@@ -48,7 +48,9 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm }) => {
         <h3 id="pp-modal-title" className="pp-modal__title">
           Confirmar cierre de sesión
         </h3>
-        <p className="pp-modal__text">¿Estás seguro de que deseas cerrar la sesión?</p>
+        <p className="pp-modal__text">
+          ¿Estás seguro de que deseas cerrar la sesión?
+        </p>
 
         <div className="pp-modal__actions">
           <button
@@ -158,7 +160,9 @@ const Principal = () => {
     }
   }, []);
 
-  const planNivel = normalizePlanNivel(usuario?.plan_nivel ?? usuario?.planNivel ?? 1);
+  const planNivel = normalizePlanNivel(
+    usuario?.plan_nivel ?? usuario?.planNivel ?? 1
+  );
 
   // ✅ SOLO 3 SECCIONES
   const navItems = useMemo(() => {
@@ -167,7 +171,7 @@ const Principal = () => {
       { label: "Flujo de Caja" },
       { label: "Cuentas Corrientes" },
     ].map((x) => {
-      const slug = slugify(x.label);
+      const slug = slugify(x.label); // "cuentas-corrientes" ✅
       return {
         key: slug,
         icon: pickIcon(x.label),
@@ -232,6 +236,12 @@ const Principal = () => {
     document.activeElement?.blur?.();
   };
 
+  // ✅ FUNCIÓN NUEVA: navegar al dashboard desde el logo
+  const handleLogoClick = () => {
+    navigate("/panel/dashboard");
+    document.activeElement?.blur?.();
+  };
+
   const confirmarCierreSesion = () => {
     try {
       sessionStorage.clear();
@@ -275,14 +285,18 @@ const Principal = () => {
 
       {/* SIDEBAR */}
       <aside className="pp-sidebar" aria-label="Navegación principal">
+        {/* ✅ CAMBIO AQUÍ: Siempre navega al dashboard */}
         <div
           className="pp-brand"
-          onClick={() => {
-            if (!hasSeenDashboard()) handleNavigate("/panel/dashboard");
-            else handleNavigate(navItems[0]?.ruta || "/panel/dashboard");
-          }}
+          onClick={handleLogoClick}
           role="button"
           tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleLogoClick();
+            }
+          }}
         >
           <div className="pp-brand__mark" aria-hidden="true">
             <FontAwesomeIcon icon={faChartLine} />
@@ -298,7 +312,9 @@ const Principal = () => {
             <button
               key={item.key}
               type="button"
-              className={`pp-nav__item ${activeKey === item.key ? "is-active" : ""}`}
+              className={`pp-nav__item ${
+                activeKey === item.key ? "is-active" : ""
+              }`}
               onClick={() => handleNavigate(item.ruta)}
               title={item.label}
             >

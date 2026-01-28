@@ -1,76 +1,76 @@
 // src/components/Movimientos/modales/ModalEditarMovimiento.jsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import "./ModalEditarMovimiento.css"; // o el css que ya uses
+import "./ModalEditarMovimiento.css"; // Reutiliza estética
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";
 const ADD_OPTION = "__ADD__";
 
 /* =========================
-   Safe lists + normalización
+   Safe lists + normalización (adaptado a NUEVA tabla)
 ========================= */
 const SAFE_LISTS = {
   periodos: [],
   clasificaciones: [],
-  tiendas: [],
+  tiposVenta: [],
+  cuentasCorrientes: [],
   tiposMovimiento: [],
-  comprobantes: [],
-  detalles: [],
-  productos: [],
-  formasTransaccion: [],
-  entidades: [],
   clientes: [],
   proveedores: [],
+  detalles: [],
+  mediosPago: [],
 };
 
 function normalizeIncomingLists(lists) {
   const l = lists && typeof lists === "object" ? lists : {};
+  const src = l.listas && typeof l.listas === "object" ? l.listas : l;
 
-  const tipos =
-    Array.isArray(l.tiposMovimiento) && l.tiposMovimiento.length
-      ? l.tiposMovimiento
-      : Array.isArray(l.tipos_movimiento)
-      ? l.tipos_movimiento
+  const tiposMov =
+    Array.isArray(src.tiposMovimiento) && src.tiposMovimiento.length
+      ? src.tiposMovimiento
+      : Array.isArray(src.tipos_movimiento)
+      ? src.tipos_movimiento
       : [];
 
-  const formas =
-    Array.isArray(l.formasTransaccion) && l.formasTransaccion.length
-      ? l.formasTransaccion
-      : Array.isArray(l.formas_transaccion)
-      ? l.formas_transaccion
+  const tiposVenta =
+    Array.isArray(src.tiposVenta) && src.tiposVenta.length
+      ? src.tiposVenta
+      : Array.isArray(src.tipos_venta)
+      ? src.tipos_venta
+      : [];
+
+  const cuentas =
+    Array.isArray(src.cuentasCorrientes) && src.cuentasCorrientes.length
+      ? src.cuentasCorrientes
+      : Array.isArray(src.cuentas_corrientes)
+      ? src.cuentas_corrientes
+      : Array.isArray(src.cuenta_corriente)
+      ? src.cuenta_corriente
+      : [];
+
+  const medios =
+    Array.isArray(src.mediosPago) && src.mediosPago.length
+      ? src.mediosPago
+      : Array.isArray(src.medios_pago)
+      ? src.medios_pago
       : [];
 
   return {
-    periodos: Array.isArray(l.periodos) ? l.periodos : [],
-    clasificaciones: Array.isArray(l.clasificaciones) ? l.clasificaciones : [],
-    tiendas: Array.isArray(l.tiendas) ? l.tiendas : [],
-    tiposMovimiento: Array.isArray(tipos) ? tipos : [],
-    comprobantes: Array.isArray(l.comprobantes) ? l.comprobantes : [],
-    detalles: Array.isArray(l.detalles) ? l.detalles : [],
-    productos: Array.isArray(l.productos) ? l.productos : [],
-    formasTransaccion: Array.isArray(formas) ? formas : [],
-    entidades: Array.isArray(l.entidades) ? l.entidades : [],
-    clientes: Array.isArray(l.clientes) ? l.clientes : [],
-    proveedores: Array.isArray(l.proveedores) ? l.proveedores : [],
+    periodos: Array.isArray(src.periodos) ? src.periodos : [],
+    clasificaciones: Array.isArray(src.clasificaciones) ? src.clasificaciones : [],
+    tiposVenta: Array.isArray(tiposVenta) ? tiposVenta : [],
+    cuentasCorrientes: Array.isArray(cuentas) ? cuentas : [],
+    tiposMovimiento: Array.isArray(tiposMov) ? tiposMov : [],
+    clientes: Array.isArray(src.clientes) ? src.clientes : [],
+    proveedores: Array.isArray(src.proveedores) ? src.proveedores : [],
+    detalles: Array.isArray(src.detalles) ? src.detalles : [],
+    mediosPago: Array.isArray(medios) ? medios : [],
   };
 }
 
 function safeNumber(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
-}
-
-function moneyARS(v) {
-  const n = Number(v || 0);
-  try {
-    return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
-  } catch {
-    return `$${n.toFixed(2)}`;
-  }
-}
-
-function firstId(arr) {
-  return arr?.[0]?.id != null ? Number(arr[0].id) : 0;
 }
 
 /* =========================
@@ -83,20 +83,15 @@ function normalizePeriodoToMMYYYY(v) {
   let m = "";
   let y = "";
 
-  // YYYY-MM o YYYY/MM
   if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
     const parts = s.split(/[-/]/);
     y = parts[0];
     m = parts[1];
-  }
-  // MM-YYYY o MM/YYYY
-  else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
+  } else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
     const parts = s.split(/[-/]/);
     m = parts[0];
     y = parts[1];
-  }
-  // YYYYMM (o MMYYYY, intento adivinar)
-  else if (/^\d{6}$/.test(s)) {
+  } else if (/^\d{6}$/.test(s)) {
     const a = Number(s.slice(0, 4));
     if (a >= 1900 && a <= 2100) {
       y = s.slice(0, 4);
@@ -106,7 +101,7 @@ function normalizePeriodoToMMYYYY(v) {
       y = s.slice(2);
     }
   } else {
-    return s; // fallback
+    return s;
   }
 
   const mm = String(Number(m)).padStart(2, "0");
@@ -133,78 +128,57 @@ function getAuthInfo() {
 }
 
 /* =========================
-   Catálogo por selector
+   Catálogo por selector (adaptado)
 ========================= */
 const CATALOGO_MAP = {
   id_clasificacion: { catalogo: "clasificaciones", label: "Clasificación" },
-  id_tienda: { catalogo: "tiendas", label: "Tienda" },
+  id_tipo_venta: { catalogo: "tipos_venta", label: "Tipo de venta" },
+  id_cuenta_corriente: { catalogo: "cuentas_corrientes", label: "Cuenta corriente" },
   id_tipo_movimiento: { catalogo: "tipos_movimiento", label: "Tipo de movimiento" },
   id_cliente: { catalogo: "clientes", label: "Cliente" },
   id_proveedor: { catalogo: "proveedores", label: "Proveedor" },
-  id_comprobante: { catalogo: "comprobantes", label: "Comprobante" },
   id_detalle: { catalogo: "detalles", label: "Detalle" },
-  id_producto: { catalogo: "productos", label: "Producto" },
-  id_forma_transaccion: { catalogo: "formas_transaccion", label: "Forma de transacción" },
-  id_entidad: { catalogo: "entidades", label: "Entidad" },
+  id_medio_pago: { catalogo: "medios_pago", label: "Medio de pago" },
 };
 
 const LISTKEY_BY_CATALOGO = {
   clasificaciones: "clasificaciones",
-  tiendas: "tiendas",
+  tipos_venta: "tiposVenta",
+  cuentas_corrientes: "cuentasCorrientes",
   tipos_movimiento: "tiposMovimiento",
   clientes: "clientes",
   proveedores: "proveedores",
-  comprobantes: "comprobantes",
   detalles: "detalles",
-  productos: "productos",
-  formas_transaccion: "formasTransaccion",
-  entidades: "entidades",
+  medios_pago: "mediosPago",
 };
 
 /* =========================
-   Build form desde row
+   Build form desde row (NUEVA ESTRUCTURA)
 ========================= */
 function buildFormFromRow(row, lists, periodoDefault) {
-  const safeLists = normalizeIncomingLists(lists);
   const r = row || {};
+  const pickPeriodo = normalizePeriodoToMMYYYY(r.periodo || periodoDefault || "");
 
-  // ✅ siempre MM-YYYY
-  const pickPeriodo = normalizePeriodoToMMYYYY(
-    r.periodo || periodoDefault || safeLists.periodos?.[0] || ""
-  );
-
-  const nOr0 = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-  const sOrNull = (v) => (v == null || v === "" ? NULL_OPTION : String(v));
+  const nOrNull = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : NULL_OPTION);
+  const sOrNull = (v) => (v == null || v === "" || v === 0 ? NULL_OPTION : String(v));
 
   return {
-    id_movimiento: nOr0(r.id_movimiento) || null,
+    id_movimiento: safeNumber(r.id_movimiento) || null,
     fecha: String(r.fecha || "").slice(0, 10) || "",
     periodo: pickPeriodo,
 
-    id_clasificacion: nOr0(r.id_clasificacion) || firstId(safeLists.clasificaciones),
-    id_tienda: nOr0(r.id_tienda) || firstId(safeLists.tiendas),
-    id_tipo_movimiento: nOr0(r.id_tipo_movimiento) || firstId(safeLists.tiposMovimiento),
+    id_clasificacion: nOrNull(r.id_clasificacion),
+    id_tipo_venta: nOrNull(r.id_tipo_venta),
+    id_cuenta_corriente: sOrNull(r.id_cuenta_corriente),
+    id_tipo_movimiento: nOrNull(r.id_tipo_movimiento),
 
     id_cliente: sOrNull(r.id_cliente),
     id_proveedor: sOrNull(r.id_proveedor),
-
-    id_comprobante: sOrNull(r.id_comprobante),
     id_detalle: sOrNull(r.id_detalle),
-    id_producto: sOrNull(r.id_producto),
 
-    mueve_stock: r.mueve_stock == null ? true : !!Number(r.mueve_stock),
-    id_tipo_movimiento_stock: nOr0(r.id_tipo_movimiento_stock) || firstId(safeLists.tiposMovimiento),
+    id_medio_pago: nOrNull(r.id_medio_pago),
 
-    cant_unidad: r.cant_unidad == null ? 1 : nOr0(r.cant_unidad),
-    precio_unitario_costos: r.precio_unitario_costos == null ? 0 : Number(r.precio_unitario_costos),
-    precio_unit_venta: r.precio_unit_venta == null ? 0 : Number(r.precio_unit_venta),
-
-    subtotal: Number(r.subtotal || 0),
-    iva: Number(r.iva || 0),
-    monto_total: Number(r.monto_total || 0),
-
-    id_forma_transaccion: nOr0(r.id_forma_transaccion) || firstId(safeLists.formasTransaccion),
-    id_entidad: sOrNull(r.id_entidad),
+    monto_total: safeNumber(r.monto_total) || 0,
   };
 }
 
@@ -216,22 +190,21 @@ export default function ModalEditarMovimiento({
   onClose,
   onSave,
   onCatalogCreated,
-  onToast, // ✅ toast global desde Movimientos
+  onToast,
 }) {
   const API = `${BASE_URL}/api.php`;
 
-  // ✅ helper toast (no renderiza acá)
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
     [onToast]
   );
 
-  // ✅ Copia local para que el select muestre al instante el item creado
   const [localLists, setLocalLists] = useState(() => ({
     ...SAFE_LISTS,
     ...normalizeIncomingLists(lists),
   }));
 
+  // ✅ Mantener listas actualizadas SIN resetear el form (evita "parpadeo" al guardar)
   useEffect(() => {
     setLocalLists({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) });
   }, [lists]);
@@ -244,43 +217,54 @@ export default function ModalEditarMovimiento({
     buildFormFromRow(row, { ...SAFE_LISTS, ...normalizeIncomingLists(lists) }, periodoDefault)
   );
 
-  // UI “Agregar…” inline
-  const [addUI, setAddUI] = useState({
-    field: null,
-    text: "",
-    saving: false,
-  });
+  // UI "Agregar…" inline
+  const [addUI, setAddUI] = useState({ field: null, text: "", saving: false });
+
+  // ✅ Autocomplete de clientes
+  const [clienteInput, setClienteInput] = useState("");
+  const [clienteFocus, setClienteFocus] = useState(false);
+  const clienteInputRef = useRef(null);
 
   const closeBtnRef = useRef(null);
 
-  // ✅ Date picker: abrir con click en todo el input (sin readOnly para evitar "immutable controls")
+  // ✅ Date picker: abrir con click en todo el input
   const fechaRef = useRef(null);
 
-  const openDatePicker = useCallback(() => {
-    const el = fechaRef.current;
-    if (!el) return;
-    if (saving || el.disabled) return;
+  // ✅ Dirty flag: evita re-hidratar el form mientras el usuario está editando
+  const dirtyRef = useRef(false);
+  const markDirty = useCallback(() => {
+    dirtyRef.current = true;
+  }, []);
 
-    try {
-      if (typeof el.showPicker === "function") {
-        el.showPicker();
-      } else {
-        el.focus();
-      }
-    } catch {
-      el.focus();
-    }
-  }, [saving]);
-
+  // ✅ Init SOLO al ABRIR el modal (no con cambios de lists/row mientras está abierto)
+  const prevOpenRef = useRef(false);
   useEffect(() => {
-    if (!open) return;
+    const wasOpen = prevOpenRef.current;
+    prevOpenRef.current = open;
 
+    if (!open || wasOpen) return;
+
+    // reset flags
+    dirtyRef.current = false;
     setSaving(false);
     setAddUI({ field: null, text: "", saving: false });
 
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(lists) };
     setLocalLists(merged);
-    setForm(buildFormFromRow(row, merged, periodoDefault));
+
+    const built = buildFormFromRow(row, merged, periodoDefault);
+    setForm(built);
+
+    // setea el texto del cliente según el row actual (si hay id_cliente)
+    const initialClienteName = (() => {
+      const all = Array.isArray(merged.clientes) ? merged.clientes : [];
+      const sid = String(built.id_cliente ?? "").trim();
+      if (!sid || sid === NULL_OPTION) return "";
+      const found = all.find((c) => String(c?.id) === sid);
+      return String(found?.nombre ?? "").trim();
+    })();
+    setClienteInput(initialClienteName);
+    setClienteFocus(false);
 
     setTimeout(() => closeBtnRef.current?.focus(), 0);
 
@@ -291,43 +275,54 @@ export default function ModalEditarMovimiento({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, lists, row, periodoDefault, onClose]);
 
-  /* =========================
-     ✅ Cálculo:
-     SUBTOTAL = (CANT*PUC) + (CANT*PUV)
-     IVA = SUBTOTAL*0.21
-     TOTAL = SUBTOTAL + IVA
-  ========================= */
-  useEffect(() => {
-    if (!open) return;
+  const openDatePicker = useCallback(() => {
+    const el = fechaRef.current;
+    if (!el) return;
+    if (saving || el.disabled) return;
 
-    const cant = safeNumber(form.cant_unidad);
-    const puc = safeNumber(form.precio_unitario_costos);
-    const puv = safeNumber(form.precio_unit_venta);
+    try {
+      if (typeof el.showPicker === "function") el.showPicker();
+      else el.focus();
+    } catch {
+      el.focus();
+    }
+  }, [saving]);
 
-    const sub = Math.max(0, Math.round((cant * puc + cant * puv) * 100) / 100);
-    const iva = Math.round(sub * 0.21 * 100) / 100;
-    const total = Math.round((sub + iva) * 100) / 100;
+  // helper: obtener nombre por id_cliente
+  const findClienteNombreById = useCallback(
+    (id) => {
+      const all = Array.isArray(safeLists.clientes) ? safeLists.clientes : [];
+      const sid = String(id ?? "").trim();
+      if (!sid || sid === NULL_OPTION) return "";
+      const found = all.find((c) => String(c?.id) === sid);
+      return String(found?.nombre ?? "").trim();
+    },
+    [safeLists.clientes]
+  );
 
-    setForm((prev) => ({ ...prev, subtotal: sub, iva, monto_total: total }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.cant_unidad, form.precio_unitario_costos, form.precio_unit_venta, open]);
+  const onChange = useCallback(
+    (k, v) => {
+      markDirty();
+      setForm((prev) => ({ ...prev, [k]: v }));
+    },
+    [markDirty]
+  );
 
-  const onChange = useCallback((k, v) => {
-    setForm((prev) => ({ ...prev, [k]: v }));
-  }, []);
+  const onPeriodoChange = useCallback(
+    (raw) => {
+      markDirty();
+      const digits = String(raw || "").replace(/\D/g, "").slice(0, 6);
+      let next = "";
 
-  // ✅ período: fuerza formato MM-YYYY mientras tipeás
-  const onPeriodoChange = useCallback((raw) => {
-    const digits = String(raw || "").replace(/\D/g, "").slice(0, 6); // MMYYYY
-    let next = "";
+      if (digits.length <= 2) next = digits;
+      else next = `${digits.slice(0, 2)}-${digits.slice(2)}`;
 
-    if (digits.length <= 2) next = digits;
-    else next = `${digits.slice(0, 2)}-${digits.slice(2)}`;
+      if (digits.length === 6) next = normalizePeriodoToMMYYYY(next);
 
-    if (digits.length === 6) next = normalizePeriodoToMMYYYY(next);
-
-    setForm((p) => ({ ...p, periodo: next }));
-  }, []);
+      setForm((p) => ({ ...p, periodo: next }));
+    },
+    [markDirty]
+  );
 
   /* =========================
      API helper
@@ -362,6 +357,7 @@ export default function ModalEditarMovimiento({
 
   /* =========================
      Guardar nuevo registro del catálogo (y actualizar TODO)
+     ✅ FIX #2: al guardar, queda seleccionado SIEMPRE (y no lo pisa nada)
   ========================= */
   const guardarNuevoCatalogo = useCallback(async () => {
     if (!addUI.field) return;
@@ -399,7 +395,7 @@ export default function ModalEditarMovimiento({
       const listKey = LISTKEY_BY_CATALOGO[meta.catalogo];
       if (!listKey) throw new Error("Catálogo desconocido para actualizar listas.");
 
-      // ✅ 1) Actualiza el modal al instante
+      // 1) Actualiza listas locales
       setLocalLists((prev) => {
         const next = { ...prev };
         const arr = Array.isArray(prev[listKey]) ? prev[listKey].slice() : [];
@@ -410,28 +406,31 @@ export default function ModalEditarMovimiento({
         return next;
       });
 
-      // ✅ 2) Selecciona el nuevo ID en el select
-      setForm((prev) => ({
-        ...prev,
-        [addUI.field]:
+      // 2) ✅ Deja seleccionado el nuevo ID (siempre)
+      setForm((prev) => {
+        const isStringField =
+          addUI.field === "id_cuenta_corriente" ||
           addUI.field === "id_cliente" ||
           addUI.field === "id_proveedor" ||
-          addUI.field === "id_comprobante" ||
-          addUI.field === "id_detalle" ||
-          addUI.field === "id_producto" ||
-          addUI.field === "id_entidad"
-            ? String(newId)
-            : Number(newId),
-      }));
+          addUI.field === "id_detalle";
 
-      // ✅ 3) Actualiza también el padre (Movimientos)
-      try {
-        onCatalogCreated?.(meta.catalogo, { id: newId, nombre: newNombre });
-      } catch {
-        // no rompe el flujo
+        return {
+          ...prev,
+          [addUI.field]: isStringField ? String(newId) : Number(newId),
+        };
+      });
+
+      // si es cliente, actualiza el input también
+      if (addUI.field === "id_cliente") {
+        setClienteInput(newNombre);
       }
 
-      // ✅ 4) Cierra UI “Agregar…”
+      // 3) Actualiza también el padre
+      try {
+        onCatalogCreated?.(meta.catalogo, { id: newId, nombre: newNombre });
+      } catch {}
+
+      // 4) Cierra UI "Agregar…"
       setAddUI({ field: null, text: "", saving: false });
 
       showToast("exito", `${meta.label} creado: "${newNombre}"`, 2600);
@@ -448,74 +447,138 @@ export default function ModalEditarMovimiento({
   };
 
   /* =========================
+     Autocomplete de CLIENTES
+  ========================= */
+  const handleClienteInputChange = useCallback(
+    (e) => {
+      markDirty();
+      const value = e.target.value;
+      setClienteInput(value);
+      // al tipear, limpiamos el ID hasta que elija una sugerencia
+      setForm((prev) => ({ ...prev, id_cliente: NULL_OPTION }));
+    },
+    [markDirty]
+  );
+
+  const handleSelectCliente = useCallback(
+    (cliente) => {
+      markDirty();
+      const nombre = String(cliente?.nombre ?? "").trim();
+      setClienteInput(nombre);
+      setForm((prev) => ({
+        ...prev,
+        id_cliente: cliente?.id != null ? String(cliente.id) : NULL_OPTION,
+      }));
+      setClienteFocus(false);
+    },
+    [markDirty]
+  );
+
+  const startAddCliente = useCallback(() => {
+    markDirty();
+    setClienteFocus(false);
+    setAddUI({ field: "id_cliente", text: "", saving: false });
+    setForm((prev) => ({ ...prev, id_cliente: ADD_OPTION }));
+  }, [markDirty]);
+
+  const filteredClientes = useMemo(() => {
+    const all = Array.isArray(safeLists.clientes) ? safeLists.clientes : [];
+    const q = clienteInput.trim().toLowerCase();
+    if (!clienteFocus || q.length < 1) return [];
+
+    return all
+      .filter((c) => String(c?.nombre ?? "").toLowerCase().includes(q))
+      .slice(0, 25);
+  }, [safeLists.clientes, clienteInput, clienteFocus]);
+
+  /* =========================
      Payload final (EDIT)
   ========================= */
   const payload = useMemo(() => {
     const isAdd = (v) => v === ADD_OPTION;
 
+    const toNullableId = (v) => {
+      if (v === NULL_OPTION || v === "" || v == null) return null;
+      if (isAdd(v)) return null;
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+
+    const toRequiredId = (v) => {
+      if (isAdd(v)) return null;
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+
     return {
       id_movimiento: form.id_movimiento,
 
       fecha: form.fecha,
-      // ✅ mandamos el valor tal como se ve (MM-YYYY)
-      // si tu backend espera YYYY-MM avisame y te lo convierto antes de enviar
       periodo: normalizePeriodoToMMYYYY(form.periodo),
 
-      id_clasificacion: isAdd(form.id_clasificacion) ? null : Number(form.id_clasificacion),
-      id_tienda: isAdd(form.id_tienda) ? null : Number(form.id_tienda),
-      id_tipo_movimiento: isAdd(form.id_tipo_movimiento) ? null : Number(form.id_tipo_movimiento),
+      id_clasificacion: toRequiredId(form.id_clasificacion),
+      id_tipo_venta: toRequiredId(form.id_tipo_venta),
+      id_cuenta_corriente: toNullableId(form.id_cuenta_corriente),
+      id_tipo_movimiento: toRequiredId(form.id_tipo_movimiento),
 
-      id_cliente: form.id_cliente === NULL_OPTION || isAdd(form.id_cliente) ? null : Number(form.id_cliente),
-      id_proveedor: form.id_proveedor === NULL_OPTION || isAdd(form.id_proveedor) ? null : Number(form.id_proveedor),
+      id_cliente: toNullableId(form.id_cliente),
+      id_proveedor: toNullableId(form.id_proveedor),
+      id_detalle: toNullableId(form.id_detalle),
 
-      id_comprobante:
-        form.id_comprobante === NULL_OPTION || isAdd(form.id_comprobante) ? null : Number(form.id_comprobante),
-      id_detalle: form.id_detalle === NULL_OPTION || isAdd(form.id_detalle) ? null : Number(form.id_detalle),
-      id_producto: form.id_producto === NULL_OPTION || isAdd(form.id_producto) ? null : Number(form.id_producto),
+      monto_total: Math.max(0, Math.round(safeNumber(form.monto_total) * 100) / 100),
 
-      mueve_stock: !!form.mueve_stock,
-      id_tipo_movimiento_stock: form.mueve_stock ? Number(form.id_tipo_movimiento_stock) : null,
-
-      cant_unidad: form.cant_unidad === "" ? null : Number(form.cant_unidad),
-      precio_unitario_costos: form.precio_unitario_costos === "" ? null : Number(form.precio_unitario_costos),
-      precio_unit_venta: form.precio_unit_venta === "" ? null : Number(form.precio_unit_venta),
-
-      subtotal: Number(form.subtotal || 0),
-      iva: Number(form.iva || 0),
-      monto_total: Number(form.monto_total || 0),
-
-      id_forma_transaccion: isAdd(form.id_forma_transaccion) ? null : Number(form.id_forma_transaccion),
-      id_entidad: form.id_entidad === NULL_OPTION || isAdd(form.id_entidad) ? null : Number(form.id_entidad),
+      id_medio_pago: toRequiredId(form.id_medio_pago),
     };
   }, [form]);
 
+  /* =========================
+     ✅ FIX #1: evitar “cambio visible” antes de cerrar
+     - No re-hidratamos el form con cambios de props mientras está abierto.
+     - Además, cuando empezás a guardar, no dejamos que nada “pise” el form.
+  ========================= */
   const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
 
     try {
-      // ✅ Bloqueo si dejó algún select en “Agregar…”
-      const bloqueantes = ["id_clasificacion", "id_tienda", "id_tipo_movimiento", "id_forma_transaccion"];
-      for (const f of bloqueantes) {
-        if (form[f] === ADD_OPTION) {
-          throw new Error(`Tenés "${CATALOGO_MAP[f]?.label || f}" en “Agregar…”. Guardalo primero.`);
-        }
-      }
-
-      const opc = ["id_cliente", "id_proveedor", "id_comprobante", "id_detalle", "id_producto", "id_entidad"];
-      for (const f of opc) {
-        if (form[f] === ADD_OPTION) {
-          throw new Error(`Tenés "${CATALOGO_MAP[f]?.label || f}" en “Agregar…”. Guardalo o elegí otra opción.`);
-        }
-      }
-
-      // ✅ valida periodo simple (MM-YYYY)
       const per = normalizePeriodoToMMYYYY(form.periodo);
-      if (per && !/^\d{2}-\d{4}$/.test(per)) {
+      if (!per || !/^\d{2}-\d{4}$/.test(per)) {
         throw new Error('Período inválido. Usá formato "MM-YYYY".');
       }
 
+      const req = [
+        ["id_clasificacion", "Clasificación"],
+        ["id_tipo_venta", "Tipo de venta"],
+        ["id_tipo_movimiento", "Tipo de movimiento"],
+        ["id_medio_pago", "Medio de pago"],
+      ];
+      for (const [k, label] of req) {
+        if (form[k] === ADD_OPTION) throw new Error(`Tenés "${label}" en "Agregar…". Guardalo primero.`);
+        const n = Number(form[k]);
+        if (!Number.isFinite(n) || n <= 0) throw new Error(`Seleccioná un valor válido para "${label}".`);
+      }
+
+      const opc = [
+        ["id_cuenta_corriente", "Cuenta corriente"],
+        ["id_cliente", "Cliente"],
+        ["id_proveedor", "Proveedor"],
+        ["id_detalle", "Detalle"],
+      ];
+      for (const [k, label] of opc) {
+        if (form[k] === ADD_OPTION) throw new Error(`Tenés "${label}" en "Agregar…". Guardalo o elegí otra opción.`);
+      }
+
+      const mt = safeNumber(form.monto_total);
+      if (mt <= 0) throw new Error("Ingresá un monto total mayor a 0.");
+
+      // Si escribió algo pero no eligió sugerencia, pedimos que seleccione (para guardar ID real)
+      if (clienteInput.trim() && (form.id_cliente === NULL_OPTION || form.id_cliente === "" || form.id_cliente == null)) {
+        throw new Error("Seleccioná el cliente desde las sugerencias (o agregalo) para guardar el ID.");
+      }
+
       await onSave?.(payload);
+
+      // (Normalmente el padre cierra el modal; si tarda, no reseteamos nada acá, así no “parpadea”.)
     } catch (e2) {
       showToast("error", e2?.message || "Error guardando movimiento.", 4200);
       setSaving(false);
@@ -523,10 +586,12 @@ export default function ModalEditarMovimiento({
   };
 
   /* =========================
-     Helper UI: elegir “Agregar…”
-  ========================= */
+     Helper UI: elegir "Agregar…"
+========================= */
   const onSelectWithAdd = useCallback(
     (field, rawValue, castToNumber) => {
+      markDirty();
+
       if (rawValue === ADD_OPTION) {
         setForm((p) => ({ ...p, [field]: ADD_OPTION }));
         setAddUI({ field, text: "", saving: false });
@@ -538,7 +603,7 @@ export default function ModalEditarMovimiento({
       const v = castToNumber ? Number(rawValue) : rawValue;
       setForm((p) => ({ ...p, [field]: v }));
     },
-    [addUI.field]
+    [addUI.field, markDirty]
   );
 
   const renderAddInline = (field) => {
@@ -565,45 +630,15 @@ export default function ModalEditarMovimiento({
             className="mit-btn mit-btn--ghost"
             onClick={() => {
               setAddUI({ field: null, text: "", saving: false });
-
-              setForm((p) => {
-                const copy = { ...p };
-
-                if (
-                  field === "id_cliente" ||
-                  field === "id_proveedor" ||
-                  field === "id_comprobante" ||
-                  field === "id_detalle" ||
-                  field === "id_producto" ||
-                  field === "id_entidad"
-                ) {
-                  copy[field] = NULL_OPTION;
-                  return copy;
-                }
-
-                const mapKey = {
-                  id_clasificacion: "clasificaciones",
-                  id_tienda: "tiendas",
-                  id_tipo_movimiento: "tiposMovimiento",
-                  id_forma_transaccion: "formasTransaccion",
-                }[field];
-
-                const first = mapKey ? firstId(safeLists[mapKey] || []) : 0;
-                copy[field] = first || 0;
-                return copy;
-              });
+              setForm((p) => ({ ...p, [field]: NULL_OPTION }));
+              if (field === "id_cliente") setClienteInput(findClienteNombreById(form.id_cliente));
             }}
             disabled={addUI.saving}
           >
             Cancelar
           </button>
 
-          <button
-            type="button"
-            className="mit-btn mit-btn--solid"
-            onClick={guardarNuevoCatalogo}
-            disabled={addUI.saving}
-          >
+          <button type="button" className="mit-btn mit-btn--solid" onClick={guardarNuevoCatalogo} disabled={addUI.saving}>
             {addUI.saving ? "Guardando..." : "Guardar"}
           </button>
         </div>
@@ -613,21 +648,9 @@ export default function ModalEditarMovimiento({
 
   if (!open) return null;
 
-  /* =========================
-     UI (igual que tu modal, con toasts)
-     Nota: acá no renderizamos Toast.
-  ========================= */
   return (
-    <div
-      className="mi-modal__overlay"
-      onClick={(e) => e.target.classList.contains("mi-modal__overlay") && cerrar()}
-    >
-      <div
-        className="mi-modal__container mi-modal__container--mov"
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="mi-modal__overlay" onClick={(e) => e.target.classList.contains("mi-modal__overlay") && cerrar()}>
+      <div className="mi-modal__container mi-modal__container--mov" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
@@ -635,23 +658,8 @@ export default function ModalEditarMovimiento({
             <p className="mi-modal__subtitle">Modificá los campos y guardá.</p>
           </div>
 
-          <button
-            ref={closeBtnRef}
-            className="mi-modal__close"
-            onClick={cerrar}
-            aria-label="Cerrar"
-            disabled={saving}
-            type="button"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
+          <button ref={closeBtnRef} className="mi-modal__close" onClick={cerrar} aria-label="Cerrar" disabled={saving} type="button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -676,10 +684,8 @@ export default function ModalEditarMovimiento({
                       value={form.fecha}
                       onChange={(e) => onChange("fecha", e.target.value)}
                       disabled={saving}
-                      // ✅ abrir picker con click en todo el input
                       onClick={openDatePicker}
                       onFocus={openDatePicker}
-                      // ✅ bloquear tipeo manual
                       onKeyDown={(e) => {
                         if (e.key === "Tab" || e.key === "Shift") return;
                         e.preventDefault();
@@ -689,7 +695,6 @@ export default function ModalEditarMovimiento({
                     <label className="fl-label">Fecha</label>
                   </div>
 
-                  {/* ✅ Período ahora siempre MM-YYYY */}
                   <div className="fl-field">
                     <input
                       className="fl-input"
@@ -699,16 +704,12 @@ export default function ModalEditarMovimiento({
                       onChange={(e) => onPeriodoChange(e.target.value)}
                       disabled={saving}
                     />
-<label className="fl-label">Período (MM-YYYY)</label>
+                    <label className="fl-label">Período (MM-YYYY)</label>
                   </div>
 
                   <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_clasificacion)}
-                      onChange={(e) => onSelectWithAdd("id_clasificacion", e.target.value, true)}
-                      disabled={saving}
-                    >
+                    <select className="fl-input fl-select" value={String(form.id_clasificacion)} onChange={(e) => onSelectWithAdd("id_clasificacion", e.target.value, true)} disabled={saving}>
+                      <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
                       {(safeLists.clasificaciones || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
@@ -721,30 +722,22 @@ export default function ModalEditarMovimiento({
                   </div>
 
                   <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_tienda)}
-                      onChange={(e) => onSelectWithAdd("id_tienda", e.target.value, true)}
-                      disabled={saving}
-                    >
-                      {(safeLists.tiendas || []).map((x) => (
+                    <select className="fl-input fl-select" value={String(form.id_tipo_venta)} onChange={(e) => onSelectWithAdd("id_tipo_venta", e.target.value, true)} disabled={saving}>
+                      <option value={NULL_OPTION}>-- Seleccionar tipo de venta --</option>
+                      {(safeLists.tiposVenta || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
                         </option>
                       ))}
                       <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
                     </select>
-                    <label className="fl-label">Tienda</label>
-                    {renderAddInline("id_tienda")}
+                    <label className="fl-label">Tipo de venta</label>
+                    {renderAddInline("id_tipo_venta")}
                   </div>
 
                   <div className="fl-field fl-col-full">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_tipo_movimiento)}
-                      onChange={(e) => onSelectWithAdd("id_tipo_movimiento", e.target.value, true)}
-                      disabled={saving}
-                    >
+                    <select className="fl-input fl-select" value={String(form.id_tipo_movimiento)} onChange={(e) => onSelectWithAdd("id_tipo_movimiento", e.target.value, true)} disabled={saving}>
+                      <option value={NULL_OPTION}>-- Seleccionar tipo de movimiento --</option>
                       {(safeLists.tiposMovimiento || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
@@ -766,30 +759,117 @@ export default function ModalEditarMovimiento({
                   <div className="fl-field">
                     <select
                       className="fl-input fl-select"
-                      value={form.id_cliente}
-                      onChange={(e) => onSelectWithAdd("id_cliente", e.target.value, false)}
+                      value={form.id_cuenta_corriente === NULL_OPTION ? "" : String(form.id_cuenta_corriente)}
+                      onChange={(e) =>
+                        onSelectWithAdd(
+                          "id_cuenta_corriente",
+                          e.target.value === "" ? NULL_OPTION : e.target.value,
+                          e.target.value !== "" && e.target.value !== ADD_OPTION
+                        )
+                      }
                       disabled={saving}
                     >
-                      <option value={NULL_OPTION}>Sin cliente</option>
-                      {(safeLists.clientes || []).map((x) => (
+                      <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
+                      {(safeLists.cuentasCorrientes || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
                         </option>
                       ))}
                       <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
                     </select>
+                    <label className="fl-label">Cuenta corriente</label>
+                    {renderAddInline("id_cuenta_corriente")}
+                  </div>
+
+                  {/* CLIENTE (autocomplete) */}
+                  <div className="fl-field" style={{ position: "relative" }}>
+                    <input
+                      ref={clienteInputRef}
+                      className="fl-input"
+                      placeholder=" "
+                      value={clienteInput}
+                      onChange={handleClienteInputChange}
+                      onFocus={() => setClienteFocus(true)}
+                      onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
+                      disabled={saving || addUI.field === "id_cliente"}
+                      autoComplete="off"
+                    />
                     <label className="fl-label">Cliente</label>
+
+                    {clienteFocus && filteredClientes.length > 0 && (
+                      <ul
+                        style={{
+                          position: "absolute",
+                          top: "100%",
+                          left: 0,
+                          right: 0,
+                          marginTop: 4,
+                          maxHeight: 230,
+                          overflowY: "auto",
+                          borderRadius: 10,
+                          border: "1px solid rgba(148, 163, 184, 0.5)",
+                          background: "white",
+                          boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
+                          padding: 4,
+                          zIndex: 40,
+                          listStyle: "none",
+                        }}
+                      >
+                        {filteredClientes.map((c) => (
+                          <li
+                            key={c.id}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectCliente(c);
+                            }}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: 8,
+                              cursor: "pointer",
+                              fontSize: 13,
+                              display: "flex",
+                              alignItems: "center",
+                            }}
+                          >
+                            <span
+                              style={{
+                                flex: 1,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {c.nombre}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={startAddCliente}
+                      disabled={saving || addUI.saving}
+                      style={{
+                        marginTop: 8,
+                        fontSize: 12,
+                        textAlign: "left",
+                        padding: 0,
+                        background: "none",
+                        border: "none",
+                        color: "#0f766e",
+                        cursor: "pointer",
+                      }}
+                    >
+                      + Agregar nuevo cliente
+                    </button>
+
                     {renderAddInline("id_cliente")}
                   </div>
 
                   <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={form.id_proveedor}
-                      onChange={(e) => onSelectWithAdd("id_proveedor", e.target.value, false)}
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>Sin proveedor</option>
+                    <select className="fl-input fl-select" value={form.id_proveedor} onChange={(e) => onSelectWithAdd("id_proveedor", e.target.value, false)} disabled={saving}>
+                      <option value={NULL_OPTION}>-- Sin proveedor --</option>
                       {(safeLists.proveedores || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
@@ -801,32 +881,7 @@ export default function ModalEditarMovimiento({
                     {renderAddInline("id_proveedor")}
                   </div>
 
-                  <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={form.id_comprobante === NULL_OPTION ? "" : String(form.id_comprobante)}
-                      onChange={(e) =>
-                        onSelectWithAdd(
-                          "id_comprobante",
-                          e.target.value === "" ? NULL_OPTION : e.target.value,
-                          e.target.value !== "" && e.target.value !== ADD_OPTION
-                        )
-                      }
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>Sin comprobante</option>
-                      {(safeLists.comprobantes || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                    </select>
-                    <label className="fl-label">Comprobante</label>
-                    {renderAddInline("id_comprobante")}
-                  </div>
-
-                  <div className="fl-field">
+                  <div className="fl-field fl-col-full">
                     <select
                       className="fl-input fl-select"
                       value={form.id_detalle === NULL_OPTION ? "" : String(form.id_detalle)}
@@ -839,7 +894,7 @@ export default function ModalEditarMovimiento({
                       }
                       disabled={saving}
                     >
-                      <option value={NULL_OPTION}>Sin detalle</option>
+                      <option value={NULL_OPTION}>-- Sin detalle --</option>
                       {(safeLists.detalles || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
@@ -850,183 +905,40 @@ export default function ModalEditarMovimiento({
                     <label className="fl-label">Detalle</label>
                     {renderAddInline("id_detalle")}
                   </div>
-
-                  <div className="fl-field fl-col-full">
-                    <select
-                      className="fl-input fl-select"
-                      value={form.id_producto === NULL_OPTION ? "" : String(form.id_producto)}
-                      onChange={(e) =>
-                        onSelectWithAdd(
-                          "id_producto",
-                          e.target.value === "" ? NULL_OPTION : e.target.value,
-                          e.target.value !== "" && e.target.value !== ADD_OPTION
-                        )
-                      }
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>Sin producto</option>
-                      {(safeLists.productos || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                    </select>
-                    <label className="fl-label">Producto</label>
-                    {renderAddInline("id_producto")}
-                  </div>
                 </div>
               </article>
 
-              {/* Stock */}
-              <article className="mi-card">
-                <h3 className="mi-card__title">Stock</h3>
-
-                <div className="fl-grid">
-                  <div className="fl-field fl-col-full">
-                    <label className="mit-switch">
-                      <input
-                        type="checkbox"
-                        checked={!!form.mueve_stock}
-                        onChange={(e) => onChange("mueve_stock", e.target.checked)}
-                        disabled={saving}
-                      />
-                      <span className="mit-switch__track" />
-                      <span className="mit-switch__text">
-                        {form.mueve_stock ? "Mueve stock" : "No mueve stock"}
-                      </span>
-                    </label>
-                  </div>
-
-                  <div className="fl-field fl-col-full">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_tipo_movimiento_stock)}
-                      disabled={!form.mueve_stock || saving}
-                      onChange={(e) => onChange("id_tipo_movimiento_stock", Number(e.target.value))}
-                    >
-                      {(safeLists.tiposMovimiento || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    <label className="fl-label">Tipo mov. stock</label>
-                  </div>
-                </div>
-              </article>
-
-              {/* Importes */}
-              <article className="mi-card">
-                <h3 className="mi-card__title">Importes</h3>
-
-                <div className="fl-grid">
-                  <div className="fl-field">
-                    <input
-                      className="fl-input"
-                      type="number"
-                      min="0"
-                      placeholder=" "
-                      value={form.cant_unidad}
-                      onChange={(e) => onChange("cant_unidad", e.target.value === "" ? "" : Number(e.target.value))}
-                      disabled={saving}
-                    />
-                    <label className="fl-label">Cantidad</label>
-                  </div>
-
-                  <div className="fl-field">
-                    <input
-                      className="fl-input"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder=" "
-                      value={form.precio_unitario_costos}
-                      onChange={(e) =>
-                        onChange("precio_unitario_costos", e.target.value === "" ? "" : Number(e.target.value))
-                      }
-                      disabled={saving}
-                    />
-                    <label className="fl-label">Precio unit. costo</label>
-                  </div>
-
-                  <div className="fl-field">
-                    <input
-                      className="fl-input"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder=" "
-                      value={form.precio_unit_venta}
-                      onChange={(e) => onChange("precio_unit_venta", e.target.value === "" ? "" : Number(e.target.value))}
-                      disabled={saving}
-                    />
-                    <label className="fl-label">Precio unit. venta</label>
-                  </div>
-
-                  <div className="fl-field">
-                    <input className="fl-input" placeholder=" " value={moneyARS(form.iva)} disabled />
-                    <label className="fl-label">IVA (auto 21%)</label>
-                  </div>
-
-                  <div className="fl-field">
-                    <input className="fl-input" placeholder=" " value={moneyARS(form.subtotal)} disabled />
-                    <label className="fl-label">Subtotal</label>
-                  </div>
-
-                  <div className="fl-field">
-                    <input className="fl-input" placeholder=" " value={moneyARS(form.monto_total)} disabled />
-                    <label className="fl-label">Monto total</label>
-                  </div>
-                </div>
-              </article>
-
-              {/* Pago / Entidad */}
+              {/* Pago */}
               <article className="mi-card mi-card--full">
-                <h3 className="mi-card__title">Pago / Entidad</h3>
+                <h3 className="mi-card__title">Pago</h3>
 
                 <div className="fl-grid">
                   <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_forma_transaccion)}
-                      onChange={(e) => onSelectWithAdd("id_forma_transaccion", e.target.value, true)}
-                      disabled={saving}
-                    >
-                      {(safeLists.formasTransaccion || []).map((x) => (
+                    <select className="fl-input fl-select" value={String(form.id_medio_pago)} onChange={(e) => onSelectWithAdd("id_medio_pago", e.target.value, true)} disabled={saving}>
+                      <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
+                      {(safeLists.mediosPago || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
                         </option>
                       ))}
                       <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
                     </select>
-                    <label className="fl-label">Forma de transacción</label>
-                    {renderAddInline("id_forma_transaccion")}
+                    <label className="fl-label">Medio de pago</label>
+                    {renderAddInline("id_medio_pago")}
                   </div>
 
                   <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={form.id_entidad === NULL_OPTION ? "" : String(form.id_entidad)}
-                      onChange={(e) =>
-                        onSelectWithAdd(
-                          "id_entidad",
-                          e.target.value === "" ? NULL_OPTION : e.target.value,
-                          e.target.value !== "" && e.target.value !== ADD_OPTION
-                        )
-                      }
+                    <input
+                      className="fl-input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder=" "
+                      value={form.monto_total}
+                      onChange={(e) => onChange("monto_total", e.target.value === "" ? "" : Number(e.target.value))}
                       disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>Sin entidad</option>
-                      {(safeLists.entidades || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                    </select>
-                    <label className="fl-label">Entidad</label>
-                    {renderAddInline("id_entidad")}
+                    />
+                    <label className="fl-label">Monto total</label>
                   </div>
                 </div>
               </article>

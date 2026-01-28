@@ -29,9 +29,9 @@ require_once __DIR__ . '/../modules/global/route.php';
 require_once __DIR__ . '/../modules/login/route.php';
 require_once __DIR__ . '/../modules/movimientos/route.php';
 require_once __DIR__ . '/../modules/flujo_caja/route.php';
+require_once __DIR__ . '/../modules/cuentas_corrientes/route.php'; // ✅ NUEVO
 
 try {
-
   if ($action === '') {
     http_response_code(200);
     echo json_encode([
@@ -58,6 +58,11 @@ try {
 
   // ✅ FLUJO CAJA
   if (function_exists('route_flujo_caja') && route_flujo_caja($action)) {
+    exit;
+  }
+
+  // ✅ CUENTAS CORRIENTES
+  if (function_exists('route_cuentas_corrientes') && route_cuentas_corrientes($action)) {
     exit;
   }
 

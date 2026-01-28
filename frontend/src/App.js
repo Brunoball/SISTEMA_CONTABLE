@@ -5,7 +5,6 @@ import {
   Routes,
   Route,
   Navigate,
-  useLocation,
 } from "react-router-dom";
 
 /* Páginas públicas */
@@ -19,6 +18,9 @@ import Principal from "./components/Principal/Principal";
 import Dashboard from "./components/Dashboard/Dashboard";
 import Movimientos from "./components/Movimientos/Movimientos";
 import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
+
+/* ✅ Cuentas Corrientes (IMPORT DEFAULT CORRECTO) */
+import CuentasCorrientes from "./components/Cuentas_Corrientes/Cuentas_Corrientes";
 
 /* =========================================================
    ✅ Auth
@@ -49,38 +51,6 @@ function RutaProtegida({ children }) {
 }
 
 /* =========================================================
-   Placeholder para secciones no hechas aún
-========================================================= */
-function SeccionPlaceholder({ titulo = "SECCIÓN" }) {
-  const location = useLocation();
-  const t =
-    titulo ||
-    String(location.pathname)
-      .replace("/panel/", "")
-      .replace(/-/g, " ")
-      .toUpperCase();
-
-  return (
-    <div style={{ padding: 18 }}>
-      <div
-        style={{
-          background: "#fff",
-          border: "1px solid rgba(0,0,0,.06)",
-          borderRadius: 16,
-          padding: 18,
-          boxShadow: "0 10px 30px rgba(0,0,0,.06)",
-        }}
-      >
-        <h2 style={{ margin: 0, fontSize: 20 }}>{t}</h2>
-        <p style={{ marginTop: 8, opacity: 0.7 }}>
-          Esta sección todavía no está implementada.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================
    🚏 Ruteo
 ========================================================= */
 export default function App() {
@@ -106,17 +76,14 @@ export default function App() {
           {/* Dashboard */}
           <Route path="dashboard" element={<Dashboard />} />
 
-          {/* ✅ 1) Movimientos */}
+          {/* Movimientos */}
           <Route path="movimientos" element={<Movimientos />} />
 
-          {/* ✅ 2) Flujo de Caja */}
+          {/* Flujo de Caja */}
           <Route path="flujo-de-caja" element={<Flujo_Caja />} />
 
-          {/* ✅ 3) Cuentas Corrientes (placeholder por ahora) */}
-          <Route
-            path="cuentas-corrientes"
-            element={<SeccionPlaceholder titulo="CUENTAS CORRIENTES" />}
-          />
+          {/* ✅ Cuentas Corrientes */}
+          <Route path="cuentas-corrientes" element={<CuentasCorrientes />} />
         </Route>
 
         {/* Cualquier otra -> login */}

@@ -58,251 +58,205 @@ function buildDaysWithPrev(string $periodo): array {
 }
 
 /* =========================
-   Inputs
+   Acción
 ========================= */
-$periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
-if ($periodo === '' || !isValidPeriodo($periodo)) {
-  fail('Parámetro "periodo" inválido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodo]);
-}
-
-$idTiendaRaw = isset($_GET['id_tienda']) ? trim((string)$_GET['id_tienda']) : '';
-$idTienda = null;
-if ($idTiendaRaw !== '') {
-  $n = (int)$idTiendaRaw;
-  if ($n <= 0) {
-    fail('Parámetro "id_tienda" inválido.', 200, ['id_tienda_recibido' => $idTiendaRaw]);
-  }
-  $idTienda = $n;
-}
+$action = $_GET['action'] ?? $_POST['action'] ?? '';
+$action = is_string($action) ? trim($action) : '';
 
 try {
   if (!isset($pdo) || !($pdo instanceof PDO)) {
     fail('DB no inicializada ($pdo es null). Revisá backend/config/db.php', 500);
   }
+  $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+  $pdo->exec("SET NAMES utf8mb4");
 
-  /* =========================
-     Config (SOLO caja: 1/4/5)
-  ========================= */
-  $TIPO_INGRESO = 1;
-  $TIPO_EGRESO  = 2;
+  /* ==========================================================
+     ✅ A) FLUJO POR CLIENTES (opcional)
+     (lo dejamos, pero ahora también soporta filtrar por periodo)
+  ========================================================== */
+  if ($action === 'flujo_caja_clientes') {
 
-  // ✅ Este reporte SOLO mira estas formas:
-  $FORMA_EFECTIVO = 1;
-  $FORMA_TRANSFER = 4;
-  $FORMA_TARJETA  = 5;
+    $TIPO_INGRESO = 1;
+    $TIPO_EGRESO  = 2;
 
-  /* =========================
-     Rango fechas
-  ========================= */
-  $start = monthStart($periodo);
-  $end   = monthEnd($periodo);
-  $startWithPrev = prevDay($start);
+    $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
+    $filtrarPeriodo = ($periodo !== '' && isValidPeriodo($periodo));
 
-  $days = buildDaysWithPrev($periodo);
-  $today = (new DateTime('today'))->format('Y-m-d');
+    $params = [
+      ':ing' => $TIPO_INGRESO,
+      ':egr' => $TIPO_EGRESO,
+    ];
 
-  /* =========================
-     0) Tiendas objetivo
-  ========================= */
-  if ($idTienda !== null) {
-    $st = $pdo->prepare("SELECT id_tienda, nombre FROM tiendas WHERE id_tienda = :id AND activo = 1 LIMIT 1");
-    $st->execute([':id' => $idTienda]);
-    $t = $st->fetch(PDO::FETCH_ASSOC);
-    if (!$t) fail("La tienda seleccionada no existe o está inactiva.", 200, ['id_tienda' => $idTienda]);
+    $whereExtra = "";
+    if ($filtrarPeriodo) {
+      $whereExtra = " AND m.periodo = :periodo ";
+      $params[':periodo'] = $periodo;
+    }
 
-    $tiendas = [[
-      'id_tienda' => (int)$t['id_tienda'],
-      'nombre'    => (string)$t['nombre'],
-    ]];
-  } else {
-    $tiendas = [];
-    $st = $pdo->query("SELECT id_tienda, nombre FROM tiendas WHERE activo = 1 ORDER BY nombre ASC");
-    while ($t = $st->fetch(PDO::FETCH_ASSOC)) {
-      $tiendas[] = [
-        'id_tienda' => (int)$t['id_tienda'],
-        'nombre'    => (string)$t['nombre'],
+    // Ajustá c.nombre si tu tabla tiene otro campo
+    $sql = "
+      SELECT
+        c.id_cliente,
+        c.nombre AS cliente,
+        COALESCE(SUM(CASE WHEN m.id_tipo_movimiento = :ing THEN m.monto_total ELSE 0 END), 0) AS ingresos,
+        COALESCE(SUM(CASE WHEN m.id_tipo_movimiento = :egr THEN m.monto_total ELSE 0 END), 0) AS egresos
+      FROM clientes c
+      LEFT JOIN movimientos m
+        ON m.id_cliente = c.id_cliente
+        $whereExtra
+      GROUP BY c.id_cliente, c.nombre
+      ORDER BY c.nombre ASC
+    ";
+
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+
+    $rows = [];
+    while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
+      $ing = (float)$r['ingresos'];
+      $egr = (float)$r['egresos'];
+      $rows[] = [
+        'id_cliente' => (int)$r['id_cliente'],
+        'cliente'    => (string)$r['cliente'],
+        'ingresos'   => $ing,
+        'egresos'    => $egr,
+        'saldo'      => $ing - $egr,
       ];
     }
-    if (!$tiendas) fail("No hay tiendas activas para mostrar.", 200);
+
+    ok([
+      'periodo' => $filtrarPeriodo ? $periodo : null,
+      'rows' => $rows,
+      'total_clientes' => count($rows),
+    ]);
   }
 
-  $tidMain = (int)$tiendas[0]['id_tienda'];
+  /* ==========================================================
+     ✅ B) FLUJO DIARIO TIPO EXCEL (ESTE ES EL TUYO)
+     action=flujo_caja_resumen
+     - NO usa tienda
+     - genera todas las fechas del mes + último día mes anterior
+     - ingresos = SUM(tipo=1) por fecha
+     - egresos  = SUM(tipo=2) por fecha
+     - saldo acumulado
+  ========================================================== */
+  if ($action === 'flujo_caja_resumen') {
 
-  /* =========================
-     1) INGRESOS (SOLO 1/4/5)
-     (incluye el día anterior)
-  ========================= */
-  $sqlIngresos = "
-    SELECT
-      m.id_tienda AS id_tienda,
-      m.fecha AS fecha,
-      m.id_forma_transaccion AS forma,
-      SUM(m.monto_total) AS total
-    FROM movimientos m
-    WHERE m.id_tienda = :id_tienda
-      AND m.id_tipo_movimiento = :tipo_ingreso
-      AND m.fecha BETWEEN :desde AND :hasta
-      AND m.id_forma_transaccion IN (:f_ef, :f_tr, :f_tj)
-    GROUP BY m.id_tienda, m.fecha, m.id_forma_transaccion
-  ";
-
-  $stIng = $pdo->prepare($sqlIngresos);
-  $stIng->execute([
-    ':id_tienda'    => $tidMain,
-    ':tipo_ingreso' => $TIPO_INGRESO,
-    ':desde'        => $startWithPrev,
-    ':hasta'        => $end,
-    ':f_ef'         => $FORMA_EFECTIVO,
-    ':f_tr'         => $FORMA_TRANSFER,
-    ':f_tj'         => $FORMA_TARJETA,
-  ]);
-
-  $ingresosByTienda = [];
-  while ($row = $stIng->fetch(PDO::FETCH_ASSOC)) {
-    $tid   = (int)$row['id_tienda'];
-    $f     = (string)$row['fecha'];
-    $forma = (int)$row['forma'];
-    $total = (float)$row['total'];
-
-    if (!isset($ingresosByTienda[$tid])) $ingresosByTienda[$tid] = [];
-    if (!isset($ingresosByTienda[$tid][$f])) {
-      $ingresosByTienda[$tid][$f] = ['efectivo' => 0.0, 'transferencias' => 0.0, 'tarjeta' => 0.0];
+    $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
+    if ($periodo === '' || !isValidPeriodo($periodo)) {
+      fail('Parámetro "periodo" inválido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodo]);
     }
 
-    if ($forma === $FORMA_EFECTIVO) {
-      $ingresosByTienda[$tid][$f]['efectivo'] += $total;
-    } elseif ($forma === $FORMA_TRANSFER) {
-      $ingresosByTienda[$tid][$f]['transferencias'] += $total;
-    } elseif ($forma === $FORMA_TARJETA) {
-      $ingresosByTienda[$tid][$f]['tarjeta'] += $total;
+    $TIPO_INGRESO = 1;
+    $TIPO_EGRESO  = 2;
+
+    $start = monthStart($periodo);
+    $end   = monthEnd($periodo);
+    $startWithPrev = prevDay($start);
+
+    $days = buildDaysWithPrev($periodo);
+    $today = (new DateTime('today'))->format('Y-m-d');
+
+    /* =========================
+       1) Totales por día (ingresos/egresos)
+       desde el día anterior al fin de mes
+    ========================= */
+    $sqlDia = "
+      SELECT
+        fecha,
+        COALESCE(SUM(CASE WHEN id_tipo_movimiento = :ing THEN monto_total ELSE 0 END), 0) AS ingresos,
+        COALESCE(SUM(CASE WHEN id_tipo_movimiento = :egr THEN monto_total ELSE 0 END), 0) AS egresos
+      FROM movimientos
+      WHERE fecha BETWEEN :desde AND :hasta
+      GROUP BY fecha
+    ";
+
+    $stDia = $pdo->prepare($sqlDia);
+    $stDia->execute([
+      ':ing' => $TIPO_INGRESO,
+      ':egr' => $TIPO_EGRESO,
+      ':desde' => $startWithPrev,
+      ':hasta' => $end,
+    ]);
+
+    $mapDia = []; // fecha => ['ingresos'=>x,'egresos'=>y]
+    while ($r = $stDia->fetch(PDO::FETCH_ASSOC)) {
+      $f = (string)$r['fecha'];
+      $mapDia[$f] = [
+        'ingresos' => (float)$r['ingresos'],
+        'egresos'  => (float)$r['egresos'],
+      ];
     }
-  }
 
-  /* =========================
-     2) EGRESOS (SOLO 1/4/5)
-     (incluye el día anterior)
-  ========================= */
-  $sqlEgresos = "
-    SELECT
-      m.id_tienda AS id_tienda,
-      m.fecha AS fecha,
-      SUM(m.monto_total) AS total
-    FROM movimientos m
-    WHERE m.id_tienda = :id_tienda
-      AND m.id_tipo_movimiento = :tipo_egreso
-      AND m.fecha BETWEEN :desde AND :hasta
-      AND m.id_forma_transaccion IN (:f_ef, :f_tr, :f_tj)
-    GROUP BY m.id_tienda, m.fecha
-  ";
+    /* =========================
+       2) Saldo base (TODO lo anterior al mes)
+       = ingresos antes del start - egresos antes del start
+    ========================= */
+    $sqlSaldoBase = "
+      SELECT
+        COALESCE(SUM(CASE WHEN id_tipo_movimiento = :ing THEN monto_total ELSE 0 END), 0)
+        -
+        COALESCE(SUM(CASE WHEN id_tipo_movimiento = :egr THEN monto_total ELSE 0 END), 0)
+        AS saldo
+      FROM movimientos
+      WHERE fecha < :desde
+    ";
 
-  $stEg = $pdo->prepare($sqlEgresos);
-  $stEg->execute([
-    ':id_tienda'   => $tidMain,
-    ':tipo_egreso' => $TIPO_EGRESO,
-    ':desde'       => $startWithPrev,
-    ':hasta'       => $end,
-    ':f_ef'        => $FORMA_EFECTIVO,
-    ':f_tr'        => $FORMA_TRANSFER,
-    ':f_tj'        => $FORMA_TARJETA,
-  ]);
+    $stBase = $pdo->prepare($sqlSaldoBase);
+    $stBase->execute([
+      ':ing' => $TIPO_INGRESO,
+      ':egr' => $TIPO_EGRESO,
+      ':desde' => $start,
+    ]);
 
-  $egresosByTienda = [];
-  while ($row = $stEg->fetch(PDO::FETCH_ASSOC)) {
-    $tid   = (int)$row['id_tienda'];
-    $f     = (string)$row['fecha'];
-    $total = (float)$row['total'];
+    $saldoBase = (float)($stBase->fetchColumn() ?: 0.0);
 
-    if (!isset($egresosByTienda[$tid])) $egresosByTienda[$tid] = [];
-    $egresosByTienda[$tid][$f] = ($egresosByTienda[$tid][$f] ?? 0.0) + $total;
-  }
+    /* =========================
+       3) Construcción filas (Excel)
+       - El primer renglón (día anterior) ya incluye sus ingresos/egresos
+       - Fechas futuras: ingresos/egresos null y saldo congelado
+    ========================= */
+    $saldo = $saldoBase;
+    $rows = [];
 
-  /* =========================
-     ✅ 3) SALDO BASE (SOLO 1/4/5)
-     = (ingresos 1/4/5) - (egresos 1/4/5)
-     de TODO lo anterior al mes seleccionado
-  ========================= */
-  $sqlSaldoBase = "
-    SELECT
-      COALESCE(SUM(
-        CASE
-          WHEN id_tipo_movimiento = :ingreso
-               AND id_forma_transaccion IN (:f_ef, :f_tr, :f_tj)
-            THEN monto_total
-          WHEN id_tipo_movimiento = :egreso
-               AND id_forma_transaccion IN (:f_ef, :f_tr, :f_tj)
-            THEN -monto_total
-          ELSE 0
-        END
-      ),0) AS saldo
-    FROM movimientos
-    WHERE id_tienda = :id_tienda
-      AND fecha < :desde
-  ";
+    foreach ($days as $iso) {
+      $isFuture = ($iso > $today);
 
-  $stSaldo = $pdo->prepare($sqlSaldoBase);
-  $stSaldo->execute([
-    ':ingreso'   => $TIPO_INGRESO,
-    ':egreso'    => $TIPO_EGRESO,
-    ':id_tienda' => $tidMain,
-    ':desde'     => $start,
-    ':f_ef'      => $FORMA_EFECTIVO,
-    ':f_tr'      => $FORMA_TRANSFER,
-    ':f_tj'      => $FORMA_TARJETA,
-  ]);
+      $ing = (float)($mapDia[$iso]['ingresos'] ?? 0.0);
+      $egr = (float)($mapDia[$iso]['egresos'] ?? 0.0);
 
-  $saldoBase = (float)($stSaldo->fetchColumn() ?: 0.0);
+      if ($isFuture) {
+        $rows[] = [
+          'fecha' => $iso,
+          'ingresos' => null,
+          'egresos' => null,
+          'saldo' => $saldo,
+        ];
+        continue;
+      }
 
-  /* =========================
-     4) Filas día por día
-  ========================= */
-  $t = $tiendas[0];
-  $tid = (int)$t['id_tienda'];
+      $saldo = $saldo + $ing - $egr;
 
-  $saldo = $saldoBase;
-  $rows = [];
-
-  foreach ($days as $iso) {
-    $isFuture = ($iso > $today);
-
-    $tarjeta = (float)($ingresosByTienda[$tid][$iso]['tarjeta'] ?? 0.0);
-    $transferencias = (float)($ingresosByTienda[$tid][$iso]['transferencias'] ?? 0.0);
-    $efectivo = (float)($ingresosByTienda[$tid][$iso]['efectivo'] ?? 0.0);
-
-    $egresos = (float)($egresosByTienda[$tid][$iso] ?? 0.0);
-
-    if ($isFuture) {
       $rows[] = [
         'fecha' => $iso,
-        'tarjeta' => null,
-        'transferencias' => null,
-        'efectivo' => null,
-        'egresos' => null,
+        'ingresos' => $ing,
+        'egresos' => $egr,
         'saldo' => $saldo,
       ];
-      continue;
     }
 
-    $saldo = $saldo + $tarjeta + $transferencias + $efectivo - $egresos;
-
-    $rows[] = [
-      'fecha' => $iso,
-      'tarjeta' => $tarjeta,
-      'transferencias' => $transferencias,
-      'efectivo' => $efectivo,
-      'egresos' => $egresos,
-      'saldo' => $saldo,
-    ];
+    ok([
+      'periodo' => $periodo,
+      'tiendas' => [[
+        'id_tienda' => 0,
+        'nombre' => 'GENERAL',
+        'saldo_base' => $saldoBase,
+        'rows' => $rows,
+      ]],
+    ]);
   }
 
-  ok([
-    'periodo' => $periodo,
-    'tiendas' => [[
-      'id_tienda'  => $tid,
-      'nombre'     => (string)$t['nombre'],
-      'saldo_base' => $saldoBase,
-      'rows'       => $rows,
-    ]],
-  ]);
+  fail('Acción no soportada en flujo_caja.php', 200, ['action' => $action]);
 
 } catch (Throwable $e) {
   fail('Error generando flujo de caja: ' . $e->getMessage(), 500);

@@ -101,10 +101,6 @@ function moneyARS(v) {
   }
 }
 
-function firstId(arr) {
-  return arr?.[0]?.id != null ? Number(arr[0].id) : 0;
-}
-
 /* =========================
    ✅ Período MM-YYYY helpers
 ========================= */
@@ -146,26 +142,40 @@ function normalizePeriodoToMMYYYY(v) {
   return `${mm}-${yyyy}`;
 }
 
+// ✅ NUEVO: derivar período desde una fecha ISO (YYYY-MM-DD) => MM-YYYY
+function periodoFromISODate(iso) {
+  const s = String(iso ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
+  const [y, m] = s.split("-");
+  return `${m}-${y}`;
+}
+
 function buildEmptyForm(lists, periodoDefault) {
   const safeLists = normalizeIncomingLists(lists);
 
+  const fecha = todayISO();
+  const per =
+    normalizePeriodoToMMYYYY(periodoDefault || "") ||
+    periodoFromISODate(fecha); // ✅ si no hay default, lo toma de la fecha
+
   return {
     id_movimiento: null,
-    fecha: todayISO(),
+    fecha,
+
     // ✅ siempre MM-YYYY
-    periodo: normalizePeriodoToMMYYYY(periodoDefault || safeLists.periodos?.[0] || ""),
+    periodo: per,
 
-    // ✅ campos NUEVA TABLA
-    id_clasificacion: firstId(safeLists.clasificaciones),
-    id_tipo_venta: firstId(safeLists.tiposVenta),
-    id_cuenta_corriente: NULL_OPTION, // nullable
-    id_tipo_movimiento: firstId(safeLists.tiposMovimiento),
+    // ✅ campos NUEVA TABLA - TODOS vacíos por defecto
+    id_clasificacion: NULL_OPTION,
+    id_tipo_venta: NULL_OPTION,
+    id_cuenta_corriente: NULL_OPTION,
+    id_tipo_movimiento: NULL_OPTION,
 
-    id_cliente: NULL_OPTION, // nullable
-    id_proveedor: NULL_OPTION, // nullable
-    id_detalle: NULL_OPTION, // nullable
+    id_cliente: NULL_OPTION,
+    id_proveedor: NULL_OPTION,
+    id_detalle: NULL_OPTION,
 
-    id_medio_pago: firstId(safeLists.mediosPago),
+    id_medio_pago: NULL_OPTION,
 
     // ✅ único importe que queda en tabla
     monto_total: 0,
@@ -251,12 +261,17 @@ export default function ModalAgregarMovimiento({
     buildEmptyForm({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) }, periodoDefault)
   );
 
-  // UI “Agregar…” inline
+  // UI "Agregar…" inline
   const [addUI, setAddUI] = useState({
     field: null,
     text: "",
     saving: false,
   });
+
+  // ✅ NUEVO: Autocomplete de clientes
+  const [clienteInput, setClienteInput] = useState("");
+  const [clienteFocus, setClienteFocus] = useState(false);
+  const clienteInputRef = useRef(null);
 
   const closeBtnRef = useRef(null);
 
@@ -284,7 +299,13 @@ export default function ModalAgregarMovimiento({
 
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(lists) };
     setLocalLists(merged);
+
+    // ✅ al abrir: si no viene periodoDefault, el período queda según fecha de hoy
     setForm(buildEmptyForm(merged, periodoDefault));
+
+    // reset autocomplete cliente
+    setClienteInput("");
+    setClienteFocus(false);
 
     setTimeout(() => closeBtnRef.current?.focus(), 0);
 
@@ -297,6 +318,19 @@ export default function ModalAgregarMovimiento({
 
   const onChange = useCallback((k, v) => {
     setForm((prev) => ({ ...prev, [k]: v }));
+  }, []);
+
+  // ✅ NUEVO: cuando cambia la FECHA, el PERÍODO se autocompleta con MES-AÑO (MM-YYYY)
+  const onFechaChange = useCallback((rawISO) => {
+    const iso = String(rawISO || "").trim();
+    const perAuto = periodoFromISODate(iso);
+
+    setForm((prev) => ({
+      ...prev,
+      fecha: iso,
+      // ✅ siempre se recalcula desde la fecha (lo que pediste)
+      periodo: perAuto || prev.periodo,
+    }));
   }, []);
 
   // ✅ período: fuerza formato MM-YYYY mientras tipeás
@@ -393,7 +427,7 @@ export default function ModalAgregarMovimiento({
         return next;
       });
 
-      // ✅ 2) Selecciona el nuevo ID en el select
+      // ✅ 2) Selecciona el nuevo ID en el select / campo
       setForm((prev) => ({
         ...prev,
         [addUI.field]:
@@ -405,6 +439,11 @@ export default function ModalAgregarMovimiento({
             : Number(newId),
       }));
 
+      // Si es cliente, también actualizamos el texto del input
+      if (addUI.field === "id_cliente") {
+        setClienteInput(newNombre);
+      }
+
       // ✅ 3) Actualiza también el padre (Movimientos)
       try {
         onCatalogCreated?.(meta.catalogo, { id: newId, nombre: newNombre });
@@ -412,7 +451,7 @@ export default function ModalAgregarMovimiento({
         // no rompe el flujo
       }
 
-      // ✅ 4) Cierra UI “Agregar…”
+      // ✅ 4) Cierra UI "Agregar…"
       setAddUI({ field: null, text: "", saving: false });
 
       showToast("exito", `${meta.label} creado: "${newNombre}"`, 2600);
@@ -427,6 +466,44 @@ export default function ModalAgregarMovimiento({
     if (saving) return;
     onClose?.();
   };
+
+  /* =========================
+     Autocomplete de CLIENTES
+  ========================= */
+  const handleClienteInputChange = useCallback((e) => {
+    const value = e.target.value;
+    setClienteInput(value);
+    // al tipear, limpiamos el ID hasta que elija una sugerencia
+    setForm((prev) => ({ ...prev, id_cliente: NULL_OPTION }));
+  }, []);
+
+  const handleSelectCliente = useCallback((cliente) => {
+    const nombre = String(cliente?.nombre ?? "").trim();
+    setClienteInput(nombre);
+    setForm((prev) => ({
+      ...prev,
+      id_cliente: cliente?.id != null ? String(cliente.id) : NULL_OPTION,
+    }));
+    setClienteFocus(false);
+  }, []);
+
+  const startAddCliente = useCallback(() => {
+    setClienteFocus(false);
+    setAddUI({ field: "id_cliente", text: "", saving: false });
+    setForm((prev) => ({ ...prev, id_cliente: ADD_OPTION }));
+  }, []);
+
+  const filteredClientes = useMemo(() => {
+    const all = Array.isArray(safeLists.clientes) ? safeLists.clientes : [];
+    const q = clienteInput.trim().toLowerCase();
+
+    // No mostrar todo el universo de clientes: solo cuando escribe algo
+    if (!clienteFocus || q.length < 1) return [];
+
+    return all
+      .filter((c) => String(c?.nombre ?? "").toLowerCase().includes(q))
+      .slice(0, 25); // límite razonable
+  }, [safeLists.clientes, clienteInput, clienteFocus]);
 
   /* =========================
      Payload final (solo campos de NUEVA TABLA)
@@ -485,7 +562,7 @@ export default function ModalAgregarMovimiento({
         ["id_medio_pago", "Medio de pago"],
       ];
       for (const [k, label] of req) {
-        if (form[k] === ADD_OPTION) throw new Error(`Tenés "${label}" en “Agregar…”. Guardalo primero.`);
+        if (form[k] === ADD_OPTION) throw new Error(`Tenés "${label}" en "Agregar…". Guardalo primero.`);
         const n = Number(form[k]);
         if (!Number.isFinite(n) || n <= 0) throw new Error(`Seleccioná un valor válido para "${label}".`);
       }
@@ -498,7 +575,7 @@ export default function ModalAgregarMovimiento({
         ["id_detalle", "Detalle"],
       ];
       for (const [k, label] of opc) {
-        if (form[k] === ADD_OPTION) throw new Error(`Tenés "${label}" en “Agregar…”. Guardalo o elegí otra opción.`);
+        if (form[k] === ADD_OPTION) throw new Error(`Tenés "${label}" en "Agregar…". Guardalo o elegí otra opción.`);
       }
 
       // ✅ monto
@@ -513,7 +590,8 @@ export default function ModalAgregarMovimiento({
   };
 
   /* =========================
-     Helper UI: elegir “Agregar…”
+     Helper UI: elegir "Agregar…"
+     (se sigue usando para los demás selects)
   ========================= */
   const onSelectWithAdd = useCallback(
     (field, rawValue, castToNumber) => {
@@ -558,28 +636,8 @@ export default function ModalAgregarMovimiento({
 
               setForm((p) => {
                 const copy = { ...p };
-
-                // opcionales: vuelven a NULL_OPTION
-                if (
-                  field === "id_cuenta_corriente" ||
-                  field === "id_cliente" ||
-                  field === "id_proveedor" ||
-                  field === "id_detalle"
-                ) {
-                  copy[field] = NULL_OPTION;
-                  return copy;
-                }
-
-                // requeridos: vuelven al primero de su lista
-                const mapKey = {
-                  id_clasificacion: "clasificaciones",
-                  id_tipo_venta: "tiposVenta",
-                  id_tipo_movimiento: "tiposMovimiento",
-                  id_medio_pago: "mediosPago",
-                }[field];
-
-                const first = mapKey ? firstId(safeLists[mapKey] || []) : 0;
-                copy[field] = first || 0;
+                // Vuelve a NULL_OPTION
+                copy[field] = NULL_OPTION;
                 return copy;
               });
             }}
@@ -588,7 +646,12 @@ export default function ModalAgregarMovimiento({
             Cancelar
           </button>
 
-          <button type="button" className="mit-btn mit-btn--solid" onClick={guardarNuevoCatalogo} disabled={addUI.saving}>
+          <button
+            type="button"
+            className="mit-btn mit-btn--solid"
+            onClick={guardarNuevoCatalogo}
+            disabled={addUI.saving}
+          >
             {addUI.saving ? "Guardando..." : "Guardar"}
           </button>
         </div>
@@ -599,7 +662,10 @@ export default function ModalAgregarMovimiento({
   if (!open) return null;
 
   return (
-    <div className="mi-modal__overlay" onClick={(e) => e.target.classList.contains("mi-modal__overlay") && cerrar()}>
+    <div
+      className="mi-modal__overlay"
+      onClick={(e) => e.target.classList.contains("mi-modal__overlay") && cerrar()}
+    >
       <div
         className="mi-modal__container mi-modal__container--mov"
         role="dialog"
@@ -621,7 +687,15 @@ export default function ModalAgregarMovimiento({
             disabled={saving}
             type="button"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -643,7 +717,8 @@ export default function ModalAgregarMovimiento({
                       type="date"
                       placeholder=" "
                       value={form.fecha}
-                      onChange={(e) => onChange("fecha", e.target.value)}
+                      // ✅ CAMBIO: al elegir fecha, autocompleta período (MM-YYYY)
+                      onChange={(e) => onFechaChange(e.target.value)}
                       disabled={saving}
                       onClick={openDatePicker}
                       onFocus={openDatePicker}
@@ -676,6 +751,7 @@ export default function ModalAgregarMovimiento({
                       onChange={(e) => onSelectWithAdd("id_clasificacion", e.target.value, true)}
                       disabled={saving}
                     >
+                      <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
                       {(safeLists.clasificaciones || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
@@ -694,6 +770,7 @@ export default function ModalAgregarMovimiento({
                       onChange={(e) => onSelectWithAdd("id_tipo_venta", e.target.value, true)}
                       disabled={saving}
                     >
+                      <option value={NULL_OPTION}>-- Seleccionar tipo de venta --</option>
                       {(safeLists.tiposVenta || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
@@ -712,6 +789,7 @@ export default function ModalAgregarMovimiento({
                       onChange={(e) => onSelectWithAdd("id_tipo_movimiento", e.target.value, true)}
                       disabled={saving}
                     >
+                      <option value={NULL_OPTION}>-- Seleccionar tipo de movimiento --</option>
                       {(safeLists.tiposMovimiento || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
@@ -743,7 +821,7 @@ export default function ModalAgregarMovimiento({
                       }
                       disabled={saving}
                     >
-                      <option value={NULL_OPTION}>Sin cuenta corriente</option>
+                      <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
                       {(safeLists.cuentasCorrientes || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
@@ -755,22 +833,95 @@ export default function ModalAgregarMovimiento({
                     {renderAddInline("id_cuenta_corriente")}
                   </div>
 
-                  <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={form.id_cliente}
-                      onChange={(e) => onSelectWithAdd("id_cliente", e.target.value, false)}
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>Sin cliente</option>
-                      {(safeLists.clientes || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                    </select>
+                  {/* ✅ Campo CLIENTE como autocomplete en vez de <select> */}
+                  <div className="fl-field" style={{ position: "relative" }}>
+                    <input
+                      ref={clienteInputRef}
+                      className="fl-input"
+                      placeholder=" "
+                      value={clienteInput}
+                      onChange={handleClienteInputChange}
+                      onFocus={() => setClienteFocus(true)}
+                      onBlur={() => {
+                        // pequeño delay para permitir click en las opciones
+                        setTimeout(() => setClienteFocus(false), 120);
+                      }}
+                      disabled={saving || addUI.field === "id_cliente"}
+                      autoComplete="off"
+                    />
                     <label className="fl-label">Cliente</label>
+
+                    {/* Lista de sugerencias */}
+                    {clienteFocus && filteredClientes.length > 0 && (
+                      <ul
+                        style={{
+                          position: "absolute",
+                          top: "100%",
+                          left: 0,
+                          right: 0,
+                          marginTop: 4,
+                          maxHeight: 230,
+                          overflowY: "auto",
+                          borderRadius: 10,
+                          border: "1px solid rgba(148, 163, 184, 0.5)",
+                          background: "white",
+                          boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
+                          padding: 4,
+                          zIndex: 40,
+                          listStyle: "none",
+                        }}
+                      >
+                        {filteredClientes.map((c) => (
+                          <li
+                            key={c.id}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectCliente(c);
+                            }}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: 8,
+                              cursor: "pointer",
+                              fontSize: 13,
+                              display: "flex",
+                              alignItems: "center",
+                            }}
+                            className="mi-autocomplete-item"
+                          >
+                            <span
+                              style={{
+                                flex: 1,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {c.nombre}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {/* Botón para agregar nuevo cliente (equivalente a OTRO (AGREGAR…)) */}
+                    <button
+                      type="button"
+                      onClick={startAddCliente}
+                      disabled={saving || addUI.saving}
+                      style={{
+                        marginTop: 8,
+                        fontSize: 12,
+                        textAlign: "left",
+                        padding: 0,
+                        background: "none",
+                        border: "none",
+                        color: "#0f766e",
+                        cursor: "pointer",
+                      }}
+                    >
+                      + Agregar nuevo cliente
+                    </button>
+
                     {renderAddInline("id_cliente")}
                   </div>
 
@@ -781,7 +932,7 @@ export default function ModalAgregarMovimiento({
                       onChange={(e) => onSelectWithAdd("id_proveedor", e.target.value, false)}
                       disabled={saving}
                     >
-                      <option value={NULL_OPTION}>Sin proveedor</option>
+                      <option value={NULL_OPTION}>-- Sin proveedor --</option>
                       {(safeLists.proveedores || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
@@ -806,7 +957,7 @@ export default function ModalAgregarMovimiento({
                       }
                       disabled={saving}
                     >
-                      <option value={NULL_OPTION}>Sin detalle</option>
+                      <option value={NULL_OPTION}>-- Sin detalle --</option>
                       {(safeLists.detalles || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
@@ -832,6 +983,7 @@ export default function ModalAgregarMovimiento({
                       onChange={(e) => onSelectWithAdd("id_medio_pago", e.target.value, true)}
                       disabled={saving}
                     >
+                      <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
                       {(safeLists.mediosPago || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
@@ -851,15 +1003,12 @@ export default function ModalAgregarMovimiento({
                       step="0.01"
                       placeholder=" "
                       value={form.monto_total}
-                      onChange={(e) => onChange("monto_total", e.target.value === "" ? "" : Number(e.target.value))}
+                      onChange={(e) =>
+                        onChange("monto_total", e.target.value === "" ? "" : Number(e.target.value))
+                      }
                       disabled={saving}
                     />
                     <label className="fl-label">Monto total</label>
-                  </div>
-
-                  <div className="fl-field">
-                    <input className="fl-input" placeholder=" " value={moneyARS(form.monto_total)} disabled />
-                    <label className="fl-label">Vista ARS</label>
                   </div>
                 </div>
               </article>

@@ -1,5 +1,6 @@
 <?php
 // backend/routes/api.php
+declare(strict_types=1);
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
 header("Access-Control-Allow-Origin: $origin");
@@ -29,7 +30,8 @@ require_once __DIR__ . '/../modules/global/route.php';
 require_once __DIR__ . '/../modules/login/route.php';
 require_once __DIR__ . '/../modules/movimientos/route.php';
 require_once __DIR__ . '/../modules/flujo_caja/route.php';
-require_once __DIR__ . '/../modules/cuentas_corrientes/route.php'; // ✅ NUEVO
+require_once __DIR__ . '/../modules/cuentas_corrientes/route.php';
+require_once __DIR__ . '/../modules/analisis_financiero/route.php'; // ✅ NUEVO
 
 try {
   if ($action === '') {
@@ -63,6 +65,11 @@ try {
 
   // ✅ CUENTAS CORRIENTES
   if (function_exists('route_cuentas_corrientes') && route_cuentas_corrientes($action)) {
+    exit;
+  }
+
+  // ✅ ANALISIS FINANCIERO
+  if (function_exists('route_analisis_financiero') && route_analisis_financiero($action)) {
     exit;
   }
 

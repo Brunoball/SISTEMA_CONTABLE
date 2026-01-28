@@ -117,6 +117,7 @@ function pickIcon(label) {
   if (s.includes("movimientos")) return faMoneyBillTrendUp;
   if (s.includes("flujo")) return faWallet;
   if (s.includes("cuentas") || s.includes("corrientes")) return faUsers;
+  if (s.includes("analisis") || s.includes("análisis")) return faChartLine;
   return faChartLine;
 }
 
@@ -164,14 +165,15 @@ const Principal = () => {
     usuario?.plan_nivel ?? usuario?.planNivel ?? 1
   );
 
-  // ✅ SOLO 3 SECCIONES
+  // ✅ SECCIONES (ahora 4 con Análisis Financiero)
   const navItems = useMemo(() => {
     const base = [
       { label: "Movimientos" },
       { label: "Flujo de Caja" },
       { label: "Cuentas Corrientes" },
+      { label: "Análisis Financiero" }, // ✅ NUEVO
     ].map((x) => {
-      const slug = slugify(x.label); // "cuentas-corrientes" ✅
+      const slug = slugify(x.label); // analisis-financiero ✅
       return {
         key: slug,
         icon: pickIcon(x.label),
@@ -180,7 +182,8 @@ const Principal = () => {
       };
     });
 
-    const limit = planNivel === 1 ? 1 : planNivel === 2 ? 2 : 3;
+    // ✅ Plan: 1=1 sección, 2=2 secciones, 3=4 secciones
+    const limit = planNivel === 1 ? 1 : planNivel === 2 ? 2 : 4;
     return base.slice(0, limit);
   }, [planNivel]);
 
@@ -236,7 +239,7 @@ const Principal = () => {
     document.activeElement?.blur?.();
   };
 
-  // ✅ FUNCIÓN NUEVA: navegar al dashboard desde el logo
+  // ✅ navegar al dashboard desde el logo
   const handleLogoClick = () => {
     navigate("/panel/dashboard");
     document.activeElement?.blur?.();
@@ -285,7 +288,6 @@ const Principal = () => {
 
       {/* SIDEBAR */}
       <aside className="pp-sidebar" aria-label="Navegación principal">
-        {/* ✅ CAMBIO AQUÍ: Siempre navega al dashboard */}
         <div
           className="pp-brand"
           onClick={handleLogoClick}
@@ -312,9 +314,7 @@ const Principal = () => {
             <button
               key={item.key}
               type="button"
-              className={`pp-nav__item ${
-                activeKey === item.key ? "is-active" : ""
-              }`}
+              className={`pp-nav__item ${activeKey === item.key ? "is-active" : ""}`}
               onClick={() => handleNavigate(item.ruta)}
               title={item.label}
             >

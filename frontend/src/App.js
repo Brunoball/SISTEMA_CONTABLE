@@ -1,11 +1,6 @@
 // src/App.js
 import React from "react";
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  Navigate,
-} from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 /* Páginas públicas */
 import Inicio from "./components/Login/Inicio";
@@ -19,8 +14,54 @@ import Dashboard from "./components/Dashboard/Dashboard";
 import Movimientos from "./components/Movimientos/Movimientos";
 import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 
-/* ✅ Cuentas Corrientes (IMPORT DEFAULT CORRECTO) */
-import CuentasCorrientes from "./components/Cuentas_Corrientes/Cuentas_Corrientes";
+/* ✅ IMPORT ROBUSTO (default o named) */
+import * as CuentasCorrientesModule from "./components/Cuentas_Corrientes/Cuentas_Corrientes";
+import * as AnalisisFinancieroModule from "./components/Analisis_Financiero/Analisis_Financiero";
+
+/* =========================================================
+   ✅ Helpers: resolver componente (default o named)
+========================================================= */
+function resolveComponent(mod, fallbacks = []) {
+  // 1) default export
+  if (mod && typeof mod.default === "function") return mod.default;
+
+  // 2) nombres esperados (named exports)
+  for (const k of fallbacks) {
+    if (mod && typeof mod[k] === "function") return mod[k];
+  }
+
+  // 3) si no sabemos el nombre, buscamos "la primera función" exportada
+  if (mod && typeof mod === "object") {
+    for (const k of Object.keys(mod)) {
+      if (typeof mod[k] === "function") return mod[k];
+    }
+  }
+
+  // 4) fallback duro (evita crash silencioso)
+  return function ComponenteNoEncontrado() {
+    return (
+      <div style={{ padding: 16 }}>
+        <h3 style={{ margin: 0 }}>Error de import/export</h3>
+        <p style={{ marginTop: 8 }}>
+          No se pudo resolver el componente. Revisá si el archivo exporta{" "}
+          <b>default</b> o un <b>named export</b>.
+        </p>
+      </div>
+    );
+  };
+}
+
+/* ✅ Componentes resueltos */
+const CuentasCorrientes = resolveComponent(CuentasCorrientesModule, [
+  "CuentasCorrientes",
+  "Cuentas_Corrientes",
+]);
+
+const AnalisisFinanciero = resolveComponent(AnalisisFinancieroModule, [
+  "AnalisisFinanciero",
+  "Analisis_Financiero",
+  "AnalisisFinancieroPage",
+]);
 
 /* =========================================================
    ✅ Auth
@@ -82,8 +123,11 @@ export default function App() {
           {/* Flujo de Caja */}
           <Route path="flujo-de-caja" element={<Flujo_Caja />} />
 
-          {/* ✅ Cuentas Corrientes */}
+          {/* Cuentas Corrientes */}
           <Route path="cuentas-corrientes" element={<CuentasCorrientes />} />
+
+          {/* ✅ Análisis Financiero */}
+          <Route path="analisis-financiero" element={<AnalisisFinanciero />} />
         </Route>
 
         {/* Cualquier otra -> login */}

@@ -1,0 +1,368 @@
+/* ===========================
+   registro.css (COMPLETO con PALETA AZUL INSTITUCIONAL)
+   =========================== */
+
+/* ====== Fuente ====== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap');
+
+/* =========================
+   PALETA AZUL INSTITUCIONAL (ÚNICO :root)
+   ========================= */
+:root {
+  --blue-inst-primary: #1D428A;
+  --blue-inst-primary-light: #2E5CBF;
+  --blue-inst-primary-dark: #102E6A;
+
+  --blue-inst-secondary: #0B5ED7;
+  --blue-inst-accent: #0B5ED7;
+
+  --blue-inst-success: #10B981;
+  --blue-inst-warning: #F59E0B;
+  --blue-inst-danger:  #D32F2F;
+
+  --blue-inst-light: #F8FAFC;
+  --blue-inst-dark:  #0F172A;
+
+  --blue-inst-gray-100: #F1F5F9;
+  --blue-inst-gray-200: #E2E8F0;
+  --blue-inst-gray-300: #CBD5E1;
+  --blue-inst-gray-400: #94A3B8;
+  --blue-inst-gray-500: #64748B;
+  --blue-inst-gray-600: #475569;
+  --blue-inst-gray-700: #334155;
+  --blue-inst-gray-800: #1E293B;
+  --blue-inst-gray-900: #0F172A;
+
+  --blue-inst-radius: 12px;
+  --blue-inst-radius-lg: 16px;
+  --blue-inst-radius-xl: 20px;
+
+  --blue-inst-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  --blue-inst-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --blue-inst-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --blue-inst-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --blue-inst-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* ====== Fondo con IMAGEN (sin degradado) ====== */
+.reg_global-container {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: url('../../imagenes/img_fondo.png') center center / cover no-repeat fixed;
+}
+
+/* ====== Tarjeta ====== */
+.reg_contenedor {
+  width: 90%;
+  max-width: 620px;
+  padding: 28px 20px;
+  background: #ffffff; /* tarjeta blanca */
+  border-radius: var(--blue-inst-radius-xl);
+  box-shadow: var(--blue-inst-shadow-xl),
+              inset 0 1px 0 rgba(255,255,255,.6),
+              0 0 0 1px rgba(255,255,255,.2);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Barra superior sólida (igual a Inicio) */
+@media (min-width: 768px) {
+  .reg_contenedor { padding: 34px; }
+  .reg_contenedor::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 6px;
+    background: var(--blue-inst-primary); /* sólido */
+    z-index: 2;
+  }
+}
+
+/* ====== Encabezado compacto ====== */
+.reg_encabezado {
+  text-align: center;
+  padding-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.reg_logo {
+  width: 90px;
+  height: 90px;
+  padding: .7rem;
+  border-radius: 50%;
+  border: 2px solid var(--blue-inst-primary);
+  object-fit: contain;
+  background: #ffffff;
+  box-shadow: var(--blue-inst-shadow-sm), inset 0 0 0 1px rgba(0,0,0,.05);
+  transition: var(--blue-inst-transition);
+  margin-bottom: 2px;
+}
+
+.reg_titulo {
+  font-size: 1.6rem;
+  line-height: 1.1;
+  margin: 2px 0 0;
+  font-weight: 800;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--blue-inst-primary);
+  letter-spacing: -0.4px;
+}
+@media (min-width: 768px) { .reg_titulo { font-size: 1.9rem; } }
+
+.reg_subtitulo {
+  font-size: 0.92rem;
+  color: var(--blue-inst-gray-600);
+  margin: 0;
+  max-width: 420px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+/* ====== Formulario ====== */
+.reg_formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.reg_campo {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+/* Inputs con íconos embebidos */
+.reg_input {
+  width: 100%;
+  padding: 12px 50px;
+  font-size: 1rem;
+  background: #ffffff;
+  border: 2px solid var(--blue-inst-gray-200);
+  border-radius: var(--blue-inst-radius);
+  box-shadow: var(--blue-inst-shadow-sm);
+  transition: var(--blue-inst-transition);
+  color: var(--blue-inst-gray-900);
+  caret-color: var(--blue-inst-primary);
+  font-family: 'Inter', sans-serif;
+}
+.reg_input:focus {
+  outline: none;
+  border-color: var(--blue-inst-primary-light);
+  box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.18); /* mismo valor que tenías (si querés lo pasamos a azul) */
+}
+
+/* Íconos embebidos base */
+.reg_campo::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px; height: 20px;
+  background-color: var(--blue-inst-gray-500);
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  transition: var(--blue-inst-transition);
+}
+
+/* Usuario (primer campo) */
+.reg_campo:nth-child(1)::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E");
+}
+
+/* Password (ambos campos con clase) */
+.reg_campo.reg_campo-password::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='11' width='18' height='11' rx='2' ry='2'/%3E%3Cpath d='M7 11V7a5 5 0 0 1 10 0v4'/%3E%3C/svg%3E");
+}
+
+/* Color del ícono en foco */
+.reg_campo:focus-within::before { background-color: var(--blue-inst-primary); }
+
+/* Botón ver contraseña (ojo) */
+.reg_toggle-password {
+  position: absolute;
+  right: 15px; top: 50%;
+  transform: translateY(-50%);
+  background: none; border: none;
+  color: var(--blue-inst-gray-500);
+  cursor: pointer;
+  transition: var(--blue-inst-transition);
+  padding: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.reg_toggle-password svg { width: 20px; height: 20px; }
+.reg_toggle-password:hover { color: var(--blue-inst-primary); }
+
+/* Mensajes */
+.reg_mensaje {
+  text-align: center;
+  color: var(--blue-inst-accent);
+  font-weight: 500;
+  margin: -6px 0 6px;
+  font-size: 0.9rem;
+  font-family: 'Inter', sans-serif;
+}
+
+/* ====== Footer y botones ====== */
+.reg_footer {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  margin-top: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.reg_footer .reg_boton { flex: 1 1 45%; min-width: 120px; }
+
+.reg_boton {
+  background: var(--blue-inst-primary);  /* sólido */
+  color: #fff;
+  padding: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 50px;
+  border: none;
+  cursor: pointer;
+  transition: var(--blue-inst-transition);
+  box-shadow: var(--blue-inst-shadow-md);
+  position: relative;
+  overflow: hidden;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.reg_boton:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--blue-inst-shadow-lg);
+  background: var(--blue-inst-primary-dark);
+}
+.reg_boton[disabled] { opacity: .7; cursor: not-allowed; }
+
+.reg_boton-secundario {
+  background: var(--blue-inst-gray-200);
+  color: var(--blue-inst-gray-800);
+  box-shadow: var(--blue-inst-shadow-sm);
+}
+.reg_boton-secundario:hover {
+  background: var(--blue-inst-gray-400);
+  color: #fff;
+  box-shadow: var(--blue-inst-shadow-md);
+}
+
+/* ====== Efecto onda ====== */
+.reg_boton:active::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 5px; height: 5px;
+  background: rgba(255,255,255,.6);
+  opacity: .6;
+  border-radius: 100%;
+  transform: scale(1,1) translate(-50%,-50%);
+  transform-origin: 50% 50%;
+  animation: princ-onda .6s ease-out;
+}
+@keyframes princ-onda {
+  0% { transform: scale(1,1) translate(-50%,-50%); opacity: .6; }
+  100% { transform: scale(30,30) translate(-50%,-50%); opacity: 0; }
+}
+
+/* ====== SELECT de Rol (debajo de Usuario) ====== */
+.reg_campo-rol select.reg_input {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 48px; /* espacio para flecha */
+  cursor: pointer;
+  background-color: #fff; /* coherente con inputs */
+}
+.reg_campo-rol select.reg_input:focus {
+  outline: none;
+}
+
+/* Icono izquierdo (maletín / rol) */
+.reg_campo-rol::before {
+  background-color: var(--blue-inst-gray-500);
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  /* briefcase */
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='M10 6h4a2 2 0 0 1 2 2v2h-8V8a2 2 0 0 1 2-2z'/%3E%3Cpath d='M4 10h16a2 2 0 0 1 2 2v5a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-5a2 2 0 0 1 2-2z'/%3E%3C/svg%3E");
+}
+
+/* Flecha custom a la derecha */
+.reg_campo-rol::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  background-color: var(--blue-inst-gray-500);
+  pointer-events: none;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  /* chevron-down */
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* Colores en foco (ícono + flecha) */
+.reg_campo-rol:focus-within::before,
+.reg_campo-rol:focus-within::after {
+  background-color: var(--blue-inst-primary);
+}
+
+/* (Opcional) quitar flecha IE/Edge antiguos */
+select.reg_input::-ms-expand { display: none; }
+
+/* ====== Responsive muy chico ====== */
+@media (max-width: 400px) {
+  .reg_contenedor {
+    padding: 22px 14px;
+    gap: 16px;
+    margin: 26px auto;
+    border-radius: var(--blue-inst-radius-lg);
+  }
+  .reg_input { padding: 11px 46px; }
+  .reg_footer { flex-direction: column; }
+  .reg_footer .reg_boton { flex: 1 1 100%; }
+  .reg_campo-rol select.reg_input { padding-right: 44px; }
+}
+
+/* ====== Fila de 2 columnas para las contraseñas ====== */
+.reg_fila-2 {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.reg_col-6 {
+  flex: 1 1 50%;
+  min-width: 0; /* evita overflow del input */
+}
+
+/* Asegura que los íconos y el botón ojo queden bien dentro de cada columna */
+.reg_fila-2 .reg_campo.reg_campo-password {
+  position: relative;
+}
+
+/* Responsive: en pantallas chicas, apilar */
+@media (max-width: 560px) {
+  .reg_fila-2 {
+    flex-direction: column;
+  }
+}

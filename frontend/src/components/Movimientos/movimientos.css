@@ -1,0 +1,962 @@
+/* src/components/Movimientos/movimientos.css */
+
+/* =========================
+   Variables (fallbacks)
+========================= */
+:root{
+  --mov-text: rgba(15, 23, 42, 0.92);
+  --mov-muted: rgba(15, 23, 42, 0.60);
+  --mov-border: rgba(15, 23, 42, 0.12);
+
+  --mov-card: #ffffff;
+  --mov-radius: 16px;
+  --mov-shadow: 0 10px 30px rgba(2, 8, 23, 0.06);
+
+  --mov-primary: var(--blue-inst-primary, #1f6feb);
+  --mov-primary-2: var(--blue-inst-secondary, #0b4fc7);
+
+  --blue-inst-gray-100: var(--blue-inst-gray-100, #f1f5f9);
+  --blue-inst-gray-700: var(--blue-inst-gray-700, rgba(15, 23, 42, 0.75));
+  --blue-inst-radius-lg: var(--blue-inst-radius-lg, 14px);
+  --blue-inst-shadow-sm: var(--blue-inst-shadow-sm, 0 6px 18px rgba(2, 8, 23, 0.06));
+  --blue-inst-shadow-md: var(--blue-inst-shadow-md, 0 10px 26px rgba(2, 8, 23, 0.08));
+  --blue-inst-transition: var(--blue-inst-transition, 140ms ease);
+}
+
+/* =========================
+   Page
+========================= */
+.mov-page{
+  width: 100%;
+  min-height: 100%;
+  color: var(--mov-text);
+}
+
+/* =========================
+   Topbar
+========================= */
+
+
+.mov-kicker{
+  font-size: 12px;
+  letter-spacing: .14em;
+  font-weight: 800;
+  color: rgba(31, 111, 235, 0.85);
+}
+
+.mov-titleRow{
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mov-title{
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.mov-subtitle{
+  color: rgb(255 255 255 / 60%);
+  max-width: 720px;
+  font-size: 14px;
+}
+
+/* Estado */
+.mov-pill{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid var(--mov-border);
+  box-shadow: 0 6px 20px rgba(2, 8, 23, 0.06);
+  color: rgba(15, 23, 42, 0.75);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.mov-dot{
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #16a34a;
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.14);
+}
+
+/* =========================
+   Alert
+========================= */
+.mov-alert{
+  margin: 0 18px 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.10);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  color: rgba(127, 29, 29, 0.92);
+  font-weight: 800;
+}
+
+/* =========================
+   Cards / Layout
+========================= */
+.mov-grid{
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.mov-card{
+  background: var(--mov-card);
+  border: 1px solid var(--mov-border);
+  border-radius: var(--mov-radius);
+  box-shadow: var(--mov-shadow);
+  overflow: hidden;
+}
+
+/* Head */
+.mov-card__head{
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.mov-card__headLeft{
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+.mov-card__title{
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.mov-card__hint{
+  margin-top: 3px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.55);
+}
+
+.mov-card__actions{
+  display: flex;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+/* =========================
+   Filters (inline in head)
+========================= */
+.mov-headFilters{
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.mov-filter label,
+.mov-search label{
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.65);
+  margin-bottom: 6px;
+}
+
+.mov-filter select,
+.mov-search input{
+  width: 100%;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--mov-border);
+  background: #fff;
+  padding: 0 12px;
+  outline: none;
+  font-weight: 700;
+  color: rgba(15, 23, 42, 0.90);
+}
+
+.mov-search input::placeholder{
+  color: rgba(15, 23, 42, 0.40);
+}
+
+.mov-filter select:focus,
+.mov-search input:focus{
+  border-color: rgba(31, 111, 235, 0.55);
+  box-shadow: 0 0 0 4px rgba(31, 111, 235, 0.12);
+}
+
+/* widths */
+.mov-filter{
+  width: 160px;
+}
+
+.mov-search{
+  width: 320px;
+}
+
+/* =========================
+   Buttons
+========================= */
+.mov-btn{
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: #fff;
+  font-weight: 900;
+  padding: 0 14px;
+  cursor: pointer;
+  color: rgba(15, 23, 42, 0.85);
+  transition: 140ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.mov-btn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(2, 8, 23, 0.08);
+}
+
+.mov-btn:active{
+  transform: translateY(0px);
+  box-shadow: none;
+}
+
+.mov-btn:disabled{
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+
+
+.mov-btn--ghost{
+  background: rgba(15, 23, 42, 0.04);
+}
+
+/* Botones "Limpiar" (mejorados) */
+.mov-btn--clear{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  white-space: nowrap;
+}
+
+.mov-btn--dangerSoft{
+  background: #fff;
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  color: var(--mov-danger);
+}
+
+.mov-btn--dangerSoft:hover{
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.30);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(2, 8, 23, 0.10);
+}
+
+.mov-btn--dangerSoft:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.18);
+}
+
+/* =========================
+   Tabs Bar (tabs + CTA)
+========================= */
+.mov-tabsBar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 14px 0 0;
+}
+
+/* CTA right */
+.mov-tabsCta{
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 0 16px;
+}
+
+/* Tabs container (pill) */
+.mov-tabs{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  box-shadow: var(--blue-inst-shadow-sm);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+
+  margin: 0;
+}
+
+.mov-tabs::-webkit-scrollbar{
+  height: 8px;
+}
+.mov-tabs::-webkit-scrollbar-thumb{
+  background: rgba(15, 23, 42, 0.14);
+  border-radius: 999px;
+}
+.mov-tabs::-webkit-scrollbar-track{
+  background: transparent;
+}
+
+.mov-tab{
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: .01em;
+
+  color: var(--blue-inst-gray-700);
+  transition: var(--blue-inst-transition);
+  white-space: nowrap;
+  position: relative;
+  user-select: none;
+}
+
+.mov-tab:hover{
+  background: rgba(29, 66, 138, 0.08);
+  color: var(--blue-inst-primary, #1f6feb);
+  transform: translateY(-1px);
+}
+
+.mov-tab:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(11, 94, 215, 0.18);
+  border-color: rgba(11, 94, 215, 0.35);
+}
+
+.mov-tab.is-active{
+  background: #fff;
+  color: var(--blue-inst-primary, #1f6feb);
+  border-color: rgba(29, 66, 138, 0.18);
+  box-shadow: var(--blue-inst-shadow-md);
+  transform: translateY(-1px);
+}
+
+.mov-tab.is-active::after{
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 6px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--blue-inst-primary, #1f6feb),
+    var(--blue-inst-secondary, #0b4fc7)
+  );
+  opacity: 0.95;
+}
+
+/* =========================
+   “Tabla” con DIVs (grid)
+========================= */
+.mov-card--table .mov-tableWrap{
+  margin-top: 10px;
+}
+
+.mov-tableWrap{
+  max-height: 520px;
+  overflow: auto;
+}
+
+/* Header sticky */
+.mov-gridTable--head{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #0b4fc7;
+  color: rgba(255,255,255,.92);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+/* contenedor fila/header */
+.mov-gridTable{
+  display: grid;
+  width: 100%;
+}
+
+/* Celdas */
+.mov-gridCell{
+  padding: 12px 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  color: rgba(15, 23, 42, 0.88);
+  font-size: 13px;
+
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mov-gridCell--head{
+  font-weight: 900;
+  letter-spacing: .02em;
+  border-bottom: none;
+  color: rgba(255,255,255,.92);
+}
+
+/* filas */
+.mov-gridTable--row{
+  background: #fff;
+}
+
+.mov-gridTable--row:hover{
+  background: rgba(31, 111, 235, 0.06);
+}
+
+/* acciones */
+.mov-actionsInline{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.mov-iconBtn{
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: 140ms ease;
+}
+
+.mov-iconBtn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(2, 8, 23, 0.08);
+}
+
+.mov-iconBtn:disabled{
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.mov-iconBtn--danger{
+  border-color: rgba(239, 68, 68, 0.25);
+  color: rgba(185, 28, 28, 0.95);
+}
+
+.mov-iconBtn--danger:hover{
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* estados vacíos */
+.mov-emptyRow{
+  padding: 24px 12px;
+  text-align: center;
+  color: rgba(15, 23, 42, 0.55);
+  font-weight: 800;
+}
+
+/* helpers */
+.is-right{ text-align: right; }
+.is-center{ text-align: center; }
+.is-strong{ font-weight: 900; }
+
+/* =========================
+   Form (si tus modales reutilizan)
+========================= */
+.mov-form{
+  padding: 14px 16px 16px;
+}
+
+.mov-formRow{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mov-field{
+  margin-bottom: 12px;
+}
+
+.mov-field label{
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(15, 23, 42, 0.65);
+  margin-bottom: 6px;
+}
+
+.mov-field input,
+.mov-field select{
+  width: 100%;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--mov-border);
+  background: #fff;
+  padding: 0 12px;
+  outline: none;
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.90);
+}
+
+.mov-field input:disabled{
+  background: rgba(15, 23, 42, 0.04);
+  color: rgba(15, 23, 42, 0.70);
+}
+
+.mov-field input:focus,
+.mov-field select:focus{
+  border-color: rgba(31, 111, 235, 0.55);
+  box-shadow: 0 0 0 4px rgba(31, 111, 235, 0.12);
+}
+
+/* Switch */
+.mov-switchRow{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+
+.mov-switch{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 10px 0 0;
+  gap: 10px;
+}
+
+.mov-switch span{
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(15, 23, 42, 0.65);
+}
+
+.mov-toggle{
+  width: 50px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.10);
+  position: relative;
+  cursor: pointer;
+  outline: none;
+  transition: 160ms ease;
+}
+
+.mov-toggle.is-on{
+  background: rgba(31, 111, 235, 0.22);
+  border-color: rgba(31, 111, 235, 0.45);
+}
+
+.mov-toggle__knob{
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  box-shadow: 0 8px 18px rgba(2, 8, 23, 0.12);
+  transition: 160ms ease;
+}
+
+.mov-toggle.is-on .mov-toggle__knob{
+  transform: translateX(22px);
+}
+
+.mov-formActions{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* =========================
+   Responsive
+========================= */
+@media (max-width: 1100px){
+  .mov-grid{
+    grid-template-columns: 1fr;
+  }
+
+
+
+  .mov-card__actions{
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 1000px){
+  .mov-titleRow{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mov-filter,
+  .mov-search{
+    width: 100%;
+  }
+}
+
+@media (max-width: 720px){
+  .mov-tabsBar{
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .mov-tabsCta{
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px){
+  .mov-formRow,
+  .mov-switchRow{
+    grid-template-columns: 1fr;
+  }
+
+  .mov-tabs{
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .mov-tab{
+    height: 38px;
+    padding: 0 12px;
+    font-size: 12.5px;
+  }
+
+  .mov-topbar{
+    padding: 16px 14px 6px;
+  }
+
+  .mov-title{
+    font-size: 28px;
+  }
+
+  .mov-alert{
+    margin: 0 14px 12px;
+  }
+}
+/* =========================
+   CTA Nuevo movimiento (mejor look)
+========================= */
+.mov-btn--primary{
+  background: #0b4fc7;
+  color: #fff;
+  border: 1px solid rgba(11, 79, 199, 0.35);
+  box-shadow: 0 10px 22px rgba(2, 8, 23, 0.10);
+}
+
+.mov-btn--primary:hover{
+  background: #0a43aa;
+  transform: translateY(-1px);
+  box-shadow: 0 14px 26px rgba(2, 8, 23, 0.14);
+}
+
+.mov-btn--primary:active{
+  background: #08398f;
+  transform: translateY(0);
+  box-shadow: 0 8px 16px rgba(2, 8, 23, 0.10);
+}
+
+.mov-btn--primary:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(11, 79, 199, 0.22), 0 10px 22px rgba(2, 8, 23, 0.10);
+}
+.is-center{ text-align: center; }
+/* src/components/Movimientos/movimientos.css */
+
+:root {
+  --mov-bg: #f8fafc;
+  --mov-primary: #2563eb;
+  --mov-primary-dark: #1d4ed8;
+  --mov-accent: #3b82f6;
+  --mov-success: #10b981;
+  --mov-danger: #ef4444;
+  --mov-text-main: #1e293b;
+  --mov-text-muted: #64748b;
+  --mov-border: #e2e8f0;
+  --mov-card-bg: #ffffff;
+  --mov-shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+  --mov-shadow-md: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+}
+
+.mov-page {
+  background-color: var(--mov-bg);
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* --- Topbar & Header --- */
+.mov-topbar {
+  margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mov-kicker {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--mov-primary);
+  margin-bottom: 0.5rem;
+}
+
+.mov-title {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: var(--mov-text-main);
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+.mov-subtitle {
+  color: var(--mov-text-muted);
+  font-size: 0.95rem;
+}
+
+/* Status Pill */
+.mov-pill {
+  background: white;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--mov-border);
+  box-shadow: var(--mov-shadow-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.mov-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--mov-success);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+}
+
+/* --- Card & Table Layout --- */
+.mov-card--table {
+  background: var(--mov-card-bg);
+  border-radius: 1.25rem;
+  border: 1px solid var(--mov-border);
+  box-shadow: var(--mov-shadow-md);
+  overflow: hidden;
+}
+
+.mov-card__head {
+  padding: 1.5rem;
+  background: #ffffff;
+  border-bottom: 1px solid var(--mov-border);
+  display: flex;
+  gap: 1.5rem;
+}
+
+.mov-card__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--mov-text-main);
+}
+
+/* Filters Group */
+.mov-headFilters {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.mov-filter, .mov-search {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.mov-filter label, .mov-search label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--mov-text-muted);
+  text-transform: uppercase;
+}
+
+.mov-filter select, .mov-search input {
+  height: 42px;
+  background: #f1f5f9;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  padding: 0 1rem;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.mov-filter select:focus, .mov-search input:focus {
+  background: white;
+  border-color: var(--mov-primary);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+  outline: none;
+}
+
+/* --- Tabs & Navigation --- */
+.mov-tabsBar {
+  padding: 0.75rem 1.5rem;
+  background: #f8fafc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--mov-border);
+}
+
+.mov-tabs {
+  display: flex;
+  padding: 0.25rem;
+  border-radius: 0.75rem;
+  gap: 0.25rem;
+}
+
+.mov-tab {
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--mov-text-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mov-tab.is-active {
+  background: white;
+  color: var(--mov-primary);
+  box-shadow: var(--mov-shadow-sm);
+}
+
+/* --- The Grid Table --- */
+.mov-gridTable--head {
+  background: #f1f5f9 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mov-gridCell--head {
+  color: var(--mov-text-muted) !important;
+  font-weight: 700 !important;
+  font-size: 0.75rem !important;
+}
+
+.mov-gridTable--row {
+  transition: background 0.1s;
+  border-bottom: 1px solid var(--mov-border);
+}
+
+.mov-gridTable--row:hover {
+  background-color: #f8fafc;
+}
+
+
+
+.is-strong {
+  font-weight: 600;
+  color: var(--mov-text-main);
+}
+
+/* Buttons */
+.mov-btn--primary {
+  background: var(--mov-primary);
+  color: white;
+  border: none;
+  font-weight: 600;
+  padding: 0.6rem 1.2rem;
+  border-radius: 0.75rem;
+  transition: all 0.2s;
+}
+
+.mov-btn--primary:hover {
+  background: var(--mov-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+.mov-iconBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 0.5rem;
+  border: 1px solid var(--mov-border);
+  background: white;
+  color: var(--mov-text-muted);
+  transition: all 0.2s;
+}
+
+.mov-iconBtn:hover {
+  background: var(--mov-primary);
+  color: white;
+  border-color: var(--mov-primary);
+}
+
+.mov-iconBtn--danger:hover {
+  background: var(--mov-danger);
+  border-color: var(--mov-danger);
+}
+/* ===== Scroll solo en body (pegalo al final) ===== */
+
+/* que la card pueda “ceder” espacio */
+.mov-card--table{
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* header siempre visible */
+.mov-gridTable--head{
+  position: sticky; /* opcional, por si scrollea la página */
+  top: 0;
+  z-index: 10;
+}
+
+/* ESTE es el scroll real */
+.mov-tableWrap{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  max-height: calc(100vh - 300px); /* ajustá 260 si te queda corto/largo */
+}

@@ -1,0 +1,256 @@
+/* src/components/Perfil/ModalPerfil.css */
+
+/* =========================================================
+   ✅ BASE MODAL (copiado/igualado a ModalEditarMovimiento)
+   - Header azul
+   - Transición sutil (fade + slide)
+   - Overlay con blur
+========================================================= */
+
+.mi-modal__overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: mi-fade 0.15s ease-out;
+  padding: 16px;
+}
+
+.mi-modal__container{
+  width: min(720px, 92vw); /* Perfil más angosto */
+  max-height: 90vh;
+  background: var(--mi-bg);
+  border-radius: var(--mi-radius-lg, 18px);
+  box-shadow: var(--mi-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: mi-slide 0.22s ease-out;
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+.mi-modal__container--perfil{
+  width: min(760px, 92vw);
+  max-width: 800px;
+}
+
+/* Header */
+.mi-modal__header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  background: var(--mi-primary);
+  color: #fff;
+}
+
+.mi-modal__head-left{ flex: 1; }
+
+.mi-modal__title{
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.mi-modal__subtitle{
+  margin: 4px 0 0;
+  font-size: .9rem;
+  opacity: .95;
+  font-weight: 500;
+}
+
+/* Botón cerrar (igual) */
+.mi-modal__close{
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  padding: 0 !important;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform .15s ease, background .15s ease;
+  font-size: 18px;
+}
+.mi-modal__close:hover{
+  background: rgba(255,255,255,.12);
+  transform: rotate(90deg);
+}
+
+/* Animaciones */
+@keyframes mi-fade{ from{opacity:0} to{opacity:1} }
+@keyframes mi-slide{
+  from{ opacity:0; transform: translateY(18px); }
+  to{ opacity:1; transform: translateY(0); }
+}
+
+/* =========================================================
+   BODY (scroll + fondo suave como Movimientos)
+========================================================= */
+.perfil-body{
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--mi-bg-soft);
+}
+
+.perfil-inner{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 22px;
+  background: linear-gradient(180deg, #fff 0%, #fbfcff 100%);
+}
+
+/* =========================================================
+   Perfil: contenido
+========================================================= */
+.perfil-card{
+  display: grid;
+  grid-template-columns: 44px 56px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--mi-border);
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(15,23,42,.03);
+  margin-bottom: 14px;
+  min-width: 0;
+}
+
+.perfil-card__icon{
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--mi-bg-soft);
+  border: 1px solid var(--mi-border);
+  font-size: 22px;
+  color: var(--mi-primary);
+}
+
+.perfil-avatar{
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  font-weight: 900;
+  color: #fff;
+  background: linear-gradient(135deg, var(--mi-primary), var(--mi-primary-600));
+  border: 1px solid rgba(0,0,0,.06);
+}
+
+.perfil-who{ min-width: 0; }
+
+.perfil-name{
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--mi-text);
+  line-height: 1.15;
+  word-break: break-word;
+}
+
+.perfil-meta{
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--mi-muted);
+}
+
+/* Grid datos */
+.perfil-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.perfil-field{
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--mi-border);
+  background: #fff;
+  min-width: 0;
+}
+
+.perfil-field--full{ grid-column: 1 / -1; }
+
+.perfil-field__label{
+  font-size: 12px;
+  color: var(--mi-muted);
+  margin-bottom: 4px;
+}
+
+.perfil-field__value{
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--mi-text);
+  word-break: break-word;
+}
+
+/* =========================================================
+   Footer acciones (igual a Movimientos)
+========================================================= */
+.mit-actions{
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--mi-border);
+  background: #fff;
+  flex: 0 0 auto;
+}
+
+.mit-help{
+  margin-right: auto;
+  padding: 0;
+  font-size: .82rem;
+  color: var(--mi-muted);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.mit-btn{
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform .16s ease, box-shadow .16s ease, filter .16s ease, background .16s ease;
+}
+
+.mit-btn--ghost{
+  background: #fff;
+  color: var(--mi-text);
+  border-color: var(--mi-border);
+}
+.mit-btn--ghost:hover{
+  background: rgba(0,0,0,.03);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(0,0,0,.08);
+}
+
+/* Responsive */
+@media (max-width: 640px){
+  .perfil-grid{ grid-template-columns: 1fr; }
+  .perfil-card{
+    grid-template-columns: 44px 52px 1fr;
+  }
+  .perfil-inner{ padding: 16px; }
+}

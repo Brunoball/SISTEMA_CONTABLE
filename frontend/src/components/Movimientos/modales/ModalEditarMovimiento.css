@@ -1,0 +1,372 @@
+/* src/components/Movimientos/modales/ModalEditarMovimiento.css */
+
+/* =========================
+   Variables (azul institucional)
+========================= */
+:root{
+  --blue-inst-primary: #1D428A;
+  --blue-inst-primary-light: #2E5CBF;
+  --blue-inst-primary-dark: #102E6A;
+
+  --blue-inst-gray-100: #F1F5F9;
+  --blue-inst-gray-200: #E2E8F0;
+  --blue-inst-gray-600: #475569;
+  --blue-inst-dark:  #0F172A;
+
+  --mi-primary: var(--blue-inst-primary);
+  --mi-primary-600: var(--blue-inst-primary-light);
+
+  --mi-bg: #ffffff;
+  --mi-bg-soft: var(--blue-inst-gray-100);
+  --mi-border: var(--blue-inst-gray-200);
+
+  --mi-text: var(--blue-inst-dark);
+  --mi-muted: var(--blue-inst-gray-600);
+
+  --mi-shadow: 0 28px 64px -24px rgba(0,0,0,.28);
+
+  --mi-radius-md: 12px;
+  --mi-radius-lg: 18px;
+}
+
+/* =========================
+   Modal base
+========================= */
+.mi-modal__overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: mi-fade 0.15s ease-out;
+  padding: 16px;
+}
+
+.mi-modal__container{
+  width: min(1060px, 92vw);
+  max-height: 90vh;
+  background: var(--mi-bg);
+  border-radius: var(--mi-radius-lg);
+  box-shadow: var(--mi-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: mi-slide 0.22s ease-out;
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+/* Header */
+.mi-modal__header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  background: var(--mi-primary);
+  color: #fff;
+}
+.mi-modal__head-left{ flex: 1; }
+
+.mi-modal__title{
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.mi-modal__subtitle{
+  margin: 4px 0 0;
+  font-size: .9rem;
+  opacity: .95;
+  font-weight: 500;
+}
+
+.mi-modal__close{
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  padding: 0 !important;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform .15s ease, background .15s ease;
+}
+.mi-modal__close:hover{
+  background: rgba(255,255,255,.12);
+  transform: rotate(90deg);
+}
+.mi-modal__close:disabled{
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+/* Body scroll + footer pegado abajo */
+.mit-modal__body{
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--mi-bg-soft);
+}
+
+.mi-tabpanel{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 22px;
+  background: linear-gradient(180deg, #fff 0%, #fbfcff 100%);
+}
+
+/* =========================
+   Error
+========================= */
+.mov-mi-error{
+  background: rgba(211, 47, 47, 0.08);
+  border: 1px solid rgba(211, 47, 47, 0.25);
+  color: #7f1d1d;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin: 0 0 14px;
+  font-weight: 700;
+}
+
+/* =========================
+   Grid / cards
+========================= */
+.mi-grid{
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 18px;
+}
+
+.mi-card{
+  grid-column: span 6;
+  background: #fff;
+  border: 1px solid var(--mi-border);
+  border-radius: var(--mi-radius-md);
+  padding: 16px;
+  box-shadow: 0 2px 10px rgba(15,23,42,.03);
+  min-width: 0;
+}
+.mi-card--full{ grid-column: 1 / -1; }
+
+.mi-card__title{
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--mi-text);
+  letter-spacing: -0.01em;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--mi-border);
+}
+
+/* =========================
+   Floating labels
+========================= */
+.fl-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  min-width: 0;
+}
+.fl-col-full{ grid-column: 1 / -1; }
+
+.fl-field{
+  position: relative;
+  min-width: 0;
+}
+
+.fl-input{
+  width: 100%;
+  border: 1px solid var(--mi-border);
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px 12px 10px;
+  font-size: .95rem;
+  color: var(--mi-text);
+  outline: none;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  box-sizing: border-box;
+}
+
+.fl-select{
+  padding-top: 18px;
+  padding-bottom: 10px;
+}
+
+.fl-label{
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  font-size: .82rem;
+  color: var(--mi-muted);
+  pointer-events: none;
+  transform-origin: left top;
+  transition: transform .16s ease, opacity .16s ease, color .16s ease;
+  opacity: .9;
+}
+
+.fl-input:focus{
+  border-color: var(--mi-primary-600);
+  box-shadow: 0 0 0 3px rgba(46,92,191,.14);
+}
+
+.fl-input:focus + .fl-label,
+.fl-input:not(:placeholder-shown) + .fl-label{
+  transform: translateY(-10px) scale(.92);
+  color: var(--mi-primary-600);
+  opacity: 1;
+}
+
+/* En selects, la label va “arriba” siempre */
+.fl-select + .fl-label{
+  transform: translateY(-10px) scale(.92);
+}
+
+.fl-input:disabled{
+  background: #f8fafc;
+  opacity: .85;
+  cursor: not-allowed;
+}
+
+/* =========================
+   Switch (mit-switch)
+========================= */
+.mit-switch{
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  user-select: none;
+  font-weight: 800;
+  color: var(--mi-text);
+}
+.mit-switch input{
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.mit-switch__track{
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: #d7e2f5;
+  border: 1px solid var(--mi-border);
+  position: relative;
+  cursor: pointer;
+  transition: .2s;
+  flex: 0 0 auto;
+}
+.mit-switch__track::after{
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  box-shadow: 0 4px 10px rgba(0,0,0,.18);
+  transition: .2s;
+}
+.mit-switch input:checked + .mit-switch__track{
+  background: var(--mi-primary);
+  border-color: rgba(255,255,255,.2);
+}
+.mit-switch input:checked + .mit-switch__track::after{
+  left: 21px;
+}
+.mit-switch__text{ font-size: .95rem; }
+
+/* =========================
+   Footer acciones
+========================= */
+.mit-actions{
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--mi-border);
+  background: #fff;
+  flex: 0 0 auto;
+}
+
+.mit-help{
+  margin-right: auto;
+  padding: 0;
+  font-size: .82rem;
+  color: var(--mi-muted);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.mit-btn{
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform .16s ease, box-shadow .16s ease, filter .16s ease, background .16s ease;
+}
+
+.mit-btn--ghost{
+  background: #fff;
+  color: var(--mi-text);
+  border-color: var(--mi-border);
+}
+.mit-btn--ghost:hover{
+  background: rgba(0,0,0,.03);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(0,0,0,.08);
+}
+
+.mit-btn--solid{
+  background: var(--mi-primary);
+  color: #fff;
+  border-color: var(--mi-primary);
+}
+.mit-btn--solid:hover{
+  filter: brightness(.97);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px rgba(29,66,138,.22);
+}
+
+.mit-btn:disabled{
+  opacity: .6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* =========================
+   Responsive
+========================= */
+@media (max-width: 900px){
+  .mi-card{ grid-column: span 12; }
+  .fl-grid{ grid-template-columns: 1fr; }
+}
+
+/* Animaciones */
+@keyframes mi-fade{ from{opacity:0} to{opacity:1} }
+@keyframes mi-slide{
+  from{ opacity:0; transform: translateY(18px); }
+  to{ opacity:1; transform: translateY(0); }
+}
+
+/* Fix overflow general */
+.mi-grid > * { min-width: 0; }
+.mi-card { min-width: 0; }
+.fl-grid { min-width: 0; }
+.fl-field { min-width: 0; }

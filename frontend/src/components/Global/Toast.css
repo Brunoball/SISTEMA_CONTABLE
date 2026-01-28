@@ -1,0 +1,91 @@
+.toast-container {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99999999999999999999999999;
+  display: flex;
+  align-items: center;
+  background-color: white;
+  padding: 14px 20px !important;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  min-width: 280px;
+  max-width: 90%;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #000;
+  animation: slideDown 0.4s ease-out;
+}
+
+.toast-icon {
+  font-size: 1.4rem;
+  margin-right: 10px;
+}
+
+.toast-exito .toast-icon {
+  color: #28a745;
+}
+
+.toast-error .toast-icon {
+  color: #dc3545;
+}
+
+.toast-advertencia .toast-icon {
+  color: #ffc107;
+}
+
+.toast-cargando .toast-icon {
+  color: #17a2b8;
+}
+
+.toast-info .toast-icon {
+  color: #007bff;
+}
+
+.toast-message {
+  flex: 1;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes fadeOutUp {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -30px);
+  }
+}
+
+.desaparecer {
+  animation: fadeOutUp 0.5s ease forwards;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+.desaparecer {
+  animation: fadeOutUp 1.5s ease forwards;
+}

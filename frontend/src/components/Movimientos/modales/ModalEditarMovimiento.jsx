@@ -200,12 +200,26 @@ export default function ModalEditarMovimiento({
     [onToast]
   );
 
+  // ✅ refs para NO resetear por cambios de props mientras está abierto
+  const listsRef = useRef(lists);
+  const rowRef = useRef(row);
+  const periodoDefaultRef = useRef(periodoDefault);
+  useEffect(() => {
+    listsRef.current = lists;
+  }, [lists]);
+  useEffect(() => {
+    rowRef.current = row;
+  }, [row]);
+  useEffect(() => {
+    periodoDefaultRef.current = periodoDefault;
+  }, [periodoDefault]);
+
   const [localLists, setLocalLists] = useState(() => ({
     ...SAFE_LISTS,
     ...normalizeIncomingLists(lists),
   }));
 
-  // ✅ Mantener listas actualizadas SIN resetear el form (evita "parpadeo" al guardar)
+  // ✅ actualizar listas SIN tocar form
   useEffect(() => {
     setLocalLists({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) });
   }, [lists]);
@@ -241,32 +255,31 @@ export default function ModalEditarMovimiento({
   // ✅ Date picker: abrir con click en todo el input
   const fechaRef = useRef(null);
 
-  // ✅ Dirty flag: evita re-hidratar el form mientras el usuario está editando
+  // ✅ Dirty flag
   const dirtyRef = useRef(false);
   const markDirty = useCallback(() => {
     dirtyRef.current = true;
   }, []);
 
-  // ✅ Init SOLO al ABRIR el modal (no con cambios de lists/row mientras está abierto)
+  // ✅ Init SOLO al ABRIR (cerrado -> abierto). NO depende de click afuera.
   const prevOpenRef = useRef(false);
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
     prevOpenRef.current = open;
 
-    if (!open || wasOpen) return;
+    if (!open) return;
+    if (wasOpen) return;
 
-    // reset flags
     dirtyRef.current = false;
     setSaving(false);
     setAddUI({ field: null, text: "", saving: false });
 
-    const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(lists) };
+    const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(listsRef.current) };
     setLocalLists(merged);
 
-    const built = buildFormFromRow(row, merged, periodoDefault);
+    const built = buildFormFromRow(rowRef.current, merged, periodoDefaultRef.current);
     setForm(built);
 
-    // setea texto de autocompletes según ids del row actual
     const nameById = (arr, id) => {
       const sid = String(id ?? "").trim();
       if (!sid || sid === NULL_OPTION) return "";
@@ -284,13 +297,17 @@ export default function ModalEditarMovimiento({
     setDetalleFocus(false);
 
     setTimeout(() => closeBtnRef.current?.focus(), 0);
+  }, [open]);
 
+  // ✅ ESC cierra (y nada más)
+  useEffect(() => {
+    if (!open) return;
     const onKeyDown = (e) => {
       if (e.key === "Escape") onClose?.();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, lists, row, periodoDefault, onClose]);
+  }, [open, onClose]);
 
   const openDatePicker = useCallback(() => {
     const el = fechaRef.current;
@@ -375,8 +392,7 @@ export default function ModalEditarMovimiento({
   );
 
   /* =========================
-     Guardar nuevo registro del catálogo (y actualizar TODO)
-     ✅ ahora también actualiza inputs de cliente/proveedor/detalle
+     Guardar nuevo registro del catálogo
   ========================= */
   const guardarNuevoCatalogo = useCallback(async () => {
     if (!addUI.field) return;
@@ -414,7 +430,6 @@ export default function ModalEditarMovimiento({
       const listKey = LISTKEY_BY_CATALOGO[meta.catalogo];
       if (!listKey) throw new Error("Catálogo desconocido para actualizar listas.");
 
-      // 1) Actualiza listas locales
       setLocalLists((prev) => {
         const next = { ...prev };
         const arr = Array.isArray(prev[listKey]) ? prev[listKey].slice() : [];
@@ -425,30 +440,24 @@ export default function ModalEditarMovimiento({
         return next;
       });
 
-      // 2) Deja seleccionado el nuevo ID (siempre)
       setForm((prev) => {
         const isStringField =
           addUI.field === "id_cuenta_corriente" ||
           addUI.field === "id_cliente" ||
           addUI.field === "id_proveedor" ||
           addUI.field === "id_detalle";
-
         return { ...prev, [addUI.field]: isStringField ? String(newId) : Number(newId) };
       });
 
-      // 2b) actualiza inputs de autocompletes
       if (addUI.field === "id_cliente") setClienteInput(newNombre);
       if (addUI.field === "id_proveedor") setProveedorInput(newNombre);
       if (addUI.field === "id_detalle") setDetalleInput(newNombre);
 
-      // 3) Actualiza también el padre
       try {
         onCatalogCreated?.(meta.catalogo, { id: newId, nombre: newNombre });
       } catch {}
 
-      // 4) Cierra UI "Agregar…"
       setAddUI({ field: null, text: "", saving: false });
-
       showToast("exito", `${meta.label} creado: "${newNombre}"`, 2600);
     } catch (e) {
       const msg = e?.message || "Error creando el registro.";
@@ -457,10 +466,11 @@ export default function ModalEditarMovimiento({
     }
   }, [API, addUI, apiPostJson, onCatalogCreated, showToast]);
 
-  const cerrar = () => {
+  // ✅ cerrar SOLO por X o ESC (nunca por click afuera)
+  const cerrar = useCallback(() => {
     if (saving) return;
     onClose?.();
-  };
+  }, [saving, onClose]);
 
   /* =========================
      Autocomplete de CLIENTES / PROVEEDORES / DETALLES
@@ -665,7 +675,6 @@ export default function ModalEditarMovimiento({
       const mt = safeNumber(form.monto_total);
       if (mt <= 0) throw new Error("Ingresá un monto total mayor a 0.");
 
-      // ✅ si escribió algo pero no eligió sugerencia, pedimos que seleccione
       if (
         clienteInput.trim() &&
         (form.id_cliente === NULL_OPTION || form.id_cliente === "" || form.id_cliente == null)
@@ -741,9 +750,9 @@ export default function ModalEditarMovimiento({
               setAddUI({ field: null, text: "", saving: false });
               setForm((p) => ({ ...p, [field]: NULL_OPTION }));
 
-              // restaurar textos de inputs si cancelamos alta inline
               if (field === "id_cliente") setClienteInput(findNombreById("clientes", form.id_cliente));
-              if (field === "id_proveedor") setProveedorInput(findNombreById("proveedores", form.id_proveedor));
+              if (field === "id_proveedor")
+                setProveedorInput(findNombreById("proveedores", form.id_proveedor));
               if (field === "id_detalle") setDetalleInput(findNombreById("detalles", form.id_detalle));
             }}
             disabled={addUI.saving}
@@ -767,10 +776,8 @@ export default function ModalEditarMovimiento({
   if (!open) return null;
 
   return (
-    <div
-      className="mi-modal__overlay"
-      onClick={(e) => e.target.classList.contains("mi-modal__overlay") && cerrar()}
-    >
+    // ✅ NO tiene onClick para cerrar por overlay
+    <div className="mi-modal__overlay">
       <div
         className="mi-modal__container mi-modal__container--mov"
         role="dialog"
@@ -890,9 +897,7 @@ export default function ModalEditarMovimiento({
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_tipo_movimiento)}
-                      onChange={(e) =>
-                        onSelectWithAdd("id_tipo_movimiento", e.target.value, true)
-                      }
+                      onChange={(e) => onSelectWithAdd("id_tipo_movimiento", e.target.value, true)}
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar tipo de movimiento --</option>
@@ -943,7 +948,7 @@ export default function ModalEditarMovimiento({
                     {renderAddInline("id_cuenta_corriente")}
                   </div>
 
-                  {/* ✅ Cliente autocomplete */}
+                  {/* Cliente */}
                   <div className="fl-field" style={{ position: "relative" }}>
                     <input
                       ref={clienteInputRef}
@@ -1030,7 +1035,7 @@ export default function ModalEditarMovimiento({
                     {renderAddInline("id_cliente")}
                   </div>
 
-                  {/* ✅ Proveedor autocomplete */}
+                  {/* Proveedor */}
                   <div className="fl-field fl-col-full" style={{ position: "relative" }}>
                     <input
                       ref={proveedorInputRef}
@@ -1117,7 +1122,7 @@ export default function ModalEditarMovimiento({
                     {renderAddInline("id_proveedor")}
                   </div>
 
-                  {/* ✅ Detalle autocomplete (full) */}
+                  {/* Detalle */}
                   <div className="fl-field fl-col-full" style={{ position: "relative" }}>
                     <input
                       ref={detalleInputRef}
@@ -1254,7 +1259,12 @@ export default function ModalEditarMovimiento({
           <div className="mit-actions">
             <div className="mit-help">{saving ? "Guardando…" : " "}</div>
 
-            <button type="button" className="mit-btn mit-btn--ghost" onClick={cerrar} disabled={saving}>
+            <button
+              type="button"
+              className="mit-btn mit-btn--ghost"
+              onClick={cerrar}
+              disabled={saving}
+            >
               Cancelar
             </button>
 

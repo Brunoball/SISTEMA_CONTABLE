@@ -8,16 +8,6 @@ const ADD_OPTION = "__ADD__";
 
 /* =========================
    Safe lists + normalización (adaptado a NUEVA tabla)
-   ✅ Solo usamos:
-   - periodos
-   - clasificaciones
-   - tiposVenta
-   - cuentasCorrientes
-   - tiposMovimiento
-   - clientes
-   - proveedores
-   - detalles
-   - mediosPago
 ========================= */
 const SAFE_LISTS = {
   periodos: [],
@@ -35,7 +25,6 @@ function normalizeIncomingLists(lists) {
   const l = lists && typeof lists === "object" ? lists : {};
   const src = l.listas && typeof l.listas === "object" ? l.listas : l;
 
-  // ✅ soporta variantes de keys del backend
   const tiposMov =
     Array.isArray(src.tiposMovimiento) && src.tiposMovimiento.length
       ? src.tiposMovimiento
@@ -102,20 +91,15 @@ function normalizePeriodoToMMYYYY(v) {
   let m = "";
   let y = "";
 
-  // YYYY-MM o YYYY/MM
   if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
     const parts = s.split(/[-/]/);
     y = parts[0];
     m = parts[1];
-  }
-  // MM-YYYY o MM/YYYY
-  else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
+  } else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
     const parts = s.split(/[-/]/);
     m = parts[0];
     y = parts[1];
-  }
-  // YYYYMM (o MMYYYY, intento adivinar)
-  else if (/^\d{6}$/.test(s)) {
+  } else if (/^\d{6}$/.test(s)) {
     const a = Number(s.slice(0, 4));
     if (a >= 1900 && a <= 2100) {
       y = s.slice(0, 4);
@@ -125,7 +109,7 @@ function normalizePeriodoToMMYYYY(v) {
       y = s.slice(2);
     }
   } else {
-    return s; // fallback
+    return s;
   }
 
   const mm = String(Number(m)).padStart(2, "0");
@@ -133,7 +117,6 @@ function normalizePeriodoToMMYYYY(v) {
   return `${mm}-${yyyy}`;
 }
 
-// ✅ derivar período desde una fecha ISO (YYYY-MM-DD) => MM-YYYY
 function periodoFromISODate(iso) {
   const s = String(iso ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
@@ -142,8 +125,7 @@ function periodoFromISODate(iso) {
 }
 
 function buildEmptyForm(lists, periodoDefault) {
-  const safeLists = normalizeIncomingLists(lists); // (se mantiene por consistencia)
-  void safeLists;
+  void normalizeIncomingLists(lists);
 
   const fecha = todayISO();
   const per =
@@ -154,7 +136,6 @@ function buildEmptyForm(lists, periodoDefault) {
     fecha,
     periodo: per,
 
-    // ✅ campos NUEVA TABLA
     id_clasificacion: NULL_OPTION,
     id_tipo_venta: NULL_OPTION,
     id_cuenta_corriente: NULL_OPTION,
@@ -202,7 +183,6 @@ const CATALOGO_MAP = {
   id_medio_pago: { catalogo: "medios_pago", label: "Medio de pago" },
 };
 
-// catálogo -> key lista local
 const LISTKEY_BY_CATALOGO = {
   clasificaciones: "clasificaciones",
   tipos_venta: "tiposVenta",
@@ -220,23 +200,32 @@ export default function ModalAgregarMovimiento({
   periodoDefault,
   onClose,
   onSave,
-  onCatalogCreated, // ✅ actualiza padre (Movimientos)
-  onToast, // ✅ Toast global (vive en Movimientos)
+  onCatalogCreated,
+  onToast,
 }) {
   const API = `${BASE_URL}/api.php`;
 
-  // ✅ helper toast (no se renderiza acá, se manda al padre)
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
     [onToast]
   );
 
-  // ✅ Copia local para que el select muestre al instante el item creado
+  // ✅ refs para leer valores actuales SIN disparar resets al cambiar props
+  const listsRef = useRef(lists);
+  const periodoDefaultRef = useRef(periodoDefault);
+  useEffect(() => {
+    listsRef.current = lists;
+  }, [lists]);
+  useEffect(() => {
+    periodoDefaultRef.current = periodoDefault;
+  }, [periodoDefault]);
+
   const [localLists, setLocalLists] = useState(() => ({
     ...SAFE_LISTS,
     ...normalizeIncomingLists(lists),
   }));
 
+  // ✅ Si cambian listas mientras el modal está abierto: actualizar SOLO listas (NO form)
   useEffect(() => {
     setLocalLists({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) });
   }, [lists]);
@@ -249,12 +238,7 @@ export default function ModalAgregarMovimiento({
     buildEmptyForm({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) }, periodoDefault)
   );
 
-  // UI "Agregar…" inline
-  const [addUI, setAddUI] = useState({
-    field: null,
-    text: "",
-    saving: false,
-  });
+  const [addUI, setAddUI] = useState({ field: null, text: "", saving: false });
 
   // ✅ Autocomplete de clientes
   const [clienteInput, setClienteInput] = useState("");
@@ -273,14 +257,12 @@ export default function ModalAgregarMovimiento({
 
   const closeBtnRef = useRef(null);
 
-  // ✅ Date picker: abrir con click en todo el input
+  // ✅ Date picker
   const fechaRef = useRef(null);
-
   const openDatePicker = useCallback(() => {
     const el = fechaRef.current;
     if (!el) return;
     if (saving || el.disabled) return;
-
     try {
       if (typeof el.showPicker === "function") el.showPicker();
       else el.focus();
@@ -289,46 +271,54 @@ export default function ModalAgregarMovimiento({
     }
   }, [saving]);
 
+  // ✅ Inicializar SOLO al abrir (cerrado -> abierto). NUNCA por cambio de lists/periodoDefault.
+  const prevOpenRef = useRef(false);
   useEffect(() => {
+    const wasOpen = prevOpenRef.current;
+    prevOpenRef.current = open;
+
     if (!open) return;
 
-    setSaving(false);
-    setAddUI({ field: null, text: "", saving: false });
+    // solo cuando se abre de verdad
+    if (!wasOpen && open) {
+      setSaving(false);
+      setAddUI({ field: null, text: "", saving: false });
 
-    const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(lists) };
-    setLocalLists(merged);
+      const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(listsRef.current) };
+      setLocalLists(merged);
 
-    // ✅ al abrir: si no viene periodoDefault, el período queda según fecha de hoy
-    setForm(buildEmptyForm(merged, periodoDefault));
+      setForm(buildEmptyForm(merged, periodoDefaultRef.current));
 
-    // reset autocomplete cliente/proveedor/detalle
-    setClienteInput("");
-    setClienteFocus(false);
+      setClienteInput("");
+      setClienteFocus(false);
 
-    setProveedorInput("");
-    setProveedorFocus(false);
+      setProveedorInput("");
+      setProveedorFocus(false);
 
-    setDetalleInput("");
-    setDetalleFocus(false);
+      setDetalleInput("");
+      setDetalleFocus(false);
 
-    setTimeout(() => closeBtnRef.current?.focus(), 0);
+      setTimeout(() => closeBtnRef.current?.focus(), 0);
+    }
+  }, [open]);
 
+  // ✅ ESC cierra (sin resets)
+  useEffect(() => {
+    if (!open) return;
     const onKeyDown = (e) => {
       if (e.key === "Escape") onClose?.();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, lists, periodoDefault, onClose]);
+  }, [open, onClose]);
 
   const onChange = useCallback((k, v) => {
     setForm((prev) => ({ ...prev, [k]: v }));
   }, []);
 
-  // ✅ cuando cambia la FECHA, el PERÍODO se autocompleta con MES-AÑO (MM-YYYY)
   const onFechaChange = useCallback((rawISO) => {
     const iso = String(rawISO || "").trim();
     const perAuto = periodoFromISODate(iso);
-
     setForm((prev) => ({
       ...prev,
       fecha: iso,
@@ -336,16 +326,12 @@ export default function ModalAgregarMovimiento({
     }));
   }, []);
 
-  // ✅ período: fuerza formato MM-YYYY mientras tipeás
   const onPeriodoChange = useCallback((raw) => {
-    const digits = String(raw || "").replace(/\D/g, "").slice(0, 6); // MMYYYY
+    const digits = String(raw || "").replace(/\D/g, "").slice(0, 6);
     let next = "";
-
     if (digits.length <= 2) next = digits;
     else next = `${digits.slice(0, 2)}-${digits.slice(2)}`;
-
     if (digits.length === 6) next = normalizePeriodoToMMYYYY(next);
-
     setForm((p) => ({ ...p, periodo: next }));
   }, []);
 
@@ -383,7 +369,7 @@ export default function ModalAgregarMovimiento({
   );
 
   /* =========================
-     Guardar nuevo registro del catálogo (y actualizar TODO)
+     Guardar nuevo registro del catálogo
   ========================= */
   const guardarNuevoCatalogo = useCallback(async () => {
     if (!addUI.field) return;
@@ -421,7 +407,6 @@ export default function ModalAgregarMovimiento({
       const listKey = LISTKEY_BY_CATALOGO[meta.catalogo];
       if (!listKey) throw new Error("Catálogo desconocido para actualizar listas.");
 
-      // ✅ 1) Actualiza el modal al instante
       setLocalLists((prev) => {
         const next = { ...prev };
         const arr = Array.isArray(prev[listKey]) ? prev[listKey].slice() : [];
@@ -432,7 +417,6 @@ export default function ModalAgregarMovimiento({
         return next;
       });
 
-      // ✅ 2) Selecciona el nuevo ID en el select / campo
       setForm((prev) => ({
         ...prev,
         [addUI.field]:
@@ -444,21 +428,17 @@ export default function ModalAgregarMovimiento({
             : Number(newId),
       }));
 
-      // ✅ 2b) si es autocomplete, actualiza texto del input
       if (addUI.field === "id_cliente") setClienteInput(newNombre);
       if (addUI.field === "id_proveedor") setProveedorInput(newNombre);
       if (addUI.field === "id_detalle") setDetalleInput(newNombre);
 
-      // ✅ 3) Actualiza también el padre (Movimientos)
       try {
         onCatalogCreated?.(meta.catalogo, { id: newId, nombre: newNombre });
       } catch {
-        // no rompe el flujo
+        // ignore
       }
 
-      // ✅ 4) Cierra UI "Agregar…"
       setAddUI({ field: null, text: "", saving: false });
-
       showToast("exito", `${meta.label} creado: "${newNombre}"`, 2600);
     } catch (e) {
       const msg = e?.message || "Error creando el registro.";
@@ -467,18 +447,18 @@ export default function ModalAgregarMovimiento({
     }
   }, [API, addUI, apiPostJson, onCatalogCreated, showToast]);
 
-  const cerrar = () => {
+  // ✅ cerrar SOLO por X o ESC
+  const cerrar = useCallback(() => {
     if (saving) return;
     onClose?.();
-  };
+  }, [saving, onClose]);
 
   /* =========================
-     Autocomplete de CLIENTES
+     Autocomplete: CLIENTES
   ========================= */
   const handleClienteInputChange = useCallback((e) => {
     const value = e.target.value;
     setClienteInput(value);
-    // al tipear, limpiamos el ID hasta que elija una sugerencia
     setForm((prev) => ({ ...prev, id_cliente: NULL_OPTION }));
   }, []);
 
@@ -501,16 +481,14 @@ export default function ModalAgregarMovimiento({
   const filteredClientes = useMemo(() => {
     const all = Array.isArray(safeLists.clientes) ? safeLists.clientes : [];
     const q = clienteInput.trim().toLowerCase();
-
     if (!clienteFocus || q.length < 1) return [];
-
     return all
       .filter((c) => String(c?.nombre ?? "").toLowerCase().includes(q))
       .slice(0, 25);
   }, [safeLists.clientes, clienteInput, clienteFocus]);
 
   /* =========================
-     Autocomplete de PROVEEDORES
+     Autocomplete: PROVEEDORES
   ========================= */
   const handleProveedorInputChange = useCallback((e) => {
     const value = e.target.value;
@@ -537,16 +515,14 @@ export default function ModalAgregarMovimiento({
   const filteredProveedores = useMemo(() => {
     const all = Array.isArray(safeLists.proveedores) ? safeLists.proveedores : [];
     const q = proveedorInput.trim().toLowerCase();
-
     if (!proveedorFocus || q.length < 1) return [];
-
     return all
       .filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q))
       .slice(0, 25);
   }, [safeLists.proveedores, proveedorInput, proveedorFocus]);
 
   /* =========================
-     Autocomplete de DETALLES
+     Autocomplete: DETALLES
   ========================= */
   const handleDetalleInputChange = useCallback((e) => {
     const value = e.target.value;
@@ -573,26 +549,17 @@ export default function ModalAgregarMovimiento({
   const filteredDetalles = useMemo(() => {
     const all = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
     const q = detalleInput.trim().toLowerCase();
-
     if (!detalleFocus || q.length < 1) return [];
-
     return all
       .filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q))
       .slice(0, 25);
   }, [safeLists.detalles, detalleInput, detalleFocus]);
 
   /* =========================
-     Payload final (solo campos de NUEVA TABLA)
+     Payload final
   ========================= */
   const payload = useMemo(() => {
     const isAdd = (v) => v === ADD_OPTION;
-
-    const toNullableId = (v) => {
-      if (v === NULL_OPTION || v === "" || v == null) return null;
-      if (isAdd(v)) return null;
-      const n = Number(v);
-      return Number.isFinite(n) && n > 0 ? n : null;
-    };
 
     const toRequiredId = (v) => {
       if (isAdd(v)) return null;
@@ -606,12 +573,12 @@ export default function ModalAgregarMovimiento({
 
       id_clasificacion: toRequiredId(form.id_clasificacion),
       id_tipo_venta: toRequiredId(form.id_tipo_venta),
-      id_cuenta_corriente: toNullableId(form.id_cuenta_corriente),
+      id_cuenta_corriente: toRequiredId(form.id_cuenta_corriente),
       id_tipo_movimiento: toRequiredId(form.id_tipo_movimiento),
 
-      id_cliente: toNullableId(form.id_cliente),
-      id_proveedor: toNullableId(form.id_proveedor),
-      id_detalle: toNullableId(form.id_detalle),
+      id_cliente: toRequiredId(form.id_cliente),
+      id_proveedor: toRequiredId(form.id_proveedor),
+      id_detalle: toRequiredId(form.id_detalle),
 
       monto_total: Math.max(0, Math.round(safeNumber(form.monto_total) * 100) / 100),
 
@@ -619,48 +586,73 @@ export default function ModalAgregarMovimiento({
     };
   }, [form]);
 
+  /* =========================
+     ✅ Validación: TODOS obligatorios
+     ✅ NO toca estado (NO borra selecciones)
+  ========================= */
+  const validateAllRequired = useCallback(() => {
+    const isAdd = (v) => v === ADD_OPTION;
+    const isEmptyText = (v) => String(v ?? "").trim() === "";
+
+    const isValidId = (v) => {
+      if (v == null) return false;
+      if (v === NULL_OPTION || v === "") return false;
+      if (isAdd(v)) return false;
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0;
+    };
+
+    const per = normalizePeriodoToMMYYYY(form.periodo);
+    if (!per || !/^\d{2}-\d{4}$/.test(per)) {
+      return { ok: false, msg: 'Período inválido. Usá formato "MM-YYYY".' };
+    }
+
+    if (isEmptyText(form.fecha) || !/^\d{4}-\d{2}-\d{2}$/.test(String(form.fecha))) {
+      return { ok: false, msg: "Completá la Fecha." };
+    }
+
+    const reqIds = [
+      ["id_clasificacion", "Clasificación"],
+      ["id_tipo_venta", "Tipo de venta"],
+      ["id_tipo_movimiento", "Tipo de movimiento"],
+      ["id_cuenta_corriente", "Cuenta corriente"],
+      ["id_medio_pago", "Medio de pago"],
+    ];
+    for (const [k, label] of reqIds) {
+      if (isAdd(form[k])) return { ok: false, msg: `Tenés "${label}" en "Agregar…". Guardalo primero.` };
+      if (!isValidId(form[k])) return { ok: false, msg: `Completá "${label}".` };
+    }
+
+    if (isAdd(form.id_cliente)) return { ok: false, msg: 'Tenés "Cliente" en "Agregar…". Guardalo primero.' };
+    if (!isValidId(form.id_cliente) || isEmptyText(clienteInput))
+      return { ok: false, msg: 'Completá "Cliente" (seleccioná de la lista).' };
+
+    if (isAdd(form.id_proveedor)) return { ok: false, msg: 'Tenés "Proveedor" en "Agregar…". Guardalo primero.' };
+    if (!isValidId(form.id_proveedor) || isEmptyText(proveedorInput))
+      return { ok: false, msg: 'Completá "Proveedor" (seleccioná de la lista).' };
+
+    if (isAdd(form.id_detalle)) return { ok: false, msg: 'Tenés "Detalle" en "Agregar…". Guardalo primero.' };
+    if (!isValidId(form.id_detalle) || isEmptyText(detalleInput))
+      return { ok: false, msg: 'Completá "Detalle" (seleccioná de la lista).' };
+
+    const mt = safeNumber(form.monto_total);
+    if (!(mt > 0)) return { ok: false, msg: 'Completá "Monto total" (mayor a 0).' };
+
+    return { ok: true, msg: "" };
+  }, [form, clienteInput, proveedorInput, detalleInput]);
+
   const submit = async (e) => {
     e.preventDefault();
+
+    // ✅ Validar ANTES para que no cambie nada si falta algo
+    const v = validateAllRequired();
+    if (!v.ok) {
+      showToast("advertencia", v.msg || "Faltan completar campos.", 3600);
+      return;
+    }
+
     setSaving(true);
-
     try {
-      // ✅ valida periodo simple (MM-YYYY)
-      const per = normalizePeriodoToMMYYYY(form.periodo);
-      if (!per || !/^\d{2}-\d{4}$/.test(per)) {
-        throw new Error('Período inválido. Usá formato "MM-YYYY".');
-      }
-
-      // ✅ valida requeridos
-      const req = [
-        ["id_clasificacion", "Clasificación"],
-        ["id_tipo_venta", "Tipo de venta"],
-        ["id_tipo_movimiento", "Tipo de movimiento"],
-        ["id_medio_pago", "Medio de pago"],
-      ];
-      for (const [k, label] of req) {
-        if (form[k] === ADD_OPTION)
-          throw new Error(`Tenés "${label}" en "Agregar…". Guardalo primero.`);
-        const n = Number(form[k]);
-        if (!Number.isFinite(n) || n <= 0)
-          throw new Error(`Seleccioná un valor válido para "${label}".`);
-      }
-
-      // ✅ opcionales: si están en ADD_OPTION, bloquea
-      const opc = [
-        ["id_cuenta_corriente", "Cuenta corriente"],
-        ["id_cliente", "Cliente"],
-        ["id_proveedor", "Proveedor"],
-        ["id_detalle", "Detalle"],
-      ];
-      for (const [k, label] of opc) {
-        if (form[k] === ADD_OPTION)
-          throw new Error(`Tenés "${label}" en "Agregar…". Guardalo o elegí otra opción.`);
-      }
-
-      // ✅ monto
-      const mt = safeNumber(form.monto_total);
-      if (mt <= 0) throw new Error("Ingresá un monto total mayor a 0.");
-
       await onSave?.(payload);
     } catch (e2) {
       showToast("error", e2?.message || "Error guardando movimiento.", 4200);
@@ -669,8 +661,7 @@ export default function ModalAgregarMovimiento({
   };
 
   /* =========================
-     Helper UI: elegir "Agregar…"
-     (se sigue usando para los demás selects)
+     Select con "Agregar…"
   ========================= */
   const onSelectWithAdd = useCallback(
     (field, rawValue, castToNumber) => {
@@ -690,7 +681,6 @@ export default function ModalAgregarMovimiento({
 
   const renderAddInline = (field) => {
     if (addUI.field !== field) return null;
-
     const label = CATALOGO_MAP[field]?.label || "Registro";
 
     return (
@@ -712,12 +702,7 @@ export default function ModalAgregarMovimiento({
             className="mit-btn mit-btn--ghost"
             onClick={() => {
               setAddUI({ field: null, text: "", saving: false });
-
-              setForm((p) => {
-                const copy = { ...p };
-                copy[field] = NULL_OPTION; // vuelve a vacío
-                return copy;
-              });
+              setForm((p) => ({ ...p, [field]: NULL_OPTION }));
             }}
             disabled={addUI.saving}
           >
@@ -740,10 +725,8 @@ export default function ModalAgregarMovimiento({
   if (!open) return null;
 
   return (
-    <div
-      className="mi-modal__overlay"
-      onClick={(e) => e.target.classList.contains("mi-modal__overlay") && cerrar()}
-    >
+    // ✅ NO cierra por click afuera: SOLO con X o ESC
+    <div className="mi-modal__overlay">
       <div
         className="mi-modal__container mi-modal__container--mov"
         role="dialog"
@@ -824,9 +807,7 @@ export default function ModalAgregarMovimiento({
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_clasificacion)}
-                      onChange={(e) =>
-                        onSelectWithAdd("id_clasificacion", e.target.value, true)
-                      }
+                      onChange={(e) => onSelectWithAdd("id_clasificacion", e.target.value, true)}
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
@@ -864,9 +845,7 @@ export default function ModalAgregarMovimiento({
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_tipo_movimiento)}
-                      onChange={(e) =>
-                        onSelectWithAdd("id_tipo_movimiento", e.target.value, true)
-                      }
+                      onChange={(e) => onSelectWithAdd("id_tipo_movimiento", e.target.value, true)}
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar tipo de movimiento --</option>
@@ -891,21 +870,17 @@ export default function ModalAgregarMovimiento({
                   <div className="fl-field">
                     <select
                       className="fl-input fl-select"
-                      value={
-                        form.id_cuenta_corriente === NULL_OPTION
-                          ? ""
-                          : String(form.id_cuenta_corriente)
-                      }
+                      value={String(form.id_cuenta_corriente)}
                       onChange={(e) =>
                         onSelectWithAdd(
                           "id_cuenta_corriente",
-                          e.target.value === "" ? NULL_OPTION : e.target.value,
-                          e.target.value !== "" && e.target.value !== ADD_OPTION
+                          e.target.value,
+                          e.target.value !== ADD_OPTION
                         )
                       }
                       disabled={saving}
                     >
-                      <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
+                      <option value={NULL_OPTION}>-- Seleccionar cuenta corriente --</option>
                       {(safeLists.cuentasCorrientes || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
@@ -917,7 +892,7 @@ export default function ModalAgregarMovimiento({
                     {renderAddInline("id_cuenta_corriente")}
                   </div>
 
-                  {/* ✅ Cliente como autocomplete */}
+                  {/* Cliente */}
                   <div className="fl-field" style={{ position: "relative" }}>
                     <input
                       ref={clienteInputRef}
@@ -1004,7 +979,7 @@ export default function ModalAgregarMovimiento({
                     {renderAddInline("id_cliente")}
                   </div>
 
-                  {/* ✅ Proveedor como autocomplete */}
+                  {/* Proveedor */}
                   <div className="fl-field fl-col-full" style={{ position: "relative" }}>
                     <input
                       ref={proveedorInputRef}
@@ -1091,7 +1066,7 @@ export default function ModalAgregarMovimiento({
                     {renderAddInline("id_proveedor")}
                   </div>
 
-                  {/* ✅ Detalle como autocomplete (full) */}
+                  {/* Detalle */}
                   <div className="fl-field fl-col-full" style={{ position: "relative" }}>
                     <input
                       ref={detalleInputRef}
@@ -1213,10 +1188,7 @@ export default function ModalAgregarMovimiento({
                       placeholder=" "
                       value={form.monto_total}
                       onChange={(e) =>
-                        onChange(
-                          "monto_total",
-                          e.target.value === "" ? "" : Number(e.target.value)
-                        )
+                        onChange("monto_total", e.target.value === "" ? "" : Number(e.target.value))
                       }
                       disabled={saving}
                     />

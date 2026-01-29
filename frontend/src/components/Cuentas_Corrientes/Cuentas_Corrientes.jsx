@@ -1,3 +1,4 @@
+// src/components/Cuentas_Corrientes/Cuentas_Corrientes.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import BASE_URL from "../../config/config";
 import "./cuentas_corrientes.css";
@@ -20,7 +21,7 @@ function buildPeriodOptions(limitBack = 18, limitForward = 3) {
     const dt = new Date(base.getFullYear(), base.getMonth() + i, 1);
     const y = dt.getFullYear();
     const m = String(dt.getMonth() + 1).padStart(2, "0");
-    out.push({ value: `${y}-${m}`, label: `${m}/${y}` });
+    out.push({ value: `${y}-${m}`, label: `${m}-${y}` }); // display tipo MM-YYYY
   }
   return out;
 }
@@ -41,8 +42,8 @@ export default function Cuentas_Corrientes() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  const [cuentas, setCuentas] = useState([]); // [{id_cuenta_corriente,nombre,signo_saldo}]
-  const [rows, setRows] = useState([]); // [{id_cliente,nombre,columnas:{id:val},saldo}]
+  const [cuentas, setCuentas] = useState([]);
+  const [rows, setRows] = useState([]);
   const [totales, setTotales] = useState({ columnas: {}, saldo: 0 });
 
   const periodOptions = useMemo(() => buildPeriodOptions(18, 3), []);
@@ -52,7 +53,9 @@ export default function Cuentas_Corrientes() {
     setErr("");
 
     try {
-      const url = `${BASE_URL}/api.php?action=cc_resumen&periodo=${encodeURIComponent(periodo || "")}`;
+      const url = `${BASE_URL}/api.php?action=cc_resumen&periodo=${encodeURIComponent(
+        periodo || ""
+      )}`;
       const data = await fetchJSON(url);
 
       if (!data || data.exito !== true) {
@@ -79,7 +82,9 @@ export default function Cuentas_Corrientes() {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return rows;
-    return rows.filter((r) => String(r.nombre || "").toLowerCase().includes(needle));
+    return rows.filter((r) =>
+      String(r.nombre || "").toLowerCase().includes(needle)
+    );
   }, [rows, q]);
 
   const visibleCount = filtered.length;
@@ -91,106 +96,183 @@ export default function Cuentas_Corrientes() {
     return Number(v || 0);
   }, []);
 
+  const colCount = 2 + (cuentas?.length || 0);
+
   return (
-    <div className="cc-wrap">
-      <div className="cc-head">
-        <div className="cc-title">
-          <h2>Cuentas Corrientes</h2>
-          <span className="cc-sub">{loading ? "Cargando..." : `${visibleCount} clientes`}</span>
+    <div className="cc-page">
+      {err && (
+        <div className="cc-alert" role="alert">
+          {err}
+        </div>
+      )}
+
+      <section className="cc-card cc-card--table">
+        <div className="cc-card__head">
+          <div className="cc-card__headLeft">
+            <div className="cc-headTitle">
+              <div className="cc-card__title">Cuentas Corrientes</div>
+              <div className="cc-card__hint">
+                {loading ? (
+                  <>Cargando...</>
+                ) : (
+                  <>
+                    Mostrando <b>{visibleCount}</b> clientes
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="cc-headFilters">
+              <div className="cc-filter">
+                <label>Período</label>
+                <select
+                  value={periodo}
+                  onChange={(e) => setPeriodo(e.target.value)}
+                  disabled={loading}
+                >
+                  {periodOptions.map((p) => (
+                    <option key={p.value || "__ALL__"} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="cc-filter cc-filter--search">
+                <label>Buscar</label>
+                <input
+                  className="cc-input"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Buscar cliente..."
+                  disabled={loading}
+                />
+              </div>
+
+              <button
+                className="cc-btn"
+                onClick={fetchResumen}
+                disabled={loading}
+                title="Recargar"
+              >
+                {loading ? "Cargando..." : "Recargar"}
+              </button>
+            </div>
+          </div>
+
+          <div className="cc-card__actions" />
         </div>
 
-        <div className="cc-controls">
-          <select className="cc-select" value={periodo} onChange={(e) => setPeriodo(e.target.value)}>
-            {periodOptions.map((p) => (
-              <option key={p.value || "__ALL__"} value={p.value}>
-                {p.label}
-              </option>
+        <div className="cc-subhead">
+          <div className="cc-subhead__name">
+            Resumen por cliente
+            <div className="cc-subhead__meta">
+              Columnas dinámicas = cuentas_corrientes • Totales en el pie.
+            </div>
+          </div>
+
+
+        </div>
+
+        {/* ✅ Wrap NO scrollea: el scroll va SOLO en el body */}
+        <div className="cc-tableWrap">
+          {/* ✅ Header sticky */}
+          <div
+            className="cc-grid cc-grid--head"
+            style={{
+              gridTemplateColumns: `260px repeat(${cuentas.length}, 1fr) .5fr`,
+            }}
+          >
+            <div className="cc-cell cc-name">CLIENTE</div>
+            {cuentas.map((c) => (
+              <div key={c.id_cuenta_corriente} className="cc-cell is-center">
+                {c.nombre}
+              </div>
             ))}
-          </select>
+            <div className="cc-cell is-center">SALDO</div>
+          </div>
 
-          <input
-            className="cc-input"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar cliente..."
-          />
-
-          <button className="cc-btn" onClick={fetchResumen} disabled={loading}>
-            Recargar
-          </button>
-        </div>
-      </div>
-
-      {err ? <div className="cc-error">{err}</div> : null}
-
-      <div className="cc-tableWrap">
-        <table className="cc-table">
-          <thead>
-            <tr>
-              <th className="name">Cliente</th>
-
-              {/* ✅ UNA COLUMNA POR CADA REGISTRO EN cuentas_corrientes */}
-              {cuentas.map((c) => (
-                <th key={c.id_cuenta_corriente} className="num">
-                  {c.nombre}
-                </th>
-              ))}
-
-              <th className="num">SALDO</th>
-            </tr>
-          </thead>
-
-          <tbody>
+          {/* ✅ Body con scroll */}
+          <div className="cc-gridBody" role="rowgroup">
             {!loading && filtered.length === 0 ? (
-              <tr>
-                <td colSpan={2 + (cuentas.length || 0)} className="empty">
-                  No hay datos
-                </td>
-              </tr>
+              <div className="cc-emptyRow">No hay datos</div>
             ) : null}
 
             {filtered.map((r) => (
-              <tr key={r.id_cliente}>
-                <td className="name">{r.nombre}</td>
+              <div
+                key={r.id_cliente}
+                className="cc-grid cc-grid--row"
+                style={{
+                  gridTemplateColumns: `260px repeat(${cuentas.length}, 1fr) .5fr`,
+                }}
+              >
+                <div className="cc-cell cc-name">{r.nombre}</div>
 
                 {cuentas.map((c) => {
                   const v = getCell(r, c.id_cuenta_corriente);
-                  const cls = v > 0 ? "pos" : v < 0 ? "neg" : "";
+                  const cls = v > 0 ? "is-positive" : v < 0 ? "is-negative" : "";
                   return (
-                    <td key={c.id_cuenta_corriente} className={`num ${cls}`}>
+                    <div
+                      key={c.id_cuenta_corriente}
+                      className={`cc-cell cc-num is-center ${cls}`}
+                    >
                       {moneyARS(v)}
-                    </td>
+                    </div>
                   );
                 })}
 
-                <td className={`num ${Number(r.saldo) > 0 ? "pos" : Number(r.saldo) < 0 ? "neg" : ""}`}>
+                <div
+                  className={`cc-cell cc-num is-center cc-saldo ${
+                    Number(r.saldo) < 0 ? "is-negative" : Number(r.saldo) > 0 ? "is-positive" : ""
+                  }`}
+                >
                   <b>{moneyARS(r.saldo)}</b>
-                </td>
-              </tr>
+                </div>
+              </div>
             ))}
-          </tbody>
 
-          <tfoot>
-            <tr>
-              <td className="tfootLabel">Totales</td>
+            {/* ✅ Footer tipo “sticky” opcional: lo dejamos simple abajo */}
+            <div
+              className="cc-grid cc-grid--tfoot"
+              style={{
+                gridTemplateColumns: `260px repeat(${cuentas.length}, 1fr) 1fr`,
+              }}
+            >
+              <div className="cc-cell cc-tfootLabel">Totales</div>
 
               {cuentas.map((c) => {
                 const v = Number((totales.columnas || {})[String(c.id_cuenta_corriente)] || 0);
-                const cls = v > 0 ? "pos" : v < 0 ? "neg" : "";
+                const cls = v > 0 ? "is-positive" : v < 0 ? "is-negative" : "";
                 return (
-                  <td key={c.id_cuenta_corriente} className={`num ${cls}`}>
+                  <div
+                    key={c.id_cuenta_corriente}
+                    className={`cc-cell cc-num is-center ${cls}`}
+                  >
                     {moneyARS(v)}
-                  </td>
+                  </div>
                 );
               })}
 
-              <td className={`num ${Number(totales.saldo) > 0 ? "pos" : Number(totales.saldo) < 0 ? "neg" : ""}`}>
+              <div
+                className={`cc-cell cc-num is-center cc-saldo ${
+                  Number(totales.saldo) < 0 ? "is-negative" : Number(totales.saldo) > 0 ? "is-positive" : ""
+                }`}
+              >
                 <b>{moneyARS(totales.saldo)}</b>
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+              </div>
+            </div>
+          </div>
+
+          {/* accesibilidad/consistencia */}
+          {!err && loading && filtered.length === 0 ? (
+            <div className="cc-emptyRow">Cargando cuentas corrientes...</div>
+          ) : null}
+        </div>
+
+        <div className="cc-footnote">
+          * Las columnas se generan desde <b>cuentas_corrientes</b>. El saldo es la suma final por cliente.
+        </div>
+      </section>
     </div>
   );
 }

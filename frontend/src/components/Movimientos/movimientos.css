@@ -404,7 +404,10 @@
   overflow: auto;
   scrollbar-gutter: stable;
 }
-
+.mov-gridTable--head,.mov-tableWrap{
+  overflow: auto;
+  scrollbar-gutter: both-edges stable;
+}
 /* contenedor fila/header */
 .mov-gridTable{
   display: grid;

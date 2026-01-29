@@ -38,7 +38,7 @@ function normalizeRows(raw) {
   // La API puede venir como:
   // 1) rows: [{ concepto, importe, tipo }]
   // 2) valores: { ventas, costo_variable, costo_fijo, otros_egresos, gastos_personales, ... }
-  // Para no frenarte, soportamos ambos.
+  // Soportamos ambos formatos.
 
   // Caso 1: array ya listo
   if (Array.isArray(raw)) {
@@ -47,7 +47,7 @@ function normalizeRows(raw) {
         id: r?.id ?? `${idx}`,
         concepto: safeText(r?.concepto ?? r?.nombre ?? r?.label ?? ""),
         importe: r?.importe == null ? null : Number(r.importe || 0),
-        tipo: safeText(r?.tipo ?? ""), // opcional: "ingreso" / "egreso"
+        tipo: safeText(r?.tipo ?? ""), // opcional: "ingreso" / "egreso" / "resultado"
       }))
       .filter((x) => x.concepto);
   }
@@ -72,7 +72,12 @@ function normalizeRows(raw) {
 
     // Gastos personales aparte (como tu Excel)
     if (Number.isFinite(gastosPers) && gastosPers !== 0) {
-      out.push({ id: "gastos_personales", concepto: "GASTOS PERSONALES", importe: gastosPers, tipo: "egreso" });
+      out.push({
+        id: "gastos_personales",
+        concepto: "GASTOS PERSONALES",
+        importe: gastosPers,
+        tipo: "egreso",
+      });
     }
 
     return out;
@@ -98,8 +103,6 @@ export default function Analisis_Financiero() {
 
     try {
       const sp = new URLSearchParams();
-      // ✅ Acción esperada en tu backend:
-      // Podés implementarla como: action=analisis_financiero_resumen
       sp.set("action", "analisis_financiero_resumen");
       sp.set("periodo", periodo);
 
@@ -158,6 +161,8 @@ export default function Analisis_Financiero() {
   const resultadoNeto = allRows.find((r) => r.id === "resultado_neto")?.importe ?? null;
   const gastosPersonales = allRows.find((r) => r.id === "gastos_personales")?.importe ?? null;
 
+  const resultadoIsNeg = Number(resultadoNeto) < 0;
+
   return (
     <div className="af-page">
       {error && (
@@ -207,9 +212,7 @@ export default function Analisis_Financiero() {
           <div className="af-card__actions" />
         </div>
 
-        {loading && !data && (
-          <div className="af-emptyRow">Cargando análisis financiero...</div>
-        )}
+        {loading && !data && <div className="af-emptyRow">Cargando análisis financiero...</div>}
 
         {!loading && data && (
           <>
@@ -239,14 +242,15 @@ export default function Analisis_Financiero() {
 
               <div className="af-gridBody" role="rowgroup">
                 {filteredRows.map((r) => {
+                  const conceptoLower = safeText(r.concepto).toLowerCase();
+
                   const isResultado =
-                    safeText(r.concepto).toLowerCase() === "resultado neto" ||
+                    conceptoLower === "resultado neto" ||
                     r.tipo === "resultado" ||
                     r.id === "resultado_neto";
 
                   const isGastoPersonal =
-                    safeText(r.concepto).toLowerCase().includes("gastos personales") ||
-                    r.id === "gastos_personales";
+                    conceptoLower.includes("gastos personales") || r.id === "gastos_personales";
 
                   return (
                     <div
@@ -256,6 +260,7 @@ export default function Analisis_Financiero() {
                       key={r.id}
                     >
                       <div className="af-cell af-concept">{r.concepto}</div>
+
                       <div
                         className={`af-cell af-num is-right ${
                           Number(r.importe) < 0 ? "is-negative" : ""
@@ -273,32 +278,46 @@ export default function Analisis_Financiero() {
               </div>
             </div>
 
+            {/* ✅ Tarjetas mejoradas */}
             <div className="af-footTotals">
-              <div className="af-totalCard">
-                <div className="af-totalLabel">Resultado Neto</div>
+              <div
+                className={`af-totalCard af-totalCard--primary ${
+                  resultadoIsNeg ? "is-negative" : "is-positive"
+                }`}
+              >
+                <div className="af-totalTop">
+                  <div className="af-totalLabel">Resultado Neto</div>
+                  <div className="af-chip">{resultadoIsNeg ? "↓ Pérdida" : "↑ Ganancia"}</div>
+                </div>
+
                 <div className="af-totalValue">
                   {resultadoNeto == null ? "-" : moneyARS(resultadoNeto)}
                 </div>
+
+                <div className="af-totalSub">
+                  Resultado del período (ventas - costos - egresos)
+                </div>
               </div>
 
-              <div className="af-totalCard is-red">
-                <div className="af-totalLabel">Gastos personales</div>
+              <div className="af-totalCard af-totalCard--danger">
+                <div className="af-totalTop">
+                  <div className="af-totalLabel">Gastos personales</div>
+                  <div className="af-chip is-danger">Control</div>
+                </div>
+
                 <div className="af-totalValue">
                   {gastosPersonales == null ? "-" : moneyARS(gastosPersonales)}
                 </div>
+
+                <div className="af-totalSub">Se muestra aparte como en tu Excel</div>
               </div>
             </div>
 
-            <div className="af-footnote">
-              * Si tu backend aún no devuelve filas, este componente soporta que devuelva un objeto “valores”
-              (ventas/costos/etc.) o un array de rows.
-            </div>
+
           </>
         )}
 
-        {!loading && !data && !error && (
-          <div className="af-emptyRow">No hay datos para mostrar.</div>
-        )}
+        {!loading && !data && !error && <div className="af-emptyRow">No hay datos para mostrar.</div>}
       </section>
     </div>
   );

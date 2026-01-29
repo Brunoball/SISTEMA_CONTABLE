@@ -370,3 +370,56 @@
 .mi-card { min-width: 0; }
 .fl-grid { min-width: 0; }
 .fl-field { min-width: 0; }
+/* =========================
+   Floating label "outlined" (cruza el borde)
+   - La label flota atravesando el borde superior
+   - Con fondo para cortar el borde
+========================= */
+
+/* Ajuste leve de padding para que la label tenga lugar arriba */
+.fl-input{
+  padding: 16px 12px 10px; /* un poquito más arriba */
+}
+
+/* Label en estado normal (dentro del input) */
+.fl-label{
+  position: absolute;
+  left: 12px;
+  top: 14px;                 /* un toque más abajo que antes */
+  font-size: .86rem;
+  color: var(--mi-muted);
+  pointer-events: none;
+  transform-origin: left top;
+  transition: transform .16s ease, color .16s ease, opacity .16s ease, top .16s ease;
+  opacity: .9;
+
+  /* clave para que luego "corte" el borde cuando flota */
+  z-index: 2;
+  padding: 0 6px;            /* crea el huequito que corta el borde */
+  background: transparent;   /* normal: sin fondo */
+}
+
+/* Cuando flota: se sube y cruza el borde superior */
+.fl-input:focus + .fl-label,
+.fl-input:not(:placeholder-shown) + .fl-label{
+  top: 0px;                                   /* la llevamos al borde */
+  transform: translateY(-50%) scale(.92);     /* cruza el borde */
+  color: var(--mi-primary-600);
+  opacity: 1;
+
+  /* este fondo es lo que "atraviesa" el borde sin que se vea la línea detrás */
+  background: #fff;
+}
+
+/* En selects: que también cruce el borde (en vez de quedarse siempre arriba sin atravesar) */
+.fl-select + .fl-label{
+  top: 0px;
+  transform: translateY(-50%) scale(.92);
+  background: #fff;
+}
+
+/* Si el input está deshabilitado, mantenemos el corte del borde prolijo */
+.fl-input:disabled + .fl-label{
+  background: #f8fafc;
+  opacity: .85;
+}

@@ -326,10 +326,13 @@
 /* 6 columnas como tu tabla */
 .fc-grid{
   display: grid;
-  grid-template-columns: 160px 1fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 160px 1fr 1fr 1fr ;
   min-width: 840px;
 }
-
+.fc-grid--head,.fc-gridBody{
+  overflow: auto;
+  scrollbar-gutter: both-edges stable;
+}
 /* Header sticky */
 .fc-grid--head{
   position: sticky;

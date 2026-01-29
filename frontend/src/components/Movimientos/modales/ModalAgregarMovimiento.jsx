@@ -92,15 +92,6 @@ function safeNumber(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function moneyARS(v) {
-  const n = Number(v || 0);
-  try {
-    return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
-  } catch {
-    return `$${n.toFixed(2)}`;
-  }
-}
-
 /* =========================
    ✅ Período MM-YYYY helpers
 ========================= */
@@ -142,7 +133,7 @@ function normalizePeriodoToMMYYYY(v) {
   return `${mm}-${yyyy}`;
 }
 
-// ✅ NUEVO: derivar período desde una fecha ISO (YYYY-MM-DD) => MM-YYYY
+// ✅ derivar período desde una fecha ISO (YYYY-MM-DD) => MM-YYYY
 function periodoFromISODate(iso) {
   const s = String(iso ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
@@ -151,21 +142,19 @@ function periodoFromISODate(iso) {
 }
 
 function buildEmptyForm(lists, periodoDefault) {
-  const safeLists = normalizeIncomingLists(lists);
+  const safeLists = normalizeIncomingLists(lists); // (se mantiene por consistencia)
+  void safeLists;
 
   const fecha = todayISO();
   const per =
-    normalizePeriodoToMMYYYY(periodoDefault || "") ||
-    periodoFromISODate(fecha); // ✅ si no hay default, lo toma de la fecha
+    normalizePeriodoToMMYYYY(periodoDefault || "") || periodoFromISODate(fecha);
 
   return {
     id_movimiento: null,
     fecha,
-
-    // ✅ siempre MM-YYYY
     periodo: per,
 
-    // ✅ campos NUEVA TABLA - TODOS vacíos por defecto
+    // ✅ campos NUEVA TABLA
     id_clasificacion: NULL_OPTION,
     id_tipo_venta: NULL_OPTION,
     id_cuenta_corriente: NULL_OPTION,
@@ -177,7 +166,6 @@ function buildEmptyForm(lists, periodoDefault) {
 
     id_medio_pago: NULL_OPTION,
 
-    // ✅ único importe que queda en tabla
     monto_total: 0,
   };
 }
@@ -268,10 +256,20 @@ export default function ModalAgregarMovimiento({
     saving: false,
   });
 
-  // ✅ NUEVO: Autocomplete de clientes
+  // ✅ Autocomplete de clientes
   const [clienteInput, setClienteInput] = useState("");
   const [clienteFocus, setClienteFocus] = useState(false);
   const clienteInputRef = useRef(null);
+
+  // ✅ Autocomplete de proveedores
+  const [proveedorInput, setProveedorInput] = useState("");
+  const [proveedorFocus, setProveedorFocus] = useState(false);
+  const proveedorInputRef = useRef(null);
+
+  // ✅ Autocomplete de detalles
+  const [detalleInput, setDetalleInput] = useState("");
+  const [detalleFocus, setDetalleFocus] = useState(false);
+  const detalleInputRef = useRef(null);
 
   const closeBtnRef = useRef(null);
 
@@ -303,9 +301,15 @@ export default function ModalAgregarMovimiento({
     // ✅ al abrir: si no viene periodoDefault, el período queda según fecha de hoy
     setForm(buildEmptyForm(merged, periodoDefault));
 
-    // reset autocomplete cliente
+    // reset autocomplete cliente/proveedor/detalle
     setClienteInput("");
     setClienteFocus(false);
+
+    setProveedorInput("");
+    setProveedorFocus(false);
+
+    setDetalleInput("");
+    setDetalleFocus(false);
 
     setTimeout(() => closeBtnRef.current?.focus(), 0);
 
@@ -320,7 +324,7 @@ export default function ModalAgregarMovimiento({
     setForm((prev) => ({ ...prev, [k]: v }));
   }, []);
 
-  // ✅ NUEVO: cuando cambia la FECHA, el PERÍODO se autocompleta con MES-AÑO (MM-YYYY)
+  // ✅ cuando cambia la FECHA, el PERÍODO se autocompleta con MES-AÑO (MM-YYYY)
   const onFechaChange = useCallback((rawISO) => {
     const iso = String(rawISO || "").trim();
     const perAuto = periodoFromISODate(iso);
@@ -328,7 +332,6 @@ export default function ModalAgregarMovimiento({
     setForm((prev) => ({
       ...prev,
       fecha: iso,
-      // ✅ siempre se recalcula desde la fecha (lo que pediste)
       periodo: perAuto || prev.periodo,
     }));
   }, []);
@@ -356,7 +359,9 @@ export default function ModalAgregarMovimiento({
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(`Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`);
+      throw new Error(
+        `Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`
+      );
     }
   }, []);
 
@@ -439,10 +444,10 @@ export default function ModalAgregarMovimiento({
             : Number(newId),
       }));
 
-      // Si es cliente, también actualizamos el texto del input
-      if (addUI.field === "id_cliente") {
-        setClienteInput(newNombre);
-      }
+      // ✅ 2b) si es autocomplete, actualiza texto del input
+      if (addUI.field === "id_cliente") setClienteInput(newNombre);
+      if (addUI.field === "id_proveedor") setProveedorInput(newNombre);
+      if (addUI.field === "id_detalle") setDetalleInput(newNombre);
 
       // ✅ 3) Actualiza también el padre (Movimientos)
       try {
@@ -497,13 +502,84 @@ export default function ModalAgregarMovimiento({
     const all = Array.isArray(safeLists.clientes) ? safeLists.clientes : [];
     const q = clienteInput.trim().toLowerCase();
 
-    // No mostrar todo el universo de clientes: solo cuando escribe algo
     if (!clienteFocus || q.length < 1) return [];
 
     return all
       .filter((c) => String(c?.nombre ?? "").toLowerCase().includes(q))
-      .slice(0, 25); // límite razonable
+      .slice(0, 25);
   }, [safeLists.clientes, clienteInput, clienteFocus]);
+
+  /* =========================
+     Autocomplete de PROVEEDORES
+  ========================= */
+  const handleProveedorInputChange = useCallback((e) => {
+    const value = e.target.value;
+    setProveedorInput(value);
+    setForm((prev) => ({ ...prev, id_proveedor: NULL_OPTION }));
+  }, []);
+
+  const handleSelectProveedor = useCallback((prov) => {
+    const nombre = String(prov?.nombre ?? "").trim();
+    setProveedorInput(nombre);
+    setForm((prev) => ({
+      ...prev,
+      id_proveedor: prov?.id != null ? String(prov.id) : NULL_OPTION,
+    }));
+    setProveedorFocus(false);
+  }, []);
+
+  const startAddProveedor = useCallback(() => {
+    setProveedorFocus(false);
+    setAddUI({ field: "id_proveedor", text: "", saving: false });
+    setForm((prev) => ({ ...prev, id_proveedor: ADD_OPTION }));
+  }, []);
+
+  const filteredProveedores = useMemo(() => {
+    const all = Array.isArray(safeLists.proveedores) ? safeLists.proveedores : [];
+    const q = proveedorInput.trim().toLowerCase();
+
+    if (!proveedorFocus || q.length < 1) return [];
+
+    return all
+      .filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q))
+      .slice(0, 25);
+  }, [safeLists.proveedores, proveedorInput, proveedorFocus]);
+
+  /* =========================
+     Autocomplete de DETALLES
+  ========================= */
+  const handleDetalleInputChange = useCallback((e) => {
+    const value = e.target.value;
+    setDetalleInput(value);
+    setForm((prev) => ({ ...prev, id_detalle: NULL_OPTION }));
+  }, []);
+
+  const handleSelectDetalle = useCallback((det) => {
+    const nombre = String(det?.nombre ?? "").trim();
+    setDetalleInput(nombre);
+    setForm((prev) => ({
+      ...prev,
+      id_detalle: det?.id != null ? String(det.id) : NULL_OPTION,
+    }));
+    setDetalleFocus(false);
+  }, []);
+
+  const startAddDetalle = useCallback(() => {
+    setDetalleFocus(false);
+    setAddUI({ field: "id_detalle", text: "", saving: false });
+    setForm((prev) => ({ ...prev, id_detalle: ADD_OPTION }));
+  }, []);
+
+  const filteredDetalles = useMemo(() => {
+    const all = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
+    const q = detalleInput.trim().toLowerCase();
+
+    if (!detalleFocus || q.length < 1) return [];
+
+    return all
+      .filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q))
+      .slice(0, 25);
+  }, [safeLists.detalles, detalleInput, detalleFocus]);
 
   /* =========================
      Payload final (solo campos de NUEVA TABLA)
@@ -562,9 +638,11 @@ export default function ModalAgregarMovimiento({
         ["id_medio_pago", "Medio de pago"],
       ];
       for (const [k, label] of req) {
-        if (form[k] === ADD_OPTION) throw new Error(`Tenés "${label}" en "Agregar…". Guardalo primero.`);
+        if (form[k] === ADD_OPTION)
+          throw new Error(`Tenés "${label}" en "Agregar…". Guardalo primero.`);
         const n = Number(form[k]);
-        if (!Number.isFinite(n) || n <= 0) throw new Error(`Seleccioná un valor válido para "${label}".`);
+        if (!Number.isFinite(n) || n <= 0)
+          throw new Error(`Seleccioná un valor válido para "${label}".`);
       }
 
       // ✅ opcionales: si están en ADD_OPTION, bloquea
@@ -575,7 +653,8 @@ export default function ModalAgregarMovimiento({
         ["id_detalle", "Detalle"],
       ];
       for (const [k, label] of opc) {
-        if (form[k] === ADD_OPTION) throw new Error(`Tenés "${label}" en "Agregar…". Guardalo o elegí otra opción.`);
+        if (form[k] === ADD_OPTION)
+          throw new Error(`Tenés "${label}" en "Agregar…". Guardalo o elegí otra opción.`);
       }
 
       // ✅ monto
@@ -636,8 +715,7 @@ export default function ModalAgregarMovimiento({
 
               setForm((p) => {
                 const copy = { ...p };
-                // Vuelve a NULL_OPTION
-                copy[field] = NULL_OPTION;
+                copy[field] = NULL_OPTION; // vuelve a vacío
                 return copy;
               });
             }}
@@ -717,7 +795,6 @@ export default function ModalAgregarMovimiento({
                       type="date"
                       placeholder=" "
                       value={form.fecha}
-                      // ✅ CAMBIO: al elegir fecha, autocompleta período (MM-YYYY)
                       onChange={(e) => onFechaChange(e.target.value)}
                       disabled={saving}
                       onClick={openDatePicker}
@@ -731,7 +808,6 @@ export default function ModalAgregarMovimiento({
                     <label className="fl-label">Fecha</label>
                   </div>
 
-                  {/* ✅ Período ahora siempre MM-YYYY */}
                   <div className="fl-field">
                     <input
                       className="fl-input"
@@ -748,7 +824,9 @@ export default function ModalAgregarMovimiento({
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_clasificacion)}
-                      onChange={(e) => onSelectWithAdd("id_clasificacion", e.target.value, true)}
+                      onChange={(e) =>
+                        onSelectWithAdd("id_clasificacion", e.target.value, true)
+                      }
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
@@ -763,7 +841,7 @@ export default function ModalAgregarMovimiento({
                     {renderAddInline("id_clasificacion")}
                   </div>
 
-                  <div className="fl-field">
+                  <div className="fl-field ">
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_tipo_venta)}
@@ -786,7 +864,9 @@ export default function ModalAgregarMovimiento({
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_tipo_movimiento)}
-                      onChange={(e) => onSelectWithAdd("id_tipo_movimiento", e.target.value, true)}
+                      onChange={(e) =>
+                        onSelectWithAdd("id_tipo_movimiento", e.target.value, true)
+                      }
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar tipo de movimiento --</option>
@@ -811,7 +891,11 @@ export default function ModalAgregarMovimiento({
                   <div className="fl-field">
                     <select
                       className="fl-input fl-select"
-                      value={form.id_cuenta_corriente === NULL_OPTION ? "" : String(form.id_cuenta_corriente)}
+                      value={
+                        form.id_cuenta_corriente === NULL_OPTION
+                          ? ""
+                          : String(form.id_cuenta_corriente)
+                      }
                       onChange={(e) =>
                         onSelectWithAdd(
                           "id_cuenta_corriente",
@@ -833,7 +917,7 @@ export default function ModalAgregarMovimiento({
                     {renderAddInline("id_cuenta_corriente")}
                   </div>
 
-                  {/* ✅ Campo CLIENTE como autocomplete en vez de <select> */}
+                  {/* ✅ Cliente como autocomplete */}
                   <div className="fl-field" style={{ position: "relative" }}>
                     <input
                       ref={clienteInputRef}
@@ -842,16 +926,12 @@ export default function ModalAgregarMovimiento({
                       value={clienteInput}
                       onChange={handleClienteInputChange}
                       onFocus={() => setClienteFocus(true)}
-                      onBlur={() => {
-                        // pequeño delay para permitir click en las opciones
-                        setTimeout(() => setClienteFocus(false), 120);
-                      }}
+                      onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
                       disabled={saving || addUI.field === "id_cliente"}
                       autoComplete="off"
                     />
                     <label className="fl-label">Cliente</label>
 
-                    {/* Lista de sugerencias */}
                     {clienteFocus && filteredClientes.length > 0 && (
                       <ul
                         style={{
@@ -903,7 +983,6 @@ export default function ModalAgregarMovimiento({
                       </ul>
                     )}
 
-                    {/* Botón para agregar nuevo cliente (equivalente a OTRO (AGREGAR…)) */}
                     <button
                       type="button"
                       onClick={startAddCliente}
@@ -925,47 +1004,177 @@ export default function ModalAgregarMovimiento({
                     {renderAddInline("id_cliente")}
                   </div>
 
-                  <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={form.id_proveedor}
-                      onChange={(e) => onSelectWithAdd("id_proveedor", e.target.value, false)}
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>-- Sin proveedor --</option>
-                      {(safeLists.proveedores || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                    </select>
+                  {/* ✅ Proveedor como autocomplete */}
+                  <div className="fl-field fl-col-full" style={{ position: "relative" }}>
+                    <input
+                      ref={proveedorInputRef}
+                      className="fl-input"
+                      placeholder=" "
+                      value={proveedorInput}
+                      onChange={handleProveedorInputChange}
+                      onFocus={() => setProveedorFocus(true)}
+                      onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
+                      disabled={saving || addUI.field === "id_proveedor"}
+                      autoComplete="off"
+                    />
                     <label className="fl-label">Proveedor</label>
+
+                    {proveedorFocus && filteredProveedores.length > 0 && (
+                      <ul
+                        style={{
+                          position: "absolute",
+                          top: "100%",
+                          left: 0,
+                          right: 0,
+                          marginTop: 4,
+                          maxHeight: 230,
+                          overflowY: "auto",
+                          borderRadius: 10,
+                          border: "1px solid rgba(148, 163, 184, 0.5)",
+                          background: "white",
+                          boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
+                          padding: 4,
+                          zIndex: 40,
+                          listStyle: "none",
+                        }}
+                      >
+                        {filteredProveedores.map((p) => (
+                          <li
+                            key={p.id}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectProveedor(p);
+                            }}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: 8,
+                              cursor: "pointer",
+                              fontSize: 13,
+                              display: "flex",
+                              alignItems: "center",
+                            }}
+                            className="mi-autocomplete-item"
+                          >
+                            <span
+                              style={{
+                                flex: 1,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {p.nombre}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={startAddProveedor}
+                      disabled={saving || addUI.saving}
+                      style={{
+                        marginTop: 8,
+                        fontSize: 12,
+                        textAlign: "left",
+                        padding: 0,
+                        background: "none",
+                        border: "none",
+                        color: "#0f766e",
+                        cursor: "pointer",
+                      }}
+                    >
+                      + Agregar nuevo proveedor
+                    </button>
+
                     {renderAddInline("id_proveedor")}
                   </div>
 
-                  <div className="fl-field fl-col-full">
-                    <select
-                      className="fl-input fl-select"
-                      value={form.id_detalle === NULL_OPTION ? "" : String(form.id_detalle)}
-                      onChange={(e) =>
-                        onSelectWithAdd(
-                          "id_detalle",
-                          e.target.value === "" ? NULL_OPTION : e.target.value,
-                          e.target.value !== "" && e.target.value !== ADD_OPTION
-                        )
-                      }
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>-- Sin detalle --</option>
-                      {(safeLists.detalles || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                    </select>
+                  {/* ✅ Detalle como autocomplete (full) */}
+                  <div className="fl-field fl-col-full" style={{ position: "relative" }}>
+                    <input
+                      ref={detalleInputRef}
+                      className="fl-input"
+                      placeholder=" "
+                      value={detalleInput}
+                      onChange={handleDetalleInputChange}
+                      onFocus={() => setDetalleFocus(true)}
+                      onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
+                      disabled={saving || addUI.field === "id_detalle"}
+                      autoComplete="off"
+                    />
                     <label className="fl-label">Detalle</label>
+
+                    {detalleFocus && filteredDetalles.length > 0 && (
+                      <ul
+                        style={{
+                          position: "absolute",
+                          top: "100%",
+                          left: 0,
+                          right: 0,
+                          marginTop: 4,
+                          maxHeight: 230,
+                          overflowY: "auto",
+                          borderRadius: 10,
+                          border: "1px solid rgba(148, 163, 184, 0.5)",
+                          background: "white",
+                          boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
+                          padding: 4,
+                          zIndex: 40,
+                          listStyle: "none",
+                        }}
+                      >
+                        {filteredDetalles.map((d) => (
+                          <li
+                            key={d.id}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectDetalle(d);
+                            }}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: 8,
+                              cursor: "pointer",
+                              fontSize: 13,
+                              display: "flex",
+                              alignItems: "center",
+                            }}
+                            className="mi-autocomplete-item"
+                          >
+                            <span
+                              style={{
+                                flex: 1,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {d.nombre}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={startAddDetalle}
+                      disabled={saving || addUI.saving}
+                      style={{
+                        marginTop: 8,
+                        fontSize: 12,
+                        textAlign: "left",
+                        padding: 0,
+                        background: "none",
+                        border: "none",
+                        color: "#0f766e",
+                        cursor: "pointer",
+                      }}
+                    >
+                      + Agregar nuevo detalle
+                    </button>
+
                     {renderAddInline("id_detalle")}
                   </div>
                 </div>
@@ -1004,7 +1213,10 @@ export default function ModalAgregarMovimiento({
                       placeholder=" "
                       value={form.monto_total}
                       onChange={(e) =>
-                        onChange("monto_total", e.target.value === "" ? "" : Number(e.target.value))
+                        onChange(
+                          "monto_total",
+                          e.target.value === "" ? "" : Number(e.target.value)
+                        )
                       }
                       disabled={saving}
                     />
@@ -1019,7 +1231,12 @@ export default function ModalAgregarMovimiento({
           <div className="mit-actions">
             <div className="mit-help">{saving ? "Guardando…" : " "}</div>
 
-            <button type="button" className="mit-btn mit-btn--ghost" onClick={cerrar} disabled={saving}>
+            <button
+              type="button"
+              className="mit-btn mit-btn--ghost"
+              onClick={cerrar}
+              disabled={saving}
+            >
               Cancelar
             </button>
 

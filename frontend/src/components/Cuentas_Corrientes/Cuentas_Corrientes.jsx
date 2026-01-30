@@ -18,20 +18,6 @@ function moneyARS(v) {
   }
 }
 
-function buildPeriodOptions(limitBack = 18, limitForward = 3) {
-  const out = [{ value: "", label: "Todos" }];
-  const now = new Date();
-  const base = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  for (let i = -limitBack; i <= limitForward; i++) {
-    const dt = new Date(base.getFullYear(), base.getMonth() + i, 1);
-    const y = dt.getFullYear();
-    const m = String(dt.getMonth() + 1).padStart(2, "0");
-    out.push({ value: `${y}-${m}`, label: `${m}-${y}` }); // display tipo MM-YYYY
-  }
-  return out;
-}
-
 async function fetchJSON(url) {
   const r = await fetch(url);
   const txt = await r.text();
@@ -43,7 +29,6 @@ async function fetchJSON(url) {
 }
 
 export default function Cuentas_Corrientes() {
-  const [periodo, setPeriodo] = useState("");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -51,8 +36,6 @@ export default function Cuentas_Corrientes() {
   const [cuentas, setCuentas] = useState([]);
   const [rows, setRows] = useState([]);
   const [totales, setTotales] = useState({ columnas: {}, saldo: 0 });
-
-  const periodOptions = useMemo(() => buildPeriodOptions(18, 3), []);
 
   /* =========================
      ✅ TOAST GLOBAL
@@ -69,12 +52,9 @@ export default function Cuentas_Corrientes() {
     setLoading(true);
     setErr("");
 
-
-
     try {
-      const url = `${BASE_URL}/api.php?action=cc_resumen&periodo=${encodeURIComponent(
-        periodo || ""
-      )}`;
+      // ✅ SIN período: cuenta corriente histórica
+      const url = `${BASE_URL}/api.php?action=cc_resumen`;
       const data = await fetchJSON(url);
 
       if (!data || data.exito !== true) {
@@ -84,7 +64,6 @@ export default function Cuentas_Corrientes() {
       setCuentas(Array.isArray(data.cuentas) ? data.cuentas : []);
       setRows(Array.isArray(data.rows) ? data.rows : []);
       setTotales(data.totales || { columnas: {}, saldo: 0 });
-      // ✅ NO mostramos toast de "cargado" (innecesario)
     } catch (e) {
       setCuentas([]);
       setRows([]);
@@ -96,7 +75,7 @@ export default function Cuentas_Corrientes() {
     } finally {
       setLoading(false);
     }
-  }, [periodo, showToast]);
+  }, [showToast]);
 
   useEffect(() => {
     fetchResumen();
@@ -119,6 +98,41 @@ export default function Cuentas_Corrientes() {
     return Number(v || 0);
   }, []);
 
+  /* ==========================================
+     ✅ ORDENAR COLUMNAS: DEBITO primero, CREDITO después
+     (y cualquier otra cuenta queda al final)
+  ========================================== */
+  const orderedCuentas = useMemo(() => {
+    const list = Array.isArray(cuentas) ? [...cuentas] : [];
+
+    const norm = (s) =>
+      String(s || "")
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+
+    const weight = (c) => {
+      const name = norm(c?.nombre);
+      // primero DEBITO, después CREDITO
+      if (name.includes("DEBITO")) return 0;
+      if (name.includes("CREDITO")) return 1;
+      return 2; // resto
+    };
+
+    list.sort((a, b) => {
+      const wa = weight(a);
+      const wb = weight(b);
+      if (wa !== wb) return wa - wb;
+
+      // desempate estable: por nombre
+      const na = norm(a?.nombre);
+      const nb = norm(b?.nombre);
+      return na.localeCompare(nb, "es");
+    });
+
+    return list;
+  }, [cuentas]);
+
   // ✅ Exportar Excel (respeta filtros y columnas dinámicas) + Toast
   const exportExcel = useCallback(() => {
     try {
@@ -132,7 +146,7 @@ export default function Cuentas_Corrientes() {
       const data = filtered.map((r) => {
         const rowObj = { Cliente: r.nombre };
 
-        (cuentas || []).forEach((c) => {
+        (orderedCuentas || []).forEach((c) => {
           const v = getCell(r, c.id_cuenta_corriente);
           rowObj[c.nombre] = Number(v || 0);
         });
@@ -145,7 +159,7 @@ export default function Cuentas_Corrientes() {
 
       ws["!cols"] = [
         { wch: 30 }, // Cliente
-        ...(cuentas || []).map(() => ({ wch: 18 })),
+        ...(orderedCuentas || []).map(() => ({ wch: 18 })),
         { wch: 18 }, // Saldo
       ];
 
@@ -157,16 +171,13 @@ export default function Cuentas_Corrientes() {
         .slice(0, 16)
         .replace(/[:T]/g, "-");
 
-      XLSX.writeFile(
-        wb,
-        `cuentas_corrientes_${periodo || "todos"}_${stamp}.xlsx`
-      );
+      XLSX.writeFile(wb, `cuentas_corrientes_${stamp}.xlsx`);
 
       showToast("exito", "Excel exportado.", 2200);
     } catch (e) {
       showToast("error", e?.message || "Error exportando Excel.", 3500);
     }
-  }, [filtered, cuentas, periodo, getCell, showToast]);
+  }, [filtered, orderedCuentas, getCell, showToast]);
 
   return (
     <div className="cc-page">
@@ -203,26 +214,7 @@ export default function Cuentas_Corrientes() {
             </div>
 
             <div className="cc-headFilters">
-              <div className="cc-filter">
-                <label>Período</label>
-                <select
-                  value={periodo}
-                  onChange={(e) => setPeriodo(e.target.value)}
-                  disabled={loading}
-                >
-                  {/* ✅ Opción Todos explícita */}
-                  <option value="">Todos</option>
-
-                  {periodOptions
-                    .filter((p) => p.value !== "") // evitamos duplicar "Todos"
-                    .map((p) => (
-                      <option key={p.value} value={p.value}>
-                        {p.label}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
+              {/* ✅ SIN período */}
               <div className="cc-filter cc-filter--search">
                 <label>Buscar</label>
                 <input
@@ -240,7 +232,9 @@ export default function Cuentas_Corrientes() {
                 onClick={exportExcel}
                 disabled={loading || !filtered.length}
                 title={
-                  filtered.length ? "Exportar a Excel" : "No hay datos para exportar"
+                  filtered.length
+                    ? "Exportar a Excel"
+                    : "No hay datos para exportar"
                 }
               >
                 <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
@@ -266,11 +260,11 @@ export default function Cuentas_Corrientes() {
           <div
             className="cc-grid cc-grid--head"
             style={{
-              gridTemplateColumns: `260px repeat(${cuentas.length}, 1fr) .5fr`,
+              gridTemplateColumns: `260px repeat(${orderedCuentas.length}, 1fr) .5fr`,
             }}
           >
             <div className="cc-cell cc-name">CLIENTE</div>
-            {cuentas.map((c) => (
+            {orderedCuentas.map((c) => (
               <div key={c.id_cuenta_corriente} className="cc-cell is-center">
                 {c.nombre}
               </div>
@@ -289,12 +283,12 @@ export default function Cuentas_Corrientes() {
                 key={r.id_cliente}
                 className="cc-grid cc-grid--row"
                 style={{
-                  gridTemplateColumns: `260px repeat(${cuentas.length}, 1fr) .5fr`,
+                  gridTemplateColumns: `260px repeat(${orderedCuentas.length}, 1fr) .5fr`,
                 }}
               >
                 <div className="cc-cell cc-name">{r.nombre}</div>
 
-                {cuentas.map((c) => {
+                {orderedCuentas.map((c) => {
                   const v = getCell(r, c.id_cuenta_corriente);
                   const cls = v > 0 ? "is-positive" : v < 0 ? "is-negative" : "";
                   return (
@@ -325,12 +319,12 @@ export default function Cuentas_Corrientes() {
             <div
               className="cc-grid cc-grid--tfoot"
               style={{
-                gridTemplateColumns: `260px repeat(${cuentas.length}, 1fr) .5fr`,
+                gridTemplateColumns: `260px repeat(${orderedCuentas.length}, 1fr) .5fr`,
               }}
             >
               <div className="cc-cell cc-tfootLabel">Totales</div>
 
-              {cuentas.map((c) => {
+              {orderedCuentas.map((c) => {
                 const v = Number(
                   (totales.columnas || {})[String(c.id_cuenta_corriente)] || 0
                 );

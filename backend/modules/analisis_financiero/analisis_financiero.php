@@ -9,8 +9,6 @@ require_once __DIR__ . '/../../config/db.php'; // $pdo
 /* =========================
    Response helpers
 ========================= */
-/** @param array<string, mixed> $arr */
-/** @param array<string, mixed> $arr */
 function ok(array $arr = []): void {
   echo json_encode(array_merge(['exito' => true], $arr), JSON_UNESCAPED_UNICODE);
   exit;
@@ -38,17 +36,17 @@ function f($v): float { return (float)($v ?? 0); }
 
 try {
   if (!isset($pdo) || !($pdo instanceof PDO)) {
-    fail('DB no inicializada ($pdo es null). RevisÃƒÂ¡ backend/config/db.php', 500);
+    fail('DB no inicializada ($pdo es null). Revisá backend/config/db.php', 500);
   }
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
 
   $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
   if ($periodo === '' || !isValidPeriodo($periodo)) {
-    fail('ParÃƒÂ¡metro "periodo" invÃƒÂ¡lido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodo]);
+    fail('Parámetro "periodo" inválido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodo]);
   }
 
-  // IDs fijos segÃƒÂºn tu tabla clasificaciones
+  // ✅ IDs fijos según tu tabla clasificaciones (como ya lo tenías)
   $ID_COSTO_FIJO        = 1;
   $ID_COSTO_VARIABLE    = 2;
   $ID_VENTAS            = 3;
@@ -65,12 +63,12 @@ try {
   ";
   $st = $pdo->prepare($sqlPeriodo);
   $st->execute([':periodo' => $periodo]);
-  $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+  $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
   $source = 'periodo';
 
-  // 2) Si no hay filas, fallback por fecha del mes (por si tu periodo estÃƒÂ¡ mal cargado)
-  if (!$rows || count($rows) === 0) {
+  // 2) Si no hay filas, fallback por fecha del mes (por si periodo está mal cargado)
+  if (count($rows) === 0) {
     $desde = monthStart($periodo);
     $hasta = monthEnd($periodo);
 
@@ -83,7 +81,7 @@ try {
     ";
     $st2 = $pdo->prepare($sqlFecha);
     $st2->execute([':desde' => $desde, ':hasta' => $hasta]);
-    $rows = $st2->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $st2->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
     $source = 'fecha';
   }
@@ -110,7 +108,7 @@ try {
 
   ok([
     'periodo' => $periodo,
-    'source' => $source, // Ã¢Å“â€¦ te dice si calculÃƒÂ³ por periodo o por fecha
+    'source' => $source,
     'valores' => [
       'ventas' => $ventas,
       'costo_variable' => $costoVariable,
@@ -122,5 +120,5 @@ try {
   ]);
 
 } catch (Throwable $e) {
-  fail('Error generando anÃƒÂ¡lisis financiero: ' . $e->getMessage(), 500);
+  fail('Error generando análisis financiero: ' . $e->getMessage(), 500);
 }

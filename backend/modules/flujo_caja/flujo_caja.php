@@ -9,8 +9,6 @@ require_once __DIR__ . '/../../config/db.php'; // $pdo
 /* =========================
    Response helpers
 ========================= */
-/** @param array<string, mixed> $arr */
-/** @param array<string, mixed> $arr */
 function ok(array $arr = []): void {
   echo json_encode(array_merge(['exito' => true], $arr), JSON_UNESCAPED_UNICODE);
   exit;
@@ -39,7 +37,8 @@ function prevDay(string $isoDate): string {
   if (!$dt) return $isoDate;
   $dt->modify('-1 day');
   return $dt->format('Y-m-d');
-}/** @return array<int, array<string, mixed>> */
+}
+/** @return array<int, string> */
 function buildDaysWithPrev(string $periodo): array {
   $start = monthStart($periodo);
   $end   = monthEnd($periodo);
@@ -60,21 +59,48 @@ function buildDaysWithPrev(string $periodo): array {
 }
 
 /* =========================
-   AcciÃƒÆ’Ã‚Â³n
+   Acción
 ========================= */
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $action = is_string($action) ? trim($action) : '';
 
 try {
   if (!isset($pdo) || !($pdo instanceof PDO)) {
-    fail('DB no inicializada ($pdo es null). RevisÃƒÆ’Ã‚Â¡ backend/config/db.php', 500);
+    fail('DB no inicializada ($pdo es null). Revisá backend/config/db.php', 500);
   }
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
 
   /* ==========================================================
-     ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ A) FLUJO POR CLIENTES (opcional)
-     (lo dejamos, pero ahora tambiÃƒÆ’Ã‚Â©n soporta filtrar por periodo)
+     ✅ NUEVO: LISTAR PERIODOS DISPONIBLES EN movimientos.periodo
+     action=flujo_caja_periodos
+  ========================================================== */
+  if ($action === 'flujo_caja_periodos') {
+    $sql = "
+      SELECT DISTINCT periodo
+      FROM movimientos
+      WHERE periodo IS NOT NULL
+        AND periodo <> ''
+        AND periodo REGEXP '^[0-9]{4}-[0-9]{2}$'
+      ORDER BY periodo DESC
+    ";
+    $st = $pdo->prepare($sql);
+    $st->execute();
+
+    $periodos = [];
+    while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
+      $p = (string)($r['periodo'] ?? '');
+      if ($p !== '' && isValidPeriodo($p)) $periodos[] = $p;
+    }
+
+    ok([
+      'periodos' => $periodos,
+      'total' => count($periodos),
+    ]);
+  }
+
+  /* ==========================================================
+     … A) FLUJO POR CLIENTES (opcional)
   ========================================================== */
   if ($action === 'flujo_caja_clientes') {
 
@@ -95,7 +121,6 @@ try {
       $params[':periodo'] = $periodo;
     }
 
-    // AjustÃƒÆ’Ã‚Â¡ c.nombre si tu tabla tiene otro campo
     $sql = "
       SELECT
         c.id_cliente,
@@ -134,19 +159,14 @@ try {
   }
 
   /* ==========================================================
-     ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ B) FLUJO DIARIO TIPO EXCEL (ESTE ES EL TUYO)
+     … B) FLUJO DIARIO TIPO EXCEL (TUYO)
      action=flujo_caja_resumen
-     - NO usa tienda
-     - genera todas las fechas del mes + ÃƒÆ’Ã‚Âºltimo dÃƒÆ’Ã‚Â­a mes anterior
-     - ingresos = SUM(tipo=1) por fecha
-     - egresos  = SUM(tipo=2) por fecha
-     - saldo acumulado
   ========================================================== */
   if ($action === 'flujo_caja_resumen') {
 
     $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
     if ($periodo === '' || !isValidPeriodo($periodo)) {
-      fail('ParÃƒÆ’Ã‚Â¡metro "periodo" invÃƒÆ’Ã‚Â¡lido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodo]);
+      fail('Parámetro "periodo" inválido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodo]);
     }
 
     $TIPO_INGRESO = 1;
@@ -159,10 +179,7 @@ try {
     $days = buildDaysWithPrev($periodo);
     $today = (new DateTime('today'))->format('Y-m-d');
 
-    /* =========================
-       1) Totales por dÃƒÆ’Ã‚Â­a (ingresos/egresos)
-       desde el dÃƒÆ’Ã‚Â­a anterior al fin de mes
-    ========================= */
+    // 1) totales por día (ing/eg)
     $sqlDia = "
       SELECT
         fecha,
@@ -181,7 +198,7 @@ try {
       ':hasta' => $end,
     ]);
 
-    $mapDia = []; // fecha => ['ingresos'=>x,'egresos'=>y]
+    $mapDia = [];
     while ($r = $stDia->fetch(PDO::FETCH_ASSOC)) {
       $f = (string)$r['fecha'];
       $mapDia[$f] = [
@@ -190,10 +207,7 @@ try {
       ];
     }
 
-    /* =========================
-       2) Saldo base (TODO lo anterior al mes)
-       = ingresos antes del start - egresos antes del start
-    ========================= */
+    // 2) saldo base (todo lo anterior al mes)
     $sqlSaldoBase = "
       SELECT
         COALESCE(SUM(CASE WHEN id_tipo_movimiento = :ing THEN monto_total ELSE 0 END), 0)
@@ -213,11 +227,7 @@ try {
 
     $saldoBase = (float)($stBase->fetchColumn() ?: 0.0);
 
-    /* =========================
-       3) ConstrucciÃƒÆ’Ã‚Â³n filas (Excel)
-       - El primer renglÃƒÆ’Ã‚Â³n (dÃƒÆ’Ã‚Â­a anterior) ya incluye sus ingresos/egresos
-       - Fechas futuras: ingresos/egresos null y saldo congelado
-    ========================= */
+    // 3) construir filas
     $saldo = $saldoBase;
     $rows = [];
 
@@ -258,7 +268,7 @@ try {
     ]);
   }
 
-  fail('AcciÃƒÆ’Ã‚Â³n no soportada en flujo_caja.php', 200, ['action' => $action]);
+  fail('Acción no soportada en flujo_caja.php', 200, ['action' => $action]);
 
 } catch (Throwable $e) {
   fail('Error generando flujo de caja: ' . $e->getMessage(), 500);

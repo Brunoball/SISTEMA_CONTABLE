@@ -43,6 +43,24 @@ function pickIcon(label) {
   return faChartLine;
 }
 
+function pickInfo(label) {
+  const s = String(label ?? "").toLowerCase();
+
+  if (s.includes("movimientos")) {
+    return "Registrá ingresos y egresos, con historial completo y filtros por período.";
+  }
+  if (s.includes("flujo")) {
+    return "Visualizá el balance de caja y la evolución financiera por período.";
+  }
+  if (s.includes("cuentas") || s.includes("corrientes")) {
+    return "Controlá saldos, pagos y deudas de clientes.";
+  }
+  if (s.includes("análisis") || s.includes("analisis")) {
+    return "Analizá indicadores financieros y comparativas del negocio.";
+  }
+  return "";
+}
+
 const DASH_SEEN_KEY = "pp_seen_dashboard";
 
 export default function Dashboard() {
@@ -62,16 +80,19 @@ export default function Dashboard() {
     return normalizePlanNivel(usuario?.plan_nivel ?? usuario?.planNivel ?? 1);
   }, [usuario]);
 
-  // ✅ AHORA 4 SECCIONES (incluye Análisis Financiero)
   const navItems = useMemo(() => {
     const base = [
       { key: "movimientos", label: "Movimientos", ruta: "/panel/movimientos" },
       { key: "flujo-de-caja", label: "Flujo de Caja", ruta: "/panel/flujo-de-caja" },
       { key: "cuentas-corrientes", label: "Cuentas Corrientes", ruta: "/panel/cuentas-corrientes" },
       { key: "analisis-financiero", label: "Análisis Financiero", ruta: "/panel/analisis-financiero" },
-    ].map((it) => ({ ...it, icon: pickIcon(it.label) }));
+    ].map((it) => ({
+      ...it,
+      icon: pickIcon(it.label),
+      info: pickInfo(it.label),
+    }));
 
-    // ✅ Plan 1: 1 módulo | Plan 2: 2 módulos | Plan 3: 4 módulos
+    // Plan 1 → 1 módulo | Plan 2 → 2 módulos | Plan 3 → 4 módulos
     const limit = planNivel === 1 ? 1 : planNivel === 2 ? 2 : 4;
     return base.slice(0, limit);
   }, [planNivel]);
@@ -90,9 +111,7 @@ export default function Dashboard() {
       <header className="db-header">
         <div className="db-header__left">
           <h1 className="db-title">Panel Contable</h1>
-          <p className="db-subtitle">
-            Elegí una sección para comenzar. Este dashboard aparece solo al iniciar sesión.
-          </p>
+          <p className="db-subtitle">Elegí una sección para comenzar.</p>
         </div>
 
         <div className="db-header__right">
@@ -110,8 +129,11 @@ export default function Dashboard() {
             <FontAwesomeIcon icon={faChartLine} />
           </div>
           <div className="db-hero__text">
-            <h2>Bienvenido</h2>
-            <p>Entrás acá una sola vez por sesión. Después manejás todo desde el menú lateral.</p>
+            <h2>Bienvenido a BALTO</h2>
+            <p>
+              Tu sistema contable para gestionar el negocio de punta a punta: movimientos,
+              caja, cuentas corrientes y análisis financiero en un solo lugar.
+            </p>
           </div>
         </div>
       </section>
@@ -130,6 +152,7 @@ export default function Dashboard() {
                 type="button"
                 className="db-quick__item"
                 onClick={() => handleNavigate(it.ruta)}
+                title={it.info}
               >
                 <span className="db-quick__icon" aria-hidden="true">
                   <FontAwesomeIcon icon={it.icon} />
@@ -140,30 +163,33 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Info */}
+        {/* Información */}
         <div className="db-card">
           <div className="db-card__title">Información</div>
-          <div className="db-card__desc">
-            Acá después podés mostrar resúmenes rápidos del sistema (caja, cuentas corrientes, etc.).
-          </div>
+          <div className="db-card__desc">Descripción rápida de cada módulo disponible.</div>
 
           <div className="db-stats">
-            <div className="db-stat">
-              <div className="db-stat__k">Movimientos</div>
-              <div className="db-stat__v">—</div>
-            </div>
-            <div className="db-stat">
-              <div className="db-stat__k">Caja</div>
-              <div className="db-stat__v">—</div>
-            </div>
-            <div className="db-stat">
-              <div className="db-stat__k">Ctas. Corrientes</div>
-              <div className="db-stat__v">—</div>
-            </div>
-            <div className="db-stat">
-              <div className="db-stat__k">Estado</div>
-              <div className="db-stat__v">OK</div>
-            </div>
+            {navItems.map((it) => (
+              <div
+                key={`${it.key}-info`}
+                className="db-stat"
+                role="button"
+                tabIndex={0}
+                onClick={() => handleNavigate(it.ruta)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") handleNavigate(it.ruta);
+                }}
+                title="Abrir módulo"
+              >
+                <div className="db-stat__k">
+                  <FontAwesomeIcon icon={it.icon} style={{ marginRight: 8 }} />
+                  {it.label}
+                </div>
+                <div className="db-stat__v" style={{ fontSize: 13, lineHeight: 1.25 }}>
+                  {it.info}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>

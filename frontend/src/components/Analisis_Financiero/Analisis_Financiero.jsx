@@ -24,14 +24,6 @@ function moneyARS(v) {
   }
 }
 
-// ✅ Periodos fijos: 2026-01 a 2026-12 (valor para API = YYYY-MM)
-function buildPeriodOptions2026() {
-  const out = [];
-  for (let m = 1; m <= 12; m++) out.push(`2026-${String(m).padStart(2, "0")}`);
-  return out;
-}
-
-// ✅ Label visual: MM-YYYY (solo display)
 function periodLabelMMYYYY(yyyyMM) {
   const [y, m] = String(yyyyMM || "").split("-");
   if (!y || !m) return String(yyyyMM || "");
@@ -42,9 +34,14 @@ function safeText(v) {
   return String(v ?? "").trim();
 }
 
+function toNumberOrZero(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function normalizeRows(raw) {
   // La API puede venir como:
-  // 1) rows: [{ concepto, importe, tipo }]
+  // 1) rows: [{ concepto, importe, tipo, id? }]
   // 2) valores: { ventas, costo_variable, costo_fijo, otros_egresos, gastos_personales, ... }
   // Soportamos ambos formatos.
 
@@ -52,21 +49,21 @@ function normalizeRows(raw) {
   if (Array.isArray(raw)) {
     return raw
       .map((r, idx) => ({
-        id: r?.id ?? `${idx}`,
+        id: safeText(r?.id ?? `${idx}`),
         concepto: safeText(r?.concepto ?? r?.nombre ?? r?.label ?? ""),
         importe: r?.importe == null ? null : Number(r.importe || 0),
-        tipo: safeText(r?.tipo ?? ""), // opcional: "ingreso" / "egreso" / "resultado"
+        tipo: safeText(r?.tipo ?? ""),
       }))
       .filter((x) => x.concepto);
   }
 
-  // Caso 2: objeto valores (tipo Excel)
+  // Caso 2: objeto valores
   if (raw && typeof raw === "object") {
-    const ventas = Number(raw?.ventas ?? 0);
-    const costoVar = Number(raw?.costo_variable ?? raw?.costoVariable ?? 0);
-    const costoFijo = Number(raw?.costo_fijo ?? raw?.costoFijo ?? 0);
-    const otrosEgresos = Number(raw?.otros_egresos ?? raw?.otrosEgresos ?? 0);
-    const gastosPers = Number(raw?.gastos_personales ?? raw?.gastosPersonales ?? 0);
+    const ventas = toNumberOrZero(raw?.ventas);
+    const costoVar = toNumberOrZero(raw?.costo_variable ?? raw?.costoVariable);
+    const costoFijo = toNumberOrZero(raw?.costo_fijo ?? raw?.costoFijo);
+    const otrosEgresos = toNumberOrZero(raw?.otros_egresos ?? raw?.otrosEgresos);
+    const gastosPers = toNumberOrZero(raw?.gastos_personales ?? raw?.gastosPersonales);
 
     const resultadoNeto = ventas - costoVar - costoFijo - otrosEgresos;
 
@@ -78,7 +75,6 @@ function normalizeRows(raw) {
       { id: "resultado_neto", concepto: "RESULTADO NETO", importe: resultadoNeto, tipo: "resultado" },
     ];
 
-    // Gastos personales aparte (como tu Excel)
     if (Number.isFinite(gastosPers) && gastosPers !== 0) {
       out.push({
         id: "gastos_personales",
@@ -92,6 +88,75 @@ function normalizeRows(raw) {
   }
 
   return [];
+}
+
+/* =========================
+   ✅ CÁLCULO CORRECTO SIEMPRE
+========================= */
+function findImporte(rows, keys) {
+  if (!Array.isArray(rows)) return 0;
+
+  for (const k of keys) {
+    if (k.id) {
+      const byId = rows.find(
+        (r) => safeText(r.id).toLowerCase() === String(k.id).toLowerCase()
+      );
+      if (byId && byId.importe != null) return toNumberOrZero(byId.importe);
+    }
+    if (k.includes && k.includes.length) {
+      const byConcept = rows.find((r) => {
+        const c = safeText(r.concepto).toLowerCase();
+        return k.includes.some((needle) => c.includes(needle));
+      });
+      if (byConcept && byConcept.importe != null) return toNumberOrZero(byConcept.importe);
+    }
+  }
+
+  return 0;
+}
+
+function computeDerivedRows(rows) {
+  const base = Array.isArray(rows) ? [...rows] : [];
+
+  const ventas = findImporte(base, [{ id: "ventas" }, { includes: ["ventas", "ingresos", "venta"] }]);
+  const costoVar = findImporte(base, [{ id: "costo_variable" }, { includes: ["costo variable", "variable"] }]);
+  const costoFijo = findImporte(base, [{ id: "costo_fijo" }, { includes: ["costo fijo", "fijo"] }]);
+  const otrosEgresos = findImporte(base, [{ id: "otros_egresos" }, { includes: ["otros egresos", "egresos"] }]);
+
+  const resultadoNeto = ventas - costoVar - costoFijo - otrosEgresos;
+
+  const idxRes = base.findIndex((r) => {
+    const id = safeText(r.id).toLowerCase();
+    const c = safeText(r.concepto).toLowerCase();
+    return (
+      id === "resultado_neto" ||
+      c === "resultado neto" ||
+      (c.includes("resultado") && c.includes("neto"))
+    );
+  });
+
+  const rowResultado = {
+    id: "resultado_neto",
+    concepto: "RESULTADO NETO",
+    importe: resultadoNeto,
+    tipo: "resultado",
+  };
+
+  if (idxRes >= 0) base[idxRes] = { ...base[idxRes], ...rowResultado };
+  else base.push(rowResultado);
+
+  const idxVentas = base.findIndex((r) => safeText(r.id).toLowerCase() === "ventas");
+  if (idxVentas >= 0) base[idxVentas] = { ...base[idxVentas], concepto: "VENTAS", tipo: "ingreso", importe: ventas };
+
+  const markTipo = (id, tipo) => {
+    const i = base.findIndex((r) => safeText(r.id).toLowerCase() === id);
+    if (i >= 0) base[i] = { ...base[i], tipo };
+  };
+  markTipo("costo_variable", "egreso");
+  markTipo("costo_fijo", "egreso");
+  markTipo("otros_egresos", "egreso");
+
+  return base;
 }
 
 /* =========================
@@ -111,16 +176,26 @@ function numOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  const txt = await r.text();
+  try {
+    return JSON.parse(txt);
+  } catch {
+    throw new Error(`Respuesta inválida (${r.status}): ${txt.slice(0, 180)}`);
+  }
+}
+
 export default function Analisis_Financiero() {
   const API = `${BASE_URL}/api.php`;
 
-  const [periodo, setPeriodo] = useState("2026-01");
+  const [periodo, setPeriodo] = useState(""); // se setea cuando cargan periodos
+  const [periodOptions, setPeriodOptions] = useState([]); // ✅ desde movimientos
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingPeriodos, setLoadingPeriodos] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
-
-  const periodOptions = useMemo(() => buildPeriodOptions2026(), []);
 
   /* =========================
      ✅ TOAST GLOBAL
@@ -133,11 +208,59 @@ export default function Analisis_Financiero() {
 
   const closeToast = useCallback(() => setToast(null), []);
 
-  const fetchAnalisis = useCallback(async () => {
-    setLoading(true);
+  /* =========================
+     ✅ Cargar períodos reales desde movimientos
+     action=analisis_financiero_periodos
+  ========================= */
+  const fetchPeriodos = useCallback(async () => {
+    setLoadingPeriodos(true);
     setError("");
 
+    try {
+      const url = `${API}?action=analisis_financiero_periodos`;
+      const json = await fetchJSON(url);
 
+      if (!json?.exito) throw new Error(json?.mensaje || "Error cargando períodos");
+
+      const arr = Array.isArray(json?.periodos) ? json.periodos : [];
+      setPeriodOptions(arr);
+
+      // si el período actual no existe, ponemos el más nuevo (arr viene DESC)
+      if (!arr.length) {
+        setPeriodo("");
+        setData(null);
+        showToast("error", "No hay períodos en movimientos.", 3200);
+        return;
+      }
+
+      if (!periodo || !arr.includes(periodo)) {
+        setPeriodo(arr[0]); // ✅ último período disponible
+      }
+    } catch (e) {
+      const msg = e?.message || "Error cargando períodos";
+      setError(msg);
+      showToast("error", msg, 4200);
+      setPeriodOptions([]);
+      setPeriodo("");
+      setData(null);
+    } finally {
+      setLoadingPeriodos(false);
+    }
+  }, [API, periodo, showToast]);
+
+  useEffect(() => {
+    fetchPeriodos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* =========================
+     ✅ Cargar análisis cuando hay período seleccionado
+  ========================= */
+  const fetchAnalisis = useCallback(async () => {
+    if (!periodo) return;
+
+    setLoading(true);
+    setError("");
 
     try {
       const sp = new URLSearchParams();
@@ -145,24 +268,11 @@ export default function Analisis_Financiero() {
       sp.set("periodo", periodo);
 
       const url = `${API}?${sp.toString()}`;
-      const res = await fetch(url, { method: "GET" });
+      const json = await fetchJSON(url);
 
-      const text = await res.text();
-      let json;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        throw new Error(
-          `Respuesta inválida (no JSON). HTTP ${res.status} - ${text.slice(0, 180)}`
-        );
-      }
-
-      if (!json?.exito) {
-        throw new Error(json?.mensaje || "Error desconocido en API");
-      }
+      if (!json?.exito) throw new Error(json?.mensaje || "Error desconocido en API");
 
       setData(json);
-      // ✅ NO mostramos toast de "cargado" (innecesario)
     } catch (e) {
       setData(null);
       const msg = e?.message || "Error cargando análisis financiero";
@@ -187,7 +297,8 @@ export default function Analisis_Financiero() {
     data?.data?.analisis ??
     null;
 
-  const allRows = useMemo(() => normalizeRows(rawRows), [rawRows]);
+  const normalized = useMemo(() => normalizeRows(rawRows), [rawRows]);
+  const allRows = useMemo(() => computeDerivedRows(normalized), [normalized]);
 
   const filteredRows = useMemo(() => {
     const needle = safeText(q).toLowerCase();
@@ -197,10 +308,9 @@ export default function Analisis_Financiero() {
 
   const showing = filteredRows.length;
 
-  // Totales (si vienen en API o los calculamos)
-  const ventas = allRows.find((r) => r.id === "ventas")?.importe ?? null;
-  const resultadoNeto = allRows.find((r) => r.id === "resultado_neto")?.importe ?? null;
-  const gastosPersonales = allRows.find((r) => r.id === "gastos_personales")?.importe ?? null;
+  const ventas = allRows.find((r) => safeText(r.id).toLowerCase() === "ventas")?.importe ?? null;
+  const resultadoNeto = allRows.find((r) => safeText(r.id).toLowerCase() === "resultado_neto")?.importe ?? null;
+  const gastosPersonales = allRows.find((r) => safeText(r.id).toLowerCase() === "gastos_personales")?.importe ?? null;
 
   const resultadoIsNeg = Number(resultadoNeto) < 0;
 
@@ -216,13 +326,11 @@ export default function Analisis_Financiero() {
 
       showToast("cargando", "Generando Excel…", 9000);
 
-      // Hoja principal: tabla
       const tableData = filteredRows.map((r) => ({
         CONCEPTO: safeText(r.concepto),
         IMPORTE: numOrNull(r.importe),
       }));
 
-      // Hoja resumen
       const resumenData = [
         { CAMPO: "PERIODO", VALOR: safeText(data?.periodo ?? periodo) },
         { CAMPO: "VENTAS", VALOR: numOrNull(ventas) },
@@ -245,9 +353,7 @@ export default function Analisis_Financiero() {
       XLSX.utils.book_append_sheet(wb, wsTabla, "Analisis");
       XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
-      const fileName = `Analisis_Financiero_${sanitizeFilePart(
-        periodLabelMMYYYY(periodo)
-      )}.xlsx`;
+      const fileName = `Analisis_Financiero_${sanitizeFilePart(periodLabelMMYYYY(periodo))}.xlsx`;
       XLSX.writeFile(wb, fileName);
 
       showToast("exito", "Excel exportado.", 2200);
@@ -258,16 +364,13 @@ export default function Analisis_Financiero() {
     }
   }, [filteredRows, data, periodo, ventas, resultadoNeto, gastosPersonales, showToast]);
 
+  const disableUI = loading || loadingPeriodos;
+
   return (
     <div className="af-page">
       {/* ✅ Toast global */}
       {toast && (
-        <Toast
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={closeToast}
-        />
+        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
       )}
 
       {error && (
@@ -282,23 +385,33 @@ export default function Analisis_Financiero() {
             <div className="af-headTitle">
               <div className="af-card__title">Análisis Financiero</div>
               <div className="af-card__hint">
-                Mostrando <b>{showing}</b> registros
+                {disableUI ? (
+                  <>Cargando…</>
+                ) : (
+                  <>
+                    Mostrando <b>{showing}</b> registros
+                  </>
+                )}
               </div>
             </div>
 
             <div className="af-headFilters">
               <div className="af-filter">
-                <label>Período (2026)</label>
+                <label>Período</label>
                 <select
                   value={periodo}
                   onChange={(e) => setPeriodo(e.target.value)}
-                  disabled={loading}
+                  disabled={disableUI || periodOptions.length === 0}
                 >
-                  {periodOptions.map((p) => (
-                    <option key={p} value={p}>
-                      {periodLabelMMYYYY(p)}
-                    </option>
-                  ))}
+                  {periodOptions.length === 0 ? (
+                    <option value="">Sin períodos</option>
+                  ) : (
+                    periodOptions.map((p) => (
+                      <option key={p} value={p}>
+                        {periodLabelMMYYYY(p)}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -308,7 +421,7 @@ export default function Analisis_Financiero() {
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   placeholder="Ej: ventas, costo fijo, gastos..."
-                  disabled={loading}
+                  disabled={disableUI}
                 />
               </div>
             </div>
@@ -320,7 +433,7 @@ export default function Analisis_Financiero() {
               type="button"
               className="af-btn af-btn--excel"
               onClick={handleExportExcel}
-              disabled={loading || !data || filteredRows.length === 0}
+              disabled={disableUI || !data || filteredRows.length === 0}
               title={!data ? "Primero cargá datos" : "Exportar tabla a Excel"}
             >
               <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
@@ -328,11 +441,11 @@ export default function Analisis_Financiero() {
           </div>
         </div>
 
-        {loading && !data && (
+        {disableUI && !data && (
           <div className="af-emptyRow">Cargando análisis financiero...</div>
         )}
 
-        {!loading && data && (
+        {!disableUI && data && (
           <>
             <div className="af-subhead">
               <div className="af-subhead__name">
@@ -349,8 +462,7 @@ export default function Analisis_Financiero() {
               </div>
 
               <div className="af-miniHint">
-                Tabla horizontal tipo Excel (Concepto / Importe). Resultado Neto se
-                resalta.
+                Tabla horizontal tipo Excel (Concepto / Importe). Resultado Neto se resalta.
               </div>
             </div>
 
@@ -367,58 +479,43 @@ export default function Analisis_Financiero() {
                   const isResultado =
                     conceptoLower === "resultado neto" ||
                     r.tipo === "resultado" ||
-                    r.id === "resultado_neto";
+                    safeText(r.id).toLowerCase() === "resultado_neto";
 
                   const isGastoPersonal =
                     conceptoLower.includes("gastos personales") ||
-                    r.id === "gastos_personales";
+                    safeText(r.id).toLowerCase() === "gastos_personales";
 
                   return (
                     <div
-                      className={`af-grid af-grid--row af-grid--excel ${
-                        isResultado ? "is-resultado" : ""
-                      } ${isGastoPersonal ? "is-gp" : ""}`}
+                      className={`af-grid af-grid--row af-grid--excel ${isResultado ? "is-resultado" : ""} ${
+                        isGastoPersonal ? "is-gp" : ""
+                      }`}
                       key={r.id}
                     >
                       <div className="af-cell af-concept">{r.concepto}</div>
 
-                      <div
-                        className={`af-cell af-num is-right ${
-                          Number(r.importe) < 0 ? "is-negative" : ""
-                        }`}
-                      >
+                      <div className={`af-cell af-num is-right ${Number(r.importe) < 0 ? "is-negative" : ""}`}>
                         {moneyARS(r.importe)}
                       </div>
                     </div>
                   );
                 })}
 
-                {!loading && filteredRows.length === 0 && (
-                  <div className="af-emptyRow">No hay datos para mostrar.</div>
-                )}
+                {filteredRows.length === 0 && <div className="af-emptyRow">No hay datos para mostrar.</div>}
               </div>
             </div>
 
-            {/* ✅ Tarjetas mejoradas */}
             <div className="af-footTotals">
-              <div
-                className={`af-totalCard af-totalCard--primary ${
-                  resultadoIsNeg ? "is-negative" : "is-positive"
-                }`}
-              >
+              <div className={`af-totalCard af-totalCard--primary ${resultadoIsNeg ? "is-negative" : "is-positive"}`}>
                 <div className="af-totalTop">
                   <div className="af-totalLabel">Resultado Neto</div>
-                  <div className="af-chip">
-                    {resultadoIsNeg ? "↓ Pérdida" : "↑ Ganancia"}
-                  </div>
+                  <div className="af-chip">{resultadoIsNeg ? "↓ Pérdida" : "↑ Ganancia"}</div>
                 </div>
 
-                <div className="af-totalValue">
-                  {resultadoNeto == null ? "-" : moneyARS(resultadoNeto)}
-                </div>
+                <div className="af-totalValue">{resultadoNeto == null ? "-" : moneyARS(resultadoNeto)}</div>
 
                 <div className="af-totalSub">
-                  Resultado del período (ventas - costos - egresos)
+                  Resultado del período (ventas - costo variable - costo fijo - otros egresos)
                 </div>
               </div>
 
@@ -428,9 +525,7 @@ export default function Analisis_Financiero() {
                   <div className="af-chip is-danger">Control</div>
                 </div>
 
-                <div className="af-totalValue">
-                  {gastosPersonales == null ? "-" : moneyARS(gastosPersonales)}
-                </div>
+                <div className="af-totalValue">{gastosPersonales == null ? "-" : moneyARS(gastosPersonales)}</div>
 
                 <div className="af-totalSub">Se muestra aparte como en tu Excel</div>
               </div>
@@ -438,9 +533,7 @@ export default function Analisis_Financiero() {
           </>
         )}
 
-        {!loading && !data && !error && (
-          <div className="af-emptyRow">No hay datos para mostrar.</div>
-        )}
+        {!disableUI && !data && !error && <div className="af-emptyRow">No hay datos para mostrar.</div>}
       </section>
     </div>
   );

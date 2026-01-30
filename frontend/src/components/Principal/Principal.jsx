@@ -1,4 +1,3 @@
-// src/components/Principal/Principal.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -35,28 +34,19 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm }) => {
   const stop = (e) => e.stopPropagation();
 
   return (
-    <div
-      className="pp-modal-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="pp-modal-title"
-      onMouseDown={onClose}
-    >
+    <div className="pp-modal-overlay" onMouseDown={onClose}>
       <div className="pp-modal" onMouseDown={stop}>
-        <div className="pp-modal__icon" aria-hidden="true">
+        <div className="pp-modal__icon">
           <FontAwesomeIcon icon={faSignOutAlt} />
         </div>
 
-        <h3 id="pp-modal-title" className="pp-modal__title">
-          Confirmar cierre de sesión
-        </h3>
+        <h3 className="pp-modal__title">Confirmar cierre de sesión</h3>
         <p className="pp-modal__text">
           ¿Estás seguro de que deseas cerrar la sesión?
         </p>
 
         <div className="pp-modal__actions">
           <button
-            type="button"
             className="pp-btn pp-btn--ghost"
             onClick={onClose}
             ref={cancelBtnRef}
@@ -64,7 +54,6 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm }) => {
             Cancelar
           </button>
           <button
-            type="button"
             className="pp-btn pp-btn--danger"
             onClick={onConfirm}
           >
@@ -76,6 +65,9 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm }) => {
   );
 };
 
+/* =========================
+   Helpers
+========================= */
 function normalizeRol(value) {
   if (value == null) return "vista";
   const v = String(value).trim().toLowerCase();
@@ -99,9 +91,6 @@ function normalizePlanNivel(value) {
   return 3;
 }
 
-/* =========================
-   Helpers NAV
-========================= */
 function slugify(name) {
   return (
     String(name ?? "")
@@ -118,13 +107,13 @@ function pickIcon(label) {
   const s = String(label ?? "").toLowerCase();
   if (s.includes("movimientos")) return faMoneyBillTrendUp;
   if (s.includes("flujo")) return faWallet;
-  if (s.includes("cuentas") || s.includes("corrientes")) return faUsers;
-  if (s.includes("analisis") || s.includes("análisis")) return faChartLine;
+  if (s.includes("cuentas")) return faUsers;
+  if (s.includes("analisis")) return faChartLine;
   return faChartLine;
 }
 
 /* =========================
-   Dashboard 1 sola vez
+   Dashboard una sola vez
 ========================= */
 const DASH_SEEN_KEY = "pp_dashboard_seen_once";
 
@@ -142,6 +131,9 @@ function markDashboardSeen() {
   } catch {}
 }
 
+/* =========================
+   COMPONENTE
+========================= */
 const Principal = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -155,7 +147,7 @@ const Principal = () => {
       const u = JSON.parse(localStorage.getItem("usuario"));
       if (u) {
         u.rol = normalizeRol(u.rol);
-        u.plan_nivel = normalizePlanNivel(u.plan_nivel ?? u.planNivel ?? 1);
+        u.plan_nivel = normalizePlanNivel(u.plan_nivel ?? 1);
       }
       setUsuario(u || null);
     } catch {
@@ -163,89 +155,48 @@ const Principal = () => {
     }
   }, []);
 
-  const planNivel = normalizePlanNivel(
-    usuario?.plan_nivel ?? usuario?.planNivel ?? 1
-  );
+  const planNivel = normalizePlanNivel(usuario?.plan_nivel ?? 1);
 
-  // ✅ SECCIONES (ahora 4 con Análisis Financiero)
   const navItems = useMemo(() => {
     const base = [
       { label: "Movimientos" },
       { label: "Flujo de Caja" },
       { label: "Cuentas Corrientes" },
-      { label: "Análisis Financiero" }, // ✅ NUEVO
+      { label: "Análisis Financiero" },
     ].map((x) => {
-      const slug = slugify(x.label); // analisis-financiero ✅
+      const slug = slugify(x.label);
       return {
         key: slug,
-        icon: pickIcon(x.label),
         label: x.label,
+        icon: pickIcon(x.label),
         ruta: `/panel/${slug}`,
       };
     });
 
-    // ✅ Plan: 1=1 sección, 2=2 secciones, 3=4 secciones
     const limit = planNivel === 1 ? 1 : planNivel === 2 ? 2 : 4;
     return base.slice(0, limit);
   }, [planNivel]);
 
   const activeKey = useMemo(() => {
-    const found = navItems.find((x) => location.pathname.startsWith(x.ruta));
+    const found = navItems.find((x) =>
+      location.pathname.startsWith(x.ruta)
+    );
     return found?.key || "";
   }, [location.pathname, navItems]);
 
   const activeLabel = useMemo(() => {
-    const found = navItems.find((x) => location.pathname.startsWith(x.ruta));
+    const found = navItems.find((x) =>
+      location.pathname.startsWith(x.ruta)
+    );
     return found?.label || "Dashboard";
   }, [location.pathname, navItems]);
-
-  // ✅ Al iniciar sesión: Dashboard solo 1 vez por sesión
-  useEffect(() => {
-    if (!usuario) return;
-    if (!location.pathname.startsWith("/panel")) return;
-
-    const seen = hasSeenDashboard();
-
-    // si NO vio dashboard aún, lo mandamos al dashboard
-    if (!seen && location.pathname !== "/panel/dashboard") {
-      navigate("/panel/dashboard", { replace: true });
-      return;
-    }
-
-    // si YA lo vio, y cae en dashboard, lo mandamos a la primera sección permitida
-    if (seen && location.pathname === "/panel/dashboard") {
-      navigate(navItems[0]?.ruta || "/panel/dashboard", { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usuario, navItems]);
-
-  // ✅ Protección por plan (dashboard permitido siempre)
-  useEffect(() => {
-    if (!usuario) return;
-    if (!location.pathname.startsWith("/panel")) return;
-
-    if (location.pathname.startsWith("/panel/dashboard")) return;
-
-    markDashboardSeen();
-
-    const allowed = navItems.some((x) => location.pathname.startsWith(x.ruta));
-    if (!allowed) {
-      navigate("/panel/dashboard", { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usuario, navItems, location.pathname]);
 
   const handleNavigate = (ruta) => {
     if (ruta && ruta !== "/panel/dashboard") markDashboardSeen();
     navigate(ruta);
-    document.activeElement?.blur?.();
   };
 
-  // ✅ navegar al dashboard desde el logo
-  const handleLogoClick = () => {
-    navigate("/panel/dashboard");
-    document.activeElement?.blur?.();
-  };
+  const handleLogoClick = () => navigate("/panel/dashboard");
 
   const confirmarCierreSesion = () => {
     try {
@@ -257,71 +208,67 @@ const Principal = () => {
     navigate("/", { replace: true });
   };
 
-  const openPerfil = () => setShowPerfilModal(true);
-
   return (
     <div className="pp-shell">
-      {/* HEADER FIJO ARRIBA */}
-{/* HEADER FIJO ARRIBA */}
-<header className="mov-topbar" role="banner" aria-label="Header fijo">
-  <div className="mov-topbar__left">
-    {/* ✅ Logo + Nombre */}
-    <button
-      type="button"
-      className="mov-topbar__logo"
-      onClick={handleLogoClick}
-      aria-label="Ir al dashboard"
-      title="Ir al dashboard"
-    >
-      {/* Poné tu logo acá: <img src="/logo.png" alt="Logo" /> */}
-      <img
-  src={LogoBalto}
-  alt="Logo Balto"
-  className="mov-topbar__logoImg"
-/>
+      {/* ================= HEADER ================= */}
+      <header className="mov-topbar">
+        <div className="mov-topbar__left">
+          <button
+            className="mov-topbar__logo"
+            onClick={handleLogoClick}
+            title="Ir al dashboard"
+          >
+            <img
+              src={LogoBalto}
+              alt="Logo Balto"
+              className="mov-topbar__logoImg"
+            />
+          </button>
 
-    </button>
+          <div className="mov-topbar__titles">
+            <div className="mov-topbar__sysname">
+              <span className="mov-topbar__brandName">BALTO</span>
+              <span className="mov-topbar__brandDot">•</span>
+              <span className="mov-topbar__brandType">
+                Sistema Contable
+              </span>
+            </div>
+<div className="mov-topbar__sysby">
+  Desarrollado por{" "}
+  <a
+    href="https://3devsnet.com"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="mov-topbar__sysbyLink"
+  >
+    3 devs
+  </a>
+</div>
 
-    <div className="mov-topbar__titles">
-      <div className="mov-topbar__sysname">SISTEMA CONTABLE</div>
-      <div className="mov-topbar__sysby">Desarrollado por 3 devs</div>
-    </div>
-  </div>
+          </div>
+        </div>
 
-  {/* Derecha: sección activa + usuario */}
-  <div className="mov-topbar__right">
-    <div className="mov-topbar__section" title={activeLabel}>
-      {activeLabel}
-    </div>
+        <div className="mov-topbar__right">
+          <div className="mov-topbar__section">{activeLabel}</div>
+          <button
+            className="mov-topbar__usericon"
+            onClick={() => setShowPerfilModal(true)}
+          >
+            <FontAwesomeIcon icon={faUserCircle} />
+          </button>
+        </div>
+      </header>
 
-    <button
-      type="button"
-      className="mov-topbar__usericon"
-      onClick={openPerfil}
-      title="Perfil"
-      aria-label="Abrir perfil"
-    >
-      <FontAwesomeIcon icon={faUserCircle} />
-    </button>
-  </div>
-</header>
-
-
-      {/* SIDEBAR */}
-      <aside className="pp-sidebar" aria-label="Navegación principal">
+      {/* ================= SIDEBAR ================= */}
+      <aside className="pp-sidebar">
+        {/* ✅ BOTÓN PANEL CONTABLE (RESTAURADO) */}
         <div
           className="pp-brand"
           onClick={handleLogoClick}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              handleLogoClick();
-            }
-          }}
         >
-          <div className="pp-brand__mark" aria-hidden="true">
+          <div className="pp-brand__mark">
             <FontAwesomeIcon icon={faChartLine} />
           </div>
           <div className="pp-brand__text">
@@ -334,12 +281,12 @@ const Principal = () => {
           {navItems.map((item) => (
             <button
               key={item.key}
-              type="button"
-              className={`pp-nav__item ${activeKey === item.key ? "is-active" : ""}`}
+              className={`pp-nav__item ${
+                activeKey === item.key ? "is-active" : ""
+              }`}
               onClick={() => handleNavigate(item.ruta)}
-              title={item.label}
             >
-              <span className="pp-nav__icon" aria-hidden="true">
+              <span className="pp-nav__icon">
                 <FontAwesomeIcon icon={item.icon} />
               </span>
               <span className="pp-nav__label">{item.label}</span>
@@ -347,15 +294,12 @@ const Principal = () => {
           ))}
         </nav>
 
-        {/* ABAJO: logout */}
         <div className="pp-sidebar__bottom">
           <button
-            type="button"
             className="pp-logout"
             onClick={() => setShowLogoutModal(true)}
-            title="Cerrar sesión"
           >
-            <span className="pp-logout__icon" aria-hidden="true">
+            <span className="pp-logout__icon">
               <FontAwesomeIcon icon={faSignOutAlt} />
             </span>
             <span className="pp-logout__label">Cerrar sesión</span>
@@ -363,14 +307,14 @@ const Principal = () => {
         </div>
       </aside>
 
-      {/* CONTENIDO */}
+      {/* ================= CONTENT ================= */}
       <main className="pp-content">
         <div className="pp-content__inner">
           <Outlet />
         </div>
       </main>
 
-      {/* MODAL PERFIL */}
+      {/* ================= MODALES ================= */}
       <ModalPerfil
         open={showPerfilModal}
         onClose={() => setShowPerfilModal(false)}

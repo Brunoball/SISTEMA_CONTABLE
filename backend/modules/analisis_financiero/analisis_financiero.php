@@ -46,45 +46,12 @@ try {
     fail('Parámetro "periodo" inválido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodo]);
   }
 
-  // ✅ IDs fijos según tu tabla clasificaciones (como ya lo tenías)
+  // ✅ IDs fijos según tu tabla clasificaciones
   $ID_COSTO_FIJO        = 1;
   $ID_COSTO_VARIABLE    = 2;
   $ID_VENTAS            = 3;
   $ID_GASTOS_PERSONALES = 4;
   $ID_OTROS_EGRESOS     = 5;
-
-  // 1) Primero probamos por periodo (columna movimientos.periodo)
-  $sqlPeriodo = "
-    SELECT id_clasificacion, COALESCE(SUM(monto_total),0) total
-    FROM movimientos
-    WHERE periodo = :periodo
-      AND id_clasificacion IN (1,2,3,4,5)
-    GROUP BY id_clasificacion
-  ";
-  $st = $pdo->prepare($sqlPeriodo);
-  $st->execute([':periodo' => $periodo]);
-  $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-  $source = 'periodo';
-
-  // 2) Si no hay filas, fallback por fecha del mes (por si periodo está mal cargado)
-  if (count($rows) === 0) {
-    $desde = monthStart($periodo);
-    $hasta = monthEnd($periodo);
-
-    $sqlFecha = "
-      SELECT id_clasificacion, COALESCE(SUM(monto_total),0) total
-      FROM movimientos
-      WHERE fecha BETWEEN :desde AND :hasta
-        AND id_clasificacion IN (1,2,3,4,5)
-      GROUP BY id_clasificacion
-    ";
-    $st2 = $pdo->prepare($sqlFecha);
-    $st2->execute([':desde' => $desde, ':hasta' => $hasta]);
-    $rows = $st2->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-    $source = 'fecha';
-  }
 
   // Inicializamos
   $ventas = 0.0;
@@ -93,17 +60,129 @@ try {
   $otrosEgresos = 0.0;
   $gastosPersonales = 0.0;
 
-  foreach ($rows as $r) {
+  $source = 'periodo';
+
+  /* =========================================================
+     1) Intento por PERIODO
+     - Ventas: id_clasificacion=3 AND (id_tipo_venta=1 OR id_cuenta_corriente=1)
+     - Otros: por id_clasificacion normal (1,2,4,5)
+  ========================================================= */
+
+  // A) Ventas con condición extra
+  $sqlVentasPeriodo = "
+    SELECT COALESCE(SUM(monto_total),0) total
+    FROM movimientos
+    WHERE periodo = :periodo
+      AND id_clasificacion = :idVentas
+      AND (id_tipo_venta = 1 OR id_cuenta_corriente = 1)
+  ";
+  $stV = $pdo->prepare($sqlVentasPeriodo);
+  $stV->execute([
+    ':periodo' => $periodo,
+    ':idVentas' => $ID_VENTAS,
+  ]);
+  $ventas = f($stV->fetchColumn());
+
+  // B) Resto de clasificaciones (sin ventas)
+  $sqlOtrosPeriodo = "
+    SELECT id_clasificacion, COALESCE(SUM(monto_total),0) total
+    FROM movimientos
+    WHERE periodo = :periodo
+      AND id_clasificacion IN (:cf, :cv, :gp, :oe)
+    GROUP BY id_clasificacion
+  ";
+  // PDO no permite bind directo de lista con IN usando 1 placeholder, así que usamos 4 placeholders.
+  $sqlOtrosPeriodo = "
+    SELECT id_clasificacion, COALESCE(SUM(monto_total),0) total
+    FROM movimientos
+    WHERE periodo = :periodo
+      AND id_clasificacion IN (:cf, :cv, :gp, :oe)
+    GROUP BY id_clasificacion
+  ";
+  $stO = $pdo->prepare($sqlOtrosPeriodo);
+  $stO->execute([
+    ':periodo' => $periodo,
+    ':cf' => $ID_COSTO_FIJO,
+    ':cv' => $ID_COSTO_VARIABLE,
+    ':gp' => $ID_GASTOS_PERSONALES,
+    ':oe' => $ID_OTROS_EGRESOS,
+  ]);
+  $rowsOtros = $stO->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+  // Detectamos si hay algo cargado por periodo (ventas u otros)
+  $hayAlgoPeriodo = ($ventas != 0.0) || (count($rowsOtros) > 0);
+
+  foreach ($rowsOtros as $r) {
     $id = (int)($r['id_clasificacion'] ?? 0);
     $total = f($r['total'] ?? 0);
 
-    if ($id === $ID_VENTAS) $ventas = $total;
-    if ($id === $ID_COSTO_VARIABLE) $costoVariable = $total;
-    if ($id === $ID_COSTO_FIJO) $costoFijo = $total;
-    if ($id === $ID_OTROS_EGRESOS) $otrosEgresos = $total;
+    if ($id === $ID_COSTO_VARIABLE)    $costoVariable = $total;
+    if ($id === $ID_COSTO_FIJO)        $costoFijo = $total;
+    if ($id === $ID_OTROS_EGRESOS)     $otrosEgresos = $total;
     if ($id === $ID_GASTOS_PERSONALES) $gastosPersonales = $total;
   }
 
+  /* =========================================================
+     2) FALLBACK por FECHA si por periodo no hubo nada
+  ========================================================= */
+  if (!$hayAlgoPeriodo) {
+    $source = 'fecha';
+    $desde = monthStart($periodo);
+    $hasta = monthEnd($periodo);
+
+    // A) Ventas por fecha con condición extra
+    $sqlVentasFecha = "
+      SELECT COALESCE(SUM(monto_total),0) total
+      FROM movimientos
+      WHERE fecha BETWEEN :desde AND :hasta
+        AND id_clasificacion = :idVentas
+        AND (id_tipo_venta = 1 OR id_cuenta_corriente = 1)
+    ";
+    $stV2 = $pdo->prepare($sqlVentasFecha);
+    $stV2->execute([
+      ':desde' => $desde,
+      ':hasta' => $hasta,
+      ':idVentas' => $ID_VENTAS,
+    ]);
+    $ventas = f($stV2->fetchColumn());
+
+    // B) Resto por fecha (1,2,4,5)
+    $sqlOtrosFecha = "
+      SELECT id_clasificacion, COALESCE(SUM(monto_total),0) total
+      FROM movimientos
+      WHERE fecha BETWEEN :desde AND :hasta
+        AND id_clasificacion IN (:cf, :cv, :gp, :oe)
+      GROUP BY id_clasificacion
+    ";
+    $stO2 = $pdo->prepare($sqlOtrosFecha);
+    $stO2->execute([
+      ':desde' => $desde,
+      ':hasta' => $hasta,
+      ':cf' => $ID_COSTO_FIJO,
+      ':cv' => $ID_COSTO_VARIABLE,
+      ':gp' => $ID_GASTOS_PERSONALES,
+      ':oe' => $ID_OTROS_EGRESOS,
+    ]);
+    $rowsOtros2 = $stO2->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    // reset (por las dudas) antes de cargar fallback
+    $costoVariable = 0.0;
+    $costoFijo = 0.0;
+    $otrosEgresos = 0.0;
+    $gastosPersonales = 0.0;
+
+    foreach ($rowsOtros2 as $r) {
+      $id = (int)($r['id_clasificacion'] ?? 0);
+      $total = f($r['total'] ?? 0);
+
+      if ($id === $ID_COSTO_VARIABLE)    $costoVariable = $total;
+      if ($id === $ID_COSTO_FIJO)        $costoFijo = $total;
+      if ($id === $ID_OTROS_EGRESOS)     $otrosEgresos = $total;
+      if ($id === $ID_GASTOS_PERSONALES) $gastosPersonales = $total;
+    }
+  }
+
+  // ✅ Resultado neto (igual que tu definición)
   $resultadoNeto = $ventas - $costoVariable - $costoFijo - $otrosEgresos;
 
   ok([

@@ -215,16 +215,35 @@ export default function Cuentas_Corrientes() {
 
             <div className="cc-headFilters">
               {/* ✅ SIN período */}
-              <div className="cc-filter cc-filter--search">
-                <label>Buscar</label>
-                <input
-                  className="cc-input"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Buscar cliente..."
-                  disabled={loading}
-                />
-              </div>
+<div className="cc-filter cc-filter--search">
+  <label>Buscar</label>
+
+  <div className="cc-searchInput">
+    <input
+      className="cc-input"
+      value={q}
+      onChange={(e) => setQ(e.target.value)}
+      placeholder="Buscar cliente..."
+      disabled={loading}
+    />
+
+    {q.trim() !== "" && !loading && (
+      <button
+        type="button"
+        className="cc-clearSearch"
+        title="Limpiar búsqueda"
+        onClick={() => {
+          setQ("");
+          const input = document.querySelector(".cc-searchInput input");
+          input?.focus();
+        }}
+      >
+        ×
+      </button>
+    )}
+  </div>
+</div>
+
 
               {/* ✅ Exportar Excel */}
               <button

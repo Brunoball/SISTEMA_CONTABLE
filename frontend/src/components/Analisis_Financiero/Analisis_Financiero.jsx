@@ -415,15 +415,36 @@ export default function Analisis_Financiero() {
                 </select>
               </div>
 
-              <div className="af-filter af-filter--search">
-                <label>Buscar</label>
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Ej: ventas, costo fijo, gastos..."
-                  disabled={disableUI}
-                />
-              </div>
+<div className="af-filter af-filter--search">
+  <label>Buscar</label>
+
+  <div className="af-searchInput">
+    <input
+      value={q}
+      onChange={(e) => setQ(e.target.value)}
+      placeholder="Ej: ventas, costo fijo, gastos..."
+      disabled={disableUI}
+    />
+
+    {q.trim() !== "" && !disableUI && (
+      <button
+        type="button"
+        className="af-clearSearch"
+        title="Limpiar búsqueda"
+        onClick={() => {
+          setQ("");
+          // no hace falta re-fetch: esto es filtro front (filteredRows)
+          // si querés re-focus:
+          const input = document.querySelector(".af-searchInput input");
+          input?.focus();
+        }}
+      >
+        ×
+      </button>
+    )}
+  </div>
+</div>
+
             </div>
           </div>
 

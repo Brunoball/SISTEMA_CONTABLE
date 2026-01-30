@@ -697,26 +697,49 @@ export default function Movimientos() {
                 </select>
               </div>
 
-              <div className="mov-search">
-                <label>
-                  <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                </label>
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  onKeyDown={async (e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      await loadRows({
-                        periodo: fPeriodo,
-                        q: e.currentTarget.value,
-                      });
-                    }
-                  }}
-                  placeholder="Buscar por cliente, proveedor, detalle, medio pago..."
-                  disabled={loadingRows}
-                />
-              </div>
+<div className="mov-search">
+  <label>
+    <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+  </label>
+
+  {/* wrapper para poner la X adentro */}
+  <div className="mov-searchInput">
+    <input
+      value={q}
+      onChange={(e) => setQ(e.target.value)}
+      onKeyDown={async (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          await loadRows({
+            periodo: fPeriodo,
+            q: e.currentTarget.value,
+          });
+        }
+      }}
+      placeholder="Buscar por cliente, proveedor, detalle, medio pago..."
+      disabled={loadingRows}
+    />
+
+    {/* X (solo si hay texto) */}
+    {q.trim() !== "" && !loadingRows && (
+      <button
+        type="button"
+        className="mov-clearSearch"
+        title="Limpiar búsqueda"
+        onClick={async () => {
+          setQ("");
+          await loadRows({ periodo: fPeriodo, q: "" });
+          // re-focus al input
+          const input = document.querySelector(".mov-searchInput input");
+          input?.focus();
+        }}
+      >
+        ×
+      </button>
+    )}
+  </div>
+</div>
+
             </div>
           </div>
 

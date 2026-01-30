@@ -108,7 +108,7 @@ html, body {
 .ini_logo{
   width: 90px;
   height: 90px;
-  padding: 0;                 /* 👈 clave: saca el padding */
+  padding: 10px;                 /* 👈 clave: saca el padding */
   border-radius: 50%;
   border: 2px solid var(--ini-primary);
   object-fit: cover;          /* 👈 zoom + recorte */

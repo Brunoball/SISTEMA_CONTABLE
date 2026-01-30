@@ -225,7 +225,7 @@
 /* ✅ el scroll va SOLO acá */
 .af-gridBody{
   overflow: auto;          /* clave */
-  max-height: calc(100vh - 340px);
+  max-height: calc(100vh - 390px);
   background: #fff;
 }
 
@@ -517,4 +517,44 @@
   cursor: not-allowed;
   box-shadow: none;
   transform: none;
+}
+/* ===== Clear (X) en buscador AF ===== */
+.af-searchInput{
+  position: relative;
+  width: 100%;
+}
+
+.af-searchInput input{
+  padding-right: 44px; /* espacio para la X */
+}
+
+.af-clearSearch{
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: none;
+  background: #fff;
+  color: rgba(15, 23, 42, 0.70);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 900;
+  transition: 140ms ease;
+}
+
+.af-clearSearch:hover{
+  background: rgba(15, 23, 42, 0.04);
+  transform: translateY(-50%) translateY(-1px);
+  box-shadow: 0 10px 20px rgba(2, 8, 23, 0.08);
+}
+
+.af-clearSearch:active{
+  transform: translateY(-50%);
+  box-shadow: none;
 }

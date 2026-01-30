@@ -9,6 +9,8 @@ require_once __DIR__ . '/../../config/db.php'; // $pdo
 /* =========================
    Response helpers
 ========================= */
+/** @param array<string, mixed> $arr */
+/** @param array<string, mixed> $arr */
 function ok(array $arr = []): void {
   echo json_encode(array_merge(['exito' => true], $arr), JSON_UNESCAPED_UNICODE);
   exit;
@@ -37,7 +39,7 @@ function prevDay(string $isoDate): string {
   if (!$dt) return $isoDate;
   $dt->modify('-1 day');
   return $dt->format('Y-m-d');
-}
+}/** @return array<int, array<string, mixed>> */
 function buildDaysWithPrev(string $periodo): array {
   $start = monthStart($periodo);
   $end   = monthEnd($periodo);
@@ -58,21 +60,21 @@ function buildDaysWithPrev(string $periodo): array {
 }
 
 /* =========================
-   Acción
+   AcciÃƒÆ’Ã‚Â³n
 ========================= */
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $action = is_string($action) ? trim($action) : '';
 
 try {
   if (!isset($pdo) || !($pdo instanceof PDO)) {
-    fail('DB no inicializada ($pdo es null). Revisá backend/config/db.php', 500);
+    fail('DB no inicializada ($pdo es null). RevisÃƒÆ’Ã‚Â¡ backend/config/db.php', 500);
   }
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
 
   /* ==========================================================
-     ✅ A) FLUJO POR CLIENTES (opcional)
-     (lo dejamos, pero ahora también soporta filtrar por periodo)
+     ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ A) FLUJO POR CLIENTES (opcional)
+     (lo dejamos, pero ahora tambiÃƒÆ’Ã‚Â©n soporta filtrar por periodo)
   ========================================================== */
   if ($action === 'flujo_caja_clientes') {
 
@@ -93,7 +95,7 @@ try {
       $params[':periodo'] = $periodo;
     }
 
-    // Ajustá c.nombre si tu tabla tiene otro campo
+    // AjustÃƒÆ’Ã‚Â¡ c.nombre si tu tabla tiene otro campo
     $sql = "
       SELECT
         c.id_cliente,
@@ -132,10 +134,10 @@ try {
   }
 
   /* ==========================================================
-     ✅ B) FLUJO DIARIO TIPO EXCEL (ESTE ES EL TUYO)
+     ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦ B) FLUJO DIARIO TIPO EXCEL (ESTE ES EL TUYO)
      action=flujo_caja_resumen
      - NO usa tienda
-     - genera todas las fechas del mes + último día mes anterior
+     - genera todas las fechas del mes + ÃƒÆ’Ã‚Âºltimo dÃƒÆ’Ã‚Â­a mes anterior
      - ingresos = SUM(tipo=1) por fecha
      - egresos  = SUM(tipo=2) por fecha
      - saldo acumulado
@@ -144,7 +146,7 @@ try {
 
     $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
     if ($periodo === '' || !isValidPeriodo($periodo)) {
-      fail('Parámetro "periodo" inválido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodo]);
+      fail('ParÃƒÆ’Ã‚Â¡metro "periodo" invÃƒÆ’Ã‚Â¡lido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodo]);
     }
 
     $TIPO_INGRESO = 1;
@@ -158,8 +160,8 @@ try {
     $today = (new DateTime('today'))->format('Y-m-d');
 
     /* =========================
-       1) Totales por día (ingresos/egresos)
-       desde el día anterior al fin de mes
+       1) Totales por dÃƒÆ’Ã‚Â­a (ingresos/egresos)
+       desde el dÃƒÆ’Ã‚Â­a anterior al fin de mes
     ========================= */
     $sqlDia = "
       SELECT
@@ -212,8 +214,8 @@ try {
     $saldoBase = (float)($stBase->fetchColumn() ?: 0.0);
 
     /* =========================
-       3) Construcción filas (Excel)
-       - El primer renglón (día anterior) ya incluye sus ingresos/egresos
+       3) ConstrucciÃƒÆ’Ã‚Â³n filas (Excel)
+       - El primer renglÃƒÆ’Ã‚Â³n (dÃƒÆ’Ã‚Â­a anterior) ya incluye sus ingresos/egresos
        - Fechas futuras: ingresos/egresos null y saldo congelado
     ========================= */
     $saldo = $saldoBase;
@@ -256,7 +258,7 @@ try {
     ]);
   }
 
-  fail('Acción no soportada en flujo_caja.php', 200, ['action' => $action]);
+  fail('AcciÃƒÆ’Ã‚Â³n no soportada en flujo_caja.php', 200, ['action' => $action]);
 
 } catch (Throwable $e) {
   fail('Error generando flujo de caja: ' . $e->getMessage(), 500);

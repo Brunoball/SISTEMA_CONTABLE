@@ -9,6 +9,8 @@ require_once __DIR__ . '/../../config/db.php'; // $pdo
 /* =========================
    Response helpers
 ========================= */
+/** @param array<string, mixed> $arr */
+/** @param array<string, mixed> $arr */
 function ok(array $arr = []): void {
   echo json_encode(array_merge(['exito' => true], $arr), JSON_UNESCAPED_UNICODE);
   exit;
@@ -36,17 +38,17 @@ function f($v): float { return (float)($v ?? 0); }
 
 try {
   if (!isset($pdo) || !($pdo instanceof PDO)) {
-    fail('DB no inicializada ($pdo es null). Revisá backend/config/db.php', 500);
+    fail('DB no inicializada ($pdo es null). RevisÃƒÂ¡ backend/config/db.php', 500);
   }
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
 
   $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
   if ($periodo === '' || !isValidPeriodo($periodo)) {
-    fail('Parámetro "periodo" inválido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodo]);
+    fail('ParÃƒÂ¡metro "periodo" invÃƒÂ¡lido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodo]);
   }
 
-  // IDs fijos según tu tabla clasificaciones
+  // IDs fijos segÃƒÂºn tu tabla clasificaciones
   $ID_COSTO_FIJO        = 1;
   $ID_COSTO_VARIABLE    = 2;
   $ID_VENTAS            = 3;
@@ -67,7 +69,7 @@ try {
 
   $source = 'periodo';
 
-  // 2) Si no hay filas, fallback por fecha del mes (por si tu periodo está mal cargado)
+  // 2) Si no hay filas, fallback por fecha del mes (por si tu periodo estÃƒÂ¡ mal cargado)
   if (!$rows || count($rows) === 0) {
     $desde = monthStart($periodo);
     $hasta = monthEnd($periodo);
@@ -108,7 +110,7 @@ try {
 
   ok([
     'periodo' => $periodo,
-    'source' => $source, // ✅ te dice si calculó por periodo o por fecha
+    'source' => $source, // Ã¢Å“â€¦ te dice si calculÃƒÂ³ por periodo o por fecha
     'valores' => [
       'ventas' => $ventas,
       'costo_variable' => $costoVariable,
@@ -120,5 +122,5 @@ try {
   ]);
 
 } catch (Throwable $e) {
-  fail('Error generando análisis financiero: ' . $e->getMessage(), 500);
+  fail('Error generando anÃƒÂ¡lisis financiero: ' . $e->getMessage(), 500);
 }

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/12.0/phpunit.xsd"
+  bootstrap="tests/bootstrap.php"
+  colors="true"
+  failOnRisky="true"
+  failOnWarning="true"
+>
+  <testsuites>
+    <testsuite name="Backend">
+      <directory suffix="Test.php">tests</directory>
+      <exclude>tests/_old</exclude>
+      <exclude>testing</exclude>
+      <exclude>vendor</exclude>
+    </testsuite>
+  </testsuites>
+
+  <php>
+    <env name="APP_ENV" value="test"/>
+  </php>
+</phpunit>

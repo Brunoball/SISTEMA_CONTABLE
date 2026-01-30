@@ -423,3 +423,71 @@
   background: #f8fafc;
   opacity: .85;
 }
+/* =========================
+   Mini modal (Agregar cliente/proveedor/detalle)
+========================= */
+.mi-mini__overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(1px);
+  display: grid;
+  place-items: center;
+  z-index: 10050; /* arriba del modal principal */
+  padding: 16px;
+}
+
+.mi-mini__modal{
+  width: min(520px, 92vw);
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,.06);
+  box-shadow: 0 28px 64px -24px rgba(0,0,0,.35);
+  overflow: hidden;
+  animation: mi-slide 0.18s ease-out;
+}
+
+.mi-mini__head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--ini-primary);
+  border-bottom: 1px solid var(--mi-border);
+}
+
+.mi-mini__title{
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.mi-mini__close{
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #ffffff;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background .15s ease, transform .15s ease;
+}
+.mi-mini__close:hover{ background: rgba(186, 186, 186, 0.06); transform: rotate(90deg); }
+.mi-mini__close:disabled{ opacity: .6; cursor: not-allowed; transform: none; }
+
+.mi-mini__body{
+  padding: 16px;
+  background: #fff;
+}
+
+.mi-mini__actions{
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}

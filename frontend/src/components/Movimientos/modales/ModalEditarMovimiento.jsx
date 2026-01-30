@@ -153,6 +153,93 @@ const LISTKEY_BY_CATALOGO = {
 };
 
 /* =========================
+   Mini Modal: alta rápida (cliente/proveedor/detalle)
+========================= */
+function AddCatalogMiniModal({
+  open,
+  title,
+  value,
+  saving,
+  onChange,
+  onCancel,
+  onSave,
+}) {
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") onCancel?.();
+      if (e.key === "Enter") onSave?.();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onCancel, onSave]);
+
+  if (!open) return null;
+
+  return (
+    <div className="mi-mini__overlay" onMouseDown={onCancel}>
+      <div className="mi-mini__modal" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="mi-mini__head">
+          <h4 className="mi-mini__title">{title}</h4>
+          <button
+            type="button"
+            className="mi-mini__close"
+            onClick={onCancel}
+            disabled={saving}
+            aria-label="Cerrar"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="mi-mini__body">
+          <div className="fl-field">
+            <input
+              ref={inputRef}
+              className="fl-input"
+              placeholder=" "
+              value={value}
+              onChange={(e) => onChange?.(e.target.value)}
+              disabled={saving}
+              autoComplete="off"
+            />
+            <label className="fl-label">Nombre</label>
+          </div>
+
+          <div className="mi-mini__actions">
+            <button
+              type="button"
+              className="mit-btn mit-btn--ghost"
+              onClick={onCancel}
+              disabled={saving}
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              className="mit-btn mit-btn--solid"
+              onClick={onSave}
+              disabled={saving}
+            >
+              {saving ? "Guardando..." : "Guardar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================
    Build form desde row (NUEVA ESTRUCTURA)
 ========================= */
 function buildFormFromRow(row, lists, periodoDefault) {
@@ -232,8 +319,15 @@ export default function ModalEditarMovimiento({
     buildFormFromRow(row, { ...SAFE_LISTS, ...normalizeIncomingLists(lists) }, periodoDefault)
   );
 
-  // UI "Agregar…" inline
-  const [addUI, setAddUI] = useState({ field: null, text: "", saving: false });
+  // UI agregar:
+  // - inline para selects comunes
+  // - mini modal para cliente/proveedor/detalle
+  const [addUI, setAddUI] = useState({
+    open: false,
+    field: null,
+    text: "",
+    saving: false,
+  });
 
   // ✅ Autocomplete de clientes
   const [clienteInput, setClienteInput] = useState("");
@@ -261,7 +355,7 @@ export default function ModalEditarMovimiento({
     dirtyRef.current = true;
   }, []);
 
-  // ✅ Init SOLO al ABRIR (cerrado -> abierto). NO depende de click afuera.
+  // ✅ Init SOLO al ABRIR
   const prevOpenRef = useRef(false);
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
@@ -272,7 +366,7 @@ export default function ModalEditarMovimiento({
 
     dirtyRef.current = false;
     setSaving(false);
-    setAddUI({ field: null, text: "", saving: false });
+    setAddUI({ open: false, field: null, text: "", saving: false });
 
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(listsRef.current) };
     setLocalLists(merged);
@@ -299,7 +393,7 @@ export default function ModalEditarMovimiento({
     setTimeout(() => closeBtnRef.current?.focus(), 0);
   }, [open]);
 
-  // ✅ ESC cierra (y nada más)
+  // ✅ ESC cierra
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e) => {
@@ -321,18 +415,6 @@ export default function ModalEditarMovimiento({
       el.focus();
     }
   }, [saving]);
-
-  // helper: obtener nombre por id_* (para cancelar addUI y volver a texto)
-  const findNombreById = useCallback(
-    (listKey, id) => {
-      const arr = Array.isArray(safeLists[listKey]) ? safeLists[listKey] : [];
-      const sid = String(id ?? "").trim();
-      if (!sid || sid === NULL_OPTION) return "";
-      const found = arr.find((x) => String(x?.id) === sid);
-      return String(found?.nombre ?? "").trim();
-    },
-    [safeLists]
-  );
 
   const onChange = useCallback(
     (k, v) => {
@@ -391,6 +473,11 @@ export default function ModalEditarMovimiento({
     [parseJsonOrThrow]
   );
 
+  const closeAddMini = useCallback(() => {
+    if (addUI.saving) return;
+    setAddUI({ open: false, field: null, text: "", saving: false });
+  }, [addUI.saving]);
+
   /* =========================
      Guardar nuevo registro del catálogo
   ========================= */
@@ -440,24 +527,27 @@ export default function ModalEditarMovimiento({
         return next;
       });
 
-      setForm((prev) => {
-        const isStringField =
-          addUI.field === "id_cuenta_corriente" ||
-          addUI.field === "id_cliente" ||
-          addUI.field === "id_proveedor" ||
-          addUI.field === "id_detalle";
-        return { ...prev, [addUI.field]: isStringField ? String(newId) : Number(newId) };
-      });
+      // en este modal, estos 3 SIEMPRE string (por tu backend actual)
+      setForm((prev) => ({ ...prev, [addUI.field]: String(newId) }));
 
-      if (addUI.field === "id_cliente") setClienteInput(newNombre);
-      if (addUI.field === "id_proveedor") setProveedorInput(newNombre);
-      if (addUI.field === "id_detalle") setDetalleInput(newNombre);
+      if (addUI.field === "id_cliente") {
+        setClienteInput(newNombre);
+        setTimeout(() => clienteInputRef.current?.focus(), 0);
+      }
+      if (addUI.field === "id_proveedor") {
+        setProveedorInput(newNombre);
+        setTimeout(() => proveedorInputRef.current?.focus(), 0);
+      }
+      if (addUI.field === "id_detalle") {
+        setDetalleInput(newNombre);
+        setTimeout(() => detalleInputRef.current?.focus(), 0);
+      }
 
       try {
         onCatalogCreated?.(meta.catalogo, { id: newId, nombre: newNombre });
       } catch {}
 
-      setAddUI({ field: null, text: "", saving: false });
+      setAddUI({ open: false, field: null, text: "", saving: false });
       showToast("exito", `${meta.label} creado: "${newNombre}"`, 2600);
     } catch (e) {
       const msg = e?.message || "Error creando el registro.";
@@ -502,7 +592,7 @@ export default function ModalEditarMovimiento({
   const startAddCliente = useCallback(() => {
     markDirty();
     setClienteFocus(false);
-    setAddUI({ field: "id_cliente", text: "", saving: false });
+    setAddUI({ open: true, field: "id_cliente", text: "", saving: false });
     setForm((prev) => ({ ...prev, id_cliente: ADD_OPTION }));
   }, [markDirty]);
 
@@ -543,7 +633,7 @@ export default function ModalEditarMovimiento({
   const startAddProveedor = useCallback(() => {
     markDirty();
     setProveedorFocus(false);
-    setAddUI({ field: "id_proveedor", text: "", saving: false });
+    setAddUI({ open: true, field: "id_proveedor", text: "", saving: false });
     setForm((prev) => ({ ...prev, id_proveedor: ADD_OPTION }));
   }, [markDirty]);
 
@@ -584,7 +674,7 @@ export default function ModalEditarMovimiento({
   const startAddDetalle = useCallback(() => {
     markDirty();
     setDetalleFocus(false);
-    setAddUI({ field: "id_detalle", text: "", saving: false });
+    setAddUI({ open: true, field: "id_detalle", text: "", saving: false });
     setForm((prev) => ({ ...prev, id_detalle: ADD_OPTION }));
   }, [markDirty]);
 
@@ -639,6 +729,16 @@ export default function ModalEditarMovimiento({
 
   const submit = async (e) => {
     e.preventDefault();
+
+    if (addUI.open) {
+      showToast(
+        "advertencia",
+        "Terminá de crear el registro (o cancelá) antes de guardar.",
+        3200
+      );
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -705,27 +805,42 @@ export default function ModalEditarMovimiento({
 
   /* =========================
      Helper UI: elegir "Agregar…"
-========================= */
+  ========================= */
   const onSelectWithAdd = useCallback(
     (field, rawValue, castToNumber) => {
       markDirty();
 
       if (rawValue === ADD_OPTION) {
+        // mini modal para estos 3:
+        const isMini =
+          field === "id_cliente" || field === "id_proveedor" || field === "id_detalle";
+
         setForm((p) => ({ ...p, [field]: ADD_OPTION }));
-        setAddUI({ field, text: "", saving: false });
+
+        if (isMini) {
+          setAddUI({ open: true, field, text: "", saving: false });
+        } else {
+          setAddUI({ open: false, field, text: "", saving: false });
+        }
         return;
       }
 
-      if (addUI.field === field) setAddUI({ field: null, text: "", saving: false });
+      if (addUI.field === field && !addUI.open) {
+        setAddUI({ open: false, field: null, text: "", saving: false });
+      }
 
       const v = castToNumber ? Number(rawValue) : rawValue;
       setForm((p) => ({ ...p, [field]: v }));
     },
-    [addUI.field, markDirty]
+    [addUI.field, addUI.open, markDirty]
   );
 
+  // Inline add: SOLO para selects (no cliente/proveedor/detalle)
   const renderAddInline = (field) => {
+    if (addUI.open) return null;
     if (addUI.field !== field) return null;
+
+    if (field === "id_cliente" || field === "id_proveedor" || field === "id_detalle") return null;
 
     const label = CATALOGO_MAP[field]?.label || "Registro";
 
@@ -747,13 +862,8 @@ export default function ModalEditarMovimiento({
             type="button"
             className="mit-btn mit-btn--ghost"
             onClick={() => {
-              setAddUI({ field: null, text: "", saving: false });
+              setAddUI({ open: false, field: null, text: "", saving: false });
               setForm((p) => ({ ...p, [field]: NULL_OPTION }));
-
-              if (field === "id_cliente") setClienteInput(findNombreById("clientes", form.id_cliente));
-              if (field === "id_proveedor")
-                setProveedorInput(findNombreById("proveedores", form.id_proveedor));
-              if (field === "id_detalle") setDetalleInput(findNombreById("detalles", form.id_detalle));
             }}
             disabled={addUI.saving}
           >
@@ -771,6 +881,26 @@ export default function ModalEditarMovimiento({
         </div>
       </div>
     );
+  };
+
+  const miniOpen =
+    addUI.open && ["id_cliente", "id_proveedor", "id_detalle"].includes(addUI.field);
+
+  const miniTitle =
+    addUI.field === "id_cliente"
+      ? "Nuevo cliente"
+      : addUI.field === "id_proveedor"
+      ? "Nuevo proveedor"
+      : "Nuevo detalle";
+
+  const cancelMini = () => {
+    setForm((p) => ({
+      ...p,
+      id_cliente: addUI.field === "id_cliente" ? NULL_OPTION : p.id_cliente,
+      id_proveedor: addUI.field === "id_proveedor" ? NULL_OPTION : p.id_proveedor,
+      id_detalle: addUI.field === "id_detalle" ? NULL_OPTION : p.id_detalle,
+    }));
+    closeAddMini();
   };
 
   if (!open) return null;
@@ -859,7 +989,9 @@ export default function ModalEditarMovimiento({
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_clasificacion)}
-                      onChange={(e) => onSelectWithAdd("id_clasificacion", e.target.value, true)}
+                      onChange={(e) =>
+                        onSelectWithAdd("id_clasificacion", e.target.value, true)
+                      }
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
@@ -897,7 +1029,9 @@ export default function ModalEditarMovimiento({
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_tipo_movimiento)}
-                      onChange={(e) => onSelectWithAdd("id_tipo_movimiento", e.target.value, true)}
+                      onChange={(e) =>
+                        onSelectWithAdd("id_tipo_movimiento", e.target.value, true)
+                      }
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar tipo de movimiento --</option>
@@ -922,16 +1056,12 @@ export default function ModalEditarMovimiento({
                   <div className="fl-field">
                     <select
                       className="fl-input fl-select"
-                      value={
-                        form.id_cuenta_corriente === NULL_OPTION
-                          ? ""
-                          : String(form.id_cuenta_corriente)
-                      }
+                      value={String(form.id_cuenta_corriente)}
                       onChange={(e) =>
                         onSelectWithAdd(
                           "id_cuenta_corriente",
-                          e.target.value === "" ? NULL_OPTION : e.target.value,
-                          e.target.value !== "" && e.target.value !== ADD_OPTION
+                          e.target.value,
+                          e.target.value !== ADD_OPTION
                         )
                       }
                       disabled={saving}
@@ -958,7 +1088,7 @@ export default function ModalEditarMovimiento({
                       onChange={handleClienteInputChange}
                       onFocus={() => setClienteFocus(true)}
                       onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
-                      disabled={saving || addUI.field === "id_cliente"}
+                      disabled={saving || addUI.open}
                       autoComplete="off"
                     />
                     <label className="fl-label">Cliente</label>
@@ -1031,8 +1161,6 @@ export default function ModalEditarMovimiento({
                     >
                       + Agregar nuevo cliente
                     </button>
-
-                    {renderAddInline("id_cliente")}
                   </div>
 
                   {/* Proveedor */}
@@ -1045,7 +1173,7 @@ export default function ModalEditarMovimiento({
                       onChange={handleProveedorInputChange}
                       onFocus={() => setProveedorFocus(true)}
                       onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
-                      disabled={saving || addUI.field === "id_proveedor"}
+                      disabled={saving || addUI.open}
                       autoComplete="off"
                     />
                     <label className="fl-label">Proveedor</label>
@@ -1118,8 +1246,6 @@ export default function ModalEditarMovimiento({
                     >
                       + Agregar nuevo proveedor
                     </button>
-
-                    {renderAddInline("id_proveedor")}
                   </div>
 
                   {/* Detalle */}
@@ -1132,7 +1258,7 @@ export default function ModalEditarMovimiento({
                       onChange={handleDetalleInputChange}
                       onFocus={() => setDetalleFocus(true)}
                       onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
-                      disabled={saving || addUI.field === "id_detalle"}
+                      disabled={saving || addUI.open}
                       autoComplete="off"
                     />
                     <label className="fl-label">Detalle</label>
@@ -1205,8 +1331,6 @@ export default function ModalEditarMovimiento({
                     >
                       + Agregar nuevo detalle
                     </button>
-
-                    {renderAddInline("id_detalle")}
                   </div>
                 </div>
               </article>
@@ -1254,6 +1378,17 @@ export default function ModalEditarMovimiento({
               </article>
             </div>
           </div>
+
+          {/* Mini modal (cliente/proveedor/detalle) */}
+          <AddCatalogMiniModal
+            open={miniOpen}
+            title={miniTitle}
+            value={addUI.text}
+            saving={addUI.saving}
+            onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
+            onCancel={cancelMini}
+            onSave={guardarNuevoCatalogo}
+          />
 
           {/* Footer */}
           <div className="mit-actions">

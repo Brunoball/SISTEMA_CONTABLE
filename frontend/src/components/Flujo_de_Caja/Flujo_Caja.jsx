@@ -3,15 +3,10 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import BASE_URL from "../../config/config";
 import "./flujo_caja.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faPenToSquare,
-  faTrashCan,
-  faPlus,
-  faBroom,
-  faMagnifyingGlass,
-  faCalendarDays,
-  faFileExcel,
-} from "@fortawesome/free-solid-svg-icons";
+import { faCalendarDays, faFileExcel } from "@fortawesome/free-solid-svg-icons";
+
+// ✅ Toast global
+import Toast from "../Global/Toast.jsx";
 
 // ✅ Excel
 import * as XLSX from "xlsx";
@@ -40,9 +35,7 @@ function fmtDateES(iso) {
 // ✅ Periodos fijos: 2026-01 a 2026-12 (valor para API = YYYY-MM)
 function buildPeriodOptions2026() {
   const out = [];
-  for (let m = 1; m <= 12; m++) {
-    out.push(`2026-${String(m).padStart(2, "0")}`);
-  }
+  for (let m = 1; m <= 12; m++) out.push(`2026-${String(m).padStart(2, "0")}`);
   return out;
 }
 
@@ -63,6 +56,22 @@ function normalizeRows(rawRows) {
   }));
 }
 
+/* =========================
+   Safe JSON parse
+========================= */
+async function parseJsonOrThrow(res) {
+  const text = await res.text();
+  if (!text) throw new Error("Respuesta vacía del servidor.");
+  try {
+    return JSON.parse(text);
+  } catch {
+    const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
+    throw new Error(
+      `Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`
+    );
+  }
+}
+
 export default function Flujo_Caja() {
   const API = `${BASE_URL}/api.php`;
 
@@ -73,9 +82,23 @@ export default function Flujo_Caja() {
 
   const periodOptions = useMemo(() => buildPeriodOptions2026(), []);
 
+  // ✅ TOAST GLOBAL
+  const [toast, setToast] = useState(null);
+
+  const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
+    setToast({ tipo, mensaje, duracion });
+  }, []);
+
+  const closeToast = useCallback(() => setToast(null), []);
+
+  /* =========================
+     Fetch resumen + toasts
+  ========================= */
   const fetchResumen = useCallback(async () => {
     setLoading(true);
     setError("");
+
+
 
     try {
       const sp = new URLSearchParams();
@@ -85,28 +108,23 @@ export default function Flujo_Caja() {
       const url = `${API}?${sp.toString()}`;
       const res = await fetch(url, { method: "GET" });
 
-      const text = await res.text();
-      let json;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        throw new Error(
-          `Respuesta inválida (no JSON). HTTP ${res.status} - ${text.slice(0, 180)}`
-        );
-      }
+      const json = await parseJsonOrThrow(res);
 
       if (!json?.exito) {
         throw new Error(json?.mensaje || "Error desconocido en API");
       }
 
       setData(json);
+
     } catch (e) {
       setData(null);
-      setError(e?.message || "Error cargando flujo de caja");
+      const msg = e?.message || "Error cargando flujo de caja";
+      setError(msg);
+      showToast("error", msg, 4200);
     } finally {
       setLoading(false);
     }
-  }, [API, periodo]);
+  }, [API, periodo, showToast]);
 
   useEffect(() => {
     fetchResumen();
@@ -118,39 +136,58 @@ export default function Flujo_Caja() {
   const showing = rows.length;
 
   /* =========================
-     Export Excel
+     Export Excel + toasts
   ========================= */
   const exportExcel = useCallback(() => {
-    if (!rows.length) return;
+    try {
+      if (!rows.length) {
+        showToast("error", "No hay datos para exportar.", 2500);
+        return;
+      }
 
-    // Datos para Excel (con headers)
-    const excelRows = rows.map((r) => ({
-      Fecha: fmtDateES(r.fecha),
-      Ingresos: r.ingresos == null ? "" : Number(r.ingresos),
-      Egresos: r.egresos == null ? "" : Number(r.egresos),
-      Saldo: r.saldo == null ? "" : Number(r.saldo),
-    }));
+      showToast("cargando", "Generando Excel…", 9000);
 
-    const ws = XLSX.utils.json_to_sheet(excelRows);
+      const excelRows = rows.map((r) => ({
+        Fecha: fmtDateES(r.fecha),
+        Ingresos: r.ingresos == null ? "" : Number(r.ingresos),
+        Egresos: r.egresos == null ? "" : Number(r.egresos),
+        Saldo: r.saldo == null ? "" : Number(r.saldo),
+      }));
 
-    // Formato de columnas (aprox)
-    ws["!cols"] = [
-      { wch: 12 }, // Fecha
-      { wch: 14 }, // Ingresos
-      { wch: 14 }, // Egresos
-      { wch: 14 }, // Saldo
-    ];
+      const ws = XLSX.utils.json_to_sheet(excelRows);
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `Flujo ${periodo}`);
+      ws["!cols"] = [
+        { wch: 12 }, // Fecha
+        { wch: 14 }, // Ingresos
+        { wch: 14 }, // Egresos
+        { wch: 14 }, // Saldo
+      ];
 
-    const fileName = `flujo_caja_${periodo.replace("-", "_")}.xlsx`;
-    const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([wbout], { type: "application/octet-stream" }), fileName);
-  }, [rows, periodo]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, `Flujo ${periodo}`);
+
+      const fileName = `flujo_caja_${periodo.replace("-", "_")}.xlsx`;
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      saveAs(new Blob([wbout], { type: "application/octet-stream" }), fileName);
+
+      showToast("exito", "Excel exportado.", 2200);
+    } catch (e) {
+      showToast("error", e?.message || "Error exportando Excel.", 3500);
+    }
+  }, [rows, periodo, showToast]);
 
   return (
     <div className="fc-page">
+      {/* ✅ Toast global */}
+      {toast && (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
+      )}
+
       {error && (
         <div className="fc-alert" role="alert">
           {error}
@@ -169,7 +206,10 @@ export default function Flujo_Caja() {
 
             <div className="fc-headFilters">
               <div className="fc-filter">
-                <label>Período (2026)</label>
+                <label>
+                  <FontAwesomeIcon icon={faCalendarDays} /> Período (2026)
+                </label>
+
                 <select
                   value={periodo}
                   onChange={(e) => setPeriodo(e.target.value)}
@@ -182,6 +222,11 @@ export default function Flujo_Caja() {
                   ))}
                 </select>
               </div>
+
+              {/* (opcional) botón recargar manual */}
+              {/* <button type="button" className="fc-btn" onClick={fetchResumen} disabled={loading}>
+                Recargar
+              </button> */}
             </div>
           </div>
 
@@ -193,7 +238,7 @@ export default function Flujo_Caja() {
               disabled={loading || rows.length === 0}
               title={rows.length ? "Exportar a Excel" : "No hay datos para exportar"}
             >
-            <FontAwesomeIcon icon={faFileExcel} />  Exportar Excel
+              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
             </button>
           </div>
         </div>

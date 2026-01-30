@@ -3,16 +3,10 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import BASE_URL from "../../config/config";
 import "./analisis_financiero.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faPenToSquare,
-  faTrashCan,
-  faPlus,
-  faBroom,
-  faMagnifyingGlass,
-  faCalendarDays,
-  faFileExcel,
-} from "@fortawesome/free-solid-svg-icons";
+import { faFileExcel } from "@fortawesome/free-solid-svg-icons";
 
+// ✅ Toast global (igual que Movimientos)
+import Toast from "../Global/Toast.jsx";
 
 // ✅ Excel
 import * as XLSX from "xlsx";
@@ -128,9 +122,22 @@ export default function Analisis_Financiero() {
 
   const periodOptions = useMemo(() => buildPeriodOptions2026(), []);
 
+  /* =========================
+     ✅ TOAST GLOBAL
+  ========================= */
+  const [toast, setToast] = useState(null);
+
+  const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
+    setToast({ tipo, mensaje, duracion });
+  }, []);
+
+  const closeToast = useCallback(() => setToast(null), []);
+
   const fetchAnalisis = useCallback(async () => {
     setLoading(true);
     setError("");
+
+
 
     try {
       const sp = new URLSearchParams();
@@ -155,13 +162,16 @@ export default function Analisis_Financiero() {
       }
 
       setData(json);
+      // ✅ NO mostramos toast de "cargado" (innecesario)
     } catch (e) {
       setData(null);
-      setError(e?.message || "Error cargando análisis financiero");
+      const msg = e?.message || "Error cargando análisis financiero";
+      setError(msg);
+      showToast("error", msg, 4200);
     } finally {
       setLoading(false);
     }
-  }, [API, periodo]);
+  }, [API, periodo, showToast]);
 
   useEffect(() => {
     fetchAnalisis();
@@ -195,10 +205,17 @@ export default function Analisis_Financiero() {
   const resultadoIsNeg = Number(resultadoNeto) < 0;
 
   /* =========================
-     ✅ Exportar a Excel
+     ✅ Exportar a Excel + Toast
   ========================= */
   const handleExportExcel = useCallback(() => {
     try {
+      if (!data || filteredRows.length === 0) {
+        showToast("error", "No hay datos para exportar.", 2500);
+        return;
+      }
+
+      showToast("cargando", "Generando Excel…", 9000);
+
       // Hoja principal: tabla
       const tableData = filteredRows.map((r) => ({
         CONCEPTO: safeText(r.concepto),
@@ -218,7 +235,6 @@ export default function Analisis_Financiero() {
       const wsTabla = XLSX.utils.json_to_sheet(tableData, {
         header: ["CONCEPTO", "IMPORTE"],
       });
-      // widths
       wsTabla["!cols"] = [{ wch: 40 }, { wch: 18 }];
 
       const wsResumen = XLSX.utils.json_to_sheet(resumenData, {
@@ -229,15 +245,31 @@ export default function Analisis_Financiero() {
       XLSX.utils.book_append_sheet(wb, wsTabla, "Analisis");
       XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
-      const fileName = `Analisis_Financiero_${sanitizeFilePart(periodLabelMMYYYY(periodo))}.xlsx`;
+      const fileName = `Analisis_Financiero_${sanitizeFilePart(
+        periodLabelMMYYYY(periodo)
+      )}.xlsx`;
       XLSX.writeFile(wb, fileName);
+
+      showToast("exito", "Excel exportado.", 2200);
     } catch (e) {
-      setError(e?.message || "Error exportando a Excel");
+      const msg = e?.message || "Error exportando a Excel";
+      setError(msg);
+      showToast("error", msg, 3500);
     }
-  }, [filteredRows, data, periodo, ventas, resultadoNeto, gastosPersonales]);
+  }, [filteredRows, data, periodo, ventas, resultadoNeto, gastosPersonales, showToast]);
 
   return (
     <div className="af-page">
+      {/* ✅ Toast global */}
+      {toast && (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
+      )}
+
       {error && (
         <div className="af-alert" role="alert">
           {error}
@@ -291,12 +323,14 @@ export default function Analisis_Financiero() {
               disabled={loading || !data || filteredRows.length === 0}
               title={!data ? "Primero cargá datos" : "Exportar tabla a Excel"}
             >
-             <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
+              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
             </button>
           </div>
         </div>
 
-        {loading && !data && <div className="af-emptyRow">Cargando análisis financiero...</div>}
+        {loading && !data && (
+          <div className="af-emptyRow">Cargando análisis financiero...</div>
+        )}
 
         {!loading && data && (
           <>
@@ -307,14 +341,16 @@ export default function Analisis_Financiero() {
                   Período {data?.periodo ?? periodo}
                   {ventas != null ? (
                     <>
-                      {" "}• Ventas: <b>{moneyARS(ventas)}</b>
+                      {" "}
+                      • Ventas: <b>{moneyARS(ventas)}</b>
                     </>
                   ) : null}
                 </div>
               </div>
 
               <div className="af-miniHint">
-                Tabla horizontal tipo Excel (Concepto / Importe). Resultado Neto se resalta.
+                Tabla horizontal tipo Excel (Concepto / Importe). Resultado Neto se
+                resalta.
               </div>
             </div>
 
@@ -334,7 +370,8 @@ export default function Analisis_Financiero() {
                     r.id === "resultado_neto";
 
                   const isGastoPersonal =
-                    conceptoLower.includes("gastos personales") || r.id === "gastos_personales";
+                    conceptoLower.includes("gastos personales") ||
+                    r.id === "gastos_personales";
 
                   return (
                     <div
@@ -371,14 +408,18 @@ export default function Analisis_Financiero() {
               >
                 <div className="af-totalTop">
                   <div className="af-totalLabel">Resultado Neto</div>
-                  <div className="af-chip">{resultadoIsNeg ? "↓ Pérdida" : "↑ Ganancia"}</div>
+                  <div className="af-chip">
+                    {resultadoIsNeg ? "↓ Pérdida" : "↑ Ganancia"}
+                  </div>
                 </div>
 
                 <div className="af-totalValue">
                   {resultadoNeto == null ? "-" : moneyARS(resultadoNeto)}
                 </div>
 
-                <div className="af-totalSub">Resultado del período (ventas - costos - egresos)</div>
+                <div className="af-totalSub">
+                  Resultado del período (ventas - costos - egresos)
+                </div>
               </div>
 
               <div className="af-totalCard af-totalCard--danger">
@@ -397,7 +438,9 @@ export default function Analisis_Financiero() {
           </>
         )}
 
-        {!loading && !data && !error && <div className="af-emptyRow">No hay datos para mostrar.</div>}
+        {!loading && !data && !error && (
+          <div className="af-emptyRow">No hay datos para mostrar.</div>
+        )}
       </section>
     </div>
   );

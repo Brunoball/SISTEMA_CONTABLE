@@ -737,20 +737,7 @@ export default function Movimientos() {
               <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
             </button>
 
-            <button
-              type="button"
-              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--dangerSoft"
-              onClick={async () => {
-                showToast("cargando", "Limpiando búsqueda…", 4000);
 
-                setQ("");
-                await loadRows({ periodo: fPeriodo, q: "" });
-
-                showToast("exito", "Búsqueda limpiada.", 2000);
-              }}
-            >
-              <FontAwesomeIcon icon={faBroom} /> Limpiar
-            </button>
           </div>
         </div>
 

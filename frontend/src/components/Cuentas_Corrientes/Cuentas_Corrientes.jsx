@@ -4,16 +4,10 @@ import * as XLSX from "xlsx";
 import BASE_URL from "../../config/config";
 import "./cuentas_corrientes.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faPenToSquare,
-  faTrashCan,
-  faPlus,
-  faBroom,
-  faMagnifyingGlass,
-  faCalendarDays,
-  faFileExcel,
-} from "@fortawesome/free-solid-svg-icons";
+import { faFileExcel } from "@fortawesome/free-solid-svg-icons";
 
+// ✅ Toast global (igual que en Movimientos)
+import Toast from "../Global/Toast.jsx";
 
 function moneyARS(v) {
   const n = Number(v || 0);
@@ -60,9 +54,22 @@ export default function Cuentas_Corrientes() {
 
   const periodOptions = useMemo(() => buildPeriodOptions(18, 3), []);
 
+  /* =========================
+     ✅ TOAST GLOBAL
+  ========================= */
+  const [toast, setToast] = useState(null);
+
+  const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
+    setToast({ tipo, mensaje, duracion });
+  }, []);
+
+  const closeToast = useCallback(() => setToast(null), []);
+
   const fetchResumen = useCallback(async () => {
     setLoading(true);
     setErr("");
+
+
 
     try {
       const url = `${BASE_URL}/api.php?action=cc_resumen&periodo=${encodeURIComponent(
@@ -77,15 +84,19 @@ export default function Cuentas_Corrientes() {
       setCuentas(Array.isArray(data.cuentas) ? data.cuentas : []);
       setRows(Array.isArray(data.rows) ? data.rows : []);
       setTotales(data.totales || { columnas: {}, saldo: 0 });
+      // ✅ NO mostramos toast de "cargado" (innecesario)
     } catch (e) {
       setCuentas([]);
       setRows([]);
       setTotales({ columnas: {}, saldo: 0 });
-      setErr(e?.message || "Error inesperado");
+
+      const msg = e?.message || "Error inesperado";
+      setErr(msg);
+      showToast("error", msg, 4200);
     } finally {
       setLoading(false);
     }
-  }, [periodo]);
+  }, [periodo, showToast]);
 
   useEffect(() => {
     fetchResumen();
@@ -108,46 +119,67 @@ export default function Cuentas_Corrientes() {
     return Number(v || 0);
   }, []);
 
-  // ✅ Exportar Excel (respeta filtros y columnas dinámicas)
+  // ✅ Exportar Excel (respeta filtros y columnas dinámicas) + Toast
   const exportExcel = useCallback(() => {
-    if (!filtered.length) return;
+    try {
+      if (!filtered.length) {
+        showToast("error", "No hay datos para exportar.", 2500);
+        return;
+      }
 
-    const data = filtered.map((r) => {
-      const rowObj = { Cliente: r.nombre };
+      showToast("cargando", "Generando Excel…", 9000);
 
-      (cuentas || []).forEach((c) => {
-        const v = getCell(r, c.id_cuenta_corriente);
-        rowObj[c.nombre] = Number(v || 0);
+      const data = filtered.map((r) => {
+        const rowObj = { Cliente: r.nombre };
+
+        (cuentas || []).forEach((c) => {
+          const v = getCell(r, c.id_cuenta_corriente);
+          rowObj[c.nombre] = Number(v || 0);
+        });
+
+        rowObj["Saldo"] = Number(r.saldo || 0);
+        return rowObj;
       });
 
-      rowObj["Saldo"] = Number(r.saldo || 0);
-      return rowObj;
-    });
+      const ws = XLSX.utils.json_to_sheet(data);
 
-    const ws = XLSX.utils.json_to_sheet(data);
+      ws["!cols"] = [
+        { wch: 30 }, // Cliente
+        ...(cuentas || []).map(() => ({ wch: 18 })),
+        { wch: 18 }, // Saldo
+      ];
 
-    ws["!cols"] = [
-      { wch: 30 }, // Cliente
-      ...(cuentas || []).map(() => ({ wch: 18 })),
-      { wch: 18 }, // Saldo
-    ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Cuentas Corrientes");
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Cuentas Corrientes");
+      const stamp = new Date()
+        .toISOString()
+        .slice(0, 16)
+        .replace(/[:T]/g, "-");
 
-    const stamp = new Date()
-      .toISOString()
-      .slice(0, 16)
-      .replace(/[:T]/g, "-");
+      XLSX.writeFile(
+        wb,
+        `cuentas_corrientes_${periodo || "todos"}_${stamp}.xlsx`
+      );
 
-    XLSX.writeFile(
-      wb,
-      `cuentas_corrientes_${periodo || "todos"}_${stamp}.xlsx`
-    );
-  }, [filtered, cuentas, periodo, getCell]);
+      showToast("exito", "Excel exportado.", 2200);
+    } catch (e) {
+      showToast("error", e?.message || "Error exportando Excel.", 3500);
+    }
+  }, [filtered, cuentas, periodo, getCell, showToast]);
 
   return (
     <div className="cc-page">
+      {/* ✅ Toast global */}
+      {toast && (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
+      )}
+
       {err && (
         <div className="cc-alert" role="alert">
           {err}
@@ -202,16 +234,17 @@ export default function Cuentas_Corrientes() {
                 />
               </div>
 
-              {/* ✅ Botón reemplazado: Exportar Excel */}
+              {/* ✅ Exportar Excel */}
               <button
                 className="cc-btnex cc-btn--excel"
                 onClick={exportExcel}
                 disabled={loading || !filtered.length}
-                title="Exportar a Excel"
+                title={
+                  filtered.length ? "Exportar a Excel" : "No hay datos para exportar"
+                }
               >
-               <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
+                <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
               </button>
-
             </div>
           </div>
 

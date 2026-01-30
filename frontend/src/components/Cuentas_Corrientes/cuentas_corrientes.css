@@ -468,3 +468,33 @@
   transform: translateY(-50%);
   box-shadow: none;
 }
+/* =========================
+   Colores columnas Débito / Crédito
+========================= */
+
+/* HEADER */
+
+
+
+
+/* BODY */
+.cc-grid--row .cc-cell:nth-child(2){
+  color: #991b1b;
+  font-weight: 800;
+}
+
+.cc-grid--row .cc-cell:nth-child(3){
+  color: #166534;
+  font-weight: 800;
+}
+
+/* FOOTER (totales) */
+.cc-grid--tfoot .cc-cell:nth-child(2){
+  color: #991b1b;
+  font-weight: 900;
+}
+
+.cc-grid--tfoot .cc-cell:nth-child(3){
+  color: #166534;
+  font-weight: 900;
+}

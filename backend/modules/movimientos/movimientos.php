@@ -5,8 +5,6 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-// Si lo llamás SIEMPRE desde routes/api.php, NO haría falta CORS acá.
-// Pero lo dejo igual que tu login para que funcione incluso directo.
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -129,7 +127,7 @@ if ($action === '') {
 }
 
 /* =========================================================
-   ✅ LISTAR (GET)  **NUEVAS TABLAS**
+   ✅ LISTAR (GET)  **FIX: LEFT JOIN para NO perder registros**
 ========================================================= */
 function movimientos_listar(PDO $pdo): void
 {
@@ -174,25 +172,25 @@ function movimientos_listar(PDO $pdo): void
       m.monto_total,
       m.id_medio_pago,
 
-      c.nombre  AS clasificacion,
-      tv.nombre AS tipo_venta,
-      cc.nombre AS cuenta_corriente,
-      tm.nombre AS tipo_movimiento,
-      cl.nombre AS cliente,
-      pr.nombre AS proveedor,
-      d.nombre  AS detalle,
-      mp.nombre AS medio_pago,
+      COALESCE(c.nombre,'')  AS clasificacion,
+      COALESCE(tv.nombre,'') AS tipo_venta,
+      COALESCE(cc.nombre,'') AS cuenta_corriente,
+      COALESCE(tm.nombre,'') AS tipo_movimiento,
+      COALESCE(cl.nombre,'') AS cliente,
+      COALESCE(pr.nombre,'') AS proveedor,
+      COALESCE(d.nombre,'')  AS detalle,
+      COALESCE(mp.nombre,'') AS medio_pago,
 
       m.created_at
     FROM movimientos m
-      INNER JOIN clasificaciones c         ON c.id_clasificacion = m.id_clasificacion
-      INNER JOIN tipos_venta tv            ON tv.id_tipo_venta = m.id_tipo_venta
-      LEFT  JOIN cuentas_corrientes cc     ON cc.id_cuenta_corriente = m.id_cuenta_corriente
-      INNER JOIN tipos_movimiento tm       ON tm.id_tipo_movimiento = m.id_tipo_movimiento
-      LEFT  JOIN clientes cl               ON cl.id_cliente = m.id_cliente
-      LEFT  JOIN proveedores pr            ON pr.id_proveedor = m.id_proveedor
-      LEFT  JOIN detalles d                ON d.id_detalle = m.id_detalle
-      INNER JOIN medios_pago mp            ON mp.id_medio_pago = m.id_medio_pago
+      LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
+      LEFT JOIN tipos_venta tv          ON tv.id_tipo_venta = m.id_tipo_venta
+      LEFT JOIN cuentas_corrientes cc   ON cc.id_cuenta_corriente = m.id_cuenta_corriente
+      LEFT JOIN tipos_movimiento tm     ON tm.id_tipo_movimiento = m.id_tipo_movimiento
+      LEFT JOIN clientes cl             ON cl.id_cliente = m.id_cliente
+      LEFT JOIN proveedores pr          ON pr.id_proveedor = m.id_proveedor
+      LEFT JOIN detalles d              ON d.id_detalle = m.id_detalle
+      LEFT JOIN medios_pago mp          ON mp.id_medio_pago = m.id_medio_pago
   ";
 
   if (!empty($where)) $sql .= " WHERE " . implode(" AND ", $where);
@@ -209,27 +207,27 @@ function movimientos_listar(PDO $pdo): void
       'fecha' => (string)$r['fecha'],
       'periodo' => (string)$r['periodo'],
 
-      // ✅ IDs para precargar modales
-      'id_clasificacion' => (int)$r['id_clasificacion'],
-      'id_tipo_venta' => (int)$r['id_tipo_venta'],
+      // IDs para precargar modales (pueden venir null por imports viejos)
+      'id_clasificacion' => $r['id_clasificacion'] === null ? null : (int)$r['id_clasificacion'],
+      'id_tipo_venta' => $r['id_tipo_venta'] === null ? null : (int)$r['id_tipo_venta'],
       'id_cuenta_corriente' => $r['id_cuenta_corriente'] === null ? null : (int)$r['id_cuenta_corriente'],
-      'id_tipo_movimiento' => (int)$r['id_tipo_movimiento'],
+      'id_tipo_movimiento' => $r['id_tipo_movimiento'] === null ? null : (int)$r['id_tipo_movimiento'],
       'id_cliente' => $r['id_cliente'] === null ? null : (int)$r['id_cliente'],
       'id_proveedor' => $r['id_proveedor'] === null ? null : (int)$r['id_proveedor'],
       'id_detalle' => $r['id_detalle'] === null ? null : (int)$r['id_detalle'],
-      'id_medio_pago' => (int)$r['id_medio_pago'],
+      'id_medio_pago' => $r['id_medio_pago'] === null ? null : (int)$r['id_medio_pago'],
 
       'monto_total' => (float)$r['monto_total'],
 
-      // ✅ nombres para tabla
-      'clasificacion' => (string)($r['clasificacion'] ?? ''),
-      'tipo_venta' => (string)($r['tipo_venta'] ?? ''),
-      'cuenta_corriente' => $r['cuenta_corriente'] === null ? null : (string)$r['cuenta_corriente'],
-      'tipo_movimiento' => (string)($r['tipo_movimiento'] ?? ''),
-      'cliente' => $r['cliente'] === null ? null : (string)$r['cliente'],
-      'proveedor' => $r['proveedor'] === null ? null : (string)$r['proveedor'],
-      'detalle' => $r['detalle'] === null ? null : (string)$r['detalle'],
-      'medio_pago' => (string)($r['medio_pago'] ?? ''),
+      // nombres para tabla (si falta relación, viene "")
+      'clasificacion' => (string)$r['clasificacion'],
+      'tipo_venta' => (string)$r['tipo_venta'],
+      'cuenta_corriente' => (string)$r['cuenta_corriente'],
+      'tipo_movimiento' => (string)$r['tipo_movimiento'],
+      'cliente' => (string)$r['cliente'],
+      'proveedor' => (string)$r['proveedor'],
+      'detalle' => (string)$r['detalle'],
+      'medio_pago' => (string)$r['medio_pago'],
 
       'created_at' => (string)($r['created_at'] ?? ''),
     ];

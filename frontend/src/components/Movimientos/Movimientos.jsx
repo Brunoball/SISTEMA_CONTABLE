@@ -1,5 +1,5 @@
 // src/components/Movimientos/Movimientos.jsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import BASE_URL from "../../config/config";
 import "./movimientos.css";
 
@@ -15,7 +15,6 @@ import {
   faPenToSquare,
   faTrashCan,
   faPlus,
-  faBroom,
   faMagnifyingGlass,
   faCalendarDays,
   faFileExcel,
@@ -40,10 +39,39 @@ function safeText(v) {
 }
 
 /* =========================
-   ✅ Período MM-YYYY helpers
+   ✅ FECHA -> DD/MM/YYYY
 ========================= */
-function normalizePeriodoToMMYYYY(v) {
+function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
+  if (!s) return "-";
+
+  // si viene "YYYY-MM-DD ..."
+  const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m1) {
+    const yyyy = m1[1];
+    const mm = String(Number(m1[2])).padStart(2, "0");
+    const dd = String(Number(m1[3])).padStart(2, "0");
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
+  // si viene "DD/MM/YYYY"
+  const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m2) {
+    const dd = String(Number(m2[1])).padStart(2, "0");
+    const mm = String(Number(m2[2])).padStart(2, "0");
+    const yyyy = m2[3];
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
+  // fallback: devolvemos tal cual
+  return s;
+}
+
+/* =========================
+   ✅ Período helpers (UI MM-YYYY) <-> (API YYYY-MM)
+========================= */
+function periodoToMMYYYY(input) {
+  const s = String(input ?? "").trim();
   if (!s) return "";
 
   let m = "";
@@ -61,7 +89,7 @@ function normalizePeriodoToMMYYYY(v) {
     m = parts[0];
     y = parts[1];
   }
-  // YYYYMM (o MMYYYY, intento adivinar)
+  // YYYYMM o MMYYYY
   else if (/^\d{6}$/.test(s)) {
     const a = Number(s.slice(0, 4));
     if (a >= 1900 && a <= 2100) {
@@ -72,12 +100,59 @@ function normalizePeriodoToMMYYYY(v) {
       y = s.slice(2);
     }
   } else {
-    return s; // fallback
+    return s;
   }
 
   const mm = String(Number(m)).padStart(2, "0");
   const yyyy = String(y);
   return `${mm}-${yyyy}`;
+}
+
+function periodoToYYYYMM(input) {
+  const s = String(input ?? "").trim();
+  if (!s) return "";
+
+  // si viene MM-YYYY
+  if (/^\d{1,2}-\d{4}$/.test(s)) {
+    const [mmRaw, yyyy] = s.split("-");
+    const mm = String(Number(mmRaw)).padStart(2, "0");
+    return `${yyyy}-${mm}`;
+  }
+
+  // si viene YYYY-MM
+  if (/^\d{4}-\d{1,2}$/.test(s)) {
+    const [yyyy, mmRaw] = s.split("-");
+    const mm = String(Number(mmRaw)).padStart(2, "0");
+    return `${yyyy}-${mm}`;
+  }
+
+  // si viene YYYY/MM o MM/YYYY
+  if (/^\d{4}\/\d{1,2}$/.test(s)) {
+    const [yyyy, mmRaw] = s.split("/");
+    const mm = String(Number(mmRaw)).padStart(2, "0");
+    return `${yyyy}-${mm}`;
+  }
+  if (/^\d{1,2}\/\d{4}$/.test(s)) {
+    const [mmRaw, yyyy] = s.split("/");
+    const mm = String(Number(mmRaw)).padStart(2, "0");
+    return `${yyyy}-${mm}`;
+  }
+
+  // YYYYMM o MMYYYY
+  if (/^\d{6}$/.test(s)) {
+    const a = Number(s.slice(0, 4));
+    if (a >= 1900 && a <= 2100) {
+      const yyyy = s.slice(0, 4);
+      const mm = String(Number(s.slice(4))).padStart(2, "0");
+      return `${yyyy}-${mm}`;
+    } else {
+      const mm = String(Number(s.slice(0, 2))).padStart(2, "0");
+      const yyyy = s.slice(2);
+      return `${yyyy}-${mm}`;
+    }
+  }
+
+  return s; // fallback
 }
 
 /* =========================
@@ -99,9 +174,11 @@ function normalizeLists(raw) {
   const src = raw?.listas && typeof raw.listas === "object" ? raw.listas : raw;
   const getArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
 
-  return {
-    periodos: (getArr("periodos") || []).map(normalizePeriodoToMMYYYY),
+  // ✅ los periodos los guardamos para UI siempre como MM-YYYY
+  const periodosUI = (getArr("periodos") || []).map(periodoToMMYYYY);
 
+  return {
+    periodos: periodosUI,
     clasificaciones: getArr("clasificaciones"),
     clientes: getArr("clientes"),
     cuentas_corrientes: getArr("cuentas_corrientes"),
@@ -155,8 +232,8 @@ function slugifySheetName(name) {
 function buildExportRows(rows, tab) {
   if (tab === "resumen") {
     return rows.map((r) => ({
-      FECHA: safeText(r.fecha),
-      PERIODO: safeText(normalizePeriodoToMMYYYY(r.periodo)),
+      FECHA: safeText(formatFechaDMY(r.fecha)),
+      PERIODO: safeText(periodoToMMYYYY(r.periodo)),
       TOTAL: Number(r.monto_total || 0),
     }));
   }
@@ -186,6 +263,64 @@ function buildExportRows(rows, tab) {
   }));
 }
 
+/* =========================
+   ✅ FULL-TEXT SEARCH helper
+   (busca por cualquier cosa: fecha, monto, ids, nombres, etc.)
+========================= */
+function normalizeSearchText(v) {
+  return String(v ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // quita acentos
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function rowMatchesQuery(row, query) {
+  const qq = normalizeSearchText(query);
+  if (!qq) return true;
+
+  // ✅ agregamos "valores derivados" que el usuario suele tipear:
+  // - fecha formateada
+  // - período UI
+  // - montos en formatos comunes ($, puntos, comas, sin separadores)
+  const fechaDMY = formatFechaDMY(row?.fecha);
+  const periodoUI = periodoToMMYYYY(row?.periodo);
+
+  const montoNum = Number(row?.monto_total || 0);
+  const montoStr1 = moneyARS(montoNum); // "$ 12.345,67" (depende locale)
+  const montoStr2 = String(montoNum); // "12345.67"
+  const montoStr3 = String(Math.trunc(montoNum)); // "12345"
+  const montoStr4 = String(montoNum)
+    .replace(/[^\d]/g, ""); // "1234567" (si tenía decimales)
+  const montoStr5 = String(montoStr1).replace(/[^\d]/g, ""); // digits-only del moneyARS
+
+  // ✅ armamos un “blob” de texto con TODO:
+  // - todos los valores del objeto
+  // - más los derivados (fecha/período/montos)
+  const parts = [];
+
+  // valores del row (cualquier campo)
+  if (row && typeof row === "object") {
+    for (const k of Object.keys(row)) {
+      const val = row[k];
+
+      // si es objeto/array, lo saltamos para evitar "[object Object]"
+      if (val && typeof val === "object") continue;
+
+      parts.push(String(val ?? ""));
+    }
+  }
+
+  // derivados
+  parts.push(fechaDMY);
+  parts.push(periodoUI);
+  parts.push(montoStr1, montoStr2, montoStr3, montoStr4, montoStr5);
+
+  const hay = normalizeSearchText(parts.join(" | "));
+  return hay.includes(qq);
+}
+
 export default function Movimientos() {
   const API = `${BASE_URL}/api.php`;
 
@@ -197,8 +332,8 @@ export default function Movimientos() {
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
-  // filtros
-  const [fPeriodo, setFPeriodo] = useState("");
+  // filtros (UI)
+  const [fPeriodo, setFPeriodo] = useState(""); // ✅ SIEMPRE MM-YYYY (NO "Todos")
   const [q, setQ] = useState("");
 
   // tabla tabs
@@ -210,14 +345,19 @@ export default function Movimientos() {
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
 
-  // ✅ TOAST GLOBAL (vive fuera de los modales)
+  // ✅ TOAST GLOBAL
   const [toast, setToast] = useState(null);
 
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
     setToast({ tipo, mensaje, duracion });
   }, []);
-
   const closeToast = useCallback(() => setToast(null), []);
+
+  /* =========================
+     ✅ Cache simple por "periodoAPI|q"
+     (evita pedir lo mismo al backend si ya lo tenés)
+  ========================= */
+  const cacheRef = useRef(new Map()); // key -> array rows
 
   /* =========================
      API helpers robustos + Authorization
@@ -234,8 +374,7 @@ export default function Movimientos() {
     if (!text) throw new Error("Respuesta vacía del servidor.");
 
     try {
-      const data = JSON.parse(text);
-      return data;
+      return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
       throw new Error(
@@ -251,8 +390,7 @@ export default function Movimientos() {
       if (token) headers.Authorization = `Bearer ${token}`;
 
       const res = await fetch(url, { method: "GET", headers });
-      const data = await parseJsonOrThrow(res);
-      return data;
+      return await parseJsonOrThrow(res);
     },
     [parseJsonOrThrow]
   );
@@ -264,14 +402,13 @@ export default function Movimientos() {
         headers: buildHeaders(),
         body: JSON.stringify(payload ?? {}),
       });
-      const data = await parseJsonOrThrow(res);
-      return data;
+      return await parseJsonOrThrow(res);
     },
     [buildHeaders, parseJsonOrThrow]
   );
 
   /* =========================
-     ✅ ACTUALIZAR LISTAS GLOBALMENTE cuando se crea algo en un catálogo
+     ✅ ACTUALIZAR LISTAS cuando se crea algo en catálogos
   ========================= */
   const handleCatalogCreated = useCallback((catalogo, item) => {
     const keyByCatalogo = {
@@ -305,11 +442,12 @@ export default function Movimientos() {
   }, []);
 
   /* =========================
-     Cargar listas
+     Cargar listas (y setear período por defecto)
   ========================= */
   const loadLists = useCallback(async () => {
     setLoadingLists(true);
     setError("");
+
     try {
       const data = await apiGet(`${API}?action=global_obtener_listas`);
       if (!data.exito)
@@ -318,31 +456,51 @@ export default function Movimientos() {
       const normalized = normalizeLists(data);
       setLists(normalized);
 
-      // ✅ default de período normalizado a MM-YYYY
-      if (!fPeriodo && (normalized.periodos || []).length) {
-        setFPeriodo(normalized.periodos[0]);
+      // ✅ SIEMPRE elegir un período por defecto (el primero)
+      if ((normalized.periodos || []).length) {
+        setFPeriodo((prev) => prev || normalized.periodos[0]); // MM-YYYY
+      } else {
+        setFPeriodo(""); // no hay periodos en DB
       }
 
       return normalized;
     } catch (e) {
       setError(e.message || "Error cargando listas.");
       setLists(emptyLists);
+      setFPeriodo("");
       return emptyLists;
     } finally {
       setLoadingLists(false);
     }
-  }, [API, apiGet, fPeriodo]);
+  }, [API, apiGet]);
 
   /* =========================
      Cargar movimientos
+     ✅ SIEMPRE por período (NO "Todos")
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
-      const periodoRaw =
-        typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
-      const periodo = normalizePeriodoToMMYYYY(periodoRaw);
-
+      const periodoUI =
+        typeof opts.periodo === "string" ? opts.periodo : fPeriodo; // MM-YYYY
       const qLocal = typeof opts.q === "string" ? opts.q : q;
+
+      // ✅ si no hay período, NO cargamos (evita "Todos")
+      const perUI = periodoToMMYYYY(periodoUI);
+      if (!perUI) {
+        setRows([]);
+        setLoadingRows(false);
+        return;
+      }
+
+      const periodoAPI = periodoToYYYYMM(perUI); // YYYY-MM
+      const cacheKey = `${periodoAPI}|${(qLocal || "").trim()}`;
+
+      // ✅ Cache hit
+      if (cacheRef.current.has(cacheKey)) {
+        setRows(cacheRef.current.get(cacheKey) || []);
+        setLoadingRows(false);
+        return;
+      }
 
       setLoadingRows(true);
       setError("");
@@ -350,7 +508,7 @@ export default function Movimientos() {
       try {
         const sp = new URLSearchParams();
         sp.set("action", "movimientos_listar");
-        if (periodo) sp.set("periodo", periodo);
+        sp.set("periodo", periodoAPI); // ✅ SIEMPRE viene
         if (qLocal) sp.set("q", qLocal);
 
         const data = await apiGet(`${API}?${sp.toString()}`);
@@ -359,12 +517,14 @@ export default function Movimientos() {
 
         const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
 
-        // ✅ normaliza periodo para UI
+        // ✅ normalizamos para UI:
         const movsNorm = movs.map((r) => ({
           ...r,
-          periodo: normalizePeriodoToMMYYYY(r?.periodo),
+          periodo: periodoToMMYYYY(r?.periodo),
+          fecha: r?.fecha,
         }));
 
+        cacheRef.current.set(cacheKey, movsNorm);
         setRows(movsNorm);
       } catch (e) {
         setError(e.message || "Error cargando movimientos.");
@@ -378,42 +538,39 @@ export default function Movimientos() {
 
   /* =========================
      Init
+     ✅ primero listas, luego cargar por período default
   ========================= */
   useEffect(() => {
     (async () => {
-      await loadLists();
-      await loadRows({ periodo: "" });
+      const normalized = await loadLists();
+      const perDefault = (normalized.periodos || [])[0] || "";
+      if (perDefault) {
+        await loadRows({ periodo: perDefault, q: "" }); // ✅ carga solo 1 período
+      } else {
+        setRows([]);
+        setLoadingRows(false);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* =========================
-     Filtrado FRONT
+     ✅ Filtrado FRONT (UI MM-YYYY)
+     ✅ AHORA: el buscador filtra por CUALQUIER cosa (monto, fecha, ids, etc.)
   ========================= */
   const filteredRows = useMemo(() => {
-    const qq = q.trim().toLowerCase();
-    const fPer = normalizePeriodoToMMYYYY(fPeriodo);
+    const fPer = periodoToMMYYYY(fPeriodo);
+
+    // ✅ si no hay período, no mostramos nada
+    if (!fPer) return [];
 
     return rows.filter((r) => {
-      const rPer = normalizePeriodoToMMYYYY(r?.periodo);
+      // 1) filtro por período (se mantiene)
+      const rPer = periodoToMMYYYY(r?.periodo);
+      if (String(rPer) !== String(fPer)) return false;
 
-      if (fPer && String(rPer) !== String(fPer)) return false;
-
-      if (qq) {
-        const hay =
-          String(r.clasificacion || "").toLowerCase().includes(qq) ||
-          String(r.tipo_venta || "").toLowerCase().includes(qq) ||
-          String(r.cuenta_corriente || "").toLowerCase().includes(qq) ||
-          String(r.tipo_movimiento || "").toLowerCase().includes(qq) ||
-          String(r.cliente || "").toLowerCase().includes(qq) ||
-          String(r.proveedor || "").toLowerCase().includes(qq) ||
-          String(r.detalle || "").toLowerCase().includes(qq) ||
-          String(r.medio_pago || "").toLowerCase().includes(qq);
-
-        if (!hay) return false;
-      }
-
-      return true;
+      // 2) filtro full-text por cualquier campo + derivados
+      return rowMatchesQuery(r, q);
     });
   }, [rows, fPeriodo, q]);
 
@@ -460,7 +617,7 @@ export default function Movimientos() {
 
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
-      const per = normalizePeriodoToMMYYYY(fPeriodo) || "TODOS";
+      const per = periodoToMMYYYY(fPeriodo) || "SIN_PERIODO";
       const fileName = `movimientos_${tab}_${per}.xlsx`;
 
       XLSX.writeFile(wb, fileName);
@@ -472,6 +629,7 @@ export default function Movimientos() {
 
   /* =========================
      Eliminar (confirmación) ✅ manda idUsuario
+     ✅ recarga solo el período actual
   ========================= */
   const confirmDelete = async () => {
     if (!selectedRow?.id_movimiento) return;
@@ -484,6 +642,7 @@ export default function Movimientos() {
 
     try {
       const { idUsuario } = getAuthInfo();
+
       const sp = new URLSearchParams();
       sp.set("action", "movimientos_eliminar");
       sp.set("id_movimiento", String(id));
@@ -494,10 +653,14 @@ export default function Movimientos() {
       setOpenDel(false);
       setSelectedRow(null);
 
-      // ✅ mostrar TODO luego de eliminar
-      setFPeriodo("");
-      await loadRows({ periodo: "", q });
+      // ✅ limpiar cache de ese período (y recargar)
+      const periodoAPI = periodoToYYYYMM(fPeriodo);
+      const keyPrefix = `${periodoAPI}|`;
+      for (const k of cacheRef.current.keys()) {
+        if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
+      }
 
+      await loadRows({ periodo: fPeriodo, q });
       showToast("exito", "Movimiento eliminado.", 2600);
     } catch (e) {
       setError(e.message || "Error eliminando movimiento.");
@@ -508,7 +671,8 @@ export default function Movimientos() {
   };
 
   /* =========================
-     Guardar (Add / Edit) ✅ agrega idUsuario
+     Guardar (Add / Edit) ✅ manda idUsuario
+     ✅ manda periodo en YYYY-MM al backend
   ========================= */
   const saveMovimiento = async (payload, isEdit) => {
     setError("");
@@ -518,7 +682,8 @@ export default function Movimientos() {
 
     const payloadNorm = {
       ...(payload || {}),
-      periodo: normalizePeriodoToMMYYYY(payload?.periodo),
+      // UI puede venir MM-YYYY; al backend mandamos YYYY-MM
+      periodo: periodoToYYYYMM(payload?.periodo),
     };
 
     const data = await apiPostJson(`${API}?action=${action}`, {
@@ -539,13 +704,13 @@ export default function Movimientos() {
           key: "fecha",
           label: "FECHA",
           align: "left",
-          render: (r) => safeText(r.fecha),
+          render: (r) => safeText(formatFechaDMY(r.fecha)),
         },
         {
           key: "periodo",
           label: "PERÍODO",
           align: "center",
-          render: (r) => safeText(normalizePeriodoToMMYYYY(r.periodo)),
+          render: (r) => safeText(periodoToMMYYYY(r.periodo)),
         },
         {
           key: "monto_total",
@@ -677,90 +842,85 @@ export default function Movimientos() {
                 </label>
 
                 <select
-                  value={normalizePeriodoToMMYYYY(fPeriodo)}
+                  value={periodoToMMYYYY(fPeriodo)}
                   onChange={async (e) => {
-                    const v = normalizePeriodoToMMYYYY(e.target.value);
-                    setFPeriodo(v);
-                    await loadRows({ periodo: v, q });
+                    const ui = periodoToMMYYYY(e.target.value); // MM-YYYY
+                    setFPeriodo(ui);
+
+                    // ✅ dejar cache y recargar (también podría NO recargar si ya está en rows)
+                    await loadRows({ periodo: ui, q });
                   }}
-                  disabled={loadingRows}
+                  disabled={loadingRows || loadingLists}
                 >
-                  <option value="">Todos</option>
+                  {/* ❌ NO "Todos" */}
                   {(lists.periodos || []).map((p) => {
-                    const mmYYYY = normalizePeriodoToMMYYYY(p);
+                    const ui = periodoToMMYYYY(p);
                     return (
-                      <option key={mmYYYY} value={mmYYYY}>
-                        {mmYYYY}
+                      <option key={ui} value={ui}>
+                        {ui}
                       </option>
                     );
                   })}
                 </select>
               </div>
 
-<div className="mov-search">
-  <label>
-    <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-  </label>
+              <div className="mov-search">
+                <label>
+                  <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                </label>
 
-  {/* wrapper para poner la X adentro */}
-  <div className="mov-searchInput">
-    <input
-      value={q}
-      onChange={(e) => setQ(e.target.value)}
-      onKeyDown={async (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          await loadRows({
-            periodo: fPeriodo,
-            q: e.currentTarget.value,
-          });
-        }
-      }}
-      placeholder="Buscar por cliente, proveedor, detalle, medio pago..."
-      disabled={loadingRows}
-    />
+                <div className="mov-searchInput">
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)} // ✅ ahora filtra “por cualquier cosa” en el front
+                    onKeyDown={async (e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
 
-    {/* X (solo si hay texto) */}
-    {q.trim() !== "" && !loadingRows && (
-      <button
-        type="button"
-        className="mov-clearSearch"
-        title="Limpiar búsqueda"
-        onClick={async () => {
-          setQ("");
-          await loadRows({ periodo: fPeriodo, q: "" });
-          // re-focus al input
-          const input = document.querySelector(".mov-searchInput input");
-          input?.focus();
-        }}
-      >
-        ×
-      </button>
-    )}
-  </div>
-</div>
+                        // (opcional) si querés también consultar backend al Enter:
+                        await loadRows({
+                          periodo: fPeriodo,
+                          q: e.currentTarget.value,
+                        });
+                      }
+                    }}
+                    placeholder="Buscar por cualquier cosa: fecha, monto, cliente, proveedor..."
+                    disabled={loadingRows}
+                  />
 
+                  {q.trim() !== "" && !loadingRows && (
+                    <button
+                      type="button"
+                      className="mov-clearSearch"
+                      title="Limpiar búsqueda"
+                      onClick={async () => {
+                        setQ("");
+
+                        // ✅ al limpiar, cargamos mismo período sin query
+                        await loadRows({ periodo: fPeriodo, q: "" });
+
+                        const input = document.querySelector(".mov-searchInput input");
+                        input?.focus();
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
           <div className="mov-card__actions">
-            {/* ✅ EXPORTAR EXCEL */}
             <button
               type="button"
               className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
-
               onClick={exportToExcel}
               disabled={loadingRows || filteredRows.length === 0}
-              title={
-                filteredRows.length
-                  ? "Exportar a Excel"
-                  : "No hay datos para exportar"
-              }
+              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
             >
               <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
             </button>
-
-
           </div>
         </div>
 
@@ -771,7 +931,7 @@ export default function Movimientos() {
                 key={t.id}
                 type="button"
                 className={`mov-tab ${tab === t.id ? "is-active" : ""}`}
-                onClick={() => setTab(t.id)}
+                onClick={() => setTab(t.id)} // ✅ solo cambia columnas, NO carga
               >
                 {t.label}
               </button>
@@ -782,6 +942,7 @@ export default function Movimientos() {
             type="button"
             className="mov-btn mov-btn--primary mov-tabsCta"
             onClick={() => setOpenAdd(true)}
+            disabled={!fPeriodo} // si no hay período no tiene sentido
           >
             <FontAwesomeIcon icon={faPlus} /> Nuevo movimiento
           </button>
@@ -812,9 +973,7 @@ export default function Movimientos() {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className="mov-gridBody">
-            {loadingRows && (
-              <div className="mov-emptyRow">Cargando movimientos...</div>
-            )}
+            {loadingRows && <div className="mov-emptyRow">Cargando movimientos...</div>}
 
             {!loadingRows &&
               filteredRows.map((r) => (
@@ -852,11 +1011,7 @@ export default function Movimientos() {
                               disabled={deletingId === r.id_movimiento}
                               onClick={() => openDeleteModal(r)}
                             >
-                              {deletingId === r.id_movimiento ? (
-                                "..."
-                              ) : (
-                                <FontAwesomeIcon icon={faTrashCan} />
-                              )}
+                              {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
                             </button>
                           </div>
                         </div>
@@ -886,7 +1041,11 @@ export default function Movimientos() {
               ))}
 
             {!loadingRows && filteredRows.length === 0 && (
-              <div className="mov-emptyRow">No hay movimientos para mostrar.</div>
+              <div className="mov-emptyRow">
+                {!fPeriodo
+                  ? "No hay período disponible para cargar movimientos."
+                  : "No hay movimientos para mostrar en este período."}
+              </div>
             )}
           </div>
         </div>
@@ -896,7 +1055,7 @@ export default function Movimientos() {
       <ModalAgregarMovimiento
         open={openAdd}
         lists={lists}
-        periodoDefault={fPeriodo}
+        periodoDefault={fPeriodo} // UI MM-YYYY
         onClose={() => setOpenAdd(false)}
         onCatalogCreated={handleCatalogCreated}
         onToast={showToast}
@@ -905,9 +1064,14 @@ export default function Movimientos() {
             showToast("cargando", "Guardando movimiento…", 12000);
             await saveMovimiento(payload, false);
 
-            // ✅ luego de guardar: mostrar TODOS
-            setFPeriodo("");
-            await loadRows({ periodo: "", q });
+            // ✅ invalida cache del período actual y recarga SOLO ese período
+            const periodoAPI = periodoToYYYYMM(fPeriodo);
+            const keyPrefix = `${periodoAPI}|`;
+            for (const k of cacheRef.current.keys()) {
+              if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
+            }
+
+            await loadRows({ periodo: fPeriodo, q });
 
             setOpenAdd(false);
             showToast("exito", "Movimiento guardado correctamente.", 2600);
@@ -922,7 +1086,7 @@ export default function Movimientos() {
         open={openEdit}
         lists={lists}
         row={selectedRow}
-        periodoDefault={fPeriodo}
+        periodoDefault={fPeriodo} // UI MM-YYYY
         onClose={() => {
           setOpenEdit(false);
           setSelectedRow(null);
@@ -934,9 +1098,14 @@ export default function Movimientos() {
             showToast("cargando", "Guardando cambios…", 12000);
             await saveMovimiento(payload, true);
 
-            // ✅ luego de editar: mostrar TODOS
-            setFPeriodo("");
-            await loadRows({ periodo: "", q });
+            // ✅ invalida cache del período actual y recarga SOLO ese período
+            const periodoAPI = periodoToYYYYMM(fPeriodo);
+            const keyPrefix = `${periodoAPI}|`;
+            for (const k of cacheRef.current.keys()) {
+              if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
+            }
+
+            await loadRows({ periodo: fPeriodo, q });
 
             setOpenEdit(false);
             setSelectedRow(null);

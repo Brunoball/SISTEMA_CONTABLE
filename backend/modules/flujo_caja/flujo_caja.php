@@ -32,21 +32,13 @@ function monthEnd(string $periodo): string {
   $dt->modify('last day of this month');
   return $dt->format('Y-m-d');
 }
-function prevDay(string $isoDate): string {
-  $dt = DateTime::createFromFormat('Y-m-d', $isoDate);
-  if (!$dt) return $isoDate;
-  $dt->modify('-1 day');
-  return $dt->format('Y-m-d');
-}
+
 /** @return array<int, string> */
-function buildDaysWithPrev(string $periodo): array {
+function buildDays(string $periodo): array {
   $start = monthStart($periodo);
   $end   = monthEnd($periodo);
-  $prev  = prevDay($start);
 
   $out = [];
-  $out[] = $prev;
-
   $dt = DateTime::createFromFormat('Y-m-d', $start);
   $dtEnd = DateTime::createFromFormat('Y-m-d', $end);
   if (!$dt || !$dtEnd) return $out;
@@ -72,7 +64,7 @@ try {
   $pdo->exec("SET NAMES utf8mb4");
 
   /* ==========================================================
-     ✅ NUEVO: LISTAR PERIODOS DISPONIBLES EN movimientos.periodo
+     ✅ LISTAR PERIODOS DISPONIBLES EN movimientos.periodo
      action=flujo_caja_periodos
   ========================================================== */
   if ($action === 'flujo_caja_periodos') {
@@ -101,6 +93,7 @@ try {
 
   /* ==========================================================
      … A) FLUJO POR CLIENTES (opcional)
+     action=flujo_caja_clientes
   ========================================================== */
   if ($action === 'flujo_caja_clientes') {
 
@@ -159,7 +152,9 @@ try {
   }
 
   /* ==========================================================
-     … B) FLUJO DIARIO TIPO EXCEL (TUYO)
+     ✅ B) FLUJO DIARIO TIPO EXCEL (ARREGLADO)
+     - NO incluye el último día del mes anterior
+     - arranca desde el día 01 con saldo = saldoBase + (ing-eg)
      action=flujo_caja_resumen
   ========================================================== */
   if ($action === 'flujo_caja_resumen') {
@@ -174,12 +169,12 @@ try {
 
     $start = monthStart($periodo);
     $end   = monthEnd($periodo);
-    $startWithPrev = prevDay($start);
 
-    $days = buildDaysWithPrev($periodo);
+    // ✅ días SOLO del mes (sin "día previo")
+    $days = buildDays($periodo);
     $today = (new DateTime('today'))->format('Y-m-d');
 
-    // 1) totales por día (ing/eg)
+    // 1) totales por día (ing/eg) SOLO dentro del mes
     $sqlDia = "
       SELECT
         fecha,
@@ -194,7 +189,7 @@ try {
     $stDia->execute([
       ':ing' => $TIPO_INGRESO,
       ':egr' => $TIPO_EGRESO,
-      ':desde' => $startWithPrev,
+      ':desde' => $start,
       ':hasta' => $end,
     ]);
 
@@ -227,7 +222,7 @@ try {
 
     $saldoBase = (float)($stBase->fetchColumn() ?: 0.0);
 
-    // 3) construir filas
+    // 3) construir filas: arrancar desde saldoBase
     $saldo = $saldoBase;
     $rows = [];
 
@@ -238,6 +233,7 @@ try {
       $egr = (float)($mapDia[$iso]['egresos'] ?? 0.0);
 
       if ($isFuture) {
+        // Futuro: no mostrar importes, pero mantener saldo acumulado hasta hoy
         $rows[] = [
           'fecha' => $iso,
           'ingresos' => null,
@@ -247,6 +243,7 @@ try {
         continue;
       }
 
+      // ✅ saldo del día = saldo anterior + (ing - egr)
       $saldo = $saldo + $ing - $egr;
 
       $rows[] = [

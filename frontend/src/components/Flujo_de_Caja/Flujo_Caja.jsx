@@ -233,10 +233,6 @@ export default function Flujo_Caja() {
                   Período {data?.periodo ?? periodo} • Saldo base: <b>{moneyARS(bloque.saldo_base)}</b>
                 </div>
               </div>
-
-              <div className="fc-miniHint">
-                Ingresos = SUM(tipo=1) por fecha • Egresos = SUM(tipo=2) por fecha • Saldo acumulado.
-              </div>
             </div>
 
             <div className="fc-tableWrap">
@@ -264,7 +260,7 @@ export default function Flujo_Caja() {
             </div>
 
             <div className="fc-footnote">
-              * El primer renglón es el último día del mes anterior, para arrastrar el saldo (como el Excel).
+              * El saldo del día 01 arranca desde el “Saldo base” y se actualiza con (ingresos − egresos) de cada día.
             </div>
           </>
         ) : (

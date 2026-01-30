@@ -809,3 +809,140 @@ button{ font-family: inherit; }
   :root{ --mov-topbar-h: 50px; }
   .mov-topbar__status-text{ display:none; }
 }
+/* =========================
+   TOPBAR — Logo + Nombre + Byline
+========================= */
+.mov-topbar{
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--mov-topbar-h);
+  z-index: 1200;
+
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 14px;
+
+  padding: 0 16px;
+
+  background:
+    radial-gradient(900px 240px at 20% 0%, rgba(255,255,255,.16), transparent 55%),
+    radial-gradient(700px 220px at 80% 100%, rgba(255,255,255,.10), transparent 55%),
+    linear-gradient(90deg, var(--pp-blue-900) 0%, var(--pp-blue-700) 55%, var(--pp-blue-600) 120%);
+
+  border-bottom: 1px solid rgba(255,255,255,.16);
+  box-shadow: 0 12px 32px rgba(2, 6, 23, .18);
+}
+
+.mov-topbar__left{
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Botón/logo */
+.mov-topbar__logo{
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  display:flex;
+  align-items:center;
+}
+
+.mov-topbar__logoBox{
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display:grid;
+  place-items:center;
+
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.18);
+  color: rgba(255,255,255,.92);
+
+  font-weight: 950;
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+
+.mov-topbar__titles{
+  display:flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.mov-topbar__sysname{
+  font-weight: 950;
+  font-size: 15px;
+  color: #fff;
+  line-height: 1.1;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(48vw, 520px);
+}
+
+.mov-topbar__sysby{
+  font-weight: 750;
+  font-size: 11px;
+  color: rgba(255,255,255,.78);
+  white-space: nowrap;
+}
+
+/* etiqueta sección activa (derecha) */
+.mov-topbar__section{
+  display:inline-flex;
+  align-items:center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.16);
+  backdrop-filter: blur(10px);
+  color: rgba(255,255,255,.92);
+  font-weight: 900;
+  font-size: 12px;
+  white-space: nowrap;
+  max-width: 38vw;
+  overflow:hidden;
+  text-overflow: ellipsis;
+}
+
+.mov-topbar__right{
+  flex: 0 0 auto;
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+/* icono usuario (header) */
+.mov-topbar__usericon{
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.06);
+  color: #e5e7eb;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 22px;
+}
+
+.mov-topbar__usericon:hover{
+  background: rgba(255,255,255,.10);
+}
+.mov-topbar__logoImg {
+  height: 38px;
+  width: auto;
+  object-fit: contain;
+}
+
+.pp-brand__logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}

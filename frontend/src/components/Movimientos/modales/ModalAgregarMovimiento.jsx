@@ -1089,7 +1089,7 @@ export default function ModalAgregarMovimiento({
                           left: 0,
                           right: 0,
                           marginTop: 4,
-                          maxHeight: 230,
+                          maxHeight: 150,
                           overflowY: "auto",
                           borderRadius: 10,
                           border: "1px solid rgba(148, 163, 184, 0.5)",
@@ -1178,22 +1178,30 @@ export default function ModalAgregarMovimiento({
                     <label className="fl-label">Medio de pago</label>
                     {renderAddInline("id_medio_pago")}
                   </div>
+<div className="fl-field">
+  <input
+    className="fl-input"
+    type="number"
+    min="0"
+    step="0.01"
+    placeholder=" "
+    value={form.monto_total}
+    onFocus={() => {
+      // ✅ si está en 0, lo limpiamos para escribir directo
+      if (Number(form.monto_total) === 0) onChange("monto_total", "");
+    }}
+    onBlur={() => {
+      // ✅ si lo dejaron vacío, vuelve a 0
+      if (String(form.monto_total).trim() === "") onChange("monto_total", 0);
+    }}
+    onChange={(e) =>
+      onChange("monto_total", e.target.value === "" ? "" : Number(e.target.value))
+    }
+    disabled={saving}
+  />
+  <label className="fl-label">Monto total</label>
+</div>
 
-                  <div className="fl-field">
-                    <input
-                      className="fl-input"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder=" "
-                      value={form.monto_total}
-                      onChange={(e) =>
-                        onChange("monto_total", e.target.value === "" ? "" : Number(e.target.value))
-                      }
-                      disabled={saving}
-                    />
-                    <label className="fl-label">Monto total</label>
-                  </div>
                 </div>
               </article>
             </div>

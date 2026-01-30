@@ -2,6 +2,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import LogoBalto from "../../imagenes/Logotransparente.png";
+
 import {
   faChartLine,
   faMoneyBillTrendUp,
@@ -260,31 +262,50 @@ const Principal = () => {
   return (
     <div className="pp-shell">
       {/* HEADER FIJO ARRIBA */}
-      <header className="mov-topbar" role="banner" aria-label="Header fijo">
-        <div className="mov-topbar__left">
-          <div className="mov-topbar__brand">SISTEMA CONTABLE</div>
+{/* HEADER FIJO ARRIBA */}
+<header className="mov-topbar" role="banner" aria-label="Header fijo">
+  <div className="mov-topbar__left">
+    {/* ✅ Logo + Nombre */}
+    <button
+      type="button"
+      className="mov-topbar__logo"
+      onClick={handleLogoClick}
+      aria-label="Ir al dashboard"
+      title="Ir al dashboard"
+    >
+      {/* Poné tu logo acá: <img src="/logo.png" alt="Logo" /> */}
+      <img
+  src={LogoBalto}
+  alt="Logo Balto"
+  className="mov-topbar__logoImg"
+/>
 
-          <div className="mov-topbar__titles">
-            <div className="mov-topbar__title">{activeLabel}</div>
-            <div className="mov-topbar__subtitle">
-              Registro, edición y control contable.
-            </div>
-          </div>
-        </div>
+    </button>
 
-        {/* RIGHT: icono usuario */}
-        <div className="mov-topbar__right">
-          <button
-            type="button"
-            className="mov-topbar__usericon"
-            onClick={openPerfil}
-            title="Perfil"
-            aria-label="Abrir perfil"
-          >
-            <FontAwesomeIcon icon={faUserCircle} />
-          </button>
-        </div>
-      </header>
+    <div className="mov-topbar__titles">
+      <div className="mov-topbar__sysname">SISTEMA CONTABLE</div>
+      <div className="mov-topbar__sysby">Desarrollado por 3 devs</div>
+    </div>
+  </div>
+
+  {/* Derecha: sección activa + usuario */}
+  <div className="mov-topbar__right">
+    <div className="mov-topbar__section" title={activeLabel}>
+      {activeLabel}
+    </div>
+
+    <button
+      type="button"
+      className="mov-topbar__usericon"
+      onClick={openPerfil}
+      title="Perfil"
+      aria-label="Abrir perfil"
+    >
+      <FontAwesomeIcon icon={faUserCircle} />
+    </button>
+  </div>
+</header>
+
 
       {/* SIDEBAR */}
       <aside className="pp-sidebar" aria-label="Navegación principal">

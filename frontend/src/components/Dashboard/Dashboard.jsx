@@ -39,6 +39,7 @@ function pickIcon(label) {
   if (s.includes("movimientos")) return faMoneyBillTrendUp;
   if (s.includes("flujo")) return faWallet;
   if (s.includes("cuentas") || s.includes("corrientes")) return faUsers;
+  if (s.includes("análisis") || s.includes("analisis")) return faChartLine;
   return faChartLine;
 }
 
@@ -61,36 +62,23 @@ export default function Dashboard() {
     return normalizePlanNivel(usuario?.plan_nivel ?? usuario?.planNivel ?? 1);
   }, [usuario]);
 
-  // ✅ SOLO 3 SECCIONES DEL SISTEMA NUEVO
+  // ✅ AHORA 4 SECCIONES (incluye Análisis Financiero)
   const navItems = useMemo(() => {
     const base = [
-      {
-        key: "movimientos",
-        label: "Movimientos",
-        ruta: "/panel/movimientos",
-      },
-      {
-        key: "flujo-de-caja",
-        label: "Flujo de Caja",
-        ruta: "/panel/flujo-de-caja",
-      },
-      {
-        key: "cuentas-corrientes",
-        label: "Cuentas Corrientes",
-        ruta: "/panel/cuentas-corrientes",
-      },
-    ].map((it) => ({
-      ...it,
-      icon: pickIcon(it.label),
-    }));
+      { key: "movimientos", label: "Movimientos", ruta: "/panel/movimientos" },
+      { key: "flujo-de-caja", label: "Flujo de Caja", ruta: "/panel/flujo-de-caja" },
+      { key: "cuentas-corrientes", label: "Cuentas Corrientes", ruta: "/panel/cuentas-corrientes" },
+      { key: "analisis-financiero", label: "Análisis Financiero", ruta: "/panel/analisis-financiero" },
+    ].map((it) => ({ ...it, icon: pickIcon(it.label) }));
 
-    const limit = planNivel === 1 ? 1 : planNivel === 2 ? 2 : 3;
+    // ✅ Plan 1: 1 módulo | Plan 2: 2 módulos | Plan 3: 4 módulos
+    const limit = planNivel === 1 ? 1 : planNivel === 2 ? 2 : 4;
     return base.slice(0, limit);
   }, [planNivel]);
 
   const handleNavigate = (ruta) => {
     try {
-      sessionStorage.setItem(DASH_SEEN_KEY, "1"); // ✅ ya no vuelve a aparecer
+      sessionStorage.setItem(DASH_SEEN_KEY, "1");
     } catch {}
     navigate(ruta);
     document.activeElement?.blur?.();
@@ -110,9 +98,7 @@ export default function Dashboard() {
         <div className="db-header__right">
           <div className="db-pill">
             <span className="db-pill__dot" aria-hidden="true" />
-            <span className="db-pill__text">
-              Plan nivel {planNivel}
-            </span>
+            <span className="db-pill__text">Plan nivel {planNivel}</span>
           </div>
         </div>
       </header>
@@ -125,9 +111,7 @@ export default function Dashboard() {
           </div>
           <div className="db-hero__text">
             <h2>Bienvenido</h2>
-            <p>
-              Entrás acá una sola vez por sesión. Después manejás todo desde el menú lateral.
-            </p>
+            <p>Entrás acá una sola vez por sesión. Después manejás todo desde el menú lateral.</p>
           </div>
         </div>
       </section>
@@ -137,9 +121,7 @@ export default function Dashboard() {
         {/* Acceso rápido */}
         <div className="db-card">
           <div className="db-card__title">Acceso rápido</div>
-          <div className="db-card__desc">
-            Accedé a los módulos disponibles según tu plan.
-          </div>
+          <div className="db-card__desc">Accedé a los módulos disponibles según tu plan.</div>
 
           <div className="db-quick">
             {navItems.map((it) => (

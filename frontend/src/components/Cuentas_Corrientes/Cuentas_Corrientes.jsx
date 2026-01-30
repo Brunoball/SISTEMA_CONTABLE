@@ -13,7 +13,7 @@ function moneyARS(v) {
 }
 
 function buildPeriodOptions(limitBack = 18, limitForward = 3) {
-  const out = [{ value: "", label: "Todos los períodos" }];
+  const out = [{ value: "", label: "Todos" }];
   const now = new Date();
   const base = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -235,7 +235,7 @@ export default function Cuentas_Corrientes() {
             <div
               className="cc-grid cc-grid--tfoot"
               style={{
-                gridTemplateColumns: `260px repeat(${cuentas.length}, 1fr) 1fr`,
+                gridTemplateColumns: `260px repeat(${cuentas.length}, 1fr) .5fr`,
               }}
             >
               <div className="cc-cell cc-tfootLabel">Totales</div>

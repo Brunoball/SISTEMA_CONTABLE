@@ -1145,7 +1145,7 @@ export default function ModalEditarMovimiento({
                           left: 0,
                           right: 0,
                           marginTop: 4,
-                          maxHeight: 230,
+                          maxHeight: 150,
                           overflowY: "auto",
                           borderRadius: 10,
                           border: "1px solid rgba(148, 163, 184, 0.5)",

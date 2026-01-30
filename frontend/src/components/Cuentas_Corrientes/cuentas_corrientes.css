@@ -387,3 +387,44 @@
     width: 100%;
   }
 }
+/* =========================
+   Botón Exportar Excel
+========================= */
+.cc-btn--excel {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+
+  /* 🎨 Verde solicitado */
+    border: 2px solid #10B981;
+    background-color:  #10B981;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.9rem;
+    letter-spacing: 0.2px;
+
+  cursor: pointer;
+  transition: all .4s;
+}
+
+.cc-btn--excel:hover:not(:disabled) {
+    background:#ffffff;
+  transform: translateY(-1px);
+  border: 2px solid #10B981;
+  filter: brightness(1.05);
+  color: #10B981;
+}
+
+.cc-btn--excel:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow:
+    0 4px 10px rgba(21, 128, 61, 0.3),
+    inset 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.cc-btn--excel:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.2);
+  box-shadow: none;
+}

@@ -2,6 +2,20 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import BASE_URL from "../../config/config";
 import "./flujo_caja.css";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faPenToSquare,
+  faTrashCan,
+  faPlus,
+  faBroom,
+  faMagnifyingGlass,
+  faCalendarDays,
+  faFileExcel,
+} from "@fortawesome/free-solid-svg-icons";
+
+// ✅ Excel
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
 /* =========================
    Helpers
@@ -103,6 +117,38 @@ export default function Flujo_Caja() {
   const rows = useMemo(() => normalizeRows(rowsRaw), [rowsRaw]);
   const showing = rows.length;
 
+  /* =========================
+     Export Excel
+  ========================= */
+  const exportExcel = useCallback(() => {
+    if (!rows.length) return;
+
+    // Datos para Excel (con headers)
+    const excelRows = rows.map((r) => ({
+      Fecha: fmtDateES(r.fecha),
+      Ingresos: r.ingresos == null ? "" : Number(r.ingresos),
+      Egresos: r.egresos == null ? "" : Number(r.egresos),
+      Saldo: r.saldo == null ? "" : Number(r.saldo),
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(excelRows);
+
+    // Formato de columnas (aprox)
+    ws["!cols"] = [
+      { wch: 12 }, // Fecha
+      { wch: 14 }, // Ingresos
+      { wch: 14 }, // Egresos
+      { wch: 14 }, // Saldo
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `Flujo ${periodo}`);
+
+    const fileName = `flujo_caja_${periodo.replace("-", "_")}.xlsx`;
+    const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    saveAs(new Blob([wbout], { type: "application/octet-stream" }), fileName);
+  }, [rows, periodo]);
+
   return (
     <div className="fc-page">
       {error && (
@@ -139,7 +185,17 @@ export default function Flujo_Caja() {
             </div>
           </div>
 
-          <div className="fc-card__actions" />
+          {/* ✅ Botón Exportar */}
+          <div className="fc-card__actions">
+            <button
+              className="fc-btn"
+              onClick={exportExcel}
+              disabled={loading || rows.length === 0}
+              title={rows.length ? "Exportar a Excel" : "No hay datos para exportar"}
+            >
+            <FontAwesomeIcon icon={faFileExcel} />  Exportar Excel
+            </button>
+          </div>
         </div>
 
         {loading && !data && (
@@ -158,7 +214,8 @@ export default function Flujo_Caja() {
               </div>
 
               <div className="fc-miniHint">
-                Ingresos = SUM(tipo=1) por fecha • Egresos = SUM(tipo=2) por fecha • Saldo acumulado.
+                Ingresos = SUM(tipo=1) por fecha • Egresos = SUM(tipo=2) por fecha •
+                Saldo acumulado.
               </div>
             </div>
 
@@ -200,7 +257,8 @@ export default function Flujo_Caja() {
             </div>
 
             <div className="fc-footnote">
-              * El primer renglón es el último día del mes anterior, para arrastrar el saldo (como el Excel).
+              * El primer renglón es el último día del mes anterior, para arrastrar el
+              saldo (como el Excel).
             </div>
           </>
         ) : (

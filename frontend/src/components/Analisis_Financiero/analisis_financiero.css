@@ -409,3 +409,112 @@
     grid-template-columns: 1fr;
   }
 }
+/* =========================
+   Botón Exportar Excel (verde #10B981)
+========================= */
+
+
+/* =========================
+   Contenedor acciones
+========================= */
+.af-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .af-card__actions {
+    width: 100%;
+    margin-top: 10px;
+  }
+
+  .af-btn--excel {
+    width: 100%;
+    justify-content: center;
+  }
+}
+/* =========================
+   AF Button – estilo FC (verde #10B981)
+========================= */
+.af-btn {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+
+  /* 🎨 Verde solicitado */
+    border: 2px solid #10B981;
+    background-color:  #10B981;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.9rem;
+    letter-spacing: 0.2px;
+
+  cursor: pointer;
+  transition: all .4s;
+
+
+}
+
+.fc-btn:hover{
+  transform: translateY(0);
+ color: #10B981;
+
+}
+
+/* Variante Excel */
+.af-btn--excel {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+
+  /* 🎨 Verde solicitado */
+    border: 2px solid #10B981;
+    background-color:  #10B981;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.9rem;
+    letter-spacing: 0.2px;
+
+  cursor: pointer;
+  transition: all .4s;
+}
+
+/* Hover PIOLA ✨ */
+.af-btn--excel:hover:not(:disabled) {
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    #ecfdf5 100%
+  );
+  color: #10B981;
+
+
+}
+
+/* Active (click) */
+.af-btn--excel:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow:
+    0 6px 12px rgba(16, 185, 129, 0.35),
+    inset 0 2px 4px rgba(0, 0, 0, 0.18);
+}
+
+/* Focus accesible */
+.af-btn--excel:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(16, 185, 129, 0.45),
+    0 6px 14px rgba(16, 185, 129, 0.35);
+}
+
+/* Disabled */
+.af-btn--excel:disabled {
+  background: #9ee7c9;
+  border-color: #9ee7c9;
+  color: #ecfdf5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}

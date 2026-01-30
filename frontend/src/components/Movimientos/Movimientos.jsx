@@ -18,7 +18,10 @@ import {
   faBroom,
   faMagnifyingGlass,
   faCalendarDays,
+  faFileExcel,
 } from "@fortawesome/free-solid-svg-icons";
+
+import * as XLSX from "xlsx";
 
 /* =========================
    Helpers
@@ -138,6 +141,51 @@ function getAuthInfo() {
   return { token, idUsuario };
 }
 
+/* =========================
+   Excel helpers
+========================= */
+function slugifySheetName(name) {
+  const s = String(name || "Movimientos")
+    .replace(/[\[\]\*\/\\\?\:]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return (s || "Movimientos").slice(0, 31);
+}
+
+function buildExportRows(rows, tab) {
+  if (tab === "resumen") {
+    return rows.map((r) => ({
+      FECHA: safeText(r.fecha),
+      PERIODO: safeText(normalizePeriodoToMMYYYY(r.periodo)),
+      TOTAL: Number(r.monto_total || 0),
+    }));
+  }
+
+  if (tab === "detalle") {
+    return rows.map((r) => ({
+      DETALLE: safeText(r.detalle),
+      "TIPO VENTA": safeText(r.tipo_venta),
+      TOTAL: Number(r.monto_total || 0),
+    }));
+  }
+
+  if (tab === "partes") {
+    return rows.map((r) => ({
+      CLASIFICACION: safeText(r.clasificacion),
+      "TIPO MOV.": safeText(r.tipo_movimiento),
+      CLIENTE: safeText(r.cliente),
+      PROVEEDOR: safeText(r.proveedor),
+    }));
+  }
+
+  // pago
+  return rows.map((r) => ({
+    "CUENTA CORRIENTE": safeText(r.cuenta_corriente),
+    "MEDIO PAGO": safeText(r.medio_pago),
+    TOTAL: Number(r.monto_total || 0),
+  }));
+}
+
 export default function Movimientos() {
   const API = `${BASE_URL}/api.php`;
 
@@ -224,7 +272,6 @@ export default function Movimientos() {
 
   /* =========================
      ✅ ACTUALIZAR LISTAS GLOBALMENTE cuando se crea algo en un catálogo
-     (adaptado a los nuevos catálogos)
   ========================= */
   const handleCatalogCreated = useCallback((catalogo, item) => {
     const keyByCatalogo = {
@@ -384,6 +431,46 @@ export default function Movimientos() {
   };
 
   /* =========================
+     Exportar Excel (según pestaña actual)
+  ========================= */
+  const exportToExcel = useCallback(() => {
+    try {
+      const dataToExport = buildExportRows(filteredRows, tab);
+
+      if (!dataToExport.length) {
+        showToast("error", "No hay datos para exportar.", 2500);
+        return;
+      }
+
+      const wb = XLSX.utils.book_new();
+      const sheetName = slugifySheetName(`Movimientos_${tab}`);
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+
+      // formato numérico para columna TOTAL si existe
+      const headers = Object.keys(dataToExport[0] || {});
+      const totalColIndex = headers.findIndex((h) => h === "TOTAL");
+      if (totalColIndex >= 0 && ws["!ref"]) {
+        const colLetter = XLSX.utils.encode_col(totalColIndex);
+        const range = XLSX.utils.decode_range(ws["!ref"]);
+        for (let r = range.s.r + 1; r <= range.e.r; r++) {
+          const cell = ws[`${colLetter}${r + 1}`];
+          if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
+        }
+      }
+
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+      const per = normalizePeriodoToMMYYYY(fPeriodo) || "TODOS";
+      const fileName = `movimientos_${tab}_${per}.xlsx`;
+
+      XLSX.writeFile(wb, fileName);
+      showToast("exito", "Excel exportado.", 2200);
+    } catch (e) {
+      showToast("error", e?.message || "Error exportando Excel.", 3500);
+    }
+  }, [filteredRows, tab, fPeriodo, showToast]);
+
+  /* =========================
      Eliminar (confirmación) ✅ manda idUsuario
   ========================= */
   const confirmDelete = async () => {
@@ -448,37 +535,103 @@ export default function Movimientos() {
   const columns = useMemo(() => {
     if (tab === "resumen") {
       return [
-        { key: "fecha", label: "FECHA", align: "left", render: (r) => safeText(r.fecha) },
-        { key: "periodo", label: "PERÍODO", align: "center", render: (r) => safeText(normalizePeriodoToMMYYYY(r.periodo)) },
-        { key: "monto_total", label: "TOTAL", align: "center", render: (r) => moneyARS(r.monto_total) },
+        {
+          key: "fecha",
+          label: "FECHA",
+          align: "left",
+          render: (r) => safeText(r.fecha),
+        },
+        {
+          key: "periodo",
+          label: "PERÍODO",
+          align: "center",
+          render: (r) => safeText(normalizePeriodoToMMYYYY(r.periodo)),
+        },
+        {
+          key: "monto_total",
+          label: "TOTAL",
+          align: "center",
+          render: (r) => moneyARS(r.monto_total),
+        },
         { key: "acciones", label: "ACCIONES", align: "center", render: () => null },
       ];
     }
 
     if (tab === "detalle") {
       return [
-        { key: "detalle", label: "DETALLE", align: "left", strong: true, render: (r) => safeText(r.detalle) },
-        { key: "tipo_venta", label: "TIPO VENTA", align: "center", render: (r) => safeText(r.tipo_venta) },
-        { key: "monto_total", label: "TOTAL", align: "center", render: (r) => moneyARS(r.monto_total) },
+        {
+          key: "detalle",
+          label: "DETALLE",
+          align: "left",
+          strong: true,
+          render: (r) => safeText(r.detalle),
+        },
+        {
+          key: "tipo_venta",
+          label: "TIPO VENTA",
+          align: "center",
+          render: (r) => safeText(r.tipo_venta),
+        },
+        {
+          key: "monto_total",
+          label: "TOTAL",
+          align: "center",
+          render: (r) => moneyARS(r.monto_total),
+        },
         { key: "acciones", label: "ACCIONES", align: "center", render: () => null },
       ];
     }
 
     if (tab === "partes") {
       return [
-        { key: "clasificacion", label: "CLASIFICACIÓN", align: "left", render: (r) => safeText(r.clasificacion) },
-        { key: "tipo_movimiento", label: "TIPO MOV.", align: "center", render: (r) => safeText(r.tipo_movimiento) },
-        { key: "cliente", label: "CLIENTE", align: "center", render: (r) => safeText(r.cliente) },
-        { key: "proveedor", label: "PROVEEDOR", align: "center", render: (r) => safeText(r.proveedor) },
+        {
+          key: "clasificacion",
+          label: "CLASIFICACIÓN",
+          align: "left",
+          render: (r) => safeText(r.clasificacion),
+        },
+        {
+          key: "tipo_movimiento",
+          label: "TIPO MOV.",
+          align: "center",
+          render: (r) => safeText(r.tipo_movimiento),
+        },
+        {
+          key: "cliente",
+          label: "CLIENTE",
+          align: "center",
+          render: (r) => safeText(r.cliente),
+        },
+        {
+          key: "proveedor",
+          label: "PROVEEDOR",
+          align: "center",
+          render: (r) => safeText(r.proveedor),
+        },
         { key: "acciones", label: "ACCIONES", align: "center", render: () => null },
       ];
     }
 
     // pago
     return [
-      { key: "cuenta_corriente", label: "CUENTA CORRIENTE", align: "left", render: (r) => safeText(r.cuenta_corriente) },
-      { key: "medio_pago", label: "MEDIO PAGO", align: "left", render: (r) => safeText(r.medio_pago) },
-      { key: "monto_total", label: "TOTAL", align: "center", render: (r) => moneyARS(r.monto_total) },
+      {
+        key: "cuenta_corriente",
+        label: "CUENTA CORRIENTE",
+        align: "left",
+        render: (r) => safeText(r.cuenta_corriente),
+      },
+      {
+        key: "medio_pago",
+        label: "MEDIO PAGO",
+        align: "left",
+        render: (r) => safeText(r.medio_pago),
+      },
+      {
+        key: "monto_total",
+        label: "TOTAL",
+        align: "center",
+        render: (r) => moneyARS(r.monto_total),
+      },
       { key: "acciones", label: "ACCIONES", align: "center", render: () => null },
     ];
   }, [tab]);
@@ -568,6 +721,22 @@ export default function Movimientos() {
           </div>
 
           <div className="mov-card__actions">
+            {/* ✅ EXPORTAR EXCEL */}
+            <button
+              type="button"
+              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
+
+              onClick={exportToExcel}
+              disabled={loadingRows || filteredRows.length === 0}
+              title={
+                filteredRows.length
+                  ? "Exportar a Excel"
+                  : "No hay datos para exportar"
+              }
+            >
+              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
+            </button>
+
             <button
               type="button"
               className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--dangerSoft"
@@ -580,7 +749,7 @@ export default function Movimientos() {
                 showToast("exito", "Búsqueda limpiada.", 2000);
               }}
             >
-              <FontAwesomeIcon icon={faBroom} /> Limpiar búsqueda
+              <FontAwesomeIcon icon={faBroom} /> Limpiar
             </button>
           </div>
         </div>

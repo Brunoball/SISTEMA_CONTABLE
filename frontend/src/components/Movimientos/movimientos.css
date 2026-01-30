@@ -963,3 +963,26 @@
   overflow: auto;
   max-height: calc(100vh - 300px); /* ajustá 260 si te queda corto/largo */
 }
+.mov-btn--excel{
+
+  border-radius: 12px;
+
+  /* 🎨 Verde solicitado */
+    border: 2px solid #10B981;
+    background-color:  #10B981;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.9rem;
+    letter-spacing: 0.2px;
+
+  cursor: pointer;
+  transition: all .4s;
+
+}
+.mov-btn--excel:hover{
+      background:#ffffff;
+  transform: translateY(-1px);
+  border: 2px solid #10B981;
+  filter: brightness(1.05);
+  color: #10B981;
+}

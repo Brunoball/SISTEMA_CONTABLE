@@ -113,7 +113,7 @@ html, body {
   border: 2px solid var(--ini-primary);
   object-fit: cover;          /* 👈 zoom + recorte */
   object-position: center;    /* centra el recorte */
-  background: #fff;
+  background: #000000;
   box-shadow: var(--ini-shadow-sm), inset 0 0 0 1px rgba(0,0,0,.05);
 }
 

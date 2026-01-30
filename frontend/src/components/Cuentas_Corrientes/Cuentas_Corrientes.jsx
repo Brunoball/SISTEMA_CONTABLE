@@ -1,7 +1,19 @@
 // src/components/Cuentas_Corrientes/Cuentas_Corrientes.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import BASE_URL from "../../config/config";
 import "./cuentas_corrientes.css";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faPenToSquare,
+  faTrashCan,
+  faPlus,
+  faBroom,
+  faMagnifyingGlass,
+  faCalendarDays,
+  faFileExcel,
+} from "@fortawesome/free-solid-svg-icons";
+
 
 function moneyARS(v) {
   const n = Number(v || 0);
@@ -96,7 +108,43 @@ export default function Cuentas_Corrientes() {
     return Number(v || 0);
   }, []);
 
-  const colCount = 2 + (cuentas?.length || 0);
+  // ✅ Exportar Excel (respeta filtros y columnas dinámicas)
+  const exportExcel = useCallback(() => {
+    if (!filtered.length) return;
+
+    const data = filtered.map((r) => {
+      const rowObj = { Cliente: r.nombre };
+
+      (cuentas || []).forEach((c) => {
+        const v = getCell(r, c.id_cuenta_corriente);
+        rowObj[c.nombre] = Number(v || 0);
+      });
+
+      rowObj["Saldo"] = Number(r.saldo || 0);
+      return rowObj;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+
+    ws["!cols"] = [
+      { wch: 30 }, // Cliente
+      ...(cuentas || []).map(() => ({ wch: 18 })),
+      { wch: 18 }, // Saldo
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Cuentas Corrientes");
+
+    const stamp = new Date()
+      .toISOString()
+      .slice(0, 16)
+      .replace(/[:T]/g, "-");
+
+    XLSX.writeFile(
+      wb,
+      `cuentas_corrientes_${periodo || "todos"}_${stamp}.xlsx`
+    );
+  }, [filtered, cuentas, periodo, getCell]);
 
   return (
     <div className="cc-page">
@@ -130,11 +178,16 @@ export default function Cuentas_Corrientes() {
                   onChange={(e) => setPeriodo(e.target.value)}
                   disabled={loading}
                 >
-                  {periodOptions.map((p) => (
-                    <option key={p.value || "__ALL__"} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
+                  {/* ✅ Opción Todos explícita */}
+                  <option value="">Todos</option>
+
+                  {periodOptions
+                    .filter((p) => p.value !== "") // evitamos duplicar "Todos"
+                    .map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {p.label}
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -149,14 +202,16 @@ export default function Cuentas_Corrientes() {
                 />
               </div>
 
+              {/* ✅ Botón reemplazado: Exportar Excel */}
               <button
-                className="cc-btn"
-                onClick={fetchResumen}
-                disabled={loading}
-                title="Recargar"
+                className="cc-btnex cc-btn--excel"
+                onClick={exportExcel}
+                disabled={loading || !filtered.length}
+                title="Exportar a Excel"
               >
-                {loading ? "Cargando..." : "Recargar"}
+               <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
               </button>
+
             </div>
           </div>
 
@@ -170,8 +225,6 @@ export default function Cuentas_Corrientes() {
               Columnas dinámicas = cuentas_corrientes • Totales en el pie.
             </div>
           </div>
-
-
         </div>
 
         {/* ✅ Wrap NO scrollea: el scroll va SOLO en el body */}
@@ -223,7 +276,11 @@ export default function Cuentas_Corrientes() {
 
                 <div
                   className={`cc-cell cc-num is-center cc-saldo ${
-                    Number(r.saldo) < 0 ? "is-negative" : Number(r.saldo) > 0 ? "is-positive" : ""
+                    Number(r.saldo) < 0
+                      ? "is-negative"
+                      : Number(r.saldo) > 0
+                      ? "is-positive"
+                      : ""
                   }`}
                 >
                   <b>{moneyARS(r.saldo)}</b>
@@ -231,7 +288,7 @@ export default function Cuentas_Corrientes() {
               </div>
             ))}
 
-            {/* ✅ Footer tipo “sticky” opcional: lo dejamos simple abajo */}
+            {/* ✅ Footer */}
             <div
               className="cc-grid cc-grid--tfoot"
               style={{
@@ -241,7 +298,9 @@ export default function Cuentas_Corrientes() {
               <div className="cc-cell cc-tfootLabel">Totales</div>
 
               {cuentas.map((c) => {
-                const v = Number((totales.columnas || {})[String(c.id_cuenta_corriente)] || 0);
+                const v = Number(
+                  (totales.columnas || {})[String(c.id_cuenta_corriente)] || 0
+                );
                 const cls = v > 0 ? "is-positive" : v < 0 ? "is-negative" : "";
                 return (
                   <div
@@ -255,7 +314,11 @@ export default function Cuentas_Corrientes() {
 
               <div
                 className={`cc-cell cc-num is-center cc-saldo ${
-                  Number(totales.saldo) < 0 ? "is-negative" : Number(totales.saldo) > 0 ? "is-positive" : ""
+                  Number(totales.saldo) < 0
+                    ? "is-negative"
+                    : Number(totales.saldo) > 0
+                    ? "is-positive"
+                    : ""
                 }`}
               >
                 <b>{moneyARS(totales.saldo)}</b>
@@ -270,7 +333,8 @@ export default function Cuentas_Corrientes() {
         </div>
 
         <div className="cc-footnote">
-          * Las columnas se generan desde <b>cuentas_corrientes</b>. El saldo es la suma final por cliente.
+          * Las columnas se generan desde <b>cuentas_corrientes</b>. El saldo es
+          la suma final por cliente.
         </div>
       </section>
     </div>

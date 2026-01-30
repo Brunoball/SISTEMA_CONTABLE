@@ -2,6 +2,20 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import BASE_URL from "../../config/config";
 import "./analisis_financiero.css";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faPenToSquare,
+  faTrashCan,
+  faPlus,
+  faBroom,
+  faMagnifyingGlass,
+  faCalendarDays,
+  faFileExcel,
+} from "@fortawesome/free-solid-svg-icons";
+
+
+// ✅ Excel
+import * as XLSX from "xlsx";
 
 /* =========================
    Helpers
@@ -86,6 +100,23 @@ function normalizeRows(raw) {
   return [];
 }
 
+/* =========================
+   Excel helpers
+========================= */
+function sanitizeFilePart(s) {
+  return String(s ?? "")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "_")
+    .slice(0, 80);
+}
+
+function numOrNull(v) {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 export default function Analisis_Financiero() {
   const API = `${BASE_URL}/api.php`;
 
@@ -163,6 +194,48 @@ export default function Analisis_Financiero() {
 
   const resultadoIsNeg = Number(resultadoNeto) < 0;
 
+  /* =========================
+     ✅ Exportar a Excel
+  ========================= */
+  const handleExportExcel = useCallback(() => {
+    try {
+      // Hoja principal: tabla
+      const tableData = filteredRows.map((r) => ({
+        CONCEPTO: safeText(r.concepto),
+        IMPORTE: numOrNull(r.importe),
+      }));
+
+      // Hoja resumen
+      const resumenData = [
+        { CAMPO: "PERIODO", VALOR: safeText(data?.periodo ?? periodo) },
+        { CAMPO: "VENTAS", VALOR: numOrNull(ventas) },
+        { CAMPO: "RESULTADO_NETO", VALOR: numOrNull(resultadoNeto) },
+        { CAMPO: "GASTOS_PERSONALES", VALOR: numOrNull(gastosPersonales) },
+      ];
+
+      const wb = XLSX.utils.book_new();
+
+      const wsTabla = XLSX.utils.json_to_sheet(tableData, {
+        header: ["CONCEPTO", "IMPORTE"],
+      });
+      // widths
+      wsTabla["!cols"] = [{ wch: 40 }, { wch: 18 }];
+
+      const wsResumen = XLSX.utils.json_to_sheet(resumenData, {
+        header: ["CAMPO", "VALOR"],
+      });
+      wsResumen["!cols"] = [{ wch: 22 }, { wch: 24 }];
+
+      XLSX.utils.book_append_sheet(wb, wsTabla, "Analisis");
+      XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
+
+      const fileName = `Analisis_Financiero_${sanitizeFilePart(periodLabelMMYYYY(periodo))}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (e) {
+      setError(e?.message || "Error exportando a Excel");
+    }
+  }, [filteredRows, data, periodo, ventas, resultadoNeto, gastosPersonales]);
+
   return (
     <div className="af-page">
       {error && (
@@ -209,7 +282,18 @@ export default function Analisis_Financiero() {
             </div>
           </div>
 
-          <div className="af-card__actions" />
+          {/* ✅ Acciones (Excel) */}
+          <div className="af-card__actions">
+            <button
+              type="button"
+              className="af-btn af-btn--excel"
+              onClick={handleExportExcel}
+              disabled={loading || !data || filteredRows.length === 0}
+              title={!data ? "Primero cargá datos" : "Exportar tabla a Excel"}
+            >
+             <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
+            </button>
+          </div>
         </div>
 
         {loading && !data && <div className="af-emptyRow">Cargando análisis financiero...</div>}
@@ -294,9 +378,7 @@ export default function Analisis_Financiero() {
                   {resultadoNeto == null ? "-" : moneyARS(resultadoNeto)}
                 </div>
 
-                <div className="af-totalSub">
-                  Resultado del período (ventas - costos - egresos)
-                </div>
+                <div className="af-totalSub">Resultado del período (ventas - costos - egresos)</div>
               </div>
 
               <div className="af-totalCard af-totalCard--danger">
@@ -312,8 +394,6 @@ export default function Analisis_Financiero() {
                 <div className="af-totalSub">Se muestra aparte como en tu Excel</div>
               </div>
             </div>
-
-
           </>
         )}
 

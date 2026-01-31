@@ -3,7 +3,9 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import BASE_URL from "../../config/config";
 import "./movimientos.css";
 
-import ModalAgregarMovimiento from "./modales/ModalAgregarMovimiento";
+// ✅ MODAL NUEVO (planilla)
+import ModalCargaRapidaMovimientos from "./modales/ModalCargaRapidaMovimientos";
+
 import ModalEditarMovimiento from "./modales/ModalEditarMovimiento";
 import ModalEliminarMovimientos from "./modales/ModalEliminarMovimientos";
 
@@ -37,6 +39,16 @@ function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "-";
 }
+function numOrZero(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+function fmtPct(v) {
+  if (v === null || v === undefined || v === "") return "-";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return safeText(v);
+  return `${n}%`;
+}
 
 /* =========================
    ✅ FECHA -> DD/MM/YYYY
@@ -63,7 +75,6 @@ function formatFechaDMY(v) {
     return `${dd}/${mm}/${yyyy}`;
   }
 
-  // fallback: devolvemos tal cual
   return s;
 }
 
@@ -152,7 +163,7 @@ function periodoToYYYYMM(input) {
     }
   }
 
-  return s; // fallback
+  return s;
 }
 
 /* =========================
@@ -174,7 +185,7 @@ function normalizeLists(raw) {
   const src = raw?.listas && typeof raw.listas === "object" ? raw.listas : raw;
   const getArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
 
-  // ✅ los periodos los guardamos para UI siempre como MM-YYYY
+  // ✅ periodos UI siempre MM-YYYY
   const periodosUI = (getArr("periodos") || []).map(periodoToMMYYYY);
 
   return {
@@ -191,13 +202,14 @@ function normalizeLists(raw) {
 }
 
 /* =========================
-   Tabs de tabla (mantenidos)
+   ✅ TABS SIMPLIFICADOS (3)
+   - TOTAL solo aparece en: RESUMEN y ITEMS
+   - Unificamos "tipo venta + partes + pago" en "Detalle"
 ========================= */
 const TABLE_TABS = [
   { id: "resumen", label: "Resumen" },
-  { id: "detalle", label: "Detalle" },
-  { id: "partes", label: "Partes" },
-  { id: "pago", label: "Pago" },
+  { id: "detalle", label: "Detalle" }, // tipo_venta + partes + pago (sin TOTAL)
+  { id: "items", label: "Items" }, // detalle + cálculos (con TOTAL)
 ];
 
 /* =========================
@@ -238,40 +250,39 @@ function buildExportRows(rows, tab) {
     }));
   }
 
+  // ✅ DETALLE (sin TOTAL para no repetir): tipo_venta + partes + pago
   if (tab === "detalle") {
     return rows.map((r) => ({
-      DETALLE: safeText(r.detalle),
       "TIPO VENTA": safeText(r.tipo_venta),
-      TOTAL: Number(r.monto_total || 0),
-    }));
-  }
-
-  if (tab === "partes") {
-    return rows.map((r) => ({
       CLASIFICACION: safeText(r.clasificacion),
       "TIPO MOV.": safeText(r.tipo_movimiento),
       CLIENTE: safeText(r.cliente),
       PROVEEDOR: safeText(r.proveedor),
+      "CUENTA CORRIENTE": safeText(r.cuenta_corriente),
+      "MEDIO PAGO": safeText(r.medio_pago),
     }));
   }
 
-  // pago
+  // ✅ ITEMS (con TOTAL)
   return rows.map((r) => ({
-    "CUENTA CORRIENTE": safeText(r.cuenta_corriente),
-    "MEDIO PAGO": safeText(r.medio_pago),
-    TOTAL: Number(r.monto_total || 0),
+    DETALLE: safeText(r.detalle),
+    CANTIDAD: numOrZero(r.cantidad),
+    PRECIO: numOrZero(r.precio),
+    SUBTOTAL: numOrZero(r.subtotal),
+    "IVA %": r.iva_pct ?? "",
+    IVA: numOrZero(r.iva_monto),
+    TOTAL: numOrZero(r.total ?? r.monto_total),
   }));
 }
 
 /* =========================
    ✅ FULL-TEXT SEARCH helper
-   (busca por cualquier cosa: fecha, monto, ids, nombres, etc.)
 ========================= */
 function normalizeSearchText(v) {
   return String(v ?? "")
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // quita acentos
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -280,39 +291,26 @@ function rowMatchesQuery(row, query) {
   const qq = normalizeSearchText(query);
   if (!qq) return true;
 
-  // ✅ agregamos "valores derivados" que el usuario suele tipear:
-  // - fecha formateada
-  // - período UI
-  // - montos en formatos comunes ($, puntos, comas, sin separadores)
   const fechaDMY = formatFechaDMY(row?.fecha);
   const periodoUI = periodoToMMYYYY(row?.periodo);
 
-  const montoNum = Number(row?.monto_total || 0);
-  const montoStr1 = moneyARS(montoNum); // "$ 12.345,67" (depende locale)
-  const montoStr2 = String(montoNum); // "12345.67"
-  const montoStr3 = String(Math.trunc(montoNum)); // "12345"
-  const montoStr4 = String(montoNum)
-    .replace(/[^\d]/g, ""); // "1234567" (si tenía decimales)
-  const montoStr5 = String(montoStr1).replace(/[^\d]/g, ""); // digits-only del moneyARS
+  const montoNum = Number(row?.monto_total || row?.total || 0);
+  const montoStr1 = moneyARS(montoNum);
+  const montoStr2 = String(montoNum);
+  const montoStr3 = String(Math.trunc(montoNum));
+  const montoStr4 = String(montoNum).replace(/[^\d]/g, "");
+  const montoStr5 = String(montoStr1).replace(/[^\d]/g, "");
 
-  // ✅ armamos un “blob” de texto con TODO:
-  // - todos los valores del objeto
-  // - más los derivados (fecha/período/montos)
   const parts = [];
 
-  // valores del row (cualquier campo)
   if (row && typeof row === "object") {
     for (const k of Object.keys(row)) {
       const val = row[k];
-
-      // si es objeto/array, lo saltamos para evitar "[object Object]"
       if (val && typeof val === "object") continue;
-
       parts.push(String(val ?? ""));
     }
   }
 
-  // derivados
   parts.push(fechaDMY);
   parts.push(periodoUI);
   parts.push(montoStr1, montoStr2, montoStr3, montoStr4, montoStr5);
@@ -333,14 +331,14 @@ export default function Movimientos() {
   const [error, setError] = useState("");
 
   // filtros (UI)
-  const [fPeriodo, setFPeriodo] = useState(""); // ✅ SIEMPRE MM-YYYY (NO "Todos")
+  const [fPeriodo, setFPeriodo] = useState(""); // ✅ SIEMPRE MM-YYYY
   const [q, setQ] = useState("");
 
-  // tabla tabs
+  // tabla tabs (ahora 3)
   const [tab, setTab] = useState("resumen");
 
   // modales
-  const [openAdd, setOpenAdd] = useState(false);
+  const [openAdd, setOpenAdd] = useState(false); // ahora abre Carga Rápida
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -355,7 +353,6 @@ export default function Movimientos() {
 
   /* =========================
      ✅ Cache simple por "periodoAPI|q"
-     (evita pedir lo mismo al backend si ya lo tenés)
   ========================= */
   const cacheRef = useRef(new Map()); // key -> array rows
 
@@ -460,7 +457,7 @@ export default function Movimientos() {
       if ((normalized.periodos || []).length) {
         setFPeriodo((prev) => prev || normalized.periodos[0]); // MM-YYYY
       } else {
-        setFPeriodo(""); // no hay periodos en DB
+        setFPeriodo("");
       }
 
       return normalized;
@@ -484,7 +481,6 @@ export default function Movimientos() {
         typeof opts.periodo === "string" ? opts.periodo : fPeriodo; // MM-YYYY
       const qLocal = typeof opts.q === "string" ? opts.q : q;
 
-      // ✅ si no hay período, NO cargamos (evita "Todos")
       const perUI = periodoToMMYYYY(periodoUI);
       if (!perUI) {
         setRows([]);
@@ -495,7 +491,6 @@ export default function Movimientos() {
       const periodoAPI = periodoToYYYYMM(perUI); // YYYY-MM
       const cacheKey = `${periodoAPI}|${(qLocal || "").trim()}`;
 
-      // ✅ Cache hit
       if (cacheRef.current.has(cacheKey)) {
         setRows(cacheRef.current.get(cacheKey) || []);
         setLoadingRows(false);
@@ -508,7 +503,7 @@ export default function Movimientos() {
       try {
         const sp = new URLSearchParams();
         sp.set("action", "movimientos_listar");
-        sp.set("periodo", periodoAPI); // ✅ SIEMPRE viene
+        sp.set("periodo", periodoAPI);
         if (qLocal) sp.set("q", qLocal);
 
         const data = await apiGet(`${API}?${sp.toString()}`);
@@ -517,7 +512,6 @@ export default function Movimientos() {
 
         const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
 
-        // ✅ normalizamos para UI:
         const movsNorm = movs.map((r) => ({
           ...r,
           periodo: periodoToMMYYYY(r?.periodo),
@@ -538,14 +532,13 @@ export default function Movimientos() {
 
   /* =========================
      Init
-     ✅ primero listas, luego cargar por período default
   ========================= */
   useEffect(() => {
     (async () => {
       const normalized = await loadLists();
       const perDefault = (normalized.periodos || [])[0] || "";
       if (perDefault) {
-        await loadRows({ periodo: perDefault, q: "" }); // ✅ carga solo 1 período
+        await loadRows({ periodo: perDefault, q: "" });
       } else {
         setRows([]);
         setLoadingRows(false);
@@ -555,21 +548,15 @@ export default function Movimientos() {
   }, []);
 
   /* =========================
-     ✅ Filtrado FRONT (UI MM-YYYY)
-     ✅ AHORA: el buscador filtra por CUALQUIER cosa (monto, fecha, ids, etc.)
+     ✅ Filtrado FRONT (UI MM-YYYY) + full text
   ========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
-
-    // ✅ si no hay período, no mostramos nada
     if (!fPer) return [];
 
     return rows.filter((r) => {
-      // 1) filtro por período (se mantiene)
       const rPer = periodoToMMYYYY(r?.periodo);
       if (String(rPer) !== String(fPer)) return false;
-
-      // 2) filtro full-text por cualquier campo + derivados
       return rowMatchesQuery(r, q);
     });
   }, [rows, fPeriodo, q]);
@@ -588,7 +575,7 @@ export default function Movimientos() {
   };
 
   /* =========================
-     Exportar Excel (según pestaña actual)
+     Exportar Excel
   ========================= */
   const exportToExcel = useCallback(() => {
     try {
@@ -603,7 +590,7 @@ export default function Movimientos() {
       const sheetName = slugifySheetName(`Movimientos_${tab}`);
       const ws = XLSX.utils.json_to_sheet(dataToExport);
 
-      // formato numérico para columna TOTAL si existe
+      // Formato moneda solo si existe TOTAL
       const headers = Object.keys(dataToExport[0] || {});
       const totalColIndex = headers.findIndex((h) => h === "TOTAL");
       if (totalColIndex >= 0 && ws["!ref"]) {
@@ -628,8 +615,18 @@ export default function Movimientos() {
   }, [filteredRows, tab, fPeriodo, showToast]);
 
   /* =========================
+     ✅ helper para invalidar cache del período actual
+  ========================= */
+  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
+    const periodoAPI = periodoToYYYYMM(periodoUI);
+    const keyPrefix = `${periodoAPI}|`;
+    for (const k of cacheRef.current.keys()) {
+      if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
+    }
+  }, []);
+
+  /* =========================
      Eliminar (confirmación) ✅ manda idUsuario
-     ✅ recarga solo el período actual
   ========================= */
   const confirmDelete = async () => {
     if (!selectedRow?.id_movimiento) return;
@@ -653,14 +650,9 @@ export default function Movimientos() {
       setOpenDel(false);
       setSelectedRow(null);
 
-      // ✅ limpiar cache de ese período (y recargar)
-      const periodoAPI = periodoToYYYYMM(fPeriodo);
-      const keyPrefix = `${periodoAPI}|`;
-      for (const k of cacheRef.current.keys()) {
-        if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
-      }
-
+      invalidateCacheForPeriodo(fPeriodo);
       await loadRows({ periodo: fPeriodo, q });
+
       showToast("exito", "Movimiento eliminado.", 2600);
     } catch (e) {
       setError(e.message || "Error eliminando movimiento.");
@@ -671,8 +663,7 @@ export default function Movimientos() {
   };
 
   /* =========================
-     Guardar (Add / Edit) ✅ manda idUsuario
-     ✅ manda periodo en YYYY-MM al backend
+     Guardar (EDIT/CREATE) ✅ manda idUsuario
   ========================= */
   const saveMovimiento = async (payload, isEdit) => {
     setError("");
@@ -695,9 +686,46 @@ export default function Movimientos() {
   };
 
   /* =========================
-     Columnas por pestaña (adaptadas)
+     ✅ SAVE BATCH (carga rápida)
   ========================= */
+  const saveBatchMovimientos = useCallback(
+    async (payloads) => {
+      const arr = Array.isArray(payloads) ? payloads : [];
+      if (!arr.length) throw new Error("No hay filas para guardar.");
+
+      const { idUsuario } = getAuthInfo();
+
+      for (let i = 0; i < arr.length; i++) {
+        const p = arr[i];
+
+        const payloadNorm = {
+          ...(p || {}),
+          periodo: periodoToYYYYMM(p?.periodo), // MM-YYYY -> YYYY-MM
+        };
+
+        const data = await apiPostJson(`${API}?action=movimientos_crear`, {
+          ...payloadNorm,
+          idUsuario,
+        });
+
+        if (!data.exito) {
+          const msg = data.mensaje || `Error guardando fila ${i + 1}.`;
+          throw new Error(msg);
+        }
+      }
+
+      invalidateCacheForPeriodo(fPeriodo);
+      await loadRows({ periodo: fPeriodo, q: "" });
+    },
+    [API, apiPostJson, fPeriodo, invalidateCacheForPeriodo, loadRows]
+  );
+
+  /* =========================
+     Columnas por pestaña (3)
+     ✅ TOTAL solo en: RESUMEN + ITEMS
+========================= */
   const columns = useMemo(() => {
+    // ✅ RESUMEN (con TOTAL)
     if (tab === "resumen") {
       return [
         {
@@ -722,33 +750,16 @@ export default function Movimientos() {
       ];
     }
 
+    // ✅ DETALLE (SIN TOTAL): tipo_venta + partes + pago en una sola vista
     if (tab === "detalle") {
       return [
         {
-          key: "detalle",
-          label: "DETALLE",
-          align: "left",
-          strong: true,
-          render: (r) => safeText(r.detalle),
-        },
-        {
           key: "tipo_venta",
           label: "TIPO VENTA",
-          align: "center",
+          align: "left",
+          strong: true,
           render: (r) => safeText(r.tipo_venta),
         },
-        {
-          key: "monto_total",
-          label: "TOTAL",
-          align: "center",
-          render: (r) => moneyARS(r.monto_total),
-        },
-        { key: "acciones", label: "ACCIONES", align: "center", render: () => null },
-      ];
-    }
-
-    if (tab === "partes") {
-      return [
         {
           key: "clasificacion",
           label: "CLASIFICACIÓN",
@@ -773,29 +784,66 @@ export default function Movimientos() {
           align: "center",
           render: (r) => safeText(r.proveedor),
         },
+        {
+          key: "cuenta_corriente",
+          label: "CUENTA CORRIENTE",
+          align: "left",
+          render: (r) => safeText(r.cuenta_corriente),
+        },
+        {
+          key: "medio_pago",
+          label: "MEDIO PAGO",
+          align: "left",
+          render: (r) => safeText(r.medio_pago),
+        },
         { key: "acciones", label: "ACCIONES", align: "center", render: () => null },
       ];
     }
 
-    // pago
+    // ✅ ITEMS (con TOTAL)
     return [
       {
-        key: "cuenta_corriente",
-        label: "CUENTA CORRIENTE",
+        key: "detalle",
+        label: "DETALLE",
         align: "left",
-        render: (r) => safeText(r.cuenta_corriente),
+        strong: true,
+        render: (r) => safeText(r.detalle),
       },
       {
-        key: "medio_pago",
-        label: "MEDIO PAGO",
-        align: "left",
-        render: (r) => safeText(r.medio_pago),
+        key: "cantidad",
+        label: "CANT.",
+        align: "center",
+        render: (r) => safeText(r?.cantidad ?? r?.qty),
       },
       {
-        key: "monto_total",
+        key: "precio",
+        label: "PRECIO",
+        align: "center",
+        render: (r) => moneyARS(r?.precio ?? r?.precio_unitario ?? 0),
+      },
+      {
+        key: "subtotal",
+        label: "SUBTOTAL",
+        align: "center",
+        render: (r) => moneyARS(r?.subtotal ?? 0),
+      },
+      {
+        key: "iva_pct",
+        label: "% IVA",
+        align: "center",
+        render: (r) => fmtPct(r?.iva_pct),
+      },
+      {
+        key: "iva_monto",
+        label: "IVA",
+        align: "center",
+        render: (r) => moneyARS(r?.iva_monto ?? 0),
+      },
+      {
+        key: "total_item",
         label: "TOTAL",
         align: "center",
-        render: (r) => moneyARS(r.monto_total),
+        render: (r) => moneyARS(r?.total ?? r?.total_item ?? r?.monto_total ?? 0),
       },
       { key: "acciones", label: "ACCIONES", align: "center", render: () => null },
     ];
@@ -844,15 +892,12 @@ export default function Movimientos() {
                 <select
                   value={periodoToMMYYYY(fPeriodo)}
                   onChange={async (e) => {
-                    const ui = periodoToMMYYYY(e.target.value); // MM-YYYY
+                    const ui = periodoToMMYYYY(e.target.value);
                     setFPeriodo(ui);
-
-                    // ✅ dejar cache y recargar (también podría NO recargar si ya está en rows)
                     await loadRows({ periodo: ui, q });
                   }}
                   disabled={loadingRows || loadingLists}
                 >
-                  {/* ❌ NO "Todos" */}
                   {(lists.periodos || []).map((p) => {
                     const ui = periodoToMMYYYY(p);
                     return (
@@ -872,12 +917,10 @@ export default function Movimientos() {
                 <div className="mov-searchInput">
                   <input
                     value={q}
-                    onChange={(e) => setQ(e.target.value)} // ✅ ahora filtra “por cualquier cosa” en el front
+                    onChange={(e) => setQ(e.target.value)}
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-
-                        // (opcional) si querés también consultar backend al Enter:
                         await loadRows({
                           periodo: fPeriodo,
                           q: e.currentTarget.value,
@@ -895,10 +938,7 @@ export default function Movimientos() {
                       title="Limpiar búsqueda"
                       onClick={async () => {
                         setQ("");
-
-                        // ✅ al limpiar, cargamos mismo período sin query
                         await loadRows({ periodo: fPeriodo, q: "" });
-
                         const input = document.querySelector(".mov-searchInput input");
                         input?.focus();
                       }}
@@ -931,20 +971,21 @@ export default function Movimientos() {
                 key={t.id}
                 type="button"
                 className={`mov-tab ${tab === t.id ? "is-active" : ""}`}
-                onClick={() => setTab(t.id)} // ✅ solo cambia columnas, NO carga
+                onClick={() => setTab(t.id)}
               >
                 {t.label}
               </button>
             ))}
           </div>
 
+          {/* ✅ botón abre Carga Rápida */}
           <button
             type="button"
             className="mov-btn mov-btn--primary mov-tabsCta"
             onClick={() => setOpenAdd(true)}
-            disabled={!fPeriodo} // si no hay período no tiene sentido
+            disabled={!fPeriodo}
           >
-            <FontAwesomeIcon icon={faPlus} /> Nuevo movimiento
+            <FontAwesomeIcon icon={faPlus} /> Carga rápida
           </button>
         </div>
 
@@ -1051,42 +1092,30 @@ export default function Movimientos() {
         </div>
       </section>
 
-      {/* MODALES */}
-      <ModalAgregarMovimiento
+      {/* ✅ MODAL CARGA RAPIDA */}
+      <ModalCargaRapidaMovimientos
         open={openAdd}
         lists={lists}
-        periodoDefault={fPeriodo} // UI MM-YYYY
+        periodoDefault={fPeriodo} // MM-YYYY
         onClose={() => setOpenAdd(false)}
-        onCatalogCreated={handleCatalogCreated}
         onToast={showToast}
-        onSave={async (payload) => {
+        onSaveBatch={async (payloads) => {
           try {
-            showToast("cargando", "Guardando movimiento…", 12000);
-            await saveMovimiento(payload, false);
-
-            // ✅ invalida cache del período actual y recarga SOLO ese período
-            const periodoAPI = periodoToYYYYMM(fPeriodo);
-            const keyPrefix = `${periodoAPI}|`;
-            for (const k of cacheRef.current.keys()) {
-              if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
-            }
-
-            await loadRows({ periodo: fPeriodo, q });
-
+            await saveBatchMovimientos(payloads);
             setOpenAdd(false);
-            showToast("exito", "Movimiento guardado correctamente.", 2600);
           } catch (e) {
-            showToast("error", e?.message || "Error guardando movimiento.", 4200);
+            showToast("error", e?.message || "Error guardando carga rápida.", 4200);
             throw e;
           }
         }}
       />
 
+      {/* EDIT */}
       <ModalEditarMovimiento
         open={openEdit}
         lists={lists}
         row={selectedRow}
-        periodoDefault={fPeriodo} // UI MM-YYYY
+        periodoDefault={fPeriodo}
         onClose={() => {
           setOpenEdit(false);
           setSelectedRow(null);
@@ -1098,13 +1127,7 @@ export default function Movimientos() {
             showToast("cargando", "Guardando cambios…", 12000);
             await saveMovimiento(payload, true);
 
-            // ✅ invalida cache del período actual y recarga SOLO ese período
-            const periodoAPI = periodoToYYYYMM(fPeriodo);
-            const keyPrefix = `${periodoAPI}|`;
-            for (const k of cacheRef.current.keys()) {
-              if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
-            }
-
+            invalidateCacheForPeriodo(fPeriodo);
             await loadRows({ periodo: fPeriodo, q });
 
             setOpenEdit(false);
@@ -1117,6 +1140,7 @@ export default function Movimientos() {
         }}
       />
 
+      {/* DELETE */}
       <ModalEliminarMovimientos
         open={openDel}
         row={selectedRow}

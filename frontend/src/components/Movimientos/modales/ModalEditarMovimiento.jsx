@@ -1,13 +1,20 @@
 // src/components/Movimientos/modales/ModalEditarMovimiento.jsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import "./ModalEditarMovimiento.css"; // Reutiliza estética
+import "./ModalEditarMovimiento.css";
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";
 const ADD_OPTION = "__ADD__";
 
+// ✅ IVA selector (igual que carga rápida)
+const IVA_OPTIONS = [
+  { label: "0%", value: 0 },
+  { label: "10,5%", value: 10.5 },
+  { label: "21%", value: 21 },
+];
+
 /* =========================
-   Safe lists + normalización (adaptado a NUEVA tabla)
+   Safe lists + normalización
 ========================= */
 const SAFE_LISTS = {
   periodos: [],
@@ -69,13 +76,24 @@ function normalizeIncomingLists(lists) {
 }
 
 function safeNumber(v) {
+  // ✅ Si viene "" o null => 0
+  if (v === "" || v == null) return 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
 
 /* =========================
-   ✅ Período MM-YYYY helpers
+   Fecha / Periodo helpers
 ========================= */
+function todayISO() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// UI: MM-YYYY
 function normalizePeriodoToMMYYYY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "";
@@ -109,6 +127,25 @@ function normalizePeriodoToMMYYYY(v) {
   return `${mm}-${yyyy}`;
 }
 
+// API: YYYY-MM
+function periodoMMYYYY_to_YYYYMM(mmYYYY) {
+  const s = String(mmYYYY ?? "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}$/.test(s)) return s;
+  if (/^\d{2}-\d{4}$/.test(s)) {
+    const [mm, yyyy] = s.split("-");
+    return `${yyyy}-${mm}`;
+  }
+  return s;
+}
+
+function periodoFromISODate(iso) {
+  const s = String(iso ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
+  const [y, m] = s.split("-");
+  return `${m}-${y}`;
+}
+
 /* =========================
    Auth helpers
 ========================= */
@@ -128,7 +165,7 @@ function getAuthInfo() {
 }
 
 /* =========================
-   Catálogo por selector (adaptado)
+   Catálogo map
 ========================= */
 const CATALOGO_MAP = {
   id_clasificacion: { catalogo: "clasificaciones", label: "Clasificación" },
@@ -153,17 +190,9 @@ const LISTKEY_BY_CATALOGO = {
 };
 
 /* =========================
-   Mini Modal: alta rápida (cliente/proveedor/detalle)
+   Mini Modal: alta rápida
 ========================= */
-function AddCatalogMiniModal({
-  open,
-  title,
-  value,
-  saving,
-  onChange,
-  onCancel,
-  onSave,
-}) {
+function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -240,19 +269,61 @@ function AddCatalogMiniModal({
 }
 
 /* =========================
-   Build form desde row (NUEVA ESTRUCTURA)
+   Cálculo item
 ========================= */
-function buildFormFromRow(row, lists, periodoDefault) {
+function calcItemTotals(cantidad, precio, ivaPct) {
+  const c = Math.max(0, safeNumber(cantidad));
+  const p = Math.max(0, safeNumber(precio));
+  const iva = Math.max(0, safeNumber(ivaPct));
+
+  const subtotal = c * p;
+  const iva_monto = subtotal * (iva / 100);
+  const total = subtotal + iva_monto;
+
+  const r2 = (n) => Math.round(n * 100) / 100;
+
+  return {
+    subtotal: r2(subtotal),
+    iva_monto: r2(iva_monto),
+    total: r2(total),
+  };
+}
+
+/* =========================
+   Build form desde row
+========================= */
+function buildFormFromRow(row, listsMerged, periodoDefault) {
   const r = row || {};
-  const pickPeriodo = normalizePeriodoToMMYYYY(r.periodo || periodoDefault || "");
+
+  const fecha = String(r.fecha || "").slice(0, 10) || "";
+  const perRow = normalizePeriodoToMMYYYY(r.periodo || "");
+  const perDef = normalizePeriodoToMMYYYY(periodoDefault || "");
+  const perByFecha = periodoFromISODate(fecha || todayISO());
+  const pickPeriodo = perRow || perDef || perByFecha || "";
 
   const nOrNull = (v) =>
-    Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : NULL_OPTION;
-  const sOrNull = (v) => (v == null || v === "" || v === 0 ? NULL_OPTION : String(v));
+    Number.isFinite(Number(v)) && Number(v) > 0 ? String(Number(v)) : NULL_OPTION;
+
+  const sOrNull = (v) => {
+    if (v == null || v === "" || v === 0) return NULL_OPTION;
+    return String(v);
+  };
+
+  const cantidad = r.cantidad != null ? safeNumber(r.cantidad) : 1;
+  const precio = r.precio != null ? safeNumber(r.precio) : safeNumber(r.monto_total);
+  const iva_pct = r.iva_pct != null ? safeNumber(r.iva_pct) : 0;
+
+  const totals = calcItemTotals(cantidad, precio, iva_pct);
+
+  const subtotal = r.subtotal != null ? safeNumber(r.subtotal) : totals.subtotal;
+  const iva_monto = r.iva_monto != null ? safeNumber(r.iva_monto) : totals.iva_monto;
+  const total = r.total != null ? safeNumber(r.total) : totals.total;
+
+  const monto_total = r.monto_total != null ? safeNumber(r.monto_total) : total;
 
   return {
     id_movimiento: safeNumber(r.id_movimiento) || null,
-    fecha: String(r.fecha || "").slice(0, 10) || "",
+    fecha,
     periodo: pickPeriodo,
 
     id_clasificacion: nOrNull(r.id_clasificacion),
@@ -266,7 +337,15 @@ function buildFormFromRow(row, lists, periodoDefault) {
 
     id_medio_pago: nOrNull(r.id_medio_pago),
 
-    monto_total: safeNumber(r.monto_total) || 0,
+    monto_total: Math.max(0, Math.round(monto_total * 100) / 100),
+
+    cantidad: Math.max(0, Math.round(cantidad * 1000) / 1000),
+    precio: Math.max(0, Math.round(precio * 100) / 100),
+    iva_pct: Math.max(0, Math.round(iva_pct * 100) / 100),
+
+    subtotal: Math.max(0, Math.round(subtotal * 100) / 100),
+    iva_monto: Math.max(0, Math.round(iva_monto * 100) / 100),
+    total: Math.max(0, Math.round(total * 100) / 100),
   };
 }
 
@@ -287,7 +366,6 @@ export default function ModalEditarMovimiento({
     [onToast]
   );
 
-  // ✅ refs para NO resetear por cambios de props mientras está abierto
   const listsRef = useRef(lists);
   const rowRef = useRef(row);
   const periodoDefaultRef = useRef(periodoDefault);
@@ -306,7 +384,6 @@ export default function ModalEditarMovimiento({
     ...normalizeIncomingLists(lists),
   }));
 
-  // ✅ actualizar listas SIN tocar form
   useEffect(() => {
     setLocalLists({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) });
   }, [lists]);
@@ -319,9 +396,6 @@ export default function ModalEditarMovimiento({
     buildFormFromRow(row, { ...SAFE_LISTS, ...normalizeIncomingLists(lists) }, periodoDefault)
   );
 
-  // UI agregar:
-  // - inline para selects comunes
-  // - mini modal para cliente/proveedor/detalle
   const [addUI, setAddUI] = useState({
     open: false,
     field: null,
@@ -329,42 +403,28 @@ export default function ModalEditarMovimiento({
     saving: false,
   });
 
-  // ✅ Autocomplete de clientes
   const [clienteInput, setClienteInput] = useState("");
   const [clienteFocus, setClienteFocus] = useState(false);
   const clienteInputRef = useRef(null);
 
-  // ✅ Autocomplete de proveedores
   const [proveedorInput, setProveedorInput] = useState("");
   const [proveedorFocus, setProveedorFocus] = useState(false);
   const proveedorInputRef = useRef(null);
 
-  // ✅ Autocomplete de detalles
   const [detalleInput, setDetalleInput] = useState("");
   const [detalleFocus, setDetalleFocus] = useState(false);
   const detalleInputRef = useRef(null);
 
   const closeBtnRef = useRef(null);
-
-  // ✅ Date picker: abrir con click en todo el input
   const fechaRef = useRef(null);
 
-  // ✅ Dirty flag
-  const dirtyRef = useRef(false);
-  const markDirty = useCallback(() => {
-    dirtyRef.current = true;
-  }, []);
-
-  // ✅ Init SOLO al ABRIR
   const prevOpenRef = useRef(false);
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
     prevOpenRef.current = open;
-
     if (!open) return;
     if (wasOpen) return;
 
-    dirtyRef.current = false;
     setSaving(false);
     setAddUI({ open: false, field: null, text: "", saving: false });
 
@@ -376,7 +436,7 @@ export default function ModalEditarMovimiento({
 
     const nameById = (arr, id) => {
       const sid = String(id ?? "").trim();
-      if (!sid || sid === NULL_OPTION) return "";
+      if (!sid || sid === NULL_OPTION || sid === ADD_OPTION) return "";
       const found = (Array.isArray(arr) ? arr : []).find((x) => String(x?.id) === sid);
       return String(found?.nombre ?? "").trim();
     };
@@ -393,7 +453,6 @@ export default function ModalEditarMovimiento({
     setTimeout(() => closeBtnRef.current?.focus(), 0);
   }, [open]);
 
-  // ✅ ESC cierra
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e) => {
@@ -407,7 +466,6 @@ export default function ModalEditarMovimiento({
     const el = fechaRef.current;
     if (!el) return;
     if (saving || el.disabled) return;
-
     try {
       if (typeof el.showPicker === "function") el.showPicker();
       else el.focus();
@@ -416,29 +474,82 @@ export default function ModalEditarMovimiento({
     }
   }, [saving]);
 
-  const onChange = useCallback(
-    (k, v) => {
-      markDirty();
-      setForm((prev) => ({ ...prev, [k]: v }));
-    },
-    [markDirty]
+  const onFechaChange = useCallback((iso) => {
+    const v = String(iso || "").trim();
+    setForm((p) => {
+      const perAuto = periodoFromISODate(v);
+      return { ...p, fecha: v, periodo: perAuto || p.periodo };
+    });
+  }, []);
+
+  const onPeriodoChange = useCallback((raw) => {
+    const digits = String(raw || "").replace(/\D/g, "").slice(0, 6);
+    let next = "";
+    if (digits.length <= 2) next = digits;
+    else next = `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    if (digits.length === 6) next = normalizePeriodoToMMYYYY(next);
+    setForm((p) => ({ ...p, periodo: next }));
+  }, []);
+
+  /* =========================
+     ✅ Item handlers (editable)
+  ========================= */
+  const recalcFromItem = useCallback((nextPartial) => {
+    setForm((p) => {
+      const next = { ...p, ...nextPartial };
+
+      const cantidad = safeNumber(next.cantidad);
+      const precio = safeNumber(next.precio);
+      const iva_pct = safeNumber(next.iva_pct);
+
+      const t = calcItemTotals(cantidad, precio, iva_pct);
+
+      next.subtotal = t.subtotal;
+      next.iva_monto = t.iva_monto;
+      next.total = t.total;
+
+      // ✅ total calculado
+      next.monto_total = t.total;
+
+      return next;
+    });
+  }, []);
+
+  const onCantidadChange = useCallback(
+    (v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }),
+    [recalcFromItem]
   );
 
-  const onPeriodoChange = useCallback(
-    (raw) => {
-      markDirty();
-      const digits = String(raw || "").replace(/\D/g, "").slice(0, 6);
-      let next = "";
-
-      if (digits.length <= 2) next = digits;
-      else next = `${digits.slice(0, 2)}-${digits.slice(2)}`;
-
-      if (digits.length === 6) next = normalizePeriodoToMMYYYY(next);
-
-      setForm((p) => ({ ...p, periodo: next }));
-    },
-    [markDirty]
+  const onPrecioChange = useCallback(
+    (v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }),
+    [recalcFromItem]
   );
+
+  const onIvaPctChange = useCallback(
+    (v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }),
+    [recalcFromItem]
+  );
+
+  const onMontoTotalManual = useCallback((v) => {
+    const mt = v === "" ? "" : Number(v);
+    setForm((p) => {
+      const next = { ...p, monto_total: mt };
+      const cantidad = Math.max(0, safeNumber(next.cantidad) || 1);
+      const iva_pct = Math.max(0, safeNumber(next.iva_pct));
+
+      const factor = cantidad * (1 + iva_pct / 100);
+      const precio = factor > 0 ? safeNumber(mt) / factor : safeNumber(mt);
+
+      const t = calcItemTotals(cantidad, precio, iva_pct);
+
+      next.precio = Math.round(precio * 100) / 100;
+      next.subtotal = t.subtotal;
+      next.iva_monto = t.iva_monto;
+      next.total = t.total;
+
+      return next;
+    });
+  }, []);
 
   /* =========================
      API helper
@@ -450,9 +561,7 @@ export default function ModalEditarMovimiento({
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(
-        `Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`
-      );
+      throw new Error(`Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`);
     }
   }, []);
 
@@ -473,14 +582,14 @@ export default function ModalEditarMovimiento({
     [parseJsonOrThrow]
   );
 
+  /* =========================
+     Alta rápida catálogo
+  ========================= */
   const closeAddMini = useCallback(() => {
     if (addUI.saving) return;
     setAddUI({ open: false, field: null, text: "", saving: false });
   }, [addUI.saving]);
 
-  /* =========================
-     Guardar nuevo registro del catálogo
-  ========================= */
   const guardarNuevoCatalogo = useCallback(async () => {
     if (!addUI.field) return;
 
@@ -527,7 +636,6 @@ export default function ModalEditarMovimiento({
         return next;
       });
 
-      // en este modal, estos 3 SIEMPRE string (por tu backend actual)
       setForm((prev) => ({ ...prev, [addUI.field]: String(newId) }));
 
       if (addUI.field === "id_cliente") {
@@ -556,139 +664,104 @@ export default function ModalEditarMovimiento({
     }
   }, [API, addUI, apiPostJson, onCatalogCreated, showToast]);
 
-  // ✅ cerrar SOLO por X o ESC (nunca por click afuera)
   const cerrar = useCallback(() => {
     if (saving) return;
     onClose?.();
   }, [saving, onClose]);
 
   /* =========================
-     Autocomplete de CLIENTES / PROVEEDORES / DETALLES
+     Autocomplete: Cliente / Proveedor / Detalle
   ========================= */
-  const handleClienteInputChange = useCallback(
-    (e) => {
-      markDirty();
-      const value = e.target.value;
-      setClienteInput(value);
-      setForm((prev) => ({ ...prev, id_cliente: NULL_OPTION }));
-    },
-    [markDirty]
-  );
-
-  const handleSelectCliente = useCallback(
-    (cliente) => {
-      markDirty();
-      const nombre = String(cliente?.nombre ?? "").trim();
-      setClienteInput(nombre);
-      setForm((prev) => ({
-        ...prev,
-        id_cliente: cliente?.id != null ? String(cliente.id) : NULL_OPTION,
-      }));
-      setClienteFocus(false);
-    },
-    [markDirty]
-  );
-
-  const startAddCliente = useCallback(() => {
-    markDirty();
-    setClienteFocus(false);
-    setAddUI({ open: true, field: "id_cliente", text: "", saving: false });
-    setForm((prev) => ({ ...prev, id_cliente: ADD_OPTION }));
-  }, [markDirty]);
-
   const filteredClientes = useMemo(() => {
     const all = Array.isArray(safeLists.clientes) ? safeLists.clientes : [];
     const q = clienteInput.trim().toLowerCase();
     if (!clienteFocus || q.length < 1) return [];
-    return all
-      .filter((c) => String(c?.nombre ?? "").toLowerCase().includes(q))
-      .slice(0, 25);
+    return all.filter((c) => String(c?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
   }, [safeLists.clientes, clienteInput, clienteFocus]);
 
-  // --- PROVEEDORES
-  const handleProveedorInputChange = useCallback(
-    (e) => {
-      markDirty();
-      const value = e.target.value;
-      setProveedorInput(value);
-      setForm((prev) => ({ ...prev, id_proveedor: NULL_OPTION }));
-    },
-    [markDirty]
-  );
+  const handleClienteInputChange = useCallback((e) => {
+    const value = e.target.value;
+    setClienteInput(value);
+    // ✅ si escribe manual, NO obligamos a ID
+    setForm((prev) => ({ ...prev, id_cliente: NULL_OPTION }));
+  }, []);
 
-  const handleSelectProveedor = useCallback(
-    (prov) => {
-      markDirty();
-      const nombre = String(prov?.nombre ?? "").trim();
-      setProveedorInput(nombre);
-      setForm((prev) => ({
-        ...prev,
-        id_proveedor: prov?.id != null ? String(prov.id) : NULL_OPTION,
-      }));
-      setProveedorFocus(false);
-    },
-    [markDirty]
-  );
+  const handleSelectCliente = useCallback((cliente) => {
+    const nombre = String(cliente?.nombre ?? "").trim();
+    setClienteInput(nombre);
+    setForm((prev) => ({
+      ...prev,
+      id_cliente: cliente?.id != null ? String(cliente.id) : NULL_OPTION,
+    }));
+    setClienteFocus(false);
+  }, []);
 
-  const startAddProveedor = useCallback(() => {
-    markDirty();
-    setProveedorFocus(false);
-    setAddUI({ open: true, field: "id_proveedor", text: "", saving: false });
-    setForm((prev) => ({ ...prev, id_proveedor: ADD_OPTION }));
-  }, [markDirty]);
+  const startAddCliente = useCallback(() => {
+    setClienteFocus(false);
+    setAddUI({ open: true, field: "id_cliente", text: "", saving: false });
+    setForm((prev) => ({ ...prev, id_cliente: ADD_OPTION }));
+  }, []);
 
   const filteredProveedores = useMemo(() => {
     const all = Array.isArray(safeLists.proveedores) ? safeLists.proveedores : [];
     const q = proveedorInput.trim().toLowerCase();
     if (!proveedorFocus || q.length < 1) return [];
-    return all
-      .filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q))
-      .slice(0, 25);
+    return all.filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
   }, [safeLists.proveedores, proveedorInput, proveedorFocus]);
 
-  // --- DETALLES
-  const handleDetalleInputChange = useCallback(
-    (e) => {
-      markDirty();
-      const value = e.target.value;
-      setDetalleInput(value);
-      setForm((prev) => ({ ...prev, id_detalle: NULL_OPTION }));
-    },
-    [markDirty]
-  );
+  const handleProveedorInputChange = useCallback((e) => {
+    const value = e.target.value;
+    setProveedorInput(value);
+    setForm((prev) => ({ ...prev, id_proveedor: NULL_OPTION }));
+  }, []);
 
-  const handleSelectDetalle = useCallback(
-    (det) => {
-      markDirty();
-      const nombre = String(det?.nombre ?? "").trim();
-      setDetalleInput(nombre);
-      setForm((prev) => ({
-        ...prev,
-        id_detalle: det?.id != null ? String(det.id) : NULL_OPTION,
-      }));
-      setDetalleFocus(false);
-    },
-    [markDirty]
-  );
+  const handleSelectProveedor = useCallback((prov) => {
+    const nombre = String(prov?.nombre ?? "").trim();
+    setProveedorInput(nombre);
+    setForm((prev) => ({
+      ...prev,
+      id_proveedor: prov?.id != null ? String(prov.id) : NULL_OPTION,
+    }));
+    setProveedorFocus(false);
+  }, []);
 
-  const startAddDetalle = useCallback(() => {
-    markDirty();
-    setDetalleFocus(false);
-    setAddUI({ open: true, field: "id_detalle", text: "", saving: false });
-    setForm((prev) => ({ ...prev, id_detalle: ADD_OPTION }));
-  }, [markDirty]);
+  const startAddProveedor = useCallback(() => {
+    setProveedorFocus(false);
+    setAddUI({ open: true, field: "id_proveedor", text: "", saving: false });
+    setForm((prev) => ({ ...prev, id_proveedor: ADD_OPTION }));
+  }, []);
 
   const filteredDetalles = useMemo(() => {
     const all = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
     const q = detalleInput.trim().toLowerCase();
     if (!detalleFocus || q.length < 1) return [];
-    return all
-      .filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q))
-      .slice(0, 25);
+    return all.filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
   }, [safeLists.detalles, detalleInput, detalleFocus]);
 
+  const handleDetalleInputChange = useCallback((e) => {
+    const value = e.target.value;
+    setDetalleInput(value);
+    setForm((prev) => ({ ...prev, id_detalle: NULL_OPTION }));
+  }, []);
+
+  const handleSelectDetalle = useCallback((det) => {
+    const nombre = String(det?.nombre ?? "").trim();
+    setDetalleInput(nombre);
+    setForm((prev) => ({
+      ...prev,
+      id_detalle: det?.id != null ? String(det.id) : NULL_OPTION,
+    }));
+    setDetalleFocus(false);
+  }, []);
+
+  const startAddDetalle = useCallback(() => {
+    setDetalleFocus(false);
+    setAddUI({ open: true, field: "id_detalle", text: "", saving: false });
+    setForm((prev) => ({ ...prev, id_detalle: ADD_OPTION }));
+  }, []);
+
   /* =========================
-     Payload final (EDIT)
+     Payload final (TODO opcional salvo fecha/periodo)
   ========================= */
   const payload = useMemo(() => {
     const isAdd = (v) => v === ADD_OPTION;
@@ -700,30 +773,43 @@ export default function ModalEditarMovimiento({
       return Number.isFinite(n) && n > 0 ? n : null;
     };
 
-    const toRequiredId = (v) => {
-      if (isAdd(v)) return null;
-      const n = Number(v);
-      return Number.isFinite(n) && n > 0 ? n : null;
-    };
+    // ✅ Item (si están vacíos => 0)
+    const cantidad = Math.max(0, safeNumber(form.cantidad));
+    const precio = Math.max(0, safeNumber(form.precio));
+    const iva_pct = Math.max(0, safeNumber(form.iva_pct));
 
+    const t = calcItemTotals(cantidad, precio, iva_pct);
+
+    // ✅ Si el usuario edita Monto total manual, lo respetamos como "total",
+    // pero mantenemos consistencia recalculando item en submit (ya lo haces).
+    // Acá mandamos el total calculado por item, que es lo más consistente.
+    // Si querés mandar el "form.monto_total" manual sí o sí, avisame y lo cambio.
     return {
       id_movimiento: form.id_movimiento,
 
       fecha: form.fecha,
-      periodo: normalizePeriodoToMMYYYY(form.periodo),
+      periodo: periodoMMYYYY_to_YYYYMM(normalizePeriodoToMMYYYY(form.periodo)),
 
-      id_clasificacion: toRequiredId(form.id_clasificacion),
-      id_tipo_venta: toRequiredId(form.id_tipo_venta),
+      // ✅ TODOS opcionales (null si no hay)
+      id_clasificacion: toNullableId(form.id_clasificacion),
+      id_tipo_venta: toNullableId(form.id_tipo_venta),
       id_cuenta_corriente: toNullableId(form.id_cuenta_corriente),
-      id_tipo_movimiento: toRequiredId(form.id_tipo_movimiento),
+      id_tipo_movimiento: toNullableId(form.id_tipo_movimiento),
 
       id_cliente: toNullableId(form.id_cliente),
       id_proveedor: toNullableId(form.id_proveedor),
       id_detalle: toNullableId(form.id_detalle),
 
-      monto_total: Math.max(0, Math.round(safeNumber(form.monto_total) * 100) / 100),
+      id_medio_pago: toNullableId(form.id_medio_pago),
 
-      id_medio_pago: toRequiredId(form.id_medio_pago),
+      // ✅ totales (pueden ser 0)
+      cantidad: Math.round(cantidad * 1000) / 1000,
+      precio: Math.round(precio * 100) / 100,
+      iva_pct: Math.round(iva_pct * 100) / 100,
+      subtotal: t.subtotal,
+      iva_monto: t.iva_monto,
+      total: t.total,
+      monto_total: Math.max(0, Math.round(t.total * 100) / 100),
     };
   }, [form]);
 
@@ -731,72 +817,79 @@ export default function ModalEditarMovimiento({
     e.preventDefault();
 
     if (addUI.open) {
-      showToast(
-        "advertencia",
-        "Terminá de crear el registro (o cancelá) antes de guardar.",
-        3200
-      );
+      showToast("advertencia", "Terminá de crear el registro (o cancelá) antes de guardar.", 3200);
       return;
     }
 
     setSaving(true);
+    showToast("cargando", "Guardando cambios…", 12000);
 
     try {
-      const per = normalizePeriodoToMMYYYY(form.periodo);
-      if (!per || !/^\d{2}-\d{4}$/.test(per)) {
-        throw new Error('Período inválido. Usá formato "MM-YYYY".');
+      // ✅ ÚNICO obligatorio: fecha válida
+      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) {
+        throw new Error("Fecha inválida.");
       }
 
-      const req = [
+      // ✅ Período: si está vacío => se completa desde la fecha.
+      const perUI = normalizePeriodoToMMYYYY(form.periodo);
+      const perAuto = periodoFromISODate(form.fecha);
+
+      const finalPer = perUI || perAuto;
+      if (!finalPer || !/^\d{2}-\d{4}$/.test(finalPer)) {
+        // si igual vino raro, no bloqueamos: mandamos el auto si existe, si no vacío
+        // (pero lo más sano es exigir formato; acá lo aflojamos como pediste)
+      }
+
+      // ✅ Si hay "Agregar…" seleccionado en algún campo, NO bloqueamos,
+      // pero lo mandamos como null (ya lo hace payload).
+      // Te aviso para que no quede colgado sin querer.
+      const addFields = [
         ["id_clasificacion", "Clasificación"],
         ["id_tipo_venta", "Tipo de venta"],
         ["id_tipo_movimiento", "Tipo de movimiento"],
         ["id_medio_pago", "Medio de pago"],
-      ];
-      for (const [k, label] of req) {
-        if (form[k] === ADD_OPTION)
-          throw new Error(`Tenés "${label}" en "Agregar…". Guardalo primero.`);
-        const n = Number(form[k]);
-        if (!Number.isFinite(n) || n <= 0)
-          throw new Error(`Seleccioná un valor válido para "${label}".`);
-      }
-
-      const opc = [
         ["id_cuenta_corriente", "Cuenta corriente"],
         ["id_cliente", "Cliente"],
         ["id_proveedor", "Proveedor"],
         ["id_detalle", "Detalle"],
       ];
-      for (const [k, label] of opc) {
-        if (form[k] === ADD_OPTION)
-          throw new Error(`Tenés "${label}" en "Agregar…". Guardalo o elegí otra opción.`);
+      const hasAdd = addFields.filter(([k]) => form[k] === ADD_OPTION);
+      if (hasAdd.length) {
+        const labels = hasAdd.map((x) => x[1]).join(", ");
+        showToast(
+          "advertencia",
+          `Tenés en "AGREGAR…" (${labels}). Se guardará sin ese campo (null).`,
+          3800
+        );
       }
 
-      const mt = safeNumber(form.monto_total);
-      if (mt <= 0) throw new Error("Ingresá un monto total mayor a 0.");
+      // ✅ Ya no obligamos a seleccionar desde sugerencias:
+      // si escribiste texto y no hay ID, simplemente se guarda null.
+      // (Si querés, acá podés auto-limpiar el texto, pero lo dejo como está.)
 
-      if (
-        clienteInput.trim() &&
-        (form.id_cliente === NULL_OPTION || form.id_cliente === "" || form.id_cliente == null)
-      ) {
-        throw new Error("Seleccioná el cliente desde las sugerencias (o agregalo) para guardar el ID.");
-      }
+      // ✅ Recalculo final coherente de item antes de mandar
+      const cantidad = Math.max(0, safeNumber(form.cantidad));
+      const precio = Math.max(0, safeNumber(form.precio));
+      const iva_pct = Math.max(0, safeNumber(form.iva_pct));
+      const t = calcItemTotals(cantidad, precio, iva_pct);
 
-      if (
-        proveedorInput.trim() &&
-        (form.id_proveedor === NULL_OPTION || form.id_proveedor === "" || form.id_proveedor == null)
-      ) {
-        throw new Error("Seleccioná el proveedor desde las sugerencias (o agregalo) para guardar el ID.");
-      }
+      const payloadFinal = {
+        ...payload,
+        // ✅ forzamos periodo final (auto si faltó)
+        periodo: periodoMMYYYY_to_YYYYMM(finalPer || ""),
+        cantidad: Math.round(cantidad * 1000) / 1000,
+        precio: Math.round(precio * 100) / 100,
+        iva_pct: Math.round(iva_pct * 100) / 100,
+        subtotal: t.subtotal,
+        iva_monto: t.iva_monto,
+        total: t.total,
+        monto_total: Math.max(0, Math.round(t.total * 100) / 100),
+      };
 
-      if (
-        detalleInput.trim() &&
-        (form.id_detalle === NULL_OPTION || form.id_detalle === "" || form.id_detalle == null)
-      ) {
-        throw new Error("Seleccioná el detalle desde las sugerencias (o agregalo) para guardar el ID.");
-      }
+      await onSave?.(payloadFinal);
 
-      await onSave?.(payload);
+      showToast("exito", "Movimiento actualizado.", 2400);
+      onClose?.();
     } catch (e2) {
       showToast("error", e2?.message || "Error guardando movimiento.", 4200);
       setSaving(false);
@@ -804,24 +897,15 @@ export default function ModalEditarMovimiento({
   };
 
   /* =========================
-     Helper UI: elegir "Agregar…"
+     UI helpers: select + inline add
   ========================= */
   const onSelectWithAdd = useCallback(
-    (field, rawValue, castToNumber) => {
-      markDirty();
-
+    (field, rawValue) => {
       if (rawValue === ADD_OPTION) {
-        // mini modal para estos 3:
-        const isMini =
-          field === "id_cliente" || field === "id_proveedor" || field === "id_detalle";
-
+        const isMini = field === "id_cliente" || field === "id_proveedor" || field === "id_detalle";
+        if (isMini) return;
+        setAddUI({ open: false, field, text: "", saving: false });
         setForm((p) => ({ ...p, [field]: ADD_OPTION }));
-
-        if (isMini) {
-          setAddUI({ open: true, field, text: "", saving: false });
-        } else {
-          setAddUI({ open: false, field, text: "", saving: false });
-        }
         return;
       }
 
@@ -829,13 +913,11 @@ export default function ModalEditarMovimiento({
         setAddUI({ open: false, field: null, text: "", saving: false });
       }
 
-      const v = castToNumber ? Number(rawValue) : rawValue;
-      setForm((p) => ({ ...p, [field]: v }));
+      setForm((p) => ({ ...p, [field]: rawValue }));
     },
-    [addUI.field, addUI.open, markDirty]
+    [addUI.field, addUI.open]
   );
 
-  // Inline add: SOLO para selects (no cliente/proveedor/detalle)
   const renderAddInline = (field) => {
     if (addUI.open) return null;
     if (addUI.field !== field) return null;
@@ -873,7 +955,9 @@ export default function ModalEditarMovimiento({
           <button
             type="button"
             className="mit-btn mit-btn--solid"
-            onClick={guardarNuevoCatalogo}
+            onClick={async () => {
+              await guardarNuevoCatalogo();
+            }}
             disabled={addUI.saving}
           >
             {addUI.saving ? "Guardando..." : "Guardar"}
@@ -883,9 +967,7 @@ export default function ModalEditarMovimiento({
     );
   };
 
-  const miniOpen =
-    addUI.open && ["id_cliente", "id_proveedor", "id_detalle"].includes(addUI.field);
-
+  const miniOpen = addUI.open && ["id_cliente", "id_proveedor", "id_detalle"].includes(addUI.field);
   const miniTitle =
     addUI.field === "id_cliente"
       ? "Nuevo cliente"
@@ -906,19 +988,18 @@ export default function ModalEditarMovimiento({
   if (!open) return null;
 
   return (
-    // ✅ NO tiene onClick para cerrar por overlay
     <div className="mi-modal__overlay">
       <div
         className="mi-modal__container mi-modal__container--mov"
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: 1180 }}
       >
-        {/* Header */}
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar movimiento</h2>
-            <p className="mi-modal__subtitle">Modificá los campos y guardá.</p>
+            <p className="mi-modal__subtitle">Actualizá los campos y guardá.</p>
           </div>
 
           <button
@@ -929,69 +1010,76 @@ export default function ModalEditarMovimiento({
             disabled={saving}
             type="button"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            ✕
           </button>
         </div>
 
-        {/* Body */}
-        <form className="mit-modal__body" onSubmit={submit}>
-          <div className="mi-tabpanel is-active">
-            <div className="mi-grid">
-              {/* Datos generales */}
-              <article className="mi-card">
-                <h3 className="mi-card__title">Datos generales</h3>
+        <form onSubmit={submit} style={{ padding: 18 }}>
+          <div className="fl-grid" style={{ marginBottom: 14 }}>
+            <div className="fl-field">
+              <input
+                ref={fechaRef}
+                className="fl-input"
+                type="date"
+                value={form.fecha}
+                onChange={(e) => onFechaChange(e.target.value)}
+                disabled={saving}
+                onClick={openDatePicker}
+                onFocus={openDatePicker}
+              />
+              <label className="fl-label">Fecha</label>
+            </div>
 
+            <div className="fl-field">
+              <input
+                className="fl-input"
+                placeholder="MM-YYYY"
+                inputMode="numeric"
+                value={form.periodo}
+                onChange={(e) => onPeriodoChange(e.target.value)}
+                disabled={saving}
+              />
+              <label className="fl-label">Período (MM-YYYY)</label>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 14 }}>
+            {/* Izquierda */}
+            <div
+              style={{
+                border: "1px solid rgba(148,163,184,.45)",
+                borderRadius: 14,
+                overflow: "hidden",
+                background: "#fff",
+              }}
+            >
+              <div
+                style={{
+                  padding: "12px 12px",
+                  background: "rgba(15, 23, 42, 0.04)",
+                  borderBottom: "1px solid rgba(148,163,184,.35)",
+                  fontWeight: 900,
+                }}
+              >
+                Datos del movimiento
+              </div>
+
+              <div style={{ padding: 12 }}>
                 <div className="fl-grid">
-                  <div className="fl-field">
-                    <input
-                      ref={fechaRef}
-                      className="fl-input"
-                      type="date"
-                      placeholder=" "
-                      value={form.fecha}
-                      onChange={(e) => onChange("fecha", e.target.value)}
-                      disabled={saving}
-                      onClick={openDatePicker}
-                      onFocus={openDatePicker}
-                      onKeyDown={(e) => {
-                        if (e.key === "Tab" || e.key === "Shift") return;
-                        e.preventDefault();
-                      }}
-                      onPaste={(e) => e.preventDefault()}
-                    />
-                    <label className="fl-label">Fecha</label>
-                  </div>
-
-                  <div className="fl-field">
-                    <input
-                      className="fl-input"
-                      placeholder="MM-YYYY"
-                      inputMode="numeric"
-                      value={form.periodo}
-                      onChange={(e) => onPeriodoChange(e.target.value)}
-                      disabled={saving}
-                    />
-                    <label className="fl-label">Período (MM-YYYY)</label>
-                  </div>
-
+                  {/* Clasificación */}
                   <div className="fl-field">
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_clasificacion)}
-                      onChange={(e) =>
-                        onSelectWithAdd("id_clasificacion", e.target.value, true)
-                      }
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === ADD_OPTION) {
+                          setAddUI({ open: false, field: "id_clasificacion", text: "", saving: false });
+                          setForm((p) => ({ ...p, id_clasificacion: ADD_OPTION }));
+                        } else {
+                          onSelectWithAdd("id_clasificacion", v);
+                        }
+                      }}
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
@@ -1006,11 +1094,20 @@ export default function ModalEditarMovimiento({
                     {renderAddInline("id_clasificacion")}
                   </div>
 
+                  {/* Tipo venta */}
                   <div className="fl-field">
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_tipo_venta)}
-                      onChange={(e) => onSelectWithAdd("id_tipo_venta", e.target.value, true)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === ADD_OPTION) {
+                          setAddUI({ open: false, field: "id_tipo_venta", text: "", saving: false });
+                          setForm((p) => ({ ...p, id_tipo_venta: ADD_OPTION }));
+                        } else {
+                          onSelectWithAdd("id_tipo_venta", v);
+                        }
+                      }}
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar tipo de venta --</option>
@@ -1025,13 +1122,20 @@ export default function ModalEditarMovimiento({
                     {renderAddInline("id_tipo_venta")}
                   </div>
 
+                  {/* Tipo movimiento */}
                   <div className="fl-field fl-col-full">
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_tipo_movimiento)}
-                      onChange={(e) =>
-                        onSelectWithAdd("id_tipo_movimiento", e.target.value, true)
-                      }
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === ADD_OPTION) {
+                          setAddUI({ open: false, field: "id_tipo_movimiento", text: "", saving: false });
+                          setForm((p) => ({ ...p, id_tipo_movimiento: ADD_OPTION }));
+                        } else {
+                          onSelectWithAdd("id_tipo_movimiento", v);
+                        }
+                      }}
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar tipo de movimiento --</option>
@@ -1045,25 +1149,21 @@ export default function ModalEditarMovimiento({
                     <label className="fl-label">Tipo de movimiento</label>
                     {renderAddInline("id_tipo_movimiento")}
                   </div>
-                </div>
-              </article>
 
-              {/* Relaciones */}
-              <article className="mi-card">
-                <h3 className="mi-card__title">Relaciones</h3>
-
-                <div className="fl-grid">
-                  <div className="fl-field">
+                  {/* Cuenta corriente */}
+                  <div className="fl-field fl-col-full">
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_cuenta_corriente)}
-                      onChange={(e) =>
-                        onSelectWithAdd(
-                          "id_cuenta_corriente",
-                          e.target.value,
-                          e.target.value !== ADD_OPTION
-                        )
-                      }
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === ADD_OPTION) {
+                          setAddUI({ open: false, field: "id_cuenta_corriente", text: "", saving: false });
+                          setForm((p) => ({ ...p, id_cuenta_corriente: ADD_OPTION }));
+                        } else {
+                          onSelectWithAdd("id_cuenta_corriente", v);
+                        }
+                      }}
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
@@ -1078,177 +1178,7 @@ export default function ModalEditarMovimiento({
                     {renderAddInline("id_cuenta_corriente")}
                   </div>
 
-                  {/* Cliente */}
-                  <div className="fl-field" style={{ position: "relative" }}>
-                    <input
-                      ref={clienteInputRef}
-                      className="fl-input"
-                      placeholder=" "
-                      value={clienteInput}
-                      onChange={handleClienteInputChange}
-                      onFocus={() => setClienteFocus(true)}
-                      onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
-                      disabled={saving || addUI.open}
-                      autoComplete="off"
-                    />
-                    <label className="fl-label">Cliente</label>
-
-                    {clienteFocus && filteredClientes.length > 0 && (
-                      <ul
-                        style={{
-                          position: "absolute",
-                          top: "100%",
-                          left: 0,
-                          right: 0,
-                          marginTop: 4,
-                          maxHeight: 230,
-                          overflowY: "auto",
-                          borderRadius: 10,
-                          border: "1px solid rgba(148, 163, 184, 0.5)",
-                          background: "white",
-                          boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
-                          padding: 4,
-                          zIndex: 40,
-                          listStyle: "none",
-                        }}
-                      >
-                        {filteredClientes.map((c) => (
-                          <li
-                            key={c.id}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectCliente(c);
-                            }}
-                            style={{
-                              padding: "6px 10px",
-                              borderRadius: 8,
-                              cursor: "pointer",
-                              fontSize: 13,
-                              display: "flex",
-                              alignItems: "center",
-                            }}
-                            className="mi-autocomplete-item"
-                          >
-                            <span
-                              style={{
-                                flex: 1,
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                              }}
-                            >
-                              {c.nombre}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={startAddCliente}
-                      disabled={saving || addUI.saving}
-                      style={{
-                        marginTop: 8,
-                        fontSize: 12,
-                        textAlign: "left",
-                        padding: 0,
-                        background: "none",
-                        border: "none",
-                        color: "#0f766e",
-                        cursor: "pointer",
-                      }}
-                    >
-                      + Agregar nuevo cliente
-                    </button>
-                  </div>
-
-                  {/* Proveedor */}
-                  <div className="fl-field fl-col-full" style={{ position: "relative" }}>
-                    <input
-                      ref={proveedorInputRef}
-                      className="fl-input"
-                      placeholder=" "
-                      value={proveedorInput}
-                      onChange={handleProveedorInputChange}
-                      onFocus={() => setProveedorFocus(true)}
-                      onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
-                      disabled={saving || addUI.open}
-                      autoComplete="off"
-                    />
-                    <label className="fl-label">Proveedor</label>
-
-                    {proveedorFocus && filteredProveedores.length > 0 && (
-                      <ul
-                        style={{
-                          position: "absolute",
-                          top: "100%",
-                          left: 0,
-                          right: 0,
-                          marginTop: 4,
-                          maxHeight: 230,
-                          overflowY: "auto",
-                          borderRadius: 10,
-                          border: "1px solid rgba(148, 163, 184, 0.5)",
-                          background: "white",
-                          boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
-                          padding: 4,
-                          zIndex: 40,
-                          listStyle: "none",
-                        }}
-                      >
-                        {filteredProveedores.map((p) => (
-                          <li
-                            key={p.id}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectProveedor(p);
-                            }}
-                            style={{
-                              padding: "6px 10px",
-                              borderRadius: 8,
-                              cursor: "pointer",
-                              fontSize: 13,
-                              display: "flex",
-                              alignItems: "center",
-                            }}
-                            className="mi-autocomplete-item"
-                          >
-                            <span
-                              style={{
-                                flex: 1,
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                              }}
-                            >
-                              {p.nombre}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={startAddProveedor}
-                      disabled={saving || addUI.saving}
-                      style={{
-                        marginTop: 8,
-                        fontSize: 12,
-                        textAlign: "left",
-                        padding: 0,
-                        background: "none",
-                        border: "none",
-                        color: "#0f766e",
-                        cursor: "pointer",
-                      }}
-                    >
-                      + Agregar nuevo proveedor
-                    </button>
-                  </div>
-
-                  {/* Detalle */}
+                  {/* Detalle (autocomplete) */}
                   <div className="fl-field fl-col-full" style={{ position: "relative" }}>
                     <input
                       ref={detalleInputRef}
@@ -1271,14 +1201,14 @@ export default function ModalEditarMovimiento({
                           left: 0,
                           right: 0,
                           marginTop: 4,
-                          maxHeight: 150,
+                          maxHeight: 180,
                           overflowY: "auto",
                           borderRadius: 10,
                           border: "1px solid rgba(148, 163, 184, 0.5)",
                           background: "white",
                           boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
                           padding: 4,
-                          zIndex: 40,
+                          zIndex: 60,
                           listStyle: "none",
                         }}
                       >
@@ -1332,34 +1262,86 @@ export default function ModalEditarMovimiento({
                       + Agregar nuevo detalle
                     </button>
                   </div>
-                </div>
-              </article>
 
-              {/* Pago */}
-              <article className="mi-card mi-card--full">
-                <h3 className="mi-card__title">Pago</h3>
-
-                <div className="fl-grid">
-                  <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_medio_pago)}
-                      onChange={(e) => onSelectWithAdd("id_medio_pago", e.target.value, true)}
-                      disabled={saving}
+                  {/* ✅ ITEM EDITABLE */}
+                  <div className="fl-field fl-col-full" style={{ marginTop: 4 }}>
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        fontSize: 13,
+                        marginBottom: 8,
+                        paddingTop: 6,
+                        borderTop: "1px dashed rgba(148,163,184,.55)",
+                      }}
                     >
-                      <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
-                      {(safeLists.mediosPago || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                    </select>
-                    <label className="fl-label">Medio de pago</label>
-                    {renderAddInline("id_medio_pago")}
+                      Ítem del movimiento (editable)
+                    </div>
+
+                    <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                      <div className="fl-field">
+                        <input
+                          className="fl-input"
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          placeholder=" "
+                          value={form.cantidad}
+                          onChange={(e) => onCantidadChange(e.target.value)}
+                          disabled={saving}
+                        />
+                        <label className="fl-label">Cantidad</label>
+                      </div>
+
+                      <div className="fl-field">
+                        <input
+                          className="fl-input"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder=" "
+                          value={form.precio}
+                          onChange={(e) => onPrecioChange(e.target.value)}
+                          disabled={saving}
+                        />
+                        <label className="fl-label">Precio unitario</label>
+                      </div>
+
+                      {/* ✅ IVA selector */}
+                      <div className="fl-field">
+                        <select
+                          className="fl-input fl-select"
+                          value={String(form.iva_pct)}
+                          onChange={(e) => onIvaPctChange(e.target.value)}
+                          disabled={saving}
+                        >
+                          {IVA_OPTIONS.map((x) => (
+                            <option key={x.value} value={x.value}>
+                              {x.label}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="fl-label">IVA %</label>
+                      </div>
+                    </div>
+
+                    <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 10 }}>
+                      <div className="fl-field">
+                        <input className="fl-input" value={form.subtotal} disabled />
+                        <label className="fl-label">Subtotal</label>
+                      </div>
+                      <div className="fl-field">
+                        <input className="fl-input" value={form.iva_monto} disabled />
+                        <label className="fl-label">IVA $</label>
+                      </div>
+                      <div className="fl-field">
+                        <input className="fl-input" value={form.total} disabled />
+                        <label className="fl-label">Total</label>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="fl-field">
+                  {/* ✅ Monto total (si querés tocarlo, recalcula precio) */}
+                  <div className="fl-field fl-col-full">
                     <input
                       className="fl-input"
                       type="number"
@@ -1367,47 +1349,259 @@ export default function ModalEditarMovimiento({
                       step="0.01"
                       placeholder=" "
                       value={form.monto_total}
-                      onChange={(e) =>
-                        onChange("monto_total", e.target.value === "" ? "" : Number(e.target.value))
-                      }
+                      onChange={(e) => onMontoTotalManual(e.target.value)}
                       disabled={saving}
                     />
-                    <label className="fl-label">Monto total</label>
+                    <label className="fl-label">Monto total (ajusta el precio)</label>
                   </div>
                 </div>
-              </article>
+              </div>
             </div>
-          </div>
 
-          {/* Mini modal (cliente/proveedor/detalle) */}
-          <AddCatalogMiniModal
-            open={miniOpen}
-            title={miniTitle}
-            value={addUI.text}
-            saving={addUI.saving}
-            onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
-            onCancel={cancelMini}
-            onSave={guardarNuevoCatalogo}
-          />
-
-          {/* Footer */}
-          <div className="mit-actions">
-            <div className="mit-help">{saving ? "Guardando…" : " "}</div>
-
-            <button
-              type="button"
-              className="mit-btn mit-btn--ghost"
-              onClick={cerrar}
-              disabled={saving}
+            {/* Derecha */}
+            <aside
+              style={{
+                border: "1px solid rgba(148,163,184,.45)",
+                borderRadius: 14,
+                padding: 12,
+                background: "#fff",
+              }}
             >
-              Cancelar
-            </button>
+              <div style={{ fontWeight: 900, marginBottom: 10 }}>Relaciones y pago</div>
 
-            <button type="submit" className="mit-btn mit-btn--solid" disabled={saving}>
-              {saving ? "Guardando..." : "Guardar"}
-            </button>
+              <div className="fl-grid" style={{ gridTemplateColumns: "1fr" }}>
+                {/* Medio pago */}
+                <div className="fl-field">
+                  <select
+                    className="fl-input fl-select"
+                    value={String(form.id_medio_pago)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === ADD_OPTION) {
+                        setAddUI({ open: false, field: "id_medio_pago", text: "", saving: false });
+                        setForm((p) => ({ ...p, id_medio_pago: ADD_OPTION }));
+                      } else {
+                        onSelectWithAdd("id_medio_pago", v);
+                      }
+                    }}
+                    disabled={saving}
+                  >
+                    <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
+                    {(safeLists.mediosPago || []).map((x) => (
+                      <option key={x.id} value={String(x.id)}>
+                        {x.nombre}
+                      </option>
+                    ))}
+                    <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+                  </select>
+                  <label className="fl-label">Medio de pago</label>
+                  {renderAddInline("id_medio_pago")}
+                </div>
+
+                {/* Cliente */}
+                <div className="fl-field" style={{ position: "relative" }}>
+                  <input
+                    ref={clienteInputRef}
+                    className="fl-input"
+                    placeholder=" "
+                    value={clienteInput}
+                    onChange={handleClienteInputChange}
+                    onFocus={() => setClienteFocus(true)}
+                    onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
+                    disabled={saving || addUI.open}
+                    autoComplete="off"
+                  />
+                  <label className="fl-label">Cliente</label>
+
+                  {clienteFocus && filteredClientes.length > 0 && (
+                    <ul
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        marginTop: 4,
+                        maxHeight: 230,
+                        overflowY: "auto",
+                        borderRadius: 10,
+                        border: "1px solid rgba(148, 163, 184, 0.5)",
+                        background: "white",
+                        boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
+                        padding: 4,
+                        zIndex: 80,
+                        listStyle: "none",
+                      }}
+                    >
+                      {filteredClientes.map((c) => (
+                        <li
+                          key={c.id}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelectCliente(c);
+                          }}
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            fontSize: 13,
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                          className="mi-autocomplete-item"
+                        >
+                          <span
+                            style={{
+                              flex: 1,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {c.nombre}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={startAddCliente}
+                    disabled={saving || addUI.saving}
+                    style={{
+                      marginTop: 8,
+                      fontSize: 12,
+                      textAlign: "left",
+                      padding: 0,
+                      background: "none",
+                      border: "none",
+                      color: "#0f766e",
+                      cursor: "pointer",
+                    }}
+                  >
+                    + Agregar nuevo cliente
+                  </button>
+                </div>
+
+                {/* Proveedor */}
+                <div className="fl-field" style={{ position: "relative" }}>
+                  <input
+                    ref={proveedorInputRef}
+                    className="fl-input"
+                    placeholder=" "
+                    value={proveedorInput}
+                    onChange={handleProveedorInputChange}
+                    onFocus={() => setProveedorFocus(true)}
+                    onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
+                    disabled={saving || addUI.open}
+                    autoComplete="off"
+                  />
+                  <label className="fl-label">Proveedor</label>
+
+                  {proveedorFocus && filteredProveedores.length > 0 && (
+                    <ul
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        marginTop: 4,
+                        maxHeight: 230,
+                        overflowY: "auto",
+                        borderRadius: 10,
+                        border: "1px solid rgba(148, 163, 184, 0.5)",
+                        background: "white",
+                        boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
+                        padding: 4,
+                        zIndex: 80,
+                        listStyle: "none",
+                      }}
+                    >
+                      {filteredProveedores.map((p) => (
+                        <li
+                          key={p.id}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelectProveedor(p);
+                          }}
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            fontSize: 13,
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                          className="mi-autocomplete-item"
+                        >
+                          <span
+                            style={{
+                              flex: 1,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {p.nombre}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={startAddProveedor}
+                    disabled={saving || addUI.saving}
+                    style={{
+                      marginTop: 8,
+                      fontSize: 12,
+                      textAlign: "left",
+                      padding: 0,
+                      background: "none",
+                      border: "none",
+                      color: "#0f766e",
+                      cursor: "pointer",
+                    }}
+                  >
+                    + Agregar nuevo proveedor
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="mit-btn mit-btn--solid"
+                  style={{ width: "100%", height: 44 }}
+                >
+                  {saving ? "Guardando..." : "Guardar"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={cerrar}
+                  disabled={saving}
+                  className="mit-btn mit-btn--ghost"
+                  style={{ width: "100%", height: 44 }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </aside>
           </div>
         </form>
+
+        <AddCatalogMiniModal
+          open={miniOpen}
+          title={miniTitle}
+          value={addUI.text}
+          saving={addUI.saving}
+          onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
+          onCancel={cancelMini}
+          onSave={guardarNuevoCatalogo}
+        />
       </div>
     </div>
   );

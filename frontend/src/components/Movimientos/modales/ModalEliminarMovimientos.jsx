@@ -1,7 +1,44 @@
 // src/components/Movimientos/modales/ModalEliminarMovimientos.jsx
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, useMemo } from "react";
 import { FaTrashAlt, FaTimes } from "react-icons/fa";
 import "./ModalEliminarMovimientos.css";
+
+function moneyARS(v) {
+  const n = Number(v || 0);
+  if (!Number.isFinite(n)) return String(v ?? "—");
+  try {
+    return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
+  } catch {
+    return `$${n.toFixed(2)}`;
+  }
+}
+
+function safeText(v) {
+  const s = String(v ?? "").trim();
+  return s ? s : "—";
+}
+
+// ✅ toma el TOTAL real del movimiento (prioridad: monto_total)
+function getMontoTotal(row) {
+  if (!row || typeof row !== "object") return null;
+
+  const candidates = [
+    row.monto_total, // ✅ principal en tu tabla
+    row.total,       // items / backend alternativo
+    row.total_item,  // items alternativo
+    row.subtotal,    // por si viene subtotal
+    row.monto,       // compat viejo
+  ];
+
+  for (const c of candidates) {
+    if (c === null || c === undefined || c === "") continue;
+    const n = Number(c);
+    if (Number.isFinite(n)) return n;
+    // si viene como string raro pero no convertible, igual lo devolvemos como "texto"
+    return c;
+  }
+  return null;
+}
 
 export default function ModalEliminarMovimientos({
   open,
@@ -9,7 +46,7 @@ export default function ModalEliminarMovimientos({
   loading = false,
   onClose,
   onConfirm,
-  onToast, // ✅ nuevo: lo maneja el padre (Movimientos) para que NO desaparezca al cerrar modal
+  onToast,
 }) {
   const cancelRef = useRef(null);
 
@@ -23,58 +60,62 @@ export default function ModalEliminarMovimientos({
     onClose?.();
   }, [loading, onClose]);
 
+  const handleConfirm = useCallback(async () => {
+    if (loading) return;
+
+    showToast("cargando", "Eliminando movimiento…", 12000);
+
+    try {
+      await onConfirm?.(); // el padre hace la API
+      showToast("exito", "Movimiento eliminado.", 2600);
+      // El cierre lo maneja el padre (como lo tenés ahora)
+    } catch (e) {
+      showToast("error", e?.message || "No se pudo eliminar el movimiento.", 4200);
+    }
+  }, [loading, onConfirm, showToast]);
+
   useEffect(() => {
     if (!open) return;
+
     setTimeout(() => cancelRef.current?.focus(), 0);
 
     const onKeyDown = (e) => {
       if (e.key === "Escape") cerrar();
       if (e.key === "Enter") {
-        // Enter confirma, pero evitamos doble click si está loading
         if (!loading) handleConfirm();
       }
     };
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, cerrar, loading]);
+  }, [open, cerrar, loading, handleConfirm]);
 
-  const idMov = row?.id_movimiento ?? "—";
-  const tipo = row?.tipo ?? row?.tipo_movimiento ?? "—";
-  const concepto = row?.concepto ?? row?.detalle ?? row?.descripcion ?? "—";
-  const monto =
-    row?.monto != null
-      ? (() => {
-          const n = Number(row.monto);
-          if (!Number.isFinite(n)) return String(row.monto);
-          try {
-            return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
-          } catch {
-            return `$${n.toFixed(2)}`;
-          }
-        })()
-      : "—";
+  const view = useMemo(() => {
+    const idMov = row?.id_movimiento ?? "—";
 
-  const handleConfirm = async () => {
-    if (loading) return;
+    // ✅ tipo: priorizamos los campos reales
+    const tipo = safeText(row?.tipo_movimiento ?? row?.tipo_venta ?? row?.tipo ?? "");
 
-    // ✅ toast “cargando” largo, el padre puede reemplazar luego por éxito/error
-    showToast("cargando", "Eliminando movimiento…", 12000);
+    // ✅ concepto: en tu sistema es "detalle" muchas veces
+    const concepto = safeText(
+      row?.detalle ??
+        row?.concepto ??
+        row?.descripcion ??
+        row?.observacion ??
+        ""
+    );
 
-    try {
-      await onConfirm?.(); // el padre hace la API
-      // Si el padre ya muestra toast de éxito, esto no molesta, pero podés dejarlo igual.
-      showToast("exito", "Movimiento eliminado.", 2600);
+    const montoRaw = getMontoTotal(row);
 
-      // OJO: cerrar el modal lo hace el padre en tu flujo (setOpenDel(false))
-      // Si querés cerrarlo acá también, descomentá:
-      // cerrar();
-    } catch (e) {
-      // ✅ si onConfirm llega a tirar error, lo mostramos
-      showToast("error", e?.message || "No se pudo eliminar el movimiento.", 4200);
-    }
-  };
+    const monto =
+      montoRaw === null
+        ? "—"
+        : typeof montoRaw === "number"
+        ? moneyARS(montoRaw)
+        : safeText(montoRaw); // si vino texto no convertible
+
+    return { idMov, tipo, concepto, monto };
+  }, [row]);
 
   if (!open) return null;
 
@@ -116,22 +157,22 @@ export default function ModalEliminarMovimientos({
         <div className="mvdel-card">
           <div className="mvdel-row">
             <span className="mvdel-label">ID Movimiento</span>
-            <span className="mvdel-value">#{idMov}</span>
+            <span className="mvdel-value">#{view.idMov}</span>
           </div>
 
           <div className="mvdel-row">
             <span className="mvdel-label">Tipo</span>
-            <span className="mvdel-value">{tipo}</span>
+            <span className="mvdel-value">{view.tipo}</span>
           </div>
 
           <div className="mvdel-row">
             <span className="mvdel-label">Concepto</span>
-            <span className="mvdel-value">{concepto}</span>
+            <span className="mvdel-value">{view.concepto}</span>
           </div>
 
           <div className="mvdel-row">
             <span className="mvdel-label">Monto</span>
-            <span className="mvdel-value">{monto}</span>
+            <span className="mvdel-value">{view.monto}</span>
           </div>
         </div>
 

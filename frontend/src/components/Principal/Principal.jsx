@@ -315,11 +315,16 @@ const Principal = () => {
       </main>
 
       {/* ================= MODALES ================= */}
-      <ModalPerfil
-        open={showPerfilModal}
-        onClose={() => setShowPerfilModal(false)}
-        usuario={usuario}
-      />
+<ModalPerfil
+  open={showPerfilModal}
+  onClose={() => setShowPerfilModal(false)}
+  usuario={usuario}
+  onLogoutRequest={() => {
+    setShowPerfilModal(false);   // opcional: cerrar el perfil
+    setShowLogoutModal(true);    // abre el confirm de logout
+  }}
+/>
+
 
       <ConfirmLogoutModal
         open={showLogoutModal}

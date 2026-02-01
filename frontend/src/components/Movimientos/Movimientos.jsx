@@ -57,7 +57,6 @@ function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "-";
 
-  // si viene "YYYY-MM-DD ..."
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
     const yyyy = m1[1];
@@ -66,7 +65,6 @@ function formatFechaDMY(v) {
     return `${dd}/${mm}/${yyyy}`;
   }
 
-  // si viene "DD/MM/YYYY"
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) {
     const dd = String(Number(m2[1])).padStart(2, "0");
@@ -88,20 +86,15 @@ function periodoToMMYYYY(input) {
   let m = "";
   let y = "";
 
-  // YYYY-MM o YYYY/MM
   if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
     const parts = s.split(/[-/]/);
     y = parts[0];
     m = parts[1];
-  }
-  // MM-YYYY o MM/YYYY
-  else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
+  } else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
     const parts = s.split(/[-/]/);
     m = parts[0];
     y = parts[1];
-  }
-  // YYYYMM o MMYYYY
-  else if (/^\d{6}$/.test(s)) {
+  } else if (/^\d{6}$/.test(s)) {
     const a = Number(s.slice(0, 4));
     if (a >= 1900 && a <= 2100) {
       y = s.slice(0, 4);
@@ -123,21 +116,18 @@ function periodoToYYYYMM(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
 
-  // si viene MM-YYYY
   if (/^\d{1,2}-\d{4}$/.test(s)) {
     const [mmRaw, yyyy] = s.split("-");
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
 
-  // si viene YYYY-MM
   if (/^\d{4}-\d{1,2}$/.test(s)) {
     const [yyyy, mmRaw] = s.split("-");
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
 
-  // si viene YYYY/MM o MM/YYYY
   if (/^\d{4}\/\d{1,2}$/.test(s)) {
     const [yyyy, mmRaw] = s.split("/");
     const mm = String(Number(mmRaw)).padStart(2, "0");
@@ -149,7 +139,6 @@ function periodoToYYYYMM(input) {
     return `${yyyy}-${mm}`;
   }
 
-  // YYYYMM o MMYYYY
   if (/^\d{6}$/.test(s)) {
     const a = Number(s.slice(0, 4));
     if (a >= 1900 && a <= 2100) {
@@ -185,7 +174,6 @@ function normalizeLists(raw) {
   const src = raw?.listas && typeof raw.listas === "object" ? raw.listas : raw;
   const getArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
 
-  // ✅ periodos UI siempre MM-YYYY
   const periodosUI = (getArr("periodos") || []).map(periodoToMMYYYY);
 
   return {
@@ -239,7 +227,6 @@ function slugifySheetName(name) {
 }
 
 function buildExportRows(rows, tab) {
-  // ✅ DETALLE (incluye FECHA + PERÍODO)
   if (tab === "detalle") {
     return rows.map((r) => ({
       FECHA: safeText(formatFechaDMY(r.fecha)),
@@ -254,7 +241,6 @@ function buildExportRows(rows, tab) {
     }));
   }
 
-  // ✅ ITEMS (con TOTAL)
   return rows.map((r) => ({
     DETALLE: safeText(r.detalle),
     CANTIDAD: numOrZero(r.cantidad),
@@ -400,6 +386,7 @@ export default function Movimientos() {
   ========================= */
   const handleCatalogCreated = useCallback((catalogo, item) => {
     const keyByCatalogo = {
+      periodos: "periodos",
       clasificaciones: "clasificaciones",
       clientes: "clientes",
       cuentas_corrientes: "cuentas_corrientes",
@@ -413,6 +400,27 @@ export default function Movimientos() {
     const listKey = keyByCatalogo[String(catalogo || "").trim()];
     if (!listKey) return;
 
+    if (listKey === "periodos") {
+      const raw = item?.nombre ?? item?.periodo ?? item?.value ?? item;
+      const ui = periodoToMMYYYY(raw);
+      if (!ui || !/^\d{2}-\d{4}$/.test(ui)) return;
+
+      setLists((prev) => {
+        const prevArr = Array.isArray(prev?.periodos) ? prev.periodos : [];
+        if (prevArr.includes(ui)) return prev;
+
+        const next = [...prevArr, ui].sort((a, b) => {
+          const [ma, ya] = a.split("-").map(Number);
+          const [mb, yb] = b.split("-").map(Number);
+          return yb !== ya ? yb - ya : mb - ma;
+        });
+
+        return { ...prev, periodos: next };
+      });
+
+      return;
+    }
+
     const newId = Number(item?.id);
     const newNombre = String(item?.nombre ?? "").trim();
     if (!Number.isFinite(newId) || newId <= 0 || !newNombre) return;
@@ -422,12 +430,29 @@ export default function Movimientos() {
       const exists = prevArr.some((x) => Number(x?.id) === newId);
       if (exists) return prev;
 
-      return {
-        ...prev,
-        [listKey]: [...prevArr, { id: newId, nombre: newNombre }],
-      };
+      return { ...prev, [listKey]: [...prevArr, { id: newId, nombre: newNombre }] };
     });
   }, []);
+
+  /* =========================
+     ✅ Refrescar SOLO períodos desde backend
+  ========================= */
+  const refreshPeriodos = useCallback(async () => {
+    try {
+      const data = await apiGet(`${API}?action=global_obtener_listas`);
+      if (!data?.exito) return;
+
+      const normalized = normalizeLists(data);
+      const nextPeriodos = Array.isArray(normalized.periodos) ? normalized.periodos : [];
+
+      setLists((prev) => ({
+        ...prev,
+        periodos: nextPeriodos,
+      }));
+    } catch {
+      // no rompas la UX si falla
+    }
+  }, [API, apiGet]);
 
   /* =========================
      Cargar listas (y setear período por defecto)
@@ -438,15 +463,13 @@ export default function Movimientos() {
 
     try {
       const data = await apiGet(`${API}?action=global_obtener_listas`);
-      if (!data.exito)
-        throw new Error(data.mensaje || "No se pudieron cargar listas.");
+      if (!data.exito) throw new Error(data.mensaje || "No se pudieron cargar listas.");
 
       const normalized = normalizeLists(data);
       setLists(normalized);
 
-      // ✅ elegir un período por defecto (el primero)
       if ((normalized.periodos || []).length) {
-        setFPeriodo((prev) => prev || normalized.periodos[0]); // MM-YYYY
+        setFPeriodo((prev) => prev || normalized.periodos[0]);
       } else {
         setFPeriodo("");
       }
@@ -464,12 +487,10 @@ export default function Movimientos() {
 
   /* =========================
      Cargar movimientos
-     ✅ SIEMPRE por período (NO "Todos")
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
-      const periodoUI =
-        typeof opts.periodo === "string" ? opts.periodo : fPeriodo; // MM-YYYY
+      const periodoUI = typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
       const qLocal = typeof opts.q === "string" ? opts.q : q;
 
       const perUI = periodoToMMYYYY(periodoUI);
@@ -479,7 +500,7 @@ export default function Movimientos() {
         return;
       }
 
-      const periodoAPI = periodoToYYYYMM(perUI); // YYYY-MM
+      const periodoAPI = periodoToYYYYMM(perUI);
       const cacheKey = `${periodoAPI}|${(qLocal || "").trim()}`;
 
       if (cacheRef.current.has(cacheKey)) {
@@ -498,8 +519,7 @@ export default function Movimientos() {
         if (qLocal) sp.set("q", qLocal);
 
         const data = await apiGet(`${API}?${sp.toString()}`);
-        if (!data.exito)
-          throw new Error(data.mensaje || "No se pudieron cargar movimientos.");
+        if (!data.exito) throw new Error(data.mensaje || "No se pudieron cargar movimientos.");
 
         const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
 
@@ -520,6 +540,43 @@ export default function Movimientos() {
     },
     [API, apiGet, fPeriodo, q]
   );
+
+  /* =========================
+     ✅ helper para invalidar cache del período actual
+     (IMPORTANTE: antes de usarlo en useEffect)
+  ========================= */
+  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
+    const periodoAPI = periodoToYYYYMM(periodoUI);
+    const keyPrefix = `${periodoAPI}|`;
+    for (const k of cacheRef.current.keys()) {
+      if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
+    }
+  }, []);
+
+  /* =========================
+     ✅ Sync automático del período seleccionado
+     (si un período desaparece del select, cambia al primero)
+  ========================= */
+  useEffect(() => {
+    if (!Array.isArray(lists.periodos)) return;
+
+    if (lists.periodos.length === 0) {
+      if (fPeriodo !== "") {
+        setFPeriodo("");
+        setRows([]);
+      }
+      return;
+    }
+
+    const current = periodoToMMYYYY(fPeriodo);
+
+    if (current && !lists.periodos.includes(current)) {
+      const next = lists.periodos[0];
+      setFPeriodo(next);
+      invalidateCacheForPeriodo(next);
+      loadRows({ periodo: next, q: "" });
+    }
+  }, [lists.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
 
   /* =========================
      Init
@@ -581,7 +638,6 @@ export default function Movimientos() {
       const sheetName = slugifySheetName(`Movimientos_${tab}`);
       const ws = XLSX.utils.json_to_sheet(dataToExport);
 
-      // Formato moneda solo si existe TOTAL
       const headers = Object.keys(dataToExport[0] || {});
       const totalColIndex = headers.findIndex((h) => h === "TOTAL");
       if (totalColIndex >= 0 && ws["!ref"]) {
@@ -604,17 +660,6 @@ export default function Movimientos() {
       showToast("error", e?.message || "Error exportando Excel.", 3500);
     }
   }, [filteredRows, tab, fPeriodo, showToast]);
-
-  /* =========================
-     ✅ helper para invalidar cache del período actual
-  ========================= */
-  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
-    const periodoAPI = periodoToYYYYMM(periodoUI);
-    const keyPrefix = `${periodoAPI}|`;
-    for (const k of cacheRef.current.keys()) {
-      if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
-    }
-  }, []);
 
   /* =========================
      Eliminar (confirmación) ✅ manda idUsuario
@@ -644,6 +689,9 @@ export default function Movimientos() {
       invalidateCacheForPeriodo(fPeriodo);
       await loadRows({ periodo: fPeriodo, q });
 
+      // ✅ refresca períodos para que desaparezca si quedó vacío (según tu backend)
+      await refreshPeriodos();
+
       showToast("exito", "Movimiento eliminado.", 2600);
     } catch (e) {
       setError(e.message || "Error eliminando movimiento.");
@@ -664,7 +712,6 @@ export default function Movimientos() {
 
     const payloadNorm = {
       ...(payload || {}),
-      // UI puede venir MM-YYYY; al backend mandamos YYYY-MM
       periodo: periodoToYYYYMM(payload?.periodo),
     };
 
@@ -691,7 +738,7 @@ export default function Movimientos() {
 
         const payloadNorm = {
           ...(p || {}),
-          periodo: periodoToYYYYMM(p?.periodo), // MM-YYYY -> YYYY-MM
+          periodo: periodoToYYYYMM(p?.periodo),
         };
 
         const data = await apiPostJson(`${API}?action=movimientos_crear`, {
@@ -721,14 +768,14 @@ export default function Movimientos() {
           key: "fecha",
           label: "FECHA",
           align: "left",
-          fr: .9,
+          fr: 0.9,
           render: (r) => safeText(formatFechaDMY(r.fecha)),
         },
         {
           key: "periodo",
           label: "PERÍODO",
           align: "center",
-          fr: .8,
+          fr: 0.8,
           render: (r) => safeText(periodoToMMYYYY(r.periodo)),
         },
         {
@@ -750,7 +797,7 @@ export default function Movimientos() {
           key: "tipo_movimiento",
           label: "TIPO MOV.",
           align: "center",
-          fr: .8,
+          fr: 0.8,
           render: (r) => safeText(r.tipo_movimiento),
         },
         {
@@ -784,7 +831,6 @@ export default function Movimientos() {
       ];
     }
 
-    // ✅ ITEMS
     return [
       {
         key: "detalle",
@@ -979,7 +1025,6 @@ export default function Movimientos() {
             ))}
           </div>
 
-          {/* ✅ botón abre Carga Rápida */}
           <button
             type="button"
             className="mov-btn mov-btn--primary mov-tabsCta"
@@ -1028,15 +1073,15 @@ export default function Movimientos() {
                   {columns.map((c) => {
                     if (c.key === "acciones") {
                       return (
-<div
-  key={c.key}
-  className={[
-    "mov-gridCell",
-    "mov-gridCell--actions",
-    c.align === "center" ? "is-center" : "",
-  ].join(" ")}
-  role="cell"
->
+                        <div
+                          key={c.key}
+                          className={[
+                            "mov-gridCell",
+                            "mov-gridCell--actions",
+                            c.align === "center" ? "is-center" : "",
+                          ].join(" ")}
+                          role="cell"
+                        >
                           <div className="mov-actionsInline">
                             <button
                               type="button"
@@ -1103,8 +1148,22 @@ export default function Movimientos() {
         onToast={showToast}
         onSaveBatch={async (payloads) => {
           try {
+            showToast("cargando", "Guardando carga rápida…", 12000);
+
             await saveBatchMovimientos(payloads);
+            await refreshPeriodos();
+
+            // ✅ si guardaste en otro período, te lleva ahí
+            const firstPer = Array.isArray(payloads) && payloads[0]?.periodo ? payloads[0].periodo : "";
+            const ui = periodoToMMYYYY(firstPer) || fPeriodo;
+
+            setQ("");
+            setFPeriodo(ui);
+            invalidateCacheForPeriodo(ui);
+            await loadRows({ periodo: ui, q: "" });
+
             setOpenAdd(false);
+            showToast("exito", "Carga rápida guardada.", 2400);
           } catch (e) {
             showToast("error", e?.message || "Error guardando carga rápida.", 4200);
             throw e;
@@ -1131,6 +1190,7 @@ export default function Movimientos() {
 
             invalidateCacheForPeriodo(fPeriodo);
             await loadRows({ periodo: fPeriodo, q });
+            await refreshPeriodos();
 
             setOpenEdit(false);
             setSelectedRow(null);

@@ -49,13 +49,18 @@ function formatMySQLDateOnly(value) {
   }
 }
 
-export default function ModalPerfil({ open, onClose, usuario }) {
+export default function ModalPerfil({
+  open,
+  onClose,
+  usuario,
+  onLogoutRequest, // ✅ NUEVO: para abrir el confirm logout desde Principal
+}) {
   const closeBtnRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
 
-    // foco al botón cerrar (igual que tu modal)
+    // foco al botón cerrar
     setTimeout(() => closeBtnRef.current?.focus(), 0);
 
     const onKeyDown = (e) => {
@@ -105,7 +110,7 @@ export default function ModalPerfil({ open, onClose, usuario }) {
         aria-labelledby="perfil-modal-title"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* HEADER (igual al de Movimientos) */}
+        {/* HEADER */}
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 id="perfil-modal-title" className="mi-modal__title">
@@ -128,7 +133,7 @@ export default function ModalPerfil({ open, onClose, usuario }) {
           </button>
         </div>
 
-        {/* BODY con scroll + gradiente (misma “sensación”) */}
+        {/* BODY */}
         <div className="perfil-body">
           <div className="perfil-inner">
             {/* CARD PRINCIPAL */}
@@ -169,9 +174,19 @@ export default function ModalPerfil({ open, onClose, usuario }) {
           </div>
         </div>
 
-        {/* FOOTER acciones (mismo estilo de botones que Movimientos) */}
+        {/* FOOTER acciones */}
         <div className="mit-actions">
           <div className="mit-help"> </div>
+
+          {/* ✅ Botón cerrar sesión dentro del panel */}
+          <button
+            type="button"
+            className="mit-btn mit-btn--danger"
+            onClick={() => onLogoutRequest?.()}
+            title="Cerrar sesión"
+          >
+            Cerrar sesión
+          </button>
 
           <button
             type="button"

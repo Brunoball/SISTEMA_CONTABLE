@@ -254,3 +254,13 @@
   }
   .perfil-inner{ padding: 16px; }
 }
+.mit-btn--danger{
+  background: #D32F2F;
+  color: #fff;
+  border-color: #D32F2F;
+}
+.mit-btn--danger:hover{
+  filter: brightness(.95);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px -18px rgba(211,47,47,.6);
+}

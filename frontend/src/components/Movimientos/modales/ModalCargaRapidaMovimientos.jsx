@@ -948,7 +948,7 @@ export default function ModalCargaRapidaMovimientos({
       {/* footer tabla */}
       <div className="mi-cr-table__foot">
         <button type="button" onClick={addRow} disabled={saving} className="mi-cr-addrow">
-          Agregar fila
+          + Agregar fila
         </button>
 <div className="mi-cr-totals">
   <div className="mi-cr-totalLine mi-cr-totalLine--sub">

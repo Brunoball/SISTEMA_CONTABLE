@@ -32,7 +32,7 @@
   --pp-trans: all .25s cubic-bezier(.4,0,.2,1);
 
   /* sidebar */
-  --pp-side-collapsed: 100px;
+  --pp-side-collapsed: 90px;
   --pp-side-expanded: 238px;
 
   /* topbar */
@@ -322,7 +322,6 @@ button{ font-family: inherit; }
 
 .pp-content__inner{
   width:100%;
-  max-width: 1500px;
   display:flex;
   flex-direction:column;
   gap: 18px;

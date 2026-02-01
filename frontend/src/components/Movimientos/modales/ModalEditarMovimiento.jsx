@@ -1014,34 +1014,8 @@ export default function ModalEditarMovimiento({
           </button>
         </div>
 
-        <form onSubmit={submit} style={{ padding: 18 }}>
-          <div className="fl-grid" style={{ marginBottom: 14 }}>
-            <div className="fl-field">
-              <input
-                ref={fechaRef}
-                className="fl-input"
-                type="date"
-                value={form.fecha}
-                onChange={(e) => onFechaChange(e.target.value)}
-                disabled={saving}
-                onClick={openDatePicker}
-                onFocus={openDatePicker}
-              />
-              <label className="fl-label">Fecha</label>
-            </div>
+        <form onSubmit={submit} style={{ padding: 10 }}>
 
-            <div className="fl-field">
-              <input
-                className="fl-input"
-                placeholder="MM-YYYY"
-                inputMode="numeric"
-                value={form.periodo}
-                onChange={(e) => onPeriodoChange(e.target.value)}
-                disabled={saving}
-              />
-              <label className="fl-label">Período (MM-YYYY)</label>
-            </div>
-          </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 14 }}>
             {/* Izquierda */}
@@ -1122,61 +1096,65 @@ export default function ModalEditarMovimiento({
                     {renderAddInline("id_tipo_venta")}
                   </div>
 
-                  {/* Tipo movimiento */}
-                  <div className="fl-field fl-col-full">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_tipo_movimiento)}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === ADD_OPTION) {
-                          setAddUI({ open: false, field: "id_tipo_movimiento", text: "", saving: false });
-                          setForm((p) => ({ ...p, id_tipo_movimiento: ADD_OPTION }));
-                        } else {
-                          onSelectWithAdd("id_tipo_movimiento", v);
-                        }
-                      }}
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>-- Seleccionar tipo de movimiento --</option>
-                      {(safeLists.tiposMovimiento || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                    </select>
-                    <label className="fl-label">Tipo de movimiento</label>
-                    {renderAddInline("id_tipo_movimiento")}
-                  </div>
+{/* ✅ Tipo movimiento + Cuenta corriente (misma fila) */}
+<div className="fl-grid fl-col-full" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+  {/* Tipo movimiento */}
+  <div className="fl-field">
+    <select
+      className="fl-input fl-select"
+      value={String(form.id_tipo_movimiento)}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (v === ADD_OPTION) {
+          setAddUI({ open: false, field: "id_tipo_movimiento", text: "", saving: false });
+          setForm((p) => ({ ...p, id_tipo_movimiento: ADD_OPTION }));
+        } else {
+          onSelectWithAdd("id_tipo_movimiento", v);
+        }
+      }}
+      disabled={saving}
+    >
+      <option value={NULL_OPTION}>-- Seleccionar tipo de movimiento --</option>
+      {(safeLists.tiposMovimiento || []).map((x) => (
+        <option key={x.id} value={String(x.id)}>
+          {x.nombre}
+        </option>
+      ))}
+      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+    </select>
+    <label className="fl-label">Tipo de movimiento</label>
+    {renderAddInline("id_tipo_movimiento")}
+  </div>
 
-                  {/* Cuenta corriente */}
-                  <div className="fl-field fl-col-full">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_cuenta_corriente)}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === ADD_OPTION) {
-                          setAddUI({ open: false, field: "id_cuenta_corriente", text: "", saving: false });
-                          setForm((p) => ({ ...p, id_cuenta_corriente: ADD_OPTION }));
-                        } else {
-                          onSelectWithAdd("id_cuenta_corriente", v);
-                        }
-                      }}
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
-                      {(safeLists.cuentasCorrientes || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                    </select>
-                    <label className="fl-label">Cuenta corriente</label>
-                    {renderAddInline("id_cuenta_corriente")}
-                  </div>
+  {/* Cuenta corriente */}
+  <div className="fl-field">
+    <select
+      className="fl-input fl-select"
+      value={String(form.id_cuenta_corriente)}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (v === ADD_OPTION) {
+          setAddUI({ open: false, field: "id_cuenta_corriente", text: "", saving: false });
+          setForm((p) => ({ ...p, id_cuenta_corriente: ADD_OPTION }));
+        } else {
+          onSelectWithAdd("id_cuenta_corriente", v);
+        }
+      }}
+      disabled={saving}
+    >
+      <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
+      {(safeLists.cuentasCorrientes || []).map((x) => (
+        <option key={x.id} value={String(x.id)}>
+          {x.nombre}
+        </option>
+      ))}
+      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+    </select>
+    <label className="fl-label">Cuenta corriente</label>
+    {renderAddInline("id_cuenta_corriente")}
+  </div>
+</div>
+
 
                   {/* Detalle (autocomplete) */}
                   <div className="fl-field fl-col-full" style={{ position: "relative" }}>
@@ -1368,6 +1346,35 @@ export default function ModalEditarMovimiento({
               }}
             >
               <div style={{ fontWeight: 900, marginBottom: 10 }}>Relaciones y pago</div>
+
+              {/* ✅ Fecha + Período ahora acá */}
+<div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+  <div className="fl-field">
+    <input
+      ref={fechaRef}
+      className="fl-input"
+      type="date"
+      value={form.fecha}
+      onChange={(e) => onFechaChange(e.target.value)}
+      disabled={saving}
+      onClick={openDatePicker}
+      onFocus={openDatePicker}
+    />
+    <label className="fl-label">Fecha</label>
+  </div>
+
+  <div className="fl-field">
+    <input
+      className="fl-input"
+      placeholder="MM-YYYY"
+      inputMode="numeric"
+      value={form.periodo}
+      onChange={(e) => onPeriodoChange(e.target.value)}
+      disabled={saving}
+    />
+    <label className="fl-label">Período</label>
+  </div>
+</div>
 
               <div className="fl-grid" style={{ gridTemplateColumns: "1fr" }}>
                 {/* Medio pago */}
@@ -1569,7 +1576,7 @@ export default function ModalEditarMovimiento({
                 </div>
               </div>
 
-              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              <div style={{ marginTop: 12, display: "Flex", gap: 10 }}>
                 <button
                   type="submit"
                   disabled={saving}

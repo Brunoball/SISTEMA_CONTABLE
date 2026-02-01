@@ -247,7 +247,7 @@ export default function Flujo_Caja() {
                 {rows.map((r) => (
                   <div className="fc-grid fc-grid--row fc-grid--excel" key={r.fecha}>
                     <div className="fc-cell fc-date">{fmtDateES(r.fecha)}</div>
-                    <div className="fc-cell fc-num is-center">{moneyARS(r.ingresos)}</div>
+                    <div className="fc-cell fc-num is-center fc-in">{moneyARS(r.ingresos)}</div>
                     <div className="fc-cell fc-num is-center fc-eg">{moneyARS(r.egresos)}</div>
                     <div className={`fc-cell fc-num is-center fc-saldo ${Number(r.saldo) < 0 ? "is-negative" : "is-positive"}`}>
                       {moneyARS(r.saldo)}

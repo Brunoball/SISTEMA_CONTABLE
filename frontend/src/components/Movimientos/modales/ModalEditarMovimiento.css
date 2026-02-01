@@ -491,3 +491,541 @@
   gap: 10px;
   margin-top: 14px;
 }
+.mi-modal__container--mov{
+  min-width: 100%;
+  min-height: 95vh;
+}
+/* =========================
+   Carga rápida: layout full height
+========================= */
+
+/* OJO: tu modal ya es flex-column; esto hace que el contenido “crezca” */
+.mi-modal__container--mov{
+  min-width: 100%;
+  min-height: 95vh;
+  max-height: 95vh; /* clave para que el overflow se maneje bien */
+}
+
+/* Contenido interno del modal */
+.mi-modal__content{
+  padding: 18px;
+  flex: 1;           /* ocupa el alto disponible del modal */
+  min-height: 0;     /* IMPORTANTÍSIMO para permitir scroll interno */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Grid principal */
+.mi-cr-grid{
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 14px;
+}
+
+/* Panel tabla */
+.mi-cr-table{
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(148,163,184,.45);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+}
+
+/* Header tabla */
+.mi-cr-table__head{
+  display: grid;
+  grid-template-columns: 2.2fr .7fr .9fr .8fr .9fr .9fr .3fr;
+  gap: 8px;
+  padding: 10px 10px;
+  background: rgba(15, 23, 42, 0.04);
+  border-bottom: 1px solid rgba(148,163,184,.35);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+/* ✅ área scrolleable de filas: ocupa todo el alto que pueda */
+.mi-cr-table__rows{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* fila */
+.mi-cr-row{
+  display: grid;
+  grid-template-columns: 2.2fr .7fr .9fr .8fr .9fr .9fr .3fr;
+  gap: 8px;
+  padding: 10px 10px;
+  border-bottom: 1px solid rgba(148,163,184,.22);
+  align-items: center;
+  position: relative;
+}
+
+/* footer tabla (totales + botón) */
+.mi-cr-table__foot{
+  flex: 0 0 auto;
+  padding: 12px 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: center;
+  border-top: 1px solid rgba(148,163,184,.22);
+  background: #fff;
+}
+
+.mi-cr-addrow{
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(15,23,42,.14);
+  background: rgba(15,23,42,.04);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.mi-cr-totals{
+  display: flex;
+  gap: 6px;
+  justify-content: end;
+  width: 100%;
+}
+.mi-cr-totalLine{
+  display: flex;
+  gap: 12px;
+}
+.mi-cr-totalLine span{ opacity: .7; }
+.mi-cr-totalLine--big{ font-size: 16px; }
+
+/* Link “agregar” estilo consistente */
+.mi-cr-link{
+  margin-top: 6px;
+  font-size: 12px;
+  text-align: left;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #0f766e;
+  cursor: pointer;
+}
+
+/* Panel filtros a la derecha: también full-height con scroll en body */
+.mi-cr-filters{
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(148,163,184,.45);
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+
+/* Top fijo (título + fecha/periodo) */
+.mi-cr-filters__top{
+  padding: 12px;
+  border-bottom: 1px solid rgba(148,163,184,.22);
+  background: #fff;
+}
+
+.mi-cr-filters__title{
+  font-weight: 900;
+  margin-bottom: 10px;
+}
+
+/* ✅ Fecha/Periodo al lado arriba del panel */
+.mi-cr-filters__dates{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* Body scrolleable del panel */
+.mi-cr-filters__body{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* acciones pegadas abajo */
+.mi-cr-filters__actions{
+  margin-top: auto;
+  display: flex;
+  gap: 10px;
+}
+
+/* Responsive */
+@media (max-width: 980px){
+  .mi-cr-grid{
+    grid-template-columns: 1fr;
+  }
+  .mi-cr-filters__dates{
+    grid-template-columns: 1fr;
+  }
+}
+.mi-modal__header--car{
+  padding: 12px 22px;
+
+}
+.mi-modal__content--car{
+ padding: 12px 18px;
+}/* =========================
+   Carga rápida: Tabla más prolija / moderna
+   (pegalo AL FINAL del CSS para que sobreescriba)
+========================= */
+
+.mi-cr-table{
+  border: 1px solid rgba(148,163,184,.40);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(15,23,42,.06);
+}
+
+/* Header sticky + mejor look */
+.mi-cr-table__head{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: linear-gradient(180deg, rgba(15,23,42,.06), rgba(15,23,42,.035));
+  border-bottom: 1px solid rgba(148,163,184,.30);
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: .2px;
+  color: rgba(15,23,42,.85);
+  overflow: auto;
+  scrollbar-gutter: both-edges stable;
+
+  padding: 12px 0;
+  gap: 10px !important;
+}
+
+/* Scroll del cuerpo */
+.mi-cr-table__rows{
+  
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #fff;
+}
+
+
+.mi-cr-table__rows::-webkit-scrollbar-track{
+  background: rgba(2,6,23,.04);
+}
+.mi-cr-table__rows::-webkit-scrollbar-thumb{
+  background: rgba(148,163,184,.65);
+  border-radius: 999px;
+  border: 2px solid rgba(2,6,23,.06);
+}
+.mi-cr-table__rows::-webkit-scrollbar-thumb:hover{
+  background: rgba(100,116,139,.75);
+}
+
+/* Fila: más aire + hover + zebra */
+.mi-cr-row{
+  gap: 0;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(148,163,184,.18);
+  align-items: center;
+  transition: background .14s ease, transform .12s ease;
+}
+
+.mi-cr-row:nth-child(odd){
+  background: rgba(241,245,249,.45);
+}
+.mi-cr-row:hover{
+  background: rgba(226,232,240,.55);
+}
+
+/* Inputs dentro de la tabla: compactos y consistentes */
+.mi-cr-row .fl-input{
+  height: 38px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,.55);
+  box-shadow: 0 1px 2px rgba(15,23,42,.05);
+}
+.mi-cr-row .fl-input:focus{
+  border-color: var(--mi-primary-600);
+  box-shadow: 0 0 0 3px rgba(46,92,191,.14);
+}
+
+/* Select (IVA) un toque más prolijo */
+.mi-cr-row .fl-select{
+  padding-top: 10px;
+  padding-bottom: 10px;
+  cursor: pointer;
+}
+
+/* Cols numéricas: mejor look (IVA y Total) */
+.mi-cr-row > div[style*="font-weight: 700"],
+.mi-cr-row > div[style*="font-weight: 800"]{
+  font-variant-numeric: tabular-nums;
+  color: rgba(15,23,42,.88);
+}
+
+/* Link “Agregar nuevo detalle” más botón-link */
+.mi-cr-link{
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f766e;
+  text-decoration: none;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  opacity: .95;
+  transition: transform .12s ease, opacity .12s ease;
+}
+.mi-cr-link:hover{
+  opacity: 1;
+  transform: translateY(-1px);
+  text-decoration: underline;
+}
+
+/* Botón eliminar: más “icon button” */
+.mi-cr-row button[title="Eliminar fila"]{
+  height: 25px !important;
+  width: 25px;  margin: 10px auto 0;
+  padding: 0;
+  border-radius: 12px !important;
+  border: 1px solid rgba(239,68,68,.30) !important;
+  background: rgba(239,68,68,.08) !important;
+  color: rgba(185,28,28,.95);
+  display: grid;
+  place-items: center;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.mi-cr-row button[title="Eliminar fila"]:hover{
+  transform: translateY(-1px);
+  background: rgba(239,68,68,.12) !important;
+  box-shadow: 0 10px 18px rgba(239,68,68,.18);
+}
+
+/* Footer: separación y totales más claros */
+.mi-cr-table__foot{
+  border-top: 1px solid rgba(148,163,184,.20);
+  background: linear-gradient(180deg, #fff, rgba(241,245,249,.55));
+  padding: 12px 12px;
+  gap: 12px;
+}
+
+.mi-cr-addrow{
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,.55);
+  background: rgba(15,23,42,.04);
+  cursor: pointer;
+  font-weight: 900;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.mi-cr-addrow:hover{
+  transform: translateY(-1px);
+  background: rgba(15,23,42,.06);
+  box-shadow: 0 10px 18px rgba(15,23,42,.10);
+}
+
+.mi-cr-totals{
+  justify-items: end;
+  gap: 6px;
+}
+.mi-cr-totalLine{
+  font-variant-numeric: tabular-nums;
+}
+.mi-cr-totalLine span{
+  opacity: .70;
+}
+.mi-cr-totalLine--big{
+  font-size: 16px;
+}
+.mi-cr-totalLine--big b{
+  color: rgba(15,23,42,.92);
+}
+
+/* Responsive: más compacto en móviles */
+@media (max-width: 980px){
+  .mi-cr-table__head,
+  .mi-cr-row{
+    gap: 8px;
+    padding: 10px 10px;
+  }
+}
+.fl-select-iva--car{
+      width: 80px;
+      padding: 10px 0 10px 10px !important;
+      text-align: center;
+}
+.mi-cr-row--car{
+  align-items: flex-start;
+}
+/* =========================
+   ✅ Carga rápida: Totales + botón agregar fila (mejorado)
+   (PEGAR AL FINAL del CSS)
+========================= */
+
+/* contenedor de totales */
+
+
+/* cada línea: pill */
+.mi-cr-totalLine{
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+
+  padding: 8px 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(148,163,184,.35);
+  background: rgba(241,245,249,.75);
+  box-shadow: 0 8px 16px rgba(15,23,42,.06);
+
+  font-variant-numeric: tabular-nums;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+}
+
+.mi-cr-totalLine:hover{
+  transform: translateY(-1px);
+  background: rgba(226,232,240,.70);
+  box-shadow: 0 12px 22px rgba(15,23,42,.10);
+}
+
+.mi-cr-totalLine span{
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .2px;
+  opacity: .78;
+  text-transform: uppercase;
+}
+
+.mi-cr-totalLine b{
+  font-size: 13px;
+  font-weight: 1000;
+  color: rgba(15,23,42,.92);
+}
+
+
+/* =========================
+   ✅ Botón "Agregar fila" más chico y prolijo
+========================= */
+.mi-cr-addrow{
+  width: fit-content;          /* ya no se estira */
+  justify-self: start;         /* pegadito a la izquierda */
+  height: 34px;                /* más chico */
+  padding: 0 12px;             /* menos largo */
+  border-radius: 999px;        /* pill */
+  border: 1px solid rgba(148,163,184,.55);
+  background: rgba(15,23,42,.035);
+  color: rgba(15,23,42,.88);
+  font-weight: 1000;
+  font-size: 12px;
+  letter-spacing: .2px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.mi-cr-addrow:hover{
+  transform: translateY(-1px);
+  background: rgba(29,66,138,.08);
+  border-color: rgba(29,66,138,.28);
+  box-shadow: 0 12px 22px rgba(29,66,138,.12);
+}
+
+.mi-cr-addrow:active{
+  transform: translateY(0px);
+  box-shadow: 0 6px 14px rgba(29,66,138,.10);
+}
+
+/* Si querés que el "+" se vea más “badge” */
+.mi-cr-addrow::before{
+  content: "+";
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 1100;
+  background: rgba(29,66,138,.12);
+  border: 1px solid rgba(29,66,138,.18);
+  color: var(--mi-primary);
+}
+
+/* Por si el grid del footer te lo estaba estirando */
+.mi-cr-table__foot{
+  grid-template-columns: auto 1fr; /* boton auto + totales ocupan el resto */
+  align-items: center;
+}
+.mi-cr-col{
+  padding: 0 10px;
+}
+.mi-cr-col--qty{
+  text-align: center;
+}input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+/* =========================
+   ✅ Chips de totales: colores distintos
+   (PEGAR AL FINAL)
+========================= */
+
+/* Base (si ya la tenés, esto solo refuerza) */
+.mi-cr-totalLine{
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtotal: azul institucional suave */
+.mi-cr-totalLine--sub{
+  border-color: rgba(29,66,138,.28) !important;
+}
+.mi-cr-totalLine--sub b{ color: rgba(29,66,138,.98) !important; }
+
+/* IVA: ámbar/naranja suave */
+.mi-cr-totalLine--iva{
+  border-color: rgba(245,158,11,.35) !important;
+}
+.mi-cr-totalLine--iva b{ color: rgba(180,83,9,.98) !important; }
+
+/* TOTAL: verde (resalta más) */
+.mi-cr-totalLine--total{
+  border-color: rgba(16,185,129,.40) !important;
+  box-shadow: 0 10px 22px rgba(16,185,129,.14) !important;
+}
+.mi-cr-totalLine--total b{ color: rgba(5,122,85,.98) !important; }
+
+/* Detallito “accent bar” a la izquierda */
+.mi-cr-totalLine--sub::before,
+.mi-cr-totalLine--iva::before,
+.mi-cr-totalLine--total::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  border-radius: 14px 0 0 14px;
+  opacity: .95;
+}
+
+.mi-cr-totalLine--sub::before{ background: rgba(29,66,138,.85); }
+.mi-cr-totalLine--iva::before{ background: rgba(245,158,11,.90); }
+.mi-cr-totalLine--total::before{ background: rgba(16,185,129,.90); }
+
+/* Hover con “lift” un poquito más notorio */
+.mi-cr-totalLine--sub:hover,
+.mi-cr-totalLine--iva:hover,
+.mi-cr-totalLine--total:hover{
+  transform: translateY(-2px);
+}

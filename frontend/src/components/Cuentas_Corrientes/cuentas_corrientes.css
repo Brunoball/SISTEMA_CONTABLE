@@ -283,7 +283,7 @@
 }
 
 /* scrollbar en el body */
-.cc-gridBody::-webkit-scrollbar{ height: 10px; width: 10px; }
+
 .cc-gridBody::-webkit-scrollbar-thumb{
   background: rgba(15, 23, 42, 0.14);
   border-radius: 999px;

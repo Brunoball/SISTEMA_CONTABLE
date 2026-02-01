@@ -385,7 +385,7 @@
    “Tabla” con DIVs (grid)
 ========================= */
 .mov-card--table .mov-tableWrap{
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .mov-tableWrap{
@@ -404,10 +404,7 @@
   overflow: auto;
   scrollbar-gutter: stable;
 }
-.mov-gridTable--head,.mov-tableWrap{
-  overflow: auto;
-  scrollbar-gutter: both-edges stable;
-}
+
 /* contenedor fila/header */
 .mov-gridTable{
   display: grid;
@@ -921,8 +918,8 @@
 }
 
 .mov-iconBtn {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 28px;
   border-radius: 0.5rem;
   border: 1px solid var(--mov-border);
   background: white;
@@ -1025,4 +1022,9 @@
 .mov-clearSearch:active{
   transform: translateY(-50%);
   box-shadow: none;
+}
+.mov-gridCell--actions{
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }

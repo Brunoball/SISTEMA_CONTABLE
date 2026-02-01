@@ -202,14 +202,11 @@ function normalizeLists(raw) {
 }
 
 /* =========================
-   ✅ TABS SIMPLIFICADOS (3)
-   - TOTAL solo aparece en: RESUMEN y ITEMS
-   - Unificamos "tipo venta + partes + pago" en "Detalle"
+   ✅ TABS SIMPLIFICADOS (2)
 ========================= */
 const TABLE_TABS = [
-  { id: "resumen", label: "Resumen" },
-  { id: "detalle", label: "Detalle" }, // tipo_venta + partes + pago (sin TOTAL)
-  { id: "items", label: "Items" }, // detalle + cálculos (con TOTAL)
+  { id: "detalle", label: "Detalle" },
+  { id: "items", label: "Items" },
 ];
 
 /* =========================
@@ -242,17 +239,11 @@ function slugifySheetName(name) {
 }
 
 function buildExportRows(rows, tab) {
-  if (tab === "resumen") {
+  // ✅ DETALLE (incluye FECHA + PERÍODO)
+  if (tab === "detalle") {
     return rows.map((r) => ({
       FECHA: safeText(formatFechaDMY(r.fecha)),
       PERIODO: safeText(periodoToMMYYYY(r.periodo)),
-      TOTAL: Number(r.monto_total || 0),
-    }));
-  }
-
-  // ✅ DETALLE (sin TOTAL para no repetir): tipo_venta + partes + pago
-  if (tab === "detalle") {
-    return rows.map((r) => ({
       "TIPO VENTA": safeText(r.tipo_venta),
       CLASIFICACION: safeText(r.clasificacion),
       "TIPO MOV.": safeText(r.tipo_movimiento),
@@ -334,11 +325,11 @@ export default function Movimientos() {
   const [fPeriodo, setFPeriodo] = useState(""); // ✅ SIEMPRE MM-YYYY
   const [q, setQ] = useState("");
 
-  // tabla tabs (ahora 3)
-  const [tab, setTab] = useState("resumen");
+  // tabs
+  const [tab, setTab] = useState("detalle");
 
   // modales
-  const [openAdd, setOpenAdd] = useState(false); // ahora abre Carga Rápida
+  const [openAdd, setOpenAdd] = useState(false); // abre Carga Rápida
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -453,7 +444,7 @@ export default function Movimientos() {
       const normalized = normalizeLists(data);
       setLists(normalized);
 
-      // ✅ SIEMPRE elegir un período por defecto (el primero)
+      // ✅ elegir un período por defecto (el primero)
       if ((normalized.periodos || []).length) {
         setFPeriodo((prev) => prev || normalized.periodos[0]); // MM-YYYY
       } else {
@@ -721,138 +712,149 @@ export default function Movimientos() {
   );
 
   /* =========================
-     Columnas por pestaña (3)
-     ✅ TOTAL solo en: RESUMEN + ITEMS
+     Columnas por pestaña (solo FR)
 ========================= */
   const columns = useMemo(() => {
-    // ✅ RESUMEN (con TOTAL)
-    if (tab === "resumen") {
+    if (tab === "detalle") {
       return [
         {
           key: "fecha",
           label: "FECHA",
           align: "left",
+          fr: .9,
           render: (r) => safeText(formatFechaDMY(r.fecha)),
         },
         {
           key: "periodo",
           label: "PERÍODO",
           align: "center",
+          fr: .8,
           render: (r) => safeText(periodoToMMYYYY(r.periodo)),
         },
-        {
-          key: "monto_total",
-          label: "TOTAL",
-          align: "center",
-          render: (r) => moneyARS(r.monto_total),
-        },
-        { key: "acciones", label: "ACCIONES", align: "center", render: () => null },
-      ];
-    }
-
-    // ✅ DETALLE (SIN TOTAL): tipo_venta + partes + pago en una sola vista
-    if (tab === "detalle") {
-      return [
         {
           key: "tipo_venta",
           label: "TIPO VENTA",
           align: "left",
           strong: true,
+          fr: 1,
           render: (r) => safeText(r.tipo_venta),
         },
         {
           key: "clasificacion",
           label: "CLASIFICACIÓN",
-          align: "left",
+          align: "center",
+          fr: 1.5,
           render: (r) => safeText(r.clasificacion),
         },
         {
           key: "tipo_movimiento",
           label: "TIPO MOV.",
           align: "center",
+          fr: .8,
           render: (r) => safeText(r.tipo_movimiento),
         },
         {
           key: "cliente",
           label: "CLIENTE",
           align: "center",
+          fr: 1.2,
           render: (r) => safeText(r.cliente),
         },
         {
           key: "proveedor",
           label: "PROVEEDOR",
           align: "center",
+          fr: 1.2,
           render: (r) => safeText(r.proveedor),
         },
         {
           key: "cuenta_corriente",
           label: "CUENTA CORRIENTE",
           align: "left",
+          fr: 1.6,
           render: (r) => safeText(r.cuenta_corriente),
         },
         {
           key: "medio_pago",
           label: "MEDIO PAGO",
-          align: "left",
+          align: "center",
+          fr: 1.3,
           render: (r) => safeText(r.medio_pago),
         },
-        { key: "acciones", label: "ACCIONES", align: "center", render: () => null },
+        { key: "acciones", label: "ACCIONES", align: "center", fr: 0.8, render: () => null },
       ];
     }
 
-    // ✅ ITEMS (con TOTAL)
+    // ✅ ITEMS
     return [
       {
         key: "detalle",
         label: "DETALLE",
         align: "left",
         strong: true,
+        fr: 2.4,
         render: (r) => safeText(r.detalle),
       },
       {
         key: "cantidad",
         label: "CANT.",
         align: "center",
+        fr: 0.9,
         render: (r) => safeText(r?.cantidad ?? r?.qty),
       },
       {
         key: "precio",
         label: "PRECIO",
         align: "center",
+        fr: 1.1,
         render: (r) => moneyARS(r?.precio ?? r?.precio_unitario ?? 0),
       },
       {
         key: "subtotal",
         label: "SUBTOTAL",
         align: "center",
+        fr: 1.1,
         render: (r) => moneyARS(r?.subtotal ?? 0),
       },
       {
         key: "iva_pct",
         label: "% IVA",
         align: "center",
+        fr: 0.9,
         render: (r) => fmtPct(r?.iva_pct),
       },
       {
         key: "iva_monto",
         label: "IVA",
         align: "center",
+        fr: 1.0,
         render: (r) => moneyARS(r?.iva_monto ?? 0),
       },
       {
         key: "total_item",
         label: "TOTAL",
         align: "center",
+        fr: 1.2,
         render: (r) => moneyARS(r?.total ?? r?.total_item ?? r?.monto_total ?? 0),
       },
-      { key: "acciones", label: "ACCIONES", align: "center", render: () => null },
+      { key: "acciones", label: "ACCIONES", align: "center", fr: 0.8, render: () => null },
     ];
   }, [tab]);
 
-  const gridCols = useMemo(
-    () => `repeat(${columns.length}, minmax(0, 1fr))`,
-    [columns.length]
-  );
+  /* =========================
+     ✅ gridTemplateColumns SOLO FR
+  ========================= */
+  const gridCols = useMemo(() => {
+    const fallback = `repeat(${columns.length}, minmax(0, 1fr))`;
+    if (!Array.isArray(columns) || !columns.length) return fallback;
+
+    return columns
+      .map((c) => {
+        const n = Number(c.fr);
+        return Number.isFinite(n) && n > 0 ? `${n}fr` : "1fr";
+      })
+      .join(" ");
+  }, [columns]);
 
   return (
     <div className="mov-page">
@@ -1000,7 +1002,7 @@ export default function Movimientos() {
               key={c.key}
               className={[
                 "mov-gridCell",
-                "mov-gridCell--head",
+                "mov-gridCell--head ",
                 c.align === "right" ? "is-right" : "",
                 c.align === "center" ? "is-center" : "",
               ].join(" ")}
@@ -1027,14 +1029,15 @@ export default function Movimientos() {
                   {columns.map((c) => {
                     if (c.key === "acciones") {
                       return (
-                        <div
-                          key={c.key}
-                          className={[
-                            "mov-gridCell",
-                            c.align === "center" ? "is-center" : "",
-                          ].join(" ")}
-                          role="cell"
-                        >
+<div
+  key={c.key}
+  className={[
+    "mov-gridCell",
+    "mov-gridCell--actions",
+    c.align === "center" ? "is-center" : "",
+  ].join(" ")}
+  role="cell"
+>
                           <div className="mov-actionsInline">
                             <button
                               type="button"

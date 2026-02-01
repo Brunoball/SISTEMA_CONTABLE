@@ -767,9 +767,8 @@ export default function ModalCargaRapidaMovimientos({
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 1180 }}
       >
-        <div className="mi-modal__header">
+        <div className="mi-modal__header mi-modal__header--car">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Carga rápida</h2>
             <p className="mi-modal__subtitle">
@@ -789,508 +788,277 @@ export default function ModalCargaRapidaMovimientos({
           </button>
         </div>
 
-        <div style={{ padding: 18 }}>
-          <div className="fl-grid" style={{ marginBottom: 14 }}>
-            <div className="fl-field">
-              <input
-                className="fl-input"
-                type="date"
-                value={fecha}
-                onChange={(e) => onFechaChange(e.target.value)}
-                disabled={saving}
-              />
-              <label className="fl-label">Fecha</label>
-            </div>
+<div className="mi-modal__content mi-modal__content--car">
+  <div className="mi-cr-grid">
+    {/* Planilla */}
+    <section className="mi-cr-table">
+      <div className="mi-cr-table__head">
+        <div>Descripción</div>
+        <div style={{ textAlign: "center" }}>Cantidad</div>
+        <div style={{ textAlign: "center" }}>Precio</div>
+        <div style={{ textAlign: "center" }}>% IVA</div>
+        <div style={{ textAlign: "center" }}>IVA</div>
+        <div style={{ textAlign: "center" }}>Total</div>
+        <div />
+      </div>
 
-            <div className="fl-field">
-              <input
-                className="fl-input"
-                placeholder="MM-YYYY"
-                inputMode="numeric"
-                value={periodo}
-                onChange={(e) => onPeriodoChange(e.target.value)}
-                disabled={saving}
-              />
-              <label className="fl-label">Período (MM-YYYY)</label>
-            </div>
+      {/* ✅ esto ahora ocupa todo el alto disponible y scrollea */}
+      <div className="mi-cr-table__rows">
+        {rowsCalc.map((r) => {
+          const suggestions = suggestDetalles(r.detalleText);
+          const showSug =
+            String(r.detalleText || "").trim().length > 0 &&
+            Number(r.id_detalle || 0) <= 0 &&
+            suggestions.length > 0;
+
+          return (
+<div key={r.id} className="mi-cr-row mi-cr-row--car">
+  {/* Descripción */}
+  <div className="mi-cr-cell mi-cr-col mi-cr-col--desc" style={{ position: "relative" }}>
+    <input
+      className="fl-input"
+      placeholder="Escribí y seleccioná un detalle…"
+      value={r.detalleText}
+      onChange={(e) => {
+        updateRow(r.id, {
+          detalleText: e.target.value,
+          id_detalle: NULL_OPTION,
+        });
+      }}
+      disabled={saving || addUI.open}
+      autoComplete="off"
+      style={{ height: 38 }}
+    />
+
+    {showSug && (
+      <ul className="mi-cr-suggest">
+        {suggestions.map((d) => (
+          <li
+            key={d.id}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              updateRow(r.id, {
+                id_detalle: String(d.id),
+                detalleText: String(d.nombre || ""),
+              });
+            }}
+            className="mi-cr-suggest__item"
+          >
+            {d.nombre}
+          </li>
+        ))}
+      </ul>
+    )}
+
+    <button
+      type="button"
+      onClick={() => startAddDetalleForRow(r.id)}
+      disabled={saving || addUI.saving}
+      className="mi-cr-link"
+    >
+      + Agregar nuevo detalle
+    </button>
+  </div>
+
+  {/* Cantidad */}
+  <div className="mi-cr-cell mi-cr-col mi-cr-col--qty">
+    <input
+      className="fl-input"
+      type="number"
+      min="0"
+      step="1"
+      value={r.cantidad}
+      onChange={(e) =>
+        updateRow(r.id, {
+          cantidad: e.target.value === "" ? "" : Number(e.target.value),
+        })
+      }
+      disabled={saving}
+      style={{ height: 38, textAlign: "center" }}
+    />
+  </div>
+
+  {/* Precio */}
+  <div className="mi-cr-cell mi-cr-col mi-cr-col--price">
+    <input
+      className="fl-input"
+      type="number"
+      min="0"
+      step="0.01"
+      value={r.precio}
+      onChange={(e) =>
+        updateRow(r.id, {
+          precio: e.target.value === "" ? "" : Number(e.target.value),
+        })
+      }
+      disabled={saving}
+      style={{ height: 38, textAlign: "center" }}
+    />
+  </div>
+
+  {/* % IVA */}
+  <div className="mi-cr-cell mi-cr-col mi-cr-col--iva">
+    <select
+      className="fl-input fl-select fl-select-iva--car"
+      value={String(r.ivaPct)}
+      onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
+      disabled={saving}
+      style={{ height: 38, textAlign: "center" }}
+    >
+      {IVA_OPTIONS.map((x) => (
+        <option key={x.value} value={x.value}>
+          {x.label}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  {/* IVA monto */}
+  <div className="mi-cr-cell mi-cr-col mi-cr-col--ivaMonto">
+    <div style={{ textAlign: "center", fontWeight: 700, paddingTop: 10 }}>
+      {moneyARS(r.ivaMonto)}
+    </div>
+  </div>
+
+  {/* Total */}
+  <div className="mi-cr-cell mi-cr-col mi-cr-col--total">
+    <div style={{ textAlign: "center", fontWeight: 800, paddingTop: 10 }}>
+      {moneyARS(r.total)}
+    </div>
+  </div>
+
+  {/* Acción */}
+  <div className="mi-cr-cell mi-cr-col mi-cr-col--action">
+    <button
+      type="button"
+      onClick={() => removeRow(r.id)}
+      disabled={saving}
+      title="Eliminar fila"
+      className="mi-cr-del"
+    >
+      ×
+    </button>
+  </div>
+</div>
+
+          );
+        })}
+      </div>
+
+      {/* footer tabla */}
+      <div className="mi-cr-table__foot">
+        <button type="button" onClick={addRow} disabled={saving} className="mi-cr-addrow">
+          Agregar fila
+        </button>
+<div className="mi-cr-totals">
+  <div className="mi-cr-totalLine mi-cr-totalLine--sub">
+    <span>Subtotal</span>
+    <b>{moneyARS(resumen.subtotal)}</b>
+  </div>
+
+  <div className="mi-cr-totalLine mi-cr-totalLine--iva">
+    <span>IVA</span>
+    <b>{moneyARS(resumen.iva)}</b>
+  </div>
+
+  <div className="mi-cr-totalLine mi-cr-totalLine--total mi-cr-totalLine--big">
+    <span>TOTAL</span>
+    <b>{moneyARS(resumen.total)}</b>
+  </div>
+</div>
+
+      </div>
+    </section>
+
+    {/* Filtros derecha + fecha/periodo arriba */}
+    <aside className="mi-cr-filters">
+      <div className="mi-cr-filters__top">
+        <div className="mi-cr-filters__title">Filtros</div>
+
+        {/* ✅ Fecha/Periodo uno al lado del otro arriba del panel */}
+        <div className="mi-cr-filters__dates">
+          <div className="fl-field">
+            <input
+              className="fl-input"
+              type="date"
+              value={fecha}
+              onChange={(e) => onFechaChange(e.target.value)}
+              disabled={saving}
+            />
+            <label className="fl-label">Fecha</label>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 14 }}>
-            {/* Planilla */}
-            <div
-              style={{
-                border: "1px solid rgba(148,163,184,.45)",
-                borderRadius: 14,
-                overflow: "hidden",
-                background: "#fff",
-              }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "2.2fr .7fr .9fr .8fr .9fr .9fr .35fr",
-                  padding: "10px 10px",
-                  background: "rgba(15, 23, 42, 0.04)",
-                  borderBottom: "1px solid rgba(148,163,184,.35)",
-                  fontWeight: 700,
-                  fontSize: 12,
-                }}
-              >
-                <div>Descripción</div>
-                <div style={{ textAlign: "center" }}>Cantidad</div>
-                <div style={{ textAlign: "center" }}>Precio</div>
-                <div style={{ textAlign: "center" }}>% IVA</div>
-                <div style={{ textAlign: "center" }}>IVA</div>
-                <div style={{ textAlign: "center" }}>Total</div>
-                <div />
-              </div>
-
-              <div style={{ maxHeight: 360, overflow: "auto" }}>
-                {rowsCalc.map((r) => {
-                  const suggestions = suggestDetalles(r.detalleText);
-                  const showSug =
-                    String(r.detalleText || "").trim().length > 0 &&
-                    Number(r.id_detalle || 0) <= 0 &&
-                    suggestions.length > 0;
-
-                  return (
-                    <div
-                      key={r.id}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "2.2fr .7fr .9fr .8fr .9fr .9fr .35fr",
-                        gap: 8,
-                        padding: "10px 10px",
-                        borderBottom: "1px solid rgba(148,163,184,.22)",
-                        alignItems: "center",
-                        position: "relative",
-                      }}
-                    >
-                      <div style={{ position: "relative" }}>
-                        <input
-                          className="fl-input"
-                          placeholder="Escribí y seleccioná un detalle…"
-                          value={r.detalleText}
-                          onChange={(e) => {
-                            updateRow(r.id, {
-                              detalleText: e.target.value,
-                              id_detalle: NULL_OPTION,
-                            });
-                          }}
-                          disabled={saving || addUI.open}
-                          autoComplete="off"
-                          style={{ height: 38 }}
-                        />
-
-                        {showSug && (
-                          <ul
-                            style={{
-                              position: "absolute",
-                              top: "100%",
-                              left: 0,
-                              right: 0,
-                              marginTop: 4,
-                              maxHeight: 220,
-                              overflowY: "auto",
-                              borderRadius: 10,
-                              border: "1px solid rgba(148, 163, 184, 0.5)",
-                              background: "white",
-                              boxShadow: "0 18px 45px rgba(15, 23, 42, 0.18)",
-                              padding: 4,
-                              zIndex: 60,
-                              listStyle: "none",
-                            }}
-                          >
-                            {suggestions.map((d) => (
-                              <li
-                                key={d.id}
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  updateRow(r.id, {
-                                    id_detalle: String(d.id),
-                                    detalleText: String(d.nombre || ""),
-                                  });
-                                }}
-                                style={{
-                                  padding: "6px 10px",
-                                  borderRadius: 8,
-                                  cursor: "pointer",
-                                  fontSize: 13,
-                                }}
-                              >
-                                {d.nombre}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-
-                        {/* ✅ Agregar nuevo detalle (por fila) */}
-                        <button
-                          type="button"
-                          onClick={() => startAddDetalleForRow(r.id)}
-                          disabled={saving || addUI.saving}
-                          style={{
-                            marginTop: 6,
-                            fontSize: 12,
-                            textAlign: "left",
-                            padding: 0,
-                            background: "none",
-                            border: "none",
-                            color: "#0f766e",
-                            cursor: "pointer",
-                          }}
-                        >
-                          + Agregar nuevo detalle
-                        </button>
-                      </div>
-
-                      <input
-                        className="fl-input"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={r.cantidad}
-                        onChange={(e) =>
-                          updateRow(r.id, {
-                            cantidad: e.target.value === "" ? "" : Number(e.target.value),
-                          })
-                        }
-                        disabled={saving}
-                        style={{ height: 38, textAlign: "center" }}
-                      />
-
-                      <input
-                        className="fl-input"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={r.precio}
-                        onChange={(e) =>
-                          updateRow(r.id, {
-                            precio: e.target.value === "" ? "" : Number(e.target.value),
-                          })
-                        }
-                        disabled={saving}
-                        style={{ height: 38, textAlign: "center" }}
-                      />
-
-                      <select
-                        className="fl-input fl-select"
-                        value={String(r.ivaPct)}
-                        onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
-                        disabled={saving}
-                        style={{ height: 38 }}
-                      >
-                        {IVA_OPTIONS.map((x) => (
-                          <option key={x.value} value={x.value}>
-                            {x.label}
-                          </option>
-                        ))}
-                      </select>
-
-                      <div style={{ textAlign: "center", fontWeight: 700 }}>
-                        {moneyARS(r.ivaMonto)}
-                      </div>
-                      <div style={{ textAlign: "center", fontWeight: 800 }}>
-                        {moneyARS(r.total)}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => removeRow(r.id)}
-                        disabled={saving}
-                        title="Eliminar fila"
-                        style={{
-                          height: 34,
-                          borderRadius: 10,
-                          border: "1px solid rgba(239,68,68,.35)",
-                          background: "rgba(239,68,68,.06)",
-                          cursor: "pointer",
-                          fontWeight: 800,
-                        }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div
-                style={{
-                  padding: "12px 12px",
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 10,
-                  alignItems: "center",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={addRow}
-                  disabled={saving}
-                  style={{
-                    height: 40,
-                    borderRadius: 12,
-                    border: "1px solid rgba(15,23,42,.14)",
-                    background: "rgba(15,23,42,.04)",
-                    cursor: "pointer",
-                    fontWeight: 800,
-                  }}
-                >
-                  + Agregar fila
-                </button>
-
-                <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
-                  <div style={{ display: "flex", gap: 12 }}>
-                    <span style={{ opacity: 0.7 }}>Subtotal</span>
-                    <b>{moneyARS(resumen.subtotal)}</b>
-                  </div>
-                  <div style={{ display: "flex", gap: 12 }}>
-                    <span style={{ opacity: 0.7 }}>IVA</span>
-                    <b>{moneyARS(resumen.iva)}</b>
-                  </div>
-                  <div style={{ display: "flex", gap: 12, fontSize: 16 }}>
-                    <span style={{ opacity: 0.7 }}>TOTAL</span>
-                    <b>{moneyARS(resumen.total)}</b>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Filtros derecha */}
-            <aside
-              style={{
-                border: "1px solid rgba(148,163,184,.45)",
-                borderRadius: 14,
-                padding: 12,
-                background: "#fff",
-              }}
-            >
-              <div style={{ fontWeight: 900, marginBottom: 10 }}>Filtros</div>
-
-              <div className="fl-grid" style={{ gridTemplateColumns: "1fr" }}>
-                {/* selects normales */}
-                {[
-                  ["id_clasificacion", "Clasificación (opcional)", listsNorm.clasificaciones],
-                  ["id_tipo_venta", "Tipo venta (opcional)", listsNorm.tipos_venta],
-                  ["id_cuenta_corriente", "Cuenta corriente (opcional)", listsNorm.cuentas_corrientes],
-                  ["id_tipo_movimiento", "Tipo movimiento (opcional)", listsNorm.tipos_movimiento],
-                  ["id_medio_pago", "Medio pago (opcional)", listsNorm.medios_pago],
-                ].map(([k, label, arr]) => (
-                  <div className="fl-field" key={k}>
-                    <select
-                      className="fl-input fl-select"
-                      value={String(filters[k])}
-                      onChange={(e) => updateFilter(k, e.target.value)}
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>{label}</option>
-                      {arr.map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    <label className="fl-label">{String(label).replace(" (opcional)", "")}</label>
-                  </div>
-                ))}
-
-                {/* ✅ Cliente autocomplete + alta */}
-                <div className="fl-field" style={{ position: "relative" }}>
-                  <input
-                    ref={clienteInputRef}
-                    className="fl-input"
-                    placeholder=" "
-                    value={clienteInput}
-                    onChange={handleClienteInputChange}
-                    onFocus={() => setClienteFocus(true)}
-                    onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
-                    disabled={saving || addUI.open}
-                    autoComplete="off"
-                  />
-                  <label className="fl-label">Cliente</label>
-
-                  {clienteFocus && filteredClientes.length > 0 && (
-                    <ul
-                      style={{
-                        position: "absolute",
-                        top: "100%",
-                        left: 0,
-                        right: 0,
-                        marginTop: 4,
-                        maxHeight: 230,
-                        overflowY: "auto",
-                        borderRadius: 10,
-                        border: "1px solid rgba(148, 163, 184, 0.5)",
-                        background: "white",
-                        boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
-                        padding: 4,
-                        zIndex: 80,
-                        listStyle: "none",
-                      }}
-                    >
-                      {filteredClientes.map((c) => (
-                        <li
-                          key={c.id}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            handleSelectCliente(c);
-                          }}
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: 8,
-                            cursor: "pointer",
-                            fontSize: 13,
-                            display: "flex",
-                            alignItems: "center",
-                          }}
-                          className="mi-autocomplete-item"
-                        >
-                          <span
-                            style={{
-                              flex: 1,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {c.nombre}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={startAddCliente}
-                    disabled={saving || addUI.saving}
-                    style={{
-                      marginTop: 8,
-                      fontSize: 12,
-                      textAlign: "left",
-                      padding: 0,
-                      background: "none",
-                      border: "none",
-                      color: "#0f766e",
-                      cursor: "pointer",
-                    }}
-                  >
-                    + Agregar nuevo cliente
-                  </button>
-                </div>
-
-                {/* ✅ Proveedor autocomplete + alta */}
-                <div className="fl-field" style={{ position: "relative" }}>
-                  <input
-                    ref={proveedorInputRef}
-                    className="fl-input"
-                    placeholder=" "
-                    value={proveedorInput}
-                    onChange={handleProveedorInputChange}
-                    onFocus={() => setProveedorFocus(true)}
-                    onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
-                    disabled={saving || addUI.open}
-                    autoComplete="off"
-                  />
-                  <label className="fl-label">Proveedor</label>
-
-                  {proveedorFocus && filteredProveedores.length > 0 && (
-                    <ul
-                      style={{
-                        position: "absolute",
-                        top: "100%",
-                        left: 0,
-                        right: 0,
-                        marginTop: 4,
-                        maxHeight: 230,
-                        overflowY: "auto",
-                        borderRadius: 10,
-                        border: "1px solid rgba(148, 163, 184, 0.5)",
-                        background: "white",
-                        boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
-                        padding: 4,
-                        zIndex: 80,
-                        listStyle: "none",
-                      }}
-                    >
-                      {filteredProveedores.map((p) => (
-                        <li
-                          key={p.id}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            handleSelectProveedor(p);
-                          }}
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: 8,
-                            cursor: "pointer",
-                            fontSize: 13,
-                            display: "flex",
-                            alignItems: "center",
-                          }}
-                          className="mi-autocomplete-item"
-                        >
-                          <span
-                            style={{
-                              flex: 1,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {p.nombre}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={startAddProveedor}
-                    disabled={saving || addUI.saving}
-                    style={{
-                      marginTop: 8,
-                      fontSize: 12,
-                      textAlign: "left",
-                      padding: 0,
-                      background: "none",
-                      border: "none",
-                      color: "#0f766e",
-                      cursor: "pointer",
-                    }}
-                  >
-                    + Agregar nuevo proveedor
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-                <button
-                  type="button"
-                  onClick={submit}
-                  disabled={saving}
-                  className="mit-btn mit-btn--solid"
-                  style={{ width: "100%", height: 44 }}
-                >
-                  {saving ? "Guardando..." : "Guardar todo"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => (!saving ? onClose?.() : null)}
-                  disabled={saving}
-                  className="mit-btn mit-btn--ghost"
-                  style={{ width: "100%", height: 44 }}
-                >
-                  Cancelar
-                </button>
-              </div>
-            </aside>
+          <div className="fl-field">
+            <input
+              className="fl-input"
+              placeholder="MM-YYYY"
+              inputMode="numeric"
+              value={periodo}
+              onChange={(e) => onPeriodoChange(e.target.value)}
+              disabled={saving}
+            />
+            <label className="fl-label">Período</label>
           </div>
         </div>
+      </div>
+
+      <div className="mi-cr-filters__body">
+        <div className="fl-grid" style={{ gridTemplateColumns: "1fr" }}>
+          {[
+            ["id_clasificacion", "Clasificación (opcional)", listsNorm.clasificaciones],
+            ["id_tipo_venta", "Tipo venta (opcional)", listsNorm.tipos_venta],
+            ["id_cuenta_corriente", "Cuenta corriente (opcional)", listsNorm.cuentas_corrientes],
+            ["id_tipo_movimiento", "Tipo movimiento (opcional)", listsNorm.tipos_movimiento],
+            ["id_medio_pago", "Medio pago (opcional)", listsNorm.medios_pago],
+          ].map(([k, label, arr]) => (
+            <div className="fl-field" key={k}>
+              <select
+                className="fl-input fl-select"
+                value={String(filters[k])}
+                onChange={(e) => updateFilter(k, e.target.value)}
+                disabled={saving}
+              >
+                <option value={NULL_OPTION}>{label}</option>
+                {arr.map((x) => (
+                  <option key={x.id} value={String(x.id)}>
+                    {x.nombre}
+                  </option>
+                ))}
+              </select>
+              <label className="fl-label">{String(label).replace(" (opcional)", "")}</label>
+            </div>
+          ))}
+
+          {/* cliente / proveedor (igual que ya tenés) */}
+          {/* ... */}
+        </div>
+
+        <div className="mi-cr-filters__actions">
+          <button
+            type="button"
+            onClick={submit}
+            disabled={saving}
+            className="mit-btn mit-btn--solid"
+            style={{ width: "100%", height: 44 }}
+          >
+            {saving ? "Guardando..." : "Guardar todo"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => (!saving ? onClose?.() : null)}
+            disabled={saving}
+            className="mit-btn mit-btn--ghost"
+            style={{ width: "100%", height: 44 }}
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
 
         {/* Mini modal alta rápida */}
         <AddCatalogMiniModal

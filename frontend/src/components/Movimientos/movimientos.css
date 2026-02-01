@@ -414,7 +414,6 @@
 /* Celdas */
 .mov-gridCell{
   padding: 12px 12px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
   color: rgba(15, 23, 42, 0.88);
   font-size: 13px;
 
@@ -422,6 +421,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+
 }
 
 .mov-gridCell--head{
@@ -492,7 +492,7 @@
 
 /* helpers */
 .is-right{ text-align: right; }
-.is-center{ text-align: center; }
+.is-center{ text-align: center; display: flex; align-items: center; justify-content: center; }
 .is-strong{ font-weight: 900; }
 
 /* =========================

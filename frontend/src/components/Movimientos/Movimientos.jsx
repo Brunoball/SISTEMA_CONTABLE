@@ -777,7 +777,6 @@ export default function Movimientos() {
         {
           key: "medio_pago",
           label: "MEDIO PAGO",
-          align: "center",
           fr: 1.3,
           render: (r) => safeText(r.medio_pago),
         },

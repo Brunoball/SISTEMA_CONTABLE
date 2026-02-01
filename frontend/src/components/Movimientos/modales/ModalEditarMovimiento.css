@@ -1029,3 +1029,66 @@ input[type="number"]::-webkit-outer-spin-button {
 .mi-cr-totalLine--total:hover{
   transform: translateY(-2px);
 }
+/* =========================
+   ✅ Carga rápida: dropdown sugerencias (igual a Cliente en Editar)
+   Usa: .mi-cr-suggest y .mi-cr-suggest__item
+   (PEGAR AL FINAL)
+========================= */
+
+.mi-cr-suggest{
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+
+  max-height: 230px;
+  overflow-y: auto;
+
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: #fff;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.28);
+
+  padding: 4px;
+  list-style: none;
+
+  z-index: 80; /* igual que Cliente */
+}
+
+.mi-cr-suggest__item{
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+
+  display: flex;
+  align-items: center;
+
+  transition: background .12s ease, transform .12s ease;
+  user-select: none;
+}
+
+.mi-cr-suggest__item:hover{
+  background: rgba(226,232,240,.55);
+  transform: translateY(-1px);
+}
+
+/* opcional: “active” si navegás con teclado (si después lo implementás) */
+.mi-cr-suggest__item:active{
+  transform: translateY(0);
+}
+
+
+.mi-cr-suggest::-webkit-scrollbar-track{
+  background: rgba(2,6,23,.04);
+  border-radius: 999px;
+}
+.mi-cr-suggest::-webkit-scrollbar-thumb{
+  background: rgba(148,163,184,.65);
+  border-radius: 999px;
+  border: 2px solid rgba(2,6,23,.06);
+}
+.mi-cr-suggest::-webkit-scrollbar-thumb:hover{
+  background: rgba(100,116,139,.75);
+}

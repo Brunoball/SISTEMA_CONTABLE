@@ -180,7 +180,7 @@ function normalizeLists(raw) {
   const pickArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
   const periodos = pickArr("periodos").map(periodoToMMYYYY);
 
-  // ✅ tipos_movimiento del backend DB real: id_tipo_movimiento / nombre
+  // ✅ tipos_movimiento del backend DB real: id / nombre
   const tiposMov = pickArr("tipos_movimiento");
 
   return {
@@ -241,11 +241,9 @@ function pickTipoMovIdByName(lists, name) {
     arr.find((x) => String(x?.nombre ?? "").trim().toLowerCase() === target) ||
     arr.find((x) => String(x?.nombre ?? "").toLowerCase().includes(target));
 
-  // ✅ obtener_listas.php devuelve "id"
   const id = Number(found?.id);
   return Number.isFinite(id) && id > 0 ? id : null;
 }
-
 
 function isCompraRow(r, idEntrada) {
   const idTipo = Number(r?.id_tipo_movimiento ?? 0);
@@ -280,8 +278,7 @@ function getCompraPagoLabel(r) {
 }
 
 /* =========================
-   ✅ Comprobante helpers
-   (tu backend actual NO devuelve factura_url; esto queda por compat)
+   ✅ Comprobante helpers (compat)
 ========================= */
 function getComprobanteUrl(r) {
   const candidates = [
@@ -292,6 +289,7 @@ function getComprobanteUrl(r) {
     r?.archivo_url,
     r?.url_factura,
     r?.path_factura,
+    r?.factura_path,
   ];
 
   const raw = candidates.find((x) => typeof x === "string" && x.trim() !== "");
@@ -378,14 +376,15 @@ export default function Compras() {
 
   const apiGet = useCallback(
     async (url) => {
-      const headers = {};
       const { token } = getAuthInfo();
+      const headers = {};
       if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch(url, {
         method: "GET",
-        headers,
-        cache: "no-store",
+        headers, // ✅ FIX: antes no lo pasabas
       });
+
       return await parseJsonOrThrow(res);
     },
     [parseJsonOrThrow]
@@ -404,7 +403,6 @@ export default function Compras() {
         method: "POST",
         headers: buildHeaders(),
         body: JSON.stringify(payload ?? {}),
-        cache: "no-store",
       });
       return await parseJsonOrThrow(res);
     },
@@ -424,7 +422,7 @@ export default function Compras() {
     setLoadingLists(true);
     setError("");
     try {
-      const data = await apiGet(`${API}?action=global_obtener_listas&_ts=${Date.now()}`);
+      const data = await apiGet(`${API}?action=global_obtener_listas&=${Date.now()}`);
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar listas.");
       const normalized = normalizeLists(data);
       setLists(normalized);
@@ -475,9 +473,6 @@ export default function Compras() {
         sp.set("action", "movimientos_listar");
         sp.set("periodo", periodoAPI);
         if (qLocal) sp.set("q", qLocal);
-
-        // ✅ cache-buster (por si hostinger cachea GET)
-        sp.set("_ts", String(Date.now()));
 
         const data = await apiGet(`${API}?${sp.toString()}`);
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar compras.");
@@ -649,6 +644,25 @@ export default function Compras() {
     setCompUrl("");
   };
 
+  // ✅ refresh post-guardar (Nueva Compra)
+  const refreshAfterSave = useCallback(
+    async (periodoGuardado) => {
+      const perUI = periodoToMMYYYY(periodoGuardado || fPeriodo);
+
+      // cerrá modal nueva
+      setOpenNueva(false);
+
+      // invalidá cache de ese período
+      invalidateCacheForPeriodo(perUI);
+
+      // recargá filas
+      await loadRows({ periodo: perUI, q });
+
+      showToast("exito", "Compra guardada y lista actualizada.", 2400);
+    },
+    [fPeriodo, q, invalidateCacheForPeriodo, loadRows, showToast]
+  );
+
   const confirmDelete = async () => {
     if (!selectedRow?.id_movimiento) return;
     const id = selectedRow.id_movimiento;
@@ -680,25 +694,42 @@ export default function Compras() {
 
   /* =========================
      ✅ Guardar compra desde ModalNuevaCompra
-     IMPORTANTE: tu backend movimientos_crear acepta JSON plano,
-     NO FormData/multipart con "movimiento"/"items".
+     (backend acepta JSON plano)
 ========================= */
-const onSaveCompra = async (payload) => {
-  const token = localStorage.getItem("token") || "";
-  const headers = { "Content-Type": "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const res = await fetch(`${API}?action=movimientos_crear`, {
+const onUpdateCompra = async ({ compra, items, facturaFile }) => {
+  // 1) actualizar movimiento + items (JSON plano o lo que tu backend acepte)
+  const res = await fetch(`${API}?action=movimientos_actualizar`, {
     method: "POST",
-    headers,
-    body: JSON.stringify(payload),
+    headers: buildHeaders(),
+    body: JSON.stringify({ ...compra, items }),
   });
 
   const data = await parseJsonOrThrow(res);
-  if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la compra.");
+  if (!data?.exito) throw new Error(data?.mensaje || "No se pudo actualizar la compra.");
+
+  // 2) si hay facturaFile: SUBIDA aparte (solo si tu backend lo soporta)
+  // Si no existe endpoint, por ahora lo ignorás.
+  // Ej:
+  // if (facturaFile) { ... fetch(`${API}?action=movimientos_subir_factura`, FormData ... ) }
+
   return data;
 };
 
+  const onSaveCompra = async (payload) => {
+    const token = localStorage.getItem("token") || "";
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(`${API}?action=movimientos_crear`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    const data = await parseJsonOrThrow(res);
+    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la compra.");
+    return data;
+  };
 
   return (
     <div className="mov-page">
@@ -878,12 +909,7 @@ const onSaveCompra = async (payload) => {
                               <FontAwesomeIcon icon={faEye} />
                             </button>
 
-                            <button
-                              type="button"
-                              className="mov-iconBtn"
-                              title="Editar"
-                              onClick={() => openEditModal(r)}
-                            >
+                            <button type="button" className="mov-iconBtn" title="Editar" onClick={() => openEditModal(r)}>
                               <FontAwesomeIcon icon={faPenToSquare} />
                             </button>
 
@@ -925,9 +951,7 @@ const onSaveCompra = async (payload) => {
 
             {!loadingRows && filteredRows.length === 0 && (
               <div className="mov-emptyRow">
-                {!fPeriodo
-                  ? "No hay período disponible para cargar compras."
-                  : "No hay compras para mostrar en este período."}
+                {!fPeriodo ? "No hay período disponible para cargar compras." : "No hay compras para mostrar en este período."}
               </div>
             )}
           </div>
@@ -941,10 +965,15 @@ const onSaveCompra = async (payload) => {
         periodoDefault={fPeriodo}
         onClose={() => setOpenNueva(false)}
         onToast={showToast}
-        onSaveCompra={onSaveCompra}
+        onSaveCompra={async (payload) => {
+          const data = await onSaveCompra(payload); // guarda en backend
+          const per = payload?.periodo || payload?.fecha || fPeriodo;
+          await refreshAfterSave(per); // refresca tabla + cierra modal
+          return data;
+        }}
       />
 
-      {/* MODAL EDITAR COMPRA */}
+      {/* MODAL EDITAR COMPRA (todavía NO cableado al backend) */}
       <ModalEditarCompra
         open={openEdit}
         lists={lists}
@@ -955,20 +984,17 @@ const onSaveCompra = async (payload) => {
           setSelectedRow(null);
         }}
         onToast={showToast}
-        onSaveCompra={async () => {
-          // cuando lo implementes:
-          // invalidateCacheForPeriodo(fPeriodo);
-          // await loadRows({ periodo: fPeriodo, q });
-        }}
+onSaveCompra={async ({ compra, items, facturaFile }) => {
+  const data = await onUpdateCompra({ compra, items, facturaFile });
+  const per = compra?.periodo || fPeriodo;
+  await refreshAfterSave(per);
+  return data;
+}}
+
       />
 
       {/* MODAL VER COMPROBANTE */}
-      <ModalVerComprobante
-        open={openVerComp}
-        url={compUrl}
-        onClose={closeComprobanteModal}
-        title="Comprobante de compra"
-      />
+      <ModalVerComprobante open={openVerComp} url={compUrl} onClose={closeComprobanteModal} title="Comprobante de compra" />
 
       {/* DELETE */}
       <ModalEliminarMovimientos

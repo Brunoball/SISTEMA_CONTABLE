@@ -861,123 +861,108 @@ export default function ModalEditarVenta({
 
               <div style={{ padding: 12 }}>
                 <div className="fl-grid">
-                  {/* Clasificación */}
-                  <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_clasificacion)}
-                      onChange={(e) => setForm((p) => ({ ...p, id_clasificacion: e.target.value }))}
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
-                      {(safeLists.clasificaciones || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                    </select>
-                    <label className="fl-label">Clasificación</label>
-                  </div>
+                 {/* ✅ Fila 1 (3 cols) */}
+  <div className="mi-row3 fl-col-full">
+    {/* Clasificación */}
+    <div className="fl-field">
+      <select
+        className="fl-input fl-select"
+        value={String(form.id_clasificacion)}
+        onChange={(e) => setForm((p) => ({ ...p, id_clasificacion: e.target.value }))}
+        disabled={saving}
+      >
+        <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
+        {(safeLists.clasificaciones || []).map((x) => (
+          <option key={x.id} value={String(x.id)}>{x.nombre}</option>
+        ))}
+      </select>
+      <label className="fl-label">Clasificación</label>
+    </div>
 
-                  {/* Tipo venta fijo */}
-                  <div className="fl-field">
-                    <select className="fl-input fl-select" value={String(form.id_tipo_venta)} disabled>
-                      {(safeLists.tiposVenta || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                      {String(form.id_tipo_venta) === NULL_OPTION && <option value={NULL_OPTION}>Venta</option>}
-                    </select>
-                    <label className="fl-label">Tipo de venta (fijo)</label>
-                  </div>
+    {/* Tipo de venta (fijo) */}
+    <div className="fl-field">
+      <select className="fl-input fl-select" value={String(form.id_tipo_venta)} disabled>
+        {(safeLists.tiposVenta || []).map((x) => (
+          <option key={x.id} value={String(x.id)}>{x.nombre}</option>
+        ))}
+        {String(form.id_tipo_venta) === NULL_OPTION && <option value={NULL_OPTION}>Venta</option>}
+      </select>
+      <label className="fl-label">Tipo de venta (fijo)</label>
+    </div>
 
-                  {/* Tipo movimiento fijo + Cuenta corriente */}
-                  <div className="fl-grid fl-col-full" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <div className="fl-field">
-                      <select className="fl-input fl-select" value={String(form.id_tipo_movimiento)} disabled>
-                        {(safeLists.tiposMovimiento || []).map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                        {String(form.id_tipo_movimiento) === NULL_OPTION && <option value={NULL_OPTION}>Salida</option>}
-                      </select>
-                      <label className="fl-label">Tipo de movimiento (fijo)</label>
-                    </div>
+    {/* Tipo de movimiento (fijo) */}
+    <div className="fl-field">
+      <select className="fl-input fl-select" value={String(form.id_tipo_movimiento)} disabled>
+        {(safeLists.tiposMovimiento || []).map((x) => (
+          <option key={x.id} value={String(x.id)}>{x.nombre}</option>
+        ))}
+        {String(form.id_tipo_movimiento) === NULL_OPTION && <option value={NULL_OPTION}>Salida</option>}
+      </select>
+      <label className="fl-label">Tipo de movimiento (fijo)</label>
+    </div>
+  </div>
 
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(form.id_cuenta_corriente)}
-                        onChange={(e) => setForm((p) => ({ ...p, id_cuenta_corriente: e.target.value }))}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
-                        {(safeLists.cuentasCorrientes || []).map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                        <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                      </select>
-                      <label className="fl-label">Cuenta corriente</label>
-                    </div>
-                  </div>
+  {/* ✅ Fila 2 (2 cols): Detalle + Cuenta corriente */}
+  <div className="mi-row2 fl-col-full" >
+    {/* Detalle (autocomplete) */}
+    <div className="fl-field" style={{ position: "relative" }}>
+      <input
+        ref={detalleInputRef}
+        className="fl-input"
+        placeholder=" "
+        value={detalleInput}
+        onChange={handleDetalleInputChange}
+        onFocus={() => setDetalleFocus(true)}
+        onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
+        disabled={saving || addUI.open}
+        autoComplete="off"
+      />
+      <label className="fl-label">Detalle</label>
 
-                  {/* Detalle (autocomplete) */}
-                  <div className="fl-field fl-col-full" style={{ position: "relative" }}>
-                    <input
-                      ref={detalleInputRef}
-                      className="fl-input"
-                      placeholder=" "
-                      value={detalleInput}
-                      onChange={handleDetalleInputChange}
-                      onFocus={() => setDetalleFocus(true)}
-                      onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
-                      disabled={saving || addUI.open}
-                      autoComplete="off"
-                    />
-                    <label className="fl-label">Detalle</label>
+      {detalleFocus && filteredDetalles.length > 0 && (
+        <ul className="mi-cr-suggest">
+          {filteredDetalles.map((d) => (
+            <li
+              key={d.id}
+              className="mi-cr-suggest__item"
+              onMouseDown={(e) => { e.preventDefault(); handleSelectDetalle(d); }}
+            >
+              <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {d.nombre}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
 
-                    {detalleFocus && filteredDetalles.length > 0 && (
-                      <ul className="mi-cr-suggest">
-                        {filteredDetalles.map((d) => (
-                          <li
-                            key={d.id}
-                            className="mi-cr-suggest__item"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectDetalle(d);
-                            }}
-                          >
-                            <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              {d.nombre}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+      <button type="button" onClick={startAddDetalle} disabled={saving || addUI.saving} className="mi-cr-link">
+        + Agregar nuevo detalle
+      </button>
+    </div>
 
-                    <button
-                      type="button"
-                      onClick={startAddDetalle}
-                      disabled={saving || addUI.saving}
-                      className="mi-cr-link"
-                    >
-                      + Agregar nuevo detalle
-                    </button>
-                  </div>
+    {/* Cuenta corriente */}
+    <div className="fl-field">
+      <select
+        className="fl-input fl-select"
+        value={String(form.id_cuenta_corriente)}
+        onChange={(e) => setForm((p) => ({ ...p, id_cuenta_corriente: e.target.value }))}
+        disabled={saving}
+      >
+        <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
+        {(safeLists.cuentasCorrientes || []).map((x) => (
+          <option key={x.id} value={String(x.id)}>{x.nombre}</option>
+        ))}
+      </select>
+      <label className="fl-label">Cuenta corriente</label>
+    </div>
+  </div>
 
                   {/* Ítem editable */}
-                  <div className="fl-field fl-col-full" style={{ marginTop: 4 }}>
+                  <div className="fl-field fl-col-full" >
                     <div
                       style={{
                         fontWeight: 600,
                         fontSize: 13,
-                        marginBottom: 8,
-                        paddingTop: 6,
                         borderTop: "1px dashed rgba(148,163,184,.55)",
                       }}
                     >
@@ -1030,7 +1015,7 @@ export default function ModalEditarVenta({
                       </div>
                     </div>
 
-                    <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 10 }}>
+                    <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                       <div className="fl-field">
                         <input className="fl-input" value={form.subtotal} disabled />
                         <label className="fl-label">Subtotal</label>
@@ -1073,10 +1058,10 @@ export default function ModalEditarVenta({
                 background: "#fff",
               }}
             >
-              <div style={{ fontWeight: 600, marginBottom: 10 }}>Relaciones y pago</div>
+              <div style={{ fontWeight: 600 }}>Relaciones y pago</div>
 
               {/* Fecha + Período */}
-              <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+              <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12}}>
                 <div className="fl-field">
                   <input
                     ref={fechaRef}

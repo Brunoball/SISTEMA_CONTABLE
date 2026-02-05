@@ -1340,3 +1340,59 @@ padding: 0 !important;
   cursor: not-allowed;
   pointer-events: none;
 }
+/* =========================
+   ✅ Filas custom (3 cols y 2 cols)
+========================= */
+
+.mi-row3{
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+  min-width: 0;
+}
+
+.mi-row2{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  min-width: 0;
+}
+
+.mi-row3 > .fl-field,
+.mi-row2 > .fl-field{
+  min-width: 0;
+}
+
+/* Responsive: apila prolijo */
+@media (max-width: 900px){
+  .mi-row3{ grid-template-columns: 1fr; }
+  .mi-row2{ grid-template-columns: 1fr; }
+}
+/* =========================
+   Filas custom reutilizables
+========================= */
+.mi-row3{
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+  min-width: 0;
+}
+
+.mi-row2{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  min-width: 0;
+}
+
+.mi-row3 > .fl-field,
+.mi-row2 > .fl-field{
+  min-width: 0;
+}
+
+@media (max-width: 900px){
+  .mi-row3,
+  .mi-row2{
+    grid-template-columns: 1fr;
+  }
+}

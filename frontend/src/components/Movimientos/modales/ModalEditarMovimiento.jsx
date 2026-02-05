@@ -1041,90 +1041,104 @@ return createPortal(
 
               <div style={{ padding: 12 }}>
                 <div className="fl-grid">
-                  {/* Clasificación */}
-                  <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_clasificacion)}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === ADD_OPTION) {
-                          setAddUI({ open: false, field: "id_clasificacion", text: "", saving: false });
-                          setForm((p) => ({ ...p, id_clasificacion: ADD_OPTION }));
-                        } else {
-                          onSelectWithAdd("id_clasificacion", v);
-                        }
-                      }}
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
-                      {(safeLists.clasificaciones || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                    </select>
-                    <label className="fl-label">Clasificación</label>
-                    {renderAddInline("id_clasificacion")}
-                  </div>
-
-                  {/* Tipo venta */}
-                  <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_tipo_venta)}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === ADD_OPTION) {
-                          setAddUI({ open: false, field: "id_tipo_venta", text: "", saving: false });
-                          setForm((p) => ({ ...p, id_tipo_venta: ADD_OPTION }));
-                        } else {
-                          onSelectWithAdd("id_tipo_venta", v);
-                        }
-                      }}
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>-- Seleccionar tipo de venta --</option>
-                      {(safeLists.tiposVenta || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                    </select>
-                    <label className="fl-label">Tipo de venta</label>
-                    {renderAddInline("id_tipo_venta")}
-                  </div>
-
-{/* ✅ Tipo movimiento + Cuenta corriente (misma fila) */}
-<div className="fl-grid fl-col-full" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-  {/* Tipo movimiento */}
+<div className="mi-row3 fl-col-full">
+  {/* Clasificación */}
   <div className="fl-field">
     <select
       className="fl-input fl-select"
-      value={String(form.id_tipo_movimiento)}
+      value={String(form.id_clasificacion)}
       onChange={(e) => {
         const v = e.target.value;
         if (v === ADD_OPTION) {
-          setAddUI({ open: false, field: "id_tipo_movimiento", text: "", saving: false });
-          setForm((p) => ({ ...p, id_tipo_movimiento: ADD_OPTION }));
+          setAddUI({ open: false, field: "id_clasificacion", text: "", saving: false });
+          setForm((p) => ({ ...p, id_clasificacion: ADD_OPTION }));
         } else {
-          onSelectWithAdd("id_tipo_movimiento", v);
+          onSelectWithAdd("id_clasificacion", v);
         }
       }}
       disabled={saving}
     >
-      <option value={NULL_OPTION}>-- Seleccionar tipo de movimiento --</option>
+      <option value={NULL_OPTION}>-- Clasificación --</option>
+      {(safeLists.clasificaciones || []).map((x) => (
+        <option key={x.id} value={String(x.id)}>{x.nombre}</option>
+      ))}
+      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+    </select>
+    <label className="fl-label">Clasificación</label>
+    {renderAddInline("id_clasificacion")}
+  </div>
+
+  {/* Tipo de venta */}
+  <div className="fl-field">
+    <select
+      className="fl-input fl-select"
+      value={String(form.id_tipo_venta)}
+      onChange={(e) => onSelectWithAdd("id_tipo_venta", e.target.value)}
+      disabled={saving}
+    >
+      <option value={NULL_OPTION}>-- Tipo de venta --</option>
+      {(safeLists.tiposVenta || []).map((x) => (
+        <option key={x.id} value={String(x.id)}>{x.nombre}</option>
+      ))}
+      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+    </select>
+    <label className="fl-label">Tipo de venta</label>
+    {renderAddInline("id_tipo_venta")}
+  </div>
+
+  {/* Tipo de movimiento */}
+  <div className="fl-field">
+    <select
+      className="fl-input fl-select"
+      value={String(form.id_tipo_movimiento)}
+      onChange={(e) => onSelectWithAdd("id_tipo_movimiento", e.target.value)}
+      disabled={saving}
+    >
+      <option value={NULL_OPTION}>-- Tipo movimiento --</option>
       {(safeLists.tiposMovimiento || []).map((x) => (
-        <option key={x.id} value={String(x.id)}>
-          {x.nombre}
-        </option>
+        <option key={x.id} value={String(x.id)}>{x.nombre}</option>
       ))}
       <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
     </select>
     <label className="fl-label">Tipo de movimiento</label>
     {renderAddInline("id_tipo_movimiento")}
+  </div>
+</div>
+<div className="mi-row2 fl-col-full" >
+  {/* Detalle */}
+  <div className="fl-field" style={{ position: "relative" }}>
+    <input
+      ref={detalleInputRef}
+      className="fl-input"
+      placeholder=" "
+      value={detalleInput}
+      onChange={handleDetalleInputChange}
+      onFocus={() => setDetalleFocus(true)}
+      onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
+      disabled={saving || addUI.open}
+    />
+    <label className="fl-label">Detalle</label>
+
+    {detalleFocus && filteredDetalles.length > 0 && (
+      <ul className="mi-cr-suggest">
+        {filteredDetalles.map((d) => (
+          <li
+            key={d.id}
+            className="mi-cr-suggest__item"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              handleSelectDetalle(d);
+            }}
+          >
+            {d.nombre}
+          </li>
+        ))}
+      </ul>
+    )}
+
+    <button type="button" onClick={startAddDetalle} className="mi-cr-link">
+      + Agregar nuevo detalle
+    </button>
   </div>
 
   {/* Cuenta corriente */}
@@ -1132,22 +1146,12 @@ return createPortal(
     <select
       className="fl-input fl-select"
       value={String(form.id_cuenta_corriente)}
-      onChange={(e) => {
-        const v = e.target.value;
-        if (v === ADD_OPTION) {
-          setAddUI({ open: false, field: "id_cuenta_corriente", text: "", saving: false });
-          setForm((p) => ({ ...p, id_cuenta_corriente: ADD_OPTION }));
-        } else {
-          onSelectWithAdd("id_cuenta_corriente", v);
-        }
-      }}
+      onChange={(e) => onSelectWithAdd("id_cuenta_corriente", e.target.value)}
       disabled={saving}
     >
-      <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
+      <option value={NULL_OPTION}>-- Cuenta corriente --</option>
       {(safeLists.cuentasCorrientes || []).map((x) => (
-        <option key={x.id} value={String(x.id)}>
-          {x.nombre}
-        </option>
+        <option key={x.id} value={String(x.id)}>{x.nombre}</option>
       ))}
       <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
     </select>
@@ -1157,99 +1161,11 @@ return createPortal(
 </div>
 
 
-                  {/* Detalle (autocomplete) */}
-                  <div className="fl-field fl-col-full" style={{ position: "relative" }}>
-                    <input
-                      ref={detalleInputRef}
-                      className="fl-input"
-                      placeholder=" "
-                      value={detalleInput}
-                      onChange={handleDetalleInputChange}
-                      onFocus={() => setDetalleFocus(true)}
-                      onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
-                      disabled={saving || addUI.open}
-                      autoComplete="off"
-                    />
-                    <label className="fl-label">Detalle</label>
-
-                    {detalleFocus && filteredDetalles.length > 0 && (
-                      <ul
-                        style={{
-                          position: "absolute",
-                          top: "100%",
-                          left: 0,
-                          right: 0,
-                          marginTop: 4,
-                          maxHeight: 180,
-                          overflowY: "auto",
-                          borderRadius: 10,
-                          border: "1px solid rgba(148, 163, 184, 0.5)",
-                          background: "white",
-                          boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
-                          padding: 4,
-                          zIndex: 60,
-                          listStyle: "none",
-                        }}
-                      >
-                        {filteredDetalles.map((d) => (
-                          <li
-                            key={d.id}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectDetalle(d);
-                            }}
-                            style={{
-                              padding: "6px 10px",
-                              borderRadius: 8,
-                              cursor: "pointer",
-                              fontSize: 13,
-                              display: "flex",
-                              alignItems: "center",
-                            }}
-                            className="mi-autocomplete-item"
-                          >
-                            <span
-                              style={{
-                                flex: 1,
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                              }}
-                            >
-                              {d.nombre}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={startAddDetalle}
-                      disabled={saving || addUI.saving}
-                      style={{
-                        marginTop: 8,
-                        fontSize: 12,
-                        textAlign: "left",
-                        padding: 0,
-                        background: "none",
-                        border: "none",
-                        color: "#0f766e",
-                        cursor: "pointer",
-                      }}
-                    >
-                      + Agregar nuevo detalle
-                    </button>
-                  </div>
-
                   {/* ✅ ITEM EDITABLE */}
                   <div className="fl-field fl-col-full" style={{ marginTop: 4 }}>
                     <div
                       style={{
-                        fontWeight: 900,
                         fontSize: 13,
-                        marginBottom: 8,
-                        paddingTop: 6,
                         borderTop: "1px dashed rgba(148,163,184,.55)",
                       }}
                     >
@@ -1303,7 +1219,7 @@ return createPortal(
                       </div>
                     </div>
 
-                    <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 10 }}>
+                    <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                       <div className="fl-field">
                         <input className="fl-input" value={form.subtotal} disabled />
                         <label className="fl-label">Subtotal</label>
@@ -1346,7 +1262,7 @@ return createPortal(
                 background: "#fff",
               }}
             >
-              <div style={{ fontWeight: 900, marginBottom: 10 }}>Relaciones y pago</div>
+              <div>Relaciones y pago</div>
 
               {/* ✅ Fecha + Período ahora acá */}
 <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>

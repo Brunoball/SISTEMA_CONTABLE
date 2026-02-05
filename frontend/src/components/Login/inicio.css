@@ -4,12 +4,12 @@
 :root {
   /* 🎨 PALETA BALTO (EXCEL) */
   --balto-midnight: #0A2540;
-  --balto-action:   #0055BB;
-  --balto-bg:       #F6F9FC;
-  --balto-text:     #425466;
-  --balto-white:    #FFFFFF;
-  --balto-success:  #22AD5C;
-  --balto-danger:   #E13D45;
+  --balto-action: #0055BB;
+  --balto-bg: #F6F9FC;
+  --balto-text: #425466;
+  --balto-white: #FFFFFF;
+  --balto-success: #22AD5C;
+  --balto-danger: #E13D45;
 
   /* Extras UI (derivados) */
   --balto-action-hover: #004AA3;
@@ -20,13 +20,23 @@
   --r-lg: 14px;
   --r-xl: 18px;
 
+  /* sombras */
   --shadow-card: 0 18px 45px rgba(10, 37, 64, 0.18);
   --shadow-soft: 0 10px 25px rgba(10, 37, 64, 0.10);
+
+  /* ✅ Gris del contenedor (como imagen) */
+  --balto-card-gray-1: #F1F3F6;
+  --balto-card-gray-2: #E6E9EE;
+  --balto-card-border: rgba(10, 37, 64, 0.10);
+  --shadow-card-gray:
+    0 20px 45px rgba(10, 37, 64, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
 
   --t: 180ms ease;
 }
 
-html, body {
+html,
+body {
   overflow: hidden;
   height: 100%;
   margin: 0;
@@ -34,37 +44,50 @@ html, body {
   background: var(--balto-bg);
 }
 
-/* Fondo suave como la imagen */
+/* Fondo suave */
 .ini_page {
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 28px 16px;
-  background:
-    radial-gradient(1100px 420px at 50% 10%, rgba(0, 85, 187, 0.10), transparent 55%),
-    radial-gradient(900px 340px at 50% 85%, rgba(10, 37, 64, 0.08), transparent 55%),
-    var(--balto-bg);
+
+  background: radial-gradient(
+    circle at top,
+    #FFFFFF 0%,
+    #F2F4F8 60%,
+    #EDF1F6 100%
+  );
 }
 
-/* Card centrada */
+/* Card centrada (✅ ahora gris como la imagen) */
 .ini_card {
   width: min(520px, 96vw);
-  background: var(--balto-white);
+
+  background: linear-gradient(
+    180deg,
+    var(--balto-card-gray-1) 0%,
+    var(--balto-card-gray-2) 100%
+  );
+
   border-radius: var(--r-xl);
-  box-shadow: var(--shadow-card);
-  border: 1px solid rgba(214, 222, 234, 0.8);
+  border: 1px solid var(--balto-card-border);
+
+  box-shadow: var(--shadow-card-gray);
+
   padding: 26px 28px 22px;
   position: relative;
+  overflow: hidden;
 }
 
-/* barra superior sutil como “detalle” */
+/* barra superior sutil */
 .ini_card::before {
   content: "";
   position: absolute;
   inset: 0 0 auto 0;
-  height: 6px;
+  height: 5px;
   border-radius: var(--r-xl) var(--r-xl) 0 0;
-  background: var(--balto-midnight);
+  background: linear-gradient(90deg, var(--balto-midnight), var(--balto-action));
+  opacity: 0.9;
 }
 
 /* Marca/Logo arriba */
@@ -79,10 +102,10 @@ html, body {
   height: 184px;
   width: auto;
   object-fit: contain;
-  filter: drop-shadow(0 6px 12px rgba(10, 37, 64, 0.12));
+  filter: drop-shadow(0 4px 8px rgba(10, 37, 64, 0.18));
 }
 
-/* Título como la imagen */
+/* Título */
 .ini_title {
   text-align: center;
   color: var(--balto-midnight);
@@ -98,7 +121,7 @@ html, body {
   gap: 14px;
 }
 
-/* Campos con íconos embebidos */
+/* Campos */
 .ini_field {
   position: relative;
 }
@@ -107,13 +130,17 @@ html, body {
   width: 100%;
   height: 46px;
   border-radius: 6px;
-  border: 1px solid var(--balto-border);
-  background: #fff;
+
+  /* ✅ más integrado al gris */
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(2px);
+
+  border: 1px solid rgba(10, 37, 64, 0.15);
   padding: 0 46px 0 44px;
   font-size: 15px;
   color: var(--balto-midnight);
   outline: none;
-  transition: border-color var(--t), box-shadow var(--t);
+  transition: border-color var(--t), box-shadow var(--t), background var(--t);
 }
 
 .ini_input::placeholder {
@@ -123,9 +150,10 @@ html, body {
 .ini_input:focus {
   border-color: rgba(0, 85, 187, 0.55);
   box-shadow: 0 0 0 4px var(--balto-focus);
+  background: rgba(255, 255, 255, 0.92);
 }
 
-/* Ícono izquierdo (usuario/candado) */
+/* Ícono izquierdo */
 .ini_field::before {
   content: "";
   position: absolute;
@@ -189,79 +217,6 @@ html, body {
   height: 18px;
 }
 
-/* Remember */
-.ini_remember {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  user-select: none;
-  color: rgba(66, 84, 102, 0.95);
-  font-size: 14px;
-  margin-top: 2px;
-}
-
-.ini_remember input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--balto-action);
-}
-
-/* Botón principal como la imagen */
-.ini_btn {
-  height: 44px;
-  border: 0;
-  border-radius: 6px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  color: #fff;
-  background: linear-gradient(180deg, var(--balto-action) 0%, #004AA3 100%);
-  box-shadow: var(--shadow-soft);
-  cursor: pointer;
-  transition: transform var(--t), filter var(--t);
-  margin-top: 2px;
-}
-
-.ini_btn:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.02);
-}
-
-.ini_btn:disabled {
-  opacity: 0.75;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* Links abajo (alineados como la captura) */
-.ini_links {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 8px;
-  font-size: 13.5px;
-}
-
-.ini_link {
-  color: var(--balto-action);
-  text-decoration: none;
-  text-underline-offset: 3px;
-}
-
-.ini_link:hover {
-  color: var(--balto-action-hover);
-}
-
-/* Responsive */
-@media (max-width: 420px) {
-  .ini_card {
-    padding: 22px 16px 18px;
-  }
-  .ini_links {
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-  }
-}
 /* ===== Remember (checkbox custom) ===== */
 .ini_remember {
   display: inline-flex;
@@ -284,10 +239,10 @@ html, body {
   pointer-events: none;
 }
 
-/* armamos el “cuadradito” visual */
+/* texto + espacio para el cuadrito */
 .ini_remember span {
   position: relative;
-  padding-left: 28px; /* espacio para el cuadrito */
+  padding-left: 28px;
   line-height: 1;
 }
 
@@ -301,8 +256,8 @@ html, body {
   width: 18px;
   height: 18px;
   border-radius: 6px;
-  border: 1px solid var(--balto-border);
-  background: #fff;
+  border: 1px solid rgba(10, 37, 64, 0.18);
+  background: rgba(255, 255, 255, 0.78);
   box-shadow: 0 3px 10px rgba(10, 37, 64, 0.08);
   transition: border-color var(--t), background var(--t), box-shadow var(--t);
 }
@@ -343,4 +298,62 @@ html, body {
 .ini_remember input:focus-visible + span::before {
   box-shadow: 0 0 0 4px var(--balto-focus), 0 3px 10px rgba(10, 37, 64, 0.10);
   border-color: rgba(0, 85, 187, 0.65);
+}
+
+/* Botón principal */
+.ini_btn {
+  height: 44px;
+  border: 0;
+  border-radius: 6px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #fff;
+  background: linear-gradient(180deg, var(--balto-action) 0%, #004AA3 100%);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  transition: transform var(--t), filter var(--t);
+  margin-top: 2px;
+}
+
+.ini_btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+}
+
+.ini_btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Links abajo */
+.ini_links {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 13.5px;
+}
+
+.ini_link {
+  color: var(--balto-action);
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.ini_link:hover {
+  color: var(--balto-action-hover);
+}
+
+/* Responsive */
+@media (max-width: 420px) {
+  .ini_card {
+    padding: 22px 16px 18px;
+  }
+
+  .ini_links {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
 }

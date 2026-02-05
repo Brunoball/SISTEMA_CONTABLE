@@ -133,18 +133,31 @@ const Principal = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showPerfilModal, setShowPerfilModal] = useState(false);
 
-  // ✅ Submenú Movimientos: mobile por click, desktop por hover controlado
+  // ✅ Submenú Movimientos: mobile por click, desktop por hover con delay
   const [openMovSub, setOpenMovSub] = useState(false);
 
-  // ✅ timer para cerrar con delay (permite bajar al submenú sin que se cierre)
+  // ✅ timers para abrir/cerrar con delay
   const closeTimerRef = useRef(null);
+  const openTimerRef = useRef(null);
+
   const closeSoon = (ms = 220) => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => setOpenMovSub(false), ms);
   };
+
+  const openSoon = (ms = 500) => {
+    if (openTimerRef.current) clearTimeout(openTimerRef.current);
+    openTimerRef.current = setTimeout(() => setOpenMovSub(true), ms);
+  };
+
   const cancelClose = () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = null;
+  };
+
+  const cancelOpen = () => {
+    if (openTimerRef.current) clearTimeout(openTimerRef.current);
+    openTimerRef.current = null;
   };
 
   useEffect(() => {
@@ -163,6 +176,7 @@ const Principal = () => {
   useEffect(() => {
     return () => {
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      if (openTimerRef.current) clearTimeout(openTimerRef.current);
     };
   }, []);
 
@@ -171,13 +185,16 @@ const Principal = () => {
   const navItems = useMemo(() => {
     const base = [
       {
-        label: "Movimientos",
+        label: "Movimientos", ruta:"/panel/Movimientos",
         children: [
-{ label: "Ventas", ruta: "/panel/ventas" },
-          { label: "Compras", ruta: "/panel/movimientos/compras" },
-          { label: "Recibo", ruta: "/panel/movimientos/recibo" },
-          { label: "Orden de Pago", ruta: "/panel/movimientos/orden-de-pago" },
-          { label: "Otros ingresos", ruta: "/panel/movimientos/otros-ingresos" },
+          // ✅ solo ventas va a /panel/ventas
+          { label: "Ventas", ruta: "/panel/ventas" },
+
+          // ✅ todas las demás opciones van a dashboard (panel)
+          { label: "Compras", ruta: "/panel/dashboard" },
+          { label: "Recibo", ruta: "/panel/dashboard" },
+          { label: "Orden de Pago", ruta: "/panel/dashboard" },
+          { label: "Otros ingresos", ruta: "/panel/dashboard" },
         ],
       },
       { label: "Flujo de Caja" },
@@ -320,16 +337,20 @@ const Principal = () => {
                 className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${
                   isOpen ? "is-open" : ""
                 }`}
-                // ✅ DESKTOP: si el submenu ya está abierto y pasás por el grupo, no lo cierres
+                // ✅ DESKTOP: hover en TODO Movimientos -> abre con delay 0.5s
                 onMouseEnter={() => {
-                  if (!isNoHover()) cancelClose();
+                  if (!isNoHover() && isMov) {
+                    cancelClose();
+                    openSoon(300);
+                  }
                 }}
-                // ✅ DESKTOP: cerrar con delay al salir del grupo completo
                 onMouseLeave={() => {
-                  if (!isNoHover() && isMov && openMovSub) closeSoon(220);
+                  if (!isNoHover() && isMov) {
+                    cancelOpen();
+                    closeSoon(220);
+                  }
                 }}
               >
-                {/* ✅ IMPORTANTE: DIV para tener caret como button real */}
                 <div
                   className={`pp-nav__item ${isActive ? "is-active" : ""}`}
                   role="button"
@@ -340,15 +361,21 @@ const Principal = () => {
                       if (isMov) setOpenMovSub((v) => !v);
                       return;
                     }
+
+
                     handleNavigate(item.ruta);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
+
                       if (hasSub && isNoHover()) {
                         if (isMov) setOpenMovSub((v) => !v);
                         return;
                       }
+
+
+
                       handleNavigate(item.ruta);
                     }
                   }}
@@ -364,16 +391,12 @@ const Principal = () => {
                       type="button"
                       className="pp-nav__caretBtn"
                       aria-label="Ver subsecciones"
-                      // ✅ DESKTOP: abrir SOLO al pasar por el caret
+                      // ✅ DESKTOP: si querés, también abre con delay al pasar por caret
                       onMouseEnter={() => {
                         if (!isNoHover() && isMov) {
                           cancelClose();
-                          setOpenMovSub(true);
+                          openSoon(500);
                         }
-                      }}
-                      // ✅ Mantener abierto si entrás al submenu
-                      onMouseLeave={() => {
-                        // no hacemos nada acá (lo maneja el group con delay)
                       }}
                       onFocus={() => {
                         if (isMov) setOpenMovSub(true);
@@ -395,25 +418,28 @@ const Principal = () => {
                 {hasSub && (
                   <div
                     className="pp-navSub"
-                    // ✅ si el mouse entra al submenu, cancelamos cierre
+                    // ✅ si entrás al submenu, se mantiene abierto
                     onMouseEnter={() => {
-                      if (!isNoHover()) cancelClose();
+                      if (!isNoHover() && isMov) {
+                        cancelClose();
+                        cancelOpen();
+                        setOpenMovSub(true);
+                      }
                     }}
-                    // ✅ si salís del submenu, cerramos con delay
                     onMouseLeave={() => {
                       if (!isNoHover() && isMov) closeSoon(220);
                     }}
                   >
                     {item.children.map((sub) => (
                       <button
-                        key={sub.ruta}
+                        key={sub.ruta + sub.label}
                         className={`pp-navSub__item ${
                           location.pathname.startsWith(sub.ruta) ? "is-active" : ""
                         }`}
                         onClick={() => {
                           markDashboardSeen();
                           navigate(sub.ruta);
-                          setOpenMovSub(false); // opcional: cerrar al elegir
+                          setOpenMovSub(false); // cerrar al elegir
                         }}
                       >
                         <span className="pp-navSub__dot" />

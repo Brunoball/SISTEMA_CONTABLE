@@ -610,19 +610,7 @@ button{ font-family: inherit; }
     transform 220ms ease;
 }
 
-/* DESKTOP: “armar” con hover del caret, mantener abierto mientras estés dentro del grupo */
-@media (hover:hover) and (pointer:fine){
-  .pp-navGroup.has-sub{ --sub-armed: 0; }
-  .pp-navGroup.has-sub:has(.pp-nav__caretBtn:hover){ --sub-armed: 1; }
 
-  /* si está armado y el mouse está dentro del grupo (incluye submenú), abrimos */
-  .pp-navGroup.has-sub:has(:hover) .pp-navSub{
-    max-height: calc(var(--sub-open-h) * var(--sub-armed));
-    opacity: var(--sub-armed);
-    transform: translateY(calc(-4px * (1 - var(--sub-armed))));
-    pointer-events: auto;
-  }
-}
 
 /* MOBILE: por toggle (click) */
 @media (hover:none){

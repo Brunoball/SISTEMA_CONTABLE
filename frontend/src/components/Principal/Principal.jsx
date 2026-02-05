@@ -191,7 +191,7 @@ const Principal = () => {
           { label: "Ventas", ruta: "/panel/ventas" },
 
           // ✅ todas las demás opciones van a dashboard (panel)
-          { label: "Compras", ruta: "/panel/dashboard" },
+          { label: "Compras", ruta: "/panel/compras" },
           { label: "Recibo", ruta: "/panel/dashboard" },
           { label: "Orden de Pago", ruta: "/panel/dashboard" },
           { label: "Otros ingresos", ruta: "/panel/dashboard" },
@@ -386,33 +386,7 @@ const Principal = () => {
 
                   <span className="pp-nav__label">{item.label}</span>
 
-                  {hasSub && (
-                    <button
-                      type="button"
-                      className="pp-nav__caretBtn"
-                      aria-label="Ver subsecciones"
-                      // ✅ DESKTOP: si querés, también abre con delay al pasar por caret
-                      onMouseEnter={() => {
-                        if (!isNoHover() && isMov) {
-                          cancelClose();
-                          openSoon(500);
-                        }
-                      }}
-                      onFocus={() => {
-                        if (isMov) setOpenMovSub(true);
-                      }}
-                      onBlur={() => {
-                        if (!isNoHover() && isMov) closeSoon(220);
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // mobile: click abre/cierra
-                        if (isMov) setOpenMovSub((v) => !v);
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faChevronDown} />
-                    </button>
-                  )}
+
                 </div>
 
                 {hasSub && (

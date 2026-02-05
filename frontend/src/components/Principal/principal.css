@@ -559,37 +559,8 @@ button{ font-family: inherit; }
    ✅ transición real (no display)
 ========================= */
 
-/* caret */
-.pp-nav__caretBtn{
-  margin-left: auto;
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  display:grid;
-  place-items:center;
 
-  border: 1px solid rgba(0, 85, 187, 0.12);
-  background: rgba(0, 85, 187, 0.06);
-  color: rgba(10, 37, 64, 0.65);
 
-  cursor: pointer;
-  transition: opacity 220ms ease, transform 220ms ease, background 220ms ease, border-color 220ms ease;
-}
-
-/* caret visible solo al hover del item (desktop) */
-@media (hover:hover) and (pointer:fine){
-  .pp-nav__caretBtn{ opacity: 0; transform: translateX(-4px); }
-  .pp-nav__item:hover .pp-nav__caretBtn{ opacity: 1; transform: translateX(0); }
-}
-
-.pp-nav__caretBtn:hover{
-  background: rgba(0, 85, 187, 0.10);
-  border-color: rgba(0, 85, 187, 0.18);
-}
-.pp-nav__caretBtn:focus-visible{
-  outline: none;
-  box-shadow: 0 0 0 4px var(--balto-focus);
-}
 
 /* submenú (animable) */
 .pp-navSub{
@@ -620,7 +591,7 @@ button{ font-family: inherit; }
     transform: translateY(0);
     pointer-events: auto;
   }
-  .pp-nav__caretBtn{ opacity: 1; transform: none; }
+
 }
 
 /* items submenú */
@@ -668,37 +639,9 @@ button{ font-family: inherit; }
 .pp-navSub__item.is-active .pp-navSub__dot{
   background: var(--balto-action);
 }
-/* caret */
-.pp-nav__caretBtn{
-  margin-left: auto;
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  display:grid;
-  place-items:center;
 
-  border: 1px solid rgba(0, 85, 187, 0.12);
-  background: rgba(0, 85, 187, 0.06);
-  color: rgba(10, 37, 64, 0.65);
 
-  cursor: pointer;
-  transition: opacity 220ms ease, transform 220ms ease, background 220ms ease, border-color 220ms ease;
-}
 
-/* caret visible solo al hover del item (desktop) */
-@media (hover:hover) and (pointer:fine){
-  .pp-nav__caretBtn{ opacity: 0; transform: translateX(-4px); }
-  .pp-nav__item:hover .pp-nav__caretBtn{ opacity: 1; transform: translateX(0); }
-}
-
-.pp-nav__caretBtn:hover{
-  background: rgba(0, 85, 187, 0.10);
-  border-color: rgba(0, 85, 187, 0.18);
-}
-.pp-nav__caretBtn:focus-visible{
-  outline: none;
-  box-shadow: 0 0 0 4px var(--balto-focus);
-}
 
 /* submenú: animable */
 .pp-navSub{

@@ -13,6 +13,8 @@ import Principal from "./components/Principal/Principal";
 import Dashboard from "./components/Dashboard/Dashboard";
 import Movimientos from "./components/Movimientos/Movimientos";
 import Ventas from "./components/Mov_Subsection/Ventas";
+import Compras from "./components/Mov_Subsection/Compras";
+
 import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 
 /* ✅ IMPORT ROBUSTO (default o named) */
@@ -121,6 +123,7 @@ export default function App() {
           {/* Movimientos */}
           <Route path="movimientos" element={<Movimientos />} />
 <Route path="ventas" element={<Ventas />} />
+<Route path="compras" element={<Compras />} />
 
           {/* Flujo de Caja */}
           <Route path="flujo-de-caja" element={<Flujo_Caja />} />

@@ -974,24 +974,30 @@ const onUpdateCompra = async ({ compra, items, facturaFile }) => {
       />
 
       {/* MODAL EDITAR COMPRA (todavía NO cableado al backend) */}
-      <ModalEditarCompra
-        open={openEdit}
-        lists={lists}
-        row={selectedRow}
-        periodoDefault={fPeriodo}
-        onClose={() => {
-          setOpenEdit(false);
-          setSelectedRow(null);
-        }}
-        onToast={showToast}
-onSaveCompra={async ({ compra, items, facturaFile }) => {
-  const data = await onUpdateCompra({ compra, items, facturaFile });
-  const per = compra?.periodo || fPeriodo;
-  await refreshAfterSave(per);
-  return data;
-}}
+<ModalEditarCompra
+  open={openEdit}
+  lists={lists}
+  row={selectedRow}
+  periodoDefault={fPeriodo}
+  onClose={() => {
+    setOpenEdit(false);
+    setSelectedRow(null);
+  }}
+  onToast={showToast}
+  onSave={async (payloadFinal) => {
+    // payloadFinal ya viene listo desde el modal
+    const data = await onUpdateCompra({
+      compra: payloadFinal,
+      items: [],          // si todavía no manejás items reales, dejalo vacío
+      facturaFile: null,  // idem
+    });
 
-      />
+    const per = payloadFinal?.periodo || fPeriodo;
+    await refreshAfterSave(per);
+    return data;
+  }}
+/>
+
 
       {/* MODAL VER COMPROBANTE */}
       <ModalVerComprobante open={openVerComp} url={compUrl} onClose={closeComprobanteModal} title="Comprobante de compra" />

@@ -1,12 +1,13 @@
 // src/components/Compras/Compras.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../config/config";
-import ModalEditarCompra from "./modales/ModalEditarCompra";
 import "../Movimientos/movimientos.css"; // ✅ misma estética que Ventas/Movimientos
 
 import Toast from "../Global/Toast.jsx";
 
 import ModalNuevaCompra from "./modales/ModalNuevaCompra";
+import ModalEditarCompra from "./modales/ModalEditarCompra";
+import ModalVerComprobante from "./modales/ModalVerComprobante";
 import ModalEliminarMovimientos from "../Movimientos/modales/ModalEliminarMovimientos";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -17,6 +18,7 @@ import {
   faMagnifyingGlass,
   faCalendarDays,
   faFileExcel,
+  faEye,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -169,13 +171,17 @@ const emptyLists = {
   medios_pago: [],
   detalles: [],
   tipos_movimiento: [],
-  tipos_compra: [],
+  tipos_venta: [],
 };
 
 function normalizeLists(raw) {
   const src = raw?.listas && typeof raw.listas === "object" ? raw.listas : raw;
+
   const pickArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
   const periodos = pickArr("periodos").map(periodoToMMYYYY);
+
+  // ✅ tipos_movimiento del backend DB real: id_tipo_movimiento / nombre
+  const tiposMov = pickArr("tipos_movimiento");
 
   return {
     periodos,
@@ -184,8 +190,8 @@ function normalizeLists(raw) {
     cuentas_corrientes: pickArr("cuentas_corrientes"),
     medios_pago: pickArr("medios_pago"),
     detalles: pickArr("detalles"),
-    tipos_movimiento: pickArr("tipos_movimiento"),
-    tipos_compra: pickArr("tipos_compra"),
+    tipos_movimiento: tiposMov,
+    tipos_venta: pickArr("tipos_venta"),
   };
 }
 
@@ -205,7 +211,7 @@ function rowMatchesQuery(row, query) {
   const qq = normalizeSearchText(query);
   if (!qq) return true;
 
-  const montoNum = Number(row?.monto_total || row?.total || 0);
+  const montoNum = Number(row?.monto_total ?? row?.total ?? 0);
   const parts = [];
 
   if (row && typeof row === "object") {
@@ -225,27 +231,41 @@ function rowMatchesQuery(row, query) {
 }
 
 /* =========================
-   Reglas de Compras
-   - tipo_movimiento = "Salida"
-   - proveedor obligatorio
+   ✅ Reglas de Compras: COMPRA = ENTRADA
 ========================= */
-function normalizeTipoMov(s) {
-  const v = String(s ?? "").trim().toLowerCase();
-  if (!v) return "";
-  if (v === "salida" || v === "egreso" || v === "compra") return "salida";
-  if (v === "entrada" || v === "ingreso") return "entrada";
-  return v;
+function pickTipoMovIdByName(lists, name) {
+  const arr = Array.isArray(lists?.tipos_movimiento) ? lists.tipos_movimiento : [];
+  const target = String(name || "").trim().toLowerCase();
+
+  const found =
+    arr.find((x) => String(x?.nombre ?? "").trim().toLowerCase() === target) ||
+    arr.find((x) => String(x?.nombre ?? "").toLowerCase().includes(target));
+
+  // ✅ obtener_listas.php devuelve "id"
+  const id = Number(found?.id);
+  return Number.isFinite(id) && id > 0 ? id : null;
 }
 
-function isCompraRow(r) {
-  const tipo = normalizeTipoMov(r?.tipo_movimiento);
-  const prov = String(r?.proveedor ?? "").trim();
-  return tipo === "salida" && prov !== "";
+
+function isCompraRow(r, idEntrada) {
+  const idTipo = Number(r?.id_tipo_movimiento ?? 0);
+  const tipoTxt = String(r?.tipo_movimiento ?? "").trim().toLowerCase();
+
+  if (Number.isFinite(idEntrada) && idEntrada > 0) {
+    if (Number.isFinite(idTipo) && idTipo > 0) return idTipo === idEntrada;
+    return tipoTxt.includes("entrada");
+  }
+
+  if (tipoTxt.includes("entrada")) return true;
+
+  const idProv = Number(r?.id_proveedor ?? 0);
+  const provTxt = String(r?.proveedor ?? "").trim();
+  return (Number.isFinite(idProv) && idProv > 0) || provTxt !== "";
 }
 
-/* ✅ “FORMA DE PAGO” en Compras:
+/* ✅ “PAGO” en Compras:
    - si hay cuenta_corriente => "Cuenta Corriente"
-   - si no => "Contado" (y en PAGO mostramos el medio_pago)
+   - si no => medio_pago (o "Contado" si no viene)
 */
 function getCompraCategoria(r) {
   const cc = String(r?.cuenta_corriente ?? "").trim();
@@ -256,7 +276,33 @@ function getCompraPagoLabel(r) {
   const cat = getCompraCategoria(r);
   if (cat === "Cuenta Corriente") return "Cuenta Corriente";
   const mp = String(r?.medio_pago ?? "").trim();
-  return mp ? mp : "—";
+  return mp ? mp : "Contado";
+}
+
+/* =========================
+   ✅ Comprobante helpers
+   (tu backend actual NO devuelve factura_url; esto queda por compat)
+========================= */
+function getComprobanteUrl(r) {
+  const candidates = [
+    r?.factura_url,
+    r?.factura,
+    r?.comprobante_url,
+    r?.comprobante,
+    r?.archivo_url,
+    r?.url_factura,
+    r?.path_factura,
+  ];
+
+  const raw = candidates.find((x) => typeof x === "string" && x.trim() !== "");
+  if (!raw) return "";
+
+  const s = raw.trim();
+  if (/^https?:\/\//i.test(s)) return s;
+
+  const base = String(BASE_URL || "").replace(/\/$/, "");
+  const rel = s.replace(/^\//, "");
+  return `${base}/${rel}`;
 }
 
 /* =========================
@@ -273,8 +319,8 @@ function slugifySheetName(name) {
 function buildExportRows(rows) {
   return rows.map((r) => ({
     FECHA: safeText(formatFechaDMY(r.fecha)),
-    DESCRIPCION: safeText(r.detalle ?? r.descripcion ?? r.concepto ?? r.detalles ?? ""),
-    PROVEEDOR: safeText(r.proveedor),
+    DESCRIPCION: safeText(r.detalle ?? r.descripcion ?? r.concepto ?? ""),
+    PROVEEDOR: safeText(r.proveedor ?? ""),
     PAGO: safeText(getCompraPagoLabel(r)),
     TOTAL: numOrZero(r.monto_total ?? r.total ?? 0),
   }));
@@ -302,6 +348,10 @@ export default function Compras() {
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
 
+  // ver comprobante
+  const [openVerComp, setOpenVerComp] = useState(false);
+  const [compUrl, setCompUrl] = useState("");
+
   const [selectedRow, setSelectedRow] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -322,9 +372,7 @@ export default function Compras() {
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(
-        `Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`
-      );
+      throw new Error(`Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`);
     }
   }, []);
 
@@ -333,7 +381,11 @@ export default function Compras() {
       const headers = {};
       const { token } = getAuthInfo();
       if (token) headers.Authorization = `Bearer ${token}`;
-      const res = await fetch(url, { method: "GET", headers });
+      const res = await fetch(url, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
       return await parseJsonOrThrow(res);
     },
     [parseJsonOrThrow]
@@ -352,6 +404,7 @@ export default function Compras() {
         method: "POST",
         headers: buildHeaders(),
         body: JSON.stringify(payload ?? {}),
+        cache: "no-store",
       });
       return await parseJsonOrThrow(res);
     },
@@ -371,7 +424,7 @@ export default function Compras() {
     setLoadingLists(true);
     setError("");
     try {
-      const data = await apiGet(`${API}?action=global_obtener_listas`);
+      const data = await apiGet(`${API}?action=global_obtener_listas&_ts=${Date.now()}`);
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar listas.");
       const normalized = normalizeLists(data);
       setLists(normalized);
@@ -423,6 +476,9 @@ export default function Compras() {
         sp.set("periodo", periodoAPI);
         if (qLocal) sp.set("q", qLocal);
 
+        // ✅ cache-buster (por si hostinger cachea GET)
+        sp.set("_ts", String(Date.now()));
+
         const data = await apiGet(`${API}?${sp.toString()}`);
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar compras.");
 
@@ -463,19 +519,21 @@ export default function Compras() {
 
   /* =========================
      Filtrado: período + regla compras + búsqueda
-  ========================= */
+========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
     if (!fPer) return [];
 
+    const idEntrada = pickTipoMovIdByName(lists, "entrada");
+
     return rows
       .filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer))
-      .filter((r) => isCompraRow(r))
+      .filter((r) => isCompraRow(r, idEntrada))
       .filter((r) => rowMatchesQuery(r, q));
-  }, [rows, fPeriodo, q]);
+  }, [rows, fPeriodo, q, lists]);
 
   /* =========================
-     Columnas (IGUAL a Ventas, pero PROVEEDOR + PAGO)
+     Columnas
   ========================= */
   const columns = useMemo(() => {
     return [
@@ -514,7 +572,7 @@ export default function Compras() {
         align: "center",
         render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
       },
-      { key: "acciones", label: "ACCIONES", fr: 0.8, align: "center", render: () => null },
+      { key: "acciones", label: "ACCIONES", fr: 0.95, align: "center", render: () => null },
     ];
   }, []);
 
@@ -572,11 +630,23 @@ export default function Compras() {
   const openEditModal = (r) => {
     setSelectedRow(r);
     setOpenEdit(true);
-    
   };
+
   const openDeleteModal = (r) => {
     setSelectedRow(r);
     setOpenDel(true);
+  };
+
+  const openComprobanteModal = (r) => {
+    const url = getComprobanteUrl(r);
+    if (!url) return;
+    setCompUrl(url);
+    setOpenVerComp(true);
+  };
+
+  const closeComprobanteModal = () => {
+    setOpenVerComp(false);
+    setCompUrl("");
   };
 
   const confirmDelete = async () => {
@@ -609,63 +679,31 @@ export default function Compras() {
   };
 
   /* =========================
-     Guardar compra desde ModalNuevaCompra
-  ========================= */
-  const onSaveCompra = useCallback(
-    async ({ compra, items, facturaFile }) => {
-      const { idUsuario } = getAuthInfo();
-      showToast("cargando", "Guardando compra…", 12000);
+     ✅ Guardar compra desde ModalNuevaCompra
+     IMPORTANTE: tu backend movimientos_crear acepta JSON plano,
+     NO FormData/multipart con "movimiento"/"items".
+========================= */
+const onSaveCompra = async (payload) => {
+  const token = localStorage.getItem("token") || "";
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
 
-      try {
-        if (facturaFile) {
-          const { token } = getAuthInfo();
-          const headers = {};
-          if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${API}?action=movimientos_crear`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
 
-          const fd = new FormData();
-          fd.append("compra", JSON.stringify({ ...(compra || {}), idUsuario }));
-          fd.append("items", JSON.stringify(items || []));
-          fd.append("factura", facturaFile);
+  const data = await parseJsonOrThrow(res);
+  if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la compra.");
+  return data;
+};
 
-          const res = await fetch(`${API}?action=compras_crear`, {
-            method: "POST",
-            headers,
-            body: fd,
-          });
-
-          const data = await parseJsonOrThrow(res);
-          if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la compra.");
-        } else {
-          const data = await apiPostJson(`${API}?action=compras_crear`, {
-            idUsuario,
-            compra: compra || {},
-            items: items || [],
-          });
-          if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la compra.");
-        }
-
-        setOpenNueva(false);
-        invalidateCacheForPeriodo(fPeriodo);
-        await loadRows({ periodo: fPeriodo, q });
-
-        showToast("exito", "Compra guardada.", 2600);
-      } catch (e) {
-        showToast("error", e?.message || "Error guardando compra.", 4500);
-        throw e;
-      }
-    },
-    [API, apiPostJson, fPeriodo, invalidateCacheForPeriodo, loadRows, parseJsonOrThrow, q, showToast]
-  );
 
   return (
     <div className="mov-page">
       {toast && (
-        <Toast
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={closeToast}
-        />
+        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
       )}
 
       {error && (
@@ -722,10 +760,7 @@ export default function Compras() {
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        await loadRows({
-                          periodo: fPeriodo,
-                          q: e.currentTarget.value,
-                        });
+                        await loadRows({ periodo: fPeriodo, q: e.currentTarget.value });
                       }
                     }}
                     placeholder="Buscar por proveedor, descripción, monto, fecha…"
@@ -779,16 +814,15 @@ export default function Compras() {
         </div>
 
         {/* HEADER */}
-<div
-  className="mov-gridTable mov-gridTable--head"
-  style={{
-    gridTemplateColumns: gridCols,
-    overflowX: "auto",
-    scrollbarGutter: "stable",
-  }}
-  role="row"
->
-
+        <div
+          className="mov-gridTable mov-gridTable--head"
+          style={{
+            gridTemplateColumns: gridCols,
+            overflowX: "auto",
+            scrollbarGutter: "stable",
+          }}
+          role="row"
+        >
           {columns.map((c) => (
             <div
               key={c.key}
@@ -820,6 +854,9 @@ export default function Compras() {
                 >
                   {columns.map((c) => {
                     if (c.key === "acciones") {
+                      const comp = getComprobanteUrl(r);
+                      const canSee = !!comp;
+
                       return (
                         <div
                           key={c.key}
@@ -831,6 +868,16 @@ export default function Compras() {
                           role="cell"
                         >
                           <div className="mov-actionsInline">
+                            <button
+                              type="button"
+                              className={`mov-iconBtn ${!canSee ? "is-disabled" : ""}`}
+                              title={canSee ? "Ver comprobante" : "Sin comprobante"}
+                              onClick={() => canSee && openComprobanteModal(r)}
+                              disabled={!canSee}
+                            >
+                              <FontAwesomeIcon icon={faEye} />
+                            </button>
+
                             <button
                               type="button"
                               className="mov-iconBtn"
@@ -869,7 +916,6 @@ export default function Compras() {
                         role="cell"
                         title={typeof val === "string" ? val : undefined}
                       >
-                        {/* ✅ MISMO TRUCO DE ELLIPSIS que Ventas */}
                         <span className="mov-ellipsissss">{val}</span>
                       </div>
                     );
@@ -888,7 +934,7 @@ export default function Compras() {
         </div>
       </section>
 
-      {/* ✅ MODAL NUEVA COMPRA */}
+      {/* MODAL NUEVA COMPRA */}
       <ModalNuevaCompra
         open={openNueva}
         lists={lists}
@@ -898,42 +944,33 @@ export default function Compras() {
         onSaveCompra={onSaveCompra}
       />
 
-      {/* EDIT (placeholder por ahora, pero con estética mov-) */}
-      {openEdit && (
-        <div className="mov-placeholder" role="dialog" aria-modal="true">
-          <div className="mov-placeholder__box">
-            <div className="mov-placeholder__title">Editar Compra</div>
-            <div className="mov-placeholder__text">
-              Seleccionada: <b>{safeText(selectedRow?.proveedor)}</b> ·{" "}
-              {moneyARS(selectedRow?.monto_total ?? selectedRow?.total ?? 0)}
-            </div>
-            <button
-              className="mov-btn"
-              onClick={() => {
-                setOpenEdit(false);
-                setSelectedRow(null);
-              }}
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>
-      )}
+      {/* MODAL EDITAR COMPRA */}
       <ModalEditarCompra
-  open={openEdit}
-  lists={lists}
-  row={selectedRow}
-  periodoDefault={fPeriodo}
-  onClose={() => setOpenEdit(false)}
-  onToast={showToast}
-  onSaveCompra={async ({ compra, items, facturaFile }) => {
-    // acá pegás al backend:
-    // - compra + items (JSON)
-    // - facturaFile (multipart) si vino
-  }}
-/>
+        open={openEdit}
+        lists={lists}
+        row={selectedRow}
+        periodoDefault={fPeriodo}
+        onClose={() => {
+          setOpenEdit(false);
+          setSelectedRow(null);
+        }}
+        onToast={showToast}
+        onSaveCompra={async () => {
+          // cuando lo implementes:
+          // invalidateCacheForPeriodo(fPeriodo);
+          // await loadRows({ periodo: fPeriodo, q });
+        }}
+      />
 
-      {/* DELETE (modal real reutilizado) */}
+      {/* MODAL VER COMPROBANTE */}
+      <ModalVerComprobante
+        open={openVerComp}
+        url={compUrl}
+        onClose={closeComprobanteModal}
+        title="Comprobante de compra"
+      />
+
+      {/* DELETE */}
       <ModalEliminarMovimientos
         open={openDel}
         row={selectedRow}

@@ -99,14 +99,14 @@ button{ font-family: inherit; }
 }
 
 .mov-topbar__logoImg{
-  height: 40px;
+  height: 80px;
   width: auto;
   object-fit: contain;
   filter: drop-shadow(0 8px 14px rgba(0,0,0,.18));
 }
 
 .mov-topbar__titles{
-  display:flex;
+  display:none;
   flex-direction: column;
   gap: 2px;
   min-width: 0;

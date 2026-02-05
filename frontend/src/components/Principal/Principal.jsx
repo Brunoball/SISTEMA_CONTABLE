@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import LogoBalto from "../../imagenes/Logo_Balto_white.png";
+import LogoBalto from "../../imagenes/LBT_TS_P.png";
 
 import {
   faChartLine,

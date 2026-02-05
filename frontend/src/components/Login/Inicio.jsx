@@ -1,9 +1,10 @@
 // src/components/inicio/Inicio.jsx
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import BASE_URL from "../../config/config";
 import "./inicio.css";
-import logoRH from "../../imagenes/Logotransparente.png";
+
+import logoBalto from "../../imagenes/LB_SistemaContable.png";
 import Toast from "../Global/Toast";
 
 const STORAGE_KEYS = {
@@ -33,12 +34,12 @@ function normalizeRol(value) {
     v === "administrator" ||
     v === "administrador" ||
     v === "superadmin"
-  )
+  ) {
     return "admin";
+  }
   return "vista";
 }
 
-// 🔒 Normaliza plan (1,2,3). Si viene raro, cae en 1.
 function normalizePlanNivel(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 1;
@@ -62,19 +63,20 @@ const Inicio = () => {
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.rememberFlag) === "1";
-    if (saved) {
-      const savedUser = localStorage.getItem(STORAGE_KEYS.user) || "";
-      const savedPassB64 = localStorage.getItem(STORAGE_KEYS.pass) || "";
-      let savedPass = "";
-      try {
-        savedPass = savedPassB64 ? atob(savedPassB64) : "";
-      } catch {
-        savedPass = "";
-      }
-      setRemember(true);
-      setNombre(savedUser);
-      setContrasena(savedPass);
+    if (!saved) return;
+
+    const savedUser = localStorage.getItem(STORAGE_KEYS.user) || "";
+    const savedPassB64 = localStorage.getItem(STORAGE_KEYS.pass) || "";
+    let savedPass = "";
+    try {
+      savedPass = savedPassB64 ? atob(savedPassB64) : "";
+    } catch {
+      savedPass = "";
     }
+
+    setRemember(true);
+    setNombre(savedUser);
+    setContrasena(savedPass);
   }, []);
 
   const persistRemember = (user, pass, flag) => {
@@ -93,8 +95,6 @@ const Inicio = () => {
     if (remember) persistRemember(nombre, contrasena, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nombre, contrasena, remember]);
-
-  const togglePasswordVisibility = () => setShowPassword((v) => !v);
 
   const manejarEnvio = async (e) => {
     e.preventDefault();
@@ -146,7 +146,6 @@ const Inicio = () => {
 
       const usuarioResp = data.usuario || {};
 
-      // ✅ rol: desde usuarioResp.rol, data.rol o token (si existiera)
       let rol = (usuarioResp.rol ?? data.rol ?? "").toString();
       if ((!rol || rol === "") && token && token.split(".").length === 3) {
         const payload = decodeJwtPayload(token);
@@ -154,20 +153,14 @@ const Inicio = () => {
         if (fromJwt) rol = fromJwt;
       }
 
-      // ✅ plan_nivel: viene del backend en data.usuario.plan_nivel
       const planNivel = normalizePlanNivel(
         usuarioResp.plan_nivel ?? usuarioResp.planNivel ?? data.plan_nivel ?? 1
       );
 
       const usuarioFinal = {
         ...usuarioResp,
-
-        // 🔧 Normalizaciones IMPORTANTES
         rol: normalizeRol(rol),
         plan_nivel: planNivel,
-
-        // 🔧 Para que el resto de tu app pueda usar "nombre" si quiere:
-        // tu backend devuelve "Nombre_Completo"
         nombre:
           usuarioResp.nombre ??
           usuarioResp.Nombre_Completo ??
@@ -187,23 +180,16 @@ const Inicio = () => {
   };
 
   return (
-    <div className="ini_contenedor-principal">
-      <div className="ini_contenedor">
-        <div className="ini_encabezado">
-          <img src={logoRH} alt="Cooperadora IPET 50" className="ini_logo" />
-          <h1 className="ini_titulo">Iniciar Sesión</h1>
-          <p className="ini_subtitulo">
-            Ingresá tus credenciales para acceder al sistema
-          </p>
+    <div className="ini_page">
+      <div className="ini_card" role="region" aria-label="Inicio de sesión">
+        <div className="ini_brand">
+          <img className="ini_brandLogo" src={logoBalto} alt="BALTO - Sistemas contables" />
         </div>
 
-        <form
-          onSubmit={manejarEnvio}
-          className="ini_formulario"
-          autoComplete="on"
-          noValidate
-        >
-          <div className="ini_campo">
+        <h1 className="ini_title">INICIAR SESIÓN</h1>
+
+        <form className="ini_form" onSubmit={manejarEnvio} autoComplete="on" noValidate>
+          <div className="ini_field ini_fieldUser">
             <input
               type="text"
               placeholder="Usuario"
@@ -216,68 +202,63 @@ const Inicio = () => {
             />
           </div>
 
-          <div className="ini_campo ini_campo-password">
+          <div className="ini_field ini_fieldPass">
             <input
               type={showPassword ? "text" : "password"}
-              className="ini_input"
               placeholder="Contraseña"
               value={contrasena}
               onChange={(e) => setContrasena(e.target.value)}
               required
+              className="ini_input ini_inputPass"
               autoComplete="current-password"
             />
+
             <button
               type="button"
-              className="ini_toggle-password"
-              onClick={togglePasswordVisibility}
+              className="ini_passToggle"
+              onClick={() => setShowPassword((v) => !v)}
               aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
               title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-              >
-                {showPassword ? (
-                  <>
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                    <line x1="1" y1="1" x2="23" y2="23"></line>
-                  </>
-                ) : (
-                  <>
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                  </>
-                )}
-              </svg>
+              {showPassword ? (
+                // eye-off
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                  <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                  <path d="M1 1l22 22" />
+                </svg>
+              ) : (
+                // eye
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              )}
             </button>
           </div>
 
-          <div className="ini_check-row">
+          <label className="ini_remember">
             <input
-              id="recordar"
               type="checkbox"
-              className="ini_checkbox"
               checked={remember}
               onChange={(e) => setRemember(e.target.checked)}
             />
-            <label htmlFor="recordar" className="ini_check-label">
-              Recordar cuenta
-            </label>
-          </div>
+            <span>Recordar cuenta</span>
+          </label>
 
-          <div className="ini_footer">
-            <button
-              type="submit"
-              className="ini_boton"
-              disabled={cargando}
-              aria-busy={cargando ? "true" : "false"}
-              aria-live="polite"
-            >
-              {cargando ? "Iniciando..." : "Iniciar Sesión"}
-            </button>
+          <button className="ini_btn" type="submit" disabled={cargando} aria-busy={cargando}>
+            {cargando ? "INICIANDO..." : "ACCEDER"}
+          </button>
+
+          <div className="ini_links">
+            <Link to="/recuperar" className="ini_link">
+              ¿Olvidaste tu contraseña?
+            </Link>
+
+            <Link to="/registro" className="ini_link">
+              Crear una cuenta
+            </Link>
           </div>
         </form>
       </div>

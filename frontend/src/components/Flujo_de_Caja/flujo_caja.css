@@ -1,25 +1,31 @@
 /* src/components/Flujo_de_Caja/flujo_caja.css */
+/* =========================================================
+   BALTO — Flujo de Caja (alineado a Movimientos)
+   - pesos livianos (420–650)
+   - paleta: Azul Medianoche / Azul Acción / Fondo App / Gris / Verde / Rojo
+========================================================= */
 
-/* =========================
-   Variables (alineadas a Movimientos)
-========================= */
 :root{
-  --fc-text: rgba(15, 23, 42, 0.92);
-  --fc-muted: rgba(15, 23, 42, 0.60);
-  --fc-border: rgba(15, 23, 42, 0.12);
+  --balto-ink:#0A2540;
+  --balto-action:#0055BB;
+  --balto-bg:#F6F9FC;
+  --balto-text:#425466;
+  --balto-white:#FFFFFF;
+  --balto-success:#22AD5C;
+  --balto-danger:#E13D45;
 
-  --fc-card: #ffffff;
+  --fc-text: color-mix(in srgb, var(--balto-ink) 86%, #000);
+  --fc-muted: color-mix(in srgb, var(--balto-text) 82%, #fff);
+  --fc-border: color-mix(in srgb, var(--balto-ink) 14%, #fff);
+
+  --fc-card: var(--balto-white);
   --fc-radius: 16px;
-  --fc-shadow: 0 10px 30px rgba(2, 8, 23, 0.06);
 
-  --fc-primary: var(--blue-inst-primary, #1f6feb);
-  --fc-primary-2: var(--blue-inst-secondary, #0b4fc7);
+  --fc-shadow-sm: 0 1px 2px rgba(10,37,64,.06);
+  --fc-shadow-md: 0 14px 34px -22px rgba(10,37,64,.28);
 
-  --fc-danger: #ef4444;
-
-  --fc-shadow-sm: var(--blue-inst-shadow-sm, 0 6px 18px rgba(2, 8, 23, 0.06));
-  --fc-shadow-md: var(--blue-inst-shadow-md, 0 10px 26px rgba(2, 8, 23, 0.08));
-  --fc-transition: var(--blue-inst-transition, 140ms ease);
+  --fc-focus: 0 0 0 4px rgba(0,85,187,.12);
+  --fc-trans: 160ms cubic-bezier(.4,0,.2,1);
 }
 
 /* =========================
@@ -29,7 +35,9 @@
   width: 100%;
   min-height: 100%;
   color: var(--fc-text);
+  background: var(--balto-bg);
   padding: 14px;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
 
 /* =========================
@@ -39,10 +47,10 @@
   margin: 0 0 12px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(239, 68, 68, 0.10);
-  border: 1px solid rgba(239, 68, 68, 0.22);
-  color: rgba(127, 29, 29, 0.92);
-  font-weight: 800;
+  background: color-mix(in srgb, var(--balto-danger) 10%, #fff);
+  border: 1px solid color-mix(in srgb, var(--balto-danger) 24%, #fff);
+  color: color-mix(in srgb, var(--balto-danger) 60%, var(--balto-ink));
+  font-weight: 560;
 }
 
 /* =========================
@@ -52,31 +60,33 @@
   background: var(--fc-card);
   border: 1px solid var(--fc-border);
   border-radius: var(--fc-radius);
-  box-shadow: var(--fc-shadow);
+  box-shadow: var(--fc-shadow-md);
   overflow: hidden;
 }
 
-/* para permitir “scroll solo en body” */
 .fc-card--table{
-  display: flex;
+  display:flex;
   flex-direction: column;
   min-height: 0;
 }
 
 /* =========================
-   Head (como Movimientos)
+   Head (igual vibe Movimientos)
 ========================= */
 .fc-card__head{
-  display: flex;
-  align-items: flex-end;
+  padding: 14px 16px;
+  display:flex;
+  align-items:flex-end;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  border-bottom: 1px solid color-mix(in srgb, var(--fc-border) 70%, #fff);
+  background:
+    radial-gradient(900px 180px at 0% 0%, rgba(0,85,187,.06), transparent 55%),
+    linear-gradient(180deg, #fff, #fff);
 }
 
 .fc-card__headLeft{
-  display: flex;
+  display:flex;
   justify-content: space-between;
   gap: 14px;
   width: 100%;
@@ -90,118 +100,125 @@
 }
 
 .fc-card__title{
-  font-weight: 900;
+  font-size: 15px;
+  font-weight: 620; /* ✅ */
   letter-spacing: -0.01em;
-  font-size: 16px;
+  color: var(--balto-ink);
 }
 
 .fc-card__hint{
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.55);
+  color: var(--fc-muted);
+  font-weight: 460;
 }
-
-.fc-miniHint{
-  font-size: 12px;
-  color: rgba(15, 23, 42, 0.55);
-  font-weight: 700;
-  line-height: 1.25;
-}
+.fc-card__hint b{ font-weight: 620; color: var(--balto-ink); }
 
 .fc-card__actions{
-  display: flex;
+  display:flex;
   gap: 10px;
   flex: 0 0 auto;
 }
 
-/* Estado tipo “pill” */
-.fc-pill{
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: #ffffff;
-  border: 1px solid var(--fc-border);
-  box-shadow: 0 6px 20px rgba(2, 8, 23, 0.06);
-  color: rgba(15, 23, 42, 0.75);
-  font-weight: 800;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.fc-dot{
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #16a34a;
-  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.14);
-}
-.fc-pill.is-loading .fc-dot,
-.fc-dot.is-loading{
-  background: var(--fc-primary);
-  box-shadow: 0 0 0 4px rgba(31, 111, 235, 0.16);
-}
-
 /* =========================
-   Filters (inline)
+   Filter
 ========================= */
 .fc-headFilters{
-  display: flex;
-  align-items: flex-end;
+  display:flex;
+  align-items:flex-end;
   gap: 12px;
-  min-width: 0;
   flex-wrap: wrap;
 }
 
+.fc-filter{
+  display:flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .fc-filter label{
-  display: block;
-  font-size: 12px;
-  font-weight: 800;
-  color: rgba(15, 23, 42, 0.65);
-  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600; /* ✅ */
+  color: color-mix(in srgb, var(--balto-text) 86%, #000);
+  letter-spacing: .06em;
+  text-transform: uppercase;
 }
 
 .fc-filter select{
-  width: 100%;
   height: 40px;
   border-radius: 12px;
   border: 1px solid var(--fc-border);
-  background: #fff;
+  background: color-mix(in srgb, var(--balto-bg) 62%, #fff);
   padding: 0 12px;
   outline: none;
-  font-weight: 700;
-  color: rgba(15, 23, 42, 0.90);
-  min-width: 180px;
+  color: var(--balto-ink);
+  font-weight: 520;
+  min-width: 190px;
+  transition: border-color var(--fc-trans), box-shadow var(--fc-trans), background var(--fc-trans);
 }
 
 .fc-filter select:focus{
-  border-color: rgba(31, 111, 235, 0.55);
-  box-shadow: 0 0 0 4px rgba(31, 111, 235, 0.12);
+  background:#fff;
+  border-color: color-mix(in srgb, var(--balto-action) 60%, #fff);
+  box-shadow: var(--fc-focus);
 }
 
 /* =========================
-   Subhead (meta arriba de la tabla)
+   Button (Export)
+========================= */
+.fc-btn{
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--balto-success) 55%, #fff);
+  background: var(--balto-success);
+  color: #fff;
+  font-weight: 580; /* ✅ */
+  cursor: pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap: 10px;
+  transition: transform var(--fc-trans), box-shadow var(--fc-trans), background var(--fc-trans), border-color var(--fc-trans), color var(--fc-trans);
+  box-shadow: 0 10px 22px rgba(34,173,92,.18);
+}
+
+.fc-btn:hover{
+  background:#fff;
+  color: var(--balto-success);
+  border-color: var(--balto-success);
+  transform: translateY(-1px);
+  box-shadow: var(--fc-shadow-sm);
+}
+
+.fc-btn:disabled{
+  opacity: .65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* =========================
+   Subhead (caja arriba de tabla)
 ========================= */
 .fc-subhead{
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
   padding: 12px 16px 10px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(15, 23, 42, 0.02);
+  border-bottom: 1px solid color-mix(in srgb, var(--fc-border) 70%, #fff);
+  background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--balto-bg) 70%, #fff));
 }
 
 .fc-subhead__name{
-  font-weight: 900;
+  font-weight: 620;  /* ✅ */
+  color: var(--balto-ink);
 }
 
 .fc-subhead__meta{
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.60);
-  font-weight: 700;
+  color: var(--fc-muted);
+  font-weight: 460;  /* ✅ */
 }
+.fc-subhead__meta b{ font-weight: 620; color: var(--balto-ink); }
 
 /* =========================
    Table wrap (scroll SOLO body)
@@ -209,292 +226,135 @@
 .fc-tableWrap{
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  max-height: 520px; /* mismo espíritu que Movimientos */
+  overflow: hidden;                 /* ✅ wrap no scrollea */
+  max-height: 520px;
 }
 
-/* scrollbar (igual vibe) */
-.fc-tableWrap::-webkit-scrollbar{   height: 8px; }
-.fc-tableWrap::-webkit-scrollbar-thumb{
-  background: rgba(15, 23, 42, 0.14);
+.fc-gridBody{
+  overflow: auto;                   /* ✅ scroll real */
+  max-height: calc(100vh - 370px);  /* ajustable */
+  background: #fff;
+}
+
+/* scrollbar */
+.fc-gridBody::-webkit-scrollbar{ height: 8px; width: 10px; }
+.fc-gridBody::-webkit-scrollbar-thumb{
+  background: rgba(10,37,64,.14);
   border-radius: 999px;
 }
-.fc-tableWrap::-webkit-scrollbar-track{ background: transparent; }
+.fc-gridBody::-webkit-scrollbar-track{ background: transparent; }
 
 /* =========================
-   Table (estilo Movimientos)
+   Grid (como tu JSX)
 ========================= */
-.fc-table{
+.fc-grid{
+  display: grid;
+  grid-template-columns: 160px 1fr 1fr 1fr;
+  min-width: 780px;
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  min-width: 840px; /* mantiene columnas prolijas */
 }
 
-.fc-table thead th{
+.fc-grid--head{
   position: sticky;
   top: 0;
-  z-index: 5;
-  background: var(--fc-primary-2);
+  z-index: 10;
+  background: var(--balto-ink);
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+
+.fc-grid--head .fc-cell{
   color: rgba(255,255,255,.92);
-  font-weight: 900;
-  letter-spacing: .02em;
-  font-size: 12px;
-  padding: 12px 12px;
-  white-space: nowrap;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+  font-size: 11px;
+  font-weight: 600;           /* ✅ */
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  border-bottom: none;
 }
 
-/* celdas */
-.fc-table tbody td{
-  padding: 12px 12px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-  color: rgba(15, 23, 42, 0.88);
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-/* hover fila */
-.fc-table tbody tr{
+/* rows */
+.fc-grid--row{
   background: #fff;
-}
-.fc-table tbody tr:hover{
-  background: rgba(31, 111, 235, 0.06);
+  border-bottom: 1px solid color-mix(in srgb, var(--fc-border) 60%, #fff);
+  transition: background var(--fc-trans);
 }
 
-/* helpers */
+.fc-grid--row:hover{
+  background: rgba(0,85,187,.05);
+}
+
+/* cells */
+.fc-cell{
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 440;           /* ✅ */
+  color: color-mix(in srgb, var(--balto-ink) 78%, #000);
+  display:flex;
+  align-items:center;
+  min-height: 44px;
+  min-width: 0;
+  overflow:hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  justify-content: flex-start;
+}
+
+.is-center{
+  justify-content:center;
+  text-align:center;
+}
+
 .fc-date{
-  font-weight: 800;
+  font-weight: 560;           /* ✅ */
+  color: var(--balto-ink);
 }
+
 .fc-num{
+  justify-content: flex-end;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
-.fc-eg{
-  color: rgba(127, 29, 29, 0.92);
-}
+
+/* =========================
+   Column colors (suaves, estilo Excel)
+========================= */
+.fc-in{ color: color-mix(in srgb, var(--balto-success) 72%, var(--balto-ink)); font-weight: 520; }
+.fc-eg{ color: color-mix(in srgb, var(--balto-danger) 70%, var(--balto-ink)); font-weight: 520; }
+
+/* saldo: pill suave */
 .fc-saldo{
-  font-weight: 900;
+  font-weight: 560;           /* ✅ */
 }
 
-/* estado vacío como Movimientos */
+.fc-saldo.is-positive{
+  color: color-mix(in srgb, var(--balto-success) 76%, var(--balto-ink));
+}
+
+.fc-saldo.is-negative{
+  color: color-mix(in srgb, var(--balto-danger) 76%, var(--balto-ink));
+}
+
+/* =========================
+   Empty / Footnote
+========================= */
 .fc-emptyRow{
-  padding: 24px 12px;
-  text-align: center;
-  color: rgba(15, 23, 42, 0.55);
-  font-weight: 800;
+  padding: 22px 12px;
+  text-align:center;
+  color: var(--fc-muted);
+  font-weight: 520;           /* ✅ */
 }
 
-/* Footnote */
 .fc-footnote{
   padding: 10px 14px;
-  opacity: 0.65;
   font-size: 12px;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  color: var(--fc-muted);
+  border-top: 1px solid color-mix(in srgb, var(--fc-border) 70%, #fff);
   background: #fff;
 }
-
-/* generic helpers */
-.is-right{ text-align: right; }
 
 /* =========================
    Responsive
 ========================= */
 @media (max-width: 720px){
-  .fc-card__headLeft{
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .fc-filter select{
-    min-width: 0;
-    width: 100%;
-  }
-  .fc-miniHint{
-    max-width: none;
-  }
-}
-/* =========================
-   "Tabla" con DIVs (grid)
-========================= */
-
-.fc-tableWrap{
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  max-height: 520px;
-}
-
-/* 6 columnas como tu tabla */
-.fc-grid{
-  display: grid;
-  grid-template-columns: 160px 1fr 1fr 1fr ;
-  min-width: 840px;
-}
-.fc-grid--head,.fc-gridBody{
-  overflow: auto;
-  scrollbar-gutter: both-edges stable;
-}
-/* Header sticky */
-.fc-grid--head{
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: #f1f5f9 !important;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
-}
-
-.fc-grid--head .fc-cell{
-  color: var(--mov-text-muted) !important;
-  font-weight: 900;
-  letter-spacing: .02em;
-  font-size: 12px;
-  padding: 12px 12px;
-  white-space: nowrap;
-}
-
-/* Body */
-.fc-gridBody{
-  background: #fff;
-}
-
-.fc-grid--row{
-  background: #fff;
-}
-
-.fc-grid--row:hover{
-  background: rgba(31, 111, 235, 0.06);
-}
-
-/* Celdas */
-.fc-cell{
-  padding: 12px 12px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-  color: rgba(15, 23, 42, 0.88);
-  font-size: 13px;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-/* helpers */
-.fc-date{ font-weight: 800; }
-.fc-num{ text-align: right; }
-.fc-eg{ color: rgba(127, 29, 29, 0.92); }
-.fc-saldo{ font-weight: 900; }
-
-.is-right{ text-align: right; }
-
-/* Empty row */
-.fc-emptyRow{
-  padding: 24px 12px;
-  text-align: center;
-  color: rgba(15, 23, 42, 0.55);
-  font-weight: 800;
-}
-/* ✅ el wrap NO scrollea, solo “contiene” */
-.fc-tableWrap{
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;         /* clave */
-  max-height: 520px;
-}
-
-/* ✅ el scroll va SOLO acá */
-.fc-gridBody{
-  overflow: auto;           /* clave */
-  max-height: calc(100vh - 310px); /* ajustá 260 si te queda corto/largo */      /* o height: 100% si preferís */
-  background: #fff;
-}
-
-
-/* =========================
-   Centrados
-========================= */
-.is-center{
-  text-align: center;
-}
-/* =========================
-   Egresos
-========================= */
-.fc-eg{
-  color: #15803d; /* green-700 */
-  font-weight: 800;
-}
-/* =========================
-   Saldo dinámico
-========================= */
-.fc-saldo{
-  font-weight: 900;
-}
-
-.fc-saldo.is-positive{
-  color: #166534; /* green-800 */
-
-  border-radius: 10px;
-  padding: 6px 12px;
-}
-
-.fc-saldo.is-negative{
-  color: #991b1b; /* red-800 */
-  border-radius: 10px;
-  padding: 6px 12px;
-}
-/* =========================
-   Botón Exportar Excel (#10B981)
-========================= */
-.fc-btn{
-  height: 40px;
-  padding: 0 12px;
-  border-radius: 12px;
-
-  /* 🎨 Verde solicitado */
-    border: 2px solid #10B981;
-    background-color:  #10B981;
-    color: #ffffff;
-    font-weight: 600;
-    font-size: 0.9rem;
-    letter-spacing: 0.2px;
-
-  cursor: pointer;
-  transition: all .4s;
-
-
-}
-
-.fc-btn:hover{
-    background:#ffffff;
-  transform: translateY(-1px);
-  border: 2px solid #10B981;
-  filter: brightness(1.05);
-  color: #10B981;
-
-}
-
-.fc-btn:active{
-  transform: translateY(0);
-  box-shadow:
-    0 4px 12px rgba(16, 185, 129, 0.35),
-    inset 0 2px 6px rgba(0,0,0,0.18);
-}
-
-.fc-btn:disabled{
-  background: linear-gradient(180deg, #6EE7B7, #34D399);
-  border-color: #34D399;
-  color: rgba(255,255,255,0.85);
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.20);
-}
-/* =========================
-   Colores por columna
-========================= */
-
-/* ✅ Ingresos: verde */
-.fc-in{
-  color: #166534 !important; /* green-800 */
-  font-weight: 800;
-}
-
-/* ✅ Egresos: rojo */
-.fc-eg{
-  color: #991b1b; /* red-800 */
-  font-weight: 800;
+  .fc-card__head{ flex-direction: column; align-items: stretch; }
+  .fc-filter select{ min-width: 0; width: 100%; }
 }

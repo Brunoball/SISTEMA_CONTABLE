@@ -1,24 +1,47 @@
-/* src/components/Analisis_Financiero/analisis_financiero.css */
+/* src/components/Analisis_Financiero/analisis_financiero.css
+   ✅ Rediseño BALTO (Excel)
+   Colores:
+   - Midnight #0A2540
+   - Action   #0055BB
+   - BG       #F6F9FC
+   - Text     #425466
+   - Success  #22AD5C
+   - Danger   #E13D45
+*/
 
 /* =========================
-   Variables (alineadas a Flujo_Caja / Movimientos)
+   Variables BALTO
 ========================= */
 :root{
-  --af-text: rgba(15, 23, 42, 0.92);
-  --af-muted: rgba(15, 23, 42, 0.60);
-  --af-border: rgba(15, 23, 42, 0.12);
+  --b-midnight: #0A2540;
+  --b-action: #0055BB;
+  --b-bg: #F6F9FC;
+  --b-text: #425466;
+  --b-white: #FFFFFF;
+  --b-success: #22AD5C;
+  --b-danger: #E13D45;
 
-  --af-card: #ffffff;
+  --af-text: rgba(10, 37, 64, 0.92);
+  --af-muted: rgba(66, 84, 102, 0.74);
+  --af-border: rgba(10, 37, 64, 0.14);
+
+  --af-card: var(--b-white);
   --af-radius: 16px;
-  --af-shadow: 0 10px 30px rgba(2, 8, 23, 0.06);
+  --af-shadow: 0 10px 30px rgba(10, 37, 64, 0.08);
 
-  --af-primary: var(--blue-inst-primary, #1f6feb);
-  --af-primary-2: var(--blue-inst-secondary, #0b4fc7);
+  --af-primary: var(--b-action);
+  --af-primary-2: var(--b-midnight);
 
-  --af-danger: #ef4444;
-  --af-success: #16a34a;
+  --af-success: var(--b-success);
+  --af-danger: var(--b-danger);
 
-  --af-transition: var(--blue-inst-transition, 140ms ease);
+  --af-focus: rgba(0, 85, 187, 0.18);
+  --af-hover: rgba(0, 85, 187, 0.06);
+
+  --af-shadow-sm: 0 6px 18px rgba(10, 37, 64, 0.10);
+  --af-shadow-md: 0 10px 26px rgba(10, 37, 64, 0.14);
+
+  --af-transition: 140ms ease;
 }
 
 /* =========================
@@ -28,6 +51,7 @@
   width: 100%;
   min-height: 100%;
   color: var(--af-text);
+  background: var(--b-bg);
 }
 
 /* =========================
@@ -37,14 +61,14 @@
   margin: 0 0 12px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(239, 68, 68, 0.10);
-  border: 1px solid rgba(239, 68, 68, 0.22);
-  color: rgba(127, 29, 29, 0.92);
-  font-weight: 800;
+  background: rgba(225, 61, 69, 0.10);
+  border: 1px solid rgba(225, 61, 69, 0.25);
+  color: rgba(10, 37, 64, 0.92);
+  font-weight: 600;
 }
 
 /* =========================
-   Card (como Flujo_Caja)
+   Card
 ========================= */
 .af-card{
   background: var(--af-card);
@@ -54,7 +78,7 @@
   overflow: hidden;
 }
 
-/* para permitir “scroll solo en body” */
+/* para permitir scroll solo en body */
 .af-card--table{
   display: flex;
   flex-direction: column;
@@ -62,7 +86,7 @@
 }
 
 /* =========================
-   Head (como Movimientos / Flujo_Caja)
+   Head
 ========================= */
 .af-card__head{
   display: flex;
@@ -70,7 +94,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  border-bottom: 1px solid rgba(10, 37, 64, 0.10);
+  background: var(--b-white);
 }
 
 .af-card__headLeft{
@@ -88,25 +113,28 @@
 }
 
 .af-card__title{
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: -0.01em;
   font-size: 16px;
+  color: var(--b-midnight);
 }
 
 .af-card__hint{
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.55);
+  color: var(--af-muted);
+  font-weight: 500;
 }
 
 .af-card__actions{
   display: flex;
+  align-items: center;
   gap: 10px;
   flex: 0 0 auto;
 }
 
 /* =========================
-   Filters (inline)
+   Filters
 ========================= */
 .af-headFilters{
   display: flex;
@@ -119,8 +147,8 @@
 .af-filter label{
   display: block;
   font-size: 12px;
-  font-weight: 800;
-  color: rgba(15, 23, 42, 0.65);
+  font-weight: 600;
+  color: rgba(66, 84, 102, 0.86);
   margin-bottom: 6px;
 }
 
@@ -129,75 +157,162 @@
   width: 100%;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid var(--af-border);
+  border: 1px solid rgba(10, 37, 64, 0.16);
   background: #fff;
   padding: 0 12px;
   outline: none;
-  font-weight: 700;
-  color: rgba(15, 23, 42, 0.90);
+  font-weight: 500;
+  color: rgba(10, 37, 64, 0.90);
   min-width: 180px;
 }
 
 .af-filter--search input{
   min-width: 260px;
+  padding-right: 44px; /* espacio para la X */
 }
 
 .af-filter input::placeholder{
-  color: rgba(15, 23, 42, 0.45);
+  color: rgba(66, 84, 102, 0.62);
 }
 
 .af-filter select:focus,
 .af-filter input:focus{
-  border-color: rgba(31, 111, 235, 0.55);
-  box-shadow: 0 0 0 4px rgba(31, 111, 235, 0.12);
+  border-color: rgba(0, 85, 187, 0.55);
+  box-shadow: 0 0 0 4px var(--af-focus);
 }
 
 /* =========================
-   Subhead (meta arriba de la tabla)
+   Clear (X) buscador
+========================= */
+.af-searchInput{
+  position: relative;
+  width: 100%;
+}
+
+.af-clearSearch{
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid rgba(10, 37, 64, 0.14);
+  background: #fff;
+  color: rgba(10, 37, 64, 0.72);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  transition: 140ms ease;
+}
+
+.af-clearSearch:hover{
+  background: rgba(10, 37, 64, 0.04);
+  transform: translateY(-50%) translateY(-1px);
+  box-shadow: 0 10px 20px rgba(10, 37, 64, 0.10);
+}
+
+.af-clearSearch:active{
+  transform: translateY(-50%);
+  box-shadow: none;
+}
+
+/* =========================
+   Botón Excel (verde oficial)
+========================= */
+.af-btn{
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: all .18s ease;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(10, 37, 64, 0.92);
+}
+
+.af-btn--excel{
+  border: 1px solid rgba(34, 173, 92, 0.85);
+  background: var(--af-success);
+  color: #fff;
+}
+
+.af-btn--excel:hover:not(:disabled){
+  background: #ffffff;
+  color: var(--af-success);
+  box-shadow: 0 10px 22px rgba(10, 37, 64, 0.10);
+  transform: translateY(-1px);
+}
+
+.af-btn--excel:active:not(:disabled){
+  transform: translateY(0);
+}
+
+.af-btn--excel:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(34, 173, 92, 0.22), 0 10px 22px rgba(10, 37, 64, 0.10);
+}
+
+.af-btn--excel:disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* =========================
+   Subhead
 ========================= */
 .af-subhead{
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   padding: 12px 16px 10px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(15, 23, 42, 0.02);
+  border-bottom: 1px solid rgba(10, 37, 64, 0.10);
+  background: rgba(10, 37, 64, 0.03);
   gap: 12px;
   flex-wrap: wrap;
 }
 
 .af-subhead__name{
-  font-weight: 900;
+  font-weight: 600;
+  color: var(--b-midnight);
 }
 
 .af-subhead__meta{
   margin-top: 3px;
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.60);
-  font-weight: 700;
+  color: rgba(66, 84, 102, 0.78);
+  font-weight: 500;
 }
 
 .af-miniHint{
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.55);
-  font-weight: 700;
+  color: rgba(66, 84, 102, 0.76);
+  font-weight: 500;
   line-height: 1.25;
   max-width: 560px;
 }
 
 /* =========================
-   "Tabla" con DIVs (grid) - estilo Flujo_Caja
+   Table wrap (NO scroll)
 ========================= */
-
-/* ✅ el wrap NO scrollea, solo “contiene” */
 .af-tableWrap{
   flex: 1;
   min-height: 0;
-  overflow: hidden;        /* clave */
-  max-height: 520px;       /* igual vibe que Movimientos */
+  overflow: hidden;
+  max-height: calc(100vh - 435px);
 }
 
-/* 2 columnas: Concepto / Importe */
+/* =========================
+   Tabla (grid)
+========================= */
 .af-grid{
   display: grid;
   grid-template-columns: 1fr 220px;
@@ -209,129 +324,135 @@
   position: sticky;
   top: 0;
   z-index: 5;
-  background: #f1f5f9 !important;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(10, 37, 64, 0.06);
+  border-bottom: 1px solid rgba(10, 37, 64, 0.14);
 }
 
 .af-grid--head .af-cell{
-  color: rgba(15, 23, 42, 0.65) !important;
-  font-weight: 900;
-  letter-spacing: .02em;
+  color: rgba(10, 37, 64, 0.72);
+  font-weight: 600;
+  letter-spacing: .04em;
   font-size: 12px;
   padding: 12px 12px;
   white-space: nowrap;
 }
 
-/* ✅ el scroll va SOLO acá */
+/* Body con scroll */
 .af-gridBody{
-  overflow: auto;          /* clave */
+  overflow: auto;
   max-height: calc(100vh - 390px);
   background: #fff;
 }
 
-/* Scrollbar (aplicada al body) */
-
+/* scrollbar */
 .af-gridBody::-webkit-scrollbar-thumb{
-  background: rgba(15, 23, 42, 0.14);
+  background: rgba(10, 37, 64, 0.16);
   border-radius: 999px;
 }
-.af-gridBody::-webkit-scrollbar-track{ background: transparent; }
+.af-gridBody::-webkit-scrollbar-track{
+  background: transparent;
+}
 
-/* Filas */
+/* filas */
 .af-grid--row{
   background: #fff;
 }
 .af-grid--row:hover{
-  background: rgba(31, 111, 235, 0.06);
+  background: var(--af-hover);
 }
 
-/* Celdas */
+/* celdas */
 .af-cell{
   padding: 12px 12px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-  color: rgba(15, 23, 42, 0.88);
+  border-bottom: 1px solid rgba(10, 37, 64, 0.08);
+  color: rgba(10, 37, 64, 0.88);
   font-size: 13px;
   white-space: nowrap;
   min-width: 0;
+  font-weight: 400;
 }
 
-.af-cell.is-right{ text-align: right; }
+.is-right{ text-align: right; }
 
 .af-concept{
-  font-weight: 800;
+  font-weight: 600;
+  color: rgba(10, 37, 64, 0.92);
 }
 
 .af-num{
   font-variant-numeric: tabular-nums;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 /* negativos */
 .af-num.is-negative{
-  color: rgba(127, 29, 29, 0.92);
-  font-weight: 900;
-}
-
-/* Resaltados (manteniendo tu lógica pero con vibe mejor) */
-.af-grid--row.is-resultado{
-  background: rgba(22, 163, 74, 0.08);
-}
-.af-grid--row.is-resultado .af-concept,
-.af-grid--row.is-resultado .af-num{
-  font-weight: 900;
-}
-
-.af-grid--row.is-gp{
-  background: rgba(239, 68, 68, 0.08);
-}
-.af-grid--row.is-gp .af-concept,
-.af-grid--row.is-gp .af-num{
-  color: rgba(127, 29, 29, 0.92);
-  font-weight: 900;
-}
-
-/* Estado vacío como Movimientos */
-.af-emptyRow{
-  padding: 24px 12px;
-  text-align: center;
-  color: rgba(15, 23, 42, 0.55);
-  font-weight: 800;
+  color: var(--af-danger);
+  font-weight: 600;
 }
 
 /* =========================
-   Tarjetas de Totales (mejoradas)
+   Resaltados
+========================= */
+.af-grid--row.is-resultado{
+  background: rgba(34, 173, 92, 0.08);
+}
+.af-grid--row.is-resultado .af-concept,
+.af-grid--row.is-resultado .af-num{
+  font-weight: 700;
+  color: rgba(10, 37, 64, 0.92);
+}
+
+.af-grid--row.is-gp{
+  background: rgba(225, 61, 69, 0.08);
+}
+.af-grid--row.is-gp .af-concept,
+.af-grid--row.is-gp .af-num{
+  color: rgba(10, 37, 64, 0.92);
+  font-weight: 700;
+}
+
+/* empty */
+.af-emptyRow{
+  padding: 24px 12px;
+  text-align: center;
+  color: rgba(66, 84, 102, 0.78);
+  font-weight: 600;
+}
+
+/* =========================
+   Totales (cards)
 ========================= */
 .af-footTotals{
   display: grid;
   grid-template-columns: repeat(2, minmax(240px, 1fr));
   gap: 12px;
   padding: 14px 16px;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  border-top: 1px solid rgba(10, 37, 64, 0.10);
   background: #fff;
 }
 
 .af-totalCard{
-  border: 1px solid rgba(15, 23, 42, 0.10);
+  border: 1px solid rgba(10, 37, 64, 0.12);
   border-radius: 14px;
   padding: 12px 14px;
-  background: rgba(15, 23, 42, 0.02);
-  box-shadow: 0 10px 26px rgba(2, 8, 23, 0.06);
+  background: rgba(10, 37, 64, 0.03);
+  box-shadow: 0 10px 26px rgba(10, 37, 64, 0.08);
   transition: transform var(--af-transition), box-shadow var(--af-transition);
 }
 
 .af-totalCard:hover{
   transform: translateY(-1px);
-  box-shadow: 0 14px 34px rgba(2, 8, 23, 0.10);
+  box-shadow: 0 14px 34px rgba(10, 37, 64, 0.12);
 }
 
 .af-totalCard--primary{
-  background: rgba(31, 111, 235, 0.06);
-  border-color: rgba(31, 111, 235, 0.18);
+  background: rgba(0, 85, 187, 0.06);
+  border-color: rgba(0, 85, 187, 0.18);
 }
 
 .af-totalCard--danger{
-  background: rgba(239, 68, 68, 0.05);
-  border-color: rgba(239, 68, 68, 0.16);
+  background: rgba(225, 61, 69, 0.06);
+  border-color: rgba(225, 61, 69, 0.18);
 }
 
 .af-totalTop{
@@ -343,8 +464,8 @@
 
 .af-totalLabel{
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.70);
-  font-weight: 900;
+  color: rgba(66, 84, 102, 0.86);
+  font-weight: 600;
 }
 
 .af-chip{
@@ -352,45 +473,42 @@
   align-items: center;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.10);
+  border: 1px solid rgba(10, 37, 64, 0.12);
   background: #fff;
-  font-weight: 900;
+  font-weight: 600;
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.72);
+  color: rgba(10, 37, 64, 0.72);
 }
 
 .af-chip.is-danger{
-  border-color: rgba(239, 68, 68, 0.22);
-  color: rgba(127, 29, 29, 0.92);
-  background: rgba(239, 68, 68, 0.06);
+  border-color: rgba(225, 61, 69, 0.22);
+  color: rgba(10, 37, 64, 0.80);
+  background: rgba(225, 61, 69, 0.08);
 }
 
 .af-totalValue{
   margin-top: 8px;
   font-size: 20px;
-  font-weight: 1000;
+  font-weight: 700;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
+  color: rgba(10, 37, 64, 0.92);
 }
 
-/* estado resultado neto */
 .af-totalCard.is-positive .af-totalValue{
-  color: #166534; /* green-800 */
+  color: var(--af-success);
 }
 .af-totalCard.is-negative .af-totalValue{
-  color: #991b1b; /* red-800 */
+  color: var(--af-danger);
 }
 
-/* texto abajo */
 .af-totalSub{
   margin-top: 6px;
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.58);
-  font-weight: 700;
+  color: rgba(66, 84, 102, 0.78);
+  font-weight: 500;
   line-height: 1.25;
 }
-
-
 
 /* =========================
    Responsive
@@ -405,156 +523,15 @@
     min-width: 0;
     width: 100%;
   }
-  .af-footTotals{
-    grid-template-columns: 1fr;
-  }
-}
-/* =========================
-   Botón Exportar Excel (verde #10B981)
-========================= */
-
-
-/* =========================
-   Contenedor acciones
-========================= */
-.af-card__actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* Responsive */
-@media (max-width: 640px) {
-  .af-card__actions {
+  .af-card__actions{
     width: 100%;
     margin-top: 10px;
   }
-
-  .af-btn--excel {
+  .af-btn--excel{
     width: 100%;
     justify-content: center;
   }
-}
-/* =========================
-   AF Button – estilo FC (verde #10B981)
-========================= */
-.af-btn {
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 12px;
-
-  /* 🎨 Verde solicitado */
-    border: 2px solid #10B981;
-    background-color:  #10B981;
-    color: #ffffff;
-    font-weight: 600;
-    font-size: 0.9rem;
-    letter-spacing: 0.2px;
-
-  cursor: pointer;
-  transition: all .4s;
-
-
-}
-
-.fc-btn:hover{
-  transform: translateY(0);
- color: #10B981;
-
-}
-
-/* Variante Excel */
-.af-btn--excel {
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 12px;
-
-  /* 🎨 Verde solicitado */
-    border: 2px solid #10B981;
-    background-color:  #10B981;
-    color: #ffffff;
-    font-weight: 600;
-    font-size: 0.9rem;
-    letter-spacing: 0.2px;
-
-  cursor: pointer;
-  transition: all .4s;
-}
-
-/* Hover PIOLA ✨ */
-.af-btn--excel:hover:not(:disabled) {
-  background: linear-gradient(
-    180deg,
-    #ffffff 0%,
-    #ecfdf5 100%
-  );
-  color: #10B981;
-
-
-}
-
-/* Active (click) */
-.af-btn--excel:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow:
-    0 6px 12px rgba(16, 185, 129, 0.35),
-    inset 0 2px 4px rgba(0, 0, 0, 0.18);
-}
-
-/* Focus accesible */
-.af-btn--excel:focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 3px rgba(16, 185, 129, 0.45),
-    0 6px 14px rgba(16, 185, 129, 0.35);
-}
-
-/* Disabled */
-.af-btn--excel:disabled {
-  background: #9ee7c9;
-  border-color: #9ee7c9;
-  color: #ecfdf5;
-  cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
-}
-/* ===== Clear (X) en buscador AF ===== */
-.af-searchInput{
-  position: relative;
-  width: 100%;
-}
-
-.af-searchInput input{
-  padding-right: 44px; /* espacio para la X */
-}
-
-.af-clearSearch{
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  border: none;
-  background: #fff;
-  color: rgba(15, 23, 42, 0.70);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: 900;
-  transition: 140ms ease;
-}
-
-.af-clearSearch:hover{
-  background: rgba(15, 23, 42, 0.04);
-  transform: translateY(-50%) translateY(-1px);
-  box-shadow: 0 10px 20px rgba(2, 8, 23, 0.08);
-}
-
-.af-clearSearch:active{
-  transform: translateY(-50%);
-  box-shadow: none;
+  .af-footTotals{
+    grid-template-columns: 1fr;
+  }
 }

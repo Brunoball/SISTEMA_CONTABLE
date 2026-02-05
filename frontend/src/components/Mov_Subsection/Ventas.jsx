@@ -1,24 +1,22 @@
-// src/components/Movimientos/Movimientos.jsx
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+// src/components/Movimientos/Ventas.jsx
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../config/config";
-import "./movimientos.css";
+import "../Movimientos/movimientos.css"; // reutiliza la estética de Movimientos
 
-// ✅ MODALES
-import ModalCargaRapidaMovimientos from "./modales/ModalCargaRapidaMovimientos";
-import ModalEditarMovimiento from "./modales/ModalEditarMovimiento";
-import ModalEliminarMovimientos from "./modales/ModalEliminarMovimientos";
-
-// ✅ Toast global
 import Toast from "../Global/Toast.jsx";
+
+import ModalNuevaVenta from "./modales/ModalNuevaVenta";
+import ModalEditarVenta from "./modales/ModalEditarVenta";
+import ModalEliminarMovimientos from "../Movimientos/modales/ModalEliminarMovimientos";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
+  faCalendarDays,
+  faMagnifyingGlass,
+  faPlus,
+  faFileExcel,
   faPenToSquare,
   faTrashCan,
-  faPlus,
-  faMagnifyingGlass,
-  faCalendarDays,
-  faFileExcel,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -38,21 +36,14 @@ function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "-";
 }
-function numOrZero(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
+function normalizeSearchText(v) {
+  return String(v ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
-
-/* ✅ pick: devuelve el primer valor “usable” de una lista de keys */
-function pick(obj, keys, fallback = "") {
-  for (const k of keys) {
-    const v = obj?.[k];
-    if (v !== null && v !== undefined && String(v).trim() !== "") return v;
-  }
-  return fallback;
-}
-
-/* ✅ FECHA -> DD/MM/YYYY */
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "-";
@@ -64,7 +55,6 @@ function formatFechaDMY(v) {
     const dd = String(Number(m1[3])).padStart(2, "0");
     return `${dd}/${mm}/${yyyy}`;
   }
-
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) {
     const dd = String(Number(m2[1])).padStart(2, "0");
@@ -72,11 +62,12 @@ function formatFechaDMY(v) {
     const yyyy = m2[3];
     return `${dd}/${mm}/${yyyy}`;
   }
-
   return s;
 }
 
-/* ✅ Período helpers (UI MM-YYYY) <-> (API YYYY-MM) */
+/* =========================
+   Período helpers (UI MM-YYYY) <-> (API YYYY-MM)
+========================= */
 function periodoToMMYYYY(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
@@ -119,13 +110,11 @@ function periodoToYYYYMM(input) {
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
-
   if (/^\d{4}-\d{1,2}$/.test(s)) {
     const [yyyy, mmRaw] = s.split("-");
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
-
   if (/^\d{4}\/\d{1,2}$/.test(s)) {
     const [yyyy, mmRaw] = s.split("/");
     const mm = String(Number(mmRaw)).padStart(2, "0");
@@ -136,7 +125,6 @@ function periodoToYYYYMM(input) {
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
-
   if (/^\d{6}$/.test(s)) {
     const a = Number(s.slice(0, 4));
     if (a >= 1900 && a <= 2100) {
@@ -149,42 +137,12 @@ function periodoToYYYYMM(input) {
       return `${yyyy}-${mm}`;
     }
   }
-
   return s;
 }
 
-/* ✅ Listas */
-const emptyLists = {
-  periodos: [],
-  clasificaciones: [],
-  clientes: [],
-  cuentas_corrientes: [],
-  detalles: [],
-  medios_pago: [],
-  proveedores: [],
-  tipos_movimiento: [],
-  tipos_venta: [],
-};
-
-function normalizeLists(raw) {
-  const src = raw?.listas && typeof raw.listas === "object" ? raw.listas : raw;
-  const getArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
-  const periodosUI = (getArr("periodos") || []).map(periodoToMMYYYY);
-
-  return {
-    periodos: periodosUI,
-    clasificaciones: getArr("clasificaciones"),
-    clientes: getArr("clientes"),
-    cuentas_corrientes: getArr("cuentas_corrientes"),
-    detalles: getArr("detalles"),
-    medios_pago: getArr("medios_pago"),
-    proveedores: getArr("proveedores"),
-    tipos_movimiento: getArr("tipos_movimiento"),
-    tipos_venta: getArr("tipos_venta"),
-  };
-}
-
-/* ✅ Auth */
+/* =========================
+   Auth helpers
+========================= */
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
 
@@ -193,43 +151,112 @@ function getAuthInfo() {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   return { token, idUsuario };
 }
 
-/* ✅ Excel */
+/* =========================
+   Listas (mismo contrato que Movimientos)
+========================= */
+const emptyLists = {
+  periodos: [],
+  clientes: [],
+  medios_pago: [],
+  tipos_venta: [],
+  clasificaciones: [],
+  cuentas_corrientes: [],
+  detalles: [],
+  proveedores: [],
+  tipos_movimiento: [],
+};
+
+function normalizeLists(raw) {
+  const src = raw?.listas && typeof raw.listas === "object" ? raw.listas : raw;
+  const getArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
+
+  const periodosUI = (getArr("periodos") || []).map(periodoToMMYYYY);
+
+  return {
+    periodos: periodosUI,
+    clientes: getArr("clientes"),
+    medios_pago: getArr("medios_pago"),
+    tipos_venta: getArr("tipos_venta"),
+    clasificaciones: getArr("clasificaciones"),
+    cuentas_corrientes: getArr("cuentas_corrientes"),
+    detalles: getArr("detalles"),
+    proveedores: getArr("proveedores"),
+    tipos_movimiento: getArr("tipos_movimiento"),
+  };
+}
+
+/* =========================
+   ✅ FILTRO VENTAS STRICT
+   Regla: solo mostrar
+   1) Tipo_movimiento = SALIDA
+   2) Cliente obligatorio (id_cliente > 0 o texto cliente)
+========================= */
+function isSalidaRow(r) {
+  // soporta: "SALIDA" o "Salida" o "salida"
+  const tm = normalizeSearchText(r?.tipo_movimiento);
+  return tm.includes("salida");
+}
+
+function hasCliente(r) {
+  const idCli = Number(
+    r?.id_cliente ?? r?.cliente_id ?? r?.idCliente ?? r?.id_cliente_fk ?? 0
+  );
+  if (Number.isFinite(idCli) && idCli > 0) return true;
+
+  // fallback por si solo viene texto
+  const cliTxt = String(r?.cliente ?? "").trim();
+  return cliTxt.length > 0;
+}
+
+function isVentaRow(r) {
+  return isSalidaRow(r) && hasCliente(r);
+}
+
+/* =========================
+   Full-text match
+========================= */
+function rowMatchesQuery(row, query) {
+  const qq = normalizeSearchText(query);
+  if (!qq) return true;
+
+  const montoNum = Number(row?.monto_total || row?.total || 0);
+  const parts = [];
+
+  if (row && typeof row === "object") {
+    for (const k of Object.keys(row)) {
+      const val = row[k];
+      if (val && typeof val === "object") continue;
+      parts.push(String(val ?? ""));
+    }
+  }
+
+  parts.push(formatFechaDMY(row?.fecha));
+  parts.push(periodoToMMYYYY(row?.periodo));
+  parts.push(String(montoNum), String(Math.trunc(montoNum)), moneyARS(montoNum));
+
+  const hay = normalizeSearchText(parts.join(" | "));
+  return hay.includes(qq);
+}
+
+/* =========================
+   Excel
+========================= */
 function slugifySheetName(name) {
-  const s = String(name || "Movimientos")
+  const s = String(name || "Ventas")
     .replace(/[\[\]\*\/\\\?\:]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return (s || "Movimientos").slice(0, 31);
+  return (s || "Ventas").slice(0, 31);
 }
 
-/* ✅ Export reducido */
-function buildExportRows(rows) {
-  return rows.map((r) => {
-    const total = pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0);
-
-    const cliente = safeText(pick(r, ["cliente", "nombre_cliente", "razon_social_cliente"], ""));
-    const proveedor = safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""));
-    const tercero = cliente !== "-" ? cliente : proveedor;
-
-    return {
-      FECHA: safeText(formatFechaDMY(pick(r, ["fecha", "fecha_movimiento", "created_at"], ""))),
-      PERIODO: safeText(periodoToMMYYYY(pick(r, ["periodo"], ""))),
-      DESCRIPCION: safeText(
-        pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")
-      ),
-      "TIPO PAGO": safeText(pick(r, ["medio_pago", "tipo_pago", "forma_pago"], "")),
-      "CLIENTE/PROVEEDOR": tercero,
-      TOTAL: numOrZero(total),
-    };
-  });
-}
-
-export default function Movimientos() {
+export default function Ventas() {
   const API = `${BASE_URL}/api.php`;
 
   const [lists, setLists] = useState(emptyLists);
@@ -241,7 +268,7 @@ export default function Movimientos() {
   const [error, setError] = useState("");
 
   // filtros
-  const [fPeriodo, setFPeriodo] = useState(""); // MM-YYYY
+  const [fPeriodo, setFPeriodo] = useState(""); // UI MM-YYYY
   const [q, setQ] = useState("");
 
   // modales
@@ -257,9 +284,12 @@ export default function Movimientos() {
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // cache por periodoAPI|q
+  // cache por "periodoAPI|q"
   const cacheRef = useRef(new Map());
 
+  /* =========================
+     API helpers
+  ========================= */
   const buildHeaders = useCallback(() => {
     const { token } = getAuthInfo();
     const h = { "Content-Type": "application/json" };
@@ -274,7 +304,7 @@ export default function Movimientos() {
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
+      throw new Error(`Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`);
     }
   }, []);
 
@@ -301,21 +331,16 @@ export default function Movimientos() {
     [buildHeaders, parseJsonOrThrow]
   );
 
-  const refreshPeriodos = useCallback(async () => {
-    try {
-      const data = await apiGet(`${API}?action=global_obtener_listas`);
-      if (!data?.exito) return;
-      const normalized = normalizeLists(data);
-      setLists((prev) => ({ ...prev, periodos: normalized.periodos || [] }));
-    } catch {}
-  }, [API, apiGet]);
-
+  /* =========================
+     Listas
+  ========================= */
   const loadLists = useCallback(async () => {
     setLoadingLists(true);
     setError("");
     try {
       const data = await apiGet(`${API}?action=global_obtener_listas`);
-      if (!data.exito) throw new Error(data.mensaje || "No se pudieron cargar listas.");
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar listas.");
+
       const normalized = normalizeLists(data);
       setLists(normalized);
 
@@ -336,14 +361,21 @@ export default function Movimientos() {
     }
   }, [API, apiGet]);
 
-  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
-    const periodoAPI = periodoToYYYYMM(periodoUI);
-    const prefix = `${periodoAPI}|`;
-    for (const k of cacheRef.current.keys()) {
-      if (String(k).startsWith(prefix)) cacheRef.current.delete(k);
+  const refreshPeriodos = useCallback(async () => {
+    try {
+      const data = await apiGet(`${API}?action=global_obtener_listas`);
+      if (!data?.exito) return;
+      const normalized = normalizeLists(data);
+      const nextPeriodos = Array.isArray(normalized.periodos) ? normalized.periodos : [];
+      setLists((prev) => ({ ...prev, periodos: nextPeriodos }));
+    } catch {
+      // ignore
     }
-  }, []);
+  }, [API, apiGet]);
 
+  /* =========================
+     Movimientos (se filtra a ventas en frontend)
+  ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
       const periodoUI = typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
@@ -375,18 +407,19 @@ export default function Movimientos() {
         if (qLocal) sp.set("q", qLocal);
 
         const data = await apiGet(`${API}?${sp.toString()}`);
-        if (!data.exito) throw new Error(data.mensaje || "No se pudieron cargar movimientos.");
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar ventas.");
 
         const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
-        const movsNorm = movs.map((r) => ({
+        const norm = movs.map((r) => ({
           ...r,
           periodo: periodoToMMYYYY(r?.periodo),
+          fecha: r?.fecha,
         }));
 
-        cacheRef.current.set(cacheKey, movsNorm);
-        setRows(movsNorm);
+        cacheRef.current.set(cacheKey, norm);
+        setRows(norm);
       } catch (e) {
-        setError(e.message || "Error cargando movimientos.");
+        setError(e.message || "Error cargando ventas.");
         setRows([]);
       } finally {
         setLoadingRows(false);
@@ -395,28 +428,17 @@ export default function Movimientos() {
     [API, apiGet, fPeriodo, q]
   );
 
-  // sync período si desaparece
-  useEffect(() => {
-    if (!Array.isArray(lists.periodos)) return;
-
-    if (lists.periodos.length === 0) {
-      if (fPeriodo !== "") {
-        setFPeriodo("");
-        setRows([]);
-      }
-      return;
+  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
+    const periodoAPI = periodoToYYYYMM(periodoUI);
+    const keyPrefix = `${periodoAPI}|`;
+    for (const k of cacheRef.current.keys()) {
+      if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
     }
+  }, []);
 
-    const current = periodoToMMYYYY(fPeriodo);
-    if (current && !lists.periodos.includes(current)) {
-      const next = lists.periodos[0];
-      setFPeriodo(next);
-      invalidateCacheForPeriodo(next);
-      loadRows({ periodo: next, q: "" });
-    }
-  }, [lists.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
-
-  // init
+  /* =========================
+     Init
+  ========================= */
   useEffect(() => {
     (async () => {
       const normalized = await loadLists();
@@ -431,132 +453,97 @@ export default function Movimientos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // filtrado front (simple)
+  /* =========================
+     Filtrado: período + ventas + búsqueda
+  ========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
     if (!fPer) return [];
-    return rows.filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer));
-  }, [rows, fPeriodo]);
 
-  // ✅ COLUMNAS REDUCIDAS (lo que pidió el patrón)
+    return rows
+      .filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer))
+      .filter((r) => isVentaRow(r))
+      .filter((r) => rowMatchesQuery(r, q));
+  }, [rows, fPeriodo, q]);
+
+  /* =========================
+     Columnas
+  ========================= */
   const columns = useMemo(() => {
     return [
       {
-        key: "descripcion",
+        key: "fecha",
+        label: "FECHA",
+        fr: 0.9,
+        render: (r) => safeText(formatFechaDMY(r.fecha)),
+      },
+      {
+        key: "detalle",
         label: "DESCRIPCIÓN",
-        align: "left",
         fr: 2.2,
-        render: (r) =>
-          safeText(
-            pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")
-          ),
-      },
-      {
-        key: "tipo_pago",
-        label: "TIPO PAGO",
-        align: "center",
-        fr: 1.1,
-        render: (r) => safeText(pick(r, ["medio_pago", "tipo_pago", "forma_pago"], "")),
-      },
-      {
-        key: "tercero",
-        label: "CLIENTE/PROVEEDOR",
+        strong: true,
         align: "left",
+        render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
+      },
+      {
+        key: "cliente",
+        label: "CLIENTE",
         fr: 1.6,
+        align: "left",
+        render: (r) => safeText(r.cliente),
+      },
+      {
+        key: "medio_pago",
+        label: "PAGO",
+        fr: 1.2,
+        align: "left",
         render: (r) => {
-          const cliente = safeText(pick(r, ["cliente", "nombre_cliente", "razon_social_cliente"], ""));
-          if (cliente !== "-") return cliente;
-          return safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""));
+          const tv = normalizeSearchText(r?.tipo_venta);
+          const esContado = tv.includes("contado");
+          if (!esContado) return "—"; // cuenta corriente u otra forma => no aplica
+          const mp = String(r.medio_pago ?? "").trim();
+          return mp ? mp : "—";
         },
       },
       {
         key: "total",
         label: "TOTAL",
+        fr: 1.1,
         align: "right",
-        fr: 1.0,
-        render: (r) => {
-          const total = pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0);
-          return moneyARS(total);
-        },
+        render: (r) => moneyARS(r.monto_total ?? r.total ?? r.total_general ?? 0),
       },
-      { key: "acciones", label: "ACCIONES", align: "center", fr: 0.8, render: () => null },
+      { key: "acciones", label: "ACCIONES", fr: 0.8, align: "center", render: () => null },
     ];
   }, []);
 
   const gridCols = useMemo(() => {
-    return columns.map((c) => `${Number(c.fr) || 1}fr`).join(" ");
+    const fallback = `repeat(${columns.length}, minmax(0, 1fr))`;
+    if (!Array.isArray(columns) || !columns.length) return fallback;
+    return columns
+      .map((c) => {
+        const n = Number(c.fr);
+        return Number.isFinite(n) && n > 0 ? `${n}fr` : "1fr";
+      })
+      .join(" ");
   }, [columns]);
 
+  /* =========================
+     Acciones modales
+  ========================= */
   const openEditModal = (r) => {
     setSelectedRow(r);
     setOpenEdit(true);
   };
-
   const openDeleteModal = (r) => {
     setSelectedRow(r);
     setOpenDel(true);
   };
 
-  const exportToExcel = useCallback(() => {
-    try {
-      const dataToExport = buildExportRows(filteredRows);
-
-      if (!dataToExport.length) {
-        showToast("error", "No hay datos para exportar.", 2500);
-        return;
-      }
-
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(dataToExport);
-      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Movimientos_Vista"));
-
-      const per = periodoToMMYYYY(fPeriodo) || "SIN_PERIODO";
-      XLSX.writeFile(wb, `movimientos_vista_${per}.xlsx`);
-      showToast("exito", "Excel exportado.", 2200);
-    } catch (e) {
-      showToast("error", e?.message || "Error exportando Excel.", 3500);
-    }
-  }, [filteredRows, fPeriodo, showToast]);
-
-  const confirmDelete = async () => {
-    if (!selectedRow?.id_movimiento) return;
-
-    const id = selectedRow.id_movimiento;
-    setDeletingId(id);
-    setError("");
-
-    showToast("cargando", "Eliminando movimiento…", 12000);
-
-    try {
-      const { idUsuario } = getAuthInfo();
-
-      const sp = new URLSearchParams();
-      sp.set("action", "movimientos_eliminar");
-      sp.set("id_movimiento", String(id));
-
-      const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
-      if (!data.exito) throw new Error(data.mensaje || "No se pudo eliminar.");
-
-      setOpenDel(false);
-      setSelectedRow(null);
-
-      invalidateCacheForPeriodo(fPeriodo);
-      await loadRows({ periodo: fPeriodo, q });
-
-      await refreshPeriodos();
-
-      showToast("exito", "Movimiento eliminado.", 2600);
-    } catch (e) {
-      setError(e.message || "Error eliminando movimiento.");
-      showToast("error", e.message || "Error eliminando movimiento.", 4200);
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
+  /* =========================
+     Guardar / eliminar
+  ========================= */
   const saveMovimiento = async (payload, isEdit) => {
     setError("");
-
     const { idUsuario } = getAuthInfo();
     const action = isEdit ? "movimientos_actualizar" : "movimientos_crear";
 
@@ -570,7 +557,41 @@ export default function Movimientos() {
       idUsuario,
     });
 
-    if (!data.exito) throw new Error(data.mensaje || "No se pudo guardar.");
+    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedRow?.id_movimiento) return;
+
+    const id = selectedRow.id_movimiento;
+    setDeletingId(id);
+    setError("");
+    showToast("cargando", "Eliminando venta…", 12000);
+
+    try {
+      const { idUsuario } = getAuthInfo();
+
+      const sp = new URLSearchParams();
+      sp.set("action", "movimientos_eliminar");
+      sp.set("id_movimiento", String(id));
+
+      const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
+
+      setOpenDel(false);
+      setSelectedRow(null);
+
+      invalidateCacheForPeriodo(fPeriodo);
+      await loadRows({ periodo: fPeriodo, q });
+
+      await refreshPeriodos();
+      showToast("exito", "Venta eliminada.", 2600);
+    } catch (e) {
+      setError(e.message || "Error eliminando venta.");
+      showToast("error", e.message || "Error eliminando venta.", 4200);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const saveBatchMovimientos = useCallback(
@@ -593,8 +614,8 @@ export default function Movimientos() {
           idUsuario,
         });
 
-        if (!data.exito) {
-          const msg = data.mensaje || `Error guardando fila ${i + 1}.`;
+        if (!data?.exito) {
+          const msg = data?.mensaje || `Error guardando fila ${i + 1}.`;
           throw new Error(msg);
         }
       }
@@ -605,30 +626,62 @@ export default function Movimientos() {
     [API, apiPostJson, fPeriodo, invalidateCacheForPeriodo, loadRows]
   );
 
+  /* =========================
+     Excel “Ventas”
+  ========================= */
+  const exportToExcel = useCallback(() => {
+    try {
+      if (!filteredRows.length) {
+        showToast("error", "No hay datos para exportar.", 2500);
+        return;
+      }
+
+      const dataToExport = filteredRows.map((r) => ({
+        FECHA: safeText(formatFechaDMY(r.fecha)),
+        DESCRIPCION: safeText(r.detalle ?? r.descripcion ?? r.concepto),
+        CLIENTE: safeText(r.cliente),
+        PAGO: safeText(String(r.medio_pago ?? "").trim() || "Cuenta Corriente"),
+        TOTAL: Number(r.monto_total ?? r.total ?? 0) || 0,
+      }));
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+
+      // formato moneda para TOTAL si existe
+      const headers = Object.keys(dataToExport[0] || {});
+      const totalColIndex = headers.findIndex((h) => h === "TOTAL");
+      if (totalColIndex >= 0 && ws["!ref"]) {
+        const colLetter = XLSX.utils.encode_col(totalColIndex);
+        const range = XLSX.utils.decode_range(ws["!ref"]);
+        for (let r = range.s.r + 1; r <= range.e.r; r++) {
+          const cell = ws[`${colLetter}${r + 1}`];
+          if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
+        }
+      }
+
+      const per = periodoToMMYYYY(fPeriodo) || "SIN_PERIODO";
+      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`Ventas_${per}`));
+
+      XLSX.writeFile(wb, `ventas_${per}.xlsx`);
+      showToast("exito", "Excel exportado.", 2200);
+    } catch (e) {
+      showToast("error", e?.message || "Error exportando Excel.", 3500);
+    }
+  }, [filteredRows, fPeriodo, showToast]);
+
   return (
     <div className="mov-page">
-      {toast && (
-        <Toast
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={closeToast}
-        />
-      )}
+      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
 
-      {error && (
-        <div className="mov-alert" role="alert">
-          {error}
-        </div>
-      )}
+      {error && <div className="mov-alert" role="alert">{error}</div>}
 
       <section className="mov-card mov-card--table">
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
             <div>
-              <div className="mov-card__title">Movimientos</div>
+              <div className="mov-card__title">Movimientos · Ventas</div>
               <div className="mov-card__hint">
-                Mostrando <b>{filteredRows.length}</b> registros
+                Mostrando <b>{filteredRows.length}</b> ventas
               </div>
             </div>
 
@@ -673,7 +726,7 @@ export default function Movimientos() {
                         await loadRows({ periodo: fPeriodo, q: e.currentTarget.value });
                       }
                     }}
-                    placeholder="Buscar…"
+                    placeholder="Buscar por fecha, cliente, descripción, monto…"
                     disabled={loadingRows}
                   />
 
@@ -685,7 +738,8 @@ export default function Movimientos() {
                       onClick={async () => {
                         setQ("");
                         await loadRows({ periodo: fPeriodo, q: "" });
-                        document.querySelector(".mov-searchInput input")?.focus();
+                        const input = document.querySelector(".mov-searchInput input");
+                        input?.focus();
                       }}
                     >
                       ×
@@ -709,23 +763,21 @@ export default function Movimientos() {
           </div>
         </div>
 
-        <div className="mov-tabsBar mov-tabsBar--mov">
+        <div className="mov-tabsBar">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }} />
           <button
             type="button"
             className="mov-btn mov-btn--primary mov-tabsCta"
             onClick={() => setOpenAdd(true)}
             disabled={!fPeriodo}
+            title={!fPeriodo ? "Primero seleccioná un período" : "Crear nueva venta"}
           >
-            <FontAwesomeIcon icon={faPlus} /> Nuevo Movimiento
+            <FontAwesomeIcon icon={faPlus} /> Nueva Venta
           </button>
         </div>
 
         {/* HEADER */}
-        <div
-          className="mov-gridTable mov-gridTable--head"
-          style={{ gridTemplateColumns: gridCols }}
-          role="row"
-        >
+        <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
           {columns.map((c) => (
             <div
               key={c.key}
@@ -745,7 +797,7 @@ export default function Movimientos() {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className="mov-gridBody">
-            {loadingRows && <div className="mov-emptyRow">Cargando movimientos...</div>}
+            {loadingRows && <div className="mov-emptyRow">Cargando ventas…</div>}
 
             {!loadingRows &&
               filteredRows.map((r) => (
@@ -763,17 +815,12 @@ export default function Movimientos() {
                           className={[
                             "mov-gridCell",
                             "mov-gridCell--actions",
-                            "is-center",
+                            c.align === "center" ? "is-center" : "",
                           ].join(" ")}
                           role="cell"
                         >
                           <div className="mov-actionsInline">
-                            <button
-                              type="button"
-                              className="mov-iconBtn"
-                              title="Editar"
-                              onClick={() => openEditModal(r)}
-                            >
+                            <button type="button" className="mov-iconBtn" title="Editar" onClick={() => openEditModal(r)}>
                               <FontAwesomeIcon icon={faPenToSquare} />
                             </button>
 
@@ -784,9 +831,7 @@ export default function Movimientos() {
                               disabled={deletingId === r.id_movimiento}
                               onClick={() => openDeleteModal(r)}
                             >
-                              {deletingId === r.id_movimiento ? "..." : (
-                                <FontAwesomeIcon icon={faTrashCan} />
-                              )}
+                              {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
                             </button>
                           </div>
                         </div>
@@ -801,9 +846,8 @@ export default function Movimientos() {
                           "mov-gridCell",
                           c.align === "right" ? "is-right" : "",
                           c.align === "center" ? "is-center" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
+                          c.strong ? "is-strong" : "",
+                        ].filter(Boolean).join(" ")}
                         role="cell"
                         title={typeof val === "string" ? val : undefined}
                       >
@@ -816,17 +860,15 @@ export default function Movimientos() {
 
             {!loadingRows && filteredRows.length === 0 && (
               <div className="mov-emptyRow">
-                {!fPeriodo
-                  ? "No hay período disponible para cargar movimientos."
-                  : "No hay movimientos para mostrar en este período."}
+                {!fPeriodo ? "No hay período disponible para cargar ventas." : "No hay ventas para mostrar en este período."}
               </div>
             )}
           </div>
         </div>
       </section>
 
-      {/* MODAL CARGA RAPIDA */}
-      <ModalCargaRapidaMovimientos
+      {/* MODAL NUEVA VENTA */}
+      <ModalNuevaVenta
         open={openAdd}
         lists={lists}
         periodoDefault={fPeriodo}
@@ -834,13 +876,12 @@ export default function Movimientos() {
         onToast={showToast}
         onSaveBatch={async (payloads) => {
           try {
-            showToast("cargando", "Guardando carga rápida…", 12000);
+            showToast("cargando", "Guardando ventas…", 12000);
 
             await saveBatchMovimientos(payloads);
             await refreshPeriodos();
 
-            const firstPer =
-              Array.isArray(payloads) && payloads[0]?.periodo ? payloads[0].periodo : "";
+            const firstPer = Array.isArray(payloads) && payloads[0]?.periodo ? payloads[0].periodo : "";
             const ui = periodoToMMYYYY(firstPer) || fPeriodo;
 
             setQ("");
@@ -849,16 +890,16 @@ export default function Movimientos() {
             await loadRows({ periodo: ui, q: "" });
 
             setOpenAdd(false);
-            showToast("exito", "Carga rápida guardada.", 2400);
+            showToast("exito", "Ventas guardadas.", 2400);
           } catch (e) {
-            showToast("error", e?.message || "Error guardando carga rápida.", 4200);
+            showToast("error", e?.message || "Error guardando ventas.", 4200);
             throw e;
           }
         }}
       />
 
-      {/* EDIT */}
-      <ModalEditarMovimiento
+      {/* MODAL EDITAR */}
+      <ModalEditarVenta
         open={openEdit}
         lists={lists}
         row={selectedRow}
@@ -867,23 +908,10 @@ export default function Movimientos() {
           setOpenEdit(false);
           setSelectedRow(null);
         }}
+        onCatalogCreated={() => {}}
         onToast={showToast}
         onSave={async (payload) => {
-          try {
-            showToast("cargando", "Guardando cambios…", 12000);
-            await saveMovimiento(payload, true);
-
-            invalidateCacheForPeriodo(fPeriodo);
-            await loadRows({ periodo: fPeriodo, q });
-            await refreshPeriodos();
-
-            setOpenEdit(false);
-            setSelectedRow(null);
-            showToast("exito", "Movimiento actualizado.", 2600);
-          } catch (e) {
-            showToast("error", e?.message || "Error actualizando movimiento.", 4200);
-            throw e;
-          }
+          await saveMovimiento(payload, true);
         }}
       />
 

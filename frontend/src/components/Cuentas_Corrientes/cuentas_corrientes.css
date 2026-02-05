@@ -1,25 +1,39 @@
 /* src/components/Cuentas_Corrientes/cuentas_corrientes.css */
 
 /* =========================
-   Variables (alineadas a Flujo/Movimientos)
+   Paleta BALTO (desde Excel)
 ========================= */
 :root{
-  --cc-text: rgba(15, 23, 42, 0.92);
-  --cc-muted: rgba(15, 23, 42, 0.60);
-  --cc-border: rgba(15, 23, 42, 0.12);
+  /* === BALTO (Excel) === */
+  --b-midnight: #0A2540; /* Azul Medianoche */
+  --b-action: #0055BB;   /* Azul de Acción */
+  --b-bg: #F6F9FC;       /* Fondo App */
+  --b-text: #425466;     /* Gris Texto */
+  --b-white: #FFFFFF;    /* Blanco */
+  --b-success: #22AD5C;  /* Verde Éxito */
+  --b-danger: #E13D45;   /* Rojo Alerta */
 
-  --cc-card: #ffffff;
+  /* === Derivados === */
+  --cc-text: rgba(10, 37, 64, 0.92);
+  --cc-muted: rgba(66, 84, 102, 0.70);
+  --cc-border: rgba(10, 37, 64, 0.14);
+
+  --cc-card: var(--b-white);
   --cc-radius: 16px;
-  --cc-shadow: 0 10px 30px rgba(2, 8, 23, 0.06);
+  --cc-shadow: 0 10px 30px rgba(10, 37, 64, 0.08);
 
-  --cc-primary: var(--blue-inst-primary, #1f6feb);
-  --cc-primary-2: var(--blue-inst-secondary, #0b4fc7);
+  --cc-primary: var(--b-action);
+  --cc-primary-2: var(--b-midnight);
 
-  --cc-danger: #ef4444;
+  --cc-success: var(--b-success);
+  --cc-danger: var(--b-danger);
 
-  --cc-shadow-sm: var(--blue-inst-shadow-sm, 0 6px 18px rgba(2, 8, 23, 0.06));
-  --cc-shadow-md: var(--blue-inst-shadow-md, 0 10px 26px rgba(2, 8, 23, 0.08));
-  --cc-transition: var(--blue-inst-transition, 140ms ease);
+  --cc-focus: rgba(0, 85, 187, 0.18);
+  --cc-hover: rgba(0, 85, 187, 0.06);
+
+  --cc-shadow-sm: 0 6px 18px rgba(10, 37, 64, 0.10);
+  --cc-shadow-md: 0 10px 26px rgba(10, 37, 64, 0.14);
+  --cc-transition: 140ms ease;
 }
 
 /* =========================
@@ -29,6 +43,7 @@
   width: 100%;
   min-height: 100%;
   color: var(--cc-text);
+  background: var(--b-bg);
 }
 
 /* =========================
@@ -38,10 +53,10 @@
   margin: 0 0 12px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(239, 68, 68, 0.10);
-  border: 1px solid rgba(239, 68, 68, 0.22);
-  color: rgba(127, 29, 29, 0.92);
-  font-weight: 800;
+  background: rgba(225, 61, 69, 0.10);
+  border: 1px solid rgba(225, 61, 69, 0.25);
+  color: rgba(10, 37, 64, 0.92);
+  font-weight: 600;
 }
 
 /* =========================
@@ -71,7 +86,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  border-bottom: 1px solid rgba(10, 37, 64, 0.10);
+  background: var(--b-white);
 }
 
 .cc-card__headLeft{
@@ -89,15 +105,17 @@
 }
 
 .cc-card__title{
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: -0.01em;
   font-size: 16px;
+  color: var(--b-midnight);
 }
 
 .cc-card__hint{
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.55);
+  color: var(--cc-muted);
+  font-weight: 500;
 }
 
 .cc-card__actions{
@@ -120,8 +138,8 @@
 .cc-filter label{
   display: block;
   font-size: 12px;
-  font-weight: 800;
-  color: rgba(15, 23, 42, 0.65);
+  font-weight: 600;
+  color: rgba(66, 84, 102, 0.85);
   margin-bottom: 6px;
 }
 
@@ -129,12 +147,12 @@
   width: 100%;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid var(--cc-border);
+  border: 1px solid rgba(10, 37, 64, 0.16);
   background: #fff;
   padding: 0 12px;
   outline: none;
-  font-weight: 700;
-  color: rgba(15, 23, 42, 0.90);
+  font-weight: 500;
+  color: rgba(10, 37, 64, 0.90);
   min-width: 180px;
 }
 
@@ -142,35 +160,36 @@
   width: 100%;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid var(--cc-border);
+  border: 1px solid rgba(10, 37, 64, 0.16);
   background: #fff;
   padding: 0 12px;
   outline: none;
-  font-weight: 700;
-  color: rgba(15, 23, 42, 0.90);
+  font-weight: 500;
+  color: rgba(10, 37, 64, 0.90);
   min-width: 240px;
 }
 
 .cc-filter select:focus,
 .cc-input:focus{
-  border-color: rgba(31, 111, 235, 0.55);
-  box-shadow: 0 0 0 4px rgba(31, 111, 235, 0.12);
+  border-color: rgba(0, 85, 187, 0.55);
+  box-shadow: 0 0 0 4px var(--cc-focus);
 }
 
+/* (si usás .cc-btn en otras acciones) */
 .cc-btn{
   height: 40px;
   padding: 0 14px;
   border-radius: 12px;
-  border: 1px solid rgba(31, 111, 235, 0.30);
-  background: rgba(31, 111, 235, 0.10);
-  color: rgba(15, 23, 42, 0.90);
-  font-weight: 900;
+  border: 1px solid rgba(0, 85, 187, 0.30);
+  background: rgba(0, 85, 187, 0.10);
+  color: rgba(10, 37, 64, 0.92);
+  font-weight: 600;
   cursor: pointer;
   transition: transform var(--cc-transition), box-shadow var(--cc-transition), background var(--cc-transition);
 }
 
 .cc-btn:hover{
-  background: rgba(31, 111, 235, 0.14);
+  background: rgba(0, 85, 187, 0.14);
   box-shadow: var(--cc-shadow-sm);
   transform: translateY(-1px);
 }
@@ -190,22 +209,23 @@
   justify-content: space-between;
   align-items: flex-end;
   padding: 12px 16px 10px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(15, 23, 42, 0.02);
+  border-bottom: 1px solid rgba(10, 37, 64, 0.10);
+  background: rgba(10, 37, 64, 0.03);
 }
 
 .cc-subhead__name{
-  font-weight: 900;
+  font-weight: 600;
+  color: var(--b-midnight);
 }
 
 .cc-subhead__meta{
   margin-top: 3px;
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.60);
-  font-weight: 700;
+  color: rgba(66, 84, 102, 0.78);
+  font-weight: 500;
 }
 
-/* pill estado */
+/* pill estado (si lo usás) */
 .cc-pill{
   display: inline-flex;
   align-items: center;
@@ -214,9 +234,9 @@
   border-radius: 999px;
   background: #ffffff;
   border: 1px solid var(--cc-border);
-  box-shadow: 0 6px 20px rgba(2, 8, 23, 0.06);
-  color: rgba(15, 23, 42, 0.75);
-  font-weight: 800;
+  box-shadow: 0 6px 20px rgba(10, 37, 64, 0.10);
+  color: rgba(10, 37, 64, 0.75);
+  font-weight: 600;
   font-size: 13px;
   white-space: nowrap;
 }
@@ -225,13 +245,13 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #16a34a;
-  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.14);
+  background: var(--cc-success);
+  box-shadow: 0 0 0 4px rgba(34, 173, 92, 0.16);
 }
 .cc-pill.is-loading .cc-dot,
 .cc-dot.is-loading{
   background: var(--cc-primary);
-  box-shadow: 0 0 0 4px rgba(31, 111, 235, 0.16);
+  box-shadow: 0 0 0 4px rgba(0, 85, 187, 0.16);
 }
 
 /* =========================
@@ -240,7 +260,7 @@
 .cc-tableWrap{
   flex: 1;
   min-height: 0;
-  overflow: hidden;          /* clave */
+  overflow: hidden;       /* clave */
   max-height: 520px;
 }
 
@@ -257,18 +277,20 @@
   position: sticky;
   top: 0;
   z-index: 5;
-  background: #f1f5f9;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(10, 37, 64, 0.06);
+  border-bottom: 1px solid rgba(10, 37, 64, 0.14);
 }
-.cc-grid--head,.cc-gridBody{
+
+.cc-grid--head,
+.cc-gridBody{
   overflow: auto;
   scrollbar-gutter: both-edges stable;
 }
 
 .cc-grid--head .cc-cell{
-  color: rgba(15, 23, 42, 0.65);
-  font-weight: 900;
-  letter-spacing: .02em;
+  color: rgba(10, 37, 64, 0.72);
+  font-weight: 600;
+  letter-spacing: .04em;
   font-size: 12px;
   padding: 12px 12px;
   white-space: nowrap;
@@ -277,39 +299,42 @@
 /* Body con scroll */
 .cc-gridBody{
   overflow: auto;            /* clave */
-  max-height: calc(100vh - 310px);
+  max-height: calc(100vh - 340px);
   background: #fff;
   scrollbar-gutter: both-edges stable;
 }
 
-/* scrollbar en el body */
-
+/* scrollbar thumb */
 .cc-gridBody::-webkit-scrollbar-thumb{
-  background: rgba(15, 23, 42, 0.14);
+  background: rgba(10, 37, 64, 0.16);
   border-radius: 999px;
 }
-.cc-gridBody::-webkit-scrollbar-track{ background: transparent; }
+.cc-gridBody::-webkit-scrollbar-track{
+  background: transparent;
+}
 
 /* filas */
 .cc-grid--row{
   background: #fff;
 }
 .cc-grid--row:hover{
-  background: rgba(31, 111, 235, 0.06);
+  background: var(--cc-hover);
 }
 
 /* celdas */
 .cc-cell{
   padding: 12px 12px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-  color: rgba(15, 23, 42, 0.88);
+  border-bottom: 1px solid rgba(10, 37, 64, 0.08);
+  color: rgba(10, 37, 64, 0.88);
   font-size: 13px;
   white-space: nowrap;
   min-width: 0;
+  font-weight: 400;
 }
 
 .cc-name{
-  font-weight: 800;
+  font-weight: 600;
+  color: rgba(10, 37, 64, 0.92);
 }
 
 .cc-num{
@@ -325,25 +350,25 @@
 .cc-emptyRow{
   padding: 24px 12px;
   text-align: center;
-  color: rgba(15, 23, 42, 0.55);
-  font-weight: 800;
+  color: rgba(66, 84, 102, 0.78);
+  font-weight: 600;
 }
 
 /* =========================
-   Pos/Neg (pill)
+   Pos/Neg (paleta Excel)
 ========================= */
 .cc-cell.is-positive{
-  color: #166534;
-  font-weight: 800;
+  color: var(--cc-success);
+  font-weight: 600;
 }
 .cc-cell.is-negative{
-  color: #991b1b;
-  font-weight: 800;
+  color: var(--cc-danger);
+  font-weight: 600;
 }
 
 /* saldo destacado */
 .cc-saldo{
-  font-weight: 900;
+  font-weight: 600;
 }
 .cc-saldo.is-positive,
 .cc-saldo.is-negative{
@@ -355,80 +380,64 @@
    Tfoot
 ========================= */
 .cc-grid--tfoot{
-  background: rgba(15, 23, 42, 0.02);
+  background: rgba(10, 37, 64, 0.03);
 }
 .cc-tfootLabel{
-  font-weight: 900;
+  font-weight: 600;
+  color: rgba(10, 37, 64, 0.90);
 }
 
 /* footnote */
 .cc-footnote{
   padding: 10px 14px;
-  opacity: 0.65;
+  color: rgba(66, 84, 102, 0.80);
   font-size: 12px;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  border-top: 1px solid rgba(10, 37, 64, 0.10);
   background: #fff;
+  font-weight: 500;
 }
 
 /* =========================
-   Responsive
+   Botón Exportar Excel (verde oficial)
 ========================= */
-@media (max-width: 720px){
-  .cc-card__headLeft{
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .cc-filter select,
-  .cc-input{
-    min-width: 0;
-    width: 100%;
-  }
-  .cc-btn{
-    width: 100%;
-  }
-}
-/* =========================
-   Botón Exportar Excel
-========================= */
-.cc-btn--excel {
+.cc-btn--excel{
   height: 40px;
   padding: 0 12px;
   border-radius: 12px;
 
-  /* 🎨 Verde solicitado */
-    border: 2px solid #10B981;
-    background-color:  #10B981;
-    color: #ffffff;
-    font-weight: 600;
-    font-size: 0.9rem;
-    letter-spacing: 0.2px;
+  border: 1px solid rgba(34, 173, 92, 0.85);
+  background: var(--cc-success);
+  color: #fff;
+
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.2px;
 
   cursor: pointer;
-  transition: all .4s;
+  transition: all .18s ease;
 }
 
-.cc-btn--excel:hover:not(:disabled) {
-    background:#ffffff;
+.cc-btn--excel:hover:not(:disabled){
+  background: #ffffff;
+  color: var(--cc-success);
+  box-shadow: 0 10px 22px rgba(10, 37, 64, 0.10);
   transform: translateY(-1px);
-  border: 2px solid #10B981;
-  filter: brightness(1.05);
-  color: #10B981;
 }
 
-.cc-btn--excel:active:not(:disabled) {
+.cc-btn--excel:active:not(:disabled){
   transform: translateY(0);
-  box-shadow:
-    0 4px 10px rgba(21, 128, 61, 0.3),
-    inset 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
-.cc-btn--excel:disabled {
+.cc-btn--excel:disabled{
   opacity: 0.55;
   cursor: not-allowed;
   filter: grayscale(0.2);
   box-shadow: none;
 }
-/* ===== Clear (X) en buscador CC ===== */
+
+/* =========================
+   Clear (X) en buscador CC
+========================= */
 .cc-searchInput{
   position: relative;
   width: 100%;
@@ -446,55 +455,77 @@
   width: 30px;
   height: 30px;
   border-radius: 10px;
-  border: none;
+  border: 1px solid rgba(10, 37, 64, 0.14);
   background: #fff;
-  color: rgba(15, 23, 42, 0.70);
+  color: rgba(10, 37, 64, 0.72);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  font-weight: 900;
+  font-weight: 600;
   transition: 140ms ease;
 }
 
 .cc-clearSearch:hover{
-  background: rgba(15, 23, 42, 0.04);
+  background: rgba(10, 37, 64, 0.04);
   transform: translateY(-50%) translateY(-1px);
-  box-shadow: 0 10px 20px rgba(2, 8, 23, 0.08);
+  box-shadow: 0 10px 20px rgba(10, 37, 64, 0.10);
 }
 
 .cc-clearSearch:active{
   transform: translateY(-50%);
   box-shadow: none;
 }
+
 /* =========================
    Colores columnas Débito / Crédito
+   (depende de que sean col 2 y 3)
 ========================= */
-
 /* HEADER */
-
-
-
+.cc-grid--head .cc-cell:nth-child(2){
+  color: rgba(225, 61, 69, 0.92);
+  font-weight: 600;
+}
+.cc-grid--head .cc-cell:nth-child(3){
+  color: rgba(34, 173, 92, 0.92);
+  font-weight: 600;
+}
 
 /* BODY */
 .cc-grid--row .cc-cell:nth-child(2){
-  color: #991b1b;
-  font-weight: 800;
+  color: var(--cc-danger);
+  font-weight: 600;
 }
-
 .cc-grid--row .cc-cell:nth-child(3){
-  color: #166534;
-  font-weight: 800;
+  color: var(--cc-success);
+  font-weight: 600;
 }
 
-/* FOOTER (totales) */
+/* FOOTER */
 .cc-grid--tfoot .cc-cell:nth-child(2){
-  color: #991b1b;
-  font-weight: 900;
+  color: var(--cc-danger);
+  font-weight: 600;
+}
+.cc-grid--tfoot .cc-cell:nth-child(3){
+  color: var(--cc-success);
+  font-weight: 600;
 }
 
-.cc-grid--tfoot .cc-cell:nth-child(3){
-  color: #166534;
-  font-weight: 900;
+/* =========================
+   Responsive
+========================= */
+@media (max-width: 720px){
+  .cc-card__headLeft{
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cc-filter select,
+  .cc-input{
+    min-width: 0;
+    width: 100%;
+  }
+  .cc-btn--excel{
+    width: 100%;
+  }
 }

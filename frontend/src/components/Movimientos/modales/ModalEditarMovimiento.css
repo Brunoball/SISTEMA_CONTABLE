@@ -1,33 +1,26 @@
-/* src/components/Movimientos/modales/ModalEditarMovimiento.css */
-
-/* =========================
-   Variables (azul institucional)
-========================= */
 :root{
-  --blue-inst-primary: #1D428A;
-  --blue-inst-primary-light: #2E5CBF;
-  --blue-inst-primary-dark: #102E6A;
+  /* ✅ Paleta oficial del cliente */
+  --blue-midnight: #0A2540; /* azul medianoche */
+  --blue-action:   #0055BB; /* azul de acción */
 
-  --blue-inst-gray-100: #F1F5F9;
-  --blue-inst-gray-200: #E2E8F0;
-  --blue-inst-gray-600: #475569;
-  --blue-inst-dark:  #0F172A;
-
-  --mi-primary: var(--blue-inst-primary);
-  --mi-primary-600: var(--blue-inst-primary-light);
-
+  /* Neutrales (mantengo tu esquema, solo ajusto coherencia) */
   --mi-bg: #ffffff;
-  --mi-bg-soft: var(--blue-inst-gray-100);
-  --mi-border: var(--blue-inst-gray-200);
+  --mi-bg-soft: #F6F8FB;
+  --mi-border: #D9E2EF;
 
-  --mi-text: var(--blue-inst-dark);
-  --mi-muted: var(--blue-inst-gray-600);
+  --mi-text: #0A2540;     /* texto principal = medianoche */
+  --mi-muted: #516173;    /* texto secundario */
+
+  /* ✅ Variables que ya usa tu CSS */
+  --mi-primary: #0A2540;      /* header / principales */
+  --mi-primary-600: #0055BB;  /* focus / acento */
 
   --mi-shadow: 0 28px 64px -24px rgba(0,0,0,.28);
 
   --mi-radius-md: 12px;
   --mi-radius-lg: 18px;
 }
+
 
 /* =========================
    Modal base
@@ -452,7 +445,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
-  background: var(--ini-primary);
+background: var(--mi-primary);
+
   border-bottom: 1px solid var(--mi-border);
 }
 
@@ -1091,4 +1085,38 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 .mi-cr-suggest::-webkit-scrollbar-thumb:hover{
   background: rgba(100,116,139,.75);
+}
+/* =========================
+   ✅ Tipografía + pesos (más finos)
+   (solo letra/peso, sin tocar layout)
+========================= */
+
+.mi-modal__container,
+.mi-mini__modal{
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* títulos */
+.mi-modal__title{ font-weight: 600 !important; }
+.mi-modal__subtitle{ font-weight: 400 !important; }
+
+/* labels / texto */
+.fl-label{ font-weight: 400 !important; }
+.mi-cr-filters__title{ font-weight: 600 !important; }
+
+/* botones */
+.mit-btn{ font-weight: 600 !important; }
+.mi-cr-addrow{ font-weight: 600 !important; }
+.mi-cr-link{ font-weight: 500 !important; }
+
+/* chips totales: mantener “resaltado” pero sin ultra bold */
+.mi-cr-totalLine span{ font-weight: 600 !important; }
+.mi-cr-totalLine b{ font-weight: 700 !important; }
+
+/* totales/valores en tabla (los tenías en inline 700/800) -> los bajo sin cambiar alineación */
+.mi-cr-col--ivaMonto div,
+.mi-cr-col--total div{
+  font-weight: 700 !important;
 }

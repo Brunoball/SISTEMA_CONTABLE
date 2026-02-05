@@ -1,7 +1,7 @@
-// src/components/Movimientos/modales/ModalCargaRapidaMovimientos.jsx
+// src/components/Ventas/modales/ModalNuevaVenta.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import "./ModalEditarMovimiento.css";
+import "../../Movimientos/modales/ModalEditarMovimiento.css"; // si tu ruta real difiere, ajustala
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";
@@ -69,7 +69,6 @@ function normalizePeriodoToMMYYYY(v) {
   const yyyy = String(y);
   return `${mm}-${yyyy}`;
 }
-
 function periodoFromISODate(iso) {
   const s = String(iso ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
@@ -81,15 +80,11 @@ function periodoFromISODate(iso) {
    Lists normalize
 ========================= */
 const SAFE_LISTS = {
-  periodos: [],
-  clasificaciones: [],
   clientes: [],
-  cuentas_corrientes: [],
   detalles: [],
   medios_pago: [],
-  proveedores: [],
-  tipos_movimiento: [],
   tipos_venta: [],
+  tipos_movimiento: [],
 };
 
 function normalizeIncomingLists(lists) {
@@ -97,15 +92,11 @@ function normalizeIncomingLists(lists) {
   const src = l.listas && typeof l.listas === "object" ? l.listas : l;
 
   return {
-    periodos: Array.isArray(src.periodos) ? src.periodos : [],
-    clasificaciones: Array.isArray(src.clasificaciones) ? src.clasificaciones : [],
     clientes: Array.isArray(src.clientes) ? src.clientes : [],
-    cuentas_corrientes: Array.isArray(src.cuentas_corrientes) ? src.cuentas_corrientes : [],
     detalles: Array.isArray(src.detalles) ? src.detalles : [],
     medios_pago: Array.isArray(src.medios_pago) ? src.medios_pago : [],
-    proveedores: Array.isArray(src.proveedores) ? src.proveedores : [],
-    tipos_movimiento: Array.isArray(src.tipos_movimiento) ? src.tipos_movimiento : [],
     tipos_venta: Array.isArray(src.tipos_venta) ? src.tipos_venta : [],
+    tipos_movimiento: Array.isArray(src.tipos_movimiento) ? src.tipos_movimiento : [],
   };
 }
 
@@ -153,7 +144,7 @@ async function apiPostJson(url, payload) {
 }
 
 /* =========================
-   Mini Modal: alta rápida (cliente/proveedor/detalle)
+   Mini Modal: alta rápida (cliente/detalle)
 ========================= */
 function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave }) {
   const inputRef = useRef(null);
@@ -242,20 +233,34 @@ function toNullablePeriodoMMYYYY(v, fallbackFechaISO) {
 }
 
 /* =========================
-   Catálogos soportados
+   Catálogos soportados (ventas)
 ========================= */
 const CATALOGO_DEF = {
   id_cliente: { catalogo: "clientes", label: "Cliente" },
-  id_proveedor: { catalogo: "proveedores", label: "Proveedor" },
   id_detalle: { catalogo: "detalles", label: "Detalle" },
 };
 
-export default function ModalCargaRapidaMovimientos({
+function isContadoTipoVenta(tipoVentaObj) {
+  const name = String(tipoVentaObj?.nombre ?? "").toLowerCase();
+  return name.includes("contado");
+}
+function isCorrienteTipoVenta(tipoVentaObj) {
+  const name = String(tipoVentaObj?.nombre ?? "").toLowerCase();
+  return name.includes("corriente");
+}
+function findSalidaTipoMovimientoId(tiposMov) {
+  const arr = Array.isArray(tiposMov) ? tiposMov : [];
+  const hit = arr.find((x) => String(x?.nombre ?? "").toLowerCase().includes("salida"));
+  const id = Number(hit?.id);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+export default function ModalNuevaVenta({
   open,
   lists,
   periodoDefault,
   onClose,
-  onSaveBatch,
+  onSaveBatch, // reutiliza la misma firma: recibe array de payloads
   onToast,
 }) {
   const API = `${BASE_URL}/api.php`;
@@ -265,7 +270,7 @@ export default function ModalCargaRapidaMovimientos({
     [onToast]
   );
 
-  // ✅ lock scroll del body SOLO mientras está abierto (no cambia tu lógica)
+  // lock scroll body mientras está abierto
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
@@ -292,24 +297,20 @@ export default function ModalCargaRapidaMovimientos({
     normalizePeriodoToMMYYYY(periodoDefault || "") || periodoFromISODate(todayISO())
   );
 
+  // ✅ “Filtros” mínimos para Ventas
   const [filters, setFilters] = useState({
-    id_clasificacion: NULL_OPTION,
     id_tipo_venta: NULL_OPTION,
-    id_cuenta_corriente: NULL_OPTION,
-    id_tipo_movimiento: NULL_OPTION,
-    id_medio_pago: NULL_OPTION,
-    id_cliente: NULL_OPTION,
-    id_proveedor: NULL_OPTION,
+    id_medio_pago: NULL_OPTION, // solo si contado
+    id_cliente: NULL_OPTION, // obligatorio
   });
 
-  // inputs para autocomplete de cliente/proveedor
+  // guardar/facturar (solo cuando es corriente)
+  const [accionCorriente, setAccionCorriente] = useState("guardar"); // "guardar" | "facturar"
+
+  // autocomplete cliente
   const [clienteInput, setClienteInput] = useState("");
   const [clienteFocus, setClienteFocus] = useState(false);
   const clienteInputRef = useRef(null);
-
-  const [proveedorInput, setProveedorInput] = useState("");
-  const [proveedorFocus, setProveedorFocus] = useState(false);
-  const proveedorInputRef = useRef(null);
 
   // filas
   const [rows, setRows] = useState(() => [
@@ -329,7 +330,7 @@ export default function ModalCargaRapidaMovimientos({
   // mini modal alta rápida
   const [addUI, setAddUI] = useState({
     open: false,
-    field: null,
+    field: null, // "id_cliente" | "id_detalle"
     rowId: null,
     text: "",
     saving: false,
@@ -349,20 +350,15 @@ export default function ModalCargaRapidaMovimientos({
       setPeriodo(per);
 
       setFilters({
-        id_clasificacion: NULL_OPTION,
         id_tipo_venta: NULL_OPTION,
-        id_cuenta_corriente: NULL_OPTION,
-        id_tipo_movimiento: NULL_OPTION,
         id_medio_pago: NULL_OPTION,
         id_cliente: NULL_OPTION,
-        id_proveedor: NULL_OPTION,
       });
+
+      setAccionCorriente("guardar");
 
       setClienteInput("");
       setClienteFocus(false);
-
-      setProveedorInput("");
-      setProveedorFocus(false);
 
       setRows([
         {
@@ -376,7 +372,6 @@ export default function ModalCargaRapidaMovimientos({
       ]);
 
       setAddUI({ open: false, field: null, rowId: null, text: "", saving: false });
-
       setSaving(false);
       setTimeout(() => closeBtnRef.current?.focus(), 0);
     }
@@ -496,43 +491,6 @@ export default function ModalCargaRapidaMovimientos({
   }, []);
 
   /* =========================
-     Autocomplete: PROVEEDORES
-========================= */
-  const proveedoresList = useMemo(
-    () => (Array.isArray(listsNorm.proveedores) ? listsNorm.proveedores : []),
-    [listsNorm.proveedores]
-  );
-
-  const filteredProveedores = useMemo(() => {
-    const q = proveedorInput.trim().toLowerCase();
-    if (!proveedorFocus || q.length < 1) return [];
-    return proveedoresList
-      .filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q))
-      .slice(0, 25);
-  }, [proveedoresList, proveedorInput, proveedorFocus]);
-
-  const handleProveedorInputChange = useCallback((e) => {
-    const value = e.target.value;
-    setProveedorInput(value);
-    setFilters((p) => ({ ...p, id_proveedor: NULL_OPTION }));
-  }, []);
-
-  const handleSelectProveedor = useCallback((prov) => {
-    const nombre = String(prov?.nombre ?? "").trim();
-    setProveedorInput(nombre);
-    setFilters((p) => ({
-      ...p,
-      id_proveedor: prov?.id != null ? String(prov.id) : NULL_OPTION,
-    }));
-    setProveedorFocus(false);
-  }, []);
-
-  const startAddProveedor = useCallback(() => {
-    setProveedorFocus(false);
-    setAddUI({ open: true, field: "id_proveedor", rowId: null, text: "", saving: false });
-  }, []);
-
-  /* =========================
      Crear nuevo catálogo
 ========================= */
   const closeAddMini = useCallback(() => {
@@ -576,8 +534,7 @@ export default function ModalCargaRapidaMovimientos({
 
       setLocalLists((prev) => {
         const next = { ...prev };
-        const listKey =
-          field === "id_cliente" ? "clientes" : field === "id_proveedor" ? "proveedores" : "detalles";
+        const listKey = field === "id_cliente" ? "clientes" : "detalles";
 
         const arr = Array.isArray(prev[listKey]) ? prev[listKey].slice() : [];
         if (!arr.some((x) => Number(x?.id) === newId)) {
@@ -591,10 +548,6 @@ export default function ModalCargaRapidaMovimientos({
         setFilters((p) => ({ ...p, id_cliente: String(newId) }));
         setClienteInput(newNombre);
         setTimeout(() => clienteInputRef.current?.focus(), 0);
-      } else if (field === "id_proveedor") {
-        setFilters((p) => ({ ...p, id_proveedor: String(newId) }));
-        setProveedorInput(newNombre);
-        setTimeout(() => proveedorInputRef.current?.focus(), 0);
       } else if (field === "id_detalle") {
         const rowId = addUI.rowId;
         if (rowId) updateRow(rowId, { id_detalle: String(newId), detalleText: newNombre });
@@ -632,9 +585,58 @@ export default function ModalCargaRapidaMovimientos({
   }, [rowsCalc]);
 
   /* =========================
-     VALIDACIÓN SUPER FLEX
+     Tipo venta -> reglas UI
+========================= */
+  const tipoVentaSelected = useMemo(() => {
+    const id = Number(filters.id_tipo_venta);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    return (listsNorm.tipos_venta || []).find((x) => Number(x?.id) === id) || null;
+  }, [filters.id_tipo_venta, listsNorm.tipos_venta]);
+
+  const isContado = useMemo(() => isContadoTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
+  const isCorriente = useMemo(() => isCorrienteTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
+
+  // cuando cambia tipo venta, reseteos coherentes
+  useEffect(() => {
+    if (!open) return;
+    if (isContado) {
+      // si pasa a contado, accion no importa
+      setAccionCorriente("guardar");
+    } else if (isCorriente) {
+      // si pasa a corriente, medio pago no aplica
+      setFilters((p) => ({ ...p, id_medio_pago: NULL_OPTION }));
+    } else {
+      // tipo venta no definido: oculto todo condicional
+      setAccionCorriente("guardar");
+      setFilters((p) => ({ ...p, id_medio_pago: NULL_OPTION }));
+    }
+  }, [open, isContado, isCorriente]);
+
+  /* =========================
+     VALIDACIÓN (Ventas)
 ========================= */
   const validate = useCallback(() => {
+    // cliente obligatorio
+    const cli = Number(filters.id_cliente);
+    if (!Number.isFinite(cli) || cli <= 0) {
+      return { ok: false, msg: "Seleccioná un Cliente para registrar la venta." };
+    }
+
+    // tipo venta obligatorio (si querés dejarlo opcional, borrá este bloque)
+    const tv = Number(filters.id_tipo_venta);
+    if (!Number.isFinite(tv) || tv <= 0) {
+      return { ok: false, msg: "Seleccioná la Forma de venta (Tipo venta)." };
+    }
+
+    // si es contado, pido medio pago
+    if (isContado) {
+      const mp = Number(filters.id_medio_pago);
+      if (!Number.isFinite(mp) || mp <= 0) {
+        return { ok: false, msg: "Seleccioná el Medio de pago para ventas Contado." };
+      }
+    }
+
+    // al menos una fila válida
     const usableLines = rowsCalc.filter((r) => {
       const det = Number(r.id_detalle);
       const total = Number(r.total || 0);
@@ -659,7 +661,7 @@ export default function ModalCargaRapidaMovimientos({
     });
 
     return { ok: true, warn: incompleteTouched };
-  }, [rowsCalc]);
+  }, [filters.id_cliente, filters.id_tipo_venta, filters.id_medio_pago, isContado, rowsCalc]);
 
   const submit = async () => {
     if (saving) return;
@@ -680,12 +682,26 @@ export default function ModalCargaRapidaMovimientos({
     if (v.warn) {
       showToast("advertencia", "Hay filas incompletas. Se guardarán solo las filas válidas.", 3500);
     } else {
-      showToast("cargando", "Guardando movimientos…", 12000);
+      showToast("cargando", "Guardando venta…", 12000);
     }
 
     try {
       const fechaToSend = toNullableDateISO(fecha);
       const periodoToSend = toNullablePeriodoMMYYYY(periodo, fechaToSend || todayISO());
+
+      // tipo_movimiento: salida (busco por nombre)
+      const idTipoMovSalida = findSalidaTipoMovimientoId(listsNorm.tipos_movimiento);
+      // 🚫 Bloqueo: en Ventas SI O SI debe ser "Salida"
+if (!idTipoMovSalida) {
+  showToast(
+    "error",
+    "No está configurado el tipo de movimiento 'Salida'. Revisá el catálogo tipos_movimiento.",
+    5200
+  );
+  setSaving(false);
+  return;
+}
+
 
       const payloads = rowsCalc
         .filter((r) => {
@@ -693,30 +709,46 @@ export default function ModalCargaRapidaMovimientos({
           const total = Number(r.total || 0);
           return Number.isFinite(det) && det > 0 && total > 0;
         })
-        .map((r) => ({
-          fecha: fechaToSend,
-          periodo: periodoToSend,
+        .map((r) => {
+          const base = {
+            // base
+            fecha: fechaToSend,
+            periodo: periodoToSend,
 
-          id_clasificacion: toNullableId(filters.id_clasificacion),
-          id_tipo_venta: toNullableId(filters.id_tipo_venta),
-          id_cuenta_corriente: toNullableId(filters.id_cuenta_corriente),
-          id_tipo_movimiento: toNullableId(filters.id_tipo_movimiento),
-          id_medio_pago: toNullableId(filters.id_medio_pago),
+            // ✅ Ventas: fijo tipo movimiento = Salida si lo encuentro
+            id_tipo_movimiento: idTipoMovSalida,
 
-          id_cliente: toNullableId(filters.id_cliente),
-          id_proveedor: toNullableId(filters.id_proveedor),
+            // mínimos filtros
+            id_tipo_venta: toNullableId(filters.id_tipo_venta),
+            id_cliente: toNullableId(filters.id_cliente),
 
-          id_detalle: toNullableId(r.id_detalle),
+            // contado: medio pago
+            id_medio_pago: isContado ? toNullableId(filters.id_medio_pago) : null,
 
-          monto_total: Math.round(Number(r.total) * 100) / 100,
+            // corriente: decide guardar o facturar
+            // ⚠️ Ajustá estos campos a lo que espere tu backend:
+            es_factura: isCorriente ? accionCorriente === "facturar" : false,
+            accion_venta: isCorriente ? accionCorriente : null,
 
-          cantidad: Math.round(Number(r.cantidad) * 100) / 100,
-          precio: Math.round(Number(r.precio) * 100) / 100,
-          iva_pct: Math.round(Number(r.ivaPct) * 100) / 100,
-          subtotal: Math.round(Number(r.subtotal) * 100) / 100,
-          iva_monto: Math.round(Number(r.ivaMonto) * 100) / 100,
-          total: Math.round(Number(r.total) * 100) / 100,
-        }));
+            // detalle
+            id_detalle: toNullableId(r.id_detalle),
+
+            monto_total: Math.round(Number(r.total) * 100) / 100,
+            cantidad: Math.round(Number(r.cantidad) * 100) / 100,
+            precio: Math.round(Number(r.precio) * 100) / 100,
+            iva_pct: Math.round(Number(r.ivaPct) * 100) / 100,
+            subtotal: Math.round(Number(r.subtotal) * 100) / 100,
+            iva_monto: Math.round(Number(r.ivaMonto) * 100) / 100,
+            total: Math.round(Number(r.total) * 100) / 100,
+          };
+
+          // limpio nulls (opcional)
+          Object.keys(base).forEach((k) => {
+            if (base[k] === undefined) delete base[k];
+          });
+
+          return base;
+        });
 
       if (!payloads.length) {
         showToast("advertencia", "No hay filas válidas para guardar.", 3500);
@@ -726,7 +758,7 @@ export default function ModalCargaRapidaMovimientos({
 
       await onSaveBatch?.(payloads);
 
-      showToast("exito", `Listo: ${payloads.length} movimientos guardados.`, 2800);
+      showToast("exito", `Listo: ${payloads.length} ítems de venta guardados.`, 2800);
       onClose?.();
     } catch (e) {
       showToast("error", e?.message || "Error guardando.", 4500);
@@ -736,18 +768,8 @@ export default function ModalCargaRapidaMovimientos({
 
   if (!open) return null;
 
-  const miniOpen = addUI.open && ["id_cliente", "id_proveedor", "id_detalle"].includes(addUI.field);
-
-  const miniTitle =
-    addUI.field === "id_cliente"
-      ? "Nuevo cliente"
-      : addUI.field === "id_proveedor"
-      ? "Nuevo proveedor"
-      : "Nuevo detalle";
-
-  const cancelMini = () => {
-    closeAddMini();
-  };
+  const miniOpen = addUI.open && ["id_cliente", "id_detalle"].includes(addUI.field);
+  const miniTitle = addUI.field === "id_cliente" ? "Nuevo cliente" : "Nuevo detalle";
 
   const modalJSX = (
     <div className="mi-modal__overlay mi-modal__overlay--mov">
@@ -759,10 +781,8 @@ export default function ModalCargaRapidaMovimientos({
       >
         <div className="mi-modal__header mi-modal__header--car">
           <div className="mi-modal__head-left">
-            <h2 className="mi-modal__title">Nuevo Movimiento</h2>
-            <p className="mi-modal__subtitle">
-              Planilla a la izquierda + filtros a la derecha. Guardás todo junto.
-            </p>
+            <h2 className="mi-modal__title">Nueva Venta</h2>
+            <p className="mi-modal__subtitle">Planilla a la izquierda + datos de venta a la derecha.</p>
           </div>
 
           <button
@@ -857,9 +877,7 @@ export default function ModalCargaRapidaMovimientos({
                           step="1"
                           value={r.cantidad}
                           onChange={(e) =>
-                            updateRow(r.id, {
-                              cantidad: e.target.value === "" ? "" : Number(e.target.value),
-                            })
+                            updateRow(r.id, { cantidad: e.target.value === "" ? "" : Number(e.target.value) })
                           }
                           disabled={saving}
                           style={{ height: 38, textAlign: "center" }}
@@ -875,9 +893,7 @@ export default function ModalCargaRapidaMovimientos({
                           step="0.01"
                           value={r.precio}
                           onChange={(e) =>
-                            updateRow(r.id, {
-                              precio: e.target.value === "" ? "" : Number(e.target.value),
-                            })
+                            updateRow(r.id, { precio: e.target.value === "" ? "" : Number(e.target.value) })
                           }
                           disabled={saving}
                           style={{ height: 38, textAlign: "center" }}
@@ -957,10 +973,10 @@ export default function ModalCargaRapidaMovimientos({
               </div>
             </section>
 
-            {/* Filtros derecha */}
+            {/* Panel derecha: datos de venta */}
             <aside className="mi-cr-filters">
               <div className="mi-cr-filters__top">
-                <div className="mi-cr-filters__title">Filtros</div>
+                <div className="mi-cr-filters__title">Datos de venta</div>
 
                 <div className="mi-cr-filters__dates">
                   <div className="fl-field">
@@ -990,32 +1006,7 @@ export default function ModalCargaRapidaMovimientos({
 
               <div className="mi-cr-filters__body">
                 <div className="fl-grid" style={{ gridTemplateColumns: "1fr" }}>
-                  {[
-                    ["id_clasificacion", "Clasificación (opcional)", listsNorm.clasificaciones],
-                    ["id_tipo_venta", "Tipo venta (opcional)", listsNorm.tipos_venta],
-                    ["id_cuenta_corriente", "Cuenta corriente (opcional)", listsNorm.cuentas_corrientes],
-                    ["id_tipo_movimiento", "Tipo movimiento (opcional)", listsNorm.tipos_movimiento],
-                    ["id_medio_pago", "Medio pago (opcional)", listsNorm.medios_pago],
-                  ].map(([k, label, arr]) => (
-                    <div className="fl-field" key={k}>
-                      <select
-                        className="fl-input fl-select"
-                        value={String(filters[k])}
-                        onChange={(e) => updateFilter(k, e.target.value)}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>{label}</option>
-                        {arr.map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                      </select>
-                      <label className="fl-label">{String(label).replace(" (opcional)", "")}</label>
-                    </div>
-                  ))}
-
-                  {/* CLIENTE autocomplete */}
+                  {/* CLIENTE (obligatorio) */}
                   <div className="fl-field" style={{ position: "relative" }}>
                     <input
                       ref={clienteInputRef}
@@ -1028,7 +1019,7 @@ export default function ModalCargaRapidaMovimientos({
                       disabled={saving || addUI.open}
                       autoComplete="off"
                     />
-                    <label className="fl-label">Cliente (opcional)</label>
+                    <label className="fl-label">Cliente *</label>
 
                     {clienteFocus && filteredClientes.length > 0 && (
                       <ul className="mi-cr-suggest">
@@ -1057,47 +1048,89 @@ export default function ModalCargaRapidaMovimientos({
                     </button>
                   </div>
 
-                  {/* PROVEEDOR autocomplete */}
-                  <div className="fl-field" style={{ position: "relative" }}>
-                    <input
-                      ref={proveedorInputRef}
-                      className="fl-input"
-                      placeholder=" "
-                      value={proveedorInput}
-                      onChange={handleProveedorInputChange}
-                      onFocus={() => setProveedorFocus(true)}
-                      onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
-                      disabled={saving || addUI.open}
-                      autoComplete="off"
-                    />
-                    <label className="fl-label">Proveedor (opcional)</label>
-
-                    {proveedorFocus && filteredProveedores.length > 0 && (
-                      <ul className="mi-cr-suggest">
-                        {filteredProveedores.map((p) => (
-                          <li
-                            key={p.id}
-                            className="mi-cr-suggest__item"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectProveedor(p);
-                            }}
-                          >
-                            {p.nombre}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    <button
-                      type="button"
-                      className="mi-cr-link"
-                      onClick={startAddProveedor}
-                      disabled={saving || addUI.saving}
+                  {/* TIPO VENTA (forma de venta) */}
+                  <div className="fl-field">
+                    <select
+                      className="fl-input fl-select"
+                      value={String(filters.id_tipo_venta)}
+                      onChange={(e) => updateFilter("id_tipo_venta", e.target.value)}
+                      disabled={saving}
                     >
-                      + Agregar nuevo proveedor
-                    </button>
+                      <option value={NULL_OPTION}>Forma de venta *</option>
+                      {(listsNorm.tipos_venta || []).map((x) => (
+                        <option key={x.id} value={String(x.id)}>
+                          {x.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="fl-label">Forma de venta</label>
                   </div>
+
+                  {/* CONTADO => MEDIO PAGO */}
+                  {isContado && (
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(filters.id_medio_pago)}
+                        onChange={(e) => updateFilter("id_medio_pago", e.target.value)}
+                        disabled={saving}
+                      >
+                        <option value={NULL_OPTION}>Medio de pago *</option>
+                        {(listsNorm.medios_pago || []).map((x) => (
+                          <option key={x.id} value={String(x.id)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="fl-label">Medio de pago</label>
+                    </div>
+                  )}
+
+                  {/* CORRIENTE => GUARDAR / FACTURAR */}
+                  {isCorriente && (
+                    <div className="mi-card mi-card--full" style={{ padding: 12 }}>
+                      <div style={{ fontWeight: 600, marginBottom: 10, color: "var(--mi-text)" }}>
+                        En cuenta corriente
+                      </div>
+
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          className={`mit-btn ${accionCorriente === "guardar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
+                          onClick={() => setAccionCorriente("guardar")}
+                          disabled={saving}
+                          style={{ height: 40 }}
+                        >
+                          Guardar
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`mit-btn ${
+                            accionCorriente === "facturar" ? "mit-btn--solid" : "mit-btn--ghost"
+                          }`}
+                          onClick={() => setAccionCorriente("facturar")}
+                          disabled={saving}
+                          style={{ height: 40 }}
+                        >
+                          Facturar
+                        </button>
+                      </div>
+<div style={{ marginTop: 10, fontSize: 12, color: "var(--mi-muted)", fontWeight: 400 }}>
+  {accionCorriente === "guardar" ? (
+    <>
+      * <b>Guardar</b>: se registra la venta en <b>Cuenta Corriente</b> y queda <b>pendiente de pago</b>.
+    </>
+  ) : (
+    <>
+      * <b>Facturar</b>: se registra la venta y se toma como <b>pago realizado</b>.
+     
+    </>
+  )}
+</div>
+
+                    </div>
+                  )}
                 </div>
 
                 <div className="mi-cr-filters__actions">
@@ -1108,7 +1141,7 @@ export default function ModalCargaRapidaMovimientos({
                     className="mit-btn mit-btn--solid"
                     style={{ width: "100%", height: 44 }}
                   >
-                    {saving ? "Guardando..." : "Guardar todo"}
+                    {saving ? "Guardando..." : "Guardar venta"}
                   </button>
 
                   <button
@@ -1133,13 +1166,12 @@ export default function ModalCargaRapidaMovimientos({
           value={addUI.text}
           saving={addUI.saving}
           onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
-          onCancel={cancelMini}
+          onCancel={closeAddMini}
           onSave={guardarNuevoCatalogo}
         />
       </div>
     </div>
   );
 
-  // ✅ CLAVE: portal al body => no queda encerrado en .pp-content
   return createPortal(modalJSX, document.body);
 }

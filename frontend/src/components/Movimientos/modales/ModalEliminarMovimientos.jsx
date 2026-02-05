@@ -1,6 +1,7 @@
 // src/components/Movimientos/modales/ModalEliminarMovimientos.jsx
 import React, { useEffect, useRef, useCallback, useMemo } from "react";
 import { FaTrashAlt, FaTimes } from "react-icons/fa";
+import { createPortal } from "react-dom"; // ✅ NUEVO
 import "./ModalEliminarMovimientos.css";
 
 function moneyARS(v) {
@@ -117,19 +118,19 @@ export default function ModalEliminarMovimientos({
     return { idMov, tipo, concepto, monto };
   }, [row]);
 
-  if (!open) return null;
+if (!open) return null;
 
-  return (
-    <div
-      className="mvdel-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-eliminar-mov-title"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) cerrar();
-      }}
-    >
-      <div className="mvdel-modal mvdel-modal--danger">
+return createPortal(
+  <div
+    className="mvdel-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="modal-eliminar-mov-title"
+    onMouseDown={(e) => {
+      if (e.target === e.currentTarget) cerrar();
+    }}
+  >
+    <div className="mvdel-modal mvdel-modal--danger">
         <button
           className="mvdel-close"
           type="button"
@@ -197,6 +198,6 @@ export default function ModalEliminarMovimientos({
           </button>
         </div>
       </div>
-    </div>
+    </div>,  document.body
   );
 }

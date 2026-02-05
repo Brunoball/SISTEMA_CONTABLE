@@ -1,156 +1,230 @@
 /* src/components/Perfil/ModalPerfil.css */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
 
-/* =========================================================
-   ✅ BASE MODAL (copiado/igualado a ModalEditarMovimiento)
-   - Header azul
-   - Transición sutil (fade + slide)
-   - Overlay con blur
-========================================================= */
+/* =========================
+   Paleta BALTO (Excel)
+   (si ya existen en :root global, esto igual funciona)
+========================= */
+:root{
+  --balto-midnight:#0A2540;
+  --balto-action:#0055BB;
+  --balto-bg:#F6F9FC;
+  --balto-text:#425466;
+  --balto-white:#FFFFFF;
+  --balto-success:#22AD5C;
+  --balto-danger:#E13D45;
 
+  --balto-action-hover:#004AA3;
+  --balto-border:#D6DEEA;
+  --balto-muted: rgba(66, 84, 102, 0.72);
+  --balto-focus: rgba(0, 85, 187, 0.18);
+
+  --r-md: 14px;
+  --r-lg: 18px;
+
+  --shadow-sm: 0 1px 3px rgba(10, 37, 64, .08);
+  --shadow-md: 0 10px 25px rgba(10, 37, 64, .12);
+  --shadow-lg: 0 18px 45px rgba(10, 37, 64, .18);
+
+  --t: 180ms ease;
+}
+
+/* =========================
+   Overlay
+========================= */
 .mi-modal__overlay{
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.55);
-  backdrop-filter: blur(2px);
+  background: rgba(10, 37, 64, 0.55);
+  backdrop-filter: blur(7px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  animation: mi-fade 0.15s ease-out;
-  padding: 16px;
+  padding: 18px;
+  animation: mpFade .16s ease-out;
 }
 
+@keyframes mpFade{
+  from{ opacity:0; }
+  to{ opacity:1; }
+}
+
+/* =========================
+   Contenedor
+========================= */
 .mi-modal__container{
-  width: min(720px, 92vw); /* Perfil más angosto */
+  width: min(760px, 94vw);
+  max-width: 820px;
   max-height: 90vh;
-  background: var(--mi-bg);
-  border-radius: var(--mi-radius-lg, 18px);
-  box-shadow: var(--mi-shadow);
+
+  background: var(--balto-white);
+  border-radius: 22px;
+  border: 1px solid rgba(214, 222, 234, 0.9);
+  box-shadow: 0 30px 70px rgba(10, 37, 64, 0.30);
+
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: mi-slide 0.22s ease-out;
-  border: 1px solid rgba(0,0,0,0.04);
+
+  animation: mpPop .18s ease-out;
 }
 
-.mi-modal__container--perfil{
-  width: min(760px, 92vw);
-  max-width: 800px;
+@keyframes mpPop{
+  from{ opacity:0; transform: translateY(14px) scale(.99); }
+  to{ opacity:1; transform: translateY(0) scale(1); }
 }
 
-/* Header */
+/* =========================
+   Header premium (tipo login)
+========================= */
 .mi-modal__header{
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 22px;
-  background: var(--mi-primary);
+  gap: 12px;
+  padding: 18px 20px;
+
+  background:
+    radial-gradient(850px 220px at 15% 0%, rgba(255,255,255,.18), transparent 55%),
+    radial-gradient(720px 220px at 85% 100%, rgba(255,255,255,.10), transparent 55%),
+    linear-gradient(90deg, var(--balto-midnight) 0%, #0D2E52 55%, #09324A 120%);
+
+  border-bottom: 1px solid rgba(255,255,255,.14);
   color: #fff;
 }
 
-.mi-modal__head-left{ flex: 1; }
+.mi-modal__head-left{
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 
 .mi-modal__title{
   margin: 0;
-  font-size: 1.35rem;
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 950;
   letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mi-modal__subtitle{
-  margin: 4px 0 0;
-  font-size: .9rem;
-  opacity: .95;
-  font-weight: 500;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: rgba(255,255,255,.82);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Botón cerrar (igual) */
+/* Botón cerrar */
 .mi-modal__close{
   appearance: none;
-  border: 0;
-  background: transparent;
-  color: #fff;
-  width: 40px;
-  height: 40px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.92);
+  width: 42px;
+  height: 42px;
   padding: 0 !important;
-  border-radius: 999px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
   cursor: pointer;
-  transition: transform .15s ease, background .15s ease;
+  transition: background var(--t), transform var(--t);
   font-size: 18px;
 }
+
 .mi-modal__close:hover{
-  background: rgba(255,255,255,.12);
-  transform: rotate(90deg);
+  background: rgba(255,255,255,.14);
+  transform: translateY(-1px);
 }
 
-/* Animaciones */
-@keyframes mi-fade{ from{opacity:0} to{opacity:1} }
-@keyframes mi-slide{
-  from{ opacity:0; transform: translateY(18px); }
-  to{ opacity:1; transform: translateY(0); }
+.mi-modal__close:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(255,255,255,.22);
 }
 
-/* =========================================================
-   BODY (scroll + fondo suave como Movimientos)
-========================================================= */
+/* =========================
+   Body
+========================= */
 .perfil-body{
-  display: flex;
-  flex-direction: column;
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  background: var(--mi-bg-soft);
+  background:
+    radial-gradient(900px 300px at 50% 0%, rgba(0, 85, 187, 0.08), transparent 60%),
+    var(--balto-bg);
 }
 
 .perfil-inner{
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 22px;
-  background: linear-gradient(180deg, #fff 0%, #fbfcff 100%);
+  padding: 18px;
 }
 
-/* =========================================================
-   Perfil: contenido
-========================================================= */
+/* scroll suave */
+.perfil-inner::-webkit-scrollbar{ width: 10px; }
+.perfil-inner::-webkit-scrollbar-thumb{
+  background: rgba(10, 37, 64, 0.20);
+  border-radius: 10px;
+}
+.perfil-inner{ scrollbar-width: thin; }
+
+/* =========================
+   Card principal (avatar)
+========================= */
 .perfil-card{
   display: grid;
-  grid-template-columns: 44px 56px 1fr;
+  grid-template-columns: 56px 64px 1fr;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+
   padding: 14px;
-  border-radius: 14px;
-  border: 1px solid var(--mi-border);
-  background: #fff;
-  box-shadow: 0 2px 10px rgba(15,23,42,.03);
+  border-radius: var(--r-lg);
+  background: rgba(255,255,255,.92);
+  border: 1px solid rgba(214, 222, 234, 0.95);
+  box-shadow: var(--shadow-md);
+
   margin-bottom: 14px;
   min-width: 0;
 }
 
+/* Ícono izquierdo (cuadro) */
 .perfil-card__icon{
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  background: var(--mi-bg-soft);
-  border: 1px solid var(--mi-border);
-  font-size: 22px;
-  color: var(--mi-primary);
-}
-
-.perfil-avatar{
   width: 56px;
   height: 56px;
-  border-radius: 16px;
+  border-radius: 18px;
   display: grid;
   place-items: center;
-  font-size: 20px;
-  font-weight: 900;
+
+  background: rgba(0, 85, 187, 0.08);
+  border: 1px solid rgba(0, 85, 187, 0.16);
+  color: var(--balto-action);
+
+  font-size: 26px;
+}
+
+/* Avatar letra */
+.perfil-avatar{
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: .02em;
   color: #fff;
-  background: linear-gradient(135deg, var(--mi-primary), var(--mi-primary-600));
+
+  background: linear-gradient(135deg, var(--balto-midnight), var(--balto-action));
+  box-shadow: 0 16px 28px rgba(0, 85, 187, 0.16);
   border: 1px solid rgba(0,0,0,.06);
 }
 
@@ -158,19 +232,25 @@
 
 .perfil-name{
   font-size: 18px;
-  font-weight: 900;
-  color: var(--mi-text);
+  font-weight: 950;
+  color: var(--balto-midnight);
   line-height: 1.15;
   word-break: break-word;
 }
 
 .perfil-meta{
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 13px;
-  color: var(--mi-muted);
+  color: var(--balto-muted);
+}
+.perfil-meta b{
+  color: rgba(10, 37, 64, 0.92);
+  font-weight: 900;
 }
 
-/* Grid datos */
+/* =========================
+   Grid datos
+========================= */
 .perfil-grid{
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -179,9 +259,10 @@
 
 .perfil-field{
   padding: 12px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--mi-border);
-  background: #fff;
+  border-radius: var(--r-md);
+  background: rgba(255,255,255,.92);
+  border: 1px solid rgba(214, 222, 234, 0.95);
+  box-shadow: var(--shadow-sm);
   min-width: 0;
 }
 
@@ -189,78 +270,105 @@
 
 .perfil-field__label{
   font-size: 12px;
-  color: var(--mi-muted);
+  font-weight: 800;
+  color: var(--balto-muted);
   margin-bottom: 4px;
+  letter-spacing: .02em;
+  text-transform: uppercase;
 }
 
 .perfil-field__value{
   font-size: 14px;
-  font-weight: 800;
-  color: var(--mi-text);
+  font-weight: 900;
+  color: rgba(10, 37, 64, 0.92);
   word-break: break-word;
 }
 
-/* =========================================================
-   Footer acciones (igual a Movimientos)
-========================================================= */
+/* =========================
+   Footer acciones (estilo login)
+========================= */
 .mit-actions{
-  margin-top: auto;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
-  padding: 14px 18px;
-  border-top: 1px solid var(--mi-border);
-  background: #fff;
-  flex: 0 0 auto;
+  gap: 10px;
+  padding: 14px 16px;
+
+  border-top: 1px solid rgba(214, 222, 234, 0.95);
+  background: rgba(255,255,255,.96);
 }
 
 .mit-help{
   margin-right: auto;
-  padding: 0;
-  font-size: .82rem;
-  color: var(--mi-muted);
-  line-height: 1;
-  display: flex;
-  align-items: center;
+  font-size: 12px;
+  color: var(--balto-muted);
 }
 
+/* Botones */
 .mit-btn{
   appearance: none;
   border: 1px solid transparent;
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-weight: 900;
+  border-radius: 14px;
+  height: 44px;
+  padding: 0 14px;
+  font-weight: 950;
+  letter-spacing: .02em;
   cursor: pointer;
-  transition: transform .16s ease, box-shadow .16s ease, filter .16s ease, background .16s ease;
+  transition: transform var(--t), box-shadow var(--t), filter var(--t), background var(--t);
 }
 
 .mit-btn--ghost{
   background: #fff;
-  color: var(--mi-text);
-  border-color: var(--mi-border);
-}
-.mit-btn--ghost:hover{
-  background: rgba(0,0,0,.03);
-  transform: translateY(-1px);
-  box-shadow: 0 10px 18px rgba(0,0,0,.08);
+  color: var(--balto-midnight);
+  border-color: rgba(214, 222, 234, 0.98);
 }
 
-/* Responsive */
-@media (max-width: 640px){
-  .perfil-grid{ grid-template-columns: 1fr; }
-  .perfil-card{
-    grid-template-columns: 44px 52px 1fr;
-  }
-  .perfil-inner{ padding: 16px; }
+.mit-btn--ghost:hover{
+  background: rgba(0, 85, 187, 0.06);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
+
 .mit-btn--danger{
-  background: #D32F2F;
+  background: var(--balto-danger);
   color: #fff;
-  border-color: #D32F2F;
+  border-color: var(--balto-danger);
 }
+
 .mit-btn--danger:hover{
   filter: brightness(.95);
   transform: translateY(-1px);
-  box-shadow: 0 12px 26px -18px rgba(211,47,47,.6);
+  box-shadow: 0 14px 26px -18px rgba(225, 61, 69, .55);
 }
+
+.mit-btn:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 4px var(--balto-focus);
+}
+
+/* =========================
+   Responsive
+========================= */
+@media (max-width: 640px){
+  .perfil-grid{ grid-template-columns: 1fr; }
+  .perfil-card{ grid-template-columns: 52px 60px 1fr; }
+  .perfil-card__icon{ width: 52px; height: 52px; border-radius: 16px; }
+  .perfil-avatar{ width: 60px; height: 60px; border-radius: 18px; }
+  .mi-modal__container{ border-radius: 18px; }
+  .perfil-inner{ padding: 14px; }
+}
+/* ===== Ajuste: tipografías menos gruesas (override) ===== */
+.mi-modal__title{ font-weight: 700; }
+.mi-modal__subtitle{ font-weight: 500; }
+
+.perfil-name{ font-weight: 700; }
+.perfil-meta b{ font-weight: 600; }
+
+.perfil-field__label{ font-weight: 600; text-transform: none; letter-spacing: 0; }
+.perfil-field__value{ font-weight: 600; }
+
+.mit-btn{ font-weight: 650; letter-spacing: 0; }
+
+/* si querés aún más finito en general */
+.perfil-meta,
+.mit-help{ font-weight: 450; }

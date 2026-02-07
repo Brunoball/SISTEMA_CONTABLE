@@ -1396,3 +1396,15 @@ padding: 0 !important;
     grid-template-columns: 1fr;
   }
 }
+#mov--modaleditarrecibo{
+  min-width: 700px !important;
+  min-height: 60vh !important;
+}
+.btn--modalrecibo{
+  max-width: 100px;
+}
+.content-btn-modalrecibo{
+  display: flex;
+  justify-content: flex-end;
+
+}

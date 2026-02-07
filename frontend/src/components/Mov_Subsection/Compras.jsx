@@ -557,7 +557,7 @@ export default function Compras() {
         key: "pago",
         label: "PAGO",
         fr: 1.2,
-        align: "left",
+        align: "center",
         render: (r) => safeText(getCompraPagoLabel(r)),
       },
       {
@@ -818,30 +818,36 @@ const onUpdateCompra = async ({ compra, items, facturaFile }) => {
             </div>
           </div>
 
-          <div className="mov-card__actions">
-            <button
-              type="button"
-              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
-              onClick={exportToExcel}
-              disabled={loadingRows || filteredRows.length === 0}
-              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
-            >
-              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
-            </button>
-          </div>
+<div
+  className="mov-card__actions"
+  style={{ display: "flex", gap: 10, alignItems: "center" }}
+>
+  <button
+    type="button"
+    className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
+    onClick={exportToExcel}
+    disabled={loadingRows || filteredRows.length === 0}
+    title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
+  >
+    <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
+  </button>
+
+  <button
+    type="button"
+    className="mov-btn mov-btn--primary"
+    onClick={() => setOpenNueva(true)}
+    disabled={!fPeriodo}
+    title={!fPeriodo ? "Primero seleccioná un período" : "Crear nueva compra"}
+  >
+    <FontAwesomeIcon icon={faPlus} /> Nueva Compra
+  </button>
+</div>
+
         </div>
 
         <div className="mov-tabsBar">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }} />
-          <button
-            type="button"
-            className="mov-btn mov-btn--primary mov-tabsCta"
-            onClick={() => setOpenNueva(true)}
-            disabled={!fPeriodo}
-            title={!fPeriodo ? "Primero seleccioná un período" : "Crear nueva compra"}
-          >
-            <FontAwesomeIcon icon={faPlus} /> Nueva Compra
-          </button>
+
         </div>
 
         {/* HEADER */}

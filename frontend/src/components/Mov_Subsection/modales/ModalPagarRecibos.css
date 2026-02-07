@@ -1,0 +1,456 @@
+
+
+/* Header más prolijo (sin tocar tu paleta base) */
+.mpr-header{
+  padding: 14px 18px;
+}
+.mpr-headLeft{ display:flex; flex-direction:column; gap:6px; }
+.mpr-title{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-weight: 600 !important; /* vos preferís más fino */
+}
+.mpr-dot{ opacity: .9; }
+.mpr-clientName{
+  opacity: .95;
+  font-weight: 600;
+}
+.mpr-subtitle{ font-weight: 400 !important; opacity: .95; }
+
+/* Body */
+.mpr-body{
+  background: color-mix(in srgb, var(--balto-bg) 62%, #fff);
+  min-height: 0;
+  overflow: hidden;
+    padding: 16px 18px;
+    height: 100vh;
+}
+.mpr-content{
+  display:flex;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 0;
+}
+
+/* Grid superior */
+.mpr-topGrid{
+  display:grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 12px;
+  min-width: 0;
+  order: 2;
+}
+@media (max-width: 900px){
+  .mpr-topGrid{ grid-template-columns: 1fr; }
+}
+
+/* Cards */
+.mpr-card{
+  background:#fff;
+  border: 1px solid rgba(148,163,184,.35);
+  border-radius: 14px;
+  padding: 12px 12px;
+  box-shadow: 0 10px 26px rgba(15,23,42,.06);
+  min-width: 0;
+}
+.mpr-cardTitle{
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: rgba(15,23,42,.72);
+  margin-bottom: 10px;
+}
+
+/* KV mini */
+.mpr-kvGrid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 520px){
+  .mpr-kvGrid{ grid-template-columns: 1fr; }
+}
+.mpr-kv{
+  border: 1px solid rgba(148,163,184,.25);
+  border-radius: 12px;
+  padding: 10px 10px;
+  background: rgba(241,245,249,.60);
+}
+.mpr-kv span{
+  display:block;
+  font-size: 12px;
+  opacity: .75;
+  margin-bottom: 2px;
+}
+.mpr-kv b{
+  display:block;
+  font-weight: 600;
+  color: rgba(15,23,42,.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Form row */
+.mpr-formRow{
+  display:grid;
+  grid-template-columns: 1fr 220px;
+  gap: 12px;
+  min-width: 0;
+}
+@media (max-width: 700px){
+  .mpr-formRow{ grid-template-columns: 1fr; }
+}
+.mpr-field label{
+  display:block;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(15,23,42,.75);
+  margin-bottom: 6px;
+}
+.mpr-hint{
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(51,65,85,.78);
+  font-weight: 400;
+}
+
+/* Select medio pago */
+.mpr-selectWrap{ position: relative; min-width: 0; }
+.mpr-select{
+  width: 100%;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,.45);
+  background: #fff;
+  padding: 0 38px 0 12px;
+  outline: none;
+  font-weight: 400;
+  color: rgba(15,23,42,.92);
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .12s ease;
+}
+.mpr-select:focus{
+  border-color: color-mix(in srgb, var(--balto-action) 60%, rgba(148,163,184,.45));
+  box-shadow: 0 0 0 3px rgba(0,85,187,.12);
+}
+.mpr-select:disabled{
+  opacity: .65;
+  cursor: not-allowed;
+}
+.mpr-selectSpinner{
+  position:absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: .75;
+}
+
+/* Total pill */
+.mpr-totalPill{
+  height: 40px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,.35);
+  background: rgba(241,245,249,.75);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: rgba(15,23,42,.92);
+}
+
+/* Acciones */
+.mpr-actions{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mpr-btnWide{
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+}
+.mpr-actionsRight{
+  display:flex;
+  gap: 10px;
+  align-items:center;
+}
+.mpr-miniStat{
+  border: 1px solid rgba(148,163,184,.25);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: rgba(241,245,249,.60);
+  display:flex;
+  gap: 8px;
+  align-items:center;
+  font-variant-numeric: tabular-nums;
+}
+.mpr-miniStat span{ font-size: 12px; opacity: .75; }
+.mpr-miniStat b{ font-size: 12px; font-weight: 600; }
+
+/* Tabla */
+.mpr-tableWrap{ min-width: 0; }
+.mpr-tableTitle{
+  font-weight: 600;
+  color: rgba(15,23,42,.90);
+  margin: 2px 0 8px;
+}
+.mpr-table{
+  border: 1px solid rgba(148,163,184,.35);
+  border-radius: 14px;
+  overflow: hidden;
+  background:#fff;
+  box-shadow: 0 10px 26px rgba(15,23,42,.06);
+}
+.mpr-thead{
+  display:grid;
+  grid-template-columns: 64px 120px 1fr 170px;
+  background: var(--balto-ink);
+  color: rgba(255,255,255,.92);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+.mpr-th{ padding: 10px 12px; }
+.mpr-th--center{ text-align:center; }
+.mpr-th--right{ text-align:right; }
+
+.mpr-tbody{
+  max-height: calc(100vh - 358px);
+  overflow:auto;
+  scrollbar-gutter: stable;
+}
+.mpr-empty{
+  padding: 14px;
+  text-align:center;
+  color: rgba(51,65,85,.75);
+  font-weight: 500;
+}
+
+.mpr-row{
+  display:grid;
+  grid-template-columns: 64px 120px 1fr 170px;
+  border-bottom: 1px solid rgba(148,163,184,.20);
+  align-items:center;
+  cursor: pointer;
+  transition: background .12s ease, transform .10s ease;
+}
+.mpr-row:nth-child(odd){ background: rgba(241,245,249,.45); }
+.mpr-row:hover{ background: rgba(226,232,240,.55); }
+.mpr-row.is-checked{
+  background: color-mix(in srgb, rgba(0,85,187,.10) 55%, rgba(241,245,249,.55));
+}
+
+.mpr-td{ padding: 10px 12px; font-size: 13px; }
+.mpr-td--center{ text-align:center; }
+.mpr-td--right{
+  text-align:right;
+  font-variant-numeric: tabular-nums;
+}
+.mpr-td--desc{
+  font-weight: 500;
+  color: rgba(15,23,42,.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* checkbox más prolijo */
+.mpr-check{
+  width: 16px;
+  height: 16px;
+  accent-color: var(--balto-action);
+  cursor: pointer;
+}
+
+/* Nota */
+.mpr-note{
+  background:#fff;
+  border: 1px solid rgba(148,163,184,.35);
+  border-radius: 14px;
+  padding: 12px 12px;
+  box-shadow: 0 10px 26px rgba(15,23,42,.06);
+}
+.mpr-noteTitle{
+  font-weight: 600;
+  color: rgba(15,23,42,.90);
+  margin-bottom: 8px;
+}
+.mpr-textarea{
+  width: 100%;
+  min-height: 90px;
+  border-radius: 14px;
+  border: 1px solid rgba(148,163,184,.45);
+  padding: 10px 12px;
+  outline: none;
+  font-family: inherit;
+  font-weight: 400;
+  color: rgba(15,23,42,.92);
+  background: color-mix(in srgb, var(--balto-bg) 62%, #fff);
+  resize: vertical;
+}
+.mpr-textarea:focus{
+  border-color: rgba(0,85,187,.45);
+  box-shadow: 0 0 0 3px rgba(0,85,187,.12);
+}
+
+/* Footer */
+.mpr-footer{
+  border-top: 1px solid rgba(148,163,184,.25);
+  background: #fff;
+}
+/* Header: pill del ID cliente */
+.mpr-clientIdPill{
+  margin-left: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.22);
+  background: rgba(255,255,255,.10);
+  color: rgba(255,255,255,.92);
+  font-size: 12px;
+  font-weight: 500; /* más fino */
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Top grid single */
+.mpr-topGrid--single{
+  grid-template-columns: 1fr !important;
+}
+
+/* =========================
+   Checklist (checkbox custom)
+========================= */
+.mpr-checkWrap{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background .12s ease, transform .10s ease;
+}
+.mpr-checkWrap:hover{
+  background: rgba(226,232,240,.65);
+}
+.mpr-checkWrap:active{
+  transform: scale(.98);
+}
+.mpr-checkWrap.is-disabled{
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.mpr-checkInput{
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mpr-checkBox{
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1.6px solid rgba(148,163,184,.70);
+  background: rgba(255,255,255,.95);
+  box-shadow: 0 2px 8px rgba(15,23,42,.10);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease, transform .12s ease;
+}
+
+.mpr-checkWrap .mpr-checkInput:focus-visible + .mpr-checkBox{
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0,85,187,.14), 0 2px 10px rgba(15,23,42,.10);
+  border-color: color-mix(in srgb, var(--balto-action) 65%, rgba(148,163,184,.70));
+}
+
+.mpr-checkWrap .mpr-checkInput:checked + .mpr-checkBox{
+  background: color-mix(in srgb, var(--balto-action) 14%, #fff);
+  border-color: color-mix(in srgb, var(--balto-action) 70%, rgba(148,163,184,.70));
+}
+
+.mpr-checkWrap .mpr-checkInput:checked + .mpr-checkBox::after{
+  content: "";
+  width: 9px;
+  height: 5px;
+  border-left: 2px solid var(--balto-action);
+  border-bottom: 2px solid var(--balto-action);
+  transform: rotate(-45deg) translateY(-0.5px);
+}
+
+/* =========================
+   Botones footer premium
+========================= */
+.mpr-footer{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.mpr-btn{
+  height: 40px;
+  border-radius: 12px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  font-weight: 500; /* más fino */
+  cursor: pointer;
+  transition: transform .10s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease, opacity .15s ease;
+}
+
+.mpr-btn:active{ transform: scale(.99); }
+.mpr-btn:disabled{
+  opacity: .55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Cancelar */
+.mpr-btn--ghost{
+  background: rgba(241,245,249,.70);
+  border-color: rgba(148,163,184,.35);
+  color: rgba(15,23,42,.86);
+}
+.mpr-btn--ghost:hover:not(:disabled){
+  background: rgba(226,232,240,.85);
+  border-color: rgba(148,163,184,.55);
+}
+
+/* Confirmar */
+.mpr-btn--primary{
+  background: var(--balto-action);
+  color: rgba(255,255,255,.96);
+  border-color: color-mix(in srgb, var(--balto-action) 75%, #000);
+  box-shadow: 0 10px 22px rgba(0,85,187,.20);
+}
+.mpr-btn--primary:hover:not(:disabled){
+  filter: brightness(1.03);
+  box-shadow: 0 12px 26px rgba(0,85,187,.26);
+}
+.mpr-btn--primary:disabled{
+  background: color-mix(in srgb, var(--balto-action) 50%, rgba(148,163,184,.65));
+  border-color: rgba(148,163,184,.45);
+}
+.mpr-modal{
+  justify-content: space-between;
+}

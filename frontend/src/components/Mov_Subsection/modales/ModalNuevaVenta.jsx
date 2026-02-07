@@ -825,7 +825,7 @@ if (!idTipoMovSalida) {
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--desc" style={{ position: "relative" }}>
                         <input
                           className="fl-input"
-                          placeholder="Escribí y seleccioná un detalle…"
+                          placeholder="Escribí o seleccioná un descripción…"
                           value={r.detalleText}
                           onChange={(e) => {
                             updateRow(r.id, {
@@ -864,7 +864,7 @@ if (!idTipoMovSalida) {
                           disabled={saving || addUI.saving}
                           className="mi-cr-link"
                         >
-                          + Agregar nuevo detalle
+                          + Agregar nuevo descripción
                         </button>
                       </div>
 
@@ -903,7 +903,7 @@ if (!idTipoMovSalida) {
                       {/* % IVA */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--iva">
                         <select
-                          className="fl-input fl-select fl-select-iva--car"
+                          className="fl-input fl-select fl-select-iva--car fl-select-iva--compra"
                           value={String(r.ivaPct)}
                           onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
                           disabled={saving}

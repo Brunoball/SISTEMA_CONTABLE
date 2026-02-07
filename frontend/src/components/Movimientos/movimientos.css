@@ -175,7 +175,7 @@
 }
 
 .mov-filter{ width: 170px; }
-.mov-search{ width: 360px; }
+
 
 /* =========================
    SEARCH: X (limpiar)
@@ -343,9 +343,11 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  max-height: calc(100vh - 320px);
+  max-height: calc(100vh - 270px);
 }
-
+.mov-tableWrap--mov{
+    max-height: calc(100vh - 250px)  !important;
+}
 /* header sticky */
 .mov-gridTable--head{
   position: sticky;

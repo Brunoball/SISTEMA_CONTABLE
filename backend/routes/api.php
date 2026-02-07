@@ -42,6 +42,7 @@ require_once __DIR__ . "/../modules/flujo_caja/route.php";
 require_once __DIR__ . "/../modules/cuentas_corrientes/route.php";
 require_once __DIR__ . "/../modules/analisis_financiero/route.php";
 
+
 try {
   if ($action === "") {
     http_response_code(200);

@@ -192,7 +192,7 @@ const Principal = () => {
 
           // ✅ todas las demás opciones van a dashboard (panel)
           { label: "Compras", ruta: "/panel/compras" },
-          { label: "Recibo", ruta: "/panel/dashboard" },
+          { label: "Recibo", ruta: "/panel/recibos" },
           { label: "Orden de Pago", ruta: "/panel/dashboard" },
           { label: "Otros ingresos", ruta: "/panel/dashboard" },
         ],

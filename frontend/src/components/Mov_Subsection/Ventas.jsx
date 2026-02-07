@@ -556,6 +556,7 @@ export default function Ventas() {
       {
         key: "fecha",
         label: "FECHA",
+        align:"center",
         fr: 0.9,
         render: (r) => safeText(formatFechaDMY(r.fecha)),
       },
@@ -571,14 +572,14 @@ export default function Ventas() {
         key: "cliente",
         label: "CLIENTE",
         fr: 1.6,
-        align: "left",
+        align: "center",
         render: (r) => safeText(r.cliente),
       },
       {
         key: "pago",
         label: "PAGO",
         fr: 1.2,
-        align: "left",
+        align: "center",
         render: (r) => {
           const cat = getVentaCategoriaLabel(r, lists); // Contado / Cuenta Corriente / Crédito
           if (cat === "Contado") {
@@ -857,34 +858,37 @@ export default function Ventas() {
             </div>
           </div>
 
-          <div className="mov-card__actions">
-            <button
-              type="button"
-              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
-              onClick={exportToExcel}
-              disabled={loadingRows || filteredRows.length === 0}
-              title={
-                filteredRows.length
-                  ? "Exportar a Excel"
-                  : "No hay datos para exportar"
-              }
-            >
-              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
-            </button>
-          </div>
+<div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+  <button
+    type="button"
+    className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
+    onClick={exportToExcel}
+    disabled={loadingRows || filteredRows.length === 0}
+    title={
+      filteredRows.length
+        ? "Exportar a Excel"
+        : "No hay datos para exportar"
+    }
+  >
+    <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
+  </button>
+
+  <button
+    type="button"
+    className="mov-btn mov-btn--primary"
+    onClick={() => setOpenAdd(true)}
+    disabled={!fPeriodo}
+    title={!fPeriodo ? "Primero seleccioná un período" : "Crear nueva venta"}
+  >
+    <FontAwesomeIcon icon={faPlus} /> Nueva Venta
+  </button>
+</div>
+
         </div>
 
         <div className="mov-tabsBar">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }} />
-          <button
-            type="button"
-            className="mov-btn mov-btn--primary mov-tabsCta"
-            onClick={() => setOpenAdd(true)}
-            disabled={!fPeriodo}
-            title={!fPeriodo ? "Primero seleccioná un período" : "Crear nueva venta"}
-          >
-            <FontAwesomeIcon icon={faPlus} /> Nueva Venta
-          </button>
+
         </div>
 
         {/* HEADER */}

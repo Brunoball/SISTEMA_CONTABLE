@@ -11,6 +11,10 @@ if (!function_exists('route_movimientos')) {
       case 'catalogo_crear':
         require_once __DIR__ . '/catalogo.php';
         return true;
+        case 'recibos_confirmar_pago':
+  require_once __DIR__ . '/recibos_confirmar_pago.php';
+  return true;
+
 
       case 'movimientos_listar':
       case 'movimientos_crear':

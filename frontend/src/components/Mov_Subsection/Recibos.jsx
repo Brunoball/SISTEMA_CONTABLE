@@ -1,24 +1,25 @@
-// src/components/Movimientos/Movimientos.jsx
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+// src/components/Movimientos/Recibos.jsx
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../config/config";
-import "./movimientos.css";
+import "../Movimientos/movimientos.css"; // ✅ misma estética
 
-// ✅ MODALES
-import ModalCargaRapidaMovimientos from "./modales/ModalCargaRapidaMovimientos";
-import ModalEditarMovimiento from "./modales/ModalEditarMovimiento";
-import ModalEliminarMovimientos from "./modales/ModalEliminarMovimientos";
 
-// ✅ Toast global
+
 import Toast from "../Global/Toast.jsx";
+import ModalEditarRecibo from "./modales/ModalEditarRecibo";
+
+import ModalPagarRecibos from "./modales/ModalPagarRecibos";
+import ModalEliminarMovimientos from "../Movimientos/modales/ModalEliminarMovimientos";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
+  faCalendarDays,
+  faMagnifyingGlass,
+  faPlus,
+  faFileExcel,
   faPenToSquare,
   faTrashCan,
-  faPlus,
-  faMagnifyingGlass,
-  faCalendarDays,
-  faFileExcel,
+  faMoneyBill1Wave,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -31,28 +32,21 @@ function moneyARS(v) {
   try {
     return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
   } catch {
-    return `$${n.toFixed(2)}`;
+    return `$${Number(n).toFixed(2)}`;
   }
 }
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "-";
 }
-function numOrZero(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
+function normalizeSearchText(v) {
+  return String(v ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
-
-/* ✅ pick: devuelve el primer valor “usable” de una lista de keys */
-function pick(obj, keys, fallback = "") {
-  for (const k of keys) {
-    const v = obj?.[k];
-    if (v !== null && v !== undefined && String(v).trim() !== "") return v;
-  }
-  return fallback;
-}
-
-/* ✅ FECHA -> DD/MM/YYYY */
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "-";
@@ -64,7 +58,6 @@ function formatFechaDMY(v) {
     const dd = String(Number(m1[3])).padStart(2, "0");
     return `${dd}/${mm}/${yyyy}`;
   }
-
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) {
     const dd = String(Number(m2[1])).padStart(2, "0");
@@ -72,11 +65,12 @@ function formatFechaDMY(v) {
     const yyyy = m2[3];
     return `${dd}/${mm}/${yyyy}`;
   }
-
   return s;
 }
 
-/* ✅ Período helpers (UI MM-YYYY) <-> (API YYYY-MM) */
+/* =========================
+   Período helpers (UI MM-YYYY) <-> (API YYYY-MM)
+========================= */
 function periodoToMMYYYY(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
@@ -119,13 +113,11 @@ function periodoToYYYYMM(input) {
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
-
   if (/^\d{4}-\d{1,2}$/.test(s)) {
     const [yyyy, mmRaw] = s.split("-");
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
-
   if (/^\d{4}\/\d{1,2}$/.test(s)) {
     const [yyyy, mmRaw] = s.split("/");
     const mm = String(Number(mmRaw)).padStart(2, "0");
@@ -136,7 +128,6 @@ function periodoToYYYYMM(input) {
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
-
   if (/^\d{6}$/.test(s)) {
     const a = Number(s.slice(0, 4));
     if (a >= 1900 && a <= 2100) {
@@ -149,42 +140,12 @@ function periodoToYYYYMM(input) {
       return `${yyyy}-${mm}`;
     }
   }
-
   return s;
 }
 
-/* ✅ Listas */
-const emptyLists = {
-  periodos: [],
-  clasificaciones: [],
-  clientes: [],
-  cuentas_corrientes: [],
-  detalles: [],
-  medios_pago: [],
-  proveedores: [],
-  tipos_movimiento: [],
-  tipos_venta: [],
-};
-
-function normalizeLists(raw) {
-  const src = raw?.listas && typeof raw.listas === "object" ? raw.listas : raw;
-  const getArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
-  const periodosUI = (getArr("periodos") || []).map(periodoToMMYYYY);
-
-  return {
-    periodos: periodosUI,
-    clasificaciones: getArr("clasificaciones"),
-    clientes: getArr("clientes"),
-    cuentas_corrientes: getArr("cuentas_corrientes"),
-    detalles: getArr("detalles"),
-    medios_pago: getArr("medios_pago"),
-    proveedores: getArr("proveedores"),
-    tipos_movimiento: getArr("tipos_movimiento"),
-    tipos_venta: getArr("tipos_venta"),
-  };
-}
-
-/* ✅ Auth */
+/* =========================
+   Auth helpers
+========================= */
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
 
@@ -193,45 +154,123 @@ function getAuthInfo() {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   return { token, idUsuario };
 }
 
-/* ✅ Excel */
+/* =========================
+   Listas
+========================= */
+const emptyLists = {
+  periodos: [],
+  clientes: [],
+  medios_pago: [],
+  tipos_venta: [],
+  clasificaciones: [],
+  cuentas_corrientes: [],
+  detalles: [],
+  proveedores: [],
+  tipos_movimiento: [],
+};
+
+function normalizeLists(raw) {
+  const src = raw?.listas && typeof raw.listas === "object" ? raw.listas : raw;
+  const getArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
+
+  const periodosUI = (getArr("periodos") || []).map(periodoToMMYYYY);
+
+  return {
+    periodos: periodosUI,
+    clientes: getArr("clientes"),
+    medios_pago: getArr("medios_pago"),
+    tipos_venta: getArr("tipos_venta"),
+    clasificaciones: getArr("clasificaciones"),
+    cuentas_corrientes: getArr("cuentas_corrientes"),
+    detalles: getArr("detalles"),
+    proveedores: getArr("proveedores"),
+    tipos_movimiento: getArr("tipos_movimiento"),
+  };
+}
+
+/* =========================
+   ✅ FILTRO RECIBOS (pendientes)
+   Regla real: tipo_venta = CUENTA CORRIENTE + tiene cliente
+========================= */
+function hasCliente(row) {
+  const idCli = Number(
+    row?.id_cliente ?? row?.cliente_id ?? row?.idCliente ?? row?.id_cliente_fk ?? 0
+  );
+  if (Number.isFinite(idCli) && idCli > 0) return true;
+
+  const cliTxt = String(row?.cliente ?? "").trim();
+  return cliTxt.length > 0;
+}
+
+function isCuentaCorrienteTipoVenta(row) {
+  // por texto (lo más confiable con tu SELECT que ya trae nombre)
+  const label = String(
+    row?.tipo_venta ?? row?.tipoVenta ?? row?.condicion_venta ?? ""
+  ).trim();
+  const s = normalizeSearchText(label);
+
+  if (s.includes("cuenta corriente")) return true;
+  if (s.includes("cuenta") && s.includes("corriente")) return true;
+  if (s.includes("cta") && s.includes("cte")) return true;
+  if (s.includes("ctacte")) return true;
+
+  return false;
+}
+
+function isReciboPendienteRow(row) {
+  return hasCliente(row) && isCuentaCorrienteTipoVenta(row);
+}
+
+/* =========================
+   Full-text match
+========================= */
+function rowMatchesQuery(row, query) {
+  const qq = normalizeSearchText(query);
+  if (!qq) return true;
+
+  const montoNum = Number(row?.monto_total || row?.total || 0);
+  const parts = [];
+
+  if (row && typeof row === "object") {
+    for (const k of Object.keys(row)) {
+      const val = row[k];
+      if (val && typeof val === "object") continue;
+      parts.push(String(val ?? ""));
+    }
+  }
+
+  parts.push(formatFechaDMY(row?.fecha));
+  parts.push(periodoToMMYYYY(row?.periodo));
+  parts.push(String(montoNum), String(Math.trunc(montoNum)), moneyARS(montoNum));
+
+  const hay = normalizeSearchText(parts.join(" | "));
+  return hay.includes(qq);
+}
+
+/* =========================
+   Excel
+========================= */
 function slugifySheetName(name) {
-  const s = String(name || "Movimientos")
+  const s = String(name || "Recibos")
     .replace(/[\[\]\*\/\\\?\:]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return (s || "Movimientos").slice(0, 31);
+  return (s || "Recibos").slice(0, 31);
 }
 
-/* ✅ Export reducido */
-function buildExportRows(rows) {
-  return rows.map((r) => {
-    const total = pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0);
-
-    const cliente = safeText(pick(r, ["cliente", "nombre_cliente", "razon_social_cliente"], ""));
-    const proveedor = safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""));
-    const tercero = cliente !== "-" ? cliente : proveedor;
-
-    return {
-      FECHA: safeText(formatFechaDMY(pick(r, ["fecha", "fecha_movimiento", "created_at"], ""))),
-      PERIODO: safeText(periodoToMMYYYY(pick(r, ["periodo"], ""))),
-      DESCRIPCION: safeText(
-        pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")
-      ),
-      "TIPO PAGO": safeText(pick(r, ["medio_pago", "tipo_pago", "forma_pago"], "")),
-      "CLIENTE/PROVEEDOR": tercero,
-      TOTAL: numOrZero(total),
-    };
-  });
-}
-
-export default function Movimientos() {
+export default function Recibos() {
   const API = `${BASE_URL}/api.php`;
 
+  /* =========================
+     ✅ STATE (primero, para evitar TDZ de rows)
+  ========================= */
   const [lists, setLists] = useState(emptyLists);
   const [rows, setRows] = useState([]);
 
@@ -241,14 +280,19 @@ export default function Movimientos() {
   const [error, setError] = useState("");
 
   // filtros
-  const [fPeriodo, setFPeriodo] = useState(""); // MM-YYYY
+  const [fPeriodo, setFPeriodo] = useState(""); // UI MM-YYYY
   const [q, setQ] = useState("");
 
-  // modales
+  // modales placeholders
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+  const openEditModal = useCallback((r) => {
+  setSelectedRow(r);
+  setOpenEdit(true);
+}, []);
+
 
   // toast
   const [toast, setToast] = useState(null);
@@ -257,9 +301,50 @@ export default function Movimientos() {
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // cache por periodoAPI|q
+  // cache por "periodoAPI|q"
   const cacheRef = useRef(new Map());
 
+  /* =========================
+     ✅ Pagar (modal)
+  ========================= */
+  const [openPagar, setOpenPagar] = useState(false);
+  const [pagarCliente, setPagarCliente] = useState(null);
+  const [pagarDeudas, setPagarDeudas] = useState([]);
+
+  const getDeudasCliente = useCallback(
+    (rowCliente) => {
+      const idCli = Number(rowCliente?.id_cliente || 0);
+      const nombreCli = String(rowCliente?.cliente || "").trim();
+
+      return (rows || [])
+        .filter((r) => {
+          const rid = Number(r?.id_cliente || 0);
+          const rnom = String(r?.cliente || "").trim();
+
+          const same =
+            (idCli > 0 && rid === idCli) ||
+            (!idCli && nombreCli && rnom.toLowerCase() === nombreCli.toLowerCase());
+
+          return same;
+        })
+        .filter((r) => isReciboPendienteRow(r));
+    },
+    [rows]
+  );
+
+  const openPagarModal = useCallback(
+    (r) => {
+      const deudas = getDeudasCliente(r);
+      setPagarCliente(r);
+      setPagarDeudas(deudas);
+      setOpenPagar(true);
+    },
+    [getDeudasCliente]
+  );
+
+  /* =========================
+     API helpers
+  ========================= */
   const buildHeaders = useCallback(() => {
     const { token } = getAuthInfo();
     const h = { "Content-Type": "application/json" };
@@ -274,7 +359,9 @@ export default function Movimientos() {
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
+      throw new Error(
+        `Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`
+      );
     }
   }, []);
 
@@ -301,21 +388,16 @@ export default function Movimientos() {
     [buildHeaders, parseJsonOrThrow]
   );
 
-  const refreshPeriodos = useCallback(async () => {
-    try {
-      const data = await apiGet(`${API}?action=global_obtener_listas`);
-      if (!data?.exito) return;
-      const normalized = normalizeLists(data);
-      setLists((prev) => ({ ...prev, periodos: normalized.periodos || [] }));
-    } catch {}
-  }, [API, apiGet]);
-
+  /* =========================
+     Listas
+  ========================= */
   const loadLists = useCallback(async () => {
     setLoadingLists(true);
     setError("");
     try {
       const data = await apiGet(`${API}?action=global_obtener_listas`);
-      if (!data.exito) throw new Error(data.mensaje || "No se pudieron cargar listas.");
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar listas.");
+
       const normalized = normalizeLists(data);
       setLists(normalized);
 
@@ -336,14 +418,21 @@ export default function Movimientos() {
     }
   }, [API, apiGet]);
 
-  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
-    const periodoAPI = periodoToYYYYMM(periodoUI);
-    const prefix = `${periodoAPI}|`;
-    for (const k of cacheRef.current.keys()) {
-      if (String(k).startsWith(prefix)) cacheRef.current.delete(k);
+  const refreshPeriodos = useCallback(async () => {
+    try {
+      const data = await apiGet(`${API}?action=global_obtener_listas`);
+      if (!data?.exito) return;
+      const normalized = normalizeLists(data);
+      const nextPeriodos = Array.isArray(normalized.periodos) ? normalized.periodos : [];
+      setLists((prev) => ({ ...prev, periodos: nextPeriodos }));
+    } catch {
+      // ignore
     }
-  }, []);
+  }, [API, apiGet]);
 
+  /* =========================
+     Movimientos
+  ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
       const periodoUI = typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
@@ -375,18 +464,19 @@ export default function Movimientos() {
         if (qLocal) sp.set("q", qLocal);
 
         const data = await apiGet(`${API}?${sp.toString()}`);
-        if (!data.exito) throw new Error(data.mensaje || "No se pudieron cargar movimientos.");
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar recibos.");
 
         const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
-        const movsNorm = movs.map((r) => ({
+        const norm = movs.map((r) => ({
           ...r,
           periodo: periodoToMMYYYY(r?.periodo),
+          fecha: r?.fecha,
         }));
 
-        cacheRef.current.set(cacheKey, movsNorm);
-        setRows(movsNorm);
+        cacheRef.current.set(cacheKey, norm);
+        setRows(norm);
       } catch (e) {
-        setError(e.message || "Error cargando movimientos.");
+        setError(e.message || "Error cargando recibos.");
         setRows([]);
       } finally {
         setLoadingRows(false);
@@ -395,28 +485,52 @@ export default function Movimientos() {
     [API, apiGet, fPeriodo, q]
   );
 
-  // sync período si desaparece
-  useEffect(() => {
-    if (!Array.isArray(lists.periodos)) return;
+  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
+    const periodoAPI = periodoToYYYYMM(periodoUI);
+    const keyPrefix = `${periodoAPI}|`;
+    for (const k of cacheRef.current.keys()) {
+      if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
+    }
+  }, []);
 
-    if (lists.periodos.length === 0) {
-      if (fPeriodo !== "") {
-        setFPeriodo("");
-        setRows([]);
+  /* =========================
+     ✅ Confirmar pago: pasa CC -> CONTADO (id_tipo_venta)
+     Backend: api.php?action=recibos_confirmar_pago
+========================= */
+  const onConfirmPago = useCallback(
+    async (payload) => {
+      try {
+        showToast("cargando", "Confirmando pago…", 12000);
+
+        const ids =
+          payload?.ids_movimiento ??
+          payload?.ids_movimientos ??
+          payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ??
+          [];
+
+        const data = await apiPostJson(`${API}?action=recibos_confirmar_pago`, {
+          ids_movimiento: ids,
+          id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
+        });
+
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
+
+        // ✅ recargar tabla: ahora ya no cumplen filtro (se fueron a CONTADO)
+        invalidateCacheForPeriodo(fPeriodo);
+        await loadRows({ periodo: fPeriodo, q });
+
+        showToast("exito", data?.mensaje || "Pago confirmado.", 2400);
+      } catch (e) {
+        showToast("error", e?.message || "Error confirmando pago.", 4200);
+        throw e; // para que el modal no cierre si falló
       }
-      return;
-    }
+    },
+    [API, apiPostJson, fPeriodo, q, invalidateCacheForPeriodo, loadRows, showToast]
+  );
 
-    const current = periodoToMMYYYY(fPeriodo);
-    if (current && !lists.periodos.includes(current)) {
-      const next = lists.periodos[0];
-      setFPeriodo(next);
-      invalidateCacheForPeriodo(next);
-      loadRows({ periodo: next, q: "" });
-    }
-  }, [lists.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
-
-  // init
+  /* =========================
+     Init
+  ========================= */
   useEffect(() => {
     (async () => {
       const normalized = await loadLists();
@@ -431,65 +545,80 @@ export default function Movimientos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // filtrado front (simple)
+  /* =========================
+     Filtrado: período + pendientes(CC) + búsqueda
+  ========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
     if (!fPer) return [];
-    return rows.filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer));
-  }, [rows, fPeriodo]);
 
-  // ✅ COLUMNAS REDUCIDAS (lo que pidió el patrón)
+    return rows
+      .filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer))
+      .filter((r) => isReciboPendienteRow(r))
+      .filter((r) => rowMatchesQuery(r, q));
+  }, [rows, fPeriodo, q]);
+
+  /* =========================
+     Columnas
+  ========================= */
   const columns = useMemo(() => {
     return [
       {
-        key: "descripcion",
-        label: "DESCRIPCIÓN",
-        align: "left",
-        fr: 2.2,
-        render: (r) =>
-          safeText(
-            pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")
-          ),
-      },
-      {
-        key: "tipo_pago",
-        label: "TIPO PAGO",
+        key: "fecha",
+        label: "FECHA",
         align: "center",
-        fr: 1.1,
-        render: (r) => safeText(pick(r, ["medio_pago", "tipo_pago", "forma_pago"], "")),
+        fr: 0.9,
+        render: (r) => safeText(formatFechaDMY(r.fecha)),
       },
       {
-        key: "tercero",
-        label: "CLIENTE/PROVEEDOR",
+        key: "detalle",
+        label: "DESCRIPCIÓN",
+        fr: 2.4,
+        strong: true,
         align: "left",
-        fr: 1.6,
-        render: (r) => {
-          const cliente = safeText(pick(r, ["cliente", "nombre_cliente", "razon_social_cliente"], ""));
-          if (cliente !== "-") return cliente;
-          return safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""));
-        },
+        render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
       },
       {
-        key: "total",
-        label: "TOTAL",
-        align: "right",
-        fr: 1.0,
-        render: (r) => {
-          const total = pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0);
-          return moneyARS(total);
-        },
+        key: "cliente",
+        label: "CLIENTE",
+        fr: 1.8,
+        align: "center",
+        render: (r) => safeText(r.cliente),
       },
-      { key: "acciones", label: "ACCIONES", align: "center", fr: 0.8, render: () => null },
+      {
+        key: "monto",
+        label: "MONTO",
+        fr: 1.1,
+        align: "center",
+        render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
+      },
+      { key: "acciones", label: "ACCIONES", fr: 0.8, align: "center", render: () => null },
     ];
   }, []);
 
   const gridCols = useMemo(() => {
-    return columns.map((c) => `${Number(c.fr) || 1}fr`).join(" ");
+    const fallback = `repeat(${columns.length}, minmax(0, 1fr))`;
+    if (!Array.isArray(columns) || !columns.length) return fallback;
+    return columns
+      .map((c) => {
+        const n = Number(c.fr);
+        return Number.isFinite(n) && n > 0 ? `${n}fr` : "1fr";
+      })
+      .join(" ");
   }, [columns]);
 
-  const openEditModal = (r) => {
+  /* =========================
+     Acciones (placeholders)
+  ========================= */
+  const openAddModalPlaceholder = () => {
+    setOpenAdd(true);
+    showToast("info", "Nuevo registro (pendiente de modal).", 2400);
+  };
+
+  const openEditModalPlaceholder = (r) => {
     setSelectedRow(r);
     setOpenEdit(true);
+    showToast("info", "Editar recibo (pendiente de modal).", 2400);
   };
 
   const openDeleteModal = (r) => {
@@ -497,35 +626,16 @@ export default function Movimientos() {
     setOpenDel(true);
   };
 
-  const exportToExcel = useCallback(() => {
-    try {
-      const dataToExport = buildExportRows(filteredRows);
-
-      if (!dataToExport.length) {
-        showToast("error", "No hay datos para exportar.", 2500);
-        return;
-      }
-
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(dataToExport);
-      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Movimientos_Vista"));
-
-      const per = periodoToMMYYYY(fPeriodo) || "SIN_PERIODO";
-      XLSX.writeFile(wb, `movimientos_vista_${per}.xlsx`);
-      showToast("exito", "Excel exportado.", 2200);
-    } catch (e) {
-      showToast("error", e?.message || "Error exportando Excel.", 3500);
-    }
-  }, [filteredRows, fPeriodo, showToast]);
-
+  /* =========================
+     Eliminar
+  ========================= */
   const confirmDelete = async () => {
     if (!selectedRow?.id_movimiento) return;
 
     const id = selectedRow.id_movimiento;
     setDeletingId(id);
     setError("");
-
-    showToast("cargando", "Eliminando movimiento…", 12000);
+    showToast("cargando", "Eliminando…", 12000);
 
     try {
       const { idUsuario } = getAuthInfo();
@@ -535,7 +645,7 @@ export default function Movimientos() {
       sp.set("id_movimiento", String(id));
 
       const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
-      if (!data.exito) throw new Error(data.mensaje || "No se pudo eliminar.");
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
 
       setOpenDel(false);
       setSelectedRow(null);
@@ -544,66 +654,55 @@ export default function Movimientos() {
       await loadRows({ periodo: fPeriodo, q });
 
       await refreshPeriodos();
-
-      showToast("exito", "Movimiento eliminado.", 2600);
+      showToast("exito", "Registro eliminado.", 2400);
     } catch (e) {
-      setError(e.message || "Error eliminando movimiento.");
-      showToast("error", e.message || "Error eliminando movimiento.", 4200);
+      setError(e.message || "Error eliminando.");
+      showToast("error", e.message || "Error eliminando.", 4200);
     } finally {
       setDeletingId(null);
     }
   };
 
-  const saveMovimiento = async (payload, isEdit) => {
-    setError("");
+  /* =========================
+     Excel “Recibos Pendientes”
+  ========================= */
+  const exportToExcel = useCallback(() => {
+    try {
+      if (!filteredRows.length) {
+        showToast("error", "No hay datos para exportar.", 2500);
+        return;
+      }
 
-    const { idUsuario } = getAuthInfo();
-    const action = isEdit ? "movimientos_actualizar" : "movimientos_crear";
+      const dataToExport = filteredRows.map((r) => ({
+        FECHA: safeText(formatFechaDMY(r.fecha)),
+        DESCRIPCION: safeText(r.detalle ?? r.descripcion ?? r.concepto),
+        CLIENTE: safeText(r.cliente),
+        MONTO: Number(r.monto_total ?? r.total ?? 0) || 0,
+      }));
 
-    const payloadNorm = {
-      ...(payload || {}),
-      periodo: periodoToYYYYMM(payload?.periodo),
-    };
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
 
-    const data = await apiPostJson(`${API}?action=${action}`, {
-      ...payloadNorm,
-      idUsuario,
-    });
-
-    if (!data.exito) throw new Error(data.mensaje || "No se pudo guardar.");
-  };
-
-  const saveBatchMovimientos = useCallback(
-    async (payloads) => {
-      const arr = Array.isArray(payloads) ? payloads : [];
-      if (!arr.length) throw new Error("No hay filas para guardar.");
-
-      const { idUsuario } = getAuthInfo();
-
-      for (let i = 0; i < arr.length; i++) {
-        const p = arr[i];
-
-        const payloadNorm = {
-          ...(p || {}),
-          periodo: periodoToYYYYMM(p?.periodo),
-        };
-
-        const data = await apiPostJson(`${API}?action=movimientos_crear`, {
-          ...payloadNorm,
-          idUsuario,
-        });
-
-        if (!data.exito) {
-          const msg = data.mensaje || `Error guardando fila ${i + 1}.`;
-          throw new Error(msg);
+      const headers = Object.keys(dataToExport[0] || {});
+      const montoColIndex = headers.findIndex((h) => h === "MONTO");
+      if (montoColIndex >= 0 && ws["!ref"]) {
+        const colLetter = XLSX.utils.encode_col(montoColIndex);
+        const range = XLSX.utils.decode_range(ws["!ref"]);
+        for (let r = range.s.r + 1; r <= range.e.r; r++) {
+          const cell = ws[`${colLetter}${r + 1}`];
+          if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
         }
       }
 
-      invalidateCacheForPeriodo(fPeriodo);
-      await loadRows({ periodo: fPeriodo, q: "" });
-    },
-    [API, apiPostJson, fPeriodo, invalidateCacheForPeriodo, loadRows]
-  );
+      const per = periodoToMMYYYY(fPeriodo) || "SIN_PERIODO";
+      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`RecibosPend_${per}`));
+
+      XLSX.writeFile(wb, `recibos_pendientes_${per}.xlsx`);
+      showToast("exito", "Excel exportado.", 2200);
+    } catch (e) {
+      showToast("error", e?.message || "Error exportando Excel.", 3500);
+    }
+  }, [filteredRows, fPeriodo, showToast]);
 
   return (
     <div className="mov-page">
@@ -626,9 +725,9 @@ export default function Movimientos() {
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
             <div>
-              <div className="mov-card__title">Movimientos</div>
+              <div className="mov-card__title">Movimientos · Recibos</div>
               <div className="mov-card__hint">
-                Mostrando <b>{filteredRows.length}</b> registros
+                Mostrando <b>{filteredRows.length}</b> pendientes
               </div>
             </div>
 
@@ -670,10 +769,13 @@ export default function Movimientos() {
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        await loadRows({ periodo: fPeriodo, q: e.currentTarget.value });
+                        await loadRows({
+                          periodo: fPeriodo,
+                          q: e.currentTarget.value,
+                        });
                       }
                     }}
-                    placeholder="Buscar…"
+                    placeholder="Buscar por fecha, cliente, descripción, monto…"
                     disabled={loadingRows}
                   />
 
@@ -685,7 +787,8 @@ export default function Movimientos() {
                       onClick={async () => {
                         setQ("");
                         await loadRows({ periodo: fPeriodo, q: "" });
-                        document.querySelector(".mov-searchInput input")?.focus();
+                        const input = document.querySelector(".mov-searchInput input");
+                        input?.focus();
                       }}
                     >
                       ×
@@ -696,39 +799,36 @@ export default function Movimientos() {
             </div>
           </div>
 
-<div
-  className="mov-card__actions"
-  style={{ display: "flex", gap: 10, alignItems: "center" }}
->
-  <button
-    type="button"
-    className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
-    onClick={exportToExcel}
-    disabled={loadingRows || filteredRows.length === 0}
-    title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
-  >
-    <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
-  </button>
+          <div
+            className="mov-card__actions"
+            style={{ display: "flex", gap: 10, alignItems: "center" }}
+          >
+            <button
+              type="button"
+              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
+              onClick={exportToExcel}
+              disabled={loadingRows || filteredRows.length === 0}
+              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
+            >
+              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
+            </button>
 
-  <button
-    type="button"
-    className="mov-btn mov-btn--primary"
-    onClick={() => setOpenAdd(true)}
-    disabled={!fPeriodo}
-    title={!fPeriodo ? "Primero seleccioná un período" : "Nuevo Movimiento"}
-  >
-    <FontAwesomeIcon icon={faPlus} /> Nuevo Movimiento
-  </button>
-</div>
 
+          </div>
         </div>
 
-
+        <div className="mov-tabsBar">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }} />
+        </div>
 
         {/* HEADER */}
         <div
           className="mov-gridTable mov-gridTable--head"
-          style={{ gridTemplateColumns: gridCols }}
+          style={{
+            gridTemplateColumns: gridCols,
+            overflowX: "auto",
+            scrollbarGutter: "stable",
+          }}
           role="row"
         >
           {columns.map((c) => (
@@ -748,9 +848,9 @@ export default function Movimientos() {
         </div>
 
         {/* BODY */}
-        <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup">
+        <div className="mov-tableWrap" role="rowgroup">
           <div className="mov-gridBody">
-            {loadingRows && <div className="mov-emptyRow">Cargando movimientos...</div>}
+            {loadingRows && <div className="mov-emptyRow">Cargando recibos…</div>}
 
             {!loadingRows &&
               filteredRows.map((r) => (
@@ -768,7 +868,7 @@ export default function Movimientos() {
                           className={[
                             "mov-gridCell",
                             "mov-gridCell--actions",
-                            "is-center",
+                            c.align === "center" ? "is-center" : "",
                           ].join(" ")}
                           role="cell"
                         >
@@ -776,9 +876,18 @@ export default function Movimientos() {
                             <button
                               type="button"
                               className="mov-iconBtn"
-                              title="Editar"
-                              onClick={() => openEditModal(r)}
+                              title="Pagar"
+                              onClick={() => openPagarModal(r)}
                             >
+                              <FontAwesomeIcon icon={faMoneyBill1Wave} />
+                            </button>
+
+<button
+  type="button"
+  className="mov-iconBtn"
+  title="Editar"
+  onClick={() => openEditModal(r)}
+>
                               <FontAwesomeIcon icon={faPenToSquare} />
                             </button>
 
@@ -789,9 +898,7 @@ export default function Movimientos() {
                               disabled={deletingId === r.id_movimiento}
                               onClick={() => openDeleteModal(r)}
                             >
-                              {deletingId === r.id_movimiento ? "..." : (
-                                <FontAwesomeIcon icon={faTrashCan} />
-                              )}
+                              {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
                             </button>
                           </div>
                         </div>
@@ -806,6 +913,7 @@ export default function Movimientos() {
                           "mov-gridCell",
                           c.align === "right" ? "is-right" : "",
                           c.align === "center" ? "is-center" : "",
+                          c.strong ? "is-strong" : "",
                         ]
                           .filter(Boolean)
                           .join(" ")}
@@ -822,75 +930,52 @@ export default function Movimientos() {
             {!loadingRows && filteredRows.length === 0 && (
               <div className="mov-emptyRow">
                 {!fPeriodo
-                  ? "No hay período disponible para cargar movimientos."
-                  : "No hay movimientos para mostrar en este período."}
+                  ? "No hay período disponible para cargar recibos."
+                  : "No hay recibos pendientes (Cuenta Corriente) en este período."}
               </div>
             )}
           </div>
         </div>
       </section>
 
-      {/* MODAL CARGA RAPIDA */}
-      <ModalCargaRapidaMovimientos
-        open={openAdd}
-        lists={lists}
-        periodoDefault={fPeriodo}
-        onClose={() => setOpenAdd(false)}
-        onToast={showToast}
-        onSaveBatch={async (payloads) => {
-          try {
-            showToast("cargando", "Guardando carga rápida…", 12000);
-
-            await saveBatchMovimientos(payloads);
-            await refreshPeriodos();
-
-            const firstPer =
-              Array.isArray(payloads) && payloads[0]?.periodo ? payloads[0].periodo : "";
-            const ui = periodoToMMYYYY(firstPer) || fPeriodo;
-
-            setQ("");
-            setFPeriodo(ui);
-            invalidateCacheForPeriodo(ui);
-            await loadRows({ periodo: ui, q: "" });
-
-            setOpenAdd(false);
-            showToast("exito", "Carga rápida guardada.", 2400);
-          } catch (e) {
-            showToast("error", e?.message || "Error guardando carga rápida.", 4200);
-            throw e;
-          }
-        }}
-      />
-
-      {/* EDIT */}
-      <ModalEditarMovimiento
-        open={openEdit}
-        lists={lists}
-        row={selectedRow}
-        periodoDefault={fPeriodo}
+      <ModalPagarRecibos
+        open={openPagar}
         onClose={() => {
-          setOpenEdit(false);
-          setSelectedRow(null);
+          setOpenPagar(false);
+          setPagarCliente(null);
+          setPagarDeudas([]);
         }}
+        onConfirm={onConfirmPago}
         onToast={showToast}
-        onSave={async (payload) => {
-          try {
-            showToast("cargando", "Guardando cambios…", 12000);
-            await saveMovimiento(payload, true);
-
-            invalidateCacheForPeriodo(fPeriodo);
-            await loadRows({ periodo: fPeriodo, q });
-            await refreshPeriodos();
-
-            setOpenEdit(false);
-            setSelectedRow(null);
-            showToast("exito", "Movimiento actualizado.", 2600);
-          } catch (e) {
-            showToast("error", e?.message || "Error actualizando movimiento.", 4200);
-            throw e;
-          }
-        }}
+        cliente={pagarCliente}
+        deudas={pagarDeudas}
       />
+<ModalEditarRecibo
+  open={openEdit}
+  row={selectedRow}
+  lists={lists}
+  periodoDefault={fPeriodo}
+  onClose={() => {
+    setOpenEdit(false);
+    setSelectedRow(null);
+  }}
+  onToast={showToast}
+  onSave={async (payloadFinal) => {
+    // ✅ usa movimientos_actualizar (igual que Compras/Ventas)
+    const { idUsuario } = getAuthInfo();
+
+    const data = await apiPostJson(`${API}?action=movimientos_actualizar`, {
+      ...payloadFinal,
+      idUsuario,
+    });
+
+    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo actualizar.");
+
+    invalidateCacheForPeriodo(fPeriodo);
+    await loadRows({ periodo: fPeriodo, q });
+  }}
+/>
+
 
       {/* DELETE */}
       <ModalEliminarMovimientos

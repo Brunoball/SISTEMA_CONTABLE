@@ -271,10 +271,10 @@ function getCompraCategoria(r) {
 }
 
 function getCompraPagoLabel(r) {
-  const cat = getCompraCategoria(r);
-  if (cat === "Cuenta Corriente") return "Cuenta Corriente";
+  const cc = String(r?.cuenta_corriente ?? "").trim();
+  if (cc) return "CUENTA CORRIENTE";
   const mp = String(r?.medio_pago ?? "").trim();
-  return mp ? mp : "Contado";
+  return mp ? mp : "CONTADO";
 }
 
 /* =========================

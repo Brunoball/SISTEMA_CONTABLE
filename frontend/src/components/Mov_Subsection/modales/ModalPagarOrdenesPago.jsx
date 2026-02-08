@@ -1,8 +1,8 @@
-// src/components/Movimientos/modales/ModalPagarRecibos.jsx
+// src/components/Movimientos/modales/ModalPagarOrdenesPago.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import "../../Movimientos/modales/ModalEditarMovimiento.css"; // estética base
-import "./ModalPagarRecibos.css"; // css propio del modal
+import "./ModalPagarRecibos.css"; // ✅ reutilizamos el mismo CSS para misma estética
 
 import BASE_URL from "../../../config/config";
 
@@ -46,7 +46,6 @@ function normalizeMediosPago(raw) {
   const root = raw && typeof raw === "object" ? raw : {};
   const src = root.listas && typeof root.listas === "object" ? root.listas : root;
 
-  // tu backend usa "medios_pago"
   const arr = Array.isArray(src.medios_pago)
     ? src.medios_pago
     : Array.isArray(src.mediosPago)
@@ -61,16 +60,14 @@ function normalizeMediosPago(raw) {
     .filter((x) => x.id > 0 && x.nombre);
 }
 
-export default function ModalPagarRecibos({
+export default function ModalPagarOrdenesPago({
   open,
   onClose,
-  onConfirm, // async ({ cliente, seleccion, totalSeleccionado, nota, id_medio_pago, medio_pago }) => void
+  onConfirm, // async ({ proveedor, seleccion, totalSeleccionado, nota, id_medio_pago, medio_pago }) => void
   onToast, // (tipo,msg,ms)
-  cliente,
+  proveedor,
   deudas = [],
-  onFactura, // ✅ opcional
 }) {
-  const dialogRef = useRef(null);
   const firstFocusRef = useRef(null);
 
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -127,7 +124,6 @@ export default function ModalPagarRecibos({
   // Esc
   useEffect(() => {
     if (!open) return;
-
     const onKey = (e) => {
       if (e.key === "Escape") onClose?.();
     };
@@ -140,8 +136,7 @@ export default function ModalPagarRecibos({
     arr.sort((a, b) => {
       const fa = String(a?.fecha || "");
       const fb = String(b?.fecha || "");
-      if (fa === fb)
-        return Number(b?.id_movimiento || 0) - Number(a?.id_movimiento || 0);
+      if (fa === fb) return Number(b?.id_movimiento || 0) - Number(a?.id_movimiento || 0);
       return fb.localeCompare(fa);
     });
     return arr;
@@ -191,7 +186,7 @@ export default function ModalPagarRecibos({
 
   const handleConfirm = async () => {
     if (!deudasOrdenadas.length) {
-      onToast?.("error", "Este cliente no tiene deudas pendientes.", 2600);
+      onToast?.("error", "Este proveedor no tiene deudas pendientes.", 2600);
       return;
     }
     if (selectedIds.size === 0) {
@@ -218,9 +213,9 @@ export default function ModalPagarRecibos({
     }
 
     const payload = {
-      cliente: {
-        id_cliente: cliente?.id_cliente ?? null,
-        nombre: cliente?.cliente ?? "",
+      proveedor: {
+        id_proveedor: proveedor?.id_proveedor ?? null,
+        nombre: proveedor?.proveedor ?? "",
       },
       seleccion,
       totalSeleccionado,
@@ -240,66 +235,11 @@ export default function ModalPagarRecibos({
     }
   };
 
-  const handleFactura = async () => {
-    if (!onFactura) {
-      onToast?.("error", "Falta conectar la acción de factura (onFactura).", 3200);
-      return;
-    }
-    if (!deudasOrdenadas.length) {
-      onToast?.("error", "Este cliente no tiene deudas pendientes.", 2600);
-      return;
-    }
-    if (selectedIds.size === 0) {
-      onToast?.("error", "Seleccioná al menos una deuda para facturar.", 2600);
-      return;
-    }
-    if (!idMedioPago) {
-      onToast?.("error", "Seleccioná un medio de pago.", 2600);
-      return;
-    }
-
-    const seleccion = deudasOrdenadas.filter((r) =>
-      selectedIds.has(Number(r?.id_movimiento || 0))
-    );
-
-    const mp = mediosPago.find((x) => String(x.id) === String(idMedioPago));
-    if (!mp) {
-      onToast?.("error", "Medio de pago inválido. Reintentá.", 2800);
-      return;
-    }
-
-    const payload = {
-      cliente: {
-        id_cliente: cliente?.id_cliente ?? null,
-        nombre: cliente?.cliente ?? "",
-      },
-      seleccion,
-      totalSeleccionado,
-      nota: nota.trim(),
-      id_medio_pago: mp.id,
-      medio_pago: mp.nombre,
-    };
-
-    try {
-      setLoading(true);
-      await onFactura(payload);
-      // si querés cerrar al facturar:
-      // onClose?.();
-    } catch (e) {
-      onToast?.("error", e?.message || "No se pudo generar la factura.", 4200);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (!open) return null;
 
   return createPortal(
     <div className="mi-modal__overlay" role="dialog" aria-modal="true">
-      <div
-        className="mi-modal__container mi-modal__container--mov mpr-modal"
-        ref={dialogRef}
-      >
+      <div className="mi-modal__container mi-modal__container--mov mpr-modal">
         {/* Header */}
         <div className="mi-modal__header mpr-header">
           <div className="mpr-headLeft">
@@ -307,14 +247,14 @@ export default function ModalPagarRecibos({
               <FontAwesomeIcon icon={faMoneyBill1Wave} />
               <span>Pagar</span>
               <span className="mpr-dot">·</span>
-              <span className="mpr-clientName">{safeText(cliente?.cliente)}</span>
+              <span className="mpr-clientName">{safeText(proveedor?.proveedor)}</span>
 
-              {cliente?.id_cliente ? (
+              {proveedor?.id_proveedor ? (
                 <span
                   className="mpr-clientIdPill"
-                  title={`ID Cliente: ${cliente.id_cliente}`}
+                  title={`ID Proveedor: ${proveedor.id_proveedor}`}
                 >
-                  ID {String(cliente.id_cliente)}
+                  ID {String(proveedor.id_proveedor)}
                 </span>
               ) : null}
             </div>
@@ -339,7 +279,7 @@ export default function ModalPagarRecibos({
         {/* Body */}
         <div className="mi-modal__body mpr-body">
           <div className="mpr-content">
-            {/* Bloque superior: Pago (como el modal anterior) */}
+            {/* Bloque superior: SOLO Pago */}
             <div className="mpr-topGrid mpr-topGrid--single">
               <div className="mpr-card">
                 <div className="mpr-formRow">
@@ -376,7 +316,6 @@ export default function ModalPagarRecibos({
                     <div className="mpr-totalPill">{moneyARS(totalSeleccionado)}</div>
                   </div>
 
-                  {/* ✅ Botón “Seleccionar todas” dentro del mismo contenedor */}
                   <div className="mpr-field mpr-field--actions">
                     <label className="mpr-labelGhost">Acciones</label>
 
@@ -395,8 +334,7 @@ export default function ModalPagarRecibos({
               </div>
             </div>
 
-            {/* Nota (opcional) */}
-            {/*
+            {/* Nota opcional (si la querés usar, descomentá)
             <div className="mpr-note">
               <div className="mpr-noteTitle">Nota / observaciones</div>
               <textarea
@@ -412,7 +350,6 @@ export default function ModalPagarRecibos({
 
           {/* Tabla de deudas */}
           <div className="mpr-tableWrap">
-            {/* ✅ Título + chips como en el modal anterior */}
             <div className="mpr-tableTitle">
               <span>Deudas pendientes</span>
 
@@ -438,7 +375,9 @@ export default function ModalPagarRecibos({
 
               <div className="mpr-tbody">
                 {!deudasOrdenadas.length && (
-                  <div className="mpr-empty">No hay deudas pendientes para este cliente.</div>
+                  <div className="mpr-empty">
+                    No hay deudas pendientes para este proveedor.
+                  </div>
                 )}
 
                 {deudasOrdenadas.map((r, idx) => {
@@ -496,26 +435,6 @@ export default function ModalPagarRecibos({
             disabled={loading}
           >
             Cancelar
-          </button>
-
-          {/* Factura (opcional) */}
-          <button
-            type="button"
-            className="mpr-btn mpr-btn--ghost"
-            onClick={handleFactura}
-            disabled={loading || selectedIds.size === 0 || !idMedioPago || !onFactura}
-            title={
-              !onFactura
-                ? "Acción no conectada"
-                : selectedIds.size === 0
-                ? "Seleccioná al menos una deuda"
-                : !idMedioPago
-                ? "Seleccioná un medio de pago"
-                : "Hacer factura"
-            }
-          >
-            <FontAwesomeIcon icon={faMoneyBill1Wave} />
-            Hacer factura
           </button>
 
           <button

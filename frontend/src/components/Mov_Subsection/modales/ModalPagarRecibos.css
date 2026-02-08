@@ -196,9 +196,12 @@
 /* Tabla */
 .mpr-tableWrap{ min-width: 0; }
 .mpr-tableTitle{
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
   font-weight: 600;
   color: rgba(15,23,42,.90);
-  margin: 2px 0 8px;
+  margin: 10px 0 ;
 }
 .mpr-table{
   border: 1px solid rgba(148,163,184,.35);
@@ -453,4 +456,40 @@
 }
 .mpr-modal{
   justify-content: space-between;
+}.mpr-formRow{
+  display:grid;
+  grid-template-columns: 1fr 220px 220px; /* select | total | botón */
+  gap: 12px;
+  align-items: end; /* alinea todo abajo (labels arriba, controles abajo) */
+  min-width: 0;
+}
+
+@media (max-width: 900px){
+  .mpr-formRow{ grid-template-columns: 1fr; }
+}
+
+/* etiqueta “fantasma” para que no te quede raro el label del botón */
+.mpr-labelGhost{
+  opacity: .75;
+  font-weight: 500;
+}
+
+/* columna acciones dentro del card */
+.mpr-field--actions{
+  display:flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mpr-btnInCard{
+  height: 40px;
+  width: 100%;
+  justify-content: center;
+}
+.mpr-content{
+  display:flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
 }

@@ -1396,7 +1396,7 @@ padding: 0 !important;
     grid-template-columns: 1fr;
   }
 }
-#mov--modaleditarrecibo{
+#mov--modaleditarrecibo,#mov--modaleditarordenpago{
   min-width: 700px !important;
   min-height: 60vh !important;
 }

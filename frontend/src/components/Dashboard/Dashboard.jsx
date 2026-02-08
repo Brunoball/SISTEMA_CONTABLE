@@ -1,5 +1,5 @@
 // src/components/Dashboard/Dashboard.jsx
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -9,6 +9,7 @@ import {
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
 
+import GifCarga from "../Global/Gif_Carga";
 import "./dashboard.css";
 
 function normalizeRol(value) {
@@ -64,7 +65,21 @@ function pickInfo(label) {
 const DASH_SEEN_KEY = "pp_seen_dashboard";
 
 export default function Dashboard() {
+
   const navigate = useNavigate();
+
+  /* =======================
+     🔥 LOADER INICIAL BALTO
+  ======================== */
+  const [loadingInicial, setLoadingInicial] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoadingInicial(false);
+    }, 10000); // 10 segundos
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const usuario = useMemo(() => {
     try {
@@ -92,7 +107,6 @@ export default function Dashboard() {
       info: pickInfo(it.label),
     }));
 
-    // Plan 1 → 1 módulo | Plan 2 → 2 módulos | Plan 3 → 4 módulos
     const limit = planNivel === 1 ? 1 : planNivel === 2 ? 2 : 4;
     return base.slice(0, limit);
   }, [planNivel]);
@@ -106,101 +120,105 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="db">
-      {/* HEADER */}
-      <header className="db-header">
-        <div className="db-header__left">
-          <h1 className="db-title">Panel Contable</h1>
-          <p className="db-subtitle">Elegí una sección para comenzar.</p>
-        </div>
+    <>
+      {/* 👇 Loader BALTO */}
+      {loadingInicial && <GifCarga />}
 
-        <div className="db-header__right">
-          <div className="db-pill">
-            <span className="db-pill__dot" aria-hidden="true" />
-            <span className="db-pill__text">Plan nivel {planNivel}</span>
+      <div className="db">
+        {/* HEADER */}
+        <header className="db-header">
+          <div className="db-header__left">
+            <h1 className="db-title">Panel Contable</h1>
+            <p className="db-subtitle">Elegí una sección para comenzar.</p>
           </div>
-        </div>
-      </header>
 
-      {/* HERO */}
-      <section className="db-hero">
-        <div className="db-hero__card">
-          <div className="db-hero__icon" aria-hidden="true">
-            <FontAwesomeIcon icon={faChartLine} />
+          <div className="db-header__right">
+            <div className="db-pill">
+              <span className="db-pill__dot" aria-hidden="true" />
+              <span className="db-pill__text">Plan nivel {planNivel}</span>
+            </div>
           </div>
-          <div className="db-hero__text">
-            <h2>Bienvenido a BALTO</h2>
-            <p>
-              Tu sistema contable para gestionar el negocio de punta a punta: movimientos,
-              caja, cuentas corrientes y análisis financiero en un solo lugar.
-            </p>
+        </header>
+
+        {/* HERO */}
+        <section className="db-hero">
+          <div className="db-hero__card">
+            <div className="db-hero__icon" aria-hidden="true">
+              <FontAwesomeIcon icon={faChartLine} />
+            </div>
+            <div className="db-hero__text">
+              <h2>Bienvenido a BALTO</h2>
+              <p>
+                Tu sistema contable para gestionar el negocio de punta a punta: movimientos,
+                caja, cuentas corrientes y análisis financiero en un solo lugar.
+              </p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* GRID */}
-      <section className="db-grid">
-        {/* Acceso rápido */}
-        <div className="db-card">
-          <div className="db-card__title">Acceso rápido</div>
-          <div className="db-card__desc">Accedé a los módulos disponibles según tu plan.</div>
+        {/* GRID */}
+        <section className="db-grid">
 
-          <div className="db-quick">
-            {navItems.map((it) => (
-              <button
-                key={it.key}
-                type="button"
-                className="db-quick__item"
-                onClick={() => handleNavigate(it.ruta)}
-                title={it.info}
-              >
-                <span className="db-quick__icon" aria-hidden="true">
-                  <FontAwesomeIcon icon={it.icon} />
-                </span>
-                <span className="db-quick__label">{it.label}</span>
-              </button>
-            ))}
+          <div className="db-card">
+            <div className="db-card__title">Acceso rápido</div>
+            <div className="db-card__desc">Accedé a los módulos disponibles según tu plan.</div>
+
+            <div className="db-quick">
+              {navItems.map((it) => (
+                <button
+                  key={it.key}
+                  type="button"
+                  className="db-quick__item"
+                  onClick={() => handleNavigate(it.ruta)}
+                  title={it.info}
+                >
+                  <span className="db-quick__icon">
+                    <FontAwesomeIcon icon={it.icon} />
+                  </span>
+                  <span className="db-quick__label">{it.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Información */}
-        <div className="db-card">
-          <div className="db-card__title">Información</div>
-          <div className="db-card__desc">Descripción rápida de cada módulo disponible.</div>
+          <div className="db-card">
+            <div className="db-card__title">Información</div>
+            <div className="db-card__desc">Descripción rápida de cada módulo disponible.</div>
 
-          <div className="db-stats">
-            {navItems.map((it) => (
-              <div
-                key={`${it.key}-info`}
-                className="db-stat"
-                role="button"
-                tabIndex={0}
-                onClick={() => handleNavigate(it.ruta)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") handleNavigate(it.ruta);
-                }}
-                title="Abrir módulo"
-              >
-                <div className="db-stat__k">
-                  <FontAwesomeIcon icon={it.icon} style={{ marginRight: 8 }} />
-                  {it.label}
+            <div className="db-stats">
+              {navItems.map((it) => (
+                <div
+                  key={`${it.key}-info`}
+                  className="db-stat"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleNavigate(it.ruta)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") handleNavigate(it.ruta);
+                  }}
+                >
+                  <div className="db-stat__k">
+                    <FontAwesomeIcon icon={it.icon} style={{ marginRight: 8 }} />
+                    {it.label}
+                  </div>
+                  <div className="db-stat__v" style={{ fontSize: 13, lineHeight: 1.25 }}>
+                    {it.info}
+                  </div>
                 </div>
-                <div className="db-stat__v" style={{ fontSize: 13, lineHeight: 1.25 }}>
-                  {it.info}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
 
-      {/* FOOTER */}
-      <footer className="db-footer">
-        Desarrollado por{" "}
-        <a href="https://3devsnet.com" target="_blank" rel="noopener noreferrer">
-          3devs.solutions
-        </a>
-      </footer>
-    </div>
+        </section>
+
+        {/* FOOTER */}
+        <footer className="db-footer">
+          Desarrollado por{" "}
+          <a href="https://3devsnet.com" target="_blank" rel="noopener noreferrer">
+            3devs.solutions
+          </a>
+        </footer>
+      </div>
+    </>
   );
 }

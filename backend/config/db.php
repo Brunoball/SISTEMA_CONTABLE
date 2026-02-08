@@ -8,7 +8,7 @@
 $host = 'localhost';
 $dbname = 'sistema_contable';
 $user = 'root'; // Cambialo si usás otro usuario
-$pass = 'Gastex2233'; // Cambialo si tenés contraseña
+$pass = 'brunoball516'; // Cambialo si tenés contraseña
 
 
 try {

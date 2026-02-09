@@ -37,6 +37,106 @@
 }
 
 /* =========================
+   MODO OSCURO (redefine variables)
+   Se activa con: html[data-theme="oscuro"]
+========================= */
+html[data-theme="oscuro"]{
+  /* base */
+  --balto-bg: #0B1220;          /* fondo app */
+  --balto-text: rgba(226,232,240,.82);
+  --balto-white: #0F172A;
+
+  /* marca */
+  --balto-midnight:#0A2540;     /* podés dejarlo, combina bien */
+  --balto-action:#4EA1FF;       /* azul más visible en dark */
+  --balto-action-hover:#2E8BFF;
+
+  /* bordes/sombras/hover */
+  --balto-border: rgba(148,163,184,0.14);
+  --balto-muted: rgba(226,232,240,.62);
+  --balto-focus: rgba(78,161,255,.22);
+  --balto-hover: rgba(78,161,255,.10);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.30);
+  --shadow-md: 0 10px 22px rgba(0,0,0,.38);
+  --shadow-lg: 0 18px 40px rgba(0,0,0,.50);
+}
+
+/* =========================
+   Ajustes visuales para dark
+   (sin tocar tu estructura)
+========================= */
+html[data-theme="oscuro"] body{
+  background: var(--balto-bg);
+  color: rgba(226,232,240,.90);
+}
+
+/* fondo general */
+html[data-theme="oscuro"] .pp-shell{
+  background:
+    radial-gradient(1100px 420px at 50% 8%, rgba(78,161,255, 0.10), transparent 55%),
+    radial-gradient(900px 340px at 50% 92%, rgba(2, 6, 23, 0.55), transparent 55%),
+    var(--balto-bg);
+}
+
+/* sidebar */
+html[data-theme="oscuro"] .pp-sidebar{
+  background: rgba(15, 23, 42, .72);
+  border-right: 1px solid rgba(148,163,184,0.14);
+}
+
+/* content card */
+html[data-theme="oscuro"] .pp-content__inner{
+  background: rgba(15, 23, 42, .62);
+  border: 1px solid rgba(148,163,184,0.14);
+}
+
+/* nav items */
+html[data-theme="oscuro"] .pp-nav__item{
+  color: rgba(226,232,240,.92);
+}
+html[data-theme="oscuro"] .pp-nav__label{
+  color: rgba(226,232,240,.84);
+}
+html[data-theme="oscuro"] .pp-nav__icon{
+  background: rgba(78,161,255, 0.12);
+  color: var(--balto-action);
+}
+
+/* subitems */
+html[data-theme="oscuro"] .pp-navSub__item{
+  background: rgba(2, 6, 23, 0.35);
+  border: 1px solid rgba(148,163,184,0.14);
+}
+html[data-theme="oscuro"] .pp-navSub__label{
+  color: rgba(226,232,240,.82);
+}
+
+/* logout */
+html[data-theme="oscuro"] .pp-logout{
+  background: rgba(15, 23, 42, .72);
+  border: 1px solid rgba(148,163,184,0.14);
+}
+
+/* modal */
+html[data-theme="oscuro"] .pp-modal{
+  background: rgba(15, 23, 42, .98);
+  border: 1px solid rgba(148,163,184,0.16);
+}
+html[data-theme="oscuro"] .pp-modal__title{
+  color: rgba(226,232,240,.92);
+}
+html[data-theme="oscuro"] .pp-modal__text{
+  color: rgba(226,232,240,.72);
+}
+html[data-theme="oscuro"] .pp-btn--ghost{
+  background: rgba(2, 6, 23, 0.35);
+  border-color: rgba(148,163,184,0.18);
+  color: rgba(226,232,240,.92);
+}
+
+
+/* =========================
    BASE
 ========================= */
 *{ box-sizing:border-box; }
@@ -756,3 +856,31 @@ button{ font-family: inherit; }
   :root{ --mov-topbar-h: 50px; }
   .mov-topbar__section{ display:none; }
 }
+
+
+/* =========================
+   BOTÓN TEMA (TOPBAR)
+========================= */
+.pp-themeBtn{
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: rgba(255,255,255,.92);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 18px;
+  transition: background var(--t), transform var(--t), box-shadow var(--t);
+}
+.pp-themeBtn:hover{
+  background: rgba(255,255,255,.10);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(2,6,23,.16);
+}
+.pp-themeBtn:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(255,255,255,.14), 0 10px 18px rgba(2,6,23,.16);
+}
+

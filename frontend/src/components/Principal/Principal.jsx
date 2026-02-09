@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import LogoBalto from "../../imagenes/Logo_Blanco_Principal.png";
+import BASE_URL from "../../config/config";
 
 import {
   faChartLine,
@@ -11,7 +12,8 @@ import {
   faUsers,
   faSignOutAlt,
   faUserCircle,
-  faChevronDown,
+  faMoon,
+  faSun,
 } from "@fortawesome/free-solid-svg-icons";
 
 import "./principal.css";
@@ -32,7 +34,6 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm }) => {
   }, [open, onClose]);
 
   if (!open) return null;
-
   const stop = (e) => e.stopPropagation();
 
   return (
@@ -43,16 +44,10 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm }) => {
         </div>
 
         <h3 className="pp-modal__title">Confirmar cierre de sesión</h3>
-        <p className="pp-modal__text">
-          ¿Estás seguro de que deseas cerrar la sesión?
-        </p>
+        <p className="pp-modal__text">¿Estás seguro de que deseas cerrar la sesión?</p>
 
         <div className="pp-modal__actions">
-          <button
-            className="pp-btn pp-btn--ghost"
-            onClick={onClose}
-            ref={cancelBtnRef}
-          >
+          <button className="pp-btn pp-btn--ghost" onClick={onClose} ref={cancelBtnRef}>
             Cancelar
           </button>
           <button className="pp-btn pp-btn--danger" onClick={onConfirm}>
@@ -70,18 +65,11 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm }) => {
 function normalizeRol(value) {
   if (value == null) return "vista";
   const v = String(value).trim().toLowerCase();
-  if (
-    v === "1" ||
-    v === "admin" ||
-    v === "administrator" ||
-    v === "administrador" ||
-    v === "superadmin"
-  ) {
+  if (v === "1" || v === "admin" || v === "administrator" || v === "administrador" || v === "superadmin") {
     return "admin";
   }
   return "vista";
 }
-
 function normalizePlanNivel(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 1;
@@ -89,7 +77,6 @@ function normalizePlanNivel(value) {
   if (n === 2) return 2;
   return 3;
 }
-
 function slugify(name) {
   return (
     String(name ?? "")
@@ -101,7 +88,6 @@ function slugify(name) {
       .replace(/^-+|-+$/g, "") || "seccion"
   );
 }
-
 function pickIcon(label) {
   const s = String(label ?? "").toLowerCase();
   if (s.includes("movimientos")) return faMoneyBillTrendUp;
@@ -110,12 +96,23 @@ function pickIcon(label) {
   if (s.includes("analisis")) return faChartLine;
   return faChartLine;
 }
+function normalizeTema(value) {
+  const t = String(value ?? "claro").trim().toLowerCase();
+  return t === "oscuro" ? "oscuro" : "claro";
+}
+function applyTheme(tema) {
+  document.documentElement.setAttribute("data-theme", tema);
+}
+function getIdUsuario(u) {
+  const cand = [u?.idUsuario, u?.id_usuario, u?.id, u?.usuario_id];
+  const n = Number(cand.find((x) => x != null && x !== "")) || 0;
+  return n;
+}
 
 /* =========================
    Dashboard una sola vez
 ========================= */
 const DASH_SEEN_KEY = "pp_dashboard_seen_once";
-
 function markDashboardSeen() {
   try {
     sessionStorage.setItem(DASH_SEEN_KEY, "1");
@@ -130,13 +127,13 @@ const Principal = () => {
   const location = useLocation();
 
   const [usuario, setUsuario] = useState(null);
+  const [tema, setTema] = useState("claro");
+
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showPerfilModal, setShowPerfilModal] = useState(false);
 
-  // ✅ Submenú Movimientos: mobile por click, desktop por hover con delay
   const [openMovSub, setOpenMovSub] = useState(false);
 
-  // ✅ timers para abrir/cerrar con delay
   const closeTimerRef = useRef(null);
   const openTimerRef = useRef(null);
 
@@ -144,17 +141,14 @@ const Principal = () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => setOpenMovSub(false), ms);
   };
-
   const openSoon = (ms = 500) => {
     if (openTimerRef.current) clearTimeout(openTimerRef.current);
     openTimerRef.current = setTimeout(() => setOpenMovSub(true), ms);
   };
-
   const cancelClose = () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = null;
   };
-
   const cancelOpen = () => {
     if (openTimerRef.current) clearTimeout(openTimerRef.current);
     openTimerRef.current = null;
@@ -166,10 +160,17 @@ const Principal = () => {
       if (u) {
         u.rol = normalizeRol(u.rol);
         u.plan_nivel = normalizePlanNivel(u.plan_nivel ?? 1);
+        u.tema = normalizeTema(u.tema ?? "claro");
       }
       setUsuario(u || null);
+
+      const t = normalizeTema(u?.tema ?? "claro");
+      setTema(t);
+      applyTheme(t);
     } catch {
       setUsuario(null);
+      setTema("claro");
+      applyTheme("claro");
     }
   }, []);
 
@@ -185,12 +186,10 @@ const Principal = () => {
   const navItems = useMemo(() => {
     const base = [
       {
-        label: "Movimientos", ruta:"/panel/Movimientos",
+        label: "Movimientos",
+        ruta: "/panel/Movimientos",
         children: [
-          // ✅ solo ventas va a /panel/ventas
           { label: "Ventas", ruta: "/panel/ventas" },
-
-          // ✅ todas las demás opciones van a dashboard (panel)
           { label: "Compras", ruta: "/panel/compras" },
           { label: "Recibo", ruta: "/panel/recibos" },
           { label: "Orden de Pago", ruta: "/panel/OrdenesPago" },
@@ -252,21 +251,66 @@ const Principal = () => {
     }
   };
 
+  /* =========================
+     ✅ toggle tema + DB REAL
+  ========================= */
+  const toggleTema = async () => {
+    const nuevo = tema === "oscuro" ? "claro" : "oscuro";
+
+    // UI inmediata
+    setTema(nuevo);
+    applyTheme(nuevo);
+
+    // actualizar usuario en localStorage
+    let u2 = null;
+    try {
+      const u = JSON.parse(localStorage.getItem("usuario")) || {};
+      u2 = { ...u, tema: nuevo };
+      localStorage.setItem("usuario", JSON.stringify(u2));
+      setUsuario(u2);
+    } catch (e) {
+      console.error("Error actualizando localStorage usuario:", e);
+    }
+
+    // pegar a backend (mostrar si falla)
+    try {
+      const u = u2 || JSON.parse(localStorage.getItem("usuario")) || {};
+      const idUsuario = getIdUsuario(u);
+
+      if (!idUsuario) {
+        console.warn("No hay idUsuario en localStorage. No se puede guardar tema en DB.", u);
+        return;
+      }
+
+      const r = await fetch(`${BASE_URL}/api.php?action=usuario_tema_actualizar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idUsuario, tema: nuevo }),
+      });
+
+      const txt = await r.text();
+      let data = null;
+      try { data = JSON.parse(txt); } catch {}
+
+      if (!r.ok || !data?.exito) {
+        console.error("Falló usuario_tema_actualizar:", r.status, txt);
+        return;
+      }
+
+      console.log("✅ Tema guardado en DB:", data);
+
+    } catch (e) {
+      console.error("Error llamando usuario_tema_actualizar:", e);
+    }
+  };
+
   return (
     <div className="pp-shell">
       {/* ================= HEADER ================= */}
       <header className="mov-topbar">
         <div className="mov-topbar__left">
-          <button
-            className="mov-topbar__logo"
-            onClick={handleLogoClick}
-            title="Ir al dashboard"
-          >
-            <img
-              src={LogoBalto}
-              alt="Logo Balto"
-              className="mov-topbar__logoImg"
-            />
+          <button className="mov-topbar__logo" onClick={handleLogoClick} title="Ir al dashboard">
+            <img src={LogoBalto} alt="Logo Balto" className="mov-topbar__logoImg" />
           </button>
 
           <div className="mov-topbar__titles">
@@ -278,12 +322,7 @@ const Principal = () => {
 
             <div className="mov-topbar__sysby">
               Desarrollado por{" "}
-              <a
-                href="https://3devsnet.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mov-topbar__sysbyLink"
-              >
+              <a href="https://3devsnet.com" target="_blank" rel="noopener noreferrer" className="mov-topbar__sysbyLink">
                 3 devs
               </a>
             </div>
@@ -292,11 +331,18 @@ const Principal = () => {
 
         <div className="mov-topbar__right">
           <div className="mov-topbar__section">{activeLabel}</div>
+
+          {/* ✅ BOTÓN TEMA */}
           <button
-            className="mov-topbar__usericon"
-            onClick={() => setShowPerfilModal(true)}
-            title="Perfil"
+            className="pp-themeBtn"
+            onClick={toggleTema}
+            title={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            aria-label={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
           >
+            <FontAwesomeIcon icon={tema === "oscuro" ? faSun : faMoon} />
+          </button>
+
+          <button className="mov-topbar__usericon" onClick={() => setShowPerfilModal(true)} title="Perfil">
             <FontAwesomeIcon icon={faUserCircle} />
           </button>
         </div>
@@ -304,13 +350,7 @@ const Principal = () => {
 
       {/* ================= SIDEBAR ================= */}
       <aside className="pp-sidebar">
-        {/* ✅ BOTÓN PANEL CONTABLE */}
-        <div
-          className="pp-brand"
-          onClick={handleLogoClick}
-          role="button"
-          tabIndex={0}
-        >
+        <div className="pp-brand" onClick={handleLogoClick} role="button" tabIndex={0}>
           <div className="pp-brand__mark">
             <FontAwesomeIcon icon={faChartLine} />
           </div>
@@ -325,19 +365,13 @@ const Principal = () => {
             const hasSub = Array.isArray(item.children) && item.children.length > 0;
             const isMov = item.key === "movimientos";
 
-            const isActive =
-              activeKey === item.key ||
-              (isMov && location.pathname.startsWith("/panel/movimientos"));
-
+            const isActive = activeKey === item.key || (isMov && location.pathname.startsWith("/panel/movimientos"));
             const isOpen = isMov && openMovSub;
 
             return (
               <div
                 key={item.key}
-                className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${
-                  isOpen ? "is-open" : ""
-                }`}
-                // ✅ DESKTOP: hover en TODO Movimientos -> abre con delay 0.5s
+                className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${isOpen ? "is-open" : ""}`}
                 onMouseEnter={() => {
                   if (!isNoHover() && isMov) {
                     cancelClose();
@@ -356,26 +390,19 @@ const Principal = () => {
                   role="button"
                   tabIndex={0}
                   onClick={() => {
-                    // mobile: tocás el item y alterna el submenú
                     if (hasSub && isNoHover()) {
                       if (isMov) setOpenMovSub((v) => !v);
                       return;
                     }
-
-
                     handleNavigate(item.ruta);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-
                       if (hasSub && isNoHover()) {
                         if (isMov) setOpenMovSub((v) => !v);
                         return;
                       }
-
-
-
                       handleNavigate(item.ruta);
                     }
                   }}
@@ -383,16 +410,12 @@ const Principal = () => {
                   <span className="pp-nav__icon">
                     <FontAwesomeIcon icon={item.icon} />
                   </span>
-
                   <span className="pp-nav__label">{item.label}</span>
-
-
                 </div>
 
                 {hasSub && (
                   <div
                     className="pp-navSub"
-                    // ✅ si entrás al submenu, se mantiene abierto
                     onMouseEnter={() => {
                       if (!isNoHover() && isMov) {
                         cancelClose();
@@ -407,13 +430,11 @@ const Principal = () => {
                     {item.children.map((sub) => (
                       <button
                         key={sub.ruta + sub.label}
-                        className={`pp-navSub__item ${
-                          location.pathname.startsWith(sub.ruta) ? "is-active" : ""
-                        }`}
+                        className={`pp-navSub__item ${location.pathname.startsWith(sub.ruta) ? "is-active" : ""}`}
                         onClick={() => {
                           markDashboardSeen();
                           navigate(sub.ruta);
-                          setOpenMovSub(false); // cerrar al elegir
+                          setOpenMovSub(false);
                         }}
                       >
                         <span className="pp-navSub__dot" />
@@ -455,11 +476,7 @@ const Principal = () => {
         }}
       />
 
-      <ConfirmLogoutModal
-        open={showLogoutModal}
-        onClose={() => setShowLogoutModal(false)}
-        onConfirm={confirmarCierreSesion}
-      />
+      <ConfirmLogoutModal open={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={confirmarCierreSesion} />
     </div>
   );
 };

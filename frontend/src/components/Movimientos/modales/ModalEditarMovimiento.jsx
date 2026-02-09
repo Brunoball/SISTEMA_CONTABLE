@@ -1,13 +1,13 @@
 // src/components/Movimientos/modales/ModalEditarMovimiento.jsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import "./ModalEditarMovimiento.css";
 import { createPortal } from "react-dom";
+import "./ModalEditarMovimiento.css";
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";
 const ADD_OPTION = "__ADD__";
 
-// ✅ IVA selector (igual que carga rápida)
+// IVA selector
 const IVA_OPTIONS = [
   { label: "0%", value: 0 },
   { label: "10,5%", value: 10.5 },
@@ -77,7 +77,6 @@ function normalizeIncomingLists(lists) {
 }
 
 function safeNumber(v) {
-  // ✅ Si viene "" o null => 0
   if (v === "" || v == null) return 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -94,7 +93,6 @@ function todayISO() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// UI: MM-YYYY
 function normalizePeriodoToMMYYYY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "";
@@ -128,7 +126,6 @@ function normalizePeriodoToMMYYYY(v) {
   return `${mm}-${yyyy}`;
 }
 
-// API: YYYY-MM
 function periodoMMYYYY_to_YYYYMM(mmYYYY) {
   const s = String(mmYYYY ?? "").trim();
   if (!s) return "";
@@ -163,6 +160,9 @@ function getAuthInfo() {
   }
 
   return { token, idUsuario };
+}
+function isTemaOscuro() {
+  return document.documentElement.getAttribute("data-theme") === "oscuro";
 }
 
 /* =========================
@@ -245,21 +245,11 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
           </div>
 
           <div className="mi-mini__actions">
-            <button
-              type="button"
-              className="mit-btn mit-btn--ghost"
-              onClick={onCancel}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>
               Cancelar
             </button>
 
-            <button
-              type="button"
-              className="mit-btn mit-btn--solid"
-              onClick={onSave}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
               {saving ? "Guardando..." : "Guardar"}
             </button>
           </div>
@@ -361,6 +351,17 @@ export default function ModalEditarMovimiento({
   onToast,
 }) {
   const API = `${BASE_URL}/api.php`;
+// ✅ dark automático leyendo data-theme (Principal.jsx)
+const [dark, setDark] = useState(isTemaOscuro());
+
+useEffect(() => {
+  const obs = new MutationObserver(() => setDark(isTemaOscuro()));
+  obs.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+  return () => obs.disconnect();
+}, []);
 
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
@@ -370,12 +371,15 @@ export default function ModalEditarMovimiento({
   const listsRef = useRef(lists);
   const rowRef = useRef(row);
   const periodoDefaultRef = useRef(periodoDefault);
+
   useEffect(() => {
     listsRef.current = lists;
   }, [lists]);
+
   useEffect(() => {
     rowRef.current = row;
   }, [row]);
+
   useEffect(() => {
     periodoDefaultRef.current = periodoDefault;
   }, [periodoDefault]);
@@ -493,7 +497,7 @@ export default function ModalEditarMovimiento({
   }, []);
 
   /* =========================
-     ✅ Item handlers (editable)
+     Item handlers
   ========================= */
   const recalcFromItem = useCallback((nextPartial) => {
     setForm((p) => {
@@ -508,8 +512,6 @@ export default function ModalEditarMovimiento({
       next.subtotal = t.subtotal;
       next.iva_monto = t.iva_monto;
       next.total = t.total;
-
-      // ✅ total calculado
       next.monto_total = t.total;
 
       return next;
@@ -683,7 +685,6 @@ export default function ModalEditarMovimiento({
   const handleClienteInputChange = useCallback((e) => {
     const value = e.target.value;
     setClienteInput(value);
-    // ✅ si escribe manual, NO obligamos a ID
     setForm((prev) => ({ ...prev, id_cliente: NULL_OPTION }));
   }, []);
 
@@ -762,7 +763,7 @@ export default function ModalEditarMovimiento({
   }, []);
 
   /* =========================
-     Payload final (TODO opcional salvo fecha/periodo)
+     Payload final
   ========================= */
   const payload = useMemo(() => {
     const isAdd = (v) => v === ADD_OPTION;
@@ -774,24 +775,18 @@ export default function ModalEditarMovimiento({
       return Number.isFinite(n) && n > 0 ? n : null;
     };
 
-    // ✅ Item (si están vacíos => 0)
     const cantidad = Math.max(0, safeNumber(form.cantidad));
     const precio = Math.max(0, safeNumber(form.precio));
     const iva_pct = Math.max(0, safeNumber(form.iva_pct));
 
     const t = calcItemTotals(cantidad, precio, iva_pct);
 
-    // ✅ Si el usuario edita Monto total manual, lo respetamos como "total",
-    // pero mantenemos consistencia recalculando item en submit (ya lo haces).
-    // Acá mandamos el total calculado por item, que es lo más consistente.
-    // Si querés mandar el "form.monto_total" manual sí o sí, avisame y lo cambio.
     return {
       id_movimiento: form.id_movimiento,
 
       fecha: form.fecha,
       periodo: periodoMMYYYY_to_YYYYMM(normalizePeriodoToMMYYYY(form.periodo)),
 
-      // ✅ TODOS opcionales (null si no hay)
       id_clasificacion: toNullableId(form.id_clasificacion),
       id_tipo_venta: toNullableId(form.id_tipo_venta),
       id_cuenta_corriente: toNullableId(form.id_cuenta_corriente),
@@ -803,7 +798,6 @@ export default function ModalEditarMovimiento({
 
       id_medio_pago: toNullableId(form.id_medio_pago),
 
-      // ✅ totales (pueden ser 0)
       cantidad: Math.round(cantidad * 1000) / 1000,
       precio: Math.round(precio * 100) / 100,
       iva_pct: Math.round(iva_pct * 100) / 100,
@@ -826,24 +820,14 @@ export default function ModalEditarMovimiento({
     showToast("cargando", "Guardando cambios…", 12000);
 
     try {
-      // ✅ ÚNICO obligatorio: fecha válida
       if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) {
         throw new Error("Fecha inválida.");
       }
 
-      // ✅ Período: si está vacío => se completa desde la fecha.
       const perUI = normalizePeriodoToMMYYYY(form.periodo);
       const perAuto = periodoFromISODate(form.fecha);
-
       const finalPer = perUI || perAuto;
-      if (!finalPer || !/^\d{2}-\d{4}$/.test(finalPer)) {
-        // si igual vino raro, no bloqueamos: mandamos el auto si existe, si no vacío
-        // (pero lo más sano es exigir formato; acá lo aflojamos como pediste)
-      }
 
-      // ✅ Si hay "Agregar…" seleccionado en algún campo, NO bloqueamos,
-      // pero lo mandamos como null (ya lo hace payload).
-      // Te aviso para que no quede colgado sin querer.
       const addFields = [
         ["id_clasificacion", "Clasificación"],
         ["id_tipo_venta", "Tipo de venta"],
@@ -857,18 +841,9 @@ export default function ModalEditarMovimiento({
       const hasAdd = addFields.filter(([k]) => form[k] === ADD_OPTION);
       if (hasAdd.length) {
         const labels = hasAdd.map((x) => x[1]).join(", ");
-        showToast(
-          "advertencia",
-          `Tenés en "AGREGAR…" (${labels}). Se guardará sin ese campo (null).`,
-          3800
-        );
+        showToast("advertencia", `Tenés en "AGREGAR…" (${labels}). Se guardará sin ese campo (null).`, 3800);
       }
 
-      // ✅ Ya no obligamos a seleccionar desde sugerencias:
-      // si escribiste texto y no hay ID, simplemente se guarda null.
-      // (Si querés, acá podés auto-limpiar el texto, pero lo dejo como está.)
-
-      // ✅ Recalculo final coherente de item antes de mandar
       const cantidad = Math.max(0, safeNumber(form.cantidad));
       const precio = Math.max(0, safeNumber(form.precio));
       const iva_pct = Math.max(0, safeNumber(form.iva_pct));
@@ -876,7 +851,6 @@ export default function ModalEditarMovimiento({
 
       const payloadFinal = {
         ...payload,
-        // ✅ forzamos periodo final (auto si faltó)
         periodo: periodoMMYYYY_to_YYYYMM(finalPer || ""),
         cantidad: Math.round(cantidad * 1000) / 1000,
         precio: Math.round(precio * 100) / 100,
@@ -922,13 +896,12 @@ export default function ModalEditarMovimiento({
   const renderAddInline = (field) => {
     if (addUI.open) return null;
     if (addUI.field !== field) return null;
-
     if (field === "id_cliente" || field === "id_proveedor" || field === "id_detalle") return null;
 
     const label = CATALOGO_MAP[field]?.label || "Registro";
 
     return (
-      <div style={{ marginTop: 10 }}>
+      <div className="mi-addInline">
         <div className="fl-field">
           <input
             className="fl-input"
@@ -940,7 +913,7 @@ export default function ModalEditarMovimiento({
           <label className="fl-label">{`Nuevo ${label}`}</label>
         </div>
 
-        <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+        <div className="mi-addInline__actions">
           <button
             type="button"
             className="mit-btn mit-btn--ghost"
@@ -956,9 +929,7 @@ export default function ModalEditarMovimiento({
           <button
             type="button"
             className="mit-btn mit-btn--solid"
-            onClick={async () => {
-              await guardarNuevoCatalogo();
-            }}
+            onClick={guardarNuevoCatalogo}
             disabled={addUI.saving}
           >
             {addUI.saving ? "Guardando..." : "Guardar"}
@@ -986,17 +957,26 @@ export default function ModalEditarMovimiento({
     closeAddMini();
   };
 
-if (!open) return null;
+  if (!open) return null;
+
+  const modalClass = `mi-modal__container mi-modal__container--mov ${dark ? "mi-modal--dark" : ""}`;
 
 return createPortal(
-  <div className="mi-modal__overlay">
-    <div
-      className="mi-modal__container mi-modal__container--mov"
-      role="dialog"
-      aria-modal="true"
-      onClick={(e) => e.stopPropagation()}
-      style={{ maxWidth: 1180 }}
-    >
+  <div
+    className={[
+      "mi-modal__overlay",
+      "mi-modal__overlay--mov",
+      dark ? "mi-modal__overlay--dark" : "",
+    ].join(" ").trim()}
+    onMouseDown={cerrar}
+  >
+
+      <div
+        className={modalClass}
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar movimiento</h2>
@@ -1015,164 +995,141 @@ return createPortal(
           </button>
         </div>
 
-        <form onSubmit={submit} style={{ padding: 10 }}>
-
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 14 }}>
+        <form onSubmit={submit} className="mi-em-form">
+          <div className="mi-em-grid">
             {/* Izquierda */}
-            <div
-              style={{
-                border: "1px solid rgba(148,163,184,.45)",
-                borderRadius: 14,
-                overflow: "hidden",
-                background: "#fff",
-              }}
-            >
-              <div
-                style={{
-                  padding: "12px 12px",
-                  background: "rgba(15, 23, 42, 0.04)",
-                  borderBottom: "1px solid rgba(148,163,184,.35)",
-                  fontWeight: 900,
-                }}
-              >
-                Datos del movimiento
-              </div>
+            <section className="mi-em-panel">
+              <div className="mi-em-panelHead">Datos del movimiento</div>
 
-              <div style={{ padding: 12 }}>
+              <div className="mi-em-panelBody">
                 <div className="fl-grid">
-<div className="mi-row3 fl-col-full">
-  {/* Clasificación */}
-  <div className="fl-field">
-    <select
-      className="fl-input fl-select"
-      value={String(form.id_clasificacion)}
-      onChange={(e) => {
-        const v = e.target.value;
-        if (v === ADD_OPTION) {
-          setAddUI({ open: false, field: "id_clasificacion", text: "", saving: false });
-          setForm((p) => ({ ...p, id_clasificacion: ADD_OPTION }));
-        } else {
-          onSelectWithAdd("id_clasificacion", v);
-        }
-      }}
-      disabled={saving}
-    >
-      <option value={NULL_OPTION}>-- Clasificación --</option>
-      {(safeLists.clasificaciones || []).map((x) => (
-        <option key={x.id} value={String(x.id)}>{x.nombre}</option>
-      ))}
-      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-    </select>
-    <label className="fl-label">Clasificación</label>
-    {renderAddInline("id_clasificacion")}
-  </div>
-
-  {/* Tipo de venta */}
-  <div className="fl-field">
-    <select
-      className="fl-input fl-select"
-      value={String(form.id_tipo_venta)}
-      onChange={(e) => onSelectWithAdd("id_tipo_venta", e.target.value)}
-      disabled={saving}
-    >
-      <option value={NULL_OPTION}>-- Tipo de venta --</option>
-      {(safeLists.tiposVenta || []).map((x) => (
-        <option key={x.id} value={String(x.id)}>{x.nombre}</option>
-      ))}
-      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-    </select>
-    <label className="fl-label">Tipo de venta</label>
-    {renderAddInline("id_tipo_venta")}
-  </div>
-
-  {/* Tipo de movimiento */}
-  <div className="fl-field">
-    <select
-      className="fl-input fl-select"
-      value={String(form.id_tipo_movimiento)}
-      onChange={(e) => onSelectWithAdd("id_tipo_movimiento", e.target.value)}
-      disabled={saving}
-    >
-      <option value={NULL_OPTION}>-- Tipo movimiento --</option>
-      {(safeLists.tiposMovimiento || []).map((x) => (
-        <option key={x.id} value={String(x.id)}>{x.nombre}</option>
-      ))}
-      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-    </select>
-    <label className="fl-label">Tipo de movimiento</label>
-    {renderAddInline("id_tipo_movimiento")}
-  </div>
-</div>
-<div className="mi-row2 fl-col-full" >
-  {/* Detalle */}
-  <div className="fl-field" style={{ position: "relative" }}>
-    <input
-      ref={detalleInputRef}
-      className="fl-input"
-      placeholder=" "
-      value={detalleInput}
-      onChange={handleDetalleInputChange}
-      onFocus={() => setDetalleFocus(true)}
-      onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
-      disabled={saving || addUI.open}
-    />
-    <label className="fl-label">Detalle</label>
-
-    {detalleFocus && filteredDetalles.length > 0 && (
-      <ul className="mi-cr-suggest">
-        {filteredDetalles.map((d) => (
-          <li
-            key={d.id}
-            className="mi-cr-suggest__item"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              handleSelectDetalle(d);
-            }}
-          >
-            {d.nombre}
-          </li>
-        ))}
-      </ul>
-    )}
-
-    <button type="button" onClick={startAddDetalle} className="mi-cr-link">
-      + Agregar nuevo detalle
-    </button>
-  </div>
-
-  {/* Cuenta corriente */}
-  <div className="fl-field">
-    <select
-      className="fl-input fl-select"
-      value={String(form.id_cuenta_corriente)}
-      onChange={(e) => onSelectWithAdd("id_cuenta_corriente", e.target.value)}
-      disabled={saving}
-    >
-      <option value={NULL_OPTION}>-- Cuenta corriente --</option>
-      {(safeLists.cuentasCorrientes || []).map((x) => (
-        <option key={x.id} value={String(x.id)}>{x.nombre}</option>
-      ))}
-      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-    </select>
-    <label className="fl-label">Cuenta corriente</label>
-    {renderAddInline("id_cuenta_corriente")}
-  </div>
-</div>
-
-
-                  {/* ✅ ITEM EDITABLE */}
-                  <div className="fl-field fl-col-full" style={{ marginTop: 4 }}>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        borderTop: "1px dashed rgba(148,163,184,.55)",
-                      }}
-                    >
-                      Ítem del movimiento (editable)
+                  {/* 3 cols */}
+                  <div className="mi-row3 fl-col-full">
+                    {/* Clasificación */}
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(form.id_clasificacion)}
+                        onChange={(e) => onSelectWithAdd("id_clasificacion", e.target.value)}
+                        disabled={saving}
+                      >
+                        <option value={NULL_OPTION}>-- Clasificación --</option>
+                        {(safeLists.clasificaciones || []).map((x) => (
+                          <option key={x.id} value={String(x.id)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                        <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+                      </select>
+                      <label className="fl-label">Clasificación</label>
+                      {renderAddInline("id_clasificacion")}
                     </div>
 
-                    <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    {/* Tipo de venta */}
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(form.id_tipo_venta)}
+                        onChange={(e) => onSelectWithAdd("id_tipo_venta", e.target.value)}
+                        disabled={saving}
+                      >
+                        <option value={NULL_OPTION}>-- Tipo de venta --</option>
+                        {(safeLists.tiposVenta || []).map((x) => (
+                          <option key={x.id} value={String(x.id)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                        <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+                      </select>
+                      <label className="fl-label">Tipo de venta</label>
+                      {renderAddInline("id_tipo_venta")}
+                    </div>
+
+                    {/* Tipo de movimiento */}
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(form.id_tipo_movimiento)}
+                        onChange={(e) => onSelectWithAdd("id_tipo_movimiento", e.target.value)}
+                        disabled={saving}
+                      >
+                        <option value={NULL_OPTION}>-- Tipo movimiento --</option>
+                        {(safeLists.tiposMovimiento || []).map((x) => (
+                          <option key={x.id} value={String(x.id)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                        <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+                      </select>
+                      <label className="fl-label">Tipo de movimiento</label>
+                      {renderAddInline("id_tipo_movimiento")}
+                    </div>
+                  </div>
+
+                  {/* 2 cols */}
+                  <div className="mi-row2 fl-col-full">
+                    {/* Detalle */}
+                    <div className="fl-field mi-autocomplete">
+                      <input
+                        ref={detalleInputRef}
+                        className="fl-input"
+                        placeholder=" "
+                        value={detalleInput}
+                        onChange={handleDetalleInputChange}
+                        onFocus={() => setDetalleFocus(true)}
+                        onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
+                        disabled={saving || addUI.open}
+                      />
+                      <label className="fl-label">Detalle</label>
+
+                      {detalleFocus && filteredDetalles.length > 0 && (
+                        <ul className="mi-cr-suggest">
+                          {filteredDetalles.map((d) => (
+                            <li
+                              key={d.id}
+                              className="mi-cr-suggest__item"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelectDetalle(d);
+                              }}
+                            >
+                              {d.nombre}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      <button type="button" onClick={startAddDetalle} className="mi-link">
+                        + Agregar nuevo detalle
+                      </button>
+                    </div>
+
+                    {/* Cuenta corriente */}
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(form.id_cuenta_corriente)}
+                        onChange={(e) => onSelectWithAdd("id_cuenta_corriente", e.target.value)}
+                        disabled={saving}
+                      >
+                        <option value={NULL_OPTION}>-- Cuenta corriente --</option>
+                        {(safeLists.cuentasCorrientes || []).map((x) => (
+                          <option key={x.id} value={String(x.id)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                        <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+                      </select>
+                      <label className="fl-label">Cuenta corriente</label>
+                      {renderAddInline("id_cuenta_corriente")}
+                    </div>
+                  </div>
+
+                  {/* Item editable */}
+                  <div className="mi-em-item fl-col-full">
+                    <div className="mi-em-itemTitle">Ítem del movimiento (editable)</div>
+
+                    <div className="mi-em-itemGrid3">
                       <div className="fl-field">
                         <input
                           className="fl-input"
@@ -1201,7 +1158,6 @@ return createPortal(
                         <label className="fl-label">Precio unitario</label>
                       </div>
 
-                      {/* ✅ IVA selector */}
                       <div className="fl-field">
                         <select
                           className="fl-input fl-select"
@@ -1219,7 +1175,7 @@ return createPortal(
                       </div>
                     </div>
 
-                    <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <div className="mi-em-itemTotalsGrid3">
                       <div className="fl-field">
                         <input className="fl-input" value={form.subtotal} disabled />
                         <label className="fl-label">Subtotal</label>
@@ -1235,7 +1191,6 @@ return createPortal(
                     </div>
                   </div>
 
-                  {/* ✅ Monto total (si querés tocarlo, recalcula precio) */}
                   <div className="fl-field fl-col-full">
                     <input
                       className="fl-input"
@@ -1251,63 +1206,47 @@ return createPortal(
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* Derecha */}
-            <aside
-              style={{
-                border: "1px solid rgba(148,163,184,.45)",
-                borderRadius: 14,
-                padding: 12,
-                background: "#fff",
-              }}
-            >
-              <div>Relaciones y pago</div>
+            <aside className="mi-em-aside">
+              <div className="mi-em-asideTitle">Relaciones y pago</div>
 
-              {/* ✅ Fecha + Período ahora acá */}
-<div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
-  <div className="fl-field">
-    <input
-      ref={fechaRef}
-      className="fl-input"
-      type="date"
-      value={form.fecha}
-      onChange={(e) => onFechaChange(e.target.value)}
-      disabled={saving}
-      onClick={openDatePicker}
-      onFocus={openDatePicker}
-    />
-    <label className="fl-label">Fecha</label>
-  </div>
+              <div className="mi-em-dates">
+                <div className="fl-field">
+                  <input
+                    ref={fechaRef}
+                    className="fl-input"
+                    type="date"
+                    value={form.fecha}
+                    onChange={(e) => onFechaChange(e.target.value)}
+                    disabled={saving}
+                    onClick={openDatePicker}
+                    onFocus={openDatePicker}
+                  />
+                  <label className="fl-label">Fecha</label>
+                </div>
 
-  <div className="fl-field">
-    <input
-      className="fl-input"
-      placeholder="MM-YYYY"
-      inputMode="numeric"
-      value={form.periodo}
-      onChange={(e) => onPeriodoChange(e.target.value)}
-      disabled={saving}
-    />
-    <label className="fl-label">Período</label>
-  </div>
-</div>
+                <div className="fl-field">
+                  <input
+                    className="fl-input"
+                    placeholder="MM-YYYY"
+                    inputMode="numeric"
+                    value={form.periodo}
+                    onChange={(e) => onPeriodoChange(e.target.value)}
+                    disabled={saving}
+                  />
+                  <label className="fl-label">Período</label>
+                </div>
+              </div>
 
-              <div className="fl-grid" style={{ gridTemplateColumns: "1fr" }}>
+              <div className="mi-em-asideBody">
                 {/* Medio pago */}
                 <div className="fl-field">
                   <select
                     className="fl-input fl-select"
                     value={String(form.id_medio_pago)}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === ADD_OPTION) {
-                        setAddUI({ open: false, field: "id_medio_pago", text: "", saving: false });
-                        setForm((p) => ({ ...p, id_medio_pago: ADD_OPTION }));
-                      } else {
-                        onSelectWithAdd("id_medio_pago", v);
-                      }
-                    }}
+                    onChange={(e) => onSelectWithAdd("id_medio_pago", e.target.value)}
                     disabled={saving}
                   >
                     <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
@@ -1323,7 +1262,7 @@ return createPortal(
                 </div>
 
                 {/* Cliente */}
-                <div className="fl-field" style={{ position: "relative" }}>
+                <div className="fl-field mi-autocomplete">
                   <input
                     ref={clienteInputRef}
                     className="fl-input"
@@ -1338,77 +1277,29 @@ return createPortal(
                   <label className="fl-label">Cliente</label>
 
                   {clienteFocus && filteredClientes.length > 0 && (
-                    <ul
-                      style={{
-                        position: "absolute",
-                        top: "100%",
-                        left: 0,
-                        right: 0,
-                        marginTop: 4,
-                        maxHeight: 230,
-                        overflowY: "auto",
-                        borderRadius: 10,
-                        border: "1px solid rgba(148, 163, 184, 0.5)",
-                        background: "white",
-                        boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
-                        padding: 4,
-                        zIndex: 80,
-                        listStyle: "none",
-                      }}
-                    >
+                    <ul className="mi-cr-suggest">
                       {filteredClientes.map((c) => (
                         <li
                           key={c.id}
+                          className="mi-cr-suggest__item"
                           onMouseDown={(e) => {
                             e.preventDefault();
                             handleSelectCliente(c);
                           }}
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: 8,
-                            cursor: "pointer",
-                            fontSize: 13,
-                            display: "flex",
-                            alignItems: "center",
-                          }}
-                          className="mi-autocomplete-item"
                         >
-                          <span
-                            style={{
-                              flex: 1,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {c.nombre}
-                          </span>
+                          <span className="mi-suggestText">{c.nombre}</span>
                         </li>
                       ))}
                     </ul>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={startAddCliente}
-                    disabled={saving || addUI.saving}
-                    style={{
-                      marginTop: 8,
-                      fontSize: 12,
-                      textAlign: "left",
-                      padding: 0,
-                      background: "none",
-                      border: "none",
-                      color: "#0f766e",
-                      cursor: "pointer",
-                    }}
-                  >
+                  <button type="button" onClick={startAddCliente} disabled={saving || addUI.saving} className="mi-link">
                     + Agregar nuevo cliente
                   </button>
                 </div>
 
                 {/* Proveedor */}
-                <div className="fl-field" style={{ position: "relative" }}>
+                <div className="fl-field mi-autocomplete">
                   <input
                     ref={proveedorInputRef}
                     className="fl-input"
@@ -1423,95 +1314,36 @@ return createPortal(
                   <label className="fl-label">Proveedor</label>
 
                   {proveedorFocus && filteredProveedores.length > 0 && (
-                    <ul
-                      style={{
-                        position: "absolute",
-                        top: "100%",
-                        left: 0,
-                        right: 0,
-                        marginTop: 4,
-                        maxHeight: 230,
-                        overflowY: "auto",
-                        borderRadius: 10,
-                        border: "1px solid rgba(148, 163, 184, 0.5)",
-                        background: "white",
-                        boxShadow: "0 18px 45px rgba(15, 23, 42, 0.28)",
-                        padding: 4,
-                        zIndex: 80,
-                        listStyle: "none",
-                      }}
-                    >
+                    <ul className="mi-cr-suggest">
                       {filteredProveedores.map((p) => (
                         <li
                           key={p.id}
+                          className="mi-cr-suggest__item"
                           onMouseDown={(e) => {
                             e.preventDefault();
                             handleSelectProveedor(p);
                           }}
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: 8,
-                            cursor: "pointer",
-                            fontSize: 13,
-                            display: "flex",
-                            alignItems: "center",
-                          }}
-                          className="mi-autocomplete-item"
                         >
-                          <span
-                            style={{
-                              flex: 1,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {p.nombre}
-                          </span>
+                          <span className="mi-suggestText">{p.nombre}</span>
                         </li>
                       ))}
                     </ul>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={startAddProveedor}
-                    disabled={saving || addUI.saving}
-                    style={{
-                      marginTop: 8,
-                      fontSize: 12,
-                      textAlign: "left",
-                      padding: 0,
-                      background: "none",
-                      border: "none",
-                      color: "#0f766e",
-                      cursor: "pointer",
-                    }}
-                  >
+                  <button type="button" onClick={startAddProveedor} disabled={saving || addUI.saving} className="mi-link">
                     + Agregar nuevo proveedor
                   </button>
                 </div>
-              </div>
 
-              <div style={{ marginTop: 12, display: "Flex", gap: 10 }}>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="mit-btn mit-btn--solid"
-                  style={{ width: "100%", height: 44 }}
-                >
-                  {saving ? "Guardando..." : "Guardar"}
-                </button>
+                <div className="mi-em-actions">
+                  <button type="submit" disabled={saving} className="mit-btn mit-btn--solid mit-btn--block">
+                    {saving ? "Guardando..." : "Guardar"}
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={cerrar}
-                  disabled={saving}
-                  className="mit-btn mit-btn--ghost"
-                  style={{ width: "100%", height: 44 }}
-                >
-                  Cancelar
-                </button>
+                  <button type="button" onClick={cerrar} disabled={saving} className="mit-btn mit-btn--ghost mit-btn--block">
+                    Cancelar
+                  </button>
+                </div>
               </div>
             </aside>
           </div>
@@ -1527,8 +1359,7 @@ return createPortal(
           onSave={guardarNuevoCatalogo}
         />
       </div>
-      
-    </div>,  document.body
-
+    </div>,
+    document.body
   );
 }

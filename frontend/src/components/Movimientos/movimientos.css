@@ -524,12 +524,15 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
   background: var(--balto-ink);
   color: rgba(255,255,255,.92);
   border-bottom: 1px solid rgba(255,255,255,.10);
+  overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 /* contenedor */
 .mov-gridTable{
   display:grid;
   width: 100%;
+
 }
 
 /* celdas: centrado vertical global */

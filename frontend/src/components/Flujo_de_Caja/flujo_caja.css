@@ -358,3 +358,150 @@
   .fc-card__head{ flex-direction: column; align-items: stretch; }
   .fc-filter select{ min-width: 0; width: 100%; }
 }
+/* =========================================================
+   FLUJO DE CAJA — DARK MODE (override)
+   Pegalo AL FINAL de flujo_caja.css
+========================================================= */
+html[data-theme="oscuro"] .fc-page{
+  background: #0B1220 !important;
+  color: rgba(226,232,240,.92) !important;
+}
+
+/* Alert en oscuro */
+html[data-theme="oscuro"] .fc-page .fc-alert{
+  background: rgba(225,61,69,.12) !important;
+  border-color: rgba(225,61,69,.24) !important;
+  color: rgba(255,255,255,.92) !important;
+}
+
+/* Card general */
+html[data-theme="oscuro"] .fc-page .fc-card{
+  background: rgba(15,23,42,.62) !important;
+  border-color: rgba(148,163,184,.14) !important;
+  box-shadow: 0 16px 40px -26px rgba(0,0,0,.62) !important;
+}
+
+/* Head */
+html[data-theme="oscuro"] .fc-page .fc-card__head{
+  background:
+    radial-gradient(900px 180px at 0% 0%, rgba(78,161,255,.12), transparent 55%),
+    linear-gradient(180deg, rgba(15,23,42,.85), rgba(15,23,42,.62)) !important;
+  border-bottom-color: rgba(148,163,184,.12) !important;
+}
+
+html[data-theme="oscuro"] .fc-page .fc-card__title{
+  color: rgba(226,232,240,.92) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-card__hint{
+  color: rgba(226,232,240,.62) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-card__hint b{
+  color: rgba(226,232,240,.92) !important;
+}
+
+/* Labels */
+html[data-theme="oscuro"] .fc-page .fc-filter label{
+  color: rgba(226,232,240,.72) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-filter label svg{
+  color: rgba(226,232,240,.85) !important;
+}
+
+/* Select */
+html[data-theme="oscuro"] .fc-page .fc-filter select{
+  background: rgba(15,23,42,.88) !important;
+  color: rgba(226,232,240,.92) !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-filter select:focus{
+  background: rgba(15,23,42,.96) !important;
+  border-color: rgba(78,161,255,.45) !important;
+  box-shadow: 0 0 0 4px rgba(78,161,255,.18) !important;
+}
+
+/* Botón export */
+html[data-theme="oscuro"] .fc-page .fc-btn{
+  background: rgba(34,173,92,.92) !important;
+  border-color: rgba(34,173,92,.50) !important;
+  color: #071018 !important;
+  box-shadow: 0 14px 28px rgba(34,173,92,.16) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-btn:hover{
+  background: rgba(34,173,92,1) !important;
+  color: #071018 !important;
+}
+
+/* Subhead */
+html[data-theme="oscuro"] .fc-page .fc-subhead{
+  background: linear-gradient(180deg, rgba(15,23,42,.85), rgba(15,23,42,.62)) !important;
+  border-bottom-color: rgba(148,163,184,.12) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-subhead__name{
+  color: rgba(226,232,240,.92) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-subhead__meta{
+  color: rgba(226,232,240,.62) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-subhead__meta b{
+  color: rgba(226,232,240,.92) !important;
+}
+
+/* Header de tabla */
+html[data-theme="oscuro"] .fc-page .fc-grid--head{
+  background: rgba(15,23,42,.95) !important;
+  border-bottom-color: rgba(148,163,184,.14) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-grid--head .fc-cell{
+  color: rgba(226,232,240,.92) !important;
+}
+
+/* Body scroll area */
+html[data-theme="oscuro"] .fc-page .fc-gridBody{
+  background: rgba(15,23,42,.40) !important;
+}
+
+/* Filas */
+html[data-theme="oscuro"] .fc-page .fc-grid--row{
+  background: rgba(15,23,42,.40) !important;
+  border-bottom-color: rgba(148,163,184,.12) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-grid--row:hover{
+  background: rgba(78,161,255,.10) !important;
+}
+
+/* Celdas */
+html[data-theme="oscuro"] .fc-page .fc-cell{
+  color: rgba(226,232,240,.86) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-date{
+  color: rgba(226,232,240,.92) !important;
+}
+
+/* Colores números (suaves) */
+html[data-theme="oscuro"] .fc-page .fc-in{
+  color: color-mix(in srgb, var(--balto-success) 72%, #e2e8f0) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-eg{
+  color: color-mix(in srgb, var(--balto-danger) 70%, #e2e8f0) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-saldo.is-positive{
+  color: color-mix(in srgb, var(--balto-success) 76%, #e2e8f0) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-saldo.is-negative{
+  color: color-mix(in srgb, var(--balto-danger) 76%, #e2e8f0) !important;
+}
+
+/* Empty row + footnote */
+html[data-theme="oscuro"] .fc-page .fc-emptyRow{
+  color: rgba(226,232,240,.65) !important;
+}
+html[data-theme="oscuro"] .fc-page .fc-footnote{
+  background: rgba(15,23,42,.62) !important;
+  border-top-color: rgba(148,163,184,.12) !important;
+  color: rgba(226,232,240,.62) !important;
+}
+
+/* Scrollbar */
+html[data-theme="oscuro"] .fc-page .fc-gridBody::-webkit-scrollbar-thumb{
+  background: rgba(148,163,184,.22) !important;
+}

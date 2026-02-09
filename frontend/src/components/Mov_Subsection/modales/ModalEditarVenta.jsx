@@ -179,7 +179,7 @@ const LISTKEY_BY_CATALOGO = {
 /* =========================
    Mini Modal: alta rápida
 ========================= */
-function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave }) {
+function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -200,9 +200,12 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="mi-mini__overlay" onMouseDown={onCancel}>
-      <div className="mi-mini__modal" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
           <button
@@ -240,7 +243,8 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -281,6 +285,13 @@ function findIdByExact(arr, exactText) {
   const hit = a.find((x) => normText(x?.nombre) === ex);
   const id = Number(hit?.id);
   return Number.isFinite(id) && id > 0 ? String(id) : NULL_OPTION;
+}
+
+/* =========================
+   Dark helper (por data-theme="oscuro")
+========================= */
+function isTemaOscuro() {
+  return document.documentElement.getAttribute("data-theme") === "oscuro";
 }
 
 /* =========================
@@ -356,18 +367,44 @@ export default function ModalEditarVenta({
   onSave,
   onCatalogCreated,
   onToast,
+  dark: darkProp, // opcional: si pasás prop, se usa; si no, se auto-detecta por data-theme
 }) {
   const API = `${BASE_URL}/api.php`;
 
+  // ✅ dark mode auto por data-theme, pero permitimos override por prop
+  const [darkAuto, setDarkAuto] = useState(isTemaOscuro());
+  useEffect(() => {
+    const obs = new MutationObserver(() => setDarkAuto(isTemaOscuro()));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
+  const dark = typeof darkProp === "boolean" ? darkProp : darkAuto;
+
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion), [onToast]);
+
+  // ✅ lock scroll del body SOLO mientras está abierto
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
 
   const listsRef = useRef(lists);
   const rowRef = useRef(row);
   const periodoDefaultRef = useRef(periodoDefault);
 
-  useEffect(() => { listsRef.current = lists; }, [lists]);
-  useEffect(() => { rowRef.current = row; }, [row]);
-  useEffect(() => { periodoDefaultRef.current = periodoDefault; }, [periodoDefault]);
+  useEffect(() => {
+    listsRef.current = lists;
+  }, [lists]);
+  useEffect(() => {
+    rowRef.current = row;
+  }, [row]);
+  useEffect(() => {
+    periodoDefaultRef.current = periodoDefault;
+  }, [periodoDefault]);
 
   const [localLists, setLocalLists] = useState(() => ({
     ...SAFE_LISTS,
@@ -545,13 +582,16 @@ export default function ModalEditarVenta({
     }
   }, []);
 
-  const apiPostJson = useCallback(async (url, payload) => {
-    const { token } = getAuthInfo();
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload ?? {}) });
-    return await parseJsonOrThrow(res);
-  }, [parseJsonOrThrow]);
+  const apiPostJson = useCallback(
+    async (url, payload) => {
+      const { token } = getAuthInfo();
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload ?? {}) });
+      return await parseJsonOrThrow(res);
+    },
+    [parseJsonOrThrow]
+  );
 
   const closeAddMini = useCallback(() => {
     if (addUI.saving) return;
@@ -610,7 +650,9 @@ export default function ModalEditarVenta({
         setTimeout(() => detalleInputRef.current?.focus(), 0);
       }
 
-      try { onCatalogCreated?.(meta.catalogo, { id: newId, nombre: newNombre }); } catch {}
+      try {
+        onCatalogCreated?.(meta.catalogo, { id: newId, nombre: newNombre });
+      } catch {}
 
       setAddUI({ open: false, field: null, text: "", saving: false });
       showToast("exito", `${meta.label} creado: "${newNombre}"`, 2600);
@@ -706,16 +748,13 @@ export default function ModalEditarVenta({
       periodo: periodoMMYYYY_to_YYYYMM(normalizePeriodoToMMYYYY(form.periodo)),
 
       id_clasificacion: toNullableId(form.id_clasificacion),
-      id_tipo_venta: fixedIds.idVenta !== NULL_OPTION ? Number(fixedIds.idVenta) : toNullableId(form.id_tipo_venta),
-      id_tipo_movimiento: fixedIds.idSalida !== NULL_OPTION ? Number(fixedIds.idSalida) : toNullableId(form.id_tipo_movimiento),
+      id_tipo_venta: fixedIds.idVenta !== NULL_OPTION ? Number(fixedIds.idVenta) : null,
+      id_tipo_movimiento: fixedIds.idSalida !== NULL_OPTION ? Number(fixedIds.idSalida) : null,
 
       id_cuenta_corriente: toNullableId(form.id_cuenta_corriente),
       id_medio_pago: toNullableId(form.id_medio_pago),
 
-      // ✅ cliente obligatorio (validamos en submit)
       id_cliente: toNullableId(form.id_cliente),
-
-      // ✅ proveedor NO
       id_proveedor: null,
 
       id_detalle: toNullableId(form.id_detalle),
@@ -750,15 +789,13 @@ export default function ModalEditarVenta({
       const perAuto = periodoFromISODate(form.fecha);
       const finalPer = perUI || perAuto;
 
-      // ✅ Cliente obligatorio: necesitamos ID (seleccionado o creado)
+      // ✅ Cliente obligatorio
       let finalIdCliente = form.id_cliente;
 
-      // Si escribió texto pero no eligió, intentamos matchear exacto con catálogo (por si coincide)
+      // Si escribió texto pero no eligió, intentamos matchear exacto con catálogo
       if ((!finalIdCliente || finalIdCliente === NULL_OPTION) && clienteInput.trim()) {
         const foundId = findIdByExact(safeLists.clientes, clienteInput.trim());
-        if (foundId !== NULL_OPTION) {
-          finalIdCliente = foundId;
-        }
+        if (foundId !== NULL_OPTION) finalIdCliente = foundId;
       }
 
       if (!finalIdCliente || finalIdCliente === NULL_OPTION || finalIdCliente === ADD_OPTION) {
@@ -810,15 +847,26 @@ export default function ModalEditarVenta({
 
   if (!open) return null;
 
+  const overlayClass = [
+    "mi-modal__overlay",
+    "mi-modal__overlay--mov",
+    dark ? "mi-modal__overlay--dark" : "",
+  ]
+    .join(" ")
+    .trim();
+
+  const containerClass = [
+    "mi-modal__container",
+    "mi-modal__container--mov",
+    "mi-modal__container--venta",
+    dark ? "mi-modal--dark" : "",
+  ]
+    .join(" ")
+    .trim();
+
   return createPortal(
-    <div className="mi-modal__overlay" onMouseDown={cerrar}>
-      <div
-        className="mi-modal__container mi-modal__container--mov"
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => e.stopPropagation()}
-        style={{ maxWidth: 1180 }}
-      >
+    <div className={overlayClass} onMouseDown={cerrar}>
+      <div className={containerClass} role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar venta</h2>
@@ -837,139 +885,131 @@ export default function ModalEditarVenta({
           </button>
         </div>
 
-        <form onSubmit={submit} style={{ padding: 10 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 14 }}>
+        <form onSubmit={submit} className="mi-em-form">
+          <div className="mi-em-grid">
             {/* Izquierda */}
-            <div
-              style={{
-                border: "1px solid rgba(148,163,184,.45)",
-                borderRadius: 14,
-                overflow: "hidden",
-                background: "#fff",
-              }}
-            >
-              <div
-                style={{
-                  padding: "12px 12px",
-                  background: "rgba(15, 23, 42, 0.04)",
-                  borderBottom: "1px solid rgba(148,163,184,.35)",
-                  fontWeight: 600,
-                }}
-              >
-                Datos de la venta
-              </div>
+            <section className="mi-em-panel">
+              <div className="mi-em-panelHead">Datos de la venta</div>
 
-              <div style={{ padding: 12 }}>
+              <div className="mi-em-panelBody">
                 <div className="fl-grid">
-                 {/* ✅ Fila 1 (3 cols) */}
-  <div className="mi-row3 fl-col-full">
-    {/* Clasificación */}
-    <div className="fl-field">
-      <select
-        className="fl-input fl-select"
-        value={String(form.id_clasificacion)}
-        onChange={(e) => setForm((p) => ({ ...p, id_clasificacion: e.target.value }))}
-        disabled={saving}
-      >
-        <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
-        {(safeLists.clasificaciones || []).map((x) => (
-          <option key={x.id} value={String(x.id)}>{x.nombre}</option>
-        ))}
-      </select>
-      <label className="fl-label">Clasificación</label>
-    </div>
-
-    {/* Tipo de venta (fijo) */}
-    <div className="fl-field">
-      <select className="fl-input fl-select" value={String(form.id_tipo_venta)} disabled>
-        {(safeLists.tiposVenta || []).map((x) => (
-          <option key={x.id} value={String(x.id)}>{x.nombre}</option>
-        ))}
-        {String(form.id_tipo_venta) === NULL_OPTION && <option value={NULL_OPTION}>Venta</option>}
-      </select>
-      <label className="fl-label">Tipo de venta (fijo)</label>
-    </div>
-
-    {/* Tipo de movimiento (fijo) */}
-    <div className="fl-field">
-      <select className="fl-input fl-select" value={String(form.id_tipo_movimiento)} disabled>
-        {(safeLists.tiposMovimiento || []).map((x) => (
-          <option key={x.id} value={String(x.id)}>{x.nombre}</option>
-        ))}
-        {String(form.id_tipo_movimiento) === NULL_OPTION && <option value={NULL_OPTION}>Salida</option>}
-      </select>
-      <label className="fl-label">Tipo de movimiento (fijo)</label>
-    </div>
-  </div>
-
-  {/* ✅ Fila 2 (2 cols): Detalle + Cuenta corriente */}
-  <div className="mi-row2 fl-col-full" >
-    {/* Detalle (autocomplete) */}
-    <div className="fl-field" style={{ position: "relative" }}>
-      <input
-        ref={detalleInputRef}
-        className="fl-input"
-        placeholder=" "
-        value={detalleInput}
-        onChange={handleDetalleInputChange}
-        onFocus={() => setDetalleFocus(true)}
-        onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
-        disabled={saving || addUI.open}
-        autoComplete="off"
-      />
-      <label className="fl-label">Detalle</label>
-
-      {detalleFocus && filteredDetalles.length > 0 && (
-        <ul className="mi-cr-suggest">
-          {filteredDetalles.map((d) => (
-            <li
-              key={d.id}
-              className="mi-cr-suggest__item"
-              onMouseDown={(e) => { e.preventDefault(); handleSelectDetalle(d); }}
-            >
-              <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {d.nombre}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <button type="button" onClick={startAddDetalle} disabled={saving || addUI.saving} className="mi-cr-link">
-        + Agregar nuevo detalle
-      </button>
-    </div>
-
-    {/* Cuenta corriente */}
-    <div className="fl-field">
-      <select
-        className="fl-input fl-select"
-        value={String(form.id_cuenta_corriente)}
-        onChange={(e) => setForm((p) => ({ ...p, id_cuenta_corriente: e.target.value }))}
-        disabled={saving}
-      >
-        <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
-        {(safeLists.cuentasCorrientes || []).map((x) => (
-          <option key={x.id} value={String(x.id)}>{x.nombre}</option>
-        ))}
-      </select>
-      <label className="fl-label">Cuenta corriente</label>
-    </div>
-  </div>
-
-                  {/* Ítem editable */}
-                  <div className="fl-field fl-col-full" >
-                    <div
-                      style={{
-                        fontWeight: 600,
-                        fontSize: 13,
-                        borderTop: "1px dashed rgba(148,163,184,.55)",
-                      }}
-                    >
-                      Ítem de la venta (editable)
+                  {/* ✅ Fila 1 (3 cols) */}
+                  <div className="mi-row3 fl-col-full">
+                    {/* Clasificación */}
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(form.id_clasificacion)}
+                        onChange={(e) => setForm((p) => ({ ...p, id_clasificacion: e.target.value }))}
+                        disabled={saving}
+                      >
+                        <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
+                        {(safeLists.clasificaciones || []).map((x) => (
+                          <option key={x.id} value={String(x.id)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="fl-label">Clasificación</label>
                     </div>
 
-                    <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    {/* Tipo de venta (fijo) */}
+                    <div className="fl-field">
+                      <select className="fl-input fl-select" value={String(form.id_tipo_venta)} disabled>
+                        {(safeLists.tiposVenta || []).map((x) => (
+                          <option key={x.id} value={String(x.id)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                        {String(form.id_tipo_venta) === NULL_OPTION && <option value={NULL_OPTION}>Venta</option>}
+                      </select>
+                      <label className="fl-label">Tipo de venta (fijo)</label>
+                    </div>
+
+                    {/* Tipo de movimiento (fijo) */}
+                    <div className="fl-field">
+                      <select className="fl-input fl-select" value={String(form.id_tipo_movimiento)} disabled>
+                        {(safeLists.tiposMovimiento || []).map((x) => (
+                          <option key={x.id} value={String(x.id)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                        {String(form.id_tipo_movimiento) === NULL_OPTION && <option value={NULL_OPTION}>Salida</option>}
+                      </select>
+                      <label className="fl-label">Tipo de movimiento (fijo)</label>
+                    </div>
+                  </div>
+
+                  {/* ✅ Fila 2 (2 cols): Detalle + Cuenta corriente */}
+                  <div className="mi-row2 fl-col-full">
+                    {/* Detalle (autocomplete) */}
+                    <div className="fl-field mi-autocomplete" style={{ position: "relative" }}>
+                      <input
+                        ref={detalleInputRef}
+                        className="fl-input"
+                        placeholder=" "
+                        value={detalleInput}
+                        onChange={handleDetalleInputChange}
+                        onFocus={() => setDetalleFocus(true)}
+                        onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
+                        disabled={saving || addUI.open}
+                        autoComplete="off"
+                      />
+                      <label className="fl-label">Detalle</label>
+
+                      {detalleFocus && filteredDetalles.length > 0 && (
+                        <ul className="mi-cr-suggest">
+                          {filteredDetalles.map((d) => (
+                            <li
+                              key={d.id}
+                              className="mi-cr-suggest__item"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelectDetalle(d);
+                              }}
+                            >
+                              <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {d.nombre}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={startAddDetalle}
+                        disabled={saving || addUI.saving}
+                        className="mi-cr-link"
+                      >
+                        + Agregar nuevo detalle
+                      </button>
+                    </div>
+
+                    {/* Cuenta corriente */}
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(form.id_cuenta_corriente)}
+                        onChange={(e) => setForm((p) => ({ ...p, id_cuenta_corriente: e.target.value }))}
+                        disabled={saving}
+                      >
+                        <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
+                        {(safeLists.cuentasCorrientes || []).map((x) => (
+                          <option key={x.id} value={String(x.id)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="fl-label">Cuenta corriente</label>
+                    </div>
+                  </div>
+
+                  {/* Ítem editable */}
+                  <div className="mi-em-item fl-col-full">
+                    <div className="mi-em-itemTitle">Ítem de la venta (editable)</div>
+
+                    <div className="mi-em-itemGrid3">
                       <div className="fl-field">
                         <input
                           className="fl-input"
@@ -1015,7 +1055,7 @@ export default function ModalEditarVenta({
                       </div>
                     </div>
 
-                    <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <div className="mi-em-itemTotalsGrid3">
                       <div className="fl-field">
                         <input className="fl-input" value={form.subtotal} disabled />
                         <label className="fl-label">Subtotal</label>
@@ -1047,21 +1087,13 @@ export default function ModalEditarVenta({
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* Derecha */}
-            <aside
-              style={{
-                border: "1px solid rgba(148,163,184,.45)",
-                borderRadius: 14,
-                padding: 12,
-                background: "#fff",
-              }}
-            >
-              <div style={{ fontWeight: 600 }}>Relaciones y pago</div>
+            <aside className="mi-em-aside">
+              <div className="mi-em-asideTitle">Relaciones y pago</div>
 
-              {/* Fecha + Período */}
-              <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12}}>
+              <div className="mi-em-dates">
                 <div className="fl-field">
                   <input
                     ref={fechaRef}
@@ -1089,72 +1121,74 @@ export default function ModalEditarVenta({
                 </div>
               </div>
 
-              {/* Medio de pago */}
-              <div className="fl-field">
-                <select
-                  className="fl-input fl-select"
-                  value={String(form.id_medio_pago)}
-                  onChange={(e) => setForm((p) => ({ ...p, id_medio_pago: e.target.value }))}
-                  disabled={saving}
-                >
-                  <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
-                  {(safeLists.mediosPago || []).map((x) => (
-                    <option key={x.id} value={String(x.id)}>
-                      {x.nombre}
-                    </option>
-                  ))}
-                  <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                </select>
-                <label className="fl-label">Medio de pago</label>
-              </div>
-
-              {/* Cliente obligatorio */}
-              <div className="fl-field" style={{ position: "relative", marginTop: 10 }}>
-                <input
-                  ref={clienteInputRef}
-                  className="fl-input"
-                  placeholder=" "
-                  value={clienteInput}
-                  onChange={handleClienteInputChange}
-                  onFocus={() => setClienteFocus(true)}
-                  onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
-                  disabled={saving || addUI.open}
-                  autoComplete="off"
-                />
-                <label className="fl-label">Cliente (obligatorio)</label>
-
-                {clienteFocus && filteredClientes.length > 0 && (
-                  <ul className="mi-cr-suggest">
-                    {filteredClientes.map((c) => (
-                      <li
-                        key={c.id}
-                        className="mi-cr-suggest__item"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          handleSelectCliente(c);
-                        }}
-                      >
-                        <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {c.nombre}
-                        </span>
-                      </li>
+              <div className="mi-em-asideBody">
+                {/* Medio de pago */}
+                <div className="fl-field">
+                  <select
+                    className="fl-input fl-select"
+                    value={String(form.id_medio_pago)}
+                    onChange={(e) => setForm((p) => ({ ...p, id_medio_pago: e.target.value }))}
+                    disabled={saving}
+                  >
+                    <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
+                    {(safeLists.mediosPago || []).map((x) => (
+                      <option key={x.id} value={String(x.id)}>
+                        {x.nombre}
+                      </option>
                     ))}
-                  </ul>
-                )}
+                    <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+                  </select>
+                  <label className="fl-label">Medio de pago</label>
+                </div>
 
-                <button type="button" onClick={startAddCliente} disabled={saving || addUI.saving} className="mi-cr-link">
-                  + Agregar nuevo cliente
-                </button>
-              </div>
+                {/* Cliente obligatorio */}
+                <div className="fl-field mi-autocomplete" style={{ position: "relative" }}>
+                  <input
+                    ref={clienteInputRef}
+                    className="fl-input"
+                    placeholder=" "
+                    value={clienteInput}
+                    onChange={handleClienteInputChange}
+                    onFocus={() => setClienteFocus(true)}
+                    onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
+                    disabled={saving || addUI.open}
+                    autoComplete="off"
+                  />
+                  <label className="fl-label">Cliente (obligatorio)</label>
 
-              <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
-                <button type="submit" disabled={saving} className="mit-btn mit-btn--solid" style={{ width: "100%", height: 44 }}>
-                  {saving ? "Guardando..." : "Guardar"}
-                </button>
+                  {clienteFocus && filteredClientes.length > 0 && (
+                    <ul className="mi-cr-suggest">
+                      {filteredClientes.map((c) => (
+                        <li
+                          key={c.id}
+                          className="mi-cr-suggest__item"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelectCliente(c);
+                          }}
+                        >
+                          <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {c.nombre}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
 
-                <button type="button" onClick={cerrar} disabled={saving} className="mit-btn mit-btn--ghost" style={{ width: "100%", height: 44 }}>
-                  Cancelar
-                </button>
+                  <button type="button" onClick={startAddCliente} disabled={saving || addUI.saving} className="mi-cr-link">
+                    + Agregar nuevo cliente
+                  </button>
+                </div>
+
+                <div className="mi-em-actions">
+                  <button type="submit" disabled={saving} className="mit-btn mit-btn--solid mit-btn--block">
+                    {saving ? "Guardando..." : "Guardar"}
+                  </button>
+
+                  <button type="button" onClick={cerrar} disabled={saving} className="mit-btn mit-btn--ghost mit-btn--block">
+                    Cancelar
+                  </button>
+                </div>
               </div>
             </aside>
           </div>
@@ -1168,6 +1202,7 @@ export default function ModalEditarVenta({
           onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
           onCancel={cancelMini}
           onSave={guardarNuevoCatalogo}
+          dark={dark}
         />
       </div>
     </div>,

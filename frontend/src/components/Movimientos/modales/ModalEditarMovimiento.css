@@ -705,7 +705,7 @@ background: var(--mi-primary);
   flex: 1;
   min-height: 0;
   overflow: auto;
-  background: #fff;
+
 }
 
 
@@ -1407,4 +1407,970 @@ padding: 0 !important;
   display: flex;
   justify-content: flex-end;
 
+}
+.mi-modal--dark .mi-cr-panel .fl-input,
+.mi-modal--dark .mi-cr-panel .fl-select{
+  background: rgba(255,255,255,0.06) !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  color: rgba(255,255,255,0.92) !important;
+}
+/* =========================================================
+   DARK MODE – Panel principal (centro)
+========================================================= */
+
+.mi-modal--dark .mi-cr-panel,
+.mi-modal--dark .mi-cr-left,
+.mi-modal--dark .mi-cr-body,
+.mi-modal--dark .mi-cr-content{
+  background: rgba(6, 18, 28, 0.85) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 20px 45px rgba(0,0,0,0.45);
+  color: rgba(255,255,255,0.92);
+}
+
+/* Si hay algo con background blanco directo */
+.mi-modal--dark [style*="background: #fff"]{
+  background: rgba(6, 18, 28, 0.85) !important;
+}
+/* =========================================================
+   MODO OSCURO – solo para este modal
+   Activación: .mi-modal--dark en el container
+========================================================= */
+
+.mi-modal--dark{
+  /* tokens del tema oscuro (basado en tu identidad) */
+  --md-bg: #071a2c;         /* fondo modal */
+  --md-panel: #0a2540;      /* panel/caja */
+  --md-panel2: #06121c;     /* panel más profundo */
+  --md-border: rgba(148,163,184,.22);
+  --md-text: rgba(255,255,255,.92);
+  --md-muted: rgba(255,255,255,.70);
+  --md-focus: rgba(0,85,187,.22); /* action glow */
+}
+
+/* Overlay un poco más oscuro */
+.mi-modal--dark ~ .mi-modal__overlay,
+.mi-modal__overlay:has(.mi-modal--dark){
+  background: rgba(0,0,0,.62);
+  backdrop-filter: blur(3px);
+}
+
+/* Container */
+.mi-modal__container.mi-modal--dark{
+  background: var(--md-bg);
+  border: 1px solid rgba(255,255,255,.06);
+}
+
+/* Header */
+.mi-modal__container.mi-modal--dark .mi-modal__header{
+  background: linear-gradient(180deg, #0a2540, #071a2c);
+  color: var(--md-text);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.mi-modal__container.mi-modal--dark .mi-modal__title{
+  font-weight: 600 !important;
+}
+.mi-modal__container.mi-modal--dark .mi-modal__subtitle{
+  color: var(--md-muted);
+  font-weight: 400 !important;
+}
+
+/* Botón cerrar */
+.mi-modal__container.mi-modal--dark .mi-modal__close{
+  color: rgba(255,255,255,.92);
+}
+.mi-modal__container.mi-modal--dark .mi-modal__close:hover{
+  background: rgba(255,255,255,.10);
+}
+
+/* Cards / paneles (tus cajas blancas) */
+.mi-modal__container.mi-modal--dark [style*="background: #fff"],
+.mi-modal__container.mi-modal--dark aside{
+  background: rgba(6,18,28,.78) !important;
+  border: 1px solid var(--md-border) !important;
+  color: var(--md-text);
+}
+
+/* “título” de secciones (ej: Datos del movimiento) */
+.mi-modal__container.mi-modal--dark [style*="background: rgba(15, 23, 42, 0.04)"]{
+  background: rgba(255,255,255,.06) !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+  color: var(--md-text) !important;
+  font-weight: 600 !important;
+}
+
+/* Inputs / selects */
+.mi-modal__container.mi-modal--dark .fl-input,
+.mi-modal__container.mi-modal--dark .fl-select{
+  background: rgba(255,255,255,.06) !important;
+  border: 1px solid rgba(255,255,255,.14) !important;
+  color: var(--md-text) !important;
+  box-shadow: none !important;
+}
+
+.mi-modal__container.mi-modal--dark .fl-input:focus,
+.mi-modal__container.mi-modal--dark .fl-select:focus{
+  border-color: rgba(0,85,187,.55) !important;
+  box-shadow: 0 0 0 3px var(--md-focus) !important;
+}
+
+.mi-modal__container.mi-modal--dark .fl-label{
+  color: var(--md-muted) !important;
+  font-weight: 400 !important;
+}
+
+/* Placeholders */
+.mi-modal__container.mi-modal--dark .fl-input::placeholder{
+  color: rgba(255,255,255,.45);
+}
+
+/* Autocomplete dropdown (cliente/proveedor/detalle) */
+.mi-modal__container.mi-modal--dark .mi-cr-suggest,
+.mi-modal__container.mi-modal--dark ul[style*="boxShadow: 0 18px 45px"]{
+  background: #071a2c !important;
+  border: 1px solid rgba(255,255,255,.14) !important;
+  box-shadow: 0 22px 55px rgba(0,0,0,.45) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-suggest__item,
+.mi-modal__container.mi-modal--dark .mi-autocomplete-item{
+  color: rgba(255,255,255,.88) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-suggest__item:hover,
+.mi-modal__container.mi-modal--dark .mi-autocomplete-item:hover{
+  background: rgba(255,255,255,.08) !important;
+}
+
+/* Botones */
+.mi-modal__container.mi-modal--dark .mit-btn--ghost{
+  background: rgba(255,255,255,.06) !important;
+  border-color: rgba(255,255,255,.14) !important;
+  color: rgba(255,255,255,.86) !important;
+}
+.mi-modal__container.mi-modal--dark .mit-btn--ghost:hover{
+  background: rgba(255,255,255,.10) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mit-btn--solid{
+  background: #0055BB !important;
+  border-color: rgba(0,85,187,.85) !important;
+  color: rgba(255,255,255,.96) !important;
+}
+.mi-modal__container.mi-modal--dark .mit-btn--solid:hover{
+  filter: brightness(1.03);
+}
+/* src/components/Movimientos/modales/ModalEditarMovimiento.css */
+
+/* =========================
+   Tokens (paleta oficial)
+========================= */
+:root{
+  --blue-midnight: #0A2540;
+  --blue-action:   #0055BB;
+
+  --mi-bg: #ffffff;
+  --mi-bg-soft: #F6F8FB;
+  --mi-border: rgba(148,163,184,.45);
+
+  --mi-text: #0A2540;
+  --mi-muted: #516173;
+
+  --mi-primary: var(--blue-midnight);
+  --mi-primary-600: var(--blue-action);
+
+  --mi-shadow: 0 28px 64px -24px rgba(0,0,0,.28);
+
+  --mi-radius-md: 12px;
+  --mi-radius-lg: 18px;
+}
+
+/* =========================
+   Modal base
+========================= */
+.mi-modal__overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: mi-fade 0.15s ease-out;
+  padding: 16px;
+}
+
+.mi-modal__container{
+  width: min(1180px, 96vw);
+  max-height: 92vh;
+  background: var(--mi-bg);
+  border-radius: var(--mi-radius-lg);
+  box-shadow: var(--mi-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.06);
+  animation: mi-slide 0.22s ease-out;
+}
+
+.mi-modal__container--mov{
+  min-height: 90vh;
+}
+
+/* Header */
+.mi-modal__header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--mi-primary);
+  color: #fff;
+}
+
+.mi-modal__title{
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600; /* ✅ más fino */
+  letter-spacing: -0.01em;
+}
+
+.mi-modal__subtitle{
+  margin: 4px 0 0;
+  font-size: .92rem;
+  opacity: .92;
+  font-weight: 400;
+}
+
+.mi-modal__close{
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform .15s ease, background .15s ease;
+}
+.mi-modal__close:hover{
+  background: rgba(255,255,255,.12);
+  transform: rotate(90deg);
+}
+.mi-modal__close:disabled{
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+/* =========================
+   Layout modal (sin inline)
+========================= */
+.mi-em-form{
+  padding: 12px;
+  background: var(--mi-bg-soft);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mi-em-grid{
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+}
+
+.mi-em-panel{
+  border: 1px solid var(--mi-border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mi-em-panelHead{
+  padding: 12px;
+  background: rgba(15, 23, 42, 0.04);
+  border-bottom: 1px solid rgba(148,163,184,.35);
+  font-weight: 600;
+  color: var(--mi-text);
+}
+
+.mi-em-panelBody{
+  padding: 12px;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* Aside */
+.mi-em-aside{
+  border: 1px solid var(--mi-border);
+  border-radius: 14px;
+  padding: 12px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mi-em-asideTitle{
+  font-weight: 600;
+  color: var(--mi-text);
+  margin-bottom: 10px;
+}
+
+.mi-em-dates{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.mi-em-asideBody{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* =========================
+   Floating labels
+========================= */
+.mi-modal__container,
+.mi-mini__modal{
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.fl-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  min-width: 0;
+}
+.fl-col-full{ grid-column: 1 / -1; }
+
+.fl-field{
+  position: relative;
+  min-width: 0;
+}
+
+.fl-input{
+  width: 100%;
+  border: 1px solid rgba(148,163,184,.55);
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 12px 10px;
+  font-size: .95rem;
+  font-weight: 400;
+  color: var(--mi-text);
+  outline: none;
+  transition: border-color .18s ease, box-shadow .18s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  box-sizing: border-box;
+}
+
+.fl-select{
+  padding-top: 18px;
+  padding-bottom: 10px;
+  cursor: pointer;
+}
+
+.fl-label{
+  position: absolute;
+  left: 12px;
+  top: 14px;
+  font-size: .86rem;
+  color: var(--mi-muted);
+  pointer-events: none;
+  transform-origin: left top;
+  transition: transform .16s ease, color .16s ease, opacity .16s ease, top .16s ease;
+  opacity: .9;
+  z-index: 2;
+  padding: 0 6px;
+  background: transparent;
+  font-weight: 400;
+}
+
+.fl-input:focus{
+  border-color: var(--mi-primary-600);
+  box-shadow: 0 0 0 3px rgba(0,85,187,.14);
+}
+
+.fl-input:focus + .fl-label,
+.fl-input:not(:placeholder-shown) + .fl-label{
+  top: 0px;
+  transform: translateY(-50%) scale(.92);
+  color: var(--mi-primary-600);
+  opacity: 1;
+  background: #fff;
+}
+
+/* selects */
+.fl-select + .fl-label{
+  top: 0px;
+  transform: translateY(-50%) scale(.92);
+  background: #fff;
+}
+
+.fl-input:disabled{
+  background: rgba(241,245,249,.7);
+  opacity: .85;
+  cursor: not-allowed;
+}
+
+/* =========================
+   Rows (3 y 2 columnas)
+========================= */
+.mi-row3{
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+  min-width: 0;
+}
+.mi-row2{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  min-width: 0;
+}
+.mi-row3 > .fl-field,
+.mi-row2 > .fl-field{
+  min-width: 0;
+}
+
+/* =========================
+   Item section
+========================= */
+.mi-em-item{
+  margin-top: 6px;
+}
+.mi-em-itemTitle{
+  font-size: 13px;
+  color: var(--mi-muted);
+  padding-top: 10px;
+  border-top: 1px dashed rgba(148,163,184,.55);
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+.mi-em-itemGrid3{
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+.mi-em-itemTotalsGrid3{
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+/* =========================
+   Botones
+========================= */
+.mit-btn{
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform .16s ease, box-shadow .16s ease, filter .16s ease, background .16s ease;
+}
+
+.mit-btn--ghost{
+  background: transparent;
+  color: var(--mi-text);
+  border-color: rgba(148,163,184,.55);
+}
+.mit-btn--ghost:hover{
+  background: rgba(0,0,0,.03);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(0,0,0,.08);
+}
+
+.mit-btn--solid{
+  background: var(--mi-primary);
+  color: #fff;
+  border-color: var(--mi-primary);
+}
+.mit-btn--solid:hover{
+  filter: brightness(.97);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px rgba(0,0,0,.20);
+}
+
+.mit-btn:disabled{
+  opacity: .6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.mit-btn--block{
+  width: 100%;
+  height: 44px;
+}
+
+.mi-em-actions{
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* =========================
+   Links (agregar nuevo)
+========================= */
+.mi-link{
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #0f766e;
+  cursor: pointer;
+}
+.mi-link:hover{
+  text-decoration: underline;
+}
+
+/* =========================
+   Autocomplete dropdown
+========================= */
+.mi-autocomplete{ position: relative; }
+
+.mi-cr-suggest{
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+
+  max-height: 230px;
+  overflow-y: auto;
+
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: #fff;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.28);
+
+  padding: 4px;
+  list-style: none;
+  z-index: 80;
+}
+
+.mi-cr-suggest__item{
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  transition: background .12s ease, transform .12s ease;
+  user-select: none;
+}
+
+.mi-cr-suggest__item:hover{
+  background: rgba(226,232,240,.55);
+  transform: translateY(-1px);
+}
+
+.mi-suggestText{
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mi-cr-suggest::-webkit-scrollbar-track{
+  background: rgba(2,6,23,.04);
+  border-radius: 999px;
+}
+.mi-cr-suggest::-webkit-scrollbar-thumb{
+  background: rgba(148,163,184,.65);
+  border-radius: 999px;
+  border: 2px solid rgba(2,6,23,.06);
+}
+.mi-cr-suggest::-webkit-scrollbar-thumb:hover{
+  background: rgba(100,116,139,.75);
+}
+
+/* =========================
+   Inline add
+========================= */
+.mi-addInline{
+  margin-top: 10px;
+}
+.mi-addInline__actions{
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* =========================
+   Mini modal
+========================= */
+.mi-mini__overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(1px);
+  display: grid;
+  place-items: center;
+  z-index: 10050;
+  padding: 16px;
+}
+
+.mi-mini__modal{
+  width: min(520px, 92vw);
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,.06);
+  box-shadow: 0 28px 64px -24px rgba(0,0,0,.35);
+  overflow: hidden;
+  animation: mi-slide 0.18s ease-out;
+}
+
+.mi-mini__head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--mi-primary);
+}
+
+.mi-mini__title{
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.mi-mini__close{
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background .15s ease, transform .15s ease;
+}
+.mi-mini__close:hover{ background: rgba(255,255,255,.10); transform: rotate(90deg); }
+.mi-mini__close:disabled{ opacity: .6; cursor: not-allowed; transform: none; }
+
+.mi-mini__body{
+  padding: 16px;
+  background: #fff;
+}
+.mi-mini__actions{
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+/* =========================
+   Responsive
+========================= */
+@media (max-width: 980px){
+  .mi-em-grid{
+    grid-template-columns: 1fr;
+  }
+  .mi-em-dates{
+    grid-template-columns: 1fr;
+  }
+  .mi-row3{ grid-template-columns: 1fr; }
+  .mi-row2{ grid-template-columns: 1fr; }
+  .mi-em-itemGrid3{ grid-template-columns: 1fr; }
+  .mi-em-itemTotalsGrid3{ grid-template-columns: 1fr; }
+  .mi-em-actions{ grid-template-columns: 1fr; }
+}
+
+/* Animaciones */
+@keyframes mi-fade{ from{opacity:0} to{opacity:1} }
+@keyframes mi-slide{
+  from{ opacity:0; transform: translateY(18px); }
+  to{ opacity:1; transform: translateY(0); }
+}
+
+/* Quitar spinners en number (Chrome/Edge) */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* =========================
+   ✅ Modo oscuro (activás con .mi-modal--dark)
+========================= */
+.mi-modal--dark{
+  --mi-bg: rgba(6, 18, 28, 0.92);
+  --mi-bg-soft: rgba(6, 18, 28, 0.60);
+  --mi-text: rgba(255,255,255,.92);
+  --mi-muted: rgba(226,232,240,.72);
+  --mi-border: rgba(255,255,255,.10);
+}
+
+/* Container oscuro */
+.mi-modal--dark.mi-modal__container{
+  background: var(--mi-bg);
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+/* Panel/aside oscuro */
+.mi-modal--dark .mi-em-panel,
+.mi-modal--dark .mi-em-aside{
+  background: rgba(10, 25, 40, 0.60);
+  border-color: rgba(255,255,255,.10);
+}
+
+.mi-modal--dark .mi-em-panelHead{
+  background: rgba(255,255,255,.06);
+  border-bottom-color: rgba(255,255,255,.10);
+  color: var(--mi-text);
+}
+
+/* Inputs oscuros */
+.mi-modal--dark .fl-input{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.12);
+  color: var(--mi-text);
+  box-shadow: none;
+}
+
+.mi-modal--dark .fl-input:focus{
+  border-color: rgba(0,85,187,.65);
+  box-shadow: 0 0 0 3px rgba(0,85,187,.18);
+}
+
+.mi-modal--dark .fl-label{
+  color: var(--mi-muted);
+}
+
+.mi-modal--dark .fl-input:focus + .fl-label,
+.mi-modal--dark .fl-input:not(:placeholder-shown) + .fl-label,
+.mi-modal--dark .fl-select + .fl-label{
+  background: rgba(6,18,28,.92);
+  color: rgba(180,210,255,.92);
+}
+
+/* Dropdown oscuro */
+.mi-modal--dark .mi-cr-suggest{
+  background: rgba(6,18,28,.98);
+  border-color: rgba(255,255,255,.12);
+  box-shadow: 0 18px 45px rgba(0,0,0,.50);
+}
+
+.mi-modal--dark .mi-cr-suggest__item:hover{
+  background: rgba(255,255,255,.08);
+}
+
+/* Botón ghost en oscuro */
+.mi-modal--dark .mit-btn--ghost{
+  border-color: rgba(255,255,255,.16);
+  color: rgba(255,255,255,.90);
+}
+.mi-modal--dark .mit-btn--ghost:hover{
+  background: rgba(255,255,255,.06);
+}
+
+/* Mini modal oscuro (opcional) */
+.mi-modal--dark + .mi-mini__overlay .mi-mini__modal{
+  background: rgba(6,18,28,.98);
+}
+/* =========================================================
+   DARK MODE – Carga Rápida (ModalCargaRapidaMovimientos)
+   Activación:
+   - container: .mi-modal__container ... .mi-modal--dark
+   - overlay:   .mi-modal__overlay--dark (lo agregamos en JSX)
+========================================================= */
+
+/* Overlay dark (sin :has) */
+.mi-modal__overlay.mi-modal__overlay--dark{
+  background: rgba(0,0,0,.62);
+  backdrop-filter: blur(3px);
+}
+
+/* Tokens dark (si ya los tenés, esto solo asegura coherencia) */
+.mi-modal__container.mi-modal--dark{
+  --cr-bg: rgba(6,18,28,.92);
+  --cr-panel: rgba(10,25,40,.62);
+  --cr-panel2: rgba(6,18,28,.72);
+  --cr-border: rgba(255,255,255,.10);
+  --cr-text: rgba(255,255,255,.92);
+  --cr-muted: rgba(226,232,240,.72);
+  --cr-soft: rgba(255,255,255,.06);
+  --cr-hover: rgba(255,255,255,.08);
+}
+
+/* Container */
+.mi-modal__container.mi-modal--dark{
+  background: var(--cr-bg);
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+/* Header */
+.mi-modal__container.mi-modal--dark .mi-modal__header{
+  background: linear-gradient(180deg, #0a2540, #071a2c);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+/* Panel tabla + panel filtros */
+.mi-modal__container.mi-modal--dark .mi-cr-table,
+.mi-modal__container.mi-modal--dark .mi-cr-filters{
+  background: var(--cr-panel2);
+  border-color: var(--cr-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.03),
+    0 18px 45px rgba(0,0,0,.40);
+  color: var(--cr-text);
+}
+
+/* Header tabla */
+.mi-modal__container.mi-modal--dark .mi-cr-table__head{
+  background: rgba(255,255,255,.06);
+  border-bottom-color: rgba(255,255,255,.10);
+  color: rgba(255,255,255,.85);
+}
+
+/* Filas (zebra/hover) */
+.mi-modal__container.mi-modal--dark .mi-cr-row{
+  border-bottom-color: rgba(255,255,255,.08);
+}
+.mi-modal__container.mi-modal--dark .mi-cr-row:nth-child(odd){
+  background: rgba(255,255,255,.03);
+}
+.mi-modal__container.mi-modal--dark .mi-cr-row:hover{
+  background: rgba(255,255,255,.06);
+}
+
+/* Inputs dentro de la tabla y filtros */
+.mi-modal__container.mi-modal--dark .fl-input,
+.mi-modal__container.mi-modal--dark .fl-select{
+  background: rgba(255,255,255,.06) !important;
+  border-color: rgba(255,255,255,.14) !important;
+  color: rgba(255,255,255,.92) !important;
+  box-shadow: none !important;
+}
+.mi-modal__container.mi-modal--dark .fl-input:focus,
+.mi-modal__container.mi-modal--dark .fl-select:focus{
+  border-color: rgba(0,85,187,.65) !important;
+  box-shadow: 0 0 0 3px rgba(0,85,187,.18) !important;
+}
+
+/* Labels flotantes con “corte” oscuro */
+.mi-modal__container.mi-modal--dark .fl-label{
+  color: rgba(226,232,240,.72) !important;
+}
+.mi-modal__container.mi-modal--dark .fl-input:focus + .fl-label,
+.mi-modal__container.mi-modal--dark .fl-input:not(:placeholder-shown) + .fl-label,
+.mi-modal__container.mi-modal--dark .fl-select + .fl-label{
+  background: rgba(6,18,28,.92) !important;
+  color: rgba(180,210,255,.92) !important;
+}
+
+/* Money (IVA/Total) */
+.mi-modal__container.mi-modal--dark .mi-cr-money{
+  color: rgba(255,255,255,.92);
+}
+.mi-modal__container.mi-modal--dark .mi-cr-money--soft{
+  color: rgba(226,232,240,.80);
+}
+
+/* Footer tabla */
+.mi-modal__container.mi-modal--dark .mi-cr-table__foot{
+  background: rgba(255,255,255,.04);
+  border-top-color: rgba(255,255,255,.10);
+}
+
+/* Botón agregar fila */
+.mi-modal__container.mi-modal--dark .mi-cr-addrow{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.14);
+  color: rgba(255,255,255,.88);
+}
+.mi-modal__container.mi-modal--dark .mi-cr-addrow::before{
+  background: rgba(0,85,187,.18);
+  border-color: rgba(0,85,187,.25);
+  color: rgba(255,255,255,.92);
+}
+
+/* Totales (chips) */
+.mi-modal__container.mi-modal--dark .mi-cr-totalLine{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.12);
+  box-shadow: 0 10px 22px rgba(0,0,0,.35);
+}
+.mi-modal__container.mi-modal--dark .mi-cr-totalLine span{
+  color: rgba(226,232,240,.75);
+}
+.mi-modal__container.mi-modal--dark .mi-cr-totalLine b{
+  color: rgba(255,255,255,.92);
+}
+
+/* Colores por tipo (sub/iva/total) adaptados a oscuro */
+.mi-modal__container.mi-modal--dark .mi-cr-totalLine--sub{
+  border-color: rgba(0,85,187,.35) !important;
+}
+.mi-modal__container.mi-modal--dark .mi-cr-totalLine--iva{
+  border-color: rgba(245,158,11,.35) !important;
+}
+.mi-modal__container.mi-modal--dark .mi-cr-totalLine--total{
+  border-color: rgba(16,185,129,.35) !important;
+  box-shadow: 0 12px 26px rgba(16,185,129,.10) !important;
+}
+
+/* Link “Agregar nuevo …” */
+.mi-modal__container.mi-modal--dark .mi-cr-link{
+  color: rgba(140,220,210,.95);
+}
+.mi-modal__container.mi-modal--dark .mi-cr-link:hover{
+  color: rgba(170,240,232,.98);
+}
+
+/* Botón eliminar fila */
+.mi-modal__container.mi-modal--dark .mi-cr-del{
+  border-color: rgba(239,68,68,.35) !important;
+  background: rgba(239,68,68,.10) !important;
+  color: rgba(255,220,220,.95) !important;
+}
+
+/* Dropdown sugerencias (detalle/cliente/proveedor) */
+.mi-modal__container.mi-modal--dark .mi-cr-suggest{
+  background: rgba(6,18,28,.98) !important;
+  border-color: rgba(255,255,255,.14) !important;
+  box-shadow: 0 22px 55px rgba(0,0,0,.45) !important;
+}
+.mi-modal__container.mi-modal--dark .mi-cr-suggest__item{
+  color: rgba(255,255,255,.88) !important;
+}
+.mi-modal__container.mi-modal--dark .mi-cr-suggest__item:hover{
+  background: rgba(255,255,255,.08) !important;
+}
+
+/* Panel filtros top */
+.mi-modal__container.mi-modal--dark .mi-cr-filters__top{
+  background: rgba(255,255,255,.04);
+  border-bottom-color: rgba(255,255,255,.10);
+}
+.mi-modal__container.mi-modal--dark .mi-cr-filters__title{
+  color: rgba(255,255,255,.90);
 }

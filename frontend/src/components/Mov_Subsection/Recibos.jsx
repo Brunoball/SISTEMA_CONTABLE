@@ -885,6 +885,7 @@ export default function Recibos() {
         open={openEdit}
         row={selectedRow}
         lists={lists}
+                  dark={true}
         periodoDefault={fPeriodo}
         onClose={() => {
           setOpenEdit(false);

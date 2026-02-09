@@ -14,6 +14,8 @@ import {
   faUserCircle,
   faMoon,
   faSun,
+  faBars,
+  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 
 import "./principal.css";
@@ -44,10 +46,16 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm }) => {
         </div>
 
         <h3 className="pp-modal__title">Confirmar cierre de sesión</h3>
-        <p className="pp-modal__text">¿Estás seguro de que deseas cerrar la sesión?</p>
+        <p className="pp-modal__text">
+          ¿Estás seguro de que deseas cerrar la sesión?
+        </p>
 
         <div className="pp-modal__actions">
-          <button className="pp-btn pp-btn--ghost" onClick={onClose} ref={cancelBtnRef}>
+          <button
+            className="pp-btn pp-btn--ghost"
+            onClick={onClose}
+            ref={cancelBtnRef}
+          >
             Cancelar
           </button>
           <button className="pp-btn pp-btn--danger" onClick={onConfirm}>
@@ -65,7 +73,13 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm }) => {
 function normalizeRol(value) {
   if (value == null) return "vista";
   const v = String(value).trim().toLowerCase();
-  if (v === "1" || v === "admin" || v === "administrator" || v === "administrador" || v === "superadmin") {
+  if (
+    v === "1" ||
+    v === "admin" ||
+    v === "administrator" ||
+    v === "administrador" ||
+    v === "superadmin"
+  ) {
     return "admin";
   }
   return "vista";
@@ -132,8 +146,13 @@ const Principal = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showPerfilModal, setShowPerfilModal] = useState(false);
 
+  // ✅ Drawer mobile
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // ✅ Submenú Movimientos
   const [openMovSub, setOpenMovSub] = useState(false);
 
+  // ✅ timers para abrir/cerrar con delay (desktop hover)
   const closeTimerRef = useRef(null);
   const openTimerRef = useRef(null);
 
@@ -180,6 +199,31 @@ const Principal = () => {
       if (openTimerRef.current) clearTimeout(openTimerRef.current);
     };
   }, []);
+
+  // ✅ si cambiás de ruta, cerrá el drawer (mobile)
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [location.pathname]);
+
+  // ✅ ESC cierra drawer
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setDrawerOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [drawerOpen]);
+
+  // ✅ bloquear scroll del body cuando el drawer está abierto (mobile)
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [drawerOpen]);
 
   const planNivel = normalizePlanNivel(usuario?.plan_nivel ?? 1);
 
@@ -229,9 +273,13 @@ const Principal = () => {
   const handleNavigate = (ruta) => {
     if (ruta && ruta !== "/panel/dashboard") markDashboardSeen();
     navigate(ruta);
+    setDrawerOpen(false);
   };
 
-  const handleLogoClick = () => navigate("/panel/dashboard");
+  const handleLogoClick = () => {
+    navigate("/panel/dashboard");
+    setDrawerOpen(false);
+  };
 
   const confirmarCierreSesion = () => {
     try {
@@ -240,6 +288,7 @@ const Principal = () => {
       localStorage.removeItem("usuario");
     } catch {}
     setShowLogoutModal(false);
+    setDrawerOpen(false);
     navigate("/", { replace: true });
   };
 
@@ -278,19 +327,27 @@ const Principal = () => {
       const idUsuario = getIdUsuario(u);
 
       if (!idUsuario) {
-        console.warn("No hay idUsuario en localStorage. No se puede guardar tema en DB.", u);
+        console.warn(
+          "No hay idUsuario en localStorage. No se puede guardar tema en DB.",
+          u
+        );
         return;
       }
 
-      const r = await fetch(`${BASE_URL}/api.php?action=usuario_tema_actualizar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idUsuario, tema: nuevo }),
-      });
+      const r = await fetch(
+        `${BASE_URL}/api.php?action=usuario_tema_actualizar`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idUsuario, tema: nuevo }),
+        }
+      );
 
       const txt = await r.text();
       let data = null;
-      try { data = JSON.parse(txt); } catch {}
+      try {
+        data = JSON.parse(txt);
+      } catch {}
 
       if (!r.ok || !data?.exito) {
         console.error("Falló usuario_tema_actualizar:", r.status, txt);
@@ -298,7 +355,6 @@ const Principal = () => {
       }
 
       console.log("✅ Tema guardado en DB:", data);
-
     } catch (e) {
       console.error("Error llamando usuario_tema_actualizar:", e);
     }
@@ -309,8 +365,27 @@ const Principal = () => {
       {/* ================= HEADER ================= */}
       <header className="mov-topbar">
         <div className="mov-topbar__left">
-          <button className="mov-topbar__logo" onClick={handleLogoClick} title="Ir al dashboard">
-            <img src={LogoBalto} alt="Logo Balto" className="mov-topbar__logoImg" />
+          {/* ✅ BURGER (solo mobile por CSS) */}
+          <button
+            className="pp-burger"
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Abrir menú"
+            title="Menú"
+          >
+            <FontAwesomeIcon icon={faBars} />
+          </button>
+
+          <button
+            className="mov-topbar__logo"
+            onClick={handleLogoClick}
+            title="Ir al dashboard"
+          >
+            <img
+              src={LogoBalto}
+              alt="Logo Balto"
+              className="mov-topbar__logoImg"
+            />
           </button>
 
           <div className="mov-topbar__titles">
@@ -322,7 +397,12 @@ const Principal = () => {
 
             <div className="mov-topbar__sysby">
               Desarrollado por{" "}
-              <a href="https://3devsnet.com" target="_blank" rel="noopener noreferrer" className="mov-topbar__sysbyLink">
+              <a
+                href="https://3devsnet.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mov-topbar__sysbyLink"
+              >
                 3 devs
               </a>
             </div>
@@ -336,20 +416,63 @@ const Principal = () => {
           <button
             className="pp-themeBtn"
             onClick={toggleTema}
-            title={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-            aria-label={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            title={
+              tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"
+            }
+            aria-label={
+              tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"
+            }
           >
             <FontAwesomeIcon icon={tema === "oscuro" ? faSun : faMoon} />
           </button>
 
-          <button className="mov-topbar__usericon" onClick={() => setShowPerfilModal(true)} title="Perfil">
+          <button
+            className="mov-topbar__usericon"
+            onClick={() => setShowPerfilModal(true)}
+            title="Perfil"
+          >
             <FontAwesomeIcon icon={faUserCircle} />
           </button>
         </div>
       </header>
 
+      {/* ✅ OVERLAY drawer (solo mobile por CSS) */}
+      <div
+        className={`pp-drawerOverlay ${drawerOpen ? "is-open" : ""}`}
+        onMouseDown={() => setDrawerOpen(false)}
+      />
+
       {/* ================= SIDEBAR ================= */}
-      <aside className="pp-sidebar">
+      <aside className={`pp-sidebar ${drawerOpen ? "is-drawerOpen" : ""}`}>
+        {/* ✅ HEADER drawer (solo mobile por CSS) */}
+        <div className="pp-drawerHeader">
+          <div
+            className="pp-drawerBrand"
+            onClick={handleLogoClick}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="pp-drawerBrand__mark">
+              <FontAwesomeIcon icon={faChartLine} />
+            </div>
+            <div className="pp-drawerBrand__txt">
+              <div className="pp-drawerBrand__t">Contable</div>
+              <div className="pp-drawerBrand__s">Panel</div>
+            </div>
+          </div>
+
+          <button
+            className="pp-drawerClose"
+            type="button"
+            onClick={() => setDrawerOpen(false)}
+            aria-label="Cerrar menú"
+            title="Cerrar"
+          >
+            <FontAwesomeIcon icon={faXmark} />
+          </button>
+        </div>
+
+        {/* ✅ Brand desktop */}
         <div className="pp-brand" onClick={handleLogoClick} role="button" tabIndex={0}>
           <div className="pp-brand__mark">
             <FontAwesomeIcon icon={faChartLine} />
@@ -365,13 +488,18 @@ const Principal = () => {
             const hasSub = Array.isArray(item.children) && item.children.length > 0;
             const isMov = item.key === "movimientos";
 
-            const isActive = activeKey === item.key || (isMov && location.pathname.startsWith("/panel/movimientos"));
+            const isActive =
+              activeKey === item.key ||
+              (isMov && location.pathname.startsWith("/panel/movimientos"));
+
             const isOpen = isMov && openMovSub;
 
             return (
               <div
                 key={item.key}
-                className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${isOpen ? "is-open" : ""}`}
+                className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${
+                  isOpen ? "is-open" : ""
+                }`}
                 onMouseEnter={() => {
                   if (!isNoHover() && isMov) {
                     cancelClose();
@@ -390,6 +518,7 @@ const Principal = () => {
                   role="button"
                   tabIndex={0}
                   onClick={() => {
+                    // mobile: tocás el item y alterna el submenú
                     if (hasSub && isNoHover()) {
                       if (isMov) setOpenMovSub((v) => !v);
                       return;
@@ -399,10 +528,12 @@ const Principal = () => {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
+
                       if (hasSub && isNoHover()) {
                         if (isMov) setOpenMovSub((v) => !v);
                         return;
                       }
+
                       handleNavigate(item.ruta);
                     }
                   }}
@@ -430,11 +561,14 @@ const Principal = () => {
                     {item.children.map((sub) => (
                       <button
                         key={sub.ruta + sub.label}
-                        className={`pp-navSub__item ${location.pathname.startsWith(sub.ruta) ? "is-active" : ""}`}
+                        className={`pp-navSub__item ${
+                          location.pathname.startsWith(sub.ruta) ? "is-active" : ""
+                        }`}
                         onClick={() => {
                           markDashboardSeen();
                           navigate(sub.ruta);
                           setOpenMovSub(false);
+                          setDrawerOpen(false);
                         }}
                       >
                         <span className="pp-navSub__dot" />
@@ -449,7 +583,13 @@ const Principal = () => {
         </nav>
 
         <div className="pp-sidebar__bottom">
-          <button className="pp-logout" onClick={() => setShowLogoutModal(true)}>
+          <button
+            className="pp-logout"
+            onClick={() => {
+              setDrawerOpen(false);
+              setShowLogoutModal(true);
+            }}
+          >
             <span className="pp-logout__icon">
               <FontAwesomeIcon icon={faSignOutAlt} />
             </span>
@@ -476,7 +616,11 @@ const Principal = () => {
         }}
       />
 
-      <ConfirmLogoutModal open={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={confirmarCierreSesion} />
+      <ConfirmLogoutModal
+        open={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={confirmarCierreSesion}
+      />
     </div>
   );
 };

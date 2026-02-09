@@ -155,7 +155,7 @@ async function apiPostJson(url, payload) {
 /* =========================
    Mini Modal: alta rápida (cliente/proveedor/detalle)
 ========================= */
-function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave }) {
+function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -178,7 +178,10 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 
   return createPortal(
     <div className="mi-mini__overlay" onMouseDown={onCancel}>
-      <div className="mi-mini__modal" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
           <button
@@ -250,22 +253,37 @@ const CATALOGO_DEF = {
   id_detalle: { catalogo: "detalles", label: "Detalle" },
 };
 
+/* =========================
+   Theme helper (data-theme)
+========================= */
+function isTemaOscuro() {
+  return document.documentElement.getAttribute("data-theme") === "oscuro";
+}
+
 export default function ModalCargaRapidaMovimientos({
   open,
   lists,
-  periodoDefault,
+  periodoDefault, // (se mantiene por compatibilidad)
   onClose,
   onSaveBatch,
   onToast,
 }) {
   const API = `${BASE_URL}/api.php`;
 
+  // ✅ dark automático leyendo data-theme (Principal.jsx)
+  const [dark, setDark] = useState(isTemaOscuro());
+  useEffect(() => {
+    const obs = new MutationObserver(() => setDark(isTemaOscuro()));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
+
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
     [onToast]
   );
 
-  // ✅ lock scroll del body SOLO mientras está abierto (no cambia tu lógica)
+  // ✅ lock scroll del body SOLO mientras está abierto
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
@@ -287,9 +305,8 @@ export default function ModalCargaRapidaMovimientos({
 
   const listsNorm = useMemo(() => localLists, [localLists]);
 
-const [fecha, setFecha] = useState(todayISO());
-const [periodo, setPeriodo] = useState(periodoFromISODate(todayISO())); // ✅ siempre hoy
-
+  const [fecha, setFecha] = useState(todayISO());
+  const [periodo, setPeriodo] = useState(periodoFromISODate(todayISO())); // ✅ siempre hoy
 
   const [filters, setFilters] = useState({
     id_clasificacion: NULL_OPTION,
@@ -343,9 +360,7 @@ const [periodo, setPeriodo] = useState(periodoFromISODate(todayISO())); // ✅ s
     if (!wasOpen && open) {
       const f = todayISO();
       setFecha(f);
-
-setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
-
+      setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
 
       setFilters({
         id_clasificacion: NULL_OPTION,
@@ -435,7 +450,7 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
 
   /* =========================
      Autocomplete: DETALLES (por fila)
-========================= */
+  ========================= */
   const detallesList = useMemo(
     () => (Array.isArray(listsNorm.detalles) ? listsNorm.detalles : []),
     [listsNorm.detalles]
@@ -459,17 +474,17 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
 
   /* =========================
      Autocomplete: CLIENTES
-========================= */
+  ========================= */
   const clientesList = useMemo(
     () => (Array.isArray(listsNorm.clientes) ? listsNorm.clientes : []),
     [listsNorm.clientes]
   );
 
   const filteredClientes = useMemo(() => {
-    const q = clienteInput.trim().toLowerCase();
-    if (!clienteFocus || q.length < 1) return [];
+    const qLocal = clienteInput.trim().toLowerCase();
+    if (!clienteFocus || qLocal.length < 1) return [];
     return clientesList
-      .filter((c) => String(c?.nombre ?? "").toLowerCase().includes(q))
+      .filter((c) => String(c?.nombre ?? "").toLowerCase().includes(qLocal))
       .slice(0, 25);
   }, [clientesList, clienteInput, clienteFocus]);
 
@@ -496,17 +511,17 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
 
   /* =========================
      Autocomplete: PROVEEDORES
-========================= */
+  ========================= */
   const proveedoresList = useMemo(
     () => (Array.isArray(listsNorm.proveedores) ? listsNorm.proveedores : []),
     [listsNorm.proveedores]
   );
 
   const filteredProveedores = useMemo(() => {
-    const q = proveedorInput.trim().toLowerCase();
-    if (!proveedorFocus || q.length < 1) return [];
+    const qLocal = proveedorInput.trim().toLowerCase();
+    if (!proveedorFocus || qLocal.length < 1) return [];
     return proveedoresList
-      .filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q))
+      .filter((p) => String(p?.nombre ?? "").toLowerCase().includes(qLocal))
       .slice(0, 25);
   }, [proveedoresList, proveedorInput, proveedorFocus]);
 
@@ -533,7 +548,7 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
 
   /* =========================
      Crear nuevo catálogo
-========================= */
+  ========================= */
   const closeAddMini = useCallback(() => {
     if (addUI.saving) return;
     setAddUI({ open: false, field: null, rowId: null, text: "", saving: false });
@@ -610,7 +625,7 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
 
   /* =========================
      Cálculos por fila
-========================= */
+  ========================= */
   const rowsCalc = useMemo(() => {
     return rows.map((r) => {
       const cantidad = Math.max(0, safeNumber(r.cantidad));
@@ -632,7 +647,7 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
 
   /* =========================
      VALIDACIÓN SUPER FLEX
-========================= */
+  ========================= */
   const validate = useCallback(() => {
     const usableLines = rowsCalc.filter((r) => {
       const det = Number(r.id_detalle);
@@ -744,17 +759,30 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
       ? "Nuevo proveedor"
       : "Nuevo detalle";
 
-  const cancelMini = () => {
-    closeAddMini();
-  };
+  const cancelMini = () => closeAddMini();
 
   const modalJSX = (
-    <div className="mi-modal__overlay mi-modal__overlay--mov">
+    <div
+      className={[
+        "mi-modal__overlay",
+        "mi-modal__overlay--mov",
+        dark ? "mi-modal__overlay--dark" : "",
+      ]
+        .join(" ")
+        .trim()}
+      onMouseDown={() => (!saving ? onClose?.() : null)}
+    >
       <div
-        className="mi-modal__container mi-modal__container--mov"
+        className={[
+          "mi-modal__container",
+          "mi-modal__container--mov",
+          dark ? "mi-modal--dark" : "",
+        ]
+          .join(" ")
+          .trim()}
         role="dialog"
         aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="mi-modal__header mi-modal__header--car">
           <div className="mi-modal__head-left">
@@ -782,11 +810,11 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
             <section className="mi-cr-table">
               <div className="mi-cr-table__head">
                 <div>Descripción</div>
-                <div style={{ textAlign: "center" }}>Cantidad</div>
-                <div style={{ textAlign: "center" }}>Precio</div>
-                <div style={{ textAlign: "center" }}>% IVA</div>
-                <div style={{ textAlign: "center" }}>IVA</div>
-                <div style={{ textAlign: "center" }}>Total</div>
+                <div className="mi-cr-center">Cantidad</div>
+                <div className="mi-cr-center">Precio</div>
+                <div className="mi-cr-center">% IVA</div>
+                <div className="mi-cr-center">IVA</div>
+                <div className="mi-cr-center">Total</div>
                 <div />
               </div>
 
@@ -801,7 +829,7 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
                   return (
                     <div key={r.id} className="mi-cr-row mi-cr-row--car">
                       {/* Descripción */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--desc" style={{ position: "relative" }}>
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--desc mi-cr-rel">
                         <input
                           className="fl-input"
                           placeholder="Escribí y seleccioná un detalle…"
@@ -814,7 +842,6 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
                           }}
                           disabled={saving || addUI.open}
                           autoComplete="off"
-                          style={{ height: 38 }}
                         />
 
                         {showSug && (
@@ -848,7 +875,7 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
                       </div>
 
                       {/* Cantidad */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--qty">
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--qty mi-cr-center">
                         <input
                           className="fl-input"
                           type="number"
@@ -861,12 +888,11 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
                             })
                           }
                           disabled={saving}
-                          style={{ height: 38, textAlign: "center" }}
                         />
                       </div>
 
                       {/* Precio */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--price">
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--price mi-cr-center">
                         <input
                           className="fl-input"
                           type="number"
@@ -879,18 +905,16 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
                             })
                           }
                           disabled={saving}
-                          style={{ height: 38, textAlign: "center" }}
                         />
                       </div>
 
                       {/* % IVA */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--iva">
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--iva mi-cr-center">
                         <select
                           className="fl-input fl-select fl-select-iva--car"
                           value={String(r.ivaPct)}
                           onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
                           disabled={saving}
-                          style={{ height: 38, textAlign: "center" }}
                         >
                           {IVA_OPTIONS.map((x) => (
                             <option key={x.value} value={x.value}>
@@ -901,17 +925,13 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
                       </div>
 
                       {/* IVA monto */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--ivaMonto">
-                        <div style={{ textAlign: "center", fontWeight: 700, paddingTop: 10 }}>
-                          {moneyARS(r.ivaMonto)}
-                        </div>
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--ivaMonto mi-cr-center">
+                        <div className="mi-cr-money mi-cr-money--soft">{moneyARS(r.ivaMonto)}</div>
                       </div>
 
                       {/* Total */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--total">
-                        <div style={{ textAlign: "center", fontWeight: 800, paddingTop: 10 }}>
-                          {moneyARS(r.total)}
-                        </div>
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--total mi-cr-center">
+                        <div className="mi-cr-money mi-cr-money--strong">{moneyARS(r.total)}</div>
                       </div>
 
                       {/* Acción */}
@@ -934,7 +954,7 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
               {/* footer tabla */}
               <div className="mi-cr-table__foot">
                 <button type="button" onClick={addRow} disabled={saving} className="mi-cr-addrow">
-                  + Agregar fila
+                  Agregar fila
                 </button>
 
                 <div className="mi-cr-totals">
@@ -988,7 +1008,7 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
               </div>
 
               <div className="mi-cr-filters__body">
-                <div className="fl-grid" style={{ gridTemplateColumns: "1fr" }}>
+                <div className="fl-grid mi-cr-onecol" style={{gridTemplateColumns:"1fr"}}>
                   {[
                     ["id_clasificacion", "Clasificación (opcional)", listsNorm.clasificaciones],
                     ["id_tipo_venta", "Tipo venta (opcional)", listsNorm.tipos_venta],
@@ -1015,7 +1035,7 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
                   ))}
 
                   {/* CLIENTE autocomplete */}
-                  <div className="fl-field" style={{ position: "relative" }}>
+                  <div className="fl-field mi-cr-rel">
                     <input
                       ref={clienteInputRef}
                       className="fl-input"
@@ -1057,7 +1077,7 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
                   </div>
 
                   {/* PROVEEDOR autocomplete */}
-                  <div className="fl-field" style={{ position: "relative" }}>
+                  <div className="fl-field mi-cr-rel">
                     <input
                       ref={proveedorInputRef}
                       className="fl-input"
@@ -1104,8 +1124,7 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
                     type="button"
                     onClick={submit}
                     disabled={saving}
-                    className="mit-btn mit-btn--solid"
-                    style={{ width: "100%", height: 44 }}
+                    className="mit-btn mit-btn--solid mit-btn--block"
                   >
                     {saving ? "Guardando..." : "Guardar todo"}
                   </button>
@@ -1114,8 +1133,7 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
                     type="button"
                     onClick={() => (!saving ? onClose?.() : null)}
                     disabled={saving}
-                    className="mit-btn mit-btn--ghost"
-                    style={{ width: "100%", height: 44 }}
+                    className="mit-btn mit-btn--ghost mit-btn--block"
                   >
                     Cancelar
                   </button>
@@ -1134,11 +1152,12 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
           onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
           onCancel={cancelMini}
           onSave={guardarNuevoCatalogo}
+          dark={dark}
         />
       </div>
     </div>
   );
 
-  // ✅ CLAVE: portal al body => no queda encerrado en .pp-content
+  // ✅ Portal al body
   return createPortal(modalJSX, document.body);
 }

@@ -529,3 +529,166 @@
     width: 100%;
   }
 }
+/* =========================================================
+   CUENTAS CORRIENTES — DARK MODE (override)
+   Pegalo AL FINAL de cuentas_corrientes.css
+========================================================= */
+html[data-theme="oscuro"] .cc-page{
+  background: #0B1220 !important;
+  color: rgba(226,232,240,.92) !important;
+}
+
+/* Alert */
+html[data-theme="oscuro"] .cc-page .cc-alert{
+  background: rgba(225,61,69,.12) !important;
+  border-color: rgba(225,61,69,.24) !important;
+  color: rgba(255,255,255,.92) !important;
+}
+
+/* Card */
+html[data-theme="oscuro"] .cc-page .cc-card{
+  background: rgba(15,23,42,.62) !important;
+  border-color: rgba(148,163,184,.14) !important;
+  box-shadow: 0 16px 40px -26px rgba(0,0,0,.62) !important;
+}
+
+/* Head */
+html[data-theme="oscuro"] .cc-page .cc-card__head{
+  background:
+    radial-gradient(900px 180px at 0% 0%, rgba(78,161,255,.12), transparent 55%),
+    linear-gradient(180deg, rgba(15,23,42,.85), rgba(15,23,42,.62)) !important;
+  border-bottom-color: rgba(148,163,184,.12) !important;
+}
+
+html[data-theme="oscuro"] .cc-page .cc-card__title{
+  color: rgba(226,232,240,.92) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-card__hint{
+  color: rgba(226,232,240,.62) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-card__hint b{
+  color: rgba(226,232,240,.92) !important;
+}
+
+/* Labels */
+html[data-theme="oscuro"] .cc-page .cc-filter label{
+  color: rgba(226,232,240,.72) !important;
+}
+
+/* Input buscador */
+html[data-theme="oscuro"] .cc-page .cc-input{
+  background: rgba(15,23,42,.88) !important;
+  color: rgba(226,232,240,.92) !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-input::placeholder{
+  color: rgba(226,232,240,.45) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-input:focus{
+  background: rgba(15,23,42,.96) !important;
+  border-color: rgba(78,161,255,.45) !important;
+  box-shadow: 0 0 0 4px rgba(78,161,255,.18) !important;
+}
+
+/* Botón X limpiar búsqueda */
+html[data-theme="oscuro"] .cc-page .cc-clearSearch{
+  background: rgba(15,23,42,.95) !important;
+  color: rgba(226,232,240,.85) !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-clearSearch:hover{
+  background: rgba(78,161,255,.12) !important;
+  border-color: rgba(78,161,255,.25) !important;
+  color: rgba(226,232,240,.95) !important;
+}
+
+/* Subhead */
+html[data-theme="oscuro"] .cc-page .cc-subhead{
+  background: linear-gradient(180deg, rgba(15,23,42,.85), rgba(15,23,42,.62)) !important;
+  border-bottom-color: rgba(148,163,184,.12) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-subhead__name{
+  color: rgba(226,232,240,.92) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-subhead__meta{
+  color: rgba(226,232,240,.62) !important;
+}
+
+/* Header tabla */
+html[data-theme="oscuro"] .cc-page .cc-grid--head{
+  background: rgba(15,23,42,.95) !important;
+  border-bottom-color: rgba(148,163,184,.14) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-grid--head .cc-cell{
+  color: rgba(226,232,240,.82) !important;
+  border-bottom-color: rgba(148,163,184,.14) !important;
+}
+
+/* Body scroll */
+html[data-theme="oscuro"] .cc-page .cc-gridBody{
+  background: rgba(15,23,42,.40) !important;
+}
+
+/* Filas */
+html[data-theme="oscuro"] .cc-page .cc-grid--row{
+  background: rgba(15,23,42,.40) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-grid--row:hover{
+  background: rgba(78,161,255,.10) !important;
+}
+
+/* Celdas */
+html[data-theme="oscuro"] .cc-page .cc-cell{
+  color: rgba(226,232,240,.86) !important;
+  border-bottom-color: rgba(148,163,184,.12) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-name{
+  color: rgba(226,232,240,.92) !important;
+}
+
+/* Pos/Neg */
+html[data-theme="oscuro"] .cc-page .cc-cell.is-positive,
+html[data-theme="oscuro"] .cc-page .cc-saldo.is-positive{
+  color: color-mix(in srgb, var(--cc-success) 76%, #e2e8f0) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-cell.is-negative,
+html[data-theme="oscuro"] .cc-page .cc-saldo.is-negative{
+  color: color-mix(in srgb, var(--cc-danger) 76%, #e2e8f0) !important;
+}
+
+/* Footer totales (tfoot) */
+html[data-theme="oscuro"] .cc-page .cc-grid--tfoot{
+  background: rgba(15,23,42,.62) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-tfootLabel{
+  color: rgba(226,232,240,.86) !important;
+}
+
+/* Footnote */
+html[data-theme="oscuro"] .cc-page .cc-footnote{
+  background: rgba(15,23,42,.62) !important;
+  border-top-color: rgba(148,163,184,.12) !important;
+  color: rgba(226,232,240,.62) !important;
+}
+
+/* Botón excel */
+html[data-theme="oscuro"] .cc-page .cc-btn--excel{
+  background: rgba(34,173,92,.92) !important;
+  border-color: rgba(34,173,92,.50) !important;
+  color: #071018 !important;
+  box-shadow: 0 14px 28px rgba(34,173,92,.16) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-btn--excel:hover:not(:disabled){
+  background: rgba(34,173,92,1) !important;
+  color: #071018 !important;
+}
+
+/* Empty row */
+html[data-theme="oscuro"] .cc-page .cc-emptyRow{
+  color: rgba(226,232,240,.65) !important;
+}
+
+/* Scrollbar */
+html[data-theme="oscuro"] .cc-page .cc-gridBody::-webkit-scrollbar-thumb{
+  background: rgba(148,163,184,.22) !important;
+}

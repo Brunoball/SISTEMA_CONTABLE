@@ -5,7 +5,10 @@
    Paleta BALTO (Excel)
    (si ya existen en :root global, esto igual funciona)
 ========================= */
-:root{
+/* =========================
+   Tokens SOLO para ModalPerfil
+========================= */
+.mi-modal__container--perfil{
   --balto-midnight:#0A2540;
   --balto-action:#0055BB;
   --balto-bg:#F6F9FC;
@@ -372,3 +375,144 @@
 /* si querés aún más finito en general */
 .perfil-meta,
 .mit-help{ font-weight: 450; }
+/* =========================
+   MODO OSCURO (ModalPerfil)
+   Activación: body.dark
+   Pegá esto AL FINAL del archivo
+========================= */
+body.dark .mi-modal__overlay{
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(6px);
+}
+
+body.dark .mi-modal__container{
+  background: #0B1E33;
+  border-color: rgba(255,255,255,.10);
+  box-shadow: 0 30px 70px rgba(0,0,0,.55);
+}
+
+body.dark .perfil-body{
+  background:
+    radial-gradient(900px 300px at 50% 0%, rgba(0, 85, 187, 0.14), transparent 60%),
+    #071624;
+}
+
+body.dark .perfil-card,
+body.dark .perfil-field{
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.10);
+  box-shadow: 0 10px 25px rgba(0,0,0,.35);
+}
+
+body.dark .perfil-name{
+  color: rgba(255,255,255,.92);
+}
+
+body.dark .perfil-meta{
+  color: rgba(255,255,255,.60);
+}
+body.dark .perfil-meta b{
+  color: rgba(255,255,255,.86);
+}
+
+body.dark .perfil-field__label{
+  color: rgba(255,255,255,.65);
+}
+
+body.dark .perfil-field__value{
+  color: rgba(255,255,255,.88);
+}
+
+body.dark .mit-actions{
+  background: rgba(255,255,255,.03);
+  border-top-color: rgba(255,255,255,.10);
+}
+
+body.dark .mit-btn--ghost{
+  background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.88);
+  border-color: rgba(255,255,255,.12);
+}
+
+body.dark .mit-btn--ghost:hover{
+  background: rgba(0, 85, 187, 0.18);
+}
+
+body.dark .mi-modal__close{
+  border-color: rgba(255,255,255,.14);
+  background: rgba(255,255,255,.08);
+}
+
+body.dark .perfil-inner::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.16);
+}
+/* =========================
+   MODO OSCURO (ModalPerfil)
+   Activación: html[data-theme="oscuro"]
+========================= */
+html[data-theme="oscuro"] .mi-modal__overlay{
+  background: rgba(0,0,0,.60);
+  backdrop-filter: blur(6px);
+}
+
+html[data-theme="oscuro"] .mi-modal__container--perfil{
+  background: #0B1E33;
+  border-color: rgba(255,255,255,.10);
+  box-shadow: 0 30px 70px rgba(0,0,0,.60);
+}
+
+html[data-theme="oscuro"] .perfil-body{
+  background:
+    radial-gradient(900px 300px at 50% 0%, rgba(0, 85, 187, 0.16), transparent 60%),
+    #071624;
+}
+
+html[data-theme="oscuro"] .perfil-card,
+html[data-theme="oscuro"] .perfil-field{
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.10);
+  box-shadow: 0 10px 25px rgba(0,0,0,.35);
+}
+
+html[data-theme="oscuro"] .perfil-name{
+  color: rgba(255,255,255,.92);
+}
+
+html[data-theme="oscuro"] .perfil-meta{
+  color: rgba(255,255,255,.60);
+}
+html[data-theme="oscuro"] .perfil-meta b{
+  color: rgba(255,255,255,.86);
+}
+
+html[data-theme="oscuro"] .perfil-field__label{
+  color: rgba(255,255,255,.65);
+}
+
+html[data-theme="oscuro"] .perfil-field__value{
+  color: rgba(255,255,255,.88);
+}
+
+html[data-theme="oscuro"] .mit-actions{
+  background: rgba(255,255,255,.03);
+  border-top-color: rgba(255,255,255,.10);
+}
+
+html[data-theme="oscuro"] .mit-btn--ghost{
+  background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.88);
+  border-color: rgba(255,255,255,.12);
+}
+
+html[data-theme="oscuro"] .mit-btn--ghost:hover{
+  background: rgba(0, 85, 187, 0.20);
+}
+
+html[data-theme="oscuro"] .mi-modal__close{
+  border-color: rgba(255,255,255,.14);
+  background: rgba(255,255,255,.08);
+}
+
+html[data-theme="oscuro"] .perfil-inner::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.18);
+}

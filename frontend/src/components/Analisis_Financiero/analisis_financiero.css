@@ -535,3 +535,198 @@
     grid-template-columns: 1fr;
   }
 }
+/* =========================================================
+   ANALISIS FINANCIERO — DARK MODE (override)
+   Pegalo AL FINAL de analisis_financiero.css
+========================================================= */
+html[data-theme="oscuro"] .af-page{
+  background: #0B1220 !important;
+  color: rgba(226,232,240,.92) !important;
+}
+
+/* Alert */
+html[data-theme="oscuro"] .af-page .af-alert{
+  background: rgba(225,61,69,.12) !important;
+  border-color: rgba(225,61,69,.24) !important;
+  color: rgba(255,255,255,.92) !important;
+}
+
+/* Card */
+html[data-theme="oscuro"] .af-page .af-card{
+  background: rgba(15,23,42,.62) !important;
+  border-color: rgba(148,163,184,.14) !important;
+  box-shadow: 0 16px 40px -26px rgba(0,0,0,.62) !important;
+}
+
+/* Head */
+html[data-theme="oscuro"] .af-page .af-card__head{
+  background:
+    radial-gradient(900px 180px at 0% 0%, rgba(78,161,255,.12), transparent 55%),
+    linear-gradient(180deg, rgba(15,23,42,.85), rgba(15,23,42,.62)) !important;
+  border-bottom-color: rgba(148,163,184,.12) !important;
+}
+html[data-theme="oscuro"] .af-page .af-card__title{
+  color: rgba(226,232,240,.92) !important;
+}
+html[data-theme="oscuro"] .af-page .af-card__hint{
+  color: rgba(226,232,240,.62) !important;
+}
+html[data-theme="oscuro"] .af-page .af-card__hint b{
+  color: rgba(226,232,240,.92) !important;
+}
+
+/* Labels */
+html[data-theme="oscuro"] .af-page .af-filter label{
+  color: rgba(226,232,240,.72) !important;
+}
+
+/* Select + Input */
+html[data-theme="oscuro"] .af-page .af-filter select,
+html[data-theme="oscuro"] .af-page .af-filter input{
+  background: rgba(15,23,42,.88) !important;
+  color: rgba(226,232,240,.92) !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+html[data-theme="oscuro"] .af-page .af-filter input::placeholder{
+  color: rgba(226,232,240,.45) !important;
+}
+html[data-theme="oscuro"] .af-page .af-filter select:focus,
+html[data-theme="oscuro"] .af-page .af-filter input:focus{
+  background: rgba(15,23,42,.96) !important;
+  border-color: rgba(78,161,255,.45) !important;
+  box-shadow: 0 0 0 4px rgba(78,161,255,.18) !important;
+}
+
+/* Botón X limpiar búsqueda */
+html[data-theme="oscuro"] .af-page .af-clearSearch{
+  background: rgba(15,23,42,.95) !important;
+  color: rgba(226,232,240,.85) !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+html[data-theme="oscuro"] .af-page .af-clearSearch:hover{
+  background: rgba(78,161,255,.12) !important;
+  border-color: rgba(78,161,255,.25) !important;
+  color: rgba(226,232,240,.95) !important;
+}
+
+/* Botón Excel */
+html[data-theme="oscuro"] .af-page .af-btn--excel{
+  background: rgba(34,173,92,.92) !important;
+  border-color: rgba(34,173,92,.50) !important;
+  color: #071018 !important;
+  box-shadow: 0 14px 28px rgba(34,173,92,.16) !important;
+}
+html[data-theme="oscuro"] .af-page .af-btn--excel:hover:not(:disabled){
+  background: rgba(34,173,92,1) !important;
+  color: #071018 !important;
+}
+
+/* Subhead */
+html[data-theme="oscuro"] .af-page .af-subhead{
+  background: linear-gradient(180deg, rgba(15,23,42,.85), rgba(15,23,42,.62)) !important;
+  border-bottom-color: rgba(148,163,184,.12) !important;
+}
+html[data-theme="oscuro"] .af-page .af-subhead__name{
+  color: rgba(226,232,240,.92) !important;
+}
+html[data-theme="oscuro"] .af-page .af-subhead__meta,
+html[data-theme="oscuro"] .af-page .af-miniHint{
+  color: rgba(226,232,240,.62) !important;
+}
+
+/* Header tabla */
+html[data-theme="oscuro"] .af-page .af-grid--head{
+  background: rgba(15,23,42,.95) !important;
+  border-bottom-color: rgba(148,163,184,.14) !important;
+}
+html[data-theme="oscuro"] .af-page .af-grid--head .af-cell{
+  color: rgba(226,232,240,.82) !important;
+}
+
+/* Body */
+html[data-theme="oscuro"] .af-page .af-gridBody{
+  background: rgba(15,23,42,.40) !important;
+}
+html[data-theme="oscuro"] .af-page .af-grid--row{
+  background: rgba(15,23,42,.40) !important;
+}
+html[data-theme="oscuro"] .af-page .af-grid--row:hover{
+  background: rgba(78,161,255,.10) !important;
+}
+
+/* Celdas */
+html[data-theme="oscuro"] .af-page .af-cell{
+  color: rgba(226,232,240,.86) !important;
+  border-bottom-color: rgba(148,163,184,.12) !important;
+}
+html[data-theme="oscuro"] .af-page .af-concept{
+  color: rgba(226,232,240,.92) !important;
+}
+
+/* Negativos */
+html[data-theme="oscuro"] .af-page .af-num.is-negative{
+  color: color-mix(in srgb, var(--af-danger) 78%, #e2e8f0) !important;
+}
+
+/* Resaltados Resultado / GP */
+html[data-theme="oscuro"] .af-page .af-grid--row.is-resultado{
+  background: rgba(34,173,92,.12) !important;
+}
+html[data-theme="oscuro"] .af-page .af-grid--row.is-gp{
+  background: rgba(225,61,69,.12) !important;
+}
+html[data-theme="oscuro"] .af-page .af-grid--row.is-resultado .af-concept,
+html[data-theme="oscuro"] .af-page .af-grid--row.is-resultado .af-num,
+html[data-theme="oscuro"] .af-page .af-grid--row.is-gp .af-concept,
+html[data-theme="oscuro"] .af-page .af-grid--row.is-gp .af-num{
+  color: rgba(226,232,240,.95) !important;
+  font-weight: 650 !important; /* fuerte pero no “negraza” */
+}
+
+/* Empty row */
+html[data-theme="oscuro"] .af-page .af-emptyRow{
+  color: rgba(226,232,240,.65) !important;
+}
+
+/* Totales (cards abajo) */
+html[data-theme="oscuro"] .af-page .af-footTotals{
+  background: rgba(15,23,42,.62) !important;
+  border-top-color: rgba(148,163,184,.12) !important;
+}
+
+html[data-theme="oscuro"] .af-page .af-totalCard{
+  background: rgba(15,23,42,.78) !important;
+  border-color: rgba(148,163,184,.14) !important;
+  box-shadow: 0 16px 40px -28px rgba(0,0,0,.62) !important;
+}
+
+html[data-theme="oscuro"] .af-page .af-totalLabel{
+  color: rgba(226,232,240,.72) !important;
+}
+
+html[data-theme="oscuro"] .af-page .af-chip{
+  background: rgba(15,23,42,.92) !important;
+  border-color: rgba(148,163,184,.16) !important;
+  color: rgba(226,232,240,.78) !important;
+}
+
+html[data-theme="oscuro"] .af-page .af-totalValue{
+  color: rgba(226,232,240,.92) !important;
+}
+
+/* positivo/negativo en totales */
+html[data-theme="oscuro"] .af-page .af-totalCard.is-positive .af-totalValue{
+  color: color-mix(in srgb, var(--af-success) 78%, #e2e8f0) !important;
+}
+html[data-theme="oscuro"] .af-page .af-totalCard.is-negative .af-totalValue{
+  color: color-mix(in srgb, var(--af-danger) 78%, #e2e8f0) !important;
+}
+
+html[data-theme="oscuro"] .af-page .af-totalSub{
+  color: rgba(226,232,240,.62) !important;
+}
+
+/* Scrollbar */
+html[data-theme="oscuro"] .af-page .af-gridBody::-webkit-scrollbar-thumb{
+  background: rgba(148,163,184,.22) !important;
+}

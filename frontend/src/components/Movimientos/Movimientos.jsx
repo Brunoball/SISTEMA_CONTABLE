@@ -523,7 +523,7 @@ export default function Movimientos() {
       {
         key: "total",
         label: "TOTAL",
-        align: "right",
+        align: "center",
         fr: 1.0,
         render: (r) => {
           const total = pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0);
@@ -812,6 +812,7 @@ export default function Movimientos() {
       <ModalCargaRapidaMovimientos
         open={openAdd}
         lists={lists}
+                  dark={true}
         periodoDefault={fPeriodo}
         onClose={() => setOpenAdd(false)}
         onToast={showToast}
@@ -845,6 +846,7 @@ export default function Movimientos() {
         lists={lists}
         row={selectedRow}
         periodoDefault={fPeriodo}
+          dark={true}
         onClose={() => {
           setOpenEdit(false);
           setSelectedRow(null);

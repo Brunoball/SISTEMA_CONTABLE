@@ -330,3 +330,44 @@
   .db-title{ font-size: 22px; }
   .db-quick{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* =========================
+   MODO OSCURO (Dashboard)
+   Activación: html[data-theme="oscuro"]
+========================= */
+html[data-theme="oscuro"] .db{
+  --db-bg: #071624;
+  --db-surface: #0B1E33;
+  --db-text: rgba(255,255,255,.84);
+  --db-text-muted: rgba(255,255,255,.60);
+
+  --db-midnight: #0A2540;
+  --db-action: #0055BB;
+
+  --db-midnight-5: rgba(255,255,255,.06);
+  --db-action-10: rgba(0,85,187,.18);
+
+  --db-shadow-sm: 0 1px 3px rgba(0,0,0,.35);
+  --db-shadow-md: 0 14px 34px rgba(0,0,0,.45);
+}
+
+html[data-theme="oscuro"] .db-header .db-title{ color: rgba(255,255,255,.92); }
+html[data-theme="oscuro"] .db-hero__card{
+  background: linear-gradient(135deg, rgba(11,30,51,.92), rgba(7,22,36,.92));
+  border-color: rgba(255,255,255,.10);
+}
+html[data-theme="oscuro"] .db-card{
+  border-color: rgba(255,255,255,.10);
+}
+html[data-theme="oscuro"] .db-pill{
+  border-color: rgba(255,255,255,.12);
+}
+html[data-theme="oscuro"] .db-quick__item{
+  border-color: rgba(255,255,255,.10);
+}
+html[data-theme="oscuro"] .db-stat{
+  border-color: rgba(255,255,255,.10);
+  background: linear-gradient(135deg, rgba(11,30,51,.92), rgba(7,22,36,.92));
+}
+html[data-theme="oscuro"] .db-stat:hover{
+  background: linear-gradient(135deg, rgba(11,30,51,.92), rgba(0,85,187,.12));
+}

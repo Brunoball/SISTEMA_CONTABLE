@@ -686,3 +686,29 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
   position: relative;
   min-height: 220px;
 }
+/* =========================================================
+   MOV — Scroll estable (aunque no haya scroll)
+   - Reserva gutter del scrollbar para evitar saltos
+   - Mantiene overflow auto siempre
+========================================================= */
+
+/* ✅ El que realmente scrollea */
+.mov-tableWrap,
+.mov-tableWrap--mov{
+  overflow: auto;                 /* siempre auto */
+  scrollbar-gutter: stable;       /* reserva espacio aunque no haya scroll */
+}
+
+/* (opcional) si querés reservar en ambos bordes (soporte depende del navegador) */
+/* 
+.mov-tableWrap,
+.mov-tableWrap--mov{
+  scrollbar-gutter: stable both-edges;
+}
+*/
+
+/* ✅ Si tenés scroll horizontal a veces, esto ayuda */
+.mov-gridTable--head{
+  overflow: auto;
+  scrollbar-gutter: stable;
+}

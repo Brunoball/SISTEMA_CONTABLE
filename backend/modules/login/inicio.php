@@ -8,16 +8,15 @@ header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
   http_response_code(204);
   exit;
 }
 
-require_once __DIR__ . '/../../config/db.php'; // debe definir $pdo (PDO)
+require_once __DIR__ . '/../../config/db.php'; // $pdo (PDO)
 
 define('DEBUG_LOGIN', false);
 
-/* ----------------- Helpers ----------------- */
 function ok(array $arr): void {
   echo json_encode($arr, JSON_UNESCAPED_UNICODE);
   exit;
@@ -33,23 +32,23 @@ function verify_password(string $inputPass, string $storedHash): bool
   $stored = trim((string)$storedHash);
   if ($stored === '') return false;
 
-  // 1) SHA-256 en hexadecimal (64)
+  // SHA-256 HEX (64)
   if (preg_match('/^[a-f0-9]{64}$/i', $stored)) {
     $calc = hash('sha256', $inputPass);
     return hash_equals(strtolower($stored), strtolower($calc));
   }
 
-  // 2) password_hash (bcrypt/argon)
+  // password_hash (bcrypt/argon)
   if (str_starts_with($stored, '$2y$') || str_starts_with($stored, '$argon2')) {
     return password_verify($inputPass, $stored);
   }
 
-  // 3) Texto plano (NO recomendado)
+  // texto plano (no recomendado)
   return hash_equals($stored, $inputPass);
 }
 
 try {
-  if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     fail('Método no permitido.', 405);
   }
 
@@ -64,13 +63,13 @@ try {
     fail('Faltan datos.');
   }
 
-  // ✅ Traemos Fecha_Creacion y datos del plan
   $sql = "
     SELECT
       u.idUsuario,
       u.Nombre_Completo,
       u.Hash_Contrasena,
       LOWER(u.rol) AS rol,
+      COALESCE(u.tema,'claro') AS tema,
       u.idPlan,
       u.Fecha_Creacion,
       p.nombre AS plan_nombre,
@@ -101,33 +100,30 @@ try {
     fail('Credenciales incorrectas.', 401);
   }
 
-  // Rol normalizado
   $rol = (string)($u['rol'] ?? 'vista');
   $rol = in_array($rol, ['admin', 'vista'], true) ? $rol : 'vista';
 
-  // Plan: fallback seguro
   $planNivel = (int)($u['plan_nivel'] ?? 1);
   if ($planNivel < 1 || $planNivel > 3) $planNivel = 1;
 
   $planNombre = (string)($u['plan_nombre'] ?? 'basico');
   if ($planNombre === '') $planNombre = 'basico';
 
-  // Si el plan está inactivo, por seguridad lo bajamos a básico
   $planActivo = (int)($u['plan_activo'] ?? 1);
   if ($planActivo !== 1) {
     $planNivel = 1;
     $planNombre = 'basico';
   }
 
-  // ✅ Fecha creación: si está NULL/vacía, la seteamos una vez con NOW()
+  $tema = strtolower(trim((string)($u['tema'] ?? 'claro')));
+  if (!in_array($tema, ['claro', 'oscuro'], true)) $tema = 'claro';
+
   $fechaCreacion = $u['Fecha_Creacion'] ?? null;
   $fechaCreacionStr = is_string($fechaCreacion) ? trim($fechaCreacion) : '';
 
   if ($fechaCreacion === null || $fechaCreacionStr === '' || $fechaCreacionStr === '0000-00-00 00:00:00') {
     $upd = $pdo->prepare("UPDATE usuarios SET Fecha_Creacion = NOW() WHERE idUsuario = :id LIMIT 1");
     $upd->execute([':id' => (int)$u['idUsuario']]);
-
-    // devolvemos lo que acabamos de setear (string MySQL)
     $fechaCreacion = (new DateTime('now'))->format('Y-m-d H:i:s');
   }
 
@@ -136,11 +132,13 @@ try {
     'usuario' => [
       'idUsuario' => (int)$u['idUsuario'],
       'Nombre_Completo' => (string)$u['Nombre_Completo'],
+      'nombre' => (string)$u['Nombre_Completo'], // 👈 para frontend (key corta)
       'rol' => $rol,
+      'tema' => $tema,
       'idPlan' => (int)($u['idPlan'] ?? 1),
       'plan_nombre' => $planNombre,
-      'plan_nivel' => $planNivel, // 1/2/3
-      'Fecha_Creacion' => $fechaCreacion, // ✅ SIEMPRE viene
+      'plan_nivel' => $planNivel,
+      'Fecha_Creacion' => $fechaCreacion,
     ],
   ]);
 

@@ -124,11 +124,10 @@ export default function App() {
 
           {/* Movimientos */}
           <Route path="movimientos" element={<Movimientos />} />
-<Route path="ventas" element={<Ventas />} />
-<Route path="compras" element={<Compras />} />
-<Route path="recibos" element={<Recibos />} />
-<Route path="OrdenesPago" element={<OrdenesPago />} />
-
+          <Route path="ventas" element={<Ventas />} />
+          <Route path="compras" element={<Compras />} />
+          <Route path="recibos" element={<Recibos />} />
+          <Route path="OrdenesPago" element={<OrdenesPago />} />
 
           {/* Flujo de Caja */}
           <Route path="flujo-de-caja" element={<Flujo_Caja />} />

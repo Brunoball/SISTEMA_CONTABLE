@@ -46,6 +46,7 @@
 }
 
 /* ====== Fondo con IMAGEN (sin degradado) ====== */
+/* ====== Fondo limpio (SIN IMAGEN) ====== */
 .reg_global-container {
   min-height: 100vh;
   width: 100%;
@@ -53,8 +54,15 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  background: url('../../imagenes/img_fondo.png') center center / cover no-repeat fixed;
+
+  /* fondo institucional suave */
+  background: linear-gradient(
+    180deg,
+    #F8FAFC 0%,
+    #EAF1FB 100%
+  );
 }
+
 
 /* ====== Tarjeta ====== */
 .reg_contenedor {

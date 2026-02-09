@@ -1,25 +1,25 @@
 // src/components/Auth/Registro.jsx
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import BASE_URL from '../../config/config';
-import './registro.css';
-import logoRH from '../../imagenes/Logo_tendencias.jpg';
-import Toast from '../Global/Toast';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import BASE_URL from "../../config/config";
+import "./registro.css";
+import Toast from "../Global/Toast";
 
 const ROLES = [
-  { value: 'vista', label: 'Rol: Vista (solo lectura)' },
-  { value: 'admin', label: 'Rol: Admin (administrador)' },
+  { value: "vista", label: "Rol: Vista (solo lectura)" },
+  { value: "admin", label: "Rol: Admin (administrador)" },
 ];
 
 const Registro = () => {
-  const [nombre, setNombre] = useState('');
-  const [contrasena, setContrasena] = useState('');
-  const [confirmarContrasena, setConfirmarContrasena] = useState('');
-  const [rol, setRol] = useState('vista');
+  const [nombre, setNombre] = useState("");
+  const [contrasena, setContrasena] = useState("");
+  const [confirmarContrasena, setConfirmarContrasena] = useState("");
+  const [rol, setRol] = useState("vista");
   const [cargando, setCargando] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [toast, setToast] = useState(null);
+
   const navigate = useNavigate();
 
   const mostrarToast = (tipo, mensaje, duracion = 3000) => {
@@ -31,53 +31,60 @@ const Registro = () => {
     e.preventDefault();
     if (cargando) return;
 
-    const nombreTrim = (nombre || '').trim();
+    const nombreTrim = (nombre || "").trim();
 
     if (!nombreTrim || !contrasena || !confirmarContrasena || !rol) {
-      mostrarToast('error', 'Por favor, completá todos los campos.');
+      mostrarToast("error", "Por favor, completá todos los campos.");
       return;
     }
     if (nombreTrim.length < 4) {
-      mostrarToast('error', 'El nombre debe tener al menos 4 caracteres.');
+      mostrarToast("error", "El nombre debe tener al menos 4 caracteres.");
       return;
     }
     if (contrasena.length < 6) {
-      mostrarToast('error', 'La contraseña debe tener al menos 6 caracteres.');
+      mostrarToast("error", "La contraseña debe tener al menos 6 caracteres.");
       return;
     }
     if (contrasena !== confirmarContrasena) {
-      mostrarToast('error', 'Las contraseñas no coinciden.');
+      mostrarToast("error", "Las contraseñas no coinciden.");
       return;
     }
-    if (!['vista', 'admin'].includes(rol)) {
-      mostrarToast('error', 'Rol inválido.');
+    if (!["vista", "admin"].includes(rol)) {
+      mostrarToast("error", "Rol inválido.");
       return;
     }
 
     try {
       setCargando(true);
-      mostrarToast('cargando', 'Registrando usuario...', 10000);
+      mostrarToast("cargando", "Registrando usuario...", 10000);
 
       const respuesta = await fetch(`${BASE_URL}/api.php?action=registro`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: nombreTrim, contrasena, rol })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre: nombreTrim, contrasena, rol }),
       });
 
-      const data = await respuesta.json();
+      const txt = await respuesta.text();
+      let data = null;
+      try {
+        data = JSON.parse(txt);
+      } catch {
+        throw new Error(`Respuesta inválida: ${txt.slice(0, 200)}`);
+      }
+
       setCargando(false);
 
-      if (data.exito) {
-        localStorage.setItem('usuario', JSON.stringify(data.usuario));
-        mostrarToast('exito', '¡Registro exitoso! Redirigiendo...', 1800);
-        setTimeout(() => navigate('/panel'), 1800);
+      if (data?.exito) {
+        localStorage.setItem("usuario", JSON.stringify(data.usuario));
+        mostrarToast("exito", "¡Registro exitoso! Redirigiendo...", 1800);
+        setTimeout(() => navigate("/panel"), 1800);
       } else {
-        mostrarToast('error', data.mensaje || 'Error al registrar usuario.');
+        mostrarToast("error", data?.mensaje || "Error al registrar usuario.");
       }
     } catch (err) {
       console.error(err);
       setCargando(false);
-      mostrarToast('error', 'Error del servidor.');
+      mostrarToast("error", "Error del servidor.");
     }
   };
 
@@ -94,9 +101,11 @@ const Registro = () => {
 
       <div className="reg_contenedor">
         <div className="reg_encabezado">
-          <img src={logoRH} alt="Logo IPET 50" className="reg_logo" />
+          {/* ✅ Logo eliminado para evitar error de import */}
           <h1 className="reg_titulo">Crear Cuenta</h1>
-          <p className="reg_subtitulo">Registrate para acceder al sistema de la Cooperadora</p>
+          <p className="reg_subtitulo">
+            Registrate para acceder al sistema de la Cooperadora
+          </p>
         </div>
 
         <form onSubmit={manejarRegistro} className="reg_formulario">
@@ -113,7 +122,7 @@ const Registro = () => {
             />
           </div>
 
-          {/* Rol (debajo de Usuario) */}
+          {/* Rol */}
           <div className="reg_campo reg_campo-rol">
             <select
               className="reg_input"
@@ -123,17 +132,19 @@ const Registro = () => {
               aria-label="Seleccionar rol"
               title="Seleccionar rol"
             >
-              {ROLES.map(r => (
-                <option key={r.value} value={r.value}>{r.label}</option>
+              {ROLES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
               ))}
             </select>
           </div>
 
-          {/* Contraseña + Confirmación (misma fila) */}
+          {/* Contraseña + Confirmación */}
           <div className="reg_fila-2">
             <div className="reg_campo reg_campo-password reg_col-6">
               <input
-                type={showPassword ? 'text' : 'password'}
+                type={showPassword ? "text" : "password"}
                 className="reg_input"
                 placeholder="Contraseña"
                 value={contrasena}
@@ -145,8 +156,8 @@ const Registro = () => {
                 type="button"
                 className="reg_toggle-password"
                 onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   {showPassword ? (
@@ -166,7 +177,7 @@ const Registro = () => {
 
             <div className="reg_campo reg_campo-password reg_col-6">
               <input
-                type={showConfirmPassword ? 'text' : 'password'}
+                type={showConfirmPassword ? "text" : "password"}
                 placeholder="Confirmar Contraseña"
                 value={confirmarContrasena}
                 onChange={(e) => setConfirmarContrasena(e.target.value)}
@@ -178,8 +189,10 @@ const Registro = () => {
                 type="button"
                 className="reg_toggle-password"
                 onClick={() => setShowConfirmPassword((v) => !v)}
-                aria-label={showConfirmPassword ? 'Ocultar confirmación' : 'Mostrar confirmación'}
-                title={showConfirmPassword ? 'Ocultar confirmación' : 'Mostrar confirmación'}
+                aria-label={
+                  showConfirmPassword ? "Ocultar confirmación" : "Mostrar confirmación"
+                }
+                title={showConfirmPassword ? "Ocultar confirmación" : "Mostrar confirmación"}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   {showConfirmPassword ? (
@@ -200,11 +213,12 @@ const Registro = () => {
 
           <div className="reg_footer">
             <button type="submit" className="reg_boton" disabled={cargando}>
-              {cargando ? 'Registrando...' : 'Registrarse'}
+              {cargando ? "Registrando..." : "Registrarse"}
             </button>
+
             <button
               type="button"
-              onClick={() => navigate('/panel')}
+              onClick={() => navigate("/panel")}
               className="reg_boton reg_boton-secundario"
             >
               Volver atrás

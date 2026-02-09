@@ -1,21 +1,39 @@
+/* src/components/Global/gif_carga.css */
+
 /* =========================
-   Overlay (NO fixed)
+   Overlay REAL (sin mover layout)
 ========================= */
 .balto-loading-overlay {
+  position: absolute;
   inset: 0;
-  background: transparent;
-  backdrop-filter: none;
-
   display: flex;
-  flex-direction: column;
   justify-content: center;
   align-items: center;
 
+  /* Sutil pro */
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(1.6px);
+
+  /* Fade */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+
+  z-index: 50;
+}
+
+.balto-loading-overlay.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.balto-loading-overlay.is-hidden {
+  opacity: 0;
   pointer-events: none;
 }
 
 /* =========================
-   Cajita clara
+   Caja pro
 ========================= */
 .balto-loading-container {
   display: flex;
@@ -24,29 +42,33 @@
   justify-content: center;
 
   background: rgba(245, 248, 252, 0.96);
-  padding:  10px;
+  padding: 10px 12px;
   border-radius: 18px;
 
   box-shadow:
-    0 10px 40px rgba(10, 37, 64, 0.25),
-    0 0 35px rgba(10, 37, 64, 0.18),
-    0 0 70px rgba(10, 37, 64, 0.08);
+    0 10px 40px rgba(10, 37, 64, 0.20),
+    0 0 35px rgba(10, 37, 64, 0.12);
 
-  pointer-events: auto;
+  /* micro anim */
+  transform: translateY(8px) scale(0.985);
+  transition: transform 180ms ease;
+}
+
+.balto-loading-overlay.is-visible .balto-loading-container {
+  transform: translateY(0px) scale(1);
 }
 
 /* =========================
-   Gif
+   GIF
 ========================= */
 .balto-loading-img {
   width: 260px;
   height: auto;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 
   user-select: none;
   pointer-events: none;
-
-  filter: drop-shadow(0 0 18px rgba(10, 37, 64, 0.25));
+  filter: drop-shadow(0 0 18px rgba(10, 37, 64, 0.22));
 }
 
 /* =========================
@@ -55,10 +77,9 @@
 .balto-loading-text {
   color: #0A2540;
   font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
   margin: 0;
-
 }
 
 /* Puntitos animados */
@@ -67,14 +88,8 @@
   display: inline-block;
   width: 1.2em; /* reserva espacio */
   text-align: left;
-
   animation: baltoDots 1.6s steps(4, end) infinite;
 }
-
-/* =========================
-   Animaciones
-========================= */
-
 
 @keyframes baltoDots {
   0%   { content: ""; }

@@ -4,7 +4,7 @@ import { useNavigate, Link } from "react-router-dom";
 import BASE_URL from "../../config/config";
 import "./inicio.css";
 
-import logoBalto from "../../imagenes/LBT_TS.png";
+import logoBalto from "../../imagenes/Logo_Balto_Azul.png";
 import Toast from "../Global/Toast";
 
 const STORAGE_KEYS = {

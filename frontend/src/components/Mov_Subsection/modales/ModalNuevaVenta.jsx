@@ -1,7 +1,7 @@
 // src/components/Ventas/modales/ModalNuevaVenta.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import "../../Movimientos/modales/ModalEditarMovimiento.css"; // si tu ruta real difiere, ajustala
+import "../../Movimientos/modales/ModalEditarMovimiento.css"; // ajustá si cambia
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";
@@ -172,13 +172,7 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
       <div className="mi-mini__modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
-          <button
-            type="button"
-            className="mi-mini__close"
-            onClick={onCancel}
-            disabled={saving}
-            aria-label="Cerrar"
-          >
+          <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving} aria-label="Cerrar">
             ✕
           </button>
         </div>
@@ -242,7 +236,7 @@ const CATALOGO_DEF = {
 
 function isContadoTipoVenta(tipoVentaObj) {
   const name = String(tipoVentaObj?.nombre ?? "").toLowerCase();
-  return name.includes("contado");
+  return name.includes("contado") || name.includes("efectivo");
 }
 function isCorrienteTipoVenta(tipoVentaObj) {
   const name = String(tipoVentaObj?.nombre ?? "").toLowerCase();
@@ -255,20 +249,10 @@ function findSalidaTipoMovimientoId(tiposMov) {
   return Number.isFinite(id) && id > 0 ? id : null;
 }
 
-export default function ModalNuevaVenta({
-  open,
-  lists,
-  periodoDefault,
-  onClose,
-  onSaveBatch, // reutiliza la misma firma: recibe array de payloads
-  onToast,
-}) {
+export default function ModalNuevaVenta({ open, lists, periodoDefault, onClose, onSaveBatch, onToast }) {
   const API = `${BASE_URL}/api.php`;
 
-  const showToast = useCallback(
-    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
-    [onToast]
-  );
+  const showToast = useCallback((tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion), [onToast]);
 
   // lock scroll body mientras está abierto
   useEffect(() => {
@@ -291,19 +275,20 @@ export default function ModalNuevaVenta({
   }, [lists]);
 
   const listsNorm = useMemo(() => localLists, [localLists]);
-const [fecha, setFecha] = useState(todayISO());
-const [periodo, setPeriodo] = useState(periodoFromISODate(todayISO())); // ✅ siempre hoy
 
+  // ✅ siempre hoy
+  const [fecha, setFecha] = useState(todayISO());
+  const [periodo, setPeriodo] = useState(periodoFromISODate(todayISO()));
 
-  // ✅ “Filtros” mínimos para Ventas
+  // ✅ Filtros mínimos Ventas
   const [filters, setFilters] = useState({
     id_tipo_venta: NULL_OPTION,
     id_medio_pago: NULL_OPTION, // solo si contado
     id_cliente: NULL_OPTION, // obligatorio
   });
 
-  // guardar/facturar (solo cuando es corriente)
-  const [accionCorriente, setAccionCorriente] = useState("guardar"); // "guardar" | "facturar"
+  // ✅ acción SOLO para CONTADO: guardar (pendiente) o facturar (pagado)
+  const [accionContado, setAccionContado] = useState("facturar"); // "guardar" | "facturar"
 
   // autocomplete cliente
   const [clienteInput, setClienteInput] = useState("");
@@ -343,9 +328,7 @@ const [periodo, setPeriodo] = useState(periodoFromISODate(todayISO())); // ✅ s
     if (!wasOpen && open) {
       const f = todayISO();
       setFecha(f);
-
-setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
-
+      setPeriodo(periodoFromISODate(f));
 
       setFilters({
         id_tipo_venta: NULL_OPTION,
@@ -353,7 +336,7 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
         id_cliente: NULL_OPTION,
       });
 
-      setAccionCorriente("guardar");
+      setAccionContado("facturar");
 
       setClienteInput("");
       setClienteFocus(false);
@@ -428,19 +411,14 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
   };
 
   /* =========================
-     Autocomplete: DETALLES (por fila)
+     Autocomplete: DETALLES
 ========================= */
-  const detallesList = useMemo(
-    () => (Array.isArray(listsNorm.detalles) ? listsNorm.detalles : []),
-    [listsNorm.detalles]
-  );
+  const detallesList = useMemo(() => (Array.isArray(listsNorm.detalles) ? listsNorm.detalles : []), [listsNorm.detalles]);
 
   const suggestDetalles = (txt) => {
     const q = String(txt || "").trim().toLowerCase();
     if (!q) return [];
-    return detallesList
-      .filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q))
-      .slice(0, 18);
+    return detallesList.filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q)).slice(0, 18);
   };
 
   const startAddDetalleForRow = useCallback(
@@ -454,17 +432,12 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
   /* =========================
      Autocomplete: CLIENTES
 ========================= */
-  const clientesList = useMemo(
-    () => (Array.isArray(listsNorm.clientes) ? listsNorm.clientes : []),
-    [listsNorm.clientes]
-  );
+  const clientesList = useMemo(() => (Array.isArray(listsNorm.clientes) ? listsNorm.clientes : []), [listsNorm.clientes]);
 
   const filteredClientes = useMemo(() => {
     const q = clienteInput.trim().toLowerCase();
     if (!clienteFocus || q.length < 1) return [];
-    return clientesList
-      .filter((c) => String(c?.nombre ?? "").toLowerCase().includes(q))
-      .slice(0, 25);
+    return clientesList.filter((c) => String(c?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
   }, [clientesList, clienteInput, clienteFocus]);
 
   const handleClienteInputChange = useCallback((e) => {
@@ -594,18 +567,19 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
   const isContado = useMemo(() => isContadoTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
   const isCorriente = useMemo(() => isCorrienteTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
 
-  // cuando cambia tipo venta, reseteos coherentes
+  // ✅ reglas:
+  // - Si pasa a Corriente: NO hay pago, forzamos "guardar" y limpiamos medio de pago
+  // - Si pasa a Contado: medio pago aplica, y dejamos elegir facturar/guardar
   useEffect(() => {
     if (!open) return;
-    if (isContado) {
-      // si pasa a contado, accion no importa
-      setAccionCorriente("guardar");
-    } else if (isCorriente) {
-      // si pasa a corriente, medio pago no aplica
+
+    if (isCorriente) {
+      setAccionContado("guardar");
       setFilters((p) => ({ ...p, id_medio_pago: NULL_OPTION }));
-    } else {
-      // tipo venta no definido: oculto todo condicional
-      setAccionCorriente("guardar");
+    }
+
+    if (!isContado) {
+      // si no es contado, medio pago no aplica
       setFilters((p) => ({ ...p, id_medio_pago: NULL_OPTION }));
     }
   }, [open, isContado, isCorriente]);
@@ -614,19 +588,17 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
      VALIDACIÓN (Ventas)
 ========================= */
   const validate = useCallback(() => {
-    // cliente obligatorio
     const cli = Number(filters.id_cliente);
     if (!Number.isFinite(cli) || cli <= 0) {
       return { ok: false, msg: "Seleccioná un Cliente para registrar la venta." };
     }
 
-    // tipo venta obligatorio (si querés dejarlo opcional, borrá este bloque)
     const tv = Number(filters.id_tipo_venta);
     if (!Number.isFinite(tv) || tv <= 0) {
       return { ok: false, msg: "Seleccioná la Forma de venta (Tipo venta)." };
     }
 
-    // si es contado, pido medio pago
+    // contado => medio pago obligatorio
     if (isContado) {
       const mp = Number(filters.id_medio_pago);
       if (!Number.isFinite(mp) || mp <= 0) {
@@ -634,7 +606,6 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
       }
     }
 
-    // al menos una fila válida
     const usableLines = rowsCalc.filter((r) => {
       const det = Number(r.id_detalle);
       const total = Number(r.total || 0);
@@ -677,29 +648,25 @@ setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
 
     setSaving(true);
 
-    if (v.warn) {
-      showToast("advertencia", "Hay filas incompletas. Se guardarán solo las filas válidas.", 3500);
-    } else {
-      showToast("cargando", "Guardando venta…", 12000);
-    }
+    if (v.warn) showToast("advertencia", "Hay filas incompletas. Se guardarán solo las filas válidas.", 3500);
+    else showToast("cargando", "Guardando venta…", 12000);
 
     try {
       const fechaToSend = toNullableDateISO(fecha);
       const periodoToSend = toNullablePeriodoMMYYYY(periodo, fechaToSend || todayISO());
 
-      // tipo_movimiento: salida (busco por nombre)
       const idTipoMovSalida = findSalidaTipoMovimientoId(listsNorm.tipos_movimiento);
-      // 🚫 Bloqueo: en Ventas SI O SI debe ser "Salida"
-if (!idTipoMovSalida) {
-  showToast(
-    "error",
-    "No está configurado el tipo de movimiento 'Salida'. Revisá el catálogo tipos_movimiento.",
-    5200
-  );
-  setSaving(false);
-  return;
-}
+      if (!idTipoMovSalida) {
+        showToast("error", "No está configurado el tipo de movimiento 'Salida'. Revisá tipos_movimiento.", 5200);
+        setSaving(false);
+        return;
+      }
 
+      // ✅ decisión de pago:
+      // - Corriente: SIEMPRE guardar (pendiente), NO facturar
+      // - Contado: depende accionContado (guardar/facturar)
+      const accionFinal = isCorriente ? "guardar" : accionContado;
+      const esFacturaFinal = isCorriente ? false : accionFinal === "facturar";
 
       const payloads = rowsCalc
         .filter((r) => {
@@ -709,26 +676,22 @@ if (!idTipoMovSalida) {
         })
         .map((r) => {
           const base = {
-            // base
             fecha: fechaToSend,
             periodo: periodoToSend,
 
-            // ✅ Ventas: fijo tipo movimiento = Salida si lo encuentro
+            // Ventas: SIEMPRE salida
             id_tipo_movimiento: idTipoMovSalida,
 
-            // mínimos filtros
             id_tipo_venta: toNullableId(filters.id_tipo_venta),
             id_cliente: toNullableId(filters.id_cliente),
 
             // contado: medio pago
             id_medio_pago: isContado ? toNullableId(filters.id_medio_pago) : null,
 
-            // corriente: decide guardar o facturar
-            // ⚠️ Ajustá estos campos a lo que espere tu backend:
-            es_factura: isCorriente ? accionCorriente === "facturar" : false,
-            accion_venta: isCorriente ? accionCorriente : null,
+            // flags/acción
+            es_factura: esFacturaFinal,
+            accion_venta: accionFinal, // "guardar" | "facturar" (corriente siempre "guardar")
 
-            // detalle
             id_detalle: toNullableId(r.id_detalle),
 
             monto_total: Math.round(Number(r.total) * 100) / 100,
@@ -740,7 +703,6 @@ if (!idTipoMovSalida) {
             total: Math.round(Number(r.total) * 100) / 100,
           };
 
-          // limpio nulls (opcional)
           Object.keys(base).forEach((k) => {
             if (base[k] === undefined) delete base[k];
           });
@@ -823,7 +785,7 @@ if (!idTipoMovSalida) {
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--desc" style={{ position: "relative" }}>
                         <input
                           className="fl-input"
-                          placeholder="Escribí o seleccioná un descripción…"
+                          placeholder="Escribí o seleccioná una descripción…"
                           value={r.detalleText}
                           onChange={(e) => {
                             updateRow(r.id, {
@@ -862,7 +824,7 @@ if (!idTipoMovSalida) {
                           disabled={saving || addUI.saving}
                           className="mi-cr-link"
                         >
-                          + Agregar nuevo descripción
+                          + Agregar nueva descripción
                         </button>
                       </div>
 
@@ -917,16 +879,12 @@ if (!idTipoMovSalida) {
 
                       {/* IVA monto */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--ivaMonto">
-                        <div style={{ textAlign: "center", fontWeight: 700, paddingTop: 10 }}>
-                          {moneyARS(r.ivaMonto)}
-                        </div>
+                        <div style={{ textAlign: "center", fontWeight: 700, paddingTop: 10 }}>{moneyARS(r.ivaMonto)}</div>
                       </div>
 
                       {/* Total */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--total">
-                        <div style={{ textAlign: "center", fontWeight: 800, paddingTop: 10 }}>
-                          {moneyARS(r.total)}
-                        </div>
+                        <div style={{ textAlign: "center", fontWeight: 800, paddingTop: 10 }}>{moneyARS(r.total)}</div>
                       </div>
 
                       {/* Acción */}
@@ -978,13 +936,7 @@ if (!idTipoMovSalida) {
 
                 <div className="mi-cr-filters__dates">
                   <div className="fl-field">
-                    <input
-                      className="fl-input"
-                      type="date"
-                      value={fecha}
-                      onChange={(e) => onFechaChange(e.target.value)}
-                      disabled={saving}
-                    />
+                    <input className="fl-input" type="date" value={fecha} onChange={(e) => onFechaChange(e.target.value)} disabled={saving} />
                     <label className="fl-label">Fecha</label>
                   </div>
 
@@ -1004,7 +956,7 @@ if (!idTipoMovSalida) {
 
               <div className="mi-cr-filters__body">
                 <div className="fl-grid" style={{ gridTemplateColumns: "1fr" }}>
-                  {/* CLIENTE (obligatorio) */}
+                  {/* CLIENTE */}
                   <div className="fl-field" style={{ position: "relative" }}>
                     <input
                       ref={clienteInputRef}
@@ -1036,17 +988,12 @@ if (!idTipoMovSalida) {
                       </ul>
                     )}
 
-                    <button
-                      type="button"
-                      className="mi-cr-link"
-                      onClick={startAddCliente}
-                      disabled={saving || addUI.saving}
-                    >
+                    <button type="button" className="mi-cr-link" onClick={startAddCliente} disabled={saving || addUI.saving}>
                       + Agregar nuevo cliente
                     </button>
                   </div>
 
-                  {/* TIPO VENTA (forma de venta) */}
+                  {/* TIPO VENTA */}
                   <div className="fl-field">
                     <select
                       className="fl-input fl-select"
@@ -1064,69 +1011,73 @@ if (!idTipoMovSalida) {
                     <label className="fl-label">Forma de venta</label>
                   </div>
 
-                  {/* CONTADO => MEDIO PAGO */}
+                  {/* CONTADO => MEDIO PAGO + (GUARDAR/FACTURAR) */}
                   {isContado && (
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(filters.id_medio_pago)}
-                        onChange={(e) => updateFilter("id_medio_pago", e.target.value)}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>Medio de pago *</option>
-                        {(listsNorm.medios_pago || []).map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                      </select>
-                      <label className="fl-label">Medio de pago</label>
-                    </div>
+                    <>
+                      <div className="fl-field">
+                        <select
+                          className="fl-input fl-select"
+                          value={String(filters.id_medio_pago)}
+                          onChange={(e) => updateFilter("id_medio_pago", e.target.value)}
+                          disabled={saving}
+                        >
+                          <option value={NULL_OPTION}>Medio de pago *</option>
+                          {(listsNorm.medios_pago || []).map((x) => (
+                            <option key={x.id} value={String(x.id)}>
+                              {x.nombre}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="fl-label">Medio de pago</label>
+                      </div>
+
+                      <div className="mi-card mi-card--full" style={{ padding: 12 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 10, color: "var(--mi-text)" }}>Pago (Contado)</div>
+
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            className={`mit-btn ${accionContado === "guardar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
+                            onClick={() => setAccionContado("guardar")}
+                            disabled={saving}
+                            style={{ height: 40 }}
+                          >
+                            Guardar
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`mit-btn ${accionContado === "facturar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
+                            onClick={() => setAccionContado("facturar")}
+                            disabled={saving}
+                            style={{ height: 40 }}
+                          >
+                            Facturar
+                          </button>
+                        </div>
+
+                        <div style={{ marginTop: 10, fontSize: 12, color: "var(--mi-muted)", fontWeight: 400 }}>
+                          {accionContado === "guardar" ? (
+                            <>
+                              * <b>Guardar</b>: se registra la venta y queda <b>pendiente de pago</b>.
+                            </>
+                          ) : (
+                            <>
+                              * <b>Facturar</b>: se registra la venta como <b>pago realizado</b>.
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </>
                   )}
 
-                  {/* CORRIENTE => GUARDAR / FACTURAR */}
+                  {/* CORRIENTE => SOLO INFO (SIEMPRE GUARDAR) */}
                   {isCorriente && (
                     <div className="mi-card mi-card--full" style={{ padding: 12 }}>
-                      <div style={{ fontWeight: 600, marginBottom: 10, color: "var(--mi-text)" }}>
-                        En cuenta corriente
+                      <div style={{ fontWeight: 600, marginBottom: 8, color: "var(--mi-text)" }}>En cuenta corriente</div>
+                      <div style={{ fontSize: 12, color: "var(--mi-muted)" }}>
+                        * Se registra la venta en <b>Cuenta Corriente</b> y queda <b>pendiente de pago</b>.
                       </div>
-
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          className={`mit-btn ${accionCorriente === "guardar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
-                          onClick={() => setAccionCorriente("guardar")}
-                          disabled={saving}
-                          style={{ height: 40 }}
-                        >
-                          Guardar
-                        </button>
-
-                        <button
-                          type="button"
-                          className={`mit-btn ${
-                            accionCorriente === "facturar" ? "mit-btn--solid" : "mit-btn--ghost"
-                          }`}
-                          onClick={() => setAccionCorriente("facturar")}
-                          disabled={saving}
-                          style={{ height: 40 }}
-                        >
-                          Facturar
-                        </button>
-                      </div>
-<div style={{ marginTop: 10, fontSize: 12, color: "var(--mi-muted)", fontWeight: 400 }}>
-  {accionCorriente === "guardar" ? (
-    <>
-      * <b>Guardar</b>: se registra la venta en <b>Cuenta Corriente</b> y queda <b>pendiente de pago</b>.
-    </>
-  ) : (
-    <>
-      * <b>Facturar</b>: se registra la venta y se toma como <b>pago realizado</b>.
-     
-    </>
-  )}
-</div>
-
                     </div>
                   )}
                 </div>

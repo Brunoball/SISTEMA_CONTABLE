@@ -11,8 +11,11 @@ import ModalEliminarMovimientos from "./modales/ModalEliminarMovimientos";
 // ✅ Toast global
 import Toast from "../Global/Toast.jsx";
 
-// ✅ GIF carga (asegurate que exista este componente)
+// ✅ Loader overlay
 import GifCarga from "../Global/Gif_Carga.jsx";
+
+// ✅ Hook loader PRO (el que creaste en Global)
+import useSmoothLoader from "../Global/useSmoothLoader.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -27,10 +30,10 @@ import {
 import * as XLSX from "xlsx";
 
 /* =========================
-   DEV: Loader mínimo
+   DEV: Loader mínimo (opcional)
 ========================= */
-const MIN_LOADING_MS = 0; // ⏱️ cambiá esto a gusto (0 para desactivar)
-const FORCE_SHOW_LOADER_DEV = false; // ✅ para que lo veas aunque haya cache (ponelo false en prod)
+const MIN_LOADING_MS = 0; // 0 desactiva
+const FORCE_SHOW_LOADER_DEV = false; // true solo dev
 
 /* =========================
    Helpers
@@ -51,8 +54,6 @@ function numOrZero(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
-
-/* ✅ pick: devuelve el primer valor “usable” de una lista de keys */
 function pick(obj, keys, fallback = "") {
   for (const k of keys) {
     const v = obj?.[k];
@@ -60,8 +61,6 @@ function pick(obj, keys, fallback = "") {
   }
   return fallback;
 }
-
-/* ✅ FECHA -> DD/MM/YYYY */
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "-";
@@ -128,13 +127,11 @@ function periodoToYYYYMM(input) {
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
-
   if (/^\d{4}-\d{1,2}$/.test(s)) {
     const [yyyy, mmRaw] = s.split("-");
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
-
   if (/^\d{4}\/\d{1,2}$/.test(s)) {
     const [yyyy, mmRaw] = s.split("/");
     const mm = String(Number(mmRaw)).padStart(2, "0");
@@ -145,7 +142,6 @@ function periodoToYYYYMM(input) {
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
-
   if (/^\d{6}$/.test(s)) {
     const a = Number(s.slice(0, 4));
     if (a >= 1900 && a <= 2100) {
@@ -216,7 +212,6 @@ function slugifySheetName(name) {
   return (s || "Movimientos").slice(0, 31);
 }
 
-/* ✅ Export reducido */
 function buildExportRows(rows) {
   return rows.map((r) => {
     const total = pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0);
@@ -243,7 +238,7 @@ export default function Movimientos() {
   const [rows, setRows] = useState([]);
 
   const [loadingLists, setLoadingLists] = useState(true);
-  const [loadingRows, setLoadingRows] = useState(true);
+  const [loadingRows, setLoadingRows] = useState(false); // para deshabilitar UI
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
@@ -267,6 +262,19 @@ export default function Movimientos() {
   // cache por periodoAPI|q
   const cacheRef = useRef(new Map());
 
+  // ✅ Loader PRO global (hook)
+  const {
+    visible: uxLoaderVisible,
+    begin: uxBegin,
+    end: uxEnd,
+  } = useSmoothLoader({
+    showDelayMs: 80,
+    minVisibleMs: 450,
+  });
+
+  /* =========================
+     API helpers
+  ========================= */
   const buildHeaders = useCallback(() => {
     const { token } = getAuthInfo();
     const h = { "Content-Type": "application/json" };
@@ -360,40 +368,42 @@ export default function Movimientos() {
       if (!perUI) {
         setRows([]);
         setLoadingRows(false);
+        setError("");
         return;
       }
 
       const periodoAPI = periodoToYYYYMM(perUI);
       const cacheKey = `${periodoAPI}|${(qLocal || "").trim()}`;
 
-      // ⏱️ arranco reloj (para loader mínimo)
+      // ✅ arrancar loader pro (delay + mínimo visible)
+      uxBegin();
+
       const start = Date.now();
-
-      // ✅ si hay cache y NO querés forzar loader, devolvemos rápido
-      if (cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
-        setRows(cacheRef.current.get(cacheKey) || []);
-        setLoadingRows(false);
-        return;
-      }
-
-      // ✅ si hay cache pero DEV quiere mostrar loader igual:
-      if (cacheRef.current.has(cacheKey) && FORCE_SHOW_LOADER_DEV) {
-        setLoadingRows(true);
-        // simulo espera mínima y luego aplico cache
-        const cached = cacheRef.current.get(cacheKey) || [];
-        const elapsed = Date.now() - start;
-        const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
-        setTimeout(() => {
-          setRows(cached);
-          setLoadingRows(false);
-        }, remaining);
-        return;
-      }
-
       setLoadingRows(true);
       setError("");
 
       try {
+        // ✅ cache hit: no “jump”, actualizamos y cerramos loader
+        if (cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
+          setRows(cacheRef.current.get(cacheKey) || []);
+          setLoadingRows(false);
+          uxEnd();
+          return;
+        }
+
+        // ✅ cache pero forzar loader (solo dev)
+        if (cacheRef.current.has(cacheKey) && FORCE_SHOW_LOADER_DEV) {
+          const cached = cacheRef.current.get(cacheKey) || [];
+          const elapsed = Date.now() - start;
+          const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+          setTimeout(() => {
+            setRows(cached);
+            setLoadingRows(false);
+            uxEnd();
+          }, remaining);
+          return;
+        }
+
         const sp = new URLSearchParams();
         sp.set("action", "movimientos_listar");
         sp.set("periodo", periodoAPI);
@@ -410,7 +420,6 @@ export default function Movimientos() {
 
         cacheRef.current.set(cacheKey, movsNorm);
 
-        // ⏱️ aplicar loader mínimo
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
 
@@ -418,10 +427,12 @@ export default function Movimientos() {
           setTimeout(() => {
             setRows(movsNorm);
             setLoadingRows(false);
+            uxEnd();
           }, remaining);
         } else {
           setRows(movsNorm);
           setLoadingRows(false);
+          uxEnd();
         }
       } catch (e) {
         const elapsed = Date.now() - start;
@@ -429,12 +440,12 @@ export default function Movimientos() {
 
         setTimeout(() => {
           setError(e.message || "Error cargando movimientos.");
-          setRows([]);
           setLoadingRows(false);
+          uxEnd();
         }, remaining);
       }
     },
-    [API, apiGet, fPeriodo, q]
+    [API, apiGet, fPeriodo, q, uxBegin, uxEnd]
   );
 
   // sync período si desaparece
@@ -480,7 +491,7 @@ export default function Movimientos() {
     return rows.filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer));
   }, [rows, fPeriodo]);
 
-  // ✅ COLUMNAS REDUCIDAS (lo que pidió el patrón)
+  // ✅ COLUMNAS REDUCIDAS
   const columns = useMemo(() => {
     return [
       {
@@ -558,42 +569,6 @@ export default function Movimientos() {
     }
   }, [filteredRows, fPeriodo, showToast]);
 
-  const confirmDelete = async () => {
-    if (!selectedRow?.id_movimiento) return;
-
-    const id = selectedRow.id_movimiento;
-    setDeletingId(id);
-    setError("");
-
-    showToast("cargando", "Eliminando movimiento…", 12000);
-
-    try {
-      const { idUsuario } = getAuthInfo();
-
-      const sp = new URLSearchParams();
-      sp.set("action", "movimientos_eliminar");
-      sp.set("id_movimiento", String(id));
-
-      const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
-      if (!data.exito) throw new Error(data.mensaje || "No se pudo eliminar.");
-
-      setOpenDel(false);
-      setSelectedRow(null);
-
-      invalidateCacheForPeriodo(fPeriodo);
-      await loadRows({ periodo: fPeriodo, q });
-
-      await refreshPeriodos();
-
-      showToast("exito", "Movimiento eliminado.", 2600);
-    } catch (e) {
-      setError(e.message || "Error eliminando movimiento.");
-      showToast("error", e.message || "Error eliminando movimiento.", 4200);
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
   const saveMovimiento = async (payload, isEdit) => {
     setError("");
 
@@ -648,19 +623,10 @@ export default function Movimientos() {
   return (
     <div className="mov-page">
       {toast && (
-        <Toast
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={closeToast}
-        />
+        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
       )}
 
-      {error && (
-        <div className="mov-alert" role="alert">
-          {error}
-        </div>
-      )}
+      {error && <div className="mov-alert" role="alert">{error}</div>}
 
       <section className="mov-card mov-card--table">
         <div className="mov-card__head">
@@ -674,10 +640,7 @@ export default function Movimientos() {
 
             <div className="mov-headFilters">
               <div className="mov-filter">
-                <label>
-                  <FontAwesomeIcon icon={faCalendarDays} /> Período
-                </label>
-
+                <label><FontAwesomeIcon icon={faCalendarDays} /> Período</label>
                 <select
                   value={periodoToMMYYYY(fPeriodo)}
                   onChange={async (e) => {
@@ -689,20 +652,13 @@ export default function Movimientos() {
                 >
                   {(lists.periodos || []).map((p) => {
                     const ui = periodoToMMYYYY(p);
-                    return (
-                      <option key={ui} value={ui}>
-                        {ui}
-                      </option>
-                    );
+                    return <option key={ui} value={ui}>{ui}</option>;
                   })}
                 </select>
               </div>
 
               <div className="mov-search">
-                <label>
-                  <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                </label>
-
+                <label><FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda</label>
                 <div className="mov-searchInput">
                   <input
                     value={q}
@@ -716,7 +672,6 @@ export default function Movimientos() {
                     placeholder="Buscar…"
                     disabled={loadingRows}
                   />
-
                   {q.trim() !== "" && !loadingRows && (
                     <button
                       type="button"
@@ -736,10 +691,7 @@ export default function Movimientos() {
             </div>
           </div>
 
-          <div
-            className="mov-card__actions"
-            style={{ display: "flex", gap: 10, alignItems: "center" }}
-          >
+          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <button
               type="button"
               className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
@@ -763,11 +715,7 @@ export default function Movimientos() {
         </div>
 
         {/* HEADER */}
-        <div
-          className="mov-gridTable mov-gridTable--head"
-          style={{ gridTemplateColumns: gridCols }}
-          role="row"
-        >
+        <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
           {columns.map((c) => (
             <div
               key={c.key}
@@ -784,78 +732,70 @@ export default function Movimientos() {
           ))}
         </div>
 
-        {/* BODY */}
+        {/* BODY: filas siempre renderizadas + loader overlay */}
         <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup">
-          <div className="mov-gridBody">
-            {/* ✅ GIF DE CARGA dentro de la tabla */}
-            {loadingRows && (
-              <div className="mov-emptyRow mov-emptyRow--loading">
-                <GifCarga />
-              </div>
-            )}
+          <div className="mov-gridBody mov-gridBody--relative">
+            {/* ✅ overlay pro (no mueve la tabla) */}
+            <GifCarga visible={uxLoaderVisible} />
 
-            {!loadingRows &&
-              filteredRows.map((r) => (
-                <div
-                  key={r.id_movimiento}
-                  className="mov-gridTable mov-gridTable--row"
-                  style={{ gridTemplateColumns: gridCols }}
-                  role="row"
-                >
-                  {columns.map((c) => {
-                    if (c.key === "acciones") {
-                      return (
-                        <div
-                          key={c.key}
-                          className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
-                          role="cell"
-                        >
-                          <div className="mov-actionsInline">
-                            <button
-                              type="button"
-                              className="mov-iconBtn"
-                              title="Editar"
-                              onClick={() => openEditModal(r)}
-                            >
-                              <FontAwesomeIcon icon={faPenToSquare} />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="mov-iconBtn mov-iconBtn--danger"
-                              title="Eliminar"
-                              disabled={deletingId === r.id_movimiento}
-                              onClick={() => openDeleteModal(r)}
-                            >
-                              {deletingId === r.id_movimiento ? "..." : (
-                                <FontAwesomeIcon icon={faTrashCan} />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    const val = c.render ? c.render(r) : safeText(r[c.key]);
+            {filteredRows.map((r) => (
+              <div
+                key={r.id_movimiento}
+                className="mov-gridTable mov-gridTable--row"
+                style={{ gridTemplateColumns: gridCols }}
+                role="row"
+              >
+                {columns.map((c) => {
+                  if (c.key === "acciones") {
                     return (
                       <div
                         key={c.key}
-                        className={[
-                          "mov-gridCell",
-                          c.align === "right" ? "is-right" : "",
-                          c.align === "center" ? "is-center" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
+                        className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
                         role="cell"
-                        title={typeof val === "string" ? val : undefined}
                       >
-                        <span className="mov-ellipsissss">{val}</span>
+                        <div className="mov-actionsInline">
+                          <button
+                            type="button"
+                            className="mov-iconBtn"
+                            title="Editar"
+                            onClick={() => openEditModal(r)}
+                            disabled={loadingRows}
+                          >
+                            <FontAwesomeIcon icon={faPenToSquare} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="mov-iconBtn mov-iconBtn--danger"
+                            title="Eliminar"
+                            disabled={loadingRows || deletingId === r.id_movimiento}
+                            onClick={() => openDeleteModal(r)}
+                          >
+                            {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
+                          </button>
+                        </div>
                       </div>
                     );
-                  })}
-                </div>
-              ))}
+                  }
+
+                  const val = c.render ? c.render(r) : safeText(r[c.key]);
+                  return (
+                    <div
+                      key={c.key}
+                      className={[
+                        "mov-gridCell",
+                        c.align === "right" ? "is-right" : "",
+                        c.align === "center" ? "is-center" : "",
+                      ].filter(Boolean).join(" ")}
+                      role="cell"
+                      title={typeof val === "string" ? val : undefined}
+                    >
+                      <span className="mov-ellipsissss">{val}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
 
             {!loadingRows && filteredRows.length === 0 && (
               <div className="mov-emptyRow">
@@ -882,8 +822,7 @@ export default function Movimientos() {
             await saveBatchMovimientos(payloads);
             await refreshPeriodos();
 
-            const firstPer =
-              Array.isArray(payloads) && payloads[0]?.periodo ? payloads[0].periodo : "";
+            const firstPer = Array.isArray(payloads) && payloads[0]?.periodo ? payloads[0].periodo : "";
             const ui = periodoToMMYYYY(firstPer) || fPeriodo;
 
             setQ("");
@@ -939,7 +878,41 @@ export default function Movimientos() {
           setOpenDel(false);
           setSelectedRow(null);
         }}
-        onConfirm={confirmDelete}
+        onConfirm={async () => {
+          if (!selectedRow?.id_movimiento) return;
+
+          const id = selectedRow.id_movimiento;
+          setDeletingId(id);
+          setError("");
+
+          showToast("cargando", "Eliminando movimiento…", 12000);
+
+          try {
+            const { idUsuario } = getAuthInfo();
+
+            const sp = new URLSearchParams();
+            sp.set("action", "movimientos_eliminar");
+            sp.set("id_movimiento", String(id));
+
+            const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
+            if (!data.exito) throw new Error(data.mensaje || "No se pudo eliminar.");
+
+            setOpenDel(false);
+            setSelectedRow(null);
+
+            invalidateCacheForPeriodo(fPeriodo);
+            await loadRows({ periodo: fPeriodo, q });
+
+            await refreshPeriodos();
+
+            showToast("exito", "Movimiento eliminado.", 2600);
+          } catch (e) {
+            setError(e.message || "Error eliminando movimiento.");
+            showToast("error", e.message || "Error eliminando movimiento.", 4200);
+          } finally {
+            setDeletingId(null);
+          }
+        }}
         onToast={showToast}
       />
     </div>

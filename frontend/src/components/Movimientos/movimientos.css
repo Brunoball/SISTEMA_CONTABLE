@@ -513,3 +513,9 @@
   .mov-card__head{ padding: 12px; }
   .mov-tabs{ width: 100%; }
 }
+
+/* agregalo a src/components/Movimientos/movimientos.css */
+.mov-gridBody--relative{
+  position: relative;
+  min-height: 220px;
+}

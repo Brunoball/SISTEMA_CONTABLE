@@ -346,7 +346,6 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
    SEARCH: X (limpiar)
 ========================= */
 .mov-searchInput{ position: relative; width: 100%; }
-.mov-searchInput input{ padding-right: 44px; }
 
 .mov-clearSearch{
   position:absolute;

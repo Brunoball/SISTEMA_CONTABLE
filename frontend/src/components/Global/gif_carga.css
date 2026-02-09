@@ -1,65 +1,85 @@
-/* Overlay: ahora NO oscurece toda la app */
+/* =========================
+   Overlay (NO fixed)
+========================= */
 .balto-loading-overlay {
-  position: fixed;
   inset: 0;
-
-  /* ❌ eliminamos fondo gigante */
   background: transparent;
   backdrop-filter: none;
 
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
 
-  z-index: 999999;
-  pointer-events: none; /* la app no queda bloqueada visualmente */
+  pointer-events: none;
 }
 
-/* Cajita chica (esta es la que se ve ahora) */
+/* =========================
+   Cajita clara
+========================= */
 .balto-loading-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
 
-  background: rgba(6, 18, 28, 0.88);
-  padding: 22px 32px;
+  background: rgba(245, 248, 252, 0.96);
+  padding:  10px;
   border-radius: 18px;
 
   box-shadow:
-    0 10px 40px rgba(0,0,0,0.45),
-    0 0 35px rgba(0, 173, 255, 0.25),
-    0 0 70px rgba(0, 173, 255, 0.12);
+    0 10px 40px rgba(10, 37, 64, 0.25),
+    0 0 35px rgba(10, 37, 64, 0.18),
+    0 0 70px rgba(10, 37, 64, 0.08);
 
   pointer-events: auto;
 }
 
-/* Perro MÁS grande */
+/* =========================
+   Gif
+========================= */
 .balto-loading-img {
-  width: 260px;  /* antes 140px */
+  width: 260px;
   height: auto;
   margin-bottom: 14px;
 
   user-select: none;
   pointer-events: none;
 
-  filter: drop-shadow(0 0 25px rgba(0, 173, 255, 0.25));
+  filter: drop-shadow(0 0 18px rgba(10, 37, 64, 0.25));
 }
 
-/* Texto */
+/* =========================
+   Texto + puntitos
+========================= */
 .balto-loading-text {
-  color: #d7ecff;
+  color: #0A2540;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.5px;
   margin: 0;
 
-  animation: baltoTextPulse 1.4s infinite ease-in-out;
 }
 
-/* Animación del texto */
-@keyframes baltoTextPulse {
-  0% { opacity: 0.35; }
-  50% { opacity: 1; }
-  100% { opacity: 0.35; }
+/* Puntitos animados */
+.balto-loading-text::after {
+  content: "";
+  display: inline-block;
+  width: 1.2em; /* reserva espacio */
+  text-align: left;
+
+  animation: baltoDots 1.6s steps(4, end) infinite;
+}
+
+/* =========================
+   Animaciones
+========================= */
+
+
+@keyframes baltoDots {
+  0%   { content: ""; }
+  25%  { content: "."; }
+  50%  { content: ".."; }
+  75%  { content: "..."; }
+  100% { content: ""; }
 }

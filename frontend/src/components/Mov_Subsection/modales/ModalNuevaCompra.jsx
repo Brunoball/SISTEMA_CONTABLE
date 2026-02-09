@@ -294,10 +294,9 @@ export default function ModalNuevaCompra({
   const closeBtnRef = useRef(null);
 
   // estado cabecera compra
-  const [fecha, setFecha] = useState(todayISO());
-  const [periodoUI, setPeriodoUI] = useState(
-    normalizePeriodoToMMYYYY(periodoDefault || "") || periodoFromISODate(todayISO())
-  );
+const [fecha, setFecha] = useState(todayISO());
+const [periodoUI, setPeriodoUI] = useState(periodoFromISODate(todayISO())); // ✅ siempre hoy
+
 
   const [compra, setCompra] = useState({
     id_proveedor: NULL_OPTION,
@@ -333,7 +332,8 @@ export default function ModalNuevaCompra({
     if (!wasOpen && open) {
       const f = todayISO();
       setFecha(f);
-      setPeriodoUI(normalizePeriodoToMMYYYY(periodoDefault || "") || periodoFromISODate(f));
+setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
+
 
       setCompra({
         id_proveedor: NULL_OPTION,

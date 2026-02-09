@@ -229,8 +229,13 @@
 
 .mpr-tbody{
   max-height: calc(100vh - 358px);
+    min-height: calc(100vh - 358px);
   overflow:auto;
   scrollbar-gutter: stable;
+}
+.mpr-tbody--pr{
+    max-height: calc(100vh - 380px);
+    min-height: calc(100vh - 380px);
 }
 .mpr-empty{
   padding: 14px;

@@ -5,6 +5,10 @@ import "../Movimientos/movimientos.css"; // ✅ misma estética
 
 import Toast from "../Global/Toast.jsx";
 
+// ✅ GIF carga inline en tabla (igual que Recibos)
+import GifCarga from "../Global/Gif_Carga.jsx";
+import "../Global/gif_carga.css";
+
 import ModalPagarOrdenesPago from "./modales/ModalPagarOrdenesPago"; // ✅ pagar OP
 import ModalEditarOrdenPago from "./modales/ModalEditarOrdenPago"; // ✅ editar OP
 import ModalEliminarMovimientos from "../Movimientos/modales/ModalEliminarMovimientos"; // ✅ borrar (reutilizado)
@@ -151,9 +155,7 @@ function getAuthInfo() {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   return { token, idUsuario };
 }
@@ -198,11 +200,7 @@ function normalizeLists(raw) {
 ========================= */
 function hasProveedor(row) {
   const idProv = Number(
-    row?.id_proveedor ??
-      row?.proveedor_id ??
-      row?.idProveedor ??
-      row?.id_proveedor_fk ??
-      0
+    row?.id_proveedor ?? row?.proveedor_id ?? row?.idProveedor ?? row?.id_proveedor_fk ?? 0
   );
   if (Number.isFinite(idProv) && idProv > 0) return true;
 
@@ -211,9 +209,7 @@ function hasProveedor(row) {
 }
 
 function isCuentaCorrienteTipoVenta(row) {
-  const label = String(
-    row?.tipo_venta ?? row?.tipoVenta ?? row?.condicion_venta ?? ""
-  ).trim();
+  const label = String(row?.tipo_venta ?? row?.tipoVenta ?? row?.condicion_venta ?? "").trim();
   const s = normalizeSearchText(label);
 
   if (s.includes("cuenta corriente")) return true;
@@ -317,9 +313,7 @@ export default function OrdenesPago() {
 
           const same =
             (idProv > 0 && rid === idProv) ||
-            (!idProv &&
-              nombreProv &&
-              rnom.toLowerCase() === nombreProv.toLowerCase());
+            (!idProv && nombreProv && rnom.toLowerCase() === nombreProv.toLowerCase());
 
           return same;
         })
@@ -355,7 +349,7 @@ export default function OrdenesPago() {
   }, []);
 
   /* =========================
-     ✅ Eliminar (modal) - reutiliza ModalEliminarMovimientos
+     ✅ Eliminar (modal)
   ========================= */
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -388,9 +382,7 @@ export default function OrdenesPago() {
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(
-        `Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`
-      );
+      throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
     }
   }, []);
 
@@ -417,13 +409,17 @@ export default function OrdenesPago() {
     [buildHeaders, parseJsonOrThrow]
   );
 
-  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
-    const periodoAPI = periodoToYYYYMM(periodoUI);
-    const keyPrefix = `${periodoAPI}|`;
-    for (const k of cacheRef.current.keys()) {
-      if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
-    }
-  }, []);
+  const invalidateCacheForPeriodo = useCallback(
+    (periodoUI) => {
+      const ui = periodoToMMYYYY(periodoUI);
+      const periodoAPI = periodoToYYYYMM(ui);
+      const keyPrefix = `${periodoAPI}|`;
+      for (const k of cacheRef.current.keys()) {
+        if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
+      }
+    },
+    []
+  );
 
   /* =========================
      Listas
@@ -433,8 +429,7 @@ export default function OrdenesPago() {
     setError("");
     try {
       const data = await apiGet(`${API}?action=global_obtener_listas`);
-      if (!data?.exito)
-        throw new Error(data?.mensaje || "No se pudieron cargar listas.");
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar listas.");
 
       const normalized = normalizeLists(data);
       setLists(normalized);
@@ -490,10 +485,7 @@ export default function OrdenesPago() {
         if (qLocal) sp.set("q", qLocal);
 
         const data = await apiGet(`${API}?${sp.toString()}`);
-        if (!data?.exito)
-          throw new Error(
-            data?.mensaje || "No se pudieron cargar órdenes de pago."
-          );
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar órdenes de pago.");
 
         const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
         const norm = movs.map((r) => ({
@@ -516,7 +508,6 @@ export default function OrdenesPago() {
 
   /* =========================
      ✅ Confirmar pago OP
-     Backend: api.php?action=ordenes_pago_confirmar_pago
   ========================= */
   const onConfirmPago = useCallback(
     async (payload) => {
@@ -526,25 +517,16 @@ export default function OrdenesPago() {
         const ids =
           payload?.ids_movimiento ??
           payload?.ids_movimientos ??
-          payload?.seleccion
-            ?.map((x) => Number(x?.id_movimiento || 0))
-            .filter(Boolean) ??
+          payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ??
           [];
 
-        const data = await apiPostJson(
-          `${API}?action=ordenes_pago_confirmar_pago`,
-          {
-            ids_movimiento: ids,
-            id_medio_pago: Number(
-              payload?.id_medio_pago || payload?.idMedioPago || 0
-            ),
-          }
-        );
+        const data = await apiPostJson(`${API}?action=ordenes_pago_confirmar_pago`, {
+          ids_movimiento: ids,
+          id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
+        });
 
-        if (!data?.exito)
-          throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
 
-        // ✅ recargar tabla
         invalidateCacheForPeriodo(fPeriodo);
         await loadRows({ periodo: fPeriodo, q });
 
@@ -559,21 +541,20 @@ export default function OrdenesPago() {
 
   /* =========================
      ✅ Guardar edición OP
-     Backend: api.php?action=movimientos_actualizar
   ========================= */
   const onSaveEditar = useCallback(
     async (payloadFinal) => {
       try {
         showToast("cargando", "Guardando cambios…", 12000);
 
-        const data = await apiPostJson(
-          `${API}?action=movimientos_actualizar`,
-          payloadFinal
-        );
-        if (!data?.exito)
-          throw new Error(
-            data?.mensaje || "No se pudo guardar la orden de pago."
-          );
+        const { idUsuario } = getAuthInfo();
+
+        const data = await apiPostJson(`${API}?action=movimientos_actualizar`, {
+          ...payloadFinal,
+          idUsuario, // ✅ igual que Compras/Recibos (por si backend lo pide)
+        });
+
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la orden de pago.");
 
         invalidateCacheForPeriodo(fPeriodo);
         await loadRows({ periodo: fPeriodo, q });
@@ -581,14 +562,14 @@ export default function OrdenesPago() {
         showToast("exito", data?.mensaje || "Orden de pago actualizada.", 2400);
       } catch (e) {
         showToast("error", e?.message || "Error guardando orden de pago.", 4200);
-        throw e; // para que el modal no cierre si falla
+        throw e;
       }
     },
     [API, apiPostJson, fPeriodo, q, invalidateCacheForPeriodo, loadRows, showToast]
   );
 
   /* =========================
-     ✅ Eliminar OP (reutiliza movimientos_eliminar)
+     ✅ Eliminar OP
   ========================= */
   const confirmDelete = useCallback(async () => {
     if (!selectedRow?.id_movimiento) return;
@@ -620,17 +601,7 @@ export default function OrdenesPago() {
     } finally {
       setDeletingId(null);
     }
-  }, [
-    API,
-    apiPostJson,
-    closeDeleteModal,
-    fPeriodo,
-    invalidateCacheForPeriodo,
-    loadRows,
-    q,
-    selectedRow,
-    showToast,
-  ]);
+  }, [API, apiPostJson, closeDeleteModal, fPeriodo, invalidateCacheForPeriodo, loadRows, q, selectedRow, showToast]);
 
   /* =========================
      Init
@@ -639,9 +610,8 @@ export default function OrdenesPago() {
     (async () => {
       const normalized = await loadLists();
       const perDefault = (normalized.periodos || [])[0] || "";
-      if (perDefault) {
-        await loadRows({ periodo: perDefault, q: "" });
-      } else {
+      if (perDefault) await loadRows({ periodo: perDefault, q: "" });
+      else {
         setRows([]);
         setLoadingRows(false);
       }
@@ -667,13 +637,7 @@ export default function OrdenesPago() {
   ========================= */
   const columns = useMemo(() => {
     return [
-      {
-        key: "fecha",
-        label: "FECHA",
-        align: "center",
-        fr: 0.9,
-        render: (r) => safeText(formatFechaDMY(r.fecha)),
-      },
+      { key: "fecha", label: "FECHA", align: "center", fr: 0.9, render: (r) => safeText(formatFechaDMY(r.fecha)) },
       {
         key: "detalle",
         label: "DESCRIPCIÓN",
@@ -682,27 +646,9 @@ export default function OrdenesPago() {
         align: "left",
         render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
       },
-      {
-        key: "proveedor",
-        label: "PROVEEDOR",
-        fr: 1.8,
-        align: "center",
-        render: (r) => safeText(r.proveedor),
-      },
-      {
-        key: "monto",
-        label: "MONTO",
-        fr: 1.1,
-        align: "center",
-        render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
-      },
-      {
-        key: "acciones",
-        label: "ACCIONES",
-        fr: 0.8,
-        align: "center",
-        render: () => null,
-      },
+      { key: "proveedor", label: "PROVEEDOR", fr: 1.8, align: "center", render: (r) => safeText(r.proveedor) },
+      { key: "monto", label: "MONTO", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
+      { key: "acciones", label: "ACCIONES", fr: 0.8, align: "center", render: () => null },
     ];
   }, []);
 
@@ -718,7 +664,7 @@ export default function OrdenesPago() {
   }, [columns]);
 
   /* =========================
-     Excel “Órdenes de pago pendientes”
+     Excel
   ========================= */
   const exportToExcel = useCallback(() => {
     try {
@@ -760,14 +706,7 @@ export default function OrdenesPago() {
 
   return (
     <div className="mov-page">
-      {toast && (
-        <Toast
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={closeToast}
-        />
-      )}
+      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
 
       {error && (
         <div className="mov-alert" role="alert">
@@ -823,10 +762,7 @@ export default function OrdenesPago() {
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        await loadRows({
-                          periodo: fPeriodo,
-                          q: e.currentTarget.value,
-                        });
+                        await loadRows({ periodo: fPeriodo, q: e.currentTarget.value });
                       }
                     }}
                     placeholder="Buscar por fecha, proveedor, descripción, monto…"
@@ -841,8 +777,7 @@ export default function OrdenesPago() {
                       onClick={async () => {
                         setQ("");
                         await loadRows({ periodo: fPeriodo, q: "" });
-                        const input = document.querySelector(".mov-searchInput input");
-                        input?.focus();
+                        document.querySelector(".mov-searchInput input")?.focus();
                       }}
                     >
                       ×
@@ -853,10 +788,7 @@ export default function OrdenesPago() {
             </div>
           </div>
 
-          <div
-            className="mov-card__actions"
-            style={{ display: "flex", gap: 10, alignItems: "center" }}
-          >
+          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <button
               type="button"
               className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
@@ -869,18 +801,10 @@ export default function OrdenesPago() {
           </div>
         </div>
 
-        <div className="mov-tabsBar">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }} />
-        </div>
-
         {/* HEADER */}
         <div
           className="mov-gridTable mov-gridTable--head"
-          style={{
-            gridTemplateColumns: gridCols,
-            overflowX: "auto",
-            scrollbarGutter: "stable",
-          }}
+          style={{ gridTemplateColumns: gridCols, overflowX: "auto", scrollbarGutter: "stable" }}
           role="row"
         >
           {columns.map((c) => (
@@ -902,7 +826,12 @@ export default function OrdenesPago() {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className="mov-gridBody">
-            {loadingRows && <div className="mov-emptyRow">Cargando órdenes de pago…</div>}
+            {/* ✅ LOADER DENTRO DE TABLA */}
+            {loadingRows && (
+              <div className="mov-emptyRow mov-emptyRow--loading">
+                <GifCarga />
+              </div>
+            )}
 
             {!loadingRows &&
               filteredRows.map((r) => (
@@ -917,29 +846,15 @@ export default function OrdenesPago() {
                       return (
                         <div
                           key={c.key}
-                          className={[
-                            "mov-gridCell",
-                            "mov-gridCell--actions",
-                            c.align === "center" ? "is-center" : "",
-                          ].join(" ")}
+                          className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
                           role="cell"
                         >
                           <div className="mov-actionsInline">
-                            <button
-                              type="button"
-                              className="mov-iconBtn"
-                              title="Pagar"
-                              onClick={() => openPagarModal(r)}
-                            >
+                            <button type="button" className="mov-iconBtn" title="Pagar" onClick={() => openPagarModal(r)}>
                               <FontAwesomeIcon icon={faMoneyBill1Wave} />
                             </button>
 
-                            <button
-                              type="button"
-                              className="mov-iconBtn"
-                              title="Editar"
-                              onClick={() => openEditarModal(r)}
-                            >
+                            <button type="button" className="mov-iconBtn" title="Editar" onClick={() => openEditarModal(r)}>
                               <FontAwesomeIcon icon={faPenToSquare} />
                             </button>
 
@@ -950,9 +865,7 @@ export default function OrdenesPago() {
                               disabled={deletingId === r.id_movimiento}
                               onClick={() => openDeleteModal(r)}
                             >
-                              {deletingId === r.id_movimiento
-                                ? "..."
-                                : <FontAwesomeIcon icon={faTrashCan} />}
+                              {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
                             </button>
                           </div>
                         </div>

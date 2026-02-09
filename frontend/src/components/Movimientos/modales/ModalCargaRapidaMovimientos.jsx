@@ -287,10 +287,9 @@ export default function ModalCargaRapidaMovimientos({
 
   const listsNorm = useMemo(() => localLists, [localLists]);
 
-  const [fecha, setFecha] = useState(todayISO());
-  const [periodo, setPeriodo] = useState(
-    normalizePeriodoToMMYYYY(periodoDefault || "") || periodoFromISODate(todayISO())
-  );
+const [fecha, setFecha] = useState(todayISO());
+const [periodo, setPeriodo] = useState(periodoFromISODate(todayISO())); // ✅ siempre hoy
+
 
   const [filters, setFilters] = useState({
     id_clasificacion: NULL_OPTION,
@@ -345,8 +344,8 @@ export default function ModalCargaRapidaMovimientos({
       const f = todayISO();
       setFecha(f);
 
-      const per = normalizePeriodoToMMYYYY(periodoDefault || "") || periodoFromISODate(f);
-      setPeriodo(per);
+setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
+
 
       setFilters({
         id_clasificacion: NULL_OPTION,

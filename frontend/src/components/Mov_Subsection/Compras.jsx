@@ -5,6 +5,10 @@ import "../Movimientos/movimientos.css"; // ✅ misma estética que Ventas/Movim
 
 import Toast from "../Global/Toast.jsx";
 
+// ✅ GIF carga inline en tabla
+import GifCarga from "../Global/Gif_Carga.jsx";
+import "../Global/gif_carga.css";
+
 import ModalNuevaCompra from "./modales/ModalNuevaCompra";
 import ModalEditarCompra from "./modales/ModalEditarCompra";
 import ModalVerComprobante from "./modales/ModalVerComprobante";
@@ -154,9 +158,7 @@ function getAuthInfo() {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
-  } catch {
-    // ignore
-  }
+  } catch {}
   return { token, idUsuario };
 }
 
@@ -179,8 +181,6 @@ function normalizeLists(raw) {
 
   const pickArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
   const periodos = pickArr("periodos").map(periodoToMMYYYY);
-
-  // ✅ tipos_movimiento del backend DB real: id / nombre
   const tiposMov = pickArr("tipos_movimiento");
 
   return {
@@ -261,15 +261,7 @@ function isCompraRow(r, idEntrada) {
   return (Number.isFinite(idProv) && idProv > 0) || provTxt !== "";
 }
 
-/* ✅ “PAGO” en Compras:
-   - si hay cuenta_corriente => "Cuenta Corriente"
-   - si no => medio_pago (o "Contado" si no viene)
-*/
-function getCompraCategoria(r) {
-  const cc = String(r?.cuenta_corriente ?? "").trim();
-  return cc ? "Cuenta Corriente" : "Contado";
-}
-
+/* ✅ PAGO label */
 function getCompraPagoLabel(r) {
   const cc = String(r?.cuenta_corriente ?? "").trim();
   if (cc) return "CUENTA CORRIENTE";
@@ -370,7 +362,9 @@ export default function Compras() {
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(`Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`);
+      throw new Error(
+        `Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`
+      );
     }
   }, []);
 
@@ -380,11 +374,7 @@ export default function Compras() {
       const headers = {};
       if (token) headers.Authorization = `Bearer ${token}`;
 
-      const res = await fetch(url, {
-        method: "GET",
-        headers, // ✅ FIX: antes no lo pasabas
-      });
-
+      const res = await fetch(url, { method: "GET", headers });
       return await parseJsonOrThrow(res);
     },
     [parseJsonOrThrow]
@@ -532,12 +522,7 @@ export default function Compras() {
   ========================= */
   const columns = useMemo(() => {
     return [
-      {
-        key: "fecha",
-        label: "FECHA",
-        fr: 0.9,
-        render: (r) => safeText(formatFechaDMY(r.fecha)),
-      },
+      { key: "fecha", label: "FECHA", fr: 0.9, align: "center", render: (r) => safeText(formatFechaDMY(r.fecha)) },
       {
         key: "detalle",
         label: "DESCRIPCIÓN",
@@ -546,27 +531,9 @@ export default function Compras() {
         align: "left",
         render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
       },
-      {
-        key: "proveedor",
-        label: "PROVEEDOR",
-        fr: 1.6,
-        align: "left",
-        render: (r) => safeText(r.proveedor),
-      },
-      {
-        key: "pago",
-        label: "PAGO",
-        fr: 1.2,
-        align: "center",
-        render: (r) => safeText(getCompraPagoLabel(r)),
-      },
-      {
-        key: "total",
-        label: "TOTAL",
-        fr: 1.1,
-        align: "center",
-        render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
-      },
+      { key: "proveedor", label: "PROVEEDOR", fr: 1.6, align: "left", render: (r) => safeText(r.proveedor) },
+      { key: "pago", label: "PAGO", fr: 1.2, align: "center", render: (r) => safeText(getCompraPagoLabel(r)) },
+      { key: "total", label: "TOTAL", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
       { key: "acciones", label: "ACCIONES", fr: 0.95, align: "center", render: () => null },
     ];
   }, []);
@@ -595,7 +562,6 @@ export default function Compras() {
       }
 
       const wb = XLSX.utils.book_new();
-      const sheetName = slugifySheetName("Compras");
       const ws = XLSX.utils.json_to_sheet(dataToExport);
 
       const headers = Object.keys(dataToExport[0] || {});
@@ -609,7 +575,7 @@ export default function Compras() {
         }
       }
 
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Compras"));
 
       const per = periodoToMMYYYY(fPeriodo) || "SIN_PERIODO";
       XLSX.writeFile(wb, `compras_${per}.xlsx`);
@@ -644,18 +610,13 @@ export default function Compras() {
     setCompUrl("");
   };
 
-  // ✅ refresh post-guardar (Nueva Compra)
   const refreshAfterSave = useCallback(
     async (periodoGuardado) => {
       const perUI = periodoToMMYYYY(periodoGuardado || fPeriodo);
 
-      // cerrá modal nueva
       setOpenNueva(false);
 
-      // invalidá cache de ese período
       invalidateCacheForPeriodo(perUI);
-
-      // recargá filas
       await loadRows({ periodo: perUI, q });
 
       showToast("exito", "Compra guardada y lista actualizada.", 2400);
@@ -692,31 +653,22 @@ export default function Compras() {
     }
   };
 
-  /* =========================
-     ✅ Guardar compra desde ModalNuevaCompra
-     (backend acepta JSON plano)
-========================= */
-const onUpdateCompra = async ({ compra, items, facturaFile }) => {
-  // 1) actualizar movimiento + items (JSON plano o lo que tu backend acepte)
-  const res = await fetch(`${API}?action=movimientos_actualizar`, {
-    method: "POST",
-    headers: buildHeaders(),
-    body: JSON.stringify({ ...compra, items }),
-  });
+  // ✅ update compra (si tu modal lo usa)
+  const onUpdateCompra = async ({ compra, items, facturaFile }) => {
+    const res = await fetch(`${API}?action=movimientos_actualizar`, {
+      method: "POST",
+      headers: buildHeaders(),
+      body: JSON.stringify({ ...compra, items }),
+    });
 
-  const data = await parseJsonOrThrow(res);
-  if (!data?.exito) throw new Error(data?.mensaje || "No se pudo actualizar la compra.");
-
-  // 2) si hay facturaFile: SUBIDA aparte (solo si tu backend lo soporta)
-  // Si no existe endpoint, por ahora lo ignorás.
-  // Ej:
-  // if (facturaFile) { ... fetch(`${API}?action=movimientos_subir_factura`, FormData ... ) }
-
-  return data;
-};
+    const data = await parseJsonOrThrow(res);
+    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo actualizar la compra.");
+    // facturaFile: si tenés endpoint de upload, va aparte
+    return data;
+  };
 
   const onSaveCompra = async (payload) => {
-    const token = localStorage.getItem("token") || "";
+    const { token } = getAuthInfo();
     const headers = { "Content-Type": "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -806,8 +758,7 @@ const onUpdateCompra = async ({ compra, items, facturaFile }) => {
                       onClick={async () => {
                         setQ("");
                         await loadRows({ periodo: fPeriodo, q: "" });
-                        const input = document.querySelector(".mov-searchInput input");
-                        input?.focus();
+                        document.querySelector(".mov-searchInput input")?.focus();
                       }}
                     >
                       ×
@@ -818,46 +769,33 @@ const onUpdateCompra = async ({ compra, items, facturaFile }) => {
             </div>
           </div>
 
-<div
-  className="mov-card__actions"
-  style={{ display: "flex", gap: 10, alignItems: "center" }}
->
-  <button
-    type="button"
-    className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
-    onClick={exportToExcel}
-    disabled={loadingRows || filteredRows.length === 0}
-    title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
-  >
-    <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
-  </button>
+          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <button
+              type="button"
+              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
+              onClick={exportToExcel}
+              disabled={loadingRows || filteredRows.length === 0}
+              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
+            >
+              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
+            </button>
 
-  <button
-    type="button"
-    className="mov-btn mov-btn--primary"
-    onClick={() => setOpenNueva(true)}
-    disabled={!fPeriodo}
-    title={!fPeriodo ? "Primero seleccioná un período" : "Crear nueva compra"}
-  >
-    <FontAwesomeIcon icon={faPlus} /> Nueva Compra
-  </button>
-</div>
-
-        </div>
-
-        <div className="mov-tabsBar">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }} />
-
+            <button
+              type="button"
+              className="mov-btn mov-btn--primary"
+              onClick={() => setOpenNueva(true)}
+              disabled={!fPeriodo}
+              title={!fPeriodo ? "Primero seleccioná un período" : "Crear nueva compra"}
+            >
+              <FontAwesomeIcon icon={faPlus} /> Nueva Compra
+            </button>
+          </div>
         </div>
 
         {/* HEADER */}
         <div
           className="mov-gridTable mov-gridTable--head"
-          style={{
-            gridTemplateColumns: gridCols,
-            overflowX: "auto",
-            scrollbarGutter: "stable",
-          }}
+          style={{ gridTemplateColumns: gridCols, overflowX: "auto", scrollbarGutter: "stable" }}
           role="row"
         >
           {columns.map((c) => (
@@ -879,7 +817,12 @@ const onUpdateCompra = async ({ compra, items, facturaFile }) => {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className="mov-gridBody">
-            {loadingRows && <div className="mov-emptyRow">Cargando compras…</div>}
+            {/* ✅ LOADER DENTRO DE LA TABLA */}
+            {loadingRows && (
+              <div className="mov-emptyRow mov-emptyRow--loading">
+                <GifCarga />
+              </div>
+            )}
 
             {!loadingRows &&
               filteredRows.map((r) => (
@@ -897,11 +840,7 @@ const onUpdateCompra = async ({ compra, items, facturaFile }) => {
                       return (
                         <div
                           key={c.key}
-                          className={[
-                            "mov-gridCell",
-                            "mov-gridCell--actions",
-                            c.align === "center" ? "is-center" : "",
-                          ].join(" ")}
+                          className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
                           role="cell"
                         >
                           <div className="mov-actionsInline">
@@ -915,7 +854,12 @@ const onUpdateCompra = async ({ compra, items, facturaFile }) => {
                               <FontAwesomeIcon icon={faEye} />
                             </button>
 
-                            <button type="button" className="mov-iconBtn" title="Editar" onClick={() => openEditModal(r)}>
+                            <button
+                              type="button"
+                              className="mov-iconBtn"
+                              title="Editar"
+                              onClick={() => openEditModal(r)}
+                            >
                               <FontAwesomeIcon icon={faPenToSquare} />
                             </button>
 
@@ -957,7 +901,9 @@ const onUpdateCompra = async ({ compra, items, facturaFile }) => {
 
             {!loadingRows && filteredRows.length === 0 && (
               <div className="mov-emptyRow">
-                {!fPeriodo ? "No hay período disponible para cargar compras." : "No hay compras para mostrar en este período."}
+                {!fPeriodo
+                  ? "No hay período disponible para cargar compras."
+                  : "No hay compras para mostrar en este período."}
               </div>
             )}
           </div>
@@ -972,41 +918,44 @@ const onUpdateCompra = async ({ compra, items, facturaFile }) => {
         onClose={() => setOpenNueva(false)}
         onToast={showToast}
         onSaveCompra={async (payload) => {
-          const data = await onSaveCompra(payload); // guarda en backend
+          const data = await onSaveCompra(payload);
           const per = payload?.periodo || payload?.fecha || fPeriodo;
-          await refreshAfterSave(per); // refresca tabla + cierra modal
+          await refreshAfterSave(per);
           return data;
         }}
       />
 
-      {/* MODAL EDITAR COMPRA (todavía NO cableado al backend) */}
-<ModalEditarCompra
-  open={openEdit}
-  lists={lists}
-  row={selectedRow}
-  periodoDefault={fPeriodo}
-  onClose={() => {
-    setOpenEdit(false);
-    setSelectedRow(null);
-  }}
-  onToast={showToast}
-  onSave={async (payloadFinal) => {
-    // payloadFinal ya viene listo desde el modal
-    const data = await onUpdateCompra({
-      compra: payloadFinal,
-      items: [],          // si todavía no manejás items reales, dejalo vacío
-      facturaFile: null,  // idem
-    });
+      {/* MODAL EDITAR COMPRA */}
+      <ModalEditarCompra
+        open={openEdit}
+        lists={lists}
+        row={selectedRow}
+        periodoDefault={fPeriodo}
+        onClose={() => {
+          setOpenEdit(false);
+          setSelectedRow(null);
+        }}
+        onToast={showToast}
+        onSave={async (payloadFinal) => {
+          const data = await onUpdateCompra({
+            compra: payloadFinal,
+            items: [],
+            facturaFile: null,
+          });
 
-    const per = payloadFinal?.periodo || fPeriodo;
-    await refreshAfterSave(per);
-    return data;
-  }}
-/>
-
+          const per = payloadFinal?.periodo || fPeriodo;
+          await refreshAfterSave(per);
+          return data;
+        }}
+      />
 
       {/* MODAL VER COMPROBANTE */}
-      <ModalVerComprobante open={openVerComp} url={compUrl} onClose={closeComprobanteModal} title="Comprobante de compra" />
+      <ModalVerComprobante
+        open={openVerComp}
+        url={compUrl}
+        onClose={closeComprobanteModal}
+        title="Comprobante de compra"
+      />
 
       {/* DELETE */}
       <ModalEliminarMovimientos

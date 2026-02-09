@@ -271,6 +271,7 @@
   min-height: 0;
   overflow: auto;
   max-height: calc(100vh - 320px);
+    min-height: calc(100vh - 320px);
 }
 
 .cmp-gridTable{

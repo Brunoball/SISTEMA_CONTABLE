@@ -3,11 +3,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import BASE_URL from "../../config/config";
 import "../Movimientos/movimientos.css"; // ✅ misma estética
 
-
-
 import Toast from "../Global/Toast.jsx";
-import ModalEditarRecibo from "./modales/ModalEditarRecibo";
 
+// ✅ GIF carga inline en tabla
+import GifCarga from "../Global/Gif_Carga.jsx";
+import "../Global/gif_carga.css";
+
+import ModalEditarRecibo from "./modales/ModalEditarRecibo";
 import ModalPagarRecibos from "./modales/ModalPagarRecibos";
 import ModalEliminarMovimientos from "../Movimientos/modales/ModalEliminarMovimientos";
 
@@ -15,7 +17,6 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarDays,
   faMagnifyingGlass,
-  faPlus,
   faFileExcel,
   faPenToSquare,
   faTrashCan,
@@ -154,9 +155,7 @@ function getAuthInfo() {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   return { token, idUsuario };
 }
@@ -210,10 +209,7 @@ function hasCliente(row) {
 }
 
 function isCuentaCorrienteTipoVenta(row) {
-  // por texto (lo más confiable con tu SELECT que ya trae nombre)
-  const label = String(
-    row?.tipo_venta ?? row?.tipoVenta ?? row?.condicion_venta ?? ""
-  ).trim();
+  const label = String(row?.tipo_venta ?? row?.tipoVenta ?? row?.condicion_venta ?? "").trim();
   const s = normalizeSearchText(label);
 
   if (s.includes("cuenta corriente")) return true;
@@ -269,7 +265,7 @@ export default function Recibos() {
   const API = `${BASE_URL}/api.php`;
 
   /* =========================
-     ✅ STATE (primero, para evitar TDZ de rows)
+     ✅ STATE
   ========================= */
   const [lists, setLists] = useState(emptyLists);
   const [rows, setRows] = useState([]);
@@ -283,16 +279,15 @@ export default function Recibos() {
   const [fPeriodo, setFPeriodo] = useState(""); // UI MM-YYYY
   const [q, setQ] = useState("");
 
-  // modales placeholders
-  const [openAdd, setOpenAdd] = useState(false);
+  // modales
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
-  const openEditModal = useCallback((r) => {
-  setSelectedRow(r);
-  setOpenEdit(true);
-}, []);
 
+  const openEditModal = useCallback((r) => {
+    setSelectedRow(r);
+    setOpenEdit(true);
+  }, []);
 
   // toast
   const [toast, setToast] = useState(null);
@@ -342,6 +337,12 @@ export default function Recibos() {
     [getDeudasCliente]
   );
 
+  const closePagarModal = useCallback(() => {
+    setOpenPagar(false);
+    setPagarCliente(null);
+    setPagarDeudas([]);
+  }, []);
+
   /* =========================
      API helpers
   ========================= */
@@ -359,9 +360,7 @@ export default function Recibos() {
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(
-        `Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`
-      );
+      throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
     }
   }, []);
 
@@ -425,9 +424,7 @@ export default function Recibos() {
       const normalized = normalizeLists(data);
       const nextPeriodos = Array.isArray(normalized.periodos) ? normalized.periodos : [];
       setLists((prev) => ({ ...prev, periodos: nextPeriodos }));
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [API, apiGet]);
 
   /* =========================
@@ -494,9 +491,8 @@ export default function Recibos() {
   }, []);
 
   /* =========================
-     ✅ Confirmar pago: pasa CC -> CONTADO (id_tipo_venta)
-     Backend: api.php?action=recibos_confirmar_pago
-========================= */
+     Confirmar pago
+  ========================= */
   const onConfirmPago = useCallback(
     async (payload) => {
       try {
@@ -515,14 +511,13 @@ export default function Recibos() {
 
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
 
-        // ✅ recargar tabla: ahora ya no cumplen filtro (se fueron a CONTADO)
         invalidateCacheForPeriodo(fPeriodo);
         await loadRows({ periodo: fPeriodo, q });
 
         showToast("exito", data?.mensaje || "Pago confirmado.", 2400);
       } catch (e) {
         showToast("error", e?.message || "Error confirmando pago.", 4200);
-        throw e; // para que el modal no cierre si falló
+        throw e;
       }
     },
     [API, apiPostJson, fPeriodo, q, invalidateCacheForPeriodo, loadRows, showToast]
@@ -535,9 +530,8 @@ export default function Recibos() {
     (async () => {
       const normalized = await loadLists();
       const perDefault = (normalized.periodos || [])[0] || "";
-      if (perDefault) {
-        await loadRows({ periodo: perDefault, q: "" });
-      } else {
+      if (perDefault) await loadRows({ periodo: perDefault, q: "" });
+      else {
         setRows([]);
         setLoadingRows(false);
       }
@@ -563,35 +557,17 @@ export default function Recibos() {
   ========================= */
   const columns = useMemo(() => {
     return [
-      {
-        key: "fecha",
-        label: "FECHA",
-        align: "center",
-        fr: 0.9,
-        render: (r) => safeText(formatFechaDMY(r.fecha)),
-      },
+      { key: "fecha", label: "FECHA", align: "center", fr: 0.9, render: (r) => safeText(formatFechaDMY(r.fecha)) },
       {
         key: "detalle",
-        label: "DESCRIPCIÓN",
+        label: "DESCRIPCION",
         fr: 2.4,
         strong: true,
         align: "left",
         render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
       },
-      {
-        key: "cliente",
-        label: "CLIENTE",
-        fr: 1.8,
-        align: "center",
-        render: (r) => safeText(r.cliente),
-      },
-      {
-        key: "monto",
-        label: "MONTO",
-        fr: 1.1,
-        align: "center",
-        render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
-      },
+      { key: "cliente", label: "CLIENTE", fr: 1.8, align: "center", render: (r) => safeText(r.cliente) },
+      { key: "monto", label: "MONTO", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
       { key: "acciones", label: "ACCIONES", fr: 0.8, align: "center", render: () => null },
     ];
   }, []);
@@ -608,19 +584,8 @@ export default function Recibos() {
   }, [columns]);
 
   /* =========================
-     Acciones (placeholders)
+     Acciones
   ========================= */
-  const openAddModalPlaceholder = () => {
-    setOpenAdd(true);
-    showToast("info", "Nuevo registro (pendiente de modal).", 2400);
-  };
-
-  const openEditModalPlaceholder = (r) => {
-    setSelectedRow(r);
-    setOpenEdit(true);
-    showToast("info", "Editar recibo (pendiente de modal).", 2400);
-  };
-
   const openDeleteModal = (r) => {
     setSelectedRow(r);
     setOpenDel(true);
@@ -664,7 +629,7 @@ export default function Recibos() {
   };
 
   /* =========================
-     Excel “Recibos Pendientes”
+     Excel
   ========================= */
   const exportToExcel = useCallback(() => {
     try {
@@ -706,14 +671,7 @@ export default function Recibos() {
 
   return (
     <div className="mov-page">
-      {toast && (
-        <Toast
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={closeToast}
-        />
-      )}
+      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
 
       {error && (
         <div className="mov-alert" role="alert">
@@ -769,10 +727,7 @@ export default function Recibos() {
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        await loadRows({
-                          periodo: fPeriodo,
-                          q: e.currentTarget.value,
-                        });
+                        await loadRows({ periodo: fPeriodo, q: e.currentTarget.value });
                       }
                     }}
                     placeholder="Buscar por fecha, cliente, descripción, monto…"
@@ -787,8 +742,7 @@ export default function Recibos() {
                       onClick={async () => {
                         setQ("");
                         await loadRows({ periodo: fPeriodo, q: "" });
-                        const input = document.querySelector(".mov-searchInput input");
-                        input?.focus();
+                        document.querySelector(".mov-searchInput input")?.focus();
                       }}
                     >
                       ×
@@ -799,10 +753,7 @@ export default function Recibos() {
             </div>
           </div>
 
-          <div
-            className="mov-card__actions"
-            style={{ display: "flex", gap: 10, alignItems: "center" }}
-          >
+          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <button
               type="button"
               className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
@@ -812,23 +763,13 @@ export default function Recibos() {
             >
               <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
             </button>
-
-
           </div>
-        </div>
-
-        <div className="mov-tabsBar">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }} />
         </div>
 
         {/* HEADER */}
         <div
           className="mov-gridTable mov-gridTable--head"
-          style={{
-            gridTemplateColumns: gridCols,
-            overflowX: "auto",
-            scrollbarGutter: "stable",
-          }}
+          style={{ gridTemplateColumns: gridCols, overflowX: "auto", scrollbarGutter: "stable" }}
           role="row"
         >
           {columns.map((c) => (
@@ -850,7 +791,12 @@ export default function Recibos() {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className="mov-gridBody">
-            {loadingRows && <div className="mov-emptyRow">Cargando recibos…</div>}
+            {/* ✅ LOADER DENTRO DE LA TABLA */}
+            {loadingRows && (
+              <div className="mov-emptyRow mov-emptyRow--loading">
+                <GifCarga />
+              </div>
+            )}
 
             {!loadingRows &&
               filteredRows.map((r) => (
@@ -865,29 +811,15 @@ export default function Recibos() {
                       return (
                         <div
                           key={c.key}
-                          className={[
-                            "mov-gridCell",
-                            "mov-gridCell--actions",
-                            c.align === "center" ? "is-center" : "",
-                          ].join(" ")}
+                          className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
                           role="cell"
                         >
                           <div className="mov-actionsInline">
-                            <button
-                              type="button"
-                              className="mov-iconBtn"
-                              title="Pagar"
-                              onClick={() => openPagarModal(r)}
-                            >
+                            <button type="button" className="mov-iconBtn" title="Pagar" onClick={() => openPagarModal(r)}>
                               <FontAwesomeIcon icon={faMoneyBill1Wave} />
                             </button>
 
-<button
-  type="button"
-  className="mov-iconBtn"
-  title="Editar"
-  onClick={() => openEditModal(r)}
->
+                            <button type="button" className="mov-iconBtn" title="Editar" onClick={() => openEditModal(r)}>
                               <FontAwesomeIcon icon={faPenToSquare} />
                             </button>
 
@@ -938,44 +870,41 @@ export default function Recibos() {
         </div>
       </section>
 
+      {/* PAGAR */}
       <ModalPagarRecibos
         open={openPagar}
-        onClose={() => {
-          setOpenPagar(false);
-          setPagarCliente(null);
-          setPagarDeudas([]);
-        }}
+        onClose={closePagarModal}
         onConfirm={onConfirmPago}
         onToast={showToast}
         cliente={pagarCliente}
         deudas={pagarDeudas}
       />
-<ModalEditarRecibo
-  open={openEdit}
-  row={selectedRow}
-  lists={lists}
-  periodoDefault={fPeriodo}
-  onClose={() => {
-    setOpenEdit(false);
-    setSelectedRow(null);
-  }}
-  onToast={showToast}
-  onSave={async (payloadFinal) => {
-    // ✅ usa movimientos_actualizar (igual que Compras/Ventas)
-    const { idUsuario } = getAuthInfo();
 
-    const data = await apiPostJson(`${API}?action=movimientos_actualizar`, {
-      ...payloadFinal,
-      idUsuario,
-    });
+      {/* EDITAR */}
+      <ModalEditarRecibo
+        open={openEdit}
+        row={selectedRow}
+        lists={lists}
+        periodoDefault={fPeriodo}
+        onClose={() => {
+          setOpenEdit(false);
+          setSelectedRow(null);
+        }}
+        onToast={showToast}
+        onSave={async (payloadFinal) => {
+          const { idUsuario } = getAuthInfo();
 
-    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo actualizar.");
+          const data = await apiPostJson(`${API}?action=movimientos_actualizar`, {
+            ...payloadFinal,
+            idUsuario,
+          });
 
-    invalidateCacheForPeriodo(fPeriodo);
-    await loadRows({ periodo: fPeriodo, q });
-  }}
-/>
+          if (!data?.exito) throw new Error(data?.mensaje || "No se pudo actualizar.");
 
+          invalidateCacheForPeriodo(fPeriodo);
+          await loadRows({ periodo: fPeriodo, q });
+        }}
+      />
 
       {/* DELETE */}
       <ModalEliminarMovimientos

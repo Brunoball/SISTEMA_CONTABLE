@@ -2,9 +2,14 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import BASE_URL from "../../config/config";
 import "./flujo_caja.css";
+
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCalendarDays, faFileExcel } from "@fortawesome/free-solid-svg-icons";
+
 import Toast from "../Global/Toast.jsx";
+import GifCarga from "../Global/Gif_Carga.jsx";
+import "../Global/gif_carga.css";
+
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
@@ -175,7 +180,14 @@ export default function Flujo_Caja() {
 
   return (
     <div className="fc-page">
-      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
+      {toast && (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
+      )}
 
       {error && (
         <div className="fc-alert" role="alert">
@@ -199,7 +211,11 @@ export default function Flujo_Caja() {
                   <FontAwesomeIcon icon={faCalendarDays} /> Período
                 </label>
 
-                <select value={periodo || ""} onChange={(e) => setPeriodo(e.target.value)} disabled={selectDisabled}>
+                <select
+                  value={periodo || ""}
+                  onChange={(e) => setPeriodo(e.target.value)}
+                  disabled={selectDisabled}
+                >
                   {periodOptions.map((p) => (
                     <option key={p} value={p}>
                       {periodLabelMMYYYY(p)}
@@ -222,15 +238,14 @@ export default function Flujo_Caja() {
           </div>
         </div>
 
-        {loading && !data && <div className="fc-emptyRow">Cargando flujo de caja...</div>}
-
         {bloque ? (
           <>
             <div className="fc-subhead">
               <div className="fc-subhead__name">
                 Caja diaria
                 <div className="fc-subhead__meta">
-                  Período {data?.periodo ?? periodo} • Saldo base: <b>{moneyARS(bloque.saldo_base)}</b>
+                  Período {data?.periodo ?? periodo} • Saldo base:{" "}
+                  <b>{moneyARS(bloque.saldo_base)}</b>
                 </div>
               </div>
             </div>
@@ -244,23 +259,38 @@ export default function Flujo_Caja() {
               </div>
 
               <div className="fc-gridBody" role="rowgroup">
-                {rows.map((r) => (
-                  <div className="fc-grid fc-grid--row fc-grid--excel" key={r.fecha}>
-                    <div className="fc-cell fc-date">{fmtDateES(r.fecha)}</div>
-                    <div className="fc-cell fc-num is-center fc-in">{moneyARS(r.ingresos)}</div>
-                    <div className="fc-cell fc-num is-center fc-eg">{moneyARS(r.egresos)}</div>
-                    <div className={`fc-cell fc-num is-center fc-saldo ${Number(r.saldo) < 0 ? "is-negative" : "is-positive"}`}>
-                      {moneyARS(r.saldo)}
-                    </div>
+                {/* ✅ LOADER DENTRO DE LA TABLA */}
+                {loading && (
+                  <div className="fc-emptyRow fc-emptyRow--loading">
+                    <GifCarga />
                   </div>
-                ))}
+                )}
 
-                {!loading && rows.length === 0 && <div className="fc-emptyRow">No hay datos para mostrar.</div>}
+                {!loading &&
+                  rows.map((r) => (
+                    <div className="fc-grid fc-grid--row fc-grid--excel" key={r.fecha}>
+                      <div className="fc-cell fc-date">{fmtDateES(r.fecha)}</div>
+                      <div className="fc-cell fc-num is-center fc-in">{moneyARS(r.ingresos)}</div>
+                      <div className="fc-cell fc-num is-center fc-eg">{moneyARS(r.egresos)}</div>
+                      <div
+                        className={`fc-cell fc-num is-center fc-saldo ${
+                          Number(r.saldo) < 0 ? "is-negative" : "is-positive"
+                        }`}
+                      >
+                        {moneyARS(r.saldo)}
+                      </div>
+                    </div>
+                  ))}
+
+                {!loading && rows.length === 0 && (
+                  <div className="fc-emptyRow">No hay datos para mostrar.</div>
+                )}
               </div>
             </div>
 
             <div className="fc-footnote">
-              * El saldo del día 01 arranca desde el “Saldo base” y se actualiza con (ingresos − egresos) de cada día.
+              * El saldo del día 01 arranca desde el “Saldo base” y se actualiza con
+              (ingresos − egresos) de cada día.
             </div>
           </>
         ) : (

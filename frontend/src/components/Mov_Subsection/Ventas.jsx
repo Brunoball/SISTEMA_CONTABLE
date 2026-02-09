@@ -5,6 +5,10 @@ import "../Movimientos/movimientos.css"; // reutiliza la estética de Movimiento
 
 import Toast from "../Global/Toast.jsx";
 
+// ✅ GIF carga (loader inline)
+import GifCarga from "../Global/Gif_Carga.jsx";
+import "../Global/gif_carga.css";
+
 import ModalNuevaVenta from "./modales/ModalNuevaVenta";
 import ModalEditarVenta from "./modales/ModalEditarVenta";
 import ModalEliminarMovimientos from "../Movimientos/modales/ModalEliminarMovimientos";
@@ -151,9 +155,7 @@ function getAuthInfo() {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   return { token, idUsuario };
 }
@@ -193,13 +195,7 @@ function normalizeLists(raw) {
 }
 
 /* =========================
-   ✅ FILTRO VENTAS (NUEVO)
-   Regla (patrón): mostrar todas
-   las ventas que sean:
-   - Contado
-   - Cuenta Corriente
-   - Crédito
-   (y cliente obligatorio)
+   ✅ FILTRO VENTAS
 ========================= */
 function hasCliente(r) {
   const idCli = Number(
@@ -207,12 +203,10 @@ function hasCliente(r) {
   );
   if (Number.isFinite(idCli) && idCli > 0) return true;
 
-  // fallback por si solo viene texto
   const cliTxt = String(r?.cliente ?? "").trim();
   return cliTxt.length > 0;
 }
 
-// intenta resolver el label de tipo_venta desde el row o desde listas.tipos_venta
 function resolveTipoVentaLabel(row, lists) {
   const direct =
     row?.tipo_venta ??
@@ -258,16 +252,13 @@ function resolveTipoVentaLabel(row, lists) {
 function isTipoVentaValido(tipoVentaLabel) {
   const tv = normalizeSearchText(tipoVentaLabel);
 
-  // contado
   if (tv.includes("contado")) return true;
 
-  // cuenta corriente (acepta variantes)
   if (tv.includes("cuenta corriente")) return true;
   if (tv.includes("cuenta") && tv.includes("corriente")) return true;
   if (tv.includes("cta") && tv.includes("cte")) return true;
   if (tv.includes("ctacte")) return true;
 
-  // crédito
   if (tv.includes("credito")) return true;
 
   return false;
@@ -283,13 +274,11 @@ function getVentaCategoriaLabel(row, lists) {
   if (tv.includes("cta") && tv.includes("cte")) return "Cuenta Corriente";
   if (tv.includes("ctacte")) return "Cuenta Corriente";
 
-  // si entró por algún caso raro, devolvemos el label original
   return label || "—";
 }
 
 function isVentaRow(row, lists) {
   if (!hasCliente(row)) return false;
-
   const label = resolveTipoVentaLabel(row, lists);
   return isTipoVentaValido(label);
 }
@@ -448,9 +437,7 @@ export default function Ventas() {
         ? normalized.periodos
         : [];
       setLists((prev) => ({ ...prev, periodos: nextPeriodos }));
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [API, apiGet]);
 
   /* =========================
@@ -536,7 +523,6 @@ export default function Ventas() {
 
   /* =========================
      Filtrado: período + ventas + búsqueda
-     ✅ NUEVO: ventas = (cliente) + (tipo_venta válido)
   ========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
@@ -556,7 +542,7 @@ export default function Ventas() {
       {
         key: "fecha",
         label: "FECHA",
-        align:"center",
+        align: "center",
         fr: 0.9,
         render: (r) => safeText(formatFechaDMY(r.fecha)),
       },
@@ -721,7 +707,7 @@ export default function Ventas() {
       }
 
       const dataToExport = filteredRows.map((r) => {
-        const cat = getVentaCategoriaLabel(r, lists); // Contado / Cuenta Corriente / Crédito
+        const cat = getVentaCategoriaLabel(r, lists);
         const pago =
           cat === "Contado"
             ? safeText(String(r.medio_pago ?? "").trim() || "—")
@@ -739,7 +725,6 @@ export default function Ventas() {
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(dataToExport);
 
-      // formato moneda para TOTAL si existe
       const headers = Object.keys(dataToExport[0] || {});
       const totalColIndex = headers.findIndex((h) => h === "TOTAL");
       if (totalColIndex >= 0 && ws["!ref"]) {
@@ -844,10 +829,7 @@ export default function Ventas() {
                       onClick={async () => {
                         setQ("");
                         await loadRows({ periodo: fPeriodo, q: "" });
-                        const input = document.querySelector(
-                          ".mov-searchInput input"
-                        );
-                        input?.focus();
+                        document.querySelector(".mov-searchInput input")?.focus();
                       }}
                     >
                       ×
@@ -858,47 +840,40 @@ export default function Ventas() {
             </div>
           </div>
 
-<div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-  <button
-    type="button"
-    className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
-    onClick={exportToExcel}
-    disabled={loadingRows || filteredRows.length === 0}
-    title={
-      filteredRows.length
-        ? "Exportar a Excel"
-        : "No hay datos para exportar"
-    }
-  >
-    <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
-  </button>
+          <div
+            className="mov-card__actions"
+            style={{ display: "flex", gap: 10, alignItems: "center" }}
+          >
+            <button
+              type="button"
+              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
+              onClick={exportToExcel}
+              disabled={loadingRows || filteredRows.length === 0}
+              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
+            >
+              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
+            </button>
 
-  <button
-    type="button"
-    className="mov-btn mov-btn--primary"
-    onClick={() => setOpenAdd(true)}
-    disabled={!fPeriodo}
-    title={!fPeriodo ? "Primero seleccioná un período" : "Crear nueva venta"}
-  >
-    <FontAwesomeIcon icon={faPlus} /> Nueva Venta
-  </button>
-</div>
-
-        </div>
-
-        <div className="mov-tabsBar">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }} />
-
+            <button
+              type="button"
+              className="mov-btn mov-btn--primary"
+              onClick={() => setOpenAdd(true)}
+              disabled={!fPeriodo}
+              title={!fPeriodo ? "Primero seleccioná un período" : "Crear nueva venta"}
+            >
+              <FontAwesomeIcon icon={faPlus} /> Nueva Venta
+            </button>
+          </div>
         </div>
 
         {/* HEADER */}
         <div
           className="mov-gridTable mov-gridTable--head"
-  style={{
-    gridTemplateColumns: gridCols,
-    overflowX: "auto",
-    scrollbarGutter: "stable",
-  }}
+          style={{
+            gridTemplateColumns: gridCols,
+            overflowX: "auto",
+            scrollbarGutter: "stable",
+          }}
           role="row"
         >
           {columns.map((c) => (
@@ -920,7 +895,12 @@ export default function Ventas() {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className="mov-gridBody">
-            {loadingRows && <div className="mov-emptyRow">Cargando ventas…</div>}
+            {/* ✅ LOADER DENTRO DE LA TABLA (como Movimientos) */}
+            {loadingRows && (
+              <div className="mov-emptyRow mov-emptyRow--loading">
+                <GifCarga />
+              </div>
+            )}
 
             {!loadingRows &&
               filteredRows.map((r) => (
@@ -938,7 +918,7 @@ export default function Ventas() {
                           className={[
                             "mov-gridCell",
                             "mov-gridCell--actions",
-                            c.align === "center" ? "is-center" : "",
+                            "is-center",
                           ].join(" ")}
                           role="cell"
                         >
@@ -1014,9 +994,7 @@ export default function Ventas() {
             await refreshPeriodos();
 
             const firstPer =
-              Array.isArray(payloads) && payloads[0]?.periodo
-                ? payloads[0].periodo
-                : "";
+              Array.isArray(payloads) && payloads[0]?.periodo ? payloads[0].periodo : "";
             const ui = periodoToMMYYYY(firstPer) || fPeriodo;
 
             setQ("");
@@ -1046,7 +1024,21 @@ export default function Ventas() {
         onCatalogCreated={() => {}}
         onToast={showToast}
         onSave={async (payload) => {
-          await saveMovimiento(payload, true);
+          try {
+            showToast("cargando", "Guardando cambios…", 12000);
+            await saveMovimiento(payload, true);
+
+            invalidateCacheForPeriodo(fPeriodo);
+            await loadRows({ periodo: fPeriodo, q });
+            await refreshPeriodos();
+
+            setOpenEdit(false);
+            setSelectedRow(null);
+            showToast("exito", "Venta actualizada.", 2600);
+          } catch (e) {
+            showToast("error", e?.message || "Error actualizando venta.", 4200);
+            throw e;
+          }
         }}
       />
 

@@ -11,6 +11,9 @@ import ModalEliminarMovimientos from "./modales/ModalEliminarMovimientos";
 // ✅ Toast global
 import Toast from "../Global/Toast.jsx";
 
+// ✅ GIF carga (asegurate que exista este componente)
+import GifCarga from "../Global/Gif_Carga.jsx";
+
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPenToSquare,
@@ -22,6 +25,12 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
+
+/* =========================
+   DEV: Loader mínimo
+========================= */
+const MIN_LOADING_MS = 0; // ⏱️ cambiá esto a gusto (0 para desactivar)
+const FORCE_SHOW_LOADER_DEV = false; // ✅ para que lo veas aunque haya cache (ponelo false en prod)
 
 /* =========================
    Helpers
@@ -219,9 +228,7 @@ function buildExportRows(rows) {
     return {
       FECHA: safeText(formatFechaDMY(pick(r, ["fecha", "fecha_movimiento", "created_at"], ""))),
       PERIODO: safeText(periodoToMMYYYY(pick(r, ["periodo"], ""))),
-      DESCRIPCION: safeText(
-        pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")
-      ),
+      DESCRIPCION: safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
       "TIPO PAGO": safeText(pick(r, ["medio_pago", "tipo_pago", "forma_pago"], "")),
       "CLIENTE/PROVEEDOR": tercero,
       TOTAL: numOrZero(total),
@@ -359,9 +366,27 @@ export default function Movimientos() {
       const periodoAPI = periodoToYYYYMM(perUI);
       const cacheKey = `${periodoAPI}|${(qLocal || "").trim()}`;
 
-      if (cacheRef.current.has(cacheKey)) {
+      // ⏱️ arranco reloj (para loader mínimo)
+      const start = Date.now();
+
+      // ✅ si hay cache y NO querés forzar loader, devolvemos rápido
+      if (cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
         setRows(cacheRef.current.get(cacheKey) || []);
         setLoadingRows(false);
+        return;
+      }
+
+      // ✅ si hay cache pero DEV quiere mostrar loader igual:
+      if (cacheRef.current.has(cacheKey) && FORCE_SHOW_LOADER_DEV) {
+        setLoadingRows(true);
+        // simulo espera mínima y luego aplico cache
+        const cached = cacheRef.current.get(cacheKey) || [];
+        const elapsed = Date.now() - start;
+        const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+        setTimeout(() => {
+          setRows(cached);
+          setLoadingRows(false);
+        }, remaining);
         return;
       }
 
@@ -384,12 +409,29 @@ export default function Movimientos() {
         }));
 
         cacheRef.current.set(cacheKey, movsNorm);
-        setRows(movsNorm);
+
+        // ⏱️ aplicar loader mínimo
+        const elapsed = Date.now() - start;
+        const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+
+        if (remaining > 0) {
+          setTimeout(() => {
+            setRows(movsNorm);
+            setLoadingRows(false);
+          }, remaining);
+        } else {
+          setRows(movsNorm);
+          setLoadingRows(false);
+        }
       } catch (e) {
-        setError(e.message || "Error cargando movimientos.");
-        setRows([]);
-      } finally {
-        setLoadingRows(false);
+        const elapsed = Date.now() - start;
+        const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+
+        setTimeout(() => {
+          setError(e.message || "Error cargando movimientos.");
+          setRows([]);
+          setLoadingRows(false);
+        }, remaining);
       }
     },
     [API, apiGet, fPeriodo, q]
@@ -447,9 +489,7 @@ export default function Movimientos() {
         align: "left",
         fr: 2.2,
         render: (r) =>
-          safeText(
-            pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")
-          ),
+          safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
       },
       {
         key: "tipo_pago",
@@ -696,34 +736,31 @@ export default function Movimientos() {
             </div>
           </div>
 
-<div
-  className="mov-card__actions"
-  style={{ display: "flex", gap: 10, alignItems: "center" }}
->
-  <button
-    type="button"
-    className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
-    onClick={exportToExcel}
-    disabled={loadingRows || filteredRows.length === 0}
-    title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
-  >
-    <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
-  </button>
+          <div
+            className="mov-card__actions"
+            style={{ display: "flex", gap: 10, alignItems: "center" }}
+          >
+            <button
+              type="button"
+              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
+              onClick={exportToExcel}
+              disabled={loadingRows || filteredRows.length === 0}
+              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
+            >
+              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
+            </button>
 
-  <button
-    type="button"
-    className="mov-btn mov-btn--primary"
-    onClick={() => setOpenAdd(true)}
-    disabled={!fPeriodo}
-    title={!fPeriodo ? "Primero seleccioná un período" : "Nuevo Movimiento"}
-  >
-    <FontAwesomeIcon icon={faPlus} /> Nuevo Movimiento
-  </button>
-</div>
-
+            <button
+              type="button"
+              className="mov-btn mov-btn--primary"
+              onClick={() => setOpenAdd(true)}
+              disabled={!fPeriodo}
+              title={!fPeriodo ? "Primero seleccioná un período" : "Nuevo Movimiento"}
+            >
+              <FontAwesomeIcon icon={faPlus} /> Nuevo Movimiento
+            </button>
+          </div>
         </div>
-
-
 
         {/* HEADER */}
         <div
@@ -750,7 +787,12 @@ export default function Movimientos() {
         {/* BODY */}
         <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup">
           <div className="mov-gridBody">
-            {loadingRows && <div className="mov-emptyRow">Cargando movimientos...</div>}
+            {/* ✅ GIF DE CARGA dentro de la tabla */}
+            {loadingRows && (
+              <div className="mov-emptyRow mov-emptyRow--loading">
+                <GifCarga />
+              </div>
+            )}
 
             {!loadingRows &&
               filteredRows.map((r) => (
@@ -765,11 +807,7 @@ export default function Movimientos() {
                       return (
                         <div
                           key={c.key}
-                          className={[
-                            "mov-gridCell",
-                            "mov-gridCell--actions",
-                            "is-center",
-                          ].join(" ")}
+                          className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
                           role="cell"
                         >
                           <div className="mov-actionsInline">

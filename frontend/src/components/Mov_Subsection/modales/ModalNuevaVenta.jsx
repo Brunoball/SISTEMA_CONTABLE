@@ -291,11 +291,9 @@ export default function ModalNuevaVenta({
   }, [lists]);
 
   const listsNorm = useMemo(() => localLists, [localLists]);
+const [fecha, setFecha] = useState(todayISO());
+const [periodo, setPeriodo] = useState(periodoFromISODate(todayISO())); // ✅ siempre hoy
 
-  const [fecha, setFecha] = useState(todayISO());
-  const [periodo, setPeriodo] = useState(
-    normalizePeriodoToMMYYYY(periodoDefault || "") || periodoFromISODate(todayISO())
-  );
 
   // ✅ “Filtros” mínimos para Ventas
   const [filters, setFilters] = useState({
@@ -346,8 +344,8 @@ export default function ModalNuevaVenta({
       const f = todayISO();
       setFecha(f);
 
-      const per = normalizePeriodoToMMYYYY(periodoDefault || "") || periodoFromISODate(f);
-      setPeriodo(per);
+setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
+
 
       setFilters({
         id_tipo_venta: NULL_OPTION,

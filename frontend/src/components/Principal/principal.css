@@ -425,7 +425,6 @@ button{ font-family: inherit; }
 }
 .pp-content__inner{
   width: 100%;
-  max-width: 1280px;
   display:flex;
   flex-direction:column;
   gap: 14px;

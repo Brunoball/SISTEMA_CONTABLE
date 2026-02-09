@@ -9,6 +9,10 @@ import { faFileExcel } from "@fortawesome/free-solid-svg-icons";
 // ✅ Toast global (igual que en Movimientos)
 import Toast from "../Global/Toast.jsx";
 
+// ✅ GIF carga
+import GifCarga from "../Global/Gif_Carga.jsx";
+import "../Global/gif_carga.css";
+
 function moneyARS(v) {
   const n = Number(v || 0);
   try {
@@ -84,9 +88,7 @@ export default function Cuentas_Corrientes() {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return rows;
-    return rows.filter((r) =>
-      String(r.nombre || "").toLowerCase().includes(needle)
-    );
+    return rows.filter((r) => String(r.nombre || "").toLowerCase().includes(needle));
   }, [rows, q]);
 
   const visibleCount = filtered.length;
@@ -113,10 +115,9 @@ export default function Cuentas_Corrientes() {
 
     const weight = (c) => {
       const name = norm(c?.nombre);
-      // primero DEBITO, después CREDITO
       if (name.includes("DEBITO")) return 0;
       if (name.includes("CREDITO")) return 1;
-      return 2; // resto
+      return 2;
     };
 
     list.sort((a, b) => {
@@ -124,7 +125,6 @@ export default function Cuentas_Corrientes() {
       const wb = weight(b);
       if (wa !== wb) return wa - wb;
 
-      // desempate estable: por nombre
       const na = norm(a?.nombre);
       const nb = norm(b?.nombre);
       return na.localeCompare(nb, "es");
@@ -156,21 +156,16 @@ export default function Cuentas_Corrientes() {
       });
 
       const ws = XLSX.utils.json_to_sheet(data);
-
       ws["!cols"] = [
-        { wch: 30 }, // Cliente
+        { wch: 30 },
         ...(orderedCuentas || []).map(() => ({ wch: 18 })),
-        { wch: 18 }, // Saldo
+        { wch: 18 },
       ];
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Cuentas Corrientes");
 
-      const stamp = new Date()
-        .toISOString()
-        .slice(0, 16)
-        .replace(/[:T]/g, "-");
-
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
       XLSX.writeFile(wb, `cuentas_corrientes_${stamp}.xlsx`);
 
       showToast("exito", "Excel exportado.", 2200);
@@ -203,58 +198,47 @@ export default function Cuentas_Corrientes() {
             <div className="cc-headTitle">
               <div className="cc-card__title">Cuentas Corrientes</div>
               <div className="cc-card__hint">
-                {loading ? (
-                  <>Cargando...</>
-                ) : (
-                  <>
-                    Mostrando <b>{visibleCount}</b> clientes
-                  </>
-                )}
+                {loading ? <>Cargando...</> : <>Mostrando <b>{visibleCount}</b> clientes</>}
               </div>
             </div>
 
             <div className="cc-headFilters">
-              {/* ✅ SIN período */}
-<div className="cc-filter cc-filter--search">
-  <label>Buscar</label>
+              {/* ✅ Buscar */}
+              <div className="cc-filter cc-filter--search">
+                <label>Buscar</label>
 
-  <div className="cc-searchInput">
-    <input
-      className="cc-input"
-      value={q}
-      onChange={(e) => setQ(e.target.value)}
-      placeholder="Buscar cliente..."
-      disabled={loading}
-    />
+                <div className="cc-searchInput">
+                  <input
+                    className="cc-input"
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="Buscar cliente..."
+                    disabled={loading}
+                  />
 
-    {q.trim() !== "" && !loading && (
-      <button
-        type="button"
-        className="cc-clearSearch"
-        title="Limpiar búsqueda"
-        onClick={() => {
-          setQ("");
-          const input = document.querySelector(".cc-searchInput input");
-          input?.focus();
-        }}
-      >
-        ×
-      </button>
-    )}
-  </div>
-</div>
-
+                  {q.trim() !== "" && !loading && (
+                    <button
+                      type="button"
+                      className="cc-clearSearch"
+                      title="Limpiar búsqueda"
+                      onClick={() => {
+                        setQ("");
+                        const input = document.querySelector(".cc-searchInput input");
+                        input?.focus();
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
 
               {/* ✅ Exportar Excel */}
               <button
                 className="cc-btnex cc-btn--excel"
                 onClick={exportExcel}
                 disabled={loading || !filtered.length}
-                title={
-                  filtered.length
-                    ? "Exportar a Excel"
-                    : "No hay datos para exportar"
-                }
+                title={filtered.length ? "Exportar a Excel" : "No hay datos para exportar"}
               >
                 <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
               </button>
@@ -293,22 +277,67 @@ export default function Cuentas_Corrientes() {
 
           {/* ✅ Body con scroll */}
           <div className="cc-gridBody" role="rowgroup">
+            {/* ✅ GIF de carga dentro del body */}
+            {loading && (
+              <div className="cc-emptyRow cc-emptyRow--loading">
+                <GifCarga />
+              </div>
+            )}
+
             {!loading && filtered.length === 0 ? (
               <div className="cc-emptyRow">No hay datos</div>
             ) : null}
 
-            {filtered.map((r) => (
+            {!loading &&
+              filtered.map((r) => (
+                <div
+                  key={r.id_cliente}
+                  className="cc-grid cc-grid--row"
+                  style={{
+                    gridTemplateColumns: `260px repeat(${orderedCuentas.length}, 1fr) .5fr`,
+                  }}
+                >
+                  <div className="cc-cell cc-name">{r.nombre}</div>
+
+                  {orderedCuentas.map((c) => {
+                    const v = getCell(r, c.id_cuenta_corriente);
+                    const cls = v > 0 ? "is-positive" : v < 0 ? "is-negative" : "";
+                    return (
+                      <div
+                        key={c.id_cuenta_corriente}
+                        className={`cc-cell cc-num is-center ${cls}`}
+                      >
+                        {moneyARS(v)}
+                      </div>
+                    );
+                  })}
+
+                  <div
+                    className={`cc-cell cc-num is-center cc-saldo ${
+                      Number(r.saldo) < 0
+                        ? "is-negative"
+                        : Number(r.saldo) > 0
+                        ? "is-positive"
+                        : ""
+                    }`}
+                  >
+                    <b>{moneyARS(r.saldo)}</b>
+                  </div>
+                </div>
+              ))}
+
+            {/* ✅ Footer: solo si NO está cargando (así no se mezcla con el loader) */}
+            {!loading && (
               <div
-                key={r.id_cliente}
-                className="cc-grid cc-grid--row"
+                className="cc-grid cc-grid--tfoot"
                 style={{
                   gridTemplateColumns: `260px repeat(${orderedCuentas.length}, 1fr) .5fr`,
                 }}
               >
-                <div className="cc-cell cc-name">{r.nombre}</div>
+                <div className="cc-cell cc-tfootLabel">Totales</div>
 
                 {orderedCuentas.map((c) => {
-                  const v = getCell(r, c.id_cuenta_corriente);
+                  const v = Number((totales.columnas || {})[String(c.id_cuenta_corriente)] || 0);
                   const cls = v > 0 ? "is-positive" : v < 0 ? "is-negative" : "";
                   return (
                     <div
@@ -322,65 +351,22 @@ export default function Cuentas_Corrientes() {
 
                 <div
                   className={`cc-cell cc-num is-center cc-saldo ${
-                    Number(r.saldo) < 0
+                    Number(totales.saldo) < 0
                       ? "is-negative"
-                      : Number(r.saldo) > 0
+                      : Number(totales.saldo) > 0
                       ? "is-positive"
                       : ""
                   }`}
                 >
-                  <b>{moneyARS(r.saldo)}</b>
+                  <b>{moneyARS(totales.saldo)}</b>
                 </div>
               </div>
-            ))}
-
-            {/* ✅ Footer */}
-            <div
-              className="cc-grid cc-grid--tfoot"
-              style={{
-                gridTemplateColumns: `260px repeat(${orderedCuentas.length}, 1fr) .5fr`,
-              }}
-            >
-              <div className="cc-cell cc-tfootLabel">Totales</div>
-
-              {orderedCuentas.map((c) => {
-                const v = Number(
-                  (totales.columnas || {})[String(c.id_cuenta_corriente)] || 0
-                );
-                const cls = v > 0 ? "is-positive" : v < 0 ? "is-negative" : "";
-                return (
-                  <div
-                    key={c.id_cuenta_corriente}
-                    className={`cc-cell cc-num is-center ${cls}`}
-                  >
-                    {moneyARS(v)}
-                  </div>
-                );
-              })}
-
-              <div
-                className={`cc-cell cc-num is-center cc-saldo ${
-                  Number(totales.saldo) < 0
-                    ? "is-negative"
-                    : Number(totales.saldo) > 0
-                    ? "is-positive"
-                    : ""
-                }`}
-              >
-                <b>{moneyARS(totales.saldo)}</b>
-              </div>
-            </div>
+            )}
           </div>
-
-          {/* accesibilidad/consistencia */}
-          {!err && loading && filtered.length === 0 ? (
-            <div className="cc-emptyRow">Cargando cuentas corrientes...</div>
-          ) : null}
         </div>
 
         <div className="cc-footnote">
-          * Las columnas se generan desde <b>cuentas_corrientes</b>. El saldo es
-          la suma final por cliente.
+          * Las columnas se generan desde <b>cuentas_corrientes</b>. El saldo es la suma final por cliente.
         </div>
       </section>
     </div>

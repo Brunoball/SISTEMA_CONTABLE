@@ -1,22 +1,21 @@
 <?php
 // backend/config/db.php
 // Configuración de la base de datos
-//brunoball516
-//Gastex2233
-//php -S localhost:3001 -c "C:\PHP\php1\php.ini"
 
-$host = 'localhost';
-$dbname = 'sistema_contable';
-$user = 'root'; // Cambialo si usás otro usuario
-$pass = 'Gastex2233'; // Cambialo si tenés contraseña
-
+$host   = defined('DB_HOST') ? (string)DB_HOST : 'localhost';
+$dbname = defined('DB_NAME') ? (string)DB_NAME : 'sistema_contable';
+$user   = defined('DB_USER') ? (string)DB_USER : 'root';
+$pass   = defined('DB_PASS') ? (string)DB_PASS : 'brunoball516';
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES   => false,
+    ]);
 } catch (PDOException $e) {
     die(json_encode([
         'exito' => false,
         'mensaje' => 'Error de conexión a la base de datos: ' . $e->getMessage()
-    ]));
+    ], JSON_UNESCAPED_UNICODE));
 }

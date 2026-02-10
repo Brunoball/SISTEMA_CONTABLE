@@ -213,7 +213,7 @@ function slugifySheetName(name) {
 }
 
 function buildExportRows(rows) {
-  return rows.map((r) => {
+  return (Array.isArray(rows) ? rows : []).map((r) => {
     const total = pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0);
 
     const cliente = safeText(pick(r, ["cliente", "nombre_cliente", "razon_social_cliente"], ""));
@@ -238,7 +238,7 @@ export default function Movimientos() {
   const [rows, setRows] = useState([]);
 
   const [loadingLists, setLoadingLists] = useState(true);
-  const [loadingRows, setLoadingRows] = useState(false); // para deshabilitar UI
+  const [loadingRows, setLoadingRows] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
@@ -263,14 +263,14 @@ export default function Movimientos() {
   const cacheRef = useRef(new Map());
 
   // ✅ Loader PRO global (hook)
-  const {
-    visible: uxLoaderVisible,
-    begin: uxBegin,
-    end: uxEnd,
-  } = useSmoothLoader({
+  const { visible: uxLoaderVisible, begin: uxBegin, end: uxEnd } = useSmoothLoader({
     showDelayMs: 80,
     minVisibleMs: 450,
   });
+
+  // ✅ Debounce búsqueda (NO corta el input)
+  const searchTimerRef = useRef(null);
+  const skipSearchRef = useRef(false);
 
   /* =========================
      API helpers
@@ -375,7 +375,6 @@ export default function Movimientos() {
       const periodoAPI = periodoToYYYYMM(perUI);
       const cacheKey = `${periodoAPI}|${(qLocal || "").trim()}`;
 
-      // ✅ arrancar loader pro (delay + mínimo visible)
       uxBegin();
 
       const start = Date.now();
@@ -383,7 +382,6 @@ export default function Movimientos() {
       setError("");
 
       try {
-        // ✅ cache hit: no “jump”, actualizamos y cerramos loader
         if (cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
           setRows(cacheRef.current.get(cacheKey) || []);
           setLoadingRows(false);
@@ -391,7 +389,6 @@ export default function Movimientos() {
           return;
         }
 
-        // ✅ cache pero forzar loader (solo dev)
         if (cacheRef.current.has(cacheKey) && FORCE_SHOW_LOADER_DEV) {
           const cached = cacheRef.current.get(cacheKey) || [];
           const elapsed = Date.now() - start;
@@ -413,10 +410,7 @@ export default function Movimientos() {
         if (!data.exito) throw new Error(data.mensaje || "No se pudieron cargar movimientos.");
 
         const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
-        const movsNorm = movs.map((r) => ({
-          ...r,
-          periodo: periodoToMMYYYY(r?.periodo),
-        }));
+        const movsNorm = movs.map((r) => ({ ...r, periodo: periodoToMMYYYY(r?.periodo) }));
 
         cacheRef.current.set(cacheKey, movsNorm);
 
@@ -484,7 +478,31 @@ export default function Movimientos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // filtrado front (simple)
+  /* =========================================================
+     ✅ AUTO-FILTRADO: a medida que escribís en el buscador
+     - Debounce 250ms
+     - NO bloquea el input mientras carga
+  ========================================================= */
+  useEffect(() => {
+    if (!fPeriodo) return;
+
+    if (skipSearchRef.current) {
+      skipSearchRef.current = false;
+      return;
+    }
+
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    searchTimerRef.current = setTimeout(() => {
+      loadRows({ periodo: fPeriodo, q });
+    }, 250);
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [q, fPeriodo, loadRows]);
+
+  // filtrado front (simple) (queda igual)
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
     if (!fPer) return [];
@@ -499,8 +517,7 @@ export default function Movimientos() {
         label: "DESCRIPCIÓN",
         align: "left",
         fr: 2.2,
-        render: (r) =>
-          safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
+        render: (r) => safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
       },
       {
         key: "tipo_pago",
@@ -534,9 +551,7 @@ export default function Movimientos() {
     ];
   }, []);
 
-  const gridCols = useMemo(() => {
-    return columns.map((c) => `${Number(c.fr) || 1}fr`).join(" ");
-  }, [columns]);
+  const gridCols = useMemo(() => columns.map((c) => `${Number(c.fr) || 1}fr`).join(" "), [columns]);
 
   const openEditModal = (r) => {
     setSelectedRow(r);
@@ -626,7 +641,11 @@ export default function Movimientos() {
         <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
       )}
 
-      {error && <div className="mov-alert" role="alert">{error}</div>}
+      {error && (
+        <div className="mov-alert" role="alert">
+          {error}
+        </div>
+      )}
 
       <section className="mov-card mov-card--table">
         <div className="mov-card__head">
@@ -640,25 +659,37 @@ export default function Movimientos() {
 
             <div className="mov-headFilters">
               <div className="mov-filter">
-                <label><FontAwesomeIcon icon={faCalendarDays} /> Período</label>
+                <label>
+                  <FontAwesomeIcon icon={faCalendarDays} /> Período
+                </label>
                 <select
                   value={periodoToMMYYYY(fPeriodo)}
                   onChange={async (e) => {
                     const ui = periodoToMMYYYY(e.target.value);
                     setFPeriodo(ui);
+
+                    // ✅ para que el efecto debounce NO dispare otra llamada extra
+                    skipSearchRef.current = true;
+
                     await loadRows({ periodo: ui, q });
                   }}
                   disabled={loadingRows || loadingLists}
                 >
                   {(lists.periodos || []).map((p) => {
                     const ui = periodoToMMYYYY(p);
-                    return <option key={ui} value={ui}>{ui}</option>;
+                    return (
+                      <option key={ui} value={ui}>
+                        {ui}
+                      </option>
+                    );
                   })}
                 </select>
               </div>
 
               <div className="mov-search">
-                <label><FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda</label>
+                <label>
+                  <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                </label>
                 <div className="mov-searchInput">
                   <input
                     value={q}
@@ -666,20 +697,32 @@ export default function Movimientos() {
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
+
+                        // ✅ Enter = buscar ya (sin esperar debounce)
+                        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                        skipSearchRef.current = true;
+
                         await loadRows({ periodo: fPeriodo, q: e.currentTarget.value });
                       }
                     }}
                     placeholder="Buscar…"
-                    disabled={loadingRows}
+                    // ✅ IMPORTANTÍSIMO: NO lo cortes mientras carga
+                    disabled={loadingLists}
                   />
-                  {q.trim() !== "" && !loadingRows && (
+
+                  {q.trim() !== "" && (
                     <button
                       type="button"
                       className="mov-clearSearch"
                       title="Limpiar búsqueda"
                       onClick={async () => {
+                        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
+
+                        // ✅ limpiar = buscar ya sin q
+                        skipSearchRef.current = true;
                         await loadRows({ periodo: fPeriodo, q: "" });
+
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
                     >
@@ -786,7 +829,9 @@ export default function Movimientos() {
                         "mov-gridCell",
                         c.align === "right" ? "is-right" : "",
                         c.align === "center" ? "is-center" : "",
-                      ].filter(Boolean).join(" ")}
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
                       role="cell"
                       title={typeof val === "string" ? val : undefined}
                     >
@@ -799,9 +844,7 @@ export default function Movimientos() {
 
             {!loadingRows && filteredRows.length === 0 && (
               <div className="mov-emptyRow">
-                {!fPeriodo
-                  ? "No hay período disponible para cargar movimientos."
-                  : "No hay movimientos para mostrar en este período."}
+                {!fPeriodo ? "No hay período disponible para cargar movimientos." : "No hay movimientos para mostrar en este período."}
               </div>
             )}
           </div>
@@ -812,7 +855,7 @@ export default function Movimientos() {
       <ModalCargaRapidaMovimientos
         open={openAdd}
         lists={lists}
-                  dark={true}
+        dark={true}
         periodoDefault={fPeriodo}
         onClose={() => setOpenAdd(false)}
         onToast={showToast}
@@ -846,7 +889,7 @@ export default function Movimientos() {
         lists={lists}
         row={selectedRow}
         periodoDefault={fPeriodo}
-          dark={true}
+        dark={true}
         onClose={() => {
           setOpenEdit(false);
           setSelectedRow(null);

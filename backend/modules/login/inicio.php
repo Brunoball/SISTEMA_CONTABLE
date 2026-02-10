@@ -13,8 +13,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
   exit;
 }
 
-require_once __DIR__ . '/../../config/db.php'; // $pdo (PDO)
-
 define('DEBUG_LOGIN', false);
 
 function ok(array $arr): void {
@@ -47,6 +45,15 @@ function verify_password(string $inputPass, string $storedHash): bool
   return hash_equals($stored, $inputPass);
 }
 
+function client_ip(): string {
+  $ip = $_SERVER['HTTP_CF_CONNECTING_IP']
+    ?? $_SERVER['HTTP_X_FORWARDED_FOR']
+    ?? $_SERVER['REMOTE_ADDR']
+    ?? '';
+  if (is_string($ip) && str_contains($ip, ',')) $ip = trim(explode(',', $ip)[0]);
+  return trim((string)$ip);
+}
+
 try {
   if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     fail('Método no permitido.', 405);
@@ -63,47 +70,120 @@ try {
     fail('Faltan datos.');
   }
 
+  // 1) Conexión MASTER
+  require_once __DIR__ . '/../../config/db_master.php'; // -> $pdo_master (PDO)
+
+  // 2) Buscar usuario master + tenant
   $sql = "
     SELECT
-      u.idUsuario,
-      u.Nombre_Completo,
-      u.Hash_Contrasena,
-      LOWER(u.rol) AS rol,
-      COALESCE(u.tema,'claro') AS tema,
-      u.idPlan,
-      u.Fecha_Creacion,
-      p.nombre AS plan_nombre,
-      p.nivel  AS plan_nivel,
-      p.activo AS plan_activo
-    FROM usuarios u
-    LEFT JOIN planes p ON p.idPlan = u.idPlan
-    WHERE u.Nombre_Completo = :nombre
+      um.idUsuarioMaster,
+      um.idTenant,
+      um.usuario,
+      um.hash_contrasena,
+      um.rol,
+      um.tema,
+      um.activo AS usuario_activo,
+      um.fecha_creacion,
+
+      t.nombre     AS tenant_nombre,
+      t.db_host,
+      t.db_name,
+      t.db_user,
+      t.db_pass,
+      t.idPlan,
+      t.activo     AS tenant_activo,
+
+      ps.nombre    AS plan_nombre,
+      ps.nivel     AS plan_nivel,
+      ps.activo    AS plan_activo
+    FROM usuarios_master um
+    INNER JOIN tenants t ON t.idTenant = um.idTenant
+    LEFT JOIN planes_saas ps ON ps.idPlan = t.idPlan
+    WHERE um.usuario = :usuario
     LIMIT 1
   ";
-  $stmt = $pdo->prepare($sql);
-  $stmt->execute([':nombre' => $nombre]);
+  $stmt = $pdo_master->prepare($sql);
+  $stmt->execute([':usuario' => $nombre]);
   $u = $stmt->fetch(PDO::FETCH_ASSOC);
+
+  // auditoría (la completamos al final con éxito/fracaso)
+  $ip = client_ip();
+  $ua = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+  $auditIdUsuarioMaster = $u ? (int)$u['idUsuarioMaster'] : null;
+  $auditIdTenant = $u ? (int)$u['idTenant'] : null;
+
+  $audit = $pdo_master->prepare("
+    INSERT INTO login_auditoria (idUsuarioMaster, idTenant, usuario, ip, user_agent, exito, creado_en)
+    VALUES (:idUsuarioMaster, :idTenant, :usuario, :ip, :ua, :exito, NOW())
+  ");
 
   if (DEBUG_LOGIN) {
     ok([
       'debug' => true,
-      'input_nombre' => $nombre,
+      'input_usuario' => $nombre,
       'usuario_db' => $u,
       'calc_sha256' => hash('sha256', $contrasena),
     ]);
   }
 
-  if (!$u) fail('Credenciales incorrectas.', 401);
-
-  $guardado = (string)($u['Hash_Contrasena'] ?? '');
-  if (!verify_password($contrasena, $guardado)) {
+  if (!$u) {
+    $audit->execute([
+      ':idUsuarioMaster' => null,
+      ':idTenant' => null,
+      ':usuario' => $nombre,
+      ':ip' => $ip,
+      ':ua' => $ua,
+      ':exito' => 0,
+    ]);
     fail('Credenciales incorrectas.', 401);
   }
 
-  $rol = (string)($u['rol'] ?? 'vista');
+  if ((int)($u['usuario_activo'] ?? 0) !== 1) {
+    $audit->execute([
+      ':idUsuarioMaster' => (int)$u['idUsuarioMaster'],
+      ':idTenant' => (int)$u['idTenant'],
+      ':usuario' => (string)$u['usuario'],
+      ':ip' => $ip,
+      ':ua' => $ua,
+      ':exito' => 0,
+    ]);
+    fail('Usuario inactivo.', 403);
+  }
+
+  if ((int)($u['tenant_activo'] ?? 0) !== 1) {
+    $audit->execute([
+      ':idUsuarioMaster' => (int)$u['idUsuarioMaster'],
+      ':idTenant' => (int)$u['idTenant'],
+      ':usuario' => (string)$u['usuario'],
+      ':ip' => $ip,
+      ':ua' => $ua,
+      ':exito' => 0,
+    ]);
+    fail('Tenant inactivo.', 403);
+  }
+
+  $guardado = (string)($u['hash_contrasena'] ?? '');
+  if (!verify_password($contrasena, $guardado)) {
+    $audit->execute([
+      ':idUsuarioMaster' => (int)$u['idUsuarioMaster'],
+      ':idTenant' => (int)$u['idTenant'],
+      ':usuario' => (string)$u['usuario'],
+      ':ip' => $ip,
+      ':ua' => $ua,
+      ':exito' => 0,
+    ]);
+    fail('Credenciales incorrectas.', 401);
+  }
+
+  // 3) Resolver rol/tema
+  $rol = strtolower(trim((string)($u['rol'] ?? 'vista')));
   $rol = in_array($rol, ['admin', 'vista'], true) ? $rol : 'vista';
 
-  $planNivel = (int)($u['plan_nivel'] ?? 1);
+  $tema = strtolower(trim((string)($u['tema'] ?? 'claro')));
+  if (!in_array($tema, ['claro', 'oscuro'], true)) $tema = 'claro';
+
+  // 4) Resolver plan desde master (planes_saas)
+  $planNivel  = (int)($u['plan_nivel'] ?? 1);
   if ($planNivel < 1 || $planNivel > 3) $planNivel = 1;
 
   $planNombre = (string)($u['plan_nombre'] ?? 'basico');
@@ -115,30 +195,69 @@ try {
     $planNombre = 'basico';
   }
 
-  $tema = strtolower(trim((string)($u['tema'] ?? 'claro')));
-  if (!in_array($tema, ['claro', 'oscuro'], true)) $tema = 'claro';
+  // 5) Conectar a la DB del TENANT usando TU MISMO db.php (sin romper módulos)
+  $tenantHost = trim((string)($u['db_host'] ?? 'localhost'));
+  $tenantDb   = trim((string)($u['db_name'] ?? ''));
+  $tenantUser = trim((string)($u['db_user'] ?? ''));
+  $tenantPass = (string)($u['db_pass'] ?? '');
 
-  $fechaCreacion = $u['Fecha_Creacion'] ?? null;
-  $fechaCreacionStr = is_string($fechaCreacion) ? trim($fechaCreacion) : '';
-
-  if ($fechaCreacion === null || $fechaCreacionStr === '' || $fechaCreacionStr === '0000-00-00 00:00:00') {
-    $upd = $pdo->prepare("UPDATE usuarios SET Fecha_Creacion = NOW() WHERE idUsuario = :id LIMIT 1");
-    $upd->execute([':id' => (int)$u['idUsuario']]);
-    $fechaCreacion = (new DateTime('now'))->format('Y-m-d H:i:s');
+  if ($tenantDb === '' || $tenantUser === '') {
+    $audit->execute([
+      ':idUsuarioMaster' => (int)$u['idUsuarioMaster'],
+      ':idTenant' => (int)$u['idTenant'],
+      ':usuario' => (string)$u['usuario'],
+      ':ip' => $ip,
+      ':ua' => $ua,
+      ':exito' => 0,
+    ]);
+    fail('Tenant mal configurado (DB).', 500);
   }
 
+  // ✅ Hook retrocompatible: db.php ahora toma estas constantes si existen
+  if (!defined('DB_HOST')) define('DB_HOST', $tenantHost);
+  if (!defined('DB_NAME')) define('DB_NAME', $tenantDb);
+  if (!defined('DB_USER')) define('DB_USER', $tenantUser);
+  if (!defined('DB_PASS')) define('DB_PASS', $tenantPass);
+
+  require_once __DIR__ . '/../../config/db.php'; // -> $pdo (PDO) apuntando a tenant DB
+
+  // chequeo rápido de conexión tenant
+  $pdo->query('SELECT 1');
+
+  // 6) Auditoría OK
+  $audit->execute([
+    ':idUsuarioMaster' => (int)$u['idUsuarioMaster'],
+    ':idTenant' => (int)$u['idTenant'],
+    ':usuario' => (string)$u['usuario'],
+    ':ip' => $ip,
+    ':ua' => $ua,
+    ':exito' => 1,
+  ]);
+
+  // 7) Respuesta (mantengo keys para no romper frontend)
   ok([
     'exito' => true,
     'usuario' => [
-      'idUsuario' => (int)$u['idUsuario'],
-      'Nombre_Completo' => (string)$u['Nombre_Completo'],
-      'nombre' => (string)$u['Nombre_Completo'], // 👈 para frontend (key corta)
+      // ✅ compat: tu frontend espera idUsuario
+      'idUsuario' => (int)$u['idUsuarioMaster'],
+      'idUsuarioMaster' => (int)$u['idUsuarioMaster'],
+      'idTenant' => (int)$u['idTenant'],
+      'tenant_nombre' => (string)($u['tenant_nombre'] ?? ''),
+
+      // ✅ compat: antes era Nombre_Completo
+      'Nombre_Completo' => (string)$u['usuario'],
+      'nombre' => (string)$u['usuario'],
+
       'rol' => $rol,
       'tema' => $tema,
+
       'idPlan' => (int)($u['idPlan'] ?? 1),
       'plan_nombre' => $planNombre,
       'plan_nivel' => $planNivel,
-      'Fecha_Creacion' => $fechaCreacion,
+
+      'Fecha_Creacion' => (string)($u['fecha_creacion'] ?? ''),
+      // opcional útil:
+      'db_name' => $tenantDb,
     ],
   ]);
 
@@ -149,4 +268,5 @@ try {
     'mensaje' => 'Error del servidor.',
     'detalle' => DEBUG_LOGIN ? $e->getMessage() : null,
   ], JSON_UNESCAPED_UNICODE);
+  exit;
 }

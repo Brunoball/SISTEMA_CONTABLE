@@ -213,18 +213,29 @@ function movimientos_listar(PDO $pdo): void
       LEFT JOIN detalles di ON di.id_detalle = fi.id_detalle
   ";
 
+  // ✅ FIX HY093: NO repetir el mismo placeholder :q con prepares nativos
   if ($q !== '') {
+    $like = '%' . $q . '%';
+
     $where[] = "(
-      UPPER(COALESCE(c.nombre,''))   LIKE UPPER(:q) OR
-      UPPER(COALESCE(tv.nombre,''))  LIKE UPPER(:q) OR
-      UPPER(COALESCE(cc.nombre,''))  LIKE UPPER(:q) OR
-      UPPER(COALESCE(tm.nombre,''))  LIKE UPPER(:q) OR
-      UPPER(COALESCE(cl.nombre,''))  LIKE UPPER(:q) OR
-      UPPER(COALESCE(pr.nombre,''))  LIKE UPPER(:q) OR
-      UPPER(COALESCE(di.nombre, d.nombre,'')) LIKE UPPER(:q) OR
-      UPPER(COALESCE(mp.nombre,''))  LIKE UPPER(:q)
+      UPPER(COALESCE(c.nombre,''))   LIKE UPPER(:q1) OR
+      UPPER(COALESCE(tv.nombre,''))  LIKE UPPER(:q2) OR
+      UPPER(COALESCE(cc.nombre,''))  LIKE UPPER(:q3) OR
+      UPPER(COALESCE(tm.nombre,''))  LIKE UPPER(:q4) OR
+      UPPER(COALESCE(cl.nombre,''))  LIKE UPPER(:q5) OR
+      UPPER(COALESCE(pr.nombre,''))  LIKE UPPER(:q6) OR
+      UPPER(COALESCE(di.nombre, d.nombre,'')) LIKE UPPER(:q7) OR
+      UPPER(COALESCE(mp.nombre,''))  LIKE UPPER(:q8)
     )";
-    $params[':q'] = '%' . $q . '%';
+
+    $params[':q1'] = $like;
+    $params[':q2'] = $like;
+    $params[':q3'] = $like;
+    $params[':q4'] = $like;
+    $params[':q5'] = $like;
+    $params[':q6'] = $like;
+    $params[':q7'] = $like;
+    $params[':q8'] = $like;
   }
 
   if (!empty($where)) $sql .= " WHERE " . implode(" AND ", $where);
@@ -236,7 +247,9 @@ function movimientos_listar(PDO $pdo): void
 
   $data = [];
   foreach ($rows as $r) {
-    $id_detalle_final = $r['item_id_detalle'] !== null ? (int)$r['item_id_detalle'] : ($r['id_detalle'] === null ? null : (int)$r['id_detalle']);
+    $id_detalle_final = $r['item_id_detalle'] !== null
+      ? (int)$r['item_id_detalle']
+      : ($r['id_detalle'] === null ? null : (int)$r['id_detalle']);
 
     $data[] = [
       'id_movimiento' => (int)$r['id_movimiento'],

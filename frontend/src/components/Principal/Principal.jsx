@@ -117,8 +117,20 @@ function normalizeTema(value) {
 function applyTheme(tema) {
   document.documentElement.setAttribute("data-theme", tema);
 }
-function getIdUsuario(u) {
-  const cand = [u?.idUsuario, u?.id_usuario, u?.id, u?.usuario_id];
+
+/**
+ * ✅ SaaS: priorizamos ID master
+ * - idUsuarioMaster (nuevo)
+ * - idUsuario (compat vieja, pero hoy tu login lo setea = idUsuarioMaster)
+ */
+function getIdUsuarioMaster(u) {
+  const cand = [
+    u?.idUsuarioMaster, // ✅ prioridad
+    u?.idUsuario, // compat
+    u?.id_usuario,
+    u?.id,
+    u?.usuario_id,
+  ];
   const n = Number(cand.find((x) => x != null && x !== "")) || 0;
   return n;
 }
@@ -301,7 +313,7 @@ const Principal = () => {
   };
 
   /* =========================
-     ✅ toggle tema + DB REAL
+     ✅ toggle tema -> MASTER
   ========================= */
   const toggleTema = async () => {
     const nuevo = tema === "oscuro" ? "claro" : "oscuro";
@@ -324,11 +336,11 @@ const Principal = () => {
     // pegar a backend (mostrar si falla)
     try {
       const u = u2 || JSON.parse(localStorage.getItem("usuario")) || {};
-      const idUsuario = getIdUsuario(u);
+      const idUsuarioMaster = getIdUsuarioMaster(u);
 
-      if (!idUsuario) {
+      if (!idUsuarioMaster) {
         console.warn(
-          "No hay idUsuario en localStorage. No se puede guardar tema en DB.",
+          "No hay idUsuarioMaster en localStorage. No se puede guardar tema en DB.",
           u
         );
         return;
@@ -339,7 +351,7 @@ const Principal = () => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ idUsuario, tema: nuevo }),
+          body: JSON.stringify({ idUsuarioMaster, tema: nuevo }), // ✅ MASTER
         }
       );
 
@@ -354,7 +366,7 @@ const Principal = () => {
         return;
       }
 
-      console.log("✅ Tema guardado en DB:", data);
+      console.log("✅ Tema guardado en DB (MASTER):", data);
     } catch (e) {
       console.error("Error llamando usuario_tema_actualizar:", e);
     }

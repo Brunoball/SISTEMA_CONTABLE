@@ -505,3 +505,214 @@ html[data-theme="oscuro"] .fc-page .fc-footnote{
 html[data-theme="oscuro"] .fc-page .fc-gridBody::-webkit-scrollbar-thumb{
   background: rgba(148,163,184,.22) !important;
 }
+/* =========================================================
+   FLUJO DE CAJA — MOBILE VIEW (NO TOCAR DESKTOP)
+   Pegalo AL FINAL de flujo_caja.css
+========================================================= */
+@media (max-width: 720px){
+
+  /* Page padding más cómodo en celu */
+  .fc-page{
+    padding: 10px;
+  }
+
+  /* Head: apilar todo */
+  .fc-card__head{
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .fc-card__headLeft{
+    gap: 10px;
+  }
+
+  .fc-headTitle{
+    min-width: 0;
+    width: 100%;
+  }
+
+  .fc-card__title{
+    font-size: 16px;
+  }
+
+  .fc-headFilters{
+    width: 100%;
+  }
+
+  .fc-filter{
+    width: 100%;
+  }
+
+  .fc-filter select{
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Acciones: botón full width */
+  .fc-card__actions{
+    width: 100%;
+  }
+
+  .fc-btn{
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Subhead: compacto */
+  .fc-subhead{
+    padding: 10px 12px;
+  }
+  .fc-subhead__meta{
+    line-height: 1.25;
+  }
+
+  /* Tabla: eliminar scroll horizontal y convertir filas a "cards" */
+  .fc-tableWrap{
+    max-height: none;     /* deja que crezca en mobile */
+    overflow: visible;    /* sin recortes */
+  }
+
+  .fc-gridBody{
+    max-height: none;     /* evita cálculos raros en mobile */
+    overflow: visible;    /* sin scroll interno */
+    background: transparent;
+    padding: 10px 10px 12px;
+  }
+
+  /* Ocultamos el header estilo excel en mobile */
+  .fc-grid--head{
+    display: none;
+  }
+
+  /* Base grid: sin min-width en mobile */
+  .fc-grid{
+    min-width: 0;
+    width: 100%;
+  }
+
+  /* Cada fila pasa a ser una card */
+  .fc-grid--row{
+    grid-template-columns: 1fr;   /* una columna */
+    border: 1px solid color-mix(in srgb, var(--fc-border) 70%, #fff);
+    border-radius: 14px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .fc-grid--row:hover{
+    background: #fff; /* no “tinte” raro */
+  }
+
+  /* Celdas: layout tipo “label - value” */
+  .fc-grid--row .fc-cell{
+    justify-content: space-between;
+    text-align: left;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    min-height: auto;
+    padding: 10px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--fc-border) 55%, #fff);
+  }
+
+  /* La fecha como “título” de la card */
+  .fc-grid--row .fc-cell:nth-child(1){
+    font-weight: 650;
+    font-size: 14px;
+    color: var(--balto-ink);
+    background: color-mix(in srgb, var(--balto-bg) 70%, #fff);
+  }
+
+  /* Labels automáticos (sin tocar JSX) */
+  .fc-grid--row .fc-cell:nth-child(2)::before{
+    content: "Ingresos";
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--fc-muted);
+    font-weight: 600;
+  }
+
+  .fc-grid--row .fc-cell:nth-child(3)::before{
+    content: "Egresos";
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--fc-muted);
+    font-weight: 600;
+  }
+
+  .fc-grid--row .fc-cell:nth-child(4)::before{
+    content: "Saldo";
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--fc-muted);
+    font-weight: 600;
+  }
+
+  /* Valores: alineados a la derecha */
+  .fc-grid--row .fc-cell:nth-child(2),
+  .fc-grid--row .fc-cell:nth-child(3),
+  .fc-grid--row .fc-cell:nth-child(4){
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  /* Reforzamos el número al final (sin depender de .is-center) */
+  .fc-grid--row .fc-cell:nth-child(2),
+  .fc-grid--row .fc-cell:nth-child(3),
+  .fc-grid--row .fc-cell:nth-child(4){
+    justify-content: space-between;
+  }
+
+  /* última fila sin borde abajo */
+  .fc-grid--row .fc-cell:last-child{
+    border-bottom: none;
+  }
+
+  /* Loader dentro de tabla en mobile: que no “rompa” */
+  .fc-emptyRow--loading{
+    padding: 14px 6px;
+  }
+
+  /* Footnote: más respirable */
+  .fc-footnote{
+    padding: 10px 12px;
+  }
+}
+
+/* Ajuste extra para pantallas MUY chicas */
+@media (max-width: 380px){
+  .fc-card__title{ font-size: 15px; }
+  .fc-gridBody{ padding: 8px 8px 10px; }
+  .fc-grid--row .fc-cell{ padding: 9px 10px; }
+}
+/* =========================================================
+   MOBILE: scroll interno en la tabla (sin tocar desktop)
+========================================================= */
+@media (max-width: 720px){
+
+  /* ✅ El contenedor limita alto */
+  .fc-tableWrap{
+    max-height: calc(100vh - 260px); /* ajustable */
+    overflow: hidden;                /* wrap no scrollea */
+  }
+
+  /* ✅ El scroll real vive acá */
+  .fc-gridBody{
+    max-height: calc(100vh - 420px); /* mismo alto */
+    overflow: auto;                  /* ✅ scroll */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Scrollbar mobile */
+  .fc-gridBody::-webkit-scrollbar{ width: 10px; }
+  .fc-gridBody::-webkit-scrollbar-thumb{
+    background: rgba(10,37,64,.14);
+    border-radius: 999px;
+  }
+  .fc-gridBody::-webkit-scrollbar-track{ background: transparent; }
+}

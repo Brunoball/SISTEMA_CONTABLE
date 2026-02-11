@@ -730,3 +730,364 @@ html[data-theme="oscuro"] .af-page .af-totalSub{
 html[data-theme="oscuro"] .af-page .af-gridBody::-webkit-scrollbar-thumb{
   background: rgba(148,163,184,.22) !important;
 }
+/* =========================================================
+   ANALISIS FINANCIERO — MOBILE RESPONSIVE (NO TOCAR DESKTOP)
+   Pegalo AL FINAL de analisis_financiero.css
+========================================================= */
+@media (max-width: 720px){
+
+  /* Page padding */
+  .af-page{
+    padding: 10px;
+  }
+
+  /* Head: apilar */
+  .af-card__head{
+    padding: 12px;
+    gap: 10px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .af-card__headLeft{
+    gap: 10px;
+  }
+
+  .af-headTitle{
+    min-width: 0;
+    width: 100%;
+  }
+
+  .af-card__title{
+    font-size: 16px;
+  }
+
+  /* Filters: 1 columna */
+  .af-headFilters{
+    width: 100%;
+    gap: 10px;
+  }
+
+  .af-filter{
+    width: 100%;
+  }
+
+  .af-filter select,
+  .af-filter input{
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Buscador: ancho completo */
+  .af-filter--search input{
+    min-width: 0;
+  }
+
+  /* Botón excel: full width */
+  .af-card__actions{
+    width: 100%;
+    margin-top: 6px;
+  }
+
+  .af-btn--excel{
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* =========================
+     TABLA: scroll interno (mobile)
+     - sin min-width gigante
+     - header oculto
+     - filas tipo "card" con labels
+  ========================= */
+
+  /* Ajuste de alto de la zona tabla */
+  .af-tableWrap{
+    max-height: calc(100vh - 300px); /* ajustable */
+    overflow: hidden;
+  }
+
+  .af-gridBody{
+    max-height: calc(100vh - 400px); /* mismo alto */
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    background: transparent;
+    padding: 10px 10px 12px;
+  }
+
+  /* Ocultar header excel en mobile */
+  .af-grid--head{
+    display: none;
+  }
+
+  /* Quitar min-width en mobile */
+  .af-grid{
+    min-width: 0;
+    width: 100%;
+  }
+
+  /* Fila -> card */
+  .af-grid--row{
+    grid-template-columns: 1fr; /* una columna */
+    border: 1px solid rgba(10, 37, 64, 0.14);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 10px;
+    background: #fff;
+  }
+
+  .af-grid--row:hover{
+    background: #fff;
+  }
+
+  /* Celdas card */
+  .af-grid--row .af-cell{
+    white-space: normal;
+    overflow: visible;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(10, 37, 64, 0.08);
+  }
+
+  /* Concepto: título */
+  .af-grid--row .af-cell:first-child{
+    font-weight: 650;
+    color: rgba(10, 37, 64, 0.92);
+    background: rgba(10, 37, 64, 0.03);
+  }
+
+  /* Importe: label + value (sin tocar JSX) */
+  .af-grid--row .af-cell:last-child{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+    border-bottom: none;
+  }
+
+  .af-grid--row .af-cell:last-child::before{
+    content: "Importe";
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: rgba(66, 84, 102, 0.70);
+    font-weight: 600;
+    margin-right: 10px;
+  }
+
+  /* Asegurar que el número quede a la derecha */
+  .af-grid--row .af-cell:last-child{
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Empty row */
+  .af-emptyRow{
+    padding: 18px 10px;
+  }
+
+  /* Subhead y totales */
+  .af-subhead{
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .af-miniHint{
+    max-width: none;
+  }
+
+  .af-footTotals{
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+}
+
+/* Extra ultra chico */
+@media (max-width: 380px){
+  .af-gridBody{ padding: 8px 8px 10px; }
+  .af-grid--row .af-cell{ padding: 9px 10px; }
+}
+/* =========================================================
+   ANALISIS FINANCIERO — SCROLL GLOBAL EN MOBILE
+   (scroll al contenedor completo, NO solo registros)
+   NO TOCAR DESKTOP
+========================================================= */
+/* =========================================================
+   ANALISIS FINANCIERO — MOBILE (cards + scroll SOLO en tabla)
+========================================================= */
+@media (max-width: 720px){
+
+  /* Page */
+  .af-page{
+    padding: 10px;
+  }
+
+  /* Head: apilar */
+  .af-card__head{
+    padding: 12px;
+    gap: 10px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .af-card__headLeft{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .af-headTitle{
+    min-width: 0;
+    width: 100%;
+  }
+
+  .af-headFilters{
+    width: 100%;
+    gap: 10px;
+  }
+
+  .af-filter{ width: 100%; }
+
+  .af-filter select,
+  .af-filter input{
+    min-width: 0;
+    width: 100%;
+  }
+
+  .af-filter--search input{ min-width: 0; }
+
+  .af-card__actions{
+    width: 100%;
+    margin-top: 6px;
+  }
+
+  .af-btn--excel{
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* ✅ SCROLL INTERNO: SOLO TABLA */
+  .af-card--table{
+    min-height: 0; /* clave para que el scroll interno funcione */
+  }
+
+  .af-tableWrap{
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    max-height: 52vh; /* ✅ ajustable: 48-60vh */
+  }
+
+  .af-gridBody{
+    height: 100%;
+    max-height: 100%;
+    overflow-y: auto;        /* ✅ scroll real */
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    background: transparent;
+    padding: 10px 10px 12px;
+  }
+
+  /* Ocultar header excel en mobile */
+  .af-grid--head{ display: none; }
+
+  /* Cards */
+  .af-grid{
+    min-width: 0;
+    width: 100%;
+  }
+
+  .af-grid--row{
+    grid-template-columns: 1fr;
+    border: 1px solid rgba(10, 37, 64, 0.14);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 10px;
+    background: #fff;
+  }
+
+  .af-grid--row:hover{ background:#fff; }
+
+  .af-grid--row .af-cell{
+    white-space: normal;
+    overflow: visible;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(10, 37, 64, 0.08);
+  }
+
+  .af-grid--row .af-cell:first-child{
+    font-weight: 650;
+    color: rgba(10, 37, 64, 0.92);
+    background: rgba(10, 37, 64, 0.03);
+  }
+
+  .af-grid--row .af-cell:last-child{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+    border-bottom: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .af-grid--row .af-cell:last-child::before{
+    content: "Importe";
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: rgba(66, 84, 102, 0.70);
+    font-weight: 600;
+    margin-right: 10px;
+  }
+
+  /* Subhead + totales debajo (fuera del scroll de tabla) */
+  .af-subhead{
+    padding: 10px 12px;
+    gap: 8px;
+    min-height: 100vh;
+  }
+
+  .af-miniHint{ max-width: none; }
+
+  .af-footTotals{
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 380px){
+  .af-gridBody{ padding: 8px 8px 10px; }
+  .af-grid--row .af-cell{ padding: 9px 10px; }
+}
+/* =========================================================
+   ANALISIS FINANCIERO — FIX REAL SCROLL MOBILE
+   Scroll al CARD completo (único scroll)
+   NO TOCA DESKTOP
+========================================================= */
+@media (max-width: 720px){
+
+
+
+  /* 2️⃣ El CARD es el que scrollea */
+  .af-card{
+    height: calc(100vh - 120px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 3️⃣ Anulamos cualquier scroll interno previo */
+  .af-tableWrap,
+  .af-gridBody{
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Scrollbar visible */
+  .af-card::-webkit-scrollbar{
+    width: 10px;
+  }
+  .af-card::-webkit-scrollbar-thumb{
+    background: rgba(10,37,64,.22);
+    border-radius: 999px;
+  }
+}

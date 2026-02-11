@@ -6,7 +6,7 @@ declare(strict_types=1);
 $host   = 'localhost';
 $dbname = 'balto_master';
 $user   = 'root';
-$pass   = 'brunoball516';
+$pass   = 'Gastex2233';
 
 try {
   $pdo_master = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass, [

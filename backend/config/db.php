@@ -1,11 +1,12 @@
 <?php
 // backend/config/db.php
 // Configuración de la base de datos
+// php -S localhost:3001 -c "C:\PHP\php1\php.ini"
 
 $host   = defined('DB_HOST') ? (string)DB_HOST : 'localhost';
 $dbname = defined('DB_NAME') ? (string)DB_NAME : 'sistema_contable';
 $user   = defined('DB_USER') ? (string)DB_USER : 'root';
-$pass   = defined('DB_PASS') ? (string)DB_PASS : 'brunoball516';
+$pass   = defined('DB_PASS') ? (string)DB_PASS : 'Gastex2233';
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass, [

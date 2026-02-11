@@ -108,13 +108,12 @@ function pickTipoMovimientoIdByName(listsNorm, name) {
 
 /* =========================
    Lists normalize
+   ✅ SIN TODO lo de pago (medios_pago / cuentas_corrientes)
 ========================= */
 const SAFE_LISTS = {
   periodos: [],
   clasificaciones: [],
   proveedores: [],
-  medios_pago: [],
-  cuentas_corrientes: [],
   detalles: [],
   tipos_movimiento: [],
 };
@@ -126,8 +125,6 @@ function normalizeIncomingLists(lists) {
     periodos: pick("periodos"),
     clasificaciones: pick("clasificaciones"),
     proveedores: pick("proveedores"),
-    medios_pago: pick("medios_pago"),
-    cuentas_corrientes: pick("cuentas_corrientes"),
     detalles: pick("detalles"),
     tipos_movimiento: pick("tipos_movimiento"),
   };
@@ -246,11 +243,17 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 
 /* =========================
    Modal
+   ✅ SIN TODO rastro de pago:
+   - sin forma_compra
+   - sin cuenta corriente
+   - sin medio de pago
+   - sin validación de pago
+   - sin campos en payload
 ========================= */
 export default function ModalNuevaCompra({
   open,
   lists,
-  periodoDefault, // UI: MM-YYYY
+  periodoDefault, // UI: MM-YYYY (no obligatorio)
   onClose,
   onToast,
   onSaveCompra, // async (payloadPlano) => {}   (si NO pasás batch, yo hago fallback)
@@ -294,18 +297,13 @@ export default function ModalNuevaCompra({
   const closeBtnRef = useRef(null);
 
   // estado cabecera compra
-const [fecha, setFecha] = useState(todayISO());
-const [periodoUI, setPeriodoUI] = useState(periodoFromISODate(todayISO())); // ✅ siempre hoy
-
+  const [fecha, setFecha] = useState(todayISO());
+  const [periodoUI, setPeriodoUI] = useState(periodoFromISODate(todayISO())); // ✅ siempre hoy
 
   const [compra, setCompra] = useState({
     id_proveedor: NULL_OPTION,
     proveedor_nombre: "",
     proveedor_cuit: "",
-
-    forma_compra: "contado", // contado | cuenta_corriente
-    id_cuenta_corriente: NULL_OPTION,
-    id_medio_pago: NULL_OPTION,
   });
 
   // ✅ filas (como Ventas)
@@ -332,17 +330,12 @@ const [periodoUI, setPeriodoUI] = useState(periodoFromISODate(todayISO())); // �
     if (!wasOpen && open) {
       const f = todayISO();
       setFecha(f);
-setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
-
+      setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
 
       setCompra({
         id_proveedor: NULL_OPTION,
         proveedor_nombre: "",
         proveedor_cuit: "",
-
-        forma_compra: "contado",
-        id_cuenta_corriente: NULL_OPTION,
-        id_medio_pago: NULL_OPTION,
       });
 
       setRows([
@@ -547,7 +540,8 @@ setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
   }, [rowsCalc]);
 
   /* =========================
-     Validación (SIN clasificación)
+     Validación
+     ✅ SIN PAGO
   ========================= */
   const validate = useCallback(() => {
     const provOk =
@@ -565,10 +559,6 @@ setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
     });
 
     if (!usableLines.length) return { ok: false, msg: "Cargá al menos 1 fila con Detalle y Total > 0." };
-
-    if (compra.forma_compra === "contado" && !(Number(compra.id_medio_pago) > 0)) {
-      return { ok: false, msg: "Seleccioná un medio de pago (contado)." };
-    }
 
     const incompleteTouched = rowsCalc.some((r) => {
       const touched =
@@ -589,6 +579,7 @@ setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
   /* =========================
      Submit (batch por filas)
      ✅ Compra = ENTRADA (id_tipo_movimiento)
+     ✅ SIN PAGO en payload
 ========================= */
   const submit = useCallback(async () => {
     if (saving) return;
@@ -616,7 +607,7 @@ setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
       const fechaISO = toNullableDateISO(fecha) || todayISO();
 
       // UI MM-YYYY -> API YYYY-MM
-      const perUI = normalizePeriodoToMMYYYY(periodoUI) || periodoFromISODate(fechaISO);
+      const perUI = normalizePeriodoToMMYYYY(periodoUI) || normalizePeriodoToMMYYYY(periodoDefault) || periodoFromISODate(fechaISO);
       const periodoAPI = periodoMMYYYY_to_YYYYMM(perUI);
 
       const idEntrada = pickTipoMovimientoIdByName(listsNorm, "entrada");
@@ -642,10 +633,6 @@ setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
             id_proveedor: toNullableId(compra.id_proveedor),
             proveedor_nombre: String(compra.proveedor_nombre || provInput || "").trim(),
             proveedor_cuit: String(compra.proveedor_cuit || "").trim() || null,
-
-            id_cuenta_corriente:
-              compra.forma_compra === "cuenta_corriente" ? toNullableId(compra.id_cuenta_corriente) : null,
-            id_medio_pago: compra.forma_compra === "contado" ? toNullableId(compra.id_medio_pago) : null,
 
             // fila
             id_detalle: toNullableId(r.id_detalle),
@@ -707,6 +694,7 @@ setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
     onSaveBatch,
     onSaveCompra,
     periodoUI,
+    periodoDefault,
     provInput,
     rowsCalc,
     saving,
@@ -730,7 +718,7 @@ setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
         <div className="mi-modal__header mi-modal__header--car">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Nueva Compra</h2>
-            <p className="mi-modal__subtitle">Planilla a la izquierda + datos de compra a la derecha.</p>
+            <p className="mi-modal__subtitle">Planilla a la izquierda + datos básicos a la derecha.</p>
           </div>
 
           <button
@@ -775,7 +763,7 @@ setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--desc" style={{ position: "relative" }}>
                         <input
                           className="fl-input"
-                          placeholder="Escribí o seleccioná un descripción…"
+                          placeholder="Escribí o seleccioná un detalle…"
                           value={r.detalleText}
                           onChange={(e) =>
                             updateRow(r.id, {
@@ -814,7 +802,7 @@ setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
                           disabled={saving || addUI.saving}
                           className="mi-cr-link"
                         >
-                          + Agregar nuevo descripción
+                          + Agregar nuevo detalle
                         </button>
                       </div>
 
@@ -919,7 +907,7 @@ setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
             </section>
 
             {/* =========================
-                Derecha: datos compra
+                Derecha: datos compra (SIN PAGO)
             ========================= */}
             <aside className="mi-cr-filters">
               <div className="mi-cr-filters__top">
@@ -1013,68 +1001,6 @@ setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
                     />
                     <label className="fl-label">CUIT Proveedor (opcional)</label>
                   </div>
-
-                  {/* Forma compra */}
-                  <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={compra.forma_compra}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        setCompra((p) => ({
-                          ...p,
-                          forma_compra: next,
-                          id_cuenta_corriente: next === "cuenta_corriente" ? p.id_cuenta_corriente : NULL_OPTION,
-                          id_medio_pago: next === "contado" ? p.id_medio_pago : NULL_OPTION,
-                        }));
-                      }}
-                      disabled={saving}
-                    >
-                      <option value="contado">Contado</option>
-                      <option value="cuenta_corriente">Cuenta Corriente</option>
-                    </select>
-                    <label className="fl-label">Forma de compra</label>
-                  </div>
-
-                  {/* Cuenta corriente */}
-                  {compra.forma_compra === "cuenta_corriente" && (
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(compra.id_cuenta_corriente)}
-                        onChange={(e) => setCompra((p) => ({ ...p, id_cuenta_corriente: e.target.value }))}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>Cuenta corriente (opcional)</option>
-                        {(listsNorm.cuentas_corrientes || []).map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                      </select>
-                      <label className="fl-label">Cuenta Corriente</label>
-                    </div>
-                  )}
-
-                  {/* Medio pago */}
-                  {compra.forma_compra === "contado" && (
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(compra.id_medio_pago)}
-                        onChange={(e) => setCompra((p) => ({ ...p, id_medio_pago: e.target.value }))}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>Medio de pago (obligatorio)</option>
-                        {(listsNorm.medios_pago || []).map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                      </select>
-                      <label className="fl-label">Medio de pago</label>
-                    </div>
-                  )}
                 </div>
 
                 <div className="mi-cr-filters__actions">

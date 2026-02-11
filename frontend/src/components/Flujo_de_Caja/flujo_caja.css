@@ -309,7 +309,6 @@
 }
 
 .fc-num{
-  justify-content: flex-end;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }

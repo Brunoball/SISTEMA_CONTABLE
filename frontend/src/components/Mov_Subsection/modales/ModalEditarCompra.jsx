@@ -884,202 +884,194 @@ export default function ModalEditarCompra({
               </div>
 
               <div style={{ padding: 12 }}>
-<div style={{ padding: 12 }}>
-  {/* ✅ FILA 1: Tipo movimiento + Clasificación + Tipo de venta (3 columnas) */}
-  <div className="mi-row3">
-    {/* Clasificación */}
-    <div className="fl-field">
-      <select
-        className="fl-input fl-select"
-        value={String(form.id_clasificacion)}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v === ADD_OPTION) {
-            setAddUI({ open: false, field: "id_clasificacion", text: "", saving: false });
-            setForm((p) => ({ ...p, id_clasificacion: ADD_OPTION }));
-          } else {
-            onSelectWithAdd("id_clasificacion", v);
-          }
-        }}
-        disabled={saving}
-      >
-        <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
-        {(safeLists.clasificaciones || []).map((x) => (
-          <option key={x.id} value={String(x.id)}>{x.nombre}</option>
-        ))}
-        <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-      </select>
-      <label className="fl-label">Clasificación</label>
-      {renderAddInline("id_clasificacion")}
-    </div>
-
-    {/* Tipo movimiento (FIJO Entrada) */}
-    <div className="fl-field">
-      <input className="fl-input" value="Entrada (Compra)" disabled />
-      <label className="fl-label">Tipo de movimiento</label>
-    </div>
-
-    {/* ✅ Tipo de venta (si NO usás este campo en compras, podés ocultarlo o dejarlo disabled) */}
-    <div className="fl-field">
-      <input className="fl-input" value="-" disabled />
-      <label className="fl-label">Tipo de venta</label>
-    </div>
-  </div>
-
-  {/* ✅ FILA 2: Detalle + Cuenta corriente (2 columnas) */}
-  <div className="mi-row2" style={{ marginTop: 12 }}>
-    {/* Detalle (autocomplete) */}
-    <div className="fl-field" style={{ position: "relative" }}>
-      <input
-        ref={detalleInputRef}
-        className="fl-input"
-        placeholder=" "
-        value={detalleInput}
-        onChange={handleDetalleInputChange}
-        onFocus={() => setDetalleFocus(true)}
-        onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
-        disabled={saving || addUI.open}
-        autoComplete="off"
-      />
-      <label className="fl-label">Detalle</label>
-
-      {detalleFocus && filteredDetalles.length > 0 && (
-        <ul className="mi-cr-suggest">
-          {filteredDetalles.map((d) => (
-            <li
-              key={d.id}
-              className="mi-cr-suggest__item"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                handleSelectDetalle(d);
-              }}
-            >
-              <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {d.nombre}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <button
-        type="button"
-        onClick={startAddDetalle}
-        disabled={saving || addUI.saving}
-        className="mi-cr-link"
-      >
-        + Agregar nuevo detalle
-      </button>
-    </div>
-
-    {/* Cuenta corriente */}
-    <div className="fl-field">
-      <select
-        className="fl-input fl-select"
-        value={String(form.id_cuenta_corriente)}
-        onChange={(e) => onSelectWithAdd("id_cuenta_corriente", e.target.value)}
-        disabled={saving}
-      >
-        <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
-        {(safeLists.cuentasCorrientes || []).map((x) => (
-          <option key={x.id} value={String(x.id)}>{x.nombre}</option>
-        ))}
-        <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-      </select>
-      <label className="fl-label">Cuenta corriente</label>
-      {renderAddInline("id_cuenta_corriente")}
-    </div>
-  </div>
-
-                  {/* Ítem */}
-                  <div className="fl-field fl-col-full" style={{ marginTop: 4 }}>
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        fontSize: 13,
-                        marginBottom: 8,
-                        paddingTop: 6,
-                        borderTop: "1px dashed rgba(148,163,184,.55)",
+                {/* ✅ FILA 1: Clasificación + Tipo movimiento (2 columnas) */}
+                <div className="mi-row2">
+                  {/* Clasificación */}
+                  <div className="fl-field">
+                    <select
+                      className="fl-input fl-select"
+                      value={String(form.id_clasificacion)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === ADD_OPTION) {
+                          setAddUI({ open: false, field: "id_clasificacion", text: "", saving: false });
+                          setForm((p) => ({ ...p, id_clasificacion: ADD_OPTION }));
+                        } else {
+                          onSelectWithAdd("id_clasificacion", v);
+                        }
                       }}
-                    >
-                      Ítem de la compra (editable)
-                    </div>
-
-                    <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                      <div className="fl-field">
-                        <input
-                          className="fl-input"
-                          type="number"
-                          min="0"
-                          step="0.001"
-                          placeholder=" "
-                          value={form.cantidad}
-                          onChange={(e) => onCantidadChange(e.target.value)}
-                          disabled={saving}
-                        />
-                        <label className="fl-label">Cantidad</label>
-                      </div>
-
-                      <div className="fl-field">
-                        <input
-                          className="fl-input"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder=" "
-                          value={form.precio}
-                          onChange={(e) => onPrecioChange(e.target.value)}
-                          disabled={saving}
-                        />
-                        <label className="fl-label">Precio unitario</label>
-                      </div>
-
-                      <div className="fl-field">
-                        <select
-                          className="fl-input fl-select"
-                          value={String(form.iva_pct)}
-                          onChange={(e) => onIvaPctChange(e.target.value)}
-                          disabled={saving}
-                        >
-                          {IVA_OPTIONS.map((x) => (
-                            <option key={x.value} value={x.value}>
-                              {x.label}
-                            </option>
-                          ))}
-                        </select>
-                        <label className="fl-label">IVA %</label>
-                      </div>
-                    </div>
-
-                    <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 10 }}>
-                      <div className="fl-field">
-                        <input className="fl-input" value={form.subtotal} disabled />
-                        <label className="fl-label">Subtotal</label>
-                      </div>
-                      <div className="fl-field">
-                        <input className="fl-input" value={form.iva_monto} disabled />
-                        <label className="fl-label">IVA $</label>
-                      </div>
-                      <div className="fl-field">
-                        <input className="fl-input" value={form.total} disabled />
-                        <label className="fl-label">Total</label>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="fl-field fl-col-full">
-                    <input
-                      className="fl-input"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder=" "
-                      value={form.monto_total}
-                      onChange={(e) => onMontoTotalManual(e.target.value)}
                       disabled={saving}
-                    />
-                    <label className="fl-label">Monto total (ajusta el precio)</label>
+                    >
+                      <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
+                      {(safeLists.clasificaciones || []).map((x) => (
+                        <option key={x.id} value={String(x.id)}>{x.nombre}</option>
+                      ))}
+                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+                    </select>
+                    <label className="fl-label">Clasificación</label>
+                    {renderAddInline("id_clasificacion")}
                   </div>
+
+                  {/* Tipo movimiento (FIJO Entrada) */}
+                  <div className="fl-field">
+                    <input className="fl-input" value="Entrada (Compra)" disabled />
+                    <label className="fl-label">Tipo de movimiento</label>
+                  </div>
+                </div>
+
+                {/* ✅ FILA 2: Detalle + Cuenta corriente */}
+                <div className="mi-row2" style={{ marginTop: 12 }}>
+                  {/* Detalle (autocomplete) */}
+                  <div className="fl-field" style={{ position: "relative" }}>
+                    <input
+                      ref={detalleInputRef}
+                      className="fl-input"
+                      placeholder=" "
+                      value={detalleInput}
+                      onChange={handleDetalleInputChange}
+                      onFocus={() => setDetalleFocus(true)}
+                      onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
+                      disabled={saving || addUI.open}
+                      autoComplete="off"
+                    />
+                    <label className="fl-label">Detalle</label>
+
+                    {detalleFocus && filteredDetalles.length > 0 && (
+                      <ul className="mi-cr-suggest">
+                        {filteredDetalles.map((d) => (
+                          <li
+                            key={d.id}
+                            className="mi-cr-suggest__item"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectDetalle(d);
+                            }}
+                          >
+                            <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {d.nombre}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={startAddDetalle}
+                      disabled={saving || addUI.saving}
+                      className="mi-cr-link"
+                    >
+                      + Agregar nuevo detalle
+                    </button>
+                  </div>
+
+                  {/* Cuenta corriente */}
+                  <div className="fl-field">
+                    <select
+                      className="fl-input fl-select"
+                      value={String(form.id_cuenta_corriente)}
+                      onChange={(e) => onSelectWithAdd("id_cuenta_corriente", e.target.value)}
+                      disabled={saving}
+                    >
+                      <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
+                      {(safeLists.cuentasCorrientes || []).map((x) => (
+                        <option key={x.id} value={String(x.id)}>{x.nombre}</option>
+                      ))}
+                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+                    </select>
+                    <label className="fl-label">Cuenta corriente</label>
+                    {renderAddInline("id_cuenta_corriente")}
+                  </div>
+                </div>
+
+                {/* Ítem */}
+                <div className="fl-field fl-col-full" style={{ marginTop: 10 }}>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 13,
+                      marginBottom: 8,
+                      paddingTop: 6,
+                      borderTop: "1px dashed rgba(148,163,184,.55)",
+                    }}
+                  >
+                    Ítem de la compra (editable)
+                  </div>
+
+                  <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <div className="fl-field">
+                      <input
+                        className="fl-input"
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        placeholder=" "
+                        value={form.cantidad}
+                        onChange={(e) => onCantidadChange(e.target.value)}
+                        disabled={saving}
+                      />
+                      <label className="fl-label">Cantidad</label>
+                    </div>
+
+                    <div className="fl-field">
+                      <input
+                        className="fl-input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder=" "
+                        value={form.precio}
+                        onChange={(e) => onPrecioChange(e.target.value)}
+                        disabled={saving}
+                      />
+                      <label className="fl-label">Precio unitario</label>
+                    </div>
+
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(form.iva_pct)}
+                        onChange={(e) => onIvaPctChange(e.target.value)}
+                        disabled={saving}
+                      >
+                        {IVA_OPTIONS.map((x) => (
+                          <option key={x.value} value={x.value}>
+                            {x.label}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="fl-label">IVA %</label>
+                    </div>
+                  </div>
+
+                  <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 10 }}>
+                    <div className="fl-field">
+                      <input className="fl-input" value={form.subtotal} disabled />
+                      <label className="fl-label">Subtotal</label>
+                    </div>
+                    <div className="fl-field">
+                      <input className="fl-input" value={form.iva_monto} disabled />
+                      <label className="fl-label">IVA $</label>
+                    </div>
+                    <div className="fl-field">
+                      <input className="fl-input" value={form.total} disabled />
+                      <label className="fl-label">Total</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="fl-field fl-col-full">
+                  <input
+                    className="fl-input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder=" "
+                    value={form.monto_total}
+                    onChange={(e) => onMontoTotalManual(e.target.value)}
+                    disabled={saving}
+                  />
+                  <label className="fl-label">Monto total (ajusta el precio)</label>
                 </div>
               </div>
             </div>
@@ -1190,16 +1182,7 @@ export default function ModalEditarCompra({
                   type="button"
                   onClick={startAddProveedor}
                   disabled={saving || addUI.saving}
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    textAlign: "left",
-                    padding: 0,
-                    background: "none",
-                    border: "none",
-                    color: "#0f766e",
-                    cursor: "pointer",
-                  }}
+                  className="mi-cr-link"
                 >
                   + Agregar nuevo proveedor
                 </button>

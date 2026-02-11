@@ -6,7 +6,7 @@
 $host   = defined('DB_HOST') ? (string)DB_HOST : 'localhost';
 $dbname = defined('DB_NAME') ? (string)DB_NAME : 'sistema_contable';
 $user   = defined('DB_USER') ? (string)DB_USER : 'root';
-$pass   = defined('DB_PASS') ? (string)DB_PASS : 'Gastex2233';
+$pass   = defined('DB_PASS') ? (string)DB_PASS : 'brunoball516';
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass, [

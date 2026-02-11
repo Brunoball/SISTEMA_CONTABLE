@@ -95,7 +95,6 @@ function get_id_usuario_from_request(array $body = []): int {
 ========================= */
 function audit_safe(PDO $pdo, int $idUsuario, string $accion, ?string $entidad, $idEntidad, $detalle): void {
   if ($idUsuario <= 0) return;
-  // modulo fijo: movimientos (consistente con tu auditoría)
   auditar($pdo, $idUsuario, 'movimientos', $accion, $entidad, $idEntidad, $detalle);
 }
 
@@ -137,25 +136,22 @@ $idUsuario = get_id_usuario_from_request($src);
 
 /**
  * ✅ Mapa de catálogos permitidos (WHITELIST)
- * Adaptado a tu NUEVA DB "sistema_contable" según la imagen:
+ * DB: sistema_contable
  * tablas: clasificaciones, clientes, proveedores, detalles,
- *         cuentas_corrientes, medios_pago, tipos_movimiento, tipos_venta
+ *         cuentas_corrientes, medios_pago, tipos_venta
  *
- * catalogo => [tabla, pk, col_nombre]
+ * ⚠️ tipos_movimiento fue eliminado del sistema
  */
 $MAP = [
-  'clasificaciones'    => ['tabla' => 'clasificaciones',    'pk' => 'id_clasificacion',   'col' => 'nombre'],
-  'clientes'           => ['tabla' => 'clientes',           'pk' => 'id_cliente',         'col' => 'nombre'],
-  'proveedores'        => ['tabla' => 'proveedores',        'pk' => 'id_proveedor',       'col' => 'nombre'],
-  'detalles'           => ['tabla' => 'detalles',           'pk' => 'id_detalle',         'col' => 'nombre'],
+  'clasificaciones'    => ['tabla' => 'clasificaciones',    'pk' => 'id_clasificacion',    'col' => 'nombre'],
+  'clientes'           => ['tabla' => 'clientes',           'pk' => 'id_cliente',          'col' => 'nombre'],
+  'proveedores'        => ['tabla' => 'proveedores',        'pk' => 'id_proveedor',        'col' => 'nombre'],
+  'detalles'           => ['tabla' => 'detalles',           'pk' => 'id_detalle',          'col' => 'nombre'],
 
-  'cuentas_corrientes' => ['tabla' => 'cuentas_corrientes', 'pk' => 'id_cuenta_corriente','col' => 'nombre'],
-  'medios_pago'        => ['tabla' => 'medios_pago',        'pk' => 'id_medio_pago',      'col' => 'nombre'],
+  'cuentas_corrientes' => ['tabla' => 'cuentas_corrientes', 'pk' => 'id_cuenta_corriente', 'col' => 'nombre'],
+  'medios_pago'        => ['tabla' => 'medios_pago',        'pk' => 'id_medio_pago',       'col' => 'nombre'],
 
-  // ✅ IMPORTANTE: en tu screenshot la tabla se llama "tipos_movimiento"
-  // (no "tipos_movimientoS")
-  'tipos_movimiento'   => ['tabla' => 'tipos_movimiento',   'pk' => 'id_tipo_movimiento', 'col' => 'nombre'],
-  'tipos_venta'        => ['tabla' => 'tipos_venta',        'pk' => 'id_tipo_venta',      'col' => 'nombre'],
+  'tipos_venta'        => ['tabla' => 'tipos_venta',        'pk' => 'id_tipo_venta',       'col' => 'nombre'],
 ];
 
 if (!isset($MAP[$catalogo])) {
@@ -185,8 +181,6 @@ if (!preg_match($rxIdent, $tabla) || !preg_match($rxIdent, $pk) || !preg_match($
    1) Si ya existe (case-insensitive), devolver el existente
 ========================================================= */
 try {
-  // Nota: UPPER(...) funciona bien para ASCII; para tildes depende collation.
-  // Como guardás TODO en mayúscula, esto suele alcanzar.
   $sql = "SELECT $pk AS id, $col AS nombre
           FROM $tabla
           WHERE UPPER($col) = UPPER(:n)
@@ -217,7 +211,6 @@ try {
 
   $newId = (int)$pdo->lastInsertId();
   if ($newId <= 0) {
-    // fallback por si lastInsertId falla (raro)
     $st2 = $pdo->prepare("SELECT $pk AS id
                           FROM $tabla
                           WHERE UPPER($col) = UPPER(:n)
@@ -228,7 +221,6 @@ try {
     $newId = (int)($r2['id'] ?? 0);
   }
 
-  // Auditoría
   audit_safe($pdo, $idUsuario, 'catalogo_crear', $tabla, $newId, [
     'catalogo' => $catalogo,
     'nuevo' => [

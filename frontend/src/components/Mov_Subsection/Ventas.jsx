@@ -1,11 +1,9 @@
 // src/components/Movimientos/Ventas.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../config/config";
-import "../Movimientos/movimientos.css"; // reutiliza la estética de Movimientos
+import "../Movimientos/movimientos.css";
 
 import Toast from "../Global/Toast.jsx";
-
-// ✅ GIF carga (loader inline)
 import GifCarga from "../Global/Gif_Carga.jsx";
 import "../Global/gif_carga.css";
 
@@ -38,7 +36,7 @@ function moneyARS(v) {
 }
 function safeText(v) {
   const s = String(v ?? "").trim();
-  return s ? s : "-";
+  return s ? s : "—";
 }
 function normalizeSearchText(v) {
   return String(v ?? "")
@@ -50,7 +48,7 @@ function normalizeSearchText(v) {
 }
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
-  if (!s) return "-";
+  if (!s) return "—";
 
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
@@ -161,7 +159,7 @@ function getAuthInfo() {
 }
 
 /* =========================
-   Listas (mismo contrato que Movimientos)
+   Listas
 ========================= */
 const emptyLists = {
   periodos: [],
@@ -178,7 +176,6 @@ const emptyLists = {
 function normalizeLists(raw) {
   const src = raw?.listas && typeof raw.listas === "object" ? raw.listas : raw;
   const getArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
-
   const periodosUI = (getArr("periodos") || []).map(periodoToMMYYYY);
 
   return {
@@ -195,7 +192,7 @@ function normalizeLists(raw) {
 }
 
 /* =========================
-   ✅ FILTRO VENTAS
+   ✅ FILTRO VENTAS (robusto)
 ========================= */
 function hasCliente(r) {
   const idCli = Number(
@@ -203,84 +200,41 @@ function hasCliente(r) {
   );
   if (Number.isFinite(idCli) && idCli > 0) return true;
 
-  const cliTxt = String(r?.cliente ?? "").trim();
+  const cliTxt = String(
+    r?.cliente ??
+      r?.cliente_nombre ??
+      r?.nombre_cliente ??
+      r?.razon_social_cliente ??
+      ""
+  ).trim();
   return cliTxt.length > 0;
 }
 
-function resolveTipoVentaLabel(row, lists) {
-  const direct =
-    row?.tipo_venta ??
-    row?.tipoVenta ??
-    row?.venta_tipo ??
-    row?.condicion_venta ??
-    row?.condicion ??
-    "";
+function hasTipoVentaText(r) {
+  const tv = String(r?.pago_tipo_venta ?? r?.tipo_venta ?? "").trim();
+  return tv.length > 0;
+}
 
-  const directTxt = String(direct ?? "").trim();
-  if (directTxt) return directTxt;
+function hasTipoVentaId(r) {
+  const id = Number(r?.id_tipo_venta ?? r?.tipo_venta_id ?? 0);
+  return Number.isFinite(id) && id > 0;
+}
 
-  const idTV = Number(
-    row?.id_tipo_venta ??
-      row?.tipo_venta_id ??
-      row?.idTipoVenta ??
-      row?.id_tipo_venta_fk ??
-      0
+function isSalida(r) {
+  const tmTxt = normalizeSearchText(
+    r?.tipo_movimiento ?? r?.pago_tipo_movimiento ?? ""
   );
+  if (tmTxt.includes("salida")) return true;
 
-  if (Number.isFinite(idTV) && idTV > 0) {
-    const arr = Array.isArray(lists?.tipos_venta) ? lists.tipos_venta : [];
-    const found = arr.find((t) => {
-      const id = Number(t?.id_tipo_venta ?? t?.idTipoVenta ?? t?.id ?? 0);
-      return Number.isFinite(id) && id === idTV;
-    });
-    if (found) {
-      return (
-        String(
-          found?.tipo_venta ??
-            found?.nombre ??
-            found?.descripcion ??
-            found?.label ??
-            ""
-        ).trim() || ""
-      );
-    }
-  }
-
-  return "";
+  const id = Number(r?.id_tipo_movimiento ?? r?.tipo_movimiento_id ?? 0);
+  return Number.isFinite(id) && id > 0;
 }
 
-function isTipoVentaValido(tipoVentaLabel) {
-  const tv = normalizeSearchText(tipoVentaLabel);
-
-  if (tv.includes("contado")) return true;
-
-  if (tv.includes("cuenta corriente")) return true;
-  if (tv.includes("cuenta") && tv.includes("corriente")) return true;
-  if (tv.includes("cta") && tv.includes("cte")) return true;
-  if (tv.includes("ctacte")) return true;
-
-  if (tv.includes("credito")) return true;
-
-  return false;
-}
-
-function getVentaCategoriaLabel(row, lists) {
-  const label = resolveTipoVentaLabel(row, lists);
-  const tv = normalizeSearchText(label);
-
-  if (tv.includes("contado")) return "Contado";
-  if (tv.includes("credito")) return "Crédito";
-  if (tv.includes("cuenta") && tv.includes("corriente")) return "Cuenta Corriente";
-  if (tv.includes("cta") && tv.includes("cte")) return "Cuenta Corriente";
-  if (tv.includes("ctacte")) return "Cuenta Corriente";
-
-  return label || "—";
-}
-
-function isVentaRow(row, lists) {
+function isVentaRow(row) {
   if (!hasCliente(row)) return false;
-  const label = resolveTipoVentaLabel(row, lists);
-  return isTipoVentaValido(label);
+  if (hasTipoVentaText(row)) return true;
+  if (hasTipoVentaId(row)) return true;
+  return isSalida(row);
 }
 
 /* =========================
@@ -318,6 +272,31 @@ function slugifySheetName(name) {
     .replace(/\s+/g, " ")
     .trim();
   return (s || "Ventas").slice(0, 31);
+}
+
+/* =========================
+   Normalizador de fila
+========================= */
+function normalizeVentaRow(r) {
+  const cliente =
+    r?.cliente ??
+    r?.cliente_nombre ??
+    r?.nombre_cliente ??
+    r?.razon_social_cliente ??
+    "";
+
+  const tipoVentaTxt = r?.pago_tipo_venta ?? r?.tipo_venta ?? "";
+  const medioPagoNombre =
+    r?.medio_pago_nombre ?? r?.medio_pago ?? r?.pago_medio_pago ?? "";
+
+  return {
+    ...r,
+    periodo: periodoToMMYYYY(r?.periodo),
+    fecha: r?.fecha,
+    cliente: String(cliente ?? "").trim() || "",
+    pago_tipo_venta: String(tipoVentaTxt ?? "").trim() || "",
+    medio_pago_nombre: String(medioPagoNombre ?? "").trim() || "",
+  };
 }
 
 export default function Ventas() {
@@ -441,7 +420,7 @@ export default function Ventas() {
   }, [API, apiGet]);
 
   /* =========================
-     Movimientos (se filtra a ventas en frontend)
+     ✅ VENTAS (listar)
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -469,7 +448,7 @@ export default function Ventas() {
 
       try {
         const sp = new URLSearchParams();
-        sp.set("action", "movimientos_listar");
+        sp.set("action", "ventas_listar");
         sp.set("periodo", periodoAPI);
         if (qLocal) sp.set("q", qLocal);
 
@@ -477,12 +456,9 @@ export default function Ventas() {
         if (!data?.exito)
           throw new Error(data?.mensaje || "No se pudieron cargar ventas.");
 
-        const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
-        const norm = movs.map((r) => ({
-          ...r,
-          periodo: periodoToMMYYYY(r?.periodo),
-          fecha: r?.fecha,
-        }));
+        const listKey = Array.isArray(data.ventas) ? "ventas" : "movimientos";
+        const arr = Array.isArray(data[listKey]) ? data[listKey] : [];
+        const norm = arr.map(normalizeVentaRow);
 
         cacheRef.current.set(cacheKey, norm);
         setRows(norm);
@@ -497,7 +473,8 @@ export default function Ventas() {
   );
 
   const invalidateCacheForPeriodo = useCallback((periodoUI) => {
-    const periodoAPI = periodoToYYYYMM(periodoUI);
+    const ui = periodoToMMYYYY(periodoUI);
+    const periodoAPI = periodoToYYYYMM(ui);
     const keyPrefix = `${periodoAPI}|`;
     for (const k of cacheRef.current.keys()) {
       if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
@@ -530,9 +507,9 @@ export default function Ventas() {
 
     return rows
       .filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer))
-      .filter((r) => isVentaRow(r, lists))
+      .filter((r) => isVentaRow(r))
       .filter((r) => rowMatchesQuery(r, q));
-  }, [rows, fPeriodo, q, lists]);
+  }, [rows, fPeriodo, q]);
 
   /* =========================
      Columnas
@@ -567,12 +544,21 @@ export default function Ventas() {
         fr: 1.2,
         align: "center",
         render: (r) => {
-          const cat = getVentaCategoriaLabel(r, lists); // Contado / Cuenta Corriente / Crédito
-          if (cat === "Contado") {
-            const mp = String(r.medio_pago ?? "").trim();
-            return mp ? mp : "—";
-          }
-          return cat || "—";
+          const tv = String(r.pago_tipo_venta ?? r.tipo_venta ?? "").trim();
+          if (tv) return tv;
+          const id = Number(r.id_tipo_venta ?? 0);
+          return Number.isFinite(id) && id > 0 ? `ID ${id}` : "—";
+        },
+      },
+      {
+        key: "medio_pago_nombre",
+        label: "MEDIO DE PAGO",
+        fr: 1.4,
+        align: "center",
+        render: (r) => {
+          const pago = normalizeSearchText(r.pago_tipo_venta ?? r.tipo_venta);
+          if (pago.includes("contado")) return safeText(r.medio_pago_nombre);
+          return "—";
         },
       },
       {
@@ -584,7 +570,7 @@ export default function Ventas() {
       },
       { key: "acciones", label: "ACCIONES", fr: 0.8, align: "center", render: () => null },
     ];
-  }, [lists]);
+  }, []);
 
   const gridCols = useMemo(() => {
     const fallback = `repeat(${columns.length}, minmax(0, 1fr))`;
@@ -598,24 +584,12 @@ export default function Ventas() {
   }, [columns]);
 
   /* =========================
-     Acciones modales
-  ========================= */
-  const openEditModal = (r) => {
-    setSelectedRow(r);
-    setOpenEdit(true);
-  };
-  const openDeleteModal = (r) => {
-    setSelectedRow(r);
-    setOpenDel(true);
-  };
-
-  /* =========================
-     Guardar / eliminar
+     Guardar / eliminar (editar + delete)
   ========================= */
   const saveMovimiento = async (payload, isEdit) => {
     setError("");
     const { idUsuario } = getAuthInfo();
-    const action = isEdit ? "movimientos_actualizar" : "movimientos_crear";
+    const action = isEdit ? "ventas_actualizar" : "ventas_crear";
 
     const payloadNorm = {
       ...(payload || {}),
@@ -642,7 +616,7 @@ export default function Ventas() {
       const { idUsuario } = getAuthInfo();
 
       const sp = new URLSearchParams();
-      sp.set("action", "movimientos_eliminar");
+      sp.set("action", "ventas_eliminar");
       sp.set("id_movimiento", String(id));
 
       const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
@@ -664,38 +638,6 @@ export default function Ventas() {
     }
   };
 
-  const saveBatchMovimientos = useCallback(
-    async (payloads) => {
-      const arr = Array.isArray(payloads) ? payloads : [];
-      if (!arr.length) throw new Error("No hay filas para guardar.");
-
-      const { idUsuario } = getAuthInfo();
-
-      for (let i = 0; i < arr.length; i++) {
-        const p = arr[i];
-
-        const payloadNorm = {
-          ...(p || {}),
-          periodo: periodoToYYYYMM(p?.periodo),
-        };
-
-        const data = await apiPostJson(`${API}?action=movimientos_crear`, {
-          ...payloadNorm,
-          idUsuario,
-        });
-
-        if (!data?.exito) {
-          const msg = data?.mensaje || `Error guardando fila ${i + 1}.`;
-          throw new Error(msg);
-        }
-      }
-
-      invalidateCacheForPeriodo(fPeriodo);
-      await loadRows({ periodo: fPeriodo, q: "" });
-    },
-    [API, apiPostJson, fPeriodo, invalidateCacheForPeriodo, loadRows]
-  );
-
   /* =========================
      Excel “Ventas”
   ========================= */
@@ -707,17 +649,19 @@ export default function Ventas() {
       }
 
       const dataToExport = filteredRows.map((r) => {
-        const cat = getVentaCategoriaLabel(r, lists);
-        const pago =
-          cat === "Contado"
-            ? safeText(String(r.medio_pago ?? "").trim() || "—")
-            : safeText(cat || "—");
+        const pago = safeText(r.pago_tipo_venta ?? r.tipo_venta);
+        const pagoNorm = normalizeSearchText(pago);
+
+        const medioPago = pagoNorm.includes("contado")
+          ? safeText(r.medio_pago_nombre)
+          : "—";
 
         return {
           FECHA: safeText(formatFechaDMY(r.fecha)),
           DESCRIPCION: safeText(r.detalle ?? r.descripcion ?? r.concepto),
           CLIENTE: safeText(r.cliente),
-          PAGO: pago,
+          PAGO: pago || "—",
+          MEDIO_DE_PAGO: medioPago,
           TOTAL: Number(r.monto_total ?? r.total ?? 0) || 0,
         };
       });
@@ -744,7 +688,7 @@ export default function Ventas() {
     } catch (e) {
       showToast("error", e?.message || "Error exportando Excel.", 3500);
     }
-  }, [filteredRows, fPeriodo, showToast, lists]);
+  }, [filteredRows, fPeriodo, showToast]);
 
   return (
     <div className="mov-page">
@@ -849,7 +793,11 @@ export default function Ventas() {
               className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
               onClick={exportToExcel}
               disabled={loadingRows || filteredRows.length === 0}
-              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
+              title={
+                filteredRows.length
+                  ? "Exportar a Excel"
+                  : "No hay datos para exportar"
+              }
             >
               <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
             </button>
@@ -895,7 +843,6 @@ export default function Ventas() {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className="mov-gridBody">
-            {/* ✅ LOADER DENTRO DE LA TABLA (como Movimientos) */}
             {loadingRows && (
               <div className="mov-emptyRow mov-emptyRow--loading">
                 <GifCarga />
@@ -927,7 +874,10 @@ export default function Ventas() {
                               type="button"
                               className="mov-iconBtn"
                               title="Editar"
-                              onClick={() => openEditModal(r)}
+                              onClick={() => {
+                                setSelectedRow(r);
+                                setOpenEdit(true);
+                              }}
                             >
                               <FontAwesomeIcon icon={faPenToSquare} />
                             </button>
@@ -937,7 +887,10 @@ export default function Ventas() {
                               className="mov-iconBtn mov-iconBtn--danger"
                               title="Eliminar"
                               disabled={deletingId === r.id_movimiento}
-                              onClick={() => openDeleteModal(r)}
+                              onClick={() => {
+                                setSelectedRow(r);
+                                setOpenDel(true);
+                              }}
                             >
                               {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
                             </button>
@@ -979,34 +932,30 @@ export default function Ventas() {
         </div>
       </section>
 
-      {/* MODAL NUEVA VENTA */}
+      {/* ✅ MODAL NUEVA VENTA (ARREGLADO: usa onSaved real) */}
       <ModalNuevaVenta
         open={openAdd}
         lists={lists}
         periodoDefault={fPeriodo}
         onClose={() => setOpenAdd(false)}
         onToast={showToast}
-        onSaveBatch={async (payloads) => {
+        onSaved={async (info) => {
+          // info: { periodoApi, periodoUI, creados }
           try {
-            showToast("cargando", "Guardando ventas…", 12000);
+            const ui = periodoToMMYYYY(info?.periodoUI || fPeriodo);
+            setOpenAdd(false);
 
-            await saveBatchMovimientos(payloads);
-            await refreshPeriodos();
-
-            const firstPer =
-              Array.isArray(payloads) && payloads[0]?.periodo ? payloads[0].periodo : "";
-            const ui = periodoToMMYYYY(firstPer) || fPeriodo;
-
+            // mostrar lo nuevo sin recargar página
             setQ("");
             setFPeriodo(ui);
+
             invalidateCacheForPeriodo(ui);
             await loadRows({ periodo: ui, q: "" });
+            await refreshPeriodos();
 
-            setOpenAdd(false);
-            showToast("exito", "Ventas guardadas.", 2400);
+            showToast("exito", "Ventas guardadas y tabla actualizada.", 2400);
           } catch (e) {
-            showToast("error", e?.message || "Error guardando ventas.", 4200);
-            throw e;
+            showToast("error", e?.message || "Se guardó, pero falló la recarga.", 4200);
           }
         }}
       />

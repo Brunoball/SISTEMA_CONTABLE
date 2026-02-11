@@ -100,6 +100,7 @@ try {
 
   /* =========================
      Map SOLO tablas existentes (sistema_contable)
+     ✅ ELIMINADO: tipos_movimiento
   ========================= */
   $map = [
     'clasificaciones'    => ['id' => 'id_clasificacion',    'table' => 'clasificaciones'],
@@ -108,7 +109,6 @@ try {
     'detalles'           => ['id' => 'id_detalle',          'table' => 'detalles'],
     'medios_pago'        => ['id' => 'id_medio_pago',       'table' => 'medios_pago'],
     'proveedores'        => ['id' => 'id_proveedor',        'table' => 'proveedores'],
-    'tipos_movimiento'   => ['id' => 'id_tipo_movimiento',  'table' => 'tipos_movimiento'],
     'tipos_venta'        => ['id' => 'id_tipo_venta',       'table' => 'tipos_venta'],
   ];
 

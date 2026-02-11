@@ -9,7 +9,7 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
   http_response_code(204);
   exit;
 }
@@ -134,6 +134,10 @@ if ($action === '') {
 
 /* =========================================================
    LISTAR (GET)
+   ✅ Ventas:
+   - pago_tipo_venta   => tv.nombre (texto)
+   - medio_pago_nombre => mp.nombre (texto)
+   ❌ SIN "salida" (tabla/columna eliminada)
 ========================================================= */
 function movimientos_listar(PDO $pdo): void
 {
@@ -157,7 +161,6 @@ function movimientos_listar(PDO $pdo): void
       m.id_clasificacion,
       m.id_tipo_venta,
       m.id_cuenta_corriente,
-      m.id_tipo_movimiento,
       m.id_cliente,
       m.id_proveedor,
       m.id_detalle,
@@ -177,18 +180,16 @@ function movimientos_listar(PDO $pdo): void
       COALESCE(c.nombre,'')  AS clasificacion,
       COALESCE(tv.nombre,'') AS tipo_venta,
       COALESCE(cc.nombre,'') AS cuenta_corriente,
-      COALESCE(tm.nombre,'') AS tipo_movimiento,
       COALESCE(cl.nombre,'') AS cliente,
       COALESCE(pr.nombre,'') AS proveedor,
 
       COALESCE(di.nombre, d.nombre, '') AS detalle,
-      COALESCE(mp.nombre,'') AS medio_pago,
+      COALESCE(mp.nombre,'') AS medio_pago_nombre,
       m.created_at
     FROM movimientos m
       LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
       LEFT JOIN tipos_venta tv          ON tv.id_tipo_venta = m.id_tipo_venta
       LEFT JOIN cuentas_corrientes cc   ON cc.id_cuenta_corriente = m.id_cuenta_corriente
-      LEFT JOIN tipos_movimiento tm     ON tm.id_tipo_movimiento = m.id_tipo_movimiento
       LEFT JOIN clientes cl             ON cl.id_cliente = m.id_cliente
       LEFT JOIN proveedores pr          ON pr.id_proveedor = m.id_proveedor
       LEFT JOIN detalles d              ON d.id_detalle = m.id_detalle
@@ -213,7 +214,6 @@ function movimientos_listar(PDO $pdo): void
       LEFT JOIN detalles di ON di.id_detalle = fi.id_detalle
   ";
 
-  // ✅ FIX HY093: NO repetir el mismo placeholder :q con prepares nativos
   if ($q !== '') {
     $like = '%' . $q . '%';
 
@@ -221,11 +221,10 @@ function movimientos_listar(PDO $pdo): void
       UPPER(COALESCE(c.nombre,''))   LIKE UPPER(:q1) OR
       UPPER(COALESCE(tv.nombre,''))  LIKE UPPER(:q2) OR
       UPPER(COALESCE(cc.nombre,''))  LIKE UPPER(:q3) OR
-      UPPER(COALESCE(tm.nombre,''))  LIKE UPPER(:q4) OR
-      UPPER(COALESCE(cl.nombre,''))  LIKE UPPER(:q5) OR
-      UPPER(COALESCE(pr.nombre,''))  LIKE UPPER(:q6) OR
-      UPPER(COALESCE(di.nombre, d.nombre,'')) LIKE UPPER(:q7) OR
-      UPPER(COALESCE(mp.nombre,''))  LIKE UPPER(:q8)
+      UPPER(COALESCE(cl.nombre,''))  LIKE UPPER(:q4) OR
+      UPPER(COALESCE(pr.nombre,''))  LIKE UPPER(:q5) OR
+      UPPER(COALESCE(di.nombre, d.nombre,'')) LIKE UPPER(:q6) OR
+      UPPER(COALESCE(mp.nombre,''))  LIKE UPPER(:q7)
     )";
 
     $params[':q1'] = $like;
@@ -235,7 +234,6 @@ function movimientos_listar(PDO $pdo): void
     $params[':q5'] = $like;
     $params[':q6'] = $like;
     $params[':q7'] = $like;
-    $params[':q8'] = $like;
   }
 
   if (!empty($where)) $sql .= " WHERE " . implode(" AND ", $where);
@@ -251,6 +249,9 @@ function movimientos_listar(PDO $pdo): void
       ? (int)$r['item_id_detalle']
       : ($r['id_detalle'] === null ? null : (int)$r['id_detalle']);
 
+    $tipoVentaTxt = trim((string)($r['tipo_venta'] ?? ''));
+    $medioPagoTxt = trim((string)($r['medio_pago_nombre'] ?? ''));
+
     $data[] = [
       'id_movimiento' => (int)$r['id_movimiento'],
       'fecha' => (string)$r['fecha'],
@@ -259,14 +260,20 @@ function movimientos_listar(PDO $pdo): void
       'id_clasificacion' => $r['id_clasificacion'] === null ? null : (int)$r['id_clasificacion'],
       'id_tipo_venta' => $r['id_tipo_venta'] === null ? null : (int)$r['id_tipo_venta'],
       'id_cuenta_corriente' => $r['id_cuenta_corriente'] === null ? null : (int)$r['id_cuenta_corriente'],
-      'id_tipo_movimiento' => $r['id_tipo_movimiento'] === null ? null : (int)$r['id_tipo_movimiento'],
       'id_cliente' => $r['id_cliente'] === null ? null : (int)$r['id_cliente'],
       'id_proveedor' => $r['id_proveedor'] === null ? null : (int)$r['id_proveedor'],
       'id_detalle' => $id_detalle_final,
+
+      // ✅ NUEVO (para tu tabla Ventas)
+      'pago_tipo_venta' => $tipoVentaTxt,
+      'medio_pago_nombre' => $medioPagoTxt,
+
+      // (mantengo IDs para edición/guardar)
       'id_medio_pago' => $r['id_medio_pago'] === null ? null : (int)$r['id_medio_pago'],
 
       'monto_total' => (float)$r['monto_total_final'],
 
+      // primer item (para edición)
       'cantidad'  => $r['item_cantidad'] === null ? null : (float)$r['item_cantidad'],
       'precio'    => $r['item_precio'] === null ? null : (float)$r['item_precio'],
       'iva_pct'   => $r['item_iva_pct'] === null ? null : (float)$r['item_iva_pct'],
@@ -274,15 +281,13 @@ function movimientos_listar(PDO $pdo): void
       'iva_monto' => $r['item_iva_monto'] === null ? null : (float)$r['item_iva_monto'],
       'total'     => $r['item_total'] === null ? null : (float)$r['item_total'],
 
-      'clasificacion' => (string)$r['clasificacion'],
-      'tipo_venta' => (string)$r['tipo_venta'],
-      'cuenta_corriente' => (string)$r['cuenta_corriente'],
-      'tipo_movimiento' => (string)$r['tipo_movimiento'],
-      'cliente' => (string)$r['cliente'],
-      'proveedor' => (string)$r['proveedor'],
-      'detalle' => (string)$r['detalle'],
-      'medio_pago' => (string)$r['medio_pago'],
-
+      // textos
+      'clasificacion' => (string)($r['clasificacion'] ?? ''),
+      'tipo_venta' => $tipoVentaTxt,
+      'cuenta_corriente' => (string)($r['cuenta_corriente'] ?? ''),
+      'cliente' => (string)($r['cliente'] ?? ''),
+      'proveedor' => (string)($r['proveedor'] ?? ''),
+      'detalle' => (string)($r['detalle'] ?? ''),
       'created_at' => (string)($r['created_at'] ?? ''),
     ];
   }
@@ -340,14 +345,11 @@ function item_payload_from_src(array $src, float $monto_total, int $id_detalle):
 
 /* =========================================================
    CREAR (POST) - FLEX
-   ✅ no obliga ids
-   ✅ si falta fecha => hoy
-   ✅ si falta periodo => desde fecha
-   ✅ si no hay id_detalle => se crea igual sin item
+   ❌ SIN "salida" (tabla/columna eliminada)
 ========================================================= */
 function movimientos_crear(PDO $pdo): void
 {
-  if ($_SERVER['REQUEST_METHOD'] !== 'POST') fail('Método no permitido.', 405);
+  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
 
   $body = read_json_body();
   $src = !empty($body) ? $body : ($_POST ?? []);
@@ -361,7 +363,6 @@ function movimientos_crear(PDO $pdo): void
 
   $id_clasificacion   = n_int($src['id_clasificacion'] ?? null);
   $id_tipo_venta      = n_int($src['id_tipo_venta'] ?? null);
-  $id_tipo_movimiento = n_int($src['id_tipo_movimiento'] ?? null);
   $id_medio_pago      = n_int($src['id_medio_pago'] ?? null);
 
   $id_cuenta_corriente = n_int($src['id_cuenta_corriente'] ?? null);
@@ -369,19 +370,16 @@ function movimientos_crear(PDO $pdo): void
   $id_proveedor        = n_int($src['id_proveedor'] ?? null);
   $id_detalle          = n_int($src['id_detalle'] ?? null);
 
-  // monto_total puede venir o no; si no viene y hay item => lo calculamos; si no hay item => 0
   $monto_total = n_float($src['monto_total'] ?? null);
 
   $hasDetalleValido = ($id_detalle !== null && $id_detalle > 0);
 
-  // si hay detalle, armamos item (si no, no insertamos item)
   $item = null;
   if ($hasDetalleValido) {
     $baseMonto = ($monto_total !== null) ? (float)$monto_total : 0.0;
     $item = item_payload_from_src($src, $baseMonto, (int)$id_detalle);
   }
 
-  // total final cabecera: si hay item => item.total, si no => monto_total o 0
   $totalCabecera = 0.0;
   if ($item !== null) $totalCabecera = (float)$item['total'];
   else if ($monto_total !== null) $totalCabecera = (float)$monto_total;
@@ -393,12 +391,12 @@ function movimientos_crear(PDO $pdo): void
       INSERT INTO movimientos (
         fecha, periodo,
         id_clasificacion, id_tipo_venta, id_cuenta_corriente,
-        id_tipo_movimiento, id_cliente, id_proveedor, id_detalle,
+        id_cliente, id_proveedor, id_detalle,
         monto_total, id_medio_pago
       ) VALUES (
         :fecha, :periodo,
         :id_clasificacion, :id_tipo_venta, :id_cuenta_corriente,
-        :id_tipo_movimiento, :id_cliente, :id_proveedor, :id_detalle,
+        :id_cliente, :id_proveedor, :id_detalle,
         :monto_total, :id_medio_pago
       )
     ";
@@ -411,7 +409,6 @@ function movimientos_crear(PDO $pdo): void
       ':id_clasificacion' => $id_clasificacion,
       ':id_tipo_venta' => $id_tipo_venta,
       ':id_cuenta_corriente' => $id_cuenta_corriente,
-      ':id_tipo_movimiento' => $id_tipo_movimiento,
       ':id_cliente' => $id_cliente,
       ':id_proveedor' => $id_proveedor,
       ':id_detalle' => $hasDetalleValido ? $id_detalle : null,
@@ -422,7 +419,6 @@ function movimientos_crear(PDO $pdo): void
 
     $newId = (int)$pdo->lastInsertId();
 
-    // si hay detalle, insertamos item
     if ($item !== null) {
       $insItem = $pdo->prepare("
         INSERT INTO movimientos_items
@@ -451,7 +447,6 @@ function movimientos_crear(PDO $pdo): void
         'id_clasificacion' => $id_clasificacion,
         'id_tipo_venta' => $id_tipo_venta,
         'id_cuenta_corriente' => $id_cuenta_corriente,
-        'id_tipo_movimiento' => $id_tipo_movimiento,
         'id_cliente' => $id_cliente,
         'id_proveedor' => $id_proveedor,
         'id_detalle' => $hasDetalleValido ? $id_detalle : null,
@@ -470,14 +465,11 @@ function movimientos_crear(PDO $pdo): void
 
 /* =========================================================
    ACTUALIZAR (POST) - FLEX
-   ✅ no obliga ids
-   ✅ si falta fecha => mantiene la anterior o hoy
-   ✅ si falta periodo => desde fecha
-   ✅ si no hay id_detalle => actualiza cabecera y borra item/lo deja? (acá dejamos item como esté)
+   ❌ SIN "salida" (tabla/columna eliminada)
 ========================================================= */
 function movimientos_actualizar(PDO $pdo): void
 {
-  if ($_SERVER['REQUEST_METHOD'] !== 'POST') fail('Método no permitido.', 405);
+  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
 
   $body = read_json_body();
   $src = !empty($body) ? $body : ($_POST ?? []);
@@ -501,10 +493,9 @@ function movimientos_actualizar(PDO $pdo): void
     $periodo = periodo_from_fecha($fecha);
   }
 
-  $id_clasificacion   = array_key_exists('id_clasificacion', $src) ? n_int($src['id_clasificacion']) : n_int($before['id_clasificacion'] ?? null);
-  $id_tipo_venta      = array_key_exists('id_tipo_venta', $src) ? n_int($src['id_tipo_venta']) : n_int($before['id_tipo_venta'] ?? null);
-  $id_tipo_movimiento = array_key_exists('id_tipo_movimiento', $src) ? n_int($src['id_tipo_movimiento']) : n_int($before['id_tipo_movimiento'] ?? null);
-  $id_medio_pago      = array_key_exists('id_medio_pago', $src) ? n_int($src['id_medio_pago']) : n_int($before['id_medio_pago'] ?? null);
+  $id_clasificacion = array_key_exists('id_clasificacion', $src) ? n_int($src['id_clasificacion']) : n_int($before['id_clasificacion'] ?? null);
+  $id_tipo_venta    = array_key_exists('id_tipo_venta', $src) ? n_int($src['id_tipo_venta']) : n_int($before['id_tipo_venta'] ?? null);
+  $id_medio_pago    = array_key_exists('id_medio_pago', $src) ? n_int($src['id_medio_pago']) : n_int($before['id_medio_pago'] ?? null);
 
   $id_cuenta_corriente = array_key_exists('id_cuenta_corriente', $src) ? n_int($src['id_cuenta_corriente']) : n_int($before['id_cuenta_corriente'] ?? null);
   $id_cliente          = array_key_exists('id_cliente', $src) ? n_int($src['id_cliente']) : n_int($before['id_cliente'] ?? null);
@@ -516,14 +507,12 @@ function movimientos_actualizar(PDO $pdo): void
 
   $hasDetalleValido = ($id_detalle !== null && $id_detalle > 0);
 
-  // armamos item solo si hay detalle válido
   $item = null;
   if ($hasDetalleValido) {
     $baseMonto = ($monto_total_in !== null) ? (float)$monto_total_in : 0.0;
     $item = item_payload_from_src($src, $baseMonto, (int)$id_detalle);
   }
 
-  // si hay item => cabecera = item.total; si no => monto_total que venga; si no => mantener
   $totalCabecera = null;
   if ($item !== null) $totalCabecera = (float)$item['total'];
   else if ($monto_total_in !== null) $totalCabecera = (float)$monto_total_in;
@@ -539,7 +528,6 @@ function movimientos_actualizar(PDO $pdo): void
         id_clasificacion = :id_clasificacion,
         id_tipo_venta = :id_tipo_venta,
         id_cuenta_corriente = :id_cuenta_corriente,
-        id_tipo_movimiento = :id_tipo_movimiento,
         id_cliente = :id_cliente,
         id_proveedor = :id_proveedor,
         id_detalle = :id_detalle,
@@ -556,7 +544,6 @@ function movimientos_actualizar(PDO $pdo): void
       ':id_clasificacion' => $id_clasificacion,
       ':id_tipo_venta' => $id_tipo_venta,
       ':id_cuenta_corriente' => $id_cuenta_corriente,
-      ':id_tipo_movimiento' => $id_tipo_movimiento,
       ':id_cliente' => $id_cliente,
       ':id_proveedor' => $id_proveedor,
       ':id_detalle' => $hasDetalleValido ? $id_detalle : null,
@@ -565,7 +552,6 @@ function movimientos_actualizar(PDO $pdo): void
       ':id_movimiento' => $id_movimiento,
     ]);
 
-    // si hay item => update/insert primer item
     if ($item !== null) {
       $getFirst = $pdo->prepare("SELECT id_item FROM movimientos_items WHERE id_movimiento = :id ORDER BY id_item ASC LIMIT 1");
       $getFirst->execute([':id' => $id_movimiento]);

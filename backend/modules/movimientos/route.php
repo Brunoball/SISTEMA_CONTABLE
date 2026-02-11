@@ -4,44 +4,56 @@ declare(strict_types=1);
 
 if (!function_exists('route_movimientos')) {
 
-    function route_movimientos(string $action): bool
-    {
-        switch (trim($action)) {
+  function route_movimientos(string $action): bool
+  {
+    switch (trim($action)) {
 
-            /* =====================================================
-               CATÁLOGOS (selects dinámicos)
-            ===================================================== */
-            case 'catalogo_crear':
-                require_once __DIR__ . '/catalogo.php';
-                return true;
-
-
-            /* =====================================================
-               CONFIRMACIÓN DE PAGOS / RECIBOS / ÓRDENES
-            ===================================================== */
-            case 'recibos_confirmar_pago':
-            case 'ordenes_pago_confirmar_pago':
-            case 'confirmar_pago':
-                require_once __DIR__ . '/confirmar_pago.php';
-                return true;
+      /* =====================================================
+         CATÁLOGOS (selects dinámicos)
+      ===================================================== */
+      case 'catalogo_crear':
+        require_once __DIR__ . '/catalogo.php';
+        return true;
 
 
-            /* =====================================================
-               CRUD DE MOVIMIENTOS
-            ===================================================== */
-            case 'movimientos_listar':
-            case 'movimientos_crear':
-            case 'movimientos_actualizar':
-            case 'movimientos_eliminar':
-                require_once __DIR__ . '/movimientos.php';
-                return true;
+      /* =====================================================
+         CONFIRMACIÓN DE PAGOS / RECIBOS / ÓRDENES
+      ===================================================== */
+      case 'recibos_confirmar_pago':
+      case 'ordenes_pago_confirmar_pago':
+      case 'confirmar_pago':
+        require_once __DIR__ . '/confirmar_pago.php';
+        return true;
 
 
-            /* =====================================================
-               ACCIÓN NO ENCONTRADA
-            ===================================================== */
-            default:
-                return false;
-        }
+      /* =====================================================
+         CRUD DE MOVIMIENTOS (GENERAL)
+      ===================================================== */
+      case 'movimientos_listar':
+      case 'movimientos_crear':
+      case 'movimientos_actualizar':
+      case 'movimientos_eliminar':
+        require_once __DIR__ . '/movimientos.php';
+        return true;
+
+
+      /* =====================================================
+         VENTAS (MÓDULO DEDICADO)
+      ===================================================== */
+      case 'ventas_listar':
+      case 'ventas_crear':
+      case 'ventas_crear_batch':
+      case 'ventas_actualizar':
+      case 'ventas_eliminar':
+        require_once __DIR__ . '/ventas.php';
+        return true;
+
+
+      /* =====================================================
+         ACCIÓN NO ENCONTRADA
+      ===================================================== */
+      default:
+        return false;
     }
+  }
 }

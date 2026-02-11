@@ -92,22 +92,17 @@ try {
   }
 
   /* ==========================================================
-     … A) FLUJO POR CLIENTES (opcional)
+     ✅ A) FLUJO POR CLIENTES (SIN id_tipo_movimiento)
+     - Antes separabas ingresos/egresos por id_tipo_movimiento (1/2).
+     - Ahora devolvemos TOTAL por cliente (suma de monto_total) y saldo = total.
      action=flujo_caja_clientes
   ========================================================== */
   if ($action === 'flujo_caja_clientes') {
 
-    $TIPO_INGRESO = 1;
-    $TIPO_EGRESO  = 2;
-
     $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
     $filtrarPeriodo = ($periodo !== '' && isValidPeriodo($periodo));
 
-    $params = [
-      ':ing' => $TIPO_INGRESO,
-      ':egr' => $TIPO_EGRESO,
-    ];
-
+    $params = [];
     $whereExtra = "";
     if ($filtrarPeriodo) {
       $whereExtra = " AND m.periodo = :periodo ";
@@ -118,8 +113,7 @@ try {
       SELECT
         c.id_cliente,
         c.nombre AS cliente,
-        COALESCE(SUM(CASE WHEN m.id_tipo_movimiento = :ing THEN m.monto_total ELSE 0 END), 0) AS ingresos,
-        COALESCE(SUM(CASE WHEN m.id_tipo_movimiento = :egr THEN m.monto_total ELSE 0 END), 0) AS egresos
+        COALESCE(SUM(m.monto_total), 0) AS total
       FROM clientes c
       LEFT JOIN movimientos m
         ON m.id_cliente = c.id_cliente
@@ -133,14 +127,11 @@ try {
 
     $rows = [];
     while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
-      $ing = (float)$r['ingresos'];
-      $egr = (float)$r['egresos'];
+      $tot = (float)($r['total'] ?? 0);
       $rows[] = [
         'id_cliente' => (int)$r['id_cliente'],
         'cliente'    => (string)$r['cliente'],
-        'ingresos'   => $ing,
-        'egresos'    => $egr,
-        'saldo'      => $ing - $egr,
+        'total'      => $tot,
       ];
     }
 
@@ -152,9 +143,10 @@ try {
   }
 
   /* ==========================================================
-     ✅ B) FLUJO DIARIO TIPO EXCEL (ARREGLADO)
-     - NO incluye el último día del mes anterior
-     - arranca desde el día 01 con saldo = saldoBase + (ing-eg)
+     ✅ B) FLUJO DIARIO TIPO EXCEL (SIN id_tipo_movimiento)
+     - Antes: ingresos/egresos por id_tipo_movimiento (1/2)
+     - Ahora: usamos "total_dia" = SUM(monto_total)
+     - saldo_base = SUM(monto_total) anterior al mes
      action=flujo_caja_resumen
   ========================================================== */
   if ($action === 'flujo_caja_resumen') {
@@ -164,9 +156,6 @@ try {
       fail('Parámetro "periodo" inválido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodo]);
     }
 
-    $TIPO_INGRESO = 1;
-    $TIPO_EGRESO  = 2;
-
     $start = monthStart($periodo);
     $end   = monthEnd($periodo);
 
@@ -174,12 +163,11 @@ try {
     $days = buildDays($periodo);
     $today = (new DateTime('today'))->format('Y-m-d');
 
-    // 1) totales por día (ing/eg) SOLO dentro del mes
+    // 1) totales por día SOLO dentro del mes
     $sqlDia = "
       SELECT
         fecha,
-        COALESCE(SUM(CASE WHEN id_tipo_movimiento = :ing THEN monto_total ELSE 0 END), 0) AS ingresos,
-        COALESCE(SUM(CASE WHEN id_tipo_movimiento = :egr THEN monto_total ELSE 0 END), 0) AS egresos
+        COALESCE(SUM(monto_total), 0) AS total_dia
       FROM movimientos
       WHERE fecha BETWEEN :desde AND :hasta
       GROUP BY fecha
@@ -187,36 +175,27 @@ try {
 
     $stDia = $pdo->prepare($sqlDia);
     $stDia->execute([
-      ':ing' => $TIPO_INGRESO,
-      ':egr' => $TIPO_EGRESO,
       ':desde' => $start,
       ':hasta' => $end,
     ]);
 
     $mapDia = [];
     while ($r = $stDia->fetch(PDO::FETCH_ASSOC)) {
-      $f = (string)$r['fecha'];
-      $mapDia[$f] = [
-        'ingresos' => (float)$r['ingresos'],
-        'egresos'  => (float)$r['egresos'],
-      ];
+      $f = (string)($r['fecha'] ?? '');
+      if ($f !== '') {
+        $mapDia[$f] = (float)($r['total_dia'] ?? 0.0);
+      }
     }
 
     // 2) saldo base (todo lo anterior al mes)
     $sqlSaldoBase = "
-      SELECT
-        COALESCE(SUM(CASE WHEN id_tipo_movimiento = :ing THEN monto_total ELSE 0 END), 0)
-        -
-        COALESCE(SUM(CASE WHEN id_tipo_movimiento = :egr THEN monto_total ELSE 0 END), 0)
-        AS saldo
+      SELECT COALESCE(SUM(monto_total), 0) AS saldo
       FROM movimientos
       WHERE fecha < :desde
     ";
 
     $stBase = $pdo->prepare($sqlSaldoBase);
     $stBase->execute([
-      ':ing' => $TIPO_INGRESO,
-      ':egr' => $TIPO_EGRESO,
       ':desde' => $start,
     ]);
 
@@ -229,27 +208,24 @@ try {
     foreach ($days as $iso) {
       $isFuture = ($iso > $today);
 
-      $ing = (float)($mapDia[$iso]['ingresos'] ?? 0.0);
-      $egr = (float)($mapDia[$iso]['egresos'] ?? 0.0);
+      $totalDia = (float)($mapDia[$iso] ?? 0.0);
 
       if ($isFuture) {
         // Futuro: no mostrar importes, pero mantener saldo acumulado hasta hoy
         $rows[] = [
           'fecha' => $iso,
-          'ingresos' => null,
-          'egresos' => null,
+          'total' => null,
           'saldo' => $saldo,
         ];
         continue;
       }
 
-      // ✅ saldo del día = saldo anterior + (ing - egr)
-      $saldo = $saldo + $ing - $egr;
+      // ✅ saldo del día = saldo anterior + total_dia
+      $saldo = $saldo + $totalDia;
 
       $rows[] = [
         'fecha' => $iso,
-        'ingresos' => $ing,
-        'egresos' => $egr,
+        'total' => $totalDia,
         'saldo' => $saldo,
       ];
     }

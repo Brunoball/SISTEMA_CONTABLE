@@ -36,6 +36,10 @@ if (!function_exists('route_movimientos')) {
       /* ✅ MOVIMIENTOS */
       case 'movimientos_listar':
       case 'movimientos_periodos_listar':
+      case 'movimientos_crear':
+      case 'movimientos_crear_batch':
+      case 'movimientos_actualizar':     // ✅ NUEVO
+      case 'movimientos_eliminar':       // ✅ NUEVO
         require __DIR__ . '/movimientos.php';
         return true;
 

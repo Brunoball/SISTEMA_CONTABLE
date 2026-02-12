@@ -1,10 +1,11 @@
-// src/components/Compras/modales/ModalNuevaCompra.jsx
+// src/components/Mov_Subsection/modales/ModalNuevaCompra.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import "../../Movimientos/modales/ModalEditarMovimiento.css"; // ✅ misma estética
+import "../../Movimientos/modales/ModalEditarMovimiento.css";
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";
+
 const IVA_OPTIONS = [
   { label: "0%", value: 0 },
   { label: "10,5%", value: 10.5 },
@@ -25,6 +26,9 @@ function safeNumber(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
+function isBlank(v) {
+  return String(v ?? "").trim() === "";
+}
 function moneyARS(v) {
   const n = Number(v || 0);
   try {
@@ -35,103 +39,69 @@ function moneyARS(v) {
 }
 
 /* =========================
-   Período helpers (UI MM-YYYY) <-> API YYYY-MM
+   Período UI (MM-YYYY) <-> API (YYYY-MM)
 ========================= */
-function normalizePeriodoToMMYYYY(v) {
-  const s = String(v ?? "").trim();
-  if (!s) return "";
-
-  let m = "";
-  let y = "";
-
-  if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    y = parts[0];
-    m = parts[1];
-  } else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    m = parts[0];
-    y = parts[1];
-  } else if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      y = s.slice(0, 4);
-      m = s.slice(4);
-    } else {
-      m = s.slice(0, 2);
-      y = s.slice(2);
-    }
-  } else {
-    return s;
-  }
-
-  const mm = String(Number(m)).padStart(2, "0");
-  const yyyy = String(y);
-  return `${mm}-${yyyy}`;
-}
-function periodoFromISODate(iso) {
+function isoToMMYYYY(iso) {
   const s = String(iso ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
   const [y, m] = s.split("-");
   return `${m}-${y}`;
 }
-function periodoMMYYYY_to_YYYYMM(mmYYYY) {
+function mmYYYYToYYYYMM(mmYYYY) {
   const s = String(mmYYYY ?? "").trim();
-  if (!/^\d{2}-\d{4}$/.test(s)) return "";
-  const [mm, yyyy] = s.split("-");
-  return `${yyyy}-${mm}`;
+  if (/^\d{2}[-/]\d{4}$/.test(s)) {
+    const [mm, yyyy] = s.split(/[-/]/);
+    return `${yyyy}-${mm}`;
+  }
+  if (/^\d{6}$/.test(s)) {
+    const mm = s.slice(0, 2);
+    const yyyy = s.slice(2);
+    return `${yyyy}-${mm}`;
+  }
+  if (/^\d{4}-\d{2}$/.test(s)) return s;
+  return "";
 }
-function toNullableId(v) {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-function toNullableDateISO(v) {
-  const s = String(v ?? "").trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
-}
-
-/* =========================
-   Tipo movimiento helper
-   (listas: tipos_movimiento => {id, nombre})
-========================= */
-function pickTipoMovimientoIdByName(listsNorm, name) {
-  const arr = Array.isArray(listsNorm?.tipos_movimiento) ? listsNorm.tipos_movimiento : [];
-  const target = String(name || "").trim().toLowerCase();
-
-  const found =
-    arr.find((x) => String(x?.nombre ?? "").trim().toLowerCase() === target) ||
-    arr.find((x) => String(x?.nombre ?? "").toLowerCase().includes(target));
-
-  const id = Number(found?.id); // ✅ backend devuelve "id"
-  return Number.isFinite(id) && id > 0 ? id : null;
+function normalizePeriodoInput(raw) {
+  const digits = String(raw || "").replace(/\D/g, "").slice(0, 6);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}-${digits.slice(2)}`;
 }
 
 /* =========================
    Lists normalize
-   ✅ SIN TODO lo de pago (medios_pago / cuentas_corrientes)
 ========================= */
 const SAFE_LISTS = {
-  periodos: [],
-  clasificaciones: [],
   proveedores: [],
   detalles: [],
-  tipos_movimiento: [],
+  medios_pago: [],
+  cuentas_corrientes: [],
 };
 
-function normalizeIncomingLists(lists) {
-  const src = lists?.listas && typeof lists.listas === "object" ? lists.listas : lists;
-  const pick = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
+function normalizeLists(lists) {
+  const src = lists && typeof lists === "object" ? lists : {};
+  const l = src.listas && typeof src.listas === "object" ? src.listas : src;
+  const pick = (k) => (Array.isArray(l?.[k]) ? l[k] : []);
+
+  const mediosPago =
+    pick("medios_pago").length ? pick("medios_pago") : pick("mediosPago").length ? pick("mediosPago") : pick("medios");
+
+  const cuentas =
+    pick("cuentas_corrientes").length
+      ? pick("cuentas_corrientes")
+      : pick("cuentasCorrientes").length
+      ? pick("cuentasCorrientes")
+      : pick("cuentas");
+
   return {
-    periodos: pick("periodos"),
-    clasificaciones: pick("clasificaciones"),
     proveedores: pick("proveedores"),
     detalles: pick("detalles"),
-    tipos_movimiento: pick("tipos_movimiento"),
+    medios_pago: mediosPago,
+    cuentas_corrientes: cuentas,
   };
 }
 
 /* =========================
-   API helpers (fallback)
+   Auth + API
 ========================= */
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
@@ -153,7 +123,7 @@ async function parseJsonOrThrow(res) {
     return JSON.parse(text);
   } catch {
     const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-    throw new Error(`Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`);
+    throw new Error(`Respuesta inválida (no JSON). HTTP ${res.status}\n${preview}`);
   }
 }
 
@@ -200,13 +170,7 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
       <div className="mi-mini__modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
-          <button
-            type="button"
-            className="mi-mini__close"
-            onClick={onCancel}
-            disabled={saving}
-            aria-label="Cerrar"
-          >
+          <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving} aria-label="Cerrar">
             ✕
           </button>
         </div>
@@ -242,41 +206,71 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 }
 
 /* =========================
-   Modal
-   ✅ SIN TODO rastro de pago:
-   - sin forma_compra
-   - sin cuenta corriente
-   - sin medio de pago
-   - sin validación de pago
-   - sin campos en payload
+   Validación filas (mensajes)
 ========================= */
-export default function ModalNuevaCompra({
-  open,
-  lists,
-  periodoDefault, // UI: MM-YYYY (no obligatorio)
-  onClose,
-  onToast,
-  onSaveCompra, // async (payloadPlano) => {}   (si NO pasás batch, yo hago fallback)
-  onSaveBatch, // ✅ opcional: async (payloadsArray) => {}
-}) {
-  const API = `${BASE_URL}/api.php`;
+function describeLineProblem(r, idx1based) {
+  const detId = Number(r.id_detalle);
+  const detTxt = String(r.detalleText || "").trim();
 
-  const showToast = useCallback(
-    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
-    [onToast]
-  );
+  const qtyBlank = isBlank(r.cantidad);
+  const priceBlank = isBlank(r.precio);
 
-  // ✅ lock scroll
+  const qty = safeNumber(r.cantidad);
+  const price = safeNumber(r.precio);
+  const total = safeNumber(r.total);
+
+  const touched =
+    detTxt !== "" ||
+    String(r.id_detalle || "").trim() !== "" ||
+    !qtyBlank ||
+    !priceBlank ||
+    safeNumber(r.cantidad) !== 0 ||
+    safeNumber(r.precio) !== 0;
+
+  if (!touched) return null;
+
+  const issues = [];
+
+  if (!(Number.isFinite(detId) && detId > 0)) {
+    issues.push(detTxt ? `el detalle "${detTxt}" no está seleccionado del listado` : "falta el detalle");
+  }
+
+  if (qtyBlank) issues.push("falta la cantidad");
+  else if (!(Number.isFinite(qty) && qty > 0)) issues.push("la cantidad debe ser mayor a 0");
+
+  if (priceBlank) issues.push("falta el precio");
+  else if (!(Number.isFinite(price) && price > 0)) issues.push("el precio debe ser mayor a 0");
+
+  if (!(Number.isFinite(total) && total > 0)) issues.push("el total queda en 0 (revisá cantidad/precio)");
+
+  if (!issues.length) return null;
+  return `Fila ${idx1based}: ${issues.join(", ")}.`;
+}
+
+/* =========================
+   Modal
+========================= */
+export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSaved }) {
+  // ✅ hooks SIEMPRE arriba (no condicionales)
+  const mediosPagoList = useMemo(() => normalizeLists(lists).medios_pago, [lists]);
+  const cuentasCorrientesList = useMemo(() => normalizeLists(lists).cuentas_corrientes, [lists]);
+
+  const API_BATCH = `${BASE_URL}/api.php?action=compras_crear_batch`;
+  const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
+
+  const showToast = useCallback((tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion), [onToast]);
+
+  // lock scroll
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevOverflow;
     };
   }, [open]);
 
-  // ESC
+  // ESC cierra
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e) => e.key === "Escape" && onClose?.();
@@ -284,33 +278,35 @@ export default function ModalNuevaCompra({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  const [localLists, setLocalLists] = useState(() => ({
-    ...SAFE_LISTS,
-    ...normalizeIncomingLists(lists),
-  }));
-  useEffect(() => {
-    setLocalLists({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) });
-  }, [lists]);
+  const [localLists, setLocalLists] = useState(() => ({ ...SAFE_LISTS, ...normalizeLists(lists) }));
+  useEffect(() => setLocalLists({ ...SAFE_LISTS, ...normalizeLists(lists) }), [lists]);
 
-  const listsNorm = useMemo(() => localLists, [localLists]);
-
-  const closeBtnRef = useRef(null);
-
-  // estado cabecera compra
+  // estado base
   const [fecha, setFecha] = useState(todayISO());
-  const [periodoUI, setPeriodoUI] = useState(periodoFromISODate(todayISO())); // ✅ siempre hoy
+  const [periodoUI, setPeriodoUI] = useState(isoToMMYYYY(todayISO()));
 
-  const [compra, setCompra] = useState({
+  // panel derecha (igual ventas: forma decide campos)
+  const [filters, setFilters] = useState({
+    forma: NULL_OPTION, // CONTADO | CUENTA_CORRIENTE
+    id_medio_pago: NULL_OPTION,
+    id_cuenta_corriente: NULL_OPTION,
     id_proveedor: NULL_OPTION,
-    proveedor_nombre: "",
     proveedor_cuit: "",
   });
 
-  // ✅ filas (como Ventas)
+  // contado: guardar/pagar
+  const [accionContado, setAccionContado] = useState("pagar"); // guardar | pagar
+
+  // proveedor autocomplete
+  const [provInput, setProvInput] = useState("");
+  const [provFocus, setProvFocus] = useState(false);
+  const closeBtnRef = useRef(null);
+
+  // filas
   const [rows, setRows] = useState(() => [
     {
       id: crypto?.randomUUID?.() || String(Date.now()),
-      id_detalle: NULL_OPTION, // string id o ""
+      id_detalle: NULL_OPTION,
       detalleText: "",
       cantidad: 1,
       precio: 0,
@@ -319,6 +315,9 @@ export default function ModalNuevaCompra({
   ]);
 
   const [saving, setSaving] = useState(false);
+
+  // mini modal
+  const [addUI, setAddUI] = useState({ open: false, rowId: null, text: "", saving: false });
 
   // reset al abrir
   const prevOpenRef = useRef(false);
@@ -330,13 +329,19 @@ export default function ModalNuevaCompra({
     if (!wasOpen && open) {
       const f = todayISO();
       setFecha(f);
-      setPeriodoUI(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
+      setPeriodoUI(isoToMMYYYY(f));
 
-      setCompra({
+      setFilters({
+        forma: NULL_OPTION,
+        id_medio_pago: NULL_OPTION,
+        id_cuenta_corriente: NULL_OPTION,
         id_proveedor: NULL_OPTION,
-        proveedor_nombre: "",
         proveedor_cuit: "",
       });
+
+      setAccionContado("pagar");
+      setProvInput("");
+      setProvFocus(false);
 
       setRows([
         {
@@ -351,56 +356,21 @@ export default function ModalNuevaCompra({
 
       setAddUI({ open: false, rowId: null, text: "", saving: false });
       setSaving(false);
+
       setTimeout(() => closeBtnRef.current?.focus(), 0);
     }
-  }, [open, periodoDefault]);
+  }, [open]);
 
-  /* =========================
-     Autocomplete proveedor
-  ========================= */
-  const proveedorInputRef = useRef(null);
-  const [provFocus, setProvFocus] = useState(false);
-  const [provInput, setProvInput] = useState("");
+  const updateFilter = (k, v) => setFilters((p) => ({ ...p, [k]: v }));
 
-  const proveedoresList = useMemo(
-    () => (Array.isArray(listsNorm.proveedores) ? listsNorm.proveedores : []),
-    [listsNorm.proveedores]
-  );
-
-  const filteredProveedores = useMemo(() => {
-    const q = provInput.trim().toLowerCase();
-    if (!provFocus || q.length < 1) return [];
-    return proveedoresList
-      .filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q))
-      .slice(0, 25);
-  }, [proveedoresList, provInput, provFocus]);
-
-  const handleProveedorInputChange = (e) => {
-    const value = e.target.value;
-    setProvInput(value);
-    setCompra((p) => ({
-      ...p,
-      id_proveedor: NULL_OPTION,
-      proveedor_nombre: value,
-    }));
+  const onFechaChange = (iso) => {
+    const v = String(iso || "").trim();
+    setFecha(v);
+    setPeriodoUI(isoToMMYYYY(v));
   };
 
-  const handleSelectProveedor = (prov) => {
-    const nombre = String(prov?.nombre ?? "").trim();
+  const onPeriodoChange = (raw) => setPeriodoUI(normalizePeriodoInput(raw));
 
-    setProvInput(nombre);
-    setCompra((p) => ({
-      ...p,
-      id_proveedor: prov?.id != null ? String(prov.id) : NULL_OPTION, // ✅ listas trae id
-      proveedor_nombre: nombre,
-      // CUIT no viene en listas -> lo dejas manual
-    }));
-    setProvFocus(false);
-  };
-
-  /* =========================
-     Filas helpers
-  ========================= */
   const addRow = () => {
     setRows((prev) => [
       ...prev,
@@ -426,32 +396,19 @@ export default function ModalNuevaCompra({
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   };
 
-  /* =========================
-     Autocomplete detalles (por fila)
-  ========================= */
-  const detallesList = useMemo(
-    () => (Array.isArray(listsNorm.detalles) ? listsNorm.detalles : []),
-    [listsNorm.detalles]
+  /* ========= detalles sugerencias ========= */
+  const detallesList = useMemo(() => (Array.isArray(localLists.detalles) ? localLists.detalles : []), [localLists.detalles]);
+
+  const suggestDetalles = useCallback(
+    (txt) => {
+      const q = String(txt || "").trim().toLowerCase();
+      if (!q) return [];
+      return detallesList.filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q)).slice(0, 18);
+    },
+    [detallesList]
   );
 
-  const suggestDetalles = (txt) => {
-    const q = String(txt || "").trim().toLowerCase();
-    if (!q) return [];
-    return detallesList
-      .filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q))
-      .slice(0, 18);
-  };
-
-  /* =========================
-     Mini modal alta detalle (catalogo_crear)
-  ========================= */
-  const [addUI, setAddUI] = useState({
-    open: false,
-    rowId: null,
-    text: "",
-    saving: false,
-  });
-
+  /* ========= mini modal detalle ========= */
   const startAddDetalleForRow = useCallback(
     (rowId) => {
       if (saving) return;
@@ -478,7 +435,7 @@ export default function ModalNuevaCompra({
     try {
       const { idUsuario } = getAuthInfo();
 
-      const data = await apiPostJson(`${API}?action=catalogo_crear`, {
+      const data = await apiPostJson(API_CATALOGO, {
         catalogo: "detalles",
         nombre,
         idUsuario,
@@ -488,38 +445,50 @@ export default function ModalNuevaCompra({
 
       const newId = Number(data?.item?.id);
       const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
+      if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
 
-      if (!Number.isFinite(newId) || newId <= 0) {
-        throw new Error("El servidor no devolvió un ID válido del detalle creado.");
-      }
-
-      // push a lista local
       setLocalLists((prev) => {
         const next = { ...prev };
         const arr = Array.isArray(prev.detalles) ? prev.detalles.slice() : [];
-        if (!arr.some((x) => Number(x?.id) === newId)) {
-          arr.push({ id: newId, nombre: newNombre });
-        }
+        if (!arr.some((x) => Number(x?.id) === newId)) arr.push({ id: newId, nombre: newNombre });
         next.detalles = arr;
         return next;
       });
 
-      // setear fila
       const rowId = addUI.rowId;
       if (rowId) updateRow(rowId, { id_detalle: String(newId), detalleText: newNombre });
 
       setAddUI({ open: false, rowId: null, text: "", saving: false });
       showToast("exito", `Detalle creado: "${newNombre}"`, 2600);
     } catch (e) {
-      const msg = e?.message || "Error creando el detalle.";
       setAddUI((p) => ({ ...p, saving: false }));
-      showToast("error", msg, 4200);
+      showToast("error", e?.message || "Error creando el detalle.", 4200);
     }
-  }, [API, addUI, showToast]);
+  }, [API_CATALOGO, addUI.rowId, addUI.text, showToast]);
 
-  /* =========================
-     Cálculos por fila
-  ========================= */
+  /* ========= proveedor autocomplete ========= */
+  const proveedoresList = useMemo(() => (Array.isArray(localLists.proveedores) ? localLists.proveedores : []), [localLists.proveedores]);
+
+  const filteredProveedores = useMemo(() => {
+    const q = provInput.trim().toLowerCase();
+    if (!provFocus || q.length < 1) return [];
+    return proveedoresList.filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
+  }, [proveedoresList, provInput, provFocus]);
+
+  const handleProveedorInputChange = useCallback((e) => {
+    const value = e.target.value;
+    setProvInput(value);
+    setFilters((p) => ({ ...p, id_proveedor: NULL_OPTION }));
+  }, []);
+
+  const handleSelectProveedor = useCallback((prov) => {
+    const nombre = String(prov?.nombre ?? "").trim();
+    setProvInput(nombre);
+    setFilters((p) => ({ ...p, id_proveedor: prov?.id != null ? String(prov.id) : NULL_OPTION }));
+    setProvFocus(false);
+  }, []);
+
+  /* ========= cálculos ========= */
   const rowsCalc = useMemo(() => {
     return rows.map((r) => {
       const cantidad = Math.max(0, safeNumber(r.cantidad));
@@ -528,7 +497,7 @@ export default function ModalNuevaCompra({
       const subtotal = cantidad * precio;
       const ivaMonto = subtotal * (ivaPct / 100);
       const total = subtotal + ivaMonto;
-      return { ...r, cantidad, precio, ivaPct, subtotal, ivaMonto, total };
+      return { ...r, subtotal, ivaMonto, total };
     });
   }, [rows]);
 
@@ -539,48 +508,78 @@ export default function ModalNuevaCompra({
     return { subtotal, iva, total };
   }, [rowsCalc]);
 
-  /* =========================
-     Validación
-     ✅ SIN PAGO
-  ========================= */
+  /* ========= forma ========= */
+  const isContado = useMemo(() => String(filters.forma) === "CONTADO", [filters.forma]);
+  const isCorriente = useMemo(() => String(filters.forma) === "CUENTA_CORRIENTE", [filters.forma]);
+
+  // limpieza automática (igual ventas)
+  useEffect(() => {
+    if (!open) return;
+
+    setFilters((p) => {
+      const forma = String(p.forma || "");
+      if (forma === "CONTADO") {
+        if (p.id_cuenta_corriente !== NULL_OPTION) return { ...p, id_cuenta_corriente: NULL_OPTION };
+      }
+      if (forma === "CUENTA_CORRIENTE") {
+        if (p.id_medio_pago !== NULL_OPTION) return { ...p, id_medio_pago: NULL_OPTION };
+      }
+      return p;
+    });
+
+    if (isCorriente) setAccionContado("guardar");
+  }, [open, isCorriente, isContado]);
+
+  /* ========= validación ========= */
   const validate = useCallback(() => {
-    const provOk =
-      Number(compra.id_proveedor) > 0 ||
-      String(provInput).trim() !== "" ||
-      String(compra.proveedor_nombre).trim() !== "";
+    const provId = Number(filters.id_proveedor);
+    const provTxt = String(provInput || "").trim();
+    if (!((Number.isFinite(provId) && provId > 0) || provTxt.length > 0)) {
+      return { ok: false, msg: "Falta seleccionar un Proveedor (obligatorio)." };
+    }
 
-    if (!provOk) return { ok: false, msg: "Seleccioná un proveedor (obligatorio)." };
+    if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
+      return { ok: false, msg: "Falta seleccionar el Tipo de compra (Contado / Cuenta Corriente)." };
+    }
 
-    // filas válidas
+    if (isContado) {
+      const mp = Number(filters.id_medio_pago);
+      if (!Number.isFinite(mp) || mp <= 0) return { ok: false, msg: "Compra Contado: falta seleccionar el Medio de pago." };
+    }
+
+    if (isCorriente) {
+      const cc = Number(filters.id_cuenta_corriente);
+      if (!Number.isFinite(cc) || cc <= 0) return { ok: false, msg: "Cuenta Corriente: falta seleccionar la Cuenta Corriente." };
+    }
+
+    const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
+    if (!/^\d{4}-\d{2}$/.test(periodoApi)) return { ok: false, msg: "Período inválido. Usá MM-YYYY (ej: 02-2026)." };
+
+    const problems = [];
+    rowsCalc.forEach((r, idx) => {
+      const p = describeLineProblem(r, idx + 1);
+      if (p) problems.push(p);
+    });
+
     const usableLines = rowsCalc.filter((r) => {
       const det = Number(r.id_detalle);
       const total = Number(r.total || 0);
       return Number.isFinite(det) && det > 0 && total > 0;
     });
 
-    if (!usableLines.length) return { ok: false, msg: "Cargá al menos 1 fila con Detalle y Total > 0." };
+    if (!usableLines.length) {
+      if (problems.length) {
+        const msg = problems.slice(0, 2).join(" ");
+        const extra = problems.length > 2 ? ` (y ${problems.length - 2} más)` : "";
+        return { ok: false, msg: `No hay filas válidas. ${msg}${extra}` };
+      }
+      return { ok: false, msg: "Cargá al menos 1 fila válida (Detalle + Cantidad + Precio)." };
+    }
 
-    const incompleteTouched = rowsCalc.some((r) => {
-      const touched =
-        String(r.detalleText || "").trim() !== "" ||
-        String(r.id_detalle || "").trim() !== "" ||
-        safeNumber(r.cantidad) !== 0 ||
-        safeNumber(r.precio) !== 0;
-      if (!touched) return false;
+    return { ok: true, warn: problems.length > 0, periodoApi };
+  }, [filters, provInput, isContado, isCorriente, periodoUI, fecha, rowsCalc]);
 
-      const det = Number(r.id_detalle);
-      const total = Number(r.total || 0);
-      return !(Number.isFinite(det) && det > 0 && total > 0);
-    });
-
-    return { ok: true, warn: incompleteTouched };
-  }, [compra, provInput, rowsCalc]);
-
-  /* =========================
-     Submit (batch por filas)
-     ✅ Compra = ENTRADA (id_tipo_movimiento)
-     ✅ SIN PAGO en payload
-========================= */
+  /* ========= submit ========= */
   const submit = useCallback(async () => {
     if (saving) return;
 
@@ -591,31 +590,21 @@ export default function ModalNuevaCompra({
 
     const v = validate();
     if (!v.ok) {
-      showToast("advertencia", v.msg || "Faltan datos.", 3600);
+      showToast("advertencia", v.msg || "Faltan datos.", 4200);
       return;
     }
 
     setSaving(true);
 
-    if (v.warn) {
-      showToast("advertencia", "Hay filas incompletas. Se guardarán solo las filas válidas.", 3500);
-    } else {
-      showToast("cargando", "Guardando compra…", 12000);
-    }
+    if (v.warn) showToast("advertencia", "Hay filas incompletas: se guardarán solo las válidas.", 3600);
+    else showToast("cargando", "Guardando compra…", 12000);
 
     try {
-      const fechaISO = toNullableDateISO(fecha) || todayISO();
+      const { idUsuario } = getAuthInfo();
 
-      // UI MM-YYYY -> API YYYY-MM
-      const perUI = normalizePeriodoToMMYYYY(periodoUI) || normalizePeriodoToMMYYYY(periodoDefault) || periodoFromISODate(fechaISO);
-      const periodoAPI = periodoMMYYYY_to_YYYYMM(perUI);
-
-      const idEntrada = pickTipoMovimientoIdByName(listsNorm, "entrada");
-      if (!idEntrada) {
-        throw new Error(
-          "No se encontró el tipo de movimiento 'ENTRADA' en listas.tipos_movimiento (global_obtener_listas)."
-        );
-      }
+      const periodoApi = v.periodoApi;
+      const accionFinal = isCorriente ? "guardar" : accionContado;
+      const esPagadaFinal = isCorriente ? false : accionFinal === "pagar";
 
       const payloads = rowsCalc
         .filter((r) => {
@@ -623,84 +612,50 @@ export default function ModalNuevaCompra({
           const total = Number(r.total || 0);
           return Number.isFinite(det) && det > 0 && total > 0;
         })
-        .map((r) => {
-          const payload = {
-            fecha: fechaISO,
-            periodo: periodoAPI,
+        .map((r) => ({
+          idUsuario,
 
-            id_tipo_movimiento: idEntrada, // ✅ ENTRADA = Compra
+          fecha,
+          periodo: periodoApi,
 
-            id_proveedor: toNullableId(compra.id_proveedor),
-            proveedor_nombre: String(compra.proveedor_nombre || provInput || "").trim(),
-            proveedor_cuit: String(compra.proveedor_cuit || "").trim() || null,
+          id_proveedor: Number(filters.id_proveedor) > 0 ? Number(filters.id_proveedor) : null,
+          proveedor_nombre: String(provInput || "").trim() || null,
+          proveedor_cuit: String(filters.proveedor_cuit || "").trim() || null,
 
-            // fila
-            id_detalle: toNullableId(r.id_detalle),
-            cantidad: Math.round(Number(r.cantidad) * 100) / 100,
-            precio: Math.round(Number(r.precio) * 100) / 100,
-            iva_pct: Math.round(Number(r.ivaPct) * 100) / 100,
-            subtotal: Math.round(Number(r.subtotal) * 100) / 100,
-            iva_monto: Math.round(Number(r.ivaMonto) * 100) / 100,
-            total: Math.round(Number(r.total) * 100) / 100,
+          id_medio_pago: isContado ? Number(filters.id_medio_pago) : null,
+          id_cuenta_corriente: isCorriente ? Number(filters.id_cuenta_corriente) : null,
 
-            // cabecera (por compat)
-            monto_total: Math.round(Number(r.total) * 100) / 100,
-          };
+          id_detalle: Number(r.id_detalle),
+          cantidad: Math.round(Number(r.cantidad) * 100) / 100,
+          precio: Math.round(Number(r.precio) * 100) / 100,
+          iva_pct: Math.round(Number(r.ivaPct) * 100) / 100,
+          subtotal: Math.round(Number(r.subtotal) * 100) / 100,
+          iva_monto: Math.round(Number(r.ivaMonto) * 100) / 100,
+          total: Math.round(Number(r.total) * 100) / 100,
 
-          Object.keys(payload).forEach((k) => {
-            if (payload[k] === undefined) delete payload[k];
-          });
+          monto_total: Math.round(Number(r.total) * 100) / 100,
 
-          return payload;
-        });
+          accion_compra: accionFinal,
+          es_pagada: esPagadaFinal,
+        }));
 
       if (!payloads.length) {
-        showToast("advertencia", "No hay filas válidas para guardar.", 3500);
+        showToast("advertencia", "No hay filas válidas para guardar.", 4200);
         setSaving(false);
         return;
       }
 
-      // ✅ si el padre soporta batch, mejor
-      if (onSaveBatch) {
-        await onSaveBatch(payloads);
-      } else if (onSaveCompra) {
-        // fallback: guardo 1 por 1 usando handler existente
-        for (const p of payloads) {
-          // eslint-disable-next-line no-await-in-loop
-          await onSaveCompra(p);
-        }
-      } else {
-        // fallback final: post directo N veces
-        for (const p of payloads) {
-          // eslint-disable-next-line no-await-in-loop
-          const data = await apiPostJson(`${API}?action=movimientos_crear`, p);
-          if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar una de las filas.");
-        }
-      }
+      const data = await apiPostJson(API_BATCH, payloads);
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar el batch de compras.");
 
-      showToast("exito", `Compra guardada: ${payloads.length} fila(s).`, 2600);
+      showToast("exito", `Listo: ${data?.creados ?? payloads.length} ítems guardados.`, 2800);
+      onSaved?.(data);
       onClose?.();
     } catch (e) {
-      showToast("error", e?.message || "Error guardando compra.", 4500);
+      showToast("error", e?.message || "Error guardando.", 4500);
       setSaving(false);
     }
-  }, [
-    API,
-    addUI.open,
-    compra,
-    fecha,
-    listsNorm,
-    onClose,
-    onSaveBatch,
-    onSaveCompra,
-    periodoUI,
-    periodoDefault,
-    provInput,
-    rowsCalc,
-    saving,
-    showToast,
-    validate,
-  ]);
+  }, [saving, addUI.open, validate, showToast, isCorriente, accionContado, rowsCalc, fecha, filters, provInput, isContado, API_BATCH, onSaved, onClose]);
 
   if (!open) return null;
 
@@ -709,39 +664,25 @@ export default function ModalNuevaCompra({
 
   const modalJSX = (
     <div className="mi-modal__overlay mi-modal__overlay--mov" onMouseDown={() => (!saving ? onClose?.() : null)}>
-      <div
-        className="mi-modal__container mi-modal__container--mov"
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className="mi-modal__container mi-modal__container--mov" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <div className="mi-modal__header mi-modal__header--car">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Nueva Compra</h2>
-            <p className="mi-modal__subtitle">Planilla a la izquierda + datos básicos a la derecha.</p>
+            <p className="mi-modal__subtitle">Planilla a la izquierda + datos de compra a la derecha.</p>
           </div>
 
-          <button
-            ref={closeBtnRef}
-            className="mi-modal__close"
-            onClick={() => (!saving ? onClose?.() : null)}
-            aria-label="Cerrar"
-            disabled={saving}
-            type="button"
-          >
+          <button ref={closeBtnRef} className="mi-modal__close" onClick={() => (!saving ? onClose?.() : null)} aria-label="Cerrar" disabled={saving} type="button">
             ✕
           </button>
         </div>
 
         <div className="mi-modal__content mi-modal__content--car">
           <div className="mi-cr-grid">
-            {/* =========================
-                Izquierda: planilla items
-            ========================= */}
+            {/* Tabla */}
             <section className="mi-cr-table">
               <div className="mi-cr-table__head">
                 <div>Detalle</div>
-                <div style={{ textAlign: "center" }}>Cant.</div>
+                <div style={{ textAlign: "center" }}>Cantidad</div>
                 <div style={{ textAlign: "center" }}>Precio</div>
                 <div style={{ textAlign: "center" }}>% IVA</div>
                 <div style={{ textAlign: "center" }}>IVA</div>
@@ -753,9 +694,7 @@ export default function ModalNuevaCompra({
                 {rowsCalc.map((r) => {
                   const suggestions = suggestDetalles(r.detalleText);
                   const showSug =
-                    String(r.detalleText || "").trim().length > 0 &&
-                    Number(r.id_detalle || 0) <= 0 &&
-                    suggestions.length > 0;
+                    String(r.detalleText || "").trim().length > 0 && Number(r.id_detalle || 0) <= 0 && suggestions.length > 0;
 
                   return (
                     <div key={r.id} className="mi-cr-row mi-cr-row--car">
@@ -765,12 +704,7 @@ export default function ModalNuevaCompra({
                           className="fl-input"
                           placeholder="Escribí o seleccioná un detalle…"
                           value={r.detalleText}
-                          onChange={(e) =>
-                            updateRow(r.id, {
-                              detalleText: e.target.value,
-                              id_detalle: NULL_OPTION,
-                            })
-                          }
+                          onChange={(e) => updateRow(r.id, { detalleText: e.target.value, id_detalle: NULL_OPTION })}
                           disabled={saving || addUI.open}
                           autoComplete="off"
                           style={{ height: 38 }}
@@ -781,14 +715,11 @@ export default function ModalNuevaCompra({
                             {suggestions.map((d) => (
                               <li
                                 key={d.id}
-                                className="mi-cr-suggest__item"
                                 onMouseDown={(e) => {
                                   e.preventDefault();
-                                  updateRow(r.id, {
-                                    id_detalle: String(d.id),
-                                    detalleText: String(d.nombre || ""),
-                                  });
+                                  updateRow(r.id, { id_detalle: String(d.id), detalleText: String(d.nombre || "") });
                                 }}
+                                className="mi-cr-suggest__item"
                               >
                                 {d.nombre}
                               </li>
@@ -796,12 +727,7 @@ export default function ModalNuevaCompra({
                           </ul>
                         )}
 
-                        <button
-                          type="button"
-                          onClick={() => startAddDetalleForRow(r.id)}
-                          disabled={saving || addUI.saving}
-                          className="mi-cr-link"
-                        >
+                        <button type="button" onClick={() => startAddDetalleForRow(r.id)} disabled={saving || addUI.saving} className="mi-cr-link">
                           + Agregar nuevo detalle
                         </button>
                       </div>
@@ -814,9 +740,7 @@ export default function ModalNuevaCompra({
                           min="0"
                           step="1"
                           value={r.cantidad}
-                          onChange={(e) =>
-                            updateRow(r.id, { cantidad: e.target.value === "" ? "" : Number(e.target.value) })
-                          }
+                          onChange={(e) => updateRow(r.id, { cantidad: e.target.value === "" ? "" : Number(e.target.value) })}
                           disabled={saving}
                           style={{ height: 38, textAlign: "center" }}
                         />
@@ -830,15 +754,13 @@ export default function ModalNuevaCompra({
                           min="0"
                           step="0.01"
                           value={r.precio}
-                          onChange={(e) =>
-                            updateRow(r.id, { precio: e.target.value === "" ? "" : Number(e.target.value) })
-                          }
+                          onChange={(e) => updateRow(r.id, { precio: e.target.value === "" ? "" : Number(e.target.value) })}
                           disabled={saving}
                           style={{ height: 38, textAlign: "center" }}
                         />
                       </div>
 
-                      {/* % IVA */}
+                      {/* IVA */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--iva">
                         <select
                           className="fl-input fl-select fl-select-iva--car fl-select-iva--compra"
@@ -855,25 +777,19 @@ export default function ModalNuevaCompra({
                         </select>
                       </div>
 
-                      {/* IVA */}
+                      {/* IVA monto */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--ivaMonto">
-                        <div style={{ textAlign: "center", paddingTop: 10 }}>{moneyARS(r.ivaMonto)}</div>
+                        <div style={{ textAlign: "center", fontWeight: 700, paddingTop: 10 }}>{moneyARS(r.ivaMonto)}</div>
                       </div>
 
                       {/* Total */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--total">
-                        <div style={{ textAlign: "center", paddingTop: 10 }}>{moneyARS(r.total)}</div>
+                        <div style={{ textAlign: "center", fontWeight: 800, paddingTop: 10 }}>{moneyARS(r.total)}</div>
                       </div>
 
                       {/* Acción */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--action">
-                        <button
-                          type="button"
-                          onClick={() => removeRow(r.id)}
-                          disabled={saving}
-                          title="Eliminar fila"
-                          className="mi-cr-del"
-                        >
+                        <button type="button" onClick={() => removeRow(r.id)} disabled={saving} title="Eliminar fila" className="mi-cr-del">
                           ×
                         </button>
                       </div>
@@ -906,46 +822,19 @@ export default function ModalNuevaCompra({
               </div>
             </section>
 
-            {/* =========================
-                Derecha: datos compra (SIN PAGO)
-            ========================= */}
+            {/* Derecha */}
             <aside className="mi-cr-filters">
               <div className="mi-cr-filters__top">
                 <div className="mi-cr-filters__title">Datos de compra</div>
 
                 <div className="mi-cr-filters__dates">
                   <div className="fl-field">
-                    <input
-                      className="fl-input"
-                      type="date"
-                      value={fecha}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setFecha(v);
-                        const perAuto = periodoFromISODate(v);
-                        if (perAuto) setPeriodoUI(perAuto);
-                      }}
-                      disabled={saving}
-                    />
+                    <input className="fl-input" type="date" value={fecha} onChange={(e) => onFechaChange(e.target.value)} disabled={saving} />
                     <label className="fl-label">Fecha</label>
                   </div>
 
                   <div className="fl-field">
-                    <input
-                      className="fl-input"
-                      placeholder="MM-YYYY"
-                      inputMode="numeric"
-                      value={periodoUI}
-                      onChange={(e) => {
-                        const digits = String(e.target.value || "").replace(/\D/g, "").slice(0, 6);
-                        let next = "";
-                        if (digits.length <= 2) next = digits;
-                        else next = `${digits.slice(0, 2)}-${digits.slice(2)}`;
-                        if (digits.length === 6) next = normalizePeriodoToMMYYYY(next);
-                        setPeriodoUI(next);
-                      }}
-                      disabled={saving}
-                    />
+                    <input className="fl-input" placeholder="MM-YYYY" inputMode="numeric" value={periodoUI} onChange={(e) => onPeriodoChange(e.target.value)} disabled={saving} />
                     <label className="fl-label">Período</label>
                   </div>
                 </div>
@@ -953,12 +842,9 @@ export default function ModalNuevaCompra({
 
               <div className="mi-cr-filters__body">
                 <div className="fl-grid" style={{ gridTemplateColumns: "1fr" }}>
-                  {/* ✅ Clasificación eliminada */}
-
-                  {/* Proveedor autocomplete */}
+                  {/* Proveedor */}
                   <div className="fl-field" style={{ position: "relative" }}>
                     <input
-                      ref={proveedorInputRef}
                       className="fl-input"
                       placeholder=" "
                       value={provInput}
@@ -968,7 +854,7 @@ export default function ModalNuevaCompra({
                       disabled={saving}
                       autoComplete="off"
                     />
-                    <label className="fl-label">Proveedor (obligatorio)</label>
+                    <label className="fl-label">Proveedor *</label>
 
                     {provFocus && filteredProveedores.length > 0 && (
                       <ul className="mi-cr-suggest">
@@ -988,39 +874,116 @@ export default function ModalNuevaCompra({
                     )}
                   </div>
 
-                  {/* CUIT proveedor (manual) */}
+                  {/* CUIT */}
                   <div className="fl-field">
                     <input
                       className="fl-input"
                       placeholder=" "
-                      value={compra.proveedor_cuit}
-                      onChange={(e) => setCompra((p) => ({ ...p, proveedor_cuit: e.target.value }))}
+                      value={filters.proveedor_cuit}
+                      onChange={(e) => updateFilter("proveedor_cuit", e.target.value)}
                       disabled={saving}
                       inputMode="numeric"
                       autoComplete="off"
                     />
                     <label className="fl-label">CUIT Proveedor (opcional)</label>
                   </div>
+
+                  {/* Forma */}
+                  <div className="fl-field">
+                    <select className="fl-input fl-select" value={String(filters.forma)} onChange={(e) => updateFilter("forma", e.target.value)} disabled={saving}>
+                      <option value={NULL_OPTION}>Tipo de compra *</option>
+                      <option value="CONTADO">CONTADO</option>
+                      <option value="CUENTA_CORRIENTE">CUENTA CORRIENTE</option>
+                    </select>
+                    <label className="fl-label">Tipo de compra</label>
+                  </div>
+
+                  {/* Contado */}
+                  {isContado && (
+                    <>
+                      <div className="fl-field">
+                        <select className="fl-input fl-select" value={String(filters.id_medio_pago)} onChange={(e) => updateFilter("id_medio_pago", e.target.value)} disabled={saving}>
+                          <option value={NULL_OPTION}>Medio de pago *</option>
+                          {mediosPagoList.map((x) => (
+                            <option key={x.id ?? x.id_medio_pago} value={String(x.id ?? x.id_medio_pago)}>
+                              {x.nombre}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="fl-label">Medio de pago</label>
+                      </div>
+
+                      <div className="mi-card mi-card--full" style={{ padding: 12 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 10, color: "var(--mi-text)" }}>Pago (Contado)</div>
+
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            className={`mit-btn ${accionContado === "guardar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
+                            onClick={() => setAccionContado("guardar")}
+                            disabled={saving}
+                            style={{ height: 40 }}
+                          >
+                            Guardar
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`mit-btn ${accionContado === "pagar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
+                            onClick={() => setAccionContado("pagar")}
+                            disabled={saving}
+                            style={{ height: 40 }}
+                          >
+                            Pagar
+                          </button>
+                        </div>
+
+                        <div style={{ marginTop: 10, fontSize: 12, color: "var(--mi-muted)" }}>
+                          {accionContado === "guardar" ? (
+                            <>
+                              * <b>Guardar</b>: queda <b>pendiente</b>.
+                            </>
+                          ) : (
+                            <>
+                              * <b>Pagar</b>: queda <b>pagada</b>.
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Corriente */}
+                  {isCorriente && (
+                    <>
+                      <div className="fl-field">
+                        <select className="fl-input fl-select" value={String(filters.id_cuenta_corriente)} onChange={(e) => updateFilter("id_cuenta_corriente", e.target.value)} disabled={saving}>
+                          <option value={NULL_OPTION}>Cuenta Corriente *</option>
+                          {cuentasCorrientesList.map((x) => (
+                            <option key={x.id ?? x.id_cuenta_corriente} value={String(x.id ?? x.id_cuenta_corriente)}>
+                              {x.nombre}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="fl-label">Cuenta Corriente</label>
+                      </div>
+
+                      <div className="mi-card mi-card--full" style={{ padding: 12 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 8, color: "var(--mi-text)" }}>En cuenta corriente</div>
+                        <div style={{ fontSize: 12, color: "var(--mi-muted)" }}>
+                          * Se registra en <b>Cuenta Corriente</b> y queda <b>pendiente</b>.
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="mi-cr-filters__actions">
-                  <button
-                    type="button"
-                    onClick={submit}
-                    disabled={saving}
-                    className="mit-btn mit-btn--solid"
-                    style={{ width: "100%", height: 44 }}
-                  >
+                  <button type="button" onClick={submit} disabled={saving} className="mit-btn mit-btn--solid" style={{ width: "100%", height: 44 }}>
                     {saving ? "Guardando..." : "Guardar compra"}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => (!saving ? onClose?.() : null)}
-                    disabled={saving}
-                    className="mit-btn mit-btn--ghost"
-                    style={{ width: "100%", height: 44 }}
-                  >
+                  <button type="button" onClick={() => (!saving ? onClose?.() : null)} disabled={saving} className="mit-btn mit-btn--ghost" style={{ width: "100%", height: 44 }}>
                     Cancelar
                   </button>
                 </div>
@@ -1029,7 +992,7 @@ export default function ModalNuevaCompra({
           </div>
         </div>
 
-        {/* Mini modal alta rápida (detalle) */}
+        {/* Mini modal */}
         <AddCatalogMiniModal
           open={miniOpen}
           title={miniTitle}

@@ -1,5 +1,5 @@
 <?php
-// backend/modules/movimientos/movimientos.php
+// backend/modules/movimientos/recibos.php
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -17,9 +17,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
 require_once __DIR__ . '/../../config/db.php';
 require_once __DIR__ . '/../utils/auditoria.php';
 
-/* =========================
-   Response helpers
-========================= */
+/* ----------------- Helpers ----------------- */
 function ok(array $arr = []): void {
   echo json_encode(array_merge(['exito' => true], $arr), JSON_UNESCAPED_UNICODE);
   exit;
@@ -29,10 +27,6 @@ function fail(string $msg, int $httpCode = 200, array $extra = []): void {
   echo json_encode(array_merge(['exito' => false, 'mensaje' => $msg], $extra), JSON_UNESCAPED_UNICODE);
   exit;
 }
-
-/* =========================
-   Input helpers
-========================= */
 function read_json_body(): array {
   $raw = file_get_contents('php://input');
   if (!$raw) return [];
@@ -50,24 +44,15 @@ function n_float($v): ?float {
   if (!is_numeric($v)) return null;
   return (float)$v;
 }
-function today_iso(): string {
-  return date('Y-m-d');
-}
+function today_iso(): string { return date('Y-m-d'); }
 function periodo_from_fecha(string $fechaISO): string {
-  // YYYY-MM-DD => YYYY-MM
   if (preg_match('/^\d{4}\-\d{2}\-\d{2}$/', $fechaISO)) return substr($fechaISO, 0, 7);
   return date('Y-m');
 }
-function is_valid_fecha(string $f): bool {
-  return (bool)preg_match('/^\d{4}\-\d{2}\-\d{2}$/', $f);
-}
-function is_valid_periodo(string $p): bool {
-  return (bool)preg_match('/^\d{4}\-\d{2}$/', $p);
-}
+function is_valid_fecha(string $f): bool { return (bool)preg_match('/^\d{4}\-\d{2}\-\d{2}$/', $f); }
+function is_valid_periodo(string $p): bool { return (bool)preg_match('/^\d{4}\-\d{2}$/', $p); }
 
-/* =========================
-   PDO check
-========================= */
+/* ----------------- PDO check ----------------- */
 if (!isset($pdo) || !($pdo instanceof PDO)) {
   fail('No hay conexión a la base de datos.');
 }
@@ -92,8 +77,7 @@ function base64url_decode(string $s): string {
   $out = base64_decode($s, true);
   return $out === false ? '' : $out;
 }
-function get_id_usuario_from_request(array $src = []): int {
-  // 1) JWT
+function get_id_usuario_from_request(array $body = []): int {
   $token = get_bearer_token();
   if ($token !== '' && substr_count($token, '.') === 2) {
     $parts = explode('.', $token);
@@ -117,8 +101,7 @@ function get_id_usuario_from_request(array $src = []): int {
     }
   }
 
-  // 2) Body / POST / GET
-  $id = $src['idUsuario'] ?? $src['id_usuario'] ?? $_POST['idUsuario'] ?? $_GET['idUsuario'] ?? null;
+  $id = $body['idUsuario'] ?? $body['id_usuario'] ?? $_POST['idUsuario'] ?? $_GET['idUsuario'] ?? null;
   if (is_numeric($id)) {
     $id = (int)$id;
     if ($id > 0) return $id;
@@ -127,25 +110,63 @@ function get_id_usuario_from_request(array $src = []): int {
 }
 function audit_safe(PDO $pdo, int $idUsuario, string $accion, ?string $entidad, $idEntidad, $detalle): void {
   if ($idUsuario <= 0) return;
-  auditar($pdo, $idUsuario, 'movimientos', $accion, $entidad, $idEntidad, $detalle);
+  auditar($pdo, $idUsuario, 'recibos', $accion, $entidad, $idEntidad, $detalle);
 }
 
 /* =========================================================
-   ACCIÓN
+   Helpers ITEMS (misma lógica que movimientos.php)
 ========================================================= */
-$action = $_GET['action'] ?? $_POST['action'] ?? '';
-$action = is_string($action) ? trim($action) : '';
-if ($action === '') fail('Falta parámetro action.');
+function item_payload_from_src(array $src, float $monto_total, int $id_detalle): array {
+  $cantidad  = n_float($src['cantidad']  ?? null);
+  $precio    = n_float($src['precio']    ?? null);
+  $iva_pct   = n_float($src['iva_pct']   ?? null);
+  $subtotal  = n_float($src['subtotal']  ?? null);
+  $iva_monto = n_float($src['iva_monto'] ?? null);
+  $total     = n_float($src['total']     ?? null);
+
+  $hasItemFields = ($cantidad !== null || $precio !== null || $iva_pct !== null || $subtotal !== null || $iva_monto !== null || $total !== null);
+
+  if (!$hasItemFields) {
+    return [
+      'id_detalle' => $id_detalle,
+      'cantidad' => 1.0,
+      'precio' => (float)$monto_total,
+      'iva_pct' => 0.0,
+      'subtotal' => (float)$monto_total,
+      'iva_monto' => 0.0,
+      'total' => (float)$monto_total,
+    ];
+  }
+
+  $cantidad = $cantidad !== null ? (float)$cantidad : 1.0;
+  $precio   = $precio !== null ? (float)$precio : 0.0;
+  $iva_pct  = $iva_pct !== null ? (float)$iva_pct : 0.0;
+
+  $calc_sub = $cantidad * $precio;
+  $calc_iva = $calc_sub * ($iva_pct / 100.0);
+  $calc_tot = $calc_sub + $calc_iva;
+
+  $subtotal  = $subtotal  !== null ? (float)$subtotal  : $calc_sub;
+  $iva_monto = $iva_monto !== null ? (float)$iva_monto : $calc_iva;
+  $total     = $total     !== null ? (float)$total     : $calc_tot;
+
+  return [
+    'id_detalle' => $id_detalle,
+    'cantidad' => $cantidad,
+    'precio' => $precio,
+    'iva_pct' => $iva_pct,
+    'subtotal' => $subtotal,
+    'iva_monto' => $iva_monto,
+    'total' => $total,
+  ];
+}
 
 /* =========================================================
-   LISTAR (GET) - SOLO MOVIMIENTOS
-   Devuelve:
-   - ids (para editar)
-   - textos (para la tabla)
-   - primer item (para edición rápida)
-   - monto_total_final (si hay items, suma items; si no, usa cabecera)
+   LISTAR RECIBOS (GET)
+   - Devuelve lo mismo que movimientos_listar para que tu UI no cambie.
+   - Recibos.jsx filtra "pendientes" en frontend (cuenta corriente + cliente).
 ========================================================= */
-function movimientos_listar(PDO $pdo): void
+function recibos_listar(PDO $pdo): void
 {
   $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
   $q       = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
@@ -154,7 +175,6 @@ function movimientos_listar(PDO $pdo): void
   $params = [];
 
   if ($periodo !== '') {
-    if (!is_valid_periodo($periodo)) fail('Período inválido. Formato esperado: YYYY-MM');
     $where[] = "m.periodo = :periodo";
     $params[':periodo'] = $periodo;
   }
@@ -174,7 +194,6 @@ function movimientos_listar(PDO $pdo): void
       m.monto_total,
       m.id_medio_pago,
 
-      -- primer item del movimiento (si existe)
       fi.id_detalle AS item_id_detalle,
       fi.cantidad   AS item_cantidad,
       fi.precio     AS item_precio,
@@ -183,18 +202,16 @@ function movimientos_listar(PDO $pdo): void
       fi.iva_monto  AS item_iva_monto,
       fi.total      AS item_total,
 
-      -- total calculado por items (si hay)
       COALESCE(it.total_sum, m.monto_total, 0) AS monto_total_final,
 
-      -- textos para UI
       COALESCE(c.nombre,'')  AS clasificacion,
       COALESCE(tv.nombre,'') AS tipo_venta,
       COALESCE(cc.nombre,'') AS cuenta_corriente,
       COALESCE(cl.nombre,'') AS cliente,
       COALESCE(pr.nombre,'') AS proveedor,
+
       COALESCE(di.nombre, d.nombre, '') AS detalle,
       COALESCE(mp.nombre,'') AS medio_pago_nombre,
-
       m.created_at
     FROM movimientos m
       LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
@@ -226,6 +243,7 @@ function movimientos_listar(PDO $pdo): void
 
   if ($q !== '') {
     $like = '%' . $q . '%';
+
     $where[] = "(
       UPPER(COALESCE(c.nombre,''))   LIKE UPPER(:q1) OR
       UPPER(COALESCE(tv.nombre,''))  LIKE UPPER(:q2) OR
@@ -235,6 +253,7 @@ function movimientos_listar(PDO $pdo): void
       UPPER(COALESCE(di.nombre, d.nombre,'')) LIKE UPPER(:q6) OR
       UPPER(COALESCE(mp.nombre,''))  LIKE UPPER(:q7)
     )";
+
     $params[':q1'] = $like;
     $params[':q2'] = $like;
     $params[':q3'] = $like;
@@ -257,24 +276,27 @@ function movimientos_listar(PDO $pdo): void
       ? (int)$r['item_id_detalle']
       : ($r['id_detalle'] === null ? null : (int)$r['id_detalle']);
 
+    $tipoVentaTxt = trim((string)($r['tipo_venta'] ?? ''));
+    $medioPagoTxt = trim((string)($r['medio_pago_nombre'] ?? ''));
+
     $data[] = [
       'id_movimiento' => (int)$r['id_movimiento'],
       'fecha' => (string)$r['fecha'],
       'periodo' => (string)$r['periodo'],
 
-      // ids
       'id_clasificacion' => $r['id_clasificacion'] === null ? null : (int)$r['id_clasificacion'],
       'id_tipo_venta' => $r['id_tipo_venta'] === null ? null : (int)$r['id_tipo_venta'],
       'id_cuenta_corriente' => $r['id_cuenta_corriente'] === null ? null : (int)$r['id_cuenta_corriente'],
       'id_cliente' => $r['id_cliente'] === null ? null : (int)$r['id_cliente'],
       'id_proveedor' => $r['id_proveedor'] === null ? null : (int)$r['id_proveedor'],
       'id_detalle' => $id_detalle_final,
+
+      'pago_tipo_venta' => $tipoVentaTxt,
+      'medio_pago_nombre' => $medioPagoTxt,
       'id_medio_pago' => $r['id_medio_pago'] === null ? null : (int)$r['id_medio_pago'],
 
-      // valores
       'monto_total' => (float)$r['monto_total_final'],
 
-      // primer item (para edición)
       'cantidad'  => $r['item_cantidad'] === null ? null : (float)$r['item_cantidad'],
       'precio'    => $r['item_precio'] === null ? null : (float)$r['item_precio'],
       'iva_pct'   => $r['item_iva_pct'] === null ? null : (float)$r['item_iva_pct'],
@@ -282,15 +304,12 @@ function movimientos_listar(PDO $pdo): void
       'iva_monto' => $r['item_iva_monto'] === null ? null : (float)$r['item_iva_monto'],
       'total'     => $r['item_total'] === null ? null : (float)$r['item_total'],
 
-      // textos (tabla)
       'clasificacion' => (string)($r['clasificacion'] ?? ''),
-      'tipo_venta' => (string)($r['tipo_venta'] ?? ''),
+      'tipo_venta' => $tipoVentaTxt,
       'cuenta_corriente' => (string)($r['cuenta_corriente'] ?? ''),
       'cliente' => (string)($r['cliente'] ?? ''),
       'proveedor' => (string)($r['proveedor'] ?? ''),
       'detalle' => (string)($r['detalle'] ?? ''),
-      'medio_pago_nombre' => (string)($r['medio_pago_nombre'] ?? ''),
-
       'created_at' => (string)($r['created_at'] ?? ''),
     ];
   }
@@ -299,176 +318,10 @@ function movimientos_listar(PDO $pdo): void
 }
 
 /* =========================================================
-   ITEMS helpers
+   ACTUALIZAR RECIBO (POST)
+   - Mismo esquema que movimientos_actualizar (cabecera + primer item)
 ========================================================= */
-function item_payload_from_src(array $src, float $monto_total, int $id_detalle): array {
-  $cantidad  = n_float($src['cantidad']  ?? null);
-  $precio    = n_float($src['precio']    ?? null);
-  $iva_pct   = n_float($src['iva_pct']   ?? null);
-  $subtotal  = n_float($src['subtotal']  ?? null);
-  $iva_monto = n_float($src['iva_monto'] ?? null);
-  $total     = n_float($src['total']     ?? null);
-
-  $hasItemFields = ($cantidad !== null || $precio !== null || $iva_pct !== null || $subtotal !== null || $iva_monto !== null || $total !== null);
-
-  // si no viene nada de item, generamos 1 ítem simple a partir del total
-  if (!$hasItemFields) {
-    return [
-      'id_detalle' => $id_detalle,
-      'cantidad' => 1.0,
-      'precio' => (float)$monto_total,
-      'iva_pct' => 0.0,
-      'subtotal' => (float)$monto_total,
-      'iva_monto' => 0.0,
-      'total' => (float)$monto_total,
-    ];
-  }
-
-  $cantidad = $cantidad !== null ? (float)$cantidad : 1.0;
-  $precio   = $precio   !== null ? (float)$precio   : 0.0;
-  $iva_pct  = $iva_pct  !== null ? (float)$iva_pct  : 0.0;
-
-  $calc_sub = $cantidad * $precio;
-  $calc_iva = $calc_sub * ($iva_pct / 100.0);
-  $calc_tot = $calc_sub + $calc_iva;
-
-  $subtotal  = $subtotal  !== null ? (float)$subtotal  : $calc_sub;
-  $iva_monto = $iva_monto !== null ? (float)$iva_monto : $calc_iva;
-  $total     = $total     !== null ? (float)$total     : $calc_tot;
-
-  return [
-    'id_detalle' => $id_detalle,
-    'cantidad' => $cantidad,
-    'precio' => $precio,
-    'iva_pct' => $iva_pct,
-    'subtotal' => $subtotal,
-    'iva_monto' => $iva_monto,
-    'total' => $total,
-  ];
-}
-
-/* =========================================================
-   CREAR (POST) - SOLO MOVIMIENTOS
-========================================================= */
-function movimientos_crear(PDO $pdo): void
-{
-  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
-
-  $body = read_json_body();
-  $src = !empty($body) ? $body : ($_POST ?? []);
-  $idUsuario = get_id_usuario_from_request($src);
-
-  $fecha = trim((string)($src['fecha'] ?? ''));
-  if ($fecha === '' || !is_valid_fecha($fecha)) $fecha = today_iso();
-
-  $periodo = trim((string)($src['periodo'] ?? ''));
-  if ($periodo === '' || !is_valid_periodo($periodo)) $periodo = periodo_from_fecha($fecha);
-
-  $id_clasificacion    = n_int($src['id_clasificacion'] ?? null);
-  $id_tipo_venta       = n_int($src['id_tipo_venta'] ?? null);
-  $id_medio_pago       = n_int($src['id_medio_pago'] ?? null);
-  $id_cuenta_corriente = n_int($src['id_cuenta_corriente'] ?? null);
-  $id_cliente          = n_int($src['id_cliente'] ?? null);
-  $id_proveedor        = n_int($src['id_proveedor'] ?? null);
-  $id_detalle          = n_int($src['id_detalle'] ?? null);
-
-  $monto_total = n_float($src['monto_total'] ?? null);
-
-  $hasDetalleValido = ($id_detalle !== null && $id_detalle > 0);
-
-  $item = null;
-  if ($hasDetalleValido) {
-    $baseMonto = ($monto_total !== null) ? (float)$monto_total : 0.0;
-    $item = item_payload_from_src($src, $baseMonto, (int)$id_detalle);
-  }
-
-  $totalCabecera = 0.0;
-  if ($item !== null) $totalCabecera = (float)$item['total'];
-  else if ($monto_total !== null) $totalCabecera = (float)$monto_total;
-
-  try {
-    $pdo->beginTransaction();
-
-    $sql = "
-      INSERT INTO movimientos (
-        fecha, periodo,
-        id_clasificacion, id_tipo_venta, id_cuenta_corriente,
-        id_cliente, id_proveedor, id_detalle,
-        monto_total, id_medio_pago
-      ) VALUES (
-        :fecha, :periodo,
-        :id_clasificacion, :id_tipo_venta, :id_cuenta_corriente,
-        :id_cliente, :id_proveedor, :id_detalle,
-        :monto_total, :id_medio_pago
-      )
-    ";
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-      ':fecha' => $fecha,
-      ':periodo' => $periodo,
-
-      ':id_clasificacion' => $id_clasificacion,
-      ':id_tipo_venta' => $id_tipo_venta,
-      ':id_cuenta_corriente' => $id_cuenta_corriente,
-      ':id_cliente' => $id_cliente,
-      ':id_proveedor' => $id_proveedor,
-      ':id_detalle' => $hasDetalleValido ? $id_detalle : null,
-
-      ':monto_total' => $totalCabecera,
-      ':id_medio_pago' => $id_medio_pago,
-    ]);
-
-    $newId = (int)$pdo->lastInsertId();
-
-    if ($item !== null) {
-      $insItem = $pdo->prepare("
-        INSERT INTO movimientos_items
-          (id_movimiento, id_detalle, cantidad, precio, iva_pct, subtotal, iva_monto, total)
-        VALUES
-          (:id_movimiento, :id_detalle, :cantidad, :precio, :iva_pct, :subtotal, :iva_monto, :total)
-      ");
-      $insItem->execute([
-        ':id_movimiento' => $newId,
-        ':id_detalle' => $item['id_detalle'],
-        ':cantidad' => $item['cantidad'],
-        ':precio' => $item['precio'],
-        ':iva_pct' => $item['iva_pct'],
-        ':subtotal' => $item['subtotal'],
-        ':iva_monto' => $item['iva_monto'],
-        ':total' => $item['total'],
-      ]);
-    }
-
-    $pdo->commit();
-
-    audit_safe($pdo, $idUsuario, 'crear', 'movimientos', $newId, [
-      'nuevo' => [
-        'fecha' => $fecha,
-        'periodo' => $periodo,
-        'id_clasificacion' => $id_clasificacion,
-        'id_tipo_venta' => $id_tipo_venta,
-        'id_cuenta_corriente' => $id_cuenta_corriente,
-        'id_cliente' => $id_cliente,
-        'id_proveedor' => $id_proveedor,
-        'id_detalle' => $hasDetalleValido ? $id_detalle : null,
-        'monto_total' => $totalCabecera,
-        'id_medio_pago' => $id_medio_pago,
-        'item' => $item,
-      ]
-    ]);
-
-    ok(['id_movimiento' => $newId]);
-  } catch (Throwable $e) {
-    if ($pdo->inTransaction()) $pdo->rollBack();
-    fail('No se pudo crear el movimiento. ' . $e->getMessage());
-  }
-}
-
-/* =========================================================
-   ACTUALIZAR (POST) - SOLO MOVIMIENTOS
-========================================================= */
-function movimientos_actualizar(PDO $pdo): void
+function recibos_actualizar(PDO $pdo): void
 {
   if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
 
@@ -494,6 +347,7 @@ function movimientos_actualizar(PDO $pdo): void
     $periodo = periodo_from_fecha($fecha);
   }
 
+  // En Recibos no tocamos reglas del negocio: dejamos que llegue lo que venga
   $id_clasificacion = array_key_exists('id_clasificacion', $src) ? n_int($src['id_clasificacion']) : n_int($before['id_clasificacion'] ?? null);
   $id_tipo_venta    = array_key_exists('id_tipo_venta', $src) ? n_int($src['id_tipo_venta']) : n_int($before['id_tipo_venta'] ?? null);
   $id_medio_pago    = array_key_exists('id_medio_pago', $src) ? n_int($src['id_medio_pago']) : n_int($before['id_medio_pago'] ?? null);
@@ -501,15 +355,15 @@ function movimientos_actualizar(PDO $pdo): void
   $id_cuenta_corriente = array_key_exists('id_cuenta_corriente', $src) ? n_int($src['id_cuenta_corriente']) : n_int($before['id_cuenta_corriente'] ?? null);
   $id_cliente          = array_key_exists('id_cliente', $src) ? n_int($src['id_cliente']) : n_int($before['id_cliente'] ?? null);
   $id_proveedor        = array_key_exists('id_proveedor', $src) ? n_int($src['id_proveedor']) : n_int($before['id_proveedor'] ?? null);
-  $id_detalle          = array_key_exists('id_detalle', $src) ? n_int($src['id_detalle']) : n_int($before['id_detalle'] ?? null);
 
+  $id_detalle = array_key_exists('id_detalle', $src) ? n_int($src['id_detalle']) : n_int($before['id_detalle'] ?? null);
   $monto_total_in = array_key_exists('monto_total', $src) ? n_float($src['monto_total']) : null;
 
   $hasDetalleValido = ($id_detalle !== null && $id_detalle > 0);
 
   $item = null;
   if ($hasDetalleValido) {
-    $baseMonto = ($monto_total_in !== null) ? (float)$monto_total_in : 0.0;
+    $baseMonto = ($monto_total_in !== null) ? (float)$monto_total_in : (float)($before['monto_total'] ?? 0);
     $item = item_payload_from_src($src, $baseMonto, (int)$id_detalle);
   }
 
@@ -552,7 +406,6 @@ function movimientos_actualizar(PDO $pdo): void
       ':id_movimiento' => $id_movimiento,
     ]);
 
-    // si hay item, actualizo/creo el primer item
     if ($item !== null) {
       $getFirst = $pdo->prepare("SELECT id_item FROM movimientos_items WHERE id_movimiento = :id ORDER BY id_item ASC LIMIT 1");
       $getFirst->execute([':id' => $id_movimiento]);
@@ -608,7 +461,7 @@ function movimientos_actualizar(PDO $pdo): void
     $afterSt->execute([':id' => $id_movimiento]);
     $after = $afterSt->fetch(PDO::FETCH_ASSOC);
 
-    audit_safe($pdo, $idUsuario, 'actualizar', 'movimientos', $id_movimiento, [
+    audit_safe($pdo, $idUsuario, 'actualizar', 'recibos', $id_movimiento, [
       'antes' => $before,
       'despues' => $after ?: null,
       'item' => $item,
@@ -617,14 +470,14 @@ function movimientos_actualizar(PDO $pdo): void
     ok(['actualizado' => true, 'id_movimiento' => $id_movimiento]);
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    fail('No se pudo actualizar el movimiento. ' . $e->getMessage());
+    fail('No se pudo actualizar el recibo. ' . $e->getMessage());
   }
 }
 
 /* =========================================================
-   ELIMINAR - SOLO MOVIMIENTOS
+   ELIMINAR RECIBO
 ========================================================= */
-function movimientos_eliminar(PDO $pdo): void
+function recibos_eliminar(PDO $pdo): void
 {
   $body = read_json_body();
   $idUsuario = get_id_usuario_from_request(!empty($body) ? $body : ($_POST ?? []));
@@ -641,7 +494,7 @@ function movimientos_eliminar(PDO $pdo): void
     $stmt = $pdo->prepare("DELETE FROM movimientos WHERE id_movimiento = :id");
     $stmt->execute([':id' => $id]);
 
-    audit_safe($pdo, $idUsuario, 'eliminar', 'movimientos', $id, [
+    audit_safe($pdo, $idUsuario, 'eliminar', 'recibos', $id, [
       'eliminado' => true,
       'antes' => $before ?: null,
     ]);
@@ -653,25 +506,133 @@ function movimientos_eliminar(PDO $pdo): void
 }
 
 /* =========================================================
-   DISPATCH - SOLO MOVIMIENTOS
+   CONFIRMAR PAGO (POST)
+   - Recibe ids_movimiento[] + id_medio_pago
+   - Marca como "CONTADO" si existe en tipos_venta (por nombre),
+     y setea id_medio_pago.
 ========================================================= */
+function find_id_tipo_venta_contado(PDO $pdo): ?int {
+  try {
+    $st = $pdo->query("SELECT id_tipo_venta, nombre FROM tipos_venta");
+    $rows = $st ? ($st->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
+    foreach ($rows as $r) {
+      $nom = strtolower(trim((string)($r['nombre'] ?? '')));
+      $nom = preg_replace('/\s+/', ' ', $nom);
+      if ($nom === 'contado' || str_contains($nom, 'contado')) {
+        $id = (int)($r['id_tipo_venta'] ?? 0);
+        return $id > 0 ? $id : null;
+      }
+    }
+  } catch (Throwable $e) {}
+  return null;
+}
+
+function recibos_confirmar_pago(PDO $pdo): void
+{
+  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
+
+  $body = read_json_body();
+  $src = !empty($body) ? $body : ($_POST ?? []);
+  $idUsuario = get_id_usuario_from_request($src);
+
+  $ids = $src['ids_movimiento'] ?? $src['ids_movimientos'] ?? [];
+  if (!is_array($ids)) $ids = [];
+
+  $idsOk = [];
+  foreach ($ids as $x) {
+    $n = n_int($x);
+    if ($n !== null && $n > 0) $idsOk[] = $n;
+  }
+  $idsOk = array_values(array_unique($idsOk));
+  if (!$idsOk) fail('Faltan ids_movimiento para confirmar.');
+
+  $id_medio_pago = n_int($src['id_medio_pago'] ?? null);
+  if ($id_medio_pago === null || $id_medio_pago <= 0) {
+    fail('Falta id_medio_pago.');
+  }
+
+  $idTipoContado = find_id_tipo_venta_contado($pdo); // puede ser null (no rompe)
+
+  try {
+    $pdo->beginTransaction();
+
+    // Traemos "antes" para auditoría
+    $in = implode(',', array_fill(0, count($idsOk), '?'));
+    $beforeSt = $pdo->prepare("SELECT * FROM movimientos WHERE id_movimiento IN ($in)");
+    $beforeSt->execute($idsOk);
+    $before = $beforeSt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $sql = "
+      UPDATE movimientos
+      SET
+        id_medio_pago = :id_medio_pago
+        " . ($idTipoContado ? ", id_tipo_venta = :id_tipo_venta" : "") . "
+      WHERE id_movimiento IN ($in)
+    ";
+
+    $params = [];
+    $params[':id_medio_pago'] = $id_medio_pago;
+    if ($idTipoContado) $params[':id_tipo_venta'] = $idTipoContado;
+
+    $st = $pdo->prepare($sql);
+
+    // bind named + positional
+    foreach ($params as $k => $v) {
+      $st->bindValue($k, $v, PDO::PARAM_INT);
+    }
+    $pos = 1;
+    foreach ($idsOk as $id) {
+      $st->bindValue($pos, $id, PDO::PARAM_INT);
+      $pos++;
+    }
+
+    $st->execute();
+
+    $pdo->commit();
+
+    audit_safe($pdo, $idUsuario, 'confirmar_pago', 'recibos', null, [
+      'ids_movimiento' => $idsOk,
+      'id_medio_pago' => $id_medio_pago,
+      'set_tipo_venta_contado' => $idTipoContado ? true : false,
+      'antes' => $before,
+    ]);
+
+    ok([
+      'mensaje' => 'Pago confirmado.',
+      'ids_movimiento' => $idsOk,
+      'id_medio_pago' => $id_medio_pago,
+    ]);
+  } catch (Throwable $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    fail('No se pudo confirmar el pago. ' . $e->getMessage());
+  }
+}
+
+/* =========================================================
+   DISPATCH
+========================================================= */
+$action = $_GET['action'] ?? $_POST['action'] ?? '';
+$action = is_string($action) ? trim($action) : '';
+
+if ($action === '') fail('Falta parámetro action.');
+
 try {
   switch ($action) {
-    case 'movimientos_listar':
-      movimientos_listar($pdo);
+    case 'recibos_listar':
+      recibos_listar($pdo);
       break;
-    case 'movimientos_crear':
-      movimientos_crear($pdo);
+    case 'recibos_actualizar':
+      recibos_actualizar($pdo);
       break;
-    case 'movimientos_actualizar':
-      movimientos_actualizar($pdo);
+    case 'recibos_eliminar':
+      recibos_eliminar($pdo);
       break;
-    case 'movimientos_eliminar':
-      movimientos_eliminar($pdo);
+    case 'recibos_confirmar_pago':
+      recibos_confirmar_pago($pdo);
       break;
     default:
-      fail('Acción no válida en movimientos: ' . $action);
+      fail('Acción no válida en recibos: ' . $action);
   }
 } catch (Throwable $e) {
-  fail('Error en movimientos: ' . $e->getMessage());
+  fail('Error en recibos: ' . $e->getMessage());
 }

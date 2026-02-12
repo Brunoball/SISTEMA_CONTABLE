@@ -76,15 +76,7 @@ function findById(arr, id) {
 /* =========================
    Mini modal genérico para catálogos
 ========================= */
-function AddCatalogMiniModal({
-  open,
-  title,
-  value,
-  saving,
-  onChange,
-  onCancel,
-  onSave,
-}) {
+function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -100,12 +92,7 @@ function AddCatalogMiniModal({
       <div className="mi-mini__modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
-          <button
-            type="button"
-            className="mi-mini__close"
-            onClick={onCancel}
-            disabled={saving}
-          >
+          <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving}>
             ✕
           </button>
         </div>
@@ -125,20 +112,10 @@ function AddCatalogMiniModal({
           </div>
 
           <div className="mi-mini__actions">
-            <button
-              type="button"
-              className="mit-btn mit-btn--ghost"
-              onClick={onCancel}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>
               Cancelar
             </button>
-            <button
-              type="button"
-              className="mit-btn mit-btn--solid"
-              onClick={onSave}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
               {saving ? "Guardando..." : "Guardar"}
             </button>
           </div>
@@ -176,10 +153,10 @@ export default function ModalEditarOrdenPago({
   // Mini modal "nuevo detalle"
   const [addDetUI, setAddDetUI] = useState({ open: false, text: "", saving: false });
 
-  // Mini modal "nuevo proveedor" (opcional, pero útil)
+  // Mini modal "nuevo proveedor"
   const [addProvUI, setAddProvUI] = useState({ open: false, text: "", saving: false });
 
-  // Form (Orden de Pago: proveedor + detalle + fecha/periodo + monto)
+  // Form
   const [form, setForm] = useState(() => ({
     id_movimiento: null,
     fecha: "",
@@ -261,9 +238,7 @@ export default function ModalEditarOrdenPago({
     const all = getArr(lists?.detalles);
     const q = normalizeSearchText(form.detalleInput);
     if (!detalleFocus || q.length < 1) return [];
-    return all
-      .filter((d) => normalizeSearchText(d?.nombre).includes(q))
-      .slice(0, 25);
+    return all.filter((d) => normalizeSearchText(d?.nombre).includes(q)).slice(0, 25);
   }, [lists, form.detalleInput, detalleFocus]);
 
   const handleDetalleInputChange = (e) => {
@@ -309,8 +284,7 @@ export default function ModalEditarOrdenPago({
       const newId = Number(data?.item?.id);
       const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
 
-      if (!Number.isFinite(newId) || newId <= 0)
-        throw new Error("El servidor no devolvió un ID válido.");
+      if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
 
       setForm((p) => ({
         ...p,
@@ -358,10 +332,8 @@ export default function ModalEditarOrdenPago({
       const newId = Number(data?.item?.id);
       const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
 
-      if (!Number.isFinite(newId) || newId <= 0)
-        throw new Error("El servidor no devolvió un ID válido.");
+      if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
 
-      // Importante: no mutamos lists acá. El parent puede recargar listas si quiere.
       setForm((p) => ({
         ...p,
         id_proveedor: String(newId),
@@ -383,11 +355,7 @@ export default function ModalEditarOrdenPago({
     e.preventDefault();
 
     if (addDetUI.open || addProvUI.open) {
-      showToast(
-        "advertencia",
-        "Terminá de crear el catálogo (o cancelá) antes de guardar.",
-        3200
-      );
+      showToast("advertencia", "Terminá de crear el catálogo (o cancelá) antes de guardar.", 3200);
       return;
     }
 
@@ -395,16 +363,12 @@ export default function ModalEditarOrdenPago({
     showToast("cargando", "Guardando cambios…", 12000);
 
     try {
-      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha))
-        throw new Error("Fecha inválida.");
+      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) throw new Error("Fecha inválida.");
 
       const perUI = periodoToMMYYYY(form.periodo) || periodoFromISODate(form.fecha);
 
-      // Reglas mínimas de OP pendiente: proveedor requerido
       const idProv =
-        form.id_proveedor && form.id_proveedor !== NULL_OPTION
-          ? Number(form.id_proveedor)
-          : null;
+        form.id_proveedor && form.id_proveedor !== NULL_OPTION ? Number(form.id_proveedor) : null;
       if (!idProv) throw new Error("Seleccioná un proveedor.");
 
       const payloadFinal = {
@@ -414,19 +378,13 @@ export default function ModalEditarOrdenPago({
 
         // Proveedor
         id_proveedor: idProv,
-        proveedor: String(form.proveedorTxt || "").trim(), // por si el backend guarda texto
+        proveedor: String(form.proveedorTxt || "").trim(),
 
-        // Detalle (catálogo)
-        id_detalle:
-          form.id_detalle && form.id_detalle !== NULL_OPTION
-            ? Number(form.id_detalle)
-            : null,
+        // Detalle
+        id_detalle: form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null,
         detalle: String(form.detalleInput || "").trim(),
 
         monto_total: Math.max(0, Math.round(safeNumber(form.monto_total) * 100) / 100),
-
-        // Opcional: si tu backend lo necesita para mantener "pendiente"
-        // tipo_venta: "CUENTA CORRIENTE",
       };
 
       await onSave?.(payloadFinal);
@@ -453,17 +411,10 @@ export default function ModalEditarOrdenPago({
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar orden de pago</h2>
-            <p className="mi-modal__subtitle">
-              Fecha, período, proveedor, descripción/detalle y monto.
-            </p>
+            <p className="mi-modal__subtitle">Fecha, período, proveedor, descripción/detalle y monto.</p>
           </div>
 
-          <button
-            className="mi-modal__close"
-            onClick={() => !saving && onClose?.()}
-            disabled={saving}
-            type="button"
-          >
+          <button className="mi-modal__close" onClick={() => !saving && onClose?.()} disabled={saving} type="button">
             ✕
           </button>
         </div>
@@ -509,7 +460,6 @@ export default function ModalEditarOrdenPago({
                 const v = e.target.value;
 
                 if (v === ADD_OPTION) {
-                  // volvemos al valor anterior (para evitar que quede "__ADD__")
                   setForm((p) => ({ ...p, id_proveedor: p.id_proveedor || NULL_OPTION }));
                   startAddProveedor();
                   return;
@@ -536,7 +486,7 @@ export default function ModalEditarOrdenPago({
             <label className="fl-label">Proveedor</label>
           </div>
 
-          {/* Descripción = Detalle (autocomplete + agregar) */}
+          {/* Descripción = Detalle */}
           <div className="fl-field" style={{ position: "relative", marginTop: 12 }}>
             <input
               ref={detalleInputRef}
@@ -562,14 +512,7 @@ export default function ModalEditarOrdenPago({
                       handleSelectDetalle(d);
                     }}
                   >
-                    <span
-                      style={{
-                        flex: 1,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
+                    <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {d.nombre}
                     </span>
                   </li>
@@ -577,12 +520,7 @@ export default function ModalEditarOrdenPago({
               </ul>
             )}
 
-            <button
-              type="button"
-              onClick={startAddDetalle}
-              disabled={saving || addProvUI.open}
-              className="mi-cr-link"
-            >
+            <button type="button" onClick={startAddDetalle} disabled={saving || addProvUI.open} className="mi-cr-link">
               + Agregar nuevo detalle
             </button>
           </div>
@@ -602,10 +540,7 @@ export default function ModalEditarOrdenPago({
             <label className="fl-label">Monto</label>
           </div>
 
-          <div
-            style={{ marginTop: 14, display: "flex", gap: 10 }}
-            className="content-btn-modalordenpago"
-          >
+          <div style={{ marginTop: 14, display: "flex", gap: 10 }} className="content-btn-modalordenpago">
             <button
               type="submit"
               disabled={saving}
@@ -645,9 +580,7 @@ export default function ModalEditarOrdenPago({
           value={addProvUI.text}
           saving={addProvUI.saving}
           onChange={(txt) => setAddProvUI((p) => ({ ...p, text: txt }))}
-          onCancel={() =>
-            !addProvUI.saving && setAddProvUI({ open: false, text: "", saving: false })
-          }
+          onCancel={() => !addProvUI.saving && setAddProvUI({ open: false, text: "", saving: false })}
           onSave={guardarNuevoProveedor}
         />
       </div>

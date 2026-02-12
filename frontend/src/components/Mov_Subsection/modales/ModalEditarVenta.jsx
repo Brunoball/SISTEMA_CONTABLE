@@ -167,13 +167,6 @@ function findIdByExact(arr, exactText) {
 }
 
 /* =========================
-   Dark helper
-========================= */
-function isTemaOscuro() {
-  return document.documentElement.getAttribute("data-theme") === "oscuro";
-}
-
-/* =========================
    Cálculo item
 ========================= */
 function calcItemTotals(cantidad, precio, ivaPct) {
@@ -190,7 +183,7 @@ function calcItemTotals(cantidad, precio, ivaPct) {
 /* =========================
    Build form desde row (venta)
 ========================= */
-function buildFormFromRowVenta(row, listsMerged, periodoDefault, fixedLocal) {
+function buildFormFromRowVenta(row, periodoDefault, fixedLocal) {
   const r = row || {};
 
   const fecha = String(r.fecha || "").slice(0, 10) || "";
@@ -214,28 +207,26 @@ function buildFormFromRowVenta(row, listsMerged, periodoDefault, fixedLocal) {
   const total = r.total != null ? safeNumber(r.total) : totals.total;
   const monto_total = r.monto_total != null ? safeNumber(r.monto_total) : total;
 
-  // ✅ IMPORTANTÍSIMO: si no encontramos fijos, NO pisamos lo que ya venía del row
+  // ⚠️ id_tipo_movimiento: el backend lo necesita, pero NO lo mostramos en UI
   const idSalida = fixedLocal?.idSalida ?? NULL_OPTION;
-  const idVenta = fixedLocal?.idVenta ?? NULL_OPTION;
 
   return {
     id_movimiento: safeNumber(r.id_movimiento) || null,
     fecha,
     periodo: pickPeriodo,
 
-    id_clasificacion: nOrNull(r.id_clasificacion),
     id_cuenta_corriente: sOrNull(r.id_cuenta_corriente),
     id_medio_pago: nOrNull(r.id_medio_pago),
 
-    // ✅ fijos SI existen; sino, usar lo que venía en el row
+    // ✅ editable en UI
+    id_tipo_venta: nOrNull(r.id_tipo_venta),
+
+    // ✅ fijo interno (no UI)
     id_tipo_movimiento: idSalida !== NULL_OPTION ? idSalida : nOrNull(r.id_tipo_movimiento),
-    id_tipo_venta: idVenta !== NULL_OPTION ? idVenta : nOrNull(r.id_tipo_venta),
 
     id_cliente: sOrNull(r.id_cliente),
-    id_proveedor: NULL_OPTION,
     id_detalle: sOrNull(r.id_detalle),
 
-    // números editables
     monto_total: Math.max(0, Math.round(monto_total * 100) / 100),
     cantidad: Math.max(0, Math.round(cantidad * 1000) / 1000),
     precio: Math.max(0, Math.round(precio * 100) / 100),
@@ -255,10 +246,25 @@ function nameById(arr, id) {
   const found = (Array.isArray(arr) ? arr : []).find((x) => String(x?.id) === sid);
   return String(found?.nombre ?? "").trim();
 }
-function hasIdInList(arr, id) {
-  const sid = String(id ?? "").trim();
-  if (!sid || sid === NULL_OPTION || sid === ADD_OPTION) return false;
-  return (Array.isArray(arr) ? arr : []).some((x) => String(x?.id) === sid);
+function getTipoVentaObj(tiposVentaArr, idTipoVenta) {
+  const sid = String(idTipoVenta ?? "").trim();
+  if (!sid || sid === NULL_OPTION) return null;
+  return (Array.isArray(tiposVentaArr) ? tiposVentaArr : []).find((x) => String(x?.id) === sid) || null;
+}
+function isTipoVentaContado(tipoVentaObj) {
+  const n = String(tipoVentaObj?.nombre ?? "").toLowerCase();
+  return n.includes("contado") || n.includes("efectivo");
+}
+function isTipoVentaCuentaCorriente(tipoVentaObj) {
+  const n = String(tipoVentaObj?.nombre ?? "").toLowerCase();
+  return n.includes("cuenta") || n.includes("corriente");
+}
+
+/* =========================
+   Dark helper
+========================= */
+function isTemaOscuro() {
+  return document.documentElement.getAttribute("data-theme") === "oscuro";
 }
 
 export default function ModalEditarVenta({
@@ -268,11 +274,13 @@ export default function ModalEditarVenta({
   periodoDefault,
   onClose,
   onSave,
-  onCatalogCreated, // (si lo usás en tu flujo, queda compatible)
   onToast,
   dark: darkProp,
 }) {
-  const API = `${BASE_URL}/api.php`;
+  const showToast = useCallback(
+    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
+    [onToast]
+  );
 
   const [darkAuto, setDarkAuto] = useState(isTemaOscuro());
   useEffect(() => {
@@ -281,11 +289,6 @@ export default function ModalEditarVenta({
     return () => obs.disconnect();
   }, []);
   const dark = typeof darkProp === "boolean" ? darkProp : darkAuto;
-
-  const showToast = useCallback(
-    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
-    [onToast]
-  );
 
   // bloquear scroll del body
   useEffect(() => {
@@ -300,7 +303,6 @@ export default function ModalEditarVenta({
   const listsRef = useRef(lists);
   const rowRef = useRef(row);
   const periodoDefaultRef = useRef(periodoDefault);
-
   useEffect(() => void (listsRef.current = lists), [lists]);
   useEffect(() => void (rowRef.current = row), [row]);
   useEffect(() => void (periodoDefaultRef.current = periodoDefault), [periodoDefault]);
@@ -309,12 +311,12 @@ export default function ModalEditarVenta({
     ...SAFE_LISTS,
     ...normalizeIncomingLists(lists),
   }));
-
   useEffect(() => {
     setLocalLists({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) });
   }, [lists]);
 
   const safeLists = useMemo(() => localLists, [localLists]);
+
   const [saving, setSaving] = useState(false);
 
   // --------- form ----------
@@ -322,10 +324,9 @@ export default function ModalEditarVenta({
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(lists) };
     const fixedLocal = {
       idSalida: findIdByIncludes(merged.tiposMovimiento, "salida"),
-      idVenta: findIdByIncludes(merged.tiposVenta, "venta"),
       idConsumidorFinal: findIdByIncludes(merged.clientes, "consumidor final"),
     };
-    const built = buildFormFromRowVenta(row, merged, periodoDefault, fixedLocal);
+    const built = buildFormFromRowVenta(row, periodoDefault, fixedLocal);
 
     // si no hay cliente => consumidor final
     const hasCliente = String(built.id_cliente || "").trim() && String(built.id_cliente) !== NULL_OPTION;
@@ -341,7 +342,6 @@ export default function ModalEditarVenta({
     return nameById(merged.clientes, form.id_cliente);
   });
   const [clienteFocus, setClienteFocus] = useState(false);
-  const clienteInputRef = useRef(null);
 
   const [detalleInput, setDetalleInput] = useState(() => {
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(lists) };
@@ -352,13 +352,12 @@ export default function ModalEditarVenta({
   const closeBtnRef = useRef(null);
   const fechaRef = useRef(null);
 
-  // abrir: reconstruir SIEMPRE con refs + merged actual (fix ids correctos)
+  // abrir: reconstruir SIEMPRE
   const prevOpenRef = useRef(false);
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
     prevOpenRef.current = open;
-    if (!open) return;
-    if (wasOpen) return;
+    if (!open || wasOpen) return;
 
     setSaving(false);
 
@@ -367,11 +366,10 @@ export default function ModalEditarVenta({
 
     const fixedLocal = {
       idSalida: findIdByIncludes(merged.tiposMovimiento, "salida"),
-      idVenta: findIdByIncludes(merged.tiposVenta, "venta"),
       idConsumidorFinal: findIdByIncludes(merged.clientes, "consumidor final"),
     };
 
-    const built = buildFormFromRowVenta(rowRef.current, merged, periodoDefaultRef.current, fixedLocal);
+    const built = buildFormFromRowVenta(rowRef.current, periodoDefaultRef.current, fixedLocal);
 
     const hasCliente = String(built.id_cliente || "").trim() && String(built.id_cliente) !== NULL_OPTION;
     const nextBuilt = { ...built };
@@ -486,10 +484,16 @@ export default function ModalEditarVenta({
     return all.filter((c) => String(c?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
   }, [safeLists.clientes, clienteInput, clienteFocus]);
 
+  const filteredDetalles = useMemo(() => {
+    const all = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
+    const q = detalleInput.trim().toLowerCase();
+    if (!detalleFocus || q.length < 1) return [];
+    return all.filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
+  }, [safeLists.detalles, detalleInput, detalleFocus]);
+
   const handleClienteInputChange = useCallback((e) => {
     const value = e.target.value;
     setClienteInput(value);
-    // hasta que seleccione uno, dejamos null
     setForm((prev) => ({ ...prev, id_cliente: NULL_OPTION }));
   }, []);
 
@@ -502,13 +506,6 @@ export default function ModalEditarVenta({
     }));
     setClienteFocus(false);
   }, []);
-
-  const filteredDetalles = useMemo(() => {
-    const all = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
-    const q = detalleInput.trim().toLowerCase();
-    if (!detalleFocus || q.length < 1) return [];
-    return all.filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
-  }, [safeLists.detalles, detalleInput, detalleFocus]);
 
   const handleDetalleInputChange = useCallback((e) => {
     const value = e.target.value;
@@ -525,6 +522,58 @@ export default function ModalEditarVenta({
     }));
     setDetalleFocus(false);
   }, []);
+
+  // ✅ Auto-fijar ID al salir del input si hay match exacto
+  const autoFixClienteIdOnBlur = useCallback(() => {
+    setTimeout(() => setClienteFocus(false), 120);
+    setForm((p) => {
+      const cur = String(p.id_cliente || "");
+      if (cur && cur !== NULL_OPTION) return p;
+      const txt = clienteInput.trim();
+      if (!txt) return p;
+      const found = findIdByExact(safeLists.clientes, txt);
+      if (found === NULL_OPTION) return p;
+      return { ...p, id_cliente: found };
+    });
+  }, [clienteInput, safeLists.clientes]);
+
+  const autoFixDetalleIdOnBlur = useCallback(() => {
+    setTimeout(() => setDetalleFocus(false), 120);
+    setForm((p) => {
+      const cur = String(p.id_detalle || "");
+      if (cur && cur !== NULL_OPTION) return p;
+      const txt = detalleInput.trim();
+      if (!txt) return p;
+      const found = findIdByExact(safeLists.detalles, txt);
+      if (found === NULL_OPTION) return p;
+      return { ...p, id_detalle: found };
+    });
+  }, [detalleInput, safeLists.detalles]);
+
+  /* =========================
+     Mostrar/Ocultar según Tipo de venta
+  ========================= */
+  const tipoVentaObj = useMemo(
+    () => getTipoVentaObj(safeLists.tiposVenta, form.id_tipo_venta),
+    [safeLists.tiposVenta, form.id_tipo_venta]
+  );
+  const esContado = useMemo(() => isTipoVentaContado(tipoVentaObj), [tipoVentaObj]);
+  const esCuentaCorriente = useMemo(() => isTipoVentaCuentaCorriente(tipoVentaObj), [tipoVentaObj]);
+
+  // Cuando cambia tipo venta, limpiamos el campo que no aplica
+  useEffect(() => {
+    if (!open) return;
+    setForm((p) => {
+      const next = { ...p };
+
+      if (esContado) {
+        next.id_cuenta_corriente = NULL_OPTION;
+      } else if (esCuentaCorriente) {
+        next.id_medio_pago = NULL_OPTION;
+      }
+      return next;
+    });
+  }, [open, esContado, esCuentaCorriente]);
 
   /* =========================
      Payload final (venta)
@@ -547,9 +596,6 @@ export default function ModalEditarVenta({
       fecha: form.fecha,
       periodo: periodoMMYYYY_to_YYYYMM(normalizePeriodoToMMYYYY(form.periodo)),
 
-      id_clasificacion: toNullableId(form.id_clasificacion),
-
-      // ✅ usar lo que está en el form (no null por default)
       id_tipo_venta: toNullableId(form.id_tipo_venta),
       id_tipo_movimiento: toNullableId(form.id_tipo_movimiento),
 
@@ -573,7 +619,6 @@ export default function ModalEditarVenta({
 
   const submit = async (e) => {
     e.preventDefault();
-
     setSaving(true);
     showToast("cargando", "Guardando cambios…", 12000);
 
@@ -586,19 +631,22 @@ export default function ModalEditarVenta({
       const perAuto = periodoFromISODate(form.fecha);
       const finalPer = perUI || perAuto;
 
+      // ✅ Tipo venta obligatorio
+      if (!form.id_tipo_venta || String(form.id_tipo_venta) === NULL_OPTION) {
+        throw new Error("En Ventas la Forma de venta (Tipo venta) es obligatoria.");
+      }
+
       // ✅ Cliente obligatorio
       let finalIdCliente = form.id_cliente;
-
       if ((!finalIdCliente || finalIdCliente === NULL_OPTION) && clienteInput.trim()) {
         const foundId = findIdByExact(safeLists.clientes, clienteInput.trim());
         if (foundId !== NULL_OPTION) finalIdCliente = foundId;
       }
-
       if (!finalIdCliente || finalIdCliente === NULL_OPTION || finalIdCliente === ADD_OPTION) {
         throw new Error("En Ventas el Cliente es obligatorio (seleccioná uno).");
       }
 
-      // ✅ Detalle obligatorio (según tu backend)
+      // ✅ Detalle obligatorio
       let finalIdDetalle = form.id_detalle;
       if ((!finalIdDetalle || finalIdDetalle === NULL_OPTION) && detalleInput.trim()) {
         const foundId = findIdByExact(safeLists.detalles, detalleInput.trim());
@@ -608,9 +656,16 @@ export default function ModalEditarVenta({
         throw new Error("En Ventas el Detalle es obligatorio (seleccioná uno).");
       }
 
-      // ✅ Tipo venta obligatorio (según tu backend)
-      if (!form.id_tipo_venta || String(form.id_tipo_venta) === NULL_OPTION) {
-        throw new Error("En Ventas la Forma de venta (Tipo venta) es obligatoria.");
+      // ✅ Reglas por tipo venta
+      if (esContado) {
+        if (!form.id_medio_pago || String(form.id_medio_pago) === NULL_OPTION) {
+          throw new Error("En ventas al contado el Medio de pago es obligatorio.");
+        }
+      }
+      if (esCuentaCorriente) {
+        if (!form.id_cuenta_corriente || String(form.id_cuenta_corriente) === NULL_OPTION) {
+          throw new Error("En ventas por Cuenta Corriente la Cuenta Corriente es obligatoria.");
+        }
       }
 
       const cantidad = Math.max(0, safeNumber(form.cantidad));
@@ -661,9 +716,6 @@ export default function ModalEditarVenta({
     .join(" ")
     .trim();
 
-  const tipoVentaExists = hasIdInList(safeLists.tiposVenta, form.id_tipo_venta);
-  const tipoMovExists = hasIdInList(safeLists.tiposMovimiento, form.id_tipo_movimiento);
-
   return createPortal(
     <div className={overlayClass} onMouseDown={cerrar}>
       <div
@@ -675,7 +727,7 @@ export default function ModalEditarVenta({
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar venta</h2>
-            <p className="mi-modal__subtitle">Tipo movimiento: Salida · Cliente obligatorio</p>
+            <p className="mi-modal__subtitle">Cliente y Detalle obligatorios</p>
           </div>
 
           <button
@@ -698,68 +750,23 @@ export default function ModalEditarVenta({
 
               <div className="mi-em-panelBody">
                 <div className="fl-grid">
-                  <div className="mi-row3 fl-col-full">
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(form.id_clasificacion)}
-                        onChange={(e) => setForm((p) => ({ ...p, id_clasificacion: e.target.value }))}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
-                        {(safeLists.clasificaciones || []).map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                      </select>
-                      <label className="fl-label">Clasificación</label>
-                    </div>
-
+                  <div className="mi-row2 fl-col-full">
+                    {/* ✅ Tipo de venta editable */}
                     <div className="fl-field">
                       <select
                         className="fl-input fl-select"
                         value={String(form.id_tipo_venta)}
-                        disabled
+                        onChange={(e) => setForm((p) => ({ ...p, id_tipo_venta: e.target.value }))}
+                        disabled={saving}
                       >
-                        {!tipoVentaExists && String(form.id_tipo_venta) !== NULL_OPTION && (
-                          <option value={String(form.id_tipo_venta)}>Tipo venta actual</option>
-                        )}
-
+                        <option value={NULL_OPTION}>-- Seleccionar tipo de venta --</option>
                         {(safeLists.tiposVenta || []).map((x) => (
                           <option key={x.id} value={String(x.id)}>
                             {x.nombre}
                           </option>
                         ))}
-
-                        {String(form.id_tipo_venta) === NULL_OPTION && (
-                          <option value={NULL_OPTION}>Venta</option>
-                        )}
                       </select>
-                      <label className="fl-label">Tipo de venta (fijo)</label>
-                    </div>
-
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(form.id_tipo_movimiento)}
-                        disabled
-                      >
-                        {!tipoMovExists && String(form.id_tipo_movimiento) !== NULL_OPTION && (
-                          <option value={String(form.id_tipo_movimiento)}>Tipo mov. actual</option>
-                        )}
-
-                        {(safeLists.tiposMovimiento || []).map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-
-                        {String(form.id_tipo_movimiento) === NULL_OPTION && (
-                          <option value={NULL_OPTION}>Salida</option>
-                        )}
-                      </select>
-                      <label className="fl-label">Tipo de movimiento (fijo)</label>
+                      <label className="fl-label">Tipo de venta</label>
                     </div>
                   </div>
 
@@ -771,7 +778,7 @@ export default function ModalEditarVenta({
                         value={detalleInput}
                         onChange={handleDetalleInputChange}
                         onFocus={() => setDetalleFocus(true)}
-                        onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
+                        onBlur={autoFixDetalleIdOnBlur}
                         disabled={saving}
                         autoComplete="off"
                       />
@@ -804,24 +811,32 @@ export default function ModalEditarVenta({
                       )}
                     </div>
 
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(form.id_cuenta_corriente)}
-                        onChange={(e) =>
-                          setForm((p) => ({ ...p, id_cuenta_corriente: e.target.value }))
-                        }
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
-                        {(safeLists.cuentasCorrientes || []).map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                      </select>
-                      <label className="fl-label">Cuenta corriente</label>
-                    </div>
+                    {/* ✅ Cuenta Corriente SOLO si es cuenta corriente */}
+                    {esCuentaCorriente ? (
+                      <div className="fl-field">
+                        <select
+                          className="fl-input fl-select"
+                          value={String(form.id_cuenta_corriente)}
+                          onChange={(e) =>
+                            setForm((p) => ({ ...p, id_cuenta_corriente: e.target.value }))
+                          }
+                          disabled={saving}
+                        >
+                          <option value={NULL_OPTION}>-- Seleccionar cuenta corriente --</option>
+                          {(safeLists.cuentasCorrientes || []).map((x) => (
+                            <option key={x.id} value={String(x.id)}>
+                              {x.nombre}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="fl-label">Cuenta corriente (obligatoria)</label>
+                      </div>
+                    ) : (
+                      <div className="fl-field" style={{ opacity: 0.6 }}>
+                        <input className="fl-input" disabled value="No aplica" />
+                        <label className="fl-label">Cuenta corriente</label>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mi-em-item fl-col-full">
@@ -939,32 +954,39 @@ export default function ModalEditarVenta({
               </div>
 
               <div className="mi-em-asideBody">
-                <div className="fl-field">
-                  <select
-                    className="fl-input fl-select"
-                    value={String(form.id_medio_pago)}
-                    onChange={(e) => setForm((p) => ({ ...p, id_medio_pago: e.target.value }))}
-                    disabled={saving}
-                  >
-                    <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
-                    {(safeLists.mediosPago || []).map((x) => (
-                      <option key={x.id} value={String(x.id)}>
-                        {x.nombre}
-                      </option>
-                    ))}
-                  </select>
-                  <label className="fl-label">Medio de pago</label>
-                </div>
+                {/* ✅ Medio de pago SOLO si es contado */}
+                {esContado ? (
+                  <div className="fl-field">
+                    <select
+                      className="fl-input fl-select"
+                      value={String(form.id_medio_pago)}
+                      onChange={(e) => setForm((p) => ({ ...p, id_medio_pago: e.target.value }))}
+                      disabled={saving}
+                    >
+                      <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
+                      {(safeLists.mediosPago || []).map((x) => (
+                        <option key={x.id} value={String(x.id)}>
+                          {x.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="fl-label">Medio de pago (obligatorio)</label>
+                  </div>
+                ) : (
+                  <div className="fl-field" style={{ opacity: 0.6 }}>
+                    <input className="fl-input" disabled value="No aplica" />
+                    <label className="fl-label">Medio de pago</label>
+                  </div>
+                )}
 
                 <div className="fl-field mi-autocomplete" style={{ position: "relative" }}>
                   <input
-                    ref={clienteInputRef}
                     className="fl-input"
                     placeholder=" "
                     value={clienteInput}
                     onChange={handleClienteInputChange}
                     onFocus={() => setClienteFocus(true)}
-                    onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
+                    onBlur={autoFixClienteIdOnBlur}
                     disabled={saving}
                     autoComplete="off"
                   />

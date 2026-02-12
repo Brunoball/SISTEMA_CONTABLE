@@ -8,27 +8,27 @@ if (!function_exists('route_movimientos')) {
   {
     switch (trim($action)) {
 
-      /* =====================================================
-         CATÁLOGOS (selects dinámicos)
-      ===================================================== */
       case 'catalogo_crear':
         require_once __DIR__ . '/catalogo.php';
         return true;
 
-
-      /* =====================================================
-         CONFIRMACIÓN DE PAGOS / RECIBOS / ÓRDENES
-      ===================================================== */
-      case 'recibos_confirmar_pago':
+      /* ✅ ÓRDENES DE PAGO (nuevo módulo) */
+      case 'ordenes_pago_listar':
+      case 'ordenes_pago_actualizar':
+      case 'ordenes_pago_eliminar':
       case 'ordenes_pago_confirmar_pago':
-      case 'confirmar_pago':
-        require_once __DIR__ . '/confirmar_pago.php';
+        require_once __DIR__ . '/ordenes_pago.php';
         return true;
 
+      /* ✅ RECIBOS */
+      case 'recibos_listar':
+      case 'recibos_actualizar':
+      case 'recibos_eliminar':
+      case 'recibos_confirmar_pago':
+        require_once __DIR__ . '/recibos.php';
+        return true;
 
-      /* =====================================================
-         CRUD DE MOVIMIENTOS (GENERAL)
-      ===================================================== */
+      /* CRUD general (Movimientos.jsx) */
       case 'movimientos_listar':
       case 'movimientos_crear':
       case 'movimientos_actualizar':
@@ -36,10 +36,7 @@ if (!function_exists('route_movimientos')) {
         require_once __DIR__ . '/movimientos.php';
         return true;
 
-
-      /* =====================================================
-         VENTAS (MÓDULO DEDICADO)
-      ===================================================== */
+      /* Ventas */
       case 'ventas_listar':
       case 'ventas_crear':
       case 'ventas_crear_batch':
@@ -48,10 +45,14 @@ if (!function_exists('route_movimientos')) {
         require_once __DIR__ . '/ventas.php';
         return true;
 
+      /* Compras */
+      case 'compras_listar':
+      case 'compras_crear':
+      case 'compras_actualizar':
+      case 'compras_eliminar':
+        require_once __DIR__ . '/compras.php';
+        return true;
 
-      /* =====================================================
-         ACCIÓN NO ENCONTRADA
-      ===================================================== */
       default:
         return false;
     }

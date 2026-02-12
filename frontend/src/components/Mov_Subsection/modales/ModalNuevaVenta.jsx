@@ -23,8 +23,13 @@ function todayISO() {
   return `${yyyy}-${mm}-${dd}`;
 }
 function safeNumber(v) {
+  // 👇 Importante: Number("") => 0, Number(null) => 0, Number(" ") => 0
+  // para validación usamos funciones específicas abajo.
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+function isBlank(v) {
+  return String(v ?? "").trim() === "";
 }
 function moneyARS(v) {
   const n = Number(v || 0);
@@ -204,6 +209,54 @@ function isContadoTipoVenta(tipoVentaObj) {
 function isCorrienteTipoVenta(tipoVentaObj) {
   const name = String(tipoVentaObj?.nombre ?? "").toLowerCase();
   return name.includes("corriente");
+}
+
+/* =========================
+   Validación detallada filas (mensajes específicos)
+========================= */
+function describeLineProblem(r, idx1based) {
+  // r ya viene con cálculos si la llamás con rowsCalc
+  const detId = Number(r.id_detalle);
+  const detTxt = String(r.detalleText || "").trim();
+
+  const qtyBlank = isBlank(r.cantidad);
+  const priceBlank = isBlank(r.precio);
+
+  const qty = safeNumber(r.cantidad);
+  const price = safeNumber(r.precio);
+  const total = safeNumber(r.total);
+
+  const touched =
+    detTxt !== "" ||
+    String(r.id_detalle || "").trim() !== "" ||
+    !qtyBlank ||
+    !priceBlank ||
+    safeNumber(r.cantidad) !== 0 ||
+    safeNumber(r.precio) !== 0;
+
+  if (!touched) return null;
+
+  const issues = [];
+
+  // detalle
+  if (!(Number.isFinite(detId) && detId > 0)) {
+    issues.push(detTxt ? `la descripción "${detTxt}" no está seleccionada del listado` : "falta la descripción (detalle)");
+  }
+
+  // cantidad
+  if (qtyBlank) issues.push("falta la cantidad");
+  else if (!(Number.isFinite(qty) && qty > 0)) issues.push("la cantidad debe ser mayor a 0");
+
+  // precio
+  if (priceBlank) issues.push("falta el precio");
+  else if (!(Number.isFinite(price) && price > 0)) issues.push("el precio debe ser mayor a 0");
+
+  // total (derivado)
+  if (!(Number.isFinite(total) && total > 0)) issues.push("el total queda en 0 (revisá cantidad / precio)");
+
+  if (!issues.length) return null;
+
+  return `Fila ${idx1based}: ${issues.join(", ")}.`;
 }
 
 export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved }) {
@@ -519,47 +572,64 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   }, [open, isContado, isCorriente]);
 
   /* =========================
-     VALIDACIÓN (según backend)
+     VALIDACIÓN DETALLADA
 ========================= */
   const validate = useCallback(() => {
+    // 1) cliente
     const cli = Number(filters.id_cliente);
-    if (!Number.isFinite(cli) || cli <= 0) return { ok: false, msg: "Seleccioná un Cliente." };
+    if (!Number.isFinite(cli) || cli <= 0) return { ok: false, msg: "Falta seleccionar un Cliente (campo obligatorio)." };
 
+    // 2) forma de venta
     const tv = Number(filters.id_tipo_venta);
-    if (!Number.isFinite(tv) || tv <= 0) return { ok: false, msg: "Seleccioná la Forma de venta." };
+    if (!Number.isFinite(tv) || tv <= 0) return { ok: false, msg: "Falta seleccionar la Forma de venta (Contado / Cuenta Corriente)." };
 
+    // 3) contado => medio de pago
     if (isContado) {
       const mp = Number(filters.id_medio_pago);
-      if (!Number.isFinite(mp) || mp <= 0) return { ok: false, msg: "Venta Contado: seleccioná Medio de pago." };
+      if (!Number.isFinite(mp) || mp <= 0) return { ok: false, msg: "Venta Contado: falta seleccionar el Medio de pago." };
     }
 
+    // 4) corriente => cuenta corriente
     if (isCorriente) {
       const cc = Number(filters.id_cuenta_corriente);
-      if (!Number.isFinite(cc) || cc <= 0) return { ok: false, msg: "Cuenta Corriente: seleccioná una Cuenta Corriente." };
+      if (!Number.isFinite(cc) || cc <= 0) return { ok: false, msg: "Cuenta Corriente: falta seleccionar la Cuenta Corriente." };
     }
 
+    // 5) período (si el usuario lo tocó y quedó raro)
+    const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
+    if (!/^\d{4}-\d{2}$/.test(periodoApi)) return { ok: false, msg: `Período inválido. Usá MM-YYYY (ej: 02-2026).` };
+
+    // 6) filas: mensajes específicos
+    const problems = [];
+    rowsCalc.forEach((r, idx) => {
+      const p = describeLineProblem(r, idx + 1);
+      if (p) problems.push(p);
+    });
+
+    // líneas válidas
     const usableLines = rowsCalc.filter((r) => {
       const det = Number(r.id_detalle);
       const total = Number(r.total || 0);
       return Number.isFinite(det) && det > 0 && total > 0;
     });
-    if (!usableLines.length) return { ok: false, msg: "Cargá al menos 1 fila con Detalle y Total > 0." };
 
-    const incompleteTouched = rowsCalc.some((r) => {
-      const touched =
-        String(r.detalleText || "").trim() !== "" ||
-        String(r.id_detalle || "").trim() !== "" ||
-        safeNumber(r.cantidad) !== 0 ||
-        safeNumber(r.precio) !== 0;
-      if (!touched) return false;
+    if (!usableLines.length) {
+      // Si el usuario tocó algo en alguna fila, devolvemos el primer problema concreto (o varios)
+      if (problems.length) {
+        // mostramos hasta 2 para que el toast no sea kilométrico
+        const msg = problems.slice(0, 2).join(" ");
+        const extra = problems.length > 2 ? ` (y ${problems.length - 2} más)` : "";
+        return { ok: false, msg: `No hay filas válidas para guardar. ${msg}${extra}` };
+      }
+      // Si no tocó nada, mensaje simple
+      return { ok: false, msg: "Cargá al menos 1 fila: elegí un Detalle y completá Cantidad y Precio (Total > 0)." };
+    }
 
-      const det = Number(r.id_detalle);
-      const total = Number(r.total || 0);
-      return !(Number.isFinite(det) && det > 0 && total > 0);
-    });
+    // warning si hay filas tocadas pero incompletas
+    const warn = problems.length > 0;
 
-    return { ok: true, warn: incompleteTouched };
-  }, [filters.id_cliente, filters.id_tipo_venta, filters.id_medio_pago, filters.id_cuenta_corriente, isContado, isCorriente, rowsCalc]);
+    return { ok: true, warn, periodoApi };
+  }, [filters.id_cliente, filters.id_tipo_venta, filters.id_medio_pago, filters.id_cuenta_corriente, isContado, isCorriente, periodoUI, fecha, rowsCalc]);
 
   /* =========================
      SUBMIT (POST batch a ventas.php)
@@ -574,18 +644,20 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
     const v = validate();
     if (!v.ok) {
-      showToast("advertencia", v.msg || "Faltan datos.", 3600);
+      showToast("advertencia", v.msg || "Faltan datos.", 4200);
       return;
     }
 
     setSaving(true);
-    if (v.warn) showToast("advertencia", "Hay filas incompletas. Se guardarán solo las filas válidas.", 3500);
+
+    if (v.warn) showToast("advertencia", "Hay filas incompletas: se guardarán solo las filas válidas.", 3600);
     else showToast("cargando", "Guardando venta…", 12000);
 
     try {
       const { idUsuario } = getAuthInfo();
 
-      const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? fecha.slice(0, 7) : "");
+      // validate() ya lo calculó y validó
+      const periodoApi = v.periodoApi || (mmYYYYToYYYYMM(periodoUI) || (fecha ? fecha.slice(0, 7) : ""));
       if (!/^\d{4}-\d{2}$/.test(periodoApi)) {
         throw new Error("Período inválido. Usá MM-YYYY (ej: 02-2026).");
       }
@@ -631,7 +703,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         }));
 
       if (!payloads.length) {
-        showToast("advertencia", "No hay filas válidas para guardar.", 3500);
+        showToast("advertencia", "No hay filas válidas para guardar. Revisá detalle, cantidad y precio.", 4200);
         setSaving(false);
         return;
       }
@@ -737,12 +809,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                           </ul>
                         )}
 
-                        <button
-                          type="button"
-                          onClick={() => startAddDetalleForRow(r.id)}
-                          disabled={saving || addUI.saving}
-                          className="mi-cr-link"
-                        >
+                        <button type="button" onClick={() => startAddDetalleForRow(r.id)} disabled={saving || addUI.saving} className="mi-cr-link">
                           + Agregar nueva descripción
                         </button>
                       </div>
@@ -804,13 +871,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
                       {/* Acción */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--action">
-                        <button
-                          type="button"
-                          onClick={() => removeRow(r.id)}
-                          disabled={saving}
-                          title="Eliminar fila"
-                          className="mi-cr-del"
-                        >
+                        <button type="button" onClick={() => removeRow(r.id)} disabled={saving} title="Eliminar fila" className="mi-cr-del">
                           ×
                         </button>
                       </div>
@@ -910,12 +971,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
                   {/* TIPO VENTA */}
                   <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(filters.id_tipo_venta)}
-                      onChange={(e) => updateFilter("id_tipo_venta", e.target.value)}
-                      disabled={saving}
-                    >
+                    <select className="fl-input fl-select" value={String(filters.id_tipo_venta)} onChange={(e) => updateFilter("id_tipo_venta", e.target.value)} disabled={saving}>
                       <option value={NULL_OPTION}>Forma de venta *</option>
                       {(localLists.tipos_venta || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
@@ -930,12 +986,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                   {isContado && (
                     <>
                       <div className="fl-field">
-                        <select
-                          className="fl-input fl-select"
-                          value={String(filters.id_medio_pago)}
-                          onChange={(e) => updateFilter("id_medio_pago", e.target.value)}
-                          disabled={saving}
-                        >
+                        <select className="fl-input fl-select" value={String(filters.id_medio_pago)} onChange={(e) => updateFilter("id_medio_pago", e.target.value)} disabled={saving}>
                           <option value={NULL_OPTION}>Medio de pago *</option>
                           {(localLists.medios_pago || []).map((x) => (
                             <option key={x.id} value={String(x.id)}>
@@ -1017,23 +1068,11 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                 </div>
 
                 <div className="mi-cr-filters__actions">
-                  <button
-                    type="button"
-                    onClick={submit}
-                    disabled={saving}
-                    className="mit-btn mit-btn--solid"
-                    style={{ width: "100%", height: 44 }}
-                  >
+                  <button type="button" onClick={submit} disabled={saving} className="mit-btn mit-btn--solid" style={{ width: "100%", height: 44 }}>
                     {saving ? "Guardando..." : "Guardar venta"}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => (!saving ? onClose?.() : null)}
-                    disabled={saving}
-                    className="mit-btn mit-btn--ghost"
-                    style={{ width: "100%", height: 44 }}
-                  >
+                  <button type="button" onClick={() => (!saving ? onClose?.() : null)} disabled={saving} className="mit-btn mit-btn--ghost" style={{ width: "100%", height: 44 }}>
                     Cancelar
                   </button>
                 </div>

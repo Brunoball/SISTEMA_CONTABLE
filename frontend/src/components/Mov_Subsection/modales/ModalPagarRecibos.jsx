@@ -30,6 +30,14 @@ function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "-";
 }
+function normalizeSearchText(v) {
+  return String(v ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "-";
@@ -46,7 +54,6 @@ function normalizeMediosPago(raw) {
   const root = raw && typeof raw === "object" ? raw : {};
   const src = root.listas && typeof root.listas === "object" ? root.listas : root;
 
-  // tu backend usa "medios_pago"
   const arr = Array.isArray(src.medios_pago)
     ? src.medios_pago
     : Array.isArray(src.mediosPago)
@@ -59,6 +66,31 @@ function normalizeMediosPago(raw) {
       nombre: String(x?.nombre ?? x?.medio_pago ?? "").trim(),
     }))
     .filter((x) => x.id > 0 && x.nombre);
+}
+
+/* =========================
+   Estado (pagado/pendiente)
+========================= */
+function isPagadoRow(row) {
+  const idMP = Number(row?.id_medio_pago ?? row?.idMedioPago ?? 0);
+  if (Number.isFinite(idMP) && idMP > 0) return true;
+
+  const mpTxt = String(row?.medio_pago_nombre ?? row?.medio_pago ?? "").trim();
+  if (mpTxt) return true;
+
+  const tv = normalizeSearchText(row?.tipo_venta ?? row?.pago_tipo_venta ?? "");
+  if (tv.includes("contado")) return true;
+
+  return false;
+}
+
+function EstadoChip({ estado }) {
+  const isOk = String(estado).toUpperCase() === "PAGADO";
+  return (
+    <span className={`mpr-chip ${isOk ? "mpr-chip--ok" : "mpr-chip--warn"}`}>
+      {estado}
+    </span>
+  );
 }
 
 export default function ModalPagarRecibos({
@@ -94,7 +126,6 @@ export default function ModalPagarRecibos({
       const mp = normalizeMediosPago(data);
       setMediosPago(mp);
 
-      // default: si hay medios, seleccionar el primero
       setIdMedioPago((prev) => {
         if (prev) return prev;
         return mp.length ? String(mp[0].id) : "";
@@ -140,8 +171,7 @@ export default function ModalPagarRecibos({
     arr.sort((a, b) => {
       const fa = String(a?.fecha || "");
       const fb = String(b?.fecha || "");
-      if (fa === fb)
-        return Number(b?.id_movimiento || 0) - Number(a?.id_movimiento || 0);
+      if (fa === fb) return Number(b?.id_movimiento || 0) - Number(a?.id_movimiento || 0);
       return fb.localeCompare(fa);
     });
     return arr;
@@ -159,28 +189,41 @@ export default function ModalPagarRecibos({
 
   const cantSeleccionadas = useMemo(() => selectedIds.size, [selectedIds]);
 
-  const toggleOne = (id) => {
+  const toggleOne = (id, row) => {
+    if (!id) return;
+    if (loading) return;
+
+    // ✅ si ya está pagado, no se selecciona
+    if (isPagadoRow(row)) return;
+
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
 
-      if (next.size !== deudasOrdenadas.length) setPagaTodo(false);
-      if (next.size === deudasOrdenadas.length && deudasOrdenadas.length > 0) setPagaTodo(true);
+      // pagaTodo solo si todas las PENDIENTES están seleccionadas
+      const pendientes = deudasOrdenadas.filter((x) => !isPagadoRow(x));
+      if (next.size !== pendientes.length) setPagaTodo(false);
+      if (pendientes.length > 0 && next.size === pendientes.length) setPagaTodo(true);
 
       return next;
     });
   };
 
   const toggleAll = () => {
-    const all = deudasOrdenadas.map((r) => Number(r?.id_movimiento || 0)).filter(Boolean);
+    if (loading) return;
+
+    const pendientes = deudasOrdenadas
+      .filter((r) => !isPagadoRow(r))
+      .map((r) => Number(r?.id_movimiento || 0))
+      .filter(Boolean);
 
     setSelectedIds((prev) => {
       const next = new Set();
-      const shouldSelectAll = prev.size !== all.length;
+      const shouldSelectAll = prev.size !== pendientes.length;
 
       if (shouldSelectAll) {
-        all.forEach((id) => next.add(id));
+        pendientes.forEach((id) => next.add(id));
         setPagaTodo(true);
       } else {
         setPagaTodo(false);
@@ -191,13 +234,21 @@ export default function ModalPagarRecibos({
 
   const handleConfirm = async () => {
     if (!deudasOrdenadas.length) {
-      onToast?.("error", "Este cliente no tiene deudas pendientes.", 2600);
+      onToast?.("error", "Este cliente no tiene registros.", 2600);
       return;
     }
-    if (selectedIds.size === 0) {
-      onToast?.("error", "Seleccioná al menos una deuda para pagar.", 2600);
+
+    // ✅ solo pendientes
+    const seleccion = deudasOrdenadas.filter((r) => {
+      const id = Number(r?.id_movimiento || 0);
+      return id && selectedIds.has(id) && !isPagadoRow(r);
+    });
+
+    if (seleccion.length === 0) {
+      onToast?.("error", "Seleccioná al menos una deuda PENDIENTE para pagar.", 2600);
       return;
     }
+
     if (!idMedioPago) {
       onToast?.("error", "Seleccioná un medio de pago.", 2600);
       return;
@@ -206,10 +257,6 @@ export default function ModalPagarRecibos({
       onToast?.("error", "Falta conectar la acción de confirmación (onConfirm).", 3200);
       return;
     }
-
-    const seleccion = deudasOrdenadas.filter((r) =>
-      selectedIds.has(Number(r?.id_movimiento || 0))
-    );
 
     const mp = mediosPago.find((x) => String(x.id) === String(idMedioPago));
     if (!mp) {
@@ -245,22 +292,24 @@ export default function ModalPagarRecibos({
       onToast?.("error", "Falta conectar la acción de factura (onFactura).", 3200);
       return;
     }
+
+    const seleccion = deudasOrdenadas.filter((r) => {
+      const id = Number(r?.id_movimiento || 0);
+      return id && selectedIds.has(id) && !isPagadoRow(r);
+    });
+
     if (!deudasOrdenadas.length) {
-      onToast?.("error", "Este cliente no tiene deudas pendientes.", 2600);
+      onToast?.("error", "Este cliente no tiene registros.", 2600);
       return;
     }
-    if (selectedIds.size === 0) {
-      onToast?.("error", "Seleccioná al menos una deuda para facturar.", 2600);
+    if (seleccion.length === 0) {
+      onToast?.("error", "Seleccioná al menos una deuda PENDIENTE para facturar.", 2600);
       return;
     }
     if (!idMedioPago) {
       onToast?.("error", "Seleccioná un medio de pago.", 2600);
       return;
     }
-
-    const seleccion = deudasOrdenadas.filter((r) =>
-      selectedIds.has(Number(r?.id_movimiento || 0))
-    );
 
     const mp = mediosPago.find((x) => String(x.id) === String(idMedioPago));
     if (!mp) {
@@ -283,8 +332,6 @@ export default function ModalPagarRecibos({
     try {
       setLoading(true);
       await onFactura(payload);
-      // si querés cerrar al facturar:
-      // onClose?.();
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo generar la factura.", 4200);
     } finally {
@@ -296,10 +343,7 @@ export default function ModalPagarRecibos({
 
   return createPortal(
     <div className="mi-modal__overlay" role="dialog" aria-modal="true">
-      <div
-        className="mi-modal__container mi-modal__container--mov mpr-modal"
-        ref={dialogRef}
-      >
+      <div className="mi-modal__container mi-modal__container--mov mpr-modal" ref={dialogRef}>
         {/* Header */}
         <div className="mi-modal__header mpr-header">
           <div className="mpr-headLeft">
@@ -310,17 +354,14 @@ export default function ModalPagarRecibos({
               <span className="mpr-clientName">{safeText(cliente?.cliente)}</span>
 
               {cliente?.id_cliente ? (
-                <span
-                  className="mpr-clientIdPill"
-                  title={`ID Cliente: ${cliente.id_cliente}`}
-                >
+                <span className="mpr-clientIdPill" title={`ID Cliente: ${cliente.id_cliente}`}>
                   ID {String(cliente.id_cliente)}
                 </span>
               ) : null}
             </div>
 
             <div className="mi-modal__subtitle mpr-subtitle">
-              Seleccioná una o más deudas pendientes
+              Ahora se muestran pendientes y pagadas (las pagadas quedan bloqueadas)
             </div>
           </div>
 
@@ -339,7 +380,6 @@ export default function ModalPagarRecibos({
         {/* Body */}
         <div className="mi-modal__body mpr-body">
           <div className="mpr-content">
-            {/* Bloque superior: Pago (como el modal anterior) */}
             <div className="mpr-topGrid mpr-topGrid--single">
               <div className="mpr-card">
                 <div className="mpr-formRow">
@@ -376,7 +416,6 @@ export default function ModalPagarRecibos({
                     <div className="mpr-totalPill">{moneyARS(totalSeleccionado)}</div>
                   </div>
 
-                  {/* ✅ Botón “Seleccionar todas” dentro del mismo contenedor */}
                   <div className="mpr-field mpr-field--actions">
                     <label className="mpr-labelGhost">Acciones</label>
 
@@ -385,7 +424,7 @@ export default function ModalPagarRecibos({
                       className="mov-btn mov-btn--ghost mpr-btnWide mpr-btnInCard"
                       onClick={toggleAll}
                       disabled={!deudasOrdenadas.length || loading}
-                      title="Seleccionar / deseleccionar todas"
+                      title="Seleccionar / deseleccionar todas (solo pendientes)"
                     >
                       <FontAwesomeIcon icon={faListCheck} />
                       {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
@@ -394,31 +433,16 @@ export default function ModalPagarRecibos({
                 </div>
               </div>
             </div>
-
-            {/* Nota (opcional) */}
-            {/*
-            <div className="mpr-note">
-              <div className="mpr-noteTitle">Nota / observaciones</div>
-              <textarea
-                className="mpr-textarea"
-                value={nota}
-                onChange={(e) => setNota(e.target.value)}
-                placeholder="Escribí una nota…"
-                disabled={loading}
-              />
-            </div>
-            */}
           </div>
 
           {/* Tabla de deudas */}
           <div className="mpr-tableWrap">
-            {/* ✅ Título + chips como en el modal anterior */}
             <div className="mpr-tableTitle">
-              <span>Deudas pendientes</span>
+              <span>Registros del cliente</span>
 
               <div className="mpr-actionsRight">
                 <div className="mpr-miniStat">
-                  <span>Deudas</span>
+                  <span>Total</span>
                   <b>{deudasOrdenadas.length}</b>
                 </div>
                 <div className="mpr-miniStat">
@@ -433,37 +457,41 @@ export default function ModalPagarRecibos({
                 <div className="mpr-th mpr-th--center">Sel</div>
                 <div className="mpr-th">Fecha</div>
                 <div className="mpr-th">Descripción</div>
+
+                {/* ✅ NUEVA COLUMNA */}
+                <div className="mpr-th mpr-th--center">Estado</div>
+
                 <div className="mpr-th mpr-th--right">Monto</div>
               </div>
 
               <div className="mpr-tbody mpr-tbody--pr">
                 {!deudasOrdenadas.length && (
-                  <div className="mpr-empty">No hay deudas pendientes para este cliente.</div>
+                  <div className="mpr-empty">No hay registros para este cliente.</div>
                 )}
 
                 {deudasOrdenadas.map((r, idx) => {
                   const id = Number(r?.id_movimiento || 0);
+                  const pagado = isPagadoRow(r);
                   const checked = selectedIds.has(id);
                   const monto = Number(r?.monto_total ?? r?.total ?? 0) || 0;
 
                   return (
                     <div
                       key={id || `${r?.fecha}-${idx}`}
-                      className={`mpr-row ${checked ? "is-checked" : ""}`}
+                      className={`mpr-row ${checked ? "is-checked" : ""} ${pagado ? "is-paid" : ""}`}
                       role="row"
-                      onClick={() => id && toggleOne(id)}
+                      onClick={() => id && toggleOne(id, r)}
+                      title={pagado ? "Este registro ya está PAGADO" : undefined}
+                      style={pagado ? { cursor: "default" } : undefined}
                     >
-                      <div
-                        className="mpr-td mpr-td--center"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <label className={`mpr-checkWrap ${(!id || loading) ? "is-disabled" : ""}`}>
+                      <div className="mpr-td mpr-td--center" onClick={(e) => e.stopPropagation()}>
+                        <label className={`mpr-checkWrap ${(!id || loading || pagado) ? "is-disabled" : ""}`}>
                           <input
                             className="mpr-checkInput"
                             type="checkbox"
                             checked={checked}
-                            onChange={() => toggleOne(id)}
-                            disabled={!id || loading}
+                            onChange={() => toggleOne(id, r)}
+                            disabled={!id || loading || pagado}
                           />
                           <span className="mpr-checkBox" aria-hidden="true" />
                         </label>
@@ -478,6 +506,11 @@ export default function ModalPagarRecibos({
                         {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
                       </div>
 
+                      {/* ✅ ESTADO */}
+                      <div className="mpr-td mpr-td--center" style={{ textAlign: "center" }}>
+                        <EstadoChip estado={pagado ? "PAGADO" : "PENDIENTE"} />
+                      </div>
+
                       <div className="mpr-td mpr-td--right">{moneyARS(monto)}</div>
                     </div>
                   );
@@ -489,16 +522,10 @@ export default function ModalPagarRecibos({
 
         {/* Footer */}
         <div className="mi-modal__footer mpr-footer">
-          <button
-            type="button"
-            className="mpr-btn mpr-btn--ghost"
-            onClick={onClose}
-            disabled={loading}
-          >
+          <button type="button" className="mpr-btn mpr-btn--ghost" onClick={onClose} disabled={loading}>
             Cancelar
           </button>
 
-          {/* Factura (opcional) */}
           <button
             type="button"
             className="mpr-btn mpr-btn--ghost"
@@ -508,7 +535,7 @@ export default function ModalPagarRecibos({
               !onFactura
                 ? "Acción no conectada"
                 : selectedIds.size === 0
-                ? "Seleccioná al menos una deuda"
+                ? "Seleccioná al menos una deuda pendiente"
                 : !idMedioPago
                 ? "Seleccioná un medio de pago"
                 : "Hacer factura"
@@ -525,7 +552,7 @@ export default function ModalPagarRecibos({
             disabled={loading || selectedIds.size === 0 || !idMedioPago}
             title={
               selectedIds.size === 0
-                ? "Seleccioná al menos una deuda"
+                ? "Seleccioná al menos una deuda pendiente"
                 : !idMedioPago
                 ? "Seleccioná un medio de pago"
                 : "Confirmar pago"

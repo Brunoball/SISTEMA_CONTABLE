@@ -409,17 +409,14 @@ export default function OrdenesPago() {
     [buildHeaders, parseJsonOrThrow]
   );
 
-  const invalidateCacheForPeriodo = useCallback(
-    (periodoUI) => {
-      const ui = periodoToMMYYYY(periodoUI);
-      const periodoAPI = periodoToYYYYMM(ui);
-      const keyPrefix = `${periodoAPI}|`;
-      for (const k of cacheRef.current.keys()) {
-        if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
-      }
-    },
-    []
-  );
+  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
+    const ui = periodoToMMYYYY(periodoUI);
+    const periodoAPI = periodoToYYYYMM(ui);
+    const keyPrefix = `${periodoAPI}|`;
+    for (const k of cacheRef.current.keys()) {
+      if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
+    }
+  }, []);
 
   /* =========================
      Listas
@@ -452,7 +449,8 @@ export default function OrdenesPago() {
   }, [API, apiGet]);
 
   /* =========================
-     Movimientos
+     ✅ Órdenes de pago (listar)
+     Ahora NO usa movimientos_listar
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -480,15 +478,16 @@ export default function OrdenesPago() {
 
       try {
         const sp = new URLSearchParams();
-        sp.set("action", "movimientos_listar");
+        sp.set("action", "ordenes_pago_listar");
         sp.set("periodo", periodoAPI);
         if (qLocal) sp.set("q", qLocal);
 
         const data = await apiGet(`${API}?${sp.toString()}`);
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar órdenes de pago.");
 
-        const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
-        const norm = movs.map((r) => ({
+        // ✅ soporta "ordenes" o "movimientos" según cómo lo devuelvas en backend
+        const list = Array.isArray(data.ordenes) ? data.ordenes : Array.isArray(data.movimientos) ? data.movimientos : [];
+        const norm = list.map((r) => ({
           ...r,
           periodo: periodoToMMYYYY(r?.periodo),
           fecha: r?.fecha,
@@ -507,7 +506,7 @@ export default function OrdenesPago() {
   );
 
   /* =========================
-     ✅ Confirmar pago OP
+     ✅ Confirmar pago OP (ya estaba bien)
   ========================= */
   const onConfirmPago = useCallback(
     async (payload) => {
@@ -541,6 +540,7 @@ export default function OrdenesPago() {
 
   /* =========================
      ✅ Guardar edición OP
+     Ahora NO usa movimientos_actualizar
   ========================= */
   const onSaveEditar = useCallback(
     async (payloadFinal) => {
@@ -549,9 +549,9 @@ export default function OrdenesPago() {
 
         const { idUsuario } = getAuthInfo();
 
-        const data = await apiPostJson(`${API}?action=movimientos_actualizar`, {
+        const data = await apiPostJson(`${API}?action=ordenes_pago_actualizar`, {
           ...payloadFinal,
-          idUsuario, // ✅ igual que Compras/Recibos (por si backend lo pide)
+          idUsuario,
         });
 
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la orden de pago.");
@@ -570,6 +570,7 @@ export default function OrdenesPago() {
 
   /* =========================
      ✅ Eliminar OP
+     Ahora NO usa movimientos_eliminar
   ========================= */
   const confirmDelete = useCallback(async () => {
     if (!selectedRow?.id_movimiento) return;
@@ -582,11 +583,11 @@ export default function OrdenesPago() {
     try {
       const { idUsuario } = getAuthInfo();
 
-      const sp = new URLSearchParams();
-      sp.set("action", "movimientos_eliminar");
-      sp.set("id_movimiento", String(id));
+      const data = await apiPostJson(`${API}?action=ordenes_pago_eliminar`, {
+        id_movimiento: Number(id),
+        idUsuario,
+      });
 
-      const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
 
       closeDeleteModal();

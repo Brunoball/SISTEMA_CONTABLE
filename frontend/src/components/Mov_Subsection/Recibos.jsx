@@ -195,8 +195,9 @@ function normalizeLists(raw) {
 }
 
 /* =========================
-   ✅ FILTRO RECIBOS (pendientes)
-   Regla real: tipo_venta = CUENTA CORRIENTE + tiene cliente
+   ✅ NUEVA REGLA RECIBOS (NO SE OCULTA NADA)
+   Recibo = tiene cliente + tiene cuenta corriente (id o texto)
+   Estado = PAGADO si id_medio_pago > 0 o tipo_venta es contado
 ========================= */
 function hasCliente(row) {
   const idCli = Number(
@@ -208,20 +209,29 @@ function hasCliente(row) {
   return cliTxt.length > 0;
 }
 
-function isCuentaCorrienteTipoVenta(row) {
-  const label = String(row?.tipo_venta ?? row?.tipoVenta ?? row?.condicion_venta ?? "").trim();
-  const s = normalizeSearchText(label);
+function hasCuentaCorriente(row) {
+  const idCC = Number(row?.id_cuenta_corriente ?? row?.cuenta_corriente_id ?? 0);
+  if (Number.isFinite(idCC) && idCC > 0) return true;
 
-  if (s.includes("cuenta corriente")) return true;
-  if (s.includes("cuenta") && s.includes("corriente")) return true;
-  if (s.includes("cta") && s.includes("cte")) return true;
-  if (s.includes("ctacte")) return true;
-
-  return false;
+  const ccTxt = String(row?.cuenta_corriente ?? "").trim();
+  return ccTxt.length > 0;
 }
 
-function isReciboPendienteRow(row) {
-  return hasCliente(row) && isCuentaCorrienteTipoVenta(row);
+function isContadoTipoVenta(row) {
+  const label = String(row?.tipo_venta ?? row?.tipoVenta ?? row?.condicion_venta ?? "").trim();
+  const s = normalizeSearchText(label);
+  return s.includes("contado");
+}
+
+function isReciboRow(row) {
+  return hasCliente(row) && hasCuentaCorriente(row);
+}
+
+function isReciboPagado(row) {
+  const idMP = Number(row?.id_medio_pago ?? 0);
+  if (Number.isFinite(idMP) && idMP > 0) return true;
+  if (isContadoTipoVenta(row)) return true;
+  return false;
 }
 
 /* =========================
@@ -306,12 +316,15 @@ export default function Recibos() {
   const [pagarCliente, setPagarCliente] = useState(null);
   const [pagarDeudas, setPagarDeudas] = useState([]);
 
-  const getDeudasCliente = useCallback(
+  // ✅ ahora trae TODAS las filas del cliente (pagadas y pendientes),
+  // pero siempre dentro de "recibos" (cliente + cuenta corriente)
+  const getRecibosCliente = useCallback(
     (rowCliente) => {
       const idCli = Number(rowCliente?.id_cliente || 0);
       const nombreCli = String(rowCliente?.cliente || "").trim();
 
       return (rows || [])
+        .filter((r) => isReciboRow(r))
         .filter((r) => {
           const rid = Number(r?.id_cliente || 0);
           const rnom = String(r?.cliente || "").trim();
@@ -321,20 +334,19 @@ export default function Recibos() {
             (!idCli && nombreCli && rnom.toLowerCase() === nombreCli.toLowerCase());
 
           return same;
-        })
-        .filter((r) => isReciboPendienteRow(r));
+        });
     },
     [rows]
   );
 
   const openPagarModal = useCallback(
     (r) => {
-      const deudas = getDeudasCliente(r);
+      const deudas = getRecibosCliente(r);
       setPagarCliente(r);
       setPagarDeudas(deudas);
       setOpenPagar(true);
     },
-    [getDeudasCliente]
+    [getRecibosCliente]
   );
 
   const closePagarModal = useCallback(() => {
@@ -428,7 +440,7 @@ export default function Recibos() {
   }, [API, apiGet]);
 
   /* =========================
-     Movimientos
+     ✅ Recibos (backend dedicado)
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -456,7 +468,7 @@ export default function Recibos() {
 
       try {
         const sp = new URLSearchParams();
-        sp.set("action", "movimientos_listar");
+        sp.set("action", "recibos_listar");
         sp.set("periodo", periodoAPI);
         if (qLocal) sp.set("q", qLocal);
 
@@ -491,8 +503,8 @@ export default function Recibos() {
   }, []);
 
   /* =========================
-     Confirmar pago
-  ========================= */
+     Confirmar pago (queda igual)
+========================= */
   const onConfirmPago = useCallback(
     async (payload) => {
       try {
@@ -511,6 +523,7 @@ export default function Recibos() {
 
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
 
+        // ✅ IMPORTANTÍSIMO: ahora NO desaparece, solo cambia a PAGADO.
         invalidateCacheForPeriodo(fPeriodo);
         await loadRows({ periodo: fPeriodo, q });
 
@@ -540,7 +553,8 @@ export default function Recibos() {
   }, []);
 
   /* =========================
-     Filtrado: período + pendientes(CC) + búsqueda
+     Filtrado: período + SOLO RECIBOS + búsqueda
+     ✅ YA NO FILTRA PENDIENTES: MUESTRA TODO Y MARCA PAGADO
   ========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
@@ -548,16 +562,32 @@ export default function Recibos() {
 
     return rows
       .filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer))
-      .filter((r) => isReciboPendienteRow(r))
+      .filter((r) => isReciboRow(r)) // ✅ recibo = cliente + cuenta corriente
       .filter((r) => rowMatchesQuery(r, q));
   }, [rows, fPeriodo, q]);
+
+  const stats = useMemo(() => {
+    let pagados = 0;
+    let pendientes = 0;
+    for (const r of filteredRows) {
+      if (isReciboPagado(r)) pagados++;
+      else pendientes++;
+    }
+    return { pagados, pendientes, total: filteredRows.length };
+  }, [filteredRows]);
 
   /* =========================
      Columnas
   ========================= */
   const columns = useMemo(() => {
     return [
-      { key: "fecha", label: "FECHA", align: "center", fr: 0.9, render: (r) => safeText(formatFechaDMY(r.fecha)) },
+      {
+        key: "fecha",
+        label: "FECHA",
+        align: "center",
+        fr: 0.9,
+        render: (r) => safeText(formatFechaDMY(r.fecha)),
+      },
       {
         key: "detalle",
         label: "DESCRIPCION",
@@ -566,9 +596,35 @@ export default function Recibos() {
         align: "left",
         render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
       },
-      { key: "cliente", label: "CLIENTE", fr: 1.8, align: "center", render: (r) => safeText(r.cliente) },
-      { key: "monto", label: "MONTO", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
-      { key: "acciones", label: "ACCIONES", fr: 0.8, align: "center", render: () => null },
+      {
+        key: "cliente",
+        label: "CLIENTE",
+        fr: 1.7,
+        align: "center",
+        render: (r) => safeText(r.cliente),
+      },
+      {
+        key: "estado",
+        label: "ESTADO",
+        fr: 0.9,
+        align: "center",
+        render: (r) => {
+          const pag = isReciboPagado(r);
+          return (
+            <span className={`mov-chip ${pag ? "mov-chip--ok" : "mov-chip--warn"}`}>
+              {pag ? "PAGADO" : "PENDIENTE"}
+            </span>
+          );
+        },
+      },
+      {
+        key: "monto",
+        label: "MONTO",
+        fr: 1.1,
+        align: "center",
+        render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
+      },
+      { key: "acciones", label: "ACCIONES", fr: 0.9, align: "center", render: () => null },
     ];
   }, []);
 
@@ -592,7 +648,7 @@ export default function Recibos() {
   };
 
   /* =========================
-     Eliminar
+     ✅ Eliminar (recibos.php)
   ========================= */
   const confirmDelete = async () => {
     if (!selectedRow?.id_movimiento) return;
@@ -606,7 +662,7 @@ export default function Recibos() {
       const { idUsuario } = getAuthInfo();
 
       const sp = new URLSearchParams();
-      sp.set("action", "movimientos_eliminar");
+      sp.set("action", "recibos_eliminar");
       sp.set("id_movimiento", String(id));
 
       const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
@@ -630,7 +686,7 @@ export default function Recibos() {
 
   /* =========================
      Excel
-  ========================= */
+========================= */
   const exportToExcel = useCallback(() => {
     try {
       if (!filteredRows.length) {
@@ -642,6 +698,7 @@ export default function Recibos() {
         FECHA: safeText(formatFechaDMY(r.fecha)),
         DESCRIPCION: safeText(r.detalle ?? r.descripcion ?? r.concepto),
         CLIENTE: safeText(r.cliente),
+        ESTADO: isReciboPagado(r) ? "PAGADO" : "PENDIENTE",
         MONTO: Number(r.monto_total ?? r.total ?? 0) || 0,
       }));
 
@@ -660,9 +717,9 @@ export default function Recibos() {
       }
 
       const per = periodoToMMYYYY(fPeriodo) || "SIN_PERIODO";
-      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`RecibosPend_${per}`));
+      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`Recibos_${per}`));
 
-      XLSX.writeFile(wb, `recibos_pendientes_${per}.xlsx`);
+      XLSX.writeFile(wb, `recibos_${per}.xlsx`);
       showToast("exito", "Excel exportado.", 2200);
     } catch (e) {
       showToast("error", e?.message || "Error exportando Excel.", 3500);
@@ -685,7 +742,8 @@ export default function Recibos() {
             <div>
               <div className="mov-card__title">Movimientos · Recibos</div>
               <div className="mov-card__hint">
-                Mostrando <b>{filteredRows.length}</b> pendientes
+                Total <b>{stats.total}</b> · Pendientes <b>{stats.pendientes}</b> · Pagados{" "}
+                <b>{stats.pagados}</b>
               </div>
             </div>
 
@@ -799,71 +857,80 @@ export default function Recibos() {
             )}
 
             {!loadingRows &&
-              filteredRows.map((r) => (
-                <div
-                  key={r.id_movimiento}
-                  className="mov-gridTable mov-gridTable--row"
-                  style={{ gridTemplateColumns: gridCols }}
-                  role="row"
-                >
-                  {columns.map((c) => {
-                    if (c.key === "acciones") {
+              filteredRows.map((r) => {
+                const pagado = isReciboPagado(r);
+
+                return (
+                  <div
+                    key={r.id_movimiento}
+                    className={`mov-gridTable mov-gridTable--row ${pagado ? "mov-row--paid" : ""}`}
+                    style={{ gridTemplateColumns: gridCols }}
+                    role="row"
+                  >
+                    {columns.map((c) => {
+                      if (c.key === "acciones") {
+                        return (
+                          <div
+                            key={c.key}
+                            className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
+                            role="cell"
+                          >
+                            <div className="mov-actionsInline">
+                              {/* ✅ Si está pagado, igual dejás el botón pero lo deshabilitás */}
+                              <button
+                                type="button"
+                                className="mov-iconBtn"
+                                title={pagado ? "Ya está pagado" : "Pagar"}
+                                onClick={() => openPagarModal(r)}
+                                disabled={false} // ✅ lo dejamos habilitado para abrir modal y ver todo
+                              >
+                                <FontAwesomeIcon icon={faMoneyBill1Wave} />
+                              </button>
+
+                              <button type="button" className="mov-iconBtn" title="Editar" onClick={() => openEditModal(r)}>
+                                <FontAwesomeIcon icon={faPenToSquare} />
+                              </button>
+
+                              <button
+                                type="button"
+                                className="mov-iconBtn mov-iconBtn--danger"
+                                title="Eliminar"
+                                disabled={deletingId === r.id_movimiento}
+                                onClick={() => openDeleteModal(r)}
+                              >
+                                {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      const val = c.render ? c.render(r) : safeText(r[c.key]);
                       return (
                         <div
                           key={c.key}
-                          className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
+                          className={[
+                            "mov-gridCell",
+                            c.align === "right" ? "is-right" : "",
+                            c.align === "center" ? "is-center" : "",
+                            c.strong ? "is-strong" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
                           role="cell"
+                          title={typeof val === "string" ? val : undefined}
                         >
-                          <div className="mov-actionsInline">
-                            <button type="button" className="mov-iconBtn" title="Pagar" onClick={() => openPagarModal(r)}>
-                              <FontAwesomeIcon icon={faMoneyBill1Wave} />
-                            </button>
-
-                            <button type="button" className="mov-iconBtn" title="Editar" onClick={() => openEditModal(r)}>
-                              <FontAwesomeIcon icon={faPenToSquare} />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="mov-iconBtn mov-iconBtn--danger"
-                              title="Eliminar"
-                              disabled={deletingId === r.id_movimiento}
-                              onClick={() => openDeleteModal(r)}
-                            >
-                              {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
-                            </button>
-                          </div>
+                          <span className="mov-ellipsissss">{val}</span>
                         </div>
                       );
-                    }
-
-                    const val = c.render ? c.render(r) : safeText(r[c.key]);
-                    return (
-                      <div
-                        key={c.key}
-                        className={[
-                          "mov-gridCell",
-                          c.align === "right" ? "is-right" : "",
-                          c.align === "center" ? "is-center" : "",
-                          c.strong ? "is-strong" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        role="cell"
-                        title={typeof val === "string" ? val : undefined}
-                      >
-                        <span className="mov-ellipsissss">{val}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+                    })}
+                  </div>
+                );
+              })}
 
             {!loadingRows && filteredRows.length === 0 && (
               <div className="mov-emptyRow">
-                {!fPeriodo
-                  ? "No hay período disponible para cargar recibos."
-                  : "No hay recibos pendientes (Cuenta Corriente) en este período."}
+                {!fPeriodo ? "No hay período disponible para cargar recibos." : "No hay recibos para este período."}
               </div>
             )}
           </div>
@@ -877,7 +944,9 @@ export default function Recibos() {
         onConfirm={onConfirmPago}
         onToast={showToast}
         cliente={pagarCliente}
-        deudas={pagarDeudas}
+        deudas={pagarDeudas} // ✅ ahora vienen pagadas+pendientes
+        // opcional: si querés facturar
+        // onFactura={...}
       />
 
       {/* EDITAR */}
@@ -885,7 +954,7 @@ export default function Recibos() {
         open={openEdit}
         row={selectedRow}
         lists={lists}
-                  dark={true}
+        dark={true}
         periodoDefault={fPeriodo}
         onClose={() => {
           setOpenEdit(false);
@@ -895,7 +964,7 @@ export default function Recibos() {
         onSave={async (payloadFinal) => {
           const { idUsuario } = getAuthInfo();
 
-          const data = await apiPostJson(`${API}?action=movimientos_actualizar`, {
+          const data = await apiPostJson(`${API}?action=recibos_actualizar`, {
             ...payloadFinal,
             idUsuario,
           });

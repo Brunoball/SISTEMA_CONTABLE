@@ -1,7 +1,7 @@
 // src/components/Compras/modales/ModalEditarCompra.jsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import "../../Movimientos/modales/ModalEditarMovimiento.css"; // ✅ MISMA estética/clases
+import "../../Movimientos/modales/ModalEditarMovimiento.css"; // ✅ misma estética/clases
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";
@@ -20,7 +20,6 @@ const SAFE_LISTS = {
   periodos: [],
   clasificaciones: [],
   cuentasCorrientes: [],
-  tiposMovimiento: [],
   proveedores: [],
   detalles: [],
   mediosPago: [],
@@ -29,13 +28,6 @@ const SAFE_LISTS = {
 function normalizeIncomingLists(lists) {
   const l = lists && typeof lists === "object" ? lists : {};
   const src = l.listas && typeof l.listas === "object" ? l.listas : l;
-
-  const tiposMov =
-    Array.isArray(src.tiposMovimiento) && src.tiposMovimiento.length
-      ? src.tiposMovimiento
-      : Array.isArray(src.tipos_movimiento)
-      ? src.tipos_movimiento
-      : [];
 
   const cuentas =
     Array.isArray(src.cuentasCorrientes) && src.cuentasCorrientes.length
@@ -57,7 +49,6 @@ function normalizeIncomingLists(lists) {
     periodos: Array.isArray(src.periodos) ? src.periodos : [],
     clasificaciones: Array.isArray(src.clasificaciones) ? src.clasificaciones : [],
     cuentasCorrientes: Array.isArray(cuentas) ? cuentas : [],
-    tiposMovimiento: Array.isArray(tiposMov) ? tiposMov : [],
     proveedores: Array.isArray(src.proveedores) ? src.proveedores : [],
     detalles: Array.isArray(src.detalles) ? src.detalles : [],
     mediosPago: Array.isArray(medios) ? medios : [],
@@ -149,11 +140,11 @@ function getAuthInfo() {
 
 /* =========================
    Catálogo map (compras)
+   ✅ SIN tipo_movimiento
 ========================= */
 const CATALOGO_MAP = {
   id_clasificacion: { catalogo: "clasificaciones", label: "Clasificación" },
   id_cuenta_corriente: { catalogo: "cuentas_corrientes", label: "Cuenta corriente" },
-  id_tipo_movimiento: { catalogo: "tipos_movimiento", label: "Tipo de movimiento" }, // (fijo Entrada)
   id_proveedor: { catalogo: "proveedores", label: "Proveedor" },
   id_detalle: { catalogo: "detalles", label: "Detalle" },
   id_medio_pago: { catalogo: "medios_pago", label: "Medio de pago" },
@@ -162,7 +153,6 @@ const CATALOGO_MAP = {
 const LISTKEY_BY_CATALOGO = {
   clasificaciones: "clasificaciones",
   cuentas_corrientes: "cuentasCorrientes",
-  tipos_movimiento: "tiposMovimiento",
   proveedores: "proveedores",
   detalles: "detalles",
   medios_pago: "mediosPago",
@@ -255,17 +245,8 @@ function calcItemTotals(cantidad, precio, ivaPct) {
 }
 
 /* =========================
-   Resolver ID tipo_movimiento Entrada
-========================= */
-function findEntradaId(tiposMovimiento) {
-  const arr = Array.isArray(tiposMovimiento) ? tiposMovimiento : [];
-  const found = arr.find((x) => String(x?.nombre ?? "").trim().toLowerCase().includes("entrada"));
-  const id = Number(found?.id);
-  return Number.isFinite(id) && id > 0 ? id : null;
-}
-
-/* =========================
    Build form desde row (compra)
+   ✅ SIN tipo_movimiento
 ========================= */
 function buildFormFromRowCompra(row, listsMerged, periodoDefault) {
   const r = row || {};
@@ -296,8 +277,6 @@ function buildFormFromRowCompra(row, listsMerged, periodoDefault) {
 
   const monto_total = r.monto_total != null ? safeNumber(r.monto_total) : total;
 
-  const entradaId = findEntradaId(listsMerged.tiposMovimiento);
-
   return {
     id_movimiento: safeNumber(r.id_movimiento) || null,
 
@@ -306,9 +285,6 @@ function buildFormFromRowCompra(row, listsMerged, periodoDefault) {
 
     id_clasificacion: nOrNull(r.id_clasificacion),
     id_cuenta_corriente: sOrNull(r.id_cuenta_corriente),
-
-    // ✅ FIJO Entrada (si no se encuentra, cae a lo que venga del row)
-    id_tipo_movimiento: entradaId ? String(entradaId) : nOrNull(r.id_tipo_movimiento),
 
     id_proveedor: sOrNull(r.id_proveedor),
     id_detalle: sOrNull(r.id_detalle),
@@ -336,6 +312,7 @@ export default function ModalEditarCompra({
   onCatalogCreated,
   onToast,
 }) {
+  // ✅ ahora “apunta a compras” (catálogo) en vez de movimientos
   const API = `${BASE_URL}/api.php`;
 
   const showToast = useCallback(
@@ -347,9 +324,15 @@ export default function ModalEditarCompra({
   const rowRef = useRef(row);
   const periodoDefaultRef = useRef(periodoDefault);
 
-  useEffect(() => { listsRef.current = lists; }, [lists]);
-  useEffect(() => { rowRef.current = row; }, [row]);
-  useEffect(() => { periodoDefaultRef.current = periodoDefault; }, [periodoDefault]);
+  useEffect(() => {
+    listsRef.current = lists;
+  }, [lists]);
+  useEffect(() => {
+    rowRef.current = row;
+  }, [row]);
+  useEffect(() => {
+    periodoDefaultRef.current = periodoDefault;
+  }, [periodoDefault]);
 
   const [localLists, setLocalLists] = useState(() => ({
     ...SAFE_LISTS,
@@ -473,9 +456,18 @@ export default function ModalEditarCompra({
     });
   }, []);
 
-  const onCantidadChange = useCallback((v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }), [recalcFromItem]);
-  const onPrecioChange = useCallback((v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }), [recalcFromItem]);
-  const onIvaPctChange = useCallback((v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }), [recalcFromItem]);
+  const onCantidadChange = useCallback(
+    (v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }),
+    [recalcFromItem]
+  );
+  const onPrecioChange = useCallback(
+    (v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }),
+    [recalcFromItem]
+  );
+  const onIvaPctChange = useCallback(
+    (v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }),
+    [recalcFromItem]
+  );
 
   const onMontoTotalManual = useCallback((v) => {
     const mt = v === "" ? "" : Number(v);
@@ -526,6 +518,7 @@ export default function ModalEditarCompra({
 
   /* =========================
      Alta rápida catálogo
+     ✅ action de compras
   ========================= */
   const closeAddMini = useCallback(() => {
     if (addUI.saving) return;
@@ -550,7 +543,8 @@ export default function ModalEditarCompra({
     try {
       const { idUsuario } = getAuthInfo();
 
-      const data = await apiPostJson(`${API}?action=catalogo_crear`, {
+      // ✅ NUEVO: compras_catalogo_crear
+      const data = await apiPostJson(`${API}?action=compras_catalogo_crear`, {
         catalogo: meta.catalogo,
         nombre,
         idUsuario,
@@ -587,7 +581,9 @@ export default function ModalEditarCompra({
         setTimeout(() => detalleInputRef.current?.focus(), 0);
       }
 
-      try { onCatalogCreated?.(meta.catalogo, { id: newId, nombre: newNombre }); } catch {}
+      try {
+        onCatalogCreated?.(meta.catalogo, { id: newId, nombre: newNombre });
+      } catch {}
 
       setAddUI({ open: false, field: null, text: "", saving: false });
       showToast("exito", `${meta.label} creado: "${newNombre}"`, 2600);
@@ -723,6 +719,7 @@ export default function ModalEditarCompra({
 
   /* =========================
      Payload final
+     ✅ SIN id_tipo_movimiento
   ========================= */
   const payload = useMemo(() => {
     const isAdd = (v) => v === ADD_OPTION;
@@ -747,9 +744,6 @@ export default function ModalEditarCompra({
 
       id_clasificacion: toNullableId(form.id_clasificacion),
       id_cuenta_corriente: toNullableId(form.id_cuenta_corriente),
-
-      // ✅ fijo Entrada (int)
-      id_tipo_movimiento: toNullableId(form.id_tipo_movimiento),
 
       id_proveedor: toNullableId(form.id_proveedor),
       id_detalle: toNullableId(form.id_detalle),
@@ -807,6 +801,7 @@ export default function ModalEditarCompra({
         monto_total: Math.max(0, Math.round(t.total * 100) / 100),
       };
 
+      // ✅ el parent es el que pega al “nuevo archivo de compras”
       await onSave?.(payloadFinal);
 
       showToast("exito", "Compra actualizada.", 2400);
@@ -884,7 +879,7 @@ export default function ModalEditarCompra({
               </div>
 
               <div style={{ padding: 12 }}>
-                {/* ✅ FILA 1: Clasificación + Tipo movimiento (2 columnas) */}
+                {/* ✅ FILA 1: Clasificación + Cuenta corriente (2 columnas) */}
                 <div className="mi-row2">
                   {/* Clasificación */}
                   <div className="fl-field">
@@ -904,65 +899,14 @@ export default function ModalEditarCompra({
                     >
                       <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
                       {(safeLists.clasificaciones || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>{x.nombre}</option>
+                        <option key={x.id} value={String(x.id)}>
+                          {x.nombre}
+                        </option>
                       ))}
                       <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
                     </select>
                     <label className="fl-label">Clasificación</label>
                     {renderAddInline("id_clasificacion")}
-                  </div>
-
-                  {/* Tipo movimiento (FIJO Entrada) */}
-                  <div className="fl-field">
-                    <input className="fl-input" value="Entrada (Compra)" disabled />
-                    <label className="fl-label">Tipo de movimiento</label>
-                  </div>
-                </div>
-
-                {/* ✅ FILA 2: Detalle + Cuenta corriente */}
-                <div className="mi-row2" style={{ marginTop: 12 }}>
-                  {/* Detalle (autocomplete) */}
-                  <div className="fl-field" style={{ position: "relative" }}>
-                    <input
-                      ref={detalleInputRef}
-                      className="fl-input"
-                      placeholder=" "
-                      value={detalleInput}
-                      onChange={handleDetalleInputChange}
-                      onFocus={() => setDetalleFocus(true)}
-                      onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
-                      disabled={saving || addUI.open}
-                      autoComplete="off"
-                    />
-                    <label className="fl-label">Detalle</label>
-
-                    {detalleFocus && filteredDetalles.length > 0 && (
-                      <ul className="mi-cr-suggest">
-                        {filteredDetalles.map((d) => (
-                          <li
-                            key={d.id}
-                            className="mi-cr-suggest__item"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectDetalle(d);
-                            }}
-                          >
-                            <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              {d.nombre}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={startAddDetalle}
-                      disabled={saving || addUI.saving}
-                      className="mi-cr-link"
-                    >
-                      + Agregar nuevo detalle
-                    </button>
                   </div>
 
                   {/* Cuenta corriente */}
@@ -975,13 +919,61 @@ export default function ModalEditarCompra({
                     >
                       <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
                       {(safeLists.cuentasCorrientes || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>{x.nombre}</option>
+                        <option key={x.id} value={String(x.id)}>
+                          {x.nombre}
+                        </option>
                       ))}
                       <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
                     </select>
                     <label className="fl-label">Cuenta corriente</label>
                     {renderAddInline("id_cuenta_corriente")}
                   </div>
+                </div>
+
+                {/* ✅ FILA 2: Detalle (autocomplete) */}
+                <div className="fl-field fl-col-full" style={{ position: "relative", marginTop: 12 }}>
+                  <input
+                    ref={detalleInputRef}
+                    className="fl-input"
+                    placeholder=" "
+                    value={detalleInput}
+                    onChange={handleDetalleInputChange}
+                    onFocus={() => setDetalleFocus(true)}
+                    onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
+                    disabled={saving || addUI.open}
+                    autoComplete="off"
+                  />
+                  <label className="fl-label">Detalle</label>
+
+                  {detalleFocus && filteredDetalles.length > 0 && (
+                    <ul className="mi-cr-suggest">
+                      {filteredDetalles.map((d) => (
+                        <li
+                          key={d.id}
+                          className="mi-cr-suggest__item"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelectDetalle(d);
+                          }}
+                        >
+                          <span
+                            style={{
+                              flex: 1,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {d.nombre}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <button type="button" onClick={startAddDetalle} disabled={saving || addUI.saving} className="mi-cr-link">
+                    + Agregar nuevo detalle
+                  </button>
                 </div>
 
                 {/* Ítem */}
@@ -1170,7 +1162,14 @@ export default function ModalEditarCompra({
                           handleSelectProveedor(p);
                         }}
                       >
-                        <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <span
+                          style={{
+                            flex: 1,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
                           {p.nombre}
                         </span>
                       </li>
@@ -1178,12 +1177,7 @@ export default function ModalEditarCompra({
                   </ul>
                 )}
 
-                <button
-                  type="button"
-                  onClick={startAddProveedor}
-                  disabled={saving || addUI.saving}
-                  className="mi-cr-link"
-                >
+                <button type="button" onClick={startAddProveedor} disabled={saving || addUI.saving} className="mi-cr-link">
                   + Agregar nuevo proveedor
                 </button>
               </div>

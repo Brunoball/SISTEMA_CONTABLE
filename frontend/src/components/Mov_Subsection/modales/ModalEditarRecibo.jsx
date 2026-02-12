@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import "../../Movimientos/modales/ModalEditarMovimiento.css";
+import "../../Movimientos/modales/ModalEditarMovimiento.css"; // ✅ no importa, backend blindado
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";
 const ADD_OPTION = "__ADD__";
 
+/* =========================
+   Helpers
+========================= */
 function safeNumber(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -14,22 +17,38 @@ function safeNumber(v) {
 function periodoToMMYYYY(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
-  if (/^\d{4}-\d{2}$/.test(s)) {
-    const [yyyy, mm] = s.split("-");
+
+  // YYYY-MM -> MM-YYYY
+  if (/^\d{4}-\d{1,2}$/.test(s)) {
+    const [yyyy, mmRaw] = s.split("-");
+    const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${mm}-${yyyy}`;
   }
-  if (/^\d{2}-\d{4}$/.test(s)) return s;
+  // MM-YYYY
+  if (/^\d{1,2}-\d{4}$/.test(s)) {
+    const [mmRaw, yyyy] = s.split("-");
+    const mm = String(Number(mmRaw)).padStart(2, "0");
+    return `${mm}-${yyyy}`;
+  }
   return s;
 }
 
 function periodoToYYYYMM(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
-  if (/^\d{2}-\d{4}$/.test(s)) {
-    const [mm, yyyy] = s.split("-");
+
+  // MM-YYYY -> YYYY-MM
+  if (/^\d{1,2}-\d{4}$/.test(s)) {
+    const [mmRaw, yyyy] = s.split("-");
+    const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
-  if (/^\d{4}-\d{2}$/.test(s)) return s;
+  // YYYY-MM
+  if (/^\d{4}-\d{1,2}$/.test(s)) {
+    const [yyyy, mmRaw] = s.split("-");
+    const mm = String(Number(mmRaw)).padStart(2, "0");
+    return `${yyyy}-${mm}`;
+  }
   return s;
 }
 
@@ -60,6 +79,9 @@ function getAuthInfo() {
   return { token, idUsuario };
 }
 
+/* =========================
+   Mini modal: agregar catálogo
+========================= */
 function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave }) {
   const inputRef = useRef(null);
 
@@ -109,15 +131,13 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
   );
 }
 
-export default function ModalEditarRecibo({
-  open,
-  row,
-  lists,
-  periodoDefault,
-  onClose,
-  onSave,
-  onToast,
-}) {
+/* =========================
+   ModalEditarRecibo
+   ✅ Backend: NUNCA llama a movimientos_*
+   - Guardar: onSave(payloadFinal) -> Recibos.jsx -> action=recibos_actualizar
+   - Catálogo: action=catalogo_crear (global)
+========================= */
+export default function ModalEditarRecibo({ open, row, lists, periodoDefault, onClose, onSave, onToast }) {
   const API = `${BASE_URL}/api.php`;
 
   const showToast = useCallback(
@@ -127,7 +147,6 @@ export default function ModalEditarRecibo({
 
   const [saving, setSaving] = useState(false);
 
-  // ✅ form: lo que pediste
   const [form, setForm] = useState(() => ({
     id_movimiento: null,
     fecha: "",
@@ -139,19 +158,20 @@ export default function ModalEditarRecibo({
     monto_total: 0,
   }));
 
-  // ✅ detalle autocomplete
   const [detalleFocus, setDetalleFocus] = useState(false);
   const detalleInputRef = useRef(null);
 
-  // mini modal "nuevo detalle"
   const [addUI, setAddUI] = useState({ open: false, text: "", saving: false });
 
-  // init
+  /* =========================
+     Init form
+  ========================= */
   useEffect(() => {
     if (!open) return;
 
     const r = row || {};
     const fecha = String(r.fecha || "").slice(0, 10);
+
     const perRow = periodoToMMYYYY(r.periodo);
     const perDef = periodoToMMYYYY(periodoDefault);
     const perAuto = periodoFromISODate(fecha);
@@ -161,12 +181,8 @@ export default function ModalEditarRecibo({
 
     const idDetalle = r.id_detalle ?? NULL_OPTION;
 
-    // si viene id_detalle, buscamos nombre en listas
     const detalles = Array.isArray(lists?.detalles) ? lists.detalles : [];
-    const detName =
-      String(
-        detalles.find((d) => String(d?.id) === String(idDetalle))?.nombre ?? ""
-      ).trim();
+    const detName = String(detalles.find((d) => String(d?.id) === String(idDetalle))?.nombre ?? "").trim();
 
     const detFallback = String(r.detalle ?? r.descripcion ?? r.concepto ?? "").trim();
 
@@ -187,13 +203,14 @@ export default function ModalEditarRecibo({
     setTimeout(() => detalleInputRef.current?.focus(), 0);
   }, [open, row, lists, periodoDefault]);
 
+  /* =========================
+     Autocomplete detalles
+  ========================= */
   const filteredDetalles = useMemo(() => {
     const all = Array.isArray(lists?.detalles) ? lists.detalles : [];
     const q = normalizeSearchText(form.detalleInput);
     if (!detalleFocus || q.length < 1) return [];
-    return all
-      .filter((d) => normalizeSearchText(d?.nombre).includes(q))
-      .slice(0, 25);
+    return all.filter((d) => normalizeSearchText(d?.nombre).includes(q)).slice(0, 25);
   }, [lists, form.detalleInput, detalleFocus]);
 
   const handleDetalleInputChange = (e) => {
@@ -207,6 +224,9 @@ export default function ModalEditarRecibo({
     setDetalleFocus(false);
   };
 
+  /* =========================
+     POST JSON helper
+  ========================= */
   const apiPostJson = useCallback(async (url, payload) => {
     const { token } = getAuthInfo();
     const headers = { "Content-Type": "application/json" };
@@ -216,10 +236,17 @@ export default function ModalEditarRecibo({
     const text = await res.text();
     if (!text) throw new Error("Respuesta vacía del servidor.");
     let data;
-    try { data = JSON.parse(text); } catch { throw new Error("Respuesta inválida (no JSON)."); }
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("Respuesta inválida (no JSON).");
+    }
     return data;
   }, []);
 
+  /* =========================
+     Nuevo detalle
+  ========================= */
   const startAddDetalle = () => {
     setDetalleFocus(false);
     setAddUI({ open: true, text: "", saving: false });
@@ -237,6 +264,8 @@ export default function ModalEditarRecibo({
 
     try {
       const { idUsuario } = getAuthInfo();
+
+      // ✅ global catalogo_crear (NO movimientos)
       const data = await apiPostJson(`${API}?action=catalogo_crear`, {
         catalogo: "detalles",
         nombre,
@@ -249,8 +278,6 @@ export default function ModalEditarRecibo({
 
       if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
 
-      // ✅ actualiza UI local (sin romper Recibos.jsx)
-      // OJO: Recibos.jsx guarda listas en state, acá solo necesitamos setear el valor para guardar
       setForm((p) => ({ ...p, id_detalle: String(newId), detalleInput: newNombre }));
 
       setAddUI({ open: false, text: "", saving: false });
@@ -261,8 +288,14 @@ export default function ModalEditarRecibo({
     }
   };
 
+  /* =========================
+     Submit
+     ✅ SOLO llama onSave(payloadFinal)
+     (Recibos.jsx decide action=recibos_actualizar)
+  ========================= */
   const submit = async (e) => {
     e.preventDefault();
+
     if (addUI.open) {
       showToast("advertencia", "Terminá de crear el detalle (o cancelá) antes de guardar.", 3200);
       return;
@@ -272,34 +305,38 @@ export default function ModalEditarRecibo({
     showToast("cargando", "Guardando cambios…", 12000);
 
     try {
-      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) throw new Error("Fecha inválida.");
+      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) {
+        throw new Error("Fecha inválida.");
+      }
 
+      // periodo: si el usuario lo borró o puso raro, lo regeneramos desde fecha
       const perUI = periodoToMMYYYY(form.periodo) || periodoFromISODate(form.fecha);
+      const perAPI = periodoToYYYYMM(perUI);
+
       const payloadFinal = {
         id_movimiento: form.id_movimiento,
         fecha: form.fecha,
-        periodo: periodoToYYYYMM(perUI),
+        periodo: perAPI, // YYYY-MM
 
-        // ✅ cliente
-        id_cliente:
-          form.id_cliente && form.id_cliente !== NULL_OPTION ? Number(form.id_cliente) : null,
+        // cliente
+        id_cliente: form.id_cliente && form.id_cliente !== NULL_OPTION ? Number(form.id_cliente) : null,
+        cliente: String(form.cliente || "").trim(), // ✅ mandamos texto también (por si tu recibos.php lo usa)
 
-        // ✅ detalle/descripcion (catálogo)
-        id_detalle:
-          form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null,
-
-        // ✅ por si tu backend usa texto
+        // detalle
+        id_detalle: form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null,
         detalle: String(form.detalleInput || "").trim(),
 
+        // monto
         monto_total: Math.max(0, Math.round(safeNumber(form.monto_total) * 100) / 100),
       };
 
+      // ✅ ESTE ES EL PUNTO CLAVE: NO HAY fetch a movimientos acá.
       await onSave?.(payloadFinal);
 
       showToast("exito", "Recibo actualizado.", 2400);
       onClose?.();
-    } catch (e2) {
-      showToast("error", e2?.message || "Error guardando recibo.", 4200);
+    } catch (err) {
+      showToast("error", err?.message || "Error guardando recibo.", 4200);
       setSaving(false);
     }
   };
@@ -309,7 +346,7 @@ export default function ModalEditarRecibo({
   return createPortal(
     <div className="mi-modal__overlay" onMouseDown={() => !saving && onClose?.()}>
       <div
-        className="mi-modal__container mi-modal__container--mov "
+        className="mi-modal__container mi-modal__container--mov"
         id="mov--modaleditarrecibo"
         role="dialog"
         aria-modal="true"
@@ -393,7 +430,7 @@ export default function ModalEditarRecibo({
             </button>
           </div>
 
-          {/* Cliente (por ahora: editable como texto, o si tenés id_cliente+lista lo hacemos autocomplete después) */}
+          {/* Cliente */}
           <div className="fl-field" style={{ marginTop: 12 }}>
             <input
               className="fl-input"
@@ -405,6 +442,7 @@ export default function ModalEditarRecibo({
             <label className="fl-label">Cliente (texto)</label>
           </div>
 
+          {/* Monto */}
           <div className="fl-field" style={{ marginTop: 12 }}>
             <input
               className="fl-input"
@@ -420,10 +458,21 @@ export default function ModalEditarRecibo({
           </div>
 
           <div style={{ marginTop: 14, display: "flex", gap: 10 }} className="content-btn-modalrecibo">
-            <button type="submit" disabled={saving} className="mit-btn mit-btn--solid btn--modalrecibo" style={{ width: "100%", height: 44 }}>
+            <button
+              type="submit"
+              disabled={saving}
+              className="mit-btn mit-btn--solid btn--modalrecibo"
+              style={{ width: "100%", height: 44 }}
+            >
               {saving ? "Guardando..." : "Guardar"}
             </button>
-            <button type="button" onClick={() => !saving && onClose?.()} disabled={saving} className="mit-btn mit-btn--ghost btn--modalrecibo" style={{ width: "100%", height: 44 }}>
+            <button
+              type="button"
+              onClick={() => !saving && onClose?.()}
+              disabled={saving}
+              className="mit-btn mit-btn--ghost btn--modalrecibo"
+              style={{ width: "100%", height: 44 }}
+            >
               Cancelar
             </button>
           </div>

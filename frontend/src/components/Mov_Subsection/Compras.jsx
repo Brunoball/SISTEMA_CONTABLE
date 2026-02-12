@@ -163,7 +163,7 @@ function getAuthInfo() {
 }
 
 /* =========================
-   Listas
+   Listas (✅ SIN tipos_movimiento)
 ========================= */
 const emptyLists = {
   periodos: [],
@@ -172,7 +172,6 @@ const emptyLists = {
   cuentas_corrientes: [],
   medios_pago: [],
   detalles: [],
-  tipos_movimiento: [],
   tipos_venta: [],
 };
 
@@ -181,7 +180,6 @@ function normalizeLists(raw) {
 
   const pickArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
   const periodos = pickArr("periodos").map(periodoToMMYYYY);
-  const tiposMov = pickArr("tipos_movimiento");
 
   return {
     periodos,
@@ -190,7 +188,6 @@ function normalizeLists(raw) {
     cuentas_corrientes: pickArr("cuentas_corrientes"),
     medios_pago: pickArr("medios_pago"),
     detalles: pickArr("detalles"),
-    tipos_movimiento: tiposMov,
     tipos_venta: pickArr("tipos_venta"),
   };
 }
@@ -231,41 +228,12 @@ function rowMatchesQuery(row, query) {
 }
 
 /* =========================
-   ✅ Reglas de Compras: COMPRA = ENTRADA
+   ✅ PAGO label
 ========================= */
-function pickTipoMovIdByName(lists, name) {
-  const arr = Array.isArray(lists?.tipos_movimiento) ? lists.tipos_movimiento : [];
-  const target = String(name || "").trim().toLowerCase();
-
-  const found =
-    arr.find((x) => String(x?.nombre ?? "").trim().toLowerCase() === target) ||
-    arr.find((x) => String(x?.nombre ?? "").toLowerCase().includes(target));
-
-  const id = Number(found?.id);
-  return Number.isFinite(id) && id > 0 ? id : null;
-}
-
-function isCompraRow(r, idEntrada) {
-  const idTipo = Number(r?.id_tipo_movimiento ?? 0);
-  const tipoTxt = String(r?.tipo_movimiento ?? "").trim().toLowerCase();
-
-  if (Number.isFinite(idEntrada) && idEntrada > 0) {
-    if (Number.isFinite(idTipo) && idTipo > 0) return idTipo === idEntrada;
-    return tipoTxt.includes("entrada");
-  }
-
-  if (tipoTxt.includes("entrada")) return true;
-
-  const idProv = Number(r?.id_proveedor ?? 0);
-  const provTxt = String(r?.proveedor ?? "").trim();
-  return (Number.isFinite(idProv) && idProv > 0) || provTxt !== "";
-}
-
-/* ✅ PAGO label */
 function getCompraPagoLabel(r) {
   const cc = String(r?.cuenta_corriente ?? "").trim();
   if (cc) return "CUENTA CORRIENTE";
-  const mp = String(r?.medio_pago ?? "").trim();
+  const mp = String(r?.medio_pago_nombre ?? r?.medio_pago ?? "").trim();
   return mp ? mp : "CONTADO";
 }
 
@@ -362,9 +330,7 @@ export default function Compras() {
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(
-        `Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`
-      );
+      throw new Error(`Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`);
     }
   }, []);
 
@@ -414,6 +380,7 @@ export default function Compras() {
     try {
       const data = await apiGet(`${API}?action=global_obtener_listas&=${Date.now()}`);
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar listas.");
+
       const normalized = normalizeLists(data);
       setLists(normalized);
 
@@ -460,15 +427,16 @@ export default function Compras() {
 
       try {
         const sp = new URLSearchParams();
-        sp.set("action", "movimientos_listar");
+        sp.set("action", "compras_listar");
         sp.set("periodo", periodoAPI);
         if (qLocal) sp.set("q", qLocal);
 
         const data = await apiGet(`${API}?${sp.toString()}`);
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar compras.");
 
-        const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
-        const norm = movs.map((r) => ({
+        const compras = Array.isArray(data.compras) ? data.compras : [];
+
+        const norm = compras.map((r) => ({
           ...r,
           periodo: periodoToMMYYYY(r?.periodo),
           fecha: r?.fecha,
@@ -503,19 +471,16 @@ export default function Compras() {
   }, []);
 
   /* =========================
-     Filtrado: período + regla compras + búsqueda
+     Filtrado: período + búsqueda
 ========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
     if (!fPer) return [];
 
-    const idEntrada = pickTipoMovIdByName(lists, "entrada");
-
     return rows
       .filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer))
-      .filter((r) => isCompraRow(r, idEntrada))
       .filter((r) => rowMatchesQuery(r, q));
-  }, [rows, fPeriodo, q, lists]);
+  }, [rows, fPeriodo, q]);
 
   /* =========================
      Columnas
@@ -632,7 +597,7 @@ export default function Compras() {
     try {
       const { idUsuario } = getAuthInfo();
       const sp = new URLSearchParams();
-      sp.set("action", "movimientos_eliminar");
+      sp.set("action", "compras_eliminar");
       sp.set("id_movimiento", String(id));
 
       showToast("cargando", "Eliminando compra…", 12000);
@@ -653,9 +618,9 @@ export default function Compras() {
     }
   };
 
-  // ✅ update compra (si tu modal lo usa)
-  const onUpdateCompra = async ({ compra, items, facturaFile }) => {
-    const res = await fetch(`${API}?action=movimientos_actualizar`, {
+  // ✅ update compra -> COMPRAS
+  const onUpdateCompra = async ({ compra, items }) => {
+    const res = await fetch(`${API}?action=compras_actualizar`, {
       method: "POST",
       headers: buildHeaders(),
       body: JSON.stringify({ ...compra, items }),
@@ -663,16 +628,16 @@ export default function Compras() {
 
     const data = await parseJsonOrThrow(res);
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo actualizar la compra.");
-    // facturaFile: si tenés endpoint de upload, va aparte
     return data;
   };
 
+  // ✅ crear compra -> COMPRAS
   const onSaveCompra = async (payload) => {
     const { token } = getAuthInfo();
     const headers = { "Content-Type": "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
 
-    const res = await fetch(`${API}?action=movimientos_crear`, {
+    const res = await fetch(`${API}?action=compras_crear`, {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
@@ -685,9 +650,7 @@ export default function Compras() {
 
   return (
     <div className="mov-page">
-      {toast && (
-        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
-      )}
+      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
 
       {error && (
         <div className="mov-alert" role="alert">
@@ -817,7 +780,6 @@ export default function Compras() {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className="mov-gridBody">
-            {/* ✅ LOADER DENTRO DE LA TABLA */}
             {loadingRows && (
               <div className="mov-emptyRow mov-emptyRow--loading">
                 <GifCarga />
@@ -854,12 +816,7 @@ export default function Compras() {
                               <FontAwesomeIcon icon={faEye} />
                             </button>
 
-                            <button
-                              type="button"
-                              className="mov-iconBtn"
-                              title="Editar"
-                              onClick={() => openEditModal(r)}
-                            >
+                            <button type="button" className="mov-iconBtn" title="Editar" onClick={() => openEditModal(r)}>
                               <FontAwesomeIcon icon={faPenToSquare} />
                             </button>
 
@@ -901,9 +858,7 @@ export default function Compras() {
 
             {!loadingRows && filteredRows.length === 0 && (
               <div className="mov-emptyRow">
-                {!fPeriodo
-                  ? "No hay período disponible para cargar compras."
-                  : "No hay compras para mostrar en este período."}
+                {!fPeriodo ? "No hay período disponible para cargar compras." : "No hay compras para mostrar en este período."}
               </div>
             )}
           </div>
@@ -940,7 +895,6 @@ export default function Compras() {
           const data = await onUpdateCompra({
             compra: payloadFinal,
             items: [],
-            facturaFile: null,
           });
 
           const per = payloadFinal?.periodo || fPeriodo;
@@ -950,12 +904,7 @@ export default function Compras() {
       />
 
       {/* MODAL VER COMPROBANTE */}
-      <ModalVerComprobante
-        open={openVerComp}
-        url={compUrl}
-        onClose={closeComprobanteModal}
-        title="Comprobante de compra"
-      />
+      <ModalVerComprobante open={openVerComp} url={compUrl} onClose={closeComprobanteModal} title="Comprobante de compra" />
 
       {/* DELETE */}
       <ModalEliminarMovimientos

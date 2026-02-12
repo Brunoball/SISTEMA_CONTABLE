@@ -586,3 +586,37 @@
   gap: 10px;
   padding: 12px 14px;
 }
+
+/* Chip de estado dentro del modal */
+.mpr-chip{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing:.2px;
+  border: 1px solid rgba(255,255,255,.12);
+}
+
+.mpr-chip--ok{
+  background: rgba(46, 204, 113, .16);
+  color: #b7f7d1;
+  border-color: rgba(46, 204, 113, .25);
+}
+
+.mpr-chip--warn{
+  background: rgba(241, 196, 15, .14);
+  color: #ffeaa7;
+  border-color: rgba(241, 196, 15, .25);
+}
+
+/* fila pagada */
+.mpr-row.is-paid{
+  opacity: .85;
+}
+.mpr-checkWrap.is-disabled{
+  opacity: .6;
+  pointer-events: none;
+}

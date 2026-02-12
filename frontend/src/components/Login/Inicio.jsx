@@ -13,18 +13,6 @@ const STORAGE_KEYS = {
   pass: "remember_contrasena", // base64
 };
 
-function decodeJwtPayload(token) {
-  try {
-    const [, payloadB64] = token.split(".");
-    if (!payloadB64) return null;
-    const b64 = payloadB64.replace(/-/g, "+").replace(/_/g, "/");
-    const json = atob(b64);
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
 function normalizeRol(value) {
   if (value == null) return "vista";
   const v = String(value).trim().toLowerCase();
@@ -114,7 +102,7 @@ const Inicio = () => {
         body: JSON.stringify({ nombre, contrasena }),
       });
 
-      if (res.status === 401) {
+      if (res.status === 401 || res.status === 403) {
         let d = null;
         try {
           d = await res.json();
@@ -141,25 +129,23 @@ const Inicio = () => {
         return;
       }
 
-      const token = data.token;
-      if (token) localStorage.setItem("token", token);
-
-      const usuarioResp = data.usuario || {};
-
-      let rol = (usuarioResp.rol ?? data.rol ?? "").toString();
-      if ((!rol || rol === "") && token && token.split(".").length === 3) {
-        const payload = decodeJwtPayload(token);
-        const fromJwt = (payload?.rol || payload?.role || payload?.scope || "").toString();
-        if (fromJwt) rol = fromJwt;
+      const sessionKey = (data.session_key || "").toString().trim();
+      if (!sessionKey) {
+        mostrarToast("error", "Login OK pero falta session_key. Revisá inicio.php.");
+        setCargando(false);
+        return;
       }
 
+      localStorage.setItem("session_key", sessionKey);
+
+      const usuarioResp = data.usuario || {};
       const planNivel = normalizePlanNivel(
         usuarioResp.plan_nivel ?? usuarioResp.planNivel ?? data.plan_nivel ?? 1
       );
 
       const usuarioFinal = {
         ...usuarioResp,
-        rol: normalizeRol(rol),
+        rol: normalizeRol(usuarioResp.rol ?? data.rol ?? "vista"),
         plan_nivel: planNivel,
         nombre:
           usuarioResp.nombre ??
@@ -221,7 +207,6 @@ const Inicio = () => {
               title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
             >
               {showPassword ? (
-                // eye-off
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
                   <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
@@ -229,7 +214,6 @@ const Inicio = () => {
                   <path d="M1 1l22 22" />
                 </svg>
               ) : (
-                // eye
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                   <circle cx="12" cy="12" r="3" />

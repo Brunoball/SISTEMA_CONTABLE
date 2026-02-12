@@ -1,3 +1,82 @@
+############################
+# SEGURIDAD (CRITICO)
+############################
+
+# Variables de entorno (PASSWORDS)
+.env
+.env.*
+backend/.env
+frontend/.env
+
+# Backups de bases
+*.sql
+*.dump
+*.bak
+
+############################
+# PHP / COMPOSER
+############################
+
+# Dependencias PHP
+backend/vendor/
+vendor/
+
+# Logs y temporales
+*.log
+backend/logs/
+backend/tmp/
+.phpunit.cache
+coverage/
+
+############################
+# ARCHIVOS DE USUARIOS
+############################
 
 backend/uploads/
-node_modules
+backend/public/uploads/
+backend/public/chats/
+backend/chats/
+uploads/
+chats/
+
+# PDFs generados
+*.pdf
+
+############################
+# NODE / REACT
+############################
+
+node_modules/
+frontend/node_modules/
+
+frontend/dist/
+frontend/build/
+
+.npm
+.cache
+.vite
+.eslintcache
+
+############################
+# SISTEMA OPERATIVO
+############################
+
+Thumbs.db
+desktop.ini
+.DS_Store
+
+############################
+# EDITORES
+############################
+
+.vscode/
+.idea/
+*.code-workspace
+
+############################
+# TEMPORALES
+############################
+
+*.tmp
+*.temp
+*.swp

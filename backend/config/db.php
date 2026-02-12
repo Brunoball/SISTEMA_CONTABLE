@@ -1,22 +1,59 @@
 <?php
 // backend/config/db.php
-// Configuración de la base de datos
-// php -S localhost:3001 -c "C:\PHP\php1\php.ini"
+declare(strict_types=1);
 
-$host   = defined('DB_HOST') ? (string)DB_HOST : 'localhost';
-$dbname = defined('DB_NAME') ? (string)DB_NAME : 'sistema_contable';
-$user   = defined('DB_USER') ? (string)DB_USER : 'root';
-$pass   = defined('DB_PASS') ? (string)DB_PASS : 'brunoball516';
+mysqli_report(MYSQLI_REPORT_OFF);
+
+/**
+ * Lee config en este orden:
+ * 1) Constantes (DB_HOST, DB_NAME, DB_USER, DB_PASS, DB_PORT) -> para multi-tenant
+ * 2) Variables de entorno (getenv)
+ * 3) Default
+ */
+function env(string $key, ?string $default = null): ?string {
+  if (defined($key)) {
+    $v = constant($key);
+    if ($v !== null && $v !== '') return (string)$v;
+  }
+
+  $v = getenv($key);
+  if ($v === false || $v === '') return $default;
+  return $v;
+}
+
+$DB_HOST = env('DB_HOST', 'localhost');
+$DB_NAME = env('DB_NAME', 'sistema_contable'); // fallback local
+$DB_USER = env('DB_USER', 'root');
+$DB_PASS = env('DB_PASS', '');
+$DB_PORT = (int)(env('DB_PORT', '3306'));
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass, [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES   => false,
-    ]);
-} catch (PDOException $e) {
-    die(json_encode([
-        'exito' => false,
-        'mensaje' => 'Error de conexión a la base de datos: ' . $e->getMessage()
-    ], JSON_UNESCAPED_UNICODE));
+  if ($DB_NAME === '' || $DB_USER === '') {
+    throw new RuntimeException("DB_NAME o DB_USER vacío. Revisá env/constantes.");
+  }
+
+  $dsn = "mysql:host={$DB_HOST};port={$DB_PORT};dbname={$DB_NAME};charset=utf8mb4";
+  $pdo = new PDO($dsn, $DB_USER, $DB_PASS, [
+    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    PDO::ATTR_EMULATE_PREPARES   => false,
+  ]);
+
+  $pdo->exec("SET NAMES utf8mb4");
+} catch (Throwable $e) {
+  header('Content-Type: application/json; charset=utf-8');
+  http_response_code(500);
+  echo json_encode([
+    'exito'   => false,
+    'mensaje' => 'No se pudo conectar a la base de datos.',
+    'debug'   => [
+      'host' => $DB_HOST,
+      'db'   => $DB_NAME,
+      'user' => $DB_USER,
+      'pass' => ($DB_PASS === '' ? 'VACIO' : 'OK'),
+      'port' => $DB_PORT,
+      'err'  => $e->getMessage(),
+    ]
+  ], JSON_UNESCAPED_UNICODE);
+  exit;
 }

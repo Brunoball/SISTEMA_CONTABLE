@@ -5,7 +5,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Session');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
@@ -25,23 +25,19 @@ function fail(string $msg, int $httpCode = 200, array $extra = []): void {
   exit;
 }
 
-function verify_password(string $inputPass, string $storedHash): bool
-{
+function verify_password(string $inputPass, string $storedHash): bool {
   $stored = trim((string)$storedHash);
   if ($stored === '') return false;
 
-  // SHA-256 HEX (64)
   if (preg_match('/^[a-f0-9]{64}$/i', $stored)) {
     $calc = hash('sha256', $inputPass);
     return hash_equals(strtolower($stored), strtolower($calc));
   }
 
-  // password_hash (bcrypt/argon)
   if (str_starts_with($stored, '$2y$') || str_starts_with($stored, '$argon2')) {
     return password_verify($inputPass, $stored);
   }
 
-  // texto plano (no recomendado)
   return hash_equals($stored, $inputPass);
 }
 
@@ -71,7 +67,7 @@ try {
   }
 
   // 1) Conexión MASTER
-  require_once __DIR__ . '/../../config/db_master.php'; // -> $pdo_master (PDO)
+  require_once __DIR__ . '/../../config/db_master.php'; // $pdo_master
 
   // 2) Buscar usuario master + tenant
   $sql = "
@@ -106,11 +102,9 @@ try {
   $stmt->execute([':usuario' => $nombre]);
   $u = $stmt->fetch(PDO::FETCH_ASSOC);
 
-  // auditoría (la completamos al final con éxito/fracaso)
+  // auditoría login
   $ip = client_ip();
   $ua = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
-  $auditIdUsuarioMaster = $u ? (int)$u['idUsuarioMaster'] : null;
-  $auditIdTenant = $u ? (int)$u['idTenant'] : null;
 
   $audit = $pdo_master->prepare("
     INSERT INTO login_auditoria (idUsuarioMaster, idTenant, usuario, ip, user_agent, exito, creado_en)
@@ -175,15 +169,15 @@ try {
     fail('Credenciales incorrectas.', 401);
   }
 
-  // 3) Resolver rol/tema
+  // 3) Rol/tema
   $rol = strtolower(trim((string)($u['rol'] ?? 'vista')));
   $rol = in_array($rol, ['admin', 'vista'], true) ? $rol : 'vista';
 
   $tema = strtolower(trim((string)($u['tema'] ?? 'claro')));
-  if (!in_array($tema, ['claro', 'oscuro'], true)) $tema = 'claro';
+  $tema = in_array($tema, ['claro', 'oscuro'], true) ? $tema : 'claro';
 
-  // 4) Resolver plan desde master (planes_saas)
-  $planNivel  = (int)($u['plan_nivel'] ?? 1);
+  // 4) Plan
+  $planNivel = (int)($u['plan_nivel'] ?? 1);
   if ($planNivel < 1 || $planNivel > 3) $planNivel = 1;
 
   $planNombre = (string)($u['plan_nombre'] ?? 'basico');
@@ -195,36 +189,7 @@ try {
     $planNombre = 'basico';
   }
 
-  // 5) Conectar a la DB del TENANT usando TU MISMO db.php (sin romper módulos)
-  $tenantHost = trim((string)($u['db_host'] ?? 'localhost'));
-  $tenantDb   = trim((string)($u['db_name'] ?? ''));
-  $tenantUser = trim((string)($u['db_user'] ?? ''));
-  $tenantPass = (string)($u['db_pass'] ?? '');
-
-  if ($tenantDb === '' || $tenantUser === '') {
-    $audit->execute([
-      ':idUsuarioMaster' => (int)$u['idUsuarioMaster'],
-      ':idTenant' => (int)$u['idTenant'],
-      ':usuario' => (string)$u['usuario'],
-      ':ip' => $ip,
-      ':ua' => $ua,
-      ':exito' => 0,
-    ]);
-    fail('Tenant mal configurado (DB).', 500);
-  }
-
-  // ✅ Hook retrocompatible: db.php ahora toma estas constantes si existen
-  if (!defined('DB_HOST')) define('DB_HOST', $tenantHost);
-  if (!defined('DB_NAME')) define('DB_NAME', $tenantDb);
-  if (!defined('DB_USER')) define('DB_USER', $tenantUser);
-  if (!defined('DB_PASS')) define('DB_PASS', $tenantPass);
-
-  require_once __DIR__ . '/../../config/db.php'; // -> $pdo (PDO) apuntando a tenant DB
-
-  // chequeo rápido de conexión tenant
-  $pdo->query('SELECT 1');
-
-  // 6) Auditoría OK
+  // 5) Auditoría OK
   $audit->execute([
     ':idUsuarioMaster' => (int)$u['idUsuarioMaster'],
     ':idTenant' => (int)$u['idTenant'],
@@ -234,35 +199,45 @@ try {
     ':exito' => 1,
   ]);
 
-  // 7) Respuesta (mantengo keys para no romper frontend)
+  // ✅ 6) Crear sesión en MASTER
+  $sessionKey = bin2hex(random_bytes(32)); // 64 chars
+  $ttlHours = 12;
+  $expira = (new DateTimeImmutable())->modify("+{$ttlHours} hours")->format("Y-m-d H:i:s");
+
+  $pdo_master->prepare("
+    INSERT INTO sesiones (session_key, idUsuarioMaster, idTenant, expira_en, ip, user_agent, activo)
+    VALUES (:k, :u, :t, :exp, :ip, :ua, 1)
+  ")->execute([
+    ':k' => $sessionKey,
+    ':u' => (int)$u['idUsuarioMaster'],
+    ':t' => (int)$u['idTenant'],
+    ':exp' => $expira,
+    ':ip' => $ip,
+    ':ua' => $ua,
+  ]);
+
+  // 7) Respuesta
   ok([
     'exito' => true,
+    'session_key' => $sessionKey,
     'usuario' => [
-      // ✅ compat: tu frontend espera idUsuario
       'idUsuario' => (int)$u['idUsuarioMaster'],
       'idUsuarioMaster' => (int)$u['idUsuarioMaster'],
       'idTenant' => (int)$u['idTenant'],
       'tenant_nombre' => (string)($u['tenant_nombre'] ?? ''),
-
-      // ✅ compat: antes era Nombre_Completo
       'Nombre_Completo' => (string)$u['usuario'],
       'nombre' => (string)$u['usuario'],
-
       'rol' => $rol,
       'tema' => $tema,
-
       'idPlan' => (int)($u['idPlan'] ?? 1),
       'plan_nombre' => $planNombre,
       'plan_nivel' => $planNivel,
-
       'Fecha_Creacion' => (string)($u['fecha_creacion'] ?? ''),
-      // opcional útil:
-      'db_name' => $tenantDb,
     ],
   ]);
 
 } catch (Throwable $e) {
-  http_response_code(500);
+  http_response_code(200);
   echo json_encode([
     'exito' => false,
     'mensaje' => 'Error del servidor.',

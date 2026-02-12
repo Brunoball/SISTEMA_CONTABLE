@@ -978,7 +978,7 @@ html[data-theme="oscuro"] .af-page .af-gridBody::-webkit-scrollbar-thumb{
 
   .af-gridBody{
     height: 100%;
-    max-height: 100%;
+    min-height: 100vh;
     overflow-y: auto;        /* ✅ scroll real */
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
@@ -1042,7 +1042,7 @@ html[data-theme="oscuro"] .af-page .af-gridBody::-webkit-scrollbar-thumb{
   .af-subhead{
     padding: 10px 12px;
     gap: 8px;
-    min-height: 100vh;
+ min-height: 20vh;
   }
 
   .af-miniHint{ max-width: none; }
@@ -1054,7 +1054,7 @@ html[data-theme="oscuro"] .af-page .af-gridBody::-webkit-scrollbar-thumb{
 }
 
 @media (max-width: 380px){
-  .af-gridBody{ padding: 8px 8px 10px; }
+  .af-gridBody{ padding: 8px 8px 10px ;  }
   .af-grid--row .af-cell{ padding: 9px 10px; }
 }
 /* =========================================================
@@ -1090,4 +1090,124 @@ html[data-theme="oscuro"] .af-page .af-gridBody::-webkit-scrollbar-thumb{
     background: rgba(10,37,64,.22);
     border-radius: 999px;
   }
+}
+/* =========================================================
+   ANALISIS FINANCIERO — MOBILE FIX (sin solapes)
+   ✅ NO TOCA DESKTOP
+   ✅ Un solo scroll: el de la página (no card)
+========================================================= */
+@media (max-width: 720px){
+
+  .af-page{
+    padding: 10px;
+    overflow: auto;
+    max-height: 85vh;
+  }
+
+  /* ❌ IMPORTANTÍSIMO: el card NO debe fijar altura/overflow en mobile */
+  .af-card{
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Asegurar flujo normal */
+  .af-card--table{
+    display: block;
+    min-height: 0;
+  }
+
+  /* La zona tabla NO fuerza alturas raras */
+  .af-tableWrap{
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* ❌ matar el min-height:100vh que te genera montajes */
+  .af-gridBody{
+
+
+    overflow: visible !important;
+    padding: 10px 0 12px;
+    background: transparent;
+  }
+
+  /* Ocultar header excel en mobile */
+  .af-grid--head{
+    display: none !important;
+    position: static !important;
+  }
+
+  /* Quitar min-width gigante */
+  .af-grid{
+    min-width: 0 !important;
+    width: 100%;
+  }
+
+  /* Filas como cards */
+  .af-grid--row{
+    grid-template-columns: 1fr;
+    border: 1px solid rgba(10, 37, 64, 0.14);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 10px;
+    background: #fff;
+  }
+
+  .af-grid--row .af-cell{
+    white-space: normal;
+    overflow: visible;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(10, 37, 64, 0.08);
+  }
+
+  .af-grid--row .af-cell:first-child{
+    font-weight: 650;
+    background: rgba(10, 37, 64, 0.03);
+  }
+
+  .af-grid--row .af-cell:last-child{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+    border-bottom: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .af-grid--row .af-cell:last-child::before{
+    content: "Importe";
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: rgba(66, 84, 102, 0.70);
+    font-weight: 600;
+    margin-right: 10px;
+  }
+
+  /* ✅ Esto evita que “Período… Ventas: $…” se encime */
+  .af-subhead{
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .af-subhead__meta{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    line-height: 1.25;
+  }
+
+  .af-subhead__meta b{
+    white-space: nowrap;
+  }
+
+  /* Totales abajo */
+  .af-footTotals{
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 380px){
+  .af-grid--row .af-cell{ padding: 9px 10px; }
 }

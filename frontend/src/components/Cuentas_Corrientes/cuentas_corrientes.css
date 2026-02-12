@@ -528,6 +528,10 @@
   .cc-btn--excel{
     width: 100%;
   }
+  .cc-page{
+    max-height: 85vh;
+    overflow: auto;
+  }
 }
 /* =========================================================
    CUENTAS CORRIENTES — DARK MODE (override)

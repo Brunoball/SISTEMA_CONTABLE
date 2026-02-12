@@ -2,9 +2,23 @@
 // backend/modules/flujo_caja/flujo_caja.php
 declare(strict_types=1);
 
+/**
+ * ✅ MULTI-TENANT:
+ * - NO incluir config/db.php
+ * - $pdo ya viene creado por tenant_bootstrap_or_fail() en routes/api.php
+ */
+
 header('Content-Type: application/json; charset=utf-8');
 
-require_once __DIR__ . '/../../config/db.php'; // $pdo
+global $pdo;
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+  http_response_code(500);
+  echo json_encode([
+    'exito' => false,
+    'mensaje' => 'PDO no disponible. Ejecutar vía routes/api.php (tenant_resolver).'
+  ], JSON_UNESCAPED_UNICODE);
+  exit;
+}
 
 /* =========================
    Response helpers
@@ -50,18 +64,14 @@ function buildDays(string $periodo): array {
   return $out;
 }
 
-/* =========================
-   Acción
-========================= */
-$action = $_GET['action'] ?? $_POST['action'] ?? '';
-$action = is_string($action) ? trim($action) : '';
-
 try {
-  if (!isset($pdo) || !($pdo instanceof PDO)) {
-    fail('DB no inicializada ($pdo es null). Revisá backend/config/db.php', 500);
-  }
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
+
+  // Este archivo responde 3 actions:
+  // flujo_caja_periodos | flujo_caja_clientes | flujo_caja_resumen
+  $action = $_GET['action'] ?? $_POST['action'] ?? '';
+  $action = strtolower(trim(is_string($action) ? $action : ''));
 
   /* ==========================================================
      ✅ LISTAR PERIODOS DISPONIBLES EN movimientos.periodo
@@ -76,14 +86,9 @@ try {
         AND periodo REGEXP '^[0-9]{4}-[0-9]{2}$'
       ORDER BY periodo DESC
     ";
-    $st = $pdo->prepare($sql);
-    $st->execute();
-
-    $periodos = [];
-    while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
-      $p = (string)($r['periodo'] ?? '');
-      if ($p !== '' && isValidPeriodo($p)) $periodos[] = $p;
-    }
+    $st = $pdo->query($sql);
+    $periodos = $st->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    $periodos = array_values(array_filter(array_map(fn($p) => (string)$p, $periodos)));
 
     ok([
       'periodos' => $periodos,
@@ -92,10 +97,10 @@ try {
   }
 
   /* ==========================================================
-     ✅ A) FLUJO POR CLIENTES (SIN id_tipo_movimiento)
-     - Antes separabas ingresos/egresos por id_tipo_movimiento (1/2).
-     - Ahora devolvemos TOTAL por cliente (suma de monto_total) y saldo = total.
+     ✅ FLUJO POR CLIENTES (total absoluto por periodo opcional)
      action=flujo_caja_clientes
+
+     Nota: esto NO separa ingresos/egresos, solo suma total.
   ========================================================== */
   if ($action === 'flujo_caja_clientes') {
 
@@ -113,7 +118,7 @@ try {
       SELECT
         c.id_cliente,
         c.nombre AS cliente,
-        COALESCE(SUM(m.monto_total), 0) AS total
+        COALESCE(SUM(ABS(m.monto_total)), 0) AS total
       FROM clientes c
       LEFT JOIN movimientos m
         ON m.id_cliente = c.id_cliente
@@ -127,11 +132,10 @@ try {
 
     $rows = [];
     while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
-      $tot = (float)($r['total'] ?? 0);
       $rows[] = [
-        'id_cliente' => (int)$r['id_cliente'],
-        'cliente'    => (string)$r['cliente'],
-        'total'      => $tot,
+        'id_cliente' => (int)($r['id_cliente'] ?? 0),
+        'cliente'    => (string)($r['cliente'] ?? ''),
+        'total'      => (float)($r['total'] ?? 0),
       ];
     }
 
@@ -143,11 +147,13 @@ try {
   }
 
   /* ==========================================================
-     ✅ B) FLUJO DIARIO TIPO EXCEL (SIN id_tipo_movimiento)
-     - Antes: ingresos/egresos por id_tipo_movimiento (1/2)
-     - Ahora: usamos "total_dia" = SUM(monto_total)
-     - saldo_base = SUM(monto_total) anterior al mes
+     ✅ FLUJO DIARIO TIPO EXCEL (COMPATIBLE CON TU REACT)
      action=flujo_caja_resumen
+
+     ✅ REGLA SIN TOCAR DB:
+     - ingresos = SUM(ABS(monto_total)) donde id_tipo_operacion = 1 (VENTA)
+     - egresos  = SUM(ABS(monto_total)) donde id_tipo_operacion = 2 (COMPRA)
+     - id_tipo_operacion = 3 (MOVIMIENTO) se ignora (neutro)
   ========================================================== */
   if ($action === 'flujo_caja_resumen') {
 
@@ -159,73 +165,73 @@ try {
     $start = monthStart($periodo);
     $end   = monthEnd($periodo);
 
-    // ✅ días SOLO del mes (sin "día previo")
     $days = buildDays($periodo);
     $today = (new DateTime('today'))->format('Y-m-d');
 
-    // 1) totales por día SOLO dentro del mes
+    // 1) ingresos/egresos por día (por id_tipo_operacion)
     $sqlDia = "
       SELECT
         fecha,
-        COALESCE(SUM(monto_total), 0) AS total_dia
+        COALESCE(SUM(CASE WHEN id_tipo_operacion = 1 THEN ABS(monto_total) ELSE 0 END), 0) AS ingresos,
+        COALESCE(SUM(CASE WHEN id_tipo_operacion = 2 THEN ABS(monto_total) ELSE 0 END), 0) AS egresos
       FROM movimientos
       WHERE fecha BETWEEN :desde AND :hasta
       GROUP BY fecha
     ";
-
     $stDia = $pdo->prepare($sqlDia);
-    $stDia->execute([
-      ':desde' => $start,
-      ':hasta' => $end,
-    ]);
+    $stDia->execute([':desde' => $start, ':hasta' => $end]);
 
-    $mapDia = [];
+    $mapDia = []; // fecha => [ingresos, egresos]
     while ($r = $stDia->fetch(PDO::FETCH_ASSOC)) {
       $f = (string)($r['fecha'] ?? '');
       if ($f !== '') {
-        $mapDia[$f] = (float)($r['total_dia'] ?? 0.0);
+        $mapDia[$f] = [
+          'ingresos' => (float)($r['ingresos'] ?? 0),
+          'egresos'  => (float)($r['egresos'] ?? 0),
+        ];
       }
     }
 
-    // 2) saldo base (todo lo anterior al mes)
+    // 2) saldo base anterior al mes (por id_tipo_operacion)
     $sqlSaldoBase = "
-      SELECT COALESCE(SUM(monto_total), 0) AS saldo
+      SELECT
+        COALESCE(SUM(CASE WHEN id_tipo_operacion = 1 THEN ABS(monto_total) ELSE 0 END), 0) AS ingresos,
+        COALESCE(SUM(CASE WHEN id_tipo_operacion = 2 THEN ABS(monto_total) ELSE 0 END), 0) AS egresos
       FROM movimientos
       WHERE fecha < :desde
     ";
-
     $stBase = $pdo->prepare($sqlSaldoBase);
-    $stBase->execute([
-      ':desde' => $start,
-    ]);
+    $stBase->execute([':desde' => $start]);
 
-    $saldoBase = (float)($stBase->fetchColumn() ?: 0.0);
+    $base = $stBase->fetch(PDO::FETCH_ASSOC) ?: ['ingresos' => 0, 'egresos' => 0];
+    $saldoBase = (float)($base['ingresos'] ?? 0) - (float)($base['egresos'] ?? 0);
 
-    // 3) construir filas: arrancar desde saldoBase
+    // 3) construir filas (saldo acumulado)
     $saldo = $saldoBase;
     $rows = [];
 
     foreach ($days as $iso) {
       $isFuture = ($iso > $today);
 
-      $totalDia = (float)($mapDia[$iso] ?? 0.0);
+      $ing = (float)($mapDia[$iso]['ingresos'] ?? 0.0);
+      $egr = (float)($mapDia[$iso]['egresos'] ?? 0.0);
 
       if ($isFuture) {
-        // Futuro: no mostrar importes, pero mantener saldo acumulado hasta hoy
         $rows[] = [
           'fecha' => $iso,
-          'total' => null,
+          'ingresos' => null,
+          'egresos' => null,
           'saldo' => $saldo,
         ];
         continue;
       }
 
-      // ✅ saldo del día = saldo anterior + total_dia
-      $saldo = $saldo + $totalDia;
+      $saldo = $saldo + $ing - $egr;
 
       $rows[] = [
         'fecha' => $iso,
-        'total' => $totalDia,
+        'ingresos' => $ing,
+        'egresos' => $egr,
         'saldo' => $saldo,
       ];
     }

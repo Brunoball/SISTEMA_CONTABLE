@@ -13,6 +13,9 @@ import "../Global/gif_carga.css";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
+/* =========================
+   Helpers
+========================= */
 function moneyARS(v) {
   if (v == null || v === "") return "-";
   const n = Number(v || 0);
@@ -57,7 +60,23 @@ async function parseJsonOrThrow(res) {
   }
 }
 
+/* =========================
+   Auth helpers (X-Session)
+========================= */
+function getSessionKey() {
+  return (localStorage.getItem("session_key") || "").toString().trim();
+}
+
+function authHeaders(extra = {}) {
+  const sessionKey = getSessionKey();
+  const h = { ...extra };
+  if (sessionKey) h["X-Session"] = sessionKey;
+  return h;
+}
+
 export default function Flujo_Caja() {
+  // ⚠️ BASE_URL = ".../routes"
+  // Tu API real queda: ".../routes/api.php"
   const API = `${BASE_URL}/api.php`;
 
   const [periodo, setPeriodo] = useState("");
@@ -74,17 +93,36 @@ export default function Flujo_Caja() {
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // ✅ 1) traer periodos reales
+  // ✅ 0) check simple de sesión
+  useEffect(() => {
+    const k = getSessionKey();
+    if (!k) {
+      // No te saco de la pantalla (por si lo estás probando),
+      // pero te avisa el motivo típico del 401.
+      showToast("advertencia", "Falta session_key. Iniciá sesión de nuevo.", 4200);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ✅ 1) traer periodos reales (requiere X-Session)
   const fetchPeriodos = useCallback(async () => {
     setLoadingPeriodos(true);
     try {
       const sp = new URLSearchParams();
       sp.set("action", "flujo_caja_periodos");
 
-      const res = await fetch(`${API}?${sp.toString()}`, { method: "GET" });
+      const res = await fetch(`${API}?${sp.toString()}`, {
+        method: "GET",
+        headers: authHeaders(),
+      });
+
       const json = await parseJsonOrThrow(res);
 
-      if (!json?.exito) throw new Error(json?.mensaje || "Error cargando períodos");
+      // Si el backend corta por tenant_resolver, suele venir 401 con {exito:false,mensaje:"Falta X-Session."}
+      if (!res.ok || !json?.exito) {
+        const msg = json?.mensaje || `Error cargando períodos (HTTP ${res.status})`;
+        throw new Error(msg);
+      }
 
       const list = Array.isArray(json?.periodos) ? json.periodos : [];
       setPeriodOptions(list);
@@ -98,6 +136,7 @@ export default function Flujo_Caja() {
       const msg = e?.message || "Error cargando períodos";
       showToast("error", msg, 4200);
       if (!periodo) setPeriodo("2026-01");
+      setPeriodOptions([]);
     } finally {
       setLoadingPeriodos(false);
     }
@@ -108,7 +147,7 @@ export default function Flujo_Caja() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ 2) cargar resumen cuando haya periodo
+  // ✅ 2) cargar resumen cuando haya periodo (requiere X-Session)
   const fetchResumen = useCallback(async () => {
     if (!periodo) return;
 
@@ -120,10 +159,18 @@ export default function Flujo_Caja() {
       sp.set("action", "flujo_caja_resumen");
       sp.set("periodo", periodo);
 
-      const res = await fetch(`${API}?${sp.toString()}`, { method: "GET" });
+      const res = await fetch(`${API}?${sp.toString()}`, {
+        method: "GET",
+        headers: authHeaders(),
+      });
+
       const json = await parseJsonOrThrow(res);
 
-      if (!json?.exito) throw new Error(json?.mensaje || "Error desconocido en API");
+      if (!res.ok || !json?.exito) {
+        const msg = json?.mensaje || `Error desconocido en API (HTTP ${res.status})`;
+        throw new Error(msg);
+      }
+
       setData(json);
     } catch (e) {
       setData(null);
@@ -139,6 +186,8 @@ export default function Flujo_Caja() {
     fetchResumen();
   }, [fetchResumen]);
 
+  // ✅ Estructura esperada del backend:
+  // data.tiendas[0].rows[] con {fecha, ingresos, egresos, saldo}
   const bloque = data?.tiendas?.[0] || null;
   const rowsRaw = bloque?.rows || [];
   const rows = useMemo(() => normalizeRows(rowsRaw), [rowsRaw]);
@@ -289,8 +338,8 @@ export default function Flujo_Caja() {
             </div>
 
             <div className="fc-footnote">
-              * El saldo del día 01 arranca desde el “Saldo base” y se actualiza con
-              (ingresos − egresos) de cada día.
+              * El saldo del día 01 arranca desde el “Saldo base” y se actualiza con (ingresos −
+              egresos) de cada día.
             </div>
           </>
         ) : (

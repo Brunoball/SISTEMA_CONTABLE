@@ -176,9 +176,46 @@ function numOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+/* =========================
+   ✅ Auth (X-Session) — igual que Movimientos
+========================= */
+function getAuthInfo() {
+  const sessionKey = (localStorage.getItem("session_key") || "").trim();
+
+  let idUsuario = 0;
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      0;
+    if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
+  } catch {}
+
+  return { sessionKey, idUsuario };
+}
+
+function buildHeadersGET() {
+  const { sessionKey } = getAuthInfo();
+  const h = {};
+  if (sessionKey) h["X-Session"] = sessionKey;
+  return h;
+}
+
 async function fetchJSON(url) {
-  const r = await fetch(url);
+  const r = await fetch(url, { method: "GET", headers: buildHeadersGET() });
+
+  // Si tu backend devuelve 401 cuando la sesión no sirve, lo mostramos claro
+  if (r.status === 401) {
+    throw new Error("401 (Unauthorized): Sesión vencida o no autorizada. Volvé a iniciar sesión.");
+  }
+
   const txt = await r.text();
+  if (!txt) throw new Error("Respuesta vacía del servidor.");
+
   try {
     return JSON.parse(txt);
   } catch {

@@ -3,7 +3,7 @@
         'name' => '3devs/backend',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '0e6e9a1ce77983ed45a5baac58019d8e5a5ce886',
+        'reference' => '4587d49278dd704452cd6bfdfa6878394f40a7fe',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -13,7 +13,7 @@
         '3devs/backend' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '0e6e9a1ce77983ed45a5baac58019d8e5a5ce886',
+            'reference' => '4587d49278dd704452cd6bfdfa6878394f40a7fe',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

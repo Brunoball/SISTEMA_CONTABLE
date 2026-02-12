@@ -2,9 +2,26 @@
 // backend/modules/cuentas_corrientes/cuentas_corrientes.php
 declare(strict_types=1);
 
+/**
+ * ✅ ACCIONES:
+ * - cc_resumen  (GET)  alias: cuentas_corrientes_resumen
+ * - cc_detalle  (GET)  alias: cuenta_corriente_detalle
+ *
+ * ✅ MULTI-TENANT:
+ * - NO incluir config/db.php
+ * - $pdo ya viene creado por tenant_bootstrap_or_fail() en routes/api.php
+ */
+
 header('Content-Type: application/json; charset=utf-8');
 
-require_once __DIR__ . '/../../config/db.php'; // define $pdo
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+  http_response_code(500);
+  echo json_encode([
+    'exito' => false,
+    'mensaje' => 'PDO no disponible. Este módulo debe ejecutarse vía routes/api.php (tenant_resolver).'
+  ], JSON_UNESCAPED_UNICODE);
+  exit;
+}
 
 /* =========================
    Response helpers
@@ -33,9 +50,13 @@ function cc_param(string $k, $default = null) {
 ========================= */
 function cc_sign_from_nombre(string $nombre): int {
   $n = mb_strtolower(trim($nombre), 'UTF-8');
+
+  // normalizo acentos rápido (por si viene "débito")
+  $n = str_replace(['á','é','í','ó','ú','ü','ñ'], ['a','e','i','o','u','u','n'], $n);
+
   if (str_contains($n, 'credito')) return +1; // suma
-  if (str_contains($n, 'débito') || str_contains($n, 'debito')) return -1; // resta
-  return 0; // otras cuentas (ej: "PRUEBAA") solo se muestran, no afectan saldo
+  if (str_contains($n, 'debito'))  return -1; // resta
+  return 0; // otras cuentas: solo se muestran, no afectan saldo
 }
 
 /* =========================
@@ -45,13 +66,11 @@ $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $action = is_string($action) ? trim($action) : '';
 
 try {
-  if (!isset($pdo) || !($pdo instanceof PDO)) {
-    cc_fail('DB no inicializada ($pdo no disponible). Revisá backend/config/db.php', 500);
-  }
+  // ✅ ERRMODE por si no viene seteado en bootstrap
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
 
-  // alias
+  // ✅ alias
   if ($action === 'cuentas_corrientes_resumen') $action = 'cc_resumen';
   if ($action === 'cuenta_corriente_detalle')  $action = 'cc_detalle';
 

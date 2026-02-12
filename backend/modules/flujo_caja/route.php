@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 function route_flujo_caja(string $action): bool
 {
-  switch ($action) {
+  $action = strtolower(trim($action));
 
-    // ✅ Todos estos actions usan el MISMO archivo
+  switch ($action) {
     case 'flujo_caja_resumen':
     case 'flujo_caja_clientes':
-    case 'flujo_caja_periodos': // ✅ NUEVO: listar periodos (DISTINCT movimientos.periodo)
+    case 'flujo_caja_periodos':
       require_once __DIR__ . '/flujo_caja.php';
       return true;
 

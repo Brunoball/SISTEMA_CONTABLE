@@ -10,6 +10,9 @@ import Toast from "../Global/Toast.jsx";
 import GifCarga from "../Global/Gif_Carga.jsx";
 import "../Global/gif_carga.css";
 
+/* =========================
+   Helpers UI
+========================= */
 function moneyARS(v) {
   const n = Number(v || 0);
   try {
@@ -19,16 +22,61 @@ function moneyARS(v) {
   }
 }
 
-async function fetchJSON(url) {
-  const r = await fetch(url);
-  const txt = await r.text();
+/* =========================
+   ✅ Auth (X-Session) — igual que Movimientos
+========================= */
+function getAuthInfo() {
+  const sessionKey = (localStorage.getItem("session_key") || "").trim();
+
+  let idUsuario = 0;
   try {
-    return JSON.parse(txt);
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      0;
+    if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
+  } catch {}
+
+  return { sessionKey, idUsuario };
+}
+
+function buildHeadersGET() {
+  const { sessionKey } = getAuthInfo();
+  const h = {};
+  if (sessionKey) h["X-Session"] = sessionKey;
+  return h;
+}
+
+async function parseJsonOrThrow(res) {
+  if (res.status === 401) {
+    throw new Error(
+      "401 (Unauthorized): Sesión vencida o no autorizada. Volvé a iniciar sesión."
+    );
+  }
+
+  const text = await res.text();
+  if (!text) throw new Error("Respuesta vacía del servidor.");
+
+  try {
+    return JSON.parse(text);
   } catch {
-    throw new Error(`Respuesta inválida (${r.status}): ${txt.slice(0, 200)}`);
+    const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
+    throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
   }
 }
 
+async function apiGet(url) {
+  const res = await fetch(url, { method: "GET", headers: buildHeadersGET() });
+  return await parseJsonOrThrow(res);
+}
+
+/* =========================
+   Component
+========================= */
 export default function Cuentas_Corrientes() {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
@@ -45,7 +93,7 @@ export default function Cuentas_Corrientes() {
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // ✅ Mobile detect (solo para render, NO toca desktop)
+  // ✅ Mobile detect (solo render)
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined"
       ? window.matchMedia("(max-width: 720px)").matches
@@ -68,13 +116,16 @@ export default function Cuentas_Corrientes() {
     };
   }, []);
 
+  /* =========================
+     Fetch resumen (✅ con X-Session)
+  ========================= */
   const fetchResumen = useCallback(async () => {
     setLoading(true);
     setErr("");
 
     try {
       const url = `${BASE_URL}/api.php?action=cc_resumen`;
-      const data = await fetchJSON(url);
+      const data = await apiGet(url);
 
       if (!data || data.exito !== true) {
         throw new Error(data?.mensaje || "Error al cargar resumen.");
@@ -100,6 +151,9 @@ export default function Cuentas_Corrientes() {
     fetchResumen();
   }, [fetchResumen]);
 
+  /* =========================
+     Filtro
+  ========================= */
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return rows;
@@ -145,7 +199,9 @@ export default function Cuentas_Corrientes() {
     return list;
   }, [cuentas]);
 
-  // ✅ Export Excel (misma lógica)
+  /* =========================
+     Export Excel
+  ========================= */
   const exportExcel = useCallback(() => {
     try {
       if (!filtered.length) {
@@ -186,10 +242,11 @@ export default function Cuentas_Corrientes() {
     }
   }, [filtered, orderedCuentas, getCell, showToast]);
 
-  // ✅ Cards mobile: expand/collapse por cliente
+  /* =========================
+     Mobile expand/collapse
+  ========================= */
   const [openId, setOpenId] = useState(null);
   useEffect(() => {
-    // si cambian filtros, cerramos el expandido (evita glitches)
     setOpenId(null);
   }, [q]);
 
@@ -197,7 +254,7 @@ export default function Cuentas_Corrientes() {
     setOpenId((prev) => (prev === id ? null : id));
   }, []);
 
-  // Desktop grid cols (igual que antes)
+  // Desktop grid cols
   const gridColsDesktop = useMemo(() => {
     return `260px repeat(${orderedCuentas.length}, 1fr) .5fr`;
   }, [orderedCuentas.length]);
@@ -249,8 +306,7 @@ export default function Cuentas_Corrientes() {
                       title="Limpiar búsqueda"
                       onClick={() => {
                         setQ("");
-                        const input = document.querySelector(".cc-searchInput input");
-                        input?.focus();
+                        document.querySelector(".cc-searchInput input")?.focus();
                       }}
                     >
                       ×
@@ -384,8 +440,6 @@ export default function Cuentas_Corrientes() {
                         >
                           {orderedCuentas.map((c) => {
                             const v = getCell(r, c.id_cuenta_corriente);
-                            const cls =
-                              v > 0 ? "is-positive" : v < 0 ? "is-negative" : "";
                             const color =
                               v > 0
                                 ? "rgba(34,173,92,.95)"
@@ -399,7 +453,6 @@ export default function Cuentas_Corrientes() {
                                   {c.nombre}
                                 </div>
                                 <div
-                                  className={cls}
                                   style={{
                                     fontSize: 13,
                                     fontWeight: 700,
@@ -496,7 +549,7 @@ export default function Cuentas_Corrientes() {
           </div>
         ) : (
           /* =========================
-             ✅ DESKTOP VIEW (igual que tenías)
+             ✅ DESKTOP VIEW
              ========================= */
           <div className="cc-tableWrap">
             <div className="cc-grid cc-grid--head" style={{ gridTemplateColumns: gridColsDesktop }}>

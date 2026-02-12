@@ -3,6 +3,24 @@ declare(strict_types=1);
 
 // backend/routes/api.php
 
+require_once __DIR__ . '/../config/bootstrap_env.php';
+
+ini_set('display_errors', '1');
+error_reporting(E_ALL);
+
+register_shutdown_function(function () {
+  $err = error_get_last();
+  if (!$err) return;
+
+  http_response_code(500);
+  header('Content-Type: application/json; charset=utf-8');
+  echo json_encode([
+    'exito' => false,
+    'fatal' => true,
+    'error' => $err,
+  ], JSON_UNESCAPED_UNICODE);
+});
+
 $origin = $_SERVER["HTTP_ORIGIN"] ?? "*";
 header("Access-Control-Allow-Origin: $origin");
 header("Vary: Origin");
@@ -26,7 +44,7 @@ $action =
 
 $action = is_string($action) ? trim($action) : "";
 
-$PUBLIC_ACTIONS = ['inicio', 'registro']; // + recuperar si existe
+$PUBLIC_ACTIONS = ['inicio', 'registro', 'logout', 'cerrar_sesion'];
 
 try {
   if ($action === "") {
@@ -34,7 +52,6 @@ try {
     exit;
   }
 
-  // Routers públicos
   require_once __DIR__ . "/../modules/global/route.php";
   require_once __DIR__ . "/../modules/login/route.php";
 
@@ -42,31 +59,30 @@ try {
     if (function_exists("route_global") && route_global($action)) exit;
     if (function_exists("route_login") && route_login($action)) exit;
 
-    echo json_encode(["exito"=>false,"mensaje"=>"Acción pública no válida: $action"], JSON_UNESCAPED_UNICODE);
+    echo json_encode(["exito" => false, "mensaje" => "Acción pública no válida: $action"], JSON_UNESCAPED_UNICODE);
     exit;
   }
 
-  // ✅ Acciones privadas => tenant bootstrap por X-Session
+  // ✅ PRIVADAS: resolver tenant + crear $pdo
   require_once __DIR__ . "/../modules/utils/tenant_resolver.php";
-  tenant_bootstrap_or_fail(); // crea $pdo tenant
+  tenant_bootstrap_or_fail(); // <-- ahora EXISTE y crea $pdo tenant
 
-  // Routers privados (usan $pdo tenant)
   require_once __DIR__ . "/../modules/movimientos/route.php";
   require_once __DIR__ . "/../modules/flujo_caja/route.php";
   require_once __DIR__ . "/../modules/cuentas_corrientes/route.php";
   require_once __DIR__ . "/../modules/analisis_financiero/route.php";
 
   if (function_exists("route_global") && route_global($action)) exit;
-  if (function_exists("route_login") && route_login($action)) exit; // incluye logout
+  if (function_exists("route_login") && route_login($action)) exit;
   if (function_exists("route_movimientos") && route_movimientos($action)) exit;
   if (function_exists("route_flujo_caja") && route_flujo_caja($action)) exit;
   if (function_exists("route_cuentas_corrientes") && route_cuentas_corrientes($action)) exit;
   if (function_exists("route_analisis_financiero") && route_analisis_financiero($action)) exit;
 
-  echo json_encode(["exito"=>false,"mensaje"=>"Acción no válida: $action"], JSON_UNESCAPED_UNICODE);
+  echo json_encode(["exito" => false, "mensaje" => "Acción no válida: $action"], JSON_UNESCAPED_UNICODE);
   exit;
 
 } catch (Throwable $e) {
-  echo json_encode(["exito"=>false,"mensaje"=>"Error en API: ".$e->getMessage()], JSON_UNESCAPED_UNICODE);
+  echo json_encode(["exito" => false, "mensaje" => "Error en API: " . $e->getMessage()], JSON_UNESCAPED_UNICODE);
   exit;
 }

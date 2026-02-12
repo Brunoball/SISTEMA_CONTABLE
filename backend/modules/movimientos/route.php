@@ -6,18 +6,23 @@ if (!function_exists('route_movimientos')) {
 
   function route_movimientos(string $action): bool
   {
-    switch (trim($action)) {
+    // ✅ CLAVE: hacer visible el $pdo creado en routes/api.php
+    global $pdo;
+
+    $action = strtolower(trim((string)$action));
+
+    switch ($action) {
 
       case 'catalogo_crear':
-        require_once __DIR__ . '/catalogo.php';
+        require __DIR__ . '/catalogo.php';
         return true;
 
-      /* ✅ ÓRDENES DE PAGO (nuevo módulo) */
+      /* ✅ ÓRDENES DE PAGO */
       case 'ordenes_pago_listar':
       case 'ordenes_pago_actualizar':
       case 'ordenes_pago_eliminar':
       case 'ordenes_pago_confirmar_pago':
-        require_once __DIR__ . '/ordenes_pago.php';
+        require __DIR__ . '/ordenes_pago.php';
         return true;
 
       /* ✅ RECIBOS */
@@ -25,32 +30,30 @@ if (!function_exists('route_movimientos')) {
       case 'recibos_actualizar':
       case 'recibos_eliminar':
       case 'recibos_confirmar_pago':
-        require_once __DIR__ . '/recibos.php';
+        require __DIR__ . '/recibos.php';
         return true;
 
-      /* CRUD general (Movimientos.jsx) */
+      /* ✅ MOVIMIENTOS */
       case 'movimientos_listar':
-      case 'movimientos_crear':
-      case 'movimientos_actualizar':
-      case 'movimientos_eliminar':
-        require_once __DIR__ . '/movimientos.php';
+      case 'movimientos_periodos_listar':
+        require __DIR__ . '/movimientos.php';
         return true;
 
-      /* Ventas */
+      /* ✅ VENTAS */
       case 'ventas_listar':
       case 'ventas_crear':
       case 'ventas_crear_batch':
       case 'ventas_actualizar':
       case 'ventas_eliminar':
-        require_once __DIR__ . '/ventas.php';
+        require __DIR__ . '/ventas.php';
         return true;
 
-      /* Compras */
+      /* ✅ COMPRAS */
       case 'compras_listar':
       case 'compras_crear':
       case 'compras_actualizar':
       case 'compras_eliminar':
-        require_once __DIR__ . '/compras.php';
+        require __DIR__ . '/compras.php';
         return true;
 
       default:

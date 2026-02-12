@@ -2,27 +2,64 @@
 declare(strict_types=1);
 
 // backend/modules/login/logout.php
+// ✅ Cierra sesión SaaS REAL: borra session_key de balto_master.sesiones
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-require_once __DIR__ . '/../../config/db_master.php';
+$origin = $_SERVER["HTTP_ORIGIN"] ?? "*";
+header("Access-Control-Allow-Origin: $origin");
+header("Vary: Origin");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, X-Session");
+header("Access-Control-Max-Age: 86400");
 
-function ok(array $a = []): void {
-  echo json_encode(array_merge(['exito'=>true], $a), JSON_UNESCAPED_UNICODE);
+if (($_SERVER["REQUEST_METHOD"] ?? "") === "OPTIONS") {
+  http_response_code(200);
+  echo json_encode(["ok" => true], JSON_UNESCAPED_UNICODE);
   exit;
 }
-function fail(string $m): void {
-  echo json_encode(['exito'=>false,'mensaje'=>$m], JSON_UNESCAPED_UNICODE);
+
+function ok(array $arr = []): void {
+  echo json_encode(array_merge(['exito' => true], $arr), JSON_UNESCAPED_UNICODE);
+  exit;
+}
+function fail(string $msg, int $httpCode = 200, array $extra = []): void {
+  http_response_code($httpCode);
+  echo json_encode(array_merge(['exito' => false, 'mensaje' => $msg], $extra), JSON_UNESCAPED_UNICODE);
   exit;
 }
 
-$key = trim((string)($_SERVER['HTTP_X_SESSION'] ?? ''));
-if ($key === '') fail('Falta X-Session.');
+function getSessionKey(): string {
+  $k = $_SERVER['HTTP_X_SESSION'] ?? '';
+  return is_string($k) ? trim($k) : '';
+}
 
-$pdo_master->prepare("
-  UPDATE sesiones
-  SET activo = 0
-  WHERE session_key = :k
-")->execute([':k' => $key]);
+try {
+  if (($_SERVER["REQUEST_METHOD"] ?? "") !== "POST") {
+    fail("Método no permitido. Usá POST.", 405);
+  }
 
-ok(['mensaje'=>'Sesión cerrada.']);
+  $sessionKey = getSessionKey();
+  if ($sessionKey === '') {
+    fail("Falta header X-Session.", 401);
+  }
+
+  // ✅ Conectar MASTER (usa tu db_master.php y crea $pdo_master)
+  require_once __DIR__ . '/../../config/db_master.php';
+
+  if (!isset($pdo_master) || !($pdo_master instanceof PDO)) {
+    throw new RuntimeException("PDO master no disponible.");
+  }
+
+  // ✅ Eliminar sesión
+  $st = $pdo_master->prepare("DELETE FROM sesiones WHERE session_key = :k");
+  $st->execute([':k' => $sessionKey]);
+
+  ok([
+    'cerrada' => ($st->rowCount() > 0),
+  ]);
+
+} catch (Throwable $e) {
+  fail("Error cerrando sesión: " . $e->getMessage(), 500);
+}

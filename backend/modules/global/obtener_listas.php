@@ -3,14 +3,21 @@
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-require_once __DIR__ . '/../../config/db.php';
+// ✅ MULTI-TENANT:
+// - NO incluir config/db.php
+// - $pdo debe venir creado por routes/api.php (tenant_resolver)
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+  http_response_code(500);
+  echo json_encode([
+    'exito' => false,
+    'mensaje' => 'PDO no disponible. Este módulo debe ejecutarse vía routes/api.php (tenant_resolver).'
+  ], JSON_UNESCAPED_UNICODE);
+  exit;
+}
 
 try {
-  if (!isset($pdo) || !($pdo instanceof PDO)) {
-    throw new RuntimeException('Conexión PDO no disponible.');
-  }
-
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
 
@@ -27,16 +34,11 @@ try {
     $m = '';
     $y = '';
 
-    // YYYY-MM o YYYY/MM
-    if (preg_match('/^\d{4}[-\/]\d{1,2}$/', $s)) {
+    if (preg_match('/^\d{4}[-\/]\d{1,2}$/', $s)) {          // YYYY-MM o YYYY/MM
       [$y, $m] = preg_split('/[-\/]/', $s);
-    }
-    // MM-YYYY o MM/YYYY
-    elseif (preg_match('/^\d{1,2}[-\/]\d{4}$/', $s)) {
+    } elseif (preg_match('/^\d{1,2}[-\/]\d{4}$/', $s)) {    // MM-YYYY o MM/YYYY
       [$m, $y] = preg_split('/[-\/]/', $s);
-    }
-    // 6 dígitos: YYYYMM o MMYYYY
-    elseif (preg_match('/^\d{6}$/', $s)) {
+    } elseif (preg_match('/^\d{6}$/', $s)) {                // YYYYMM o MMYYYY
       $a = (int)substr($s, 0, 4);
       if ($a >= 1900 && $a <= 2100) {
         $y = substr($s, 0, 4);
@@ -46,7 +48,7 @@ try {
         $y = substr($s, 2, 4);
       }
     } else {
-      return $s; // fallback (no tocamos)
+      return $s; // fallback
     }
 
     $mi = (int)$m;
@@ -59,7 +61,7 @@ try {
     return $mm . '-' . (string)$yi;
   }
 
-  // ✅ devuelve un timestamp "YYYY-MM-01" para ordenar por fecha real
+  // ✅ devuelve un timestamp para ordenar por fecha real
   function periodoSortKey(string $mmYYYY): int {
     $s = trim($mmYYYY);
     if (!preg_match('/^\d{2}\-\d{4}$/', $s)) return 0;
@@ -71,7 +73,6 @@ try {
 
   // ✅ fetch robusto (con activo si existe)
   $fetch = function(string $table, string $idCol) use ($pdo): array {
-    // intentamos con activo=1
     $sql1 = "SELECT `$idCol` AS id, `nombre`
              FROM `$table`
              WHERE `activo` = 1
@@ -79,7 +80,6 @@ try {
     try {
       $stmt = $pdo->query($sql1);
     } catch (Throwable $e) {
-      // fallback si no existe activo
       $sql2 = "SELECT `$idCol` AS id, `nombre`
                FROM `$table`
                ORDER BY `nombre` ASC";
@@ -99,8 +99,7 @@ try {
   };
 
   /* =========================
-     Map SOLO tablas existentes (sistema_contable)
-     ✅ ELIMINADO: tipos_movimiento
+     Map de tablas
   ========================= */
   $map = [
     'clasificaciones'    => ['id' => 'id_clasificacion',    'table' => 'clasificaciones'],
@@ -113,7 +112,7 @@ try {
   ];
 
   /* =========================
-     Periodos (si existe tabla movimientos)
+     Periodos desde movimientos
   ========================= */
   $periodos = [];
   try {
@@ -132,17 +131,14 @@ try {
       if ($mmYYYY !== '') $norm[] = $mmYYYY;
     }
 
-    // ✅ deduplica (evita keys repetidas en React)
     $norm = array_values(array_unique($norm));
 
-    // ✅ ordena por fecha real desc (más nuevo primero)
     usort($norm, function($a, $b) {
       return periodoSortKey($b) <=> periodoSortKey($a);
     });
 
     $periodos = $norm;
   } catch (Throwable $e) {
-    // si no existe "movimientos" o "periodo", no rompemos nada
     $periodos = [];
   }
 

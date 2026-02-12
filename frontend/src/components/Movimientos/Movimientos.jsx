@@ -14,7 +14,7 @@ import Toast from "../Global/Toast.jsx";
 // ✅ Loader overlay
 import GifCarga from "../Global/Gif_Carga.jsx";
 
-// ✅ Hook loader PRO (el que creaste en Global)
+// ✅ Hook loader PRO
 import useSmoothLoader from "../Global/useSmoothLoader.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -189,18 +189,19 @@ function normalizeLists(raw) {
   };
 }
 
-/* ✅ Auth */
+/* ✅ Auth (NUEVO: X-Session) */
 function getAuthInfo() {
-  const token = localStorage.getItem("token") || "";
+  const sessionKey = (localStorage.getItem("session_key") || "").trim();
 
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    const cand =
+      u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
-  return { token, idUsuario };
+  return { sessionKey, idUsuario };
 }
 
 /* ✅ Excel */
@@ -268,17 +269,24 @@ export default function Movimientos() {
     minVisibleMs: 450,
   });
 
-  // ✅ Debounce búsqueda (NO corta el input)
+  // ✅ Debounce búsqueda
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
   /* =========================
-     API helpers
+     API helpers (NUEVO X-Session)
   ========================= */
   const buildHeaders = useCallback(() => {
-    const { token } = getAuthInfo();
+    const { sessionKey } = getAuthInfo();
     const h = { "Content-Type": "application/json" };
-    if (token) h.Authorization = `Bearer ${token}`;
+    if (sessionKey) h["X-Session"] = sessionKey;
+    return h;
+  }, []);
+
+  const buildHeadersGET = useCallback(() => {
+    const { sessionKey } = getAuthInfo();
+    const h = {};
+    if (sessionKey) h["X-Session"] = sessionKey;
     return h;
   }, []);
 
@@ -295,13 +303,10 @@ export default function Movimientos() {
 
   const apiGet = useCallback(
     async (url) => {
-      const headers = {};
-      const { token } = getAuthInfo();
-      if (token) headers.Authorization = `Bearer ${token}`;
-      const res = await fetch(url, { method: "GET", headers });
+      const res = await fetch(url, { method: "GET", headers: buildHeadersGET() });
       return await parseJsonOrThrow(res);
     },
-    [parseJsonOrThrow]
+    [buildHeadersGET, parseJsonOrThrow]
   );
 
   const apiPostJson = useCallback(
@@ -376,7 +381,6 @@ export default function Movimientos() {
       const cacheKey = `${periodoAPI}|${(qLocal || "").trim()}`;
 
       uxBegin();
-
       const start = Date.now();
       setLoadingRows(true);
       setError("");
@@ -386,18 +390,6 @@ export default function Movimientos() {
           setRows(cacheRef.current.get(cacheKey) || []);
           setLoadingRows(false);
           uxEnd();
-          return;
-        }
-
-        if (cacheRef.current.has(cacheKey) && FORCE_SHOW_LOADER_DEV) {
-          const cached = cacheRef.current.get(cacheKey) || [];
-          const elapsed = Date.now() - start;
-          const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
-          setTimeout(() => {
-            setRows(cached);
-            setLoadingRows(false);
-            uxEnd();
-          }, remaining);
           return;
         }
 
@@ -478,11 +470,7 @@ export default function Movimientos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* =========================================================
-     ✅ AUTO-FILTRADO: a medida que escribís en el buscador
-     - Debounce 250ms
-     - NO bloquea el input mientras carga
-  ========================================================= */
+  // debounce búsqueda
   useEffect(() => {
     if (!fPeriodo) return;
 
@@ -502,14 +490,12 @@ export default function Movimientos() {
     };
   }, [q, fPeriodo, loadRows]);
 
-  // filtrado front (simple) (queda igual)
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
     if (!fPer) return [];
     return rows.filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer));
   }, [rows, fPeriodo]);
 
-  // ✅ COLUMNAS REDUCIDAS
   const columns = useMemo(() => {
     return [
       {
@@ -524,7 +510,7 @@ export default function Movimientos() {
         label: "TIPO PAGO",
         align: "center",
         fr: 1.1,
-        render: (r) => safeText(pick(r, ["medio_pago", "tipo_pago", "forma_pago"], "")),
+        render: (r) => safeText(pick(r, ["medio_pago_nombre", "medio_pago", "tipo_pago", "forma_pago"], "")),
       },
       {
         key: "tercero",
@@ -543,7 +529,7 @@ export default function Movimientos() {
         align: "center",
         fr: 1.0,
         render: (r) => {
-          const total = pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0);
+          const total = pick(r, ["monto_total", "monto_total_final", "total", "importe_total", "monto", "importe"], 0);
           return moneyARS(total);
         },
       },
@@ -668,9 +654,7 @@ export default function Movimientos() {
                     const ui = periodoToMMYYYY(e.target.value);
                     setFPeriodo(ui);
 
-                    // ✅ para que el efecto debounce NO dispare otra llamada extra
                     skipSearchRef.current = true;
-
                     await loadRows({ periodo: ui, q });
                   }}
                   disabled={loadingRows || loadingLists}
@@ -697,16 +681,12 @@ export default function Movimientos() {
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-
-                        // ✅ Enter = buscar ya (sin esperar debounce)
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         skipSearchRef.current = true;
-
                         await loadRows({ periodo: fPeriodo, q: e.currentTarget.value });
                       }
                     }}
                     placeholder="Buscar…"
-                    // ✅ IMPORTANTÍSIMO: NO lo cortes mientras carga
                     disabled={loadingLists}
                   />
 
@@ -718,11 +698,8 @@ export default function Movimientos() {
                       onClick={async () => {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
-
-                        // ✅ limpiar = buscar ya sin q
                         skipSearchRef.current = true;
                         await loadRows({ periodo: fPeriodo, q: "" });
-
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
                     >
@@ -775,10 +752,9 @@ export default function Movimientos() {
           ))}
         </div>
 
-        {/* BODY: filas siempre renderizadas + loader overlay */}
+        {/* BODY */}
         <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup">
           <div className="mov-gridBody mov-gridBody--relative">
-            {/* ✅ overlay pro (no mueve la tabla) */}
             <GifCarga visible={uxLoaderVisible} />
 
             {filteredRows.map((r) => (

@@ -1,5 +1,5 @@
 // src/components/Principal/Principal.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import LogoBalto from "../../imagenes/Logo_Blanco_Principal.png";
@@ -24,7 +24,7 @@ import ModalPerfil from "../Perfil/ModalPerfil";
 /* =========================
    Modal cierre de sesión
 ========================= */
-const ConfirmLogoutModal = ({ open, onClose, onConfirm }) => {
+const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
   const cancelBtnRef = useRef(null);
 
   useEffect(() => {
@@ -55,11 +55,16 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm }) => {
             className="pp-btn pp-btn--ghost"
             onClick={onClose}
             ref={cancelBtnRef}
+            disabled={loading}
           >
             Cancelar
           </button>
-          <button className="pp-btn pp-btn--danger" onClick={onConfirm}>
-            Confirmar
+          <button
+            className="pp-btn pp-btn--danger"
+            onClick={onConfirm}
+            disabled={loading}
+          >
+            {loading ? "Cerrando..." : "Confirmar"}
           </button>
         </div>
       </div>
@@ -84,6 +89,7 @@ function normalizeRol(value) {
   }
   return "vista";
 }
+
 function normalizePlanNivel(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 1;
@@ -91,6 +97,7 @@ function normalizePlanNivel(value) {
   if (n === 2) return 2;
   return 3;
 }
+
 function slugify(name) {
   return (
     String(name ?? "")
@@ -102,6 +109,7 @@ function slugify(name) {
       .replace(/^-+|-+$/g, "") || "seccion"
   );
 }
+
 function pickIcon(label) {
   const s = String(label ?? "").toLowerCase();
   if (s.includes("movimientos")) return faMoneyBillTrendUp;
@@ -110,23 +118,23 @@ function pickIcon(label) {
   if (s.includes("analisis")) return faChartLine;
   return faChartLine;
 }
+
 function normalizeTema(value) {
   const t = String(value ?? "claro").trim().toLowerCase();
   return t === "oscuro" ? "oscuro" : "claro";
 }
+
 function applyTheme(tema) {
   document.documentElement.setAttribute("data-theme", tema);
 }
 
 /**
  * ✅ SaaS: priorizamos ID master
- * - idUsuarioMaster (nuevo)
- * - idUsuario (compat vieja, pero hoy tu login lo setea = idUsuarioMaster)
  */
 function getIdUsuarioMaster(u) {
   const cand = [
-    u?.idUsuarioMaster, // ✅ prioridad
-    u?.idUsuario, // compat
+    u?.idUsuarioMaster,
+    u?.idUsuario,
     u?.id_usuario,
     u?.id,
     u?.usuario_id,
@@ -142,6 +150,23 @@ const DASH_SEEN_KEY = "pp_dashboard_seen_once";
 function markDashboardSeen() {
   try {
     sessionStorage.setItem(DASH_SEEN_KEY, "1");
+  } catch {}
+}
+
+/* =========================
+   ✅ Session key helper
+========================= */
+function getSessionKey() {
+  const k = localStorage.getItem("session_key") || "";
+  return String(k || "").trim();
+}
+
+function hardClientLogoutCleanup() {
+  try {
+    sessionStorage.clear();
+    localStorage.removeItem("token");
+    localStorage.removeItem("session_key");
+    localStorage.removeItem("usuario");
   } catch {}
 }
 
@@ -168,6 +193,10 @@ const Principal = () => {
   const closeTimerRef = useRef(null);
   const openTimerRef = useRef(null);
 
+  // ✅ evita doble logout (ref para que no rompa deps)
+  const closingRef = useRef(false);
+  const [closingUI, setClosingUI] = useState(false);
+
   const closeSoon = (ms = 220) => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => setOpenMovSub(false), ms);
@@ -185,7 +214,19 @@ const Principal = () => {
     openTimerRef.current = null;
   };
 
+  /* =========================
+     ✅ Guard / carga usuario
+  ========================= */
   useEffect(() => {
+    // 1) si no hay session_key => afuera
+    const sk = getSessionKey();
+    if (!sk) {
+      hardClientLogoutCleanup();
+      navigate("/", { replace: true });
+      return;
+    }
+
+    // 2) cargar usuario + tema
     try {
       const u = JSON.parse(localStorage.getItem("usuario"));
       if (u) {
@@ -203,7 +244,8 @@ const Principal = () => {
       setTema("claro");
       applyTheme("claro");
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // solo una vez
 
   useEffect(() => {
     return () => {
@@ -293,17 +335,6 @@ const Principal = () => {
     setDrawerOpen(false);
   };
 
-  const confirmarCierreSesion = () => {
-    try {
-      sessionStorage.clear();
-      localStorage.removeItem("token");
-      localStorage.removeItem("usuario");
-    } catch {}
-    setShowLogoutModal(false);
-    setDrawerOpen(false);
-    navigate("/", { replace: true });
-  };
-
   const isNoHover = () => {
     try {
       return window.matchMedia && window.matchMedia("(hover: none)").matches;
@@ -311,6 +342,54 @@ const Principal = () => {
       return false;
     }
   };
+
+  /* =========================
+     ✅ CIERRE DE SESIÓN (borra en DB master)
+  ========================= */
+  const confirmarCierreSesion = useCallback(async () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setClosingUI(true);
+
+    const sessionKey = getSessionKey();
+
+    try {
+      if (sessionKey) {
+        const r = await fetch(`${BASE_URL}/api.php?action=logout`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session": sessionKey,
+          },
+          body: JSON.stringify({}),
+        });
+
+        // No bloqueamos el logout por un warning del backend, pero lo logueamos
+        const txt = await r.text();
+        try {
+          const data = JSON.parse(txt);
+          if (!r.ok || data?.exito === false) {
+            console.warn("Logout backend falló:", r.status, data);
+          }
+        } catch {
+          if (!r.ok) console.warn("Logout backend falló:", r.status, txt);
+        }
+      }
+    } catch (e) {
+      console.warn("Error llamando logout:", e);
+    } finally {
+      // limpieza local SIEMPRE
+      hardClientLogoutCleanup();
+
+      setShowLogoutModal(false);
+      setDrawerOpen(false);
+
+      navigate("/", { replace: true });
+
+      setClosingUI(false);
+      closingRef.current = false;
+    }
+  }, [navigate]);
 
   /* =========================
      ✅ toggle tema -> MASTER
@@ -333,27 +412,25 @@ const Principal = () => {
       console.error("Error actualizando localStorage usuario:", e);
     }
 
-    // pegar a backend (mostrar si falla)
+    // pegar a backend
     try {
       const u = u2 || JSON.parse(localStorage.getItem("usuario")) || {};
       const idUsuarioMaster = getIdUsuarioMaster(u);
 
       if (!idUsuarioMaster) {
-        console.warn(
-          "No hay idUsuarioMaster en localStorage. No se puede guardar tema en DB.",
-          u
-        );
+        console.warn("No hay idUsuarioMaster en localStorage.", u);
         return;
       }
 
-      const r = await fetch(
-        `${BASE_URL}/api.php?action=usuario_tema_actualizar`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ idUsuarioMaster, tema: nuevo }), // ✅ MASTER
-        }
-      );
+      const sessionKey = getSessionKey(); // opcional por si en backend lo querés validar
+      const headers = { "Content-Type": "application/json" };
+      if (sessionKey) headers["X-Session"] = sessionKey;
+
+      const r = await fetch(`${BASE_URL}/api.php?action=usuario_tema_actualizar`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ idUsuarioMaster, tema: nuevo }),
+      });
 
       const txt = await r.text();
       let data = null;
@@ -377,7 +454,6 @@ const Principal = () => {
       {/* ================= HEADER ================= */}
       <header className="mov-topbar">
         <div className="mov-topbar__left">
-          {/* ✅ BURGER (solo mobile por CSS) */}
           <button
             className="pp-burger"
             type="button"
@@ -424,16 +500,11 @@ const Principal = () => {
         <div className="mov-topbar__right">
           <div className="mov-topbar__section">{activeLabel}</div>
 
-          {/* ✅ BOTÓN TEMA */}
           <button
             className="pp-themeBtn"
             onClick={toggleTema}
-            title={
-              tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"
-            }
-            aria-label={
-              tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"
-            }
+            title={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            aria-label={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
           >
             <FontAwesomeIcon icon={tema === "oscuro" ? faSun : faMoon} />
           </button>
@@ -448,7 +519,7 @@ const Principal = () => {
         </div>
       </header>
 
-      {/* ✅ OVERLAY drawer (solo mobile por CSS) */}
+      {/* ✅ OVERLAY drawer */}
       <div
         className={`pp-drawerOverlay ${drawerOpen ? "is-open" : ""}`}
         onMouseDown={() => setDrawerOpen(false)}
@@ -456,7 +527,6 @@ const Principal = () => {
 
       {/* ================= SIDEBAR ================= */}
       <aside className={`pp-sidebar ${drawerOpen ? "is-drawerOpen" : ""}`}>
-        {/* ✅ HEADER drawer (solo mobile por CSS) */}
         <div className="pp-drawerHeader">
           <div
             className="pp-drawerBrand"
@@ -484,7 +554,6 @@ const Principal = () => {
           </button>
         </div>
 
-        {/* ✅ Brand desktop */}
         <div className="pp-brand" onClick={handleLogoClick} role="button" tabIndex={0}>
           <div className="pp-brand__mark">
             <FontAwesomeIcon icon={faChartLine} />
@@ -509,9 +578,7 @@ const Principal = () => {
             return (
               <div
                 key={item.key}
-                className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${
-                  isOpen ? "is-open" : ""
-                }`}
+                className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${isOpen ? "is-open" : ""}`}
                 onMouseEnter={() => {
                   if (!isNoHover() && isMov) {
                     cancelClose();
@@ -530,7 +597,6 @@ const Principal = () => {
                   role="button"
                   tabIndex={0}
                   onClick={() => {
-                    // mobile: tocás el item y alterna el submenú
                     if (hasSub && isNoHover()) {
                       if (isMov) setOpenMovSub((v) => !v);
                       return;
@@ -540,12 +606,10 @@ const Principal = () => {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-
                       if (hasSub && isNoHover()) {
                         if (isMov) setOpenMovSub((v) => !v);
                         return;
                       }
-
                       handleNavigate(item.ruta);
                     }
                   }}
@@ -632,6 +696,7 @@ const Principal = () => {
         open={showLogoutModal}
         onClose={() => setShowLogoutModal(false)}
         onConfirm={confirmarCierreSesion}
+        loading={closingUI}
       />
     </div>
   );

@@ -10,5 +10,8 @@
                     },
     "scripts":  {
                     "test":  "php vendor/bin/phpunit --configuration phpunit.xml"
-                }
+                },
+    "require": {
+        "vlucas/phpdotenv": "^5.6"
+    }
 }

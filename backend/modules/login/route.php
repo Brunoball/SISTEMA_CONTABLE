@@ -14,7 +14,9 @@ function route_login(string $action): bool
       require __DIR__ . '/registro.php';
       return true;
 
+    // ✅ Logout (cerrar sesión)
     case 'logout':
+    case 'cerrar_sesion':
       require __DIR__ . '/logout.php';
       return true;
   }

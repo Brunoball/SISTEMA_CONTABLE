@@ -149,17 +149,26 @@ function periodoToYYYYMM(input) {
 }
 
 /* =========================
-   Auth helpers
+   Auth helpers (Bearer + X-Session)
 ========================= */
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
+
+  // ✅ nuevo multi-tenant (#balto_login)
+  const sessionKey =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    "";
+
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
-  return { token, idUsuario };
+
+  return { token, sessionKey, idUsuario };
 }
 
 /* =========================
@@ -323,6 +332,17 @@ export default function Compras() {
   // cache por periodo|q
   const cacheRef = useRef(new Map());
 
+  /* =========================
+     API helpers (Bearer + X-Session)
+  ========================= */
+  const buildHeaders = useCallback(() => {
+    const { token, sessionKey } = getAuthInfo();
+    const h = { "Content-Type": "application/json" };
+    if (sessionKey) h["X-Session"] = sessionKey; // ✅ nuevo
+    if (token) h.Authorization = `Bearer ${token}`; // ✅ compat
+    return h;
+  }, []);
+
   const parseJsonOrThrow = useCallback(async (res) => {
     const text = await res.text();
     if (!text) throw new Error("Respuesta vacía del servidor.");
@@ -330,14 +350,17 @@ export default function Compras() {
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(`Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`);
+      throw new Error(
+        `Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`
+      );
     }
   }, []);
 
   const apiGet = useCallback(
     async (url) => {
-      const { token } = getAuthInfo();
+      const { token, sessionKey } = getAuthInfo();
       const headers = {};
+      if (sessionKey) headers["X-Session"] = sessionKey;
       if (token) headers.Authorization = `Bearer ${token}`;
 
       const res = await fetch(url, { method: "GET", headers });
@@ -345,13 +368,6 @@ export default function Compras() {
     },
     [parseJsonOrThrow]
   );
-
-  const buildHeaders = useCallback(() => {
-    const { token } = getAuthInfo();
-    const h = { "Content-Type": "application/json" };
-    if (token) h.Authorization = `Bearer ${token}`;
-    return h;
-  }, []);
 
   const apiPostJson = useCallback(
     async (url, payload) => {
@@ -374,12 +390,16 @@ export default function Compras() {
     }
   }, []);
 
+  /* =========================
+     Listas
+  ========================= */
   const loadLists = useCallback(async () => {
     setLoadingLists(true);
     setError("");
     try {
-      const data = await apiGet(`${API}?action=global_obtener_listas&=${Date.now()}`);
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar listas.");
+      const data = await apiGet(`${API}?action=global_obtener_listas&_=${Date.now()}`);
+      if (!data?.exito)
+        throw new Error(data?.mensaje || "No se pudieron cargar listas.");
 
       const normalized = normalizeLists(data);
       setLists(normalized);
@@ -401,9 +421,13 @@ export default function Compras() {
     }
   }, [API, apiGet]);
 
+  /* =========================
+     Listar compras
+  ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
-      const periodoUI = typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
+      const periodoUI =
+        typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
       const qLocal = typeof opts.q === "string" ? opts.q : q;
 
       const perUI = periodoToMMYYYY(periodoUI);
@@ -432,7 +456,8 @@ export default function Compras() {
         if (qLocal) sp.set("q", qLocal);
 
         const data = await apiGet(`${API}?${sp.toString()}`);
-        if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar compras.");
+        if (!data?.exito)
+          throw new Error(data?.mensaje || "No se pudieron cargar compras.");
 
         const compras = Array.isArray(data.compras) ? data.compras : [];
 
@@ -472,7 +497,7 @@ export default function Compras() {
 
   /* =========================
      Filtrado: período + búsqueda
-========================= */
+  ========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
     if (!fPer) return [];
@@ -487,7 +512,13 @@ export default function Compras() {
   ========================= */
   const columns = useMemo(() => {
     return [
-      { key: "fecha", label: "FECHA", fr: 0.9, align: "center", render: (r) => safeText(formatFechaDMY(r.fecha)) },
+      {
+        key: "fecha",
+        label: "FECHA",
+        fr: 0.9,
+        align: "center",
+        render: (r) => safeText(formatFechaDMY(r.fecha)),
+      },
       {
         key: "detalle",
         label: "DESCRIPCIÓN",
@@ -496,10 +527,34 @@ export default function Compras() {
         align: "left",
         render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
       },
-      { key: "proveedor", label: "PROVEEDOR", fr: 1.6, align: "left", render: (r) => safeText(r.proveedor) },
-      { key: "pago", label: "PAGO", fr: 1.2, align: "center", render: (r) => safeText(getCompraPagoLabel(r)) },
-      { key: "total", label: "TOTAL", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
-      { key: "acciones", label: "ACCIONES", fr: 0.95, align: "center", render: () => null },
+      {
+        key: "proveedor",
+        label: "PROVEEDOR",
+        fr: 1.6,
+        align: "left",
+        render: (r) => safeText(r.proveedor),
+      },
+      {
+        key: "pago",
+        label: "PAGO",
+        fr: 1.2,
+        align: "center",
+        render: (r) => safeText(getCompraPagoLabel(r)),
+      },
+      {
+        key: "total",
+        label: "TOTAL",
+        fr: 1.1,
+        align: "center",
+        render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
+      },
+      {
+        key: "acciones",
+        label: "ACCIONES",
+        fr: 0.95,
+        align: "center",
+        render: () => null,
+      },
     ];
   }, []);
 
@@ -579,6 +634,7 @@ export default function Compras() {
     async (periodoGuardado) => {
       const perUI = periodoToMMYYYY(periodoGuardado || fPeriodo);
 
+      // ✅ cerrar modal desde acá también es ok (por si el modal no lo cierra)
       setOpenNueva(false);
 
       invalidateCacheForPeriodo(perUI);
@@ -627,30 +683,21 @@ export default function Compras() {
     });
 
     const data = await parseJsonOrThrow(res);
-    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo actualizar la compra.");
-    return data;
-  };
-
-  // ✅ crear compra -> COMPRAS
-  const onSaveCompra = async (payload) => {
-    const { token } = getAuthInfo();
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers.Authorization = `Bearer ${token}`;
-
-    const res = await fetch(`${API}?action=compras_crear`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-    });
-
-    const data = await parseJsonOrThrow(res);
-    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la compra.");
+    if (!data?.exito)
+      throw new Error(data?.mensaje || "No se pudo actualizar la compra.");
     return data;
   };
 
   return (
     <div className="mov-page">
-      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
+      {toast && (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
+      )}
 
       {error && (
         <div className="mov-alert" role="alert">
@@ -706,7 +753,10 @@ export default function Compras() {
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        await loadRows({ periodo: fPeriodo, q: e.currentTarget.value });
+                        await loadRows({
+                          periodo: fPeriodo,
+                          q: e.currentTarget.value,
+                        });
                       }
                     }}
                     placeholder="Buscar por proveedor, descripción, monto, fecha…"
@@ -721,7 +771,9 @@ export default function Compras() {
                       onClick={async () => {
                         setQ("");
                         await loadRows({ periodo: fPeriodo, q: "" });
-                        document.querySelector(".mov-searchInput input")?.focus();
+                        document
+                          .querySelector(".mov-searchInput input")
+                          ?.focus();
                       }}
                     >
                       ×
@@ -732,13 +784,20 @@ export default function Compras() {
             </div>
           </div>
 
-          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div
+            className="mov-card__actions"
+            style={{ display: "flex", gap: 10, alignItems: "center" }}
+          >
             <button
               type="button"
               className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
               onClick={exportToExcel}
               disabled={loadingRows || filteredRows.length === 0}
-              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
+              title={
+                filteredRows.length
+                  ? "Exportar a Excel"
+                  : "No hay datos para exportar"
+              }
             >
               <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
             </button>
@@ -758,7 +817,11 @@ export default function Compras() {
         {/* HEADER */}
         <div
           className="mov-gridTable mov-gridTable--head"
-          style={{ gridTemplateColumns: gridCols, overflowX: "auto", scrollbarGutter: "stable" }}
+          style={{
+            gridTemplateColumns: gridCols,
+            overflowX: "auto",
+            scrollbarGutter: "stable",
+          }}
           role="row"
         >
           {columns.map((c) => (
@@ -802,7 +865,11 @@ export default function Compras() {
                       return (
                         <div
                           key={c.key}
-                          className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
+                          className={[
+                            "mov-gridCell",
+                            "mov-gridCell--actions",
+                            "is-center",
+                          ].join(" ")}
                           role="cell"
                         >
                           <div className="mov-actionsInline">
@@ -816,7 +883,12 @@ export default function Compras() {
                               <FontAwesomeIcon icon={faEye} />
                             </button>
 
-                            <button type="button" className="mov-iconBtn" title="Editar" onClick={() => openEditModal(r)}>
+                            <button
+                              type="button"
+                              className="mov-iconBtn"
+                              title="Editar"
+                              onClick={() => openEditModal(r)}
+                            >
                               <FontAwesomeIcon icon={faPenToSquare} />
                             </button>
 
@@ -858,25 +930,30 @@ export default function Compras() {
 
             {!loadingRows && filteredRows.length === 0 && (
               <div className="mov-emptyRow">
-                {!fPeriodo ? "No hay período disponible para cargar compras." : "No hay compras para mostrar en este período."}
+                {!fPeriodo
+                  ? "No hay período disponible para cargar compras."
+                  : "No hay compras para mostrar en este período."}
               </div>
             )}
           </div>
         </div>
       </section>
 
-      {/* MODAL NUEVA COMPRA */}
+      {/* ✅ MODAL NUEVA COMPRA (ARREGLADO: ahora usa onSaved para refrescar) */}
       <ModalNuevaCompra
         open={openNueva}
         lists={lists}
-        periodoDefault={fPeriodo}
         onClose={() => setOpenNueva(false)}
         onToast={showToast}
-        onSaveCompra={async (payload) => {
-          const data = await onSaveCompra(payload);
-          const per = payload?.periodo || payload?.fecha || fPeriodo;
+        onSaved={async (info) => {
+          // info puede traer periodo en API (YYYY-MM) o UI (MM-YYYY)
+          const per =
+            info?.periodoUI ||
+            info?.periodo ||
+            info?.periodoApi ||
+            fPeriodo;
+
           await refreshAfterSave(per);
-          return data;
         }}
       />
 
@@ -904,7 +981,12 @@ export default function Compras() {
       />
 
       {/* MODAL VER COMPROBANTE */}
-      <ModalVerComprobante open={openVerComp} url={compUrl} onClose={closeComprobanteModal} title="Comprobante de compra" />
+      <ModalVerComprobante
+        open={openVerComp}
+        url={compUrl}
+        onClose={closeComprobanteModal}
+        title="Comprobante de compra"
+      />
 
       {/* DELETE */}
       <ModalEliminarMovimientos

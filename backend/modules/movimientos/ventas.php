@@ -7,14 +7,16 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Session');
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
   http_response_code(204);
   exit;
 }
 
-require_once __DIR__ . '/../../config/db.php';
+// ✅ IMPORTANTE (multi-tenant):
+// NO volvemos a incluir db.php acá.
+// El $pdo debe venir desde routes/api.php (tenant_resolver) y estar en scope global.
 require_once __DIR__ . '/../utils/auditoria.php';
 
 /* ----------------- Helpers ----------------- */
@@ -66,19 +68,23 @@ function norm_text(string $s): string {
 }
 
 /* ----------------- PDO check ----------------- */
+global $pdo;
 if (!isset($pdo) || !($pdo instanceof PDO)) {
-  fail('No hay conexión a la base de datos.');
+  fail('No hay conexión a la base de datos (PDO no disponible).');
 }
 
 /* =========================================================
-   idUsuario (token/body)
+   idUsuario (JWT/body/X-Session)
 ========================================================= */
+function get_header_value(string $key): string {
+  $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $key));
+  $v = $_SERVER[$serverKey] ?? '';
+  if (!is_string($v)) $v = '';
+  return trim($v);
+}
 function get_bearer_token(): string {
-  $h = '';
-  if (!empty($_SERVER['HTTP_AUTHORIZATION'])) $h = (string)$_SERVER['HTTP_AUTHORIZATION'];
-  elseif (!empty($_SERVER['Authorization'])) $h = (string)$_SERVER['Authorization'];
-
-  $h = trim($h);
+  $h = get_header_value('Authorization');
+  if ($h === '') $h = trim((string)($_SERVER['HTTP_AUTHORIZATION'] ?? ''));
   if ($h === '') return '';
   if (stripos($h, 'Bearer ') === 0) return trim(substr($h, 7));
   return '';
@@ -90,7 +96,38 @@ function base64url_decode(string $s): string {
   $out = base64_decode($s, true);
   return $out === false ? '' : $out;
 }
-function get_id_usuario_from_request(array $body = []): int {
+
+/**
+ * ✅ Si existe tabla `sesiones`, intenta resolver id_usuario desde X-Session
+ * (si no existe, devuelve 0 y no rompe).
+ */
+function get_id_usuario_from_x_session(PDO $pdo): int {
+  $sessionKey = get_header_value('X-Session');
+  if ($sessionKey === '') return 0;
+
+  try {
+    $chk = $pdo->query("SHOW TABLES LIKE 'sesiones'");
+    $exists = $chk ? (bool)$chk->fetchColumn() : false;
+    if (!$exists) return 0;
+
+    // Ajustá nombres de columnas si tu tabla usa otros
+    $st = $pdo->prepare("
+      SELECT id_usuario
+      FROM sesiones
+      WHERE session_key = :k
+      LIMIT 1
+    ");
+    $st->execute([':k' => $sessionKey]);
+    $id = $st->fetchColumn();
+    $id = is_numeric($id) ? (int)$id : 0;
+    return $id > 0 ? $id : 0;
+  } catch (Throwable $e) {
+    return 0;
+  }
+}
+
+function get_id_usuario_from_request(PDO $pdo, array $body = []): int {
+  // 1) JWT
   $token = get_bearer_token();
   if ($token !== '' && substr_count($token, '.') === 2) {
     $parts = explode('.', $token);
@@ -114,13 +151,20 @@ function get_id_usuario_from_request(array $body = []): int {
     }
   }
 
+  // 2) body / post / get
   $id = $body['idUsuario'] ?? $body['id_usuario'] ?? $_POST['idUsuario'] ?? $_GET['idUsuario'] ?? null;
   if (is_numeric($id)) {
     $id = (int)$id;
     if ($id > 0) return $id;
   }
+
+  // 3) X-Session (si existe tabla sesiones)
+  $idSess = get_id_usuario_from_x_session($pdo);
+  if ($idSess > 0) return $idSess;
+
   return 0;
 }
+
 function audit_safe(PDO $pdo, int $idUsuario, string $accion, ?string $entidad, $idEntidad, $detalle): void {
   if ($idUsuario <= 0) return;
   auditar($pdo, $idUsuario, 'ventas', $accion, $entidad, $idEntidad, $detalle);
@@ -128,9 +172,6 @@ function audit_safe(PDO $pdo, int $idUsuario, string $accion, ?string $entidad, 
 
 /* =========================================================
    Constantes / helpers de tipo_operacion
-   - Requiere tablas:
-     tipos_operacion(id_tipo_operacion, nombre, activo, created_at)
-   - Se asume que "VENTA" existe como nombre
 ========================================================= */
 function get_tipo_operacion_id_venta(PDO $pdo): int {
   $st = $pdo->prepare("SELECT id_tipo_operacion FROM tipos_operacion WHERE activo = 1 AND UPPER(nombre) = 'VENTA' LIMIT 1");
@@ -254,8 +295,7 @@ function validar_venta_or_fail(PDO $pdo, array $src): array {
     $id_medio_pago = null; // forzar null
   }
 
-  // ✅ Si no matchea "contado" ni "corriente", igual exigimos coherencia:
-  // Si mandan ambos o ninguno, es inconsistente.
+  // ✅ Si no matchea "contado" ni "corriente", igual exigimos coherencia
   if (!$isContado && !$isCorriente) {
     $hasMP = ($id_medio_pago !== null && $id_medio_pago > 0);
     $hasCC = ($id_cuenta_corriente !== null && $id_cuenta_corriente > 0);
@@ -276,7 +316,7 @@ function validar_venta_or_fail(PDO $pdo, array $src): array {
     'id_medio_pago' => $id_medio_pago,
     'id_cuenta_corriente' => $id_cuenta_corriente,
     'id_cliente' => $id_cliente,
-    'id_proveedor' => null,            // ✅ ventas: proveedor null
+    'id_proveedor' => null,
     'id_detalle' => $id_detalle,
     'monto_total' => $totalCabecera,
     'tipo_venta_nombre' => $tipoVentaNombre,
@@ -286,13 +326,6 @@ function validar_venta_or_fail(PDO $pdo, array $src): array {
 
 /* =========================================================
    LISTAR VENTAS (GET)
-   ✅ filtro por tipo_operacion = VENTA
-   ✅ filtro de consistencia:
-      - id_cliente NOT NULL
-      - id_proveedor NULL/0
-      - id_tipo_venta NOT NULL
-      - (CONTADO -> medio_pago NOT NULL y cuenta_corriente NULL)
-      - (CUENTA CORRIENTE -> cuenta_corriente NOT NULL y medio_pago NULL)
 ========================================================= */
 function ventas_listar(PDO $pdo): void {
   $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
@@ -304,18 +337,13 @@ function ventas_listar(PDO $pdo): void {
   $where = [];
   $params = [];
 
-  // ✅ filtro base VENTAS
   $where[] = "m.id_tipo_operacion = :idVenta";
   $params[':idVenta'] = $idVenta;
 
-  // ✅ reglas requeridas a nivel listado (para que no se mezclen registros sucios)
   $where[] = "m.id_cliente IS NOT NULL";
   $where[] = "(m.id_proveedor IS NULL OR m.id_proveedor = 0)";
   $where[] = "m.id_tipo_venta IS NOT NULL";
 
-  // ✅ coherencia contado/corriente por nombre en tipos_venta
-  // - CONTADO: mp NOT NULL, cc NULL
-  // - CUENTA CORRIENTE: cc NOT NULL, mp NULL
   $where[] = "(
       (UPPER(tv.nombre) LIKE '%CONTADO%' AND m.id_medio_pago IS NOT NULL AND (m.id_cuenta_corriente IS NULL OR m.id_cuenta_corriente = 0))
       OR
@@ -474,14 +502,13 @@ function ventas_listar(PDO $pdo): void {
 
 /* =========================================================
    CREAR 1 VENTA (POST)
-   ✅ inserta id_tipo_operacion = VENTA
 ========================================================= */
 function ventas_crear(PDO $pdo): void {
   if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
 
   $body = read_json_body();
   $src = !empty($body) ? $body : ($_POST ?? []);
-  $idUsuario = get_id_usuario_from_request($src);
+  $idUsuario = get_id_usuario_from_request($pdo, $src);
 
   $v = validar_venta_or_fail($pdo, $src);
 
@@ -568,18 +595,19 @@ function ventas_crear(PDO $pdo): void {
 
 /* =========================================================
    CREAR BATCH (POST) - ModalNuevaVenta
-   ✅ inserta id_tipo_operacion=VENTA en cada item
 ========================================================= */
 function ventas_crear_batch(PDO $pdo): void {
   if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
 
   $body = read_json_body();
   $src = !empty($body) ? $body : ($_POST ?? []);
-  $idUsuario = get_id_usuario_from_request(is_array($src) ? [] : $src);
+
+  // ✅ idUsuario: si viene array directo, el id puede venir por session/header
+  $idUsuario = get_id_usuario_from_request($pdo, is_array($src) ? [] : $src);
 
   $items = [];
   if (is_array($src) && array_keys($src) === range(0, count($src) - 1)) {
-    $items = $src; // array directo
+    $items = $src;
   } elseif (is_array($src) && isset($src['items']) && is_array($src['items'])) {
     $items = $src['items'];
   }
@@ -679,15 +707,13 @@ function ventas_crear_batch(PDO $pdo): void {
 
 /* =========================================================
    ACTUALIZAR VENTA (POST)
-   ✅ exige que el movimiento sea tipo_operacion=VENTA
-   ✅ fuerza id_proveedor NULL y aplica reglas contado/corriente
 ========================================================= */
 function ventas_actualizar(PDO $pdo): void {
   if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
 
   $body = read_json_body();
   $src = !empty($body) ? $body : ($_POST ?? []);
-  $idUsuario = get_id_usuario_from_request($src);
+  $idUsuario = get_id_usuario_from_request($pdo, $src);
 
   $id_movimiento = n_int($src['id_movimiento'] ?? null);
   if (!$id_movimiento) fail('Falta id_movimiento.');
@@ -697,14 +723,12 @@ function ventas_actualizar(PDO $pdo): void {
   $before = $beforeSt->fetch(PDO::FETCH_ASSOC);
   if (!$before) fail('La venta no existe: ' . $id_movimiento);
 
-  // ✅ asegurar que sea VENTA por tipo_operacion
   $idVenta = get_tipo_operacion_id_venta($pdo);
   if ($idVenta <= 0) fail("No existe el tipo_operacion 'VENTA' en tipos_operacion.");
   if ((int)($before['id_tipo_operacion'] ?? 0) !== $idVenta) {
     fail('Este movimiento no es una venta (tipo_operacion).');
   }
 
-  // Mezclar: si no viene un campo, tomar before
   $merge = $src;
   foreach ([
     'fecha','periodo','id_clasificacion','id_tipo_venta','id_medio_pago','id_cuenta_corriente',
@@ -715,7 +739,6 @@ function ventas_actualizar(PDO $pdo): void {
     }
   }
 
-  // Validar con reglas y forzar tipo_operacion=VENTA
   $v = validar_venta_or_fail($pdo, $merge);
 
   try {
@@ -751,7 +774,6 @@ function ventas_actualizar(PDO $pdo): void {
       ':id_movimiento' => $id_movimiento,
     ]);
 
-    // update/insert primer item
     $it = $v['item'];
 
     $getFirst = $pdo->prepare("SELECT id_item FROM movimientos_items WHERE id_movimiento = :id ORDER BY id_item ASC LIMIT 1");
@@ -822,12 +844,11 @@ function ventas_actualizar(PDO $pdo): void {
 
 /* =========================================================
    ELIMINAR VENTA
-   ✅ solo si tipo_operacion=VENTA
 ========================================================= */
 function ventas_eliminar(PDO $pdo): void {
   $body = read_json_body();
   $src = !empty($body) ? $body : ($_POST ?? []);
-  $idUsuario = get_id_usuario_from_request($src);
+  $idUsuario = get_id_usuario_from_request($pdo, $src);
 
   $id = $_GET['id_movimiento'] ?? $_POST['id_movimiento'] ?? ($body['id_movimiento'] ?? null);
   $id = n_int($id);

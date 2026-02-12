@@ -1,4 +1,3 @@
-// src/components/Movimientos/modales/ModalEditarOrdenPago.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "../../Movimientos/modales/ModalEditarMovimiento.css";
@@ -128,15 +127,7 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 /* =========================
    Modal editar Orden de Pago
 ========================= */
-export default function ModalEditarOrdenPago({
-  open,
-  row,
-  lists,
-  periodoDefault,
-  onClose,
-  onSave, // async (payloadFinal) => void
-  onToast,
-}) {
+export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault, onClose, onSave, onToast }) {
   const API = `${BASE_URL}/api.php`;
 
   const showToast = useCallback(
@@ -146,8 +137,9 @@ export default function ModalEditarOrdenPago({
 
   const [saving, setSaving] = useState(false);
 
-  // Autocomplete detalle
+  // ✅ Autocomplete detalle: focus + armado (solo si el usuario tipeó)
   const [detalleFocus, setDetalleFocus] = useState(false);
+  const [detalleArmed, setDetalleArmed] = useState(false);
   const detalleInputRef = useRef(null);
 
   // Mini modal "nuevo detalle"
@@ -213,7 +205,11 @@ export default function ModalEditarOrdenPago({
     const provNameFromList = String(findById(proveedores, idProv)?.nombre ?? "").trim();
 
     setSaving(false);
+
+    // ✅ no abrir dropdown al abrir
     setDetalleFocus(false);
+    setDetalleArmed(false);
+
     setAddDetUI({ open: false, text: "", saving: false });
     setAddProvUI({ open: false, text: "", saving: false });
 
@@ -228,7 +224,8 @@ export default function ModalEditarOrdenPago({
       monto_total: safeNumber(r.monto_total ?? r.total ?? 0),
     });
 
-    setTimeout(() => detalleInputRef.current?.focus(), 0);
+    // ❌ Antes: autofocus que disparaba dropdown
+    // setTimeout(() => detalleInputRef.current?.focus(), 0);
   }, [open, row, lists, periodoDefault]);
 
   /* =========================
@@ -237,12 +234,16 @@ export default function ModalEditarOrdenPago({
   const filteredDetalles = useMemo(() => {
     const all = getArr(lists?.detalles);
     const q = normalizeSearchText(form.detalleInput);
-    if (!detalleFocus || q.length < 1) return [];
+
+    // ✅ SOLO si el usuario tipeó
+    if (!detalleFocus || !detalleArmed || q.length < 1) return [];
+
     return all.filter((d) => normalizeSearchText(d?.nombre).includes(q)).slice(0, 25);
-  }, [lists, form.detalleInput, detalleFocus]);
+  }, [lists, form.detalleInput, detalleFocus, detalleArmed]);
 
   const handleDetalleInputChange = (e) => {
     const value = e.target.value;
+    setDetalleArmed(true); // ✅ usuario escribió
     setForm((p) => ({ ...p, detalleInput: value, id_detalle: NULL_OPTION }));
   };
 
@@ -253,11 +254,15 @@ export default function ModalEditarOrdenPago({
       detalleInput: nombre,
       id_detalle: String(det?.id ?? NULL_OPTION),
     }));
+
+    // ✅ cerrar y desarmar
     setDetalleFocus(false);
+    setDetalleArmed(false);
   };
 
   const startAddDetalle = () => {
     setDetalleFocus(false);
+    setDetalleArmed(false);
     setAddDetUI({ open: true, text: "", saving: false });
   };
 
@@ -294,6 +299,9 @@ export default function ModalEditarOrdenPago({
 
       setAddDetUI({ open: false, text: "", saving: false });
       showToast("exito", `Detalle creado: "${newNombre}"`, 2400);
+
+      setDetalleFocus(false);
+      setDetalleArmed(false);
     } catch (e) {
       setAddDetUI((p) => ({ ...p, saving: false }));
       showToast("error", e?.message || "Error creando detalle.", 4200);
@@ -305,9 +313,7 @@ export default function ModalEditarOrdenPago({
   ========================= */
   const proveedoresList = useMemo(() => getArr(lists?.proveedores), [lists]);
 
-  const startAddProveedor = () => {
-    setAddProvUI({ open: true, text: "", saving: false });
-  };
+  const startAddProveedor = () => setAddProvUI({ open: true, text: "", saving: false });
 
   const guardarNuevoProveedor = async () => {
     const nombre = String(addProvUI.text || "").trim();
@@ -367,8 +373,7 @@ export default function ModalEditarOrdenPago({
 
       const perUI = periodoToMMYYYY(form.periodo) || periodoFromISODate(form.fecha);
 
-      const idProv =
-        form.id_proveedor && form.id_proveedor !== NULL_OPTION ? Number(form.id_proveedor) : null;
+      const idProv = form.id_proveedor && form.id_proveedor !== NULL_OPTION ? Number(form.id_proveedor) : null;
       if (!idProv) throw new Error("Seleccioná un proveedor.");
 
       const payloadFinal = {
@@ -376,11 +381,9 @@ export default function ModalEditarOrdenPago({
         fecha: form.fecha,
         periodo: periodoToYYYYMM(perUI),
 
-        // Proveedor
         id_proveedor: idProv,
         proveedor: String(form.proveedorTxt || "").trim(),
 
-        // Detalle
         id_detalle: form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null,
         detalle: String(form.detalleInput || "").trim(),
 
@@ -428,11 +431,7 @@ export default function ModalEditarOrdenPago({
                 value={form.fecha}
                 onChange={(e) => {
                   const v = e.target.value;
-                  setForm((p) => ({
-                    ...p,
-                    fecha: v,
-                    periodo: periodoFromISODate(v) || p.periodo,
-                  }));
+                  setForm((p) => ({ ...p, fecha: v, periodo: periodoFromISODate(v) || p.periodo }));
                 }}
                 disabled={saving}
               />
@@ -467,11 +466,7 @@ export default function ModalEditarOrdenPago({
 
                 const prov = findById(proveedoresList, v);
                 const nombre = String(prov?.nombre ?? "").trim();
-                setForm((p) => ({
-                  ...p,
-                  id_proveedor: v,
-                  proveedorTxt: nombre || p.proveedorTxt,
-                }));
+                setForm((p) => ({ ...p, id_proveedor: v, proveedorTxt: nombre || p.proveedorTxt }));
               }}
               disabled={saving}
             >
@@ -501,7 +496,7 @@ export default function ModalEditarOrdenPago({
             />
             <label className="fl-label">Descripción (Detalle)</label>
 
-            {detalleFocus && filteredDetalles.length > 0 && (
+            {detalleFocus && detalleArmed && filteredDetalles.length > 0 && (
               <ul className="mi-cr-suggest">
                 {filteredDetalles.map((d) => (
                   <li

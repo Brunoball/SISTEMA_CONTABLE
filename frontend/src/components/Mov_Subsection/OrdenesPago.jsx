@@ -145,10 +145,15 @@ function periodoToYYYYMM(input) {
 }
 
 /* =========================
-   Auth helpers
+   ✅ Auth helpers (SaaS: X-Session)
 ========================= */
 function getAuthInfo() {
-  const token = localStorage.getItem("token") || "";
+  // ✅ session_key del login SaaS
+  const session =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    "";
 
   let idUsuario = 0;
   try {
@@ -157,7 +162,7 @@ function getAuthInfo() {
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
-  return { token, idUsuario };
+  return { session, idUsuario };
 }
 
 /* =========================
@@ -366,12 +371,12 @@ export default function OrdenesPago() {
   }, []);
 
   /* =========================
-     API helpers
+     API helpers (SaaS: X-Session)
   ========================= */
   const buildHeaders = useCallback(() => {
-    const { token } = getAuthInfo();
+    const { session } = getAuthInfo();
     const h = { "Content-Type": "application/json" };
-    if (token) h.Authorization = `Bearer ${token}`;
+    if (session) h["X-Session"] = session;
     return h;
   }, []);
 
@@ -389,8 +394,8 @@ export default function OrdenesPago() {
   const apiGet = useCallback(
     async (url) => {
       const headers = {};
-      const { token } = getAuthInfo();
-      if (token) headers.Authorization = `Bearer ${token}`;
+      const { session } = getAuthInfo();
+      if (session) headers["X-Session"] = session;
       const res = await fetch(url, { method: "GET", headers });
       return await parseJsonOrThrow(res);
     },
@@ -485,8 +490,12 @@ export default function OrdenesPago() {
         const data = await apiGet(`${API}?${sp.toString()}`);
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar órdenes de pago.");
 
-        // ✅ soporta "ordenes" o "movimientos" según cómo lo devuelvas en backend
-        const list = Array.isArray(data.ordenes) ? data.ordenes : Array.isArray(data.movimientos) ? data.movimientos : [];
+        const list = Array.isArray(data.ordenes)
+          ? data.ordenes
+          : Array.isArray(data.movimientos)
+          ? data.movimientos
+          : [];
+
         const norm = list.map((r) => ({
           ...r,
           periodo: periodoToMMYYYY(r?.periodo),
@@ -506,7 +515,7 @@ export default function OrdenesPago() {
   );
 
   /* =========================
-     ✅ Confirmar pago OP (ya estaba bien)
+     ✅ Confirmar pago OP
   ========================= */
   const onConfirmPago = useCallback(
     async (payload) => {
@@ -540,7 +549,6 @@ export default function OrdenesPago() {
 
   /* =========================
      ✅ Guardar edición OP
-     Ahora NO usa movimientos_actualizar
   ========================= */
   const onSaveEditar = useCallback(
     async (payloadFinal) => {
@@ -570,7 +578,6 @@ export default function OrdenesPago() {
 
   /* =========================
      ✅ Eliminar OP
-     Ahora NO usa movimientos_eliminar
   ========================= */
   const confirmDelete = useCallback(async () => {
     if (!selectedRow?.id_movimiento) return;
@@ -845,11 +852,7 @@ export default function OrdenesPago() {
                   {columns.map((c) => {
                     if (c.key === "acciones") {
                       return (
-                        <div
-                          key={c.key}
-                          className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
-                          role="cell"
-                        >
+                        <div key={c.key} className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")} role="cell">
                           <div className="mov-actionsInline">
                             <button type="button" className="mov-iconBtn" title="Pagar" onClick={() => openPagarModal(r)}>
                               <FontAwesomeIcon icon={faMoneyBill1Wave} />

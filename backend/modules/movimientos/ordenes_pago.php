@@ -2,104 +2,60 @@
 // backend/modules/movimientos/ordenes_pago.php
 declare(strict_types=1);
 
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+/**
+ * ✅ Este archivo se incluye desde routes/api.php mediante modules/movimientos/route.php
+ * ✅ En SaaS multi-tenant, el $pdo YA existe (tenant_resolver). Por eso:
+ *    - NO require db.php acá
+ *    - NO headers CORS acá (van en routes/api.php)
+ */
 
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
-
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
-  http_response_code(204);
-  exit;
-}
-
-require_once __DIR__ . '/../../config/db.php';
 require_once __DIR__ . '/../utils/auditoria.php';
 
-/* ----------------- Helpers ----------------- */
-function ok(array $arr = []): void {
+/* ----------------- Helpers response ----------------- */
+function op_ok(array $arr = []): void {
   echo json_encode(array_merge(['exito' => true], $arr), JSON_UNESCAPED_UNICODE);
   exit;
 }
-function fail(string $msg, int $httpCode = 200, array $extra = []): void {
+function op_fail(string $msg, int $httpCode = 200, array $extra = []): void {
   http_response_code($httpCode);
   echo json_encode(array_merge(['exito' => false, 'mensaje' => $msg], $extra), JSON_UNESCAPED_UNICODE);
   exit;
 }
-function read_json_body(): array {
+function op_read_json_body(): array {
   $raw = file_get_contents('php://input');
   if (!$raw) return [];
   $data = json_decode($raw, true);
   return is_array($data) ? $data : [];
 }
-function n_int($v): ?int {
+function op_n_int($v): ?int {
   if ($v === null || $v === '') return null;
   if (!is_numeric($v)) return null;
   $n = (int)$v;
   return $n >= 0 ? $n : null;
 }
-function n_float($v): ?float {
+function op_n_float($v): ?float {
   if ($v === null || $v === '') return null;
   if (!is_numeric($v)) return null;
   return (float)$v;
 }
-function today_iso(): string { return date('Y-m-d'); }
-function periodo_from_fecha(string $fechaISO): string {
+function op_today_iso(): string { return date('Y-m-d'); }
+function op_periodo_from_fecha(string $fechaISO): string {
   if (preg_match('/^\d{4}\-\d{2}\-\d{2}$/', $fechaISO)) return substr($fechaISO, 0, 7);
   return date('Y-m');
 }
-function is_valid_fecha(string $f): bool { return (bool)preg_match('/^\d{4}\-\d{2}\-\d{2}$/', $f); }
-function is_valid_periodo(string $p): bool { return (bool)preg_match('/^\d{4}\-\d{2}$/', $p); }
+function op_is_valid_fecha(string $f): bool { return (bool)preg_match('/^\d{4}\-\d{2}\-\d{2}$/', $f); }
+function op_is_valid_periodo(string $p): bool { return (bool)preg_match('/^\d{4}\-\d{2}$/', $p); }
 
-/* ----------------- PDO check ----------------- */
+/* ----------------- PDO check (SaaS) ----------------- */
+global $pdo;
 if (!isset($pdo) || !($pdo instanceof PDO)) {
-  fail('No hay conexión a la base de datos.');
+  op_fail('Conexión PDO no disponible (tenant no resuelto).', 500);
 }
 
 /* =========================================================
-   idUsuario (token/body)
+   idUsuario (body/post/get)
 ========================================================= */
-function get_bearer_token(): string {
-  $h = '';
-  if (!empty($_SERVER['HTTP_AUTHORIZATION'])) $h = (string)$_SERVER['HTTP_AUTHORIZATION'];
-  elseif (!empty($_SERVER['Authorization'])) $h = (string)$_SERVER['Authorization'];
-  $h = trim($h);
-  if ($h === '') return '';
-  if (stripos($h, 'Bearer ') === 0) return trim(substr($h, 7));
-  return '';
-}
-function base64url_decode(string $s): string {
-  $s = str_replace(['-', '_'], ['+', '/'], $s);
-  $pad = strlen($s) % 4;
-  if ($pad) $s .= str_repeat('=', 4 - $pad);
-  $out = base64_decode($s, true);
-  return $out === false ? '' : $out;
-}
-function get_id_usuario_from_request(array $body = []): int {
-  $token = get_bearer_token();
-  if ($token !== '' && substr_count($token, '.') === 2) {
-    $parts = explode('.', $token);
-    $payloadJson = base64url_decode($parts[1] ?? '');
-    if ($payloadJson !== '') {
-      $payload = json_decode($payloadJson, true);
-      if (is_array($payload)) {
-        $candidates = [
-          $payload['idUsuario'] ?? null,
-          $payload['id_usuario'] ?? null,
-          $payload['uid'] ?? null,
-          $payload['sub'] ?? null,
-        ];
-        foreach ($candidates as $c) {
-          if (is_numeric($c)) {
-            $id = (int)$c;
-            if ($id > 0) return $id;
-          }
-        }
-      }
-    }
-  }
-
+function op_get_id_usuario_from_request(array $body = []): int {
   $id = $body['idUsuario'] ?? $body['id_usuario'] ?? $_POST['idUsuario'] ?? $_GET['idUsuario'] ?? null;
   if (is_numeric($id)) {
     $id = (int)$id;
@@ -107,7 +63,7 @@ function get_id_usuario_from_request(array $body = []): int {
   }
   return 0;
 }
-function audit_safe(PDO $pdo, int $idUsuario, string $accion, ?string $entidad, $idEntidad, $detalle): void {
+function op_audit_safe(PDO $pdo, int $idUsuario, string $accion, ?string $entidad, $idEntidad, $detalle): void {
   if ($idUsuario <= 0) return;
   auditar($pdo, $idUsuario, 'ordenes_pago', $accion, $entidad, $idEntidad, $detalle);
 }
@@ -115,13 +71,13 @@ function audit_safe(PDO $pdo, int $idUsuario, string $accion, ?string $entidad, 
 /* =========================================================
    Helpers Items (igual que movimientos.php)
 ========================================================= */
-function item_payload_from_src(array $src, float $monto_total, int $id_detalle): array {
-  $cantidad  = n_float($src['cantidad']  ?? null);
-  $precio    = n_float($src['precio']    ?? null);
-  $iva_pct   = n_float($src['iva_pct']   ?? null);
-  $subtotal  = n_float($src['subtotal']  ?? null);
-  $iva_monto = n_float($src['iva_monto'] ?? null);
-  $total     = n_float($src['total']     ?? null);
+function op_item_payload_from_src(array $src, float $monto_total, int $id_detalle): array {
+  $cantidad  = op_n_float($src['cantidad']  ?? null);
+  $precio    = op_n_float($src['precio']    ?? null);
+  $iva_pct   = op_n_float($src['iva_pct']   ?? null);
+  $subtotal  = op_n_float($src['subtotal']  ?? null);
+  $iva_monto = op_n_float($src['iva_monto'] ?? null);
+  $total     = op_n_float($src['total']     ?? null);
 
   $hasItemFields = ($cantidad !== null || $precio !== null || $iva_pct !== null || $subtotal !== null || $iva_monto !== null || $total !== null);
 
@@ -163,8 +119,7 @@ function item_payload_from_src(array $src, float $monto_total, int $id_detalle):
 /* =========================================================
    Buscar ID "CONTADO" (si existe)
 ========================================================= */
-function find_tipo_venta_contado_id(PDO $pdo): ?int {
-  // Intentamos encontrar una opción "CONTADO" (o parecida)
+function op_find_tipo_venta_contado_id(PDO $pdo): ?int {
   $sql = "
     SELECT id_tipo_venta
     FROM tipos_venta
@@ -183,8 +138,7 @@ function find_tipo_venta_contado_id(PDO $pdo): ?int {
 
 /* =========================================================
    LISTAR (GET)
-   - Devolvemos misma estructura que movimientos_listar
-   - (El filtrado "pendiente" lo seguís haciendo en frontend)
+   - Devuelve "movimientos" (compatible con frontend)
 ========================================================= */
 function ordenes_pago_listar(PDO $pdo): void
 {
@@ -311,7 +265,7 @@ function ordenes_pago_listar(PDO $pdo): void
       'id_proveedor' => $r['id_proveedor'] === null ? null : (int)$r['id_proveedor'],
       'id_detalle' => $id_detalle_final,
 
-      // Texto (como ya venías usando en frontend)
+      // Texto
       'pago_tipo_venta' => $tipoVentaTxt,
       'medio_pago_nombre' => $medioPagoTxt,
 
@@ -339,7 +293,7 @@ function ordenes_pago_listar(PDO $pdo): void
     ];
   }
 
-  ok(['movimientos' => $data]);
+  op_ok(['movimientos' => $data]);
 }
 
 /* =========================================================
@@ -347,37 +301,36 @@ function ordenes_pago_listar(PDO $pdo): void
 ========================================================= */
 function ordenes_pago_actualizar(PDO $pdo): void
 {
-  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
+  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') op_fail('Método no permitido.', 405);
 
-  $body = read_json_body();
+  $body = op_read_json_body();
   $src = !empty($body) ? $body : ($_POST ?? []);
-  $idUsuario = get_id_usuario_from_request($src);
+  $idUsuario = op_get_id_usuario_from_request($src);
 
-  $id_movimiento = n_int($src['id_movimiento'] ?? null);
-  if (!$id_movimiento) fail('Falta id_movimiento.');
+  $id_movimiento = op_n_int($src['id_movimiento'] ?? null);
+  if (!$id_movimiento) op_fail('Falta id_movimiento.');
 
   $beforeSt = $pdo->prepare("SELECT * FROM movimientos WHERE id_movimiento = :id LIMIT 1");
   $beforeSt->execute([':id' => $id_movimiento]);
   $before = $beforeSt->fetch(PDO::FETCH_ASSOC);
-  if (!$before) fail('El movimiento no existe: ' . $id_movimiento);
+  if (!$before) op_fail('El movimiento no existe: ' . $id_movimiento);
 
   $fecha = trim((string)($src['fecha'] ?? ''));
-  if ($fecha === '' || !is_valid_fecha($fecha)) {
-    $fecha = !empty($before['fecha']) ? (string)$before['fecha'] : today_iso();
+  if ($fecha === '' || !op_is_valid_fecha($fecha)) {
+    $fecha = !empty($before['fecha']) ? (string)$before['fecha'] : op_today_iso();
   }
 
   $periodo = trim((string)($src['periodo'] ?? ''));
-  if ($periodo === '' || !is_valid_periodo($periodo)) $periodo = periodo_from_fecha($fecha);
+  if ($periodo === '' || !op_is_valid_periodo($periodo)) $periodo = op_periodo_from_fecha($fecha);
 
-  // En OP dejamos lo demás igual; actualizamos lo relevante
-  $id_proveedor = array_key_exists('id_proveedor', $src) ? n_int($src['id_proveedor']) : n_int($before['id_proveedor'] ?? null);
-  $id_detalle   = array_key_exists('id_detalle', $src)   ? n_int($src['id_detalle'])   : n_int($before['id_detalle'] ?? null);
+  $id_proveedor = array_key_exists('id_proveedor', $src) ? op_n_int($src['id_proveedor']) : op_n_int($before['id_proveedor'] ?? null);
+  $id_detalle   = array_key_exists('id_detalle', $src)   ? op_n_int($src['id_detalle'])   : op_n_int($before['id_detalle'] ?? null);
 
-  $id_medio_pago = array_key_exists('id_medio_pago', $src) ? n_int($src['id_medio_pago']) : n_int($before['id_medio_pago'] ?? null);
-  $monto_total_in = array_key_exists('monto_total', $src) ? n_float($src['monto_total']) : null;
+  $id_medio_pago = array_key_exists('id_medio_pago', $src) ? op_n_int($src['id_medio_pago']) : op_n_int($before['id_medio_pago'] ?? null);
+  $monto_total_in = array_key_exists('monto_total', $src) ? op_n_float($src['monto_total']) : null;
 
   if (!$id_proveedor || $id_proveedor <= 0) {
-    fail('Seleccioná un proveedor.');
+    op_fail('Seleccioná un proveedor.');
   }
 
   $hasDetalleValido = ($id_detalle !== null && $id_detalle > 0);
@@ -385,7 +338,7 @@ function ordenes_pago_actualizar(PDO $pdo): void
   $item = null;
   if ($hasDetalleValido) {
     $baseMonto = ($monto_total_in !== null) ? (float)$monto_total_in : (float)($before['monto_total'] ?? 0);
-    $item = item_payload_from_src($src, $baseMonto, (int)$id_detalle);
+    $item = op_item_payload_from_src($src, $baseMonto, (int)$id_detalle);
   }
 
   $totalCabecera = null;
@@ -396,7 +349,7 @@ function ordenes_pago_actualizar(PDO $pdo): void
   try {
     $pdo->beginTransaction();
 
-    // OJO: no tocamos tipo_venta acá para no romper el estado "pendiente"
+    // ✅ NO tocamos id_tipo_venta para no romper "pendiente"
     $sql = "
       UPDATE movimientos SET
         fecha = :fecha,
@@ -474,30 +427,33 @@ function ordenes_pago_actualizar(PDO $pdo): void
     $afterSt->execute([':id' => $id_movimiento]);
     $after = $afterSt->fetch(PDO::FETCH_ASSOC);
 
-    audit_safe($pdo, $idUsuario, 'actualizar', 'ordenes_pago', $id_movimiento, [
+    op_audit_safe($pdo, $idUsuario, 'actualizar', 'ordenes_pago', $id_movimiento, [
       'antes' => $before,
       'despues' => $after ?: null,
       'item' => $item,
     ]);
 
-    ok(['actualizado' => true, 'id_movimiento' => $id_movimiento]);
+    op_ok(['mensaje' => 'Orden de pago actualizada.', 'actualizado' => true, 'id_movimiento' => $id_movimiento]);
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    fail('No se pudo actualizar la orden de pago. ' . $e->getMessage());
+    op_fail('No se pudo actualizar la orden de pago. ' . $e->getMessage(), 500);
   }
 }
 
 /* =========================================================
-   ELIMINAR (POST/GET)
+   ELIMINAR (POST)
 ========================================================= */
 function ordenes_pago_eliminar(PDO $pdo): void
 {
-  $body = read_json_body();
-  $idUsuario = get_id_usuario_from_request(!empty($body) ? $body : ($_POST ?? []));
+  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') op_fail('Método no permitido.', 405);
 
-  $id = $_GET['id_movimiento'] ?? $_POST['id_movimiento'] ?? ($body['id_movimiento'] ?? null);
-  $id = n_int($id);
-  if (!$id) fail('Falta id_movimiento.');
+  $body = op_read_json_body();
+  $src = !empty($body) ? $body : ($_POST ?? []);
+  $idUsuario = op_get_id_usuario_from_request($src);
+
+  $id = $src['id_movimiento'] ?? $_POST['id_movimiento'] ?? $_GET['id_movimiento'] ?? null;
+  $id = op_n_int($id);
+  if (!$id) op_fail('Falta id_movimiento.');
 
   $beforeSt = $pdo->prepare("SELECT * FROM movimientos WHERE id_movimiento = :id LIMIT 1");
   $beforeSt->execute([':id' => $id]);
@@ -507,14 +463,14 @@ function ordenes_pago_eliminar(PDO $pdo): void
     $stmt = $pdo->prepare("DELETE FROM movimientos WHERE id_movimiento = :id");
     $stmt->execute([':id' => $id]);
 
-    audit_safe($pdo, $idUsuario, 'eliminar', 'ordenes_pago', $id, [
+    op_audit_safe($pdo, $idUsuario, 'eliminar', 'ordenes_pago', $id, [
       'eliminado' => true,
       'antes' => $before ?: null,
     ]);
 
-    ok(['eliminado' => true, 'id_movimiento' => $id]);
+    op_ok(['mensaje' => 'Orden de pago eliminada.', 'eliminado' => true, 'id_movimiento' => $id]);
   } catch (Throwable $e) {
-    fail('No se pudo eliminar la orden de pago. ' . $e->getMessage());
+    op_fail('No se pudo eliminar la orden de pago. ' . $e->getMessage(), 500);
   }
 }
 
@@ -526,31 +482,31 @@ function ordenes_pago_eliminar(PDO $pdo): void
    Efecto:
    - setea id_medio_pago
    - cambia id_tipo_venta a CONTADO si existe; si no, lo pone NULL
-   - (opcional) limpia id_cuenta_corriente
+   - limpia id_cuenta_corriente (queda como "pagado")
 ========================================================= */
 function ordenes_pago_confirmar_pago(PDO $pdo): void
 {
-  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
+  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') op_fail('Método no permitido.', 405);
 
-  $body = read_json_body();
+  $body = op_read_json_body();
   $src = !empty($body) ? $body : ($_POST ?? []);
-  $idUsuario = get_id_usuario_from_request($src);
+  $idUsuario = op_get_id_usuario_from_request($src);
 
   $ids = $src['ids_movimiento'] ?? $src['ids_movimientos'] ?? [];
   if (!is_array($ids)) $ids = [];
 
   $clean = [];
   foreach ($ids as $x) {
-    $n = n_int($x);
+    $n = op_n_int($x);
     if ($n && $n > 0) $clean[] = $n;
   }
   $clean = array_values(array_unique($clean));
-  if (!count($clean)) fail('No hay movimientos seleccionados.');
+  if (!count($clean)) op_fail('No hay movimientos seleccionados.');
 
-  $id_medio_pago = n_int($src['id_medio_pago'] ?? null);
-  if (!$id_medio_pago || $id_medio_pago <= 0) fail('Seleccioná un medio de pago.');
+  $id_medio_pago = op_n_int($src['id_medio_pago'] ?? null);
+  if (!$id_medio_pago || $id_medio_pago <= 0) op_fail('Seleccioná un medio de pago.');
 
-  $idContado = find_tipo_venta_contado_id($pdo); // puede ser null
+  $idContado = op_find_tipo_venta_contado_id($pdo); // puede ser null
 
   try {
     $pdo->beginTransaction();
@@ -572,47 +528,43 @@ function ordenes_pago_confirmar_pago(PDO $pdo): void
 
     $pdo->commit();
 
-    audit_safe($pdo, $idUsuario, 'confirmar_pago', 'ordenes_pago', null, [
+    op_audit_safe($pdo, $idUsuario, 'confirmar_pago', 'ordenes_pago', null, [
       'ids_movimiento' => $clean,
       'id_medio_pago' => $id_medio_pago,
       'id_tipo_venta_contado' => $idContado,
     ]);
 
-    ok(['mensaje' => 'Pago confirmado.', 'ids' => $clean]);
+    op_ok(['mensaje' => 'Pago confirmado.', 'ids' => $clean]);
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    fail('No se pudo confirmar el pago. ' . $e->getMessage());
+    op_fail('No se pudo confirmar el pago. ' . $e->getMessage(), 500);
   }
 }
 
 /* =========================================================
-   DISPATCH
+   DISPATCH (cuando se incluye desde route.php)
 ========================================================= */
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $action = is_string($action) ? trim($action) : '';
-if ($action === '') fail('Falta parámetro action.');
+if ($action === '') op_fail('Falta parámetro action.');
 
-try {
-  switch ($action) {
-    case 'ordenes_pago_listar':
-      ordenes_pago_listar($pdo);
-      break;
+switch ($action) {
+  case 'ordenes_pago_listar':
+    ordenes_pago_listar($pdo);
+    break;
 
-    case 'ordenes_pago_actualizar':
-      ordenes_pago_actualizar($pdo);
-      break;
+  case 'ordenes_pago_actualizar':
+    ordenes_pago_actualizar($pdo);
+    break;
 
-    case 'ordenes_pago_eliminar':
-      ordenes_pago_eliminar($pdo);
-      break;
+  case 'ordenes_pago_eliminar':
+    ordenes_pago_eliminar($pdo);
+    break;
 
-    case 'ordenes_pago_confirmar_pago':
-      ordenes_pago_confirmar_pago($pdo);
-      break;
+  case 'ordenes_pago_confirmar_pago':
+    ordenes_pago_confirmar_pago($pdo);
+    break;
 
-    default:
-      fail('Acción no válida en ordenes_pago: ' . $action);
-  }
-} catch (Throwable $e) {
-  fail('Error en ordenes_pago: ' . $e->getMessage());
+  default:
+    op_fail('Acción no válida en ordenes_pago: ' . $action, 400);
 }

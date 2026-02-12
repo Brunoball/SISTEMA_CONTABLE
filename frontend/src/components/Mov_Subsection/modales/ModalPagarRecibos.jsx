@@ -26,10 +26,12 @@ function moneyARS(v) {
     return `$${Number(n).toFixed(2)}`;
   }
 }
+
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "-";
 }
+
 function normalizeSearchText(v) {
   return String(v ?? "")
     .toLowerCase()
@@ -38,6 +40,7 @@ function normalizeSearchText(v) {
     .replace(/\s+/g, " ")
     .trim();
 }
+
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "-";
@@ -50,6 +53,39 @@ function formatFechaDMY(v) {
   }
   return s;
 }
+
+/* =========================
+   ✅ Auth helpers (X-Session)
+========================= */
+function getAuthInfo() {
+  const token = localStorage.getItem("token") || "";
+
+  const session =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("x_session") ||
+    localStorage.getItem("X-Session") ||
+    "";
+
+  return { token, session };
+}
+
+function buildAuthHeaders() {
+  const { token, session } = getAuthInfo();
+  const headers = {};
+
+  // ✅ SaaS (Balto)
+  if (session) headers["X-Session"] = session;
+
+  // ✅ compat viejo si todavía lo usás en algo
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  return headers;
+}
+
+/* =========================
+   Medios de pago normalizer
+========================= */
 function normalizeMediosPago(raw) {
   const root = raw && typeof raw === "object" ? raw : {};
   const src = root.listas && typeof root.listas === "object" ? root.listas : root;
@@ -114,24 +150,39 @@ export default function ModalPagarRecibos({
   // Medios de pago (backend)
   const [mediosPago, setMediosPago] = useState([]);
   const [loadingMedios, setLoadingMedios] = useState(false);
+
+  // ✅ IMPORTANTE: arranca vacío => obliga a elegir
   const [idMedioPago, setIdMedioPago] = useState(""); // string en UI
 
   const fetchMediosPago = useCallback(async () => {
     try {
       setLoadingMedios(true);
+
       const url = `${BASE_URL}/api.php?action=global_obtener_listas`;
-      const res = await fetch(url, { method: "GET" });
-      const data = await res.json().catch(() => null);
+
+      const res = await fetch(url, {
+        method: "GET",
+        headers: buildAuthHeaders(),
+      });
+
+      const text = await res.text();
+      if (!text) throw new Error("Respuesta vacía del servidor.");
+
+      let data = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
+        throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
+      }
 
       const mp = normalizeMediosPago(data);
       setMediosPago(mp);
 
-      setIdMedioPago((prev) => {
-        if (prev) return prev;
-        return mp.length ? String(mp[0].id) : "";
-      });
+      // ✅ NO auto-seleccionar el primero (queda en "")
+      // setIdMedioPago(prev => prev || (mp.length ? String(mp[0].id) : ""));
     } catch (e) {
-      onToast?.("error", "No se pudieron cargar los medios de pago.", 3200);
+      onToast?.("error", e?.message || "No se pudieron cargar los medios de pago.", 4200);
       setMediosPago([]);
       setIdMedioPago("");
     } finally {
@@ -149,7 +200,7 @@ export default function ModalPagarRecibos({
     setLoading(false);
 
     setMediosPago([]);
-    setIdMedioPago("");
+    setIdMedioPago(""); // ✅ siempre pedir selección
     fetchMediosPago();
 
     setTimeout(() => firstFocusRef.current?.focus(), 50);
@@ -393,9 +444,19 @@ export default function ModalPagarRecibos({
                         disabled={loading || loadingMedios}
                         className="mpr-select"
                       >
+                        {/* ✅ Placeholder SIEMPRE */}
+                        <option value="">
+                          {loadingMedios ? "Cargando medios de pago…" : "Seleccioná un medio de pago…"}
+                        </option>
+
+                        {/* ✅ Si no hay medios */}
                         {!loadingMedios && mediosPago.length === 0 && (
-                          <option value="">(Sin medios de pago)</option>
+                          <option value="" disabled>
+                            (Sin medios de pago)
+                          </option>
                         )}
+
+                        {/* ✅ Opciones reales */}
                         {mediosPago.map((x) => (
                           <option key={x.id} value={String(x.id)}>
                             {x.nombre}
@@ -457,10 +518,7 @@ export default function ModalPagarRecibos({
                 <div className="mpr-th mpr-th--center">Sel</div>
                 <div className="mpr-th">Fecha</div>
                 <div className="mpr-th">Descripción</div>
-
-                {/* ✅ NUEVA COLUMNA */}
                 <div className="mpr-th mpr-th--center">Estado</div>
-
                 <div className="mpr-th mpr-th--right">Monto</div>
               </div>
 
@@ -485,7 +543,7 @@ export default function ModalPagarRecibos({
                       style={pagado ? { cursor: "default" } : undefined}
                     >
                       <div className="mpr-td mpr-td--center" onClick={(e) => e.stopPropagation()}>
-                        <label className={`mpr-checkWrap ${(!id || loading || pagado) ? "is-disabled" : ""}`}>
+                        <label className={`mpr-checkWrap ${!id || loading || pagado ? "is-disabled" : ""}`}>
                           <input
                             className="mpr-checkInput"
                             type="checkbox"
@@ -506,7 +564,6 @@ export default function ModalPagarRecibos({
                         {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
                       </div>
 
-                      {/* ✅ ESTADO */}
                       <div className="mpr-td mpr-td--center" style={{ textAlign: "center" }}>
                         <EstadoChip estado={pagado ? "PAGADO" : "PENDIENTE"} />
                       </div>

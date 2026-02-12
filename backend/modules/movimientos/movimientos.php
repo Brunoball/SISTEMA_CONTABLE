@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 /**
  * ✅ ACCIONES:
- * - movimientos_listar (GET)
+ * - movimientos_listar (GET)  ✅ OPTIMIZADO + PAGINADO
  * - movimientos_periodos_listar (GET)
  * - movimientos_crear (POST JSON)
  * - movimientos_crear_batch (POST JSON)
- * - movimientos_actualizar (POST JSON) ✅ NUEVO
- * - movimientos_eliminar (POST JSON) ✅ NUEVO
+ * - movimientos_actualizar (POST JSON)
+ * - movimientos_eliminar (POST JSON)
  *
  * ✅ MULTI-TENANT:
  * - NO incluir config/db.php
@@ -54,6 +54,13 @@ function as_int_or_null($v): ?int {
   if (is_string($v) && trim($v) === '') return null;
   $n = (int)$v;
   return ($n > 0) ? $n : null;
+}
+
+function as_int($v, int $default = 0): int {
+  if ($v === null || $v === '' || $v === false) return $default;
+  if (!is_numeric($v)) return $default;
+  $n = (int)$v;
+  return $n;
 }
 
 function as_dec($v, int $scale = 2): float {
@@ -157,22 +164,91 @@ function movimientos_periodos_listar(PDO $pdo): void {
 }
 
 /* =========================================================
-   LISTAR MOVIMIENTOS (GET)
+   LISTAR MOVIMIENTOS (GET) ✅ OPTIMIZADO + PAGINADO
+   - Filtra primero movimientos (CTE mov)
+   - Suma items SOLO de esos movimientos
+   - Primer item SOLO de esos movimientos
 ========================================================= */
 function movimientos_listar(PDO $pdo): void {
   $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
   $q       = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
 
-  $where = [];
-  $params = [];
+  // Paginación (saas-friendly)
+  $limit  = as_int($_GET['limit'] ?? 300, 300);
+  $offset = as_int($_GET['offset'] ?? 0, 0);
+
+  // caps defensivos (evita que un cliente tire 100k filas)
+  if ($limit < 1) $limit = 1;
+  if ($limit > 1000) $limit = 1000;
+  if ($offset < 0) $offset = 0;
 
   if ($periodo !== '') {
     if (!is_valid_periodo_yyyymm($periodo)) fail('Período inválido. Formato esperado: YYYY-MM');
-    $where[] = "m.periodo = :periodo";
-    $params[':periodo'] = $periodo;
+  } else {
+    // En tu UI SIEMPRE mandás periodo, pero por seguridad:
+    fail('Falta período.');
   }
 
+  $params = [
+    ':periodo' => $periodo,
+    ':limit' => $limit,
+    ':offset' => $offset,
+  ];
+
+  // Nota: en MySQL 8 los CTE ayudan a materializar el set reducido.
+  // Además, tu índice (periodo, fecha, id_movimiento) permite ordenar por fecha/id súper rápido.
   $sql = "
+    WITH mov AS (
+      SELECT
+        m.id_movimiento,
+        m.fecha,
+        m.periodo,
+        m.id_tipo_operacion,
+        m.id_clasificacion,
+        m.id_tipo_venta,
+        m.id_cuenta_corriente,
+        m.id_cliente,
+        m.id_proveedor,
+        m.id_detalle,
+        m.monto_total,
+        m.id_medio_pago,
+        m.created_at
+      FROM movimientos m
+      WHERE m.periodo = :periodo
+      " . ($q !== '' ? "
+        AND (
+          COALESCE(m.id_movimiento, 0) LIKE :q OR
+          EXISTS (SELECT 1 FROM clasificaciones c WHERE c.id_clasificacion = m.id_clasificacion AND c.nombre LIKE :q) OR
+          EXISTS (SELECT 1 FROM tipos_venta tv WHERE tv.id_tipo_venta = m.id_tipo_venta AND tv.nombre LIKE :q) OR
+          EXISTS (SELECT 1 FROM cuentas_corrientes cc WHERE cc.id_cuenta_corriente = m.id_cuenta_corriente AND cc.nombre LIKE :q) OR
+          EXISTS (SELECT 1 FROM clientes cl WHERE cl.id_cliente = m.id_cliente AND cl.nombre LIKE :q) OR
+          EXISTS (SELECT 1 FROM proveedores pr WHERE pr.id_proveedor = m.id_proveedor AND pr.nombre LIKE :q) OR
+          EXISTS (SELECT 1 FROM medios_pago mp WHERE mp.id_medio_pago = m.id_medio_pago AND mp.nombre LIKE :q) OR
+          EXISTS (SELECT 1 FROM detalles d WHERE d.id_detalle = m.id_detalle AND d.nombre LIKE :q)
+        )
+      " : "") . "
+      ORDER BY m.fecha DESC, m.id_movimiento DESC
+      LIMIT :limit OFFSET :offset
+    ),
+    items_sum AS (
+      SELECT mi.id_movimiento, SUM(mi.total) AS total_sum
+      FROM movimientos_items mi
+      INNER JOIN mov ON mov.id_movimiento = mi.id_movimiento
+      GROUP BY mi.id_movimiento
+    ),
+    min_item AS (
+      SELECT mi.id_movimiento, MIN(mi.id_item) AS min_id_item
+      FROM movimientos_items mi
+      INNER JOIN mov ON mov.id_movimiento = mi.id_movimiento
+      GROUP BY mi.id_movimiento
+    ),
+    first_item AS (
+      SELECT mi1.*
+      FROM movimientos_items mi1
+      INNER JOIN min_item x
+        ON x.id_movimiento = mi1.id_movimiento
+       AND x.min_id_item = mi1.id_item
+    )
     SELECT
       m.id_movimiento,
       m.fecha,
@@ -206,7 +282,7 @@ function movimientos_listar(PDO $pdo): void {
       COALESCE(mp.nombre,'') AS medio_pago_nombre,
 
       m.created_at
-    FROM movimientos m
+    FROM mov m
       LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
       LEFT JOIN tipos_venta tv          ON tv.id_tipo_venta = m.id_tipo_venta
       LEFT JOIN cuentas_corrientes cc   ON cc.id_cuenta_corriente = m.id_cuenta_corriente
@@ -215,51 +291,31 @@ function movimientos_listar(PDO $pdo): void {
       LEFT JOIN detalles d              ON d.id_detalle = m.id_detalle
       LEFT JOIN medios_pago mp          ON mp.id_medio_pago = m.id_medio_pago
 
-      LEFT JOIN (
-        SELECT id_movimiento, SUM(total) AS total_sum
-        FROM movimientos_items
-        GROUP BY id_movimiento
-      ) it ON it.id_movimiento = m.id_movimiento
+      LEFT JOIN items_sum it            ON it.id_movimiento = m.id_movimiento
+      LEFT JOIN first_item fi           ON fi.id_movimiento = m.id_movimiento
+      LEFT JOIN detalles di             ON di.id_detalle = fi.id_detalle
 
-      LEFT JOIN (
-        SELECT mi1.*
-        FROM movimientos_items mi1
-        INNER JOIN (
-          SELECT id_movimiento, MIN(id_item) AS min_id_item
-          FROM movimientos_items
-          GROUP BY id_movimiento
-        ) x ON x.id_movimiento = mi1.id_movimiento AND x.min_id_item = mi1.id_item
-      ) fi ON fi.id_movimiento = m.id_movimiento
-
-      LEFT JOIN detalles di ON di.id_detalle = fi.id_detalle
+    ORDER BY m.fecha DESC, m.id_movimiento DESC
   ";
 
   if ($q !== '') {
-    $like = '%' . $q . '%';
-    $where[] = "(
-      UPPER(COALESCE(c.nombre,''))   LIKE UPPER(:q1) OR
-      UPPER(COALESCE(tv.nombre,''))  LIKE UPPER(:q2) OR
-      UPPER(COALESCE(cc.nombre,''))  LIKE UPPER(:q3) OR
-      UPPER(COALESCE(cl.nombre,''))  LIKE UPPER(:q4) OR
-      UPPER(COALESCE(pr.nombre,''))  LIKE UPPER(:q5) OR
-      UPPER(COALESCE(di.nombre, d.nombre,'')) LIKE UPPER(:q6) OR
-      UPPER(COALESCE(mp.nombre,''))  LIKE UPPER(:q7)
-    )";
-    $params[':q1'] = $like;
-    $params[':q2'] = $like;
-    $params[':q3'] = $like;
-    $params[':q4'] = $like;
-    $params[':q5'] = $like;
-    $params[':q6'] = $like;
-    $params[':q7'] = $like;
+    // LIKE case-insensitive por collation (en la práctica en utf8mb4_*_ai_ci es CI)
+    $params[':q'] = '%' . $q . '%';
   }
 
-  if (!empty($where)) $sql .= " WHERE " . implode(" AND ", $where);
-  $sql .= " ORDER BY m.fecha DESC, m.id_movimiento DESC";
-
   try {
+    // IMPORTANT: Para LIMIT/OFFSET con placeholders en MySQL, conviene bindValue con PDO::PARAM_INT
     $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
+
+    foreach ($params as $k => $v) {
+      if ($k === ':limit' || $k === ':offset') {
+        $stmt->bindValue($k, (int)$v, PDO::PARAM_INT);
+      } else {
+        $stmt->bindValue($k, $v);
+      }
+    }
+
+    $stmt->execute();
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
     $data = [];
@@ -302,7 +358,17 @@ function movimientos_listar(PDO $pdo): void {
       ];
     }
 
-    ok(['movimientos' => $data]);
+    // Detectar si hay más (si devolvimos limit, puede haber más)
+    $hasMore = count($data) === $limit;
+    $nextOffset = $hasMore ? ($offset + $limit) : null;
+
+    ok([
+      'movimientos' => $data,
+      'limit' => $limit,
+      'offset' => $offset,
+      'has_more' => $hasMore,
+      'next_offset' => $nextOffset,
+    ]);
   } catch (Throwable $e) {
     fail('No se pudieron cargar movimientos. ' . $e->getMessage());
   }
@@ -323,10 +389,9 @@ function movimientos_crear(PDO $pdo): void {
     fail('Período inválido. Debe ser YYYY-MM (ej: 2026-02).');
   }
 
-  // tu tabla exige id_tipo_operacion NOT NULL
   $id_tipo_operacion = as_int_or_null($in['id_tipo_operacion'] ?? null)
     ?? as_int_or_null($in['id_tipo_movimiento'] ?? null)
-    ?? 1; // default
+    ?? 1;
 
   $id_clasificacion     = as_int_or_null($in['id_clasificacion'] ?? null);
   $id_tipo_venta        = as_int_or_null($in['id_tipo_venta'] ?? null);
@@ -339,7 +404,6 @@ function movimientos_crear(PDO $pdo): void {
   $monto_total = as_dec($in['monto_total'] ?? ($in['total'] ?? 0), 2);
   if ($monto_total <= 0) fail('Monto total inválido. Debe ser > 0.');
 
-  // Item (si hay detalle)
   $item_cantidad = isset($in['cantidad']) ? as_dec($in['cantidad'], 3) : null;
   $item_precio   = isset($in['precio']) ? as_dec($in['precio'], 2) : null;
   $item_iva_pct  = isset($in['iva_pct']) ? as_dec($in['iva_pct'], 2) : null;
@@ -420,7 +484,6 @@ function movimientos_crear(PDO $pdo): void {
 
 /* =========================================================
    CREAR BATCH (POST JSON)
-   body: { items: [ {..movimiento..}, ... ] }
 ========================================================= */
 function movimientos_crear_batch(PDO $pdo): void {
   require_post();
@@ -522,7 +585,7 @@ function movimientos_crear_batch(PDO $pdo): void {
 }
 
 /* =========================================================
-   ACTUALIZAR (EDITAR) MOVIMIENTO (POST JSON) ✅ NUEVO
+   ACTUALIZAR MOVIMIENTO (POST JSON)
 ========================================================= */
 function movimientos_actualizar(PDO $pdo): void {
   require_post();
@@ -531,7 +594,6 @@ function movimientos_actualizar(PDO $pdo): void {
   $id_movimiento = as_int_or_null($in['id_movimiento'] ?? null);
   if (!$id_movimiento) fail('Falta id_movimiento.');
 
-  // aseguro que exista
   $old = load_movimiento_or_fail($pdo, $id_movimiento);
 
   $fecha   = as_date_or_null($in['fecha'] ?? $old['fecha'] ?? null);
@@ -555,7 +617,6 @@ function movimientos_actualizar(PDO $pdo): void {
   $id_detalle           = array_key_exists('id_detalle', $in) ? as_int_or_null($in['id_detalle']) : as_int_or_null($old['id_detalle'] ?? null);
   $id_medio_pago        = array_key_exists('id_medio_pago', $in) ? as_int_or_null($in['id_medio_pago']) : as_int_or_null($old['id_medio_pago'] ?? null);
 
-  // monto_total: si viene 0, lo recalculo desde total, sino tomo el de BD
   $monto_total = null;
   if (array_key_exists('monto_total', $in) || array_key_exists('total', $in)) {
     $monto_total = as_dec($in['monto_total'] ?? ($in['total'] ?? 0), 2);
@@ -565,7 +626,6 @@ function movimientos_actualizar(PDO $pdo): void {
 
   if ($monto_total <= 0) fail('Monto total inválido. Debe ser > 0.');
 
-  // Item (si hay detalle)
   $item_cantidad = array_key_exists('cantidad', $in) ? as_dec($in['cantidad'], 3) : null;
   $item_precio   = array_key_exists('precio', $in) ? as_dec($in['precio'], 2) : null;
   $item_iva_pct  = array_key_exists('iva_pct', $in) ? as_dec($in['iva_pct'], 2) : null;
@@ -608,9 +668,6 @@ function movimientos_actualizar(PDO $pdo): void {
       ':id_movimiento' => $id_movimiento,
     ]);
 
-    // ✅ estrategia simple y estable:
-    // - borro todos los items del movimiento
-    // - si hay id_detalle, inserto 1 item nuevo coherente con lo que edita el modal
     $pdo->prepare("DELETE FROM movimientos_items WHERE id_movimiento = :id")
         ->execute([':id' => $id_movimiento]);
 
@@ -646,7 +703,7 @@ function movimientos_actualizar(PDO $pdo): void {
 }
 
 /* =========================================================
-   ELIMINAR MOVIMIENTO (POST JSON) ✅ NUEVO
+   ELIMINAR MOVIMIENTO (POST JSON)
 ========================================================= */
 function movimientos_eliminar(PDO $pdo): void {
   require_post();
@@ -657,17 +714,14 @@ function movimientos_eliminar(PDO $pdo): void {
 
   if (!$id_movimiento) fail('Falta id_movimiento.');
 
-  // aseguro que exista
   load_movimiento_or_fail($pdo, $id_movimiento);
 
   try {
     $pdo->beginTransaction();
 
-    // 1) items
     $pdo->prepare("DELETE FROM movimientos_items WHERE id_movimiento = :id")
         ->execute([':id' => $id_movimiento]);
 
-    // 2) movimiento
     $st = $pdo->prepare("DELETE FROM movimientos WHERE id_movimiento = :id LIMIT 1");
     $st->execute([':id' => $id_movimiento]);
 

@@ -145,10 +145,19 @@ function periodoToYYYYMM(input) {
 }
 
 /* =========================
-   Auth helpers
+   ✅ Auth helpers (NUEVO: X-Session)
 ========================= */
 function getAuthInfo() {
+  // Viejo (si lo seguís usando en otros módulos)
   const token = localStorage.getItem("token") || "";
+
+  // Nuevo SaaS (Balto): session_key
+  const session =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("x_session") ||
+    localStorage.getItem("X-Session") ||
+    "";
 
   let idUsuario = 0;
   try {
@@ -157,7 +166,7 @@ function getAuthInfo() {
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
-  return { token, idUsuario };
+  return { token, session, idUsuario };
 }
 
 /* =========================
@@ -316,8 +325,6 @@ export default function Recibos() {
   const [pagarCliente, setPagarCliente] = useState(null);
   const [pagarDeudas, setPagarDeudas] = useState([]);
 
-  // ✅ ahora trae TODAS las filas del cliente (pagadas y pendientes),
-  // pero siempre dentro de "recibos" (cliente + cuenta corriente)
   const getRecibosCliente = useCallback(
     (rowCliente) => {
       const idCli = Number(rowCliente?.id_cliente || 0);
@@ -356,12 +363,19 @@ export default function Recibos() {
   }, []);
 
   /* =========================
-     API helpers
+     ✅ API helpers (NUEVO: X-Session)
   ========================= */
   const buildHeaders = useCallback(() => {
-    const { token } = getAuthInfo();
+    const { token, session } = getAuthInfo();
+
     const h = { "Content-Type": "application/json" };
+
+    // ✅ NUEVO SaaS
+    if (session) h["X-Session"] = session;
+
+    // ✅ compat viejo (por si algún módulo todavía usa Bearer)
     if (token) h.Authorization = `Bearer ${token}`;
+
     return h;
   }, []);
 
@@ -379,8 +393,14 @@ export default function Recibos() {
   const apiGet = useCallback(
     async (url) => {
       const headers = {};
-      const { token } = getAuthInfo();
+      const { token, session } = getAuthInfo();
+
+      // ✅ NUEVO SaaS
+      if (session) headers["X-Session"] = session;
+
+      // ✅ compat viejo
       if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch(url, { method: "GET", headers });
       return await parseJsonOrThrow(res);
     },
@@ -523,7 +543,6 @@ export default function Recibos() {
 
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
 
-        // ✅ IMPORTANTÍSIMO: ahora NO desaparece, solo cambia a PAGADO.
         invalidateCacheForPeriodo(fPeriodo);
         await loadRows({ periodo: fPeriodo, q });
 
@@ -554,7 +573,6 @@ export default function Recibos() {
 
   /* =========================
      Filtrado: período + SOLO RECIBOS + búsqueda
-     ✅ YA NO FILTRA PENDIENTES: MUESTRA TODO Y MARCA PAGADO
   ========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
@@ -562,7 +580,7 @@ export default function Recibos() {
 
     return rows
       .filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer))
-      .filter((r) => isReciboRow(r)) // ✅ recibo = cliente + cuenta corriente
+      .filter((r) => isReciboRow(r))
       .filter((r) => rowMatchesQuery(r, q));
   }, [rows, fPeriodo, q]);
 
@@ -849,7 +867,6 @@ export default function Recibos() {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className="mov-gridBody">
-            {/* ✅ LOADER DENTRO DE LA TABLA */}
             {loadingRows && (
               <div className="mov-emptyRow mov-emptyRow--loading">
                 <GifCarga />
@@ -876,13 +893,12 @@ export default function Recibos() {
                             role="cell"
                           >
                             <div className="mov-actionsInline">
-                              {/* ✅ Si está pagado, igual dejás el botón pero lo deshabilitás */}
                               <button
                                 type="button"
                                 className="mov-iconBtn"
                                 title={pagado ? "Ya está pagado" : "Pagar"}
                                 onClick={() => openPagarModal(r)}
-                                disabled={false} // ✅ lo dejamos habilitado para abrir modal y ver todo
+                                disabled={false}
                               >
                                 <FontAwesomeIcon icon={faMoneyBill1Wave} />
                               </button>
@@ -944,9 +960,7 @@ export default function Recibos() {
         onConfirm={onConfirmPago}
         onToast={showToast}
         cliente={pagarCliente}
-        deudas={pagarDeudas} // ✅ ahora vienen pagadas+pendientes
-        // opcional: si querés facturar
-        // onFactura={...}
+        deudas={pagarDeudas}
       />
 
       {/* EDITAR */}

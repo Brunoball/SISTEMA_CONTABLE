@@ -42,6 +42,33 @@ function formatFechaDMY(v) {
   }
   return s;
 }
+
+/* =========================
+   ✅ Auth helpers (X-Session)
+========================= */
+function getAuthInfo() {
+  const token = localStorage.getItem("token") || "";
+
+  const session =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("x_session") ||
+    localStorage.getItem("X-Session") ||
+    "";
+
+  return { token, session };
+}
+
+function buildAuthHeaders() {
+  const { token, session } = getAuthInfo();
+  const headers = {};
+
+  if (session) headers["X-Session"] = session;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  return headers;
+}
+
 function normalizeMediosPago(raw) {
   const root = raw && typeof raw === "object" ? raw : {};
   const src = root.listas && typeof root.listas === "object" ? root.listas : root;
@@ -79,25 +106,39 @@ export default function ModalPagarOrdenesPago({
   // Medios de pago (backend)
   const [mediosPago, setMediosPago] = useState([]);
   const [loadingMedios, setLoadingMedios] = useState(false);
+
+  // ✅ IMPORTANTE: arranca vacío => obliga a elegir
   const [idMedioPago, setIdMedioPago] = useState(""); // string en UI
 
   const fetchMediosPago = useCallback(async () => {
     try {
       setLoadingMedios(true);
+
       const url = `${BASE_URL}/api.php?action=global_obtener_listas`;
-      const res = await fetch(url, { method: "GET" });
-      const data = await res.json().catch(() => null);
+
+      const res = await fetch(url, {
+        method: "GET",
+        headers: buildAuthHeaders(),
+      });
+
+      const text = await res.text();
+      if (!text) throw new Error("Respuesta vacía del servidor.");
+
+      let data = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
+        throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
+      }
 
       const mp = normalizeMediosPago(data);
       setMediosPago(mp);
 
-      // default: si hay medios, seleccionar el primero
-      setIdMedioPago((prev) => {
-        if (prev) return prev;
-        return mp.length ? String(mp[0].id) : "";
-      });
+      // ✅ NO auto-seleccionar el primero (queda en "")
+      // setIdMedioPago(prev => prev || (mp.length ? String(mp[0].id) : ""));
     } catch (e) {
-      onToast?.("error", "No se pudieron cargar los medios de pago.", 3200);
+      onToast?.("error", e?.message || "No se pudieron cargar los medios de pago.", 4200);
       setMediosPago([]);
       setIdMedioPago("");
     } finally {
@@ -115,7 +156,7 @@ export default function ModalPagarOrdenesPago({
     setLoading(false);
 
     setMediosPago([]);
-    setIdMedioPago("");
+    setIdMedioPago(""); // ✅ siempre pedir selección
     fetchMediosPago();
 
     setTimeout(() => firstFocusRef.current?.focus(), 50);
@@ -155,6 +196,9 @@ export default function ModalPagarOrdenesPago({
   const cantSeleccionadas = useMemo(() => selectedIds.size, [selectedIds]);
 
   const toggleOne = (id) => {
+    if (!id) return;
+    if (loading) return;
+
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -168,6 +212,8 @@ export default function ModalPagarOrdenesPago({
   };
 
   const toggleAll = () => {
+    if (loading) return;
+
     const all = deudasOrdenadas.map((r) => Number(r?.id_movimiento || 0)).filter(Boolean);
 
     setSelectedIds((prev) => {
@@ -202,9 +248,7 @@ export default function ModalPagarOrdenesPago({
       return;
     }
 
-    const seleccion = deudasOrdenadas.filter((r) =>
-      selectedIds.has(Number(r?.id_movimiento || 0))
-    );
+    const seleccion = deudasOrdenadas.filter((r) => selectedIds.has(Number(r?.id_movimiento || 0)));
 
     const mp = mediosPago.find((x) => String(x.id) === String(idMedioPago));
     if (!mp) {
@@ -250,18 +294,13 @@ export default function ModalPagarOrdenesPago({
               <span className="mpr-clientName">{safeText(proveedor?.proveedor)}</span>
 
               {proveedor?.id_proveedor ? (
-                <span
-                  className="mpr-clientIdPill"
-                  title={`ID Proveedor: ${proveedor.id_proveedor}`}
-                >
+                <span className="mpr-clientIdPill" title={`ID Proveedor: ${proveedor.id_proveedor}`}>
                   ID {String(proveedor.id_proveedor)}
                 </span>
               ) : null}
             </div>
 
-            <div className="mi-modal__subtitle mpr-subtitle">
-              Seleccioná una o más deudas pendientes
-            </div>
+            <div className="mi-modal__subtitle mpr-subtitle">Seleccioná una o más deudas pendientes</div>
           </div>
 
           <button
@@ -279,7 +318,6 @@ export default function ModalPagarOrdenesPago({
         {/* Body */}
         <div className="mi-modal__body mpr-body">
           <div className="mpr-content">
-            {/* Bloque superior: SOLO Pago */}
             <div className="mpr-topGrid mpr-topGrid--single">
               <div className="mpr-card">
                 <div className="mpr-formRow">
@@ -293,9 +331,19 @@ export default function ModalPagarOrdenesPago({
                         disabled={loading || loadingMedios}
                         className="mpr-select"
                       >
+                        {/* ✅ Placeholder SIEMPRE */}
+                        <option value="">
+                          {loadingMedios ? "Cargando medios de pago…" : "Seleccioná un medio de pago…"}
+                        </option>
+
+                        {/* ✅ Si no hay medios */}
                         {!loadingMedios && mediosPago.length === 0 && (
-                          <option value="">(Sin medios de pago)</option>
+                          <option value="" disabled>
+                            (Sin medios de pago)
+                          </option>
                         )}
+
+                        {/* ✅ Opciones reales */}
                         {mediosPago.map((x) => (
                           <option key={x.id} value={String(x.id)}>
                             {x.nombre}
@@ -333,19 +381,6 @@ export default function ModalPagarOrdenesPago({
                 </div>
               </div>
             </div>
-
-            {/* Nota opcional (si la querés usar, descomentá)
-            <div className="mpr-note">
-              <div className="mpr-noteTitle">Nota / observaciones</div>
-              <textarea
-                className="mpr-textarea"
-                value={nota}
-                onChange={(e) => setNota(e.target.value)}
-                placeholder="Escribí una nota…"
-                disabled={loading}
-              />
-            </div>
-            */}
           </div>
 
           {/* Tabla de deudas */}
@@ -375,9 +410,7 @@ export default function ModalPagarOrdenesPago({
 
               <div className="mpr-tbody">
                 {!deudasOrdenadas.length && (
-                  <div className="mpr-empty">
-                    No hay deudas pendientes para este proveedor.
-                  </div>
+                  <div className="mpr-empty">No hay deudas pendientes para este proveedor.</div>
                 )}
 
                 {deudasOrdenadas.map((r, idx) => {
@@ -392,11 +425,8 @@ export default function ModalPagarOrdenesPago({
                       role="row"
                       onClick={() => id && toggleOne(id)}
                     >
-                      <div
-                        className="mpr-td mpr-td--center"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <label className={`mpr-checkWrap ${(!id || loading) ? "is-disabled" : ""}`}>
+                      <div className="mpr-td mpr-td--center" onClick={(e) => e.stopPropagation()}>
+                        <label className={`mpr-checkWrap ${!id || loading ? "is-disabled" : ""}`}>
                           <input
                             className="mpr-checkInput"
                             type="checkbox"
@@ -428,12 +458,7 @@ export default function ModalPagarOrdenesPago({
 
         {/* Footer */}
         <div className="mi-modal__footer mpr-footer">
-          <button
-            type="button"
-            className="mpr-btn mpr-btn--ghost"
-            onClick={onClose}
-            disabled={loading}
-          >
+          <button type="button" className="mpr-btn mpr-btn--ghost" onClick={onClose} disabled={loading}>
             Cancelar
           </button>
 

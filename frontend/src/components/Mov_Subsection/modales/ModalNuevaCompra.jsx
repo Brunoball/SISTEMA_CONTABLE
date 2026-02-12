@@ -83,7 +83,11 @@ function normalizeLists(lists) {
   const pick = (k) => (Array.isArray(l?.[k]) ? l[k] : []);
 
   const mediosPago =
-    pick("medios_pago").length ? pick("medios_pago") : pick("mediosPago").length ? pick("mediosPago") : pick("medios");
+    pick("medios_pago").length
+      ? pick("medios_pago")
+      : pick("mediosPago").length
+      ? pick("mediosPago")
+      : pick("medios");
 
   const cuentas =
     pick("cuentas_corrientes").length
@@ -101,19 +105,28 @@ function normalizeLists(lists) {
 }
 
 /* =========================
-   Auth + API
+   ✅ Auth + headers (SaaS: X-Session)
 ========================= */
 function getAuthInfo() {
+  // 🔑 SaaS session_key (prioridad)
+  const sessionKey =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("x_session") ||
+    localStorage.getItem("X-Session") ||
+    "";
+
+  // (compat) token viejo si lo seguís usando en algún endpoint
   const token = localStorage.getItem("token") || "";
+
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
-  } catch {
-    // ignore
-  }
-  return { token, idUsuario };
+  } catch {}
+
+  return { token, sessionKey, idUsuario };
 }
 
 async function parseJsonOrThrow(res) {
@@ -127,10 +140,21 @@ async function parseJsonOrThrow(res) {
   }
 }
 
-async function apiPostJson(url, payload) {
-  const { token } = getAuthInfo();
+function buildAuthHeaders() {
+  const { token, sessionKey } = getAuthInfo();
   const headers = { "Content-Type": "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
+
+  // ✅ NUEVO: multi-tenant auth
+  if (sessionKey) headers["X-Session"] = sessionKey;
+
+  // (compat) si NO hay sessionKey, usa Bearer token (si existe)
+  if (!sessionKey && token) headers.Authorization = `Bearer ${token}`;
+
+  return headers;
+}
+
+async function apiPostJson(url, payload) {
+  const headers = buildAuthHeaders();
 
   const res = await fetch(url, {
     method: "POST",
@@ -255,6 +279,9 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const mediosPagoList = useMemo(() => normalizeLists(lists).medios_pago, [lists]);
   const cuentasCorrientesList = useMemo(() => normalizeLists(lists).cuentas_corrientes, [lists]);
 
+  // ✅ IMPORTANTE: ahora estás usando routes/api.php en local (puede ser /routes/api.php o /api.php según tu setup)
+  // Tu error mostraba: http://127.0.0.1:3001/routes/api.php?action=compras_crear_batch
+  // Así que lo dejamos así:
   const API_BATCH = `${BASE_URL}/api.php?action=compras_crear_batch`;
   const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
 
@@ -583,6 +610,13 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const submit = useCallback(async () => {
     if (saving) return;
 
+    // ✅ si falta X-Session, avisar claro (así no te vuelve a pasar)
+    const { sessionKey } = getAuthInfo();
+    if (!sessionKey) {
+      showToast("error", "No hay sesión activa (Falta X-Session). Iniciá sesión de nuevo.", 5200);
+      return;
+    }
+
     if (addUI.open) {
       showToast("advertencia", "Terminá de crear el detalle (o cancelá) antes de guardar.", 3200);
       return;
@@ -645,6 +679,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
         return;
       }
 
+      // ✅ POST con X-Session (buildAuthHeaders -> apiPostJson)
       const data = await apiPostJson(API_BATCH, payloads);
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar el batch de compras.");
 
@@ -664,14 +699,26 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
   const modalJSX = (
     <div className="mi-modal__overlay mi-modal__overlay--mov" onMouseDown={() => (!saving ? onClose?.() : null)}>
-      <div className="mi-modal__container mi-modal__container--mov" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="mi-modal__container mi-modal__container--mov"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="mi-modal__header mi-modal__header--car">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Nueva Compra</h2>
             <p className="mi-modal__subtitle">Planilla a la izquierda + datos de compra a la derecha.</p>
           </div>
 
-          <button ref={closeBtnRef} className="mi-modal__close" onClick={() => (!saving ? onClose?.() : null)} aria-label="Cerrar" disabled={saving} type="button">
+          <button
+            ref={closeBtnRef}
+            className="mi-modal__close"
+            onClick={() => (!saving ? onClose?.() : null)}
+            aria-label="Cerrar"
+            disabled={saving}
+            type="button"
+          >
             ✕
           </button>
         </div>
@@ -727,7 +774,12 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                           </ul>
                         )}
 
-                        <button type="button" onClick={() => startAddDetalleForRow(r.id)} disabled={saving || addUI.saving} className="mi-cr-link">
+                        <button
+                          type="button"
+                          onClick={() => startAddDetalleForRow(r.id)}
+                          disabled={saving || addUI.saving}
+                          className="mi-cr-link"
+                        >
                           + Agregar nuevo detalle
                         </button>
                       </div>

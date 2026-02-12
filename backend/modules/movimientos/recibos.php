@@ -5,16 +5,19 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
+// ✅ CORS (IMPORTANTE: permitir X-Session)
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Session');
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
   http_response_code(204);
   exit;
 }
 
-require_once __DIR__ . '/../../config/db.php';
+// ✅ EN ESTRUCTURA NUEVA: el $pdo lo crea routes/api.php (tenant_resolver)
+global $pdo;
+
 require_once __DIR__ . '/../utils/auditoria.php';
 
 /* ----------------- Helpers ----------------- */
@@ -54,11 +57,11 @@ function is_valid_periodo(string $p): bool { return (bool)preg_match('/^\d{4}\-\
 
 /* ----------------- PDO check ----------------- */
 if (!isset($pdo) || !($pdo instanceof PDO)) {
-  fail('No hay conexión a la base de datos.');
+  fail('Conexión PDO no disponible (tenant no resuelto o sesión inválida).', 500);
 }
 
 /* =========================================================
-   idUsuario (token/body)
+   idUsuario (token/body) - queda por compat
 ========================================================= */
 function get_bearer_token(): string {
   $h = '';
@@ -163,8 +166,6 @@ function item_payload_from_src(array $src, float $monto_total, int $id_detalle):
 
 /* =========================================================
    LISTAR RECIBOS (GET)
-   - Devuelve lo mismo que movimientos_listar para que tu UI no cambie.
-   - Recibos.jsx filtra "pendientes" en frontend (cuenta corriente + cliente).
 ========================================================= */
 function recibos_listar(PDO $pdo): void
 {
@@ -319,7 +320,6 @@ function recibos_listar(PDO $pdo): void
 
 /* =========================================================
    ACTUALIZAR RECIBO (POST)
-   - Mismo esquema que movimientos_actualizar (cabecera + primer item)
 ========================================================= */
 function recibos_actualizar(PDO $pdo): void
 {
@@ -347,7 +347,6 @@ function recibos_actualizar(PDO $pdo): void
     $periodo = periodo_from_fecha($fecha);
   }
 
-  // En Recibos no tocamos reglas del negocio: dejamos que llegue lo que venga
   $id_clasificacion = array_key_exists('id_clasificacion', $src) ? n_int($src['id_clasificacion']) : n_int($before['id_clasificacion'] ?? null);
   $id_tipo_venta    = array_key_exists('id_tipo_venta', $src) ? n_int($src['id_tipo_venta']) : n_int($before['id_tipo_venta'] ?? null);
   $id_medio_pago    = array_key_exists('id_medio_pago', $src) ? n_int($src['id_medio_pago']) : n_int($before['id_medio_pago'] ?? null);
@@ -507,9 +506,6 @@ function recibos_eliminar(PDO $pdo): void
 
 /* =========================================================
    CONFIRMAR PAGO (POST)
-   - Recibe ids_movimiento[] + id_medio_pago
-   - Marca como "CONTADO" si existe en tipos_venta (por nombre),
-     y setea id_medio_pago.
 ========================================================= */
 function find_id_tipo_venta_contado(PDO $pdo): ?int {
   try {
@@ -551,13 +547,13 @@ function recibos_confirmar_pago(PDO $pdo): void
     fail('Falta id_medio_pago.');
   }
 
-  $idTipoContado = find_id_tipo_venta_contado($pdo); // puede ser null (no rompe)
+  $idTipoContado = find_id_tipo_venta_contado($pdo);
 
   try {
     $pdo->beginTransaction();
 
-    // Traemos "antes" para auditoría
     $in = implode(',', array_fill(0, count($idsOk), '?'));
+
     $beforeSt = $pdo->prepare("SELECT * FROM movimientos WHERE id_movimiento IN ($in)");
     $beforeSt->execute($idsOk);
     $before = $beforeSt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -576,7 +572,6 @@ function recibos_confirmar_pago(PDO $pdo): void
 
     $st = $pdo->prepare($sql);
 
-    // bind named + positional
     foreach ($params as $k => $v) {
       $st->bindValue($k, $v, PDO::PARAM_INT);
     }

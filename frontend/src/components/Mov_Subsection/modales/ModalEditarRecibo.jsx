@@ -133,9 +133,6 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 
 /* =========================
    ModalEditarRecibo
-   ✅ Backend: NUNCA llama a movimientos_*
-   - Guardar: onSave(payloadFinal) -> Recibos.jsx -> action=recibos_actualizar
-   - Catálogo: action=catalogo_crear (global)
 ========================= */
 export default function ModalEditarRecibo({ open, row, lists, periodoDefault, onClose, onSave, onToast }) {
   const API = `${BASE_URL}/api.php`;
@@ -158,7 +155,9 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
     monto_total: 0,
   }));
 
+  // ✅ Autocomplete: focus + armado (solo muestra dropdown si el usuario tipeó)
   const [detalleFocus, setDetalleFocus] = useState(false);
+  const [detalleArmed, setDetalleArmed] = useState(false);
   const detalleInputRef = useRef(null);
 
   const [addUI, setAddUI] = useState({ open: false, text: "", saving: false });
@@ -189,6 +188,10 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
     setSaving(false);
     setAddUI({ open: false, text: "", saving: false });
 
+    // ✅ MUY IMPORTANTE: al abrir NO queremos dropdown
+    setDetalleFocus(false);
+    setDetalleArmed(false);
+
     setForm({
       id_movimiento: safeNumber(r.id_movimiento) || null,
       fecha: fecha || "",
@@ -200,7 +203,8 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
       monto_total: safeNumber(r.monto_total ?? r.total ?? 0),
     });
 
-    setTimeout(() => detalleInputRef.current?.focus(), 0);
+    // ❌ Antes: autofocus que disparaba dropdown
+    // setTimeout(() => detalleInputRef.current?.focus(), 0);
   }, [open, row, lists, periodoDefault]);
 
   /* =========================
@@ -209,19 +213,26 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
   const filteredDetalles = useMemo(() => {
     const all = Array.isArray(lists?.detalles) ? lists.detalles : [];
     const q = normalizeSearchText(form.detalleInput);
-    if (!detalleFocus || q.length < 1) return [];
+
+    // ✅ SOLO mostrar si el usuario tipeó (armed)
+    if (!detalleFocus || !detalleArmed || q.length < 1) return [];
+
     return all.filter((d) => normalizeSearchText(d?.nombre).includes(q)).slice(0, 25);
-  }, [lists, form.detalleInput, detalleFocus]);
+  }, [lists, form.detalleInput, detalleFocus, detalleArmed]);
 
   const handleDetalleInputChange = (e) => {
     const value = e.target.value;
+    setDetalleArmed(true); // ✅ ahora sí, el usuario escribió
     setForm((p) => ({ ...p, detalleInput: value, id_detalle: NULL_OPTION }));
   };
 
   const handleSelectDetalle = (det) => {
     const nombre = String(det?.nombre ?? "").trim();
     setForm((p) => ({ ...p, detalleInput: nombre, id_detalle: String(det?.id ?? NULL_OPTION) }));
+
+    // ✅ al seleccionar, cerramos y “desarmamos”
     setDetalleFocus(false);
+    setDetalleArmed(false);
   };
 
   /* =========================
@@ -249,6 +260,7 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
   ========================= */
   const startAddDetalle = () => {
     setDetalleFocus(false);
+    setDetalleArmed(false);
     setAddUI({ open: true, text: "", saving: false });
   };
 
@@ -265,7 +277,6 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
     try {
       const { idUsuario } = getAuthInfo();
 
-      // ✅ global catalogo_crear (NO movimientos)
       const data = await apiPostJson(`${API}?action=catalogo_crear`, {
         catalogo: "detalles",
         nombre,
@@ -282,6 +293,10 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
 
       setAddUI({ open: false, text: "", saving: false });
       showToast("exito", `Detalle creado: "${newNombre}"`, 2400);
+
+      // ✅ no abrir dropdown
+      setDetalleFocus(false);
+      setDetalleArmed(false);
     } catch (e) {
       setAddUI((p) => ({ ...p, saving: false }));
       showToast("error", e?.message || "Error creando detalle.", 4200);
@@ -290,8 +305,6 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
 
   /* =========================
      Submit
-     ✅ SOLO llama onSave(payloadFinal)
-     (Recibos.jsx decide action=recibos_actualizar)
   ========================= */
   const submit = async (e) => {
     e.preventDefault();
@@ -309,7 +322,6 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
         throw new Error("Fecha inválida.");
       }
 
-      // periodo: si el usuario lo borró o puso raro, lo regeneramos desde fecha
       const perUI = periodoToMMYYYY(form.periodo) || periodoFromISODate(form.fecha);
       const perAPI = periodoToYYYYMM(perUI);
 
@@ -318,19 +330,15 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
         fecha: form.fecha,
         periodo: perAPI, // YYYY-MM
 
-        // cliente
         id_cliente: form.id_cliente && form.id_cliente !== NULL_OPTION ? Number(form.id_cliente) : null,
-        cliente: String(form.cliente || "").trim(), // ✅ mandamos texto también (por si tu recibos.php lo usa)
+        cliente: String(form.cliente || "").trim(),
 
-        // detalle
         id_detalle: form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null,
         detalle: String(form.detalleInput || "").trim(),
 
-        // monto
         monto_total: Math.max(0, Math.round(safeNumber(form.monto_total) * 100) / 100),
       };
 
-      // ✅ ESTE ES EL PUNTO CLAVE: NO HAY fetch a movimientos acá.
       await onSave?.(payloadFinal);
 
       showToast("exito", "Recibo actualizado.", 2400);
@@ -406,7 +414,7 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
             />
             <label className="fl-label">Descripción (Detalle)</label>
 
-            {detalleFocus && filteredDetalles.length > 0 && (
+            {detalleFocus && detalleArmed && filteredDetalles.length > 0 && (
               <ul className="mi-cr-suggest">
                 {filteredDetalles.map((d) => (
                   <li

@@ -36,6 +36,11 @@ const MIN_LOADING_MS = 0; // 0 desactiva
 const FORCE_SHOW_LOADER_DEV = false; // true solo dev
 
 /* =========================
+   PERF: paginado
+========================= */
+const PAGE_SIZE = 300; // ✅ SaaS-friendly
+
+/* =========================
    Helpers
 ========================= */
 function moneyARS(v) {
@@ -240,12 +245,18 @@ export default function Movimientos() {
 
   const [loadingLists, setLoadingLists] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
   // filtros
   const [fPeriodo, setFPeriodo] = useState(""); // MM-YYYY
   const [q, setQ] = useState("");
+
+  // paginado
+  const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState(null);
 
   // modales
   const [openAdd, setOpenAdd] = useState(false);
@@ -260,8 +271,11 @@ export default function Movimientos() {
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // cache por periodoAPI|q
+  // cache por periodoAPI|q  -> { rows, hasMore, nextOffset }
   const cacheRef = useRef(new Map());
+
+  // ✅ para evitar “apendear” respuestas viejas
+  const reqIdRef = useRef(0);
 
   // ✅ Loader PRO global (hook)
   const { visible: uxLoaderVisible, begin: uxBegin, end: uxEnd } = useSmoothLoader({
@@ -364,30 +378,56 @@ export default function Movimientos() {
     }
   }, []);
 
+  const setPageState = useCallback((payload) => {
+    setRows(payload?.rows || []);
+    setHasMore(!!payload?.hasMore);
+    setNextOffset(payload?.nextOffset ?? null);
+  }, []);
+
+  /* =========================
+     LOAD ROWS (paginado real)
+     ✅ FIX: append con setRows(prev => ...)
+     ✅ FIX: reqId para ignorar respuestas viejas
+  ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
       const periodoUI = typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
       const qLocal = typeof opts.q === "string" ? opts.q : q;
 
+      const append = !!opts.append;
+      const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
+
       const perUI = periodoToMMYYYY(periodoUI);
       if (!perUI) {
         setRows([]);
+        setHasMore(false);
+        setNextOffset(null);
         setLoadingRows(false);
+        setLoadingMore(false);
         setError("");
         return;
       }
 
       const periodoAPI = periodoToYYYYMM(perUI);
-      const cacheKey = `${periodoAPI}|${(qLocal || "").trim()}`;
+      const qKey = (qLocal || "").trim();
+      const cacheKey = `${periodoAPI}|${qKey}`;
 
-      uxBegin();
+      // marcar request
+      const myReqId = ++reqIdRef.current;
+
+      // UX loader solo cuando es carga principal (no "cargar más")
+      if (!append) uxBegin();
+
       const start = Date.now();
-      setLoadingRows(true);
+      if (append) setLoadingMore(true);
+      else setLoadingRows(true);
       setError("");
 
       try {
-        if (cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
-          setRows(cacheRef.current.get(cacheKey) || []);
+        // Cache solo para la carga principal (offset 0)
+        if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
+          const cached = cacheRef.current.get(cacheKey);
+          setPageState(cached);
           setLoadingRows(false);
           uxEnd();
           return;
@@ -396,42 +436,89 @@ export default function Movimientos() {
         const sp = new URLSearchParams();
         sp.set("action", "movimientos_listar");
         sp.set("periodo", periodoAPI);
-        if (qLocal) sp.set("q", qLocal);
+        if (qKey) sp.set("q", qKey);
+        sp.set("limit", String(PAGE_SIZE));
+        sp.set("offset", String(offset));
 
         const data = await apiGet(`${API}?${sp.toString()}`);
         if (!data.exito) throw new Error(data.mensaje || "No se pudieron cargar movimientos.");
 
+        // si llegó tarde, ignorar
+        if (myReqId !== reqIdRef.current) {
+          if (append) setLoadingMore(false);
+          else {
+            setLoadingRows(false);
+            uxEnd();
+          }
+          return;
+        }
+
         const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
         const movsNorm = movs.map((r) => ({ ...r, periodo: periodoToMMYYYY(r?.periodo) }));
 
-        cacheRef.current.set(cacheKey, movsNorm);
+        const newHasMore = !!data.has_more;
+        const newNextOffset =
+          data.next_offset !== undefined && data.next_offset !== null ? Number(data.next_offset) : null;
 
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
 
-        if (remaining > 0) {
-          setTimeout(() => {
+        const apply = () => {
+          if (append) {
+            // ✅ FIX REAL: append seguro con prev
+            setRows((prev) => {
+              const base = Array.isArray(prev) ? prev : [];
+              const seen = new Set(base.map((x) => String(x?.id_movimiento)));
+              const add = movsNorm.filter((x) => !seen.has(String(x?.id_movimiento)));
+              return [...base, ...add];
+            });
+          } else {
             setRows(movsNorm);
-            setLoadingRows(false);
-            uxEnd();
-          }, remaining);
-        } else {
-          setRows(movsNorm);
-          setLoadingRows(false);
-          uxEnd();
-        }
+          }
+
+          setHasMore(newHasMore);
+          setNextOffset(newNextOffset);
+
+          const payload = {
+            rows: append ? null : movsNorm,
+            hasMore: newHasMore,
+            nextOffset: newNextOffset,
+          };
+
+          // cache solo base
+          if (!append && offset === 0) cacheRef.current.set(cacheKey, { rows: movsNorm, hasMore: newHasMore, nextOffset: newNextOffset });
+
+          if (append) setLoadingMore(false);
+          else setLoadingRows(false);
+
+          if (!append) uxEnd();
+        };
+
+        if (remaining > 0) setTimeout(apply, remaining);
+        else apply();
       } catch (e) {
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
 
         setTimeout(() => {
+          // si llegó tarde, ignorar error viejo
+          if (myReqId !== reqIdRef.current) {
+            if (append) setLoadingMore(false);
+            else {
+              setLoadingRows(false);
+              uxEnd();
+            }
+            return;
+          }
+
           setError(e.message || "Error cargando movimientos.");
-          setLoadingRows(false);
-          uxEnd();
+          if (append) setLoadingMore(false);
+          else setLoadingRows(false);
+          if (!append) uxEnd();
         }, remaining);
       }
     },
-    [API, apiGet, fPeriodo, q, uxBegin, uxEnd]
+    [API, apiGet, fPeriodo, q, setPageState, uxBegin, uxEnd]
   );
 
   // sync período si desaparece
@@ -442,6 +529,8 @@ export default function Movimientos() {
       if (fPeriodo !== "") {
         setFPeriodo("");
         setRows([]);
+        setHasMore(false);
+        setNextOffset(null);
       }
       return;
     }
@@ -451,7 +540,7 @@ export default function Movimientos() {
       const next = lists.periodos[0];
       setFPeriodo(next);
       invalidateCacheForPeriodo(next);
-      loadRows({ periodo: next, q: "" });
+      loadRows({ periodo: next, q: "", offset: 0, append: false });
     }
   }, [lists.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
 
@@ -461,16 +550,18 @@ export default function Movimientos() {
       const normalized = await loadLists();
       const perDefault = (normalized.periodos || [])[0] || "";
       if (perDefault) {
-        await loadRows({ periodo: perDefault, q: "" });
+        await loadRows({ periodo: perDefault, q: "", offset: 0, append: false });
       } else {
         setRows([]);
+        setHasMore(false);
+        setNextOffset(null);
         setLoadingRows(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // debounce búsqueda
+  // debounce búsqueda (resetea paginado)
   useEffect(() => {
     if (!fPeriodo) return;
 
@@ -482,7 +573,7 @@ export default function Movimientos() {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
     searchTimerRef.current = setTimeout(() => {
-      loadRows({ periodo: fPeriodo, q });
+      loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
     }, 250);
 
     return () => {
@@ -493,7 +584,7 @@ export default function Movimientos() {
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
     if (!fPer) return [];
-    return rows.filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer));
+    return (Array.isArray(rows) ? rows : []).filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer));
   }, [rows, fPeriodo]);
 
   const columns = useMemo(() => {
@@ -558,6 +649,10 @@ export default function Movimientos() {
         return;
       }
 
+      if (hasMore) {
+        showToast("error", "Ojo: faltan registros sin cargar. Si querés exportar todo, cargá más primero.", 4200);
+      }
+
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(dataToExport);
       XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Movimientos_Vista"));
@@ -568,10 +663,10 @@ export default function Movimientos() {
     } catch (e) {
       showToast("error", e?.message || "Error exportando Excel.", 3500);
     }
-  }, [filteredRows, fPeriodo, showToast]);
+  }, [filteredRows, fPeriodo, showToast, hasMore]);
 
   /* =========================================================
-     ✅ Guardar 1 movimiento (edición / alta normal)
+     ✅ Guardar 1 movimiento
   ========================================================= */
   const saveMovimiento = async (payload, isEdit) => {
     setError("");
@@ -593,7 +688,7 @@ export default function Movimientos() {
   };
 
   /* =========================================================
-     ✅ Guardar BATCH (CARGA RÁPIDA) - 1 SOLO POST
+     ✅ Guardar BATCH (CARGA RÁPIDA)
   ========================================================= */
   const saveBatchMovimientos = useCallback(
     async (payloads) => {
@@ -602,7 +697,6 @@ export default function Movimientos() {
 
       const { idUsuario } = getAuthInfo();
 
-      // Normalizo periodo a YYYY-MM (el backend ya acepta MM-YYYY igual, pero esto lo deja limpio)
       const movimientos = arr.map((p) => ({
         ...(p || {}),
         periodo: periodoToYYYYMM(p?.periodo),
@@ -615,14 +709,28 @@ export default function Movimientos() {
 
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la carga rápida.");
 
-      // refresco
       invalidateCacheForPeriodo(fPeriodo);
-      await loadRows({ periodo: fPeriodo, q: "" });
+      await loadRows({ periodo: fPeriodo, q: "", offset: 0, append: false });
 
       return data;
     },
     [API, apiPostJson, fPeriodo, invalidateCacheForPeriodo, loadRows]
   );
+
+  const handleChangePeriodo = async (valueUI) => {
+    const ui = periodoToMMYYYY(valueUI);
+    setFPeriodo(ui);
+    setQ("");
+
+    skipSearchRef.current = true;
+
+    await loadRows({ periodo: ui, q: "", offset: 0, append: false });
+  };
+
+  const handleLoadMore = async () => {
+    if (!hasMore || loadingMore || nextOffset === null) return;
+    await loadRows({ periodo: fPeriodo, q, offset: nextOffset, append: true });
+  };
 
   return (
     <div className="mov-page">
@@ -640,7 +748,7 @@ export default function Movimientos() {
             <div>
               <div className="mov-card__title">Movimientos</div>
               <div className="mov-card__hint">
-                Mostrando <b>{filteredRows.length}</b> registros
+                Mostrando <b>{filteredRows.length}</b> registros{hasMore ? " (hay más)" : ""}
               </div>
             </div>
 
@@ -651,14 +759,8 @@ export default function Movimientos() {
                 </label>
                 <select
                   value={periodoToMMYYYY(fPeriodo)}
-                  onChange={async (e) => {
-                    const ui = periodoToMMYYYY(e.target.value);
-                    setFPeriodo(ui);
-
-                    skipSearchRef.current = true;
-                    await loadRows({ periodo: ui, q });
-                  }}
-                  disabled={loadingRows || loadingLists}
+                  onChange={(e) => handleChangePeriodo(e.target.value)}
+                  disabled={loadingRows || loadingLists || loadingMore}
                 >
                   {(lists.periodos || []).map((p) => {
                     const ui = periodoToMMYYYY(p);
@@ -684,7 +786,7 @@ export default function Movimientos() {
                         e.preventDefault();
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         skipSearchRef.current = true;
-                        await loadRows({ periodo: fPeriodo, q: e.currentTarget.value });
+                        await loadRows({ periodo: fPeriodo, q: e.currentTarget.value, offset: 0, append: false });
                       }
                     }}
                     placeholder="Buscar…"
@@ -700,7 +802,7 @@ export default function Movimientos() {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
                         skipSearchRef.current = true;
-                        await loadRows({ periodo: fPeriodo, q: "" });
+                        await loadRows({ periodo: fPeriodo, q: "", offset: 0, append: false });
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
                     >
@@ -779,7 +881,7 @@ export default function Movimientos() {
                             className="mov-iconBtn"
                             title="Editar"
                             onClick={() => openEditModal(r)}
-                            disabled={loadingRows}
+                            disabled={loadingRows || loadingMore}
                           >
                             <FontAwesomeIcon icon={faPenToSquare} />
                           </button>
@@ -788,7 +890,7 @@ export default function Movimientos() {
                             type="button"
                             className="mov-iconBtn mov-iconBtn--danger"
                             title="Eliminar"
-                            disabled={loadingRows || deletingId === r.id_movimiento}
+                            disabled={loadingRows || loadingMore || deletingId === r.id_movimiento}
                             onClick={() => openDeleteModal(r)}
                           >
                             {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
@@ -826,6 +928,21 @@ export default function Movimientos() {
                   : "No hay movimientos para mostrar en este período."}
               </div>
             )}
+
+            {/* ✅ CARGAR MÁS */}
+            {!loadingRows && filteredRows.length > 0 && hasMore && (
+              <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
+                <button
+                  type="button"
+                  className="mov-btn mov-btn--ghost"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  title="Cargar más movimientos"
+                >
+                  {loadingMore ? "Cargando…" : "Cargar más"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -841,22 +958,17 @@ export default function Movimientos() {
           try {
             showToast("cargando", "Guardando carga rápida…", 12000);
 
-            // ✅ 1 solo POST batch
             await saveBatchMovimientos(payloads);
-
-            // ✅ refresco periodos en lists
             await refreshPeriodos();
 
-            // ✅ intento quedarme en el período del modal; si no existe, vuelvo al actual o al primero
             const firstPer = Array.isArray(payloads) && payloads[0]?.periodo ? payloads[0].periodo : "";
             const wantedUI = periodoToMMYYYY(firstPer) || fPeriodo;
 
-            // Si el período no está en lists (por timing), lo dejo igual y el effect de sync lo corrige
             setQ("");
             setFPeriodo(wantedUI);
 
             invalidateCacheForPeriodo(wantedUI);
-            await loadRows({ periodo: wantedUI, q: "" });
+            await loadRows({ periodo: wantedUI, q: "", offset: 0, append: false });
 
             setOpenAdd(false);
             showToast("exito", "Carga rápida guardada.", 2400);
@@ -884,7 +996,7 @@ export default function Movimientos() {
             await saveMovimiento(payload, true);
 
             invalidateCacheForPeriodo(fPeriodo);
-            await loadRows({ periodo: fPeriodo, q });
+            await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
             await refreshPeriodos();
 
             setOpenEdit(false);
@@ -929,7 +1041,7 @@ export default function Movimientos() {
             setSelectedRow(null);
 
             invalidateCacheForPeriodo(fPeriodo);
-            await loadRows({ periodo: fPeriodo, q });
+            await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
 
             await refreshPeriodos();
 

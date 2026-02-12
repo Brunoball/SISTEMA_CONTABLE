@@ -143,10 +143,18 @@ function periodoToYYYYMM(input) {
 }
 
 /* =========================
-   Auth helpers
+   Auth helpers (token + X-Session)
 ========================= */
 function getAuthInfo() {
+  // ✅ compat: si seguís usando JWT en algunos módulos, no se rompe
   const token = localStorage.getItem("token") || "";
+
+  // ✅ nuevo: session_key del login multi-tenant (#balto_login)
+  const sessionKey =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    "";
 
   let idUsuario = 0;
   try {
@@ -155,7 +163,7 @@ function getAuthInfo() {
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
-  return { token, idUsuario };
+  return { token, sessionKey, idUsuario };
 }
 
 /* =========================
@@ -209,17 +217,14 @@ function hasCliente(r) {
   ).trim();
   return cliTxt.length > 0;
 }
-
 function hasTipoVentaText(r) {
   const tv = String(r?.pago_tipo_venta ?? r?.tipo_venta ?? "").trim();
   return tv.length > 0;
 }
-
 function hasTipoVentaId(r) {
   const id = Number(r?.id_tipo_venta ?? r?.tipo_venta_id ?? 0);
   return Number.isFinite(id) && id > 0;
 }
-
 function isSalida(r) {
   const tmTxt = normalizeSearchText(
     r?.tipo_movimiento ?? r?.pago_tipo_movimiento ?? ""
@@ -229,7 +234,6 @@ function isSalida(r) {
   const id = Number(r?.id_tipo_movimiento ?? r?.tipo_movimiento_id ?? 0);
   return Number.isFinite(id) && id > 0;
 }
-
 function isVentaRow(row) {
   if (!hasCliente(row)) return false;
   if (hasTipoVentaText(row)) return true;
@@ -331,12 +335,18 @@ export default function Ventas() {
   const cacheRef = useRef(new Map());
 
   /* =========================
-     API helpers
+     API helpers (Bearer + X-Session)
   ========================= */
   const buildHeaders = useCallback(() => {
-    const { token } = getAuthInfo();
+    const { token, sessionKey } = getAuthInfo();
     const h = { "Content-Type": "application/json" };
+
+    // ✅ nuevo
+    if (sessionKey) h["X-Session"] = sessionKey;
+
+    // ✅ compat viejo
     if (token) h.Authorization = `Bearer ${token}`;
+
     return h;
   }, []);
 
@@ -355,9 +365,12 @@ export default function Ventas() {
 
   const apiGet = useCallback(
     async (url) => {
+      const { token, sessionKey } = getAuthInfo();
       const headers = {};
-      const { token } = getAuthInfo();
+
+      if (sessionKey) headers["X-Session"] = sessionKey;
       if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch(url, { method: "GET", headers });
       return await parseJsonOrThrow(res);
     },
@@ -598,7 +611,7 @@ export default function Ventas() {
 
     const data = await apiPostJson(`${API}?action=${action}`, {
       ...payloadNorm,
-      idUsuario,
+      idUsuario, // ✅ si backend lo ignora por X-Session, no pasa nada
     });
 
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
@@ -932,7 +945,7 @@ export default function Ventas() {
         </div>
       </section>
 
-      {/* ✅ MODAL NUEVA VENTA (ARREGLADO: usa onSaved real) */}
+      {/* ✅ MODAL NUEVA VENTA */}
       <ModalNuevaVenta
         open={openAdd}
         lists={lists}
@@ -940,12 +953,10 @@ export default function Ventas() {
         onClose={() => setOpenAdd(false)}
         onToast={showToast}
         onSaved={async (info) => {
-          // info: { periodoApi, periodoUI, creados }
           try {
             const ui = periodoToMMYYYY(info?.periodoUI || fPeriodo);
             setOpenAdd(false);
 
-            // mostrar lo nuevo sin recargar página
             setQ("");
             setFPeriodo(ui);
 

@@ -38,8 +38,8 @@ if (!function_exists('route_movimientos')) {
       case 'movimientos_periodos_listar':
       case 'movimientos_crear':
       case 'movimientos_crear_batch':
-      case 'movimientos_actualizar':     // ✅ NUEVO
-      case 'movimientos_eliminar':       // ✅ NUEVO
+      case 'movimientos_actualizar':
+      case 'movimientos_eliminar':
         require __DIR__ . '/movimientos.php';
         return true;
 
@@ -55,6 +55,7 @@ if (!function_exists('route_movimientos')) {
       /* ✅ COMPRAS */
       case 'compras_listar':
       case 'compras_crear':
+      case 'compras_crear_batch': // ✅ FALTABA (tu compras.php lo tiene)
       case 'compras_actualizar':
       case 'compras_eliminar':
         require __DIR__ . '/compras.php';

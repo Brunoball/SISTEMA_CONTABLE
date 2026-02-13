@@ -26,6 +26,16 @@ function moneyARS(v) {
   }
 }
 
+function moneyARSAbs(v) {
+  if (v == null || v === "") return "-";
+  const n = Math.abs(Number(v || 0));
+  try {
+    return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
+  } catch {
+    return `$${n.toFixed(2)}`;
+  }
+}
+
 function fmtDateES(iso) {
   if (!iso) return "-";
   const [y, m, d] = String(iso).split("-");
@@ -45,6 +55,7 @@ function normalizeRows(rawRows) {
     fecha: String(r?.fecha ?? ""),
     ingresos: r?.ingresos == null ? null : Number(r.ingresos || 0),
     egresos: r?.egresos == null ? null : Number(r.egresos || 0),
+    otros: r?.otros == null ? null : Number(r.otros || 0), // ✅ NUEVO (signed)
     saldo: r?.saldo == null ? null : Number(r.saldo || 0),
   }));
 }
@@ -97,8 +108,6 @@ export default function Flujo_Caja() {
   useEffect(() => {
     const k = getSessionKey();
     if (!k) {
-      // No te saco de la pantalla (por si lo estás probando),
-      // pero te avisa el motivo típico del 401.
       showToast("advertencia", "Falta session_key. Iniciá sesión de nuevo.", 4200);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,7 +127,6 @@ export default function Flujo_Caja() {
 
       const json = await parseJsonOrThrow(res);
 
-      // Si el backend corta por tenant_resolver, suele venir 401 con {exito:false,mensaje:"Falta X-Session."}
       if (!res.ok || !json?.exito) {
         const msg = json?.mensaje || `Error cargando períodos (HTTP ${res.status})`;
         throw new Error(msg);
@@ -187,7 +195,7 @@ export default function Flujo_Caja() {
   }, [fetchResumen]);
 
   // ✅ Estructura esperada del backend:
-  // data.tiendas[0].rows[] con {fecha, ingresos, egresos, saldo}
+  // data.tiendas[0].rows[] con {fecha, ingresos, egresos, otros, saldo}
   const bloque = data?.tiendas?.[0] || null;
   const rowsRaw = bloque?.rows || [];
   const rows = useMemo(() => normalizeRows(rowsRaw), [rowsRaw]);
@@ -206,11 +214,12 @@ export default function Flujo_Caja() {
         Fecha: fmtDateES(r.fecha),
         Ingresos: r.ingresos == null ? "" : Number(r.ingresos),
         Egresos: r.egresos == null ? "" : Number(r.egresos),
+        Otros: r.otros == null ? "" : Number(r.otros), // ✅ signed (positivos/negativos)
         Saldo: r.saldo == null ? "" : Number(r.saldo),
       }));
 
       const ws = XLSX.utils.json_to_sheet(excelRows);
-      ws["!cols"] = [{ wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+      ws["!cols"] = [{ wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, `Flujo ${periodo}`);
@@ -300,10 +309,12 @@ export default function Flujo_Caja() {
             </div>
 
             <div className="fc-tableWrap">
+              {/* ✅ 5 columnas */}
               <div className="fc-grid fc-grid--head fc-grid--excel">
                 <div className="fc-cell">FECHA</div>
                 <div className="fc-cell is-center">INGRESOS</div>
                 <div className="fc-cell is-center">EGRESOS</div>
+                <div className="fc-cell is-center">OTROS</div>
                 <div className="fc-cell is-center">SALDO</div>
               </div>
 
@@ -316,20 +327,41 @@ export default function Flujo_Caja() {
                 )}
 
                 {!loading &&
-                  rows.map((r) => (
-                    <div className="fc-grid fc-grid--row fc-grid--excel" key={r.fecha}>
-                      <div className="fc-cell fc-date">{fmtDateES(r.fecha)}</div>
-                      <div className="fc-cell fc-num is-center fc-in">{moneyARS(r.ingresos)}</div>
-                      <div className="fc-cell fc-num is-center fc-eg">{moneyARS(r.egresos)}</div>
-                      <div
-                        className={`fc-cell fc-num is-center fc-saldo ${
-                          Number(r.saldo) < 0 ? "is-negative" : "is-positive"
-                        }`}
-                      >
-                        {moneyARS(r.saldo)}
+                  rows.map((r) => {
+                    const otros = r.otros == null ? null : Number(r.otros || 0);
+                    const otrosIsNeg = otros != null && otros < 0;
+
+                    return (
+                      <div className="fc-grid fc-grid--row fc-grid--excel" key={r.fecha}>
+                        <div className="fc-cell fc-date">{fmtDateES(r.fecha)}</div>
+
+                        <div className="fc-cell fc-num is-center fc-in">
+                          {moneyARS(r.ingresos)}
+                        </div>
+
+                        <div className="fc-cell fc-num is-center fc-eg">
+                          {moneyARS(r.egresos)}
+                        </div>
+
+                        {/* ✅ OTROS: se pinta según signo, se muestra ABS */}
+                        <div
+                          className={`fc-cell fc-num is-center ${
+                            otrosIsNeg ? "fc-eg" : "fc-in"
+                          }`}
+                        >
+                          {otros == null ? "-" : moneyARSAbs(otros)}
+                        </div>
+
+                        <div
+                          className={`fc-cell fc-num is-center fc-saldo ${
+                            Number(r.saldo) < 0 ? "is-negative" : "is-positive"
+                          }`}
+                        >
+                          {moneyARS(r.saldo)}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                 {!loading && rows.length === 0 && (
                   <div className="fc-emptyRow">No hay datos para mostrar.</div>
@@ -338,8 +370,8 @@ export default function Flujo_Caja() {
             </div>
 
             <div className="fc-footnote">
-              * El saldo del día 01 arranca desde el “Saldo base” y se actualiza con (ingresos −
-              egresos) de cada día.
+              * El saldo del día 01 arranca desde el “Saldo base” y se actualiza con (ingresos + otros − egresos)
+              de cada día.
             </div>
           </>
         ) : (

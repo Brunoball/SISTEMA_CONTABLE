@@ -59,27 +59,20 @@ function formatFechaDMY(v) {
 ========================= */
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
-
   const session =
     localStorage.getItem("session_key") ||
     localStorage.getItem("sessionKey") ||
     localStorage.getItem("x_session") ||
     localStorage.getItem("X-Session") ||
     "";
-
   return { token, session };
 }
 
 function buildAuthHeaders() {
   const { token, session } = getAuthInfo();
   const headers = {};
-
-  // ✅ SaaS (Balto)
-  if (session) headers["X-Session"] = session;
-
-  // ✅ compat viejo si todavía lo usás en algo
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
+  if (session) headers["X-Session"] = session; // ✅ SaaS
+  if (token) headers["Authorization"] = `Bearer ${token}`; // compat viejo
   return headers;
 }
 
@@ -129,14 +122,38 @@ function EstadoChip({ estado }) {
   );
 }
 
+/* =========================
+   ✅ fetch JSON helper
+========================= */
+async function fetchJsonOrThrow(url, opts = {}) {
+  const res = await fetch(url, opts);
+  const text = await res.text();
+  if (!text) throw new Error("Respuesta vacía del servidor.");
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    const preview = text.length > 700 ? text.slice(0, 700) + "..." : text;
+    throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
+  }
+  if (!res.ok) {
+    throw new Error(data?.mensaje || `HTTP ${res.status}`);
+  }
+  if (data?.exito === false) {
+    throw new Error(data?.mensaje || "Operación fallida.");
+  }
+  return data;
+}
+
 export default function ModalPagarRecibos({
   open,
   onClose,
-  onConfirm, // async ({ cliente, seleccion, totalSeleccionado, nota, id_medio_pago, medio_pago }) => void
-  onToast, // (tipo,msg,ms)
+  onConfirm,  // opcional: si no viene, el modal confirma directo contra el backend
+  onToast,    // (tipo,msg,ms)
+  onAfterPaid, // ✅ NUEVO opcional: (ids, {id, nombre}) => void para que el padre actualice su tabla
   cliente,
   deudas = [],
-  onFactura, // ✅ opcional
+  onFactura, // opcional
 }) {
   const dialogRef = useRef(null);
   const firstFocusRef = useRef(null);
@@ -146,6 +163,9 @@ export default function ModalPagarRecibos({
 
   const [nota, setNota] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // ✅ Local copy de deudas para que el chip cambie a PAGADO instantáneo
+  const [rows, setRows] = useState(() => []);
 
   // Medios de pago (backend)
   const [mediosPago, setMediosPago] = useState([]);
@@ -159,27 +179,15 @@ export default function ModalPagarRecibos({
       setLoadingMedios(true);
 
       const url = `${BASE_URL}/api.php?action=global_obtener_listas`;
-
-      const res = await fetch(url, {
+      const data = await fetchJsonOrThrow(url, {
         method: "GET",
         headers: buildAuthHeaders(),
       });
 
-      const text = await res.text();
-      if (!text) throw new Error("Respuesta vacía del servidor.");
-
-      let data = null;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-        throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
-      }
-
       const mp = normalizeMediosPago(data);
       setMediosPago(mp);
 
-      // ✅ NO auto-seleccionar el primero (queda en "")
+      // ✅ NO auto-seleccionar el primero
       // setIdMedioPago(prev => prev || (mp.length ? String(mp[0].id) : ""));
     } catch (e) {
       onToast?.("error", e?.message || "No se pudieron cargar los medios de pago.", 4200);
@@ -199,12 +207,14 @@ export default function ModalPagarRecibos({
     setNota("");
     setLoading(false);
 
+    setRows(Array.isArray(deudas) ? [...deudas] : []); // ✅ copiar deudas al abrir
+
     setMediosPago([]);
-    setIdMedioPago(""); // ✅ siempre pedir selección
+    setIdMedioPago("");
     fetchMediosPago();
 
     setTimeout(() => firstFocusRef.current?.focus(), 50);
-  }, [open, fetchMediosPago]);
+  }, [open, fetchMediosPago, deudas]);
 
   // Esc
   useEffect(() => {
@@ -218,7 +228,7 @@ export default function ModalPagarRecibos({
   }, [open, onClose]);
 
   const deudasOrdenadas = useMemo(() => {
-    const arr = Array.isArray(deudas) ? [...deudas] : [];
+    const arr = Array.isArray(rows) ? [...rows] : [];
     arr.sort((a, b) => {
       const fa = String(a?.fecha || "");
       const fb = String(b?.fecha || "");
@@ -226,7 +236,7 @@ export default function ModalPagarRecibos({
       return fb.localeCompare(fa);
     });
     return arr;
-  }, [deudas]);
+  }, [rows]);
 
   const totalSeleccionado = useMemo(() => {
     let sum = 0;
@@ -283,6 +293,19 @@ export default function ModalPagarRecibos({
     });
   };
 
+  // ✅ Confirmación default (si el padre no manda onConfirm)
+  const confirmPagoDefault = async ({ ids_movimiento, id_medio_pago }) => {
+    const url = `${BASE_URL}/api.php?action=recibos_confirmar_pago`;
+    return await fetchJsonOrThrow(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildAuthHeaders(),
+      },
+      body: JSON.stringify({ ids_movimiento, id_medio_pago }),
+    });
+  };
+
   const handleConfirm = async () => {
     if (!deudasOrdenadas.length) {
       onToast?.("error", "Este cliente no tiene registros.", 2600);
@@ -304,10 +327,6 @@ export default function ModalPagarRecibos({
       onToast?.("error", "Seleccioná un medio de pago.", 2600);
       return;
     }
-    if (!onConfirm) {
-      onToast?.("error", "Falta conectar la acción de confirmación (onConfirm).", 3200);
-      return;
-    }
 
     const mp = mediosPago.find((x) => String(x.id) === String(idMedioPago));
     if (!mp) {
@@ -315,21 +334,53 @@ export default function ModalPagarRecibos({
       return;
     }
 
-    const payload = {
-      cliente: {
-        id_cliente: cliente?.id_cliente ?? null,
-        nombre: cliente?.cliente ?? "",
-      },
-      seleccion,
-      totalSeleccionado,
-      nota: nota.trim(),
-      id_medio_pago: mp.id,
-      medio_pago: mp.nombre,
-    };
+    const ids = seleccion.map((r) => Number(r?.id_movimiento || 0)).filter(Boolean);
 
     try {
       setLoading(true);
-      await onConfirm(payload);
+
+      // 1) Backend
+      if (onConfirm) {
+        await onConfirm({
+          cliente: {
+            id_cliente: cliente?.id_cliente ?? null,
+            nombre: cliente?.cliente ?? "",
+          },
+          seleccion,
+          totalSeleccionado,
+          nota: nota.trim(),
+          id_medio_pago: mp.id,
+          medio_pago: mp.nombre,
+        });
+      } else {
+        await confirmPagoDefault({ ids_movimiento: ids, id_medio_pago: mp.id });
+      }
+
+      // 2) ✅ Marcar como PAGADO en el modal (chip cambia instantáneo)
+      setRows((prev) =>
+        (Array.isArray(prev) ? prev : []).map((r) => {
+          const id = Number(r?.id_movimiento || 0);
+          if (!id || !ids.includes(id)) return r;
+          return {
+            ...r,
+            id_medio_pago: mp.id,
+            medio_pago_nombre: mp.nombre,
+            tipo_venta: "CONTADO",
+            pago_tipo_venta: "CONTADO",
+          };
+        })
+      );
+
+      // 3) ✅ avisar al padre para que también cambie afuera (si quiere)
+      onAfterPaid?.(ids, mp);
+
+      onToast?.("ok", "Pago confirmado ✅", 2200);
+
+      // 4) limpiar selección
+      setSelectedIds(new Set());
+      setPagaTodo(false);
+
+      // ✅ Si querés que NO se cierre el modal, comentá la línea de abajo
       onClose?.();
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo registrar el pago.", 4200);
@@ -412,7 +463,7 @@ export default function ModalPagarRecibos({
             </div>
 
             <div className="mi-modal__subtitle mpr-subtitle">
-              Ahora se muestran pendientes y pagadas (las pagadas quedan bloqueadas)
+              Se muestran pendientes y pagadas (las pagadas quedan bloqueadas)
             </div>
           </div>
 
@@ -444,19 +495,16 @@ export default function ModalPagarRecibos({
                         disabled={loading || loadingMedios}
                         className="mpr-select"
                       >
-                        {/* ✅ Placeholder SIEMPRE */}
                         <option value="">
                           {loadingMedios ? "Cargando medios de pago…" : "Seleccioná un medio de pago…"}
                         </option>
 
-                        {/* ✅ Si no hay medios */}
                         {!loadingMedios && mediosPago.length === 0 && (
                           <option value="" disabled>
                             (Sin medios de pago)
                           </option>
                         )}
 
-                        {/* ✅ Opciones reales */}
                         {mediosPago.map((x) => (
                           <option key={x.id} value={String(x.id)}>
                             {x.nombre}
@@ -496,7 +544,7 @@ export default function ModalPagarRecibos({
             </div>
           </div>
 
-          {/* Tabla de deudas */}
+          {/* Tabla */}
           <div className="mpr-tableWrap">
             <div className="mpr-tableTitle">
               <span>Registros del cliente</span>

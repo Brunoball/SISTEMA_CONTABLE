@@ -117,7 +117,7 @@ function audit_safe(PDO $pdo, int $idUsuario, string $accion, ?string $entidad, 
 }
 
 /* =========================================================
-   Helpers ITEMS (misma lógica que movimientos.php)
+   Helpers ITEMS
 ========================================================= */
 function item_payload_from_src(array $src, float $monto_total, int $id_detalle): array {
   $cantidad  = n_float($src['cantidad']  ?? null);
@@ -505,7 +505,7 @@ function recibos_eliminar(PDO $pdo): void
 }
 
 /* =========================================================
-   CONFIRMAR PAGO (POST)
+   CONFIRMAR PAGO (POST) ✅ ARREGLADO (SIN HY093)
 ========================================================= */
 function find_id_tipo_venta_contado(PDO $pdo): ?int {
   try {
@@ -531,6 +531,7 @@ function recibos_confirmar_pago(PDO $pdo): void
   $src = !empty($body) ? $body : ($_POST ?? []);
   $idUsuario = get_id_usuario_from_request($src);
 
+  // ids_movimiento[]
   $ids = $src['ids_movimiento'] ?? $src['ids_movimientos'] ?? [];
   if (!is_array($ids)) $ids = [];
 
@@ -542,60 +543,84 @@ function recibos_confirmar_pago(PDO $pdo): void
   $idsOk = array_values(array_unique($idsOk));
   if (!$idsOk) fail('Faltan ids_movimiento para confirmar.');
 
+  // id_medio_pago obligatorio
   $id_medio_pago = n_int($src['id_medio_pago'] ?? null);
-  if ($id_medio_pago === null || $id_medio_pago <= 0) {
-    fail('Falta id_medio_pago.');
-  }
+  if ($id_medio_pago === null || $id_medio_pago <= 0) fail('Falta id_medio_pago.');
 
+  // tipo_venta CONTADO (si existe)
   $idTipoContado = find_id_tipo_venta_contado($pdo);
 
   try {
     $pdo->beginTransaction();
 
-    $in = implode(',', array_fill(0, count($idsOk), '?'));
+    // Validar medio de pago (existe)
+    $vmp = $pdo->prepare("SELECT 1 FROM medios_pago WHERE id_medio_pago = :id LIMIT 1");
+    $vmp->execute([':id' => (int)$id_medio_pago]);
+    if ((int)($vmp->fetchColumn() ?: 0) !== 1) {
+      $pdo->rollBack();
+      fail('id_medio_pago inválido.');
+    }
 
-    $beforeSt = $pdo->prepare("SELECT * FROM movimientos WHERE id_movimiento IN ($in)");
-    $beforeSt->execute($idsOk);
+    // ✅ placeholders NOMBRADOS para IN (...)
+    $inNamed = [];
+    $params = [
+      ':id_medio_pago' => (int)$id_medio_pago,
+    ];
+
+    foreach ($idsOk as $i => $id) {
+      $ph = ':id' . $i;
+      $inNamed[] = $ph;
+      $params[$ph] = (int)$id;
+    }
+    $inSql = implode(',', $inNamed);
+
+    // BEFORE para auditoría (opcional)
+    $onlyIdsParams = [];
+    foreach ($inNamed as $ph) $onlyIdsParams[$ph] = $params[$ph];
+
+    $beforeSt = $pdo->prepare("SELECT * FROM movimientos WHERE id_movimiento IN ($inSql)");
+    $beforeSt->execute($onlyIdsParams);
     $before = $beforeSt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    $sql = "
-      UPDATE movimientos
-      SET
-        id_medio_pago = :id_medio_pago
-        " . ($idTipoContado ? ", id_tipo_venta = :id_tipo_venta" : "") . "
-      WHERE id_movimiento IN ($in)
-    ";
+    // UPDATE (todo nombrado => NO HY093)
+    if ($idTipoContado) {
+      $params[':id_tipo_venta'] = (int)$idTipoContado;
 
-    $params = [];
-    $params[':id_medio_pago'] = $id_medio_pago;
-    if ($idTipoContado) $params[':id_tipo_venta'] = $idTipoContado;
+      $sql = "
+        UPDATE movimientos
+        SET
+          id_medio_pago = :id_medio_pago,
+          id_tipo_venta = :id_tipo_venta
+        WHERE id_movimiento IN ($inSql)
+      ";
+    } else {
+      $sql = "
+        UPDATE movimientos
+        SET
+          id_medio_pago = :id_medio_pago
+        WHERE id_movimiento IN ($inSql)
+      ";
+    }
 
     $st = $pdo->prepare($sql);
-
-    foreach ($params as $k => $v) {
-      $st->bindValue($k, $v, PDO::PARAM_INT);
-    }
-    $pos = 1;
-    foreach ($idsOk as $id) {
-      $st->bindValue($pos, $id, PDO::PARAM_INT);
-      $pos++;
-    }
-
-    $st->execute();
+    $st->execute($params);
 
     $pdo->commit();
 
     audit_safe($pdo, $idUsuario, 'confirmar_pago', 'recibos', null, [
       'ids_movimiento' => $idsOk,
       'id_medio_pago' => $id_medio_pago,
-      'set_tipo_venta_contado' => $idTipoContado ? true : false,
+      'id_tipo_venta_contado' => $idTipoContado ?: null,
+      'actualizados' => $st->rowCount(),
       'antes' => $before,
     ]);
 
     ok([
       'mensaje' => 'Pago confirmado.',
+      'actualizados' => $st->rowCount(),
       'ids_movimiento' => $idsOk,
       'id_medio_pago' => $id_medio_pago,
+      'id_tipo_venta_contado' => $idTipoContado ?: null,
     ]);
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
@@ -608,7 +633,6 @@ function recibos_confirmar_pago(PDO $pdo): void
 ========================================================= */
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $action = is_string($action) ? trim($action) : '';
-
 if ($action === '') fail('Falta parámetro action.');
 
 try {

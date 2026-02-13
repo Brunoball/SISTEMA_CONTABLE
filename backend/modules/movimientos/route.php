@@ -17,6 +17,12 @@ if (!function_exists('route_movimientos')) {
         require __DIR__ . '/catalogo.php';
         return true;
 
+      /* ✅ CONFIRMAR PAGO (GENÉRICO) */
+      case 'movimientos_confirmar_pago':
+        // ✅ usa $pdo multi-tenant (no include db.php)
+        require __DIR__ . '/confirmar_pago.php';
+        return true;
+
       /* ✅ ÓRDENES DE PAGO */
       case 'ordenes_pago_listar':
       case 'ordenes_pago_actualizar':
@@ -55,7 +61,7 @@ if (!function_exists('route_movimientos')) {
       /* ✅ COMPRAS */
       case 'compras_listar':
       case 'compras_crear':
-      case 'compras_crear_batch': // ✅ FALTABA (tu compras.php lo tiene)
+      case 'compras_crear_batch':
       case 'compras_actualizar':
       case 'compras_eliminar':
         require __DIR__ . '/compras.php';

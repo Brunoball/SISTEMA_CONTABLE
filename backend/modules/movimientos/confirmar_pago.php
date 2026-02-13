@@ -1,42 +1,82 @@
 <?php
+// backend/modules/movimientos/confirmar_pago.php
 declare(strict_types=1);
 
+/**
+ * Confirma pago de movimientos:
+ * - setea id_tipo_venta = CONTADO
+ * - setea id_medio_pago = (opcional pero recomendado)
+ *
+ * INPUT JSON:
+ * {
+ *   "ids_movimiento": [1,2,3]  // o "ids_movimientos"
+ *   "id_medio_pago": 5         // opcional pero recomendado
+ * }
+ *
+ * RESP:
+ * { exito: true, actualizados: N, id_tipo_venta_contado: X, id_medio_pago: Y|null }
+ */
+
+// ✅ Multi-tenant: $pdo ya viene creado por routes/api.php (tenant_resolver)
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+  header('Content-Type: application/json; charset=utf-8');
+  http_response_code(500);
+  echo json_encode([
+    'exito' => false,
+    'mensaje' => 'PDO no disponible. Ejecutá esto vía routes/api.php (tenant_resolver).'
+  ], JSON_UNESCAPED_UNICODE);
+  exit;
+}
+
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/../../config/db.php';
+
+function json_fail(string $msg, int $code = 200, array $extra = []): void {
+  http_response_code($code);
+  echo json_encode(array_merge(['exito' => false, 'mensaje' => $msg], $extra), JSON_UNESCAPED_UNICODE);
+  exit;
+}
+
+function json_ok(array $extra = []): void {
+  echo json_encode(array_merge(['exito' => true], $extra), JSON_UNESCAPED_UNICODE);
+  exit;
+}
+
+function read_json(): array {
+  $raw = file_get_contents('php://input');
+  if (!$raw) return [];
+  $j = json_decode($raw, true);
+  return is_array($j) ? $j : [];
+}
+
+function only_post(): void {
+  if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+  }
+  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    json_fail('Método no permitido. Usá POST.');
+  }
+}
+
+only_post();
 
 try {
-  if (!isset($pdo) || !($pdo instanceof PDO)) {
-    throw new RuntimeException('Conexión PDO no disponible.');
-  }
-
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
 
-  // Opcional: aceptar solo POST
-  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-    echo json_encode([
-      "exito" => false,
-      "mensaje" => "Método no permitido. Usá POST."
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
-  }
-
-  $input = json_decode(file_get_contents("php://input"), true);
-  if (!is_array($input)) $input = [];
+  $input = read_json();
 
   $ids = $input['ids_movimiento'] ?? $input['ids_movimientos'] ?? [];
   $id_medio_pago = (int)($input['id_medio_pago'] ?? $input['idMedioPago'] ?? 0);
 
   if (!is_array($ids) || count($ids) === 0) {
-    echo json_encode(["exito" => false, "mensaje" => "Faltan ids_movimiento"], JSON_UNESCAPED_UNICODE);
-    exit;
+    json_fail('Faltan ids_movimiento.');
   }
 
-  // Normalizar ids
+  // Normalizar ids: int > 0, únicos
   $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn($x) => $x > 0)));
   if (count($ids) === 0) {
-    echo json_encode(["exito" => false, "mensaje" => "ids_movimiento inválidos"], JSON_UNESCAPED_UNICODE);
-    exit;
+    json_fail('ids_movimiento inválidos.');
   }
 
   // ✅ Buscar ID de tipo_venta CONTADO
@@ -52,45 +92,54 @@ try {
   $id_contado = (int)($stmtTV->fetchColumn() ?: 0);
 
   if ($id_contado <= 0) {
-    echo json_encode(["exito" => false, "mensaje" => "No existe tipo_venta 'CONTADO'."], JSON_UNESCAPED_UNICODE);
-    exit;
+    json_fail("No existe tipo_venta 'CONTADO'.");
   }
 
-  // Validar medio de pago si vino (opcional pero recomendado)
+  // ✅ Validar medio de pago si vino
   if ($id_medio_pago > 0) {
     $stmtMP = $pdo->prepare("
       SELECT 1
       FROM medios_pago
-      WHERE id_medio_pago = ?
+      WHERE id_medio_pago = :id
       LIMIT 1
     ");
-    $stmtMP->execute([$id_medio_pago]);
+    $stmtMP->execute([':id' => $id_medio_pago]);
     $ok = (int)($stmtMP->fetchColumn() ?: 0);
     if ($ok !== 1) {
-      echo json_encode(["exito" => false, "mensaje" => "id_medio_pago inválido."], JSON_UNESCAPED_UNICODE);
-      exit;
+      json_fail('id_medio_pago inválido.');
     }
   }
 
-  $placeholders = implode(',', array_fill(0, count($ids), '?'));
+  // ✅ IN (...) con placeholders NOMBRADOS (evita HY093 para siempre)
+  $inParts = [];
+  $params = [
+    ':id_contado' => $id_contado,
+  ];
+
+  foreach ($ids as $i => $id) {
+    $ph = ':id' . $i;
+    $inParts[] = $ph;
+    $params[$ph] = (int)$id;
+  }
+
+  $inSql = implode(',', $inParts);
 
   $pdo->beginTransaction();
 
-  // ✅ Pasar a contado + guardar medio de pago si vino
   if ($id_medio_pago > 0) {
     $sql = "
       UPDATE movimientos
-      SET id_tipo_venta = ?, id_medio_pago = ?
-      WHERE id_movimiento IN ($placeholders)
+      SET id_tipo_venta = :id_contado,
+          id_medio_pago = :id_medio_pago
+      WHERE id_movimiento IN ($inSql)
     ";
-    $params = array_merge([$id_contado, $id_medio_pago], $ids);
+    $params[':id_medio_pago'] = $id_medio_pago;
   } else {
     $sql = "
       UPDATE movimientos
-      SET id_tipo_venta = ?
-      WHERE id_movimiento IN ($placeholders)
+      SET id_tipo_venta = :id_contado
+      WHERE id_movimiento IN ($inSql)
     ";
-    $params = array_merge([$id_contado], $ids);
   }
 
   $stmt = $pdo->prepare($sql);
@@ -98,23 +147,14 @@ try {
 
   $pdo->commit();
 
-  echo json_encode([
-    "exito" => true,
-    "mensaje" => "Pago confirmado: movimientos pasados a CONTADO.",
-    "actualizados" => $stmt->rowCount(),
-    "id_tipo_venta_contado" => $id_contado,
-    "id_medio_pago" => $id_medio_pago > 0 ? $id_medio_pago : null,
-  ], JSON_UNESCAPED_UNICODE);
-  exit;
+  json_ok([
+    'mensaje' => 'Pago confirmado: movimientos pasados a CONTADO.',
+    'actualizados' => $stmt->rowCount(),
+    'id_tipo_venta_contado' => $id_contado,
+    'id_medio_pago' => $id_medio_pago > 0 ? $id_medio_pago : null,
+  ]);
 
 } catch (Throwable $e) {
-  if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
-    $pdo->rollBack();
-  }
-
-  echo json_encode([
-    "exito" => false,
-    "mensaje" => "Error: " . $e->getMessage()
-  ], JSON_UNESCAPED_UNICODE);
-  exit;
+  if ($pdo instanceof PDO && $pdo->inTransaction()) $pdo->rollBack();
+  json_fail('Error: ' . $e->getMessage());
 }

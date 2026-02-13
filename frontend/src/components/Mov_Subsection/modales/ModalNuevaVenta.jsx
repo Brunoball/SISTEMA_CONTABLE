@@ -38,10 +38,7 @@ function moneyARS(v) {
   }
 }
 function uid() {
-  return (
-    crypto?.randomUUID?.() ||
-    `${Date.now()}-${Math.random().toString(16).slice(2)}`
-  );
+  return crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 /* =========================
@@ -68,9 +65,7 @@ function mmYYYYToYYYYMM(mmYYYY) {
   return "";
 }
 function normalizePeriodoInput(raw) {
-  const digits = String(raw || "")
-    .replace(/\D/g, "")
-    .slice(0, 6);
+  const digits = String(raw || "").replace(/\D/g, "").slice(0, 6);
   if (digits.length <= 2) return digits;
   return `${digits.slice(0, 2)}-${digits.slice(2)}`;
 }
@@ -87,9 +82,7 @@ function normalizeLists(lists) {
     detalles: Array.isArray(l.detalles) ? l.detalles : [],
     medios_pago: Array.isArray(l.medios_pago) ? l.medios_pago : [],
     tipos_venta: Array.isArray(l.tipos_venta) ? l.tipos_venta : [],
-    cuentas_corrientes: Array.isArray(l.cuentas_corrientes)
-      ? l.cuentas_corrientes
-      : [],
+    cuentas_corrientes: Array.isArray(l.cuentas_corrientes) ? l.cuentas_corrientes : [],
   };
 }
 
@@ -124,9 +117,7 @@ async function parseJsonOrThrow(res) {
     data = JSON.parse(text);
   } catch {
     const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-    throw new Error(
-      `Respuesta inválida (no JSON). HTTP ${res.status}\n${preview}`
-    );
+    throw new Error(`Respuesta inválida (no JSON). HTTP ${res.status}\n${preview}`);
   }
 
   if (!res.ok) {
@@ -189,9 +180,7 @@ function AddCatalogMiniModal({
   return createPortal(
     <div className="mi-mini__overlay" onMouseDown={onCancel}>
       <div
-        className={["mi-mini__modal", dark ? "mi-modal--dark" : ""]
-          .join(" ")
-          .trim()}
+        className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="mi-mini__head">
@@ -268,26 +257,29 @@ function isCorrienteTipoVenta(tipoVentaObj) {
    ✅ ID tolerante
 ========================= */
 function getClienteId(c) {
-  const cand =
-    c?.id ??
-    c?.id_cliente ??
-    c?.idCliente ??
-    c?.cliente_id ??
-    c?.idcliente ??
-    null;
+  const cand = c?.id ?? c?.id_cliente ?? c?.idCliente ?? c?.cliente_id ?? c?.idcliente ?? null;
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 function getDetalleId(d) {
-  const cand =
-    d?.id ??
-    d?.id_detalle ??
-    d?.idDetalle ??
-    d?.detalle_id ??
-    d?.iddetalle ??
-    null;
+  const cand = d?.id ?? d?.id_detalle ?? d?.idDetalle ?? d?.detalle_id ?? d?.iddetalle ?? null;
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/* ✅ para no duplicar items en listas (cliente/detalle) */
+function getIdGeneric(x) {
+  const cand =
+    x?.id ??
+    x?.id_cliente ??
+    x?.idCliente ??
+    x?.cliente_id ??
+    x?.id_detalle ??
+    x?.idDetalle ??
+    x?.detalle_id ??
+    0;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 /* =========================
@@ -316,22 +308,15 @@ function describeLineProblem(r, idx1based) {
 
   const issues = [];
   if (!(Number.isFinite(detId) && detId > 0)) {
-    issues.push(
-      detTxt
-        ? `la descripción "${detTxt}" no está seleccionada del listado`
-        : "falta la descripción (detalle)"
-    );
+    issues.push(detTxt ? `la descripción "${detTxt}" no está seleccionada del listado` : "falta la descripción (detalle)");
   }
   if (qtyBlank) issues.push("falta la cantidad");
-  else if (!(Number.isFinite(qty) && qty > 0))
-    issues.push("la cantidad debe ser mayor a 0");
+  else if (!(Number.isFinite(qty) && qty > 0)) issues.push("la cantidad debe ser mayor a 0");
 
   if (priceBlank) issues.push("falta el precio");
-  else if (!(Number.isFinite(price) && price > 0))
-    issues.push("el precio debe ser mayor a 0");
+  else if (!(Number.isFinite(price) && price > 0)) issues.push("el precio debe ser mayor a 0");
 
-  if (!(Number.isFinite(total) && total > 0))
-    issues.push("el total queda en 0 (revisá cantidad / precio)");
+  if (!(Number.isFinite(total) && total > 0)) issues.push("el total queda en 0 (revisá cantidad / precio)");
 
   if (!issues.length) return null;
   return `Fila ${idx1based}: ${issues.join(", ")}.`;
@@ -346,13 +331,8 @@ function isTemaOscuro() {
   return Boolean(byAttr || byBody);
 }
 
-export default function ModalNuevaVenta({
-  open,
-  lists,
-  onClose,
-  onToast,
-  onSaved,
-}) {
+export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved }) {
+  // ✅ NUEVA ESTRUCTURA: siempre por routes/api.php
   const API_BATCH = `${BASE_URL}/api.php?action=ventas_crear_batch`;
   const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
 
@@ -426,14 +406,7 @@ export default function ModalNuevaVenta({
 
   // filas
   const [rows, setRows] = useState(() => [
-    {
-      id: uid(),
-      id_detalle: NULL_OPTION,
-      detalleText: "",
-      cantidad: 1,
-      precio: 0,
-      ivaPct: 0,
-    },
+    { id: uid(), id_detalle: NULL_OPTION, detalleText: "", cantidad: 1, precio: 0, ivaPct: 0 },
   ]);
 
   const [saving, setSaving] = useState(false);
@@ -473,24 +446,9 @@ export default function ModalNuevaVenta({
       setClienteInput("");
       setClienteFocus(false);
 
-      setRows([
-        {
-          id: uid(),
-          id_detalle: NULL_OPTION,
-          detalleText: "",
-          cantidad: 1,
-          precio: 0,
-          ivaPct: 0,
-        },
-      ]);
+      setRows([{ id: uid(), id_detalle: NULL_OPTION, detalleText: "", cantidad: 1, precio: 0, ivaPct: 0 }]);
 
-      setAddUI({
-        open: false,
-        field: null,
-        rowId: null,
-        text: "",
-        saving: false,
-      });
+      setAddUI({ open: false, field: null, rowId: null, text: "", saving: false });
 
       setSaving(false);
       setTimeout(() => closeBtnRef.current?.focus(), 0);
@@ -519,17 +477,7 @@ export default function ModalNuevaVenta({
   const onPeriodoChange = (raw) => setPeriodoUI(normalizePeriodoInput(raw));
 
   const addRow = () => {
-    setRows((prev) => [
-      ...prev,
-      {
-        id: uid(),
-        id_detalle: NULL_OPTION,
-        detalleText: "",
-        cantidad: 1,
-        precio: 0,
-        ivaPct: 0,
-      },
-    ]);
+    setRows((prev) => [...prev, { id: uid(), id_detalle: NULL_OPTION, detalleText: "", cantidad: 1, precio: 0, ivaPct: 0 }]);
   };
 
   const removeRow = (id) => {
@@ -558,13 +506,7 @@ export default function ModalNuevaVenta({
   const startAddDetalleForRow = useCallback(
     (rowId) => {
       if (saving) return;
-      setAddUI({
-        open: true,
-        field: "id_detalle",
-        rowId,
-        text: "",
-        saving: false,
-      });
+      setAddUI({ open: true, field: "id_detalle", rowId, text: "", saving: false });
     },
     [saving]
   );
@@ -593,22 +535,13 @@ export default function ModalNuevaVenta({
     const cid = getClienteId(cliente);
 
     setClienteInput(nombre);
-    setFilters((p) => ({
-      ...p,
-      id_cliente: cid != null ? String(cid) : NULL_OPTION,
-    }));
+    setFilters((p) => ({ ...p, id_cliente: cid != null ? String(cid) : NULL_OPTION }));
     setClienteFocus(false);
   }, []);
 
   const startAddCliente = useCallback(() => {
     setClienteFocus(false);
-    setAddUI({
-      open: true,
-      field: "id_cliente",
-      rowId: null,
-      text: "",
-      saving: false,
-    });
+    setAddUI({ open: true, field: "id_cliente", rowId: null, text: "", saving: false });
   }, []);
 
   /* =========================
@@ -644,21 +577,23 @@ export default function ModalNuevaVenta({
         idUsuario,
       });
 
-      if (!data?.exito)
-        throw new Error(data?.mensaje || "No se pudo crear el registro.");
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear el registro.");
 
       const newId = Number(data?.item?.id);
       const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
 
-      if (!Number.isFinite(newId) || newId <= 0)
-        throw new Error("El servidor no devolvió un ID válido.");
+      if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
 
+      // ✅ FIX: no duplicar (cliente/detalle) usando id genérico
       setLocalLists((prev) => {
         const next = { ...prev };
         const listKey = field === "id_cliente" ? "clientes" : "detalles";
         const arr = Array.isArray(prev[listKey]) ? prev[listKey].slice() : [];
-        if (!arr.some((x) => Number(getClienteId(x) ?? x?.id) === newId))
+
+        if (!arr.some((x) => getIdGeneric(x) === newId)) {
           arr.push({ id: newId, nombre: newNombre });
+        }
+
         next[listKey] = arr;
         return next;
       });
@@ -669,8 +604,7 @@ export default function ModalNuevaVenta({
         setTimeout(() => clienteInputRef.current?.focus(), 0);
       } else {
         const rowId = addUI.rowId;
-        if (rowId)
-          updateRow(rowId, { id_detalle: String(newId), detalleText: newNombre });
+        if (rowId) updateRow(rowId, { id_detalle: String(newId), detalleText: newNombre });
       }
 
       setAddUI({ open: false, field: null, rowId: null, text: "", saving: false });
@@ -712,14 +646,8 @@ export default function ModalNuevaVenta({
     return (localLists.tipos_venta || []).find((x) => Number(x?.id) === id) || null;
   }, [filters.id_tipo_venta, localLists.tipos_venta]);
 
-  const isContado = useMemo(
-    () => isContadoTipoVenta(tipoVentaSelected),
-    [tipoVentaSelected]
-  );
-  const isCorriente = useMemo(
-    () => isCorrienteTipoVenta(tipoVentaSelected),
-    [tipoVentaSelected]
-  );
+  const isContado = useMemo(() => isContadoTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
+  const isCorriente = useMemo(() => isCorrienteTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
 
   useEffect(() => {
     if (!open) return;
@@ -729,8 +657,7 @@ export default function ModalNuevaVenta({
       setFilters((p) => ({ ...p, id_medio_pago: NULL_OPTION }));
     }
     if (!isContado) setFilters((p) => ({ ...p, id_medio_pago: NULL_OPTION }));
-    if (!isCorriente)
-      setFilters((p) => ({ ...p, id_cuenta_corriente: NULL_OPTION }));
+    if (!isCorriente) setFilters((p) => ({ ...p, id_cuenta_corriente: NULL_OPTION }));
   }, [open, isContado, isCorriente]);
 
   /* =========================
@@ -751,33 +678,24 @@ export default function ModalNuevaVenta({
 
   const validate = useCallback(() => {
     const cli = resolveClienteId();
-    if (!Number.isFinite(cli) || cli <= 0)
-      return { ok: false, msg: "Falta seleccionar un Cliente (obligatorio)." };
+    if (!Number.isFinite(cli) || cli <= 0) return { ok: false, msg: "Falta seleccionar un Cliente (obligatorio)." };
 
     const tv = Number(filters.id_tipo_venta);
-    if (!Number.isFinite(tv) || tv <= 0)
-      return { ok: false, msg: "Falta seleccionar la Forma de venta." };
+    if (!Number.isFinite(tv) || tv <= 0) return { ok: false, msg: "Falta seleccionar la Forma de venta." };
 
     if (isContado) {
       const mp = Number(filters.id_medio_pago);
       if (!Number.isFinite(mp) || mp <= 0)
-        return {
-          ok: false,
-          msg: "Venta Contado: falta seleccionar el Medio de pago.",
-        };
+        return { ok: false, msg: "Venta Contado: falta seleccionar el Medio de pago." };
     }
 
     if (isCorriente) {
       const cc = Number(filters.id_cuenta_corriente);
       if (!Number.isFinite(cc) || cc <= 0)
-        return {
-          ok: false,
-          msg: "Cuenta Corriente: falta seleccionar la Cuenta Corriente.",
-        };
+        return { ok: false, msg: "Cuenta Corriente: falta seleccionar la Cuenta Corriente." };
     }
 
-    const periodoApi =
-      mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
+    const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
     if (!/^\d{4}-\d{2}$/.test(periodoApi))
       return { ok: false, msg: "Período inválido. Usá MM-YYYY (ej: 02-2026)." };
 
@@ -796,31 +714,23 @@ export default function ModalNuevaVenta({
     if (!usableLines.length) {
       if (problems.length) {
         const msg = problems.slice(0, 2).join(" ");
-        const extra =
-          problems.length > 2 ? ` (y ${problems.length - 2} más)` : "";
+        const extra = problems.length > 2 ? ` (y ${problems.length - 2} más)` : "";
         return { ok: false, msg: `No hay filas válidas para guardar. ${msg}${extra}` };
       }
-      return {
-        ok: false,
-        msg: "Cargá al menos 1 fila válida: elegí un Detalle y completá Cantidad/Precio.",
-      };
+      return { ok: false, msg: "Cargá al menos 1 fila válida: elegí un Detalle y completá Cantidad/Precio." };
     }
 
     return { ok: true, warn: problems.length > 0, problems, usableLines };
   }, [filters, fecha, periodoUI, isContado, isCorriente, rowsCalc, resolveClienteId]);
 
   /* =========================
-     ✅ SUBMIT (FIX: batch como array de ventas completas)
+     ✅ SUBMIT (batch como array de ventas completas)
   ========================= */
   const submit = async () => {
     if (saving) return;
 
     if (addUI.open) {
-      showToast(
-        "advertencia",
-        "Terminá de crear el registro (o cancelá) antes de guardar.",
-        3200
-      );
+      showToast("advertencia", "Terminá de crear el registro (o cancelá) antes de guardar.", 3200);
       return;
     }
 
@@ -836,10 +746,8 @@ export default function ModalNuevaVenta({
       return;
     }
 
-    const periodoApi =
-      mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
-    const fechaApi =
-      /^\d{4}-\d{2}-\d{2}$/.test(String(fecha)) ? String(fecha) : todayISO();
+    const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
+    const fechaApi = /^\d{4}-\d{2}-\d{2}$/.test(String(fecha)) ? String(fecha) : todayISO();
 
     const usableLines = (v.usableLines || []).slice();
 
@@ -847,9 +755,6 @@ export default function ModalNuevaVenta({
     showToast("cargando", "Guardando venta…", 12000);
 
     try {
-      // ✅ IMPORTANTE:
-      // Tu backend ventas_crear_batch valida CADA ELEMENTO del array como venta completa.
-      // Entonces mandamos array de "ventas", una por fila válida, repitiendo cabecera.
       const ventasBatch = usableLines.map((r) => ({
         fecha: fechaApi,
         periodo: periodoApi,
@@ -862,7 +767,6 @@ export default function ModalNuevaVenta({
 
         accion_contado: isContado ? accionContado : null,
 
-        // item (lo que el backend espera)
         id_detalle: Number(r.id_detalle),
         cantidad: Math.round(Number(r.cantidad) * 100) / 100,
         precio: Math.round(Number(r.precio) * 100) / 100,
@@ -887,8 +791,7 @@ export default function ModalNuevaVenta({
 
   if (!open) return null;
 
-  const miniOpen =
-    addUI.open && ["id_cliente", "id_detalle"].includes(addUI.field);
+  const miniOpen = addUI.open && ["id_cliente", "id_detalle"].includes(addUI.field);
   const miniTitle = addUI.field === "id_cliente" ? "Nuevo cliente" : "Nuevo detalle";
 
   const modalJSX = (
@@ -897,9 +800,7 @@ export default function ModalNuevaVenta({
         "mi-modal__overlay",
         "mi-modal__overlay--mov",
         dark ? "mi-modal__overlay--dark" : "",
-      ]
-        .join(" ")
-        .trim()}
+      ].join(" ").trim()}
       onMouseDown={() => (!saving ? onClose?.() : null)}
     >
       <div
@@ -907,9 +808,7 @@ export default function ModalNuevaVenta({
           "mi-modal__container",
           "mi-modal__container--mov",
           dark ? "mi-modal--dark" : "",
-        ]
-          .join(" ")
-          .trim()}
+        ].join(" ").trim()}
         role="dialog"
         aria-modal="true"
         onMouseDown={(e) => e.stopPropagation()}
@@ -963,10 +862,7 @@ export default function ModalNuevaVenta({
                           placeholder="Escribí y seleccioná un detalle…"
                           value={r.detalleText}
                           onChange={(e) =>
-                            updateRow(r.id, {
-                              detalleText: e.target.value,
-                              id_detalle: NULL_OPTION,
-                            })
+                            updateRow(r.id, { detalleText: e.target.value, id_detalle: NULL_OPTION })
                           }
                           disabled={saving || addUI.open}
                           autoComplete="off"
@@ -1015,8 +911,7 @@ export default function ModalNuevaVenta({
                           value={r.cantidad}
                           onChange={(e) =>
                             updateRow(r.id, {
-                              cantidad:
-                                e.target.value === "" ? "" : Number(e.target.value),
+                              cantidad: e.target.value === "" ? "" : Number(e.target.value),
                             })
                           }
                           disabled={saving}
@@ -1033,8 +928,7 @@ export default function ModalNuevaVenta({
                           value={r.precio}
                           onChange={(e) =>
                             updateRow(r.id, {
-                              precio:
-                                e.target.value === "" ? "" : Number(e.target.value),
+                              precio: e.target.value === "" ? "" : Number(e.target.value),
                             })
                           }
                           disabled={saving}
@@ -1046,9 +940,7 @@ export default function ModalNuevaVenta({
                         <select
                           className="fl-input fl-select fl-select-iva--car"
                           value={String(r.ivaPct)}
-                          onChange={(e) =>
-                            updateRow(r.id, { ivaPct: Number(e.target.value) })
-                          }
+                          onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
                           disabled={saving}
                         >
                           {IVA_OPTIONS.map((x) => (
@@ -1061,16 +953,12 @@ export default function ModalNuevaVenta({
 
                       {/* IVA monto */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--ivaMonto mi-cr-center">
-                        <div className="mi-cr-money mi-cr-money--soft">
-                          {moneyARS(r.ivaMonto)}
-                        </div>
+                        <div className="mi-cr-money mi-cr-money--soft">{moneyARS(r.ivaMonto)}</div>
                       </div>
 
                       {/* Total */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--total mi-cr-center">
-                        <div className="mi-cr-money mi-cr-money--strong">
-                          {moneyARS(r.total)}
-                        </div>
+                        <div className="mi-cr-money mi-cr-money--strong">{moneyARS(r.total)}</div>
                       </div>
 
                       {/* Acción */}
@@ -1092,12 +980,7 @@ export default function ModalNuevaVenta({
 
               {/* footer tabla */}
               <div className="mi-cr-table__foot">
-                <button
-                  type="button"
-                  onClick={addRow}
-                  disabled={saving}
-                  className="mi-cr-addrow"
-                >
+                <button type="button" onClick={addRow} disabled={saving} className="mi-cr-addrow">
                   Agregar fila
                 </button>
 
@@ -1241,9 +1124,7 @@ export default function ModalNuevaVenta({
                     <select
                       className="fl-input fl-select"
                       value={String(filters.id_cuenta_corriente)}
-                      onChange={(e) =>
-                        updateFilter("id_cuenta_corriente", e.target.value)
-                      }
+                      onChange={(e) => updateFilter("id_cuenta_corriente", e.target.value)}
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>Cuenta corriente</option>

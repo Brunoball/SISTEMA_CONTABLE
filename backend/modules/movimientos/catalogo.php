@@ -5,17 +5,18 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
+// ⚠️ Si tu frontend y backend están en el mismo dominio, podés ajustar el ORIGIN a fijo.
+// Por ahora lo dejo permisivo como venías (pero habilitando X-Session).
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Session');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
   http_response_code(204);
   exit;
 }
 
-require_once __DIR__ . '/../../config/db.php';       // $pdo
-require_once __DIR__ . '/../utils/auditoria.php';    // auditar(...)
+require_once __DIR__ . '/../utils/auditoria.php'; // auditar(...)
 
 /* =========================
    Helpers JSON
@@ -37,7 +38,10 @@ function read_json_body(): array {
 }
 
 /* =========================
-   JWT helpers (solo para sacar id)
+   Auth helpers (multi-tenant)
+   - En la estructura nueva el login te valida X-Session en routes/api.php.
+   - Ese archivo debería setear el user id en algún lado.
+   - Acá intentamos recuperarlo de forma compatible sin romper nada.
 ========================= */
 function base64url_decode(string $s): string {
   $s = str_replace(['-', '_'], ['+', '/'], $s);
@@ -55,8 +59,29 @@ function get_bearer_token(): string {
   if (stripos($h, 'Bearer ') === 0) return trim(substr($h, 7));
   return '';
 }
+
+/**
+ * ✅ Intenta obtener idUsuario desde:
+ * 1) variables globales que setea routes/api.php (recomendado)
+ * 2) JWT (solo leer payload)
+ * 3) body/POST/GET (fallback)
+ */
 function get_id_usuario_from_request(array $body = []): int {
-  // 1) JWT (sin verificar firma, solo para sacar id del payload)
+  // 1) globals/const (ideal: lo setea routes/api.php tras validar X-Session)
+  $candidates = [
+    $GLOBALS['AUTH_USER_ID'] ?? null,
+    $GLOBALS['auth_user_id'] ?? null,
+    $GLOBALS['ID_USUARIO'] ?? null,
+    (defined('AUTH_USER_ID') ? constant('AUTH_USER_ID') : null),
+    (defined('ID_USUARIO') ? constant('ID_USUARIO') : null),
+    // si tu resolver guarda algo tipo $GLOBALS['AUTH'] = ['idUsuario'=>...]
+    (is_array($GLOBALS['AUTH'] ?? null) ? ($GLOBALS['AUTH']['idUsuario'] ?? null) : null),
+  ];
+  foreach ($candidates as $c) {
+    if (is_numeric($c) && (int)$c > 0) return (int)$c;
+  }
+
+  // 2) JWT (sin verificar firma, solo para sacar id del payload)
   $token = get_bearer_token();
   if ($token !== '' && substr_count($token, '.') === 2) {
     $parts = explode('.', $token);
@@ -64,28 +89,22 @@ function get_id_usuario_from_request(array $body = []): int {
     if ($payloadJson !== '') {
       $payload = json_decode($payloadJson, true);
       if (is_array($payload)) {
-        $candidates = [
+        $jwtCandidates = [
           $payload['idUsuario'] ?? null,
           $payload['id_usuario'] ?? null,
           $payload['uid'] ?? null,
           $payload['sub'] ?? null,
         ];
-        foreach ($candidates as $c) {
-          if (is_numeric($c)) {
-            $id = (int)$c;
-            if ($id > 0) return $id;
-          }
+        foreach ($jwtCandidates as $c) {
+          if (is_numeric($c) && (int)$c > 0) return (int)$c;
         }
       }
     }
   }
 
-  // 2) body / POST / GET
+  // 3) body / POST / GET
   $id = $body['idUsuario'] ?? $body['id_usuario'] ?? $_POST['idUsuario'] ?? $_GET['idUsuario'] ?? null;
-  if (is_numeric($id)) {
-    $id = (int)$id;
-    if ($id > 0) return $id;
-  }
+  if (is_numeric($id) && (int)$id > 0) return (int)$id;
 
   return 0;
 }
@@ -98,16 +117,19 @@ function audit_safe(PDO $pdo, int $idUsuario, string $accion, ?string $entidad, 
   auditar($pdo, $idUsuario, 'movimientos', $accion, $entidad, $idEntidad, $detalle);
 }
 
-/* ----------------- PDO check ----------------- */
+/* =========================
+   ✅ CLAVE: usar $pdo del tenant_resolver
+========================= */
+global $pdo;
 if (!isset($pdo) || !($pdo instanceof PDO)) {
-  fail('No hay conexión a la base de datos.');
+  fail('PDO no disponible. Este módulo debe ejecutarse vía routes/api.php (tenant_resolver).', 500);
 }
 
 try {
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
 } catch (Throwable $e) {
-  fail('Error inicializando conexión: ' . $e->getMessage());
+  fail('Error inicializando conexión: ' . $e->getMessage(), 500);
 }
 
 /* =========================================================
@@ -116,46 +138,40 @@ try {
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $action = is_string($action) ? trim($action) : '';
 if ($action !== 'catalogo_crear') {
-  fail('Acción no válida en catálogo: ' . $action);
+  fail('Acción no válida en catálogo: ' . $action, 400);
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
   fail('Método no permitido.', 405);
 }
 
 $body = read_json_body();
-$src = !empty($body) ? $body : ($_POST ?? []);
+$src  = !empty($body) ? $body : ($_POST ?? []);
 
 $catalogo = isset($src['catalogo']) ? trim((string)$src['catalogo']) : '';
 $nombre   = isset($src['nombre']) ? trim((string)$src['nombre']) : '';
 
-if ($catalogo === '') fail('Falta campo: catalogo.');
-if ($nombre === '') fail('Falta campo: nombre.');
+if ($catalogo === '') fail('Falta campo: catalogo.', 400);
+if ($nombre === '')   fail('Falta campo: nombre.', 400);
 
 $idUsuario = get_id_usuario_from_request($src);
 
 /**
  * ✅ Mapa de catálogos permitidos (WHITELIST)
- * DB: sistema_contable
- * tablas: clasificaciones, clientes, proveedores, detalles,
- *         cuentas_corrientes, medios_pago, tipos_venta
- *
- * ⚠️ tipos_movimiento fue eliminado del sistema
+ * Tablas del tenant (DB del cliente resuelta por tenant_resolver)
  */
 $MAP = [
   'clasificaciones'    => ['tabla' => 'clasificaciones',    'pk' => 'id_clasificacion',    'col' => 'nombre'],
   'clientes'           => ['tabla' => 'clientes',           'pk' => 'id_cliente',          'col' => 'nombre'],
   'proveedores'        => ['tabla' => 'proveedores',        'pk' => 'id_proveedor',        'col' => 'nombre'],
   'detalles'           => ['tabla' => 'detalles',           'pk' => 'id_detalle',          'col' => 'nombre'],
-
   'cuentas_corrientes' => ['tabla' => 'cuentas_corrientes', 'pk' => 'id_cuenta_corriente', 'col' => 'nombre'],
   'medios_pago'        => ['tabla' => 'medios_pago',        'pk' => 'id_medio_pago',       'col' => 'nombre'],
-
   'tipos_venta'        => ['tabla' => 'tipos_venta',        'pk' => 'id_tipo_venta',       'col' => 'nombre'],
 ];
 
 if (!isset($MAP[$catalogo])) {
-  fail('Catálogo no permitido: ' . $catalogo);
+  fail('Catálogo no permitido: ' . $catalogo, 400);
 }
 
 $tabla = $MAP[$catalogo]['tabla'];
@@ -167,14 +183,14 @@ $col   = $MAP[$catalogo]['col'];
 ========================================================= */
 $nombreNorm = mb_strtoupper($nombre, 'UTF-8');
 $nombreNorm = preg_replace('/\s+/u', ' ', trim($nombreNorm));
-if ($nombreNorm === '') fail('Nombre inválido.');
+if ($nombreNorm === '') fail('Nombre inválido.', 400);
 
 /* =========================================================
    Seguridad extra: asegurar identificadores válidos
 ========================================================= */
 $rxIdent = '/^[a-zA-Z0-9_]+$/';
 if (!preg_match($rxIdent, $tabla) || !preg_match($rxIdent, $pk) || !preg_match($rxIdent, $col)) {
-  fail('Configuración inválida del catálogo.');
+  fail('Configuración inválida del catálogo.', 500);
 }
 
 /* =========================================================
@@ -192,14 +208,14 @@ try {
   if ($ex) {
     ok([
       'item' => [
-        'id' => (int)$ex['id'],
-        'nombre' => (string)$ex['nombre'],
+        'id'        => (int)$ex['id'],
+        'nombre'    => (string)$ex['nombre'],
         'existente' => true,
       ],
     ]);
   }
 } catch (Throwable $e) {
-  fail('Error verificando duplicado: ' . $e->getMessage());
+  fail('Error verificando duplicado: ' . $e->getMessage(), 500);
 }
 
 /* =========================================================
@@ -210,6 +226,8 @@ try {
   $stmt->execute([':nombre' => $nombreNorm]);
 
   $newId = (int)$pdo->lastInsertId();
+
+  // fallback si lastInsertId no devuelve (según config/driver)
   if ($newId <= 0) {
     $st2 = $pdo->prepare("SELECT $pk AS id
                           FROM $tabla
@@ -224,18 +242,18 @@ try {
   audit_safe($pdo, $idUsuario, 'catalogo_crear', $tabla, $newId, [
     'catalogo' => $catalogo,
     'nuevo' => [
-      'id' => $newId,
+      'id'     => $newId,
       'nombre' => $nombreNorm,
     ],
   ]);
 
   ok([
     'item' => [
-      'id' => $newId,
-      'nombre' => $nombreNorm,
+      'id'        => $newId,
+      'nombre'    => $nombreNorm,
       'existente' => false,
     ],
   ]);
 } catch (Throwable $e) {
-  fail('No se pudo crear en ' . $catalogo . '. ' . $e->getMessage());
+  fail('No se pudo crear en ' . $catalogo . '. ' . $e->getMessage(), 500);
 }

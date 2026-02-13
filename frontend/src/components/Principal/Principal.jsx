@@ -119,24 +119,12 @@ function normalizeTema(value) {
 }
 
 /**
- * ✅ Opción A: data-theme + body.dark (compatibilidad modales viejos)
+ * ✅ Tema: data-theme + body.dark (compatibilidad)
  */
 function applyTheme(tema) {
-  // Tema principal (tu sistema actual)
   document.documentElement.setAttribute("data-theme", tema);
-
-  // ✅ Compatibilidad con modales viejos que usan body.dark
   const isDark = tema === "oscuro";
   document.body.classList.toggle("dark", isDark);
-}
-
-/**
- * ✅ SaaS: priorizamos ID master
- */
-function getIdUsuarioMaster(u) {
-  const cand = [u?.idUsuarioMaster, u?.idUsuario, u?.id_usuario, u?.id, u?.usuario_id];
-  const n = Number(cand.find((x) => x != null && x !== "")) || 0;
-  return n;
 }
 
 /* =========================
@@ -197,14 +185,17 @@ const Principal = () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => setOpenMovSub(false), ms);
   };
+
   const openSoon = (ms = 500) => {
     if (openTimerRef.current) clearTimeout(openTimerRef.current);
     openTimerRef.current = setTimeout(() => setOpenMovSub(true), ms);
   };
+
   const cancelClose = () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = null;
   };
+
   const cancelOpen = () => {
     if (openTimerRef.current) clearTimeout(openTimerRef.current);
     openTimerRef.current = null;
@@ -214,7 +205,6 @@ const Principal = () => {
      ✅ Guard / carga usuario
   ========================= */
   useEffect(() => {
-    // 1) si no hay session_key => afuera
     const sk = getSessionKey();
     if (!sk) {
       hardClientLogoutCleanup();
@@ -222,7 +212,6 @@ const Principal = () => {
       return;
     }
 
-    // 2) cargar usuario + tema
     try {
       const u = JSON.parse(localStorage.getItem("usuario"));
       if (u) {
@@ -340,7 +329,7 @@ const Principal = () => {
   };
 
   /* =========================
-     ✅ CIERRE DE SESIÓN (borra en DB master)
+     ✅ CIERRE DE SESIÓN
   ========================= */
   const confirmarCierreSesion = useCallback(async () => {
     if (closingRef.current) return;
@@ -374,24 +363,24 @@ const Principal = () => {
       console.warn("Error llamando logout:", e);
     } finally {
       hardClientLogoutCleanup();
-
       setShowLogoutModal(false);
       setDrawerOpen(false);
-
       navigate("/", { replace: true });
-
       setClosingUI(false);
       closingRef.current = false;
     }
   }, [navigate]);
 
   /* =========================
-     ✅ toggle tema -> MASTER
+     ✅ toggle tema -> MASTER (NUEVO)
+     - ya no manda idUsuarioMaster (se resuelve por X-Session)
+     - si falla, revierte UI + localStorage
   ========================= */
   const toggleTema = async () => {
+    const prevTema = tema;
     const nuevo = tema === "oscuro" ? "claro" : "oscuro";
 
-    // UI inmediata
+    // UI inmediata (optimista)
     setTema(nuevo);
     applyTheme(nuevo);
 
@@ -406,16 +395,8 @@ const Principal = () => {
       console.error("Error actualizando localStorage usuario:", e);
     }
 
-    // pegar a backend
+    // pegar a backend (solo X-Session + tema)
     try {
-      const u = u2 || JSON.parse(localStorage.getItem("usuario")) || {};
-      const idUsuarioMaster = getIdUsuarioMaster(u);
-
-      if (!idUsuarioMaster) {
-        console.warn("No hay idUsuarioMaster en localStorage.", u);
-        return;
-      }
-
       const sessionKey = getSessionKey();
       const headers = { "Content-Type": "application/json" };
       if (sessionKey) headers["X-Session"] = sessionKey;
@@ -423,7 +404,7 @@ const Principal = () => {
       const r = await fetch(`${BASE_URL}/api.php?action=usuario_tema_actualizar`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ idUsuarioMaster, tema: nuevo }),
+        body: JSON.stringify({ tema: nuevo }), // ✅ NUEVO: sin id
       });
 
       const txt = await r.text();
@@ -434,12 +415,32 @@ const Principal = () => {
 
       if (!r.ok || !data?.exito) {
         console.error("Falló usuario_tema_actualizar:", r.status, txt);
+
+        // 🔁 revertir UI + localStorage
+        setTema(prevTema);
+        applyTheme(prevTema);
+        try {
+          const u = JSON.parse(localStorage.getItem("usuario")) || {};
+          const uPrev = { ...u, tema: prevTema };
+          localStorage.setItem("usuario", JSON.stringify(uPrev));
+          setUsuario(uPrev);
+        } catch {}
         return;
       }
 
       console.log("✅ Tema guardado en DB (MASTER):", data);
     } catch (e) {
       console.error("Error llamando usuario_tema_actualizar:", e);
+
+      // 🔁 revertir UI + localStorage
+      setTema(prevTema);
+      applyTheme(prevTema);
+      try {
+        const u = JSON.parse(localStorage.getItem("usuario")) || {};
+        const uPrev = { ...u, tema: prevTema };
+        localStorage.setItem("usuario", JSON.stringify(uPrev));
+        setUsuario(uPrev);
+      } catch {}
     }
   };
 

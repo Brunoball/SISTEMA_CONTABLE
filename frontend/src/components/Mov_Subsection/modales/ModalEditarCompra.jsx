@@ -1,7 +1,7 @@
 // src/components/Compras/modales/ModalEditarCompra.jsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import "../../Movimientos/modales/ModalEditarMovimiento.css"; // ✅ misma estética/clases
+import "../../Movimientos/modales/ModalEditarMovimiento.css";
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";
@@ -12,6 +12,25 @@ const IVA_OPTIONS = [
   { label: "10,5%", value: 10.5 },
   { label: "21%", value: 21 },
 ];
+
+/* =========================
+   ✅ IDs tolerantes
+========================= */
+function getProveedorId(p) {
+  const cand = p?.id ?? p?.id_proveedor ?? p?.idProveedor ?? p?.proveedor_id ?? null;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function getDetalleId(d) {
+  const cand = d?.id ?? d?.id_detalle ?? d?.idDetalle ?? d?.detalle_id ?? null;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function getGenericId(x) {
+  const cand = x?.id ?? x?.ID ?? x?.id_item ?? x?.idCatalogo ?? null;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 /* =========================
    Safe lists + normalización
@@ -126,7 +145,9 @@ function periodoFromISODate(iso) {
    Dark helper (igual a Venta)
 ========================= */
 function isTemaOscuro() {
-  return document.documentElement.getAttribute("data-theme") === "oscuro";
+  const byAttr = document.documentElement.getAttribute("data-theme") === "oscuro";
+  const byBody = document.body?.classList?.contains("dark");
+  return Boolean(byAttr || byBody);
 }
 
 /* =========================
@@ -134,6 +155,12 @@ function isTemaOscuro() {
 ========================= */
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
+  const sessionKey =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("x_session") ||
+    localStorage.getItem("X-Session") ||
+    "";
 
   let idUsuario = 0;
   try {
@@ -142,7 +169,7 @@ function getAuthInfo() {
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
-  return { token, idUsuario };
+  return { token, sessionKey, idUsuario };
 }
 
 /* =========================
@@ -166,8 +193,9 @@ const LISTKEY_BY_CATALOGO = {
 
 /* =========================
    Mini Modal: alta rápida
+   ✅ soporta dark con mi-modal--dark
 ========================= */
-function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave }) {
+function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -190,16 +218,10 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 
   return (
     <div className="mi-mini__overlay" onMouseDown={onCancel}>
-      <div className="mi-mini__modal" onMouseDown={(e) => e.stopPropagation()}>
+      <div className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()} onMouseDown={(e) => e.stopPropagation()}>
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
-          <button
-            type="button"
-            className="mi-mini__close"
-            onClick={onCancel}
-            disabled={saving}
-            aria-label="Cerrar"
-          >
+          <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving} aria-label="Cerrar">
             ✕
           </button>
         </div>
@@ -261,8 +283,7 @@ function buildFormFromRowCompra(row, periodoDefault) {
   const perByFecha = periodoFromISODate(fecha || todayISO());
   const pickPeriodo = perRow || perDef || perByFecha || "";
 
-  const nOrNull = (v) =>
-    Number.isFinite(Number(v)) && Number(v) > 0 ? String(Number(v)) : NULL_OPTION;
+  const nOrNull = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? String(Number(v)) : NULL_OPTION);
 
   const sOrNull = (v) => {
     if (v == null || v === "" || v === 0) return NULL_OPTION;
@@ -314,7 +335,7 @@ export default function ModalEditarCompra({
   onSave,
   onCatalogCreated,
   onToast,
-  dark: darkProp, // ✅ nuevo (igual a Venta)
+  dark: darkProp,
 }) {
   const API = `${BASE_URL}/api.php`;
 
@@ -323,16 +344,25 @@ export default function ModalEditarCompra({
     [onToast]
   );
 
-  // ✅ dark auto (igual a Venta)
+  // dark auto
   const [darkAuto, setDarkAuto] = useState(isTemaOscuro());
   useEffect(() => {
-    const obs = new MutationObserver(() => setDarkAuto(isTemaOscuro()));
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => obs.disconnect();
+    const update = () => setDarkAuto(isTemaOscuro());
+    const obsHtml = new MutationObserver(update);
+    obsHtml.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+    const obsBody = new MutationObserver(update);
+    if (document.body) obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
+    update();
+    return () => {
+      obsHtml.disconnect();
+      obsBody.disconnect();
+    };
   }, []);
   const dark = typeof darkProp === "boolean" ? darkProp : darkAuto;
 
-  // ✅ bloquear scroll del body (igual a Venta)
+  // bloquear scroll
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
@@ -349,17 +379,13 @@ export default function ModalEditarCompra({
   useEffect(() => void (rowRef.current = row), [row]);
   useEffect(() => void (periodoDefaultRef.current = periodoDefault), [periodoDefault]);
 
-  const [localLists, setLocalLists] = useState(() => ({
-    ...SAFE_LISTS,
-    ...normalizeIncomingLists(lists),
-  }));
+  const [localLists, setLocalLists] = useState(() => ({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) }));
   useEffect(() => {
     setLocalLists({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) });
   }, [lists]);
   const safeLists = useMemo(() => localLists, [localLists]);
 
   const [saving, setSaving] = useState(false);
-
   const [form, setForm] = useState(() => buildFormFromRowCompra(row, periodoDefault));
   const [addUI, setAddUI] = useState({ open: false, field: null, text: "", saving: false });
 
@@ -375,7 +401,7 @@ export default function ModalEditarCompra({
   const closeBtnRef = useRef(null);
   const fechaRef = useRef(null);
 
-  // abrir: reconstruir SIEMPRE (igual a Venta)
+  // abrir: reconstruir SIEMPRE
   const prevOpenRef = useRef(false);
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
@@ -391,17 +417,27 @@ export default function ModalEditarCompra({
     const built = buildFormFromRowCompra(rowRef.current, periodoDefaultRef.current);
     setForm(built);
 
-    const nameById = (arr, id) => {
+    // ✅ nameById tolerante
+    const nameById = (arr, id, kind) => {
       const sid = String(id ?? "").trim();
       if (!sid || sid === NULL_OPTION || sid === ADD_OPTION) return "";
-      const found = (Array.isArray(arr) ? arr : []).find((x) => String(x?.id) === sid);
+      const a = Array.isArray(arr) ? arr : [];
+      const found = a.find((x) => {
+        const xid =
+          kind === "proveedores"
+            ? getProveedorId(x)
+            : kind === "detalles"
+            ? getDetalleId(x)
+            : getGenericId(x);
+        return String(xid ?? "") === sid;
+      });
       return String(found?.nombre ?? "").trim();
     };
 
-    setProveedorInput(nameById(merged.proveedores, built.id_proveedor));
+    setProveedorInput(nameById(merged.proveedores, built.id_proveedor, "proveedores"));
     setProveedorFocus(false);
 
-    setDetalleInput(nameById(merged.detalles, built.id_detalle));
+    setDetalleInput(nameById(merged.detalles, built.id_detalle, "detalles"));
     setDetalleFocus(false);
 
     setTimeout(() => closeBtnRef.current?.focus(), 0);
@@ -466,15 +502,9 @@ export default function ModalEditarCompra({
     });
   }, []);
 
-  const onCantidadChange = useCallback((v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }), [
-    recalcFromItem,
-  ]);
-  const onPrecioChange = useCallback((v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }), [
-    recalcFromItem,
-  ]);
-  const onIvaPctChange = useCallback((v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }), [
-    recalcFromItem,
-  ]);
+  const onCantidadChange = useCallback((v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }), [recalcFromItem]);
+  const onPrecioChange = useCallback((v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }), [recalcFromItem]);
+  const onIvaPctChange = useCallback((v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }), [recalcFromItem]);
 
   const onMontoTotalManual = useCallback((v) => {
     const mt = v === "" ? "" : Number(v);
@@ -500,8 +530,14 @@ export default function ModalEditarCompra({
     const text = await res.text();
     if (!text) throw new Error("Respuesta vacía del servidor.");
     try {
-      return JSON.parse(text);
-    } catch {
+      const data = JSON.parse(text);
+      if (!res.ok) {
+        const msg = data?.mensaje || data?.error || `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      return data;
+    } catch (e) {
+      if (e instanceof Error) throw e;
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
       throw new Error(`Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`);
     }
@@ -509,9 +545,10 @@ export default function ModalEditarCompra({
 
   const apiPostJson = useCallback(
     async (url, payload) => {
-      const { token } = getAuthInfo();
+      const { token, sessionKey } = getAuthInfo();
       const headers = { "Content-Type": "application/json" };
-      if (token) headers.Authorization = `Bearer ${token}`;
+      if (sessionKey) headers["X-Session"] = sessionKey;
+      if (!sessionKey && token) headers.Authorization = `Bearer ${token}`;
       const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload ?? {}) });
       return await parseJsonOrThrow(res);
     },
@@ -552,10 +589,16 @@ export default function ModalEditarCompra({
 
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear el registro.");
 
-      const newId = Number(data?.item?.id);
-      const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
+      const item = data?.item || {};
+      // ✅ id tolerante según catálogo
+      let newId = null;
+      if (meta.catalogo === "proveedores") newId = getProveedorId(item) ?? getGenericId(item);
+      else if (meta.catalogo === "detalles") newId = getDetalleId(item) ?? getGenericId(item);
+      else newId = getGenericId(item);
 
-      if (!Number.isFinite(newId) || newId <= 0) {
+      const newNombre = String(item?.nombre ?? "").trim() || nombre;
+
+      if (!Number.isFinite(Number(newId)) || Number(newId) <= 0) {
         throw new Error("El servidor no devolvió un ID válido del registro creado.");
       }
 
@@ -565,7 +608,16 @@ export default function ModalEditarCompra({
       setLocalLists((prev) => {
         const next = { ...prev };
         const arr = Array.isArray(prev[listKey]) ? prev[listKey].slice() : [];
-        if (!arr.some((x) => Number(x?.id) === newId)) arr.push({ id: newId, nombre: newNombre });
+        const already = arr.some((x) => {
+          const xid =
+            meta.catalogo === "proveedores"
+              ? getProveedorId(x)
+              : meta.catalogo === "detalles"
+              ? getDetalleId(x)
+              : getGenericId(x);
+          return Number(xid) === Number(newId);
+        });
+        if (!already) arr.push({ id: Number(newId), nombre: newNombre });
         next[listKey] = arr;
         return next;
       });
@@ -582,7 +634,7 @@ export default function ModalEditarCompra({
       }
 
       try {
-        onCatalogCreated?.(meta.catalogo, { id: newId, nombre: newNombre });
+        onCatalogCreated?.(meta.catalogo, { id: Number(newId), nombre: newNombre });
       } catch {}
 
       setAddUI({ open: false, field: null, text: "", saving: false });
@@ -618,8 +670,9 @@ export default function ModalEditarCompra({
 
   const handleSelectProveedor = useCallback((prov) => {
     const nombre = String(prov?.nombre ?? "").trim();
+    const pid = getProveedorId(prov);
     setProveedorInput(nombre);
-    setForm((prev) => ({ ...prev, id_proveedor: prov?.id != null ? String(prov.id) : NULL_OPTION }));
+    setForm((prev) => ({ ...prev, id_proveedor: pid != null ? String(pid) : NULL_OPTION }));
     setProveedorFocus(false);
   }, []);
 
@@ -631,8 +684,9 @@ export default function ModalEditarCompra({
 
   const handleSelectDetalle = useCallback((det) => {
     const nombre = String(det?.nombre ?? "").trim();
+    const did = getDetalleId(det);
     setDetalleInput(nombre);
-    setForm((prev) => ({ ...prev, id_detalle: det?.id != null ? String(det.id) : NULL_OPTION }));
+    setForm((prev) => ({ ...prev, id_detalle: did != null ? String(did) : NULL_OPTION }));
     setDetalleFocus(false);
   }, []);
 
@@ -653,7 +707,6 @@ export default function ModalEditarCompra({
   ========================= */
   const onSelectWithAdd = useCallback((field, rawValue) => {
     if (rawValue === ADD_OPTION) {
-      // inline add SOLO para fields no-mini
       const isMini = field === "id_proveedor" || field === "id_detalle";
       if (isMini) return;
       setAddUI({ open: false, field, text: "", saving: false });
@@ -758,17 +811,14 @@ export default function ModalEditarCompra({
     try {
       if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) throw new Error("Fecha inválida.");
 
-      // ✅ Proveedor obligatorio
       if (!form.id_proveedor || form.id_proveedor === NULL_OPTION || form.id_proveedor === ADD_OPTION) {
         throw new Error("Seleccioná un proveedor (o crealo con “Agregar nuevo proveedor”).");
       }
 
-      // ✅ Periodo: si vacío => auto desde fecha
       const perUI = normalizePeriodoToMMYYYY(form.periodo);
       const perAuto = periodoFromISODate(form.fecha);
       const finalPer = perUI || perAuto;
 
-      // ✅ recalculo final coherente
       const cantidad = Math.max(0, safeNumber(form.cantidad));
       const precio = Math.max(0, safeNumber(form.precio));
       const iva_pct = Math.max(0, safeNumber(form.iva_pct));
@@ -810,11 +860,7 @@ export default function ModalEditarCompra({
 
   if (!open) return null;
 
-  const overlayClass = [
-    "mi-modal__overlay",
-    "mi-modal__overlay--mov",
-    dark ? "mi-modal__overlay--dark" : "",
-  ]
+  const overlayClass = ["mi-modal__overlay", "mi-modal__overlay--mov", dark ? "mi-modal__overlay--dark" : ""]
     .join(" ")
     .trim();
 
@@ -829,12 +875,7 @@ export default function ModalEditarCompra({
 
   return createPortal(
     <div className={overlayClass} onMouseDown={cerrar}>
-      <div
-        className={containerClass}
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className={containerClass} role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar compra</h2>
@@ -870,11 +911,14 @@ export default function ModalEditarCompra({
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
-                      {(safeLists.clasificaciones || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
+                      {(safeLists.clasificaciones || []).map((x) => {
+                        const xid = getGenericId(x) ?? Number(x?.id);
+                        return (
+                          <option key={xid ?? x?.nombre} value={String(xid ?? "")}>
+                            {x.nombre}
+                          </option>
+                        );
+                      })}
                       <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
                     </select>
                     <label className="fl-label">Clasificación</label>
@@ -889,11 +933,14 @@ export default function ModalEditarCompra({
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
-                      {(safeLists.cuentasCorrientes || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
+                      {(safeLists.cuentasCorrientes || []).map((x) => {
+                        const xid = getGenericId(x) ?? Number(x?.id ?? x?.id_cuenta_corriente);
+                        return (
+                          <option key={xid ?? x?.nombre} value={String(xid ?? "")}>
+                            {x.nombre}
+                          </option>
+                        );
+                      })}
                       <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
                     </select>
                     <label className="fl-label">Cuenta corriente</label>
@@ -918,27 +965,25 @@ export default function ModalEditarCompra({
 
                   {detalleFocus && filteredDetalles.length > 0 && (
                     <ul className="mi-cr-suggest">
-                      {filteredDetalles.map((d) => (
-                        <li
-                          key={d.id}
-                          className="mi-cr-suggest__item"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            handleSelectDetalle(d);
-                          }}
-                        >
-                          <span className="mi-suggestText">{d.nombre}</span>
-                        </li>
-                      ))}
+                      {filteredDetalles.map((d) => {
+                        const did = getDetalleId(d);
+                        return (
+                          <li
+                            key={did ?? d?.nombre}
+                            className="mi-cr-suggest__item"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectDetalle(d);
+                            }}
+                          >
+                            <span className="mi-suggestText">{d.nombre}</span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={startAddDetalle}
-                    disabled={saving || addUI.saving}
-                    className="mi-link"
-                  >
+                  <button type="button" onClick={startAddDetalle} disabled={saving || addUI.saving} className="mi-link">
                     + Agregar nuevo detalle
                   </button>
                 </div>
@@ -977,12 +1022,7 @@ export default function ModalEditarCompra({
                     </div>
 
                     <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(form.iva_pct)}
-                        onChange={(e) => onIvaPctChange(e.target.value)}
-                        disabled={saving}
-                      >
+                      <select className="fl-input fl-select" value={String(form.iva_pct)} onChange={(e) => onIvaPctChange(e.target.value)} disabled={saving}>
                         {IVA_OPTIONS.map((x) => (
                           <option key={x.value} value={x.value}>
                             {x.label}
@@ -1066,11 +1106,14 @@ export default function ModalEditarCompra({
                     disabled={saving}
                   >
                     <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
-                    {(safeLists.mediosPago || []).map((x) => (
-                      <option key={x.id} value={String(x.id)}>
-                        {x.nombre}
-                      </option>
-                    ))}
+                    {(safeLists.mediosPago || []).map((x) => {
+                      const xid = getGenericId(x) ?? Number(x?.id ?? x?.id_medio_pago);
+                      return (
+                        <option key={xid ?? x?.nombre} value={String(xid ?? "")}>
+                          {x.nombre}
+                        </option>
+                      );
+                    })}
                     <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
                   </select>
                   <label className="fl-label">Medio de pago</label>
@@ -1093,27 +1136,25 @@ export default function ModalEditarCompra({
 
                   {proveedorFocus && filteredProveedores.length > 0 && (
                     <ul className="mi-cr-suggest">
-                      {filteredProveedores.map((p) => (
-                        <li
-                          key={p.id}
-                          className="mi-cr-suggest__item"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            handleSelectProveedor(p);
-                          }}
-                        >
-                          <span className="mi-suggestText">{p.nombre}</span>
-                        </li>
-                      ))}
+                      {filteredProveedores.map((p) => {
+                        const pid = getProveedorId(p);
+                        return (
+                          <li
+                            key={pid ?? p?.nombre}
+                            className="mi-cr-suggest__item"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectProveedor(p);
+                            }}
+                          >
+                            <span className="mi-suggestText">{p.nombre}</span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={startAddProveedor}
-                    disabled={saving || addUI.saving}
-                    className="mi-link"
-                  >
+                  <button type="button" onClick={startAddProveedor} disabled={saving || addUI.saving} className="mi-link">
                     + Agregar nuevo proveedor
                   </button>
                 </div>
@@ -1134,12 +1175,20 @@ export default function ModalEditarCompra({
 
         <AddCatalogMiniModal
           open={miniOpen}
-          title={miniTitle}
+          title={addUI.field === "id_proveedor" ? "Nuevo proveedor" : "Nuevo detalle"}
           value={addUI.text}
           saving={addUI.saving}
           onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
-          onCancel={cancelMini}
+          onCancel={() => {
+            setForm((p) => ({
+              ...p,
+              id_proveedor: addUI.field === "id_proveedor" ? NULL_OPTION : p.id_proveedor,
+              id_detalle: addUI.field === "id_detalle" ? NULL_OPTION : p.id_detalle,
+            }));
+            closeAddMini();
+          }}
           onSave={guardarNuevoCatalogo}
+          dark={dark}
         />
       </div>
     </div>,

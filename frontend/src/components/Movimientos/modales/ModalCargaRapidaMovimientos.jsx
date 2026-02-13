@@ -33,6 +33,9 @@ function moneyARS(v) {
     return `$${n.toFixed(2)}`;
   }
 }
+function uid() {
+  return crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 /* =========================
    Período helpers (MM-YYYY)
@@ -110,37 +113,68 @@ function normalizeIncomingLists(lists) {
 }
 
 /* =========================
-   API helpers + auth
+   ✅ ID tolerante (fix)
+========================= */
+function getClienteId(c) {
+  const cand = c?.id ?? c?.id_cliente ?? c?.idCliente ?? c?.cliente_id ?? c?.idcliente ?? null;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function getProveedorId(p) {
+  const cand =
+    p?.id ?? p?.id_proveedor ?? p?.idProveedor ?? p?.proveedor_id ?? p?.idproveedor ?? null;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function getDetalleId(d) {
+  const cand = d?.id ?? d?.id_detalle ?? d?.idDetalle ?? d?.detalle_id ?? d?.iddetalle ?? null;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function getIdGeneric(x) {
+  const cand =
+    x?.id ??
+    x?.id_cliente ??
+    x?.idCliente ??
+    x?.cliente_id ??
+    x?.id_proveedor ??
+    x?.idProveedor ??
+    x?.proveedor_id ??
+    x?.id_detalle ??
+    x?.idDetalle ??
+    x?.detalle_id ??
+    0;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/* =========================
+   API helpers + auth (JWT + X-Session) ✅
 ========================= */
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
+
+  const sessionKey =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    "";
 
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
-  } catch {
-    // ignore
-  }
+  } catch {}
 
-  return { token, idUsuario };
-}
-
-async function parseJsonOrThrow(res) {
-  const text = await res.text();
-  if (!text) throw new Error("Respuesta vacía del servidor.");
-  try {
-    return JSON.parse(text);
-  } catch {
-    const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-    throw new Error(`Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`);
-  }
+  return { token, sessionKey, idUsuario };
 }
 
 async function apiPostJson(url, payload) {
-  const { token } = getAuthInfo();
+  const { token, sessionKey } = getAuthInfo();
+
   const headers = { "Content-Type": "application/json" };
+  if (sessionKey) headers["X-Session"] = sessionKey;
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(url, {
@@ -149,13 +183,38 @@ async function apiPostJson(url, payload) {
     body: JSON.stringify(payload ?? {}),
   });
 
-  return await parseJsonOrThrow(res);
+  const text = await res.text();
+  if (!text) throw new Error("Respuesta vacía del servidor.");
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
+    throw new Error(`Respuesta inválida (no JSON). HTTP ${res.status}\n${preview}`);
+  }
+
+  if (!res.ok) {
+    const msg = data?.mensaje || data?.error || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+
+  return data;
 }
 
 /* =========================
    Mini Modal: alta rápida (cliente/proveedor/detalle)
 ========================= */
-function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
+function AddCatalogMiniModal({
+  open,
+  title,
+  value,
+  saving,
+  onChange,
+  onCancel,
+  onSave,
+  dark = false,
+}) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -210,11 +269,21 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
           </div>
 
           <div className="mi-mini__actions">
-            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>
+            <button
+              type="button"
+              className="mit-btn mit-btn--ghost"
+              onClick={onCancel}
+              disabled={saving}
+            >
               Cancelar
             </button>
 
-            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
+            <button
+              type="button"
+              className="mit-btn mit-btn--solid"
+              onClick={onSave}
+              disabled={saving}
+            >
               {saving ? "Guardando..." : "Guardar"}
             </button>
           </div>
@@ -254,10 +323,12 @@ const CATALOGO_DEF = {
 };
 
 /* =========================
-   Theme helper (data-theme)
+   Theme helper (data-theme + body.dark) ✅
 ========================= */
 function isTemaOscuro() {
-  return document.documentElement.getAttribute("data-theme") === "oscuro";
+  const byAttr = document.documentElement.getAttribute("data-theme") === "oscuro";
+  const byBody = document.body?.classList?.contains("dark");
+  return Boolean(byAttr || byBody);
 }
 
 export default function ModalCargaRapidaMovimientos({
@@ -270,12 +341,23 @@ export default function ModalCargaRapidaMovimientos({
 }) {
   const API = `${BASE_URL}/api.php`;
 
-  // ✅ dark automático leyendo data-theme (Principal.jsx)
+  // ✅ dark automático
   const [dark, setDark] = useState(isTemaOscuro());
   useEffect(() => {
-    const obs = new MutationObserver(() => setDark(isTemaOscuro()));
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => obs.disconnect();
+    const update = () => setDark(isTemaOscuro());
+
+    const obsHtml = new MutationObserver(update);
+    obsHtml.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+    const obsBody = new MutationObserver(update);
+    if (document.body)
+      obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
+    update();
+    return () => {
+      obsHtml.disconnect();
+      obsBody.disconnect();
+    };
   }, []);
 
   const showToast = useCallback(
@@ -329,14 +411,7 @@ export default function ModalCargaRapidaMovimientos({
 
   // filas
   const [rows, setRows] = useState(() => [
-    {
-      id: crypto?.randomUUID?.() || String(Date.now()),
-      id_detalle: NULL_OPTION,
-      detalleText: "",
-      cantidad: 1,
-      precio: 0,
-      ivaPct: 0,
-    },
+    { id: uid(), id_detalle: NULL_OPTION, detalleText: "", cantidad: 1, precio: 0, ivaPct: 0 },
   ]);
 
   const [saving, setSaving] = useState(false);
@@ -351,6 +426,9 @@ export default function ModalCargaRapidaMovimientos({
     saving: false,
   });
 
+  /* =========================
+     Reset al abrir
+  ========================= */
   const prevOpenRef = useRef(false);
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
@@ -378,16 +456,7 @@ export default function ModalCargaRapidaMovimientos({
       setProveedorInput("");
       setProveedorFocus(false);
 
-      setRows([
-        {
-          id: crypto?.randomUUID?.() || String(Date.now()),
-          id_detalle: NULL_OPTION,
-          detalleText: "",
-          cantidad: 1,
-          precio: 0,
-          ivaPct: 0,
-        },
-      ]);
+      setRows([{ id: uid(), id_detalle: NULL_OPTION, detalleText: "", cantidad: 1, precio: 0, ivaPct: 0 }]);
 
       setAddUI({ open: false, field: null, rowId: null, text: "", saving: false });
 
@@ -396,6 +465,9 @@ export default function ModalCargaRapidaMovimientos({
     }
   }, [open, periodoDefault]);
 
+  /* =========================
+     ESC cierra
+  ========================= */
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e) => {
@@ -426,14 +498,7 @@ export default function ModalCargaRapidaMovimientos({
   const addRow = () => {
     setRows((prev) => [
       ...prev,
-      {
-        id: crypto?.randomUUID?.() || String(Date.now() + Math.random()),
-        id_detalle: NULL_OPTION,
-        detalleText: "",
-        cantidad: 1,
-        precio: 0,
-        ivaPct: 0,
-      },
+      { id: uid(), id_detalle: NULL_OPTION, detalleText: "", cantidad: 1, precio: 0, ivaPct: 0 },
     ]);
   };
 
@@ -496,11 +561,10 @@ export default function ModalCargaRapidaMovimientos({
 
   const handleSelectCliente = useCallback((cliente) => {
     const nombre = String(cliente?.nombre ?? "").trim();
+    const cid = getClienteId(cliente);
+
     setClienteInput(nombre);
-    setFilters((p) => ({
-      ...p,
-      id_cliente: cliente?.id != null ? String(cliente.id) : NULL_OPTION,
-    }));
+    setFilters((p) => ({ ...p, id_cliente: cid != null ? String(cid) : NULL_OPTION }));
     setClienteFocus(false);
   }, []);
 
@@ -533,11 +597,10 @@ export default function ModalCargaRapidaMovimientos({
 
   const handleSelectProveedor = useCallback((prov) => {
     const nombre = String(prov?.nombre ?? "").trim();
+    const pid = getProveedorId(prov);
+
     setProveedorInput(nombre);
-    setFilters((p) => ({
-      ...p,
-      id_proveedor: prov?.id != null ? String(prov.id) : NULL_OPTION,
-    }));
+    setFilters((p) => ({ ...p, id_proveedor: pid != null ? String(pid) : NULL_OPTION }));
     setProveedorFocus(false);
   }, []);
 
@@ -594,7 +657,7 @@ export default function ModalCargaRapidaMovimientos({
           field === "id_cliente" ? "clientes" : field === "id_proveedor" ? "proveedores" : "detalles";
 
         const arr = Array.isArray(prev[listKey]) ? prev[listKey].slice() : [];
-        if (!arr.some((x) => Number(x?.id) === newId)) {
+        if (!arr.some((x) => getIdGeneric(x) === newId)) {
           arr.push({ id: newId, nombre: newNombre });
         }
         next[listKey] = arr;
@@ -759,8 +822,6 @@ export default function ModalCargaRapidaMovimientos({
       ? "Nuevo proveedor"
       : "Nuevo detalle";
 
-  const cancelMini = () => closeAddMini();
-
   const modalJSX = (
     <div
       className={[
@@ -787,9 +848,7 @@ export default function ModalCargaRapidaMovimientos({
         <div className="mi-modal__header mi-modal__header--car">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Nuevo Movimiento</h2>
-            <p className="mi-modal__subtitle">
-              Planilla a la izquierda + filtros a la derecha. Guardás todo junto.
-            </p>
+            <p className="mi-modal__subtitle">Planilla a la izquierda + filtros a la derecha. Guardás todo junto.</p>
           </div>
 
           <button
@@ -835,10 +894,7 @@ export default function ModalCargaRapidaMovimientos({
                           placeholder="Escribí y seleccioná un detalle…"
                           value={r.detalleText}
                           onChange={(e) => {
-                            updateRow(r.id, {
-                              detalleText: e.target.value,
-                              id_detalle: NULL_OPTION,
-                            });
+                            updateRow(r.id, { detalleText: e.target.value, id_detalle: NULL_OPTION });
                           }}
                           disabled={saving || addUI.open}
                           autoComplete="off"
@@ -846,21 +902,24 @@ export default function ModalCargaRapidaMovimientos({
 
                         {showSug && (
                           <ul className="mi-cr-suggest">
-                            {suggestions.map((d) => (
-                              <li
-                                key={d.id}
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  updateRow(r.id, {
-                                    id_detalle: String(d.id),
-                                    detalleText: String(d.nombre || ""),
-                                  });
-                                }}
-                                className="mi-cr-suggest__item"
-                              >
-                                {d.nombre}
-                              </li>
-                            ))}
+                            {suggestions.map((d) => {
+                              const did = getDetalleId(d) ?? d?.id;
+                              return (
+                                <li
+                                  key={did ?? d?.id ?? String(Math.random())}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    updateRow(r.id, {
+                                      id_detalle: String(did || ""),
+                                      detalleText: String(d?.nombre || ""),
+                                    });
+                                  }}
+                                  className="mi-cr-suggest__item"
+                                >
+                                  {d.nombre}
+                                </li>
+                              );
+                            })}
                           </ul>
                         )}
 
@@ -1008,7 +1067,8 @@ export default function ModalCargaRapidaMovimientos({
               </div>
 
               <div className="mi-cr-filters__body">
-                <div className="fl-grid mi-cr-onecol" style={{gridTemplateColumns:"1fr"}}>
+                {/* ⚠️ Mantengo tu inline style porque lo mandaste así */}
+                <div className="fl-grid mi-cr-onecol" style={{ gridTemplateColumns: "1fr" }}>
                   {[
                     ["id_clasificacion", "Clasificación (opcional)", listsNorm.clasificaciones],
                     ["id_tipo_venta", "Tipo venta (opcional)", listsNorm.tipos_venta],
@@ -1024,11 +1084,14 @@ export default function ModalCargaRapidaMovimientos({
                         disabled={saving}
                       >
                         <option value={NULL_OPTION}>{label}</option>
-                        {arr.map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
+                        {(arr || []).map((x) => {
+                          const xid = getIdGeneric(x);
+                          return (
+                            <option key={xid || x.id} value={String(xid || x.id || "")}>
+                              {x.nombre}
+                            </option>
+                          );
+                        })}
                       </select>
                       <label className="fl-label">{String(label).replace(" (opcional)", "")}</label>
                     </div>
@@ -1051,18 +1114,21 @@ export default function ModalCargaRapidaMovimientos({
 
                     {clienteFocus && filteredClientes.length > 0 && (
                       <ul className="mi-cr-suggest">
-                        {filteredClientes.map((c) => (
-                          <li
-                            key={c.id}
-                            className="mi-cr-suggest__item"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectCliente(c);
-                            }}
-                          >
-                            {c.nombre}
-                          </li>
-                        ))}
+                        {filteredClientes.map((c) => {
+                          const cid = getClienteId(c) ?? c?.id;
+                          return (
+                            <li
+                              key={cid ?? c?.id ?? String(Math.random())}
+                              className="mi-cr-suggest__item"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelectCliente(c);
+                              }}
+                            >
+                              {c.nombre}
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
 
@@ -1093,18 +1159,21 @@ export default function ModalCargaRapidaMovimientos({
 
                     {proveedorFocus && filteredProveedores.length > 0 && (
                       <ul className="mi-cr-suggest">
-                        {filteredProveedores.map((p) => (
-                          <li
-                            key={p.id}
-                            className="mi-cr-suggest__item"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectProveedor(p);
-                            }}
-                          >
-                            {p.nombre}
-                          </li>
-                        ))}
+                        {filteredProveedores.map((p) => {
+                          const pid = getProveedorId(p) ?? p?.id;
+                          return (
+                            <li
+                              key={pid ?? p?.id ?? String(Math.random())}
+                              className="mi-cr-suggest__item"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelectProveedor(p);
+                              }}
+                            >
+                              {p.nombre}
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
 
@@ -1150,7 +1219,7 @@ export default function ModalCargaRapidaMovimientos({
           value={addUI.text}
           saving={addUI.saving}
           onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
-          onCancel={cancelMini}
+          onCancel={closeAddMini}
           onSave={guardarNuevoCatalogo}
           dark={dark}
         />
@@ -1158,6 +1227,5 @@ export default function ModalCargaRapidaMovimientos({
     </div>
   );
 
-  // ✅ Portal al body
   return createPortal(modalJSX, document.body);
 }

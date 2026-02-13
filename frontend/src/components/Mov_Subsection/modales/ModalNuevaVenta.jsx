@@ -37,6 +37,9 @@ function moneyARS(v) {
     return `$${n.toFixed(2)}`;
   }
 }
+function uid() {
+  return crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 /* =========================
    Período UI (MM-YYYY) <-> API (YYYY-MM)
@@ -62,7 +65,9 @@ function mmYYYYToYYYYMM(mmYYYY) {
   return "";
 }
 function normalizePeriodoInput(raw) {
-  const digits = String(raw || "").replace(/\D/g, "").slice(0, 6);
+  const digits = String(raw || "")
+    .replace(/\D/g, "")
+    .slice(0, 6);
   if (digits.length <= 2) return digits;
   return `${digits.slice(0, 2)}-${digits.slice(2)}`;
 }
@@ -79,19 +84,16 @@ function normalizeLists(lists) {
     detalles: Array.isArray(l.detalles) ? l.detalles : [],
     medios_pago: Array.isArray(l.medios_pago) ? l.medios_pago : [],
     tipos_venta: Array.isArray(l.tipos_venta) ? l.tipos_venta : [],
-    cuentas_corrientes: Array.isArray(l.cuentas_corrientes)
-      ? l.cuentas_corrientes
-      : [],
+    cuentas_corrientes: Array.isArray(l.cuentas_corrientes) ? l.cuentas_corrientes : [],
   };
 }
 
 /* =========================
-   ✅ Auth + API (JWT + X-Session)  <-- FIX 401
+   ✅ Auth + API (JWT + X-Session)
 ========================= */
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
 
-  // ✅ nuevo: session_key del login multi-tenant (#balto_login)
   const sessionKey =
     localStorage.getItem("session_key") ||
     localStorage.getItem("sessionKey") ||
@@ -117,12 +119,9 @@ async function parseJsonOrThrow(res) {
     data = JSON.parse(text);
   } catch {
     const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-    throw new Error(
-      `Respuesta inválida (no JSON). HTTP ${res.status}\n${preview}`
-    );
+    throw new Error(`Respuesta inválida (no JSON). HTTP ${res.status}\n${preview}`);
   }
 
-  // ✅ si el server devolvió 401/403 o similar, mostramos el mensaje del backend
   if (!res.ok) {
     const msg = data?.mensaje || data?.error || `HTTP ${res.status}`;
     throw new Error(msg);
@@ -135,8 +134,8 @@ async function apiPostJson(url, payload) {
   const { token, sessionKey } = getAuthInfo();
 
   const headers = { "Content-Type": "application/json" };
-  if (sessionKey) headers["X-Session"] = sessionKey; // ✅ CLAVE
-  if (token) headers.Authorization = `Bearer ${token}`; // ✅ compat viejo
+  if (sessionKey) headers["X-Session"] = sessionKey;
+  if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -158,6 +157,7 @@ function AddCatalogMiniModal({
   onChange,
   onCancel,
   onSave,
+  dark = false,
 }) {
   const inputRef = useRef(null);
 
@@ -181,7 +181,10 @@ function AddCatalogMiniModal({
 
   return createPortal(
     <div className="mi-mini__overlay" onMouseDown={onCancel}>
-      <div className="mi-mini__modal" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
           <button
@@ -210,21 +213,11 @@ function AddCatalogMiniModal({
           </div>
 
           <div className="mi-mini__actions">
-            <button
-              type="button"
-              className="mit-btn mit-btn--ghost"
-              onClick={onCancel}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>
               Cancelar
             </button>
 
-            <button
-              type="button"
-              className="mit-btn mit-btn--solid"
-              onClick={onSave}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
               {saving ? "Guardando..." : "Guardar"}
             </button>
           </div>
@@ -253,7 +246,7 @@ function isCorrienteTipoVenta(tipoVentaObj) {
 }
 
 /* =========================
-   Validación detallada filas (mensajes específicos)
+   Validación detallada filas
 ========================= */
 function describeLineProblem(r, idx1based) {
   const detId = Number(r.id_detalle);
@@ -277,41 +270,52 @@ function describeLineProblem(r, idx1based) {
   if (!touched) return null;
 
   const issues = [];
-
   if (!(Number.isFinite(detId) && detId > 0)) {
-    issues.push(
-      detTxt
-        ? `la descripción "${detTxt}" no está seleccionada del listado`
-        : "falta la descripción (detalle)"
-    );
+    issues.push(detTxt ? `la descripción "${detTxt}" no está seleccionada del listado` : "falta la descripción (detalle)");
   }
-
   if (qtyBlank) issues.push("falta la cantidad");
-  else if (!(Number.isFinite(qty) && qty > 0))
-    issues.push("la cantidad debe ser mayor a 0");
+  else if (!(Number.isFinite(qty) && qty > 0)) issues.push("la cantidad debe ser mayor a 0");
 
   if (priceBlank) issues.push("falta el precio");
-  else if (!(Number.isFinite(price) && price > 0))
-    issues.push("el precio debe ser mayor a 0");
+  else if (!(Number.isFinite(price) && price > 0)) issues.push("el precio debe ser mayor a 0");
 
-  if (!(Number.isFinite(total) && total > 0))
-    issues.push("el total queda en 0 (revisá cantidad / precio)");
+  if (!(Number.isFinite(total) && total > 0)) issues.push("el total queda en 0 (revisá cantidad / precio)");
 
   if (!issues.length) return null;
-
   return `Fila ${idx1based}: ${issues.join(", ")}.`;
 }
 
-export default function ModalNuevaVenta({
-  open,
-  lists,
-  onClose,
-  onToast,
-  onSaved,
-}) {
-  // ✅ Endpoints (NO hardcodear /routes acá: depende de tu BASE_URL)
+/* =========================
+   Theme helper (body.dark OR data-theme="oscuro")
+========================= */
+function isTemaOscuro() {
+  const byAttr = document.documentElement.getAttribute("data-theme") === "oscuro";
+  const byBody = document.body?.classList?.contains("dark");
+  return Boolean(byAttr || byBody);
+}
+
+export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved }) {
   const API_BATCH = `${BASE_URL}/api.php?action=ventas_crear_batch`;
   const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
+
+  // ✅ dark automático (data-theme="oscuro" o body.dark)
+  const [dark, setDark] = useState(isTemaOscuro());
+  useEffect(() => {
+    const update = () => setDark(isTemaOscuro());
+
+    // observa data-theme en <html> y class en <body>
+    const obsHtml = new MutationObserver(update);
+    obsHtml.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+    const obsBody = new MutationObserver(update);
+    if (document.body) obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
+    update();
+    return () => {
+      obsHtml.disconnect();
+      obsBody.disconnect();
+    };
+  }, []);
 
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
@@ -359,7 +363,7 @@ export default function ModalNuevaVenta({
   // filas
   const [rows, setRows] = useState(() => [
     {
-      id: crypto?.randomUUID?.() || String(Date.now()),
+      id: uid(),
       id_detalle: NULL_OPTION,
       detalleText: "",
       cantidad: 1,
@@ -407,7 +411,7 @@ export default function ModalNuevaVenta({
 
       setRows([
         {
-          id: crypto?.randomUUID?.() || String(Date.now()),
+          id: uid(),
           id_detalle: NULL_OPTION,
           detalleText: "",
           cantidad: 1,
@@ -416,13 +420,7 @@ export default function ModalNuevaVenta({
         },
       ]);
 
-      setAddUI({
-        open: false,
-        field: null,
-        rowId: null,
-        text: "",
-        saving: false,
-      });
+      setAddUI({ open: false, field: null, rowId: null, text: "", saving: false });
 
       setSaving(false);
       setTimeout(() => closeBtnRef.current?.focus(), 0);
@@ -448,14 +446,13 @@ export default function ModalNuevaVenta({
     setFecha(v);
     setPeriodoUI(isoToMMYYYY(v));
   };
-
   const onPeriodoChange = (raw) => setPeriodoUI(normalizePeriodoInput(raw));
 
   const addRow = () => {
     setRows((prev) => [
       ...prev,
       {
-        id: crypto?.randomUUID?.() || String(Date.now() + Math.random()),
+        id: uid(),
         id_detalle: NULL_OPTION,
         detalleText: "",
         cantidad: 1,
@@ -484,22 +481,14 @@ export default function ModalNuevaVenta({
     const q = String(txt || "").trim().toLowerCase();
     if (!q) return [];
     return detallesList
-      .filter((d) =>
-        String(d?.nombre ?? "").toLowerCase().includes(q)
-      )
+      .filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q))
       .slice(0, 18);
   };
 
   const startAddDetalleForRow = useCallback(
     (rowId) => {
       if (saving) return;
-      setAddUI({
-        open: true,
-        field: "id_detalle",
-        rowId,
-        text: "",
-        saving: false,
-      });
+      setAddUI({ open: true, field: "id_detalle", rowId, text: "", saving: false });
     },
     [saving]
   );
@@ -568,7 +557,7 @@ export default function ModalNuevaVenta({
       const data = await apiPostJson(API_CATALOGO, {
         catalogo: meta.catalogo,
         nombre,
-        idUsuario, // compat; si backend ignora por X-Session, ok
+        idUsuario,
       });
 
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear el registro.");
@@ -582,8 +571,7 @@ export default function ModalNuevaVenta({
         const next = { ...prev };
         const listKey = field === "id_cliente" ? "clientes" : "detalles";
         const arr = Array.isArray(prev[listKey]) ? prev[listKey].slice() : [];
-        if (!arr.some((x) => Number(x?.id) === newId))
-          arr.push({ id: newId, nombre: newNombre });
+        if (!arr.some((x) => Number(x?.id) === newId)) arr.push({ id: newId, nombre: newNombre });
         next[listKey] = arr;
         return next;
       });
@@ -646,41 +634,33 @@ export default function ModalNuevaVenta({
       setAccionContado("guardar");
       setFilters((p) => ({ ...p, id_medio_pago: NULL_OPTION }));
     }
-    if (!isContado) {
-      setFilters((p) => ({ ...p, id_medio_pago: NULL_OPTION }));
-    }
-    if (!isCorriente) {
-      setFilters((p) => ({ ...p, id_cuenta_corriente: NULL_OPTION }));
-    }
+    if (!isContado) setFilters((p) => ({ ...p, id_medio_pago: NULL_OPTION }));
+    if (!isCorriente) setFilters((p) => ({ ...p, id_cuenta_corriente: NULL_OPTION }));
   }, [open, isContado, isCorriente]);
 
   /* =========================
-     VALIDACIÓN DETALLADA
+     VALIDACIÓN
   ========================= */
   const validate = useCallback(() => {
     const cli = Number(filters.id_cliente);
-    if (!Number.isFinite(cli) || cli <= 0)
-      return { ok: false, msg: "Falta seleccionar un Cliente (campo obligatorio)." };
+    if (!Number.isFinite(cli) || cli <= 0) return { ok: false, msg: "Falta seleccionar un Cliente (obligatorio)." };
 
     const tv = Number(filters.id_tipo_venta);
-    if (!Number.isFinite(tv) || tv <= 0)
-      return { ok: false, msg: "Falta seleccionar la Forma de venta (Contado / Cuenta Corriente)." };
+    if (!Number.isFinite(tv) || tv <= 0) return { ok: false, msg: "Falta seleccionar la Forma de venta." };
 
     if (isContado) {
       const mp = Number(filters.id_medio_pago);
-      if (!Number.isFinite(mp) || mp <= 0)
-        return { ok: false, msg: "Venta Contado: falta seleccionar el Medio de pago." };
+      if (!Number.isFinite(mp) || mp <= 0) return { ok: false, msg: "Venta Contado: falta seleccionar el Medio de pago." };
     }
 
     if (isCorriente) {
       const cc = Number(filters.id_cuenta_corriente);
-      if (!Number.isFinite(cc) || cc <= 0)
-        return { ok: false, msg: "Cuenta Corriente: falta seleccionar la Cuenta Corriente." };
+      if (!Number.isFinite(cc) || cc <= 0) return { ok: false, msg: "Cuenta Corriente: falta seleccionar la Cuenta Corriente." };
     }
 
     const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
     if (!/^\d{4}-\d{2}$/.test(periodoApi))
-      return { ok: false, msg: `Período inválido. Usá MM-YYYY (ej: 02-2026).` };
+      return { ok: false, msg: "Período inválido. Usá MM-YYYY (ej: 02-2026)." };
 
     const problems = [];
     rowsCalc.forEach((r, idx) => {
@@ -700,27 +680,12 @@ export default function ModalNuevaVenta({
         const extra = problems.length > 2 ? ` (y ${problems.length - 2} más)` : "";
         return { ok: false, msg: `No hay filas válidas para guardar. ${msg}${extra}` };
       }
-      return { ok: false, msg: "Cargá al menos 1 fila: elegí un Detalle y completá Cantidad y Precio (Total > 0)." };
+      return { ok: false, msg: "Cargá al menos 1 fila válida: elegí un Detalle y completá Cantidad/Precio." };
     }
 
-    const warn = problems.length > 0;
+    return { ok: true, warn: problems.length > 0, problems };
+  }, [filters, fecha, periodoUI, isContado, isCorriente, rowsCalc]);
 
-    return { ok: true, warn, periodoApi };
-  }, [
-    filters.id_cliente,
-    filters.id_tipo_venta,
-    filters.id_medio_pago,
-    filters.id_cuenta_corriente,
-    isContado,
-    isCorriente,
-    periodoUI,
-    fecha,
-    rowsCalc,
-  ]);
-
-  /* =========================
-     SUBMIT (POST batch)
-  ========================= */
   const submit = async () => {
     if (saving) return;
 
@@ -731,44 +696,36 @@ export default function ModalNuevaVenta({
 
     const v = validate();
     if (!v.ok) {
-      showToast("advertencia", v.msg || "Faltan datos.", 4200);
+      showToast("advertencia", v.msg || "Faltan datos.", 3800);
       return;
     }
 
-    setSaving(true);
+    const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
+    const fechaApi = /^\d{4}-\d{2}-\d{2}$/.test(String(fecha)) ? String(fecha) : todayISO();
 
-    if (v.warn) showToast("advertencia", "Hay filas incompletas: se guardarán solo las filas válidas.", 3600);
-    else showToast("cargando", "Guardando venta…", 12000);
+    const usableLines = rowsCalc.filter((r) => {
+      const det = Number(r.id_detalle);
+      const total = Number(r.total || 0);
+      return Number.isFinite(det) && det > 0 && total > 0;
+    });
+
+    setSaving(true);
+    showToast("cargando", "Guardando venta…", 12000);
 
     try {
-      const { idUsuario } = getAuthInfo();
+      const payload = {
+        fecha: fechaApi,
+        periodo: periodoApi,
 
-      const periodoApi = v.periodoApi || (mmYYYYToYYYYMM(periodoUI) || (fecha ? fecha.slice(0, 7) : ""));
-      if (!/^\d{4}-\d{2}$/.test(periodoApi)) {
-        throw new Error("Período inválido. Usá MM-YYYY (ej: 02-2026).");
-      }
+        id_cliente: Number(filters.id_cliente),
+        id_tipo_venta: Number(filters.id_tipo_venta),
 
-      const accionFinal = isCorriente ? "guardar" : accionContado;
-      const esFacturaFinal = isCorriente ? false : accionFinal === "facturar";
+        id_medio_pago: isContado ? Number(filters.id_medio_pago) : null,
+        id_cuenta_corriente: isCorriente ? Number(filters.id_cuenta_corriente) : null,
 
-      const payloads = rowsCalc
-        .filter((r) => {
-          const det = Number(r.id_detalle);
-          const total = Number(r.total || 0);
-          return Number.isFinite(det) && det > 0 && total > 0;
-        })
-        .map((r) => ({
-          idUsuario,
+        accion_contado: isContado ? accionContado : null,
 
-          fecha,
-          periodo: periodoApi,
-
-          id_tipo_venta: Number(filters.id_tipo_venta),
-          id_cliente: Number(filters.id_cliente),
-
-          id_medio_pago: isContado ? Number(filters.id_medio_pago) : null,
-          id_cuenta_corriente: isCorriente ? Number(filters.id_cuenta_corriente) : null,
-
+        items: usableLines.map((r) => ({
           id_detalle: Number(r.id_detalle),
           cantidad: Math.round(Number(r.cantidad) * 100) / 100,
           precio: Math.round(Number(r.precio) * 100) / 100,
@@ -776,27 +733,18 @@ export default function ModalNuevaVenta({
           subtotal: Math.round(Number(r.subtotal) * 100) / 100,
           iva_monto: Math.round(Number(r.ivaMonto) * 100) / 100,
           total: Math.round(Number(r.total) * 100) / 100,
-
           monto_total: Math.round(Number(r.total) * 100) / 100,
+        })),
+      };
 
-          accion_venta: accionFinal,
-          es_factura: esFacturaFinal,
-        }));
+      const data = await apiPostJson(API_BATCH, payload);
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la venta.");
 
-      if (!payloads.length) {
-        showToast("advertencia", "No hay filas válidas para guardar. Revisá detalle, cantidad y precio.", 4200);
-        setSaving(false);
-        return;
-      }
-
-      const data = await apiPostJson(API_BATCH, payloads);
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar el batch de ventas.");
-
-      showToast("exito", `Listo: ${data?.creados ?? payloads.length} ítems de venta guardados.`, 2800);
+      showToast("exito", "Venta guardada.", 2600);
       onSaved?.(data);
       onClose?.();
     } catch (e) {
-      showToast("error", e?.message || "Error guardando.", 4500);
+      showToast("error", e?.message || "Error guardando la venta.", 4500);
       setSaving(false);
     }
   };
@@ -808,11 +756,19 @@ export default function ModalNuevaVenta({
 
   const modalJSX = (
     <div
-      className="mi-modal__overlay mi-modal__overlay--mov"
+      className={[
+        "mi-modal__overlay",
+        "mi-modal__overlay--mov",
+        dark ? "mi-modal__overlay--dark" : "",
+      ].join(" ").trim()}
       onMouseDown={() => (!saving ? onClose?.() : null)}
     >
       <div
-        className="mi-modal__container mi-modal__container--mov"
+        className={[
+          "mi-modal__container",
+          "mi-modal__container--mov",
+          dark ? "mi-modal--dark" : "",
+        ].join(" ").trim()}
         role="dialog"
         aria-modal="true"
         onMouseDown={(e) => e.stopPropagation()}
@@ -820,9 +776,7 @@ export default function ModalNuevaVenta({
         <div className="mi-modal__header mi-modal__header--car">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Nueva Venta</h2>
-            <p className="mi-modal__subtitle">
-              Planilla a la izquierda + datos de venta a la derecha.
-            </p>
+            <p className="mi-modal__subtitle">Cargá varias filas y guardá todo junto.</p>
           </div>
 
           <button
@@ -843,11 +797,11 @@ export default function ModalNuevaVenta({
             <section className="mi-cr-table">
               <div className="mi-cr-table__head">
                 <div>Descripción</div>
-                <div style={{ textAlign: "center" }}>Cantidad</div>
-                <div style={{ textAlign: "center" }}>Precio</div>
-                <div style={{ textAlign: "center" }}>% IVA</div>
-                <div style={{ textAlign: "center" }}>IVA</div>
-                <div style={{ textAlign: "center" }}>Total</div>
+                <div className="mi-cr-center">Cantidad</div>
+                <div className="mi-cr-center">Precio</div>
+                <div className="mi-cr-center">% IVA</div>
+                <div className="mi-cr-center">IVA</div>
+                <div className="mi-cr-center">Total</div>
                 <div />
               </div>
 
@@ -862,20 +816,16 @@ export default function ModalNuevaVenta({
                   return (
                     <div key={r.id} className="mi-cr-row mi-cr-row--car">
                       {/* Descripción */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--desc" style={{ position: "relative" }}>
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--desc mi-cr-rel">
                         <input
                           className="fl-input"
-                          placeholder="Escribí o seleccioná una descripción…"
+                          placeholder="Escribí y seleccioná un detalle…"
                           value={r.detalleText}
                           onChange={(e) =>
-                            updateRow(r.id, {
-                              detalleText: e.target.value,
-                              id_detalle: NULL_OPTION,
-                            })
+                            updateRow(r.id, { detalleText: e.target.value, id_detalle: NULL_OPTION })
                           }
                           disabled={saving || addUI.open}
                           autoComplete="off"
-                          style={{ height: 38 }}
                         />
 
                         {showSug && (
@@ -885,10 +835,7 @@ export default function ModalNuevaVenta({
                                 key={d.id}
                                 onMouseDown={(e) => {
                                   e.preventDefault();
-                                  updateRow(r.id, {
-                                    id_detalle: String(d.id),
-                                    detalleText: String(d.nombre || ""),
-                                  });
+                                  updateRow(r.id, { id_detalle: String(d.id), detalleText: String(d.nombre || "") });
                                 }}
                                 className="mi-cr-suggest__item"
                               >
@@ -904,12 +851,12 @@ export default function ModalNuevaVenta({
                           disabled={saving || addUI.saving}
                           className="mi-cr-link"
                         >
-                          + Agregar nueva descripción
+                          + Agregar nuevo detalle
                         </button>
                       </div>
 
                       {/* Cantidad */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--qty">
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--qty mi-cr-center">
                         <input
                           className="fl-input"
                           type="number"
@@ -917,17 +864,14 @@ export default function ModalNuevaVenta({
                           step="1"
                           value={r.cantidad}
                           onChange={(e) =>
-                            updateRow(r.id, {
-                              cantidad: e.target.value === "" ? "" : Number(e.target.value),
-                            })
+                            updateRow(r.id, { cantidad: e.target.value === "" ? "" : Number(e.target.value) })
                           }
                           disabled={saving}
-                          style={{ height: 38, textAlign: "center" }}
                         />
                       </div>
 
                       {/* Precio */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--price">
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--price mi-cr-center">
                         <input
                           className="fl-input"
                           type="number"
@@ -935,23 +879,19 @@ export default function ModalNuevaVenta({
                           step="0.01"
                           value={r.precio}
                           onChange={(e) =>
-                            updateRow(r.id, {
-                              precio: e.target.value === "" ? "" : Number(e.target.value),
-                            })
+                            updateRow(r.id, { precio: e.target.value === "" ? "" : Number(e.target.value) })
                           }
                           disabled={saving}
-                          style={{ height: 38, textAlign: "center" }}
                         />
                       </div>
 
                       {/* % IVA */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--iva">
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--iva mi-cr-center">
                         <select
-                          className="fl-input fl-select fl-select-iva--car fl-select-iva--compra"
+                          className="fl-input fl-select fl-select-iva--car"
                           value={String(r.ivaPct)}
                           onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
                           disabled={saving}
-                          style={{ height: 38, textAlign: "center" }}
                         >
                           {IVA_OPTIONS.map((x) => (
                             <option key={x.value} value={x.value}>
@@ -962,17 +902,13 @@ export default function ModalNuevaVenta({
                       </div>
 
                       {/* IVA monto */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--ivaMonto">
-                        <div style={{ textAlign: "center", fontWeight: 700, paddingTop: 10 }}>
-                          {moneyARS(r.ivaMonto)}
-                        </div>
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--ivaMonto mi-cr-center">
+                        <div className="mi-cr-money mi-cr-money--soft">{moneyARS(r.ivaMonto)}</div>
                       </div>
 
                       {/* Total */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--total">
-                        <div style={{ textAlign: "center", fontWeight: 800, paddingTop: 10 }}>
-                          {moneyARS(r.total)}
-                        </div>
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--total mi-cr-center">
+                        <div className="mi-cr-money mi-cr-money--strong">{moneyARS(r.total)}</div>
                       </div>
 
                       {/* Acción */}
@@ -995,7 +931,7 @@ export default function ModalNuevaVenta({
               {/* footer tabla */}
               <div className="mi-cr-table__foot">
                 <button type="button" onClick={addRow} disabled={saving} className="mi-cr-addrow">
-                  + Agregar fila
+                  Agregar fila
                 </button>
 
                 <div className="mi-cr-totals">
@@ -1017,10 +953,10 @@ export default function ModalNuevaVenta({
               </div>
             </section>
 
-            {/* Panel derecha */}
+            {/* Filtros derecha */}
             <aside className="mi-cr-filters">
               <div className="mi-cr-filters__top">
-                <div className="mi-cr-filters__title">Datos de venta</div>
+                <div className="mi-cr-filters__title">Datos</div>
 
                 <div className="mi-cr-filters__dates">
                   <div className="fl-field">
@@ -1049,168 +985,128 @@ export default function ModalNuevaVenta({
               </div>
 
               <div className="mi-cr-filters__body">
-                <div className="fl-grid" style={{ gridTemplateColumns: "1fr" }}>
-                  {/* CLIENTE */}
-                  <div className="fl-field" style={{ position: "relative" }}>
-                    <input
-                      ref={clienteInputRef}
-                      className="fl-input"
-                      placeholder=" "
-                      value={clienteInput}
-                      onChange={handleClienteInputChange}
-                      onFocus={() => setClienteFocus(true)}
-                      onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
-                      disabled={saving || addUI.open}
-                      autoComplete="off"
-                    />
-                    <label className="fl-label">Cliente *</label>
+                {/* Cliente */}
+                <div className="fl-field mi-cr-rel">
+                  <input
+                    ref={clienteInputRef}
+                    className="fl-input"
+                    placeholder=" "
+                    value={clienteInput}
+                    onChange={handleClienteInputChange}
+                    onFocus={() => setClienteFocus(true)}
+                    onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
+                    disabled={saving || addUI.open}
+                    autoComplete="off"
+                  />
+                  <label className="fl-label">Cliente</label>
 
-                    {clienteFocus && filteredClientes.length > 0 && (
-                      <ul className="mi-cr-suggest">
-                        {filteredClientes.map((c) => (
-                          <li
-                            key={c.id}
-                            className="mi-cr-suggest__item"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectCliente(c);
-                            }}
-                          >
-                            {c.nombre}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                  {clienteFocus && filteredClientes.length > 0 && (
+                    <ul className="mi-cr-suggest">
+                      {filteredClientes.map((c) => (
+                        <li
+                          key={c.id}
+                          className="mi-cr-suggest__item"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelectCliente(c);
+                          }}
+                        >
+                          {c.nombre}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
 
-                    <button
-                      type="button"
-                      className="mi-cr-link"
-                      onClick={startAddCliente}
-                      disabled={saving || addUI.saving}
-                    >
-                      + Agregar nuevo cliente
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className="mi-cr-link"
+                    onClick={startAddCliente}
+                    disabled={saving || addUI.saving}
+                  >
+                    + Agregar nuevo cliente
+                  </button>
+                </div>
 
-                  {/* TIPO VENTA */}
+                {/* Tipo venta */}
+                <div className="fl-field">
+                  <select
+                    className="fl-input fl-select"
+                    value={String(filters.id_tipo_venta)}
+                    onChange={(e) => updateFilter("id_tipo_venta", e.target.value)}
+                    disabled={saving}
+                  >
+                    <option value={NULL_OPTION}>Forma de venta</option>
+                    {(localLists.tipos_venta || []).map((x) => (
+                      <option key={x.id} value={String(x.id)}>
+                        {x.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="fl-label">Forma de venta</label>
+                </div>
+
+                {/* Medio pago (solo contado) */}
+                {isContado && (
                   <div className="fl-field">
                     <select
                       className="fl-input fl-select"
-                      value={String(filters.id_tipo_venta)}
-                      onChange={(e) => updateFilter("id_tipo_venta", e.target.value)}
+                      value={String(filters.id_medio_pago)}
+                      onChange={(e) => updateFilter("id_medio_pago", e.target.value)}
                       disabled={saving}
                     >
-                      <option value={NULL_OPTION}>Forma de venta *</option>
-                      {(localLists.tipos_venta || []).map((x) => (
+                      <option value={NULL_OPTION}>Medio de pago</option>
+                      {(localLists.medios_pago || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
                           {x.nombre}
                         </option>
                       ))}
                     </select>
-                    <label className="fl-label">Forma de venta</label>
+                    <label className="fl-label">Medio de pago</label>
                   </div>
+                )}
 
-                  {/* CONTADO => MEDIO PAGO + (GUARDAR/FACTURAR) */}
-                  {isContado && (
-                    <>
-                      <div className="fl-field">
-                        <select
-                          className="fl-input fl-select"
-                          value={String(filters.id_medio_pago)}
-                          onChange={(e) => updateFilter("id_medio_pago", e.target.value)}
-                          disabled={saving}
-                        >
-                          <option value={NULL_OPTION}>Medio de pago *</option>
-                          {(localLists.medios_pago || []).map((x) => (
-                            <option key={x.id} value={String(x.id)}>
-                              {x.nombre}
-                            </option>
-                          ))}
-                        </select>
-                        <label className="fl-label">Medio de pago</label>
-                      </div>
+                {/* Cuenta corriente (solo corriente) */}
+                {isCorriente && (
+                  <div className="fl-field">
+                    <select
+                      className="fl-input fl-select"
+                      value={String(filters.id_cuenta_corriente)}
+                      onChange={(e) => updateFilter("id_cuenta_corriente", e.target.value)}
+                      disabled={saving}
+                    >
+                      <option value={NULL_OPTION}>Cuenta corriente</option>
+                      {(localLists.cuentas_corrientes || []).map((x) => (
+                        <option key={x.id} value={String(x.id)}>
+                          {x.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="fl-label">Cuenta corriente</label>
+                  </div>
+                )}
 
-                      <div className="mi-card mi-card--full" style={{ padding: 12 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 10, color: "var(--mi-text)" }}>
-                          Pago (Contado)
-                        </div>
-
-                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                          <button
-                            type="button"
-                            className={`mit-btn ${accionContado === "guardar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
-                            onClick={() => setAccionContado("guardar")}
-                            disabled={saving}
-                            style={{ height: 40 }}
-                          >
-                            Guardar
-                          </button>
-
-                          <button
-                            type="button"
-                            className={`mit-btn ${accionContado === "facturar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
-                            onClick={() => setAccionContado("facturar")}
-                            disabled={saving}
-                            style={{ height: 40 }}
-                          >
-                            Facturar
-                          </button>
-                        </div>
-
-                        <div style={{ marginTop: 10, fontSize: 12, color: "var(--mi-muted)", fontWeight: 400 }}>
-                          {accionContado === "guardar" ? (
-                            <>
-                              * <b>Guardar</b>: se registra la venta y queda <b>pendiente de pago</b>.
-                            </>
-                          ) : (
-                            <>
-                              * <b>Facturar</b>: se registra la venta como <b>pago realizado</b>.
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {/* CORRIENTE => CUENTA CORRIENTE OBLIGATORIA */}
-                  {isCorriente && (
-                    <>
-                      <div className="fl-field">
-                        <select
-                          className="fl-input fl-select"
-                          value={String(filters.id_cuenta_corriente)}
-                          onChange={(e) => updateFilter("id_cuenta_corriente", e.target.value)}
-                          disabled={saving}
-                        >
-                          <option value={NULL_OPTION}>Cuenta Corriente *</option>
-                          {(localLists.cuentas_corrientes || []).map((x) => (
-                            <option key={x.id} value={String(x.id)}>
-                              {x.nombre}
-                            </option>
-                          ))}
-                        </select>
-                        <label className="fl-label">Cuenta Corriente</label>
-                      </div>
-
-                      <div className="mi-card mi-card--full" style={{ padding: 12 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 8, color: "var(--mi-text)" }}>
-                          En cuenta corriente
-                        </div>
-                        <div style={{ fontSize: 12, color: "var(--mi-muted)" }}>
-                          * Se registra la venta en <b>Cuenta Corriente</b> y queda <b>pendiente de pago</b>.
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
+                {/* Acción contado */}
+                {isContado && (
+                  <div className="fl-field">
+                    <select
+                      className="fl-input fl-select"
+                      value={accionContado}
+                      onChange={(e) => setAccionContado(e.target.value)}
+                      disabled={saving}
+                    >
+                      <option value="facturar">Facturar</option>
+                      <option value="guardar">Guardar</option>
+                    </select>
+                    <label className="fl-label">Acción</label>
+                  </div>
+                )}
 
                 <div className="mi-cr-filters__actions">
                   <button
                     type="button"
                     onClick={submit}
                     disabled={saving}
-                    className="mit-btn mit-btn--solid"
-                    style={{ width: "100%", height: 44 }}
+                    className="mit-btn mit-btn--solid mit-btn--block"
                   >
                     {saving ? "Guardando..." : "Guardar venta"}
                   </button>
@@ -1219,8 +1115,7 @@ export default function ModalNuevaVenta({
                     type="button"
                     onClick={() => (!saving ? onClose?.() : null)}
                     disabled={saving}
-                    className="mit-btn mit-btn--ghost"
-                    style={{ width: "100%", height: 44 }}
+                    className="mit-btn mit-btn--ghost mit-btn--block"
                   >
                     Cancelar
                   </button>
@@ -1239,6 +1134,7 @@ export default function ModalNuevaVenta({
           onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
           onCancel={closeAddMini}
           onSave={guardarNuevoCatalogo}
+          dark={dark}
         />
       </div>
     </div>

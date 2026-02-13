@@ -101,7 +101,7 @@ html[data-theme="oscuro"]{
 /* Base texto/fondo */
 html[data-theme="oscuro"] body{
   background: var(--balto-bg);
-  color: rgba(226,232,240,.90);
+  color: rgba(226,232,240,.90) !important;
 }
 
 /* Fondo general shell (menos “azulazo”) */
@@ -950,6 +950,7 @@ button{ font-family: inherit; }
 
 /* ✅ MOBILE/TABLET: sidebar pasa a drawer */
 @media (max-width: 720px){
+  .ini_page{padding: 0;}
   .pp-burger{ display:grid; }
 
   .pp-shell{
@@ -989,7 +990,7 @@ button{ font-family: inherit; }
 
   /* content full width */
   .pp-content{ padding: 12px; }
-  .pp-content__inner{ padding: 12px; }
+  .pp-content__inner{ padding: 8px; }
 }
 
 @media (max-width: 560px){

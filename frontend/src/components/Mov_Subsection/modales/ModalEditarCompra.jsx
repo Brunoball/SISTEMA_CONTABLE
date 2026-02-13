@@ -123,6 +123,13 @@ function periodoFromISODate(iso) {
 }
 
 /* =========================
+   Dark helper (igual a Venta)
+========================= */
+function isTemaOscuro() {
+  return document.documentElement.getAttribute("data-theme") === "oscuro";
+}
+
+/* =========================
    Auth helpers
 ========================= */
 function getAuthInfo() {
@@ -140,7 +147,6 @@ function getAuthInfo() {
 
 /* =========================
    Catálogo map (compras)
-   ✅ SIN tipo_movimiento
 ========================= */
 const CATALOGO_MAP = {
   id_clasificacion: { catalogo: "clasificaciones", label: "Clasificación" },
@@ -240,15 +246,13 @@ function calcItemTotals(cantidad, precio, ivaPct) {
   const total = subtotal + iva_monto;
 
   const r2 = (n) => Math.round(n * 100) / 100;
-
   return { subtotal: r2(subtotal), iva_monto: r2(iva_monto), total: r2(total) };
 }
 
 /* =========================
    Build form desde row (compra)
-   ✅ SIN tipo_movimiento
 ========================= */
-function buildFormFromRowCompra(row, listsMerged, periodoDefault) {
+function buildFormFromRowCompra(row, periodoDefault) {
   const r = row || {};
 
   const fecha = String(r.fecha || "").slice(0, 10) || "";
@@ -279,7 +283,6 @@ function buildFormFromRowCompra(row, listsMerged, periodoDefault) {
 
   return {
     id_movimiento: safeNumber(r.id_movimiento) || null,
-
     fecha,
     periodo: pickPeriodo,
 
@@ -311,8 +314,8 @@ export default function ModalEditarCompra({
   onSave,
   onCatalogCreated,
   onToast,
+  dark: darkProp, // ✅ nuevo (igual a Venta)
 }) {
-  // ✅ ahora “apunta a compras” (catálogo) en vez de movimientos
   const API = `${BASE_URL}/api.php`;
 
   const showToast = useCallback(
@@ -320,39 +323,47 @@ export default function ModalEditarCompra({
     [onToast]
   );
 
+  // ✅ dark auto (igual a Venta)
+  const [darkAuto, setDarkAuto] = useState(isTemaOscuro());
+  useEffect(() => {
+    const obs = new MutationObserver(() => setDarkAuto(isTemaOscuro()));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
+  const dark = typeof darkProp === "boolean" ? darkProp : darkAuto;
+
+  // ✅ bloquear scroll del body (igual a Venta)
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
+
   const listsRef = useRef(lists);
   const rowRef = useRef(row);
   const periodoDefaultRef = useRef(periodoDefault);
-
-  useEffect(() => {
-    listsRef.current = lists;
-  }, [lists]);
-  useEffect(() => {
-    rowRef.current = row;
-  }, [row]);
-  useEffect(() => {
-    periodoDefaultRef.current = periodoDefault;
-  }, [periodoDefault]);
+  useEffect(() => void (listsRef.current = lists), [lists]);
+  useEffect(() => void (rowRef.current = row), [row]);
+  useEffect(() => void (periodoDefaultRef.current = periodoDefault), [periodoDefault]);
 
   const [localLists, setLocalLists] = useState(() => ({
     ...SAFE_LISTS,
     ...normalizeIncomingLists(lists),
   }));
-
   useEffect(() => {
     setLocalLists({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) });
   }, [lists]);
-
   const safeLists = useMemo(() => localLists, [localLists]);
 
   const [saving, setSaving] = useState(false);
 
-  const [form, setForm] = useState(() =>
-    buildFormFromRowCompra(row, { ...SAFE_LISTS, ...normalizeIncomingLists(lists) }, periodoDefault)
-  );
-
+  const [form, setForm] = useState(() => buildFormFromRowCompra(row, periodoDefault));
   const [addUI, setAddUI] = useState({ open: false, field: null, text: "", saving: false });
 
+  // Autocomplete
   const [proveedorInput, setProveedorInput] = useState("");
   const [proveedorFocus, setProveedorFocus] = useState(false);
   const proveedorInputRef = useRef(null);
@@ -364,12 +375,12 @@ export default function ModalEditarCompra({
   const closeBtnRef = useRef(null);
   const fechaRef = useRef(null);
 
+  // abrir: reconstruir SIEMPRE (igual a Venta)
   const prevOpenRef = useRef(false);
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
     prevOpenRef.current = open;
-    if (!open) return;
-    if (wasOpen) return;
+    if (!open || wasOpen) return;
 
     setSaving(false);
     setAddUI({ open: false, field: null, text: "", saving: false });
@@ -377,7 +388,7 @@ export default function ModalEditarCompra({
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(listsRef.current) };
     setLocalLists(merged);
 
-    const built = buildFormFromRowCompra(rowRef.current, merged, periodoDefaultRef.current);
+    const built = buildFormFromRowCompra(rowRef.current, periodoDefaultRef.current);
     setForm(built);
 
     const nameById = (arr, id) => {
@@ -398,12 +409,15 @@ export default function ModalEditarCompra({
 
   useEffect(() => {
     if (!open) return;
-    const onKeyDown = (e) => {
-      if (e.key === "Escape") onClose?.();
-    };
+    const onKeyDown = (e) => e.key === "Escape" && onClose?.();
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
+
+  const cerrar = useCallback(() => {
+    if (saving) return;
+    onClose?.();
+  }, [saving, onClose]);
 
   const openDatePicker = useCallback(() => {
     const el = fechaRef.current;
@@ -440,34 +454,27 @@ export default function ModalEditarCompra({
   const recalcFromItem = useCallback((nextPartial) => {
     setForm((p) => {
       const next = { ...p, ...nextPartial };
-
       const cantidad = safeNumber(next.cantidad);
       const precio = safeNumber(next.precio);
       const iva_pct = safeNumber(next.iva_pct);
-
       const t = calcItemTotals(cantidad, precio, iva_pct);
-
       next.subtotal = t.subtotal;
       next.iva_monto = t.iva_monto;
       next.total = t.total;
       next.monto_total = t.total;
-
       return next;
     });
   }, []);
 
-  const onCantidadChange = useCallback(
-    (v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }),
-    [recalcFromItem]
-  );
-  const onPrecioChange = useCallback(
-    (v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }),
-    [recalcFromItem]
-  );
-  const onIvaPctChange = useCallback(
-    (v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }),
-    [recalcFromItem]
-  );
+  const onCantidadChange = useCallback((v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }), [
+    recalcFromItem,
+  ]);
+  const onPrecioChange = useCallback((v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }), [
+    recalcFromItem,
+  ]);
+  const onIvaPctChange = useCallback((v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }), [
+    recalcFromItem,
+  ]);
 
   const onMontoTotalManual = useCallback((v) => {
     const mt = v === "" ? "" : Number(v);
@@ -475,17 +482,13 @@ export default function ModalEditarCompra({
       const next = { ...p, monto_total: mt };
       const cantidad = Math.max(0, safeNumber(next.cantidad) || 1);
       const iva_pct = Math.max(0, safeNumber(next.iva_pct));
-
       const factor = cantidad * (1 + iva_pct / 100);
       const precio = factor > 0 ? safeNumber(mt) / factor : safeNumber(mt);
-
       const t = calcItemTotals(cantidad, precio, iva_pct);
-
       next.precio = Math.round(precio * 100) / 100;
       next.subtotal = t.subtotal;
       next.iva_monto = t.iva_monto;
       next.total = t.total;
-
       return next;
     });
   }, []);
@@ -509,7 +512,6 @@ export default function ModalEditarCompra({
       const { token } = getAuthInfo();
       const headers = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
-
       const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload ?? {}) });
       return await parseJsonOrThrow(res);
     },
@@ -517,8 +519,7 @@ export default function ModalEditarCompra({
   );
 
   /* =========================
-     Alta rápida catálogo
-     ✅ action de compras
+     Alta rápida catálogo (mini modal)
   ========================= */
   const closeAddMini = useCallback(() => {
     if (addUI.saving) return;
@@ -543,7 +544,6 @@ export default function ModalEditarCompra({
     try {
       const { idUsuario } = getAuthInfo();
 
-      // ✅ NUEVO: compras_catalogo_crear
       const data = await apiPostJson(`${API}?action=compras_catalogo_crear`, {
         catalogo: meta.catalogo,
         nombre,
@@ -593,11 +593,6 @@ export default function ModalEditarCompra({
     }
   }, [API, addUI, apiPostJson, onCatalogCreated, showToast]);
 
-  const cerrar = useCallback(() => {
-    if (saving) return;
-    onClose?.();
-  }, [saving, onClose]);
-
   /* =========================
      Autocomplete: Proveedor / Detalle
   ========================= */
@@ -607,6 +602,13 @@ export default function ModalEditarCompra({
     if (!proveedorFocus || q.length < 1) return [];
     return all.filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
   }, [safeLists.proveedores, proveedorInput, proveedorFocus]);
+
+  const filteredDetalles = useMemo(() => {
+    const all = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
+    const q = detalleInput.trim().toLowerCase();
+    if (!detalleFocus || q.length < 1) return [];
+    return all.filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
+  }, [safeLists.detalles, detalleInput, detalleFocus]);
 
   const handleProveedorInputChange = useCallback((e) => {
     const value = e.target.value;
@@ -621,19 +623,6 @@ export default function ModalEditarCompra({
     setProveedorFocus(false);
   }, []);
 
-  const startAddProveedor = useCallback(() => {
-    setProveedorFocus(false);
-    setAddUI({ open: true, field: "id_proveedor", text: "", saving: false });
-    setForm((prev) => ({ ...prev, id_proveedor: ADD_OPTION }));
-  }, []);
-
-  const filteredDetalles = useMemo(() => {
-    const all = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
-    const q = detalleInput.trim().toLowerCase();
-    if (!detalleFocus || q.length < 1) return [];
-    return all.filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
-  }, [safeLists.detalles, detalleInput, detalleFocus]);
-
   const handleDetalleInputChange = useCallback((e) => {
     const value = e.target.value;
     setDetalleInput(value);
@@ -647,6 +636,12 @@ export default function ModalEditarCompra({
     setDetalleFocus(false);
   }, []);
 
+  const startAddProveedor = useCallback(() => {
+    setProveedorFocus(false);
+    setAddUI({ open: true, field: "id_proveedor", text: "", saving: false });
+    setForm((prev) => ({ ...prev, id_proveedor: ADD_OPTION }));
+  }, []);
+
   const startAddDetalle = useCallback(() => {
     setDetalleFocus(false);
     setAddUI({ open: true, field: "id_detalle", text: "", saving: false });
@@ -654,22 +649,20 @@ export default function ModalEditarCompra({
   }, []);
 
   /* =========================
-     UI helpers: select + inline add
+     Select con “OTRO (AGREGAR…)”
   ========================= */
-  const onSelectWithAdd = useCallback(
-    (field, rawValue) => {
-      if (rawValue === ADD_OPTION) {
-        const isMini = field === "id_proveedor" || field === "id_detalle";
-        if (isMini) return;
-        setAddUI({ open: false, field, text: "", saving: false });
-        setForm((p) => ({ ...p, [field]: ADD_OPTION }));
-        return;
-      }
-      if (addUI.field === field && !addUI.open) setAddUI({ open: false, field: null, text: "", saving: false });
-      setForm((p) => ({ ...p, [field]: rawValue }));
-    },
-    [addUI.field, addUI.open]
-  );
+  const onSelectWithAdd = useCallback((field, rawValue) => {
+    if (rawValue === ADD_OPTION) {
+      // inline add SOLO para fields no-mini
+      const isMini = field === "id_proveedor" || field === "id_detalle";
+      if (isMini) return;
+      setAddUI({ open: false, field, text: "", saving: false });
+      setForm((p) => ({ ...p, [field]: ADD_OPTION }));
+      return;
+    }
+    setAddUI((p) => (p.field === field && !p.open ? { open: false, field: null, text: "", saving: false } : p));
+    setForm((p) => ({ ...p, [field]: rawValue }));
+  }, []);
 
   const renderAddInline = (field) => {
     if (addUI.open) return null;
@@ -679,7 +672,7 @@ export default function ModalEditarCompra({
     const label = CATALOGO_MAP[field]?.label || "Registro";
 
     return (
-      <div style={{ marginTop: 10 }}>
+      <div className="mi-addInline">
         <div className="fl-field">
           <input
             className="fl-input"
@@ -691,7 +684,7 @@ export default function ModalEditarCompra({
           <label className="fl-label">{`Nuevo ${label}`}</label>
         </div>
 
-        <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+        <div className="mi-addInline__actions">
           <button
             type="button"
             className="mit-btn mit-btn--ghost"
@@ -704,12 +697,7 @@ export default function ModalEditarCompra({
             Cancelar
           </button>
 
-          <button
-            type="button"
-            className="mit-btn mit-btn--solid"
-            onClick={guardarNuevoCatalogo}
-            disabled={addUI.saving}
-          >
+          <button type="button" className="mit-btn mit-btn--solid" onClick={guardarNuevoCatalogo} disabled={addUI.saving}>
             {addUI.saving ? "Guardando..." : "Guardar"}
           </button>
         </div>
@@ -719,11 +707,9 @@ export default function ModalEditarCompra({
 
   /* =========================
      Payload final
-     ✅ SIN id_tipo_movimiento
   ========================= */
   const payload = useMemo(() => {
     const isAdd = (v) => v === ADD_OPTION;
-
     const toNullableId = (v) => {
       if (v === NULL_OPTION || v === "" || v == null) return null;
       if (isAdd(v)) return null;
@@ -734,7 +720,6 @@ export default function ModalEditarCompra({
     const cantidad = Math.max(0, safeNumber(form.cantidad));
     const precio = Math.max(0, safeNumber(form.precio));
     const iva_pct = Math.max(0, safeNumber(form.iva_pct));
-
     const t = calcItemTotals(cantidad, precio, iva_pct);
 
     return {
@@ -773,7 +758,7 @@ export default function ModalEditarCompra({
     try {
       if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) throw new Error("Fecha inválida.");
 
-      // ✅ Proveedor obligatorio (si querés hacerlo opcional, borramos este bloque)
+      // ✅ Proveedor obligatorio
       if (!form.id_proveedor || form.id_proveedor === NULL_OPTION || form.id_proveedor === ADD_OPTION) {
         throw new Error("Seleccioná un proveedor (o crealo con “Agregar nuevo proveedor”).");
       }
@@ -801,7 +786,6 @@ export default function ModalEditarCompra({
         monto_total: Math.max(0, Math.round(t.total * 100) / 100),
       };
 
-      // ✅ el parent es el que pega al “nuevo archivo de compras”
       await onSave?.(payloadFinal);
 
       showToast("exito", "Compra actualizada.", 2400);
@@ -812,9 +796,6 @@ export default function ModalEditarCompra({
     }
   };
 
-  /* =========================
-     Mini modal: proveedor/detalle
-  ========================= */
   const miniOpen = addUI.open && ["id_proveedor", "id_detalle"].includes(addUI.field);
   const miniTitle = addUI.field === "id_proveedor" ? "Nuevo proveedor" : "Nuevo detalle";
 
@@ -829,14 +810,30 @@ export default function ModalEditarCompra({
 
   if (!open) return null;
 
+  const overlayClass = [
+    "mi-modal__overlay",
+    "mi-modal__overlay--mov",
+    dark ? "mi-modal__overlay--dark" : "",
+  ]
+    .join(" ")
+    .trim();
+
+  const containerClass = [
+    "mi-modal__container",
+    "mi-modal__container--mov",
+    "mi-modal__container--compra",
+    dark ? "mi-modal--dark" : "",
+  ]
+    .join(" ")
+    .trim();
+
   return createPortal(
-    <div className="mi-modal__overlay">
+    <div className={overlayClass} onMouseDown={cerrar}>
       <div
-        className="mi-modal__container mi-modal__container--mov"
+        className={containerClass}
         role="dialog"
         aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 1180 }}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
@@ -856,45 +853,20 @@ export default function ModalEditarCompra({
           </button>
         </div>
 
-        <form onSubmit={submit} style={{ padding: 10 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 14 }}>
+        <form onSubmit={submit} className="mi-em-form">
+          <div className="mi-em-grid">
             {/* Izquierda */}
-            <div
-              style={{
-                border: "1px solid rgba(148,163,184,.45)",
-                borderRadius: 14,
-                overflow: "hidden",
-                background: "#fff",
-              }}
-            >
-              <div
-                style={{
-                  padding: "12px 12px",
-                  background: "rgba(15, 23, 42, 0.04)",
-                  borderBottom: "1px solid rgba(148,163,184,.35)",
-                  fontWeight: 700,
-                }}
-              >
-                Datos de la compra
-              </div>
+            <section className="mi-em-panel">
+              <div className="mi-em-panelHead">Datos de la compra</div>
 
-              <div style={{ padding: 12 }}>
-                {/* ✅ FILA 1: Clasificación + Cuenta corriente (2 columnas) */}
+              <div className="mi-em-panelBody">
+                {/* Fila 1 */}
                 <div className="mi-row2">
-                  {/* Clasificación */}
                   <div className="fl-field">
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_clasificacion)}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === ADD_OPTION) {
-                          setAddUI({ open: false, field: "id_clasificacion", text: "", saving: false });
-                          setForm((p) => ({ ...p, id_clasificacion: ADD_OPTION }));
-                        } else {
-                          onSelectWithAdd("id_clasificacion", v);
-                        }
-                      }}
+                      onChange={(e) => onSelectWithAdd("id_clasificacion", e.target.value)}
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar clasificación --</option>
@@ -909,7 +881,6 @@ export default function ModalEditarCompra({
                     {renderAddInline("id_clasificacion")}
                   </div>
 
-                  {/* Cuenta corriente */}
                   <div className="fl-field">
                     <select
                       className="fl-input fl-select"
@@ -930,8 +901,8 @@ export default function ModalEditarCompra({
                   </div>
                 </div>
 
-                {/* ✅ FILA 2: Detalle (autocomplete) */}
-                <div className="fl-field fl-col-full" style={{ position: "relative", marginTop: 12 }}>
+                {/* Detalle (autocomplete) */}
+                <div className="fl-field mi-autocomplete fl-col-full" style={{ marginTop: 12 }}>
                   <input
                     ref={detalleInputRef}
                     className="fl-input"
@@ -956,41 +927,27 @@ export default function ModalEditarCompra({
                             handleSelectDetalle(d);
                           }}
                         >
-                          <span
-                            style={{
-                              flex: 1,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {d.nombre}
-                          </span>
+                          <span className="mi-suggestText">{d.nombre}</span>
                         </li>
                       ))}
                     </ul>
                   )}
 
-                  <button type="button" onClick={startAddDetalle} disabled={saving || addUI.saving} className="mi-cr-link">
+                  <button
+                    type="button"
+                    onClick={startAddDetalle}
+                    disabled={saving || addUI.saving}
+                    className="mi-link"
+                  >
                     + Agregar nuevo detalle
                   </button>
                 </div>
 
                 {/* Ítem */}
-                <div className="fl-field fl-col-full" style={{ marginTop: 10 }}>
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      fontSize: 13,
-                      marginBottom: 8,
-                      paddingTop: 6,
-                      borderTop: "1px dashed rgba(148,163,184,.55)",
-                    }}
-                  >
-                    Ítem de la compra (editable)
-                  </div>
+                <div className="mi-em-item fl-col-full">
+                  <div className="mi-em-itemTitle">Ítem de la compra (editable)</div>
 
-                  <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                  <div className="mi-em-itemGrid3">
                     <div className="fl-field">
                       <input
                         className="fl-input"
@@ -1036,7 +993,7 @@ export default function ModalEditarCompra({
                     </div>
                   </div>
 
-                  <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 10 }}>
+                  <div className="mi-em-itemTotalsGrid3">
                     <div className="fl-field">
                       <input className="fl-input" value={form.subtotal} disabled />
                       <label className="fl-label">Subtotal</label>
@@ -1066,21 +1023,13 @@ export default function ModalEditarCompra({
                   <label className="fl-label">Monto total (ajusta el precio)</label>
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* Derecha */}
-            <aside
-              style={{
-                border: "1px solid rgba(148,163,184,.45)",
-                borderRadius: 14,
-                padding: 12,
-                background: "#fff",
-              }}
-            >
-              <div style={{ fontWeight: 700, marginBottom: 10 }}>Relaciones y pago</div>
+            <aside className="mi-em-aside">
+              <div className="mi-em-asideTitle">Relaciones y pago</div>
 
-              {/* Fecha + Período */}
-              <div className="fl-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+              <div className="mi-em-dates">
                 <div className="fl-field">
                   <input
                     ref={fechaRef}
@@ -1108,88 +1057,76 @@ export default function ModalEditarCompra({
                 </div>
               </div>
 
-              {/* Medio pago */}
-              <div className="fl-field">
-                <select
-                  className="fl-input fl-select"
-                  value={String(form.id_medio_pago)}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === ADD_OPTION) {
-                      setAddUI({ open: false, field: "id_medio_pago", text: "", saving: false });
-                      setForm((p) => ({ ...p, id_medio_pago: ADD_OPTION }));
-                    } else {
-                      onSelectWithAdd("id_medio_pago", v);
-                    }
-                  }}
-                  disabled={saving}
-                >
-                  <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
-                  {(safeLists.mediosPago || []).map((x) => (
-                    <option key={x.id} value={String(x.id)}>
-                      {x.nombre}
-                    </option>
-                  ))}
-                  <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                </select>
-                <label className="fl-label">Medio de pago</label>
-                {renderAddInline("id_medio_pago")}
-              </div>
+              <div className="mi-em-asideBody">
+                <div className="fl-field">
+                  <select
+                    className="fl-input fl-select"
+                    value={String(form.id_medio_pago)}
+                    onChange={(e) => onSelectWithAdd("id_medio_pago", e.target.value)}
+                    disabled={saving}
+                  >
+                    <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
+                    {(safeLists.mediosPago || []).map((x) => (
+                      <option key={x.id} value={String(x.id)}>
+                        {x.nombre}
+                      </option>
+                    ))}
+                    <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+                  </select>
+                  <label className="fl-label">Medio de pago</label>
+                  {renderAddInline("id_medio_pago")}
+                </div>
 
-              {/* Proveedor */}
-              <div className="fl-field" style={{ position: "relative", marginTop: 10 }}>
-                <input
-                  ref={proveedorInputRef}
-                  className="fl-input"
-                  placeholder=" "
-                  value={proveedorInput}
-                  onChange={handleProveedorInputChange}
-                  onFocus={() => setProveedorFocus(true)}
-                  onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
-                  disabled={saving || addUI.open}
-                  autoComplete="off"
-                />
-                <label className="fl-label">Proveedor</label>
+                <div className="fl-field mi-autocomplete">
+                  <input
+                    ref={proveedorInputRef}
+                    className="fl-input"
+                    placeholder=" "
+                    value={proveedorInput}
+                    onChange={handleProveedorInputChange}
+                    onFocus={() => setProveedorFocus(true)}
+                    onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
+                    disabled={saving || addUI.open}
+                    autoComplete="off"
+                  />
+                  <label className="fl-label">Proveedor</label>
 
-                {proveedorFocus && filteredProveedores.length > 0 && (
-                  <ul className="mi-cr-suggest">
-                    {filteredProveedores.map((p) => (
-                      <li
-                        key={p.id}
-                        className="mi-cr-suggest__item"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          handleSelectProveedor(p);
-                        }}
-                      >
-                        <span
-                          style={{
-                            flex: 1,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
+                  {proveedorFocus && filteredProveedores.length > 0 && (
+                    <ul className="mi-cr-suggest">
+                      {filteredProveedores.map((p) => (
+                        <li
+                          key={p.id}
+                          className="mi-cr-suggest__item"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelectProveedor(p);
                           }}
                         >
-                          {p.nombre}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                          <span className="mi-suggestText">{p.nombre}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
 
-                <button type="button" onClick={startAddProveedor} disabled={saving || addUI.saving} className="mi-cr-link">
-                  + Agregar nuevo proveedor
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={startAddProveedor}
+                    disabled={saving || addUI.saving}
+                    className="mi-link"
+                  >
+                    + Agregar nuevo proveedor
+                  </button>
+                </div>
 
-              <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
-                <button type="submit" disabled={saving} className="mit-btn mit-btn--solid" style={{ width: "100%", height: 44 }}>
-                  {saving ? "Guardando..." : "Guardar"}
-                </button>
+                <div className="mi-em-actions">
+                  <button type="submit" disabled={saving} className="mit-btn mit-btn--solid mit-btn--block">
+                    {saving ? "Guardando..." : "Guardar"}
+                  </button>
 
-                <button type="button" onClick={cerrar} disabled={saving} className="mit-btn mit-btn--ghost" style={{ width: "100%", height: 44 }}>
-                  Cancelar
-                </button>
+                  <button type="button" onClick={cerrar} disabled={saving} className="mit-btn mit-btn--ghost mit-btn--block">
+                    Cancelar
+                  </button>
+                </div>
               </div>
             </aside>
           </div>

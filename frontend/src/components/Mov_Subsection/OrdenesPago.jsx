@@ -928,6 +928,7 @@ export default function OrdenesPago() {
         onClose={closeEditarModal}
         onToast={showToast}
         onSave={onSaveEditar}
+
       />
 
       {/* DELETE */}

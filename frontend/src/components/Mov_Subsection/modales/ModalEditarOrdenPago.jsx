@@ -1,6 +1,7 @@
+// src/components/Movimientos/modales/ModalEditarOrdenPago.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import "../../Movimientos/modales/ModalEditarMovimiento.css";
+import "../../Movimientos/modales/ModalEditarMovimiento.css"; // ✅ estética + dark por clases
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";
@@ -17,22 +18,32 @@ function safeNumber(v) {
 function periodoToMMYYYY(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
-  if (/^\d{4}-\d{2}$/.test(s)) {
-    const [yyyy, mm] = s.split("-");
+  if (/^\d{4}-\d{1,2}$/.test(s)) {
+    const [yyyy, mmRaw] = s.split("-");
+    const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${mm}-${yyyy}`;
   }
-  if (/^\d{2}-\d{4}$/.test(s)) return s;
+  if (/^\d{1,2}-\d{4}$/.test(s)) {
+    const [mmRaw, yyyy] = s.split("-");
+    const mm = String(Number(mmRaw)).padStart(2, "0");
+    return `${mm}-${yyyy}`;
+  }
   return s;
 }
 
 function periodoToYYYYMM(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
-  if (/^\d{2}-\d{4}$/.test(s)) {
-    const [mm, yyyy] = s.split("-");
+  if (/^\d{1,2}-\d{4}$/.test(s)) {
+    const [mmRaw, yyyy] = s.split("-");
+    const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
-  if (/^\d{4}-\d{2}$/.test(s)) return s;
+  if (/^\d{4}-\d{1,2}$/.test(s)) {
+    const [yyyy, mmRaw] = s.split("-");
+    const mm = String(Number(mmRaw)).padStart(2, "0");
+    return `${yyyy}-${mm}`;
+  }
   return s;
 }
 
@@ -69,13 +80,21 @@ function getArr(x) {
 
 function findById(arr, id) {
   const sid = String(id ?? "");
-  return getArr(arr).find((it) => String(it?.id ?? it?.id_detalle ?? it?.id_proveedor) === sid);
+  return getArr(arr).find(
+    (it) => String(it?.id ?? it?.id_detalle ?? it?.id_proveedor) === sid
+  );
+}
+
+function isDarkEnabled(darkProp) {
+  if (darkProp === true) return true;
+  if (typeof document === "undefined") return false;
+  return document.body?.classList?.contains("dark");
 }
 
 /* =========================
    Mini modal genérico para catálogos
 ========================= */
-function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave }) {
+function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -87,8 +106,13 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
   if (!open) return null;
 
   return (
-    <div className="mi-mini__overlay" onMouseDown={onCancel}>
-      <div className="mi-mini__modal" onMouseDown={(e) => e.stopPropagation()}>
+    <div className={`mi-mini__overlay ${dark ? "mi-mini__overlay--dark" : ""}`} onMouseDown={onCancel}>
+      <div
+        className={`mi-mini__modal ${dark ? "mi-mini__modal--dark" : ""}`}
+        onMouseDown={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
           <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving}>
@@ -127,8 +151,18 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 /* =========================
    Modal editar Orden de Pago
 ========================= */
-export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault, onClose, onSave, onToast }) {
+export default function ModalEditarOrdenPago({
+  open,
+  row,
+  lists,
+  periodoDefault,
+  onClose,
+  onSave,
+  onToast,
+  dark, // ✅ opcional: si no lo pasás, toma body.dark
+}) {
   const API = `${BASE_URL}/api.php`;
+  const darkOn = isDarkEnabled(dark);
 
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
@@ -137,7 +171,7 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
 
   const [saving, setSaving] = useState(false);
 
-  // ✅ Autocomplete detalle: focus + armado (solo si el usuario tipeó)
+  // ✅ Autocomplete detalle: solo dropdown si el usuario tipeó
   const [detalleFocus, setDetalleFocus] = useState(false);
   const [detalleArmed, setDetalleArmed] = useState(false);
   const detalleInputRef = useRef(null);
@@ -160,6 +194,9 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
     monto_total: 0,
   }));
 
+  /* =========================
+     POST JSON helper
+  ========================= */
   const apiPostJson = useCallback(async (url, payload) => {
     const { token } = getAuthInfo();
     const headers = { "Content-Type": "application/json" };
@@ -180,7 +217,9 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
     }
   }, []);
 
-  // Init al abrir
+  /* =========================
+     Init al abrir
+  ========================= */
   useEffect(() => {
     if (!open) return;
 
@@ -192,8 +231,6 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
     const perAuto = periodoFromISODate(fecha);
 
     const idProv = r.id_proveedor ?? r.proveedor_id ?? r.idProveedor ?? NULL_OPTION;
-    const provTxt = String(r.proveedor ?? "").trim();
-
     const idDet = r.id_detalle ?? NULL_OPTION;
 
     const detalles = getArr(lists?.detalles);
@@ -203,10 +240,9 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
     const detFallback = String(r.detalle ?? r.descripcion ?? r.concepto ?? "").trim();
 
     const provNameFromList = String(findById(proveedores, idProv)?.nombre ?? "").trim();
+    const provFallback = String(r.proveedor ?? "").trim();
 
     setSaving(false);
-
-    // ✅ no abrir dropdown al abrir
     setDetalleFocus(false);
     setDetalleArmed(false);
 
@@ -218,14 +254,11 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
       fecha: fecha || "",
       periodo: perRow || perDef || perAuto || "",
       id_proveedor: String(idProv ?? NULL_OPTION),
-      proveedorTxt: provNameFromList || provTxt || "",
+      proveedorTxt: provNameFromList || provFallback || "",
       id_detalle: String(idDet ?? NULL_OPTION),
       detalleInput: detName || detFallback || "",
       monto_total: safeNumber(r.monto_total ?? r.total ?? 0),
     });
-
-    // ❌ Antes: autofocus que disparaba dropdown
-    // setTimeout(() => detalleInputRef.current?.focus(), 0);
   }, [open, row, lists, periodoDefault]);
 
   /* =========================
@@ -235,15 +268,13 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
     const all = getArr(lists?.detalles);
     const q = normalizeSearchText(form.detalleInput);
 
-    // ✅ SOLO si el usuario tipeó
     if (!detalleFocus || !detalleArmed || q.length < 1) return [];
-
     return all.filter((d) => normalizeSearchText(d?.nombre).includes(q)).slice(0, 25);
   }, [lists, form.detalleInput, detalleFocus, detalleArmed]);
 
   const handleDetalleInputChange = (e) => {
     const value = e.target.value;
-    setDetalleArmed(true); // ✅ usuario escribió
+    setDetalleArmed(true);
     setForm((p) => ({ ...p, detalleInput: value, id_detalle: NULL_OPTION }));
   };
 
@@ -254,12 +285,59 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
       detalleInput: nombre,
       id_detalle: String(det?.id ?? NULL_OPTION),
     }));
-
-    // ✅ cerrar y desarmar
     setDetalleFocus(false);
     setDetalleArmed(false);
   };
 
+  /* =========================
+     Proveedor select + agregar
+  ========================= */
+  const proveedoresList = useMemo(() => getArr(lists?.proveedores), [lists]);
+
+  const startAddProveedor = () => setAddProvUI({ open: true, text: "", saving: false });
+
+  const guardarNuevoProveedor = async () => {
+    const nombre = String(addProvUI.text || "").trim();
+    if (!nombre) {
+      showToast("advertencia", "Escribí un nombre para el proveedor.", 2600);
+      return;
+    }
+
+    setAddProvUI((p) => ({ ...p, saving: true }));
+    showToast("cargando", "Creando proveedor…", 12000);
+
+    try {
+      const { idUsuario } = getAuthInfo();
+      const data = await apiPostJson(`${API}?action=catalogo_crear`, {
+        catalogo: "proveedores",
+        nombre,
+        idUsuario,
+      });
+
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear el proveedor.");
+
+      const newId = Number(data?.item?.id);
+      const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
+
+      if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
+
+      setForm((p) => ({
+        ...p,
+        id_proveedor: String(newId),
+        proveedorTxt: newNombre,
+      }));
+
+      setAddProvUI({ open: false, text: "", saving: false });
+      showToast("exito", `Proveedor creado: "${newNombre}"`, 2400);
+    } catch (e) {
+      setAddProvUI((p) => ({ ...p, saving: false }));
+      showToast("error", e?.message || "Error creando proveedor.", 4200);
+    }
+  };
+
+  /* =========================
+     Nuevo detalle
+  ========================= */
   const startAddDetalle = () => {
     setDetalleFocus(false);
     setDetalleArmed(false);
@@ -309,52 +387,6 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
   };
 
   /* =========================
-     Proveedor (select + agregar)
-  ========================= */
-  const proveedoresList = useMemo(() => getArr(lists?.proveedores), [lists]);
-
-  const startAddProveedor = () => setAddProvUI({ open: true, text: "", saving: false });
-
-  const guardarNuevoProveedor = async () => {
-    const nombre = String(addProvUI.text || "").trim();
-    if (!nombre) {
-      showToast("advertencia", "Escribí un nombre para el proveedor.", 2600);
-      return;
-    }
-
-    setAddProvUI((p) => ({ ...p, saving: true }));
-    showToast("cargando", "Creando proveedor…", 12000);
-
-    try {
-      const { idUsuario } = getAuthInfo();
-      const data = await apiPostJson(`${API}?action=catalogo_crear`, {
-        catalogo: "proveedores",
-        nombre,
-        idUsuario,
-      });
-
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear el proveedor.");
-
-      const newId = Number(data?.item?.id);
-      const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
-
-      if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
-
-      setForm((p) => ({
-        ...p,
-        id_proveedor: String(newId),
-        proveedorTxt: newNombre,
-      }));
-
-      setAddProvUI({ open: false, text: "", saving: false });
-      showToast("exito", `Proveedor creado: "${newNombre}"`, 2400);
-    } catch (e) {
-      setAddProvUI((p) => ({ ...p, saving: false }));
-      showToast("error", e?.message || "Error creando proveedor.", 4200);
-    }
-  };
-
-  /* =========================
      Submit
   ========================= */
   const submit = async (e) => {
@@ -372,19 +404,22 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
       if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) throw new Error("Fecha inválida.");
 
       const perUI = periodoToMMYYYY(form.periodo) || periodoFromISODate(form.fecha);
+      const perAPI = periodoToYYYYMM(perUI);
 
-      const idProv = form.id_proveedor && form.id_proveedor !== NULL_OPTION ? Number(form.id_proveedor) : null;
+      const idProv =
+        form.id_proveedor && form.id_proveedor !== NULL_OPTION ? Number(form.id_proveedor) : null;
       if (!idProv) throw new Error("Seleccioná un proveedor.");
 
       const payloadFinal = {
         id_movimiento: form.id_movimiento,
         fecha: form.fecha,
-        periodo: periodoToYYYYMM(perUI),
+        periodo: perAPI, // YYYY-MM
 
         id_proveedor: idProv,
         proveedor: String(form.proveedorTxt || "").trim(),
 
-        id_detalle: form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null,
+        id_detalle:
+          form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null,
         detalle: String(form.detalleInput || "").trim(),
 
         monto_total: Math.max(0, Math.round(safeNumber(form.monto_total) * 100) / 100),
@@ -394,8 +429,8 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
 
       showToast("exito", "Orden de pago actualizada.", 2400);
       onClose?.();
-    } catch (e2) {
-      showToast("error", e2?.message || "Error guardando orden de pago.", 4200);
+    } catch (err) {
+      showToast("error", err?.message || "Error guardando orden de pago.", 4200);
       setSaving(false);
     }
   };
@@ -403,9 +438,16 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
   if (!open) return null;
 
   return createPortal(
-    <div className="mi-modal__overlay" onMouseDown={() => !saving && onClose?.()}>
+    <div
+      className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`}
+      onMouseDown={() => !saving && onClose?.()}
+    >
       <div
-        className="mi-modal__container mi-modal__container--mov"
+        className={[
+          "mi-modal__container",
+          "mi-modal__container--mov",
+          darkOn ? "mi-modal--dark" : "",
+        ].join(" ")}
         id="mov--modaleditarordenpago"
         role="dialog"
         aria-modal="true"
@@ -414,15 +456,20 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar orden de pago</h2>
-            <p className="mi-modal__subtitle">Fecha, período, proveedor, descripción/detalle y monto.</p>
+            <p className="mi-modal__subtitle">Fecha, período, proveedor, detalle y monto.</p>
           </div>
 
-          <button className="mi-modal__close" onClick={() => !saving && onClose?.()} disabled={saving} type="button">
+          <button
+            className="mi-modal__close"
+            onClick={() => !saving && onClose?.()}
+            disabled={saving}
+            type="button"
+          >
             ✕
           </button>
         </div>
 
-        <form onSubmit={submit} style={{ padding: 14 }}>
+        <form onSubmit={submit} className="mi-modal__formPad">
           <div className="mi-row2">
             <div className="fl-field">
               <input
@@ -451,9 +498,9 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
           </div>
 
           {/* Proveedor */}
-          <div className="fl-field" style={{ marginTop: 12 }}>
+          <div className="fl-field mi-field--mt12">
             <select
-              className="fl-input"
+              className="fl-input fl-select"
               value={form.id_proveedor}
               onChange={(e) => {
                 const v = e.target.value;
@@ -481,8 +528,8 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
             <label className="fl-label">Proveedor</label>
           </div>
 
-          {/* Descripción = Detalle */}
-          <div className="fl-field" style={{ position: "relative", marginTop: 12 }}>
+          {/* Detalle (autocomplete + agregar) */}
+          <div className="fl-field mi-field--mt12 mi-field--rel">
             <input
               ref={detalleInputRef}
               className="fl-input"
@@ -507,21 +554,24 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
                       handleSelectDetalle(d);
                     }}
                   >
-                    <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {d.nombre}
-                    </span>
+                    <span className="mi-suggestText">{d.nombre}</span>
                   </li>
                 ))}
               </ul>
             )}
 
-            <button type="button" onClick={startAddDetalle} disabled={saving || addProvUI.open} className="mi-cr-link">
+            <button
+              type="button"
+              onClick={startAddDetalle}
+              disabled={saving || addProvUI.open}
+              className="mi-cr-link"
+            >
               + Agregar nuevo detalle
             </button>
           </div>
 
           {/* Monto */}
-          <div className="fl-field" style={{ marginTop: 12 }}>
+          <div className="fl-field mi-field--mt12">
             <input
               className="fl-input"
               type="number"
@@ -535,12 +585,11 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
             <label className="fl-label">Monto</label>
           </div>
 
-          <div style={{ marginTop: 14, display: "flex", gap: 10 }} className="content-btn-modalordenpago">
+          <div className="content-btn-modalordenpago mi-actions--mt14 ordenpagobuttos">
             <button
               type="submit"
               disabled={saving}
               className="mit-btn mit-btn--solid btn--modalordenpago"
-              style={{ width: "100%", height: 44 }}
             >
               {saving ? "Guardando..." : "Guardar"}
             </button>
@@ -550,7 +599,6 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
               onClick={() => !saving && onClose?.()}
               disabled={saving}
               className="mit-btn mit-btn--ghost btn--modalordenpago"
-              style={{ width: "100%", height: 44 }}
             >
               Cancelar
             </button>
@@ -566,6 +614,7 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
           onChange={(txt) => setAddDetUI((p) => ({ ...p, text: txt }))}
           onCancel={() => !addDetUI.saving && setAddDetUI({ open: false, text: "", saving: false })}
           onSave={guardarNuevoDetalle}
+          dark={darkOn}
         />
 
         {/* Mini modal: nuevo proveedor */}
@@ -577,6 +626,7 @@ export default function ModalEditarOrdenPago({ open, row, lists, periodoDefault,
           onChange={(txt) => setAddProvUI((p) => ({ ...p, text: txt }))}
           onCancel={() => !addProvUI.saving && setAddProvUI({ open: false, text: "", saving: false })}
           onSave={guardarNuevoProveedor}
+          dark={darkOn}
         />
       </div>
     </div>,

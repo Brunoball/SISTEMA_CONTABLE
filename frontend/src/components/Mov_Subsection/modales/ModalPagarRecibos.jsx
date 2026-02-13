@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { createPortal } from "react-dom";
 import "../../Movimientos/modales/ModalEditarMovimiento.css"; // estética base
 import "./ModalPagarRecibos.css"; // css propio del modal
-
 import BASE_URL from "../../../config/config";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -55,6 +54,13 @@ function formatFechaDMY(v) {
 }
 
 /* =========================
+   ✅ Dark mode helper
+========================= */
+function isTemaOscuro() {
+  return document.documentElement.getAttribute("data-theme") === "oscuro";
+}
+
+/* =========================
    ✅ Auth helpers (X-Session)
 ========================= */
 function getAuthInfo() {
@@ -71,8 +77,8 @@ function getAuthInfo() {
 function buildAuthHeaders() {
   const { token, session } = getAuthInfo();
   const headers = {};
-  if (session) headers["X-Session"] = session; // ✅ SaaS
-  if (token) headers["Authorization"] = `Bearer ${token}`; // compat viejo
+  if (session) headers["X-Session"] = session;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   return headers;
 }
 
@@ -136,27 +142,34 @@ async function fetchJsonOrThrow(url, opts = {}) {
     const preview = text.length > 700 ? text.slice(0, 700) + "..." : text;
     throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
   }
-  if (!res.ok) {
-    throw new Error(data?.mensaje || `HTTP ${res.status}`);
-  }
-  if (data?.exito === false) {
-    throw new Error(data?.mensaje || "Operación fallida.");
-  }
+  if (!res.ok) throw new Error(data?.mensaje || `HTTP ${res.status}`);
+  if (data?.exito === false) throw new Error(data?.mensaje || "Operación fallida.");
   return data;
 }
 
 export default function ModalPagarRecibos({
   open,
   onClose,
-  onConfirm,  // opcional: si no viene, el modal confirma directo contra el backend
-  onToast,    // (tipo,msg,ms)
-  onAfterPaid, // ✅ NUEVO opcional: (ids, {id, nombre}) => void para que el padre actualice su tabla
+  onConfirm,
+  onToast,
+  onAfterPaid,
   cliente,
   deudas = [],
-  onFactura, // opcional
+  onFactura,
 }) {
   const dialogRef = useRef(null);
   const firstFocusRef = useRef(null);
+
+  // ✅ dark automático leyendo data-theme
+  const [dark, setDark] = useState(isTemaOscuro());
+  useEffect(() => {
+    const obs = new MutationObserver(() => setDark(isTemaOscuro()));
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => obs.disconnect();
+  }, []);
 
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [pagaTodo, setPagaTodo] = useState(false);
@@ -164,15 +177,15 @@ export default function ModalPagarRecibos({
   const [nota, setNota] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ✅ Local copy de deudas para que el chip cambie a PAGADO instantáneo
+  // ✅ Local copy de deudas para chip instantáneo
   const [rows, setRows] = useState(() => []);
 
-  // Medios de pago (backend)
+  // Medios de pago
   const [mediosPago, setMediosPago] = useState([]);
   const [loadingMedios, setLoadingMedios] = useState(false);
 
-  // ✅ IMPORTANTE: arranca vacío => obliga a elegir
-  const [idMedioPago, setIdMedioPago] = useState(""); // string en UI
+  // arranca vacío => obliga a elegir
+  const [idMedioPago, setIdMedioPago] = useState("");
 
   const fetchMediosPago = useCallback(async () => {
     try {
@@ -186,9 +199,6 @@ export default function ModalPagarRecibos({
 
       const mp = normalizeMediosPago(data);
       setMediosPago(mp);
-
-      // ✅ NO auto-seleccionar el primero
-      // setIdMedioPago(prev => prev || (mp.length ? String(mp[0].id) : ""));
     } catch (e) {
       onToast?.("error", e?.message || "No se pudieron cargar los medios de pago.", 4200);
       setMediosPago([]);
@@ -198,7 +208,7 @@ export default function ModalPagarRecibos({
     }
   }, [onToast]);
 
-  // Reset al abrir + cargar medios de pago
+  // Reset al abrir + cargar medios
   useEffect(() => {
     if (!open) return;
 
@@ -207,7 +217,7 @@ export default function ModalPagarRecibos({
     setNota("");
     setLoading(false);
 
-    setRows(Array.isArray(deudas) ? [...deudas] : []); // ✅ copiar deudas al abrir
+    setRows(Array.isArray(deudas) ? [...deudas] : []);
 
     setMediosPago([]);
     setIdMedioPago("");
@@ -219,7 +229,6 @@ export default function ModalPagarRecibos({
   // Esc
   useEffect(() => {
     if (!open) return;
-
     const onKey = (e) => {
       if (e.key === "Escape") onClose?.();
     };
@@ -253,8 +262,6 @@ export default function ModalPagarRecibos({
   const toggleOne = (id, row) => {
     if (!id) return;
     if (loading) return;
-
-    // ✅ si ya está pagado, no se selecciona
     if (isPagadoRow(row)) return;
 
     setSelectedIds((prev) => {
@@ -262,7 +269,6 @@ export default function ModalPagarRecibos({
       if (next.has(id)) next.delete(id);
       else next.add(id);
 
-      // pagaTodo solo si todas las PENDIENTES están seleccionadas
       const pendientes = deudasOrdenadas.filter((x) => !isPagadoRow(x));
       if (next.size !== pendientes.length) setPagaTodo(false);
       if (pendientes.length > 0 && next.size === pendientes.length) setPagaTodo(true);
@@ -293,7 +299,6 @@ export default function ModalPagarRecibos({
     });
   };
 
-  // ✅ Confirmación default (si el padre no manda onConfirm)
   const confirmPagoDefault = async ({ ids_movimiento, id_medio_pago }) => {
     const url = `${BASE_URL}/api.php?action=recibos_confirmar_pago`;
     return await fetchJsonOrThrow(url, {
@@ -312,7 +317,6 @@ export default function ModalPagarRecibos({
       return;
     }
 
-    // ✅ solo pendientes
     const seleccion = deudasOrdenadas.filter((r) => {
       const id = Number(r?.id_movimiento || 0);
       return id && selectedIds.has(id) && !isPagadoRow(r);
@@ -339,7 +343,6 @@ export default function ModalPagarRecibos({
     try {
       setLoading(true);
 
-      // 1) Backend
       if (onConfirm) {
         await onConfirm({
           cliente: {
@@ -356,7 +359,7 @@ export default function ModalPagarRecibos({
         await confirmPagoDefault({ ids_movimiento: ids, id_medio_pago: mp.id });
       }
 
-      // 2) ✅ Marcar como PAGADO en el modal (chip cambia instantáneo)
+      // marcar pagado dentro del modal
       setRows((prev) =>
         (Array.isArray(prev) ? prev : []).map((r) => {
           const id = Number(r?.id_movimiento || 0);
@@ -371,16 +374,13 @@ export default function ModalPagarRecibos({
         })
       );
 
-      // 3) ✅ avisar al padre para que también cambie afuera (si quiere)
       onAfterPaid?.(ids, mp);
 
       onToast?.("ok", "Pago confirmado ✅", 2200);
 
-      // 4) limpiar selección
       setSelectedIds(new Set());
       setPagaTodo(false);
 
-      // ✅ Si querés que NO se cierre el modal, comentá la línea de abajo
       onClose?.();
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo registrar el pago.", 4200);
@@ -443,9 +443,30 @@ export default function ModalPagarRecibos({
 
   if (!open) return null;
 
+  const modalClass = [
+    "mi-modal__container",
+    "mi-modal__container--mov",
+    "mpr-modal",
+    dark ? "mi-modal--dark" : "",
+  ]
+    .join(" ")
+    .trim();
+
+  const overlayClass = [
+    "mi-modal__overlay",
+    "mi-modal__overlay--mov",
+    dark ? "mi-modal__overlay--dark" : "",
+  ]
+    .join(" ")
+    .trim();
+
   return createPortal(
-    <div className="mi-modal__overlay" role="dialog" aria-modal="true">
-      <div className="mi-modal__container mi-modal__container--mov mpr-modal" ref={dialogRef}>
+    <div className={overlayClass} role="dialog" aria-modal="true" onMouseDown={onClose}>
+      <div
+        className={modalClass}
+        ref={dialogRef}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="mi-modal__header mpr-header">
           <div className="mpr-headLeft">
@@ -482,144 +503,142 @@ export default function ModalPagarRecibos({
         {/* Body */}
         <div className="mi-modal__body mpr-body">
           <div className="mpr-content">
-            <div className="mpr-topGrid mpr-topGrid--single">
-              <div className="mpr-card">
-                <div className="mpr-formRow">
-                  <div className="mpr-field">
-                    <label>Medio de pago</label>
+            <div className="mpr-card">
+              <div className="mpr-formRow">
+                <div className="mpr-field">
+                  <label>Medio de pago</label>
 
-                    <div className="mpr-selectWrap">
-                      <select
-                        value={idMedioPago}
-                        onChange={(e) => setIdMedioPago(e.target.value)}
-                        disabled={loading || loadingMedios}
-                        className="mpr-select"
-                      >
-                        <option value="">
-                          {loadingMedios ? "Cargando medios de pago…" : "Seleccioná un medio de pago…"}
+                  <div className="mpr-selectWrap">
+                    <select
+                      value={idMedioPago}
+                      onChange={(e) => setIdMedioPago(e.target.value)}
+                      disabled={loading || loadingMedios}
+                      className="mpr-select"
+                    >
+                      <option value="">
+                        {loadingMedios ? "Cargando medios de pago…" : "Seleccioná un medio de pago…"}
+                      </option>
+
+                      {!loadingMedios && mediosPago.length === 0 && (
+                        <option value="" disabled>
+                          (Sin medios de pago)
                         </option>
-
-                        {!loadingMedios && mediosPago.length === 0 && (
-                          <option value="" disabled>
-                            (Sin medios de pago)
-                          </option>
-                        )}
-
-                        {mediosPago.map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                      </select>
-
-                      {loadingMedios && (
-                        <span className="mpr-selectSpinner" title="Cargando…">
-                          <FontAwesomeIcon icon={faCircleNotch} spin />
-                        </span>
                       )}
-                    </div>
-                  </div>
 
-                  <div className="mpr-field">
-                    <label>Total seleccionado</label>
-                    <div className="mpr-totalPill">{moneyARS(totalSeleccionado)}</div>
-                  </div>
+                      {mediosPago.map((x) => (
+                        <option key={x.id} value={String(x.id)}>
+                          {x.nombre}
+                        </option>
+                      ))}
+                    </select>
 
-                  <div className="mpr-field mpr-field--actions">
-                    <label className="mpr-labelGhost">Acciones</label>
-
-                    <button
-                      type="button"
-                      className="mov-btn mov-btn--ghost mpr-btnWide mpr-btnInCard"
-                      onClick={toggleAll}
-                      disabled={!deudasOrdenadas.length || loading}
-                      title="Seleccionar / deseleccionar todas (solo pendientes)"
-                    >
-                      <FontAwesomeIcon icon={faListCheck} />
-                      {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
-                    </button>
+                    {loadingMedios && (
+                      <span className="mpr-selectSpinner" title="Cargando…">
+                        <FontAwesomeIcon icon={faCircleNotch} spin />
+                      </span>
+                    )}
                   </div>
                 </div>
+
+                <div className="mpr-field">
+                  <label>Total seleccionado</label>
+                  <div className="mpr-totalPill">{moneyARS(totalSeleccionado)}</div>
+                </div>
+
+                <div className="mpr-field mpr-field--actions">
+                  <label className="mpr-labelGhost">Acciones</label>
+                  <button
+                    type="button"
+                    className="mov-btn mov-btn--ghost mpr-btnWide mpr-btnInCard"
+                    onClick={toggleAll}
+                    disabled={!deudasOrdenadas.length || loading}
+                    title="Seleccionar / deseleccionar todas (solo pendientes)"
+                  >
+                    <FontAwesomeIcon icon={faListCheck} />
+                    {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
+                  </button>
+                </div>
               </div>
+
+              {/* Nota opcional (si la querés usar más adelante) */}
+              {/* <div className="mpr-note">
+                <div className="mpr-noteTitle">Nota</div>
+                <textarea className="mpr-textarea" value={nota} onChange={(e)=>setNota(e.target.value)} />
+              </div> */}
             </div>
-          </div>
 
-          {/* Tabla */}
-          <div className="mpr-tableWrap">
-            <div className="mpr-tableTitle">
-              <span>Registros del cliente</span>
-
-              <div className="mpr-actionsRight">
-                <div className="mpr-miniStat">
-                  <span>Total</span>
-                  <b>{deudasOrdenadas.length}</b>
-                </div>
-                <div className="mpr-miniStat">
-                  <span>Seleccionadas</span>
-                  <b>{cantSeleccionadas}</b>
+            {/* Tabla */}
+            <div className="mpr-tableWrap">
+              <div className="mpr-tableTitle">
+                <span>Registros del cliente</span>
+                <div className="mpr-actionsRight">
+                  <div className="mpr-miniStat">
+                    <span>Total</span>
+                    <b>{deudasOrdenadas.length}</b>
+                  </div>
+                  <div className="mpr-miniStat">
+                    <span>Seleccionadas</span>
+                    <b>{cantSeleccionadas}</b>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="mpr-table">
-              <div className="mpr-thead" role="row">
-                <div className="mpr-th mpr-th--center">Sel</div>
-                <div className="mpr-th">Fecha</div>
-                <div className="mpr-th">Descripción</div>
-                <div className="mpr-th mpr-th--center">Estado</div>
-                <div className="mpr-th mpr-th--right">Monto</div>
-              </div>
+              <div className="mpr-table">
+                <div className="mpr-thead" role="row">
+                  <div className="mpr-th mpr-th--center">Sel</div>
+                  <div className="mpr-th">Fecha</div>
+                  <div className="mpr-th">Descripción</div>
+                  <div className="mpr-th mpr-th--center">Estado</div>
+                  <div className="mpr-th mpr-th--right">Monto</div>
+                </div>
 
-              <div className="mpr-tbody mpr-tbody--pr">
-                {!deudasOrdenadas.length && (
-                  <div className="mpr-empty">No hay registros para este cliente.</div>
-                )}
+                <div className="mpr-tbody">
+                  {!deudasOrdenadas.length && (
+                    <div className="mpr-empty">No hay registros para este cliente.</div>
+                  )}
 
-                {deudasOrdenadas.map((r, idx) => {
-                  const id = Number(r?.id_movimiento || 0);
-                  const pagado = isPagadoRow(r);
-                  const checked = selectedIds.has(id);
-                  const monto = Number(r?.monto_total ?? r?.total ?? 0) || 0;
+                  {deudasOrdenadas.map((r, idx) => {
+                    const id = Number(r?.id_movimiento || 0);
+                    const pagado = isPagadoRow(r);
+                    const checked = selectedIds.has(id);
+                    const monto = Number(r?.monto_total ?? r?.total ?? 0) || 0;
 
-                  return (
-                    <div
-                      key={id || `${r?.fecha}-${idx}`}
-                      className={`mpr-row ${checked ? "is-checked" : ""} ${pagado ? "is-paid" : ""}`}
-                      role="row"
-                      onClick={() => id && toggleOne(id, r)}
-                      title={pagado ? "Este registro ya está PAGADO" : undefined}
-                      style={pagado ? { cursor: "default" } : undefined}
-                    >
-                      <div className="mpr-td mpr-td--center" onClick={(e) => e.stopPropagation()}>
-                        <label className={`mpr-checkWrap ${!id || loading || pagado ? "is-disabled" : ""}`}>
-                          <input
-                            className="mpr-checkInput"
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleOne(id, r)}
-                            disabled={!id || loading || pagado}
-                          />
-                          <span className="mpr-checkBox" aria-hidden="true" />
-                        </label>
-                      </div>
-
-                      <div className="mpr-td">{safeText(formatFechaDMY(r?.fecha))}</div>
-
+                    return (
                       <div
-                        className="mpr-td mpr-td--desc"
-                        title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
+                        key={id || `${r?.fecha}-${idx}`}
+                        className={`mpr-row ${checked ? "is-checked" : ""} ${pagado ? "is-paid" : ""}`}
+                        role="row"
+                        onClick={() => id && toggleOne(id, r)}
+                        title={pagado ? "Este registro ya está PAGADO" : undefined}
                       >
-                        {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
-                      </div>
+                        <div className="mpr-td mpr-td--center" onClick={(e) => e.stopPropagation()}>
+                          <label className={`mpr-checkWrap ${!id || loading || pagado ? "is-disabled" : ""}`}>
+                            <input
+                              className="mpr-checkInput"
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleOne(id, r)}
+                              disabled={!id || loading || pagado}
+                            />
+                            <span className="mpr-checkBox" aria-hidden="true" />
+                          </label>
+                        </div>
 
-                      <div className="mpr-td mpr-td--center" style={{ textAlign: "center" }}>
-                        <EstadoChip estado={pagado ? "PAGADO" : "PENDIENTE"} />
-                      </div>
+                        <div className="mpr-td">{safeText(formatFechaDMY(r?.fecha))}</div>
 
-                      <div className="mpr-td mpr-td--right">{moneyARS(monto)}</div>
-                    </div>
-                  );
-                })}
+                        <div className="mpr-td mpr-td--desc" title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}>
+                          {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
+                        </div>
+
+                        <div className="mpr-td mpr-td--center">
+                          <EstadoChip estado={pagado ? "PAGADO" : "PENDIENTE"} />
+                        </div>
+
+                        <div className="mpr-td mpr-td--right">{moneyARS(monto)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -655,13 +674,6 @@ export default function ModalPagarRecibos({
             className="mpr-btn mpr-btn--primary"
             onClick={handleConfirm}
             disabled={loading || selectedIds.size === 0 || !idMedioPago}
-            title={
-              selectedIds.size === 0
-                ? "Seleccioná al menos una deuda pendiente"
-                : !idMedioPago
-                ? "Seleccioná un medio de pago"
-                : "Confirmar pago"
-            }
           >
             <FontAwesomeIcon icon={faCheck} />
             {loading ? "Procesando…" : "Confirmar pago"}

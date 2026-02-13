@@ -46,9 +46,7 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
         </div>
 
         <h3 className="pp-modal__title">Confirmar cierre de sesión</h3>
-        <p className="pp-modal__text">
-          ¿Estás seguro de que deseas cerrar la sesión?
-        </p>
+        <p className="pp-modal__text">¿Estás seguro de que deseas cerrar la sesión?</p>
 
         <div className="pp-modal__actions">
           <button
@@ -59,11 +57,7 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
           >
             Cancelar
           </button>
-          <button
-            className="pp-btn pp-btn--danger"
-            onClick={onConfirm}
-            disabled={loading}
-          >
+          <button className="pp-btn pp-btn--danger" onClick={onConfirm} disabled={loading}>
             {loading ? "Cerrando..." : "Confirmar"}
           </button>
         </div>
@@ -124,21 +118,23 @@ function normalizeTema(value) {
   return t === "oscuro" ? "oscuro" : "claro";
 }
 
+/**
+ * ✅ Opción A: data-theme + body.dark (compatibilidad modales viejos)
+ */
 function applyTheme(tema) {
+  // Tema principal (tu sistema actual)
   document.documentElement.setAttribute("data-theme", tema);
+
+  // ✅ Compatibilidad con modales viejos que usan body.dark
+  const isDark = tema === "oscuro";
+  document.body.classList.toggle("dark", isDark);
 }
 
 /**
  * ✅ SaaS: priorizamos ID master
  */
 function getIdUsuarioMaster(u) {
-  const cand = [
-    u?.idUsuarioMaster,
-    u?.idUsuario,
-    u?.id_usuario,
-    u?.id,
-    u?.usuario_id,
-  ];
+  const cand = [u?.idUsuarioMaster, u?.idUsuario, u?.id_usuario, u?.id, u?.usuario_id];
   const n = Number(cand.find((x) => x != null && x !== "")) || 0;
   return n;
 }
@@ -193,7 +189,7 @@ const Principal = () => {
   const closeTimerRef = useRef(null);
   const openTimerRef = useRef(null);
 
-  // ✅ evita doble logout (ref para que no rompa deps)
+  // ✅ evita doble logout
   const closingRef = useRef(false);
   const [closingUI, setClosingUI] = useState(false);
 
@@ -364,7 +360,6 @@ const Principal = () => {
           body: JSON.stringify({}),
         });
 
-        // No bloqueamos el logout por un warning del backend, pero lo logueamos
         const txt = await r.text();
         try {
           const data = JSON.parse(txt);
@@ -378,7 +373,6 @@ const Principal = () => {
     } catch (e) {
       console.warn("Error llamando logout:", e);
     } finally {
-      // limpieza local SIEMPRE
       hardClientLogoutCleanup();
 
       setShowLogoutModal(false);
@@ -422,7 +416,7 @@ const Principal = () => {
         return;
       }
 
-      const sessionKey = getSessionKey(); // opcional por si en backend lo querés validar
+      const sessionKey = getSessionKey();
       const headers = { "Content-Type": "application/json" };
       if (sessionKey) headers["X-Session"] = sessionKey;
 
@@ -464,16 +458,8 @@ const Principal = () => {
             <FontAwesomeIcon icon={faBars} />
           </button>
 
-          <button
-            className="mov-topbar__logo"
-            onClick={handleLogoClick}
-            title="Ir al dashboard"
-          >
-            <img
-              src={LogoBalto}
-              alt="Logo Balto"
-              className="mov-topbar__logoImg"
-            />
+          <button className="mov-topbar__logo" onClick={handleLogoClick} title="Ir al dashboard">
+            <img src={LogoBalto} alt="Logo Balto" className="mov-topbar__logoImg" />
           </button>
 
           <div className="mov-topbar__titles">
@@ -528,12 +514,7 @@ const Principal = () => {
       {/* ================= SIDEBAR ================= */}
       <aside className={`pp-sidebar ${drawerOpen ? "is-drawerOpen" : ""}`}>
         <div className="pp-drawerHeader">
-          <div
-            className="pp-drawerBrand"
-            onClick={handleLogoClick}
-            role="button"
-            tabIndex={0}
-          >
+          <div className="pp-drawerBrand" onClick={handleLogoClick} role="button" tabIndex={0}>
             <div className="pp-drawerBrand__mark">
               <FontAwesomeIcon icon={faChartLine} />
             </div>
@@ -570,8 +551,7 @@ const Principal = () => {
             const isMov = item.key === "movimientos";
 
             const isActive =
-              activeKey === item.key ||
-              (isMov && location.pathname.startsWith("/panel/movimientos"));
+              activeKey === item.key || (isMov && location.pathname.startsWith("/panel/movimientos"));
 
             const isOpen = isMov && openMovSub;
 

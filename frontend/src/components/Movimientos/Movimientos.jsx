@@ -870,11 +870,12 @@ export default function Movimientos() {
                 {columns.map((c) => {
                   if (c.key === "acciones") {
                     return (
-                      <div
-                        key={c.key}
-                        className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
-                        role="cell"
-                      >
+<div
+  key={c.key}
+  className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
+  role="cell"
+  data-label={c.label}
+>
                         <div className="mov-actionsInline">
                           <button
                             type="button"
@@ -902,18 +903,20 @@ export default function Movimientos() {
 
                   const val = c.render ? c.render(r) : safeText(r[c.key]);
                   return (
-                    <div
-                      key={c.key}
-                      className={[
-                        "mov-gridCell",
-                        c.align === "right" ? "is-right" : "",
-                        c.align === "center" ? "is-center" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      role="cell"
-                      title={typeof val === "string" ? val : undefined}
-                    >
+<div
+  key={c.key}
+  className={[
+    "mov-gridCell",
+    c.align === "right" ? "is-right" : "",
+    c.align === "center" ? "is-center" : "",
+  ]
+    .filter(Boolean)
+    .join(" ")}
+  role="cell"
+  data-label={c.label}
+  title={typeof val === "string" ? val : undefined}
+>
+
                       <span className="mov-ellipsissss">{val}</span>
                     </div>
                   );

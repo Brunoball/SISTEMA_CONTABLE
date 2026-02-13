@@ -37,6 +37,9 @@ function moneyARS(v) {
     return `$${Number(n).toFixed(2)}`;
   }
 }
+function uid() {
+  return crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 /* =========================
    Período UI (MM-YYYY) <-> API (YYYY-MM)
@@ -99,8 +102,8 @@ function normalizeLists(lists) {
   return {
     proveedores: pick("proveedores"),
     detalles: pick("detalles"),
-    medios_pago: mediosPago,
-    cuentas_corrientes: cuentas,
+    medios_pago: Array.isArray(mediosPago) ? mediosPago : [],
+    cuentas_corrientes: Array.isArray(cuentas) ? cuentas : [],
   };
 }
 
@@ -108,7 +111,6 @@ function normalizeLists(lists) {
    ✅ Auth + headers (SaaS: X-Session)
 ========================= */
 function getAuthInfo() {
-  // 🔑 SaaS session_key (prioridad)
   const sessionKey =
     localStorage.getItem("session_key") ||
     localStorage.getItem("sessionKey") ||
@@ -116,7 +118,6 @@ function getAuthInfo() {
     localStorage.getItem("X-Session") ||
     "";
 
-  // (compat) token viejo si lo seguís usando en algún endpoint
   const token = localStorage.getItem("token") || "";
 
   let idUsuario = 0;
@@ -143,32 +144,35 @@ async function parseJsonOrThrow(res) {
 function buildAuthHeaders() {
   const { token, sessionKey } = getAuthInfo();
   const headers = { "Content-Type": "application/json" };
-
-  // ✅ NUEVO: multi-tenant auth
   if (sessionKey) headers["X-Session"] = sessionKey;
-
-  // (compat) si NO hay sessionKey, usa Bearer token (si existe)
   if (!sessionKey && token) headers.Authorization = `Bearer ${token}`;
-
   return headers;
 }
 
 async function apiPostJson(url, payload) {
   const headers = buildAuthHeaders();
-
   const res = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify(payload ?? {}),
   });
-
   return await parseJsonOrThrow(res);
 }
 
 /* =========================
-   Mini Modal: alta rápida (detalle)
+   Theme helper (body.dark OR data-theme="oscuro")
 ========================= */
-function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave }) {
+function isTemaOscuro() {
+  const byAttr = document.documentElement.getAttribute("data-theme") === "oscuro";
+  const byBody = document.body?.classList?.contains("dark");
+  return Boolean(byAttr || byBody);
+}
+
+/* =========================
+   Mini Modal: alta rápida (detalle)
+   ✅ ahora soporta dark (mi-modal--dark)
+========================= */
+function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -191,7 +195,10 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 
   return createPortal(
     <div className="mi-mini__overlay" onMouseDown={onCancel}>
-      <div className="mi-mini__modal" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
           <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving} aria-label="Cerrar">
@@ -254,7 +261,6 @@ function describeLineProblem(r, idx1based) {
   if (!touched) return null;
 
   const issues = [];
-
   if (!(Number.isFinite(detId) && detId > 0)) {
     issues.push(detTxt ? `el detalle "${detTxt}" no está seleccionado del listado` : "falta el detalle");
   }
@@ -275,17 +281,32 @@ function describeLineProblem(r, idx1based) {
    Modal
 ========================= */
 export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSaved }) {
-  // ✅ hooks SIEMPRE arriba (no condicionales)
-  const mediosPagoList = useMemo(() => normalizeLists(lists).medios_pago, [lists]);
-  const cuentasCorrientesList = useMemo(() => normalizeLists(lists).cuentas_corrientes, [lists]);
-
-  // ✅ IMPORTANTE: ahora estás usando routes/api.php en local (puede ser /routes/api.php o /api.php según tu setup)
-  // Tu error mostraba: http://127.0.0.1:3001/routes/api.php?action=compras_crear_batch
-  // Así que lo dejamos así:
+  // ✅ IMPORTANTE: tu setup actual usa BASE_URL + /api.php
   const API_BATCH = `${BASE_URL}/api.php?action=compras_crear_batch`;
   const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
 
-  const showToast = useCallback((tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion), [onToast]);
+  const showToast = useCallback(
+    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
+    [onToast]
+  );
+
+  // ✅ DARK automático + observar cambios (igual ModalNuevaVenta)
+  const [dark, setDark] = useState(isTemaOscuro());
+  useEffect(() => {
+    const update = () => setDark(isTemaOscuro());
+
+    const obsHtml = new MutationObserver(update);
+    obsHtml.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+    const obsBody = new MutationObserver(update);
+    if (document.body) obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
+    update();
+    return () => {
+      obsHtml.disconnect();
+      obsBody.disconnect();
+    };
+  }, []);
 
   // lock scroll
   useEffect(() => {
@@ -308,11 +329,16 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const [localLists, setLocalLists] = useState(() => ({ ...SAFE_LISTS, ...normalizeLists(lists) }));
   useEffect(() => setLocalLists({ ...SAFE_LISTS, ...normalizeLists(lists) }), [lists]);
 
+  const mediosPagoList = useMemo(() => (Array.isArray(localLists.medios_pago) ? localLists.medios_pago : []), [localLists.medios_pago]);
+  const cuentasCorrientesList = useMemo(
+    () => (Array.isArray(localLists.cuentas_corrientes) ? localLists.cuentas_corrientes : []),
+    [localLists.cuentas_corrientes]
+  );
+
   // estado base
   const [fecha, setFecha] = useState(todayISO());
   const [periodoUI, setPeriodoUI] = useState(isoToMMYYYY(todayISO()));
 
-  // panel derecha (igual ventas: forma decide campos)
   const [filters, setFilters] = useState({
     forma: NULL_OPTION, // CONTADO | CUENTA_CORRIENTE
     id_medio_pago: NULL_OPTION,
@@ -321,7 +347,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     proveedor_cuit: "",
   });
 
-  // contado: guardar/pagar
   const [accionContado, setAccionContado] = useState("pagar"); // guardar | pagar
 
   // proveedor autocomplete
@@ -332,7 +357,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   // filas
   const [rows, setRows] = useState(() => [
     {
-      id: crypto?.randomUUID?.() || String(Date.now()),
+      id: uid(),
       id_detalle: NULL_OPTION,
       detalleText: "",
       cantidad: 1,
@@ -343,7 +368,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
   const [saving, setSaving] = useState(false);
 
-  // mini modal
+  // mini modal detalle
   const [addUI, setAddUI] = useState({ open: false, rowId: null, text: "", saving: false });
 
   // reset al abrir
@@ -372,7 +397,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
       setRows([
         {
-          id: crypto?.randomUUID?.() || String(Date.now()),
+          id: uid(),
           id_detalle: NULL_OPTION,
           detalleText: "",
           cantidad: 1,
@@ -395,20 +420,12 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     setFecha(v);
     setPeriodoUI(isoToMMYYYY(v));
   };
-
   const onPeriodoChange = (raw) => setPeriodoUI(normalizePeriodoInput(raw));
 
   const addRow = () => {
     setRows((prev) => [
       ...prev,
-      {
-        id: crypto?.randomUUID?.() || String(Date.now() + Math.random()),
-        id_detalle: NULL_OPTION,
-        detalleText: "",
-        cantidad: 1,
-        precio: 0,
-        ivaPct: 0,
-      },
+      { id: uid(), id_detalle: NULL_OPTION, detalleText: "", cantidad: 1, precio: 0, ivaPct: 0 },
     ]);
   };
 
@@ -482,8 +499,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
         return next;
       });
 
-      const rowId = addUI.rowId;
-      if (rowId) updateRow(rowId, { id_detalle: String(newId), detalleText: newNombre });
+      if (addUI.rowId) updateRow(addUI.rowId, { id_detalle: String(newId), detalleText: newNombre });
 
       setAddUI({ open: false, rowId: null, text: "", saving: false });
       showToast("exito", `Detalle creado: "${newNombre}"`, 2600);
@@ -545,17 +561,13 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
     setFilters((p) => {
       const forma = String(p.forma || "");
-      if (forma === "CONTADO") {
-        if (p.id_cuenta_corriente !== NULL_OPTION) return { ...p, id_cuenta_corriente: NULL_OPTION };
-      }
-      if (forma === "CUENTA_CORRIENTE") {
-        if (p.id_medio_pago !== NULL_OPTION) return { ...p, id_medio_pago: NULL_OPTION };
-      }
+      if (forma === "CONTADO" && p.id_cuenta_corriente !== NULL_OPTION) return { ...p, id_cuenta_corriente: NULL_OPTION };
+      if (forma === "CUENTA_CORRIENTE" && p.id_medio_pago !== NULL_OPTION) return { ...p, id_medio_pago: NULL_OPTION };
       return p;
     });
 
     if (isCorriente) setAccionContado("guardar");
-  }, [open, isCorriente, isContado]);
+  }, [open, isCorriente]);
 
   /* ========= validación ========= */
   const validate = useCallback(() => {
@@ -610,7 +622,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const submit = useCallback(async () => {
     if (saving) return;
 
-    // ✅ si falta X-Session, avisar claro (así no te vuelve a pasar)
     const { sessionKey } = getAuthInfo();
     if (!sessionKey) {
       showToast("error", "No hay sesión activa (Falta X-Session). Iniciá sesión de nuevo.", 5200);
@@ -679,7 +690,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
         return;
       }
 
-      // ✅ POST con X-Session (buildAuthHeaders -> apiPostJson)
       const data = await apiPostJson(API_BATCH, payloads);
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar el batch de compras.");
 
@@ -690,7 +700,22 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       showToast("error", e?.message || "Error guardando.", 4500);
       setSaving(false);
     }
-  }, [saving, addUI.open, validate, showToast, isCorriente, accionContado, rowsCalc, fecha, filters, provInput, isContado, API_BATCH, onSaved, onClose]);
+  }, [
+    saving,
+    addUI.open,
+    validate,
+    showToast,
+    isCorriente,
+    accionContado,
+    rowsCalc,
+    fecha,
+    filters,
+    provInput,
+    isContado,
+    API_BATCH,
+    onSaved,
+    onClose,
+  ]);
 
   if (!open) return null;
 
@@ -698,9 +723,20 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const miniTitle = "Nuevo detalle";
 
   const modalJSX = (
-    <div className="mi-modal__overlay mi-modal__overlay--mov" onMouseDown={() => (!saving ? onClose?.() : null)}>
+    <div
+      className={[
+        "mi-modal__overlay",
+        "mi-modal__overlay--mov",
+        dark ? "mi-modal__overlay--dark" : "",
+      ].join(" ").trim()}
+      onMouseDown={() => (!saving ? onClose?.() : null)}
+    >
       <div
-        className="mi-modal__container mi-modal__container--mov"
+        className={[
+          "mi-modal__container",
+          "mi-modal__container--mov",
+          dark ? "mi-modal--dark" : "",
+        ].join(" ").trim()}
         role="dialog"
         aria-modal="true"
         onMouseDown={(e) => e.stopPropagation()}
@@ -729,11 +765,11 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
             <section className="mi-cr-table">
               <div className="mi-cr-table__head">
                 <div>Detalle</div>
-                <div style={{ textAlign: "center" }}>Cantidad</div>
-                <div style={{ textAlign: "center" }}>Precio</div>
-                <div style={{ textAlign: "center" }}>% IVA</div>
-                <div style={{ textAlign: "center" }}>IVA</div>
-                <div style={{ textAlign: "center" }}>Total</div>
+                <div className="mi-cr-center">Cantidad</div>
+                <div className="mi-cr-center">Precio</div>
+                <div className="mi-cr-center">% IVA</div>
+                <div className="mi-cr-center">IVA</div>
+                <div className="mi-cr-center">Total</div>
                 <div />
               </div>
 
@@ -741,12 +777,14 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                 {rowsCalc.map((r) => {
                   const suggestions = suggestDetalles(r.detalleText);
                   const showSug =
-                    String(r.detalleText || "").trim().length > 0 && Number(r.id_detalle || 0) <= 0 && suggestions.length > 0;
+                    String(r.detalleText || "").trim().length > 0 &&
+                    Number(r.id_detalle || 0) <= 0 &&
+                    suggestions.length > 0;
 
                   return (
                     <div key={r.id} className="mi-cr-row mi-cr-row--car">
                       {/* Detalle */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--desc" style={{ position: "relative" }}>
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--desc mi-cr-rel">
                         <input
                           className="fl-input"
                           placeholder="Escribí o seleccioná un detalle…"
@@ -754,7 +792,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                           onChange={(e) => updateRow(r.id, { detalleText: e.target.value, id_detalle: NULL_OPTION })}
                           disabled={saving || addUI.open}
                           autoComplete="off"
-                          style={{ height: 38 }}
                         />
 
                         {showSug && (
@@ -785,7 +822,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                       </div>
 
                       {/* Cantidad */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--qty">
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--qty mi-cr-center">
                         <input
                           className="fl-input"
                           type="number"
@@ -794,12 +831,11 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                           value={r.cantidad}
                           onChange={(e) => updateRow(r.id, { cantidad: e.target.value === "" ? "" : Number(e.target.value) })}
                           disabled={saving}
-                          style={{ height: 38, textAlign: "center" }}
                         />
                       </div>
 
                       {/* Precio */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--price">
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--price mi-cr-center">
                         <input
                           className="fl-input"
                           type="number"
@@ -808,18 +844,16 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                           value={r.precio}
                           onChange={(e) => updateRow(r.id, { precio: e.target.value === "" ? "" : Number(e.target.value) })}
                           disabled={saving}
-                          style={{ height: 38, textAlign: "center" }}
                         />
                       </div>
 
                       {/* IVA */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--iva">
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--iva mi-cr-center">
                         <select
                           className="fl-input fl-select fl-select-iva--car fl-select-iva--compra"
                           value={String(r.ivaPct)}
                           onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
                           disabled={saving}
-                          style={{ height: 38, textAlign: "center" }}
                         >
                           {IVA_OPTIONS.map((x) => (
                             <option key={x.value} value={x.value}>
@@ -830,18 +864,24 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                       </div>
 
                       {/* IVA monto */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--ivaMonto">
-                        <div style={{ textAlign: "center", fontWeight: 700, paddingTop: 10 }}>{moneyARS(r.ivaMonto)}</div>
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--ivaMonto mi-cr-center">
+                        <div className="mi-cr-money mi-cr-money--soft">{moneyARS(r.ivaMonto)}</div>
                       </div>
 
                       {/* Total */}
-                      <div className="mi-cr-cell mi-cr-col mi-cr-col--total">
-                        <div style={{ textAlign: "center", fontWeight: 800, paddingTop: 10 }}>{moneyARS(r.total)}</div>
+                      <div className="mi-cr-cell mi-cr-col mi-cr-col--total mi-cr-center">
+                        <div className="mi-cr-money mi-cr-money--strong">{moneyARS(r.total)}</div>
                       </div>
 
                       {/* Acción */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--action">
-                        <button type="button" onClick={() => removeRow(r.id)} disabled={saving} title="Eliminar fila" className="mi-cr-del">
+                        <button
+                          type="button"
+                          onClick={() => removeRow(r.id)}
+                          disabled={saving}
+                          title="Eliminar fila"
+                          className="mi-cr-del"
+                        >
                           ×
                         </button>
                       </div>
@@ -886,156 +926,184 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                   </div>
 
                   <div className="fl-field">
-                    <input className="fl-input" placeholder="MM-YYYY" inputMode="numeric" value={periodoUI} onChange={(e) => onPeriodoChange(e.target.value)} disabled={saving} />
+                    <input
+                      className="fl-input"
+                      placeholder="MM-YYYY"
+                      inputMode="numeric"
+                      value={periodoUI}
+                      onChange={(e) => onPeriodoChange(e.target.value)}
+                      disabled={saving}
+                    />
                     <label className="fl-label">Período</label>
                   </div>
                 </div>
               </div>
 
               <div className="mi-cr-filters__body">
-                <div className="fl-grid" style={{ gridTemplateColumns: "1fr" }}>
-                  {/* Proveedor */}
-                  <div className="fl-field" style={{ position: "relative" }}>
-                    <input
-                      className="fl-input"
-                      placeholder=" "
-                      value={provInput}
-                      onChange={handleProveedorInputChange}
-                      onFocus={() => setProvFocus(true)}
-                      onBlur={() => setTimeout(() => setProvFocus(false), 120)}
-                      disabled={saving}
-                      autoComplete="off"
-                    />
-                    <label className="fl-label">Proveedor *</label>
+                {/* Proveedor */}
+                <div className="fl-field mi-cr-rel">
+                  <input
+                    className="fl-input"
+                    placeholder=" "
+                    value={provInput}
+                    onChange={handleProveedorInputChange}
+                    onFocus={() => setProvFocus(true)}
+                    onBlur={() => setTimeout(() => setProvFocus(false), 120)}
+                    disabled={saving}
+                    autoComplete="off"
+                  />
+                  <label className="fl-label">Proveedor *</label>
 
-                    {provFocus && filteredProveedores.length > 0 && (
-                      <ul className="mi-cr-suggest">
-                        {filteredProveedores.map((p) => (
-                          <li
-                            key={p.id}
-                            className="mi-cr-suggest__item"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectProveedor(p);
-                            }}
-                          >
-                            {p.nombre}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  {/* CUIT */}
-                  <div className="fl-field">
-                    <input
-                      className="fl-input"
-                      placeholder=" "
-                      value={filters.proveedor_cuit}
-                      onChange={(e) => updateFilter("proveedor_cuit", e.target.value)}
-                      disabled={saving}
-                      inputMode="numeric"
-                      autoComplete="off"
-                    />
-                    <label className="fl-label">CUIT Proveedor (opcional)</label>
-                  </div>
-
-                  {/* Forma */}
-                  <div className="fl-field">
-                    <select className="fl-input fl-select" value={String(filters.forma)} onChange={(e) => updateFilter("forma", e.target.value)} disabled={saving}>
-                      <option value={NULL_OPTION}>Tipo de compra *</option>
-                      <option value="CONTADO">CONTADO</option>
-                      <option value="CUENTA_CORRIENTE">CUENTA CORRIENTE</option>
-                    </select>
-                    <label className="fl-label">Tipo de compra</label>
-                  </div>
-
-                  {/* Contado */}
-                  {isContado && (
-                    <>
-                      <div className="fl-field">
-                        <select className="fl-input fl-select" value={String(filters.id_medio_pago)} onChange={(e) => updateFilter("id_medio_pago", e.target.value)} disabled={saving}>
-                          <option value={NULL_OPTION}>Medio de pago *</option>
-                          {mediosPagoList.map((x) => (
-                            <option key={x.id ?? x.id_medio_pago} value={String(x.id ?? x.id_medio_pago)}>
-                              {x.nombre}
-                            </option>
-                          ))}
-                        </select>
-                        <label className="fl-label">Medio de pago</label>
-                      </div>
-
-                      <div className="mi-card mi-card--full" style={{ padding: 12 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 10, color: "var(--mi-text)" }}>Pago (Contado)</div>
-
-                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                          <button
-                            type="button"
-                            className={`mit-btn ${accionContado === "guardar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
-                            onClick={() => setAccionContado("guardar")}
-                            disabled={saving}
-                            style={{ height: 40 }}
-                          >
-                            Guardar
-                          </button>
-
-                          <button
-                            type="button"
-                            className={`mit-btn ${accionContado === "pagar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
-                            onClick={() => setAccionContado("pagar")}
-                            disabled={saving}
-                            style={{ height: 40 }}
-                          >
-                            Pagar
-                          </button>
-                        </div>
-
-                        <div style={{ marginTop: 10, fontSize: 12, color: "var(--mi-muted)" }}>
-                          {accionContado === "guardar" ? (
-                            <>
-                              * <b>Guardar</b>: queda <b>pendiente</b>.
-                            </>
-                          ) : (
-                            <>
-                              * <b>Pagar</b>: queda <b>pagada</b>.
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {/* Corriente */}
-                  {isCorriente && (
-                    <>
-                      <div className="fl-field">
-                        <select className="fl-input fl-select" value={String(filters.id_cuenta_corriente)} onChange={(e) => updateFilter("id_cuenta_corriente", e.target.value)} disabled={saving}>
-                          <option value={NULL_OPTION}>Cuenta Corriente *</option>
-                          {cuentasCorrientesList.map((x) => (
-                            <option key={x.id ?? x.id_cuenta_corriente} value={String(x.id ?? x.id_cuenta_corriente)}>
-                              {x.nombre}
-                            </option>
-                          ))}
-                        </select>
-                        <label className="fl-label">Cuenta Corriente</label>
-                      </div>
-
-                      <div className="mi-card mi-card--full" style={{ padding: 12 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 8, color: "var(--mi-text)" }}>En cuenta corriente</div>
-                        <div style={{ fontSize: 12, color: "var(--mi-muted)" }}>
-                          * Se registra en <b>Cuenta Corriente</b> y queda <b>pendiente</b>.
-                        </div>
-                      </div>
-                    </>
+                  {provFocus && filteredProveedores.length > 0 && (
+                    <ul className="mi-cr-suggest">
+                      {filteredProveedores.map((p) => (
+                        <li
+                          key={p.id}
+                          className="mi-cr-suggest__item"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelectProveedor(p);
+                          }}
+                        >
+                          {p.nombre}
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
 
+                {/* CUIT */}
+                <div className="fl-field">
+                  <input
+                    className="fl-input"
+                    placeholder=" "
+                    value={filters.proveedor_cuit}
+                    onChange={(e) => updateFilter("proveedor_cuit", e.target.value)}
+                    disabled={saving}
+                    inputMode="numeric"
+                    autoComplete="off"
+                  />
+                  <label className="fl-label">CUIT Proveedor (opcional)</label>
+                </div>
+
+                {/* Forma */}
+                <div className="fl-field">
+                  <select
+                    className="fl-input fl-select"
+                    value={String(filters.forma)}
+                    onChange={(e) => updateFilter("forma", e.target.value)}
+                    disabled={saving}
+                  >
+                    <option value={NULL_OPTION}>Tipo de compra *</option>
+                    <option value="CONTADO">CONTADO</option>
+                    <option value="CUENTA_CORRIENTE">CUENTA CORRIENTE</option>
+                  </select>
+                  <label className="fl-label">Tipo de compra</label>
+                </div>
+
+                {/* Contado */}
+                {isContado && (
+                  <>
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(filters.id_medio_pago)}
+                        onChange={(e) => updateFilter("id_medio_pago", e.target.value)}
+                        disabled={saving}
+                      >
+                        <option value={NULL_OPTION}>Medio de pago *</option>
+                        {mediosPagoList.map((x) => (
+                          <option key={x.id ?? x.id_medio_pago} value={String(x.id ?? x.id_medio_pago)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="fl-label">Medio de pago</label>
+                    </div>
+
+                    <div className="mi-card mi-card--full">
+                      <div className="mi-card__title">Pago (Contado)</div>
+
+                      <div className="mi-card__actionsRow">
+                        <button
+                          type="button"
+                          className={`mit-btn ${accionContado === "guardar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
+                          onClick={() => setAccionContado("guardar")}
+                          disabled={saving}
+                        >
+                          Guardar
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`mit-btn ${accionContado === "pagar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
+                          onClick={() => setAccionContado("pagar")}
+                          disabled={saving}
+                        >
+                          Pagar
+                        </button>
+                      </div>
+
+                      <div className="mi-card__hint">
+                        {accionContado === "guardar" ? (
+                          <>
+                            * <b>Guardar</b>: queda <b>pendiente</b>.
+                          </>
+                        ) : (
+                          <>
+                            * <b>Pagar</b>: queda <b>pagada</b>.
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Corriente */}
+                {isCorriente && (
+                  <>
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(filters.id_cuenta_corriente)}
+                        onChange={(e) => updateFilter("id_cuenta_corriente", e.target.value)}
+                        disabled={saving}
+                      >
+                        <option value={NULL_OPTION}>Cuenta Corriente *</option>
+                        {cuentasCorrientesList.map((x) => (
+                          <option key={x.id ?? x.id_cuenta_corriente} value={String(x.id ?? x.id_cuenta_corriente)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="fl-label">Cuenta Corriente</label>
+                    </div>
+
+                    <div className="mi-card mi-card--full">
+                      <div className="mi-card__title">En cuenta corriente</div>
+                      <div className="mi-card__hint">
+                        * Se registra en <b>Cuenta Corriente</b> y queda <b>pendiente</b>.
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 <div className="mi-cr-filters__actions">
-                  <button type="button" onClick={submit} disabled={saving} className="mit-btn mit-btn--solid" style={{ width: "100%", height: 44 }}>
+                  <button
+                    type="button"
+                    onClick={submit}
+                    disabled={saving}
+                    className="mit-btn mit-btn--solid mit-btn--block"
+                  >
                     {saving ? "Guardando..." : "Guardar compra"}
                   </button>
 
-                  <button type="button" onClick={() => (!saving ? onClose?.() : null)} disabled={saving} className="mit-btn mit-btn--ghost" style={{ width: "100%", height: 44 }}>
+                  <button
+                    type="button"
+                    onClick={() => (!saving ? onClose?.() : null)}
+                    disabled={saving}
+                    className="mit-btn mit-btn--ghost mit-btn--block"
+                  >
                     Cancelar
                   </button>
                 </div>
@@ -1044,7 +1112,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
           </div>
         </div>
 
-        {/* Mini modal */}
+        {/* Mini modal (✅ ahora también hereda modo oscuro) */}
         <AddCatalogMiniModal
           open={miniOpen}
           title={miniTitle}
@@ -1053,6 +1121,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
           onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
           onCancel={closeAddMini}
           onSave={guardarNuevoDetalle}
+          dark={dark}
         />
       </div>
     </div>

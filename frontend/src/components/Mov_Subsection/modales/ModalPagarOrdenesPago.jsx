@@ -44,6 +44,13 @@ function formatFechaDMY(v) {
 }
 
 /* =========================
+   ✅ Dark mode helper
+========================= */
+function isTemaOscuro() {
+  return document.documentElement.getAttribute("data-theme") === "oscuro";
+}
+
+/* =========================
    ✅ Auth helpers (X-Session)
 ========================= */
 function getAuthInfo() {
@@ -95,7 +102,19 @@ export default function ModalPagarOrdenesPago({
   proveedor,
   deudas = [],
 }) {
+  const dialogRef = useRef(null);
   const firstFocusRef = useRef(null);
+
+  // ✅ dark automático leyendo data-theme
+  const [dark, setDark] = useState(isTemaOscuro());
+  useEffect(() => {
+    const obs = new MutationObserver(() => setDark(isTemaOscuro()));
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => obs.disconnect();
+  }, []);
 
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [pagaTodo, setPagaTodo] = useState(false);
@@ -281,9 +300,31 @@ export default function ModalPagarOrdenesPago({
 
   if (!open) return null;
 
+  // ✅ clases dark (igual patrón que ModalPagarRecibos)
+  const modalClass = [
+    "mi-modal__container",
+    "mi-modal__container--mov",
+    "mpr-modal",
+    dark ? "mi-modal--dark" : "",
+  ]
+    .join(" ")
+    .trim();
+
+  const overlayClass = [
+    "mi-modal__overlay",
+    "mi-modal__overlay--mov",
+    dark ? "mi-modal__overlay--dark" : "",
+  ]
+    .join(" ")
+    .trim();
+
   return createPortal(
-    <div className="mi-modal__overlay" role="dialog" aria-modal="true">
-      <div className="mi-modal__container mi-modal__container--mov mpr-modal">
+    <div className={overlayClass} role="dialog" aria-modal="true" onMouseDown={onClose}>
+      <div
+        className={modalClass}
+        ref={dialogRef}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="mi-modal__header mpr-header">
           <div className="mpr-headLeft">
@@ -300,7 +341,9 @@ export default function ModalPagarOrdenesPago({
               ) : null}
             </div>
 
-            <div className="mi-modal__subtitle mpr-subtitle">Seleccioná una o más deudas pendientes</div>
+            <div className="mi-modal__subtitle mpr-subtitle">
+              Seleccioná una o más deudas pendientes
+            </div>
           </div>
 
           <button
@@ -331,19 +374,16 @@ export default function ModalPagarOrdenesPago({
                         disabled={loading || loadingMedios}
                         className="mpr-select"
                       >
-                        {/* ✅ Placeholder SIEMPRE */}
                         <option value="">
                           {loadingMedios ? "Cargando medios de pago…" : "Seleccioná un medio de pago…"}
                         </option>
 
-                        {/* ✅ Si no hay medios */}
                         {!loadingMedios && mediosPago.length === 0 && (
                           <option value="" disabled>
                             (Sin medios de pago)
                           </option>
                         )}
 
-                        {/* ✅ Opciones reales */}
                         {mediosPago.map((x) => (
                           <option key={x.id} value={String(x.id)}>
                             {x.nombre}
@@ -379,78 +419,84 @@ export default function ModalPagarOrdenesPago({
                     </button>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Tabla de deudas */}
-          <div className="mpr-tableWrap">
-            <div className="mpr-tableTitle">
-              <span>Deudas pendientes</span>
-
-              <div className="mpr-actionsRight">
-                <div className="mpr-miniStat">
-                  <span>Deudas</span>
-                  <b>{deudasOrdenadas.length}</b>
-                </div>
-                <div className="mpr-miniStat">
-                  <span>Seleccionadas</span>
-                  <b>{cantSeleccionadas}</b>
-                </div>
+                {/* Nota opcional */}
+                {/* <div className="mpr-note">
+                  <div className="mpr-noteTitle">Nota</div>
+                  <textarea className="mpr-textarea" value={nota} onChange={(e)=>setNota(e.target.value)} />
+                </div> */}
               </div>
             </div>
 
-            <div className="mpr-table">
-              <div className="mpr-thead" role="row">
-                <div className="mpr-th mpr-th--center">Sel</div>
-                <div className="mpr-th">Fecha</div>
-                <div className="mpr-th">Descripción</div>
-                <div className="mpr-th mpr-th--right">Monto</div>
+            {/* Tabla de deudas */}
+            <div className="mpr-tableWrap">
+              <div className="mpr-tableTitle">
+                <span>Deudas pendientes</span>
+
+                <div className="mpr-actionsRight">
+                  <div className="mpr-miniStat">
+                    <span>Deudas</span>
+                    <b>{deudasOrdenadas.length}</b>
+                  </div>
+                  <div className="mpr-miniStat">
+                    <span>Seleccionadas</span>
+                    <b>{cantSeleccionadas}</b>
+                  </div>
+                </div>
               </div>
 
-              <div className="mpr-tbody">
-                {!deudasOrdenadas.length && (
-                  <div className="mpr-empty">No hay deudas pendientes para este proveedor.</div>
-                )}
+              <div className="mpr-table">
+                <div className="mpr-thead" role="row">
+                  <div className="mpr-th mpr-th--center">Sel</div>
+                  <div className="mpr-th">Fecha</div>
+                  <div className="mpr-th">Descripción</div>
+                  <div className="mpr-th mpr-th--right">Monto</div>
+                </div>
 
-                {deudasOrdenadas.map((r, idx) => {
-                  const id = Number(r?.id_movimiento || 0);
-                  const checked = selectedIds.has(id);
-                  const monto = Number(r?.monto_total ?? r?.total ?? 0) || 0;
+                <div className="mpr-tbody">
+                  {!deudasOrdenadas.length && (
+                    <div className="mpr-empty">No hay deudas pendientes para este proveedor.</div>
+                  )}
 
-                  return (
-                    <div
-                      key={id || `${r?.fecha}-${idx}`}
-                      className={`mpr-row ${checked ? "is-checked" : ""}`}
-                      role="row"
-                      onClick={() => id && toggleOne(id)}
-                    >
-                      <div className="mpr-td mpr-td--center" onClick={(e) => e.stopPropagation()}>
-                        <label className={`mpr-checkWrap ${!id || loading ? "is-disabled" : ""}`}>
-                          <input
-                            className="mpr-checkInput"
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleOne(id)}
-                            disabled={!id || loading}
-                          />
-                          <span className="mpr-checkBox" aria-hidden="true" />
-                        </label>
-                      </div>
+                  {deudasOrdenadas.map((r, idx) => {
+                    const id = Number(r?.id_movimiento || 0);
+                    const checked = selectedIds.has(id);
+                    const monto = Number(r?.monto_total ?? r?.total ?? 0) || 0;
 
-                      <div className="mpr-td">{safeText(formatFechaDMY(r?.fecha))}</div>
-
+                    return (
                       <div
-                        className="mpr-td mpr-td--desc"
-                        title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
+                        key={id || `${r?.fecha}-${idx}`}
+                        className={`mpr-row ${checked ? "is-checked" : ""}`}
+                        role="row"
+                        onClick={() => id && toggleOne(id)}
                       >
-                        {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
-                      </div>
+                        <div className="mpr-td mpr-td--center" onClick={(e) => e.stopPropagation()}>
+                          <label className={`mpr-checkWrap ${!id || loading ? "is-disabled" : ""}`}>
+                            <input
+                              className="mpr-checkInput"
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleOne(id)}
+                              disabled={!id || loading}
+                            />
+                            <span className="mpr-checkBox" aria-hidden="true" />
+                          </label>
+                        </div>
 
-                      <div className="mpr-td mpr-td--right">{moneyARS(monto)}</div>
-                    </div>
-                  );
-                })}
+                        <div className="mpr-td">{safeText(formatFechaDMY(r?.fecha))}</div>
+
+                        <div
+                          className="mpr-td mpr-td--desc"
+                          title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
+                        >
+                          {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
+                        </div>
+
+                        <div className="mpr-td mpr-td--right">{moneyARS(monto)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>

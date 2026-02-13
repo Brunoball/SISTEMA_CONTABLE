@@ -1740,6 +1740,7 @@ padding: 0 !important;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 10px 0;
 }
 
 /* =========================
@@ -1853,7 +1854,7 @@ padding: 0 !important;
    Item section
 ========================= */
 .mi-em-item{
-  margin-top: 6px;
+  margin-bottom: 6px;
 }
 .mi-em-itemTitle{
   font-size: 13px;
@@ -2373,4 +2374,18 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 .mi-modal__container.mi-modal--dark .mi-cr-filters__title{
   color: rgba(255,255,255,.90);
+}
+/* Padding estándar para forms (Recibo/OrdenPago) */
+.mi-modal__formPad{
+  padding: 14px;
+}
+
+/* util */
+.mi-field--mt12{ margin-top: 12px; }
+.mi-field--rel{ position: relative; }
+.mi-actions--mt14{ margin-top: 14px; }
+.ordenpagobuttos{
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
 }

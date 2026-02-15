@@ -265,15 +265,28 @@
   position: sticky;
   top: 0;
   z-index: 5;
-  background: rgba(10, 37, 64, 0.06);
+  background: var(--balto-white);
   border-bottom: 1px solid rgba(10, 37, 64, 0.14);
 }
 
-.cc-grid--head,
-.cc-gridBody{
+/* ✅ 1 solo scroll container (horizontal + vertical) */
+.cc-gridScroll{
   overflow: auto;
-  scrollbar-gutter: both-edges stable;
+  max-height: calc(100vh - 340px);
+  background: #fff;
+  scrollbar-gutter: stable both-edges;
 }
+
+/* ✅ header sticky dentro del scroller */
+
+
+/* ✅ body ya no scrollea: lo scrollea el wrapper */
+.cc-gridBody{
+  overflow: visible;
+  max-height: none;
+  background: transparent;
+}
+
 
 .cc-grid--head .cc-cell{
   color: rgba(10, 37, 64, 0.72);
@@ -289,6 +302,7 @@
 .cc-gridBody{
   overflow: auto;            /* clave */
   max-height: calc(100vh - 340px);
+    min-height: calc(100vh - 340px);
   background: #fff;
   scrollbar-gutter: both-edges stable;
 }

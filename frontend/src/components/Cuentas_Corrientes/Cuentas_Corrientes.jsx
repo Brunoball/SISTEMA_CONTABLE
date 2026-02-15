@@ -10,7 +10,7 @@ import { faCalendarDays, faFileExcel } from "@fortawesome/free-solid-svg-icons";
 import Toast from "../Global/Toast.jsx";
 
 /* =========================
-   Helpers UI
+   Helpers
 ========================= */
 function moneyARS(v) {
   const n = Number(v || 0);
@@ -21,31 +21,26 @@ function moneyARS(v) {
   }
 }
 
-/* ✅ Período label */
 function periodLabelMMYYYY(yyyyMM) {
   const [y, m] = String(yyyyMM || "").split("-");
   if (!y || !m) return String(yyyyMM || "");
   return `${m}-${y}`;
 }
 
-/* ✅ normaliza a YYYY-MM */
 function periodoToYYYYMM(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
 
-  // YYYY-MM o YYYY/M
   if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
     const [yyyy, mmRaw] = s.split(/[-/]/);
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
-  // MM-YYYY o MM/YYYY
   if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
     const [mmRaw, yyyy] = s.split(/[-/]/);
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
-  // 202601 / 012026
   if (/^\d{6}$/.test(s)) {
     const a = Number(s.slice(0, 4));
     if (a >= 1900 && a <= 2100) {
@@ -68,30 +63,18 @@ function currentYYYYMM() {
   return `${yyyy}-${mm}`;
 }
 
-/* =========================
-   ✅ Auth (X-Session)
-========================= */
-function getAuthInfo() {
-  const sessionKey = (localStorage.getItem("session_key") || "").trim();
-
-  let idUsuario = 0;
-  try {
-    const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand =
-      u?.idUsuarioMaster ??
-      u?.idUsuario ??
-      u?.id_usuario ??
-      u?.id ??
-      u?.user_id ??
-      0;
-    if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
-  } catch {}
-
-  return { sessionKey, idUsuario };
+function normTxt(s) {
+  return String(s || "")
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
+/* =========================
+   Auth (X-Session)
+========================= */
 function buildHeadersGET() {
-  const { sessionKey } = getAuthInfo();
+  const sessionKey = (localStorage.getItem("session_key") || "").trim();
   const h = {};
   if (sessionKey) h["X-Session"] = sessionKey;
   return h;
@@ -121,7 +104,7 @@ async function apiGet(url) {
 }
 
 /* =========================
-   ✅ Period cache (instant set) — igual Flujo_Caja
+   Period cache
 ========================= */
 const CC_PERIOD_CACHE_KEY = "cc_periodo_cache";
 
@@ -146,26 +129,28 @@ export default function Cuentas_Corrientes() {
 
   const [q, setQ] = useState("");
 
-  // ✅ PERÍODO instantáneo (cache primero, sino mes actual)
   const [periodo, setPeriodo] = useState(() => readCachedPeriodo() || currentYYYYMM());
-  const [periodOptions, setPeriodOptions] = useState([]); // YYYY-MM[]
+  const [periodOptions, setPeriodOptions] = useState([]);
   const [loadingPeriodos, setLoadingPeriodos] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  const [cuentas, setCuentas] = useState([]);
   const [rows, setRows] = useState([]);
   const [totales, setTotales] = useState({ columnas: {}, saldo: 0 });
 
-  // ✅ Toast
+  // ✅ IDs “reales” para DEBITO/CREDITO (si están en catálogo)
+  const [debitoId, setDebitoId] = useState(null);
+  const [creditoId, setCreditoId] = useState(null);
+
+  // Toast
   const [toast, setToast] = useState(null);
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
     setToast({ tipo, mensaje, duracion });
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // ✅ Mobile detect (solo render)
+  // Mobile detect
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined"
       ? window.matchMedia("(max-width: 720px)").matches
@@ -174,7 +159,6 @@ export default function Cuentas_Corrientes() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-
     const mq = window.matchMedia("(max-width: 720px)");
     const onChange = () => setIsMobile(mq.matches);
 
@@ -188,20 +172,20 @@ export default function Cuentas_Corrientes() {
     };
   }, []);
 
-  // ✅ check simple sesión
+  // check sesión
   useEffect(() => {
     const k = (localStorage.getItem("session_key") || "").trim();
     if (!k) showToast("advertencia", "Falta session_key. Iniciá sesión de nuevo.", 4200);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ guardar periodo al cambiar (instant)
+  // guardar periodo
   useEffect(() => {
     if (periodo) writeCachedPeriodo(periodo);
   }, [periodo]);
 
   /* =========================================================
-     ✅ Skeleton: delay anti-parpadeo (igual Flujo_Caja)
+     Skeleton delay anti-parpadeo
   ========================================================= */
   const skelTimerRef = useRef(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
@@ -218,58 +202,63 @@ export default function Cuentas_Corrientes() {
   }, []);
 
   useEffect(() => {
-    return () => {
-      if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
-    };
+    return () => skelTimerRef.current && clearTimeout(skelTimerRef.current);
   }, []);
 
   /* =========================================================
-     ✅ 1) Periodos desde Dashboard (global_obtener_listas)
-     - normaliza a YYYY-MM
-     - si el periodo actual no existe, setea el más nuevo
+     1) Listas globales: periodos + detectar IDs debito/credito
   ========================================================= */
-  const fetchPeriodosFromDashboard = useCallback(async () => {
+  const fetchDashboardLists = useCallback(async () => {
     setLoadingPeriodos(true);
     try {
       const data = await apiGet(`${API}?action=global_obtener_listas`);
+      if (!data || data.exito !== true) throw new Error(data?.mensaje || "Error al cargar listas.");
 
-      if (!data || data.exito !== true) {
-        throw new Error(data?.mensaje || "Error al cargar períodos.");
-      }
-
-      const raw = Array.isArray(data?.listas?.periodos)
+      // periodos
+      const rawPeriodos = Array.isArray(data?.listas?.periodos)
         ? data.listas.periodos
         : Array.isArray(data?.periodos)
         ? data.periodos
         : [];
 
-      const unique = Array.from(new Set(raw.map((p) => periodoToYYYYMM(p)).filter(Boolean)));
+      const unique = Array.from(new Set(rawPeriodos.map(periodoToYYYYMM).filter(Boolean)));
       unique.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
-
       setPeriodOptions(unique);
 
-      // ✅ si el periodo actual no está en la lista, agarrá el más reciente
-      if (unique.length) {
-        if (!periodo || !unique.includes(periodo)) {
-          setPeriodo(unique[0]);
-        }
-      }
+      if (unique.length && (!periodo || !unique.includes(periodo))) setPeriodo(unique[0]);
+
+      // catálogo CC (para detectar IDs)
+      const rawCC =
+        Array.isArray(data?.listas?.cuentasCorrientes) ? data.listas.cuentasCorrientes :
+        Array.isArray(data?.listas?.cuentas_corrientes) ? data.listas.cuentas_corrientes :
+        Array.isArray(data?.cuentasCorrientes) ? data.cuentasCorrientes :
+        Array.isArray(data?.cuentas_corrientes) ? data.cuentas_corrientes :
+        [];
+
+      const cc = Array.isArray(rawCC) ? rawCC : [];
+
+      const deb = cc.find((c) => normTxt(c?.nombre).includes("DEBITO"));
+      const cre = cc.find((c) => normTxt(c?.nombre).includes("CREDITO"));
+
+      setDebitoId(deb?.id_cuenta_corriente ?? null);
+      setCreditoId(cre?.id_cuenta_corriente ?? null);
     } catch (e) {
       setPeriodOptions([]);
-      showToast("error", e?.message || "Error cargando períodos", 4200);
-      // no pisamos el periodo; queda el cache/fallback
+      setDebitoId(null);
+      setCreditoId(null);
+      showToast("error", e?.message || "Error cargando listas", 4200);
     } finally {
       setLoadingPeriodos(false);
     }
   }, [API, showToast, periodo]);
 
   useEffect(() => {
-    fetchPeriodosFromDashboard();
+    fetchDashboardLists();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* =========================================================
-     ✅ 2) Fetch resumen (✅ con X-Session) + período + skeleton
+     2) Resumen por período
   ========================================================= */
   const fetchResumen = useCallback(async () => {
     if (!periodo) return;
@@ -281,22 +270,16 @@ export default function Cuentas_Corrientes() {
     try {
       const sp = new URLSearchParams();
       sp.set("action", "cc_resumen");
-      sp.set("periodo", periodo); // ✅ clave para replicar Flujo_Caja
+      sp.set("periodo", periodo);
 
       const data = await apiGet(`${API}?${sp.toString()}`);
+      if (!data || data.exito !== true) throw new Error(data?.mensaje || "Error al cargar resumen.");
 
-      if (!data || data.exito !== true) {
-        throw new Error(data?.mensaje || "Error al cargar resumen.");
-      }
-
-      setCuentas(Array.isArray(data.cuentas) ? data.cuentas : []);
       setRows(Array.isArray(data.rows) ? data.rows : []);
       setTotales(data.totales || { columnas: {}, saldo: 0 });
     } catch (e) {
-      setCuentas([]);
       setRows([]);
       setTotales({ columnas: {}, saldo: 0 });
-
       const msg = e?.message || "Error inesperado";
       setErr(msg);
       showToast("error", msg, 4200);
@@ -321,45 +304,43 @@ export default function Cuentas_Corrientes() {
 
   const visibleCount = filtered.length;
 
-  const getCell = useCallback((row, cuentaId) => {
+  /* =========================
+     Valores DEBITO / CREDITO (sin depender del header)
+  ========================= */
+  const getValueByCuenta = useCallback((row, cuentaId) => {
     const cols = row && typeof row === "object" ? row.columnas : null;
     if (!cols || typeof cols !== "object") return 0;
-    const v = cols[String(cuentaId)];
-    return Number(v || 0);
+    return Number(cols[String(cuentaId)] || 0);
   }, []);
 
-  // ✅ Orden cuentas: Débito primero, Crédito después
-  const orderedCuentas = useMemo(() => {
-    const list = Array.isArray(cuentas) ? [...cuentas] : [];
+  const pickFallbackIds = useCallback((row) => {
+    const cols = row && typeof row === "object" ? row.columnas : null;
+    if (!cols || typeof cols !== "object") return { deb: null, cre: null };
+    const keys = Object.keys(cols);
+    if (keys.length < 2) return { deb: keys[0] ?? null, cre: null };
+    // fallback simple: 1ro y 2do
+    return { deb: keys[0], cre: keys[1] };
+  }, []);
 
-    const norm = (s) =>
-      String(s || "")
-        .toUpperCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "");
-
-    const weight = (c) => {
-      const name = norm(c?.nombre);
-      if (name.includes("DEBITO")) return 0;
-      if (name.includes("CREDITO")) return 1;
-      return 2;
+  const getDebitoCredito = useCallback((row) => {
+    // 1) si detectamos IDs reales, usamos esos
+    if (debitoId != null || creditoId != null) {
+      return {
+        deb: debitoId != null ? getValueByCuenta(row, debitoId) : 0,
+        cre: creditoId != null ? getValueByCuenta(row, creditoId) : 0,
+      };
+    }
+    // 2) fallback: 2 primeras keys de row.columnas
+    const { deb, cre } = pickFallbackIds(row);
+    const cols = row?.columnas || {};
+    return {
+      deb: deb != null ? Number(cols[String(deb)] || 0) : 0,
+      cre: cre != null ? Number(cols[String(cre)] || 0) : 0,
     };
-
-    list.sort((a, b) => {
-      const wa = weight(a);
-      const wb = weight(b);
-      if (wa !== wb) return wa - wb;
-
-      const na = norm(a?.nombre);
-      const nb = norm(b?.nombre);
-      return na.localeCompare(nb, "es");
-    });
-
-    return list;
-  }, [cuentas]);
+  }, [debitoId, creditoId, getValueByCuenta, pickFallbackIds]);
 
   /* =========================
-     Export Excel
+     Export Excel (4 columnas fijas)
   ========================= */
   const exportExcel = useCallback(() => {
     try {
@@ -371,23 +352,17 @@ export default function Cuentas_Corrientes() {
       showToast("cargando", "Generando Excel…", 9000);
 
       const data = filtered.map((r) => {
-        const rowObj = { Cliente: r.nombre };
-
-        (orderedCuentas || []).forEach((c) => {
-          const v = getCell(r, c.id_cuenta_corriente);
-          rowObj[c.nombre] = Number(v || 0);
-        });
-
-        rowObj["Saldo"] = Number(r.saldo || 0);
-        return rowObj;
+        const { deb, cre } = getDebitoCredito(r);
+        return {
+          Cliente: r.nombre,
+          "DEBITO (SALIDA DE MERCADERIA)": Number(deb || 0),
+          "CREDITO (COBRO DE MERCADERIA)": Number(cre || 0),
+          Saldo: Number(r.saldo || 0),
+        };
       });
 
       const ws = XLSX.utils.json_to_sheet(data);
-      ws["!cols"] = [
-        { wch: 30 },
-        ...(orderedCuentas || []).map(() => ({ wch: 18 })),
-        { wch: 18 },
-      ];
+      ws["!cols"] = [{ wch: 30 }, { wch: 28 }, { wch: 28 }, { wch: 18 }];
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Cuentas Corrientes");
@@ -399,43 +374,29 @@ export default function Cuentas_Corrientes() {
     } catch (e) {
       showToast("error", e?.message || "Error exportando Excel.", 3500);
     }
-  }, [filtered, orderedCuentas, getCell, showToast, periodo]);
+  }, [filtered, getDebitoCredito, showToast, periodo]);
 
   /* =========================
      Mobile expand/collapse
   ========================= */
   const [openId, setOpenId] = useState(null);
-  useEffect(() => {
-    setOpenId(null);
-  }, [q, periodo]);
+  useEffect(() => setOpenId(null), [q, periodo]);
 
   const toggleOpen = useCallback((id) => {
     setOpenId((prev) => (prev === id ? null : id));
   }, []);
 
-  // Desktop grid cols
+  // ✅ grid fijo 4 columnas
   const gridColsDesktop = useMemo(() => {
-    return `260px repeat(${orderedCuentas.length}, 1fr) .5fr`;
-  }, [orderedCuentas.length]);
-
-  // ✅ estado para "soft loading" (blur leve)
-  const softLoading = (loading || loadingPeriodos) && showSkeleton;
-
-  // Skeleton widths (parece data real)
-  const skelWidths = useMemo(() => {
-    return {
-      name: ["40%", "58%", "46%", "62%"],
-      num: ["44%", "58%", "36%", "52%"],
-      saldo: ["52%", "44%", "62%", "38%"],
-    };
+    return `260px minmax(320px, 1fr) minmax(320px, 1fr) minmax(160px, .6fr)`;
   }, []);
 
-  const renderSkeletonRowDesktop = (idx) => {
-    const w = (key) => {
-      const list = skelWidths[key] || ["50%"];
-      return list[idx % list.length];
-    };
+  const softLoading = (loading || loadingPeriodos) && showSkeleton;
+  const selectDisabled = loadingPeriodos;
 
+  const renderSkeletonRowDesktop = (idx) => {
+    const widths = ["44%", "58%", "36%", "52%"];
+    const w = (i) => widths[i % widths.length];
     return (
       <div
         key={`cc-skel-${idx}`}
@@ -443,58 +404,20 @@ export default function Cuentas_Corrientes() {
         style={{ gridTemplateColumns: gridColsDesktop }}
       >
         <div className="cc-cell cc-name">
-          <span className="cc-skeletonBar" style={{ width: w("name") }} />
+          <span className="cc-skeletonBar" style={{ width: w(idx) }} />
         </div>
-
-        {orderedCuentas.map((c, j) => (
-          <div key={`${idx}-${c.id_cuenta_corriente}-${j}`} className="cc-cell cc-num is-center">
-            <span className="cc-skeletonBar" style={{ width: w("num") }} />
-          </div>
-        ))}
-
+        <div className="cc-cell cc-num is-center">
+          <span className="cc-skeletonBar" style={{ width: "48%" }} />
+        </div>
+        <div className="cc-cell cc-num is-center">
+          <span className="cc-skeletonBar" style={{ width: "48%" }} />
+        </div>
         <div className="cc-cell cc-num is-center cc-saldo">
-          <span className="cc-skeletonBar" style={{ width: w("saldo") }} />
+          <span className="cc-skeletonBar" style={{ width: "52%" }} />
         </div>
       </div>
     );
   };
-
-  const renderSkeletonCardMobile = (idx) => {
-    const w = (key) => {
-      const list = skelWidths[key] || ["50%"];
-      return list[idx % list.length];
-    };
-
-    return (
-      <div
-        key={`cc-mskel-${idx}`}
-        className="cc-mobileCard cc-row--skeleton"
-        style={{
-          border: "1px solid rgba(10, 37, 64, 0.14)",
-          borderRadius: 14,
-          padding: 12,
-          background: "#fff",
-          marginBottom: 10,
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-          <div style={{ minWidth: 0, width: "100%" }}>
-            <div style={{ height: 14 }}>
-              <span className="cc-skeletonBar" style={{ width: w("name"), height: 12 }} />
-            </div>
-            <div style={{ marginTop: 8, height: 12 }}>
-              <span className="cc-skeletonBar" style={{ width: "34%", height: 10 }} />
-            </div>
-          </div>
-          <div style={{ width: 28, height: 20, opacity: 0.7 }}>
-            <span className="cc-skeletonBar" style={{ width: "70%", height: 12 }} />
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const selectDisabled = loadingPeriodos;
 
   return (
     <div className="cc-page">
@@ -524,7 +447,6 @@ export default function Cuentas_Corrientes() {
             </div>
 
             <div className="cc-headFilters">
-              {/* ✅ Período (idéntico patrón Flujo_Caja) */}
               <div className="cc-filter">
                 <label>
                   <FontAwesomeIcon icon={faCalendarDays} /> Período
@@ -600,13 +522,30 @@ export default function Cuentas_Corrientes() {
         </div>
 
         {/* =========================
-            ✅ MOBILE VIEW (sin scroll horizontal)
-           ========================= */}
+            MOBILE (sin scroll horizontal)
+        ========================= */}
         {isMobile ? (
           <div className="cc-mobileList" style={{ padding: 12 }}>
             {showSkeleton && (loading || loadingPeriodos) ? (
               <div className={["cc-skeletonWrap", softLoading ? "cc-softLoading" : ""].join(" ")}>
-                {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonCardMobile(i))}
+                {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
+                  <div
+                    key={`m-skel-${i}`}
+                    className="cc-mobileCard cc-row--skeleton"
+                    style={{
+                      border: "1px solid rgba(10, 37, 64, 0.14)",
+                      borderRadius: 14,
+                      padding: 12,
+                      background: "#fff",
+                      marginBottom: 10,
+                    }}
+                  >
+                    <span className="cc-skeletonBar" style={{ width: "55%", height: 12 }} />
+                    <div style={{ marginTop: 10 }}>
+                      <span className="cc-skeletonBar" style={{ width: "38%", height: 10 }} />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <>
@@ -615,6 +554,14 @@ export default function Cuentas_Corrientes() {
                 {!loading &&
                   filtered.map((r) => {
                     const isOpen = openId === r.id_cliente;
+                    const { deb, cre } = getDebitoCredito(r);
+
+                    const saldoColor =
+                      Number(r.saldo) < 0
+                        ? "rgba(225,61,69,.95)"
+                        : Number(r.saldo) > 0
+                        ? "rgba(34,173,92,.95)"
+                        : "rgba(10,37,64,.75)";
 
                     return (
                       <div
@@ -646,24 +593,9 @@ export default function Cuentas_Corrientes() {
                           }}
                         >
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, color: "rgba(10,37,64,.92)" }}>
-                              {r.nombre}
-                            </div>
+                            <div style={{ fontWeight: 600, color: "rgba(10,37,64,.92)" }}>{r.nombre}</div>
                             <div style={{ fontSize: 12, color: "rgba(66,84,102,.75)", marginTop: 2 }}>
-                              Saldo:{" "}
-                              <span
-                                style={{
-                                  fontWeight: 700,
-                                  color:
-                                    Number(r.saldo) < 0
-                                      ? "rgba(225,61,69,.95)"
-                                      : Number(r.saldo) > 0
-                                      ? "rgba(34,173,92,.95)"
-                                      : "rgba(10,37,64,.75)",
-                                }}
-                              >
-                                {moneyARS(r.saldo)}
-                              </span>
+                              Saldo: <span style={{ fontWeight: 800, color: saldoColor }}>{moneyARS(r.saldo)}</span>
                             </div>
                           </div>
 
@@ -693,42 +625,22 @@ export default function Cuentas_Corrientes() {
                                 borderTop: "1px solid rgba(10,37,64,.10)",
                               }}
                             >
-                              {orderedCuentas.map((c) => {
-                                const v = getCell(r, c.id_cuenta_corriente);
-                                const color =
-                                  v > 0
-                                    ? "rgba(34,173,92,.95)"
-                                    : v < 0
-                                    ? "rgba(225,61,69,.95)"
-                                    : "rgba(10,37,64,.75)";
-
-                                return (
-                                  <React.Fragment key={c.id_cuenta_corriente}>
-                                    <div style={{ fontSize: 13, color: "rgba(66,84,102,.90)" }}>
-                                      {c.nombre}
-                                    </div>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color }}>
-                                      {moneyARS(v)}
-                                    </div>
-                                  </React.Fragment>
-                                );
-                              })}
-
-                              <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(10,37,64,.92)" }}>
-                                SALDO
+                              <div style={{ fontSize: 13, color: "rgba(66,84,102,.90)" }}>
+                                DEBITO (SALIDA DE MERCADERIA)
                               </div>
-                              <div
-                                style={{
-                                  fontSize: 14,
-                                  fontWeight: 800,
-                                  color:
-                                    Number(r.saldo) < 0
-                                      ? "rgba(225,61,69,.95)"
-                                      : Number(r.saldo) > 0
-                                      ? "rgba(34,173,92,.95)"
-                                      : "rgba(10,37,64,.75)",
-                                }}
-                              >
+                              <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(225,61,69,.95)" }}>
+                                {moneyARS(deb)}
+                              </div>
+
+                              <div style={{ fontSize: 13, color: "rgba(66,84,102,.90)" }}>
+                                CREDITO (COBRO DE MERCADERIA)
+                              </div>
+                              <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(34,173,92,.95)" }}>
+                                {moneyARS(cre)}
+                              </div>
+
+                              <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(10,37,64,.92)" }}>SALDO</div>
+                              <div style={{ fontSize: 14, fontWeight: 900, color: saldoColor }}>
                                 {moneyARS(r.saldo)}
                               </div>
                             </div>
@@ -738,7 +650,6 @@ export default function Cuentas_Corrientes() {
                     );
                   })}
 
-                {/* Totales mobile */}
                 {!loading && (
                   <div
                     className="cc-mobileTotals"
@@ -750,45 +661,46 @@ export default function Cuentas_Corrientes() {
                       background: "rgba(10,37,64,.03)",
                     }}
                   >
-                    <div style={{ fontWeight: 800, marginBottom: 8, color: "rgba(10,37,64,.92)" }}>
-                      Totales
-                    </div>
+                    <div style={{ fontWeight: 800, marginBottom: 8, color: "rgba(10,37,64,.92)" }}>Totales</div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
-                      {orderedCuentas.map((c) => {
-                        const v = Number((totales.columnas || {})[String(c.id_cuenta_corriente)] || 0);
-                        const color =
-                          v > 0
-                            ? "rgba(34,173,92,.95)"
-                            : v < 0
-                            ? "rgba(225,61,69,.95)"
-                            : "rgba(10,37,64,.75)";
-                        return (
-                          <React.Fragment key={c.id_cuenta_corriente}>
-                            <div style={{ fontSize: 13, color: "rgba(66,84,102,.90)" }}>{c.nombre}</div>
-                            <div style={{ fontSize: 13, fontWeight: 800, color }}>{moneyARS(v)}</div>
-                          </React.Fragment>
-                        );
-                      })}
+                    {/* Totales: si el backend trae totales por columnas, intentamos usar los IDs detectados */}
+                    {(() => {
+                      const cols = totales.columnas || {};
+                      const debT =
+                        debitoId != null ? Number(cols[String(debitoId)] || 0) : 0;
+                      const creT =
+                        creditoId != null ? Number(cols[String(creditoId)] || 0) : 0;
 
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(10,37,64,.92)" }}>
-                        SALDO
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 900,
-                          color:
-                            Number(totales.saldo) < 0
-                              ? "rgba(225,61,69,.95)"
-                              : Number(totales.saldo) > 0
-                              ? "rgba(34,173,92,.95)"
-                              : "rgba(10,37,64,.75)",
-                        }}
-                      >
-                        {moneyARS(totales.saldo)}
-                      </div>
-                    </div>
+                      const saldoColor =
+                        Number(totales.saldo) < 0
+                          ? "rgba(225,61,69,.95)"
+                          : Number(totales.saldo) > 0
+                          ? "rgba(34,173,92,.95)"
+                          : "rgba(10,37,64,.75)";
+
+                      return (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+                          <div style={{ fontSize: 13, color: "rgba(66,84,102,.90)" }}>
+                            DEBITO (SALIDA DE MERCADERIA)
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 900, color: "rgba(225,61,69,.95)" }}>
+                            {moneyARS(debT)}
+                          </div>
+
+                          <div style={{ fontSize: 13, color: "rgba(66,84,102,.90)" }}>
+                            CREDITO (COBRO DE MERCADERIA)
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 900, color: "rgba(34,173,92,.95)" }}>
+                            {moneyARS(creT)}
+                          </div>
+
+                          <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(10,37,64,.92)" }}>SALDO</div>
+                          <div style={{ fontSize: 14, fontWeight: 900, color: saldoColor }}>
+                            {moneyARS(totales.saldo)}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </>
@@ -796,79 +708,81 @@ export default function Cuentas_Corrientes() {
           </div>
         ) : (
           /* =========================
-             ✅ DESKTOP VIEW
-             ========================= */
+             DESKTOP: 1 solo scroll + header sticky fijo
+          ========================= */
           <div className="cc-tableWrap">
-            <div className="cc-grid cc-grid--head" style={{ gridTemplateColumns: gridColsDesktop }}>
-              <div className="cc-cell cc-name">CLIENTE</div>
-              {orderedCuentas.map((c) => (
-                <div key={c.id_cuenta_corriente} className="cc-cell is-center">
-                  {c.nombre}
+            <div className={["cc-gridBody", softLoading ? "cc-softLoading" : ""].join(" ")} role="rowgroup">
+              {/* ✅ Header fijo (SIEMPRE 4 columnas) */}
+              <div className="cc-grid cc-grid--head" style={{ gridTemplateColumns: gridColsDesktop }}>
+                <div className="cc-cell cc-name">CLIENTE</div>
+                <div className="cc-cell is-center" style={{ color: "rgba(225,61,69,.92)", fontWeight: 700 }}>
+                  DEBITO (SALIDA DE MERCADERIA)
                 </div>
-              ))}
-              <div className="cc-cell is-center">SALDO</div>
-            </div>
+                <div className="cc-cell is-center" style={{ color: "rgba(34,173,92,.92)", fontWeight: 700 }}>
+                  CREDITO (COBRO DE MERCADERIA)
+                </div>
+                <div className="cc-cell is-center">SALDO</div>
+              </div>
 
-            <div
-              className={["cc-gridBody", softLoading ? "cc-softLoading" : ""].join(" ")}
-              role="rowgroup"
-            >
               {showSkeleton && (loading || loadingPeriodos) ? (
                 <div className="cc-skeletonWrap" aria-busy="true">
                   {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRowDesktop(i))}
                 </div>
               ) : (
                 <>
-                  {!loading && filtered.length === 0 ? (
-                    <div className="cc-emptyRow">No hay datos</div>
-                  ) : null}
+                  {!loading && filtered.length === 0 ? <div className="cc-emptyRow">No hay datos</div> : null}
 
                   {!loading &&
-                    filtered.map((r) => (
-                      <div
-                        key={r.id_cliente}
-                        className="cc-grid cc-grid--row"
-                        style={{ gridTemplateColumns: gridColsDesktop }}
-                      >
-                        <div className="cc-cell cc-name">{r.nombre}</div>
+                    filtered.map((r) => {
+                      const { deb, cre } = getDebitoCredito(r);
+                      const debCls = deb > 0 ? "is-negative" : deb < 0 ? "is-positive" : ""; // si tu debito siempre +, queda rojo igual por CSS
+                      const creCls = cre > 0 ? "is-positive" : cre < 0 ? "is-negative" : "";
 
-                        {orderedCuentas.map((c) => {
-                          const v = getCell(r, c.id_cuenta_corriente);
-                          const cls = v > 0 ? "is-positive" : v < 0 ? "is-negative" : "";
-                          return (
-                            <div key={c.id_cuenta_corriente} className={`cc-cell cc-num is-center ${cls}`}>
-                              {moneyARS(v)}
-                            </div>
-                          );
-                        })}
+                      const saldoCls =
+                        Number(r.saldo) < 0 ? "is-negative" : Number(r.saldo) > 0 ? "is-positive" : "";
 
+                      return (
                         <div
-                          className={`cc-cell cc-num is-center cc-saldo ${
-                            Number(r.saldo) < 0
-                              ? "is-negative"
-                              : Number(r.saldo) > 0
-                              ? "is-positive"
-                              : ""
-                          }`}
+                          key={r.id_cliente}
+                          className="cc-grid cc-grid--row"
+                          style={{ gridTemplateColumns: gridColsDesktop }}
                         >
-                          <b>{moneyARS(r.saldo)}</b>
+                          <div className="cc-cell cc-name">{r.nombre}</div>
+
+                          <div className={`cc-cell cc-num is-center is-negative ${debCls}`}>
+                            {moneyARS(deb)}
+                          </div>
+
+                          <div className={`cc-cell cc-num is-center is-positive ${creCls}`}>
+                            {moneyARS(cre)}
+                          </div>
+
+                          <div className={`cc-cell cc-num is-center cc-saldo ${saldoCls}`}>
+                            <b>{moneyARS(r.saldo)}</b>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
 
                   {!loading && (
                     <div className="cc-grid cc-grid--tfoot" style={{ gridTemplateColumns: gridColsDesktop }}>
                       <div className="cc-cell cc-tfootLabel">Totales</div>
 
-                      {orderedCuentas.map((c) => {
-                        const v = Number((totales.columnas || {})[String(c.id_cuenta_corriente)] || 0);
-                        const cls = v > 0 ? "is-positive" : v < 0 ? "is-negative" : "";
+                      {(() => {
+                        const cols = totales.columnas || {};
+                        const debT = debitoId != null ? Number(cols[String(debitoId)] || 0) : 0;
+                        const creT = creditoId != null ? Number(cols[String(creditoId)] || 0) : 0;
                         return (
-                          <div key={c.id_cuenta_corriente} className={`cc-cell cc-num is-center ${cls}`}>
-                            {moneyARS(v)}
-                          </div>
+                          <>
+                            <div className="cc-cell cc-num is-center is-negative">
+                              {moneyARS(debT)}
+                            </div>
+                            <div className="cc-cell cc-num is-center is-positive">
+                              {moneyARS(creT)}
+                            </div>
+                          </>
                         );
-                      })}
+                      })()}
 
                       <div
                         className={`cc-cell cc-num is-center cc-saldo ${
@@ -890,7 +804,7 @@ export default function Cuentas_Corrientes() {
         )}
 
         <div className="cc-footnote">
-          * Las columnas se generan desde <b>cuentas_corrientes</b>. El saldo es la suma final por cliente.
+          * Header fijo con 4 columnas (Cliente / Débito / Crédito / Saldo).
         </div>
       </section>
     </div>

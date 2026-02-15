@@ -18,7 +18,8 @@
    - Alerta 0.15 (etiquetas)
 ========================= */
 .db{
-  --db-midnight:#0A2540;               /* Azul Medianoche */
+  --db-midnight:#0A2540; 
+  --db-midnightimg:#0A2540;              /* Azul Medianoche */
   --db-action:#0055BB;                 /* Azul de Acción */
 
   --db-bg:#F6F9FC;                     /* Fondo de App */
@@ -127,7 +128,7 @@
   align-items:center;
   justify-content:center;
   color:#fff;
-  background: linear-gradient(135deg, var(--db-midnight), var(--db-action));
+  background: linear-gradient(135deg, var(--db-midnightimg), var(--db-action));
   box-shadow: 0 14px 24px rgba(0,85,187,.18);
   flex: 0 0 auto;
 }
@@ -340,7 +341,7 @@ html[data-theme="oscuro"] .db{
   --db-text: rgba(255,255,255,.84);
   --db-text-muted: rgba(255,255,255,.60);
 
-  --db-midnight: #0A2540;
+  --db-midnight: rgba(226,232,240,.90) !important;
   --db-action: #0055BB;
 
   --db-midnight-5: rgba(255,255,255,.06);

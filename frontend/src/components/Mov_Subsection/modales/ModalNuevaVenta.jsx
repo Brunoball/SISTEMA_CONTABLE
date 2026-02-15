@@ -145,6 +145,106 @@ async function apiPostJson(url, payload) {
 }
 
 /* =========================
+   ✅ Cache persistente de catálogos (para que NO se pierdan al reabrir)
+   - Se guarda por "contexto" (sessionKey/token) para no mezclar tenants
+========================= */
+function catalogCacheKey() {
+  const { sessionKey, token } = getAuthInfo();
+  const ctx = sessionKey || token || "anon";
+  return `balto_catalog_cache_v1__${ctx}`;
+}
+
+function safeReadJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    const obj = JSON.parse(raw);
+    return obj && typeof obj === "object" ? obj : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeWriteJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // sin storage o lleno: ignoramos, pero no rompemos
+  }
+}
+
+function getIdGeneric(x) {
+  const cand =
+    x?.id ??
+    x?.id_cliente ??
+    x?.idCliente ??
+    x?.cliente_id ??
+    x?.id_detalle ??
+    x?.idDetalle ??
+    x?.detalle_id ??
+    0;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function normalizeItemName(x) {
+  return String(x?.nombre ?? x?.name ?? x?.descripcion ?? "").trim();
+}
+
+function mergeUniqueById(baseArr, extraArr) {
+  const base = Array.isArray(baseArr) ? baseArr : [];
+  const extra = Array.isArray(extraArr) ? extraArr : [];
+  const map = new Map();
+
+  // prioridad: base primero
+  for (const it of base) {
+    const id = getIdGeneric(it);
+    if (!id) continue;
+    const nombre = normalizeItemName(it) || String(it?.nombre ?? "");
+    map.set(id, { ...it, id, nombre });
+  }
+
+  // extra agrega / completa si no existe
+  for (const it of extra) {
+    const id = getIdGeneric(it);
+    if (!id) continue;
+    if (!map.has(id)) {
+      const nombre = normalizeItemName(it);
+      map.set(id, { ...it, id, nombre });
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+function readCatalogCache() {
+  const key = catalogCacheKey();
+  const obj = safeReadJSON(key, { clientes: [], detalles: [] });
+  return {
+    clientes: Array.isArray(obj.clientes) ? obj.clientes : [],
+    detalles: Array.isArray(obj.detalles) ? obj.detalles : [],
+  };
+}
+
+function upsertCatalogCache(type, item) {
+  const key = catalogCacheKey();
+  const current = readCatalogCache();
+  const arr = type === "clientes" ? current.clientes : current.detalles;
+
+  const id = getIdGeneric(item);
+  const nombre = normalizeItemName(item);
+  if (!id || !nombre) return;
+
+  const next = arr.some((x) => getIdGeneric(x) === id) ? arr : [...arr, { id, nombre }];
+
+  const toSave = {
+    ...current,
+    [type]: next,
+  };
+  safeWriteJSON(key, toSave);
+}
+
+/* =========================
    Mini Modal: alta rápida (cliente/detalle)
 ========================= */
 function AddCatalogMiniModal({
@@ -240,8 +340,8 @@ function AddCatalogMiniModal({
    Catálogos soportados (ventas)
 ========================= */
 const CATALOGO_DEF = {
-  id_cliente: { catalogo: "clientes", label: "Cliente" },
-  id_detalle: { catalogo: "detalles", label: "Detalle" },
+  id_cliente: { catalogo: "clientes", label: "Cliente", cacheKey: "clientes" },
+  id_detalle: { catalogo: "detalles", label: "Detalle", cacheKey: "detalles" },
 };
 
 function isContadoTipoVenta(tipoVentaObj) {
@@ -265,21 +365,6 @@ function getDetalleId(d) {
   const cand = d?.id ?? d?.id_detalle ?? d?.idDetalle ?? d?.detalle_id ?? d?.iddetalle ?? null;
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-/* ✅ para no duplicar items en listas (cliente/detalle) */
-function getIdGeneric(x) {
-  const cand =
-    x?.id ??
-    x?.id_cliente ??
-    x?.idCliente ??
-    x?.cliente_id ??
-    x?.id_detalle ??
-    x?.idDetalle ??
-    x?.detalle_id ??
-    0;
-  const n = Number(cand);
-  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 /* =========================
@@ -331,6 +416,20 @@ function isTemaOscuro() {
   return Boolean(byAttr || byBody);
 }
 
+/* =========================
+   ✅ merge backend lists + cache persistente
+========================= */
+function mergeListsWithCache(incomingLists) {
+  const norm = normalizeLists(incomingLists);
+  const cache = readCatalogCache();
+
+  return {
+    ...norm,
+    clientes: mergeUniqueById(norm.clientes, cache.clientes),
+    detalles: mergeUniqueById(norm.detalles, cache.detalles),
+  };
+}
+
 export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved }) {
   // ✅ NUEVA ESTRUCTURA: siempre por routes/api.php
   const API_BATCH = `${BASE_URL}/api.php?action=ventas_crear_batch`;
@@ -379,10 +478,13 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   }, [open]);
 
   /* =========================
-     Listas normalizadas
+     ✅ Listas normalizadas + cacheadas
+     - OJO: NO las pises al reabrir; siempre mergeamos
   ========================= */
-  const [localLists, setLocalLists] = useState(() => normalizeLists(lists));
-  useEffect(() => setLocalLists(normalizeLists(lists)), [lists]);
+  const [localLists, setLocalLists] = useState(() => mergeListsWithCache(lists));
+  useEffect(() => {
+    setLocalLists(mergeListsWithCache(lists));
+  }, [lists]);
 
   /* =========================
      Estado base
@@ -422,7 +524,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   });
 
   /* =========================
-     Reset al abrir
+     Reset al abrir (FORM)
+     ✅ NO tocamos localLists acá (para no perder cache/merge)
   ========================= */
   const prevOpenRef = useRef(false);
   useEffect(() => {
@@ -584,10 +687,13 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
       if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
 
-      // ✅ FIX: no duplicar (cliente/detalle) usando id genérico
+      // ✅ 1) Guardar en cache persistente (para que al reabrir siga estando)
+      upsertCatalogCache(meta.cacheKey, { id: newId, nombre: newNombre });
+
+      // ✅ 2) Actualizar listas en memoria (sin duplicar)
       setLocalLists((prev) => {
         const next = { ...prev };
-        const listKey = field === "id_cliente" ? "clientes" : "detalles";
+        const listKey = meta.cacheKey; // "clientes" o "detalles"
         const arr = Array.isArray(prev[listKey]) ? prev[listKey].slice() : [];
 
         if (!arr.some((x) => getIdGeneric(x) === newId)) {
@@ -598,6 +704,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         return next;
       });
 
+      // ✅ 3) Aplicar selección inmediata
       if (field === "id_cliente") {
         setFilters((p) => ({ ...p, id_cliente: String(newId) }));
         setClienteInput(newNombre);

@@ -21,6 +21,83 @@ import {
 import "./principal.css";
 import ModalPerfil from "../Perfil/ModalPerfil";
 
+/* =========================================================
+   ✅ OPTIMIZACIÓN PRO (prefetch rutas + prefetch listas)
+   - Prefetch de módulos al hacer hover (Vite/Webpack)
+   - Prefetch de listas globales en background (SWR simple)
+========================================================= */
+
+// ⚡ Prefetch de módulos (mejora MUCHO el “primer click”)
+const ROUTE_PREFETCH = {
+  "/panel/movimientos": () => import("../Movimientos/Movimientos"),
+  "/panel/ventas": () => import("../Mov_Subsection/Ventas"),
+  "/panel/compras": () => import("../Mov_Subsection/Compras"),
+  "/panel/recibos": () => import("../Mov_Subsection/Recibos"),
+  "/panel/OrdenesPago": () => import("../Mov_Subsection/OrdenesPago"),
+  "/panel/flujo-de-caja": () => import("../Flujo_de_Caja/Flujo_Caja"),
+  "/panel/cuentas-corrientes": () => import("../Cuentas_Corrientes/Cuentas_Corrientes"),
+  "/panel/analisis-financiero": () => import("../Analisis_Financiero/Analisis_Financiero"),
+};
+
+function prefetchRoute(ruta) {
+  try {
+    const fn = ROUTE_PREFETCH[ruta];
+    if (fn) fn();
+  } catch {}
+}
+
+// ⚡ Cache simple de listas globales (solo para “calentar”)
+// (los componentes que ya consumen ListasContext lo aprovechan;
+// si no, igual te baja la latencia por warm-up)
+const LISTAS_CACHE_KEY = "balto_listas_cache_v1";
+const LISTAS_TTL_MS = 10 * 60 * 1000; // 10 min
+
+function safeJsonParse(s) {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
+function getCachedListas() {
+  const raw = sessionStorage.getItem(LISTAS_CACHE_KEY);
+  const parsed = safeJsonParse(raw);
+  if (!parsed?.ts || !parsed?.data) return null;
+  if (Date.now() - Number(parsed.ts) > LISTAS_TTL_MS) return null;
+  return parsed.data;
+}
+
+function setCachedListas(data) {
+  try {
+    sessionStorage.setItem(LISTAS_CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+  } catch {}
+}
+
+async function prefetchGlobalListas(sessionKey) {
+  try {
+    const cached = getCachedListas();
+    if (cached) return cached;
+
+    const headers = {};
+    if (sessionKey) headers["X-Session"] = sessionKey;
+
+    const r = await fetch(`${BASE_URL}/api.php?action=global_obtener_listas`, {
+      method: "GET",
+      headers,
+    });
+
+    const txt = await r.text();
+    const data = safeJsonParse(txt);
+    if (!r.ok || !data?.exito) return null;
+
+    setCachedListas(data);
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 /* =========================
    Modal cierre de sesión
 ========================= */
@@ -36,10 +113,11 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
   }, [open, onClose]);
 
   if (!open) return null;
+
   const stop = (e) => e.stopPropagation();
 
   return (
-    <div className="pp-modal-overlay" onMouseDown={onClose}>
+    <div className="pp-modal-overlay" onMouseDown={onClose} role="dialog" aria-modal="true">
       <div className="pp-modal" onMouseDown={stop}>
         <div className="pp-modal__icon">
           <FontAwesomeIcon icon={faSignOutAlt} />
@@ -229,6 +307,18 @@ const Principal = () => {
       setTema("claro");
       applyTheme("claro");
     }
+
+    // ✅ PRO: prefetch listas globales en background (calienta todo el panel)
+    // No bloquea UI.
+    try {
+      const sessionKey = getSessionKey();
+      // si el navegador está ocupado, que lo haga cuando pueda
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(() => prefetchGlobalListas(sessionKey), { timeout: 1200 });
+      } else {
+        setTimeout(() => prefetchGlobalListas(sessionKey), 200);
+      }
+    } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // solo una vez
 
@@ -239,9 +329,10 @@ const Principal = () => {
     };
   }, []);
 
-  // ✅ si cambiás de ruta, cerrá el drawer (mobile)
+  // ✅ si cambiás de ruta, cerrá el drawer (mobile) y el submenú (para que no quede colgado)
   useEffect(() => {
     setDrawerOpen(false);
+    setOpenMovSub(false);
   }, [location.pathname]);
 
   // ✅ ESC cierra drawer
@@ -267,10 +358,10 @@ const Principal = () => {
   const planNivel = normalizePlanNivel(usuario?.plan_nivel ?? 1);
 
   const navItems = useMemo(() => {
+    // ✅ IMPORTANTE: rutas consistentes con App.js
     const base = [
       {
         label: "Movimientos",
-        ruta: "/panel/Movimientos",
         children: [
           { label: "Ventas", ruta: "/panel/ventas" },
           { label: "Compras", ruta: "/panel/compras" },
@@ -279,16 +370,17 @@ const Principal = () => {
           { label: "Otros ingresos", ruta: "/panel/dashboard" },
         ],
       },
-      { label: "Flujo de Caja" },
-      { label: "Cuentas Corrientes" },
-      { label: "Análisis Financiero" },
+      { label: "Flujo de Caja", ruta: "/panel/flujo-de-caja" },
+      { label: "Cuentas Corrientes", ruta: "/panel/cuentas-corrientes" },
+      { label: "Análisis Financiero", ruta: "/panel/analisis-financiero" },
     ].map((x) => {
       const slug = slugify(x.label);
       return {
         key: slug,
         label: x.label,
         icon: pickIcon(x.label),
-        ruta: `/panel/${slug}`,
+        // ✅ si viene ruta explícita, usarla; si no, autogenerar
+        ruta: x.ruta || `/panel/${slug}`,
         children: x.children || null,
       };
     });
@@ -309,16 +401,21 @@ const Principal = () => {
     return found?.label || "Dashboard";
   }, [location.pathname, navItems]);
 
-  const handleNavigate = (ruta) => {
-    if (ruta && ruta !== "/panel/dashboard") markDashboardSeen();
-    navigate(ruta);
-    setDrawerOpen(false);
-  };
+  const handleNavigate = useCallback(
+    (ruta) => {
+      if (ruta && ruta !== "/panel/dashboard") markDashboardSeen();
+      navigate(ruta);
+      setDrawerOpen(false);
+      setOpenMovSub(false);
+    },
+    [navigate]
+  );
 
-  const handleLogoClick = () => {
+  const handleLogoClick = useCallback(() => {
     navigate("/panel/dashboard");
     setDrawerOpen(false);
-  };
+    setOpenMovSub(false);
+  }, [navigate]);
 
   const isNoHover = () => {
     try {
@@ -365,6 +462,7 @@ const Principal = () => {
       hardClientLogoutCleanup();
       setShowLogoutModal(false);
       setDrawerOpen(false);
+      setOpenMovSub(false);
       navigate("/", { replace: true });
       setClosingUI(false);
       closingRef.current = false;
@@ -372,7 +470,7 @@ const Principal = () => {
   }, [navigate]);
 
   /* =========================
-     ✅ toggle tema -> MASTER (NUEVO)
+     ✅ toggle tema -> MASTER
      - ya no manda idUsuarioMaster (se resuelve por X-Session)
      - si falla, revierte UI + localStorage
   ========================= */
@@ -404,7 +502,7 @@ const Principal = () => {
       const r = await fetch(`${BASE_URL}/api.php?action=usuario_tema_actualizar`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ tema: nuevo }), // ✅ NUEVO: sin id
+        body: JSON.stringify({ tema: nuevo }),
       });
 
       const txt = await r.text();
@@ -561,6 +659,9 @@ const Principal = () => {
                 key={item.key}
                 className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${isOpen ? "is-open" : ""}`}
                 onMouseEnter={() => {
+                  // ✅ PRO: prefetch del módulo al hover
+                  prefetchRoute(item.ruta);
+
                   if (!isNoHover() && isMov) {
                     cancelClose();
                     openSoon(300);
@@ -621,6 +722,7 @@ const Principal = () => {
                         className={`pp-navSub__item ${
                           location.pathname.startsWith(sub.ruta) ? "is-active" : ""
                         }`}
+                        onMouseEnter={() => prefetchRoute(sub.ruta)}
                         onClick={() => {
                           markDashboardSeen();
                           navigate(sub.ruta);

@@ -34,6 +34,12 @@
   --cc-shadow-sm: 0 6px 18px rgba(10, 37, 64, 0.10);
   --cc-shadow-md: 0 10px 26px rgba(10, 37, 64, 0.14);
   --cc-transition: 140ms ease;
+
+  /* Skeleton */
+  --cc-skel-h: 12px;
+  --cc-skel-radius: 999px;
+  --cc-skel-a: rgba(10,37,64,.08);
+  --cc-skel-b: rgba(10,37,64,.14);
 }
 
 /* =========================
@@ -135,12 +141,23 @@
   flex-wrap: wrap;
 }
 
+.cc-filter{
+  display:flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .cc-filter label{
   display: block;
   font-size: 12px;
   font-weight: 600;
   color: rgba(66, 84, 102, 0.85);
-  margin-bottom: 6px;
+  margin-bottom: 0;
+}
+
+.cc-filter label svg{
+  margin-right: 6px;
+  opacity: .9;
 }
 
 .cc-filter select{
@@ -225,35 +242,6 @@
   font-weight: 500;
 }
 
-/* pill estado (si lo usás) */
-.cc-pill{
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: #ffffff;
-  border: 1px solid var(--cc-border);
-  box-shadow: 0 6px 20px rgba(10, 37, 64, 0.10);
-  color: rgba(10, 37, 64, 0.75);
-  font-weight: 600;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.cc-dot{
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--cc-success);
-  box-shadow: 0 0 0 4px rgba(34, 173, 92, 0.16);
-}
-.cc-pill.is-loading .cc-dot,
-.cc-dot.is-loading{
-  background: var(--cc-primary);
-  box-shadow: 0 0 0 4px rgba(0, 85, 187, 0.16);
-}
-
 /* =========================
    Table wrap (NO scroll)
 ========================= */
@@ -294,6 +282,7 @@
   font-size: 12px;
   padding: 12px 12px;
   white-space: nowrap;
+  border-bottom: none;
 }
 
 /* Body con scroll */
@@ -330,6 +319,8 @@
   white-space: nowrap;
   min-width: 0;
   font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cc-name{
@@ -341,7 +332,7 @@
   text-align: right;
 }
 
-/* centrado como tu .is-center */
+/* centrado */
 .is-center{
   text-align: center;
 }
@@ -369,11 +360,6 @@
 /* saldo destacado */
 .cc-saldo{
   font-weight: 600;
-}
-.cc-saldo.is-positive,
-.cc-saldo.is-negative{
-  border-radius: 10px;
-  padding: 12px 12px;
 }
 
 /* =========================
@@ -533,6 +519,100 @@
     overflow: auto;
   }
 }
+
+/* =========================================================
+   ✅ SKELETON (alineado EXACTO a las celdas)
+   - Nada de barras "a lo ancho"
+   - Cada celda muestra su propia barrita centrada/alineada
+========================================================= */
+
+/* leve "soft loading" como Flujo */
+.cc-softLoading{
+  opacity: .98;
+}
+
+/* contenedor skeleton dentro del body */
+.cc-skeletonWrap{
+  padding: 0;
+}
+
+/* fila skeleton: mismo alto/spacing que una fila real */
+.cc-row--skeleton{
+  pointer-events: none;
+}
+
+/* Evita hover en skeleton */
+.cc-row--skeleton:hover{
+  background: #fff !important;
+}
+
+/* ✅ CLAVE: cada celda se convierte en contenedor flex
+   para que la barrita quede EXACTAMENTE donde iría el texto */
+.cc-row--skeleton .cc-cell{
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+/* alineaciones según tipo de celda */
+.cc-row--skeleton .cc-cell.cc-name{
+  justify-content: flex-start;
+}
+.cc-row--skeleton .cc-cell.cc-num{
+  justify-content: flex-end; /* números */
+}
+.cc-row--skeleton .cc-cell.is-center{
+  justify-content: center;   /* columnas centradas */
+}
+
+/* barrita skeleton */
+.cc-skeletonBar{
+  display: block;
+  height: var(--cc-skel-h);
+  border-radius: var(--cc-skel-radius);
+
+  /* ✅ el ancho lo define el inline style (width: "40%" etc)
+     pero SIEMPRE está limitado al ancho real de la celda */
+  max-width: 100%;
+  min-width: 48px;
+
+  background:
+    linear-gradient(90deg,
+      var(--cc-skel-a) 0%,
+      var(--cc-skel-b) 22%,
+      var(--cc-skel-a) 48%,
+      var(--cc-skel-b) 72%,
+      var(--cc-skel-a) 100%);
+  background-size: 240% 100%;
+  animation: ccShimmer 1.05s ease-in-out infinite;
+}
+
+/* en celdas numéricas, que se vea como un número (más "cortita") */
+.cc-row--skeleton .cc-cell.cc-num .cc-skeletonBar{
+  min-width: 36px;
+}
+
+/* en la celda del nombre, un poquito más alta para parecer texto */
+.cc-row--skeleton .cc-cell.cc-name .cc-skeletonBar{
+  height: calc(var(--cc-skel-h) + 1px);
+}
+
+/* shimmer */
+@keyframes ccShimmer{
+  0%{ background-position: 100% 0; }
+  100%{ background-position: 0% 0; }
+}
+
+/* =========================================================
+   ✅ MOBILE skeleton (tarjetas)
+========================================================= */
+.cc-mobileCard.cc-row--skeleton{
+  background: #fff;
+}
+.cc-mobileCard.cc-row--skeleton .cc-skeletonBar{
+  height: 12px;
+}
+
 /* =========================================================
    CUENTAS CORRIENTES — DARK MODE (override)
    Pegalo AL FINAL de cuentas_corrientes.css
@@ -577,6 +657,18 @@ html[data-theme="oscuro"] .cc-page .cc-card__hint b{
 /* Labels */
 html[data-theme="oscuro"] .cc-page .cc-filter label{
   color: rgba(226,232,240,.72) !important;
+}
+
+/* Select período */
+html[data-theme="oscuro"] .cc-page .cc-filter select{
+  background: rgba(15,23,42,.88) !important;
+  color: rgba(226,232,240,.92) !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-filter select:focus{
+  background: rgba(15,23,42,.96) !important;
+  border-color: rgba(78,161,255,.45) !important;
+  box-shadow: 0 0 0 4px rgba(78,161,255,.18) !important;
 }
 
 /* Input buscador */
@@ -625,7 +717,6 @@ html[data-theme="oscuro"] .cc-page .cc-grid--head{
 }
 html[data-theme="oscuro"] .cc-page .cc-grid--head .cc-cell{
   color: rgba(226,232,240,.82) !important;
-  border-bottom-color: rgba(148,163,184,.14) !important;
 }
 
 /* Body scroll */
@@ -695,4 +786,10 @@ html[data-theme="oscuro"] .cc-page .cc-emptyRow{
 /* Scrollbar */
 html[data-theme="oscuro"] .cc-page .cc-gridBody::-webkit-scrollbar-thumb{
   background: rgba(148,163,184,.22) !important;
+}
+
+/* ✅ Skeleton en dark (más “gris” y parejo) */
+html[data-theme="oscuro"] .cc-page{
+  --cc-skel-a: rgba(226,232,240,.07);
+  --cc-skel-b: rgba(226,232,240,.14);
 }

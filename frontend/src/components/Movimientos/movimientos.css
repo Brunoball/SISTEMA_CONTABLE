@@ -878,3 +878,134 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
     font-size: 18px;
   }
 }
+
+/* Efecto mínimo mientras carga rápido (sin spinner) */
+.mov-softLoading {
+  opacity: 0.82;
+  filter: blur(0.3px);
+  transition: opacity 120ms ease, filter 120ms ease;
+  pointer-events: none; /* evita clicks mientras actualiza */
+}
+
+
+
+
+/* =========================================================
+   MOVIMIENTOS — Skeleton Shimmer (Stripe-like)
+   Pegalo AL FINAL de movimientos.css
+========================================================= */
+
+/* wrapper general skeleton */
+.mov-skeletonWrap,
+.mov-skeletonMore{
+  width: 100%;
+}
+
+/* fila skeleton (mantiene misma estructura) */
+.mov-row--skeleton{
+  pointer-events: none;
+}
+
+.mov-row--skeleton .mov-gridCell{
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+/* barrita skeleton */
+.mov-skeletonBar{
+  display: block;
+  height: 12px;
+  border-radius: 999px;
+  width: 60%;
+  position: relative;
+  overflow: hidden;
+
+  /* base */
+  background: color-mix(in srgb, var(--balto-ink) 8%, #fff);
+}
+
+/* shimmer */
+.mov-skeletonBar::after{
+  content:"";
+  position:absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,255,255,.55),
+    transparent
+  );
+  animation: movShimmer 1.15s infinite;
+}
+
+/* skeleton icons (acciones) */
+.mov-skelActions{
+  display:inline-flex;
+  gap: 10px;
+  align-items:center;
+  justify-content:center;
+}
+
+.mov-skelIcon{
+  width: 36px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--mov-border) 70%, #fff);
+  background: color-mix(in srgb, var(--balto-ink) 8%, #fff);
+  position: relative;
+  overflow: hidden;
+}
+
+.mov-skelIcon::after{
+  content:"";
+  position:absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,255,255,.55),
+    transparent
+  );
+  animation: movShimmer 1.15s infinite;
+}
+
+/* zona skeleton "cargar más" abajo */
+.mov-skeletonMore{
+  margin-top: 10px;
+  opacity: .92;
+}
+
+/* anim */
+@keyframes movShimmer{
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+
+/* accesibilidad */
+@media (prefers-reduced-motion: reduce){
+  .mov-skeletonBar::after,
+  .mov-skelIcon::after{
+    animation: none !important;
+  }
+}
+
+/* =========================================================
+   DARK MODE: skeleton adaptado
+========================================================= */
+html[data-theme="oscuro"] .mov-skeletonBar,
+html[data-theme="oscuro"] .mov-skelIcon{
+  background: rgba(148,163,184,.14) !important;
+  border-color: rgba(148,163,184,.16) !important;
+}
+
+html[data-theme="oscuro"] .mov-skeletonBar::after,
+html[data-theme="oscuro"] .mov-skelIcon::after{
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,255,255,.12),
+    transparent
+  ) !important;
+}

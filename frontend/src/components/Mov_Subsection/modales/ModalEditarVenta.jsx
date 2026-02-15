@@ -14,74 +14,66 @@ const IVA_OPTIONS = [
 ];
 
 /* =========================
-   Safe lists + normalización
+   ✅ Auth + headers (SaaS: X-Session)
 ========================= */
-const SAFE_LISTS = {
-  periodos: [],
-  clasificaciones: [],
-  tiposVenta: [],
-  cuentasCorrientes: [],
-  tiposMovimiento: [],
-  clientes: [],
-  detalles: [],
-  mediosPago: [],
-};
+function getAuthInfo() {
+  const sessionKey =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("x_session") ||
+    localStorage.getItem("X-Session") ||
+    "";
 
-function normalizeIncomingLists(lists) {
-  const l = lists && typeof lists === "object" ? lists : {};
-  const src = l.listas && typeof l.listas === "object" ? l.listas : l;
+  const token = localStorage.getItem("token") || "";
 
-  const tiposMov =
-    Array.isArray(src.tiposMovimiento) && src.tiposMovimiento.length
-      ? src.tiposMovimiento
-      : Array.isArray(src.tipos_movimiento)
-      ? src.tipos_movimiento
-      : [];
+  let idUsuario = 0;
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
+  } catch {}
 
-  const tiposVenta =
-    Array.isArray(src.tiposVenta) && src.tiposVenta.length
-      ? src.tiposVenta
-      : Array.isArray(src.tipos_venta)
-      ? src.tipos_venta
-      : [];
-
-  const cuentas =
-    Array.isArray(src.cuentasCorrientes) && src.cuentasCorrientes.length
-      ? src.cuentasCorrientes
-      : Array.isArray(src.cuentas_corrientes)
-      ? src.cuentas_corrientes
-      : Array.isArray(src.cuenta_corriente)
-      ? src.cuenta_corriente
-      : [];
-
-  const medios =
-    Array.isArray(src.mediosPago) && src.mediosPago.length
-      ? src.mediosPago
-      : Array.isArray(src.medios_pago)
-      ? src.medios_pago
-      : [];
-
-  return {
-    periodos: Array.isArray(src.periodos) ? src.periodos : [],
-    clasificaciones: Array.isArray(src.clasificaciones) ? src.clasificaciones : [],
-    tiposVenta: Array.isArray(tiposVenta) ? tiposVenta : [],
-    cuentasCorrientes: Array.isArray(cuentas) ? cuentas : [],
-    tiposMovimiento: Array.isArray(tiposMov) ? tiposMov : [],
-    clientes: Array.isArray(src.clientes) ? src.clientes : [],
-    detalles: Array.isArray(src.detalles) ? src.detalles : [],
-    mediosPago: Array.isArray(medios) ? medios : [],
-  };
+  return { token, sessionKey, idUsuario };
 }
 
+async function parseJsonOrThrow(res) {
+  const text = await res.text();
+  if (!text) throw new Error("Respuesta vacía del servidor.");
+  try {
+    return JSON.parse(text);
+  } catch {
+    const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
+    throw new Error(`Respuesta inválida (no JSON). HTTP ${res.status}\n${preview}`);
+  }
+}
+
+function buildAuthHeaders() {
+  const { token, sessionKey } = getAuthInfo();
+  const headers = { "Content-Type": "application/json" };
+  if (sessionKey) headers["X-Session"] = sessionKey;
+  if (!sessionKey && token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+async function apiPostJson(url, payload) {
+  const headers = buildAuthHeaders();
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload ?? {}),
+  });
+  return await parseJsonOrThrow(res);
+}
+
+/* =========================
+   Helpers base
+========================= */
 function safeNumber(v) {
   if (v === "" || v == null) return 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
 
-/* =========================
-   Fecha / Periodo helpers
-========================= */
 function todayISO() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -90,6 +82,9 @@ function todayISO() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+/* =========================
+   Fecha / Periodo helpers
+========================= */
 function normalizePeriodoToMMYYYY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "";
@@ -151,6 +146,7 @@ function normText(s) {
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 }
+
 function findIdByIncludes(arr, includesText) {
   const inc = normText(includesText);
   const a = Array.isArray(arr) ? arr : [];
@@ -158,6 +154,7 @@ function findIdByIncludes(arr, includesText) {
   const id = Number(hit?.id);
   return Number.isFinite(id) && id > 0 ? String(id) : NULL_OPTION;
 }
+
 function findIdByExact(arr, exactText) {
   const ex = normText(exactText);
   const a = Array.isArray(arr) ? arr : [];
@@ -178,6 +175,66 @@ function calcItemTotals(cantidad, precio, ivaPct) {
   const total = subtotal + iva_monto;
   const r2 = (n) => Math.round(n * 100) / 100;
   return { subtotal: r2(subtotal), iva_monto: r2(iva_monto), total: r2(total) };
+}
+
+/* =========================
+   Safe lists + normalización
+========================= */
+const SAFE_LISTS = {
+  periodos: [],
+  clasificaciones: [],
+  tiposVenta: [],
+  cuentasCorrientes: [],
+  tiposMovimiento: [],
+  clientes: [],
+  detalles: [],
+  mediosPago: [],
+};
+
+function normalizeIncomingLists(lists) {
+  const l = lists && typeof lists === "object" ? lists : {};
+  const src = l.listas && typeof l.listas === "object" ? l.listas : l;
+
+  const tiposMov =
+    Array.isArray(src.tiposMovimiento) && src.tiposMovimiento.length
+      ? src.tiposMovimiento
+      : Array.isArray(src.tipos_movimiento)
+      ? src.tipos_movimiento
+      : [];
+
+  const tiposVenta =
+    Array.isArray(src.tiposVenta) && src.tiposVenta.length
+      ? src.tiposVenta
+      : Array.isArray(src.tipos_venta)
+      ? src.tipos_venta
+      : [];
+
+  const cuentas =
+    Array.isArray(src.cuentasCorrientes) && src.cuentasCorrientes.length
+      ? src.cuentasCorrientes
+      : Array.isArray(src.cuentas_corrientes)
+      ? src.cuentas_corrientes
+      : Array.isArray(src.cuenta_corriente)
+      ? src.cuenta_corriente
+      : [];
+
+  const medios =
+    Array.isArray(src.mediosPago) && src.mediosPago.length
+      ? src.mediosPago
+      : Array.isArray(src.medios_pago)
+      ? src.medios_pago
+      : [];
+
+  return {
+    periodos: Array.isArray(src.periodos) ? src.periodos : [],
+    clasificaciones: Array.isArray(src.clasificaciones) ? src.clasificaciones : [],
+    tiposVenta: Array.isArray(tiposVenta) ? tiposVenta : [],
+    cuentasCorrientes: Array.isArray(cuentas) ? cuentas : [],
+    tiposMovimiento: Array.isArray(tiposMov) ? tiposMov : [],
+    clientes: Array.isArray(src.clientes) ? src.clientes : [],
+    detalles: Array.isArray(src.detalles) ? src.detalles : [],
+    mediosPago: Array.isArray(medios) ? medios : [],
+  };
 }
 
 /* =========================
@@ -246,25 +303,107 @@ function nameById(arr, id) {
   const found = (Array.isArray(arr) ? arr : []).find((x) => String(x?.id) === sid);
   return String(found?.nombre ?? "").trim();
 }
+
 function getTipoVentaObj(tiposVentaArr, idTipoVenta) {
   const sid = String(idTipoVenta ?? "").trim();
   if (!sid || sid === NULL_OPTION) return null;
   return (Array.isArray(tiposVentaArr) ? tiposVentaArr : []).find((x) => String(x?.id) === sid) || null;
 }
+
 function isTipoVentaContado(tipoVentaObj) {
   const n = String(tipoVentaObj?.nombre ?? "").toLowerCase();
   return n.includes("contado") || n.includes("efectivo");
 }
+
 function isTipoVentaCuentaCorriente(tipoVentaObj) {
   const n = String(tipoVentaObj?.nombre ?? "").toLowerCase();
   return n.includes("cuenta") || n.includes("corriente");
 }
 
 /* =========================
-   Dark helper
+   Theme helper
 ========================= */
 function isTemaOscuro() {
-  return document.documentElement.getAttribute("data-theme") === "oscuro";
+  const byAttr = document.documentElement.getAttribute("data-theme") === "oscuro";
+  const byBody = document.body?.classList?.contains("dark");
+  return Boolean(byAttr || byBody);
+}
+
+/* =========================
+   ✅ Mini modal reutilizable
+========================= */
+function AddCatalogMiniModal({
+  open,
+  title,
+  label = "Nombre",
+  value,
+  saving,
+  onChange,
+  onCancel,
+  onSave,
+  dark = false,
+}) {
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") onCancel?.();
+      if (e.key === "Enter") onSave?.();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onCancel, onSave]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div className="mi-mini__overlay" onMouseDown={onCancel}>
+      <div
+        className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="mi-mini__head">
+          <h4 className="mi-mini__title">{title}</h4>
+          <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving} aria-label="Cerrar">
+            ✕
+          </button>
+        </div>
+
+        <div className="mi-mini__body">
+          <div className="fl-field">
+            <input
+              ref={inputRef}
+              className="fl-input"
+              placeholder=" "
+              value={value}
+              onChange={(e) => onChange?.(e.target.value)}
+              disabled={saving}
+              autoComplete="off"
+            />
+            <label className="fl-label">{label}</label>
+          </div>
+
+          <div className="mi-mini__actions">
+            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>
+              Cancelar
+            </button>
+
+            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
+              {saving ? "Guardando..." : "Guardar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
 }
 
 export default function ModalEditarVenta({
@@ -275,18 +414,32 @@ export default function ModalEditarVenta({
   onClose,
   onSave,
   onToast,
+  onCatalogCreated, // ✅ NUEVO: avisar al padre
   dark: darkProp,
 }) {
+  const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
+
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
     [onToast]
   );
 
+  // ✅ DARK automático + soporta prop
   const [darkAuto, setDarkAuto] = useState(isTemaOscuro());
   useEffect(() => {
-    const obs = new MutationObserver(() => setDarkAuto(isTemaOscuro()));
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => obs.disconnect();
+    const update = () => setDarkAuto(isTemaOscuro());
+
+    const obsHtml = new MutationObserver(update);
+    obsHtml.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+    const obsBody = new MutationObserver(update);
+    if (document.body) obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
+    update();
+    return () => {
+      obsHtml.disconnect();
+      obsBody.disconnect();
+    };
   }, []);
   const dark = typeof darkProp === "boolean" ? darkProp : darkAuto;
 
@@ -352,6 +505,97 @@ export default function ModalEditarVenta({
   const closeBtnRef = useRef(null);
   const fechaRef = useRef(null);
 
+  // ✅ Mini modal: alta rápida (cliente/detalle)
+  const [addUI, setAddUI] = useState({
+    open: false,
+    catalogo: null, // "clientes" | "detalles"
+    text: "",
+    saving: false,
+  });
+
+  const closeAddMini = useCallback(() => {
+    if (addUI.saving) return;
+    setAddUI({ open: false, catalogo: null, text: "", saving: false });
+  }, [addUI.saving]);
+
+  const startAddCliente = useCallback(() => {
+    if (saving) return;
+    setAddUI({ open: true, catalogo: "clientes", text: clienteInput.trim() || "", saving: false });
+  }, [saving, clienteInput]);
+
+  const startAddDetalle = useCallback(() => {
+    if (saving) return;
+    setAddUI({ open: true, catalogo: "detalles", text: detalleInput.trim() || "", saving: false });
+  }, [saving, detalleInput]);
+
+  const guardarNuevoCatalogo = useCallback(async () => {
+    const catalogo = addUI.catalogo;
+    const nombre = String(addUI.text || "").trim();
+
+    if (!catalogo) return;
+    if (!nombre) {
+      showToast("advertencia", "Escribí un nombre antes de guardar.", 2600);
+      return;
+    }
+
+    const { sessionKey, idUsuario } = getAuthInfo();
+    if (!sessionKey) {
+      showToast("error", "No hay sesión activa (Falta X-Session). Iniciá sesión de nuevo.", 5200);
+      return;
+    }
+
+    setAddUI((p) => ({ ...p, saving: true }));
+    showToast("cargando", `Creando ${catalogo === "clientes" ? "cliente" : "detalle"}…`, 12000);
+
+    try {
+      const data = await apiPostJson(API_CATALOGO, {
+        catalogo,
+        nombre,
+        idUsuario,
+      });
+
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear el ítem.");
+
+      const newId = Number(data?.item?.id);
+      const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
+
+      if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
+
+      // ✅ actualizar listas locales del modal
+      setLocalLists((prev) => {
+        const next = { ...prev };
+        const key = catalogo === "clientes" ? "clientes" : "detalles";
+        const arr = Array.isArray(prev[key]) ? prev[key].slice() : [];
+        if (!arr.some((x) => Number(x?.id) === newId)) arr.push({ id: newId, nombre: newNombre });
+        next[key] = arr;
+        return next;
+      });
+
+      // ✅ avisar al padre (Ventas.jsx) para que actualice SU estado lists
+      onCatalogCreated?.({
+        catalogo,
+        item: { id: newId, nombre: newNombre },
+      });
+
+      // setear en el form + input correspondiente
+      if (catalogo === "clientes") {
+        setForm((p) => ({ ...p, id_cliente: String(newId) }));
+        setClienteInput(newNombre);
+        setClienteFocus(false);
+      } else {
+        setForm((p) => ({ ...p, id_detalle: String(newId) }));
+        setDetalleInput(newNombre);
+        setDetalleFocus(false);
+      }
+
+      setAddUI({ open: false, catalogo: null, text: "", saving: false });
+      showToast("exito", `${catalogo === "clientes" ? "Cliente" : "Detalle"} creado: "${newNombre}"`, 2600);
+    } catch (e) {
+      setAddUI((p) => ({ ...p, saving: false }));
+      showToast("error", e?.message || "Error creando el ítem.", 4200);
+    }
+  }, [API_CATALOGO, addUI.catalogo, addUI.text, showToast, onCatalogCreated]);
+
   // abrir: reconstruir SIEMPRE
   const prevOpenRef = useRef(false);
   useEffect(() => {
@@ -360,6 +604,7 @@ export default function ModalEditarVenta({
     if (!open || wasOpen) return;
 
     setSaving(false);
+    setAddUI({ open: false, catalogo: null, text: "", saving: false });
 
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(listsRef.current) };
     setLocalLists(merged);
@@ -388,17 +633,22 @@ export default function ModalEditarVenta({
     setTimeout(() => closeBtnRef.current?.focus(), 0);
   }, [open]);
 
+  // ESC cierra (si no está guardando ni mini modal)
   useEffect(() => {
     if (!open) return;
-    const onKeyDown = (e) => e.key === "Escape" && onClose?.();
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      if (saving || addUI.open) return;
+      onClose?.();
+    };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  }, [open, saving, addUI.open, onClose]);
 
   const cerrar = useCallback(() => {
-    if (saving) return;
+    if (saving || addUI.open) return;
     onClose?.();
-  }, [saving, onClose]);
+  }, [saving, addUI.open, onClose]);
 
   const openDatePicker = useCallback(() => {
     const el = fechaRef.current;
@@ -447,15 +697,9 @@ export default function ModalEditarVenta({
     });
   }, []);
 
-  const onCantidadChange = useCallback((v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }), [
-    recalcFromItem,
-  ]);
-  const onPrecioChange = useCallback((v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }), [
-    recalcFromItem,
-  ]);
-  const onIvaPctChange = useCallback((v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }), [
-    recalcFromItem,
-  ]);
+  const onCantidadChange = useCallback((v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }), [recalcFromItem]);
+  const onPrecioChange = useCallback((v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }), [recalcFromItem]);
+  const onIvaPctChange = useCallback((v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }), [recalcFromItem]);
 
   const onMontoTotalManual = useCallback((v) => {
     const mt = v === "" ? "" : Number(v);
@@ -565,12 +809,8 @@ export default function ModalEditarVenta({
     if (!open) return;
     setForm((p) => {
       const next = { ...p };
-
-      if (esContado) {
-        next.id_cuenta_corriente = NULL_OPTION;
-      } else if (esCuentaCorriente) {
-        next.id_medio_pago = NULL_OPTION;
-      }
+      if (esContado) next.id_cuenta_corriente = NULL_OPTION;
+      else if (esCuentaCorriente) next.id_medio_pago = NULL_OPTION;
       return next;
     });
   }, [open, esContado, esCuentaCorriente]);
@@ -619,6 +859,11 @@ export default function ModalEditarVenta({
 
   const submit = async (e) => {
     e.preventDefault();
+    if (addUI.open) {
+      showToast("advertencia", "Cerrá el mini modal (guardar o cancelar) antes de guardar la venta.", 3200);
+      return;
+    }
+
     setSaving(true);
     showToast("cargando", "Guardando cambios…", 12000);
 
@@ -636,7 +881,7 @@ export default function ModalEditarVenta({
         throw new Error("En Ventas la Forma de venta (Tipo venta) es obligatoria.");
       }
 
-      // ✅ Cliente obligatorio
+      // ✅ Cliente obligatorio (con autofix por texto exacto)
       let finalIdCliente = form.id_cliente;
       if ((!finalIdCliente || finalIdCliente === NULL_OPTION) && clienteInput.trim()) {
         const foundId = findIdByExact(safeLists.clientes, clienteInput.trim());
@@ -646,7 +891,7 @@ export default function ModalEditarVenta({
         throw new Error("En Ventas el Cliente es obligatorio (seleccioná uno).");
       }
 
-      // ✅ Detalle obligatorio
+      // ✅ Detalle obligatorio (con autofix por texto exacto)
       let finalIdDetalle = form.id_detalle;
       if ((!finalIdDetalle || finalIdDetalle === NULL_OPTION) && detalleInput.trim()) {
         const foundId = findIdByExact(safeLists.detalles, detalleInput.trim());
@@ -716,6 +961,9 @@ export default function ModalEditarVenta({
     .join(" ")
     .trim();
 
+  const miniTitle =
+    addUI.catalogo === "clientes" ? "Nuevo cliente" : addUI.catalogo === "detalles" ? "Nuevo detalle" : "Nuevo";
+
   return createPortal(
     <div className={overlayClass} onMouseDown={cerrar}>
       <div
@@ -735,7 +983,7 @@ export default function ModalEditarVenta({
             className="mi-modal__close"
             onClick={cerrar}
             aria-label="Cerrar"
-            disabled={saving}
+            disabled={saving || addUI.open}
             type="button"
           >
             ✕
@@ -757,7 +1005,7 @@ export default function ModalEditarVenta({
                         className="fl-input fl-select"
                         value={String(form.id_tipo_venta)}
                         onChange={(e) => setForm((p) => ({ ...p, id_tipo_venta: e.target.value }))}
-                        disabled={saving}
+                        disabled={saving || addUI.open}
                       >
                         <option value={NULL_OPTION}>-- Seleccionar tipo de venta --</option>
                         {(safeLists.tiposVenta || []).map((x) => (
@@ -771,6 +1019,7 @@ export default function ModalEditarVenta({
                   </div>
 
                   <div className="mi-row2 fl-col-full">
+                    {/* ✅ Detalle autocomplete + agregar */}
                     <div className="fl-field mi-autocomplete" style={{ position: "relative" }}>
                       <input
                         className="fl-input"
@@ -779,7 +1028,7 @@ export default function ModalEditarVenta({
                         onChange={handleDetalleInputChange}
                         onFocus={() => setDetalleFocus(true)}
                         onBlur={autoFixDetalleIdOnBlur}
-                        disabled={saving}
+                        disabled={saving || addUI.open}
                         autoComplete="off"
                       />
                       <label className="fl-label">Detalle (obligatorio)</label>
@@ -809,6 +1058,16 @@ export default function ModalEditarVenta({
                           ))}
                         </ul>
                       )}
+
+                      <button
+                        type="button"
+                        onClick={startAddDetalle}
+                        disabled={saving || addUI.open || addUI.saving}
+                        className="mi-cr-link"
+                        style={{ marginTop: 8 }}
+                      >
+                        + Agregar nuevo detalle
+                      </button>
                     </div>
 
                     {/* ✅ Cuenta Corriente SOLO si es cuenta corriente */}
@@ -820,7 +1079,7 @@ export default function ModalEditarVenta({
                           onChange={(e) =>
                             setForm((p) => ({ ...p, id_cuenta_corriente: e.target.value }))
                           }
-                          disabled={saving}
+                          disabled={saving || addUI.open}
                         >
                           <option value={NULL_OPTION}>-- Seleccionar cuenta corriente --</option>
                           {(safeLists.cuentasCorrientes || []).map((x) => (
@@ -852,7 +1111,7 @@ export default function ModalEditarVenta({
                           placeholder=" "
                           value={form.cantidad}
                           onChange={(e) => onCantidadChange(e.target.value)}
-                          disabled={saving}
+                          disabled={saving || addUI.open}
                         />
                         <label className="fl-label">Cantidad</label>
                       </div>
@@ -866,7 +1125,7 @@ export default function ModalEditarVenta({
                           placeholder=" "
                           value={form.precio}
                           onChange={(e) => onPrecioChange(e.target.value)}
-                          disabled={saving}
+                          disabled={saving || addUI.open}
                         />
                         <label className="fl-label">Precio unitario</label>
                       </div>
@@ -876,7 +1135,7 @@ export default function ModalEditarVenta({
                           className="fl-input fl-select"
                           value={String(form.iva_pct)}
                           onChange={(e) => onIvaPctChange(e.target.value)}
-                          disabled={saving}
+                          disabled={saving || addUI.open}
                         >
                           {IVA_OPTIONS.map((x) => (
                             <option key={x.value} value={x.value}>
@@ -913,7 +1172,7 @@ export default function ModalEditarVenta({
                       placeholder=" "
                       value={form.monto_total}
                       onChange={(e) => onMontoTotalManual(e.target.value)}
-                      disabled={saving}
+                      disabled={saving || addUI.open}
                     />
                     <label className="fl-label">Monto total (ajusta el precio)</label>
                   </div>
@@ -933,7 +1192,7 @@ export default function ModalEditarVenta({
                     type="date"
                     value={form.fecha}
                     onChange={(e) => onFechaChange(e.target.value)}
-                    disabled={saving}
+                    disabled={saving || addUI.open}
                     onClick={openDatePicker}
                     onFocus={openDatePicker}
                   />
@@ -947,7 +1206,7 @@ export default function ModalEditarVenta({
                     inputMode="numeric"
                     value={form.periodo}
                     onChange={(e) => onPeriodoChange(e.target.value)}
-                    disabled={saving}
+                    disabled={saving || addUI.open}
                   />
                   <label className="fl-label">Período</label>
                 </div>
@@ -961,7 +1220,7 @@ export default function ModalEditarVenta({
                       className="fl-input fl-select"
                       value={String(form.id_medio_pago)}
                       onChange={(e) => setForm((p) => ({ ...p, id_medio_pago: e.target.value }))}
-                      disabled={saving}
+                      disabled={saving || addUI.open}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
                       {(safeLists.mediosPago || []).map((x) => (
@@ -979,6 +1238,7 @@ export default function ModalEditarVenta({
                   </div>
                 )}
 
+                {/* ✅ Cliente autocomplete + agregar */}
                 <div className="fl-field mi-autocomplete" style={{ position: "relative" }}>
                   <input
                     className="fl-input"
@@ -987,7 +1247,7 @@ export default function ModalEditarVenta({
                     onChange={handleClienteInputChange}
                     onFocus={() => setClienteFocus(true)}
                     onBlur={autoFixClienteIdOnBlur}
-                    disabled={saving}
+                    disabled={saving || addUI.open}
                     autoComplete="off"
                   />
                   <label className="fl-label">Cliente (obligatorio)</label>
@@ -1017,12 +1277,22 @@ export default function ModalEditarVenta({
                       ))}
                     </ul>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={startAddCliente}
+                    disabled={saving || addUI.open || addUI.saving}
+                    className="mi-cr-link"
+                    style={{ marginTop: 8 }}
+                  >
+                    + Agregar nuevo cliente
+                  </button>
                 </div>
 
                 <div className="mi-em-actions">
                   <button
                     type="submit"
-                    disabled={saving}
+                    disabled={saving || addUI.open}
                     className="mit-btn mit-btn--solid mit-btn--block"
                   >
                     {saving ? "Guardando..." : "Guardar"}
@@ -1031,7 +1301,7 @@ export default function ModalEditarVenta({
                   <button
                     type="button"
                     onClick={cerrar}
-                    disabled={saving}
+                    disabled={saving || addUI.open}
                     className="mit-btn mit-btn--ghost mit-btn--block"
                   >
                     Cancelar
@@ -1041,6 +1311,19 @@ export default function ModalEditarVenta({
             </aside>
           </div>
         </form>
+
+        {/* ✅ Mini modal (cliente/detalle) con dark */}
+        <AddCatalogMiniModal
+          open={addUI.open}
+          title={miniTitle}
+          label="Nombre"
+          value={addUI.text}
+          saving={addUI.saving}
+          onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
+          onCancel={closeAddMini}
+          onSave={guardarNuevoCatalogo}
+          dark={dark}
+        />
       </div>
     </div>,
     document.body

@@ -1,8 +1,6 @@
 /* src/components/Flujo_de_Caja/flujo_caja.css */
 /* =========================================================
    BALTO — Flujo de Caja (alineado a Movimientos)
-   - pesos livianos (420–650)
-   - paleta: Azul Medianoche / Azul Acción / Fondo App / Gris / Verde / Rojo
 ========================================================= */
 
 :root{
@@ -71,7 +69,7 @@
 }
 
 /* =========================
-   Head (igual vibe Movimientos)
+   Head
 ========================= */
 .fc-card__head{
   padding: 14px 16px;
@@ -95,13 +93,11 @@
   align-items: flex-start;
 }
 
-.fc-headTitle{
-  min-width: 220px;
-}
+.fc-headTitle{ min-width: 220px; }
 
 .fc-card__title{
   font-size: 15px;
-  font-weight: 620; /* ✅ */
+  font-weight: 620;
   letter-spacing: -0.01em;
   color: var(--balto-ink);
 }
@@ -138,7 +134,7 @@
 
 .fc-filter label{
   font-size: 11px;
-  font-weight: 600; /* ✅ */
+  font-weight: 600;
   color: color-mix(in srgb, var(--balto-text) 86%, #000);
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -164,7 +160,7 @@
 }
 
 /* =========================
-   Button (Export)
+   Button
 ========================= */
 .fc-btn{
   height: 40px;
@@ -173,7 +169,7 @@
   border: 1px solid color-mix(in srgb, var(--balto-success) 55%, #fff);
   background: var(--balto-success);
   color: #fff;
-  font-weight: 580; /* ✅ */
+  font-weight: 580;
   cursor: pointer;
   display:inline-flex;
   align-items:center;
@@ -199,7 +195,7 @@
 }
 
 /* =========================
-   Subhead (caja arriba de tabla)
+   Subhead
 ========================= */
 .fc-subhead{
   padding: 12px 16px 10px;
@@ -208,7 +204,7 @@
 }
 
 .fc-subhead__name{
-  font-weight: 620;  /* ✅ */
+  font-weight: 620;
   color: var(--balto-ink);
 }
 
@@ -216,23 +212,23 @@
   margin-top: 4px;
   font-size: 12px;
   color: var(--fc-muted);
-  font-weight: 460;  /* ✅ */
+  font-weight: 460;
 }
 .fc-subhead__meta b{ font-weight: 620; color: var(--balto-ink); }
 
 /* =========================
-   Table wrap (scroll SOLO body)
+   Table wrap
 ========================= */
 .fc-tableWrap{
   flex: 1;
   min-height: 0;
-  overflow: hidden;                 /* ✅ wrap no scrollea */
+  overflow: hidden;
   max-height: 520px;
 }
 
 .fc-gridBody{
-  overflow: auto;                   /* ✅ scroll real */
-  max-height: calc(100vh - 370px);  /* ajustable */
+  overflow: auto;
+  max-height: calc(100vh - 370px);
   background: #fff;
 }
 
@@ -245,7 +241,7 @@
 .fc-gridBody::-webkit-scrollbar-track{ background: transparent; }
 
 /* =========================
-   Grid (como tu JSX)
+   Grid
 ========================= */
 .fc-grid{
   display: grid;
@@ -265,7 +261,7 @@
 .fc-grid--head .fc-cell{
   color: rgba(255,255,255,.92);
   font-size: 11px;
-  font-weight: 600;           /* ✅ */
+  font-weight: 600;
   letter-spacing: .08em;
   text-transform: uppercase;
   border-bottom: none;
@@ -286,7 +282,7 @@
 .fc-cell{
   padding: 10px 12px;
   font-size: 13px;
-  font-weight: 440;           /* ✅ */
+  font-weight: 440;
   color: color-mix(in srgb, var(--balto-ink) 78%, #000);
   display:flex;
   align-items:center;
@@ -304,7 +300,7 @@
 }
 
 .fc-date{
-  font-weight: 560;           /* ✅ */
+  font-weight: 560;
   color: var(--balto-ink);
 }
 
@@ -314,23 +310,14 @@
 }
 
 /* =========================
-   Column colors (suaves, estilo Excel)
+   Column colors
 ========================= */
 .fc-in{ color: color-mix(in srgb, var(--balto-success) 72%, var(--balto-ink)); font-weight: 520; }
 .fc-eg{ color: color-mix(in srgb, var(--balto-danger) 70%, var(--balto-ink)); font-weight: 520; }
 
-/* saldo: pill suave */
-.fc-saldo{
-  font-weight: 560;           /* ✅ */
-}
-
-.fc-saldo.is-positive{
-  color: color-mix(in srgb, var(--balto-success) 76%, var(--balto-ink));
-}
-
-.fc-saldo.is-negative{
-  color: color-mix(in srgb, var(--balto-danger) 76%, var(--balto-ink));
-}
+.fc-saldo{ font-weight: 560; }
+.fc-saldo.is-positive{ color: color-mix(in srgb, var(--balto-success) 76%, var(--balto-ink)); }
+.fc-saldo.is-negative{ color: color-mix(in srgb, var(--balto-danger) 76%, var(--balto-ink)); }
 
 /* =========================
    Empty / Footnote
@@ -339,7 +326,7 @@
   padding: 22px 12px;
   text-align:center;
   color: var(--fc-muted);
-  font-weight: 520;           /* ✅ */
+  font-weight: 520;
 }
 
 .fc-footnote{
@@ -351,36 +338,33 @@
 }
 
 /* =========================
-   Responsive
+   Responsive (base)
 ========================= */
 @media (max-width: 720px){
   .fc-card__head{ flex-direction: column; align-items: stretch; }
   .fc-filter select{ min-width: 0; width: 100%; }
 }
+
 /* =========================================================
-   FLUJO DE CAJA — DARK MODE (override)
-   Pegalo AL FINAL de flujo_caja.css
+   DARK MODE
 ========================================================= */
 html[data-theme="oscuro"] .fc-page{
   background: #0B1220 !important;
   color: rgba(226,232,240,.92) !important;
 }
 
-/* Alert en oscuro */
 html[data-theme="oscuro"] .fc-page .fc-alert{
   background: rgba(225,61,69,.12) !important;
   border-color: rgba(225,61,69,.24) !important;
   color: rgba(255,255,255,.92) !important;
 }
 
-/* Card general */
 html[data-theme="oscuro"] .fc-page .fc-card{
   background: rgba(15,23,42,.62) !important;
   border-color: rgba(148,163,184,.14) !important;
   box-shadow: 0 16px 40px -26px rgba(0,0,0,.62) !important;
 }
 
-/* Head */
 html[data-theme="oscuro"] .fc-page .fc-card__head{
   background:
     radial-gradient(900px 180px at 0% 0%, rgba(78,161,255,.12), transparent 55%),
@@ -388,25 +372,13 @@ html[data-theme="oscuro"] .fc-page .fc-card__head{
   border-bottom-color: rgba(148,163,184,.12) !important;
 }
 
-html[data-theme="oscuro"] .fc-page .fc-card__title{
-  color: rgba(226,232,240,.92) !important;
-}
-html[data-theme="oscuro"] .fc-page .fc-card__hint{
-  color: rgba(226,232,240,.62) !important;
-}
-html[data-theme="oscuro"] .fc-page .fc-card__hint b{
-  color: rgba(226,232,240,.92) !important;
-}
+html[data-theme="oscuro"] .fc-page .fc-card__title{ color: rgba(226,232,240,.92) !important; }
+html[data-theme="oscuro"] .fc-page .fc-card__hint{ color: rgba(226,232,240,.62) !important; }
+html[data-theme="oscuro"] .fc-page .fc-card__hint b{ color: rgba(226,232,240,.92) !important; }
 
-/* Labels */
-html[data-theme="oscuro"] .fc-page .fc-filter label{
-  color: rgba(226,232,240,.72) !important;
-}
-html[data-theme="oscuro"] .fc-page .fc-filter label svg{
-  color: rgba(226,232,240,.85) !important;
-}
+html[data-theme="oscuro"] .fc-page .fc-filter label{ color: rgba(226,232,240,.72) !important; }
+html[data-theme="oscuro"] .fc-page .fc-filter label svg{ color: rgba(226,232,240,.85) !important; }
 
-/* Select */
 html[data-theme="oscuro"] .fc-page .fc-filter select{
   background: rgba(15,23,42,.88) !important;
   color: rgba(226,232,240,.92) !important;
@@ -418,7 +390,6 @@ html[data-theme="oscuro"] .fc-page .fc-filter select:focus{
   box-shadow: 0 0 0 4px rgba(78,161,255,.18) !important;
 }
 
-/* Botón export */
 html[data-theme="oscuro"] .fc-page .fc-btn{
   background: rgba(34,173,92,.92) !important;
   border-color: rgba(34,173,92,.50) !important;
@@ -430,53 +401,30 @@ html[data-theme="oscuro"] .fc-page .fc-btn:hover{
   color: #071018 !important;
 }
 
-/* Subhead */
 html[data-theme="oscuro"] .fc-page .fc-subhead{
   background: linear-gradient(180deg, rgba(15,23,42,.85), rgba(15,23,42,.62)) !important;
   border-bottom-color: rgba(148,163,184,.12) !important;
 }
-html[data-theme="oscuro"] .fc-page .fc-subhead__name{
-  color: rgba(226,232,240,.92) !important;
-}
-html[data-theme="oscuro"] .fc-page .fc-subhead__meta{
-  color: rgba(226,232,240,.62) !important;
-}
-html[data-theme="oscuro"] .fc-page .fc-subhead__meta b{
-  color: rgba(226,232,240,.92) !important;
-}
+html[data-theme="oscuro"] .fc-page .fc-subhead__name{ color: rgba(226,232,240,.92) !important; }
+html[data-theme="oscuro"] .fc-page .fc-subhead__meta{ color: rgba(226,232,240,.62) !important; }
+html[data-theme="oscuro"] .fc-page .fc-subhead__meta b{ color: rgba(226,232,240,.92) !important; }
 
-/* Header de tabla */
 html[data-theme="oscuro"] .fc-page .fc-grid--head{
   background: rgba(15,23,42,.95) !important;
   border-bottom-color: rgba(148,163,184,.14) !important;
 }
-html[data-theme="oscuro"] .fc-page .fc-grid--head .fc-cell{
-  color: rgba(226,232,240,.92) !important;
-}
+html[data-theme="oscuro"] .fc-page .fc-grid--head .fc-cell{ color: rgba(226,232,240,.92) !important; }
 
-/* Body scroll area */
-html[data-theme="oscuro"] .fc-page .fc-gridBody{
-  background: rgba(15,23,42,.40) !important;
-}
-
-/* Filas */
+html[data-theme="oscuro"] .fc-page .fc-gridBody{ background: rgba(15,23,42,.40) !important; }
 html[data-theme="oscuro"] .fc-page .fc-grid--row{
   background: rgba(15,23,42,.40) !important;
   border-bottom-color: rgba(148,163,184,.12) !important;
 }
-html[data-theme="oscuro"] .fc-page .fc-grid--row:hover{
-  background: rgba(78,161,255,.10) !important;
-}
+html[data-theme="oscuro"] .fc-page .fc-grid--row:hover{ background: rgba(78,161,255,.10) !important; }
 
-/* Celdas */
-html[data-theme="oscuro"] .fc-page .fc-cell{
-  color: rgba(226,232,240,.86) !important;
-}
-html[data-theme="oscuro"] .fc-page .fc-date{
-  color: rgba(226,232,240,.92) !important;
-}
+html[data-theme="oscuro"] .fc-page .fc-cell{ color: rgba(226,232,240,.86) !important; }
+html[data-theme="oscuro"] .fc-page .fc-date{ color: rgba(226,232,240,.92) !important; }
 
-/* Colores números (suaves) */
 html[data-theme="oscuro"] .fc-page .fc-in{
   color: color-mix(in srgb, var(--balto-success) 72%, #e2e8f0) !important;
 }
@@ -490,108 +438,64 @@ html[data-theme="oscuro"] .fc-page .fc-saldo.is-negative{
   color: color-mix(in srgb, var(--balto-danger) 76%, #e2e8f0) !important;
 }
 
-/* Empty row + footnote */
-html[data-theme="oscuro"] .fc-page .fc-emptyRow{
-  color: rgba(226,232,240,.65) !important;
-}
+html[data-theme="oscuro"] .fc-page .fc-emptyRow{ color: rgba(226,232,240,.65) !important; }
 html[data-theme="oscuro"] .fc-page .fc-footnote{
   background: rgba(15,23,42,.62) !important;
   border-top-color: rgba(148,163,184,.12) !important;
   color: rgba(226,232,240,.62) !important;
 }
-
-/* Scrollbar */
 html[data-theme="oscuro"] .fc-page .fc-gridBody::-webkit-scrollbar-thumb{
   background: rgba(148,163,184,.22) !important;
 }
+
 /* =========================================================
-   FLUJO DE CAJA — MOBILE VIEW (NO TOCAR DESKTOP)
-   Pegalo AL FINAL de flujo_caja.css
+   MOBILE VIEW (NO TOCAR DESKTOP)
 ========================================================= */
 @media (max-width: 720px){
 
-  /* Page padding más cómodo en celu */
-  .fc-page{
-    padding: 10px;
-  }
+  .fc-page{ padding: 10px; }
 
-  /* Head: apilar todo */
   .fc-card__head{
     padding: 12px;
     gap: 10px;
   }
 
-  .fc-card__headLeft{
-    gap: 10px;
-  }
+  .fc-card__headLeft{ gap: 10px; }
+  .fc-headTitle{ min-width: 0; width: 100%; }
+  .fc-card__title{ font-size: 16px; }
 
-  .fc-headTitle{
-    min-width: 0;
-    width: 100%;
-  }
+  .fc-headFilters{ width: 100%; }
+  .fc-filter{ width: 100%; }
+  .fc-filter select{ width: 100%; min-width: 0; }
 
-  .fc-card__title{
-    font-size: 16px;
-  }
+  .fc-card__actions{ width: 100%; }
+  .fc-btn{ width: 100%; justify-content: center; }
 
-  .fc-headFilters{
-    width: 100%;
-  }
+  .fc-subhead{ padding: 10px 12px; }
+  .fc-subhead__meta{ line-height: 1.25; }
 
-  .fc-filter{
-    width: 100%;
-  }
-
-  .fc-filter select{
-    width: 100%;
-    min-width: 0;
-  }
-
-  /* Acciones: botón full width */
-  .fc-card__actions{
-    width: 100%;
-  }
-
-  .fc-btn{
-    width: 100%;
-    justify-content: center;
-  }
-
-  /* Subhead: compacto */
-  .fc-subhead{
-    padding: 10px 12px;
-  }
-  .fc-subhead__meta{
-    line-height: 1.25;
-  }
-
-  /* Tabla: eliminar scroll horizontal y convertir filas a "cards" */
+  /* tabla */
   .fc-tableWrap{
-    max-height: none;     /* deja que crezca en mobile */
-    overflow: visible;    /* sin recortes */
+    max-height: none;
+    overflow: visible;
   }
 
   .fc-gridBody{
-    max-height: none;     /* evita cálculos raros en mobile */
-    overflow: visible;    /* sin scroll interno */
+    max-height: none;
+    overflow: visible;
     background: transparent;
     padding: 10px 10px 12px;
   }
 
-  /* Ocultamos el header estilo excel en mobile */
-  .fc-grid--head{
-    display: none;
-  }
+  .fc-grid--head{ display: none; }
 
-  /* Base grid: sin min-width en mobile */
   .fc-grid{
     min-width: 0;
     width: 100%;
   }
 
-  /* Cada fila pasa a ser una card */
   .fc-grid--row{
-    grid-template-columns: 1fr;   /* una columna */
+    grid-template-columns: 1fr;
     border: 1px solid color-mix(in srgb, var(--fc-border) 70%, #fff);
     border-radius: 14px;
     margin-bottom: 10px;
@@ -599,11 +503,8 @@ html[data-theme="oscuro"] .fc-page .fc-gridBody::-webkit-scrollbar-thumb{
     background: #fff;
   }
 
-  .fc-grid--row:hover{
-    background: #fff; /* no “tinte” raro */
-  }
+  .fc-grid--row:hover{ background: #fff; }
 
-  /* Celdas: layout tipo “label - value” */
   .fc-grid--row .fc-cell{
     justify-content: space-between;
     text-align: left;
@@ -615,7 +516,7 @@ html[data-theme="oscuro"] .fc-page .fc-gridBody::-webkit-scrollbar-thumb{
     border-bottom: 1px solid color-mix(in srgb, var(--fc-border) 55%, #fff);
   }
 
-  /* La fecha como “título” de la card */
+  /* ✅ Fecha título */
   .fc-grid--row .fc-cell:nth-child(1){
     font-weight: 650;
     font-size: 14px;
@@ -623,7 +524,7 @@ html[data-theme="oscuro"] .fc-page .fc-gridBody::-webkit-scrollbar-thumb{
     background: color-mix(in srgb, var(--balto-bg) 70%, #fff);
   }
 
-  /* Labels automáticos (sin tocar JSX) */
+  /* ✅ Labels automáticos (AHORA 5 columnas: 2..5) */
   .fc-grid--row .fc-cell:nth-child(2)::before{
     content: "Ingresos";
     font-size: 11px;
@@ -632,7 +533,6 @@ html[data-theme="oscuro"] .fc-page .fc-gridBody::-webkit-scrollbar-thumb{
     color: var(--fc-muted);
     font-weight: 600;
   }
-
   .fc-grid--row .fc-cell:nth-child(3)::before{
     content: "Egresos";
     font-size: 11px;
@@ -641,8 +541,15 @@ html[data-theme="oscuro"] .fc-page .fc-gridBody::-webkit-scrollbar-thumb{
     color: var(--fc-muted);
     font-weight: 600;
   }
-
   .fc-grid--row .fc-cell:nth-child(4)::before{
+    content: "Otros";
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--fc-muted);
+    font-weight: 600;
+  }
+  .fc-grid--row .fc-cell:nth-child(5)::before{
     content: "Saldo";
     font-size: 11px;
     letter-spacing: .06em;
@@ -651,67 +558,94 @@ html[data-theme="oscuro"] .fc-page .fc-gridBody::-webkit-scrollbar-thumb{
     font-weight: 600;
   }
 
-  /* Valores: alineados a la derecha */
   .fc-grid--row .fc-cell:nth-child(2),
   .fc-grid--row .fc-cell:nth-child(3),
-  .fc-grid--row .fc-cell:nth-child(4){
+  .fc-grid--row .fc-cell:nth-child(4),
+  .fc-grid--row .fc-cell:nth-child(5){
     display: flex;
     gap: 10px;
     align-items: center;
-  }
-
-  /* Reforzamos el número al final (sin depender de .is-center) */
-  .fc-grid--row .fc-cell:nth-child(2),
-  .fc-grid--row .fc-cell:nth-child(3),
-  .fc-grid--row .fc-cell:nth-child(4){
     justify-content: space-between;
   }
 
-  /* última fila sin borde abajo */
-  .fc-grid--row .fc-cell:last-child{
-    border-bottom: none;
-  }
+  .fc-grid--row .fc-cell:last-child{ border-bottom: none; }
 
-  /* Loader dentro de tabla en mobile: que no “rompa” */
-  .fc-emptyRow--loading{
-    padding: 14px 6px;
-  }
-
-  /* Footnote: más respirable */
-  .fc-footnote{
-    padding: 10px 12px;
-  }
+  .fc-footnote{ padding: 10px 12px; }
 }
 
-/* Ajuste extra para pantallas MUY chicas */
 @media (max-width: 380px){
   .fc-card__title{ font-size: 15px; }
   .fc-gridBody{ padding: 8px 8px 10px; }
   .fc-grid--row .fc-cell{ padding: 9px 10px; }
 }
+
 /* =========================================================
-   MOBILE: scroll interno en la tabla (sin tocar desktop)
+   MOBILE: scroll interno en la tabla
 ========================================================= */
 @media (max-width: 720px){
-
-  /* ✅ El contenedor limita alto */
   .fc-tableWrap{
-    max-height: calc(100vh - 260px); /* ajustable */
-    overflow: hidden;                /* wrap no scrollea */
+    max-height: calc(100vh - 260px);
+    overflow: hidden;
   }
-
-  /* ✅ El scroll real vive acá */
   .fc-gridBody{
-    max-height: calc(100vh - 420px); /* mismo alto */
-    overflow: auto;                  /* ✅ scroll */
+    max-height: calc(100vh - 420px);
+    overflow: auto;
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Scrollbar mobile */
   .fc-gridBody::-webkit-scrollbar{ width: 10px; }
   .fc-gridBody::-webkit-scrollbar-thumb{
     background: rgba(10,37,64,.14);
     border-radius: 999px;
   }
   .fc-gridBody::-webkit-scrollbar-track{ background: transparent; }
+}
+
+/* =========================================================
+   ✅ Skeleton shimmer (estilo Movimientos)
+========================================================= */
+.fc-softLoading{
+  filter: blur(.2px);
+  opacity: .98;
+}
+
+.fc-skeletonWrap{
+  padding: 8px 0;
+}
+
+.fc-row--skeleton{
+  pointer-events: none;
+}
+
+.fc-skeletonBar{
+  display: inline-block;
+  height: 12px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg,
+      rgba(10,37,64,.08) 0%,
+      rgba(10,37,64,.14) 25%,
+      rgba(10,37,64,.08) 50%,
+      rgba(10,37,64,.14) 75%,
+      rgba(10,37,64,.08) 100%);
+  background-size: 240% 100%;
+  animation: fcShimmer 1.05s ease-in-out infinite;
+}
+
+.fc-cell .fc-skeletonBar{ margin: 2px 0; }
+
+@keyframes fcShimmer{
+  0%{ background-position: 100% 0; }
+  100%{ background-position: 0% 0; }
+}
+
+html[data-theme="oscuro"] .fc-page .fc-skeletonBar{
+  background:
+    linear-gradient(90deg,
+      rgba(226,232,240,.07) 0%,
+      rgba(226,232,240,.14) 25%,
+      rgba(226,232,240,.07) 50%,
+      rgba(226,232,240,.14) 75%,
+      rgba(226,232,240,.07) 100%);
+  background-size: 240% 100%;
 }

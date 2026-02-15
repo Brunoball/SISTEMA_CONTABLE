@@ -1211,3 +1211,110 @@ html[data-theme="oscuro"] .af-page .af-gridBody::-webkit-scrollbar-thumb{
 @media (max-width: 380px){
   .af-grid--row .af-cell{ padding: 9px 10px; }
 }
+
+/* =========================
+   SKELETON LOADING (filas)
+========================= */
+
+/* el contenedor entra en modo carga */
+.af-gridBody.is-loading{
+  position: relative;
+}
+
+/* una fila skeleton */
+.af-skeletonRow{
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 0;
+  padding: 0;
+}
+
+/* celda skeleton */
+.af-skeletonCell{
+  padding: 12px;
+  border-bottom: 1px solid rgba(10,37,64,.08);
+}
+
+/* barra gris */
+.af-skeletonBar{
+  height: 14px;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+
+  background: linear-gradient(
+    90deg,
+    rgba(10,37,64,.06) 0%,
+    rgba(10,37,64,.12) 50%,
+    rgba(10,37,64,.06) 100%
+  );
+
+  background-size: 300% 100%;
+  animation: af-skeletonShimmer 1.25s linear infinite;
+}
+
+/* diferentes largos para parecer real */
+.af-skeletonBar.short{ width: 45%; }
+.af-skeletonBar.medium{ width: 65%; }
+.af-skeletonBar.long{ width: 85%; }
+
+/* animación */
+@keyframes af-skeletonShimmer{
+  0%{
+    background-position: 200% 0;
+  }
+  100%{
+    background-position: -200% 0;
+  }
+}
+
+/* =========================================================
+   ✅ Skeleton shimmer (carga de filas)
+========================================================= */
+.af-softLoading{
+  filter: blur(.2px);
+  opacity: .98;
+}
+
+.af-skeletonWrap{
+  padding: 8px 0;
+}
+
+.af-row--skeleton{
+  pointer-events: none;
+}
+
+/* barra animada */
+.af-skeletonBar{
+  display: inline-block;
+  height: 12px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg,
+      rgba(10,37,64,.08) 0%,
+      rgba(10,37,64,.14) 25%,
+      rgba(10,37,64,.08) 50%,
+      rgba(10,37,64,.14) 75%,
+      rgba(10,37,64,.08) 100%);
+  background-size: 240% 100%;
+  animation: afShimmer 1.05s ease-in-out infinite;
+}
+
+.af-cell .af-skeletonBar{ margin: 2px 0; }
+
+@keyframes afShimmer{
+  0%{ background-position: 100% 0; }
+  100%{ background-position: 0% 0; }
+}
+
+/* dark mode */
+html[data-theme="oscuro"] .af-page .af-skeletonBar{
+  background:
+    linear-gradient(90deg,
+      rgba(226,232,240,.07) 0%,
+      rgba(226,232,240,.14) 25%,
+      rgba(226,232,240,.07) 50%,
+      rgba(226,232,240,.14) 75%,
+      rgba(226,232,240,.07) 100%);
+  background-size: 240% 100%;
+}

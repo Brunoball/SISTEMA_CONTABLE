@@ -1,6 +1,7 @@
+// src/components/Movimientos/modales/ModalEditarRecibo.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import "../../Movimientos/modales/ModalEditarMovimiento.css"; // ✅ estética + dark por clases
+import "../../Movimientos/modales/ModalEditarMovimiento.css";
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";
@@ -61,36 +62,104 @@ function normalizeSearchText(v) {
     .trim();
 }
 
+function isDarkEnabled(darkProp) {
+  if (darkProp === true) return true;
+  if (typeof document === "undefined") return false;
+  const byAttr = document.documentElement.getAttribute("data-theme") === "oscuro";
+  const byBody = document.body?.classList?.contains("dark");
+  return Boolean(byAttr || byBody);
+}
+
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
+
+  const sessionKey =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    "";
+
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
-  return { token, idUsuario };
+
+  return { token, sessionKey, idUsuario };
 }
 
-function isDarkEnabled(darkProp) {
-  if (darkProp === true) return true;
-  if (typeof document === "undefined") return false;
-  return document.body?.classList?.contains("dark");
+async function parseJsonOrThrow(res) {
+  const text = await res.text();
+  if (!text) throw new Error("Respuesta vacía del servidor.");
+
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
+    throw new Error(`Respuesta inválida (no JSON). HTTP ${res.status}\n${preview}`);
+  }
+
+  if (!res.ok) {
+    const msg = data?.mensaje || data?.error || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+
+  return data;
+}
+
+async function apiGetJson(url) {
+  const { token, sessionKey } = getAuthInfo();
+  const headers = {};
+  if (sessionKey) headers["X-Session"] = sessionKey;
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(url, { method: "GET", headers });
+  return await parseJsonOrThrow(res);
+}
+
+async function apiPostJson(url, payload) {
+  const { token, sessionKey } = getAuthInfo();
+  const headers = { "Content-Type": "application/json" };
+  if (sessionKey) headers["X-Session"] = sessionKey;
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload ?? {}),
+  });
+
+  return await parseJsonOrThrow(res);
+}
+
+function getArr(x) {
+  return Array.isArray(x) ? x : [];
+}
+
+function getIdGeneric(x) {
+  const cand = x?.id ?? x?.id_detalle ?? x?.idDetalle ?? x?.detalle_id ?? 0;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/* =========================
+   Lists normalize (como Ventas)
+========================= */
+function normalizeLists(lists) {
+  const src = lists && typeof lists === "object" ? lists : {};
+  const l = src.listas && typeof src.listas === "object" ? src.listas : src;
+
+  return {
+    detalles: Array.isArray(l.detalles) ? l.detalles : [],
+  };
 }
 
 /* =========================
    Mini modal: agregar catálogo
 ========================= */
-function AddCatalogMiniModal({
-  open,
-  title,
-  value,
-  saving,
-  onChange,
-  onCancel,
-  onSave,
-  dark,
-}) {
+function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -99,13 +168,20 @@ function AddCatalogMiniModal({
     return () => clearTimeout(t);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") onCancel?.();
+      if (e.key === "Enter") onSave?.();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onCancel, onSave]);
+
   if (!open) return null;
 
-  return (
-    <div
-      className={`mi-mini__overlay ${dark ? "mi-mini__overlay--dark" : ""}`}
-      onMouseDown={onCancel}
-    >
+  return createPortal(
+    <div className={`mi-mini__overlay ${dark ? "mi-mini__overlay--dark" : ""}`} onMouseDown={onCancel}>
       <div
         className={`mi-mini__modal ${dark ? "mi-mini__modal--dark" : ""}`}
         onMouseDown={(e) => e.stopPropagation()}
@@ -114,12 +190,7 @@ function AddCatalogMiniModal({
       >
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
-          <button
-            type="button"
-            className="mi-mini__close"
-            onClick={onCancel}
-            disabled={saving}
-          >
+          <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving}>
             ✕
           </button>
         </div>
@@ -139,26 +210,17 @@ function AddCatalogMiniModal({
           </div>
 
           <div className="mi-mini__actions">
-            <button
-              type="button"
-              className="mit-btn mit-btn--ghost"
-              onClick={onCancel}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>
               Cancelar
             </button>
-            <button
-              type="button"
-              className="mit-btn mit-btn--solid"
-              onClick={onSave}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
               {saving ? "Guardando..." : "Guardar"}
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -173,9 +235,11 @@ export default function ModalEditarRecibo({
   onClose,
   onSave,
   onToast,
-  dark, // ✅ opcional: si no lo pasás, toma body.dark
+  dark,
 }) {
-  const API = `${BASE_URL}/api.php`;
+  const API_LISTS = `${BASE_URL}/api.php?action=global_obtener_listas`;
+  const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
+
   const darkOn = isDarkEnabled(dark);
 
   const showToast = useCallback(
@@ -184,6 +248,18 @@ export default function ModalEditarRecibo({
   );
 
   const [saving, setSaving] = useState(false);
+
+  // ✅ localLists con refresh al abrir (fix del bug)
+  const [localLists, setLocalLists] = useState(() => normalizeLists(lists));
+  useEffect(() => setLocalLists(normalizeLists(lists)), [lists]);
+
+  const refreshLists = useCallback(async () => {
+    const data = await apiGetJson(API_LISTS);
+    const normalized = normalizeLists(data);
+    setLocalLists((prev) => ({
+      detalles: normalized.detalles?.length ? normalized.detalles : prev.detalles,
+    }));
+  }, [API_LISTS]);
 
   const [form, setForm] = useState(() => ({
     id_movimiento: null,
@@ -196,7 +272,7 @@ export default function ModalEditarRecibo({
     monto_total: 0,
   }));
 
-  // ✅ Autocomplete: solo dropdown si el usuario tipeó
+  // ✅ Autocomplete
   const [detalleFocus, setDetalleFocus] = useState(false);
   const [detalleArmed, setDetalleArmed] = useState(false);
   const detalleInputRef = useRef(null);
@@ -204,10 +280,12 @@ export default function ModalEditarRecibo({
   const [addUI, setAddUI] = useState({ open: false, text: "", saving: false });
 
   /* =========================
-     Init form
+     Init form + refresh lists
   ========================= */
   useEffect(() => {
     if (!open) return;
+
+    refreshLists().catch(() => {});
 
     const r = row || {};
     const fecha = String(r.fecha || "").slice(0, 10);
@@ -221,9 +299,8 @@ export default function ModalEditarRecibo({
 
     const idDetalle = r.id_detalle ?? NULL_OPTION;
 
-    const detalles = Array.isArray(lists?.detalles) ? lists.detalles : [];
     const detName = String(
-      detalles.find((d) => String(d?.id) === String(idDetalle))?.nombre ?? ""
+      getArr(localLists.detalles).find((d) => String(getIdGeneric(d)) === String(idDetalle))?.nombre ?? ""
     ).trim();
 
     const detFallback = String(r.detalle ?? r.descripcion ?? r.concepto ?? "").trim();
@@ -244,21 +321,20 @@ export default function ModalEditarRecibo({
       detalleInput: detName || detFallback || "",
       monto_total: safeNumber(r.monto_total ?? r.total ?? 0),
     });
-  }, [open, row, lists, periodoDefault]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, row, periodoDefault]); // no metas localLists para no resetear por refresh
 
   /* =========================
-     Autocomplete detalles
+     Autocomplete detalles (usa localLists)
   ========================= */
   const filteredDetalles = useMemo(() => {
-    const all = Array.isArray(lists?.detalles) ? lists.detalles : [];
+    const all = getArr(localLists.detalles);
     const q = normalizeSearchText(form.detalleInput);
 
     if (!detalleFocus || !detalleArmed || q.length < 1) return [];
 
-    return all
-      .filter((d) => normalizeSearchText(d?.nombre).includes(q))
-      .slice(0, 25);
-  }, [lists, form.detalleInput, detalleFocus, detalleArmed]);
+    return all.filter((d) => normalizeSearchText(d?.nombre).includes(q)).slice(0, 25);
+  }, [localLists.detalles, form.detalleInput, detalleFocus, detalleArmed]);
 
   const handleDetalleInputChange = (e) => {
     const value = e.target.value;
@@ -268,43 +344,21 @@ export default function ModalEditarRecibo({
 
   const handleSelectDetalle = (det) => {
     const nombre = String(det?.nombre ?? "").trim();
+    const did = getIdGeneric(det) || det?.id;
     setForm((p) => ({
       ...p,
       detalleInput: nombre,
-      id_detalle: String(det?.id ?? NULL_OPTION),
+      id_detalle: String(did ?? NULL_OPTION),
     }));
     setDetalleFocus(false);
     setDetalleArmed(false);
   };
 
   /* =========================
-     POST JSON helper
-  ========================= */
-  const apiPostJson = useCallback(async (url, payload) => {
-    const { token } = getAuthInfo();
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers.Authorization = `Bearer ${token}`;
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload ?? {}),
-    });
-    const text = await res.text();
-    if (!text) throw new Error("Respuesta vacía del servidor.");
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      throw new Error("Respuesta inválida (no JSON).");
-    }
-    return data;
-  }, []);
-
-  /* =========================
-     Nuevo detalle
+     Nuevo detalle (fix + update localLists)
   ========================= */
   const startAddDetalle = () => {
+    if (saving) return;
     setDetalleFocus(false);
     setDetalleArmed(false);
     setAddUI({ open: true, text: "", saving: false });
@@ -323,7 +377,7 @@ export default function ModalEditarRecibo({
     try {
       const { idUsuario } = getAuthInfo();
 
-      const data = await apiPostJson(`${API}?action=catalogo_crear`, {
+      const data = await apiPostJson(API_CATALOGO, {
         catalogo: "detalles",
         nombre,
         idUsuario,
@@ -334,9 +388,16 @@ export default function ModalEditarRecibo({
       const newId = Number(data?.item?.id);
       const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
 
-      if (!Number.isFinite(newId) || newId <= 0) {
-        throw new Error("El servidor no devolvió un ID válido.");
-      }
+      if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
+
+      // ✅ update localLists (clave del fix)
+      setLocalLists((prev) => {
+        const arr = getArr(prev.detalles).slice();
+        if (!arr.some((x) => getIdGeneric(x) === newId)) {
+          arr.push({ id: newId, nombre: newNombre });
+        }
+        return { ...prev, detalles: arr };
+      });
 
       setForm((p) => ({ ...p, id_detalle: String(newId), detalleInput: newNombre }));
 
@@ -366,24 +427,23 @@ export default function ModalEditarRecibo({
     showToast("cargando", "Guardando cambios…", 12000);
 
     try {
-      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) {
-        throw new Error("Fecha inválida.");
-      }
+      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) throw new Error("Fecha inválida.");
 
       const perUI = periodoToMMYYYY(form.periodo) || periodoFromISODate(form.fecha);
       const perAPI = periodoToYYYYMM(perUI);
+
+      const idDet = form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null;
+      if (!idDet) throw new Error("Seleccioná un detalle.");
 
       const payloadFinal = {
         id_movimiento: form.id_movimiento,
         fecha: form.fecha,
         periodo: perAPI, // YYYY-MM
 
-        id_cliente:
-          form.id_cliente && form.id_cliente !== NULL_OPTION ? Number(form.id_cliente) : null,
+        id_cliente: form.id_cliente && form.id_cliente !== NULL_OPTION ? Number(form.id_cliente) : null,
         cliente: String(form.cliente || "").trim(),
 
-        id_detalle:
-          form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null,
+        id_detalle: idDet,
         detalle: String(form.detalleInput || "").trim(),
 
         monto_total: Math.max(0, Math.round(safeNumber(form.monto_total) * 100) / 100),
@@ -402,16 +462,9 @@ export default function ModalEditarRecibo({
   if (!open) return null;
 
   return createPortal(
-    <div
-      className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`}
-      onMouseDown={() => !saving && onClose?.()}
-    >
+    <div className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`} onMouseDown={() => !saving && onClose?.()}>
       <div
-        className={[
-          "mi-modal__container",
-          "mi-modal__container--mov",
-          darkOn ? "mi-modal--dark" : "",
-        ].join(" ")}
+        className={["mi-modal__container", "mi-modal__container--mov", darkOn ? "mi-modal--dark" : ""].join(" ")}
         id="mov--modaleditarrecibo"
         role="dialog"
         aria-modal="true"
@@ -420,17 +473,10 @@ export default function ModalEditarRecibo({
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar recibo</h2>
-            <p className="mi-modal__subtitle">
-              Fecha, período, descripción/detalle, cliente y monto.
-            </p>
+            <p className="mi-modal__subtitle">Fecha, período, descripción/detalle, cliente y monto.</p>
           </div>
 
-          <button
-            className="mi-modal__close"
-            onClick={() => !saving && onClose?.()}
-            disabled={saving}
-            type="button"
-          >
+          <button className="mi-modal__close" onClick={() => !saving && onClose?.()} disabled={saving} type="button">
             ✕
           </button>
         </div>
@@ -463,7 +509,7 @@ export default function ModalEditarRecibo({
             </div>
           </div>
 
-          {/* ✅ Descripción = Detalle (autocomplete + agregar) */}
+          {/* ✅ Detalle */}
           <div className="fl-field mi-field--mt12 mi-field--rel">
             <input
               ref={detalleInputRef}
@@ -482,7 +528,7 @@ export default function ModalEditarRecibo({
               <ul className="mi-cr-suggest">
                 {filteredDetalles.map((d) => (
                   <li
-                    key={d.id}
+                    key={getIdGeneric(d) || d.id}
                     className="mi-cr-suggest__item"
                     onMouseDown={(e) => {
                       e.preventDefault();
@@ -495,12 +541,7 @@ export default function ModalEditarRecibo({
               </ul>
             )}
 
-            <button
-              type="button"
-              onClick={startAddDetalle}
-              disabled={saving}
-              className="mi-cr-link"
-            >
+            <button type="button" onClick={startAddDetalle} disabled={saving} className="mi-cr-link">
               + Agregar nuevo detalle
             </button>
           </div>
@@ -533,19 +574,10 @@ export default function ModalEditarRecibo({
           </div>
 
           <div className="content-btn-modalrecibo mi-actions--mt14">
-            <button
-              type="submit"
-              disabled={saving}
-              className="mit-btn mit-btn--solid btn--modalrecibo"
-            >
+            <button type="submit" disabled={saving} className="mit-btn mit-btn--solid btn--modalrecibo">
               {saving ? "Guardando..." : "Guardar"}
             </button>
-            <button
-              type="button"
-              onClick={() => !saving && onClose?.()}
-              disabled={saving}
-              className="mit-btn mit-btn--ghost btn--modalrecibo"
-            >
+            <button type="button" onClick={() => !saving && onClose?.()} disabled={saving} className="mit-btn mit-btn--ghost btn--modalrecibo">
               Cancelar
             </button>
           </div>

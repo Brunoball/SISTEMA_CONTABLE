@@ -1,5 +1,5 @@
 // src/components/Dashboard/Dashboard.jsx
-import React, { useMemo, useEffect, useState } from "react";
+import React, { useMemo, useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -11,6 +11,9 @@ import {
 
 import GifCarga from "../Global/Gif_Carga";
 import "./dashboard.css";
+
+// ✅ NUEVO: consumir ListasContext
+import { useListas } from "../../context/ListasContext";
 
 function normalizeRol(value) {
   if (value == null) return "vista";
@@ -65,21 +68,52 @@ function pickInfo(label) {
 const DASH_SEEN_KEY = "pp_seen_dashboard";
 
 export default function Dashboard() {
-
   const navigate = useNavigate();
+
+  // ✅ ListasContext (cache + fetch centralizado)
+  const { ensureListsLoaded } = useListas();
 
   /* =======================
      🔥 LOADER INICIAL BALTO
+     - ahora se apaga cuando listas terminan,
+       con fallback a 10s si algo falla.
   ======================== */
   const [loadingInicial, setLoadingInicial] = useState(true);
+  const didWarmupRef = useRef(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoadingInicial(false);
-    }, 10000); // 10 segundos
+    if (didWarmupRef.current) return;
+    didWarmupRef.current = true;
 
-    return () => clearTimeout(timer);
-  }, []);
+    let alive = true;
+
+    // Fallback: no dejes el loader infinito
+    const fallback = setTimeout(() => {
+      if (!alive) return;
+      setLoadingInicial(false);
+    }, 10000);
+
+    // ✅ Warm-up fuerte: forzá cargar listas al entrar al Dashboard
+    // background:true => no bloquea con "loadingLists" global,
+    // pero sí calienta cache para TODAS las secciones.
+    (async () => {
+      try {
+        await ensureListsLoaded({ force: true, background: true });
+      } catch {
+        // el provider ya maneja el error internamente,
+        // acá no frenamos la UI
+      } finally {
+        if (!alive) return;
+        clearTimeout(fallback);
+        setLoadingInicial(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+      clearTimeout(fallback);
+    };
+  }, [ensureListsLoaded]);
 
   const usuario = useMemo(() => {
     try {
@@ -158,7 +192,6 @@ export default function Dashboard() {
 
         {/* GRID */}
         <section className="db-grid">
-
           <div className="db-card">
             <div className="db-card__title">Acceso rápido</div>
             <div className="db-card__desc">Accedé a los módulos disponibles según tu plan.</div>
@@ -208,7 +241,6 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
-
         </section>
 
         {/* FOOTER */}

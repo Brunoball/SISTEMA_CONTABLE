@@ -1,0 +1,263 @@
+// src/context/ListasContext.jsx
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import BASE_URL from "../config/config";
+
+/* =========================
+   CONFIG
+========================= */
+const LISTS_TTL_MS = 10 * 60 * 1000; // 10 min (ajustable)
+const CACHE_PREFIX = "balto_lists_cache_v1";
+
+/* =========================
+   Helpers
+========================= */
+function getSessionKey() {
+  return String(localStorage.getItem("session_key") || "").trim();
+}
+
+// Cache “por sesión/tenant” (suficiente en tu multi-tenant)
+function getCacheKey() {
+  const sk = getSessionKey();
+  const tag = sk ? sk.slice(0, 12) : "nosession";
+  return `${CACHE_PREFIX}:${tag}`;
+}
+
+function safeJsonParse(s) {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
+/* ✅ período helpers */
+function periodoToMMYYYY(input) {
+  const s = String(input ?? "").trim();
+  if (!s) return "";
+
+  let m = "";
+  let y = "";
+
+  if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
+    const parts = s.split(/[-/]/);
+    y = parts[0];
+    m = parts[1];
+  } else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
+    const parts = s.split(/[-/]/);
+    m = parts[0];
+    y = parts[1];
+  } else if (/^\d{6}$/.test(s)) {
+    const a = Number(s.slice(0, 4));
+    if (a >= 1900 && a <= 2100) {
+      y = s.slice(0, 4);
+      m = s.slice(4);
+    } else {
+      m = s.slice(0, 2);
+      y = s.slice(2);
+    }
+  } else {
+    return s;
+  }
+
+  const mm = String(Number(m)).padStart(2, "0");
+  const yyyy = String(y);
+  return `${mm}-${yyyy}`;
+}
+
+const emptyLists = {
+  periodos: [],
+  clasificaciones: [],
+  clientes: [],
+  cuentas_corrientes: [],
+  detalles: [],
+  medios_pago: [],
+  proveedores: [],
+  tipos_movimiento: [],
+  tipos_venta: [],
+};
+
+function normalizeLists(raw) {
+  const src = raw?.listas && typeof raw.listas === "object" ? raw.listas : raw;
+  const getArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
+  const periodosUI = (getArr("periodos") || []).map(periodoToMMYYYY);
+
+  return {
+    periodos: periodosUI,
+    clasificaciones: getArr("clasificaciones"),
+    clientes: getArr("clientes"),
+    cuentas_corrientes: getArr("cuentas_corrientes"),
+    detalles: getArr("detalles"),
+    medios_pago: getArr("medios_pago"),
+    proveedores: getArr("proveedores"),
+    tipos_movimiento: getArr("tipos_movimiento"),
+    tipos_venta: getArr("tipos_venta"),
+  };
+}
+
+/* =========================
+   Context
+========================= */
+const ListasCtx = createContext(null);
+
+export function ListasProvider({ children }) {
+  const API = `${BASE_URL}/api.php`;
+
+  const [lists, setLists] = useState(emptyLists);
+  const [loadingLists, setLoadingLists] = useState(false);
+  const [errorLists, setErrorLists] = useState("");
+  const [lastUpdated, setLastUpdated] = useState(0);
+
+  const inflightRef = useRef(null); // evita duplicar requests simultáneos
+
+  const buildHeadersGET = useCallback(() => {
+    const sk = getSessionKey();
+    const h = {};
+    if (sk) h["X-Session"] = sk;
+    return h;
+  }, []);
+
+  const parseJsonOrThrow = useCallback(async (res) => {
+    const text = await res.text();
+    if (!text) throw new Error("Respuesta vacía del servidor.");
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      const preview = text.length > 700 ? text.slice(0, 700) + "..." : text;
+      throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
+    }
+    return data;
+  }, []);
+
+  const fetchLists = useCallback(
+    async () => {
+      const res = await fetch(`${API}?action=global_obtener_listas`, {
+        method: "GET",
+        headers: buildHeadersGET(),
+      });
+      const data = await parseJsonOrThrow(res);
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar listas.");
+      return normalizeLists(data);
+    },
+    [API, buildHeadersGET, parseJsonOrThrow]
+  );
+
+  const writeCache = useCallback((payload) => {
+    try {
+      const key = getCacheKey();
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          ts: Date.now(),
+          lists: payload,
+        })
+      );
+    } catch {}
+  }, []);
+
+  const readCache = useCallback(() => {
+    try {
+      const key = getCacheKey();
+      const raw = localStorage.getItem(key);
+      const parsed = safeJsonParse(raw);
+      if (!parsed || !parsed.ts || !parsed.lists) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const ensureListsLoaded = useCallback(
+    async ({ force = false, background = false } = {}) => {
+      const cached = readCache();
+      const now = Date.now();
+      const cacheFresh = cached && now - Number(cached.ts || 0) <= LISTS_TTL_MS;
+
+      // 1) Si hay cache, setear instantáneo (no bloquear UI)
+      if (cached?.lists && !force) {
+        setLists(cached.lists);
+        setLastUpdated(Number(cached.ts) || now);
+      }
+
+      // 2) Si cache es fresco y no forzamos, no hace falta red
+      if (cacheFresh && !force) {
+        return cached.lists;
+      }
+
+      // 3) Evitar duplicar requests
+      if (inflightRef.current) {
+        return inflightRef.current;
+      }
+
+      const doRequest = (async () => {
+        if (!background) {
+          setLoadingLists(true);
+        }
+        setErrorLists("");
+
+        try {
+          const fresh = await fetchLists();
+          setLists(fresh);
+          setLastUpdated(Date.now());
+          writeCache(fresh);
+          return fresh;
+        } catch (e) {
+          const msg = e?.message || "Error cargando listas.";
+          setErrorLists(msg);
+
+          // si no hay cache útil, dejar vacío; si hay cache, lo mantenemos
+          if (!cached?.lists) setLists(emptyLists);
+          return cached?.lists || emptyLists;
+        } finally {
+          if (!background) setLoadingLists(false);
+          inflightRef.current = null;
+        }
+      })();
+
+      inflightRef.current = doRequest;
+      return doRequest;
+    },
+    [fetchLists, readCache, writeCache]
+  );
+
+  // ✅ Prefetch automatico al montar el Provider (SWR)
+  useEffect(() => {
+    // 1) levantar cache instantáneo si existe
+    const cached = readCache();
+    if (cached?.lists) {
+      setLists(cached.lists);
+      setLastUpdated(Number(cached.ts) || 0);
+    }
+
+    // 2) refrescar en background si está stale
+    ensureListsLoaded({ force: false, background: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const refreshLists = useCallback(async () => {
+    return await ensureListsLoaded({ force: true, background: false });
+  }, [ensureListsLoaded]);
+
+  const value = useMemo(
+    () => ({
+      lists,
+      loadingLists,
+      errorLists,
+      lastUpdated,
+      ensureListsLoaded,
+      refreshLists,
+      setLists, // por si en el futuro querés modificar manualmente algo
+    }),
+    [lists, loadingLists, errorLists, lastUpdated, ensureListsLoaded, refreshLists]
+  );
+
+  return <ListasCtx.Provider value={value}>{children}</ListasCtx.Provider>;
+}
+
+export function useListas() {
+  const ctx = useContext(ListasCtx);
+  if (!ctx) {
+    throw new Error("useListas() debe usarse dentro de <ListasProvider />");
+  }
+  return ctx;
+}

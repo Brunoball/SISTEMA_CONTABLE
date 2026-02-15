@@ -1,16 +1,12 @@
 // src/components/Analisis_Financiero/Analisis_Financiero.jsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import BASE_URL from "../../config/config";
 import "./analisis_financiero.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFileExcel } from "@fortawesome/free-solid-svg-icons";
 
-// ✅ Toast global (igual que Movimientos)
+// ✅ Toast global
 import Toast from "../Global/Toast.jsx";
-
-// ✅ GIF carga
-import GifCarga from "../Global/Gif_Carga.jsx";
-import "../Global/gif_carga.css";
 
 // ✅ Excel
 import * as XLSX from "xlsx";
@@ -46,7 +42,6 @@ function toNumberOrZero(v) {
 function normalizeRows(raw) {
   // 1) rows: [{ concepto, importe, tipo, id? }]
   // 2) valores: { ventas, costo_variable, costo_fijo, otros_egresos, gastos_personales, ... }
-
   if (Array.isArray(raw)) {
     return raw
       .map((r, idx) => ({
@@ -177,60 +172,96 @@ function numOrNull(v) {
 }
 
 /* =========================
-   ✅ Auth (X-Session) — igual que Movimientos
+   ✅ Auth helpers (X-Session)
 ========================= */
-function getAuthInfo() {
-  const sessionKey = (localStorage.getItem("session_key") || "").trim();
-
-  let idUsuario = 0;
-  try {
-    const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand =
-      u?.idUsuarioMaster ??
-      u?.idUsuario ??
-      u?.id_usuario ??
-      u?.id ??
-      u?.user_id ??
-      0;
-    if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
-  } catch {}
-
-  return { sessionKey, idUsuario };
+function getSessionKey() {
+  return (localStorage.getItem("session_key") || "").toString().trim();
 }
-
-function buildHeadersGET() {
-  const { sessionKey } = getAuthInfo();
-  const h = {};
+function authHeaders(extra = {}) {
+  const sessionKey = getSessionKey();
+  const h = { ...extra };
   if (sessionKey) h["X-Session"] = sessionKey;
   return h;
 }
-
-async function fetchJSON(url) {
-  const r = await fetch(url, { method: "GET", headers: buildHeadersGET() });
-
-  // Si tu backend devuelve 401 cuando la sesión no sirve, lo mostramos claro
-  if (r.status === 401) {
+async function parseJsonOrThrow(res) {
+  // 401 claro
+  if (res.status === 401) {
     throw new Error("401 (Unauthorized): Sesión vencida o no autorizada. Volvé a iniciar sesión.");
   }
 
-  const txt = await r.text();
-  if (!txt) throw new Error("Respuesta vacía del servidor.");
-
+  const text = await res.text();
+  if (!text) throw new Error("Respuesta vacía del servidor.");
   try {
-    return JSON.parse(txt);
+    return JSON.parse(text);
   } catch {
-    throw new Error(`Respuesta inválida (${r.status}): ${txt.slice(0, 180)}`);
+    const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
+    throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
   }
 }
+
+/* =========================
+   ✅ Período: normalizador + cache (IGUAL FLUJO_CAJA)
+========================= */
+function periodoToYYYYMM(input) {
+  const s = String(input ?? "").trim();
+  if (!s) return "";
+
+  // YYYY-MM o YYYY/M
+  if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
+    const [yyyy, mmRaw] = s.split(/[-/]/);
+    const mm = String(Number(mmRaw)).padStart(2, "0");
+    return `${yyyy}-${mm}`;
+  }
+  // MM-YYYY o MM/YYYY
+  if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
+    const [mmRaw, yyyy] = s.split(/[-/]/);
+    const mm = String(Number(mmRaw)).padStart(2, "0");
+    return `${yyyy}-${mm}`;
+  }
+  // 202601 / 012026
+  if (/^\d{6}$/.test(s)) {
+    const a = Number(s.slice(0, 4));
+    if (a >= 1900 && a <= 2100) {
+      const yyyy = s.slice(0, 4);
+      const mm = String(Number(s.slice(4))).padStart(2, "0");
+      return `${yyyy}-${mm}`;
+    } else {
+      const mm = String(Number(s.slice(0, 2))).padStart(2, "0");
+      const yyyy = s.slice(2);
+      return `${yyyy}-${mm}`;
+    }
+  }
+  return "";
+}
+
+const PERIOD_CACHE_KEY = "af_periodo_cache";
+function readCachedPeriodo() {
+  const v = (localStorage.getItem(PERIOD_CACHE_KEY) || "").trim();
+  const norm = periodoToYYYYMM(v);
+  return norm || "";
+}
+function writeCachedPeriodo(v) {
+  const norm = periodoToYYYYMM(v);
+  if (norm) localStorage.setItem(PERIOD_CACHE_KEY, norm);
+}
+
+/* =========================
+   Skeleton config (igual idea Flujo)
+========================= */
+const SKELETON_ROWS = 10;
 
 export default function Analisis_Financiero() {
   const API = `${BASE_URL}/api.php`;
 
-  const [periodo, setPeriodo] = useState("");
-  const [periodOptions, setPeriodOptions] = useState([]);
+  // ✅ PERÍODO instantáneo (cache primero, sino fallback)
+  const [periodo, setPeriodo] = useState(() => readCachedPeriodo() || "2026-01");
+
+  const [periodOptions, setPeriodOptions] = useState([]); // YYYY-MM[]
   const [q, setQ] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [loadingPeriodos, setLoadingPeriodos] = useState(false);
+
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
 
@@ -238,75 +269,129 @@ export default function Analisis_Financiero() {
      ✅ TOAST GLOBAL
   ========================= */
   const [toast, setToast] = useState(null);
-
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
     setToast({ tipo, mensaje, duracion });
   }, []);
-
   const closeToast = useCallback(() => setToast(null), []);
 
-  /* =========================
-     ✅ Cargar períodos reales desde movimientos
-     action=analisis_financiero_periodos
-  ========================= */
-  const fetchPeriodos = useCallback(async () => {
+  // ✅ Skeleton: delay anti-parpadeo (IGUAL FLUJO)
+  const skelTimerRef = useRef(null);
+  const [showSkeleton, setShowSkeleton] = useState(false);
+
+  const beginSkeleton = useCallback(() => {
+    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
+    setShowSkeleton(false);
+    skelTimerRef.current = setTimeout(() => setShowSkeleton(true), 120);
+  }, []);
+
+  const endSkeleton = useCallback(() => {
+    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
+    setShowSkeleton(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
+    };
+  }, []);
+
+  // ✅ check simple sesión
+  useEffect(() => {
+    const k = getSessionKey();
+    if (!k) showToast("advertencia", "Falta session_key. Iniciá sesión de nuevo.", 4200);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ✅ guardar periodo al cambiar (instant)
+  useEffect(() => {
+    if (periodo) writeCachedPeriodo(periodo);
+  }, [periodo]);
+
+  /* =========================================================
+     ✅ 1) Periodos desde Dashboard (global_obtener_listas)
+     - normaliza a YYYY-MM
+     - unique + sort desc
+     - si periodo actual no existe => setea el más nuevo
+  ========================================================= */
+  const fetchPeriodosFromDashboard = useCallback(async () => {
     setLoadingPeriodos(true);
     setError("");
 
     try {
-      const url = `${API}?action=analisis_financiero_periodos`;
-      const json = await fetchJSON(url);
+      const res = await fetch(`${API}?action=global_obtener_listas`, {
+        method: "GET",
+        headers: authHeaders(),
+      });
 
-      if (!json?.exito) throw new Error(json?.mensaje || "Error cargando períodos");
+      const json = await parseJsonOrThrow(res);
 
-      const arr = Array.isArray(json?.periodos) ? json.periodos : [];
-      setPeriodOptions(arr);
-
-      if (!arr.length) {
-        setPeriodo("");
-        setData(null);
-        showToast("error", "No hay períodos en movimientos.", 3200);
-        return;
+      if (!res.ok || !json?.exito) {
+        throw new Error(json?.mensaje || `Error cargando períodos (HTTP ${res.status})`);
       }
 
-      if (!periodo || !arr.includes(periodo)) {
-        setPeriodo(arr[0]);
+      const raw = Array.isArray(json?.listas?.periodos)
+        ? json.listas.periodos
+        : Array.isArray(json?.periodos)
+        ? json.periodos
+        : [];
+
+      const unique = Array.from(
+        new Set(raw.map((p) => periodoToYYYYMM(p)).filter(Boolean))
+      );
+
+      unique.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+      setPeriodOptions(unique);
+
+      if (unique.length) {
+        if (!periodo || !unique.includes(periodo)) setPeriodo(unique[0]);
+      } else {
+        // no pisamos el periodo (queda cache/fallback), pero avisamos
+        showToast("error", "No hay períodos disponibles.", 3200);
       }
     } catch (e) {
       const msg = e?.message || "Error cargando períodos";
       setError(msg);
       showToast("error", msg, 4200);
       setPeriodOptions([]);
-      setPeriodo("");
-      setData(null);
+      // no pisamos el periodo (queda cache/fallback)
     } finally {
       setLoadingPeriodos(false);
     }
   }, [API, periodo, showToast]);
 
   useEffect(() => {
-    fetchPeriodos();
+    fetchPeriodosFromDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* =========================
-     ✅ Cargar análisis cuando hay período seleccionado
-  ========================= */
+  /* =========================================================
+     ✅ 2) Cargar análisis cuando hay período seleccionado
+     - tabla SIEMPRE visible
+     - skeleton SOLO en rows
+  ========================================================= */
   const fetchAnalisis = useCallback(async () => {
     if (!periodo) return;
 
     setLoading(true);
     setError("");
+    beginSkeleton();
 
     try {
       const sp = new URLSearchParams();
       sp.set("action", "analisis_financiero_resumen");
       sp.set("periodo", periodo);
 
-      const url = `${API}?${sp.toString()}`;
-      const json = await fetchJSON(url);
+      const res = await fetch(`${API}?${sp.toString()}`, {
+        method: "GET",
+        headers: authHeaders(),
+      });
 
-      if (!json?.exito) throw new Error(json?.mensaje || "Error desconocido en API");
+      const json = await parseJsonOrThrow(res);
+
+      if (!res.ok || !json?.exito) {
+        throw new Error(json?.mensaje || `Error desconocido en API (HTTP ${res.status})`);
+      }
+
       setData(json);
     } catch (e) {
       setData(null);
@@ -315,13 +400,17 @@ export default function Analisis_Financiero() {
       showToast("error", msg, 4200);
     } finally {
       setLoading(false);
+      endSkeleton();
     }
-  }, [API, periodo, showToast]);
+  }, [API, periodo, showToast, beginSkeleton, endSkeleton]);
 
   useEffect(() => {
     fetchAnalisis();
   }, [fetchAnalisis]);
 
+  /* =========================
+     Datos / normalización
+  ========================= */
   const rawRows =
     data?.rows ??
     data?.data?.rows ??
@@ -347,6 +436,10 @@ export default function Analisis_Financiero() {
   const gastosPersonales = allRows.find((r) => safeText(r.id).toLowerCase() === "gastos_personales")?.importe ?? null;
 
   const resultadoIsNeg = Number(resultadoNeto) < 0;
+
+  // ✅ soft loading igual flujo
+  const softLoading = (loading || loadingPeriodos) && showSkeleton;
+  const disableUI = loadingPeriodos; // select bloqueado solo mientras llegan periodos
 
   /* =========================
      ✅ Exportar a Excel + Toast
@@ -394,7 +487,31 @@ export default function Analisis_Financiero() {
     }
   }, [filteredRows, data, periodo, ventas, resultadoNeto, gastosPersonales, showToast]);
 
-  const disableUI = loading || loadingPeriodos;
+  // Skeleton widths (para parecer real)
+  const skelWidths = useMemo(() => {
+    return {
+      concepto: ["42%", "58%", "50%", "64%", "46%"],
+      importe: ["32%", "38%", "28%", "40%", "34%"],
+    };
+  }, []);
+
+  const renderSkeletonRow = (idx) => {
+    const w = (key) => {
+      const list = skelWidths[key] || ["50%"];
+      return list[idx % list.length];
+    };
+
+    return (
+      <div className="af-grid af-grid--row af-grid--excel af-row--skeleton" key={`skel-${idx}`}>
+        <div className="af-cell af-concept">
+          <span className="af-skeletonBar" style={{ width: w("concepto") }} />
+        </div>
+        <div className="af-cell af-num is-right">
+          <span className="af-skeletonBar" style={{ width: w("importe") }} />
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="af-page">
@@ -419,33 +536,29 @@ export default function Analisis_Financiero() {
             <div className="af-headTitle">
               <div className="af-card__title">Análisis Financiero</div>
               <div className="af-card__hint">
-                {disableUI ? (
-                  <>Cargando…</>
-                ) : (
-                  <>
-                    Mostrando <b>{showing}</b> registros
-                  </>
-                )}
+                Mostrando <b>{showing}</b> registros
               </div>
             </div>
 
             <div className="af-headFilters">
               <div className="af-filter">
                 <label>Período</label>
+
                 <select
-                  value={periodo}
+                  value={periodo || ""}
                   onChange={(e) => setPeriodo(e.target.value)}
-                  disabled={disableUI || periodOptions.length === 0}
+                  disabled={disableUI}
                 >
-                  {periodOptions.length === 0 ? (
-                    <option value="">Sin períodos</option>
-                  ) : (
-                    periodOptions.map((p) => (
-                      <option key={p} value={p}>
-                        {periodLabelMMYYYY(p)}
-                      </option>
-                    ))
+                  {/* ✅ si todavía no llegó la lista, mostramos el periodo actual */}
+                  {(!periodOptions.length || !periodOptions.includes(periodo)) && (
+                    <option value={periodo}>{periodLabelMMYYYY(periodo)}</option>
                   )}
+
+                  {periodOptions.map((p) => (
+                    <option key={p} value={p}>
+                      {periodLabelMMYYYY(p)}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -457,10 +570,10 @@ export default function Analisis_Financiero() {
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     placeholder="Ej: ventas, costo fijo, gastos..."
-                    disabled={disableUI}
+                    disabled={loading || loadingPeriodos}
                   />
 
-                  {q.trim() !== "" && !disableUI && (
+                  {q.trim() !== "" && !(loading || loadingPeriodos) && (
                     <button
                       type="button"
                       className="af-clearSearch"
@@ -483,7 +596,7 @@ export default function Analisis_Financiero() {
               type="button"
               className="af-btn af-btn--excel"
               onClick={handleExportExcel}
-              disabled={disableUI || !data || filteredRows.length === 0}
+              disabled={loading || loadingPeriodos || !data || filteredRows.length === 0}
               title={!data ? "Primero cargá datos" : "Exportar tabla a Excel"}
             >
               <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
@@ -491,66 +604,66 @@ export default function Analisis_Financiero() {
           </div>
         </div>
 
-        {/* ✅ TABLA: si está cargando, mostramos el GIF dentro del body */}
+        {/* ✅ TABLA SIEMPRE visible */}
         <div className="af-tableWrap">
           <div className="af-grid af-grid--head af-grid--excel">
             <div className="af-cell">CONCEPTO</div>
             <div className="af-cell is-right">IMPORTE</div>
           </div>
 
-          <div className="af-gridBody" role="rowgroup">
-            {disableUI && (
-              <div className="af-emptyRow af-emptyRow--loading">
-                <GifCarga />
+          <div className={["af-gridBody", softLoading ? "af-softLoading" : ""].join(" ")}>
+            {/* ✅ Skeleton rows (carga) */}
+            {showSkeleton && (loading || loadingPeriodos) ? (
+              <div className="af-skeletonWrap" aria-busy="true">
+                {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
               </div>
-            )}
+            ) : (
+              <>
+                {data &&
+                  filteredRows.map((r) => {
+                    const conceptoLower = safeText(r.concepto).toLowerCase();
 
-            {!disableUI &&
-              data &&
-              filteredRows.map((r) => {
-                const conceptoLower = safeText(r.concepto).toLowerCase();
+                    const isResultado =
+                      conceptoLower === "resultado neto" ||
+                      r.tipo === "resultado" ||
+                      safeText(r.id).toLowerCase() === "resultado_neto";
 
-                const isResultado =
-                  conceptoLower === "resultado neto" ||
-                  r.tipo === "resultado" ||
-                  safeText(r.id).toLowerCase() === "resultado_neto";
+                    const isGastoPersonal =
+                      conceptoLower.includes("gastos personales") ||
+                      safeText(r.id).toLowerCase() === "gastos_personales";
 
-                const isGastoPersonal =
-                  conceptoLower.includes("gastos personales") ||
-                  safeText(r.id).toLowerCase() === "gastos_personales";
+                    return (
+                      <div
+                        className={`af-grid af-grid--row af-grid--excel ${
+                          isResultado ? "is-resultado" : ""
+                        } ${isGastoPersonal ? "is-gp" : ""}`}
+                        key={r.id}
+                      >
+                        <div className="af-cell af-concept">{r.concepto}</div>
 
-                return (
-                  <div
-                    className={`af-grid af-grid--row af-grid--excel ${
-                      isResultado ? "is-resultado" : ""
-                    } ${isGastoPersonal ? "is-gp" : ""}`}
-                    key={r.id}
-                  >
-                    <div className="af-cell af-concept">{r.concepto}</div>
+                        <div
+                          className={`af-cell af-num is-right ${
+                            Number(r.importe) < 0 ? "is-negative" : ""
+                          }`}
+                        >
+                          {moneyARS(r.importe)}
+                        </div>
+                      </div>
+                    );
+                  })}
 
-                    <div
-                      className={`af-cell af-num is-right ${
-                        Number(r.importe) < 0 ? "is-negative" : ""
-                      }`}
-                    >
-                      {moneyARS(r.importe)}
-                    </div>
-                  </div>
-                );
-              })}
+                {!data && !error && <div className="af-emptyRow">No hay datos para mostrar.</div>}
 
-            {!disableUI && data && filteredRows.length === 0 && (
-              <div className="af-emptyRow">No hay datos para mostrar.</div>
-            )}
-
-            {!disableUI && !data && !error && (
-              <div className="af-emptyRow">No hay datos para mostrar.</div>
+                {!!data && filteredRows.length === 0 && (
+                  <div className="af-emptyRow">No hay datos para mostrar.</div>
+                )}
+              </>
             )}
           </div>
         </div>
 
         {/* ✅ RESTO del layout solo cuando hay data y NO está cargando */}
-        {!disableUI && data && (
+        {!loading && !loadingPeriodos && data && (
           <>
             <div className="af-subhead">
               <div className="af-subhead__name">

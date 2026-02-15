@@ -63,32 +63,112 @@ function normalizeSearchText(v) {
     .trim();
 }
 
+function isDarkEnabled(darkProp) {
+  if (darkProp === true) return true;
+  if (typeof document === "undefined") return false;
+  const byAttr = document.documentElement.getAttribute("data-theme") === "oscuro";
+  const byBody = document.body?.classList?.contains("dark");
+  return Boolean(byAttr || byBody);
+}
+
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
+
+  const sessionKey =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    "";
+
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
-  return { token, idUsuario };
+
+  return { token, sessionKey, idUsuario };
+}
+
+async function parseJsonOrThrow(res) {
+  const text = await res.text();
+  if (!text) throw new Error("Respuesta vacía del servidor.");
+
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
+    throw new Error(`Respuesta inválida (no JSON). HTTP ${res.status}\n${preview}`);
+  }
+
+  if (!res.ok) {
+    const msg = data?.mensaje || data?.error || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+
+  return data;
+}
+
+async function apiGetJson(url) {
+  const { token, sessionKey } = getAuthInfo();
+  const headers = {};
+  if (sessionKey) headers["X-Session"] = sessionKey;
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(url, { method: "GET", headers });
+  return await parseJsonOrThrow(res);
+}
+
+async function apiPostJson(url, payload) {
+  const { token, sessionKey } = getAuthInfo();
+  const headers = { "Content-Type": "application/json" };
+  if (sessionKey) headers["X-Session"] = sessionKey;
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload ?? {}),
+  });
+
+  return await parseJsonOrThrow(res);
 }
 
 function getArr(x) {
   return Array.isArray(x) ? x : [];
 }
 
-function findById(arr, id) {
-  const sid = String(id ?? "");
-  return getArr(arr).find(
-    (it) => String(it?.id ?? it?.id_detalle ?? it?.id_proveedor) === sid
-  );
+function getIdGeneric(x) {
+  const cand =
+    x?.id ??
+    x?.id_detalle ??
+    x?.idDetalle ??
+    x?.detalle_id ??
+    x?.id_proveedor ??
+    x?.idProveedor ??
+    x?.proveedor_id ??
+    0;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-function isDarkEnabled(darkProp) {
-  if (darkProp === true) return true;
-  if (typeof document === "undefined") return false;
-  return document.body?.classList?.contains("dark");
+function findById(arr, id) {
+  const sid = String(id ?? "");
+  return getArr(arr).find((it) => String(getIdGeneric(it)) === sid);
+}
+
+/* =========================
+   Lists normalize (lo mismo que Ventas)
+========================= */
+function normalizeLists(lists) {
+  const src = lists && typeof lists === "object" ? lists : {};
+  const l = src.listas && typeof src.listas === "object" ? src.listas : src;
+
+  return {
+    detalles: Array.isArray(l.detalles) ? l.detalles : [],
+    proveedores: Array.isArray(l.proveedores) ? l.proveedores : [],
+  };
 }
 
 /* =========================
@@ -103,9 +183,19 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
     return () => clearTimeout(t);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") onCancel?.();
+      if (e.key === "Enter") onSave?.();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onCancel, onSave]);
+
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className={`mi-mini__overlay ${dark ? "mi-mini__overlay--dark" : ""}`} onMouseDown={onCancel}>
       <div
         className={`mi-mini__modal ${dark ? "mi-mini__modal--dark" : ""}`}
@@ -144,7 +234,8 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -159,9 +250,12 @@ export default function ModalEditarOrdenPago({
   onClose,
   onSave,
   onToast,
-  dark, // ✅ opcional: si no lo pasás, toma body.dark
+  dark,
 }) {
-  const API = `${BASE_URL}/api.php`;
+  const API_BASE = `${BASE_URL}/api.php`;
+  const API_LISTS = `${BASE_URL}/api.php?action=global_obtener_listas`;
+  const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
+
   const darkOn = isDarkEnabled(dark);
 
   const showToast = useCallback(
@@ -171,7 +265,24 @@ export default function ModalEditarOrdenPago({
 
   const [saving, setSaving] = useState(false);
 
-  // ✅ Autocomplete detalle: solo dropdown si el usuario tipeó
+  // ✅ localLists: se refrescan al abrir (soluciona el bug)
+  const [localLists, setLocalLists] = useState(() => normalizeLists(lists));
+  useEffect(() => setLocalLists(normalizeLists(lists)), [lists]);
+
+  const refreshLists = useCallback(async () => {
+    // trae lo último del tenant
+    const data = await apiGetJson(API_LISTS);
+    const normalized = normalizeLists(data);
+    setLocalLists((prev) => {
+      // merge por si el endpoint devuelve otras keys
+      return {
+        detalles: normalized.detalles?.length ? normalized.detalles : prev.detalles,
+        proveedores: normalized.proveedores?.length ? normalized.proveedores : prev.proveedores,
+      };
+    });
+  }, [API_LISTS]);
+
+  // ✅ Autocomplete detalle
   const [detalleFocus, setDetalleFocus] = useState(false);
   const [detalleArmed, setDetalleArmed] = useState(false);
   const detalleInputRef = useRef(null);
@@ -195,33 +306,13 @@ export default function ModalEditarOrdenPago({
   }));
 
   /* =========================
-     POST JSON helper
-  ========================= */
-  const apiPostJson = useCallback(async (url, payload) => {
-    const { token } = getAuthInfo();
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers.Authorization = `Bearer ${token}`;
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload ?? {}),
-    });
-
-    const text = await res.text();
-    if (!text) throw new Error("Respuesta vacía del servidor.");
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error("Respuesta inválida (no JSON).");
-    }
-  }, []);
-
-  /* =========================
-     Init al abrir
+     Init al abrir + refresh lists
   ========================= */
   useEffect(() => {
     if (!open) return;
+
+    // 🔥 Esto es lo que arregla “no aparecen al reabrir”
+    refreshLists().catch(() => {});
 
     const r = row || {};
     const fecha = String(r.fecha || "").slice(0, 10);
@@ -233,13 +324,10 @@ export default function ModalEditarOrdenPago({
     const idProv = r.id_proveedor ?? r.proveedor_id ?? r.idProveedor ?? NULL_OPTION;
     const idDet = r.id_detalle ?? NULL_OPTION;
 
-    const detalles = getArr(lists?.detalles);
-    const proveedores = getArr(lists?.proveedores);
-
-    const detName = String(findById(detalles, idDet)?.nombre ?? "").trim();
+    const detName = String(findById(localLists.detalles, idDet)?.nombre ?? "").trim();
     const detFallback = String(r.detalle ?? r.descripcion ?? r.concepto ?? "").trim();
 
-    const provNameFromList = String(findById(proveedores, idProv)?.nombre ?? "").trim();
+    const provNameFromList = String(findById(localLists.proveedores, idProv)?.nombre ?? "").trim();
     const provFallback = String(r.proveedor ?? "").trim();
 
     setSaving(false);
@@ -259,18 +347,19 @@ export default function ModalEditarOrdenPago({
       detalleInput: detName || detFallback || "",
       monto_total: safeNumber(r.monto_total ?? r.total ?? 0),
     });
-  }, [open, row, lists, periodoDefault]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, row, periodoDefault]); // NO metas localLists acá para que no resetee el form al refrescar listas
 
   /* =========================
-     Detalle autocomplete
+     Detalle autocomplete (usa localLists)
   ========================= */
   const filteredDetalles = useMemo(() => {
-    const all = getArr(lists?.detalles);
+    const all = getArr(localLists.detalles);
     const q = normalizeSearchText(form.detalleInput);
 
     if (!detalleFocus || !detalleArmed || q.length < 1) return [];
     return all.filter((d) => normalizeSearchText(d?.nombre).includes(q)).slice(0, 25);
-  }, [lists, form.detalleInput, detalleFocus, detalleArmed]);
+  }, [localLists.detalles, form.detalleInput, detalleFocus, detalleArmed]);
 
   const handleDetalleInputChange = (e) => {
     const value = e.target.value;
@@ -280,21 +369,25 @@ export default function ModalEditarOrdenPago({
 
   const handleSelectDetalle = (det) => {
     const nombre = String(det?.nombre ?? "").trim();
+    const did = getIdGeneric(det) || det?.id;
     setForm((p) => ({
       ...p,
       detalleInput: nombre,
-      id_detalle: String(det?.id ?? NULL_OPTION),
+      id_detalle: String(did ?? NULL_OPTION),
     }));
     setDetalleFocus(false);
     setDetalleArmed(false);
   };
 
   /* =========================
-     Proveedor select + agregar
+     Proveedores list (usa localLists)
   ========================= */
-  const proveedoresList = useMemo(() => getArr(lists?.proveedores), [lists]);
+  const proveedoresList = useMemo(() => getArr(localLists.proveedores), [localLists.proveedores]);
 
-  const startAddProveedor = () => setAddProvUI({ open: true, text: "", saving: false });
+  const startAddProveedor = () => {
+    if (saving) return;
+    setAddProvUI({ open: true, text: "", saving: false });
+  };
 
   const guardarNuevoProveedor = async () => {
     const nombre = String(addProvUI.text || "").trim();
@@ -308,7 +401,8 @@ export default function ModalEditarOrdenPago({
 
     try {
       const { idUsuario } = getAuthInfo();
-      const data = await apiPostJson(`${API}?action=catalogo_crear`, {
+
+      const data = await apiPostJson(API_CATALOGO, {
         catalogo: "proveedores",
         nombre,
         idUsuario,
@@ -320,6 +414,15 @@ export default function ModalEditarOrdenPago({
       const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
 
       if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
+
+      // ✅ update localLists (para que quede al reabrir aunque el padre no refresque)
+      setLocalLists((prev) => {
+        const arr = getArr(prev.proveedores).slice();
+        if (!arr.some((x) => getIdGeneric(x) === newId)) {
+          arr.push({ id: newId, nombre: newNombre });
+        }
+        return { ...prev, proveedores: arr };
+      });
 
       setForm((p) => ({
         ...p,
@@ -339,6 +442,7 @@ export default function ModalEditarOrdenPago({
      Nuevo detalle
   ========================= */
   const startAddDetalle = () => {
+    if (saving) return;
     setDetalleFocus(false);
     setDetalleArmed(false);
     setAddDetUI({ open: true, text: "", saving: false });
@@ -356,7 +460,8 @@ export default function ModalEditarOrdenPago({
 
     try {
       const { idUsuario } = getAuthInfo();
-      const data = await apiPostJson(`${API}?action=catalogo_crear`, {
+
+      const data = await apiPostJson(API_CATALOGO, {
         catalogo: "detalles",
         nombre,
         idUsuario,
@@ -368,6 +473,15 @@ export default function ModalEditarOrdenPago({
       const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
 
       if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
+
+      // ✅ update localLists (clave del fix)
+      setLocalLists((prev) => {
+        const arr = getArr(prev.detalles).slice();
+        if (!arr.some((x) => getIdGeneric(x) === newId)) {
+          arr.push({ id: newId, nombre: newNombre });
+        }
+        return { ...prev, detalles: arr };
+      });
 
       setForm((p) => ({
         ...p,
@@ -406,9 +520,11 @@ export default function ModalEditarOrdenPago({
       const perUI = periodoToMMYYYY(form.periodo) || periodoFromISODate(form.fecha);
       const perAPI = periodoToYYYYMM(perUI);
 
-      const idProv =
-        form.id_proveedor && form.id_proveedor !== NULL_OPTION ? Number(form.id_proveedor) : null;
+      const idProv = form.id_proveedor && form.id_proveedor !== NULL_OPTION ? Number(form.id_proveedor) : null;
       if (!idProv) throw new Error("Seleccioná un proveedor.");
+
+      const idDet = form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null;
+      if (!idDet) throw new Error("Seleccioná un detalle.");
 
       const payloadFinal = {
         id_movimiento: form.id_movimiento,
@@ -418,8 +534,7 @@ export default function ModalEditarOrdenPago({
         id_proveedor: idProv,
         proveedor: String(form.proveedorTxt || "").trim(),
 
-        id_detalle:
-          form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null,
+        id_detalle: idDet,
         detalle: String(form.detalleInput || "").trim(),
 
         monto_total: Math.max(0, Math.round(safeNumber(form.monto_total) * 100) / 100),
@@ -438,16 +553,9 @@ export default function ModalEditarOrdenPago({
   if (!open) return null;
 
   return createPortal(
-    <div
-      className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`}
-      onMouseDown={() => !saving && onClose?.()}
-    >
+    <div className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`} onMouseDown={() => !saving && onClose?.()}>
       <div
-        className={[
-          "mi-modal__container",
-          "mi-modal__container--mov",
-          darkOn ? "mi-modal--dark" : "",
-        ].join(" ")}
+        className={["mi-modal__container", "mi-modal__container--mov", darkOn ? "mi-modal--dark" : ""].join(" ")}
         id="mov--modaleditarordenpago"
         role="dialog"
         aria-modal="true"
@@ -459,12 +567,7 @@ export default function ModalEditarOrdenPago({
             <p className="mi-modal__subtitle">Fecha, período, proveedor, detalle y monto.</p>
           </div>
 
-          <button
-            className="mi-modal__close"
-            onClick={() => !saving && onClose?.()}
-            disabled={saving}
-            type="button"
-          >
+          <button className="mi-modal__close" onClick={() => !saving && onClose?.()} disabled={saving} type="button">
             ✕
           </button>
         </div>
@@ -520,7 +623,7 @@ export default function ModalEditarOrdenPago({
               <option value={NULL_OPTION}>(Seleccionar proveedor)</option>
               <option value={ADD_OPTION}>+ Agregar proveedor…</option>
               {proveedoresList.map((p) => (
-                <option key={p.id} value={String(p.id)}>
+                <option key={getIdGeneric(p) || p.id} value={String(getIdGeneric(p) || p.id)}>
                   {p.nombre}
                 </option>
               ))}
@@ -547,7 +650,7 @@ export default function ModalEditarOrdenPago({
               <ul className="mi-cr-suggest">
                 {filteredDetalles.map((d) => (
                   <li
-                    key={d.id}
+                    key={getIdGeneric(d) || d.id}
                     className="mi-cr-suggest__item"
                     onMouseDown={(e) => {
                       e.preventDefault();
@@ -560,12 +663,7 @@ export default function ModalEditarOrdenPago({
               </ul>
             )}
 
-            <button
-              type="button"
-              onClick={startAddDetalle}
-              disabled={saving || addProvUI.open}
-              className="mi-cr-link"
-            >
+            <button type="button" onClick={startAddDetalle} disabled={saving || addProvUI.open} className="mi-cr-link">
               + Agregar nuevo detalle
             </button>
           </div>
@@ -586,20 +684,11 @@ export default function ModalEditarOrdenPago({
           </div>
 
           <div className="content-btn-modalordenpago mi-actions--mt14 ordenpagobuttos">
-            <button
-              type="submit"
-              disabled={saving}
-              className="mit-btn mit-btn--solid btn--modalordenpago"
-            >
+            <button type="submit" disabled={saving} className="mit-btn mit-btn--solid btn--modalordenpago">
               {saving ? "Guardando..." : "Guardar"}
             </button>
 
-            <button
-              type="button"
-              onClick={() => !saving && onClose?.()}
-              disabled={saving}
-              className="mit-btn mit-btn--ghost btn--modalordenpago"
-            >
+            <button type="button" onClick={() => !saving && onClose?.()} disabled={saving} className="mit-btn mit-btn--ghost btn--modalordenpago">
               Cancelar
             </button>
           </div>

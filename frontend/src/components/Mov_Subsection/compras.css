@@ -437,3 +437,101 @@
   .cmp-card__head{ flex-direction: column; align-items: stretch; }
   .cmp-card__actions{ justify-content: flex-end; }
 }
+/* =========================================================
+   ✅ COMPRAS — Responsive SOLO mobile (no toca desktop)
+   Scope: .mov-page--compras
+========================================================= */
+
+@media (max-width: 720px) {
+  /* ocultar header de tabla solo en Compras */
+  .mov-page--compras .mov-gridTable--head {
+    display: none !important;
+  }
+
+  /* wrapper: evitamos scroll raro y damos altura usable */
+  .mov-page--compras .mov-tableWrap--compras {
+    overflow: auto;
+    min-height: 43vh !important;
+    max-height: 43vh !important;
+  }
+
+  /* cada fila pasa a "card" */
+  .mov-page--compras .mov-gridTable--row {
+    display: block !important;     /* pisa el display:grid */
+    padding: 12px;
+    margin: 10px 0;
+    border: 1px solid color-mix(in srgb, var(--mov-border) 70%, #fff);
+    border-radius: 16px;
+    background: #fff;
+  }
+
+  /* celdas en formato label + valor */
+  .mov-page--compras .mov-gridTable--row .mov-gridCell {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 10px;
+    align-items: start;
+    padding: 4px 0;
+    min-height: auto;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: initial;
+  }
+
+  /* etiqueta (sale de data-label) */
+  .mov-page--compras .mov-gridTable--row .mov-gridCell::before {
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--mov-muted);
+    line-height: 1.2;
+    padding-top: 2px;
+  }
+
+  /* el valor ya no recorta */
+  .mov-page--compras .mov-ellipsissss {
+    overflow: visible;
+    text-overflow: initial;
+    white-space: normal;
+    line-height: 1.25;
+  }
+
+  /* centrar ya no sirve en mobile */
+  .mov-page--compras .mov-gridTable--row .mov-gridCell.is-center {
+    justify-items: start;
+    text-align: left;
+  }
+
+  /* acciones abajo, alineadas a la izquierda */
+  .mov-page--compras .mov-gridCell--actions {
+    grid-template-columns: 120px 1fr;
+  }
+
+  .mov-page--compras .mov-actionsInline {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
+
+/* Mobile muy chico */
+@media (max-width: 420px) {
+  .mov-page--compras .mov-gridTable--row .mov-gridCell {
+    grid-template-columns: 1fr 3fr;
+  }
+}
+
+/* =========================================================
+   🌙 Dark mode: Compras cards (usa tu selector actual)
+========================================================= */
+
+html[data-theme="oscuro"] .mov-page--compras .mov-gridTable--row {
+  background: rgba(15,23,42,.40) !important;
+  border-color: rgba(148,163,184,.14) !important;
+}
+
+html[data-theme="oscuro"] .mov-page--compras .mov-gridTable--row .mov-gridCell::before {
+  color: rgba(226,232,240,.60) !important;
+}

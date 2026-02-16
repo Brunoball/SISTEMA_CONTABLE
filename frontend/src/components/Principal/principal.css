@@ -990,7 +990,7 @@ button{ font-family: inherit; }
 
   /* content full width */
   .pp-content{ padding: 12px; }
-  .pp-content__inner{ padding: 8px; }
+  .pp-content__inner{ padding: 8px;  }
 }
 
 @media (max-width: 560px){

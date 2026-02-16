@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../config/config";
 import "../Movimientos/movimientos.css";
-
+import "./compras.css";
 import Toast from "../Global/Toast.jsx";
 
 import ModalNuevaCompra from "./modales/ModalNuevaCompra";
@@ -178,12 +178,7 @@ function getAuthInfo() {
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand =
-      u?.idUsuarioMaster ??
-      u?.idUsuario ??
-      u?.id_usuario ??
-      u?.id ??
-      u?.user_id ??
-      0;
+      u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
@@ -508,7 +503,7 @@ export default function Compras() {
                 if (id === null || id === undefined) return true;
                 return !seen.has(String(id));
               });
-              appendedCount = add.length; // 👈 ojo: esto no sale afuera, pero en "more" no nos importa
+              appendedCount = add.length; // best-effort
               return [...prevArr, ...add];
             });
             appendedCount = page.length; // best-effort
@@ -922,6 +917,7 @@ export default function Compras() {
             c.align === "right" ? "is-right" : "",
           ].join(" ")}
           role="cell"
+          data-label={c.label} /* ✅ para mobile card */
         >
           <span className="mov-skeletonBar" style={{ width: "60%" }} />
         </div>
@@ -930,18 +926,15 @@ export default function Compras() {
   );
 
   // ✅ si hay 100 exactos, mostrar SOLO cargar todos
-  const showLoadMoreBtn = !loadingRows && hasMore && filteredRows.length > 0 && filteredRows.length < PAGE_SIZE;
+  const showLoadMoreBtn =
+    !loadingRows && hasMore && filteredRows.length > 0 && filteredRows.length < PAGE_SIZE;
   const showLoadAllBtn = !loadingRows && hasMore && filteredRows.length > 0;
 
   return (
-    <div className="mov-page">
+    // ✅ scope compras para responsive SIN tocar desktop
+    <div className="mov-page mov-page--compras">
       {toast && (
-        <Toast
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={closeToast}
-        />
+        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
       )}
 
       {errorListsCtx && (
@@ -1021,7 +1014,13 @@ export default function Compras() {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
                         skipSearchRef.current = true;
-                        await loadRows({ periodo: fPeriodo, q: "", offset: 0, append: false, mode: "initial" });
+                        await loadRows({
+                          periodo: fPeriodo,
+                          q: "",
+                          offset: 0,
+                          append: false,
+                          mode: "initial",
+                        });
                       }}
                       disabled={loadingAll}
                     >
@@ -1079,7 +1078,7 @@ export default function Compras() {
         </div>
 
         {/* BODY */}
-        <div className="mov-tableWrap" role="rowgroup">
+        <div className="mov-tableWrap mov-tableWrap--compras" role="rowgroup">
           <div className={["mov-gridBody mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
             {showSkeleton && loadingRows ? (
               <div className="mov-skeletonWrap" aria-busy="true">
@@ -1100,13 +1099,14 @@ export default function Compras() {
                       style={{ gridTemplateColumns: gridCols }}
                       role="row"
                     >
-                      <div className="mov-gridCell is-center" role="cell">
+                      <div className="mov-gridCell is-center" role="cell" data-label="FECHA">
                         {safeText(formatFechaDMY(pick(r, ["fecha"], "")))}
                       </div>
 
                       <div
                         className="mov-gridCell is-strong"
                         role="cell"
+                        data-label="DESCRIPCIÓN"
                         title={safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], ""))}
                       >
                         <span className="mov-ellipsissss">
@@ -1117,6 +1117,7 @@ export default function Compras() {
                       <div
                         className="mov-gridCell"
                         role="cell"
+                        data-label="PROVEEDOR"
                         title={safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""))}
                       >
                         <span className="mov-ellipsissss">
@@ -1124,15 +1125,15 @@ export default function Compras() {
                         </span>
                       </div>
 
-                      <div className="mov-gridCell is-center" role="cell">
+                      <div className="mov-gridCell is-center" role="cell" data-label="PAGO">
                         {safeText(getCompraPagoLabel(r))}
                       </div>
 
-                      <div className="mov-gridCell is-center" role="cell">
+                      <div className="mov-gridCell is-center" role="cell" data-label="TOTAL">
                         {moneyARS(pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0))}
                       </div>
 
-                      <div className="mov-gridCell mov-gridCell--actions is-center" role="cell">
+                      <div className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label="ACCIONES">
                         <div className="mov-actionsInline">
                           <button
                             type="button"
@@ -1171,9 +1172,7 @@ export default function Compras() {
 
                 {!loadingRows && filteredRows.length === 0 && (
                   <div className="mov-emptyRow">
-                    {!fPeriodo
-                      ? "No hay período disponible para cargar compras."
-                      : "No hay compras para mostrar en este período."}
+                    {!fPeriodo ? "No hay período disponible para cargar compras." : "No hay compras para mostrar en este período."}
                   </div>
                 )}
 
@@ -1245,12 +1244,7 @@ export default function Compras() {
         }}
       />
 
-      <ModalVerComprobante
-        open={openVerComp}
-        url={compUrl}
-        onClose={closeComprobanteModal}
-        title="Comprobante de compra"
-      />
+      <ModalVerComprobante open={openVerComp} url={compUrl} onClose={closeComprobanteModal} title="Comprobante de compra" />
 
       <ModalEliminarMovimientos
         open={openDel}

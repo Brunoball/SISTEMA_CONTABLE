@@ -808,7 +808,7 @@ const Principal = () => {
 
       {/* ================= CONTENT ================= */}
       <main className="pp-content">
-        <div className="pp-content__inner">
+        <div className="pp-content__inner" >
           <Outlet />
         </div>
       </main>

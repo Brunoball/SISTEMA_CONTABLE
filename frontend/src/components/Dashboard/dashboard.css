@@ -330,6 +330,10 @@
 @media (max-width: 720px){
   .db-title{ font-size: 22px; }
   .db-quick{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .db{
+   overflow: auto;
+   max-height: 87vh;
+}
 }
 /* =========================
    MODO OSCURO (Dashboard)

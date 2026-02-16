@@ -35,7 +35,11 @@ const PAGE_SIZE = 100;
    Skeleton rows
 ========================= */
 const SKELETON_ROWS = 10;
-const MIN_LOADING_MS = 0; // 0 desactiva
+
+// ✅ para evitar “parpadeo doble”
+const SKELETON_DELAY_MS = 140;
+
+// (si querés forzar loader en dev)
 const FORCE_SHOW_LOADER_DEV = false;
 
 /* =========================
@@ -173,7 +177,9 @@ function getAuthInfo() {
    ✅ FILTRO ORDENES DE PAGO (pendientes)
 ========================= */
 function hasProveedor(row) {
-  const idProv = Number(row?.id_proveedor ?? row?.proveedor_id ?? row?.idProveedor ?? row?.id_proveedor_fk ?? 0);
+  const idProv = Number(
+    row?.id_proveedor ?? row?.proveedor_id ?? row?.idProveedor ?? row?.id_proveedor_fk ?? 0
+  );
   if (Number.isFinite(idProv) && idProv > 0) return true;
 
   const provTxt = String(row?.proveedor ?? "").trim();
@@ -274,26 +280,44 @@ export default function OrdenesPago() {
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
-  // ✅ Skeleton delay
+  // ✅ Skeleton anti-parpadeo
   const skelTimerRef = useRef(null);
+  const loadingRef = useRef(false);
   const [showSkeleton, setShowSkeleton] = useState(false);
 
-  const beginSkeleton = useCallback(() => {
+  // ✅ “mensaje vacío” solo después de haber cargado la key actual
+  const [loadedKey, setLoadedKey] = useState(""); // ultimo periodoAPI|q efectivamente cargado
+
+  const clearSkeletonTimer = useCallback(() => {
     if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
-    setShowSkeleton(false);
-    skelTimerRef.current = setTimeout(() => setShowSkeleton(true), 120);
+    skelTimerRef.current = null;
   }, []);
-  const endSkeleton = useCallback(() => {
-    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
+
+  const startSkeleton = useCallback(
+    (myReqId) => {
+      clearSkeletonTimer();
+      setShowSkeleton(false);
+      skelTimerRef.current = setTimeout(() => {
+        // solo mostramos si la request sigue siendo la actual y seguimos en loading
+        if (loadingRef.current && myReqId === reqIdRef.current) {
+          setShowSkeleton(true);
+        }
+      }, SKELETON_DELAY_MS);
+    },
+    [clearSkeletonTimer]
+  );
+
+  const stopSkeleton = useCallback(() => {
+    clearSkeletonTimer();
     setShowSkeleton(false);
-  }, []);
+  }, [clearSkeletonTimer]);
 
   useEffect(() => {
     return () => {
-      if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
+      clearSkeletonTimer();
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, []);
+  }, [clearSkeletonTimer]);
 
   /* =========================
      API helpers (X-Session)
@@ -350,11 +374,20 @@ export default function OrdenesPago() {
     }
   }, []);
 
+  const currentKey = useMemo(() => {
+    const perUI = periodoToMMYYYY(fPeriodo);
+    if (!perUI) return "";
+    const perAPI = periodoToYYYYMM(perUI);
+    const qKey = (q || "").trim();
+    return `${perAPI}|${qKey}`;
+  }, [fPeriodo, q]);
+
   /* =========================
      ✅ Cargar órdenes (listado)
      - cache por periodo|q
      - reqId para evitar race
-     - skeleton shimmer
+     - skeleton SIN parpadeo
+     - NO mostrar “no hay” antes de cargar
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -365,8 +398,9 @@ export default function OrdenesPago() {
       if (!perUI) {
         setRows([]);
         setLoadingRows(false);
-        endSkeleton();
-        return;
+        loadingRef.current = false;
+        stopSkeleton();
+        return null;
       }
 
       const periodoAPI = periodoToYYYYMM(perUI);
@@ -374,19 +408,25 @@ export default function OrdenesPago() {
       const cacheKey = `${periodoAPI}|${qKey}`;
 
       const myReqId = ++reqIdRef.current;
-      const start = Date.now();
 
-      beginSkeleton();
+      // ✅ marcamos loading “real” y NO seteamos loadedKey todavía (evita mensaje vacío antes)
+      loadingRef.current = true;
       setLoadingRows(true);
       setError("");
+      startSkeleton(myReqId);
 
       try {
+        // ✅ cache: NO mostrar skeleton (ni disparar timer) si ya está cacheado (evita parpadeo)
         if (cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
+          // cancelamos skeleton si estaba programado
+          loadingRef.current = false;
+          setLoadingRows(false);
+          stopSkeleton();
+
           const cached = cacheRef.current.get(cacheKey) || [];
           setRows(cached);
-          setLoadingRows(false);
-          endSkeleton();
-          return;
+          setLoadedKey(cacheKey);
+          return cached;
         }
 
         const sp = new URLSearchParams();
@@ -398,9 +438,11 @@ export default function OrdenesPago() {
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar órdenes de pago.");
 
         if (myReqId !== reqIdRef.current) {
+          // request vieja: no tocar estado visible
+          loadingRef.current = false;
           setLoadingRows(false);
-          endSkeleton();
-          return;
+          stopSkeleton();
+          return null;
         }
 
         const list = Array.isArray(data.ordenes)
@@ -414,42 +456,33 @@ export default function OrdenesPago() {
           periodo: periodoToMMYYYY(r?.periodo),
         }));
 
-        const elapsed = Date.now() - start;
-        const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+        cacheRef.current.set(cacheKey, norm);
 
-        return await new Promise((resolve) => {
-          const apply = () => {
-            cacheRef.current.set(cacheKey, norm);
-            setRows(norm);
-            setLoadingRows(false);
-            endSkeleton();
-            resolve(norm);
-          };
-          if (remaining > 0) setTimeout(apply, remaining);
-          else apply();
-        });
+        loadingRef.current = false;
+        setRows(norm);
+        setLoadedKey(cacheKey);
+        setLoadingRows(false);
+        stopSkeleton();
+
+        return norm;
       } catch (e) {
-        const elapsed = Date.now() - start;
-        const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+        if (myReqId !== reqIdRef.current) {
+          loadingRef.current = false;
+          setLoadingRows(false);
+          stopSkeleton();
+          return null;
+        }
 
-        return await new Promise((resolve) => {
-          setTimeout(() => {
-            if (myReqId !== reqIdRef.current) {
-              setLoadingRows(false);
-              endSkeleton();
-              resolve(null);
-              return;
-            }
-            setError(e?.message || "Error cargando órdenes de pago.");
-            setRows([]);
-            setLoadingRows(false);
-            endSkeleton();
-            resolve(null);
-          }, remaining);
-        });
+        loadingRef.current = false;
+        setError(e?.message || "Error cargando órdenes de pago.");
+        setRows([]);
+        setLoadedKey(cacheKey); // ✅ ya “intentó” cargar esa key: ahora sí puede mostrar vacío si corresponde
+        setLoadingRows(false);
+        stopSkeleton();
+        return null;
       }
     },
-    [API, apiGet, beginSkeleton, endSkeleton, fPeriodo, q]
+    [API, apiGet, fPeriodo, q, startSkeleton, stopSkeleton]
   );
 
   /* =========================
@@ -475,7 +508,8 @@ export default function OrdenesPago() {
       } else {
         setRows([]);
         setLoadingRows(false);
-        endSkeleton();
+        loadingRef.current = false;
+        stopSkeleton();
       }
     })();
 
@@ -494,6 +528,7 @@ export default function OrdenesPago() {
         setFPeriodo("");
         setRows([]);
         setShowAll(false);
+        setLoadedKey(""); // reset
       }
       return;
     }
@@ -770,7 +805,12 @@ export default function OrdenesPago() {
         {columns.map((c) => {
           if (c.key === "acciones") {
             return (
-              <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
+              <div
+                key={c.key}
+                className="mov-gridCell mov-gridCell--actions is-center"
+                role="cell"
+                data-label={c.label}
+              >
                 <div className="mov-skelActions">
                   <span className="mov-skelIcon" />
                   <span className="mov-skelIcon" />
@@ -834,6 +874,7 @@ export default function OrdenesPago() {
 
   const lists = listasCtx || { periodos: [] };
 
+  // ✅ overlay suave SOLO cuando skeleton está visible
   const softLoading = loadingRows && showSkeleton;
 
   const handleChangePeriodo = async (valueUI) => {
@@ -853,6 +894,12 @@ export default function OrdenesPago() {
   const onClickCargarTodos = () => {
     setShowAll(true);
   };
+
+  // ✅ Mensaje vacío SOLO cuando:
+  // - NO está cargando
+  // - la key actual YA fue cargada (loadedKey === currentKey)
+  // - y no hay filas
+  const canShowEmpty = !loadingRows && loadedKey !== "" && loadedKey === currentKey && filteredRows.length === 0;
 
   return (
     <div className="mov-page">
@@ -899,11 +946,7 @@ export default function OrdenesPago() {
                   <FontAwesomeIcon icon={faCalendarDays} /> Período
                 </label>
 
-                <select
-                  value={periodoToMMYYYY(fPeriodo)}
-                  onChange={(e) => handleChangePeriodo(e.target.value)}
-                  disabled={loadingRows || loadingListsCtx}
-                >
+                <select value={periodoToMMYYYY(fPeriodo)} onChange={(e) => handleChangePeriodo(e.target.value)} disabled={loadingRows || loadingListsCtx}>
                   {(lists.periodos || []).map((p) => {
                     const ui = periodoToMMYYYY(p);
                     return (
@@ -925,7 +968,7 @@ export default function OrdenesPago() {
                     value={q}
                     onChange={(e) => {
                       setQ(e.target.value);
-                      setShowAll(false); // 🔥 cada cambio vuelve a 100
+                      setShowAll(false);
                     }}
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
@@ -997,6 +1040,7 @@ export default function OrdenesPago() {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className={["mov-gridBody", "mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
+            {/* ✅ Skeleton SOLO si llegó a mostrarse (sin parpadeo) */}
             {showSkeleton && loadingRows ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
@@ -1085,7 +1129,8 @@ export default function OrdenesPago() {
                   </div>
                 )}
 
-                {!loadingRows && filteredRows.length === 0 && (
+                {/* ✅ EMPTY: SOLO DESPUÉS DE CARGAR LA INFO (nunca antes) */}
+                {canShowEmpty && (
                   <div className="mov-emptyRow">
                     {!fPeriodo
                       ? "No hay período disponible para cargar órdenes de pago."

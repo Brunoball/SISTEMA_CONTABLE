@@ -258,30 +258,24 @@ export default function Movimientos() {
   // cache por periodoAPI|q  -> { rows, hasMore, nextOffset }
   const cacheRef = useRef(new Map());
 
-  // ✅ para evitar “apendear” respuestas viejas
+  // ✅ ID global monotónico (para descartar respuestas viejas)
   const reqIdRef = useRef(0);
+
+  // ✅ tokens por tipo de carga (evita que una request vieja apague loaders)
+  const rowsReqIdRef = useRef(0); // request activa de "carga principal"
+  const moreReqIdRef = useRef(0); // request activa de "append"
 
   // ✅ Debounce búsqueda
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
-  // ✅ Skeleton: pequeño delay para que no “parpadee” si responde ultra rápido
-  const skelTimerRef = useRef(null);
+  // ✅ Skeleton (FIX anti-parpadeo):
+  // - se muestra INMEDIATO al arrancar loadingRows (sin delay)
+  // - nunca queda un “vacío” entre cambio de período y llegada de datos
   const [showSkeleton, setShowSkeleton] = useState(false);
-
-  const beginSkeleton = useCallback(() => {
-    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
-    setShowSkeleton(false);
-    skelTimerRef.current = setTimeout(() => setShowSkeleton(true), 120);
-  }, []);
-  const endSkeleton = useCallback(() => {
-    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
-    setShowSkeleton(false);
-  }, []);
 
   useEffect(() => {
     return () => {
-      if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
   }, []);
@@ -350,6 +344,10 @@ export default function Movimientos() {
 
   /* =========================
      LOAD ROWS (paginado real)
+     ✅ FIX anti-parpadeo:
+        - cache se aplica ANTES de prender loaders
+        - skeleton principal se mantiene constante hasta que llegan datos reales
+        - requests viejas NO tocan loaders
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -360,6 +358,8 @@ export default function Movimientos() {
       const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
 
       const perUI = periodoToMMYYYY(periodoUI);
+
+      // ⛔ sin período => limpiar
       if (!perUI) {
         setRows([]);
         setHasMore(false);
@@ -367,8 +367,8 @@ export default function Movimientos() {
         setLoadingRows(false);
         setLoadingMore(false);
         setLoadingAll(false);
+        setShowSkeleton(false);
         setError("");
-        endSkeleton();
         return { hasMore: false, nextOffset: null, received: 0 };
       }
 
@@ -376,32 +376,49 @@ export default function Movimientos() {
       const qKey = (qLocal || "").trim();
       const cacheKey = `${periodoAPI}|${qKey}`;
 
+      // ✅ ID global (descartar respuestas viejas)
       const myReqId = ++reqIdRef.current;
-      const start = Date.now();
 
+      // ✅ cache SOLO para carga principal offset=0
+      // IMPORTANTÍSIMO: aplicarlo ANTES de prender loaders, así no hay flash/skeleton extra.
+      if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
+        const cached = cacheRef.current.get(cacheKey);
+
+        // marcar request activa
+        rowsReqIdRef.current = myReqId;
+
+        // si llegó tarde, no tocar UI
+        if (rowsReqIdRef.current !== myReqId) return null;
+
+        setShowSkeleton(false);
+        setLoadingRows(false);
+
+        setRows(Array.isArray(cached?.rows) ? cached.rows : []);
+        setHasMore(!!cached?.hasMore);
+        setNextOffset(cached?.nextOffset ?? null);
+        setError("");
+
+        return {
+          hasMore: !!cached?.hasMore,
+          nextOffset: cached?.nextOffset ?? null,
+          received: Array.isArray(cached?.rows) ? cached.rows.length : 0,
+        };
+      }
+
+      // ✅ marcar request activa por tipo + prender loaders
       if (!append) {
-        beginSkeleton();
+        rowsReqIdRef.current = myReqId;
+        setShowSkeleton(true); // ✅ INMEDIATO (sin delay) => no hay “vacío”
         setLoadingRows(true);
       } else {
+        moreReqIdRef.current = myReqId;
         setLoadingMore(true);
       }
+
       setError("");
+      const start = Date.now();
 
       try {
-        if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
-          const cached = cacheRef.current.get(cacheKey);
-          setRows(cached?.rows || []);
-          setHasMore(!!cached?.hasMore);
-          setNextOffset(cached?.nextOffset ?? null);
-          setLoadingRows(false);
-          endSkeleton();
-          return {
-            hasMore: !!cached?.hasMore,
-            nextOffset: cached?.nextOffset ?? null,
-            received: Array.isArray(cached?.rows) ? cached.rows.length : 0,
-          };
-        }
-
         const sp = new URLSearchParams();
         sp.set("action", "movimientos_listar");
         sp.set("periodo", periodoAPI);
@@ -410,14 +427,10 @@ export default function Movimientos() {
         sp.set("offset", String(offset));
 
         const data = await apiGet(`${API}?${sp.toString()}`);
-        if (!data.exito) throw new Error(data.mensaje || "No se pudieron cargar movimientos.");
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar movimientos.");
 
-        if (myReqId !== reqIdRef.current) {
-          if (append) setLoadingMore(false);
-          else setLoadingRows(false);
-          endSkeleton();
-          return null;
-        }
+        // ✅ si llegó tarde, NO tocar loaders ni UI
+        if (myReqId !== reqIdRef.current) return null;
 
         const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
         const movsNorm = movs.map((r) => ({ ...r, periodo: periodoToMMYYYY(r?.periodo) }));
@@ -431,6 +444,8 @@ export default function Movimientos() {
 
         return await new Promise((resolve) => {
           const apply = () => {
+            if (myReqId !== reqIdRef.current) return resolve(null);
+
             if (append) {
               setRows((prev) => {
                 const base = Array.isArray(prev) ? prev : [];
@@ -446,13 +461,22 @@ export default function Movimientos() {
             setNextOffset(newNextOffset);
 
             if (!append && offset === 0) {
-              cacheRef.current.set(cacheKey, { rows: movsNorm, hasMore: newHasMore, nextOffset: newNextOffset });
+              cacheRef.current.set(cacheKey, {
+                rows: movsNorm,
+                hasMore: newHasMore,
+                nextOffset: newNextOffset,
+              });
             }
 
-            if (append) setLoadingMore(false);
-            else setLoadingRows(false);
-
-            endSkeleton();
+            // ✅ apagar loader SOLO si sigue siendo la activa de ese tipo
+            if (append) {
+              if (moreReqIdRef.current === myReqId) setLoadingMore(false);
+            } else {
+              if (rowsReqIdRef.current === myReqId) {
+                setLoadingRows(false);
+                setShowSkeleton(false); // ✅ se apaga solo cuando hay datos reales aplicados
+              }
+            }
 
             resolve({ hasMore: newHasMore, nextOffset: newNextOffset, received: movsNorm.length });
           };
@@ -466,36 +490,34 @@ export default function Movimientos() {
 
         return await new Promise((resolve) => {
           setTimeout(() => {
-            if (myReqId !== reqIdRef.current) {
-              if (append) setLoadingMore(false);
-              else setLoadingRows(false);
-              endSkeleton();
-              resolve(null);
-              return;
+            if (myReqId !== reqIdRef.current) return resolve(null);
+
+            setError(e?.message || "Error cargando movimientos.");
+
+            if (append) {
+              if (moreReqIdRef.current === myReqId) setLoadingMore(false);
+            } else {
+              if (rowsReqIdRef.current === myReqId) {
+                setLoadingRows(false);
+                setShowSkeleton(false);
+              }
             }
 
-            setError(e.message || "Error cargando movimientos.");
-            if (append) setLoadingMore(false);
-            else setLoadingRows(false);
-
-            endSkeleton();
             resolve(null);
           }, remaining);
         });
       }
     },
-    [API, apiGet, fPeriodo, q, beginSkeleton, endSkeleton]
+    [API, apiGet, fPeriodo, q]
   );
 
   /* =========================
      ✅ INIT: asegurar listas + cargar rows
-     ✅ FIX: usamos el return de ensureListsLoaded para leer periodos reales
   ========================= */
   useEffect(() => {
     let alive = true;
 
     (async () => {
-      // ✅ pedimos las listas y usamos lo que devuelve (NO el estado viejo)
       const loadedLists = await ensureListsLoaded({ force: false, background: true }).catch(() => null);
       if (!alive) return;
 
@@ -511,7 +533,7 @@ export default function Movimientos() {
         setHasMore(false);
         setNextOffset(null);
         setLoadingRows(false);
-        endSkeleton();
+        setShowSkeleton(false);
       }
     })();
 
@@ -663,7 +685,7 @@ export default function Movimientos() {
       idUsuario,
     });
 
-    if (!data.exito) throw new Error(data.mensaje || "No se pudo guardar.");
+    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
   };
 
   /* =========================================================
@@ -700,9 +722,9 @@ export default function Movimientos() {
     const ui = periodoToMMYYYY(valueUI);
     setFPeriodo(ui);
     setQ("");
-
     skipSearchRef.current = true;
 
+    invalidateCacheForPeriodo(ui);
     await loadRows({ periodo: ui, q: "", offset: 0, append: false });
   };
 
@@ -710,7 +732,7 @@ export default function Movimientos() {
      ✅ BOTÓN: "Cargar todos"
   ========================================================= */
   const handleLoadAll = useCallback(async () => {
-    if (!hasMore || loadingMore || loadingRows || loadingListsCtx) return;
+    if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
     if (nextOffset === null) return;
 
     setLoadingAll(true);
@@ -739,7 +761,7 @@ export default function Movimientos() {
     } finally {
       setLoadingAll(false);
     }
-  }, [hasMore, loadingMore, loadingRows, loadingListsCtx, nextOffset, fPeriodo, q, loadRows, showToast]);
+  }, [hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll, nextOffset, fPeriodo, q, loadRows, showToast]);
 
   // ✅ estado UX: difumina la tabla solo en carga principal
   const softLoading = loadingRows && showSkeleton;
@@ -803,7 +825,6 @@ export default function Movimientos() {
   };
 
   // ✅ listas a pasar a modales/UI (del Provider)
-  // ✅ FIX: incluimos tipos_operacion para que llegue a los modales
   const lists = listasCtx || {
     periodos: [],
     clasificaciones: [],
@@ -817,7 +838,6 @@ export default function Movimientos() {
     tipos_operacion: [], // ✅ NUEVO
   };
 
-  // ✅ si listasCtx existe pero no trae la clave aún, la aseguramos igual
   const listsSafe = useMemo(() => {
     const src = listasCtx || {};
     return {
@@ -834,6 +854,9 @@ export default function Movimientos() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listasCtx]);
+
+  // ✅ no mostrar empty-state mientras cualquier carga esté activa
+  const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
   return (
     <div className="mov-page">
@@ -861,6 +884,7 @@ export default function Movimientos() {
               <div className="mov-card__title">Movimientos</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> registros{hasMore ? " (hay más)" : ""}
+                {loadingAll ? " (cargando…)" : ""}
               </div>
             </div>
 
@@ -942,7 +966,6 @@ export default function Movimientos() {
               type="button"
               className="mov-btn mov-btn--primary"
               onClick={async () => {
-                // ✅ opcional: aseguramos listas antes de abrir
                 await ensureListsLoaded({ force: false, background: true }).catch(() => {});
                 setOpenAdd(true);
               }}
@@ -975,8 +998,8 @@ export default function Movimientos() {
         {/* BODY */}
         <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup">
           <div className={["mov-gridBody mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
-            {/* ✅ Skeleton principal */}
-            {showSkeleton && loadingRows ? (
+            {/* ✅ Skeleton principal (constante, sin parpadeo) */}
+            {loadingRows && showSkeleton ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
               </div>
@@ -1058,7 +1081,8 @@ export default function Movimientos() {
                   </div>
                 ))}
 
-                {!loadingRows && filteredRows.length === 0 && (
+                {/* ✅ NO mostrar empty mientras carga (evita “flash”) */}
+                {!isAnyLoading && filteredRows.length === 0 && (
                   <div className="mov-emptyRow">
                     {!fPeriodo
                       ? "No hay período disponible para cargar movimientos."
@@ -1096,7 +1120,7 @@ export default function Movimientos() {
       {/* MODAL CARGA RAPIDA */}
       <ModalCargaRapidaMovimientos
         open={openAdd}
-        lists={listsSafe} // ✅ PASAMOS listsSafe con tipos_operacion asegurado
+        lists={listsSafe}
         periodoDefault={fPeriodo}
         onClose={() => setOpenAdd(false)}
         onToast={showToast}
@@ -1128,7 +1152,7 @@ export default function Movimientos() {
       {/* EDIT */}
       <ModalEditarMovimiento
         open={openEdit}
-        lists={listsSafe} // ✅ PASAMOS listsSafe con tipos_operacion asegurado
+        lists={listsSafe}
         row={selectedRow}
         periodoDefault={fPeriodo}
         onClose={() => {
@@ -1183,14 +1207,17 @@ export default function Movimientos() {
             const data = await (async () => {
               const res = await fetch(`${API}?${sp.toString()}`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json", ...(getAuthInfo().sessionKey ? { "X-Session": getAuthInfo().sessionKey } : {}) },
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(getAuthInfo().sessionKey ? { "X-Session": getAuthInfo().sessionKey } : {}),
+                },
                 body: JSON.stringify({ idUsuario }),
               });
               const txt = await res.text();
               return JSON.parse(txt || "{}");
             })();
 
-            if (!data.exito) throw new Error(data.mensaje || "No se pudo eliminar.");
+            if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
 
             setOpenDel(false);
             setSelectedRow(null);
@@ -1202,8 +1229,8 @@ export default function Movimientos() {
 
             showToast("exito", "Movimiento eliminado.", 2600);
           } catch (e) {
-            setError(e.message || "Error eliminando movimiento.");
-            showToast("error", e.message || "Error eliminando movimiento.", 4200);
+            setError(e?.message || "Error eliminando movimiento.");
+            showToast("error", e?.message || "Error eliminando movimiento.", 4200);
           } finally {
             setDeletingId(null);
           }

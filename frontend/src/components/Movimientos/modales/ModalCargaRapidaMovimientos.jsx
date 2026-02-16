@@ -91,8 +91,8 @@ const SAFE_LISTS = {
   detalles: [],
   medios_pago: [],
   proveedores: [],
-  tipos_movimiento: [],
   tipos_venta: [],
+  tipos_operacion: [],
 };
 
 function normalizeIncomingLists(lists) {
@@ -107,8 +107,14 @@ function normalizeIncomingLists(lists) {
     detalles: Array.isArray(src.detalles) ? src.detalles : [],
     medios_pago: Array.isArray(src.medios_pago) ? src.medios_pago : [],
     proveedores: Array.isArray(src.proveedores) ? src.proveedores : [],
-    tipos_movimiento: Array.isArray(src.tipos_movimiento) ? src.tipos_movimiento : [],
     tipos_venta: Array.isArray(src.tipos_venta) ? src.tipos_venta : [],
+    tipos_operacion: Array.isArray(src.tipos_operacion)
+      ? src.tipos_operacion
+      : Array.isArray(src.tipo_operacion)
+      ? src.tipo_operacion
+      : Array.isArray(src.tipos_operaciones)
+      ? src.tipos_operaciones
+      : [],
   };
 }
 
@@ -121,8 +127,7 @@ function getClienteId(c) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 function getProveedorId(p) {
-  const cand =
-    p?.id ?? p?.id_proveedor ?? p?.idProveedor ?? p?.proveedor_id ?? p?.idproveedor ?? null;
+  const cand = p?.id ?? p?.id_proveedor ?? p?.idProveedor ?? p?.proveedor_id ?? p?.idproveedor ?? null;
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
@@ -143,7 +148,11 @@ function getIdGeneric(x) {
     x?.id_detalle ??
     x?.idDetalle ??
     x?.detalle_id ??
+    x?.id_tipo_operacion ??
+    x?.idTipoOperacion ??
+    x?.tipo_operacion_id ??
     0;
+
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
@@ -205,16 +214,7 @@ async function apiPostJson(url, payload) {
 /* =========================
    Mini Modal: alta rápida (cliente/proveedor/detalle)
 ========================= */
-function AddCatalogMiniModal({
-  open,
-  title,
-  value,
-  saving,
-  onChange,
-  onCancel,
-  onSave,
-  dark = false,
-}) {
+function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -269,21 +269,11 @@ function AddCatalogMiniModal({
           </div>
 
           <div className="mi-mini__actions">
-            <button
-              type="button"
-              className="mit-btn mit-btn--ghost"
-              onClick={onCancel}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>
               Cancelar
             </button>
 
-            <button
-              type="button"
-              className="mit-btn mit-btn--solid"
-              onClick={onSave}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
               {saving ? "Guardando..." : "Guardar"}
             </button>
           </div>
@@ -350,8 +340,7 @@ export default function ModalCargaRapidaMovimientos({
     obsHtml.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
     const obsBody = new MutationObserver(update);
-    if (document.body)
-      obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    if (document.body) obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
 
     update();
     return () => {
@@ -392,9 +381,9 @@ export default function ModalCargaRapidaMovimientos({
 
   const [filters, setFilters] = useState({
     id_clasificacion: NULL_OPTION,
+    id_tipo_operacion: NULL_OPTION, // ✅ Primero se selecciona
     id_tipo_venta: NULL_OPTION,
     id_cuenta_corriente: NULL_OPTION,
-    id_tipo_movimiento: NULL_OPTION,
     id_medio_pago: NULL_OPTION,
     id_cliente: NULL_OPTION,
     id_proveedor: NULL_OPTION,
@@ -438,13 +427,13 @@ export default function ModalCargaRapidaMovimientos({
     if (!wasOpen && open) {
       const f = todayISO();
       setFecha(f);
-      setPeriodo(periodoFromISODate(f)); // ✅ siempre desde la fecha actual
+      setPeriodo(periodoFromISODate(f));
 
       setFilters({
         id_clasificacion: NULL_OPTION,
+        id_tipo_operacion: NULL_OPTION,
         id_tipo_venta: NULL_OPTION,
         id_cuenta_corriente: NULL_OPTION,
-        id_tipo_movimiento: NULL_OPTION,
         id_medio_pago: NULL_OPTION,
         id_cliente: NULL_OPTION,
         id_proveedor: NULL_OPTION,
@@ -687,6 +676,67 @@ export default function ModalCargaRapidaMovimientos({
   }, [API, addUI, showToast]);
 
   /* =========================
+     Lógica condicional para mostrar campos
+  ========================= */
+  const tipoOperacionSeleccionado = filters.id_tipo_operacion;
+  const tipoVentaSeleccionado = filters.id_tipo_venta;
+
+  // Determinar qué campos de cliente/proveedor mostrar según tipo de operación
+  const mostrarCliente = useMemo(() => {
+    if (!tipoOperacionSeleccionado || tipoOperacionSeleccionado === NULL_OPTION) return false;
+    
+    // Buscar el tipo de operación seleccionado
+    const tipoOp = listsNorm.tipos_operacion.find(
+      (t) => String(getIdGeneric(t)) === String(tipoOperacionSeleccionado)
+    );
+    
+    if (!tipoOp) return false;
+    
+    const nombreTipo = String(tipoOp?.nombre || "").toLowerCase();
+    return nombreTipo.includes("venta") || nombreTipo.includes("movimiento");
+  }, [tipoOperacionSeleccionado, listsNorm.tipos_operacion]);
+
+  const mostrarProveedor = useMemo(() => {
+    if (!tipoOperacionSeleccionado || tipoOperacionSeleccionado === NULL_OPTION) return false;
+    
+    const tipoOp = listsNorm.tipos_operacion.find(
+      (t) => String(getIdGeneric(t)) === String(tipoOperacionSeleccionado)
+    );
+    
+    if (!tipoOp) return false;
+    
+    const nombreTipo = String(tipoOp?.nombre || "").toLowerCase();
+    return nombreTipo.includes("compra") || nombreTipo.includes("movimiento");
+  }, [tipoOperacionSeleccionado, listsNorm.tipos_operacion]);
+
+  // Determinar si mostrar medio de pago o cuenta corriente según tipo de venta
+  const tipoVentaEsContado = useMemo(() => {
+    if (!tipoVentaSeleccionado || tipoVentaSeleccionado === NULL_OPTION) return false;
+    
+    const tipoVenta = listsNorm.tipos_venta.find(
+      (t) => String(getIdGeneric(t)) === String(tipoVentaSeleccionado)
+    );
+    
+    if (!tipoVenta) return false;
+    
+    const nombreTipo = String(tipoVenta?.nombre || "").toLowerCase();
+    return nombreTipo.includes("contado");
+  }, [tipoVentaSeleccionado, listsNorm.tipos_venta]);
+
+  const tipoVentaEsCuentaCorriente = useMemo(() => {
+    if (!tipoVentaSeleccionado || tipoVentaSeleccionado === NULL_OPTION) return false;
+    
+    const tipoVenta = listsNorm.tipos_venta.find(
+      (t) => String(getIdGeneric(t)) === String(tipoVentaSeleccionado)
+    );
+    
+    if (!tipoVenta) return false;
+    
+    const nombreTipo = String(tipoVenta?.nombre || "").toLowerCase();
+    return nombreTipo.includes("cuenta corriente") || nombreTipo.includes("cta cte");
+  }, [tipoVentaSeleccionado, listsNorm.tipos_venta]);
+
+  /* =========================
      Cálculos por fila
   ========================= */
   const rowsCalc = useMemo(() => {
@@ -775,9 +825,9 @@ export default function ModalCargaRapidaMovimientos({
           periodo: periodoToSend,
 
           id_clasificacion: toNullableId(filters.id_clasificacion),
+          id_tipo_operacion: toNullableId(filters.id_tipo_operacion),
           id_tipo_venta: toNullableId(filters.id_tipo_venta),
           id_cuenta_corriente: toNullableId(filters.id_cuenta_corriente),
-          id_tipo_movimiento: toNullableId(filters.id_tipo_movimiento),
           id_medio_pago: toNullableId(filters.id_medio_pago),
 
           id_cliente: toNullableId(filters.id_cliente),
@@ -824,21 +874,13 @@ export default function ModalCargaRapidaMovimientos({
 
   const modalJSX = (
     <div
-      className={[
-        "mi-modal__overlay",
-        "mi-modal__overlay--mov",
-        dark ? "mi-modal__overlay--dark" : "",
-      ]
+      className={["mi-modal__overlay", "mi-modal__overlay--mov", dark ? "mi-modal__overlay--dark" : ""]
         .join(" ")
         .trim()}
       onMouseDown={() => (!saving ? onClose?.() : null)}
     >
       <div
-        className={[
-          "mi-modal__container",
-          "mi-modal__container--mov",
-          dark ? "mi-modal--dark" : "",
-        ]
+        className={["mi-modal__container", "mi-modal__container--mov", dark ? "mi-modal--dark" : ""]
           .join(" ")
           .trim()}
         role="dialog"
@@ -942,9 +984,7 @@ export default function ModalCargaRapidaMovimientos({
                           step="1"
                           value={r.cantidad}
                           onChange={(e) =>
-                            updateRow(r.id, {
-                              cantidad: e.target.value === "" ? "" : Number(e.target.value),
-                            })
+                            updateRow(r.id, { cantidad: e.target.value === "" ? "" : Number(e.target.value) })
                           }
                           disabled={saving}
                         />
@@ -959,9 +999,7 @@ export default function ModalCargaRapidaMovimientos({
                           step="0.01"
                           value={r.precio}
                           onChange={(e) =>
-                            updateRow(r.id, {
-                              precio: e.target.value === "" ? "" : Number(e.target.value),
-                            })
+                            updateRow(r.id, { precio: e.target.value === "" ? "" : Number(e.target.value) })
                           }
                           disabled={saving}
                         />
@@ -1067,24 +1105,93 @@ export default function ModalCargaRapidaMovimientos({
               </div>
 
               <div className="mi-cr-filters__body">
-                {/* ⚠️ Mantengo tu inline style porque lo mandaste así */}
                 <div className="fl-grid mi-cr-onecol" style={{ gridTemplateColumns: "1fr" }}>
-                  {[
-                    ["id_clasificacion", "Clasificación (opcional)", listsNorm.clasificaciones],
-                    ["id_tipo_venta", "Tipo venta (opcional)", listsNorm.tipos_venta],
-                    ["id_cuenta_corriente", "Cuenta corriente (opcional)", listsNorm.cuentas_corrientes],
-                    ["id_tipo_movimiento", "Tipo movimiento (opcional)", listsNorm.tipos_movimiento],
-                    ["id_medio_pago", "Medio pago (opcional)", listsNorm.medios_pago],
-                  ].map(([k, label, arr]) => (
-                    <div className="fl-field" key={k}>
+                  {/* Clasificación (siempre visible) */}
+                  <div className="fl-field">
+                    <select
+                      className="fl-input fl-select"
+                      value={String(filters.id_clasificacion)}
+                      onChange={(e) => updateFilter("id_clasificacion", e.target.value)}
+                      disabled={saving}
+                    >
+                      <option value={NULL_OPTION}>Clasificación (opcional)</option>
+                      {(listsNorm.clasificaciones || []).map((x) => {
+                        const xid = getIdGeneric(x);
+                        return (
+                          <option key={xid || x.id} value={String(xid || x.id || "")}>
+                            {x.nombre}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <label className="fl-label">Clasificación</label>
+                  </div>
+
+                  {/* Tipo Operación (siempre visible primero) */}
+                  <div className="fl-field">
+                    <select
+                      className="fl-input fl-select"
+                      value={String(filters.id_tipo_operacion)}
+                      onChange={(e) => {
+                        updateFilter("id_tipo_operacion", e.target.value);
+                        // Resetear campos dependientes
+                        updateFilter("id_cliente", NULL_OPTION);
+                        updateFilter("id_proveedor", NULL_OPTION);
+                        setClienteInput("");
+                        setProveedorInput("");
+                      }}
+                      disabled={saving}
+                    >
+                      <option value={NULL_OPTION}>Seleccionar tipo de operación *</option>
+                      {(listsNorm.tipos_operacion || []).map((x) => {
+                        const xid = getIdGeneric(x);
+                        return (
+                          <option key={xid || x.id} value={String(xid || x.id || "")}>
+                            {x.nombre}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <label className="fl-label">Tipo Operación</label>
+                  </div>
+
+                  {/* Tipo Venta (siempre visible) */}
+                  <div className="fl-field">
+                    <select
+                      className="fl-input fl-select"
+                      value={String(filters.id_tipo_venta)}
+                      onChange={(e) => {
+                        updateFilter("id_tipo_venta", e.target.value);
+                        // Resetear campos dependientes
+                        updateFilter("id_medio_pago", NULL_OPTION);
+                        updateFilter("id_cuenta_corriente", NULL_OPTION);
+                      }}
+                      disabled={saving}
+                    >
+                      <option value={NULL_OPTION}>Tipo venta (opcional)</option>
+                      {(listsNorm.tipos_venta || []).map((x) => {
+                        const xid = getIdGeneric(x);
+                        return (
+                          <option key={xid || x.id} value={String(xid || x.id || "")}>
+                            {x.nombre}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <label className="fl-label">Tipo Venta</label>
+                  </div>
+
+                  {/* Medio de pago - solo si es contado */}
+                  {tipoVentaEsContado && (
+                    <div className="fl-field">
                       <select
                         className="fl-input fl-select"
-                        value={String(filters[k])}
-                        onChange={(e) => updateFilter(k, e.target.value)}
+                        value={String(filters.id_medio_pago)}
+                        onChange={(e) => updateFilter("id_medio_pago", e.target.value)}
                         disabled={saving}
                       >
-                        <option value={NULL_OPTION}>{label}</option>
-                        {(arr || []).map((x) => {
+                        <option value={NULL_OPTION}>Medio pago (opcional)</option>
+                        {(listsNorm.medios_pago || []).map((x) => {
                           const xid = getIdGeneric(x);
                           return (
                             <option key={xid || x.id} value={String(xid || x.id || "")}>
@@ -1093,108 +1200,130 @@ export default function ModalCargaRapidaMovimientos({
                           );
                         })}
                       </select>
-                      <label className="fl-label">{String(label).replace(" (opcional)", "")}</label>
+                      <label className="fl-label">Medio Pago</label>
                     </div>
-                  ))}
+                  )}
 
-                  {/* CLIENTE autocomplete */}
-                  <div className="fl-field mi-cr-rel">
-                    <input
-                      ref={clienteInputRef}
-                      className="fl-input"
-                      placeholder=" "
-                      value={clienteInput}
-                      onChange={handleClienteInputChange}
-                      onFocus={() => setClienteFocus(true)}
-                      onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
-                      disabled={saving || addUI.open}
-                      autoComplete="off"
-                    />
-                    <label className="fl-label">Cliente (opcional)</label>
-
-                    {clienteFocus && filteredClientes.length > 0 && (
-                      <ul className="mi-cr-suggest">
-                        {filteredClientes.map((c) => {
-                          const cid = getClienteId(c) ?? c?.id;
+                  {/* Cuenta corriente - solo si es cuenta corriente */}
+                  {tipoVentaEsCuentaCorriente && (
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(filters.id_cuenta_corriente)}
+                        onChange={(e) => updateFilter("id_cuenta_corriente", e.target.value)}
+                        disabled={saving}
+                      >
+                        <option value={NULL_OPTION}>Cuenta corriente (opcional)</option>
+                        {(listsNorm.cuentas_corrientes || []).map((x) => {
+                          const xid = getIdGeneric(x);
                           return (
-                            <li
-                              key={cid ?? c?.id ?? String(Math.random())}
-                              className="mi-cr-suggest__item"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                handleSelectCliente(c);
-                              }}
-                            >
-                              {c.nombre}
-                            </li>
+                            <option key={xid || x.id} value={String(xid || x.id || "")}>
+                              {x.nombre}
+                            </option>
                           );
                         })}
-                      </ul>
-                    )}
+                      </select>
+                      <label className="fl-label">Cuenta Corriente</label>
+                    </div>
+                  )}
 
-                    <button
-                      type="button"
-                      className="mi-cr-link"
-                      onClick={startAddCliente}
-                      disabled={saving || addUI.saving}
-                    >
-                      + Agregar nuevo cliente
-                    </button>
-                  </div>
+                  {/* CLIENTE - condicional según tipo operación */}
+                  {mostrarCliente && (
+                    <div className="fl-field mi-cr-rel">
+                      <input
+                        ref={clienteInputRef}
+                        className="fl-input"
+                        placeholder=" "
+                        value={clienteInput}
+                        onChange={handleClienteInputChange}
+                        onFocus={() => setClienteFocus(true)}
+                        onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
+                        disabled={saving || addUI.open}
+                        autoComplete="off"
+                      />
+                      <label className="fl-label">Cliente (opcional)</label>
 
-                  {/* PROVEEDOR autocomplete */}
-                  <div className="fl-field mi-cr-rel">
-                    <input
-                      ref={proveedorInputRef}
-                      className="fl-input"
-                      placeholder=" "
-                      value={proveedorInput}
-                      onChange={handleProveedorInputChange}
-                      onFocus={() => setProveedorFocus(true)}
-                      onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
-                      disabled={saving || addUI.open}
-                      autoComplete="off"
-                    />
-                    <label className="fl-label">Proveedor (opcional)</label>
+                      {clienteFocus && filteredClientes.length > 0 && (
+                        <ul className="mi-cr-suggest">
+                          {filteredClientes.map((c) => {
+                            const cid = getClienteId(c) ?? c?.id;
+                            return (
+                              <li
+                                key={cid ?? c?.id ?? String(Math.random())}
+                                className="mi-cr-suggest__item"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  handleSelectCliente(c);
+                                }}
+                              >
+                                {c.nombre}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
 
-                    {proveedorFocus && filteredProveedores.length > 0 && (
-                      <ul className="mi-cr-suggest">
-                        {filteredProveedores.map((p) => {
-                          const pid = getProveedorId(p) ?? p?.id;
-                          return (
-                            <li
-                              key={pid ?? p?.id ?? String(Math.random())}
-                              className="mi-cr-suggest__item"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                handleSelectProveedor(p);
-                              }}
-                            >
-                              {p.nombre}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
+                      <button
+                        type="button"
+                        className="mi-cr-link"
+                        onClick={startAddCliente}
+                        disabled={saving || addUI.saving}
+                      >
+                        + Agregar nuevo cliente
+                      </button>
+                    </div>
+                  )}
 
-                    <button
-                      type="button"
-                      className="mi-cr-link"
-                      onClick={startAddProveedor}
-                      disabled={saving || addUI.saving}
-                    >
-                      + Agregar nuevo proveedor
-                    </button>
-                  </div>
+                  {/* PROVEEDOR - condicional según tipo operación */}
+                  {mostrarProveedor && (
+                    <div className="fl-field mi-cr-rel">
+                      <input
+                        ref={proveedorInputRef}
+                        className="fl-input"
+                        placeholder=" "
+                        value={proveedorInput}
+                        onChange={handleProveedorInputChange}
+                        onFocus={() => setProveedorFocus(true)}
+                        onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
+                        disabled={saving || addUI.open}
+                        autoComplete="off"
+                      />
+                      <label className="fl-label">Proveedor (opcional)</label>
+
+                      {proveedorFocus && filteredProveedores.length > 0 && (
+                        <ul className="mi-cr-suggest">
+                          {filteredProveedores.map((p) => {
+                            const pid = getProveedorId(p) ?? p?.id;
+                            return (
+                              <li
+                                key={pid ?? p?.id ?? String(Math.random())}
+                                className="mi-cr-suggest__item"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  handleSelectProveedor(p);
+                                }}
+                              >
+                                {p.nombre}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+
+                      <button
+                        type="button"
+                        className="mi-cr-link"
+                        onClick={startAddProveedor}
+                        disabled={saving || addUI.saving}
+                      >
+                        + Agregar nuevo proveedor
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mi-cr-filters__actions">
-                  <button
-                    type="button"
-                    onClick={submit}
-                    disabled={saving}
-                    className="mit-btn mit-btn--solid mit-btn--block"
-                  >
+                  <button type="button" onClick={submit} disabled={saving} className="mit-btn mit-btn--solid mit-btn--block">
                     {saving ? "Guardando..." : "Guardar todo"}
                   </button>
 

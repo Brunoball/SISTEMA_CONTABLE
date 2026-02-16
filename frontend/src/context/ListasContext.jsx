@@ -74,6 +74,8 @@ const emptyLists = {
   proveedores: [],
   tipos_movimiento: [],
   tipos_venta: [],
+  // ✅ NUEVO
+  tipos_operacion: [],
 };
 
 function normalizeLists(raw) {
@@ -91,6 +93,8 @@ function normalizeLists(raw) {
     proveedores: getArr("proveedores"),
     tipos_movimiento: getArr("tipos_movimiento"),
     tipos_venta: getArr("tipos_venta"),
+    // ✅ NUEVO
+    tipos_operacion: getArr("tipos_operacion"),
   };
 }
 
@@ -190,9 +194,7 @@ export function ListasProvider({ children }) {
       }
 
       const doRequest = (async () => {
-        if (!background) {
-          setLoadingLists(true);
-        }
+        if (!background) setLoadingLists(true);
         setErrorLists("");
 
         try {
@@ -246,7 +248,7 @@ export function ListasProvider({ children }) {
       lastUpdated,
       ensureListsLoaded,
       refreshLists,
-      setLists, // por si en el futuro querés modificar manualmente algo
+      setLists,
     }),
     [lists, loadingLists, errorLists, lastUpdated, ensureListsLoaded, refreshLists]
   );

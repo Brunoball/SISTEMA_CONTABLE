@@ -27,6 +27,11 @@ import * as XLSX from "xlsx";
 import { useListas } from "../../context/ListasContext";
 
 /* =========================
+   PERF: “Cargar todos”
+========================= */
+const PAGE_SIZE = 100;
+
+/* =========================
    Skeleton rows
 ========================= */
 const SKELETON_ROWS = 10;
@@ -166,7 +171,6 @@ function getAuthInfo() {
 
 /* =========================
    ✅ FILTRO ORDENES DE PAGO (pendientes)
-   Regla espejo: tipo_venta = CUENTA CORRIENTE + tiene proveedor
 ========================= */
 function hasProveedor(row) {
   const idProv = Number(row?.id_proveedor ?? row?.proveedor_id ?? row?.idProveedor ?? row?.id_proveedor_fk ?? 0);
@@ -249,6 +253,9 @@ export default function OrdenesPago() {
   // filtros
   const [fPeriodo, setFPeriodo] = useState(""); // UI MM-YYYY
   const [q, setQ] = useState("");
+
+  // ✅ “Cargar todos”
+  const [showAll, setShowAll] = useState(false);
 
   // toast
   const [toast, setToast] = useState(null);
@@ -345,7 +352,6 @@ export default function OrdenesPago() {
 
   /* =========================
      ✅ Cargar órdenes (listado)
-     - usa listasProvider para período default
      - cache por periodo|q
      - reqId para evitar race
      - skeleton shimmer
@@ -464,7 +470,8 @@ export default function OrdenesPago() {
 
       if (perDefault) {
         setFPeriodo((prev) => prev || perDefault);
-        await loadRows({ periodo: perDefault, q: "", });
+        setShowAll(false);
+        await loadRows({ periodo: perDefault, q: "" });
       } else {
         setRows([]);
         setLoadingRows(false);
@@ -486,6 +493,7 @@ export default function OrdenesPago() {
       if (fPeriodo !== "") {
         setFPeriodo("");
         setRows([]);
+        setShowAll(false);
       }
       return;
     }
@@ -494,8 +502,9 @@ export default function OrdenesPago() {
     if (current && !periodos.includes(current)) {
       const next = periodos[0];
       setFPeriodo(next);
+      setShowAll(false);
       invalidateCacheForPeriodo(next);
-      loadRows({ periodo: next, q: "", });
+      loadRows({ periodo: next, q: "" });
     }
   }, [listasCtx?.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
 
@@ -510,8 +519,11 @@ export default function OrdenesPago() {
 
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
+    // 🔥 al cambiar búsqueda, volvemos a “modo 100”
+    setShowAll(false);
+
     searchTimerRef.current = setTimeout(() => {
-      loadRows({ periodo: fPeriodo, q, });
+      loadRows({ periodo: fPeriodo, q });
     }, 250);
 
     return () => {
@@ -613,7 +625,7 @@ export default function OrdenesPago() {
         invalidateCacheForPeriodo(fPeriodo);
         await loadRows({ periodo: fPeriodo, q });
 
-        await refreshLists?.(); // por si cambia algo global
+        await refreshLists?.();
         showToast("exito", data?.mensaje || "Pago confirmado.", 2400);
       } catch (e) {
         showToast("error", e?.message || "Error confirmando pago.", 4200);
@@ -695,6 +707,16 @@ export default function OrdenesPago() {
       .filter((r) => rowMatchesQuery(r, q));
   }, [rows, fPeriodo, q]);
 
+  // ✅ lo que se RENDERIZA (100 o todo)
+  const visibleRows = useMemo(() => {
+    if (showAll) return filteredRows;
+    return filteredRows.slice(0, PAGE_SIZE);
+  }, [filteredRows, showAll]);
+
+  const totalPendientes = filteredRows.length;
+  const mostrando = visibleRows.length;
+  const hayMas = !showAll && totalPendientes > PAGE_SIZE;
+
   /* =========================
      Columnas / grilla
   ========================= */
@@ -748,12 +770,7 @@ export default function OrdenesPago() {
         {columns.map((c) => {
           if (c.key === "acciones") {
             return (
-              <div
-                key={c.key}
-                className="mov-gridCell mov-gridCell--actions is-center"
-                role="cell"
-                data-label={c.label}
-              >
+              <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
                 <div className="mov-skelActions">
                   <span className="mov-skelIcon" />
                   <span className="mov-skelIcon" />
@@ -827,7 +844,14 @@ export default function OrdenesPago() {
     setQ("");
     skipSearchRef.current = true;
 
+    // 🔥 reset “Cargar todos”
+    setShowAll(false);
+
     await loadRows({ periodo: ui, q: "" });
+  };
+
+  const onClickCargarTodos = () => {
+    setShowAll(true);
   };
 
   return (
@@ -851,8 +875,21 @@ export default function OrdenesPago() {
           <div className="mov-card__headLeft">
             <div>
               <div className="mov-card__title">Movimientos · Órdenes de Pago</div>
+
+              {/* ✅ contador REAL */}
               <div className="mov-card__hint">
-                Mostrando <b>{filteredRows.length}</b> pendientes
+                Mostrando <b>{mostrando}</b>
+                {hayMas ? (
+                  <>
+                    {" "}
+                    de <b>{totalPendientes}</b> pendientes
+                  </>
+                ) : (
+                  <>
+                    {" "}
+                    pendientes (<b>{totalPendientes}</b>)
+                  </>
+                )}
               </div>
             </div>
 
@@ -886,12 +923,16 @@ export default function OrdenesPago() {
                 <div className="mov-searchInput">
                   <input
                     value={q}
-                    onChange={(e) => setQ(e.target.value)}
+                    onChange={(e) => {
+                      setQ(e.target.value);
+                      setShowAll(false); // 🔥 cada cambio vuelve a 100
+                    }}
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         skipSearchRef.current = true;
+                        setShowAll(false);
                         await loadRows({ periodo: fPeriodo, q: e.currentTarget.value });
                       }
                     }}
@@ -908,6 +949,7 @@ export default function OrdenesPago() {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
                         skipSearchRef.current = true;
+                        setShowAll(false);
                         await loadRows({ periodo: fPeriodo, q: "" });
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
@@ -961,7 +1003,7 @@ export default function OrdenesPago() {
               </div>
             ) : (
               <>
-                {filteredRows.map((r) => (
+                {visibleRows.map((r) => (
                   <div
                     key={r.id_movimiento}
                     className="mov-gridTable mov-gridTable--row"
@@ -1028,6 +1070,20 @@ export default function OrdenesPago() {
                     })}
                   </div>
                 ))}
+
+                {/* ✅ BOTÓN CARGAR TODOS */}
+                {!loadingRows && hayMas && (
+                  <div style={{ padding: "12px 10px", display: "flex", justifyContent: "center" }}>
+                    <button
+                      type="button"
+                      className="mov-btn mov-btn--primary"
+                      onClick={onClickCargarTodos}
+                      title={`Cargar todos (${totalPendientes - PAGE_SIZE} más)`}
+                    >
+                      Cargar todos ({totalPendientes - PAGE_SIZE} más)
+                    </button>
+                  </div>
+                )}
 
                 {!loadingRows && filteredRows.length === 0 && (
                   <div className="mov-emptyRow">

@@ -331,6 +331,17 @@ function ventas_listar(PDO $pdo): void {
   $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
   $q       = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
 
+  // ✅ paginado (si no vienen, default)
+  $limit  = isset($_GET['limit'])  ? (int)$_GET['limit']  : 100;
+  $offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
+
+  if ($limit < 1) $limit = 100;
+  if ($limit > 500) $limit = 500; // cap de seguridad
+  if ($offset < 0) $offset = 0;
+
+  // ✅ pedimos 1 extra para saber si hay más
+  $limitPlus = $limit + 1;
+
   $idVenta = get_tipo_operacion_id_venta($pdo);
   if ($idVenta <= 0) fail("No existe el tipo_operacion 'VENTA' en tipos_operacion.");
 
@@ -344,6 +355,7 @@ function ventas_listar(PDO $pdo): void {
   $where[] = "(m.id_proveedor IS NULL OR m.id_proveedor = 0)";
   $where[] = "m.id_tipo_venta IS NOT NULL";
 
+  // ✅ reglas Ventas (contado/corriente)
   $where[] = "(
       (UPPER(tv.nombre) LIKE '%CONTADO%' AND m.id_medio_pago IS NOT NULL AND (m.id_cuenta_corriente IS NULL OR m.id_cuenta_corriente = 0))
       OR
@@ -442,10 +454,26 @@ function ventas_listar(PDO $pdo): void {
 
   $sql .= " WHERE " . implode(" AND ", $where);
   $sql .= " ORDER BY m.fecha DESC, m.id_movimiento DESC";
+  $sql .= " LIMIT :lim OFFSET :off";
 
   $stmt = $pdo->prepare($sql);
-  $stmt->execute($params);
-  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+  // bind de params normales
+  foreach ($params as $k => $v) {
+    $stmt->bindValue($k, $v);
+  }
+
+  // bind paginado (INT)
+  $stmt->bindValue(':lim', $limitPlus, PDO::PARAM_INT);
+  $stmt->bindValue(':off', $offset, PDO::PARAM_INT);
+
+  $stmt->execute();
+  $rowsAll = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+  // ✅ has_more real (por el +1)
+  $hasMore = count($rowsAll) > $limit;
+  $rows = $hasMore ? array_slice($rowsAll, 0, $limit) : $rowsAll;
+  $nextOffset = $hasMore ? ($offset + $limit) : null;
 
   $data = [];
   foreach ($rows as $r) {
@@ -497,8 +525,15 @@ function ventas_listar(PDO $pdo): void {
     ];
   }
 
-  ok(['ventas' => $data]);
+  ok([
+    'ventas' => $data,
+    'has_more' => $hasMore,
+    'next_offset' => $nextOffset,
+    'limit' => $limit,
+    'offset' => $offset,
+  ]);
 }
+
 
 /* =========================================================
    CREAR 1 VENTA (POST)

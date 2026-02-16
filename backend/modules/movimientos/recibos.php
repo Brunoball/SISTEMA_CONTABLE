@@ -165,12 +165,25 @@ function item_payload_from_src(array $src, float $monto_total, int $id_detalle):
 }
 
 /* =========================================================
-   LISTAR RECIBOS (GET)
+   LISTAR RECIBOS (GET) ✅ PAGINADO REAL (limit/offset)
+   - Devuelve max 100 por llamada
+   - has_more + next_offset
+   - total_count solo en offset=0
 ========================================================= */
 function recibos_listar(PDO $pdo): void
 {
   $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
   $q       = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+
+  // ✅ paginado
+  $limit  = isset($_GET['limit']) ? (int)$_GET['limit'] : 100;
+  $offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
+
+  if ($limit <= 0) $limit = 100;
+  if ($limit > 100) $limit = 100;   // ✅ clavado a 100
+  if ($offset < 0) $offset = 0;
+
+  $limitPlus = $limit + 1; // ✅ para detectar has_more sin COUNT siempre
 
   $where = [];
   $params = [];
@@ -180,6 +193,61 @@ function recibos_listar(PDO $pdo): void
     $params[':periodo'] = $periodo;
   }
 
+  // FROM/JOIN base (igual a tu query original, pero paginada)
+  $from = "
+    FROM movimientos m
+      LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
+      LEFT JOIN tipos_venta tv          ON tv.id_tipo_venta = m.id_tipo_venta
+      LEFT JOIN cuentas_corrientes cc   ON cc.id_cuenta_corriente = m.id_cuenta_corriente
+      LEFT JOIN clientes cl             ON cl.id_cliente = m.id_cliente
+      LEFT JOIN proveedores pr          ON pr.id_proveedor = m.id_proveedor
+      LEFT JOIN detalles d              ON d.id_detalle = m.id_detalle
+      LEFT JOIN medios_pago mp          ON mp.id_medio_pago = m.id_medio_pago
+
+      LEFT JOIN (
+        SELECT mi1.*
+        FROM movimientos_items mi1
+        INNER JOIN (
+          SELECT id_movimiento, MIN(id_item) AS min_id_item
+          FROM movimientos_items
+          GROUP BY id_movimiento
+        ) x ON x.id_movimiento = mi1.id_movimiento AND x.min_id_item = mi1.id_item
+      ) fi ON fi.id_movimiento = m.id_movimiento
+
+      LEFT JOIN detalles di ON di.id_detalle = fi.id_detalle
+
+      LEFT JOIN (
+        SELECT id_movimiento, SUM(total) AS total_sum
+        FROM movimientos_items
+        GROUP BY id_movimiento
+      ) it ON it.id_movimiento = m.id_movimiento
+  ";
+
+  if ($q !== '') {
+    $like = '%' . $q . '%';
+
+    $where[] = "(
+      UPPER(COALESCE(c.nombre,''))   LIKE UPPER(:q1) OR
+      UPPER(COALESCE(tv.nombre,''))  LIKE UPPER(:q2) OR
+      UPPER(COALESCE(cc.nombre,''))  LIKE UPPER(:q3) OR
+      UPPER(COALESCE(cl.nombre,''))  LIKE UPPER(:q4) OR
+      UPPER(COALESCE(pr.nombre,''))  LIKE UPPER(:q5) OR
+      UPPER(COALESCE(di.nombre, d.nombre,'')) LIKE UPPER(:q6) OR
+      UPPER(COALESCE(mp.nombre,''))  LIKE UPPER(:q7)
+    )";
+
+    $params[':q1'] = $like;
+    $params[':q2'] = $like;
+    $params[':q3'] = $like;
+    $params[':q4'] = $like;
+    $params[':q5'] = $like;
+    $params[':q6'] = $like;
+    $params[':q7'] = $like;
+  }
+
+  $whereSql = (!empty($where)) ? (" WHERE " . implode(" AND ", $where)) : "";
+
+  // ✅ Query paginada (trae 101 para saber si hay más)
   $sql = "
     SELECT
       m.id_movimiento,
@@ -214,62 +282,43 @@ function recibos_listar(PDO $pdo): void
       COALESCE(di.nombre, d.nombre, '') AS detalle,
       COALESCE(mp.nombre,'') AS medio_pago_nombre,
       m.created_at
-    FROM movimientos m
-      LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
-      LEFT JOIN tipos_venta tv          ON tv.id_tipo_venta = m.id_tipo_venta
-      LEFT JOIN cuentas_corrientes cc   ON cc.id_cuenta_corriente = m.id_cuenta_corriente
-      LEFT JOIN clientes cl             ON cl.id_cliente = m.id_cliente
-      LEFT JOIN proveedores pr          ON pr.id_proveedor = m.id_proveedor
-      LEFT JOIN detalles d              ON d.id_detalle = m.id_detalle
-      LEFT JOIN medios_pago mp          ON mp.id_medio_pago = m.id_medio_pago
-
-      LEFT JOIN (
-        SELECT id_movimiento, SUM(total) AS total_sum
-        FROM movimientos_items
-        GROUP BY id_movimiento
-      ) it ON it.id_movimiento = m.id_movimiento
-
-      LEFT JOIN (
-        SELECT mi1.*
-        FROM movimientos_items mi1
-        INNER JOIN (
-          SELECT id_movimiento, MIN(id_item) AS min_id_item
-          FROM movimientos_items
-          GROUP BY id_movimiento
-        ) x ON x.id_movimiento = mi1.id_movimiento AND x.min_id_item = mi1.id_item
-      ) fi ON fi.id_movimiento = m.id_movimiento
-
-      LEFT JOIN detalles di ON di.id_detalle = fi.id_detalle
+    $from
+    $whereSql
+    ORDER BY m.fecha DESC, m.id_movimiento DESC
+    LIMIT :lim OFFSET :off
   ";
 
-  if ($q !== '') {
-    $like = '%' . $q . '%';
-
-    $where[] = "(
-      UPPER(COALESCE(c.nombre,''))   LIKE UPPER(:q1) OR
-      UPPER(COALESCE(tv.nombre,''))  LIKE UPPER(:q2) OR
-      UPPER(COALESCE(cc.nombre,''))  LIKE UPPER(:q3) OR
-      UPPER(COALESCE(cl.nombre,''))  LIKE UPPER(:q4) OR
-      UPPER(COALESCE(pr.nombre,''))  LIKE UPPER(:q5) OR
-      UPPER(COALESCE(di.nombre, d.nombre,'')) LIKE UPPER(:q6) OR
-      UPPER(COALESCE(mp.nombre,''))  LIKE UPPER(:q7)
-    )";
-
-    $params[':q1'] = $like;
-    $params[':q2'] = $like;
-    $params[':q3'] = $like;
-    $params[':q4'] = $like;
-    $params[':q5'] = $like;
-    $params[':q6'] = $like;
-    $params[':q7'] = $like;
-  }
-
-  if (!empty($where)) $sql .= " WHERE " . implode(" AND ", $where);
-  $sql .= " ORDER BY m.fecha DESC, m.id_movimiento DESC";
-
   $stmt = $pdo->prepare($sql);
-  $stmt->execute($params);
+
+  // bind params normales
+  foreach ($params as $k => $v) $stmt->bindValue($k, $v);
+
+  // bind paginado como INT sí o sí
+  $stmt->bindValue(':lim', (int)$limitPlus, PDO::PARAM_INT);
+  $stmt->bindValue(':off', (int)$offset, PDO::PARAM_INT);
+
+  $stmt->execute();
   $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+  // ✅ has_more si vinieron más de 100
+  $hasMore = count($rows) > $limit;
+  if ($hasMore) array_pop($rows); // dejamos exactamente 100
+
+  $nextOffset = $hasMore ? ($offset + $limit) : null;
+
+  // ✅ total_count SOLO en la primera página (para UI “total real”)
+  $totalCount = null;
+  if ($offset === 0) {
+    $sqlCount = "
+      SELECT COUNT(DISTINCT m.id_movimiento) AS total
+      $from
+      $whereSql
+    ";
+    $stc = $pdo->prepare($sqlCount);
+    foreach ($params as $k => $v) $stc->bindValue($k, $v);
+    $stc->execute();
+    $totalCount = (int)($stc->fetchColumn() ?: 0);
+  }
 
   $data = [];
   foreach ($rows as $r) {
@@ -315,7 +364,14 @@ function recibos_listar(PDO $pdo): void
     ];
   }
 
-  ok(['movimientos' => $data]);
+  ok([
+    'movimientos' => $data,
+    'has_more' => $hasMore,
+    'next_offset' => $nextOffset,
+    'limit' => $limit,
+    'offset' => $offset,
+    'total_count' => $totalCount, // null si offset>0
+  ]);
 }
 
 /* =========================================================

@@ -153,7 +153,6 @@
 .mi-card__title{
   margin: 0 0 12px;
   font-size: 1rem;
-  font-weight: 800;
   color: var(--mi-text);
   letter-spacing: -0.01em;
   padding-bottom: 8px;
@@ -2388,4 +2387,103 @@ input[type="number"]::-webkit-outer-spin-button {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+}/* =========================================================
+   ✅ PANEL CONTADO / CUENTA CORRIENTE – estilo original
+========================================================= */
+
+/* Card del panel */
+.mi-cr-filters .mi-card{
+  background: #ffffff;
+  border: 1px solid rgba(148,163,184,.45);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 6px 18px rgba(15,23,42,.08);
+}
+
+/* Título */
+.mi-cr-filters .mi-card__title{
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mi-text);
+  margin-bottom: 14px;
+  border-bottom: 1px solid rgba(148,163,184,.35);
+  padding-bottom: 10px;
+}
+
+/* Contenedor de botones */
+.mi-card__actionsRow{
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* Botones toggle */
+.mi-card__actionsRow .mit-btn{
+  flex: 1;
+  height: 42px;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: all .18s ease;
+}
+
+/* Botón inactivo */
+.mi-card__actionsRow .mit-btn--ghost{
+  background: #f1f5f9;
+  border: 1px solid rgba(148,163,184,.45);
+  color: var(--mi-text);
+}
+
+.mi-card__actionsRow .mit-btn--ghost:hover{
+  background: #e2e8f0;
+}
+
+/* Botón activo (Facturar o Guardar seleccionado) */
+.mi-card__actionsRow .mit-btn--solid{
+  background: var(--blue-midnight);
+  border: 1px solid var(--blue-midnight);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(10,37,64,.25);
+}
+
+.mi-card__actionsRow .mit-btn--solid:hover{
+  background: #0d2f55;
+}
+
+/* Hint */
+.mi-card__hint{
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #475569;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.mi-card__hint b{
+  font-weight: 600;
+}
+.mi-modal--dark .mi-cr-filters .mi-card{
+  background: rgba(10,25,40,.65);
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 14px 30px rgba(0,0,0,.35);
+}
+
+.mi-modal--dark .mi-card__title{
+  color: rgba(255,255,255,.92);
+  border-bottom-color: rgba(255,255,255,.12);
+}
+
+.mi-modal--dark .mi-card__actionsRow .mit-btn--ghost{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.14);
+  color: rgba(255,255,255,.85);
+}
+
+.mi-modal--dark .mi-card__actionsRow .mit-btn--solid{
+  background: var(--blue-action);
+  border-color: var(--blue-action);
+}
+
+.mi-modal--dark .mi-card__hint{
+  color: rgba(226,232,240,.75);
 }

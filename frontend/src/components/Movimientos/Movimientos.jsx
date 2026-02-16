@@ -1056,7 +1056,7 @@ export default function Movimientos() {
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
                       type="button"
-                      className="mov-btn mov-btn--ghost"
+                      className="mov-btn mov-btn--loadAll"
                       onClick={handleLoadAll}
                       disabled={loadingMore || loadingAll || loadingListsCtx}
                       title="Cargar todos los movimientos restantes"

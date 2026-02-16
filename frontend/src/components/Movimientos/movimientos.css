@@ -1009,3 +1009,65 @@ html[data-theme="oscuro"] .mov-skelIcon::after{
     transparent
   ) !important;
 }
+/* =========================================================
+   ✅ Botón "Cargar todos" (Movimientos)
+========================================================= */
+
+.mov-btn--loadAll{
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-weight: 600;
+  letter-spacing: .2px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  background: rgba(0,85,187,.10);          /* action soft */
+  border: 1px solid rgba(0,85,187,.28);
+  color: var(--blue-action);               /* #0055BB */
+  box-shadow: 0 8px 18px rgba(0,0,0,.06);
+
+  transition: transform .14s ease, background .14s ease, border-color .14s ease, box-shadow .14s ease;
+}
+
+.mov-btn--loadAll:hover{
+  background: rgba(0,85,187,.16);
+  border-color: rgba(0,85,187,.38);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px rgba(0,0,0,.09);
+}
+
+.mov-btn--loadAll:active{
+  transform: translateY(0px);
+  box-shadow: 0 8px 18px rgba(0,0,0,.06);
+}
+
+.mov-btn--loadAll:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0,85,187,.22), 0 10px 22px rgba(0,0,0,.08);
+}
+
+/* ✅ Disabled / Loading */
+.mov-btn--loadAll:disabled{
+  opacity: .55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* =========================================================
+   🌙 Dark mode (si usás body.dark)
+========================================================= */
+body.dark .mov-btn--loadAll{
+  background: rgba(0,85,187,.18);
+  border-color: rgba(255,255,255,.16);
+  color: rgba(255,255,255,.90);
+  box-shadow: 0 14px 26px rgba(0,0,0,.35);
+}
+
+body.dark .mov-btn--loadAll:hover{
+  background: rgba(0,85,187,.28);
+  border-color: rgba(255,255,255,.22);
+}

@@ -181,7 +181,9 @@ function getAuthInfo() {
    ✅ Reglas Recibos
 ========================= */
 function isContadoTipoVenta(row) {
-  const label = String(row?.tipo_venta ?? row?.tipoVenta ?? row?.condicion_venta ?? "").trim();
+  const label = String(
+    row?.tipo_venta ?? row?.tipoVenta ?? row?.condicion_venta ?? ""
+  ).trim();
   const s = normalizeSearchText(label);
   return s.includes("contado");
 }
@@ -266,6 +268,9 @@ export default function Recibos() {
   const skelTimerRef = useRef(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
 
+  // ✅ FIX: bloquea "No hay registros" durante transiciones (evita flash)
+  const [uiPending, setUiPending] = useState(false);
+
   const beginSkeleton = useCallback(() => {
     if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
     setShowSkeleton(false);
@@ -307,13 +312,18 @@ export default function Recibos() {
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
+      throw new Error(
+        `Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`
+      );
     }
   }, []);
 
   const apiGet = useCallback(
     async (url) => {
-      const res = await fetch(url, { method: "GET", headers: buildHeadersGET() });
+      const res = await fetch(url, {
+        method: "GET",
+        headers: buildHeadersGET(),
+      });
       return await parseJsonOrThrow(res);
     },
     [buildHeadersGET, parseJsonOrThrow]
@@ -362,6 +372,7 @@ export default function Recibos() {
         setLoadingAll(false);
         setError("");
         endSkeleton();
+        setUiPending(false);
         return { hasMore: false, nextOffset: null, received: 0 };
       }
 
@@ -371,6 +382,9 @@ export default function Recibos() {
 
       const myReqId = ++reqIdRef.current;
       const start = Date.now();
+
+      // ✅ FIX: evitamos flash de "No hay registros" ANTES de que arranque loadingRows/showSkeleton
+      if (!append) setUiPending(true);
 
       if (!append) {
         beginSkeleton();
@@ -382,13 +396,19 @@ export default function Recibos() {
 
       try {
         // cache solo para carga principal
-        if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
+        if (
+          !append &&
+          offset === 0 &&
+          cacheRef.current.has(cacheKey) &&
+          !FORCE_SHOW_LOADER_DEV
+        ) {
           const cached = cacheRef.current.get(cacheKey);
           setRows(cached?.rows || []);
           setHasMore(!!cached?.hasMore);
           setNextOffset(cached?.nextOffset ?? null);
           setLoadingRows(false);
           endSkeleton();
+          if (myReqId === reqIdRef.current) setUiPending(false);
           return {
             hasMore: !!cached?.hasMore,
             nextOffset: cached?.nextOffset ?? null,
@@ -404,7 +424,8 @@ export default function Recibos() {
         sp.set("offset", String(offset));
 
         const data = await apiGet(`${API}?${sp.toString()}`);
-        if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar recibos.");
+        if (!data?.exito)
+          throw new Error(data?.mensaje || "No se pudieron cargar recibos.");
 
         if (myReqId !== reqIdRef.current) {
           if (append) setLoadingMore(false);
@@ -421,7 +442,9 @@ export default function Recibos() {
 
         const newHasMore = !!data.has_more;
         const newNextOffset =
-          data.next_offset !== undefined && data.next_offset !== null ? Number(data.next_offset) : null;
+          data.next_offset !== undefined && data.next_offset !== null
+            ? Number(data.next_offset)
+            : null;
 
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
@@ -432,7 +455,9 @@ export default function Recibos() {
               setRows((prev) => {
                 const base = Array.isArray(prev) ? prev : [];
                 const seen = new Set(base.map((x) => String(x?.id_movimiento)));
-                const add = movsNorm.filter((x) => !seen.has(String(x?.id_movimiento)));
+                const add = movsNorm.filter(
+                  (x) => !seen.has(String(x?.id_movimiento))
+                );
                 return [...base, ...add];
               });
             } else {
@@ -443,14 +468,24 @@ export default function Recibos() {
             setNextOffset(newNextOffset);
 
             if (!append && offset === 0) {
-              cacheRef.current.set(cacheKey, { rows: movsNorm, hasMore: newHasMore, nextOffset: newNextOffset });
+              cacheRef.current.set(cacheKey, {
+                rows: movsNorm,
+                hasMore: newHasMore,
+                nextOffset: newNextOffset,
+              });
             }
 
             if (append) setLoadingMore(false);
             else setLoadingRows(false);
 
             endSkeleton();
-            resolve({ hasMore: newHasMore, nextOffset: newNextOffset, received: movsNorm.length });
+            if (myReqId === reqIdRef.current) setUiPending(false);
+
+            resolve({
+              hasMore: newHasMore,
+              nextOffset: newNextOffset,
+              received: movsNorm.length,
+            });
           };
 
           if (remaining > 0) setTimeout(apply, remaining);
@@ -475,6 +510,8 @@ export default function Recibos() {
             else setLoadingRows(false);
 
             endSkeleton();
+            if (myReqId === reqIdRef.current) setUiPending(false);
+
             resolve(null);
           }, remaining);
         });
@@ -496,7 +533,9 @@ export default function Recibos() {
 
       if (!alive) return;
 
-      const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos.map(periodoToMMYYYY) : [];
+      const periodos = Array.isArray(listasCtx?.periodos)
+        ? listasCtx.periodos.map(periodoToMMYYYY)
+        : [];
       const perDefault = periodos[0] || "";
 
       if (perDefault) {
@@ -507,6 +546,7 @@ export default function Recibos() {
         setHasMore(false);
         setNextOffset(null);
         setLoadingRows(false);
+        setUiPending(false);
         endSkeleton();
       }
     })();
@@ -519,7 +559,9 @@ export default function Recibos() {
 
   // ✅ sync período si desaparece
   useEffect(() => {
-    const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos.map(periodoToMMYYYY) : [];
+    const periodos = Array.isArray(listasCtx?.periodos)
+      ? listasCtx.periodos.map(periodoToMMYYYY)
+      : [];
 
     if (periodos.length === 0) {
       if (fPeriodo !== "") {
@@ -551,8 +593,12 @@ export default function Recibos() {
 
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
-    searchTimerRef.current = setTimeout(() => {
-      loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
+    // ✅ FIX: evita “flash” mientras espera el debounce + fetch
+    setUiPending(true);
+
+    searchTimerRef.current = setTimeout(async () => {
+      await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
+      // loadRows ya apaga uiPending si es la request vigente
     }, 250);
 
     return () => {
@@ -566,7 +612,13 @@ export default function Recibos() {
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
     if (!fPer) return [];
-    return (Array.isArray(rows) ? rows : []).filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer));
+
+    return (Array.isArray(rows) ? rows : []).filter((r) => {
+      const perRow = periodoToMMYYYY(r?.periodo);
+      // ✅ si el backend NO manda periodo por fila, NO filtramos ese registro afuera
+      if (!perRow) return true;
+      return String(perRow) === String(fPer);
+    });
   }, [rows, fPeriodo]);
 
   const stats = useMemo(() => {
@@ -584,7 +636,13 @@ export default function Recibos() {
   ========================= */
   const columns = useMemo(() => {
     return [
-      { key: "fecha", label: "FECHA", align: "center", fr: 0.9, render: (r) => safeText(formatFechaDMY(r.fecha)) },
+      {
+        key: "fecha",
+        label: "FECHA",
+        align: "center",
+        fr: 0.9,
+        render: (r) => safeText(formatFechaDMY(r.fecha)),
+      },
       {
         key: "detalle",
         label: "DESCRIPCION",
@@ -593,7 +651,13 @@ export default function Recibos() {
         align: "left",
         render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
       },
-      { key: "cliente", label: "CLIENTE", fr: 1.7, align: "center", render: (r) => safeText(r.cliente) },
+      {
+        key: "cliente",
+        label: "CLIENTE",
+        fr: 1.7,
+        align: "center",
+        render: (r) => safeText(r.cliente),
+      },
       {
         key: "estado",
         label: "ESTADO",
@@ -601,10 +665,20 @@ export default function Recibos() {
         align: "center",
         render: (r) => {
           const pag = isReciboPagado(r);
-          return <span className={`mov-chip ${pag ? "mov-chip--ok" : "mov-chip--warn"}`}>{pag ? "PAGADO" : "PENDIENTE"}</span>;
+          return (
+            <span className={`mov-chip ${pag ? "mov-chip--ok" : "mov-chip--warn"}`}>
+              {pag ? "PAGADO" : "PENDIENTE"}
+            </span>
+          );
         },
       },
-      { key: "monto", label: "MONTO", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
+      {
+        key: "monto",
+        label: "MONTO",
+        fr: 1.1,
+        align: "center",
+        render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
+      },
       { key: "acciones", label: "ACCIONES", fr: 0.9, align: "center", render: () => null },
     ];
   }, []);
@@ -632,7 +706,9 @@ export default function Recibos() {
         const rid = Number(r?.id_cliente || 0);
         const rnom = String(r?.cliente || "").trim();
 
-        const same = (idCli > 0 && rid === idCli) || (!idCli && nombreCli && rnom.toLowerCase() === nombreCli.toLowerCase());
+        const same =
+          (idCli > 0 && rid === idCli) ||
+          (!idCli && nombreCli && rnom.toLowerCase() === nombreCli.toLowerCase());
         return same;
       });
     },
@@ -666,7 +742,9 @@ export default function Recibos() {
         const ids =
           payload?.ids_movimiento ??
           payload?.ids_movimientos ??
-          payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ??
+          payload?.seleccion
+            ?.map((x) => Number(x?.id_movimiento || 0))
+            .filter(Boolean) ??
           [];
 
         const { idUsuario } = getAuthInfo();
@@ -746,7 +824,11 @@ export default function Recibos() {
       }
 
       if (hasMore) {
-        showToast("error", "Ojo: faltan recibos sin cargar. Si querés exportar todo, tocá “Cargar todos” primero.", 5200);
+        showToast(
+          "error",
+          "Ojo: faltan recibos sin cargar. Si querés exportar todo, tocá “Cargar todos” primero.",
+          5200
+        );
       }
 
       const dataToExport = filteredRows.map((r) => ({
@@ -783,8 +865,6 @@ export default function Recibos() {
 
   /* =========================
      ✅ BOTÓN: "Cargar todos"
-     - solo aparece si hasMore=true
-     - trae el resto usando nextOffset
   ========================= */
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx) return;
@@ -844,7 +924,12 @@ export default function Recibos() {
         {columns.map((c) => {
           if (c.key === "acciones") {
             return (
-              <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
+              <div
+                key={c.key}
+                className="mov-gridCell mov-gridCell--actions is-center"
+                role="cell"
+                data-label={c.label}
+              >
                 <div className="mov-skelActions">
                   <span className="mov-skelIcon" />
                   <span className="mov-skelIcon" />
@@ -877,21 +962,44 @@ export default function Recibos() {
   };
 
   // ✅ listas a pasar a modales
-  const lists = listasCtx || {
-    periodos: [],
-    clientes: [],
-    medios_pago: [],
-    tipos_venta: [],
-    clasificaciones: [],
-    cuentas_corrientes: [],
-    detalles: [],
-    proveedores: [],
-    tipos_movimiento: [],
-  };
+  const lists =
+    listasCtx || {
+      periodos: [],
+      clientes: [],
+      medios_pago: [],
+      tipos_venta: [],
+      clasificaciones: [],
+      cuentas_corrientes: [],
+      detalles: [],
+      proveedores: [],
+      tipos_movimiento: [],
+    };
+
+  /* =========================
+     ✅ FIX UI: evitar “flash” de empty
+     - Ahora también bloquea durante transiciones (uiPending)
+  ========================= */
+  const periodoUI = periodoToMMYYYY(fPeriodo);
+  const isInit = loadingListsCtx || !periodoUI; // todavía inicializando/período no listo
+  const showEmpty =
+    !isInit &&
+    !uiPending && // ✅ FIX
+    !loadingRows &&
+    !showSkeleton &&
+    !loadingMore &&
+    !loadingAll &&
+    filteredRows.length === 0;
 
   return (
     <div className="mov-page">
-      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
+      {toast && (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
+      )}
 
       {errorListsCtx && (
         <div className="mov-alert" role="alert">
@@ -911,7 +1019,8 @@ export default function Recibos() {
             <div>
               <div className="mov-card__title">Movimientos · Recibos</div>
               <div className="mov-card__hint">
-                Total <b>{stats.total}</b> · Pendientes <b>{stats.pendientes}</b> · Pagados <b>{stats.pagados}</b>
+                Total <b>{stats.total}</b> · Pendientes <b>{stats.pendientes}</b> · Pagados{" "}
+                <b>{stats.pagados}</b>
                 {" · "}
                 Mostrando <b>{filteredRows.length}</b>
                 {hasMore ? " (hay más)" : ""}
@@ -928,11 +1037,16 @@ export default function Recibos() {
                   value={periodoToMMYYYY(fPeriodo)}
                   onChange={async (e) => {
                     const ui = periodoToMMYYYY(e.target.value);
+
+                    // ✅ FIX: evita flash antes de que arranque loadRows
+                    setUiPending(true);
+
                     setFPeriodo(ui);
                     setQ("");
 
                     skipSearchRef.current = true;
                     await loadRows({ periodo: ui, q: "", offset: 0, append: false }); // ✅ 100
+                    // loadRows apaga uiPending si es request vigente
                   }}
                   disabled={loadingRows || loadingListsCtx || loadingMore || loadingAll}
                 >
@@ -960,8 +1074,18 @@ export default function Recibos() {
                       if (e.key === "Enter") {
                         e.preventDefault();
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+                        // ✅ FIX
+                        setUiPending(true);
+
                         skipSearchRef.current = true;
-                        await loadRows({ periodo: fPeriodo, q: e.currentTarget.value, offset: 0, append: false });
+                        await loadRows({
+                          periodo: fPeriodo,
+                          q: e.currentTarget.value,
+                          offset: 0,
+                          append: false,
+                        });
+                        // loadRows apaga uiPending si es request vigente
                       }
                     }}
                     placeholder="Buscar por fecha, cliente, descripción, monto…"
@@ -976,8 +1100,13 @@ export default function Recibos() {
                       onClick={async () => {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
+
+                        // ✅ FIX
+                        setUiPending(true);
+
                         skipSearchRef.current = true;
                         await loadRows({ periodo: fPeriodo, q: "", offset: 0, append: false });
+                        // loadRows apaga uiPending si es request vigente
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
                       disabled={loadingAll}
@@ -1077,7 +1206,13 @@ export default function Recibos() {
                                   type="button"
                                   className="mov-iconBtn mov-iconBtn--danger"
                                   title="Eliminar"
-                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || deletingId === r.id_movimiento}
+                                  disabled={
+                                    loadingRows ||
+                                    loadingMore ||
+                                    loadingAll ||
+                                    loadingListsCtx ||
+                                    deletingId === r.id_movimiento
+                                  }
                                   onClick={() => {
                                     setSelectedRow(r);
                                     setOpenDel(true);
@@ -1114,18 +1249,15 @@ export default function Recibos() {
                   );
                 })}
 
-                {!loadingRows && filteredRows.length === 0 && (
-                  <div className="mov-emptyRow">
-                    {!fPeriodo ? "No hay período disponible para cargar recibos." : "No hay recibos para este período."}
-                  </div>
-                )}
+                {/* ✅ FIX: no mostrar empty durante init/carga/transiciones */}
+                {showEmpty && <div className="mov-emptyRow">No hay recibos para este período.</div>}
 
-                {/* ✅ BOTÓN: CARGAR TODOS (APARECE SOLO SI HAY MÁS DE 100) */}
+                {/* ✅ BOTÓN: CARGAR TODOS */}
                 {!loadingRows && filteredRows.length > 0 && hasMore && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
                       type="button"
-                      className="mov-btn mov-btn--ghost"
+                      className="mov-btn mov-btn--loadAll"
                       onClick={handleLoadAll}
                       disabled={loadingMore || loadingAll || loadingListsCtx}
                       title="Cargar todos los recibos restantes"
@@ -1150,7 +1282,11 @@ export default function Recibos() {
       {/* PAGAR */}
       <ModalPagarRecibos
         open={openPagar}
-        onClose={closePagarModal}
+        onClose={() => {
+          setOpenPagar(false);
+          setPagarCliente(null);
+          setPagarDeudas([]);
+        }}
         onConfirm={onConfirmPago}
         onToast={showToast}
         cliente={pagarCliente}

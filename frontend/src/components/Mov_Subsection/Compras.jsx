@@ -1195,7 +1195,7 @@ export default function Compras() {
                     {showLoadAllBtn && (
                       <button
                         type="button"
-                        className="mov-btn mov-btn--ghost"
+                        className="mov-btn mov-btn--loadAll"
                         onClick={handleLoadAll}
                         disabled={loadingMore || loadingRows || loadingAll || loadingListsCtx}
                         title="Cargar todas las compras restantes"

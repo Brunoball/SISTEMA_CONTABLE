@@ -1076,7 +1076,7 @@ export default function OrdenesPago() {
                   <div style={{ padding: "12px 10px", display: "flex", justifyContent: "center" }}>
                     <button
                       type="button"
-                      className="mov-btn mov-btn--primary"
+                      className="mov-btn mov-btn--loadAll"
                       onClick={onClickCargarTodos}
                       title={`Cargar todos (${totalPendientes - PAGE_SIZE} más)`}
                     >

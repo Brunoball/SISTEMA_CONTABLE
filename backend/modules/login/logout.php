@@ -41,8 +41,10 @@ try {
   }
 
   $sessionKey = getSessionKey();
+
+  // ✅ Si no hay header, igual devolvemos OK (cliente puede limpiar igual)
   if ($sessionKey === '') {
-    fail("Falta header X-Session.", 401);
+    ok(['cerrada' => false, 'mensaje' => 'Sin X-Session (cliente ya estaba limpio).']);
   }
 
   // ✅ Conectar MASTER (usa tu db_master.php y crea $pdo_master)

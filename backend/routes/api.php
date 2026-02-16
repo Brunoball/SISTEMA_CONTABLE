@@ -44,6 +44,7 @@ $action =
 
 $action = is_string($action) ? trim($action) : "";
 
+// Acciones públicas (NO exigen X-Session)
 $PUBLIC_ACTIONS = ['inicio', 'registro', 'logout', 'cerrar_sesion'];
 
 try {
@@ -55,6 +56,7 @@ try {
   require_once __DIR__ . "/../modules/global/route.php";
   require_once __DIR__ . "/../modules/login/route.php";
 
+  // ✅ Públicas
   if (in_array($action, $PUBLIC_ACTIONS, true)) {
     if (function_exists("route_global") && route_global($action)) exit;
     if (function_exists("route_login") && route_login($action)) exit;
@@ -63,10 +65,22 @@ try {
     exit;
   }
 
-  // ✅ PRIVADAS: resolver tenant + crear $pdo
-  require_once __DIR__ . "/../modules/utils/tenant_resolver.php";
-  tenant_bootstrap_or_fail(); // <-- ahora EXISTE y crea $pdo tenant
+  // ✅ Privadas: validar sesión MASTER primero (expira a 30 min sin uso)
+  require_once __DIR__ . "/../config/db_master.php";                 // $pdo_master
+  require_once __DIR__ . "/../modules/login/require_session.php";    // require_session()
 
+  $ses = require_session($pdo_master); // ← corta con 401 si está vencida/invalid
+  // Guardamos por si algún módulo lo necesita:
+  $GLOBALS['SESSION_MASTER'] = $ses;
+  // También, por conveniencia:
+  $_SERVER['X_IDTENANT'] = (string)($ses['idTenant'] ?? '');
+  $_SERVER['X_IDUSUARIO_MASTER'] = (string)($ses['idUsuarioMaster'] ?? '');
+
+  // ✅ Ahora sí: resolver tenant + crear $pdo tenant
+  require_once __DIR__ . "/../modules/utils/tenant_resolver.php";
+  tenant_bootstrap_or_fail(); // crea $pdo tenant (y debería usar la sesión ya validada)
+
+  // Rutas de módulos privados
   require_once __DIR__ . "/../modules/movimientos/route.php";
   require_once __DIR__ . "/../modules/flujo_caja/route.php";
   require_once __DIR__ . "/../modules/cuentas_corrientes/route.php";

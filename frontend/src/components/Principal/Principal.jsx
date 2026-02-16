@@ -23,8 +23,6 @@ import ModalPerfil from "../Perfil/ModalPerfil";
 
 /* =========================================================
    ✅ OPTIMIZACIÓN PRO (prefetch rutas + prefetch listas)
-   - Prefetch de módulos al hacer hover (Vite/Webpack)
-   - Prefetch de listas globales en background (SWR simple)
 ========================================================= */
 
 // ⚡ Prefetch de módulos (mejora MUCHO el “primer click”)
@@ -47,8 +45,6 @@ function prefetchRoute(ruta) {
 }
 
 // ⚡ Cache simple de listas globales (solo para “calentar”)
-// (los componentes que ya consumen ListasContext lo aprovechan;
-// si no, igual te baja la latencia por warm-up)
 const LISTAS_CACHE_KEY = "balto_listas_cache_v1";
 const LISTAS_TTL_MS = 10 * 60 * 1000; // 10 min
 
@@ -74,7 +70,7 @@ function setCachedListas(data) {
   } catch {}
 }
 
-async function prefetchGlobalListas(sessionKey) {
+async function prefetchGlobalListas(sessionKey, onUnauthorized) {
   try {
     const cached = getCachedListas();
     if (cached) return cached;
@@ -86,6 +82,14 @@ async function prefetchGlobalListas(sessionKey) {
       method: "GET",
       headers,
     });
+
+    // ✅ si expiró sesión, forzar logout del cliente
+    if (r.status === 401 || r.status === 403) {
+      try {
+        onUnauthorized?.();
+      } catch {}
+      return null;
+    }
 
     const txt = await r.text();
     const data = safeJsonParse(txt);
@@ -233,6 +237,11 @@ function hardClientLogoutCleanup() {
 }
 
 /* =========================
+   ✅ AUTO-LOGOUT por inactividad
+========================= */
+const IDLE_MS = 30 * 60 * 1000; // ✅ 30 minutos SIN INTERACCIÓN (PROD)
+
+/* =========================
    COMPONENTE
 ========================= */
 const Principal = () => {
@@ -259,6 +268,9 @@ const Principal = () => {
   const closingRef = useRef(false);
   const [closingUI, setClosingUI] = useState(false);
 
+  // ✅ Idle timer
+  const idleTimerRef = useRef(null);
+
   const closeSoon = (ms = 220) => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => setOpenMovSub(false), ms);
@@ -278,6 +290,59 @@ const Principal = () => {
     if (openTimerRef.current) clearTimeout(openTimerRef.current);
     openTimerRef.current = null;
   };
+
+  /* =========================
+     ✅ Logout “duro” reutilizable (manual y automático)
+     - borra sesión en backend (si existe)
+     - limpia cliente SIEMPRE
+  ========================= */
+  const doLogout = useCallback(
+    async ({ silent = false } = {}) => {
+      if (closingRef.current) return;
+      closingRef.current = true;
+
+      if (!silent) setClosingUI(true);
+
+      // ✅ cortar el timer de inactividad (por si justo se dispara)
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
+
+      const sessionKey = getSessionKey();
+
+      try {
+        if (sessionKey) {
+          const r = await fetch(`${BASE_URL}/api.php?action=logout`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Session": sessionKey,
+            },
+            body: JSON.stringify({}),
+          });
+
+          // si falla no importa: igual limpiamos cliente
+          if (!r.ok) {
+            const txt = await r.text().catch(() => "");
+            console.warn("Logout backend falló:", r.status, txt);
+          }
+        }
+      } catch (e) {
+        console.warn("Error llamando logout:", e);
+      } finally {
+        hardClientLogoutCleanup();
+        setShowLogoutModal(false);
+        setDrawerOpen(false);
+        setOpenMovSub(false);
+        navigate("/", { replace: true });
+
+        if (!silent) setClosingUI(false);
+        closingRef.current = false;
+      }
+    },
+    [navigate]
+  );
 
   /* =========================
      ✅ Guard / carga usuario
@@ -309,27 +374,30 @@ const Principal = () => {
     }
 
     // ✅ PRO: prefetch listas globales en background (calienta todo el panel)
-    // No bloquea UI.
     try {
       const sessionKey = getSessionKey();
-      // si el navegador está ocupado, que lo haga cuando pueda
+      const onUnauthorized = () => doLogout({ silent: true });
+
       if (typeof window.requestIdleCallback === "function") {
-        window.requestIdleCallback(() => prefetchGlobalListas(sessionKey), { timeout: 1200 });
+        window.requestIdleCallback(() => prefetchGlobalListas(sessionKey, onUnauthorized), {
+          timeout: 1200,
+        });
       } else {
-        setTimeout(() => prefetchGlobalListas(sessionKey), 200);
+        setTimeout(() => prefetchGlobalListas(sessionKey, onUnauthorized), 200);
       }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // solo una vez
+  }, []); // solo una vez (intencional)
 
   useEffect(() => {
     return () => {
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
       if (openTimerRef.current) clearTimeout(openTimerRef.current);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
   }, []);
 
-  // ✅ si cambiás de ruta, cerrá el drawer (mobile) y el submenú (para que no quede colgado)
+  // ✅ si cambiás de ruta, cerrá el drawer (mobile) y el submenú
   useEffect(() => {
     setDrawerOpen(false);
     setOpenMovSub(false);
@@ -355,10 +423,33 @@ const Principal = () => {
     };
   }, [drawerOpen]);
 
+  /* =========================
+     ✅ AUTO-LOGOUT por inactividad (30 min)
+     - Resetea timer ante interacción real del usuario
+  ========================= */
+  useEffect(() => {
+    const resetIdle = () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        doLogout({ silent: true });
+      }, IDLE_MS);
+    };
+
+    const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
+    events.forEach((e) => window.addEventListener(e, resetIdle, { passive: true }));
+
+    // ✅ arranca el conteo desde que entra al panel
+    resetIdle();
+
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      events.forEach((e) => window.removeEventListener(e, resetIdle));
+    };
+  }, [doLogout]);
+
   const planNivel = normalizePlanNivel(usuario?.plan_nivel ?? 1);
 
   const navItems = useMemo(() => {
-    // ✅ IMPORTANTE: rutas consistentes con App.js
     const base = [
       {
         label: "Movimientos",
@@ -379,7 +470,6 @@ const Principal = () => {
         key: slug,
         label: x.label,
         icon: pickIcon(x.label),
-        // ✅ si viene ruta explícita, usarla; si no, autogenerar
         ruta: x.ruta || `/panel/${slug}`,
         children: x.children || null,
       };
@@ -426,74 +516,30 @@ const Principal = () => {
   };
 
   /* =========================
-     ✅ CIERRE DE SESIÓN
+     ✅ CIERRE DE SESIÓN (manual con modal)
   ========================= */
   const confirmarCierreSesion = useCallback(async () => {
-    if (closingRef.current) return;
-    closingRef.current = true;
-    setClosingUI(true);
-
-    const sessionKey = getSessionKey();
-
-    try {
-      if (sessionKey) {
-        const r = await fetch(`${BASE_URL}/api.php?action=logout`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Session": sessionKey,
-          },
-          body: JSON.stringify({}),
-        });
-
-        const txt = await r.text();
-        try {
-          const data = JSON.parse(txt);
-          if (!r.ok || data?.exito === false) {
-            console.warn("Logout backend falló:", r.status, data);
-          }
-        } catch {
-          if (!r.ok) console.warn("Logout backend falló:", r.status, txt);
-        }
-      }
-    } catch (e) {
-      console.warn("Error llamando logout:", e);
-    } finally {
-      hardClientLogoutCleanup();
-      setShowLogoutModal(false);
-      setDrawerOpen(false);
-      setOpenMovSub(false);
-      navigate("/", { replace: true });
-      setClosingUI(false);
-      closingRef.current = false;
-    }
-  }, [navigate]);
+    await doLogout({ silent: false });
+  }, [doLogout]);
 
   /* =========================
      ✅ toggle tema -> MASTER
-     - ya no manda idUsuarioMaster (se resuelve por X-Session)
-     - si falla, revierte UI + localStorage
+     - si devuelve 401/403 => logout
   ========================= */
   const toggleTema = async () => {
     const prevTema = tema;
     const nuevo = tema === "oscuro" ? "claro" : "oscuro";
 
-    // UI inmediata (optimista)
     setTema(nuevo);
     applyTheme(nuevo);
 
-    // actualizar usuario en localStorage
-    let u2 = null;
     try {
       const u = JSON.parse(localStorage.getItem("usuario")) || {};
-      u2 = { ...u, tema: nuevo };
+      const u2 = { ...u, tema: nuevo };
       localStorage.setItem("usuario", JSON.stringify(u2));
       setUsuario(u2);
-    } catch (e) {
-      console.error("Error actualizando localStorage usuario:", e);
-    }
+    } catch {}
 
-    // pegar a backend (solo X-Session + tema)
     try {
       const sessionKey = getSessionKey();
       const headers = { "Content-Type": "application/json" };
@@ -505,6 +551,12 @@ const Principal = () => {
         body: JSON.stringify({ tema: nuevo }),
       });
 
+      // ✅ si expiró sesión, logout
+      if (r.status === 401 || r.status === 403) {
+        await doLogout({ silent: true });
+        return;
+      }
+
       const txt = await r.text();
       let data = null;
       try {
@@ -514,7 +566,7 @@ const Principal = () => {
       if (!r.ok || !data?.exito) {
         console.error("Falló usuario_tema_actualizar:", r.status, txt);
 
-        // 🔁 revertir UI + localStorage
+        // revertir UI + localStorage
         setTema(prevTema);
         applyTheme(prevTema);
         try {
@@ -525,12 +577,10 @@ const Principal = () => {
         } catch {}
         return;
       }
-
-      console.log("✅ Tema guardado en DB (MASTER):", data);
     } catch (e) {
       console.error("Error llamando usuario_tema_actualizar:", e);
 
-      // 🔁 revertir UI + localStorage
+      // revertir UI + localStorage
       setTema(prevTema);
       applyTheme(prevTema);
       try {
@@ -659,7 +709,6 @@ const Principal = () => {
                 key={item.key}
                 className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${isOpen ? "is-open" : ""}`}
                 onMouseEnter={() => {
-                  // ✅ PRO: prefetch del módulo al hover
                   prefetchRoute(item.ruta);
 
                   if (!isNoHover() && isMov) {

@@ -199,10 +199,11 @@ try {
     ':exito' => 1,
   ]);
 
-  // ✅ 6) Crear sesión en MASTER
+  // ✅ 6) Crear sesión en MASTER (30 minutos PROD)
   $sessionKey = bin2hex(random_bytes(32)); // 64 chars
-  $ttlHours = 12;
-  $expira = (new DateTimeImmutable())->modify("+{$ttlHours} hours")->format("Y-m-d H:i:s");
+
+  $ttlMinutes = 30; // ✅ PROD: 30 minutos
+  $expira = (new DateTimeImmutable())->modify("+{$ttlMinutes} minutes")->format("Y-m-d H:i:s");
 
   $pdo_master->prepare("
     INSERT INTO sesiones (session_key, idUsuarioMaster, idTenant, expira_en, ip, user_agent, activo)

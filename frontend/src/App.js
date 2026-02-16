@@ -66,24 +66,28 @@ const AnalisisFinanciero = resolveComponent(AnalisisFinancieroModule, [
 ]);
 
 /* =========================================================
-   ✅ Auth
+   ✅ Auth (SaaS REAL)
+   - En tu sistema NO usás "token"
+   - Usás session_key + usuario en localStorage
 ========================================================= */
 function isAuthenticated() {
   try {
-    const token = localStorage.getItem("token");
+    const sessionKey = (localStorage.getItem("session_key") || "").trim();
     const rawUser = localStorage.getItem("usuario");
 
-    let usuarioOk = false;
-    if (rawUser) {
-      try {
-        JSON.parse(rawUser);
-        usuarioOk = true;
-      } catch {
-        usuarioOk = false;
-      }
-    }
+    // ✅ debe existir session_key
+    if (!sessionKey) return false;
 
-    return !!token || usuarioOk;
+    // ✅ y un usuario JSON válido
+    if (!rawUser) return false;
+
+    const u = JSON.parse(rawUser);
+    if (!u || typeof u !== "object") return false;
+
+    // opcional: chequear campos mínimos
+    // if (!u.idTenant) return false;
+
+    return true;
   } catch {
     return false;
   }

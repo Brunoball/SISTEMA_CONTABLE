@@ -350,9 +350,6 @@ export default function Movimientos() {
 
   /* =========================
      LOAD ROWS (paginado real)
-     ✅ Skeleton shimmer (sin GifCarga)
-     ✅ reqId para ignorar respuestas viejas
-     ✅ DEVUELVE {hasMore,nextOffset,received} para "Cargar todos"
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -379,9 +376,7 @@ export default function Movimientos() {
       const qKey = (qLocal || "").trim();
       const cacheKey = `${periodoAPI}|${qKey}`;
 
-      // marcar request
       const myReqId = ++reqIdRef.current;
-
       const start = Date.now();
 
       if (!append) {
@@ -393,7 +388,6 @@ export default function Movimientos() {
       setError("");
 
       try {
-        // Cache solo para carga principal (offset 0)
         if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
           const cached = cacheRef.current.get(cacheKey);
           setRows(cached?.rows || []);
@@ -418,7 +412,6 @@ export default function Movimientos() {
         const data = await apiGet(`${API}?${sp.toString()}`);
         if (!data.exito) throw new Error(data.mensaje || "No se pudieron cargar movimientos.");
 
-        // si llegó tarde, ignorar
         if (myReqId !== reqIdRef.current) {
           if (append) setLoadingMore(false);
           else setLoadingRows(false);
@@ -495,22 +488,19 @@ export default function Movimientos() {
   );
 
   /* =========================
-     ✅ INIT: asegurar listas (por si entran directo)
-     y cargar primera página de rows
+     ✅ INIT: asegurar listas + cargar rows
+     ✅ FIX: usamos el return de ensureListsLoaded para leer periodos reales
   ========================= */
   useEffect(() => {
     let alive = true;
 
     (async () => {
-      try {
-        // si el usuario entró directo a /panel/movimientos,
-        // aseguramos listas sin forzar (usa cache si está)
-        await ensureListsLoaded({ force: false, background: true });
-      } catch {}
-
+      // ✅ pedimos las listas y usamos lo que devuelve (NO el estado viejo)
+      const loadedLists = await ensureListsLoaded({ force: false, background: true }).catch(() => null);
       if (!alive) return;
 
-      const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos : [];
+      const periodosSrc = loadedLists?.periodos ?? listasCtx?.periodos;
+      const periodos = Array.isArray(periodosSrc) ? periodosSrc : [];
       const perDefault = periodos[0] || "";
 
       if (perDefault) {
@@ -813,6 +803,7 @@ export default function Movimientos() {
   };
 
   // ✅ listas a pasar a modales/UI (del Provider)
+  // ✅ FIX: incluimos tipos_operacion para que llegue a los modales
   const lists = listasCtx || {
     periodos: [],
     clasificaciones: [],
@@ -823,7 +814,26 @@ export default function Movimientos() {
     proveedores: [],
     tipos_movimiento: [],
     tipos_venta: [],
+    tipos_operacion: [], // ✅ NUEVO
   };
+
+  // ✅ si listasCtx existe pero no trae la clave aún, la aseguramos igual
+  const listsSafe = useMemo(() => {
+    const src = listasCtx || {};
+    return {
+      periodos: Array.isArray(src.periodos) ? src.periodos : lists.periodos,
+      clasificaciones: Array.isArray(src.clasificaciones) ? src.clasificaciones : lists.clasificaciones,
+      clientes: Array.isArray(src.clientes) ? src.clientes : lists.clientes,
+      cuentas_corrientes: Array.isArray(src.cuentas_corrientes) ? src.cuentas_corrientes : lists.cuentas_corrientes,
+      detalles: Array.isArray(src.detalles) ? src.detalles : lists.detalles,
+      medios_pago: Array.isArray(src.medios_pago) ? src.medios_pago : lists.medios_pago,
+      proveedores: Array.isArray(src.proveedores) ? src.proveedores : lists.proveedores,
+      tipos_movimiento: Array.isArray(src.tipos_movimiento) ? src.tipos_movimiento : lists.tipos_movimiento,
+      tipos_venta: Array.isArray(src.tipos_venta) ? src.tipos_venta : lists.tipos_venta,
+      tipos_operacion: Array.isArray(src.tipos_operacion) ? src.tipos_operacion : lists.tipos_operacion,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listasCtx]);
 
   return (
     <div className="mov-page">
@@ -864,7 +874,7 @@ export default function Movimientos() {
                   onChange={(e) => handleChangePeriodo(e.target.value)}
                   disabled={loadingRows || loadingListsCtx || loadingMore || loadingAll}
                 >
-                  {(lists.periodos || []).map((p) => {
+                  {(listsSafe.periodos || []).map((p) => {
                     const ui = periodoToMMYYYY(p);
                     return (
                       <option key={ui} value={ui}>
@@ -931,7 +941,11 @@ export default function Movimientos() {
             <button
               type="button"
               className="mov-btn mov-btn--primary"
-              onClick={() => setOpenAdd(true)}
+              onClick={async () => {
+                // ✅ opcional: aseguramos listas antes de abrir
+                await ensureListsLoaded({ force: false, background: true }).catch(() => {});
+                setOpenAdd(true);
+              }}
               disabled={!fPeriodo || loadingAll || loadingListsCtx}
               title={!fPeriodo ? "Primero seleccioná un período" : "Nuevo Movimiento"}
             >
@@ -989,7 +1003,8 @@ export default function Movimientos() {
                                 type="button"
                                 className="mov-iconBtn"
                                 title="Editar"
-                                onClick={() => {
+                                onClick={async () => {
+                                  await ensureListsLoaded({ force: false, background: true }).catch(() => {});
                                   setSelectedRow(r);
                                   setOpenEdit(true);
                                 }}
@@ -1081,7 +1096,7 @@ export default function Movimientos() {
       {/* MODAL CARGA RAPIDA */}
       <ModalCargaRapidaMovimientos
         open={openAdd}
-        lists={lists}
+        lists={listsSafe} // ✅ PASAMOS listsSafe con tipos_operacion asegurado
         periodoDefault={fPeriodo}
         onClose={() => setOpenAdd(false)}
         onToast={showToast}
@@ -1113,7 +1128,7 @@ export default function Movimientos() {
       {/* EDIT */}
       <ModalEditarMovimiento
         open={openEdit}
-        lists={lists}
+        lists={listsSafe} // ✅ PASAMOS listsSafe con tipos_operacion asegurado
         row={selectedRow}
         periodoDefault={fPeriodo}
         onClose={() => {
@@ -1165,7 +1180,16 @@ export default function Movimientos() {
             sp.set("action", "movimientos_eliminar");
             sp.set("id_movimiento", String(id));
 
-            const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
+            const data = await (async () => {
+              const res = await fetch(`${API}?${sp.toString()}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...(getAuthInfo().sessionKey ? { "X-Session": getAuthInfo().sessionKey } : {}) },
+                body: JSON.stringify({ idUsuario }),
+              });
+              const txt = await res.text();
+              return JSON.parse(txt || "{}");
+            })();
+
             if (!data.exito) throw new Error(data.mensaje || "No se pudo eliminar.");
 
             setOpenDel(false);

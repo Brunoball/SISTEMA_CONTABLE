@@ -100,6 +100,7 @@ try {
 
   /* =========================
      Map de tablas
+     ✅ AÑADIMOS tipos_operacion
   ========================= */
   $map = [
     'clasificaciones'    => ['id' => 'id_clasificacion',    'table' => 'clasificaciones'],
@@ -109,6 +110,9 @@ try {
     'medios_pago'        => ['id' => 'id_medio_pago',       'table' => 'medios_pago'],
     'proveedores'        => ['id' => 'id_proveedor',        'table' => 'proveedores'],
     'tipos_venta'        => ['id' => 'id_tipo_venta',       'table' => 'tipos_venta'],
+
+    // ✅ NUEVO: tabla tipos_operacion (la de tu screenshot)
+    'tipos_operacion'    => ['id' => 'id_tipo_operacion',   'table' => 'tipos_operacion'],
   ];
 
   /* =========================

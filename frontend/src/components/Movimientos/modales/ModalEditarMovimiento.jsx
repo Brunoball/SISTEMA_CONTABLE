@@ -22,7 +22,7 @@ const SAFE_LISTS = {
   clasificaciones: [],
   tiposVenta: [],
   cuentasCorrientes: [],
-  tiposMovimiento: [],
+  tiposOperacion: [], // ✅ Nuevo
   clientes: [],
   proveedores: [],
   detalles: [],
@@ -33,18 +33,22 @@ function normalizeIncomingLists(lists) {
   const l = lists && typeof lists === "object" ? lists : {};
   const src = l.listas && typeof l.listas === "object" ? l.listas : l;
 
-  const tiposMov =
-    Array.isArray(src.tiposMovimiento) && src.tiposMovimiento.length
-      ? src.tiposMovimiento
-      : Array.isArray(src.tipos_movimiento)
-      ? src.tipos_movimiento
-      : [];
-
   const tiposVenta =
     Array.isArray(src.tiposVenta) && src.tiposVenta.length
       ? src.tiposVenta
       : Array.isArray(src.tipos_venta)
       ? src.tipos_venta
+      : [];
+
+  const tiposOperacion =
+    Array.isArray(src.tiposOperacion) && src.tiposOperacion.length
+      ? src.tiposOperacion
+      : Array.isArray(src.tipos_operacion)
+      ? src.tipos_operacion
+      : Array.isArray(src.tipo_operacion)
+      ? src.tipo_operacion
+      : Array.isArray(src.tipos_operaciones)
+      ? src.tipos_operaciones
       : [];
 
   const cuentas =
@@ -68,7 +72,7 @@ function normalizeIncomingLists(lists) {
     clasificaciones: Array.isArray(src.clasificaciones) ? src.clasificaciones : [],
     tiposVenta: Array.isArray(tiposVenta) ? tiposVenta : [],
     cuentasCorrientes: Array.isArray(cuentas) ? cuentas : [],
-    tiposMovimiento: Array.isArray(tiposMov) ? tiposMov : [],
+    tiposOperacion: Array.isArray(tiposOperacion) ? tiposOperacion : [],
     clientes: Array.isArray(src.clientes) ? src.clientes : [],
     proveedores: Array.isArray(src.proveedores) ? src.proveedores : [],
     detalles: Array.isArray(src.detalles) ? src.detalles : [],
@@ -170,9 +174,9 @@ function isTemaOscuro() {
 ========================= */
 const CATALOGO_MAP = {
   id_clasificacion: { catalogo: "clasificaciones", label: "Clasificación" },
+  id_tipo_operacion: { catalogo: "tipos_operacion", label: "Tipo de operación" },
   id_tipo_venta: { catalogo: "tipos_venta", label: "Tipo de venta" },
   id_cuenta_corriente: { catalogo: "cuentas_corrientes", label: "Cuenta corriente" },
-  id_tipo_movimiento: { catalogo: "tipos_movimiento", label: "Tipo de movimiento" },
   id_cliente: { catalogo: "clientes", label: "Cliente" },
   id_proveedor: { catalogo: "proveedores", label: "Proveedor" },
   id_detalle: { catalogo: "detalles", label: "Detalle" },
@@ -181,9 +185,9 @@ const CATALOGO_MAP = {
 
 const LISTKEY_BY_CATALOGO = {
   clasificaciones: "clasificaciones",
+  tipos_operacion: "tiposOperacion",
   tipos_venta: "tiposVenta",
   cuentas_corrientes: "cuentasCorrientes",
-  tipos_movimiento: "tiposMovimiento",
   clientes: "clientes",
   proveedores: "proveedores",
   detalles: "detalles",
@@ -193,7 +197,7 @@ const LISTKEY_BY_CATALOGO = {
 /* =========================
    Mini Modal: alta rápida
 ========================= */
-function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave }) {
+function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -214,9 +218,12 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="mi-mini__overlay" onMouseDown={onCancel}>
-      <div className="mi-mini__modal" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
           <button
@@ -255,7 +262,8 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -287,7 +295,7 @@ function buildFormFromRow(row, listsMerged, periodoDefault) {
   const r = row || {};
 
   const fecha = String(r.fecha || "").slice(0, 10) || "";
-  const perRow = normalizePeriodoToMMYYYY(r.periodo || "");
+  const perRow = normalizePeriodoToMMYYYY(r.periodo_ui || r.periodo || "");
   const perDef = normalizePeriodoToMMYYYY(periodoDefault || "");
   const perByFecha = periodoFromISODate(fecha || todayISO());
   const pickPeriodo = perRow || perDef || perByFecha || "";
@@ -318,9 +326,9 @@ function buildFormFromRow(row, listsMerged, periodoDefault) {
     periodo: pickPeriodo,
 
     id_clasificacion: nOrNull(r.id_clasificacion),
+    id_tipo_operacion: nOrNull(r.id_tipo_operacion),
     id_tipo_venta: nOrNull(r.id_tipo_venta),
     id_cuenta_corriente: sOrNull(r.id_cuenta_corriente),
-    id_tipo_movimiento: nOrNull(r.id_tipo_movimiento),
 
     id_cliente: sOrNull(r.id_cliente),
     id_proveedor: sOrNull(r.id_proveedor),
@@ -351,17 +359,18 @@ export default function ModalEditarMovimiento({
   onToast,
 }) {
   const API = `${BASE_URL}/api.php`;
-// ✅ dark automático leyendo data-theme (Principal.jsx)
-const [dark, setDark] = useState(isTemaOscuro());
 
-useEffect(() => {
-  const obs = new MutationObserver(() => setDark(isTemaOscuro()));
-  obs.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ["data-theme"],
-  });
-  return () => obs.disconnect();
-}, []);
+  // ✅ dark automático
+  const [dark, setDark] = useState(isTemaOscuro());
+
+  useEffect(() => {
+    const obs = new MutationObserver(() => setDark(isTemaOscuro()));
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => obs.disconnect();
+  }, []);
 
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
@@ -497,6 +506,62 @@ useEffect(() => {
   }, []);
 
   /* =========================
+     Lógica condicional (Cliente/Proveedor)
+  ========================= */
+  const tipoOperacionSeleccionado = form.id_tipo_operacion;
+
+  const getFlagsFromTipoOperacion = useCallback(
+    (idTipoOp) => {
+      const sid = String(idTipoOp ?? "").trim();
+      if (!sid || sid === NULL_OPTION || sid === ADD_OPTION) return { showCliente: false, showProveedor: false };
+
+      const tipoOp = (Array.isArray(safeLists.tiposOperacion) ? safeLists.tiposOperacion : []).find(
+        (t) => String(t?.id) === sid
+      );
+      const nombreTipo = String(tipoOp?.nombre || "").toLowerCase();
+
+      const showCliente = nombreTipo.includes("venta") || nombreTipo.includes("movimiento");
+      const showProveedor = nombreTipo.includes("compra") || nombreTipo.includes("movimiento");
+
+      return { showCliente, showProveedor };
+    },
+    [safeLists.tiposOperacion]
+  );
+
+  const mostrarCliente = useMemo(() => {
+    const { showCliente } = getFlagsFromTipoOperacion(tipoOperacionSeleccionado);
+    return showCliente;
+  }, [tipoOperacionSeleccionado, getFlagsFromTipoOperacion]);
+
+  const mostrarProveedor = useMemo(() => {
+    const { showProveedor } = getFlagsFromTipoOperacion(tipoOperacionSeleccionado);
+    return showProveedor;
+  }, [tipoOperacionSeleccionado, getFlagsFromTipoOperacion]);
+
+  // Tipo de venta
+  const tipoVentaSeleccionado = form.id_tipo_venta;
+
+  const tipoVentaEsContado = useMemo(() => {
+    if (!tipoVentaSeleccionado || tipoVentaSeleccionado === NULL_OPTION || tipoVentaSeleccionado === ADD_OPTION) return false;
+
+    const tipoVenta = safeLists.tiposVenta.find((t) => String(t?.id) === String(tipoVentaSeleccionado));
+    if (!tipoVenta) return false;
+
+    const nombreTipo = String(tipoVenta?.nombre || "").toLowerCase();
+    return nombreTipo.includes("contado");
+  }, [tipoVentaSeleccionado, safeLists.tiposVenta]);
+
+  const tipoVentaEsCuentaCorriente = useMemo(() => {
+    if (!tipoVentaSeleccionado || tipoVentaSeleccionado === NULL_OPTION || tipoVentaSeleccionado === ADD_OPTION) return false;
+
+    const tipoVenta = safeLists.tiposVenta.find((t) => String(t?.id) === String(tipoVentaSeleccionado));
+    if (!tipoVenta) return false;
+
+    const nombreTipo = String(tipoVenta?.nombre || "").toLowerCase();
+    return nombreTipo.includes("cuenta corriente") || nombreTipo.includes("cta cte");
+  }, [tipoVentaSeleccionado, safeLists.tiposVenta]);
+
+  /* =========================
      Item handlers
   ========================= */
   const recalcFromItem = useCallback((nextPartial) => {
@@ -518,20 +583,9 @@ useEffect(() => {
     });
   }, []);
 
-  const onCantidadChange = useCallback(
-    (v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }),
-    [recalcFromItem]
-  );
-
-  const onPrecioChange = useCallback(
-    (v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }),
-    [recalcFromItem]
-  );
-
-  const onIvaPctChange = useCallback(
-    (v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }),
-    [recalcFromItem]
-  );
+  const onCantidadChange = useCallback((v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }), [recalcFromItem]);
+  const onPrecioChange = useCallback((v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }), [recalcFromItem]);
+  const onIvaPctChange = useCallback((v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }), [recalcFromItem]);
 
   const onMontoTotalManual = useCallback((v) => {
     const mt = v === "" ? "" : Number(v);
@@ -788,9 +842,9 @@ useEffect(() => {
       periodo: periodoMMYYYY_to_YYYYMM(normalizePeriodoToMMYYYY(form.periodo)),
 
       id_clasificacion: toNullableId(form.id_clasificacion),
+      id_tipo_operacion: toNullableId(form.id_tipo_operacion),
       id_tipo_venta: toNullableId(form.id_tipo_venta),
       id_cuenta_corriente: toNullableId(form.id_cuenta_corriente),
-      id_tipo_movimiento: toNullableId(form.id_tipo_movimiento),
 
       id_cliente: toNullableId(form.id_cliente),
       id_proveedor: toNullableId(form.id_proveedor),
@@ -830,8 +884,8 @@ useEffect(() => {
 
       const addFields = [
         ["id_clasificacion", "Clasificación"],
+        ["id_tipo_operacion", "Tipo de operación"],
         ["id_tipo_venta", "Tipo de venta"],
-        ["id_tipo_movimiento", "Tipo de movimiento"],
         ["id_medio_pago", "Medio de pago"],
         ["id_cuenta_corriente", "Cuenta corriente"],
         ["id_cliente", "Cliente"],
@@ -891,6 +945,36 @@ useEffect(() => {
       setForm((p) => ({ ...p, [field]: rawValue }));
     },
     [addUI.field, addUI.open]
+  );
+
+  // ✅ Handler especial para tipo_operacion:
+  // - NO borra los dos
+  // - limpia SOLO el que deja de corresponder (por ejemplo proveedor si ya no se muestra)
+  const handleTipoOperacionChange = useCallback(
+    (nextValue) => {
+      if (nextValue === ADD_OPTION) {
+        // modo agregar inline
+        onSelectWithAdd("id_tipo_operacion", nextValue);
+        return;
+      }
+
+      const { showCliente, showProveedor } = getFlagsFromTipoOperacion(nextValue);
+
+      setForm((prev) => ({
+        ...prev,
+        id_tipo_operacion: nextValue,
+        id_cliente: showCliente ? prev.id_cliente : NULL_OPTION,
+        id_proveedor: showProveedor ? prev.id_proveedor : NULL_OPTION,
+      }));
+
+      // inputs visuales: solo limpiamos el que se oculta
+      if (!showCliente) setClienteInput("");
+      if (!showProveedor) setProveedorInput("");
+
+      setClienteFocus(false);
+      setProveedorFocus(false);
+    },
+    [getFlagsFromTipoOperacion, onSelectWithAdd]
   );
 
   const renderAddInline = (field) => {
@@ -961,16 +1045,15 @@ useEffect(() => {
 
   const modalClass = `mi-modal__container mi-modal__container--mov ${dark ? "mi-modal--dark" : ""}`;
 
-return createPortal(
-  <div
-    className={[
-      "mi-modal__overlay",
-      "mi-modal__overlay--mov",
-      dark ? "mi-modal__overlay--dark" : "",
-    ].join(" ").trim()}
-    onMouseDown={cerrar}
-  >
-
+  return createPortal(
+    <div
+      className={[
+        "mi-modal__overlay",
+        "mi-modal__overlay--mov",
+        dark ? "mi-modal__overlay--dark" : "",
+      ].join(" ").trim()}
+      onMouseDown={cerrar}
+    >
       <div
         className={modalClass}
         role="dialog"
@@ -1025,12 +1108,39 @@ return createPortal(
                       {renderAddInline("id_clasificacion")}
                     </div>
 
+                    {/* Tipo de operación */}
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(form.id_tipo_operacion)}
+                        onChange={(e) => handleTipoOperacionChange(e.target.value)}
+                        disabled={saving}
+                      >
+                        <option value={NULL_OPTION}>-- Tipo de operación --</option>
+                        {(safeLists.tiposOperacion || []).map((x) => (
+                          <option key={x.id} value={String(x.id)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                        <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+                      </select>
+                      <label className="fl-label">Tipo de operación</label>
+                      {renderAddInline("id_tipo_operacion")}
+                    </div>
+
                     {/* Tipo de venta */}
                     <div className="fl-field">
                       <select
                         className="fl-input fl-select"
                         value={String(form.id_tipo_venta)}
-                        onChange={(e) => onSelectWithAdd("id_tipo_venta", e.target.value)}
+                        onChange={(e) => {
+                          onSelectWithAdd("id_tipo_venta", e.target.value);
+                          setForm((p) => ({
+                            ...p,
+                            id_medio_pago: NULL_OPTION,
+                            id_cuenta_corriente: NULL_OPTION,
+                          }));
+                        }}
                         disabled={saving}
                       >
                         <option value={NULL_OPTION}>-- Tipo de venta --</option>
@@ -1045,25 +1155,7 @@ return createPortal(
                       {renderAddInline("id_tipo_venta")}
                     </div>
 
-                    {/* Tipo de movimiento */}
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(form.id_tipo_movimiento)}
-                        onChange={(e) => onSelectWithAdd("id_tipo_movimiento", e.target.value)}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>-- Tipo movimiento --</option>
-                        {(safeLists.tiposMovimiento || []).map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                        <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                      </select>
-                      <label className="fl-label">Tipo de movimiento</label>
-                      {renderAddInline("id_tipo_movimiento")}
-                    </div>
+                    {/* ✅ ELIMINADO: Tipo de movimiento */}
                   </div>
 
                   {/* 2 cols */}
@@ -1104,25 +1196,27 @@ return createPortal(
                       </button>
                     </div>
 
-                    {/* Cuenta corriente */}
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(form.id_cuenta_corriente)}
-                        onChange={(e) => onSelectWithAdd("id_cuenta_corriente", e.target.value)}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>-- Cuenta corriente --</option>
-                        {(safeLists.cuentasCorrientes || []).map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                        <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                      </select>
-                      <label className="fl-label">Cuenta corriente</label>
-                      {renderAddInline("id_cuenta_corriente")}
-                    </div>
+                    {/* Cuenta corriente - condicional según tipo de venta */}
+                    {tipoVentaEsCuentaCorriente && (
+                      <div className="fl-field">
+                        <select
+                          className="fl-input fl-select"
+                          value={String(form.id_cuenta_corriente)}
+                          onChange={(e) => onSelectWithAdd("id_cuenta_corriente", e.target.value)}
+                          disabled={saving}
+                        >
+                          <option value={NULL_OPTION}>-- Cuenta corriente --</option>
+                          {(safeLists.cuentasCorrientes || []).map((x) => (
+                            <option key={x.id} value={String(x.id)}>
+                              {x.nombre}
+                            </option>
+                          ))}
+                          <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+                        </select>
+                        <label className="fl-label">Cuenta corriente</label>
+                        {renderAddInline("id_cuenta_corriente")}
+                      </div>
+                    )}
                   </div>
 
                   {/* Item editable */}
@@ -1241,99 +1335,105 @@ return createPortal(
               </div>
 
               <div className="mi-em-asideBody">
-                {/* Medio pago */}
-                <div className="fl-field">
-                  <select
-                    className="fl-input fl-select"
-                    value={String(form.id_medio_pago)}
-                    onChange={(e) => onSelectWithAdd("id_medio_pago", e.target.value)}
-                    disabled={saving}
-                  >
-                    <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
-                    {(safeLists.mediosPago || []).map((x) => (
-                      <option key={x.id} value={String(x.id)}>
-                        {x.nombre}
-                      </option>
-                    ))}
-                    <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                  </select>
-                  <label className="fl-label">Medio de pago</label>
-                  {renderAddInline("id_medio_pago")}
-                </div>
-
-                {/* Cliente */}
-                <div className="fl-field mi-autocomplete">
-                  <input
-                    ref={clienteInputRef}
-                    className="fl-input"
-                    placeholder=" "
-                    value={clienteInput}
-                    onChange={handleClienteInputChange}
-                    onFocus={() => setClienteFocus(true)}
-                    onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
-                    disabled={saving || addUI.open}
-                    autoComplete="off"
-                  />
-                  <label className="fl-label">Cliente</label>
-
-                  {clienteFocus && filteredClientes.length > 0 && (
-                    <ul className="mi-cr-suggest">
-                      {filteredClientes.map((c) => (
-                        <li
-                          key={c.id}
-                          className="mi-cr-suggest__item"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            handleSelectCliente(c);
-                          }}
-                        >
-                          <span className="mi-suggestText">{c.nombre}</span>
-                        </li>
+                {/* Medio pago - condicional según tipo de venta */}
+                {tipoVentaEsContado && (
+                  <div className="fl-field">
+                    <select
+                      className="fl-input fl-select"
+                      value={String(form.id_medio_pago)}
+                      onChange={(e) => onSelectWithAdd("id_medio_pago", e.target.value)}
+                      disabled={saving}
+                    >
+                      <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
+                      {(safeLists.mediosPago || []).map((x) => (
+                        <option key={x.id} value={String(x.id)}>
+                          {x.nombre}
+                        </option>
                       ))}
-                    </ul>
-                  )}
+                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+                    </select>
+                    <label className="fl-label">Medio de pago</label>
+                    {renderAddInline("id_medio_pago")}
+                  </div>
+                )}
 
-                  <button type="button" onClick={startAddCliente} disabled={saving || addUI.saving} className="mi-link">
-                    + Agregar nuevo cliente
-                  </button>
-                </div>
+                {/* Cliente - condicional según tipo de operación */}
+                {mostrarCliente && (
+                  <div className="fl-field mi-autocomplete">
+                    <input
+                      ref={clienteInputRef}
+                      className="fl-input"
+                      placeholder=" "
+                      value={clienteInput}
+                      onChange={handleClienteInputChange}
+                      onFocus={() => setClienteFocus(true)}
+                      onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
+                      disabled={saving || addUI.open}
+                      autoComplete="off"
+                    />
+                    <label className="fl-label">Cliente</label>
 
-                {/* Proveedor */}
-                <div className="fl-field mi-autocomplete">
-                  <input
-                    ref={proveedorInputRef}
-                    className="fl-input"
-                    placeholder=" "
-                    value={proveedorInput}
-                    onChange={handleProveedorInputChange}
-                    onFocus={() => setProveedorFocus(true)}
-                    onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
-                    disabled={saving || addUI.open}
-                    autoComplete="off"
-                  />
-                  <label className="fl-label">Proveedor</label>
+                    {clienteFocus && filteredClientes.length > 0 && (
+                      <ul className="mi-cr-suggest">
+                        {filteredClientes.map((c) => (
+                          <li
+                            key={c.id}
+                            className="mi-cr-suggest__item"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectCliente(c);
+                            }}
+                          >
+                            <span className="mi-suggestText">{c.nombre}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
 
-                  {proveedorFocus && filteredProveedores.length > 0 && (
-                    <ul className="mi-cr-suggest">
-                      {filteredProveedores.map((p) => (
-                        <li
-                          key={p.id}
-                          className="mi-cr-suggest__item"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            handleSelectProveedor(p);
-                          }}
-                        >
-                          <span className="mi-suggestText">{p.nombre}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                    <button type="button" onClick={startAddCliente} disabled={saving || addUI.saving} className="mi-link">
+                      + Agregar nuevo cliente
+                    </button>
+                  </div>
+                )}
 
-                  <button type="button" onClick={startAddProveedor} disabled={saving || addUI.saving} className="mi-link">
-                    + Agregar nuevo proveedor
-                  </button>
-                </div>
+                {/* Proveedor - condicional según tipo de operación */}
+                {mostrarProveedor && (
+                  <div className="fl-field mi-autocomplete">
+                    <input
+                      ref={proveedorInputRef}
+                      className="fl-input"
+                      placeholder=" "
+                      value={proveedorInput}
+                      onChange={handleProveedorInputChange}
+                      onFocus={() => setProveedorFocus(true)}
+                      onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
+                      disabled={saving || addUI.open}
+                      autoComplete="off"
+                    />
+                    <label className="fl-label">Proveedor</label>
+
+                    {proveedorFocus && filteredProveedores.length > 0 && (
+                      <ul className="mi-cr-suggest">
+                        {filteredProveedores.map((p) => (
+                          <li
+                            key={p.id}
+                            className="mi-cr-suggest__item"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectProveedor(p);
+                            }}
+                          >
+                            <span className="mi-suggestText">{p.nombre}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <button type="button" onClick={startAddProveedor} disabled={saving || addUI.saving} className="mi-link">
+                      + Agregar nuevo proveedor
+                    </button>
+                  </div>
+                )}
 
                 <div className="mi-em-actions">
                   <button type="submit" disabled={saving} className="mit-btn mit-btn--solid mit-btn--block">
@@ -1357,6 +1457,7 @@ return createPortal(
           onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
           onCancel={cancelMini}
           onSave={guardarNuevoCatalogo}
+          dark={dark}
         />
       </div>
     </div>,

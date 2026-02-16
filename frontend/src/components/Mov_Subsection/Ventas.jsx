@@ -186,6 +186,40 @@ function getAuthInfo() {
 }
 
 /* =========================
+   ✅ ID robusto (CLAVE del bug)
+   Si tu backend NO devuelve `id_movimiento` y devuelve otro nombre,
+   antes te estaba deduplicando mal y te quedabas en 100.
+========================= */
+function getMovimientoId(r) {
+  const cand =
+    r?.id_movimiento ??
+    r?.idMovimiento ??
+    r?.id_mov ??
+    r?.id ??
+    r?.id_venta ??
+    r?.idVenta ??
+    r?.venta_id ??
+    r?.movimiento_id ??
+    r?.id_movimiento_fk ??
+    null;
+
+  const n = Number(cand);
+  if (Number.isFinite(n) && n > 0) return n;
+  return null;
+}
+function getRowKey(r) {
+  const id = getMovimientoId(r);
+  if (id) return `id:${id}`;
+
+  // fallback estable (por si NO hay id): fecha + cliente + detalle + monto
+  const f = String(r?.fecha ?? "").trim();
+  const c = String(r?.cliente ?? r?.cliente_nombre ?? "").trim();
+  const d = String(r?.detalle ?? r?.descripcion ?? r?.concepto ?? "").trim();
+  const m = String(Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0);
+  return `fx:${f}|${c}|${d}|${m}`;
+}
+
+/* =========================
    ✅ FILTRO VENTAS (robusto)
 ========================= */
 function hasCliente(r) {
@@ -229,6 +263,7 @@ function isVentaRow(row) {
 
 /* =========================
    Normalizador de fila
+   ✅ fuerza `id_movimiento` si vino con otro nombre
 ========================= */
 function normalizeVentaRow(r) {
   const cliente =
@@ -242,8 +277,11 @@ function normalizeVentaRow(r) {
   const medioPagoNombre =
     r?.medio_pago_nombre ?? r?.medio_pago ?? r?.pago_medio_pago ?? "";
 
+  const idMov = getMovimientoId(r);
+
   return {
     ...r,
+    id_movimiento: idMov ?? r?.id_movimiento ?? null, // ✅ garantizado si existe
     periodo: periodoToMMYYYY(r?.periodo),
     fecha: r?.fecha,
     cliente: String(cliente ?? "").trim() || "",
@@ -292,7 +330,6 @@ function slugifySheetName(name) {
 export default function Ventas() {
   const API = `${BASE_URL}/api.php`;
 
-  // ✅ LISTAS CENTRALIZADAS (igual Movimientos)
   const {
     lists: listasCtx,
     loadingLists: loadingListsCtx,
@@ -303,52 +340,41 @@ export default function Ventas() {
 
   const [rows, setRows] = useState([]);
 
-  // ✅ MUY IMPORTANTE:
-  // para append correcto (y para que el contador cambie), necesitamos un ref
-  // con el "último rows" real. Si no, se corta y queda en 100.
+  // ✅ fuente de verdad inmediata para append/merge
   const rowsRef = useRef([]);
   useEffect(() => {
     rowsRef.current = Array.isArray(rows) ? rows : [];
   }, [rows]);
 
-  const [loadingRows, setLoadingRows] = useState(false); // carga principal
-  const [loadingMore, setLoadingMore] = useState(false); // cargar páginas (interno)
-  const [loadingAll, setLoadingAll] = useState(false); // ✅ cargar todos
+  const [loadingRows, setLoadingRows] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingAll, setLoadingAll] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
-  // filtros
   const [fPeriodo, setFPeriodo] = useState(""); // UI MM-YYYY
   const [q, setQ] = useState("");
 
-  // paginado
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(null);
 
-  // modales
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
 
-  // toast
   const [toast, setToast] = useState(null);
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
     setToast({ tipo, mensaje, duracion });
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // cache por periodoAPI|q  -> { rows, hasMore, nextOffset }
   const cacheRef = useRef(new Map());
-
-  // ✅ para evitar aplicar respuestas viejas
   const reqIdRef = useRef(0);
 
-  // ✅ Debounce búsqueda (igual Movimientos)
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
-  // ✅ Skeleton delay para evitar parpadeo
   const skelTimerRef = useRef(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
 
@@ -423,7 +449,7 @@ export default function Ventas() {
 
   const refreshPeriodos = useCallback(async () => {
     try {
-      await refreshLists(); // ✅ refresca TODO en Provider (periodos incluidos)
+      await refreshLists();
     } catch {}
   }, [refreshLists]);
 
@@ -437,15 +463,7 @@ export default function Ventas() {
 
   /* =========================
      LOAD ROWS (paginado)
-     ✅ 100 de arranque.
-     ✅ Detecta “hay más” aunque backend no mande has_more:
-        pedimos 101 (PROBE_LIMIT). Si vienen 101 -> hay más.
-     ✅ nextOffset = offset + 100.
-     ✅ FIX CRÍTICO:
-        Para append NO usamos setRows(prev=>...) para medir "addedCount",
-        porque React ejecuta el updater async y te quedaba addedCount=0,
-        cortando en 100.
-        Ahora mergeamos con rowsRef.current (siempre actualizado).
+     ✅ merge con key robusta (getRowKey)
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -485,7 +503,6 @@ export default function Ventas() {
       setError("");
 
       try {
-        // ✅ Cache solo carga principal offset 0
         if (
           !append &&
           offset === 0 &&
@@ -511,8 +528,6 @@ export default function Ventas() {
         sp.set("action", "ventas_listar");
         sp.set("periodo", periodoAPI);
         if (qKey) sp.set("q", qKey);
-
-        // ✅ 101 para probe
         sp.set("limit", String(PROBE_LIMIT));
         sp.set("offset", String(offset));
 
@@ -535,7 +550,6 @@ export default function Ventas() {
         const rawArr = Array.isArray(data[listKey]) ? data[listKey] : [];
         const normAll = rawArr.map(normalizeVentaRow);
 
-        // ✅ Detecta “hay más”
         let newHasMore =
           data.has_more !== undefined ? !!data.has_more : normAll.length > PAGE_SIZE;
 
@@ -546,7 +560,6 @@ export default function Ventas() {
             ? offset + PAGE_SIZE
             : null;
 
-        // ✅ si vinieron 101, nos quedamos con 100
         const page = newHasMore ? normAll.slice(0, PAGE_SIZE) : normAll;
 
         const elapsed = Date.now() - start;
@@ -556,9 +569,10 @@ export default function Ventas() {
           const apply = () => {
             if (append) {
               const base = Array.isArray(rowsRef.current) ? rowsRef.current : [];
-              const seen = new Set(base.map((x) => String(x?.id_movimiento)));
+              const seen = new Set(base.map((x) => getRowKey(x)));
+
               const add = page.filter((x) => {
-                const k = String(x?.id_movimiento);
+                const k = getRowKey(x);
                 return k && !seen.has(k);
               });
 
@@ -566,7 +580,7 @@ export default function Ventas() {
               rowsRef.current = merged;
               setRows(merged);
 
-              // ✅ si no agregamos nada, el backend probablemente ignora offset
+              // ✅ si no agregamos nada, probablemente backend ignora offset
               if (add.length === 0) {
                 newHasMore = false;
                 newNextOffset = null;
@@ -624,7 +638,7 @@ export default function Ventas() {
   );
 
   /* =========================
-     ✅ INIT: asegurar listas y cargar 100
+     ✅ INIT
   ========================= */
   useEffect(() => {
     let alive = true;
@@ -682,7 +696,7 @@ export default function Ventas() {
     }
   }, [listasCtx?.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
 
-  // ✅ debounce búsqueda (resetea paginado)
+  // ✅ debounce búsqueda
   useEffect(() => {
     if (!fPeriodo) return;
 
@@ -704,6 +718,7 @@ export default function Ventas() {
 
   /* =========================
      Filtrado client-side
+     ✅ AHORA filteredRows es el TOTAL de filas cargadas que coinciden con el filtro
   ========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
@@ -800,7 +815,7 @@ export default function Ventas() {
       if (hasMore) {
         showToast(
           "error",
-          "Ojo: faltan registros sin cargar. Si querés exportar todo, tocá “Cargar más” primero.",
+          "Ojo: faltan registros sin cargar. Si querés exportar todo, tocá “Cargar todos” primero.",
           5200
         );
       }
@@ -902,25 +917,27 @@ export default function Ventas() {
   };
 
   /* =========================
-     ✅ BOTÓN: "Cargar más" (pero carga TODO lo restante)
-     - Arranca con 100.
-     - Si hay más, aparece abajo.
-     - Al tocarlo, trae todas las páginas restantes.
+     ✅ "Cargar todos" MEJORADO
+     (termina de paginar hasta el final)
+     AHORA actualiza el contador correctamente
   ========================= */
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
     if (nextOffset === null) return;
 
     setLoadingAll(true);
-    showToast("cargando", "Cargando más ventas…", 12000);
+    showToast("cargando", "Cargando todas las ventas…", 12000);
 
     let offset = nextOffset;
     let guard = 0;
+    let previousLength = rowsRef.current.length;
 
     try {
       while (offset !== null && guard < 3000) {
         const currentPer = periodoToMMYYYY(fPeriodo);
         const currentQ = (q || "").trim();
+
+        const beforeLen = rowsRef.current.length;
 
         const res = await loadRows({
           periodo: currentPer,
@@ -933,12 +950,21 @@ export default function Ventas() {
         guard += 1;
         offset = res.nextOffset;
 
+        // ✅ si no crece, no hay más real (o backend ignora offset)
+        const afterLen = rowsRef.current.length;
+        if (afterLen === beforeLen) break;
+
+        previousLength = afterLen;
+
         if (!res.hasMore || offset === null) break;
       }
 
-      showToast("exito", "Listo: ya se cargaron todas.", 2600);
+      // ✅ Forzar actualización del contador (aunque ya debería estar actualizado por los setRows)
+      setRows([...rowsRef.current]); // Esto fuerza re-render con el nuevo length
+      
+      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} ventas.`, 2600);
     } catch (e) {
-      showToast("error", e?.message || "Error cargando más.", 4200);
+      showToast("error", e?.message || "Error cargando todas.", 4200);
     } finally {
       setLoadingAll(false);
     }
@@ -955,10 +981,9 @@ export default function Ventas() {
     showToast,
   ]);
 
-  // ✅ estado UX: difumina tabla solo en carga principal
+  // ✅ estado UX
   const softLoading = loadingRows && showSkeleton;
 
-  // ✅ skeleton config por columna
   const skelWidths = useMemo(() => {
     return {
       fecha: ["44%", "38%", "40%", "36%"],
@@ -1018,7 +1043,6 @@ export default function Ventas() {
     );
   };
 
-  // ✅ listas desde Provider
   const lists =
     listasCtx || {
       periodos: [],
@@ -1060,8 +1084,11 @@ export default function Ventas() {
           <div className="mov-card__headLeft">
             <div>
               <div className="mov-card__title">Movimientos · Ventas</div>
+
+              {/* ✅ CONTADOR: AHORA REFLEJA CORRECTAMENTE LO QUE HAY EN TABLA */}
               <div className="mov-card__hint">
-                Mostrando <b>{filteredRows.length}</b> ventas{hasMore ? " (hay más)" : ""}
+                Mostrando <b>{filteredRows.length}</b> ventas
+                {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
               </div>
             </div>
 
@@ -1207,7 +1234,6 @@ export default function Ventas() {
               softLoading ? "mov-softLoading" : "",
             ].join(" ")}
           >
-            {/* ✅ Skeleton principal */}
             {showSkeleton && loadingRows ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
@@ -1221,83 +1247,82 @@ export default function Ventas() {
                 )}
 
                 {!loadingRows &&
-                  filteredRows.map((r) => (
-                    <div
-                      key={r.id_movimiento}
-                      className="mov-gridTable mov-gridTable--row"
-                      style={{ gridTemplateColumns: gridCols }}
-                      role="row"
-                    >
-                      {columns.map((c) => {
-                        if (c.key === "acciones") {
+                  filteredRows.map((r) => {
+                    const key = getRowKey(r);
+                    return (
+                      <div
+                        key={key}
+                        className="mov-gridTable mov-gridTable--row"
+                        style={{ gridTemplateColumns: gridCols }}
+                        role="row"
+                      >
+                        {columns.map((c) => {
+                          if (c.key === "acciones") {
+                            return (
+                              <div
+                                key={c.key}
+                                className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
+                                role="cell"
+                              >
+                                <div className="mov-actionsInline">
+                                  <button
+                                    type="button"
+                                    className="mov-iconBtn"
+                                    title="Editar"
+                                    onClick={() => {
+                                      setSelectedRow(r);
+                                      setOpenEdit(true);
+                                    }}
+                                    disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                                  >
+                                    <FontAwesomeIcon icon={faPenToSquare} />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="mov-iconBtn mov-iconBtn--danger"
+                                    title="Eliminar"
+                                    disabled={
+                                      loadingRows ||
+                                      loadingMore ||
+                                      loadingAll ||
+                                      loadingListsCtx ||
+                                      deletingId === r.id_movimiento
+                                    }
+                                    onClick={() => {
+                                      setSelectedRow(r);
+                                      setOpenDel(true);
+                                    }}
+                                  >
+                                    {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          const val = c.render ? c.render(r) : safeText(r[c.key]);
                           return (
                             <div
                               key={c.key}
-                              className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(
-                                " "
-                              )}
+                              className={[
+                                "mov-gridCell",
+                                c.align === "right" ? "is-right" : "",
+                                c.align === "center" ? "is-center" : "",
+                                c.strong ? "is-strong" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
                               role="cell"
+                              title={typeof val === "string" ? val : undefined}
                             >
-                              <div className="mov-actionsInline">
-                                <button
-                                  type="button"
-                                  className="mov-iconBtn"
-                                  title="Editar"
-                                  onClick={() => {
-                                    setSelectedRow(r);
-                                    setOpenEdit(true);
-                                  }}
-                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx}
-                                >
-                                  <FontAwesomeIcon icon={faPenToSquare} />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="mov-iconBtn mov-iconBtn--danger"
-                                  title="Eliminar"
-                                  disabled={
-                                    loadingRows ||
-                                    loadingMore ||
-                                    loadingAll ||
-                                    loadingListsCtx ||
-                                    deletingId === r.id_movimiento
-                                  }
-                                  onClick={() => {
-                                    setSelectedRow(r);
-                                    setOpenDel(true);
-                                  }}
-                                >
-                                  {deletingId === r.id_movimiento ? "..." : (
-                                    <FontAwesomeIcon icon={faTrashCan} />
-                                  )}
-                                </button>
-                              </div>
+                              <span className="mov-ellipsissss">{val}</span>
                             </div>
                           );
-                        }
-
-                        const val = c.render ? c.render(r) : safeText(r[c.key]);
-                        return (
-                          <div
-                            key={c.key}
-                            className={[
-                              "mov-gridCell",
-                              c.align === "right" ? "is-right" : "",
-                              c.align === "center" ? "is-center" : "",
-                              c.strong ? "is-strong" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                            role="cell"
-                            title={typeof val === "string" ? val : undefined}
-                          >
-                            <span className="mov-ellipsissss">{val}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
+                        })}
+                      </div>
+                    );
+                  })}
 
                 {!loadingRows && filteredRows.length === 0 && (
                   <div className="mov-emptyRow">
@@ -1307,10 +1332,8 @@ export default function Ventas() {
                   </div>
                 )}
 
-                {/* ✅ BOTÓN:
-                    - aparece cuando hay más páginas (hasMore)
-                    - al tocarlo, termina de cargar TODO lo restante */}
-                {!loadingRows && hasMore && (
+                {/* ✅ BOTÓN CARGAR TODOS */}
+                {!loadingRows && hasMore && filteredRows.length > 0 && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
                       type="button"
@@ -1319,12 +1342,11 @@ export default function Ventas() {
                       disabled={loadingMore || loadingAll || loadingListsCtx}
                       title="Cargar todas las ventas restantes"
                     >
-                      {loadingAll ? "Cargando…" : "Cargar más"}
+                      {loadingAll ? "Cargando todas…" : "Cargar todos"}
                     </button>
                   </div>
                 )}
 
-                {/* ✅ Skeleton “cargar todo lo restante” */}
                 {(loadingMore || loadingAll) && (
                   <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">
                     {Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}

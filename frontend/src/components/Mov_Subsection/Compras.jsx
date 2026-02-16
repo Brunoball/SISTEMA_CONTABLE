@@ -1,13 +1,9 @@
 // src/components/Compras/Compras.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../config/config";
-import "../Movimientos/movimientos.css"; // ✅ misma estética que Ventas/Movimientos
+import "../Movimientos/movimientos.css";
 
 import Toast from "../Global/Toast.jsx";
-
-// ✅ GIF carga inline en tabla
-import GifCarga from "../Global/Gif_Carga.jsx";
-import "../Global/gif_carga.css";
 
 import ModalNuevaCompra from "./modales/ModalNuevaCompra";
 import ModalEditarCompra from "./modales/ModalEditarCompra";
@@ -26,6 +22,14 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
+import { useListas } from "../../context/ListasContext";
+
+/* =========================
+   PERF: paginado
+========================= */
+const PAGE_SIZE = 100;
+const SKELETON_ROWS = 10;
+const PAGE_LIMIT_API = PAGE_SIZE + 1;
 
 /* =========================
    Helpers
@@ -46,10 +50,24 @@ function numOrZero(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
-
-/* =========================
-   FECHA -> DD/MM/YYYY
-========================= */
+function pick(obj, keys, fallback = "") {
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (v !== null && v !== undefined && String(v).trim() !== "") return v;
+  }
+  return fallback;
+}
+function getRowId(r) {
+  return (
+    r?.id_compra ??
+    r?.idCompra ??
+    r?.id_movimiento ??
+    r?.idMovimiento ??
+    r?.id ??
+    r?.ID ??
+    null
+  );
+}
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "—";
@@ -73,9 +91,7 @@ function formatFechaDMY(v) {
   return s;
 }
 
-/* =========================
-   Período helpers (UI MM-YYYY) <-> (API YYYY-MM)
-========================= */
+/* Período UI (MM-YYYY) */
 function periodoToMMYYYY(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
@@ -109,6 +125,7 @@ function periodoToMMYYYY(input) {
   return `${mm}-${yyyy}`;
 }
 
+/* API período (YYYY-MM) */
 function periodoToYYYYMM(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
@@ -148,97 +165,31 @@ function periodoToYYYYMM(input) {
   return s;
 }
 
-/* =========================
-   Auth helpers (Bearer + X-Session)
-========================= */
 function getAuthInfo() {
-  const token = localStorage.getItem("token") || "";
-
-  // ✅ nuevo multi-tenant (#balto_login)
-  const sessionKey =
+  const token = (localStorage.getItem("token") || "").trim();
+  const sessionKey = (
     localStorage.getItem("session_key") ||
     localStorage.getItem("sessionKey") ||
     localStorage.getItem("X-Session") ||
-    "";
+    ""
+  ).trim();
 
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
   return { token, sessionKey, idUsuario };
 }
 
-/* =========================
-   Listas (✅ SIN tipos_movimiento)
-========================= */
-const emptyLists = {
-  periodos: [],
-  clasificaciones: [],
-  proveedores: [],
-  cuentas_corrientes: [],
-  medios_pago: [],
-  detalles: [],
-  tipos_venta: [],
-};
-
-function normalizeLists(raw) {
-  const src = raw?.listas && typeof raw.listas === "object" ? raw.listas : raw;
-
-  const pickArr = (k) => (Array.isArray(src?.[k]) ? src[k] : []);
-  const periodos = pickArr("periodos").map(periodoToMMYYYY);
-
-  return {
-    periodos,
-    clasificaciones: pickArr("clasificaciones"),
-    proveedores: pickArr("proveedores"),
-    cuentas_corrientes: pickArr("cuentas_corrientes"),
-    medios_pago: pickArr("medios_pago"),
-    detalles: pickArr("detalles"),
-    tipos_venta: pickArr("tipos_venta"),
-  };
-}
-
-/* =========================
-   Full-text search
-========================= */
-function normalizeSearchText(v) {
-  return String(v ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function rowMatchesQuery(row, query) {
-  const qq = normalizeSearchText(query);
-  if (!qq) return true;
-
-  const montoNum = Number(row?.monto_total ?? row?.total ?? 0);
-  const parts = [];
-
-  if (row && typeof row === "object") {
-    for (const k of Object.keys(row)) {
-      const val = row[k];
-      if (val && typeof val === "object") continue;
-      parts.push(String(val ?? ""));
-    }
-  }
-
-  parts.push(formatFechaDMY(row?.fecha));
-  parts.push(periodoToMMYYYY(row?.periodo));
-  parts.push(String(montoNum), String(Math.trunc(montoNum)), moneyARS(montoNum));
-
-  const hay = normalizeSearchText(parts.join(" | "));
-  return hay.includes(qq);
-}
-
-/* =========================
-   ✅ PAGO label
-========================= */
 function getCompraPagoLabel(r) {
   const cc = String(r?.cuenta_corriente ?? "").trim();
   if (cc) return "CUENTA CORRIENTE";
@@ -246,9 +197,6 @@ function getCompraPagoLabel(r) {
   return mp ? mp : "CONTADO";
 }
 
-/* =========================
-   ✅ Comprobante helpers (compat)
-========================= */
 function getComprobanteUrl(r) {
   const candidates = [
     r?.factura_url,
@@ -260,21 +208,15 @@ function getComprobanteUrl(r) {
     r?.path_factura,
     r?.factura_path,
   ];
-
   const raw = candidates.find((x) => typeof x === "string" && x.trim() !== "");
   if (!raw) return "";
-
   const s = raw.trim();
   if (/^https?:\/\//i.test(s)) return s;
-
   const base = String(BASE_URL || "").replace(/\/$/, "");
   const rel = s.replace(/^\//, "");
   return `${base}/${rel}`;
 }
 
-/* =========================
-   Excel export
-========================= */
 function slugifySheetName(name) {
   const s = String(name || "Compras")
     .replace(/[\[\]\*\/\\\?\:]/g, " ")
@@ -284,62 +226,103 @@ function slugifySheetName(name) {
 }
 
 function buildExportRows(rows) {
-  return rows.map((r) => ({
-    FECHA: safeText(formatFechaDMY(r.fecha)),
-    DESCRIPCION: safeText(r.detalle ?? r.descripcion ?? r.concepto ?? ""),
-    PROVEEDOR: safeText(r.proveedor ?? ""),
+  return (Array.isArray(rows) ? rows : []).map((r) => ({
+    FECHA: safeText(formatFechaDMY(pick(r, ["fecha"], ""))),
+    PERIODO: safeText(periodoToMMYYYY(pick(r, ["periodo"], ""))),
+    DESCRIPCION: safeText(
+      pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")
+    ),
+    PROVEEDOR: safeText(
+      pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")
+    ),
     PAGO: safeText(getCompraPagoLabel(r)),
-    TOTAL: numOrZero(r.monto_total ?? r.total ?? 0),
+    TOTAL: numOrZero(
+      pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)
+    ),
   }));
 }
 
-/* =========================
-   Component
-========================= */
 export default function Compras() {
   const API = `${BASE_URL}/api.php`;
 
-  const [lists, setLists] = useState(emptyLists);
-  const [rows, setRows] = useState([]);
+  const {
+    lists: listasCtx,
+    loadingLists: loadingListsCtx,
+    errorLists: errorListsCtx,
+    ensureListsLoaded,
+    refreshLists,
+  } = useListas();
 
-  const [loadingLists, setLoadingLists] = useState(true);
-  const [loadingRows, setLoadingRows] = useState(true);
+  const [rows, setRows] = useState([]);
+  const [loadingRows, setLoadingRows] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingAll, setLoadingAll] = useState(false);
   const [error, setError] = useState("");
 
-  // filtros
-  const [fPeriodo, setFPeriodo] = useState(""); // MM-YYYY
+  const [fPeriodo, setFPeriodo] = useState("");
   const [q, setQ] = useState("");
 
-  // modales
+  const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState(null);
+
   const [openNueva, setOpenNueva] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
 
-  // ver comprobante
   const [openVerComp, setOpenVerComp] = useState(false);
   const [compUrl, setCompUrl] = useState("");
 
   const [selectedRow, setSelectedRow] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
-  // toast
   const [toast, setToast] = useState(null);
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
     setToast({ tipo, mensaje, duracion });
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // cache por periodo|q
   const cacheRef = useRef(new Map());
+  const reqIdRef = useRef(0);
+
+  const searchTimerRef = useRef(null);
+  const skipSearchRef = useRef(false);
+
+  const skelTimerRef = useRef(null);
+  const [showSkeleton, setShowSkeleton] = useState(false);
+
+  const beginSkeleton = useCallback(() => {
+    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
+    setShowSkeleton(false);
+    skelTimerRef.current = setTimeout(() => setShowSkeleton(true), 120);
+  }, []);
+  const endSkeleton = useCallback(() => {
+    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
+    setShowSkeleton(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, []);
 
   /* =========================
-     API helpers (Bearer + X-Session)
+     API helpers
   ========================= */
   const buildHeaders = useCallback(() => {
     const { token, sessionKey } = getAuthInfo();
     const h = { "Content-Type": "application/json" };
-    if (sessionKey) h["X-Session"] = sessionKey; // ✅ nuevo
-    if (token) h.Authorization = `Bearer ${token}`; // ✅ compat
+    if (sessionKey) h["X-Session"] = sessionKey;
+    if (token) h.Authorization = `Bearer ${token}`;
+    return h;
+  }, []);
+
+  const buildHeadersGET = useCallback(() => {
+    const { token, sessionKey } = getAuthInfo();
+    const h = {};
+    if (sessionKey) h["X-Session"] = sessionKey;
+    if (token) h.Authorization = `Bearer ${token}`;
     return h;
   }, []);
 
@@ -350,23 +333,16 @@ export default function Compras() {
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(
-        `Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`
-      );
+      throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
     }
   }, []);
 
   const apiGet = useCallback(
     async (url) => {
-      const { token, sessionKey } = getAuthInfo();
-      const headers = {};
-      if (sessionKey) headers["X-Session"] = sessionKey;
-      if (token) headers.Authorization = `Bearer ${token}`;
-
-      const res = await fetch(url, { method: "GET", headers });
+      const res = await fetch(url, { method: "GET", headers: buildHeadersGET() });
       return await parseJsonOrThrow(res);
     },
-    [parseJsonOrThrow]
+    [buildHeadersGET, parseJsonOrThrow]
   );
 
   const apiPostJson = useCallback(
@@ -381,131 +357,266 @@ export default function Compras() {
     [buildHeaders, parseJsonOrThrow]
   );
 
+  const refreshPeriodos = useCallback(async () => {
+    try {
+      await refreshLists();
+    } catch {}
+  }, [refreshLists]);
+
   const invalidateCacheForPeriodo = useCallback((periodoUI) => {
-    const ui = periodoToMMYYYY(periodoUI);
-    const periodoAPI = periodoToYYYYMM(ui);
-    const keyPrefix = `${periodoAPI}|`;
+    const periodoAPI = periodoToYYYYMM(periodoUI);
+    const prefix = `${periodoAPI}|`;
     for (const k of cacheRef.current.keys()) {
-      if (String(k).startsWith(keyPrefix)) cacheRef.current.delete(k);
+      if (String(k).startsWith(prefix)) cacheRef.current.delete(k);
     }
   }, []);
 
   /* =========================
-     Listas
-  ========================= */
-  const loadLists = useCallback(async () => {
-    setLoadingLists(true);
-    setError("");
-    try {
-      const data = await apiGet(`${API}?action=global_obtener_listas&_=${Date.now()}`);
-      if (!data?.exito)
-        throw new Error(data?.mensaje || "No se pudieron cargar listas.");
-
-      const normalized = normalizeLists(data);
-      setLists(normalized);
-
-      if ((normalized.periodos || []).length) {
-        setFPeriodo((prev) => prev || normalized.periodos[0]);
-      } else {
-        setFPeriodo("");
-      }
-
-      return normalized;
-    } catch (e) {
-      setError(e?.message || "Error cargando listas.");
-      setLists(emptyLists);
-      setFPeriodo("");
-      return emptyLists;
-    } finally {
-      setLoadingLists(false);
-    }
-  }, [API, apiGet]);
-
-  /* =========================
-     Listar compras
+     LOAD (FIX PROGRESO)
+     - devuelve appended + pageIds para "Cargar todos"
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
-      const periodoUI =
-        typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
+      const periodoUI = typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
       const qLocal = typeof opts.q === "string" ? opts.q : q;
 
+      const append = !!opts.append;
+      const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
+      const mode = String(opts.mode || (append ? "more" : "initial"));
+
+      // ✅ si viene, lo usamos para dedupe REAL sin depender del estado
+      const seenIdsExternal = opts.seenIds instanceof Set ? opts.seenIds : null;
+
       const perUI = periodoToMMYYYY(periodoUI);
+
       if (!perUI) {
         setRows([]);
+        setHasMore(false);
+        setNextOffset(null);
         setLoadingRows(false);
-        return;
+        setLoadingMore(false);
+        setLoadingAll(false);
+        setError("");
+        endSkeleton();
+        return { hasMore: false, nextOffset: null, received: 0, appended: 0, pageIds: [] };
       }
 
       const periodoAPI = periodoToYYYYMM(perUI);
-      const cacheKey = `${periodoAPI}|${(qLocal || "").trim()}`;
+      const qKey = (qLocal || "").trim();
+      const cacheKey = `${periodoAPI}|${qKey}`;
 
-      if (cacheRef.current.has(cacheKey)) {
-        setRows(cacheRef.current.get(cacheKey) || []);
-        setLoadingRows(false);
-        return;
+      const myReqId = ++reqIdRef.current;
+
+      if (!append) {
+        beginSkeleton();
+        setLoadingRows(true);
+      } else {
+        if (mode !== "all") setLoadingMore(true);
       }
-
-      setLoadingRows(true);
       setError("");
 
       try {
+        if (!append && offset === 0 && cacheRef.current.has(cacheKey)) {
+          const cached = cacheRef.current.get(cacheKey);
+          setRows(cached?.rows || []);
+          setHasMore(!!cached?.hasMore);
+          setNextOffset(cached?.nextOffset ?? null);
+          setLoadingRows(false);
+          endSkeleton();
+          return {
+            hasMore: !!cached?.hasMore,
+            nextOffset: cached?.nextOffset ?? null,
+            received: Array.isArray(cached?.rows) ? cached.rows.length : 0,
+            appended: 0,
+            pageIds: (Array.isArray(cached?.rows) ? cached.rows : [])
+              .map((x) => getRowId(x))
+              .filter((id) => id !== null && id !== undefined)
+              .map(String),
+          };
+        }
+
         const sp = new URLSearchParams();
         sp.set("action", "compras_listar");
         sp.set("periodo", periodoAPI);
-        if (qLocal) sp.set("q", qLocal);
+        if (qKey) sp.set("q", qKey);
+        sp.set("limit", String(PAGE_LIMIT_API));
+        sp.set("offset", String(offset));
 
         const data = await apiGet(`${API}?${sp.toString()}`);
-        if (!data?.exito)
-          throw new Error(data?.mensaje || "No se pudieron cargar compras.");
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar compras.");
 
-        const compras = Array.isArray(data.compras) ? data.compras : [];
+        if (myReqId !== reqIdRef.current) {
+          if (append) {
+            if (mode !== "all") setLoadingMore(false);
+          } else setLoadingRows(false);
+          endSkeleton();
+          return null;
+        }
 
-        const norm = compras.map((r) => ({
-          ...r,
-          periodo: periodoToMMYYYY(r?.periodo),
-          fecha: r?.fecha,
-        }));
+        const raw = Array.isArray(data.compras) ? data.compras : [];
+        const rawNorm = raw.map((r) => ({ ...r, periodo: periodoToMMYYYY(r?.periodo) }));
 
-        cacheRef.current.set(cacheKey, norm);
-        setRows(norm);
+        const backendHasMore =
+          data.has_more !== undefined && data.has_more !== null ? !!data.has_more : null;
+
+        const backendNextOffset =
+          data.next_offset !== undefined && data.next_offset !== null ? Number(data.next_offset) : null;
+
+        let page = rawNorm.slice(0, PAGE_SIZE);
+        let newHasMore = false;
+        let newNextOffset = null;
+
+        if (backendHasMore !== null) {
+          newHasMore = backendHasMore;
+          newNextOffset = backendHasMore ? backendNextOffset : null;
+          if (newHasMore && (newNextOffset === null || Number.isNaN(newNextOffset))) {
+            newNextOffset = offset + page.length;
+          }
+        } else {
+          newHasMore = rawNorm.length > PAGE_SIZE;
+          newNextOffset = newHasMore ? offset + PAGE_SIZE : null;
+        }
+
+        const pageIds = page
+          .map((x) => getRowId(x))
+          .filter((id) => id !== null && id !== undefined)
+          .map(String);
+
+        let appendedCount = 0;
+
+        if (append) {
+          // ✅ dedupe usando seenIdsExternal si está (Cargar todos)
+          //    sino dedupe simple por prev (Cargar más)
+          if (seenIdsExternal) {
+            const add = page.filter((x) => {
+              const id = getRowId(x);
+              if (id === null || id === undefined) return true;
+              return !seenIdsExternal.has(String(id));
+            });
+            appendedCount = add.length;
+
+            setRows((prev) => {
+              const prevArr = Array.isArray(prev) ? prev : [];
+              return [...prevArr, ...add];
+            });
+          } else {
+            setRows((prev) => {
+              const prevArr = Array.isArray(prev) ? prev : [];
+              const seen = new Set(prevArr.map((x) => String(getRowId(x))));
+              const add = page.filter((x) => {
+                const id = getRowId(x);
+                if (id === null || id === undefined) return true;
+                return !seen.has(String(id));
+              });
+              appendedCount = add.length; // 👈 ojo: esto no sale afuera, pero en "more" no nos importa
+              return [...prevArr, ...add];
+            });
+            appendedCount = page.length; // best-effort
+          }
+        } else {
+          setRows(page);
+          cacheRef.current.set(cacheKey, { rows: page, hasMore: newHasMore, nextOffset: newNextOffset });
+        }
+
+        setHasMore(newHasMore);
+        setNextOffset(newNextOffset);
+
+        if (append) {
+          if (mode !== "all") setLoadingMore(false);
+        } else setLoadingRows(false);
+
+        endSkeleton();
+
+        return {
+          hasMore: newHasMore,
+          nextOffset: newNextOffset,
+          received: page.length,
+          appended: appendedCount,
+          pageIds,
+        };
       } catch (e) {
+        if (myReqId !== reqIdRef.current) {
+          if (append) {
+            if (mode !== "all") setLoadingMore(false);
+          } else setLoadingRows(false);
+          endSkeleton();
+          return null;
+        }
+
         setError(e?.message || "Error cargando compras.");
-        setRows([]);
-      } finally {
-        setLoadingRows(false);
+        if (append) {
+          if (mode !== "all") setLoadingMore(false);
+        } else setLoadingRows(false);
+        endSkeleton();
+        return null;
       }
     },
-    [API, apiGet, fPeriodo, q]
+    [API, apiGet, fPeriodo, q, beginSkeleton, endSkeleton]
   );
 
   /* =========================
-     Init
+     INIT
   ========================= */
   useEffect(() => {
+    let alive = true;
+
     (async () => {
-      const normalized = await loadLists();
-      const perDefault = (normalized.periodos || [])[0] || "";
-      if (perDefault) await loadRows({ periodo: perDefault, q: "" });
-      else {
+      try {
+        await ensureListsLoaded({ force: false, background: true });
+      } catch {}
+
+      if (!alive) return;
+
+      const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos : [];
+      const perDefault = periodos[0] || "";
+
+      if (perDefault) {
+        setFPeriodo((prev) => prev || perDefault);
+        await loadRows({ periodo: perDefault, q: "", offset: 0, append: false, mode: "initial" });
+      } else {
         setRows([]);
+        setHasMore(false);
+        setNextOffset(null);
         setLoadingRows(false);
+        endSkeleton();
       }
     })();
+
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!fPeriodo) return;
+
+    if (skipSearchRef.current) {
+      skipSearchRef.current = false;
+      return;
+    }
+
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    searchTimerRef.current = setTimeout(() => {
+      loadRows({ periodo: fPeriodo, q, offset: 0, append: false, mode: "initial" });
+    }, 250);
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [q, fPeriodo, loadRows]);
+
   /* =========================
-     Filtrado: período + búsqueda
+     Data derivada
   ========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
     if (!fPer) return [];
-
-    return rows
-      .filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer))
-      .filter((r) => rowMatchesQuery(r, q));
-  }, [rows, fPeriodo, q]);
+    return (Array.isArray(rows) ? rows : []).filter(
+      (r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer)
+    );
+  }, [rows, fPeriodo]);
 
   /* =========================
      Columnas
@@ -517,7 +628,7 @@ export default function Compras() {
         label: "FECHA",
         fr: 0.9,
         align: "center",
-        render: (r) => safeText(formatFechaDMY(r.fecha)),
+        render: (r) => safeText(formatFechaDMY(pick(r, ["fecha"], ""))),
       },
       {
         key: "detalle",
@@ -525,14 +636,16 @@ export default function Compras() {
         fr: 2.2,
         strong: true,
         align: "left",
-        render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
+        render: (r) =>
+          safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
       },
       {
         key: "proveedor",
         label: "PROVEEDOR",
         fr: 1.6,
         align: "left",
-        render: (r) => safeText(r.proveedor),
+        render: (r) =>
+          safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")),
       },
       {
         key: "pago",
@@ -546,15 +659,10 @@ export default function Compras() {
         label: "TOTAL",
         fr: 1.1,
         align: "center",
-        render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
+        render: (r) =>
+          moneyARS(pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)),
       },
-      {
-        key: "acciones",
-        label: "ACCIONES",
-        fr: 0.95,
-        align: "center",
-        render: () => null,
-      },
+      { key: "acciones", label: "ACCIONES", fr: 0.95, align: "center", render: () => null },
     ];
   }, []);
 
@@ -575,26 +683,20 @@ export default function Compras() {
   const exportToExcel = useCallback(() => {
     try {
       const dataToExport = buildExportRows(filteredRows);
-
       if (!dataToExport.length) {
         showToast("error", "No hay datos para exportar.", 2500);
         return;
       }
+      if (hasMore) {
+        showToast(
+          "error",
+          "Ojo: faltan registros sin cargar. Si querés exportar todo, tocá “Cargar todos” primero.",
+          5200
+        );
+      }
 
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(dataToExport);
-
-      const headers = Object.keys(dataToExport[0] || {});
-      const totalColIndex = headers.findIndex((h) => h === "TOTAL");
-      if (totalColIndex >= 0 && ws["!ref"]) {
-        const colLetter = XLSX.utils.encode_col(totalColIndex);
-        const range = XLSX.utils.decode_range(ws["!ref"]);
-        for (let r = range.s.r + 1; r <= range.e.r; r++) {
-          const cell = ws[`${colLetter}${r + 1}`];
-          if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
-        }
-      }
-
       XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Compras"));
 
       const per = periodoToMMYYYY(fPeriodo) || "SIN_PERIODO";
@@ -603,28 +705,25 @@ export default function Compras() {
     } catch (e) {
       showToast("error", e?.message || "Error exportando Excel.", 3500);
     }
-  }, [filteredRows, fPeriodo, showToast]);
+  }, [filteredRows, fPeriodo, showToast, hasMore]);
 
   /* =========================
-     Acciones
+     Acciones UI
   ========================= */
   const openEditModal = (r) => {
     setSelectedRow(r);
     setOpenEdit(true);
   };
-
   const openDeleteModal = (r) => {
     setSelectedRow(r);
     setOpenDel(true);
   };
-
   const openComprobanteModal = (r) => {
     const url = getComprobanteUrl(r);
     if (!url) return;
     setCompUrl(url);
     setOpenVerComp(true);
   };
-
   const closeComprobanteModal = () => {
     setOpenVerComp(false);
     setCompUrl("");
@@ -633,21 +732,21 @@ export default function Compras() {
   const refreshAfterSave = useCallback(
     async (periodoGuardado) => {
       const perUI = periodoToMMYYYY(periodoGuardado || fPeriodo);
-
-      // ✅ cerrar modal desde acá también es ok (por si el modal no lo cierra)
       setOpenNueva(false);
+      setOpenEdit(false);
 
       invalidateCacheForPeriodo(perUI);
-      await loadRows({ periodo: perUI, q });
+      await loadRows({ periodo: perUI, q, offset: 0, append: false, mode: "initial" });
 
+      await refreshPeriodos();
       showToast("exito", "Compra guardada y lista actualizada.", 2400);
     },
-    [fPeriodo, q, invalidateCacheForPeriodo, loadRows, showToast]
+    [fPeriodo, q, invalidateCacheForPeriodo, loadRows, refreshPeriodos, showToast]
   );
 
   const confirmDelete = async () => {
-    if (!selectedRow?.id_movimiento) return;
-    const id = selectedRow.id_movimiento;
+    const id = getRowId(selectedRow);
+    if (!id) return;
     setDeletingId(id);
 
     try {
@@ -664,8 +763,9 @@ export default function Compras() {
       setSelectedRow(null);
 
       invalidateCacheForPeriodo(fPeriodo);
-      await loadRows({ periodo: fPeriodo, q });
+      await loadRows({ periodo: fPeriodo, q, offset: 0, append: false, mode: "initial" });
 
+      await refreshPeriodos();
       showToast("exito", "Compra eliminada.", 2600);
     } catch (e) {
       showToast("error", e?.message || "Error eliminando compra.", 4200);
@@ -674,19 +774,164 @@ export default function Compras() {
     }
   };
 
-  // ✅ update compra -> COMPRAS
-  const onUpdateCompra = async ({ compra, items }) => {
-    const res = await fetch(`${API}?action=compras_actualizar`, {
-      method: "POST",
-      headers: buildHeaders(),
-      body: JSON.stringify({ ...compra, items }),
-    });
+  const handleLoadMore = useCallback(async () => {
+    if (!hasMore || loadingRows || loadingMore || loadingAll || loadingListsCtx) return;
+    if (nextOffset === null) return;
 
-    const data = await parseJsonOrThrow(res);
-    if (!data?.exito)
-      throw new Error(data?.mensaje || "No se pudo actualizar la compra.");
-    return data;
+    const currentPer = periodoToMMYYYY(fPeriodo);
+    const currentQ = (q || "").trim();
+
+    showToast("cargando", "Cargando más…", 6000);
+    await loadRows({
+      periodo: currentPer,
+      q: currentQ,
+      offset: nextOffset,
+      append: true,
+      mode: "more",
+    });
+  }, [
+    hasMore,
+    loadingRows,
+    loadingMore,
+    loadingAll,
+    loadingListsCtx,
+    nextOffset,
+    fPeriodo,
+    q,
+    loadRows,
+    showToast,
+  ]);
+
+  // ✅ CARGAR TODOS (FIX: progreso real sin depender del estado)
+  const handleLoadAll = useCallback(async () => {
+    if (!hasMore || loadingRows || loadingMore || loadingAll || loadingListsCtx) return;
+    if (nextOffset === null) return;
+
+    setLoadingAll(true);
+    showToast("cargando", "Cargando todas las compras…", 12000);
+
+    let offset = nextOffset;
+    let guard = 0;
+
+    // ✅ seen local con lo YA cargado
+    const seen = new Set(
+      (Array.isArray(rows) ? rows : [])
+        .map((x) => getRowId(x))
+        .filter((id) => id !== null && id !== undefined)
+        .map(String)
+    );
+
+    let finishedOk = false;
+    let stoppedNoProgress = false;
+
+    try {
+      while (offset !== null && guard < 3000) {
+        const currentPer = periodoToMMYYYY(fPeriodo);
+        const currentQ = (q || "").trim();
+
+        const res = await loadRows({
+          periodo: currentPer,
+          q: currentQ,
+          offset,
+          append: true,
+          mode: "all",
+          seenIds: seen, // ✅ dedupe estable
+        });
+
+        if (!res) break;
+
+        // ✅ actualizar seen con lo que vino (aunque haya duplicados)
+        (res.pageIds || []).forEach((id) => seen.add(String(id)));
+
+        // ✅ si no agregó nada y todavía "hay más", es backend bug/offset trabado
+        if (res.hasMore && res.appended === 0) {
+          stoppedNoProgress = true;
+          break;
+        }
+
+        // ✅ si nextOffset no avanza => loop infinito, cortamos
+        if (res.nextOffset === offset) {
+          stoppedNoProgress = true;
+          break;
+        }
+
+        offset = res.nextOffset;
+        guard += 1;
+
+        if (!res.hasMore || offset === null) {
+          finishedOk = true;
+          break;
+        }
+      }
+
+      if (finishedOk) {
+        showToast("exito", "Listo: ya se cargaron todas.", 2600);
+      } else if (stoppedNoProgress) {
+        showToast(
+          "error",
+          "Se detuvo: el backend no está avanzando el paginado (next_offset/has_more). Revisá el endpoint compras_listar.",
+          6500
+        );
+      } else {
+        showToast("error", "No se pudo completar la carga total.", 4200);
+      }
+    } catch (e) {
+      showToast("error", e?.message || "Error cargando todas.", 4200);
+    } finally {
+      setLoadingAll(false);
+    }
+  }, [
+    hasMore,
+    loadingRows,
+    loadingMore,
+    loadingAll,
+    loadingListsCtx,
+    nextOffset,
+    fPeriodo,
+    q,
+    loadRows,
+    showToast,
+    rows,
+  ]);
+
+  const softLoading = loadingRows && showSkeleton;
+  const lists = listasCtx || { periodos: [] };
+
+  const handleChangePeriodo = async (valueUI) => {
+    const ui = periodoToMMYYYY(valueUI);
+    setFPeriodo(ui);
+    setQ("");
+    skipSearchRef.current = true;
+    await loadRows({ periodo: ui, q: "", offset: 0, append: false, mode: "initial" });
   };
+
+  const renderSkeletonRow = (idx) => (
+    <div
+      key={`skel-${idx}`}
+      className="mov-gridTable mov-gridTable--row mov-row--skeleton"
+      style={{ gridTemplateColumns: gridCols }}
+      role="row"
+      aria-hidden="true"
+    >
+      {columns.map((c) => (
+        <div
+          key={c.key}
+          className={[
+            "mov-gridCell",
+            c.align === "center" ? "is-center" : "",
+            c.align === "right" ? "is-right" : "",
+          ].join(" ")}
+          role="cell"
+        >
+          <span className="mov-skeletonBar" style={{ width: "60%" }} />
+        </div>
+      ))}
+    </div>
+  );
+
+  // ✅ si hay 100 exactos, mostrar SOLO cargar todos
+  const showLoadMoreBtn = !loadingRows && hasMore && filteredRows.length > 0 && filteredRows.length < PAGE_SIZE;
+  const showLoadAllBtn = !loadingRows && hasMore && filteredRows.length > 0;
 
   return (
     <div className="mov-page">
@@ -699,6 +944,11 @@ export default function Compras() {
         />
       )}
 
+      {errorListsCtx && (
+        <div className="mov-alert" role="alert">
+          {errorListsCtx}
+        </div>
+      )}
       {error && (
         <div className="mov-alert" role="alert">
           {error}
@@ -711,7 +961,7 @@ export default function Compras() {
             <div>
               <div className="mov-card__title">Movimientos · Compras</div>
               <div className="mov-card__hint">
-                Mostrando <b>{filteredRows.length}</b>
+                Mostrando <b>{filteredRows.length}</b> registros{hasMore ? " (hay más)" : ""}
               </div>
             </div>
 
@@ -720,15 +970,10 @@ export default function Compras() {
                 <label>
                   <FontAwesomeIcon icon={faCalendarDays} /> Período
                 </label>
-
                 <select
                   value={periodoToMMYYYY(fPeriodo)}
-                  onChange={async (e) => {
-                    const ui = periodoToMMYYYY(e.target.value);
-                    setFPeriodo(ui);
-                    await loadRows({ periodo: ui, q });
-                  }}
-                  disabled={loadingRows || loadingLists}
+                  onChange={(e) => handleChangePeriodo(e.target.value)}
+                  disabled={loadingRows || loadingListsCtx || loadingMore || loadingAll}
                 >
                   {(lists.periodos || []).map((p) => {
                     const ui = periodoToMMYYYY(p);
@@ -753,28 +998,32 @@ export default function Compras() {
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
+                        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                        skipSearchRef.current = true;
                         await loadRows({
                           periodo: fPeriodo,
                           q: e.currentTarget.value,
+                          offset: 0,
+                          append: false,
+                          mode: "initial",
                         });
                       }
                     }}
                     placeholder="Buscar por proveedor, descripción, monto, fecha…"
-                    disabled={loadingRows}
+                    disabled={loadingListsCtx || loadingAll}
                   />
-
-                  {q.trim() !== "" && !loadingRows && (
+                  {q.trim() !== "" && (
                     <button
                       type="button"
                       className="mov-clearSearch"
                       title="Limpiar búsqueda"
                       onClick={async () => {
+                        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
-                        await loadRows({ periodo: fPeriodo, q: "" });
-                        document
-                          .querySelector(".mov-searchInput input")
-                          ?.focus();
+                        skipSearchRef.current = true;
+                        await loadRows({ periodo: fPeriodo, q: "", offset: 0, append: false, mode: "initial" });
                       }}
+                      disabled={loadingAll}
                     >
                       ×
                     </button>
@@ -784,20 +1033,13 @@ export default function Compras() {
             </div>
           </div>
 
-          <div
-            className="mov-card__actions"
-            style={{ display: "flex", gap: 10, alignItems: "center" }}
-          >
+          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <button
               type="button"
               className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
               onClick={exportToExcel}
               disabled={loadingRows || filteredRows.length === 0}
-              title={
-                filteredRows.length
-                  ? "Exportar a Excel"
-                  : "No hay datos para exportar"
-              }
+              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
             >
               <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
             </button>
@@ -806,7 +1048,7 @@ export default function Compras() {
               type="button"
               className="mov-btn mov-btn--primary"
               onClick={() => setOpenNueva(true)}
-              disabled={!fPeriodo}
+              disabled={!fPeriodo || loadingListsCtx || loadingAll}
               title={!fPeriodo ? "Primero seleccioná un período" : "Crear nueva compra"}
             >
               <FontAwesomeIcon icon={faPlus} /> Nueva Compra
@@ -817,11 +1059,7 @@ export default function Compras() {
         {/* HEADER */}
         <div
           className="mov-gridTable mov-gridTable--head"
-          style={{
-            gridTemplateColumns: gridCols,
-            overflowX: "auto",
-            scrollbarGutter: "stable",
-          }}
+          style={{ gridTemplateColumns: gridCols, overflowX: "auto", scrollbarGutter: "stable" }}
           role="row"
         >
           {columns.map((c) => (
@@ -830,8 +1068,8 @@ export default function Compras() {
               className={[
                 "mov-gridCell",
                 "mov-gridCell--head",
-                c.align === "right" ? "is-right" : "",
                 c.align === "center" ? "is-center" : "",
+                c.align === "right" ? "is-right" : "",
               ].join(" ")}
               role="columnheader"
             >
@@ -842,125 +1080,158 @@ export default function Compras() {
 
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
-          <div className="mov-gridBody">
-            {loadingRows && (
-              <div className="mov-emptyRow mov-emptyRow--loading">
-                <GifCarga />
+          <div className={["mov-gridBody mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
+            {showSkeleton && loadingRows ? (
+              <div className="mov-skeletonWrap" aria-busy="true">
+                {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
               </div>
-            )}
+            ) : (
+              <>
+                {filteredRows.map((r) => {
+                  const rowId = getRowId(r) ?? `row-${Math.random()}`;
+                  const comp = getComprobanteUrl(r);
+                  const canSee = !!comp;
+                  const isDeleting = deletingId !== null && String(deletingId) === String(rowId);
 
-            {!loadingRows &&
-              filteredRows.map((r) => (
-                <div
-                  key={r.id_movimiento}
-                  className="mov-gridTable mov-gridTable--row"
-                  style={{ gridTemplateColumns: gridCols }}
-                  role="row"
-                >
-                  {columns.map((c) => {
-                    if (c.key === "acciones") {
-                      const comp = getComprobanteUrl(r);
-                      const canSee = !!comp;
-
-                      return (
-                        <div
-                          key={c.key}
-                          className={[
-                            "mov-gridCell",
-                            "mov-gridCell--actions",
-                            "is-center",
-                          ].join(" ")}
-                          role="cell"
-                        >
-                          <div className="mov-actionsInline">
-                            <button
-                              type="button"
-                              className={`mov-iconBtn ${!canSee ? "is-disabled" : ""}`}
-                              title={canSee ? "Ver comprobante" : "Sin comprobante"}
-                              onClick={() => canSee && openComprobanteModal(r)}
-                              disabled={!canSee}
-                            >
-                              <FontAwesomeIcon icon={faEye} />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="mov-iconBtn"
-                              title="Editar"
-                              onClick={() => openEditModal(r)}
-                            >
-                              <FontAwesomeIcon icon={faPenToSquare} />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="mov-iconBtn mov-iconBtn--danger"
-                              title="Eliminar"
-                              disabled={deletingId === r.id_movimiento}
-                              onClick={() => openDeleteModal(r)}
-                            >
-                              {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    const val = c.render ? c.render(r) : safeText(r[c.key]);
-                    return (
-                      <div
-                        key={c.key}
-                        className={[
-                          "mov-gridCell",
-                          c.align === "right" ? "is-right" : "",
-                          c.align === "center" ? "is-center" : "",
-                          c.strong ? "is-strong" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        role="cell"
-                        title={typeof val === "string" ? val : undefined}
-                      >
-                        <span className="mov-ellipsissss">{val}</span>
+                  return (
+                    <div
+                      key={rowId}
+                      className="mov-gridTable mov-gridTable--row"
+                      style={{ gridTemplateColumns: gridCols }}
+                      role="row"
+                    >
+                      <div className="mov-gridCell is-center" role="cell">
+                        {safeText(formatFechaDMY(pick(r, ["fecha"], "")))}
                       </div>
-                    );
-                  })}
-                </div>
-              ))}
 
-            {!loadingRows && filteredRows.length === 0 && (
-              <div className="mov-emptyRow">
-                {!fPeriodo
-                  ? "No hay período disponible para cargar compras."
-                  : "No hay compras para mostrar en este período."}
-              </div>
+                      <div
+                        className="mov-gridCell is-strong"
+                        role="cell"
+                        title={safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], ""))}
+                      >
+                        <span className="mov-ellipsissss">
+                          {safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], ""))}
+                        </span>
+                      </div>
+
+                      <div
+                        className="mov-gridCell"
+                        role="cell"
+                        title={safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""))}
+                      >
+                        <span className="mov-ellipsissss">
+                          {safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""))}
+                        </span>
+                      </div>
+
+                      <div className="mov-gridCell is-center" role="cell">
+                        {safeText(getCompraPagoLabel(r))}
+                      </div>
+
+                      <div className="mov-gridCell is-center" role="cell">
+                        {moneyARS(pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0))}
+                      </div>
+
+                      <div className="mov-gridCell mov-gridCell--actions is-center" role="cell">
+                        <div className="mov-actionsInline">
+                          <button
+                            type="button"
+                            className={`mov-iconBtn ${!canSee ? "is-disabled" : ""}`}
+                            title={canSee ? "Ver comprobante" : "Sin comprobante"}
+                            onClick={() => canSee && openComprobanteModal(r)}
+                            disabled={!canSee || loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                          >
+                            <FontAwesomeIcon icon={faEye} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="mov-iconBtn"
+                            title="Editar"
+                            onClick={() => openEditModal(r)}
+                            disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                          >
+                            <FontAwesomeIcon icon={faPenToSquare} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="mov-iconBtn mov-iconBtn--danger"
+                            title="Eliminar"
+                            disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || isDeleting}
+                            onClick={() => openDeleteModal(r)}
+                          >
+                            {isDeleting ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {!loadingRows && filteredRows.length === 0 && (
+                  <div className="mov-emptyRow">
+                    {!fPeriodo
+                      ? "No hay período disponible para cargar compras."
+                      : "No hay compras para mostrar en este período."}
+                  </div>
+                )}
+
+                {/* BOTONES */}
+                {!loadingRows && filteredRows.length > 0 && hasMore && (
+                  <div style={{ display: "flex", justifyContent: "center", gap: 10, padding: "12px 0" }}>
+                    {showLoadMoreBtn && (
+                      <button
+                        type="button"
+                        className="mov-btn mov-btn--ghost"
+                        onClick={handleLoadMore}
+                        disabled={loadingMore || loadingRows || loadingAll || loadingListsCtx}
+                        title="Cargar 100 registros más"
+                      >
+                        {loadingMore ? "Cargando…" : "Cargar más"}
+                      </button>
+                    )}
+
+                    {showLoadAllBtn && (
+                      <button
+                        type="button"
+                        className="mov-btn mov-btn--ghost"
+                        onClick={handleLoadAll}
+                        disabled={loadingMore || loadingRows || loadingAll || loadingListsCtx}
+                        title="Cargar todas las compras restantes"
+                      >
+                        {loadingAll ? "Cargando todas…" : "Cargar todos"}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {(loadingMore || loadingAll) && (
+                  <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">
+                    {Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
       </section>
 
-      {/* ✅ MODAL NUEVA COMPRA (ARREGLADO: ahora usa onSaved para refrescar) */}
+      {/* MODALES */}
       <ModalNuevaCompra
         open={openNueva}
-        lists={lists}
+        lists={listasCtx || { periodos: [] }}
         onClose={() => setOpenNueva(false)}
         onToast={showToast}
         onSaved={async (info) => {
-          // info puede traer periodo en API (YYYY-MM) o UI (MM-YYYY)
-          const per =
-            info?.periodoUI ||
-            info?.periodo ||
-            info?.periodoApi ||
-            fPeriodo;
-
+          const per = info?.periodoUI || info?.periodo || info?.periodoApi || fPeriodo;
           await refreshAfterSave(per);
         }}
       />
 
-      {/* MODAL EDITAR COMPRA */}
       <ModalEditarCompra
         open={openEdit}
-        lists={lists}
+        lists={listasCtx || { periodos: [] }}
         row={selectedRow}
         periodoDefault={fPeriodo}
         onClose={() => {
@@ -968,19 +1239,12 @@ export default function Compras() {
           setSelectedRow(null);
         }}
         onToast={showToast}
-        onSave={async (payloadFinal) => {
-          const data = await onUpdateCompra({
-            compra: payloadFinal,
-            items: [],
-          });
-
-          const per = payloadFinal?.periodo || fPeriodo;
+        onSave={async () => {
+          const per = selectedRow?.periodo || fPeriodo;
           await refreshAfterSave(per);
-          return data;
         }}
       />
 
-      {/* MODAL VER COMPROBANTE */}
       <ModalVerComprobante
         open={openVerComp}
         url={compUrl}
@@ -988,11 +1252,10 @@ export default function Compras() {
         title="Comprobante de compra"
       />
 
-      {/* DELETE */}
       <ModalEliminarMovimientos
         open={openDel}
         row={selectedRow}
-        loading={deletingId === selectedRow?.id_movimiento}
+        loading={deletingId !== null && String(deletingId) === String(getRowId(selectedRow))}
         onClose={() => {
           setOpenDel(false);
           setSelectedRow(null);

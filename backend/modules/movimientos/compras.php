@@ -235,6 +235,26 @@ function compras_listar(PDO $pdo): void {
   $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
   $q       = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
 
+  // ✅ PAGINADO
+  // En tu frontend: limit = PAGE_SIZE + 1 (101) y offset (0, 100, 200...)
+  $limitRaw  = $_GET['limit']  ?? null;
+  $offsetRaw = $_GET['offset'] ?? null;
+
+  $limit  = n_int($limitRaw);
+  $offset = n_int($offsetRaw);
+
+  // defaults
+  if ($limit === null)  $limit = 101; // 100 + 1
+  if ($offset === null) $offset = 0;
+
+  // hard caps (evita abuso)
+  if ($limit < 1) $limit = 1;
+  if ($limit > 501) $limit = 501; // 500+1 máx
+  if ($offset < 0) $offset = 0;
+
+  // pageSize real: si limit = 101 => pageSize = 100
+  $pageSize = ($limit > 1) ? ($limit - 1) : 1;
+
   $idCompra = get_tipo_operacion_id_compra($pdo);
   if ($idCompra <= 0) fail("No existe el tipo_operacion 'COMPRA' en tipos_operacion.");
 
@@ -248,6 +268,7 @@ function compras_listar(PDO $pdo): void {
   $where[] = "(m.id_cliente IS NULL OR m.id_cliente = 0)";
   $where[] = "(m.id_tipo_venta IS NULL OR m.id_tipo_venta = 0)";
 
+  // ✅ coherencia pago: exactamente uno
   $where[] = "(
       (m.id_medio_pago IS NOT NULL AND (m.id_cuenta_corriente IS NULL OR m.id_cuenta_corriente = 0))
       OR
@@ -340,9 +361,19 @@ function compras_listar(PDO $pdo): void {
   $sql .= " WHERE " . implode(" AND ", $where);
   $sql .= " ORDER BY m.fecha DESC, m.id_movimiento DESC";
 
+  // ✅ APLICAR LIMIT/OFFSET (bind en MySQL a veces falla en LIMIT/OFFSET, por eso inyectamos ints validados)
+  $sql .= " LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
+
   $stmt = $pdo->prepare($sql);
   $stmt->execute($params);
   $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+  // ✅ has_more + next_offset, y recortamos a pageSize (100)
+  $hasMore = (count($rows) > $pageSize);
+  if ($hasMore) {
+    $rows = array_slice($rows, 0, $pageSize);
+  }
+  $nextOffset = $hasMore ? ($offset + $pageSize) : null;
 
   $data = [];
   foreach ($rows as $r) {
@@ -385,7 +416,13 @@ function compras_listar(PDO $pdo): void {
     ];
   }
 
-  ok(['compras' => $data]);
+  ok([
+    'compras' => $data,
+    'has_more' => $hasMore,
+    'next_offset' => $nextOffset,
+    'offset' => (int)$offset,
+    'limit' => (int)$pageSize,
+  ]);
 }
 
 /* =========================================================

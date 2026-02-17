@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 // backend/modules/login/logout.php
 // ✅ Cierra sesión SaaS REAL: borra session_key de balto_master.sesiones
+// ✅ FIX: evita "Cannot redeclare getSessionKey()" cuando api.php ya incluyó require_session.php
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -30,9 +31,27 @@ function fail(string $msg, int $httpCode = 200, array $extra = []): void {
   exit;
 }
 
-function getSessionKey(): string {
+/**
+ * ✅ Obtener X-Session sin redeclarar getSessionKey()
+ * - Si require_session.php ya está cargado, puede existir getSessionKey()
+ * - Si no existe, usamos lectura directa
+ */
+function logout_get_session_key(): string {
+  // 1) si ya existe getSessionKey(), la usamos
+  if (function_exists('getSessionKey')) {
+    $k = getSessionKey();
+    return is_string($k) ? trim($k) : '';
+  }
+
+  // 2) fallback directo
   $k = $_SERVER['HTTP_X_SESSION'] ?? '';
-  return is_string($k) ? trim($k) : '';
+  if ((!is_string($k) || trim($k) === '') && function_exists('getallheaders')) {
+    $all = getallheaders();
+    if (is_array($all)) {
+      $k = $all['X-Session'] ?? $all['x-session'] ?? $k;
+    }
+  }
+  return trim((string)$k);
 }
 
 try {
@@ -40,15 +59,17 @@ try {
     fail("Método no permitido. Usá POST.", 405);
   }
 
-  $sessionKey = getSessionKey();
+  $sessionKey = logout_get_session_key();
 
   // ✅ Si no hay header, igual devolvemos OK (cliente puede limpiar igual)
   if ($sessionKey === '') {
     ok(['cerrada' => false, 'mensaje' => 'Sin X-Session (cliente ya estaba limpio).']);
   }
 
-  // ✅ Conectar MASTER (usa tu db_master.php y crea $pdo_master)
-  require_once __DIR__ . '/../../config/db_master.php';
+  // ✅ Conectar MASTER (si api.php ya lo incluyó, esto no rompe)
+  if (!isset($pdo_master) || !($pdo_master instanceof PDO)) {
+    require_once __DIR__ . '/../../config/db_master.php';
+  }
 
   if (!isset($pdo_master) || !($pdo_master instanceof PDO)) {
     throw new RuntimeException("PDO master no disponible.");

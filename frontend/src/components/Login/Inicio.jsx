@@ -1,5 +1,5 @@
 // src/components/inicio/Inicio.jsx
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import BASE_URL from "../../config/config";
 import "./inicio.css";
@@ -13,6 +13,9 @@ const STORAGE_KEYS = {
   pass: "remember_contrasena", // base64
 };
 
+/* =========================
+   Normalizadores
+========================= */
 function normalizeRol(value) {
   if (value == null) return "vista";
   const v = String(value).trim().toLowerCase();
@@ -36,6 +39,40 @@ function normalizePlanNivel(value) {
   return 3;
 }
 
+/* =========================
+   Helpers de red (fix ERR_CONNECTION_REFUSED)
+========================= */
+
+// Detecta errores típicos de fetch cuando NO hay servidor escuchando
+function isConnectionError(err) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  // Chrome/Edge: "Failed to fetch"
+  // Otros: "NetworkError when attempting to fetch resource."
+  // Node/undici: "ECONNREFUSED"
+  return (
+    msg.includes("failed to fetch") ||
+    msg.includes("networkerror") ||
+    msg.includes("network error") ||
+    msg.includes("econnrefused") ||
+    msg.includes("connection refused") ||
+    msg.includes("err_connection_refused")
+  );
+}
+
+function withTimeout(ms) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  return { controller, clear: () => clearTimeout(id) };
+}
+
+function safeJsonParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 const Inicio = () => {
   const [nombre, setNombre] = useState("");
   const [contrasena, setContrasena] = useState("");
@@ -49,6 +86,22 @@ const Inicio = () => {
 
   const navigate = useNavigate();
 
+  // ✅ endpoints: primero el BASE_URL (no tocamos config), y fallback a 127.0.0.1
+  const LOGIN_ENDPOINTS = useMemo(() => {
+    const primary = `${BASE_URL}/api.php?action=inicio`;
+    const fallback = `http://127.0.0.1:3001/routes/api.php?action=inicio`;
+
+    // Evitar duplicados si BASE_URL ya es 127.0.0.1
+    const unique = [];
+    for (const u of [primary, fallback]) {
+      if (!unique.includes(u)) unique.push(u);
+    }
+    return unique;
+  }, []);
+
+  /* =========================
+     Load remember me
+  ========================= */
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.rememberFlag) === "1";
     if (!saved) return;
@@ -84,82 +137,137 @@ const Inicio = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nombre, contrasena, remember]);
 
+  /* =========================
+     Request login (con fallback)
+  ========================= */
+  const postLogin = async (url, payload) => {
+    // timeout corto para no quedar “colgado” si el puerto no responde bien
+    const { controller, clear } = withTimeout(8000);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      // Leemos texto primero para poder parsear incluso si el backend manda algo no-JSON
+      const text = await res.text();
+      const data = safeJsonParse(text);
+
+      return { ok: res.ok, status: res.status, data, rawText: text };
+    } finally {
+      clear();
+    }
+  };
+
   const manejarEnvio = async (e) => {
     e.preventDefault();
     if (cargando) return;
-    setCargando(true);
 
-    if (!nombre || !contrasena) {
+    const user = String(nombre || "").trim();
+    const pass = String(contrasena || "");
+
+    if (!user || !pass) {
       mostrarToast("advertencia", "Por favor complete todos los campos");
-      setCargando(false);
       return;
     }
 
+    setCargando(true);
+
     try {
-      const res = await fetch(`${BASE_URL}/api.php?action=inicio`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre, contrasena }),
-      });
+      let lastError = null;
 
-      if (res.status === 401 || res.status === 403) {
-        let d = null;
+      for (let i = 0; i < LOGIN_ENDPOINTS.length; i++) {
+        const url = LOGIN_ENDPOINTS[i];
+
         try {
-          d = await res.json();
-        } catch {}
-        mostrarToast("error", d?.mensaje || "Usuario o contraseña incorrectos");
-        setCargando(false);
-        return;
+          const r = await postLogin(url, { nombre: user, contrasena: pass });
+
+          // ✅ 401/403: credenciales / inactivo (no reintentar en fallback)
+          if (r.status === 401 || r.status === 403) {
+            const msg = r.data?.mensaje || "Usuario o contraseña incorrectos";
+            mostrarToast("error", msg);
+            setCargando(false);
+            return;
+          }
+
+          // ✅ no OK: error genérico del backend
+          if (!r.ok) {
+            const msg =
+              r.data?.mensaje ||
+              "No se pudo iniciar sesión. Intente nuevamente.";
+            mostrarToast("error", msg);
+            setCargando(false);
+            return;
+          }
+
+          // ✅ OK: validar payload
+          const data = r.data;
+          if (!data || !data.exito) {
+            mostrarToast("error", data?.mensaje || "Usuario o contraseña incorrectos");
+            setCargando(false);
+            return;
+          }
+
+          const sessionKey = String(data.session_key || "").trim();
+          if (!sessionKey) {
+            mostrarToast("error", "Login OK pero falta session_key. Revisá inicio.php.");
+            setCargando(false);
+            return;
+          }
+
+          localStorage.setItem("session_key", sessionKey);
+
+          const usuarioResp = data.usuario || {};
+          const planNivel = normalizePlanNivel(
+            usuarioResp.plan_nivel ?? usuarioResp.planNivel ?? data.plan_nivel ?? 1
+          );
+
+          const usuarioFinal = {
+            ...usuarioResp,
+            rol: normalizeRol(usuarioResp.rol ?? data.rol ?? "vista"),
+            plan_nivel: planNivel,
+            nombre:
+              usuarioResp.nombre ??
+              usuarioResp.Nombre_Completo ??
+              usuarioResp.user ??
+              user,
+          };
+
+          localStorage.setItem("usuario", JSON.stringify(usuarioFinal));
+          persistRemember(user, pass, remember);
+
+          navigate("/panel");
+          return;
+        } catch (err) {
+          // Si es error de conexión, probamos fallback (siguiente endpoint)
+          if (isConnectionError(err) && i < LOGIN_ENDPOINTS.length - 1) {
+            lastError = err;
+            continue;
+          }
+
+          // Abort por timeout también cae acá
+          const msg =
+            err?.name === "AbortError"
+              ? "Tiempo de espera agotado conectando al servidor."
+              : "No se pudo iniciar sesión. Verificá que el backend esté corriendo en http://127.0.0.1:3001.";
+
+          mostrarToast("error", msg);
+          setCargando(false);
+          return;
+        }
       }
 
-      if (!res.ok) {
+      // Si terminó el loop sin return (raro), error final
+      if (lastError) {
+        mostrarToast(
+          "error",
+          "No se pudo conectar al backend (puerto 3001). Verificá que esté levantado con: php -S 127.0.0.1:3001 -t ."
+        );
+      } else {
         mostrarToast("error", "No se pudo iniciar sesión. Intente nuevamente.");
-        setCargando(false);
-        return;
       }
-
-      let data = null;
-      try {
-        data = await res.json();
-      } catch {}
-
-      if (!data || !data.exito) {
-        mostrarToast("error", data?.mensaje || "Usuario o contraseña incorrectos");
-        setCargando(false);
-        return;
-      }
-
-      const sessionKey = (data.session_key || "").toString().trim();
-      if (!sessionKey) {
-        mostrarToast("error", "Login OK pero falta session_key. Revisá inicio.php.");
-        setCargando(false);
-        return;
-      }
-
-      localStorage.setItem("session_key", sessionKey);
-
-      const usuarioResp = data.usuario || {};
-      const planNivel = normalizePlanNivel(
-        usuarioResp.plan_nivel ?? usuarioResp.planNivel ?? data.plan_nivel ?? 1
-      );
-
-      const usuarioFinal = {
-        ...usuarioResp,
-        rol: normalizeRol(usuarioResp.rol ?? data.rol ?? "vista"),
-        plan_nivel: planNivel,
-        nombre:
-          usuarioResp.nombre ??
-          usuarioResp.Nombre_Completo ??
-          usuarioResp.user ??
-          nombre,
-      };
-
-      localStorage.setItem("usuario", JSON.stringify(usuarioFinal));
-      persistRemember(nombre, contrasena, remember);
-
-      navigate("/panel");
-    } catch {
-      mostrarToast("error", "No se pudo iniciar sesión. Intente nuevamente.");
     } finally {
       setCargando(false);
     }
@@ -169,7 +277,11 @@ const Inicio = () => {
     <div className="ini_page">
       <div className="ini_card" role="region" aria-label="Inicio de sesión">
         <div className="ini_brand">
-          <img className="ini_brandLogo" src={logoBalto} alt="BALTO - Sistemas contables" />
+          <img
+            className="ini_brandLogo"
+            src={logoBalto}
+            alt="BALTO - Sistemas contables"
+          />
         </div>
 
         <h1 className="ini_title">INICIAR SESIÓN</h1>

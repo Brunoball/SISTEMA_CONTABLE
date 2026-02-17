@@ -1,11 +1,10 @@
 // src/components/Movimientos/modales/ModalEditarOrdenPago.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import "../../Movimientos/modales/ModalEditarMovimiento.css"; // ✅ estética + dark por clases
+import "../../Movimientos/modales/ModalEditarMovimiento.css";
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";
-const ADD_OPTION = "__ADD__";
 
 /* =========================
    Helpers
@@ -83,7 +82,7 @@ function getAuthInfo() {
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    const cand = u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
@@ -153,13 +152,14 @@ function getIdGeneric(x) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-function findById(arr, id) {
-  const sid = String(id ?? "");
-  return getArr(arr).find((it) => String(getIdGeneric(it)) === sid);
+function getIdProveedor(x) {
+  const cand = x?.id ?? x?.id_proveedor ?? x?.idProveedor ?? x?.proveedor_id ?? 0;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 /* =========================
-   Lists normalize (lo mismo que Ventas)
+   Lists normalize
 ========================= */
 function normalizeLists(lists) {
   const src = lists && typeof lists === "object" ? lists : {};
@@ -172,9 +172,19 @@ function normalizeLists(lists) {
 }
 
 /* =========================
-   Mini modal genérico para catálogos
+   Mini modal: agregar catálogo
 ========================= */
-function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark }) {
+function AddCatalogMiniModal({
+  open,
+  title,
+  value,
+  saving,
+  onChange,
+  onCancel,
+  onSave,
+  dark,
+  label = "Nombre",
+}) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -221,7 +231,7 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
               disabled={saving}
               autoComplete="off"
             />
-            <label className="fl-label">Nombre</label>
+            <label className="fl-label">{label}</label>
           </div>
 
           <div className="mi-mini__actions">
@@ -240,7 +250,7 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 }
 
 /* =========================
-   Modal editar Orden de Pago
+   ModalEditarOrdenPago
 ========================= */
 export default function ModalEditarOrdenPago({
   open,
@@ -252,7 +262,6 @@ export default function ModalEditarOrdenPago({
   onToast,
   dark,
 }) {
-  const API_BASE = `${BASE_URL}/api.php`;
   const API_LISTS = `${BASE_URL}/api.php?action=global_obtener_listas`;
   const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
 
@@ -265,33 +274,42 @@ export default function ModalEditarOrdenPago({
 
   const [saving, setSaving] = useState(false);
 
-  // ✅ localLists: se refrescan al abrir (soluciona el bug)
+  // ✅ localLists con refresh al abrir
   const [localLists, setLocalLists] = useState(() => normalizeLists(lists));
   useEffect(() => setLocalLists(normalizeLists(lists)), [lists]);
 
   const refreshLists = useCallback(async () => {
-    // trae lo último del tenant
     const data = await apiGetJson(API_LISTS);
     const normalized = normalizeLists(data);
-    setLocalLists((prev) => {
-      // merge por si el endpoint devuelve otras keys
-      return {
-        detalles: normalized.detalles?.length ? normalized.detalles : prev.detalles,
-        proveedores: normalized.proveedores?.length ? normalized.proveedores : prev.proveedores,
-      };
-    });
+    setLocalLists((prev) => ({
+      detalles: normalized.detalles?.length ? normalized.detalles : prev.detalles,
+      proveedores: normalized.proveedores?.length ? normalized.proveedores : prev.proveedores,
+    }));
   }, [API_LISTS]);
 
-  // ✅ Autocomplete detalle
+  // ✅ Autocomplete detalles
   const [detalleFocus, setDetalleFocus] = useState(false);
   const [detalleArmed, setDetalleArmed] = useState(false);
   const detalleInputRef = useRef(null);
 
-  // Mini modal "nuevo detalle"
-  const [addDetUI, setAddDetUI] = useState({ open: false, text: "", saving: false });
+  // ✅ Autocomplete proveedores
+  const [provFocus, setProvFocus] = useState(false);
+  const [provArmed, setProvArmed] = useState(false);
+  const provInputRef = useRef(null);
 
-  // Mini modal "nuevo proveedor"
-  const [addProvUI, setAddProvUI] = useState({ open: false, text: "", saving: false });
+  // Mini modal único (detalles/proveedores)
+  const [addUI, setAddUI] = useState({ open: false, catalogo: "detalles", text: "", saving: false });
+
+  // ✅ guardamos “defaults” del registro para permitir campos vacíos
+  const defaultsRef = useRef({
+    fecha: "",
+    periodoMMYYYY: "",
+    monto: 0,
+    id_proveedor: NULL_OPTION,
+    proveedorTxt: "",
+    id_detalle: NULL_OPTION,
+    detalleTxt: "",
+  });
 
   // Form
   const [form, setForm] = useState(() => ({
@@ -299,19 +317,18 @@ export default function ModalEditarOrdenPago({
     fecha: "",
     periodo: "",
     id_proveedor: NULL_OPTION,
-    proveedorTxt: "",
+    proveedorInput: "",
     id_detalle: NULL_OPTION,
     detalleInput: "",
-    monto_total: 0,
+    monto_total: "",
   }));
 
   /* =========================
-     Init al abrir + refresh lists
+     Init form + refresh lists
   ========================= */
   useEffect(() => {
     if (!open) return;
 
-    // 🔥 Esto es lo que arregla “no aparecen al reabrir”
     refreshLists().catch(() => {});
 
     const r = row || {};
@@ -324,39 +341,56 @@ export default function ModalEditarOrdenPago({
     const idProv = r.id_proveedor ?? r.proveedor_id ?? r.idProveedor ?? NULL_OPTION;
     const idDet = r.id_detalle ?? NULL_OPTION;
 
-    const detName = String(findById(localLists.detalles, idDet)?.nombre ?? "").trim();
+    const detName = String(
+      getArr(localLists.detalles).find((d) => String(getIdGeneric(d)) === String(idDet))?.nombre ?? ""
+    ).trim();
     const detFallback = String(r.detalle ?? r.descripcion ?? r.concepto ?? "").trim();
 
-    const provNameFromList = String(findById(localLists.proveedores, idProv)?.nombre ?? "").trim();
+    const provNameFromList = String(
+      getArr(localLists.proveedores).find((p) => String(getIdProveedor(p)) === String(idProv))?.nombre ?? ""
+    ).trim();
     const provFallback = String(r.proveedor ?? "").trim();
 
+    const monto = safeNumber(r.monto_total ?? r.total ?? 0);
+
+    defaultsRef.current = {
+      fecha: fecha || "",
+      periodoMMYYYY: perRow || perDef || perAuto || "",
+      monto: monto,
+      id_proveedor: String(idProv ?? NULL_OPTION),
+      proveedorTxt: (provNameFromList || provFallback || "").trim(),
+      id_detalle: String(idDet ?? NULL_OPTION),
+      detalleTxt: (detName || detFallback || "").trim(),
+    };
+
     setSaving(false);
+    setAddUI({ open: false, catalogo: "detalles", text: "", saving: false });
+
     setDetalleFocus(false);
     setDetalleArmed(false);
-
-    setAddDetUI({ open: false, text: "", saving: false });
-    setAddProvUI({ open: false, text: "", saving: false });
+    setProvFocus(false);
+    setProvArmed(false);
 
     setForm({
       id_movimiento: safeNumber(r.id_movimiento) || null,
-      fecha: fecha || "",
-      periodo: perRow || perDef || perAuto || "",
-      id_proveedor: String(idProv ?? NULL_OPTION),
-      proveedorTxt: provNameFromList || provFallback || "",
-      id_detalle: String(idDet ?? NULL_OPTION),
-      detalleInput: detName || detFallback || "",
-      monto_total: safeNumber(r.monto_total ?? r.total ?? 0),
+      fecha: defaultsRef.current.fecha,
+      periodo: defaultsRef.current.periodoMMYYYY,
+      id_proveedor: defaultsRef.current.id_proveedor,
+      proveedorInput: defaultsRef.current.proveedorTxt,
+      id_detalle: defaultsRef.current.id_detalle,
+      detalleInput: defaultsRef.current.detalleTxt,
+      // ✅ string para permitir vacío sin romper
+      monto_total: defaultsRef.current.monto ? String(defaultsRef.current.monto) : "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, row, periodoDefault]); // NO metas localLists acá para que no resetee el form al refrescar listas
+  }, [open, row, periodoDefault]); // no agregues localLists
 
   /* =========================
-     Detalle autocomplete (usa localLists)
+     Autocomplete detalles
   ========================= */
   const filteredDetalles = useMemo(() => {
     const all = getArr(localLists.detalles);
     const q = normalizeSearchText(form.detalleInput);
-
     if (!detalleFocus || !detalleArmed || q.length < 1) return [];
     return all.filter((d) => normalizeSearchText(d?.nombre).includes(q)).slice(0, 25);
   }, [localLists.detalles, form.detalleInput, detalleFocus, detalleArmed]);
@@ -370,144 +404,109 @@ export default function ModalEditarOrdenPago({
   const handleSelectDetalle = (det) => {
     const nombre = String(det?.nombre ?? "").trim();
     const did = getIdGeneric(det) || det?.id;
-    setForm((p) => ({
-      ...p,
-      detalleInput: nombre,
-      id_detalle: String(did ?? NULL_OPTION),
-    }));
+    setForm((p) => ({ ...p, detalleInput: nombre, id_detalle: String(did ?? NULL_OPTION) }));
     setDetalleFocus(false);
     setDetalleArmed(false);
   };
 
   /* =========================
-     Proveedores list (usa localLists)
+     Autocomplete proveedores
   ========================= */
-  const proveedoresList = useMemo(() => getArr(localLists.proveedores), [localLists.proveedores]);
+  const filteredProveedores = useMemo(() => {
+    const all = getArr(localLists.proveedores);
+    const q = normalizeSearchText(form.proveedorInput);
+    if (!provFocus || !provArmed || q.length < 1) return [];
+    return all.filter((p) => normalizeSearchText(p?.nombre).includes(q)).slice(0, 25);
+  }, [localLists.proveedores, form.proveedorInput, provFocus, provArmed]);
 
-  const startAddProveedor = () => {
-    if (saving) return;
-    setAddProvUI({ open: true, text: "", saving: false });
+  const handleProveedorInputChange = (e) => {
+    const value = e.target.value;
+    setProvArmed(true);
+    setForm((p) => ({ ...p, proveedorInput: value, id_proveedor: NULL_OPTION }));
   };
 
-  const guardarNuevoProveedor = async () => {
-    const nombre = String(addProvUI.text || "").trim();
+  const handleSelectProveedor = (prov) => {
+    const nombre = String(prov?.nombre ?? "").trim();
+    const pid = getIdProveedor(prov) || prov?.id;
+    setForm((p) => ({ ...p, proveedorInput: nombre, id_proveedor: String(pid ?? NULL_OPTION) }));
+    setProvFocus(false);
+    setProvArmed(false);
+  };
+
+  /* =========================
+     Nuevo catálogo
+  ========================= */
+  const startAdd = (catalogo) => {
+    if (saving) return;
+
+    setDetalleFocus(false);
+    setDetalleArmed(false);
+    setProvFocus(false);
+    setProvArmed(false);
+
+    setAddUI({ open: true, catalogo, text: "", saving: false });
+  };
+
+  const guardarNuevoCatalogo = async () => {
+    const nombre = String(addUI.text || "").trim();
+    const catalogo = addUI.catalogo;
+
     if (!nombre) {
-      showToast("advertencia", "Escribí un nombre para el proveedor.", 2600);
+      showToast("advertencia", "Escribí un nombre.", 2600);
       return;
     }
 
-    setAddProvUI((p) => ({ ...p, saving: true }));
-    showToast("cargando", "Creando proveedor…", 12000);
+    setAddUI((p) => ({ ...p, saving: true }));
+    showToast("cargando", `Creando ${catalogo.slice(0, -1)}…`, 12000);
 
     try {
       const { idUsuario } = getAuthInfo();
 
       const data = await apiPostJson(API_CATALOGO, {
-        catalogo: "proveedores",
+        catalogo,
         nombre,
         idUsuario,
       });
 
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear el proveedor.");
+      if (!data?.exito) throw new Error(data?.mensaje || `No se pudo crear ${catalogo}.`);
 
       const newId = Number(data?.item?.id);
       const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
 
       if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
 
-      // ✅ update localLists (para que quede al reabrir aunque el padre no refresque)
-      setLocalLists((prev) => {
-        const arr = getArr(prev.proveedores).slice();
-        if (!arr.some((x) => getIdGeneric(x) === newId)) {
-          arr.push({ id: newId, nombre: newNombre });
-        }
-        return { ...prev, proveedores: arr };
-      });
+      if (catalogo === "detalles") {
+        setLocalLists((prev) => {
+          const arr = getArr(prev.detalles).slice();
+          if (!arr.some((x) => getIdGeneric(x) === newId)) arr.push({ id: newId, nombre: newNombre });
+          return { ...prev, detalles: arr };
+        });
+        setForm((p) => ({ ...p, id_detalle: String(newId), detalleInput: newNombre }));
+      } else if (catalogo === "proveedores") {
+        setLocalLists((prev) => {
+          const arr = getArr(prev.proveedores).slice();
+          if (!arr.some((x) => getIdProveedor(x) === newId)) arr.push({ id: newId, nombre: newNombre });
+          return { ...prev, proveedores: arr };
+        });
+        setForm((p) => ({ ...p, id_proveedor: String(newId), proveedorInput: newNombre }));
+      }
 
-      setForm((p) => ({
-        ...p,
-        id_proveedor: String(newId),
-        proveedorTxt: newNombre,
-      }));
-
-      setAddProvUI({ open: false, text: "", saving: false });
-      showToast("exito", `Proveedor creado: "${newNombre}"`, 2400);
+      setAddUI({ open: false, catalogo: "detalles", text: "", saving: false });
+      showToast("exito", `${catalogo.slice(0, -1)} creado: "${newNombre}"`, 2400);
     } catch (e) {
-      setAddProvUI((p) => ({ ...p, saving: false }));
-      showToast("error", e?.message || "Error creando proveedor.", 4200);
+      setAddUI((p) => ({ ...p, saving: false }));
+      showToast("error", e?.message || "Error creando.", 4200);
     }
   };
 
   /* =========================
-     Nuevo detalle
-  ========================= */
-  const startAddDetalle = () => {
-    if (saving) return;
-    setDetalleFocus(false);
-    setDetalleArmed(false);
-    setAddDetUI({ open: true, text: "", saving: false });
-  };
-
-  const guardarNuevoDetalle = async () => {
-    const nombre = String(addDetUI.text || "").trim();
-    if (!nombre) {
-      showToast("advertencia", "Escribí un nombre para el detalle.", 2600);
-      return;
-    }
-
-    setAddDetUI((p) => ({ ...p, saving: true }));
-    showToast("cargando", "Creando detalle…", 12000);
-
-    try {
-      const { idUsuario } = getAuthInfo();
-
-      const data = await apiPostJson(API_CATALOGO, {
-        catalogo: "detalles",
-        nombre,
-        idUsuario,
-      });
-
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear el detalle.");
-
-      const newId = Number(data?.item?.id);
-      const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
-
-      if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
-
-      // ✅ update localLists (clave del fix)
-      setLocalLists((prev) => {
-        const arr = getArr(prev.detalles).slice();
-        if (!arr.some((x) => getIdGeneric(x) === newId)) {
-          arr.push({ id: newId, nombre: newNombre });
-        }
-        return { ...prev, detalles: arr };
-      });
-
-      setForm((p) => ({
-        ...p,
-        id_detalle: String(newId),
-        detalleInput: newNombre,
-      }));
-
-      setAddDetUI({ open: false, text: "", saving: false });
-      showToast("exito", `Detalle creado: "${newNombre}"`, 2400);
-
-      setDetalleFocus(false);
-      setDetalleArmed(false);
-    } catch (e) {
-      setAddDetUI((p) => ({ ...p, saving: false }));
-      showToast("error", e?.message || "Error creando detalle.", 4200);
-    }
-  };
-
-  /* =========================
-     Submit
+     Submit (NO obligatorio todo)
   ========================= */
   const submit = async (e) => {
     e.preventDefault();
 
-    if (addDetUI.open || addProvUI.open) {
-      showToast("advertencia", "Terminá de crear el catálogo (o cancelá) antes de guardar.", 3200);
+    if (addUI.open) {
+      showToast("advertencia", "Terminá de crear (o cancelá) antes de guardar.", 3200);
       return;
     }
 
@@ -515,29 +514,54 @@ export default function ModalEditarOrdenPago({
     showToast("cargando", "Guardando cambios…", 12000);
 
     try {
-      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) throw new Error("Fecha inválida.");
+      // ✅ Fecha: si está vacía, usar la original
+      const fechaFinal = String(form.fecha || defaultsRef.current.fecha || "").trim();
+      if (!fechaFinal || !/^\d{4}-\d{2}-\d{2}$/.test(fechaFinal)) {
+        throw new Error("Fecha inválida.");
+      }
 
-      const perUI = periodoToMMYYYY(form.periodo) || periodoFromISODate(form.fecha);
-      const perAPI = periodoToYYYYMM(perUI);
+      // ✅ Período: si está vacío, derivar desde fecha
+      const perUI =
+        periodoToMMYYYY(form.periodo) ||
+        defaultsRef.current.periodoMMYYYY ||
+        periodoFromISODate(fechaFinal) ||
+        "";
 
-      const idProv = form.id_proveedor && form.id_proveedor !== NULL_OPTION ? Number(form.id_proveedor) : null;
-      if (!idProv) throw new Error("Seleccioná un proveedor.");
+      const perAPI = perUI ? periodoToYYYYMM(perUI) : ""; // si querés permitir “sin período”
+      // si tu backend exige período, forzalo:
+      // const perAPI = periodoToYYYYMM(perUI || periodoFromISODate(fechaFinal));
 
-      const idDet = form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null;
-      if (!idDet) throw new Error("Seleccioná un detalle.");
+      // ✅ Proveedor: opcional
+      const provTxt = String(form.proveedorInput || "").trim();
+      const idProv =
+        form.id_proveedor && form.id_proveedor !== NULL_OPTION ? Number(form.id_proveedor) : null;
+
+      // ✅ Detalle: opcional
+      const detTxt = String(form.detalleInput || "").trim();
+      const idDet =
+        form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null;
+
+      // ✅ Monto: opcional (si vacío, mantener original)
+      const montoIngresado = String(form.monto_total ?? "").trim();
+      const montoFinal =
+        montoIngresado === ""
+          ? safeNumber(defaultsRef.current.monto)
+          : Math.max(0, Math.round(safeNumber(montoIngresado) * 100) / 100);
 
       const payloadFinal = {
         id_movimiento: form.id_movimiento,
-        fecha: form.fecha,
-        periodo: perAPI, // YYYY-MM
 
-        id_proveedor: idProv,
-        proveedor: String(form.proveedorTxt || "").trim(),
+        fecha: fechaFinal,
+        periodo: perAPI, // YYYY-MM (o "" si decidís permitirlo)
 
-        id_detalle: idDet,
-        detalle: String(form.detalleInput || "").trim(),
+        // ids opcionales (null)
+        id_proveedor: Number.isFinite(idProv) && idProv > 0 ? idProv : null,
+        proveedor: provTxt, // puede ser ""
 
-        monto_total: Math.max(0, Math.round(safeNumber(form.monto_total) * 100) / 100),
+        id_detalle: Number.isFinite(idDet) && idDet > 0 ? idDet : null,
+        detalle: detTxt, // puede ser ""
+
+        monto_total: montoFinal,
       };
 
       await onSave?.(payloadFinal);
@@ -553,7 +577,10 @@ export default function ModalEditarOrdenPago({
   if (!open) return null;
 
   return createPortal(
-    <div className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`} onMouseDown={() => !saving && onClose?.()}>
+    <div
+      className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`}
+      onMouseDown={() => !saving && onClose?.()}
+    >
       <div
         className={["mi-modal__container", "mi-modal__container--mov", darkOn ? "mi-modal--dark" : ""].join(" ")}
         id="mov--modaleditarordenpago"
@@ -581,7 +608,12 @@ export default function ModalEditarOrdenPago({
                 value={form.fecha}
                 onChange={(e) => {
                   const v = e.target.value;
-                  setForm((p) => ({ ...p, fecha: v, periodo: periodoFromISODate(v) || p.periodo }));
+                  setForm((p) => ({
+                    ...p,
+                    fecha: v,
+                    // si el usuario cambia fecha y el período está vacío, autocompletar
+                    periodo: p.periodo || periodoFromISODate(v) || p.periodo,
+                  }));
                 }}
                 disabled={saving}
               />
@@ -600,38 +632,44 @@ export default function ModalEditarOrdenPago({
             </div>
           </div>
 
-          {/* Proveedor */}
-          <div className="fl-field mi-field--mt12">
-            <select
-              className="fl-input fl-select"
-              value={form.id_proveedor}
-              onChange={(e) => {
-                const v = e.target.value;
-
-                if (v === ADD_OPTION) {
-                  setForm((p) => ({ ...p, id_proveedor: p.id_proveedor || NULL_OPTION }));
-                  startAddProveedor();
-                  return;
-                }
-
-                const prov = findById(proveedoresList, v);
-                const nombre = String(prov?.nombre ?? "").trim();
-                setForm((p) => ({ ...p, id_proveedor: v, proveedorTxt: nombre || p.proveedorTxt }));
-              }}
-              disabled={saving}
-            >
-              <option value={NULL_OPTION}>(Seleccionar proveedor)</option>
-              <option value={ADD_OPTION}>+ Agregar proveedor…</option>
-              {proveedoresList.map((p) => (
-                <option key={getIdGeneric(p) || p.id} value={String(getIdGeneric(p) || p.id)}>
-                  {p.nombre}
-                </option>
-              ))}
-            </select>
+          {/* ✅ Proveedor (autocomplete + agregar) */}
+          <div className="fl-field mi-field--mt12 mi-field--rel">
+            <input
+              ref={provInputRef}
+              className="fl-input"
+              placeholder=" "
+              value={form.proveedorInput}
+              onChange={handleProveedorInputChange}
+              onFocus={() => setProvFocus(true)}
+              onBlur={() => setTimeout(() => setProvFocus(false), 120)}
+              disabled={saving || addUI.open}
+              autoComplete="off"
+            />
             <label className="fl-label">Proveedor</label>
+
+            {provFocus && provArmed && filteredProveedores.length > 0 && (
+              <ul className="mi-cr-suggest">
+                {filteredProveedores.map((p) => (
+                  <li
+                    key={getIdProveedor(p) || p.id}
+                    className="mi-cr-suggest__item"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleSelectProveedor(p);
+                    }}
+                  >
+                    <span className="mi-cr-suggest__text">{p.nombre}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <button type="button" onClick={() => startAdd("proveedores")} disabled={saving} className="mi-cr-link">
+              + Agregar nuevo proveedor
+            </button>
           </div>
 
-          {/* Detalle (autocomplete + agregar) */}
+          {/* ✅ Detalle (autocomplete + agregar) */}
           <div className="fl-field mi-field--mt12 mi-field--rel">
             <input
               ref={detalleInputRef}
@@ -641,7 +679,7 @@ export default function ModalEditarOrdenPago({
               onChange={handleDetalleInputChange}
               onFocus={() => setDetalleFocus(true)}
               onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
-              disabled={saving || addDetUI.open || addProvUI.open}
+              disabled={saving || addUI.open}
               autoComplete="off"
             />
             <label className="fl-label">Descripción (Detalle)</label>
@@ -657,18 +695,18 @@ export default function ModalEditarOrdenPago({
                       handleSelectDetalle(d);
                     }}
                   >
-                    <span className="mi-suggestText">{d.nombre}</span>
+                    <span className="mi-cr-suggest__text">{d.nombre}</span>
                   </li>
                 ))}
               </ul>
             )}
 
-            <button type="button" onClick={startAddDetalle} disabled={saving || addProvUI.open} className="mi-cr-link">
+            <button type="button" onClick={() => startAdd("detalles")} disabled={saving} className="mi-cr-link">
               + Agregar nuevo detalle
             </button>
           </div>
 
-          {/* Monto */}
+          {/* Monto (opcional) */}
           <div className="fl-field mi-field--mt12">
             <input
               className="fl-input"
@@ -688,33 +726,26 @@ export default function ModalEditarOrdenPago({
               {saving ? "Guardando..." : "Guardar"}
             </button>
 
-            <button type="button" onClick={() => !saving && onClose?.()} disabled={saving} className="mit-btn mit-btn--ghost btn--modalordenpago">
+            <button
+              type="button"
+              onClick={() => !saving && onClose?.()}
+              disabled={saving}
+              className="mit-btn mit-btn--ghost btn--modalordenpago"
+            >
               Cancelar
             </button>
           </div>
         </form>
 
-        {/* Mini modal: nuevo detalle */}
         <AddCatalogMiniModal
-          open={addDetUI.open}
-          title="Nuevo detalle"
-          value={addDetUI.text}
-          saving={addDetUI.saving}
-          onChange={(txt) => setAddDetUI((p) => ({ ...p, text: txt }))}
-          onCancel={() => !addDetUI.saving && setAddDetUI({ open: false, text: "", saving: false })}
-          onSave={guardarNuevoDetalle}
-          dark={darkOn}
-        />
-
-        {/* Mini modal: nuevo proveedor */}
-        <AddCatalogMiniModal
-          open={addProvUI.open}
-          title="Nuevo proveedor"
-          value={addProvUI.text}
-          saving={addProvUI.saving}
-          onChange={(txt) => setAddProvUI((p) => ({ ...p, text: txt }))}
-          onCancel={() => !addProvUI.saving && setAddProvUI({ open: false, text: "", saving: false })}
-          onSave={guardarNuevoProveedor}
+          open={addUI.open}
+          title={addUI.catalogo === "proveedores" ? "Nuevo proveedor" : "Nuevo detalle"}
+          label={addUI.catalogo === "proveedores" ? "Nombre del proveedor" : "Nombre del detalle"}
+          value={addUI.text}
+          saving={addUI.saving}
+          onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
+          onCancel={() => !addUI.saving && setAddUI({ open: false, catalogo: "detalles", text: "", saving: false })}
+          onSave={guardarNuevoCatalogo}
           dark={darkOn}
         />
       </div>

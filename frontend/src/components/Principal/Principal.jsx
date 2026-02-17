@@ -44,7 +44,59 @@ function prefetchRoute(ruta) {
   } catch {}
 }
 
-// ⚡ Cache simple de listas globales (solo para “calentar”)
+/* =========================================================
+   ✅ AUTH HARDENING (100% seguro)
+   - apiFetch: agrega X-Session y dispara evento global si 401/403
+   - idle robusto: lastActivityTs + visibility/focus (suspensión)
+========================================================= */
+
+const LAST_ACTIVITY_KEY = "balto_last_activity_ts";
+
+// wrapper fetch centralizado para este archivo
+async function apiFetch(path, options = {}) {
+  const sessionKey = (localStorage.getItem("session_key") || "").trim();
+
+  const headers = new Headers(options.headers || {});
+  if (sessionKey) headers.set("X-Session", sessionKey);
+
+  // si mandás body y no seteaste content-type, asumimos JSON
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    try {
+      window.dispatchEvent(new CustomEvent("auth:unauthorized", { detail: { status: res.status } }));
+    } catch {}
+  }
+
+  return res;
+}
+
+function setLastActivityNow() {
+  try {
+    sessionStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
+  } catch {}
+}
+
+function getLastActivityTs() {
+  try {
+    const v = sessionStorage.getItem(LAST_ACTIVITY_KEY);
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/* =========================
+   Cache simple de listas globales
+========================= */
 const LISTAS_CACHE_KEY = "balto_listas_cache_v1";
 const LISTAS_TTL_MS = 10 * 60 * 1000; // 10 min
 
@@ -70,20 +122,16 @@ function setCachedListas(data) {
   } catch {}
 }
 
-async function prefetchGlobalListas(sessionKey, onUnauthorized) {
+async function prefetchGlobalListas(onUnauthorized) {
   try {
     const cached = getCachedListas();
     if (cached) return cached;
 
-    const headers = {};
-    if (sessionKey) headers["X-Session"] = sessionKey;
-
-    const r = await fetch(`${BASE_URL}/api.php?action=global_obtener_listas`, {
+    const r = await apiFetch(`/api.php?action=global_obtener_listas`, {
       method: "GET",
-      headers,
     });
 
-    // ✅ si expiró sesión, forzar logout del cliente
+    // ✅ si expiró sesión, forzar logout del cliente (igual ya dispara evento)
     if (r.status === 401 || r.status === 403) {
       try {
         onUnauthorized?.();
@@ -154,7 +202,13 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
 function normalizeRol(value) {
   if (value == null) return "vista";
   const v = String(value).trim().toLowerCase();
-  if (v === "1" || v === "admin" || v === "administrator" || v === "administrador" || v === "superadmin") {
+  if (
+    v === "1" ||
+    v === "admin" ||
+    v === "administrator" ||
+    v === "administrador" ||
+    v === "superadmin"
+  ) {
     return "admin";
   }
   return "vista";
@@ -233,7 +287,7 @@ function hardClientLogoutCleanup() {
 /* =========================
    ✅ AUTO-LOGOUT por inactividad
 ========================= */
-const IDLE_MS = 30 * 60 * 1000; // ✅ 30 minutos SIN INTERACCIÓN (PROD)
+const IDLE_MS = 30 * 60 * 1000; // 30 minutos SIN INTERACCIÓN (PROD)
 
 /* =========================
    COMPONENTE
@@ -287,6 +341,8 @@ const Principal = () => {
 
   /* =========================
      ✅ Logout “duro” reutilizable (manual y automático)
+     - borra sesión en backend (si existe)
+     - limpia cliente SIEMPRE
   ========================= */
   const doLogout = useCallback(
     async ({ silent = false } = {}) => {
@@ -295,7 +351,7 @@ const Principal = () => {
 
       if (!silent) setClosingUI(true);
 
-      // ✅ cortar el timer de inactividad (por si justo se dispara)
+      // ✅ cortar el timer de inactividad
       if (idleTimerRef.current) {
         clearTimeout(idleTimerRef.current);
         idleTimerRef.current = null;
@@ -305,15 +361,12 @@ const Principal = () => {
 
       try {
         if (sessionKey) {
-          const r = await fetch(`${BASE_URL}/api.php?action=logout`, {
+          const r = await apiFetch(`/api.php?action=logout`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Session": sessionKey,
-            },
             body: JSON.stringify({}),
           });
 
+          // si falla no importa: igual limpiamos cliente
           if (!r.ok) {
             const txt = await r.text().catch(() => "");
             console.warn("Logout backend falló:", r.status, txt);
@@ -334,6 +387,17 @@ const Principal = () => {
     },
     [navigate]
   );
+
+  /* =========================
+     ✅ Escuchar 401/403 global (cualquier request)
+  ========================= */
+  useEffect(() => {
+    const onUnauthorized = () => {
+      doLogout({ silent: true });
+    };
+    window.addEventListener("auth:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("auth:unauthorized", onUnauthorized);
+  }, [doLogout]);
 
   /* =========================
      ✅ Guard / carga usuario
@@ -364,17 +428,17 @@ const Principal = () => {
       applyTheme("claro");
     }
 
+    // ✅ iniciar last activity al entrar (para suspensión)
+    setLastActivityNow();
+
     // ✅ PRO: prefetch listas globales en background (calienta todo el panel)
     try {
-      const sessionKey = getSessionKey();
       const onUnauthorized = () => doLogout({ silent: true });
 
       if (typeof window.requestIdleCallback === "function") {
-        window.requestIdleCallback(() => prefetchGlobalListas(sessionKey, onUnauthorized), {
-          timeout: 1200,
-        });
+        window.requestIdleCallback(() => prefetchGlobalListas(onUnauthorized), { timeout: 1200 });
       } else {
-        setTimeout(() => prefetchGlobalListas(sessionKey, onUnauthorized), 200);
+        setTimeout(() => prefetchGlobalListas(onUnauthorized), 200);
       }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -415,10 +479,13 @@ const Principal = () => {
   }, [drawerOpen]);
 
   /* =========================
-     ✅ AUTO-LOGOUT por inactividad (30 min)
+     ✅ AUTO-LOGOUT por inactividad (robusto)
+     - Resetea timer + guarda lastActivityTs
   ========================= */
   useEffect(() => {
     const resetIdle = () => {
+      setLastActivityNow();
+
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       idleTimerRef.current = setTimeout(() => {
         doLogout({ silent: true });
@@ -428,11 +495,41 @@ const Principal = () => {
     const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
     events.forEach((e) => window.addEventListener(e, resetIdle, { passive: true }));
 
+    // ✅ arranca el conteo desde que entra al panel
     resetIdle();
 
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       events.forEach((e) => window.removeEventListener(e, resetIdle));
+    };
+  }, [doLogout]);
+
+  /* =========================
+     ✅ SUSPENSIÓN / TAB BACKGROUND:
+     - al volver a foco/visible, si ya pasaron 30 min => logout
+  ========================= */
+  useEffect(() => {
+    const checkExpiredOnWake = () => {
+      const last = getLastActivityTs();
+      if (!last) return;
+
+      const diff = Date.now() - last;
+      if (diff >= IDLE_MS) {
+        doLogout({ silent: true });
+      }
+    };
+
+    const onFocus = () => checkExpiredOnWake();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") checkExpiredOnWake();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [doLogout]);
 
@@ -442,7 +539,6 @@ const Principal = () => {
     const base = [
       {
         label: "Movimientos",
-        ruta: "/panel/movimientos", // ✅ IMPORTANTE: ruta real para navegar en mobile
         children: [
           { label: "Ventas", ruta: "/panel/ventas" },
           { label: "Compras", ruta: "/panel/compras" },
@@ -513,7 +609,7 @@ const Principal = () => {
   }, [doLogout]);
 
   /* =========================
-     ✅ toggle tema -> MASTER
+     ✅ toggle tema -> MASTER (con apiFetch + auto-logout 401/403)
   ========================= */
   const toggleTema = async () => {
     const prevTema = tema;
@@ -530,16 +626,12 @@ const Principal = () => {
     } catch {}
 
     try {
-      const sessionKey = getSessionKey();
-      const headers = { "Content-Type": "application/json" };
-      if (sessionKey) headers["X-Session"] = sessionKey;
-
-      const r = await fetch(`${BASE_URL}/api.php?action=usuario_tema_actualizar`, {
+      const r = await apiFetch(`/api.php?action=usuario_tema_actualizar`, {
         method: "POST",
-        headers,
         body: JSON.stringify({ tema: nuevo }),
       });
 
+      // ✅ si expiró sesión, logout (igual apiFetch dispara evento)
       if (r.status === 401 || r.status === 403) {
         await doLogout({ silent: true });
         return;
@@ -554,6 +646,7 @@ const Principal = () => {
       if (!r.ok || !data?.exito) {
         console.error("Falló usuario_tema_actualizar:", r.status, txt);
 
+        // revertir UI + localStorage
         setTema(prevTema);
         applyTheme(prevTema);
         try {
@@ -567,6 +660,7 @@ const Principal = () => {
     } catch (e) {
       console.error("Error llamando usuario_tema_actualizar:", e);
 
+      // revertir UI + localStorage
       setTema(prevTema);
       applyTheme(prevTema);
       try {
@@ -714,41 +808,19 @@ const Principal = () => {
                   role="button"
                   tabIndex={0}
                   onClick={() => {
-                    // ✅ MOBILE: 1er tap abre submenú, 2do tap entra a Movimientos
                     if (hasSub && isNoHover()) {
-                      if (isMov) {
-                        if (!openMovSub) {
-                          setOpenMovSub(true);
-                          return;
-                        }
-                        handleNavigate(item.ruta); // /panel/movimientos
-                        return;
-                      }
-                      // si algún día agregás otros con submenú:
-                      handleNavigate(item.ruta);
+                      if (isMov) setOpenMovSub((v) => !v);
                       return;
                     }
-
-                    // ✅ DESKTOP: navega normal
                     handleNavigate(item.ruta);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-
                       if (hasSub && isNoHover()) {
-                        if (isMov) {
-                          if (!openMovSub) {
-                            setOpenMovSub(true);
-                            return;
-                          }
-                          handleNavigate(item.ruta);
-                          return;
-                        }
-                        handleNavigate(item.ruta);
+                        if (isMov) setOpenMovSub((v) => !v);
                         return;
                       }
-
                       handleNavigate(item.ruta);
                     }
                   }}

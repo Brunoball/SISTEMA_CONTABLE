@@ -36,7 +36,7 @@ const PAGE_SIZE = 100;
 ========================= */
 const SKELETON_ROWS = 10;
 
-// ✅ para evitar “parpadeo doble”
+// delay anti “flash” (solo cuando YA hay data previa)
 const SKELETON_DELAY_MS = 140;
 
 // (si querés forzar loader en dev)
@@ -251,6 +251,32 @@ function slugifySheetName(name) {
   return (s || "OrdenesPago").slice(0, 31);
 }
 
+/* =========================
+   Key helpers (para NO parpadeo)
+========================= */
+function makeKeyFromPeriodoQ(periodoUI, q) {
+  const perUI = periodoToMMYYYY(periodoUI);
+  if (!perUI) return "";
+  const perAPI = periodoToYYYYMM(perUI);
+  const qKey = String(q || "").trim();
+  return `${perAPI}|${qKey}`;
+}
+function splitKey(key) {
+  const s = String(key || "");
+  const idx = s.indexOf("|");
+  if (idx === -1) return { periodoAPI: s, qKey: "" };
+  return { periodoAPI: s.slice(0, idx), qKey: s.slice(idx + 1) };
+}
+function yyyymmToMMYYYY(yyyymm) {
+  const s = String(yyyymm || "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}$/.test(s)) {
+    const [yyyy, mm] = s.split("-");
+    return `${mm}-${yyyy}`;
+  }
+  return periodoToMMYYYY(s);
+}
+
 export default function OrdenesPago() {
   const API = `${BASE_URL}/api.php`;
 
@@ -268,7 +294,7 @@ export default function OrdenesPago() {
   const [loadingRows, setLoadingRows] = useState(false);
   const [error, setError] = useState("");
 
-  // filtros
+  // filtros (selección del usuario)
   const [fPeriodo, setFPeriodo] = useState(""); // UI MM-YYYY
   const [q, setQ] = useState("");
 
@@ -288,6 +314,9 @@ export default function OrdenesPago() {
   // ✅ anti “respuesta vieja”
   const reqIdRef = useRef(0);
 
+  // ✅ DEDUPE: requests en vuelo por key (evita DOBLE RECARGA)
+  const inflightRef = useRef(new Map()); // key -> { promise, reqId }
+
   // ✅ Debounce búsqueda
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
@@ -297,8 +326,11 @@ export default function OrdenesPago() {
   const loadingRef = useRef(false);
   const [showSkeleton, setShowSkeleton] = useState(false);
 
-  // ✅ “mensaje vacío” solo después de haber cargado la key actual
-  const [loadedKey, setLoadedKey] = useState(""); // ultimo periodoAPI|q efectivamente cargado
+  // ✅ “dataKey”: key REAL de los datos que se están mostrando
+  const [loadedKey, setLoadedKey] = useState("");
+
+  // ✅ primera carga (para mostrar skeleton inmediato)
+  const firstPaintRef = useRef(true);
 
   const clearSkeletonTimer = useCallback(() => {
     if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
@@ -308,14 +340,18 @@ export default function OrdenesPago() {
   const startSkeleton = useCallback(
     (myReqId) => {
       clearSkeletonTimer();
-      setShowSkeleton(false);
+
+      // 🔥 si es primera carga (todavía no hay data), skeleton inmediato
+      const hasAnyData = rows.length > 0 || !!loadedKey;
+      const delay = hasAnyData ? SKELETON_DELAY_MS : 0;
+
       skelTimerRef.current = setTimeout(() => {
         if (loadingRef.current && myReqId === reqIdRef.current) {
           setShowSkeleton(true);
         }
-      }, SKELETON_DELAY_MS);
+      }, delay);
     },
-    [clearSkeletonTimer]
+    [clearSkeletonTimer, rows.length, loadedKey]
   );
 
   const stopSkeleton = useCallback(() => {
@@ -383,37 +419,57 @@ export default function OrdenesPago() {
     for (const k of cacheRef.current.keys()) {
       if (String(k).startsWith(prefix)) cacheRef.current.delete(k);
     }
+    // también borramos inflight por si quedó algo raro
+    for (const k of inflightRef.current.keys()) {
+      if (String(k).startsWith(prefix)) inflightRef.current.delete(k);
+    }
   }, []);
 
-  const currentKey = useMemo(() => {
-    const perUI = periodoToMMYYYY(fPeriodo);
-    if (!perUI) return "";
-    const perAPI = periodoToYYYYMM(perUI);
-    const qKey = (q || "").trim();
-    return `${perAPI}|${qKey}`;
-  }, [fPeriodo, q]);
+  const currentKey = useMemo(() => makeKeyFromPeriodoQ(fPeriodo, q), [fPeriodo, q]);
 
   /* =========================
      ✅ Cargar órdenes (listado)
+<<<<<<< HEAD
+=======
+     OBJETIVO:
+     - CERO parpadeo: NO vaciar tabla durante cargas
+     - DEDUPE: si ya hay request para misma key, NO dispara otra
+     - Skeleton: 1ra vez inmediato, después con delay
+>>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
       const periodoUI = typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
       const qLocal = typeof opts.q === "string" ? opts.q : q;
 
-      const perUI = periodoToMMYYYY(periodoUI);
-      if (!perUI) {
+      const cacheKey = makeKeyFromPeriodoQ(periodoUI, qLocal);
+
+      if (!cacheKey) {
         setRows([]);
+        setLoadedKey("");
+        setError("");
         setLoadingRows(false);
         loadingRef.current = false;
         stopSkeleton();
         return null;
       }
 
-      const periodoAPI = periodoToYYYYMM(perUI);
-      const qKey = (qLocal || "").trim();
-      const cacheKey = `${periodoAPI}|${qKey}`;
+      // ✅ 1) Cache hit => swap instantáneo, sin loader (0 flash)
+      if (cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
+        const cached = cacheRef.current.get(cacheKey) || [];
+        setError("");
+        setRows(cached);
+        setLoadedKey(cacheKey);
+        return cached;
+      }
 
+      // ✅ 2) DEDUPE: si ya hay una request igual en vuelo, la esperamos
+      const inflight = inflightRef.current.get(cacheKey);
+      if (inflight?.promise) {
+        return await inflight.promise;
+      }
+
+      // ✅ 3) Fetch real (único por key)
       const myReqId = ++reqIdRef.current;
 
       loadingRef.current = true;
@@ -421,23 +477,52 @@ export default function OrdenesPago() {
       setError("");
       startSkeleton(myReqId);
 
+<<<<<<< HEAD
       try {
         if (cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
           loadingRef.current = false;
           setLoadingRows(false);
           stopSkeleton();
+=======
+      const { periodoAPI, qKey } = splitKey(cacheKey);
+>>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
 
-          const cached = cacheRef.current.get(cacheKey) || [];
-          setRows(cached);
+      const promise = (async () => {
+        try {
+          const sp = new URLSearchParams();
+          sp.set("action", "ordenes_pago_listar");
+          sp.set("periodo", periodoAPI);
+          if (qKey) sp.set("q", qKey);
+
+          const data = await apiGet(`${API}?${sp.toString()}`);
+          if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar órdenes de pago.");
+
+          // request vieja => no tocar UI
+          if (myReqId !== reqIdRef.current) return null;
+
+          const list = Array.isArray(data.ordenes)
+            ? data.ordenes
+            : Array.isArray(data.movimientos)
+            ? data.movimientos
+            : [];
+
+          const norm = list.map((r) => ({
+            ...r,
+            periodo: periodoToMMYYYY(r?.periodo),
+          }));
+
+          cacheRef.current.set(cacheKey, norm);
+
+          // ✅ swap “de una” (cuando ya está TODO)
+          setRows(norm);
           setLoadedKey(cacheKey);
-          return cached;
-        }
 
-        const sp = new URLSearchParams();
-        sp.set("action", "ordenes_pago_listar");
-        sp.set("periodo", periodoAPI);
-        if (qKey) sp.set("q", qKey);
+          firstPaintRef.current = false;
+          return norm;
+        } catch (e) {
+          if (myReqId !== reqIdRef.current) return null;
 
+<<<<<<< HEAD
         const data = await apiGet(`${API}?${sp.toString()}`);
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar órdenes de pago.");
 
@@ -445,9 +530,25 @@ export default function OrdenesPago() {
           loadingRef.current = false;
           setLoadingRows(false);
           stopSkeleton();
+=======
+          // ✅ NO vaciamos filas (cero parpadeo)
+          setError(e?.message || "Error cargando órdenes de pago.");
+>>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
           return null;
+        } finally {
+          // apaga loader SOLO si sigue siendo la request vigente
+          if (myReqId === reqIdRef.current) {
+            loadingRef.current = false;
+            setLoadingRows(false);
+            stopSkeleton();
+          }
+          // limpiar inflight
+          const curr = inflightRef.current.get(cacheKey);
+          if (curr?.reqId === myReqId) inflightRef.current.delete(cacheKey);
         }
+      })();
 
+<<<<<<< HEAD
         const list = Array.isArray(data.ordenes)
           ? data.ordenes
           : Array.isArray(data.movimientos)
@@ -484,12 +585,17 @@ export default function OrdenesPago() {
         stopSkeleton();
         return null;
       }
+=======
+      inflightRef.current.set(cacheKey, { promise, reqId: myReqId });
+      return await promise;
+>>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
     },
     [API, apiGet, fPeriodo, q, startSkeleton, stopSkeleton]
   );
 
   /* =========================
      INIT: asegurar listas + período default + cargar rows
+     ✅ clave: evitar DOBLE recarga por debounce
   ========================= */
   useEffect(() => {
     let alive = true;
@@ -505,11 +611,16 @@ export default function OrdenesPago() {
       const perDefault = periodos[0] || "";
 
       if (perDefault) {
+        // ✅ IMPORTANTÍSIMO: si seteamos fPeriodo acá, el debounce NO debe disparar otra carga
+        skipSearchRef.current = true;
+        setQ("");
         setFPeriodo((prev) => prev || perDefault);
         setShowAll(false);
+
         await loadRows({ periodo: perDefault, q: "" });
       } else {
         setRows([]);
+        setLoadedKey("");
         setLoadingRows(false);
         loadingRef.current = false;
         stopSkeleton();
@@ -522,12 +633,13 @@ export default function OrdenesPago() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ sync período si desaparece
+  // ✅ sync período si desaparece (y evitar doble)
   useEffect(() => {
     const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos : [];
 
     if (periodos.length === 0) {
       if (fPeriodo !== "") {
+        skipSearchRef.current = true;
         setFPeriodo("");
         setRows([]);
         setShowAll(false);
@@ -539,6 +651,8 @@ export default function OrdenesPago() {
     const current = periodoToMMYYYY(fPeriodo);
     if (current && !periodos.includes(current)) {
       const next = periodos[0];
+      skipSearchRef.current = true; // ✅ evita debounce duplicado
+      setQ("");
       setFPeriodo(next);
       setShowAll(false);
       invalidateCacheForPeriodo(next);
@@ -546,7 +660,7 @@ export default function OrdenesPago() {
     }
   }, [listasCtx?.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
 
-  // ✅ debounce búsqueda
+  // ✅ debounce búsqueda (NO doble recarga gracias a skip + dedupe)
   useEffect(() => {
     if (!fPeriodo) return;
 
@@ -743,19 +857,25 @@ export default function OrdenesPago() {
   ]);
 
   /* =========================
-     Filtrado final (pendientes + búsqueda)
+     ✅ Filtrado final
+     - SIEMPRE filtra en base a lo que realmente está cargado (loadedKey)
+     - así no “salta” mientras el user cambia período/búsqueda
   ========================= */
+  const displayKey = loadedKey || currentKey;
+  const display = useMemo(() => splitKey(displayKey), [displayKey]);
+
   const filteredRows = useMemo(() => {
-    const fPer = periodoToMMYYYY(fPeriodo);
+    const fPer = yyyymmToMMYYYY(display?.periodoAPI);
     if (!fPer) return [];
 
-    return (Array.isArray(rows) ? rows : [])
-      .filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer))
-      .filter((r) => isOrdenPagoPendienteRow(r))
-      .filter((r) => rowMatchesQuery(r, q));
-  }, [rows, fPeriodo, q]);
+    const displayQ = display?.qKey || "";
 
-  // ✅ lo que se RENDERIZA (100 o todo)
+    return (Array.isArray(rows) ? rows : [])
+      .filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(periodoToMMYYYY(fPer)))
+      .filter((r) => isOrdenPagoPendienteRow(r))
+      .filter((r) => rowMatchesQuery(r, displayQ));
+  }, [rows, display]);
+
   const visibleRows = useMemo(() => {
     if (showAll) return filteredRows;
     return filteredRows.slice(0, PAGE_SIZE);
@@ -814,7 +934,6 @@ export default function OrdenesPago() {
       .join(" ");
   }, [columns]);
 
-  // ✅ skeleton config por columna (como Movimientos)
   const skelWidths = useMemo(() => {
     return {
       fecha: ["44%", "38%", "50%", "42%"],
@@ -905,33 +1024,37 @@ export default function OrdenesPago() {
 
   const lists = listasCtx || { periodos: [] };
 
-  // ✅ overlay suave SOLO cuando skeleton está visible
   const softLoading = loadingRows && showSkeleton;
 
   const handleChangePeriodo = async (valueUI) => {
     const ui = periodoToMMYYYY(valueUI);
-    setFPeriodo(ui);
 
-    // reset search sin disparar doble
-    setQ("");
+    // ✅ evita debounce duplicado
     skipSearchRef.current = true;
 
-    // 🔥 reset “Cargar todos”
+    setFPeriodo(ui);
+    setQ("");
     setShowAll(false);
 
     await loadRows({ periodo: ui, q: "" });
   };
 
-  const onClickCargarTodos = () => {
-    setShowAll(true);
-  };
+  const onClickCargarTodos = () => setShowAll(true);
 
+<<<<<<< HEAD
   // ✅ Mensaje vacío SOLO cuando:
   // - NO está cargando
   // - la key actual YA fue cargada (loadedKey === currentKey)
   // - y no hay filas
   const canShowEmpty =
     !loadingRows && loadedKey !== "" && loadedKey === currentKey && filteredRows.length === 0;
+=======
+  const canShowEmpty =
+    !loadingRows &&
+    loadedKey !== "" &&
+    loadedKey === currentKey &&
+    filteredRows.length === 0;
+>>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
 
   return (
     <div className="mov-page mov-page--ordenesPago">
@@ -961,7 +1084,10 @@ export default function OrdenesPago() {
           <div className="mov-card__headLeft">
             <div>
               <div className="mov-card__title">Movimientos · Órdenes de Pago</div>
+<<<<<<< HEAD
 
+=======
+>>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
               <div className="mov-card__hint">
                 Mostrando <b>{mostrando}</b>
                 {hayMas ? (
@@ -1032,8 +1158,8 @@ export default function OrdenesPago() {
                       title="Limpiar búsqueda"
                       onClick={async () => {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                        setQ("");
                         skipSearchRef.current = true;
+                        setQ("");
                         setShowAll(false);
                         await loadRows({ periodo: fPeriodo, q: "" });
                         document.querySelector(".mov-searchInput input")?.focus();
@@ -1082,6 +1208,7 @@ export default function OrdenesPago() {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className={["mov-gridBody", "mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
+<<<<<<< HEAD
             {showSkeleton && loadingRows ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
@@ -1186,6 +1313,112 @@ export default function OrdenesPago() {
                   </div>
                 )}
               </>
+=======
+            {/* ✅ siempre renderizamos filas (cero parpadeo) */}
+            {visibleRows.map((r) => (
+              <div
+                key={r.id_movimiento}
+                className="mov-gridTable mov-gridTable--row"
+                style={{ gridTemplateColumns: gridCols }}
+                role="row"
+              >
+                {columns.map((c) => {
+                  if (c.key === "acciones") {
+                    return (
+                      <div key={c.key} className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")} role="cell">
+                        <div className="mov-actionsInline">
+                          <button
+                            type="button"
+                            className="mov-iconBtn"
+                            title="Pagar"
+                            onClick={() => openPagarModal(r)}
+                            disabled={loadingRows || loadingListsCtx}
+                          >
+                            <FontAwesomeIcon icon={faMoneyBill1Wave} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="mov-iconBtn"
+                            title="Editar"
+                            onClick={() => openEditarModal(r)}
+                            disabled={loadingRows || loadingListsCtx}
+                          >
+                            <FontAwesomeIcon icon={faPenToSquare} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="mov-iconBtn mov-iconBtn--danger"
+                            title="Eliminar"
+                            disabled={loadingRows || loadingListsCtx || deletingId === r.id_movimiento}
+                            onClick={() => openDeleteModal(r)}
+                          >
+                            {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const val = c.render ? c.render(r) : safeText(r[c.key]);
+                  return (
+                    <div
+                      key={c.key}
+                      className={[
+                        "mov-gridCell",
+                        c.align === "right" ? "is-right" : "",
+                        c.align === "center" ? "is-center" : "",
+                        c.strong ? "is-strong" : "",
+                      ].filter(Boolean).join(" ")}
+                      role="cell"
+                      title={typeof val === "string" ? val : undefined}
+                    >
+                      <span className="mov-ellipsissss">{val}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+
+            {/* ✅ BOTÓN CARGAR TODOS */}
+            {!loadingRows && hayMas && (
+              <div style={{ padding: "12px 10px", display: "flex", justifyContent: "center" }}>
+                <button
+                  type="button"
+                  className="mov-btn mov-btn--loadAll"
+                  onClick={onClickCargarTodos}
+                  title={`Cargar todos (${totalPendientes - PAGE_SIZE} más)`}
+                >
+                  Cargar todos ({totalPendientes - PAGE_SIZE} más)
+                </button>
+              </div>
+            )}
+
+            {/* ✅ EMPTY */}
+            {canShowEmpty && (
+              <div className="mov-emptyRow">
+                {!fPeriodo
+                  ? "No hay período disponible para cargar órdenes de pago."
+                  : "No hay órdenes de pago pendientes (Cuenta Corriente) en este período."}
+              </div>
+            )}
+
+            {/* ✅ SKELETON OVERLAY */}
+            {showSkeleton && loadingRows && (
+              <div
+                className="mov-skeletonWrap"
+                aria-busy="true"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  paddingTop: 0,
+                  pointerEvents: "none",
+                }}
+              >
+                {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
+              </div>
+>>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
             )}
           </div>
         </div>

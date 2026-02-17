@@ -153,7 +153,7 @@ function isTemaOscuro() {
 }
 
 /* =========================
-   Auth helpers
+   Auth helpers (✅ X-Session)
 ========================= */
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
@@ -195,7 +195,10 @@ const LISTKEY_BY_CATALOGO = {
 
 /* =========================
    Mini Modal: alta rápida
+<<<<<<< HEAD
    ✅ FIX: createPortal + overlay top-level
+=======
+>>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
 ========================= */
 function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
@@ -309,7 +312,7 @@ function buildFormFromRowCompra(row, periodoDefault) {
   const monto_total = r.monto_total != null ? safeNumber(r.monto_total) : total;
 
   return {
-    id_movimiento: safeNumber(r.id_movimiento) || null,
+    id_movimiento: safeNumber(r.id_movimiento ?? r.id ?? r.id_compra) || null,
     fecha,
     periodo: pickPeriodo,
 
@@ -423,7 +426,6 @@ export default function ModalEditarCompra({
     const built = buildFormFromRowCompra(rowRef.current, periodoDefaultRef.current);
     setForm(built);
 
-    // ✅ nameById tolerante
     const nameById = (arr, id, kind) => {
       const sid = String(id ?? "").trim();
       if (!sid || sid === NULL_OPTION || sid === ADD_OPTION) return "";
@@ -530,31 +532,35 @@ export default function ModalEditarCompra({
   }, []);
 
   /* =========================
-     API helper
+     API helper (✅ X-Session + errores)
   ========================= */
   const parseJsonOrThrow = useCallback(async (res) => {
     const text = await res.text();
     if (!text) throw new Error("Respuesta vacía del servidor.");
+
+    let data = null;
     try {
-      const data = JSON.parse(text);
-      if (!res.ok) {
-        const msg = data?.mensaje || data?.error || `HTTP ${res.status}`;
-        throw new Error(msg);
-      }
-      return data;
-    } catch (e) {
-      if (e instanceof Error) throw e;
+      data = JSON.parse(text);
+    } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
       throw new Error(`Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`);
     }
+
+    if (!res.ok) {
+      const msg = data?.mensaje || data?.error || `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    return data;
   }, []);
 
   const apiPostJson = useCallback(
     async (url, payload) => {
       const { token, sessionKey } = getAuthInfo();
       const headers = { "Content-Type": "application/json" };
+
       if (sessionKey) headers["X-Session"] = sessionKey;
-      if (!sessionKey && token) headers.Authorization = `Bearer ${token}`;
+      else if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload ?? {}) });
       return await parseJsonOrThrow(res);
     },
@@ -588,7 +594,10 @@ export default function ModalEditarCompra({
     try {
       const { idUsuario } = getAuthInfo();
 
+<<<<<<< HEAD
       // ✅ mismo endpoint que NuevaCompra
+=======
+>>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
       const data = await apiPostJson(`${API}?action=catalogo_crear`, {
         catalogo: meta.catalogo,
         nombre,
@@ -598,7 +607,7 @@ export default function ModalEditarCompra({
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear el registro.");
 
       const item = data?.item || {};
-      // ✅ id tolerante según catálogo
+
       let newId = null;
       if (meta.catalogo === "proveedores") newId = getProveedorId(item) ?? getGenericId(item);
       else if (meta.catalogo === "detalles") newId = getDetalleId(item) ?? getGenericId(item);
@@ -613,9 +622,18 @@ export default function ModalEditarCompra({
       const listKey = LISTKEY_BY_CATALOGO[meta.catalogo];
       if (!listKey) throw new Error("Catálogo desconocido para actualizar listas.");
 
+      // ✅ IMPORTANTE: guardamos con la key correcta para que getProveedorId/getDetalleId funcione SIEMPRE
+      const pushNormalized = (catalogo, id, nombre) => {
+        if (catalogo === "proveedores") return { id_proveedor: Number(id), nombre };
+        if (catalogo === "detalles") return { id_detalle: Number(id), nombre };
+        // otros: fallback genérico
+        return { id: Number(id), nombre };
+      };
+
       setLocalLists((prev) => {
         const next = { ...prev };
         const arr = Array.isArray(prev[listKey]) ? prev[listKey].slice() : [];
+
         const already = arr.some((x) => {
           const xid =
             meta.catalogo === "proveedores"
@@ -625,19 +643,23 @@ export default function ModalEditarCompra({
               : getGenericId(x);
           return Number(xid) === Number(newId);
         });
-        if (!already) arr.push({ id: Number(newId), nombre: newNombre });
+
+        if (!already) arr.push(pushNormalized(meta.catalogo, newId, newNombre));
         next[listKey] = arr;
         return next;
       });
 
-      setForm((prev) => ({ ...prev, [addUI.field]: String(newId) }));
+      // ✅ setea el ID real en el form
+      setForm((prev) => ({ ...prev, [addUI.field]: String(Number(newId)) }));
 
       if (addUI.field === "id_proveedor") {
         setProveedorInput(newNombre);
+        setProveedorFocus(false);
         setTimeout(() => proveedorInputRef.current?.focus(), 0);
       }
       if (addUI.field === "id_detalle") {
         setDetalleInput(newNombre);
+        setDetalleFocus(false);
         setTimeout(() => detalleInputRef.current?.focus(), 0);
       }
 
@@ -673,6 +695,7 @@ export default function ModalEditarCompra({
   const handleProveedorInputChange = useCallback((e) => {
     const value = e.target.value;
     setProveedorInput(value);
+    // si escribe, dejamos el id "sin seleccionar" hasta que elija de la lista o coincida exacto al guardar
     setForm((prev) => ({ ...prev, id_proveedor: NULL_OPTION }));
   }, []);
 
@@ -767,6 +790,29 @@ export default function ModalEditarCompra({
   };
 
   /* =========================
+     ✅ FIX CLAVE: sync por nombre exacto (antes de guardar)
+     Si el input tiene un nombre válido y el ID quedó vacío, lo resolvemos.
+  ========================= */
+  const resolveIdByExactName = useCallback((kind) => {
+    const norm = (s) => String(s ?? "").trim().toLowerCase();
+    if (kind === "proveedor") {
+      const name = norm(proveedorInput);
+      if (!name) return null;
+      const all = Array.isArray(safeLists.proveedores) ? safeLists.proveedores : [];
+      const hit = all.find((p) => norm(p?.nombre) === name);
+      return hit ? getProveedorId(hit) : null;
+    }
+    if (kind === "detalle") {
+      const name = norm(detalleInput);
+      if (!name) return null;
+      const all = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
+      const hit = all.find((d) => norm(d?.nombre) === name);
+      return hit ? getDetalleId(hit) : null;
+    }
+    return null;
+  }, [proveedorInput, detalleInput, safeLists.proveedores, safeLists.detalles]);
+
+  /* =========================
      Payload final
   ========================= */
   const payload = useMemo(() => {
@@ -817,10 +863,27 @@ export default function ModalEditarCompra({
     showToast("cargando", "Guardando cambios…", 12000);
 
     try {
+      if (!form.id_movimiento) throw new Error("Falta id_movimiento (no puedo actualizar).");
       if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) throw new Error("Fecha inválida.");
 
-      if (!form.id_proveedor || form.id_proveedor === NULL_OPTION || form.id_proveedor === ADD_OPTION) {
+      // ✅ FIX: si el usuario creó proveedor/detalle y quedó ID vacío, resolvemos por nombre exacto
+      let proveedorId = form.id_proveedor;
+      if (!proveedorId || proveedorId === NULL_OPTION || proveedorId === ADD_OPTION) {
+        const resolved = resolveIdByExactName("proveedor");
+        if (resolved) proveedorId = String(resolved);
+      }
+
+      let detalleId = form.id_detalle;
+      if (!detalleId || detalleId === NULL_OPTION || detalleId === ADD_OPTION) {
+        const resolved = resolveIdByExactName("detalle");
+        if (resolved) detalleId = String(resolved);
+      }
+
+      if (!proveedorId || proveedorId === NULL_OPTION || proveedorId === ADD_OPTION) {
         throw new Error("Seleccioná un proveedor (o crealo con “Agregar nuevo proveedor”).");
+      }
+      if (!detalleId || detalleId === NULL_OPTION || detalleId === ADD_OPTION) {
+        throw new Error("Seleccioná un detalle (o crealo con “Agregar nuevo detalle”).");
       }
 
       const perUI = normalizePeriodoToMMYYYY(form.periodo);
@@ -834,6 +897,9 @@ export default function ModalEditarCompra({
 
       const payloadFinal = {
         ...payload,
+        id_proveedor: Number(proveedorId),
+        id_detalle: Number(detalleId),
+
         periodo: periodoMMYYYY_to_YYYYMM(finalPer || ""),
         cantidad: Math.round(cantidad * 1000) / 1000,
         precio: Math.round(precio * 100) / 100,
@@ -855,7 +921,6 @@ export default function ModalEditarCompra({
   };
 
   const miniOpen = addUI.open && ["id_proveedor", "id_detalle"].includes(addUI.field);
-  const miniTitle = addUI.field === "id_proveedor" ? "Nuevo proveedor" : "Nuevo detalle";
 
   if (!open) return null;
 
@@ -1183,6 +1248,7 @@ export default function ModalEditarCompra({
           value={addUI.text}
           saving={addUI.saving}
           onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
+<<<<<<< HEAD
           onCancel={() => {
             // revertir ADD_OPTION si cancelás
             setForm((p) => ({
@@ -1192,6 +1258,9 @@ export default function ModalEditarCompra({
             }));
             closeAddMini();
           }}
+=======
+          onCancel={cancelMini}
+>>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
           onSave={guardarNuevoCatalogo}
           dark={dark}
         />

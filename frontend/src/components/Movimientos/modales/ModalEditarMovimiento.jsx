@@ -15,6 +15,42 @@ const IVA_OPTIONS = [
 ];
 
 /* =========================
+   ✅ ID tolerante (igual al modal carga rápida)
+========================= */
+function getIdGeneric(x) {
+  const cand =
+    x?.id ??
+    x?.id_cliente ??
+    x?.idCliente ??
+    x?.cliente_id ??
+    x?.id_proveedor ??
+    x?.idProveedor ??
+    x?.proveedor_id ??
+    x?.id_detalle ??
+    x?.idDetalle ??
+    x?.detalle_id ??
+    x?.id_tipo_operacion ??
+    x?.idTipoOperacion ??
+    x?.tipo_operacion_id ??
+    x?.id_tipo_venta ??
+    x?.idTipoVenta ??
+    x?.tipo_venta_id ??
+    x?.id_clasificacion ??
+    x?.idClasificacion ??
+    x?.clasificacion_id ??
+    x?.id_cuenta_corriente ??
+    x?.idCuentaCorriente ??
+    x?.cuenta_corriente_id ??
+    x?.id_medio_pago ??
+    x?.idMedioPago ??
+    x?.medio_pago_id ??
+    0;
+
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/* =========================
    Safe lists + normalización
 ========================= */
 const SAFE_LISTS = {
@@ -22,7 +58,7 @@ const SAFE_LISTS = {
   clasificaciones: [],
   tiposVenta: [],
   cuentasCorrientes: [],
-  tiposOperacion: [], // ✅ Nuevo
+  tiposOperacion: [],
   clientes: [],
   proveedores: [],
   detalles: [],
@@ -149,10 +185,17 @@ function periodoFromISODate(iso) {
 }
 
 /* =========================
-   Auth helpers
+   ✅ Auth helpers (JWT + X-Session)
+   FIX: antes faltaba X-Session y backend multi-tenant te tira error
 ========================= */
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
+
+  const sessionKey =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    "";
 
   let idUsuario = 0;
   try {
@@ -163,8 +206,9 @@ function getAuthInfo() {
     // ignore
   }
 
-  return { token, idUsuario };
+  return { token, sessionKey, idUsuario };
 }
+
 function isTemaOscuro() {
   return document.documentElement.getAttribute("data-theme") === "oscuro";
 }
@@ -300,8 +344,7 @@ function buildFormFromRow(row, listsMerged, periodoDefault) {
   const perByFecha = periodoFromISODate(fecha || todayISO());
   const pickPeriodo = perRow || perDef || perByFecha || "";
 
-  const nOrNull = (v) =>
-    Number.isFinite(Number(v)) && Number(v) > 0 ? String(Number(v)) : NULL_OPTION;
+  const nOrNull = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? String(Number(v)) : NULL_OPTION);
 
   const sOrNull = (v) => {
     if (v == null || v === "" || v === 0) return NULL_OPTION;
@@ -448,10 +491,11 @@ export default function ModalEditarMovimiento({
     const built = buildFormFromRow(rowRef.current, merged, periodoDefaultRef.current);
     setForm(built);
 
+    // ✅ FIX: buscar por id tolerante (no solo x.id)
     const nameById = (arr, id) => {
       const sid = String(id ?? "").trim();
       if (!sid || sid === NULL_OPTION || sid === ADD_OPTION) return "";
-      const found = (Array.isArray(arr) ? arr : []).find((x) => String(x?.id) === sid);
+      const found = (Array.isArray(arr) ? arr : []).find((x) => String(getIdGeneric(x)) === sid);
       return String(found?.nombre ?? "").trim();
     };
 
@@ -515,8 +559,9 @@ export default function ModalEditarMovimiento({
       const sid = String(idTipoOp ?? "").trim();
       if (!sid || sid === NULL_OPTION || sid === ADD_OPTION) return { showCliente: false, showProveedor: false };
 
+      // ✅ FIX: buscar id tolerante
       const tipoOp = (Array.isArray(safeLists.tiposOperacion) ? safeLists.tiposOperacion : []).find(
-        (t) => String(t?.id) === sid
+        (t) => String(getIdGeneric(t)) === sid
       );
       const nombreTipo = String(tipoOp?.nombre || "").toLowerCase();
 
@@ -528,35 +573,31 @@ export default function ModalEditarMovimiento({
     [safeLists.tiposOperacion]
   );
 
-  const mostrarCliente = useMemo(() => {
-    const { showCliente } = getFlagsFromTipoOperacion(tipoOperacionSeleccionado);
-    return showCliente;
-  }, [tipoOperacionSeleccionado, getFlagsFromTipoOperacion]);
+  const mostrarCliente = useMemo(() => getFlagsFromTipoOperacion(tipoOperacionSeleccionado).showCliente, [
+    tipoOperacionSeleccionado,
+    getFlagsFromTipoOperacion,
+  ]);
 
-  const mostrarProveedor = useMemo(() => {
-    const { showProveedor } = getFlagsFromTipoOperacion(tipoOperacionSeleccionado);
-    return showProveedor;
-  }, [tipoOperacionSeleccionado, getFlagsFromTipoOperacion]);
+  const mostrarProveedor = useMemo(() => getFlagsFromTipoOperacion(tipoOperacionSeleccionado).showProveedor, [
+    tipoOperacionSeleccionado,
+    getFlagsFromTipoOperacion,
+  ]);
 
   // Tipo de venta
   const tipoVentaSeleccionado = form.id_tipo_venta;
 
   const tipoVentaEsContado = useMemo(() => {
     if (!tipoVentaSeleccionado || tipoVentaSeleccionado === NULL_OPTION || tipoVentaSeleccionado === ADD_OPTION) return false;
-
-    const tipoVenta = safeLists.tiposVenta.find((t) => String(t?.id) === String(tipoVentaSeleccionado));
+    const tipoVenta = safeLists.tiposVenta.find((t) => String(getIdGeneric(t)) === String(tipoVentaSeleccionado));
     if (!tipoVenta) return false;
-
     const nombreTipo = String(tipoVenta?.nombre || "").toLowerCase();
     return nombreTipo.includes("contado");
   }, [tipoVentaSeleccionado, safeLists.tiposVenta]);
 
   const tipoVentaEsCuentaCorriente = useMemo(() => {
     if (!tipoVentaSeleccionado || tipoVentaSeleccionado === NULL_OPTION || tipoVentaSeleccionado === ADD_OPTION) return false;
-
-    const tipoVenta = safeLists.tiposVenta.find((t) => String(t?.id) === String(tipoVentaSeleccionado));
+    const tipoVenta = safeLists.tiposVenta.find((t) => String(getIdGeneric(t)) === String(tipoVentaSeleccionado));
     if (!tipoVenta) return false;
-
     const nombreTipo = String(tipoVenta?.nombre || "").toLowerCase();
     return nombreTipo.includes("cuenta corriente") || nombreTipo.includes("cta cte");
   }, [tipoVentaSeleccionado, safeLists.tiposVenta]);
@@ -609,8 +650,8 @@ export default function ModalEditarMovimiento({
   }, []);
 
   /* =========================
-     API helper
-  ========================= */
+     ✅ API helper (con X-Session + res.ok check)
+========================= */
   const parseJsonOrThrow = useCallback(async (res) => {
     const text = await res.text();
     if (!text) throw new Error("Respuesta vacía del servidor.");
@@ -624,8 +665,10 @@ export default function ModalEditarMovimiento({
 
   const apiPostJson = useCallback(
     async (url, payload) => {
-      const { token } = getAuthInfo();
+      const { token, sessionKey } = getAuthInfo();
+
       const headers = { "Content-Type": "application/json" };
+      if (sessionKey) headers["X-Session"] = sessionKey; // ✅ FIX
       if (token) headers.Authorization = `Bearer ${token}`;
 
       const res = await fetch(url, {
@@ -634,7 +677,15 @@ export default function ModalEditarMovimiento({
         body: JSON.stringify(payload ?? {}),
       });
 
-      return await parseJsonOrThrow(res);
+      const data = await parseJsonOrThrow(res);
+
+      // ✅ si backend devuelve 401/403/500, antes igual seguía y terminaba en errores raros
+      if (!res.ok) {
+        const msg = data?.mensaje || data?.error || `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+
+      return data;
     },
     [parseJsonOrThrow]
   );
@@ -686,7 +737,7 @@ export default function ModalEditarMovimiento({
       setLocalLists((prev) => {
         const next = { ...prev };
         const arr = Array.isArray(prev[listKey]) ? prev[listKey].slice() : [];
-        if (!arr.some((x) => Number(x?.id) === newId)) {
+        if (!arr.some((x) => Number(getIdGeneric(x)) === newId)) {
           arr.push({ id: newId, nombre: newNombre });
         }
         next[listKey] = arr;
@@ -744,11 +795,9 @@ export default function ModalEditarMovimiento({
 
   const handleSelectCliente = useCallback((cliente) => {
     const nombre = String(cliente?.nombre ?? "").trim();
+    const cid = getIdGeneric(cliente);
     setClienteInput(nombre);
-    setForm((prev) => ({
-      ...prev,
-      id_cliente: cliente?.id != null ? String(cliente.id) : NULL_OPTION,
-    }));
+    setForm((prev) => ({ ...prev, id_cliente: cid > 0 ? String(cid) : NULL_OPTION }));
     setClienteFocus(false);
   }, []);
 
@@ -773,11 +822,9 @@ export default function ModalEditarMovimiento({
 
   const handleSelectProveedor = useCallback((prov) => {
     const nombre = String(prov?.nombre ?? "").trim();
+    const pid = getIdGeneric(prov);
     setProveedorInput(nombre);
-    setForm((prev) => ({
-      ...prev,
-      id_proveedor: prov?.id != null ? String(prov.id) : NULL_OPTION,
-    }));
+    setForm((prev) => ({ ...prev, id_proveedor: pid > 0 ? String(pid) : NULL_OPTION }));
     setProveedorFocus(false);
   }, []);
 
@@ -802,11 +849,9 @@ export default function ModalEditarMovimiento({
 
   const handleSelectDetalle = useCallback((det) => {
     const nombre = String(det?.nombre ?? "").trim();
+    const did = getIdGeneric(det);
     setDetalleInput(nombre);
-    setForm((prev) => ({
-      ...prev,
-      id_detalle: det?.id != null ? String(det.id) : NULL_OPTION,
-    }));
+    setForm((prev) => ({ ...prev, id_detalle: did > 0 ? String(did) : NULL_OPTION }));
     setDetalleFocus(false);
   }, []);
 
@@ -947,13 +992,9 @@ export default function ModalEditarMovimiento({
     [addUI.field, addUI.open]
   );
 
-  // ✅ Handler especial para tipo_operacion:
-  // - NO borra los dos
-  // - limpia SOLO el que deja de corresponder (por ejemplo proveedor si ya no se muestra)
   const handleTipoOperacionChange = useCallback(
     (nextValue) => {
       if (nextValue === ADD_OPTION) {
-        // modo agregar inline
         onSelectWithAdd("id_tipo_operacion", nextValue);
         return;
       }
@@ -967,7 +1008,6 @@ export default function ModalEditarMovimiento({
         id_proveedor: showProveedor ? prev.id_proveedor : NULL_OPTION,
       }));
 
-      // inputs visuales: solo limpiamos el que se oculta
       if (!showCliente) setClienteInput("");
       if (!showProveedor) setProveedorInput("");
 
@@ -1010,12 +1050,7 @@ export default function ModalEditarMovimiento({
             Cancelar
           </button>
 
-          <button
-            type="button"
-            className="mit-btn mit-btn--solid"
-            onClick={guardarNuevoCatalogo}
-            disabled={addUI.saving}
-          >
+          <button type="button" className="mit-btn mit-btn--solid" onClick={guardarNuevoCatalogo} disabled={addUI.saving}>
             {addUI.saving ? "Guardando..." : "Guardar"}
           </button>
         </div>
@@ -1025,11 +1060,7 @@ export default function ModalEditarMovimiento({
 
   const miniOpen = addUI.open && ["id_cliente", "id_proveedor", "id_detalle"].includes(addUI.field);
   const miniTitle =
-    addUI.field === "id_cliente"
-      ? "Nuevo cliente"
-      : addUI.field === "id_proveedor"
-      ? "Nuevo proveedor"
-      : "Nuevo detalle";
+    addUI.field === "id_cliente" ? "Nuevo cliente" : addUI.field === "id_proveedor" ? "Nuevo proveedor" : "Nuevo detalle";
 
   const cancelMini = () => {
     setForm((p) => ({
@@ -1047,19 +1078,10 @@ export default function ModalEditarMovimiento({
 
   return createPortal(
     <div
-      className={[
-        "mi-modal__overlay",
-        "mi-modal__overlay--mov",
-        dark ? "mi-modal__overlay--dark" : "",
-      ].join(" ").trim()}
+      className={["mi-modal__overlay", "mi-modal__overlay--mov", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim()}
       onMouseDown={cerrar}
     >
-      <div
-        className={modalClass}
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className={modalClass} role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar movimiento</h2>
@@ -1097,11 +1119,14 @@ export default function ModalEditarMovimiento({
                         disabled={saving}
                       >
                         <option value={NULL_OPTION}>-- Clasificación --</option>
-                        {(safeLists.clasificaciones || []).map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
+                        {(safeLists.clasificaciones || []).map((x) => {
+                          const xid = getIdGeneric(x);
+                          return (
+                            <option key={xid || x.id} value={String(xid || x.id || "")}>
+                              {x.nombre}
+                            </option>
+                          );
+                        })}
                         <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
                       </select>
                       <label className="fl-label">Clasificación</label>
@@ -1117,11 +1142,14 @@ export default function ModalEditarMovimiento({
                         disabled={saving}
                       >
                         <option value={NULL_OPTION}>-- Tipo de operación --</option>
-                        {(safeLists.tiposOperacion || []).map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
+                        {(safeLists.tiposOperacion || []).map((x) => {
+                          const xid = getIdGeneric(x);
+                          return (
+                            <option key={xid || x.id} value={String(xid || x.id || "")}>
+                              {x.nombre}
+                            </option>
+                          );
+                        })}
                         <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
                       </select>
                       <label className="fl-label">Tipo de operación</label>
@@ -1144,18 +1172,19 @@ export default function ModalEditarMovimiento({
                         disabled={saving}
                       >
                         <option value={NULL_OPTION}>-- Tipo de venta --</option>
-                        {(safeLists.tiposVenta || []).map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
+                        {(safeLists.tiposVenta || []).map((x) => {
+                          const xid = getIdGeneric(x);
+                          return (
+                            <option key={xid || x.id} value={String(xid || x.id || "")}>
+                              {x.nombre}
+                            </option>
+                          );
+                        })}
                         <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
                       </select>
                       <label className="fl-label">Tipo de venta</label>
                       {renderAddInline("id_tipo_venta")}
                     </div>
-
-                    {/* ✅ ELIMINADO: Tipo de movimiento */}
                   </div>
 
                   {/* 2 cols */}
@@ -1171,27 +1200,31 @@ export default function ModalEditarMovimiento({
                         onFocus={() => setDetalleFocus(true)}
                         onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
                         disabled={saving || addUI.open}
+                        autoComplete="off"
                       />
                       <label className="fl-label">Detalle</label>
 
                       {detalleFocus && filteredDetalles.length > 0 && (
                         <ul className="mi-cr-suggest">
-                          {filteredDetalles.map((d) => (
-                            <li
-                              key={d.id}
-                              className="mi-cr-suggest__item"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                handleSelectDetalle(d);
-                              }}
-                            >
-                              {d.nombre}
-                            </li>
-                          ))}
+                          {filteredDetalles.map((d) => {
+                            const did = getIdGeneric(d);
+                            return (
+                              <li
+                                key={did || d.id}
+                                className="mi-cr-suggest__item"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  handleSelectDetalle(d);
+                                }}
+                              >
+                                {d.nombre}
+                              </li>
+                            );
+                          })}
                         </ul>
                       )}
 
-                      <button type="button" onClick={startAddDetalle} className="mi-link">
+                      <button type="button" onClick={startAddDetalle} className="mi-link" disabled={saving || addUI.saving}>
                         + Agregar nuevo detalle
                       </button>
                     </div>
@@ -1206,11 +1239,14 @@ export default function ModalEditarMovimiento({
                           disabled={saving}
                         >
                           <option value={NULL_OPTION}>-- Cuenta corriente --</option>
-                          {(safeLists.cuentasCorrientes || []).map((x) => (
-                            <option key={x.id} value={String(x.id)}>
-                              {x.nombre}
-                            </option>
-                          ))}
+                          {(safeLists.cuentasCorrientes || []).map((x) => {
+                            const xid = getIdGeneric(x);
+                            return (
+                              <option key={xid || x.id} value={String(xid || x.id || "")}>
+                                {x.nombre}
+                              </option>
+                            );
+                          })}
                           <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
                         </select>
                         <label className="fl-label">Cuenta corriente</label>
@@ -1345,11 +1381,14 @@ export default function ModalEditarMovimiento({
                       disabled={saving}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
-                      {(safeLists.mediosPago || []).map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
+                      {(safeLists.mediosPago || []).map((x) => {
+                        const xid = getIdGeneric(x);
+                        return (
+                          <option key={xid || x.id} value={String(xid || x.id || "")}>
+                            {x.nombre}
+                          </option>
+                        );
+                      })}
                       <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
                     </select>
                     <label className="fl-label">Medio de pago</label>
@@ -1375,18 +1414,21 @@ export default function ModalEditarMovimiento({
 
                     {clienteFocus && filteredClientes.length > 0 && (
                       <ul className="mi-cr-suggest">
-                        {filteredClientes.map((c) => (
-                          <li
-                            key={c.id}
-                            className="mi-cr-suggest__item"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectCliente(c);
-                            }}
-                          >
-                            <span className="mi-suggestText">{c.nombre}</span>
-                          </li>
-                        ))}
+                        {filteredClientes.map((c) => {
+                          const cid = getIdGeneric(c);
+                          return (
+                            <li
+                              key={cid || c.id}
+                              className="mi-cr-suggest__item"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelectCliente(c);
+                              }}
+                            >
+                              <span className="mi-suggestText">{c.nombre}</span>
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
 
@@ -1414,22 +1456,30 @@ export default function ModalEditarMovimiento({
 
                     {proveedorFocus && filteredProveedores.length > 0 && (
                       <ul className="mi-cr-suggest">
-                        {filteredProveedores.map((p) => (
-                          <li
-                            key={p.id}
-                            className="mi-cr-suggest__item"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectProveedor(p);
-                            }}
-                          >
-                            <span className="mi-suggestText">{p.nombre}</span>
-                          </li>
-                        ))}
+                        {filteredProveedores.map((p) => {
+                          const pid = getIdGeneric(p);
+                          return (
+                            <li
+                              key={pid || p.id}
+                              className="mi-cr-suggest__item"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelectProveedor(p);
+                              }}
+                            >
+                              <span className="mi-suggestText">{p.nombre}</span>
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
 
-                    <button type="button" onClick={startAddProveedor} disabled={saving || addUI.saving} className="mi-link">
+                    <button
+                      type="button"
+                      onClick={startAddProveedor}
+                      disabled={saving || addUI.saving}
+                      className="mi-link"
+                    >
                       + Agregar nuevo proveedor
                     </button>
                   </div>

@@ -7,7 +7,6 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-// ✅ agregado X-Session para multi-tenant
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Session');
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
@@ -15,7 +14,24 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
   exit;
 }
 
-require_once __DIR__ . '/../../config/db.php';
+/**
+ * ✅ FIX CLAVE (tu problema):
+ * A veces el frontend termina pegándole a compras_crear aunque venga id_movimiento,
+ * entonces te "inserta" (crea una compra nueva) en vez de actualizar.
+ *
+ * Solución: "upsert" seguro:
+ * - Si llega id_movimiento > 0, tratamos la acción como compras_actualizar aunque haya venido compras_crear.
+ *
+ * ✅ Además: multi-tenant
+ * - Si $pdo ya viene desde routes/api.php (tenant_resolver), NO volvemos a incluir db.php.
+ * - Si $pdo no existe, recién ahí incluimos db.php.
+ */
+
+// ✅ Multi-tenant: NO pisar $pdo si ya viene del router
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+  require_once __DIR__ . '/../../config/db.php';
+}
+
 require_once __DIR__ . '/../utils/auditoria.php';
 
 /* ----------------- Helpers ----------------- */
@@ -115,7 +131,7 @@ function audit_safe(PDO $pdo, int $idUsuario, string $accion, ?string $entidad, 
 }
 
 /* =========================================================
-   Constantes / helpers de tipo_operacion
+   tipo_operacion COMPRA
 ========================================================= */
 function get_tipo_operacion_id_compra(PDO $pdo): int {
   $st = $pdo->prepare("SELECT id_tipo_operacion FROM tipos_operacion WHERE activo = 1 AND UPPER(nombre) = 'COMPRA' LIMIT 1");
@@ -191,7 +207,6 @@ function validar_compra_or_fail(PDO $pdo, array $src): array {
 
   $monto_total = n_float($src['monto_total'] ?? null);
 
-  // ✅ tipo_operacion COMPRA (obligatorio y fijo)
   $id_tipo_operacion_compra = get_tipo_operacion_id_compra($pdo);
   if ($id_tipo_operacion_compra <= 0) {
     fail("No existe el tipo_operacion 'COMPRA' en tipos_operacion.");
@@ -235,24 +250,19 @@ function compras_listar(PDO $pdo): void {
   $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
   $q       = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
 
-  // ✅ PAGINADO
-  // En tu frontend: limit = PAGE_SIZE + 1 (101) y offset (0, 100, 200...)
   $limitRaw  = $_GET['limit']  ?? null;
   $offsetRaw = $_GET['offset'] ?? null;
 
   $limit  = n_int($limitRaw);
   $offset = n_int($offsetRaw);
 
-  // defaults
-  if ($limit === null)  $limit = 101; // 100 + 1
+  if ($limit === null)  $limit = 101;
   if ($offset === null) $offset = 0;
 
-  // hard caps (evita abuso)
   if ($limit < 1) $limit = 1;
-  if ($limit > 501) $limit = 501; // 500+1 máx
+  if ($limit > 501) $limit = 501;
   if ($offset < 0) $offset = 0;
 
-  // pageSize real: si limit = 101 => pageSize = 100
   $pageSize = ($limit > 1) ? ($limit - 1) : 1;
 
   $idCompra = get_tipo_operacion_id_compra($pdo);
@@ -268,7 +278,6 @@ function compras_listar(PDO $pdo): void {
   $where[] = "(m.id_cliente IS NULL OR m.id_cliente = 0)";
   $where[] = "(m.id_tipo_venta IS NULL OR m.id_tipo_venta = 0)";
 
-  // ✅ coherencia pago: exactamente uno
   $where[] = "(
       (m.id_medio_pago IS NOT NULL AND (m.id_cuenta_corriente IS NULL OR m.id_cuenta_corriente = 0))
       OR
@@ -310,7 +319,6 @@ function compras_listar(PDO $pdo): void {
       COALESCE(c.nombre,'')    AS clasificacion,
       COALESCE(cc.nombre,'')   AS cuenta_corriente,
       COALESCE(pr.nombre,'')   AS proveedor,
-
       COALESCE(di.nombre, d.nombre, '') AS detalle,
       COALESCE(mp.nombre,'') AS medio_pago_nombre,
 
@@ -360,19 +368,14 @@ function compras_listar(PDO $pdo): void {
 
   $sql .= " WHERE " . implode(" AND ", $where);
   $sql .= " ORDER BY m.fecha DESC, m.id_movimiento DESC";
-
-  // ✅ APLICAR LIMIT/OFFSET (bind en MySQL a veces falla en LIMIT/OFFSET, por eso inyectamos ints validados)
   $sql .= " LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
 
   $stmt = $pdo->prepare($sql);
   $stmt->execute($params);
   $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-  // ✅ has_more + next_offset, y recortamos a pageSize (100)
   $hasMore = (count($rows) > $pageSize);
-  if ($hasMore) {
-    $rows = array_slice($rows, 0, $pageSize);
-  }
+  if ($hasMore) $rows = array_slice($rows, 0, $pageSize);
   $nextOffset = $hasMore ? ($offset + $pageSize) : null;
 
   $data = [];
@@ -427,14 +430,23 @@ function compras_listar(PDO $pdo): void {
 
 /* =========================================================
    CREAR 1 COMPRA (POST)
+   ✅ FIX: si llega id_movimiento => actualiza (evita inserción accidental)
 ========================================================= */
 function compras_crear(PDO $pdo): void {
   if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
 
   $body = read_json_body();
   $src = !empty($body) ? $body : ($_POST ?? []);
-  $idUsuario = get_id_usuario_from_request($src);
 
+  // ✅ FIX CLAVE: si el frontend por error llama "crear" al editar,
+  // pero viene id_movimiento, lo tratamos como UPDATE.
+  $maybeId = n_int($src['id_movimiento'] ?? null);
+  if ($maybeId !== null && $maybeId > 0) {
+    compras_actualizar($pdo);
+    return;
+  }
+
+  $idUsuario = get_id_usuario_from_request($src);
   $v = validar_compra_or_fail($pdo, $src);
 
   try {
@@ -542,6 +554,8 @@ function compras_crear_batch(PDO $pdo): void {
     foreach ($items as $i => $one) {
       if (!is_array($one)) fail("Ítem batch inválido en índice $i.");
 
+      // Nota: acá NO hacemos update automático en batch para no mezclar semánticas.
+      // Si quisieras, se puede extender, pero no es tu caso actual.
       $v = validar_compra_or_fail($pdo, $one);
 
       $stmt = $pdo->prepare("
@@ -644,6 +658,8 @@ function compras_actualizar(PDO $pdo): void {
     fail('Este movimiento no es una compra (tipo_operacion).');
   }
 
+  // ✅ Merge: si el frontend no manda algún campo, tomamos el anterior.
+  // (id_proveedor / id_detalle SIEMPRE se espera que venga cuando cambiaste, y acá NO se pisa si viene)
   $merge = $src;
   foreach ([
     'fecha','periodo','id_clasificacion','id_medio_pago','id_cuenta_corriente',
@@ -799,6 +815,16 @@ function compras_eliminar(PDO $pdo): void {
 ========================================================= */
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $action = is_string($action) ? trim($action) : '';
+
+// ✅ FIX EXTRA: si por cualquier motivo action=compras_crear pero llega id_movimiento,
+// lo convertimos en compras_actualizar (doble seguro).
+if ($action === 'compras_crear') {
+  $tmp = read_json_body();
+  $idMaybe = n_int(($tmp['id_movimiento'] ?? null));
+  if ($idMaybe !== null && $idMaybe > 0) {
+    $action = 'compras_actualizar';
+  }
+}
 
 try {
   switch ($action) {

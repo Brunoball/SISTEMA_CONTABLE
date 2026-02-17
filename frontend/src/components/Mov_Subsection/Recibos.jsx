@@ -264,26 +264,14 @@ export default function Recibos() {
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
-  // ✅ Skeleton delay
-  const skelTimerRef = useRef(null);
-  const [showSkeleton, setShowSkeleton] = useState(false);
-
   // ✅ FIX: bloquea "No hay registros" durante transiciones (evita flash)
   const [uiPending, setUiPending] = useState(false);
 
-  const beginSkeleton = useCallback(() => {
-    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
-    setShowSkeleton(false);
-    skelTimerRef.current = setTimeout(() => setShowSkeleton(true), 120);
-  }, []);
-  const endSkeleton = useCallback(() => {
-    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
-    setShowSkeleton(false);
-  }, []);
+  // ✅ FIX: evita doble carga inicial (setFPeriodo del init dispara el debounce)
+  const didInitRef = useRef(false);
 
   useEffect(() => {
     return () => {
-      if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
   }, []);
@@ -352,7 +340,8 @@ export default function Recibos() {
   /* =========================
      ✅ LOAD ROWS
      - Trae MÁX 100 en la primera carga
-     - Si hay más, backend devuelve has_more/next_offset y aparece botón "Cargar todos"
+     - Skeleton SIN DELAY (no parpadea)
+     - Evita "doble carga" por debounce inicial con didInitRef/skipSearchRef
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -371,7 +360,6 @@ export default function Recibos() {
         setLoadingMore(false);
         setLoadingAll(false);
         setError("");
-        endSkeleton();
         setUiPending(false);
         return { hasMore: false, nextOffset: null, received: 0 };
       }
@@ -383,11 +371,11 @@ export default function Recibos() {
       const myReqId = ++reqIdRef.current;
       const start = Date.now();
 
-      // ✅ FIX: evitamos flash de "No hay registros" ANTES de que arranque loadingRows/showSkeleton
+      // ✅ FIX: evita flash de empty ANTES de loading
       if (!append) setUiPending(true);
 
+      // ✅ Skeleton fijo: sin delay
       if (!append) {
-        beginSkeleton();
         setLoadingRows(true);
       } else {
         setLoadingMore(true);
@@ -407,7 +395,6 @@ export default function Recibos() {
           setHasMore(!!cached?.hasMore);
           setNextOffset(cached?.nextOffset ?? null);
           setLoadingRows(false);
-          endSkeleton();
           if (myReqId === reqIdRef.current) setUiPending(false);
           return {
             hasMore: !!cached?.hasMore,
@@ -430,7 +417,6 @@ export default function Recibos() {
         if (myReqId !== reqIdRef.current) {
           if (append) setLoadingMore(false);
           else setLoadingRows(false);
-          endSkeleton();
           return null;
         }
 
@@ -478,7 +464,6 @@ export default function Recibos() {
             if (append) setLoadingMore(false);
             else setLoadingRows(false);
 
-            endSkeleton();
             if (myReqId === reqIdRef.current) setUiPending(false);
 
             resolve({
@@ -500,7 +485,6 @@ export default function Recibos() {
             if (myReqId !== reqIdRef.current) {
               if (append) setLoadingMore(false);
               else setLoadingRows(false);
-              endSkeleton();
               resolve(null);
               return;
             }
@@ -509,7 +493,6 @@ export default function Recibos() {
             if (append) setLoadingMore(false);
             else setLoadingRows(false);
 
-            endSkeleton();
             if (myReqId === reqIdRef.current) setUiPending(false);
 
             resolve(null);
@@ -517,11 +500,12 @@ export default function Recibos() {
         });
       }
     },
-    [API, apiGet, fPeriodo, q, beginSkeleton, endSkeleton]
+    [API, apiGet, fPeriodo, q]
   );
 
   /* =========================
      ✅ INIT: listas + primera página (100)
+     ✅ FIX: evita doble load (skipSearchRef + didInitRef)
   ========================= */
   useEffect(() => {
     let alive = true;
@@ -539,6 +523,9 @@ export default function Recibos() {
       const perDefault = periodos[0] || "";
 
       if (perDefault) {
+        // ✅ bloquea el debounce por este set inicial
+        skipSearchRef.current = true;
+
         setFPeriodo((prev) => prev || perDefault);
         await loadRows({ periodo: perDefault, q: "", offset: 0, append: false }); // ✅ 100
       } else {
@@ -547,8 +534,10 @@ export default function Recibos() {
         setNextOffset(null);
         setLoadingRows(false);
         setUiPending(false);
-        endSkeleton();
       }
+
+      // ✅ ahora sí habilitamos el debounce normal
+      if (alive) didInitRef.current = true;
     })();
 
     return () => {
@@ -586,6 +575,9 @@ export default function Recibos() {
   useEffect(() => {
     if (!fPeriodo) return;
 
+    // ✅ FIX: no dispares debounce hasta que termine el init real
+    if (!didInitRef.current) return;
+
     if (skipSearchRef.current) {
       skipSearchRef.current = false;
       return;
@@ -593,12 +585,12 @@ export default function Recibos() {
 
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
-    // ✅ FIX: evita “flash” mientras espera el debounce + fetch
+    // ✅ evita “flash” mientras espera debounce + fetch
     setUiPending(true);
 
     searchTimerRef.current = setTimeout(async () => {
       await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
-      // loadRows ya apaga uiPending si es la request vigente
+      // loadRows apaga uiPending si es la request vigente
     }, 250);
 
     return () => {
@@ -724,12 +716,6 @@ export default function Recibos() {
     },
     [getRecibosCliente]
   );
-
-  const closePagarModal = useCallback(() => {
-    setOpenPagar(false);
-    setPagarCliente(null);
-    setPagarDeudas([]);
-  }, []);
 
   /* =========================
      Confirmar pago
@@ -899,7 +885,7 @@ export default function Recibos() {
   }, [hasMore, loadingMore, loadingRows, loadingListsCtx, nextOffset, fPeriodo, q, loadRows, showToast]);
 
   // ✅ UX: difumina tabla solo en carga principal
-  const softLoading = loadingRows && showSkeleton;
+  const softLoading = loadingRows;
 
   // ✅ skeleton config por columna
   const skelWidths = useMemo(() => {
@@ -977,15 +963,14 @@ export default function Recibos() {
 
   /* =========================
      ✅ FIX UI: evitar “flash” de empty
-     - Ahora también bloquea durante transiciones (uiPending)
   ========================= */
   const periodoUI = periodoToMMYYYY(fPeriodo);
   const isInit = loadingListsCtx || !periodoUI; // todavía inicializando/período no listo
+
   const showEmpty =
     !isInit &&
-    !uiPending && // ✅ FIX
+    !uiPending &&
     !loadingRows &&
-    !showSkeleton &&
     !loadingMore &&
     !loadingAll &&
     filteredRows.length === 0;
@@ -1044,9 +1029,10 @@ export default function Recibos() {
                     setFPeriodo(ui);
                     setQ("");
 
+                    // ✅ bloquea debounce por este cambio manual
                     skipSearchRef.current = true;
+
                     await loadRows({ periodo: ui, q: "", offset: 0, append: false }); // ✅ 100
-                    // loadRows apaga uiPending si es request vigente
                   }}
                   disabled={loadingRows || loadingListsCtx || loadingMore || loadingAll}
                 >
@@ -1075,7 +1061,6 @@ export default function Recibos() {
                         e.preventDefault();
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
-                        // ✅ FIX
                         setUiPending(true);
 
                         skipSearchRef.current = true;
@@ -1085,7 +1070,6 @@ export default function Recibos() {
                           offset: 0,
                           append: false,
                         });
-                        // loadRows apaga uiPending si es request vigente
                       }
                     }}
                     placeholder="Buscar por fecha, cliente, descripción, monto…"
@@ -1101,12 +1085,10 @@ export default function Recibos() {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
 
-                        // ✅ FIX
                         setUiPending(true);
 
                         skipSearchRef.current = true;
                         await loadRows({ periodo: fPeriodo, q: "", offset: 0, append: false });
-                        // loadRows apaga uiPending si es request vigente
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
                       disabled={loadingAll}
@@ -1153,7 +1135,7 @@ export default function Recibos() {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className={["mov-gridBody mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
-            {showSkeleton && loadingRows ? (
+            {loadingRows ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
               </div>

@@ -58,15 +58,7 @@ function pick(obj, keys, fallback = "") {
   return fallback;
 }
 function getRowId(r) {
-  return (
-    r?.id_compra ??
-    r?.idCompra ??
-    r?.id_movimiento ??
-    r?.idMovimiento ??
-    r?.id ??
-    r?.ID ??
-    null
-  );
+  return r?.id_compra ?? r?.idCompra ?? r?.id_movimiento ?? r?.idMovimiento ?? r?.id ?? r?.ID ?? null;
 }
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
@@ -171,14 +163,14 @@ function getAuthInfo() {
     localStorage.getItem("session_key") ||
     localStorage.getItem("sessionKey") ||
     localStorage.getItem("X-Session") ||
+    localStorage.getItem("x_session") ||
     ""
   ).trim();
 
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand =
-      u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    const cand = u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
@@ -224,16 +216,10 @@ function buildExportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((r) => ({
     FECHA: safeText(formatFechaDMY(pick(r, ["fecha"], ""))),
     PERIODO: safeText(periodoToMMYYYY(pick(r, ["periodo"], ""))),
-    DESCRIPCION: safeText(
-      pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")
-    ),
-    PROVEEDOR: safeText(
-      pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")
-    ),
+    DESCRIPCION: safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
+    PROVEEDOR: safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")),
     PAGO: safeText(getCompraPagoLabel(r)),
-    TOTAL: numOrZero(
-      pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)
-    ),
+    TOTAL: numOrZero(pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)),
   }));
 }
 
@@ -285,6 +271,9 @@ export default function Compras() {
   const skelTimerRef = useRef(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
 
+  // ✅ evita “No hay…” antes de terminar la carga (y evita flash entre cargas)
+  const [ready, setReady] = useState(false);
+
   const beginSkeleton = useCallback(() => {
     if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
     setShowSkeleton(false);
@@ -325,7 +314,9 @@ export default function Compras() {
     const text = await res.text();
     if (!text) throw new Error("Respuesta vacía del servidor.");
     try {
-      return JSON.parse(text);
+      const data = JSON.parse(text);
+      // si el backend devuelve {exito:false,...} igual lo tomamos y lo manejamos afuera
+      return data;
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
       throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
@@ -367,8 +358,48 @@ export default function Compras() {
   }, []);
 
   /* =========================
-     LOAD (FIX PROGRESO)
-     - devuelve appended + pageIds para "Cargar todos"
+     ✅ FIX: endpoint real de edición
+     - intenta varios nombres de action para no clavarte
+  ========================= */
+  const editarCompraEnBackend = useCallback(
+    async (payloadFinal) => {
+      const { idUsuario } = getAuthInfo();
+      const id = payloadFinal?.id_movimiento ?? payloadFinal?.id ?? getRowId(selectedRow);
+      if (!id) throw new Error("No encuentro id_movimiento para editar.");
+
+      // aseguramos id_movimiento en el payload
+      const body = { ...payloadFinal, id_movimiento: Number(id), idUsuario };
+
+      // probamos acciones posibles
+      const candidates = ["compras_editar", "compras_actualizar", "movimientos_editar"];
+
+      let lastErr = null;
+      for (const action of candidates) {
+        try {
+          const sp = new URLSearchParams();
+          sp.set("action", action);
+          // algunos backends esperan id_movimiento en query también
+          sp.set("id_movimiento", String(id));
+
+          const data = await apiPostJson(`${API}?${sp.toString()}`, body);
+
+          if (data?.exito) return data;
+
+          // si el endpoint existe pero respondió exito:false
+          const msg = data?.mensaje || `No se pudo editar (action=${action}).`;
+          lastErr = new Error(msg);
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+
+      throw lastErr || new Error("No se pudo editar la compra (ningún endpoint respondió OK).");
+    },
+    [API, apiPostJson, selectedRow]
+  );
+
+  /* =========================
+     LOAD
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -379,7 +410,6 @@ export default function Compras() {
       const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
       const mode = String(opts.mode || (append ? "more" : "initial"));
 
-      // ✅ si viene, lo usamos para dedupe REAL sin depender del estado
       const seenIdsExternal = opts.seenIds instanceof Set ? opts.seenIds : null;
 
       const perUI = periodoToMMYYYY(periodoUI);
@@ -392,6 +422,7 @@ export default function Compras() {
         setLoadingMore(false);
         setLoadingAll(false);
         setError("");
+        setReady(true);
         endSkeleton();
         return { hasMore: false, nextOffset: null, received: 0, appended: 0, pageIds: [] };
       }
@@ -401,6 +432,8 @@ export default function Compras() {
       const cacheKey = `${periodoAPI}|${qKey}`;
 
       const myReqId = ++reqIdRef.current;
+
+      if (!append && offset === 0) setReady(false);
 
       if (!append) {
         beginSkeleton();
@@ -417,6 +450,7 @@ export default function Compras() {
           setHasMore(!!cached?.hasMore);
           setNextOffset(cached?.nextOffset ?? null);
           setLoadingRows(false);
+          setReady(true);
           endSkeleton();
           return {
             hasMore: !!cached?.hasMore,
@@ -457,7 +491,7 @@ export default function Compras() {
         const backendNextOffset =
           data.next_offset !== undefined && data.next_offset !== null ? Number(data.next_offset) : null;
 
-        let page = rawNorm.slice(0, PAGE_SIZE);
+        const page = rawNorm.slice(0, PAGE_SIZE);
         let newHasMore = false;
         let newNextOffset = null;
 
@@ -480,8 +514,6 @@ export default function Compras() {
         let appendedCount = 0;
 
         if (append) {
-          // ✅ dedupe usando seenIdsExternal si está (Cargar todos)
-          //    sino dedupe simple por prev (Cargar más)
           if (seenIdsExternal) {
             const add = page.filter((x) => {
               const id = getRowId(x);
@@ -518,7 +550,10 @@ export default function Compras() {
 
         if (append) {
           if (mode !== "all") setLoadingMore(false);
-        } else setLoadingRows(false);
+        } else {
+          setLoadingRows(false);
+          setReady(true);
+        }
 
         endSkeleton();
 
@@ -541,7 +576,10 @@ export default function Compras() {
         setError(e?.message || "Error cargando compras.");
         if (append) {
           if (mode !== "all") setLoadingMore(false);
-        } else setLoadingRows(false);
+        } else {
+          setLoadingRows(false);
+          setReady(true);
+        }
         endSkeleton();
         return null;
       }
@@ -566,6 +604,8 @@ export default function Compras() {
       const perDefault = periodos[0] || "";
 
       if (perDefault) {
+        skipSearchRef.current = true;
+        setReady(false);
         setFPeriodo((prev) => prev || perDefault);
         await loadRows({ periodo: perDefault, q: "", offset: 0, append: false, mode: "initial" });
       } else {
@@ -573,6 +613,7 @@ export default function Compras() {
         setHasMore(false);
         setNextOffset(null);
         setLoadingRows(false);
+        setReady(true);
         endSkeleton();
       }
     })();
@@ -583,6 +624,9 @@ export default function Compras() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* =========================
+     Debounce búsqueda
+  ========================= */
   useEffect(() => {
     if (!fPeriodo) return;
 
@@ -608,9 +652,7 @@ export default function Compras() {
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
     if (!fPer) return [];
-    return (Array.isArray(rows) ? rows : []).filter(
-      (r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer)
-    );
+    return (Array.isArray(rows) ? rows : []).filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer));
   }, [rows, fPeriodo]);
 
   /* =========================
@@ -631,16 +673,14 @@ export default function Compras() {
         fr: 2.2,
         strong: true,
         align: "left",
-        render: (r) =>
-          safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
+        render: (r) => safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
       },
       {
         key: "proveedor",
         label: "PROVEEDOR",
         fr: 1.6,
         align: "left",
-        render: (r) =>
-          safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")),
+        render: (r) => safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")),
       },
       {
         key: "pago",
@@ -654,8 +694,7 @@ export default function Compras() {
         label: "TOTAL",
         fr: 1.1,
         align: "center",
-        render: (r) =>
-          moneyARS(pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)),
+        render: (r) => moneyARS(pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)),
       },
       { key: "acciones", label: "ACCIONES", fr: 0.95, align: "center", render: () => null },
     ];
@@ -729,14 +768,36 @@ export default function Compras() {
       const perUI = periodoToMMYYYY(periodoGuardado || fPeriodo);
       setOpenNueva(false);
       setOpenEdit(false);
+      setSelectedRow(null);
 
       invalidateCacheForPeriodo(perUI);
       await loadRows({ periodo: perUI, q, offset: 0, append: false, mode: "initial" });
 
       await refreshPeriodos();
-      showToast("exito", "Compra guardada y lista actualizada.", 2400);
     },
-    [fPeriodo, q, invalidateCacheForPeriodo, loadRows, refreshPeriodos, showToast]
+    [fPeriodo, q, invalidateCacheForPeriodo, loadRows, refreshPeriodos]
+  );
+
+  /* =========================
+     ✅ FIX: GUARDAR EDICIÓN (real)
+  ========================= */
+  const handleSaveEdit = useCallback(
+    async (payloadFinal) => {
+      showToast("cargando", "Guardando cambios…", 12000);
+      try {
+        const data = await editarCompraEnBackend(payloadFinal);
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudo actualizar.");
+
+        const per = payloadFinal?.periodo || fPeriodo;
+        await refreshAfterSave(per);
+
+        showToast("exito", "Compra actualizada.", 2400);
+      } catch (e) {
+        showToast("error", e?.message || "Error guardando compra.", 4200);
+        throw e; // 👈 importante: el modal corta saving si falla
+      }
+    },
+    [editarCompraEnBackend, fPeriodo, refreshAfterSave, showToast]
   );
 
   const confirmDelete = async () => {
@@ -784,20 +845,9 @@ export default function Compras() {
       append: true,
       mode: "more",
     });
-  }, [
-    hasMore,
-    loadingRows,
-    loadingMore,
-    loadingAll,
-    loadingListsCtx,
-    nextOffset,
-    fPeriodo,
-    q,
-    loadRows,
-    showToast,
-  ]);
+  }, [hasMore, loadingRows, loadingMore, loadingAll, loadingListsCtx, nextOffset, fPeriodo, q, loadRows, showToast]);
 
-  // ✅ CARGAR TODOS (FIX: progreso real sin depender del estado)
+  // ✅ CARGAR TODOS
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingRows || loadingMore || loadingAll || loadingListsCtx) return;
     if (nextOffset === null) return;
@@ -808,7 +858,6 @@ export default function Compras() {
     let offset = nextOffset;
     let guard = 0;
 
-    // ✅ seen local con lo YA cargado
     const seen = new Set(
       (Array.isArray(rows) ? rows : [])
         .map((x) => getRowId(x))
@@ -830,21 +879,17 @@ export default function Compras() {
           offset,
           append: true,
           mode: "all",
-          seenIds: seen, // ✅ dedupe estable
+          seenIds: seen,
         });
 
         if (!res) break;
 
-        // ✅ actualizar seen con lo que vino (aunque haya duplicados)
         (res.pageIds || []).forEach((id) => seen.add(String(id)));
 
-        // ✅ si no agregó nada y todavía "hay más", es backend bug/offset trabado
         if (res.hasMore && res.appended === 0) {
           stoppedNoProgress = true;
           break;
         }
-
-        // ✅ si nextOffset no avanza => loop infinito, cortamos
         if (res.nextOffset === offset) {
           stoppedNoProgress = true;
           break;
@@ -875,28 +920,20 @@ export default function Compras() {
     } finally {
       setLoadingAll(false);
     }
-  }, [
-    hasMore,
-    loadingRows,
-    loadingMore,
-    loadingAll,
-    loadingListsCtx,
-    nextOffset,
-    fPeriodo,
-    q,
-    loadRows,
-    showToast,
-    rows,
-  ]);
+  }, [hasMore, loadingRows, loadingMore, loadingAll, loadingListsCtx, nextOffset, fPeriodo, q, loadRows, showToast, rows]);
 
   const softLoading = loadingRows && showSkeleton;
   const lists = listasCtx || { periodos: [] };
 
   const handleChangePeriodo = async (valueUI) => {
     const ui = periodoToMMYYYY(valueUI);
+
+    skipSearchRef.current = true;
+
+    setReady(false);
     setFPeriodo(ui);
     setQ("");
-    skipSearchRef.current = true;
+
     await loadRows({ periodo: ui, q: "", offset: 0, append: false, mode: "initial" });
   };
 
@@ -911,13 +948,9 @@ export default function Compras() {
       {columns.map((c) => (
         <div
           key={c.key}
-          className={[
-            "mov-gridCell",
-            c.align === "center" ? "is-center" : "",
-            c.align === "right" ? "is-right" : "",
-          ].join(" ")}
+          className={["mov-gridCell", c.align === "center" ? "is-center" : "", c.align === "right" ? "is-right" : ""].join(" ")}
           role="cell"
-          data-label={c.label} /* ✅ para mobile card */
+          data-label={c.label}
         >
           <span className="mov-skeletonBar" style={{ width: "60%" }} />
         </div>
@@ -926,16 +959,14 @@ export default function Compras() {
   );
 
   // ✅ si hay 100 exactos, mostrar SOLO cargar todos
-  const showLoadMoreBtn =
-    !loadingRows && hasMore && filteredRows.length > 0 && filteredRows.length < PAGE_SIZE;
+  const showLoadMoreBtn = !loadingRows && hasMore && filteredRows.length > 0 && filteredRows.length < PAGE_SIZE;
   const showLoadAllBtn = !loadingRows && hasMore && filteredRows.length > 0;
 
+  const canShowEmpty = ready && !loadingRows && !loadingListsCtx && filteredRows.length === 0;
+
   return (
-    // ✅ scope compras para responsive SIN tocar desktop
     <div className="mov-page mov-page--compras">
-      {toast && (
-        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
-      )}
+      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
 
       {errorListsCtx && (
         <div className="mov-alert" role="alert">
@@ -1014,13 +1045,7 @@ export default function Compras() {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
                         skipSearchRef.current = true;
-                        await loadRows({
-                          periodo: fPeriodo,
-                          q: "",
-                          offset: 0,
-                          append: false,
-                          mode: "initial",
-                        });
+                        await loadRows({ periodo: fPeriodo, q: "", offset: 0, append: false, mode: "initial" });
                       }}
                       disabled={loadingAll}
                     >
@@ -1064,12 +1089,9 @@ export default function Compras() {
           {columns.map((c) => (
             <div
               key={c.key}
-              className={[
-                "mov-gridCell",
-                "mov-gridCell--head",
-                c.align === "center" ? "is-center" : "",
-                c.align === "right" ? "is-right" : "",
-              ].join(" ")}
+              className={["mov-gridCell", "mov-gridCell--head", c.align === "center" ? "is-center" : "", c.align === "right" ? "is-right" : ""].join(
+                " "
+              )}
               role="columnheader"
             >
               {c.label}
@@ -1093,12 +1115,7 @@ export default function Compras() {
                   const isDeleting = deletingId !== null && String(deletingId) === String(rowId);
 
                   return (
-                    <div
-                      key={rowId}
-                      className="mov-gridTable mov-gridTable--row"
-                      style={{ gridTemplateColumns: gridCols }}
-                      role="row"
-                    >
+                    <div key={rowId} className="mov-gridTable mov-gridTable--row" style={{ gridTemplateColumns: gridCols }} role="row">
                       <div className="mov-gridCell is-center" role="cell" data-label="FECHA">
                         {safeText(formatFechaDMY(pick(r, ["fecha"], "")))}
                       </div>
@@ -1109,9 +1126,7 @@ export default function Compras() {
                         data-label="DESCRIPCIÓN"
                         title={safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], ""))}
                       >
-                        <span className="mov-ellipsissss">
-                          {safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], ""))}
-                        </span>
+                        <span className="mov-ellipsissss">{safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], ""))}</span>
                       </div>
 
                       <div
@@ -1120,9 +1135,7 @@ export default function Compras() {
                         data-label="PROVEEDOR"
                         title={safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""))}
                       >
-                        <span className="mov-ellipsissss">
-                          {safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""))}
-                        </span>
+                        <span className="mov-ellipsissss">{safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""))}</span>
                       </div>
 
                       <div className="mov-gridCell is-center" role="cell" data-label="PAGO">
@@ -1170,7 +1183,8 @@ export default function Compras() {
                   );
                 })}
 
-                {!loadingRows && filteredRows.length === 0 && (
+                {/* ✅ EMPTY (solo cuando terminó la carga) */}
+                {canShowEmpty && (
                   <div className="mov-emptyRow">
                     {!fPeriodo ? "No hay período disponible para cargar compras." : "No hay compras para mostrar en este período."}
                   </div>
@@ -1225,6 +1239,7 @@ export default function Compras() {
         onSaved={async (info) => {
           const per = info?.periodoUI || info?.periodo || info?.periodoApi || fPeriodo;
           await refreshAfterSave(per);
+          showToast("exito", "Compra creada.", 2200);
         }}
       />
 
@@ -1238,10 +1253,7 @@ export default function Compras() {
           setSelectedRow(null);
         }}
         onToast={showToast}
-        onSave={async () => {
-          const per = selectedRow?.periodo || fPeriodo;
-          await refreshAfterSave(per);
-        }}
+        onSave={handleSaveEdit} // ✅ AHORA SI: guarda en backend
       />
 
       <ModalVerComprobante open={openVerComp} url={compUrl} onClose={closeComprobanteModal} title="Comprobante de compra" />

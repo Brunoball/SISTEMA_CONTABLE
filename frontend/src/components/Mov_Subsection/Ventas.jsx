@@ -5,7 +5,8 @@ import "../Movimientos/movimientos.css"; // ✅ misma estética
 
 import Toast from "../Global/Toast.jsx";
 
-// ✅ Loader overlay (fallback)
+// ✅ Loader overlay (fallback) — lo dejamos importado por si lo usás en otro lado,
+// pero en ESTA tabla NO lo usamos para evitar “parpadeo doble”.
 import GifCarga from "../Global/Gif_Carga.jsx";
 import "../Global/gif_carga.css";
 
@@ -187,8 +188,6 @@ function getAuthInfo() {
 
 /* =========================
    ✅ ID robusto (CLAVE del bug)
-   Si tu backend NO devuelve `id_movimiento` y devuelve otro nombre,
-   antes te estaba deduplicando mal y te quedabas en 100.
 ========================= */
 function getMovimientoId(r) {
   const cand =
@@ -223,9 +222,7 @@ function getRowKey(r) {
    ✅ FILTRO VENTAS (robusto)
 ========================= */
 function hasCliente(r) {
-  const idCli = Number(
-    r?.id_cliente ?? r?.cliente_id ?? r?.idCliente ?? r?.id_cliente_fk ?? 0
-  );
+  const idCli = Number(r?.id_cliente ?? r?.cliente_id ?? r?.idCliente ?? r?.id_cliente_fk ?? 0);
   if (Number.isFinite(idCli) && idCli > 0) return true;
 
   const cliTxt = String(
@@ -246,9 +243,7 @@ function hasTipoVentaId(r) {
   return Number.isFinite(id) && id > 0;
 }
 function isSalida(r) {
-  const tmTxt = normalizeSearchText(
-    r?.tipo_movimiento ?? r?.pago_tipo_movimiento ?? ""
-  );
+  const tmTxt = normalizeSearchText(r?.tipo_movimiento ?? r?.pago_tipo_movimiento ?? "");
   if (tmTxt.includes("salida")) return true;
 
   const id = Number(r?.id_tipo_movimiento ?? r?.tipo_movimiento_id ?? 0);
@@ -263,7 +258,6 @@ function isVentaRow(row) {
 
 /* =========================
    Normalizador de fila
-   ✅ fuerza `id_movimiento` si vino con otro nombre
 ========================= */
 function normalizeVentaRow(r) {
   const cliente =
@@ -281,7 +275,7 @@ function normalizeVentaRow(r) {
 
   return {
     ...r,
-    id_movimiento: idMov ?? r?.id_movimiento ?? null, // ✅ garantizado si existe
+    id_movimiento: idMov ?? r?.id_movimiento ?? null,
     periodo: periodoToMMYYYY(r?.periodo),
     fecha: r?.fecha,
     cliente: String(cliente ?? "").trim() || "",
@@ -370,27 +364,23 @@ export default function Ventas() {
   const closeToast = useCallback(() => setToast(null), []);
 
   const cacheRef = useRef(new Map());
+
+  // ✅ request id global (stale response guard)
   const reqIdRef = useRef(0);
+
+  // ✅ request id por tipo (para que una request vieja NO apague loaders de la nueva)
+  const rowsReqIdRef = useRef(0);
+  const moreReqIdRef = useRef(0);
 
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
-  const skelTimerRef = useRef(null);
-  const [showSkeleton, setShowSkeleton] = useState(false);
-
-  const beginSkeleton = useCallback(() => {
-    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
-    setShowSkeleton(false);
-    skelTimerRef.current = setTimeout(() => setShowSkeleton(true), 120);
-  }, []);
-  const endSkeleton = useCallback(() => {
-    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
-    setShowSkeleton(false);
-  }, []);
+  // ✅ Skeleton: SIN timer para evitar “parpadeo doble”.
+  // Las líneas se muestran desde que empieza loadingRows hasta que termina.
+  const showSkeleton = loadingRows;
 
   useEffect(() => {
     return () => {
-      if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
   }, []);
@@ -421,9 +411,7 @@ export default function Ventas() {
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(
-        `Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`
-      );
+      throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
     }
   }, []);
 
@@ -463,7 +451,8 @@ export default function Ventas() {
 
   /* =========================
      LOAD ROWS (paginado)
-     ✅ merge con key robusta (getRowKey)
+     ✅ Fix “No hay ventas...” (race)
+     ✅ Fix “parpadeo doble” (solo skeleton estable)
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -483,7 +472,6 @@ export default function Ventas() {
         setLoadingMore(false);
         setLoadingAll(false);
         setError("");
-        endSkeleton();
         return { hasMore: false, nextOffset: null, received: 0 };
       }
 
@@ -494,29 +482,30 @@ export default function Ventas() {
       const myReqId = ++reqIdRef.current;
       const start = Date.now();
 
+      // ✅ set active request id by type
       if (!append) {
-        beginSkeleton();
+        rowsReqIdRef.current = myReqId;
         setLoadingRows(true);
       } else {
+        moreReqIdRef.current = myReqId;
         setLoadingMore(true);
       }
       setError("");
 
       try {
-        if (
-          !append &&
-          offset === 0 &&
-          cacheRef.current.has(cacheKey) &&
-          !FORCE_SHOW_LOADER_DEV
-        ) {
+        // ✅ cache solo para carga principal offset=0
+        if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
+          // ✅ no tocar si ya no soy la request activa principal
+          if (rowsReqIdRef.current !== myReqId) return null;
+
           const cached = cacheRef.current.get(cacheKey);
           const cachedRows = Array.isArray(cached?.rows) ? cached.rows : [];
           rowsRef.current = cachedRows;
           setRows(cachedRows);
           setHasMore(!!cached?.hasMore);
           setNextOffset(cached?.nextOffset ?? null);
+
           setLoadingRows(false);
-          endSkeleton();
           return {
             hasMore: !!cached?.hasMore,
             nextOffset: cached?.nextOffset ?? null,
@@ -534,12 +523,8 @@ export default function Ventas() {
         const data = await apiGet(`${API}?${sp.toString()}`);
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar ventas.");
 
-        if (myReqId !== reqIdRef.current) {
-          if (append) setLoadingMore(false);
-          else setLoadingRows(false);
-          endSkeleton();
-          return null;
-        }
+        // ✅ stale response: NO tocar loaders/UI
+        if (myReqId !== reqIdRef.current) return null;
 
         const listKey = Array.isArray(data.ventas)
           ? "ventas"
@@ -567,6 +552,9 @@ export default function Ventas() {
 
         return await new Promise((resolve) => {
           const apply = () => {
+            // ✅ si ya no soy la request activa, no tocar nada
+            if (myReqId !== reqIdRef.current) return resolve(null);
+
             if (append) {
               const base = Array.isArray(rowsRef.current) ? rowsRef.current : [];
               const seen = new Set(base.map((x) => getRowKey(x)));
@@ -585,27 +573,36 @@ export default function Ventas() {
                 newHasMore = false;
                 newNextOffset = null;
               }
+
+              setHasMore(newHasMore);
+              setNextOffset(newNextOffset);
+
+              // ✅ apagar loader SOLO si sigo siendo la request activa "more"
+              if (moreReqIdRef.current === myReqId) setLoadingMore(false);
             } else {
               rowsRef.current = page;
               setRows(page);
+
+              setHasMore(newHasMore);
+              setNextOffset(newNextOffset);
+
+              if (offset === 0) {
+                cacheRef.current.set(cacheKey, {
+                  rows: page,
+                  hasMore: newHasMore,
+                  nextOffset: newNextOffset,
+                });
+              }
+
+              // ✅ apagar loader SOLO si sigo siendo la request activa "rows"
+              if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
             }
 
-            setHasMore(newHasMore);
-            setNextOffset(newNextOffset);
-
-            if (!append && offset === 0) {
-              cacheRef.current.set(cacheKey, {
-                rows: page,
-                hasMore: newHasMore,
-                nextOffset: newNextOffset,
-              });
-            }
-
-            if (append) setLoadingMore(false);
-            else setLoadingRows(false);
-
-            endSkeleton();
-            resolve({ hasMore: newHasMore, nextOffset: newNextOffset, received: page.length });
+            resolve({
+              hasMore: newHasMore,
+              nextOffset: newNextOffset,
+              received: page.length,
+            });
           };
 
           if (remaining > 0) setTimeout(apply, remaining);
@@ -617,24 +614,23 @@ export default function Ventas() {
 
         return await new Promise((resolve) => {
           setTimeout(() => {
-            if (myReqId !== reqIdRef.current) {
-              if (append) setLoadingMore(false);
-              else setLoadingRows(false);
-              endSkeleton();
-              resolve(null);
-              return;
-            }
+            // ✅ stale response: NO tocar loaders/UI
+            if (myReqId !== reqIdRef.current) return resolve(null);
 
             setError(e.message || "Error cargando ventas.");
-            if (append) setLoadingMore(false);
-            else setLoadingRows(false);
-            endSkeleton();
+
+            if (append) {
+              if (moreReqIdRef.current === myReqId) setLoadingMore(false);
+            } else {
+              if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
+            }
+
             resolve(null);
           }, remaining);
         });
       }
     },
-    [API, apiGet, fPeriodo, q, beginSkeleton, endSkeleton]
+    [API, apiGet, fPeriodo, q]
   );
 
   /* =========================
@@ -662,7 +658,6 @@ export default function Ventas() {
         setHasMore(false);
         setNextOffset(null);
         setLoadingRows(false);
-        endSkeleton();
       }
     })();
 
@@ -718,7 +713,6 @@ export default function Ventas() {
 
   /* =========================
      Filtrado client-side
-     ✅ AHORA filteredRows es el TOTAL de filas cargadas que coinciden con el filtro
   ========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
@@ -824,9 +818,7 @@ export default function Ventas() {
         const pago = safeText(r.pago_tipo_venta ?? r.tipo_venta);
         const pagoNorm = normalizeSearchText(pago);
 
-        const medioPago = pagoNorm.includes("contado")
-          ? safeText(r.medio_pago_nombre)
-          : "—";
+        const medioPago = pagoNorm.includes("contado") ? safeText(r.medio_pago_nombre) : "—";
 
         return {
           FECHA: safeText(formatFechaDMY(r.fecha)),
@@ -917,9 +909,7 @@ export default function Ventas() {
   };
 
   /* =========================
-     ✅ "Cargar todos" MEJORADO
-     (termina de paginar hasta el final)
-     AHORA actualiza el contador correctamente
+     ✅ "Cargar todos" (loop seguro)
   ========================= */
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
@@ -930,7 +920,6 @@ export default function Ventas() {
 
     let offset = nextOffset;
     let guard = 0;
-    let previousLength = rowsRef.current.length;
 
     try {
       while (offset !== null && guard < 3000) {
@@ -950,18 +939,15 @@ export default function Ventas() {
         guard += 1;
         offset = res.nextOffset;
 
-        // ✅ si no crece, no hay más real (o backend ignora offset)
         const afterLen = rowsRef.current.length;
         if (afterLen === beforeLen) break;
-
-        previousLength = afterLen;
 
         if (!res.hasMore || offset === null) break;
       }
 
-      // ✅ Forzar actualización del contador (aunque ya debería estar actualizado por los setRows)
-      setRows([...rowsRef.current]); // Esto fuerza re-render con el nuevo length
-      
+      // fuerza render (por si el último append no cambió referencia)
+      setRows([...rowsRef.current]);
+
       showToast("exito", `Listo: se cargaron ${rowsRef.current.length} ventas.`, 2600);
     } catch (e) {
       showToast("error", e?.message || "Error cargando todas.", 4200);
@@ -982,7 +968,7 @@ export default function Ventas() {
   ]);
 
   // ✅ estado UX
-  const softLoading = loadingRows && showSkeleton;
+  const softLoading = loadingRows; // (skeleton estable)
 
   const skelWidths = useMemo(() => {
     return {
@@ -1056,15 +1042,13 @@ export default function Ventas() {
       tipos_movimiento: [],
     };
 
+  // ✅ clave: NO mostrar empty-state mientras esté cargando algo
+  const isAnyLoading = loadingRows || loadingMore || loadingAll;
+
   return (
     <div className="mov-page">
       {toast && (
-        <Toast
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={closeToast}
-        />
+        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
       )}
 
       {errorListsCtx && (
@@ -1085,7 +1069,6 @@ export default function Ventas() {
             <div>
               <div className="mov-card__title">Movimientos · Ventas</div>
 
-              {/* ✅ CONTADOR: AHORA REFLEJA CORRECTAMENTE LO QUE HAY EN TABLA */}
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> ventas
                 {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
@@ -1177,10 +1160,7 @@ export default function Ventas() {
             </div>
           </div>
 
-          <div
-            className="mov-card__actions"
-            style={{ display: "flex", gap: 10, alignItems: "center" }}
-          >
+          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <button
               type="button"
               className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
@@ -1204,11 +1184,7 @@ export default function Ventas() {
         </div>
 
         {/* HEADER */}
-        <div
-          className="mov-gridTable mov-gridTable--head"
-          style={{ gridTemplateColumns: gridCols }}
-          role="row"
-        >
+        <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
           {columns.map((c) => (
             <div
               key={c.key}
@@ -1227,104 +1203,93 @@ export default function Ventas() {
 
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
-          <div
-            className={[
-              "mov-gridBody",
-              "mov-gridBody--relative",
-              softLoading ? "mov-softLoading" : "",
-            ].join(" ")}
-          >
-            {showSkeleton && loadingRows ? (
+          <div className={["mov-gridBody", "mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
+            {/* ✅ Skeleton estable (sin parpadeo) */}
+            {showSkeleton ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
               </div>
             ) : (
               <>
-                {loadingRows && !showSkeleton && (
-                  <div className="mov-emptyRow mov-emptyRow--loading">
-                    <GifCarga />
-                  </div>
-                )}
-
-                {!loadingRows &&
-                  filteredRows.map((r) => {
-                    const key = getRowKey(r);
-                    return (
-                      <div
-                        key={key}
-                        className="mov-gridTable mov-gridTable--row"
-                        style={{ gridTemplateColumns: gridCols }}
-                        role="row"
-                      >
-                        {columns.map((c) => {
-                          if (c.key === "acciones") {
-                            return (
-                              <div
-                                key={c.key}
-                                className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
-                                role="cell"
-                              >
-                                <div className="mov-actionsInline">
-                                  <button
-                                    type="button"
-                                    className="mov-iconBtn"
-                                    title="Editar"
-                                    onClick={() => {
-                                      setSelectedRow(r);
-                                      setOpenEdit(true);
-                                    }}
-                                    disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx}
-                                  >
-                                    <FontAwesomeIcon icon={faPenToSquare} />
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    className="mov-iconBtn mov-iconBtn--danger"
-                                    title="Eliminar"
-                                    disabled={
-                                      loadingRows ||
-                                      loadingMore ||
-                                      loadingAll ||
-                                      loadingListsCtx ||
-                                      deletingId === r.id_movimiento
-                                    }
-                                    onClick={() => {
-                                      setSelectedRow(r);
-                                      setOpenDel(true);
-                                    }}
-                                  >
-                                    {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          const val = c.render ? c.render(r) : safeText(r[c.key]);
+                {filteredRows.map((r) => {
+                  const key = getRowKey(r);
+                  return (
+                    <div
+                      key={key}
+                      className="mov-gridTable mov-gridTable--row"
+                      style={{ gridTemplateColumns: gridCols }}
+                      role="row"
+                    >
+                      {columns.map((c) => {
+                        if (c.key === "acciones") {
                           return (
                             <div
                               key={c.key}
-                              className={[
-                                "mov-gridCell",
-                                c.align === "right" ? "is-right" : "",
-                                c.align === "center" ? "is-center" : "",
-                                c.strong ? "is-strong" : "",
-                              ]
-                                .filter(Boolean)
-                                .join(" ")}
+                              className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
                               role="cell"
-                              title={typeof val === "string" ? val : undefined}
                             >
-                              <span className="mov-ellipsissss">{val}</span>
+                              <div className="mov-actionsInline">
+                                <button
+                                  type="button"
+                                  className="mov-iconBtn"
+                                  title="Editar"
+                                  onClick={() => {
+                                    setSelectedRow(r);
+                                    setOpenEdit(true);
+                                  }}
+                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                                >
+                                  <FontAwesomeIcon icon={faPenToSquare} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="mov-iconBtn mov-iconBtn--danger"
+                                  title="Eliminar"
+                                  disabled={
+                                    loadingRows ||
+                                    loadingMore ||
+                                    loadingAll ||
+                                    loadingListsCtx ||
+                                    deletingId === r.id_movimiento
+                                  }
+                                  onClick={() => {
+                                    setSelectedRow(r);
+                                    setOpenDel(true);
+                                  }}
+                                >
+                                  {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
+                                </button>
+                              </div>
                             </div>
                           );
-                        })}
-                      </div>
-                    );
-                  })}
+                        }
 
-                {!loadingRows && filteredRows.length === 0 && (
+                        const val = c.render ? c.render(r) : safeText(r[c.key]);
+                        return (
+                          <div
+                            key={c.key}
+                            className={[
+                              "mov-gridCell",
+                              c.align === "right" ? "is-right" : "",
+                              c.align === "center" ? "is-center" : "",
+                              c.strong ? "is-strong" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            role="cell"
+                            title={typeof val === "string" ? val : undefined}
+                          >
+                            <span className="mov-ellipsissss">{val}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+
+                {/* ✅ FIX: NO mostrar empty mientras carga algo */}
+                {!isAnyLoading && filteredRows.length === 0 && (
                   <div className="mov-emptyRow">
                     {!fPeriodo
                       ? "No hay período disponible para cargar ventas."

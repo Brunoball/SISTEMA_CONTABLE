@@ -44,7 +44,59 @@ function prefetchRoute(ruta) {
   } catch {}
 }
 
-// ⚡ Cache simple de listas globales (solo para “calentar”)
+/* =========================================================
+   ✅ AUTH HARDENING (100% seguro)
+   - apiFetch: agrega X-Session y dispara evento global si 401/403
+   - idle robusto: lastActivityTs + visibility/focus (suspensión)
+========================================================= */
+
+const LAST_ACTIVITY_KEY = "balto_last_activity_ts";
+
+// wrapper fetch centralizado para este archivo
+async function apiFetch(path, options = {}) {
+  const sessionKey = (localStorage.getItem("session_key") || "").trim();
+
+  const headers = new Headers(options.headers || {});
+  if (sessionKey) headers.set("X-Session", sessionKey);
+
+  // si mandás body y no seteaste content-type, asumimos JSON
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    try {
+      window.dispatchEvent(new CustomEvent("auth:unauthorized", { detail: { status: res.status } }));
+    } catch {}
+  }
+
+  return res;
+}
+
+function setLastActivityNow() {
+  try {
+    sessionStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
+  } catch {}
+}
+
+function getLastActivityTs() {
+  try {
+    const v = sessionStorage.getItem(LAST_ACTIVITY_KEY);
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/* =========================
+   Cache simple de listas globales
+========================= */
 const LISTAS_CACHE_KEY = "balto_listas_cache_v1";
 const LISTAS_TTL_MS = 10 * 60 * 1000; // 10 min
 
@@ -70,20 +122,16 @@ function setCachedListas(data) {
   } catch {}
 }
 
-async function prefetchGlobalListas(sessionKey, onUnauthorized) {
+async function prefetchGlobalListas(onUnauthorized) {
   try {
     const cached = getCachedListas();
     if (cached) return cached;
 
-    const headers = {};
-    if (sessionKey) headers["X-Session"] = sessionKey;
-
-    const r = await fetch(`${BASE_URL}/api.php?action=global_obtener_listas`, {
+    const r = await apiFetch(`/api.php?action=global_obtener_listas`, {
       method: "GET",
-      headers,
     });
 
-    // ✅ si expiró sesión, forzar logout del cliente
+    // ✅ si expiró sesión, forzar logout del cliente (igual ya dispara evento)
     if (r.status === 401 || r.status === 403) {
       try {
         onUnauthorized?.();
@@ -239,7 +287,7 @@ function hardClientLogoutCleanup() {
 /* =========================
    ✅ AUTO-LOGOUT por inactividad
 ========================= */
-const IDLE_MS = 30 * 60 * 1000; // ✅ 30 minutos SIN INTERACCIÓN (PROD)
+const IDLE_MS = 30 * 60 * 1000; // 30 minutos SIN INTERACCIÓN (PROD)
 
 /* =========================
    COMPONENTE
@@ -303,7 +351,7 @@ const Principal = () => {
 
       if (!silent) setClosingUI(true);
 
-      // ✅ cortar el timer de inactividad (por si justo se dispara)
+      // ✅ cortar el timer de inactividad
       if (idleTimerRef.current) {
         clearTimeout(idleTimerRef.current);
         idleTimerRef.current = null;
@@ -313,12 +361,8 @@ const Principal = () => {
 
       try {
         if (sessionKey) {
-          const r = await fetch(`${BASE_URL}/api.php?action=logout`, {
+          const r = await apiFetch(`/api.php?action=logout`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Session": sessionKey,
-            },
             body: JSON.stringify({}),
           });
 
@@ -343,6 +387,17 @@ const Principal = () => {
     },
     [navigate]
   );
+
+  /* =========================
+     ✅ Escuchar 401/403 global (cualquier request)
+  ========================= */
+  useEffect(() => {
+    const onUnauthorized = () => {
+      doLogout({ silent: true });
+    };
+    window.addEventListener("auth:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("auth:unauthorized", onUnauthorized);
+  }, [doLogout]);
 
   /* =========================
      ✅ Guard / carga usuario
@@ -373,17 +428,17 @@ const Principal = () => {
       applyTheme("claro");
     }
 
+    // ✅ iniciar last activity al entrar (para suspensión)
+    setLastActivityNow();
+
     // ✅ PRO: prefetch listas globales en background (calienta todo el panel)
     try {
-      const sessionKey = getSessionKey();
       const onUnauthorized = () => doLogout({ silent: true });
 
       if (typeof window.requestIdleCallback === "function") {
-        window.requestIdleCallback(() => prefetchGlobalListas(sessionKey, onUnauthorized), {
-          timeout: 1200,
-        });
+        window.requestIdleCallback(() => prefetchGlobalListas(onUnauthorized), { timeout: 1200 });
       } else {
-        setTimeout(() => prefetchGlobalListas(sessionKey, onUnauthorized), 200);
+        setTimeout(() => prefetchGlobalListas(onUnauthorized), 200);
       }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -424,11 +479,13 @@ const Principal = () => {
   }, [drawerOpen]);
 
   /* =========================
-     ✅ AUTO-LOGOUT por inactividad (30 min)
-     - Resetea timer ante interacción real del usuario
+     ✅ AUTO-LOGOUT por inactividad (robusto)
+     - Resetea timer + guarda lastActivityTs
   ========================= */
   useEffect(() => {
     const resetIdle = () => {
+      setLastActivityNow();
+
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       idleTimerRef.current = setTimeout(() => {
         doLogout({ silent: true });
@@ -444,6 +501,35 @@ const Principal = () => {
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       events.forEach((e) => window.removeEventListener(e, resetIdle));
+    };
+  }, [doLogout]);
+
+  /* =========================
+     ✅ SUSPENSIÓN / TAB BACKGROUND:
+     - al volver a foco/visible, si ya pasaron 30 min => logout
+  ========================= */
+  useEffect(() => {
+    const checkExpiredOnWake = () => {
+      const last = getLastActivityTs();
+      if (!last) return;
+
+      const diff = Date.now() - last;
+      if (diff >= IDLE_MS) {
+        doLogout({ silent: true });
+      }
+    };
+
+    const onFocus = () => checkExpiredOnWake();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") checkExpiredOnWake();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [doLogout]);
 
@@ -523,8 +609,7 @@ const Principal = () => {
   }, [doLogout]);
 
   /* =========================
-     ✅ toggle tema -> MASTER
-     - si devuelve 401/403 => logout
+     ✅ toggle tema -> MASTER (con apiFetch + auto-logout 401/403)
   ========================= */
   const toggleTema = async () => {
     const prevTema = tema;
@@ -541,17 +626,12 @@ const Principal = () => {
     } catch {}
 
     try {
-      const sessionKey = getSessionKey();
-      const headers = { "Content-Type": "application/json" };
-      if (sessionKey) headers["X-Session"] = sessionKey;
-
-      const r = await fetch(`${BASE_URL}/api.php?action=usuario_tema_actualizar`, {
+      const r = await apiFetch(`/api.php?action=usuario_tema_actualizar`, {
         method: "POST",
-        headers,
         body: JSON.stringify({ tema: nuevo }),
       });
 
-      // ✅ si expiró sesión, logout
+      // ✅ si expiró sesión, logout (igual apiFetch dispara evento)
       if (r.status === 401 || r.status === 403) {
         await doLogout({ silent: true });
         return;
@@ -808,7 +888,7 @@ const Principal = () => {
 
       {/* ================= CONTENT ================= */}
       <main className="pp-content">
-        <div className="pp-content__inner" >
+        <div className="pp-content__inner">
           <Outlet />
         </div>
       </main>

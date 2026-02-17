@@ -82,7 +82,7 @@ function getAuthInfo() {
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    const cand = u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
@@ -144,8 +144,15 @@ function getIdGeneric(x) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+function getIdCliente(x) {
+  const cand = x?.id ?? x?.id_cliente ?? x?.idCliente ?? x?.cliente_id ?? 0;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 /* =========================
    Lists normalize (como Ventas)
+   ✅ ahora incluye clientes
 ========================= */
 function normalizeLists(lists) {
   const src = lists && typeof lists === "object" ? lists : {};
@@ -153,13 +160,14 @@ function normalizeLists(lists) {
 
   return {
     detalles: Array.isArray(l.detalles) ? l.detalles : [],
+    clientes: Array.isArray(l.clientes) ? l.clientes : [],
   };
 }
 
 /* =========================
    Mini modal: agregar catálogo
 ========================= */
-function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark }) {
+function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark, label = "Nombre" }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -206,7 +214,7 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
               disabled={saving}
               autoComplete="off"
             />
-            <label className="fl-label">Nombre</label>
+            <label className="fl-label">{label}</label>
           </div>
 
           <div className="mi-mini__actions">
@@ -227,25 +235,13 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 /* =========================
    ModalEditarRecibo
 ========================= */
-export default function ModalEditarRecibo({
-  open,
-  row,
-  lists,
-  periodoDefault,
-  onClose,
-  onSave,
-  onToast,
-  dark,
-}) {
+export default function ModalEditarRecibo({ open, row, lists, periodoDefault, onClose, onSave, onToast, dark }) {
   const API_LISTS = `${BASE_URL}/api.php?action=global_obtener_listas`;
   const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
 
   const darkOn = isDarkEnabled(dark);
 
-  const showToast = useCallback(
-    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
-    [onToast]
-  );
+  const showToast = useCallback((tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion), [onToast]);
 
   const [saving, setSaving] = useState(false);
 
@@ -258,6 +254,7 @@ export default function ModalEditarRecibo({
     const normalized = normalizeLists(data);
     setLocalLists((prev) => ({
       detalles: normalized.detalles?.length ? normalized.detalles : prev.detalles,
+      clientes: normalized.clientes?.length ? normalized.clientes : prev.clientes,
     }));
   }, [API_LISTS]);
 
@@ -266,18 +263,24 @@ export default function ModalEditarRecibo({
     fecha: "",
     periodo: "",
     id_cliente: NULL_OPTION,
-    cliente: "",
+    clienteInput: "",
     id_detalle: NULL_OPTION,
     detalleInput: "",
     monto_total: 0,
   }));
 
-  // ✅ Autocomplete
+  // ✅ Autocomplete Detalles
   const [detalleFocus, setDetalleFocus] = useState(false);
   const [detalleArmed, setDetalleArmed] = useState(false);
   const detalleInputRef = useRef(null);
 
-  const [addUI, setAddUI] = useState({ open: false, text: "", saving: false });
+  // ✅ Autocomplete Clientes
+  const [clienteFocus, setClienteFocus] = useState(false);
+  const [clienteArmed, setClienteArmed] = useState(false);
+  const clienteInputRef = useRef(null);
+
+  // Mini-modals
+  const [addUI, setAddUI] = useState({ open: false, catalogo: "detalles", text: "", saving: false });
 
   /* =========================
      Init form + refresh lists
@@ -295,7 +298,7 @@ export default function ModalEditarRecibo({
     const perAuto = periodoFromISODate(fecha);
 
     const idCliente = r.id_cliente ?? r.cliente_id ?? r.idCliente ?? NULL_OPTION;
-    const clienteTxt = String(r.cliente ?? "").trim();
+    const clienteTxt = String(r.cliente ?? r.nombre_cliente ?? r.razon_social_cliente ?? "").trim();
 
     const idDetalle = r.id_detalle ?? NULL_OPTION;
 
@@ -305,18 +308,25 @@ export default function ModalEditarRecibo({
 
     const detFallback = String(r.detalle ?? r.descripcion ?? r.concepto ?? "").trim();
 
+    // nombre cliente desde lista si hay id
+    const cliName = String(
+      getArr(localLists.clientes).find((c) => String(getIdCliente(c)) === String(idCliente))?.nombre ?? ""
+    ).trim();
+
     setSaving(false);
-    setAddUI({ open: false, text: "", saving: false });
+    setAddUI({ open: false, catalogo: "detalles", text: "", saving: false });
 
     setDetalleFocus(false);
     setDetalleArmed(false);
+    setClienteFocus(false);
+    setClienteArmed(false);
 
     setForm({
       id_movimiento: safeNumber(r.id_movimiento) || null,
       fecha: fecha || "",
       periodo: perRow || perDef || perAuto || "",
       id_cliente: String(idCliente ?? NULL_OPTION),
-      cliente: clienteTxt,
+      clienteInput: cliName || clienteTxt || "",
       id_detalle: String(idDetalle ?? NULL_OPTION),
       detalleInput: detName || detFallback || "",
       monto_total: safeNumber(r.monto_total ?? r.total ?? 0),
@@ -355,60 +365,102 @@ export default function ModalEditarRecibo({
   };
 
   /* =========================
-     Nuevo detalle (fix + update localLists)
+     Autocomplete clientes (usa localLists)
   ========================= */
-  const startAddDetalle = () => {
-    if (saving) return;
-    setDetalleFocus(false);
-    setDetalleArmed(false);
-    setAddUI({ open: true, text: "", saving: false });
+  const filteredClientes = useMemo(() => {
+    const all = getArr(localLists.clientes);
+    const q = normalizeSearchText(form.clienteInput);
+
+    if (!clienteFocus || !clienteArmed || q.length < 1) return [];
+
+    return all
+      .filter((c) => normalizeSearchText(c?.nombre ?? c?.razon_social ?? c?.cliente).includes(q))
+      .slice(0, 25);
+  }, [localLists.clientes, form.clienteInput, clienteFocus, clienteArmed]);
+
+  const handleClienteInputChange = (e) => {
+    const value = e.target.value;
+    setClienteArmed(true);
+    // si escribe, invalidamos id_cliente (igual que detalle)
+    setForm((p) => ({ ...p, clienteInput: value, id_cliente: NULL_OPTION }));
   };
 
-  const guardarNuevoDetalle = async () => {
+  const handleSelectCliente = (cli) => {
+    const nombre = String(cli?.nombre ?? cli?.razon_social ?? cli?.cliente ?? "").trim();
+    const cid = getIdCliente(cli) || cli?.id;
+    setForm((p) => ({
+      ...p,
+      clienteInput: nombre,
+      id_cliente: String(cid ?? NULL_OPTION),
+    }));
+    setClienteFocus(false);
+    setClienteArmed(false);
+  };
+
+  /* =========================
+     Nuevo catálogo (detalles/clientes)
+  ========================= */
+  const startAdd = (catalogo) => {
+    if (saving) return;
+
+    // cerrar dropdowns
+    setDetalleFocus(false);
+    setDetalleArmed(false);
+    setClienteFocus(false);
+    setClienteArmed(false);
+
+    setAddUI({ open: true, catalogo, text: "", saving: false });
+  };
+
+  const guardarNuevoCatalogo = async () => {
     const nombre = String(addUI.text || "").trim();
+    const catalogo = addUI.catalogo;
+
     if (!nombre) {
-      showToast("advertencia", "Escribí un nombre para el detalle.", 2600);
+      showToast("advertencia", "Escribí un nombre.", 2600);
       return;
     }
 
     setAddUI((p) => ({ ...p, saving: true }));
-    showToast("cargando", "Creando detalle…", 12000);
+    showToast("cargando", `Creando ${catalogo.slice(0, -1)}…`, 12000);
 
     try {
       const { idUsuario } = getAuthInfo();
 
       const data = await apiPostJson(API_CATALOGO, {
-        catalogo: "detalles",
+        catalogo, // "detalles" | "clientes"
         nombre,
         idUsuario,
       });
 
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear el detalle.");
+      if (!data?.exito) throw new Error(data?.mensaje || `No se pudo crear ${catalogo}.`);
 
       const newId = Number(data?.item?.id);
       const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
 
       if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
 
-      // ✅ update localLists (clave del fix)
-      setLocalLists((prev) => {
-        const arr = getArr(prev.detalles).slice();
-        if (!arr.some((x) => getIdGeneric(x) === newId)) {
-          arr.push({ id: newId, nombre: newNombre });
-        }
-        return { ...prev, detalles: arr };
-      });
+      if (catalogo === "detalles") {
+        setLocalLists((prev) => {
+          const arr = getArr(prev.detalles).slice();
+          if (!arr.some((x) => getIdGeneric(x) === newId)) arr.push({ id: newId, nombre: newNombre });
+          return { ...prev, detalles: arr };
+        });
+        setForm((p) => ({ ...p, id_detalle: String(newId), detalleInput: newNombre }));
+      } else if (catalogo === "clientes") {
+        setLocalLists((prev) => {
+          const arr = getArr(prev.clientes).slice();
+          if (!arr.some((x) => getIdCliente(x) === newId)) arr.push({ id: newId, nombre: newNombre });
+          return { ...prev, clientes: arr };
+        });
+        setForm((p) => ({ ...p, id_cliente: String(newId), clienteInput: newNombre }));
+      }
 
-      setForm((p) => ({ ...p, id_detalle: String(newId), detalleInput: newNombre }));
-
-      setAddUI({ open: false, text: "", saving: false });
-      showToast("exito", `Detalle creado: "${newNombre}"`, 2400);
-
-      setDetalleFocus(false);
-      setDetalleArmed(false);
+      setAddUI({ open: false, catalogo: "detalles", text: "", saving: false });
+      showToast("exito", `${catalogo.slice(0, -1)} creado: "${newNombre}"`, 2400);
     } catch (e) {
       setAddUI((p) => ({ ...p, saving: false }));
-      showToast("error", e?.message || "Error creando detalle.", 4200);
+      showToast("error", e?.message || "Error creando.", 4200);
     }
   };
 
@@ -419,7 +471,7 @@ export default function ModalEditarRecibo({
     e.preventDefault();
 
     if (addUI.open) {
-      showToast("advertencia", "Terminá de crear el detalle (o cancelá) antes de guardar.", 3200);
+      showToast("advertencia", "Terminá de crear (o cancelá) antes de guardar.", 3200);
       return;
     }
 
@@ -441,7 +493,7 @@ export default function ModalEditarRecibo({
         periodo: perAPI, // YYYY-MM
 
         id_cliente: form.id_cliente && form.id_cliente !== NULL_OPTION ? Number(form.id_cliente) : null,
-        cliente: String(form.cliente || "").trim(),
+        cliente: String(form.clienteInput || "").trim(),
 
         id_detalle: idDet,
         detalle: String(form.detalleInput || "").trim(),
@@ -462,7 +514,10 @@ export default function ModalEditarRecibo({
   if (!open) return null;
 
   return createPortal(
-    <div className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`} onMouseDown={() => !saving && onClose?.()}>
+    <div
+      className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`}
+      onMouseDown={() => !saving && onClose?.()}
+    >
       <div
         className={["mi-modal__container", "mi-modal__container--mov", darkOn ? "mi-modal--dark" : ""].join(" ")}
         id="mov--modaleditarrecibo"
@@ -473,7 +528,7 @@ export default function ModalEditarRecibo({
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar recibo</h2>
-            <p className="mi-modal__subtitle">Fecha, período, descripción/detalle, cliente y monto.</p>
+            <p className="mi-modal__subtitle">Fecha, período, detalle, cliente y monto.</p>
           </div>
 
           <button className="mi-modal__close" onClick={() => !saving && onClose?.()} disabled={saving} type="button">
@@ -541,21 +596,46 @@ export default function ModalEditarRecibo({
               </ul>
             )}
 
-            <button type="button" onClick={startAddDetalle} disabled={saving} className="mi-cr-link">
+            <button type="button" onClick={() => startAdd("detalles")} disabled={saving} className="mi-cr-link">
               + Agregar nuevo detalle
             </button>
           </div>
 
-          {/* Cliente */}
-          <div className="fl-field mi-field--mt12">
+          {/* ✅ Cliente (igual a detalle, con sugerencias + alta) */}
+          <div className="fl-field mi-field--mt12 mi-field--rel">
             <input
+              ref={clienteInputRef}
               className="fl-input"
               placeholder=" "
-              value={form.cliente}
-              onChange={(e) => setForm((p) => ({ ...p, cliente: e.target.value }))}
-              disabled={saving}
+              value={form.clienteInput}
+              onChange={handleClienteInputChange}
+              onFocus={() => setClienteFocus(true)}
+              onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
+              disabled={saving || addUI.open}
+              autoComplete="off"
             />
-            <label className="fl-label">Cliente (texto)</label>
+            <label className="fl-label">Cliente</label>
+
+            {clienteFocus && clienteArmed && filteredClientes.length > 0 && (
+              <ul className="mi-cr-suggest">
+                {filteredClientes.map((c) => (
+                  <li
+                    key={getIdCliente(c) || c.id}
+                    className="mi-cr-suggest__item"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleSelectCliente(c);
+                    }}
+                  >
+                    <span className="mi-cr-suggest__text">{String(c?.nombre ?? c?.razon_social ?? c?.cliente ?? "").trim()}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <button type="button" onClick={() => startAdd("clientes")} disabled={saving} className="mi-cr-link">
+              + Agregar nuevo cliente
+            </button>
           </div>
 
           {/* Monto */}
@@ -577,7 +657,12 @@ export default function ModalEditarRecibo({
             <button type="submit" disabled={saving} className="mit-btn mit-btn--solid btn--modalrecibo">
               {saving ? "Guardando..." : "Guardar"}
             </button>
-            <button type="button" onClick={() => !saving && onClose?.()} disabled={saving} className="mit-btn mit-btn--ghost btn--modalrecibo">
+            <button
+              type="button"
+              onClick={() => !saving && onClose?.()}
+              disabled={saving}
+              className="mit-btn mit-btn--ghost btn--modalrecibo"
+            >
               Cancelar
             </button>
           </div>
@@ -585,12 +670,13 @@ export default function ModalEditarRecibo({
 
         <AddCatalogMiniModal
           open={addUI.open}
-          title="Nuevo detalle"
+          title={addUI.catalogo === "clientes" ? "Nuevo cliente" : "Nuevo detalle"}
+          label={addUI.catalogo === "clientes" ? "Nombre del cliente" : "Nombre del detalle"}
           value={addUI.text}
           saving={addUI.saving}
           onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
-          onCancel={() => !addUI.saving && setAddUI({ open: false, text: "", saving: false })}
-          onSave={guardarNuevoDetalle}
+          onCancel={() => !addUI.saving && setAddUI({ open: false, catalogo: "detalles", text: "", saving: false })}
+          onSave={guardarNuevoCatalogo}
           dark={darkOn}
         />
       </div>

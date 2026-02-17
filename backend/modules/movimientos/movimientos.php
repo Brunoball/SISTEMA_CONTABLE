@@ -98,38 +98,32 @@ function normalize_periodo_to_yyyymm(string $p): string {
   $p = trim($p);
   if ($p === '') return '';
 
-  // YYYY-MM
   if (preg_match('/^\d{4}\-\d{2}$/', $p)) return $p;
 
-  // MM-YYYY -> YYYY-MM
   if (preg_match('/^\d{1,2}\-\d{4}$/', $p)) {
     [$mm, $yyyy] = explode('-', $p);
     $mm = str_pad((string)((int)$mm), 2, '0', STR_PAD_LEFT);
     return $yyyy . '-' . $mm;
   }
 
-  // YYYY/M or YYYY/MM -> YYYY-MM
   if (preg_match('/^\d{4}\/\d{1,2}$/', $p)) {
     [$yyyy, $mm] = explode('/', $p);
     $mm = str_pad((string)((int)$mm), 2, '0', STR_PAD_LEFT);
     return $yyyy . '-' . $mm;
   }
 
-  // M/YYYY or MM/YYYY -> YYYY-MM
   if (preg_match('/^\d{1,2}\/\d{4}$/', $p)) {
     [$mm, $yyyy] = explode('/', $p);
     $mm = str_pad((string)((int)$mm), 2, '0', STR_PAD_LEFT);
     return $yyyy . '-' . $mm;
   }
 
-  // YYYYMM -> YYYY-MM
   if (preg_match('/^\d{6}$/', $p)) {
     $yyyy = substr($p, 0, 4);
     $mm   = substr($p, 4, 2);
     return $yyyy . '-' . $mm;
   }
 
-  // fallback (si te llega algo raro, lo dejamos)
   return $p;
 }
 function is_valid_periodo_yyyymm(string $p): bool {
@@ -148,6 +142,41 @@ function load_movimiento_or_fail(PDO $pdo, int $id_movimiento): array {
   $row = $st->fetch(PDO::FETCH_ASSOC);
   if (!$row) fail('Movimiento no encontrado.');
   return $row;
+}
+
+/**
+ * ✅ Builder del WHERE de búsqueda:
+ * - Evita reutilizar el mismo placeholder (:q) muchas veces (PDO MySQL -> HY093)
+ * - Genera placeholders únicos :q1..:q8 y los bindea todos
+ */
+function build_where_q(string $q, array &$params): string {
+  $q = trim($q);
+  if ($q === '') return '';
+
+  $like = '%' . $q . '%';
+
+  // placeholders únicos
+  $params[':q_id']  = $like;
+  $params[':q_c']   = $like;
+  $params[':q_tv']  = $like;
+  $params[':q_cc']  = $like;
+  $params[':q_cl']  = $like;
+  $params[':q_pr']  = $like;
+  $params[':q_mp']  = $like;
+  $params[':q_d']   = $like;
+
+  return "
+    AND (
+      CAST(COALESCE(m.id_movimiento, 0) AS CHAR) LIKE :q_id OR
+      EXISTS (SELECT 1 FROM clasificaciones c WHERE c.id_clasificacion = m.id_clasificacion AND c.nombre LIKE :q_c) OR
+      EXISTS (SELECT 1 FROM tipos_venta tv WHERE tv.id_tipo_venta = m.id_tipo_venta AND tv.nombre LIKE :q_tv) OR
+      EXISTS (SELECT 1 FROM cuentas_corrientes cc WHERE cc.id_cuenta_corriente = m.id_cuenta_corriente AND cc.nombre LIKE :q_cc) OR
+      EXISTS (SELECT 1 FROM clientes cl WHERE cl.id_cliente = m.id_cliente AND cl.nombre LIKE :q_cl) OR
+      EXISTS (SELECT 1 FROM proveedores pr WHERE pr.id_proveedor = m.id_proveedor AND pr.nombre LIKE :q_pr) OR
+      EXISTS (SELECT 1 FROM medios_pago mp WHERE mp.id_medio_pago = m.id_medio_pago AND mp.nombre LIKE :q_mp) OR
+      EXISTS (SELECT 1 FROM detalles d WHERE d.id_detalle = m.id_detalle AND d.nombre LIKE :q_d)
+    )
+  ";
 }
 
 /* =========================================================
@@ -172,12 +201,11 @@ function movimientos_periodos_listar(PDO $pdo): void {
     $periodos = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
     $periodos = array_values(array_filter(array_map(fn($p) => trim((string)$p), $periodos)));
 
-    // ✅ también para UI nueva MM-YYYY
     $periodos_ui = array_values(array_map(fn($p) => periodo_yyyymm_to_mmyyyy((string)$p), $periodos));
 
     ok([
-      'periodos' => $periodos,         // YYYY-MM (backend estándar)
-      'periodos_ui' => $periodos_ui,   // MM-YYYY (para inputs tipo el tuyo)
+      'periodos' => $periodos,
+      'periodos_ui' => $periodos_ui,
     ]);
   } catch (Throwable $e) {
     fail('No se pudieron obtener los períodos. ' . $e->getMessage());
@@ -188,7 +216,8 @@ function movimientos_periodos_listar(PDO $pdo): void {
    LISTAR MOVIMIENTOS (GET)
    ✅ periodo flexible (acepta MM-YYYY y lo normaliza)
    ✅ paginado robusto (limit+1 => has_more real)
-   ✅ total_count real (para que el front muestre el número correcto)
+   ✅ total_count real
+   ✅ FIX HY093: placeholders únicos para q
 ========================================================= */
 function movimientos_listar(PDO $pdo): void {
   $periodoRaw = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
@@ -203,40 +232,23 @@ function movimientos_listar(PDO $pdo): void {
 
   if ($periodoRaw === '') fail('Falta período.');
 
-  // ✅ acepta MM-YYYY / etc y lo pasa a YYYY-MM
   $periodo = normalize_periodo_to_yyyymm($periodoRaw);
   if (!is_valid_periodo_yyyymm($periodo)) {
     fail('Período inválido. Formatos aceptados: YYYY-MM o MM-YYYY (y variantes con /).');
   }
 
-  // ✅ total_count (con y sin q) para UI
-  $totalParams = [':periodo' => $periodo];
-  $whereQ = '';
-  if ($q !== '') {
-    $whereQ = "
-      AND (
-        CAST(COALESCE(m.id_movimiento, 0) AS CHAR) LIKE :q OR
-        EXISTS (SELECT 1 FROM clasificaciones c WHERE c.id_clasificacion = m.id_clasificacion AND c.nombre LIKE :q) OR
-        EXISTS (SELECT 1 FROM tipos_venta tv WHERE tv.id_tipo_venta = m.id_tipo_venta AND tv.nombre LIKE :q) OR
-        EXISTS (SELECT 1 FROM cuentas_corrientes cc WHERE cc.id_cuenta_corriente = m.id_cuenta_corriente AND cc.nombre LIKE :q) OR
-        EXISTS (SELECT 1 FROM clientes cl WHERE cl.id_cliente = m.id_cliente AND cl.nombre LIKE :q) OR
-        EXISTS (SELECT 1 FROM proveedores pr WHERE pr.id_proveedor = m.id_proveedor AND pr.nombre LIKE :q) OR
-        EXISTS (SELECT 1 FROM medios_pago mp WHERE mp.id_medio_pago = m.id_medio_pago AND mp.nombre LIKE :q) OR
-        EXISTS (SELECT 1 FROM detalles d WHERE d.id_detalle = m.id_detalle AND d.nombre LIKE :q)
-      )
-    ";
-    $totalParams[':q'] = '%' . $q . '%';
-  }
-
   try {
-    // total_count (con filtros)
+    // ✅ total_count
+    $paramsCount = [':periodo' => $periodo];
+    $whereQ = build_where_q($q, $paramsCount);
+
     $stCount = $pdo->prepare("
       SELECT COUNT(*) AS cnt
       FROM movimientos m
       WHERE m.periodo = :periodo
       $whereQ
     ");
-    foreach ($totalParams as $k => $v) {
+    foreach ($paramsCount as $k => $v) {
       $stCount->bindValue($k, $v);
     }
     $stCount->execute();
@@ -244,6 +256,14 @@ function movimientos_listar(PDO $pdo): void {
 
     // ✅ paginado robusto: pedimos 1 extra
     $limitPlus = $limit + 1;
+
+    // params para listar (independientes)
+    $paramsList = [
+      ':periodo' => $periodo,
+      ':limitPlus' => (int)$limitPlus,
+      ':offset' => (int)$offset,
+    ];
+    $whereQ2 = build_where_q($q, $paramsList);
 
     $sql = "
       WITH mov AS (
@@ -263,7 +283,7 @@ function movimientos_listar(PDO $pdo): void {
           m.created_at
         FROM movimientos m
         WHERE m.periodo = :periodo
-        $whereQ
+        $whereQ2
         ORDER BY m.fecha DESC, m.id_movimiento DESC
         LIMIT :limitPlus OFFSET :offset
       ),
@@ -336,17 +356,17 @@ function movimientos_listar(PDO $pdo): void {
     ";
 
     $stmt = $pdo->prepare($sql);
-
-    // binds
-    $stmt->bindValue(':periodo', $periodo);
-    if ($q !== '') $stmt->bindValue(':q', '%' . $q . '%');
-    $stmt->bindValue(':limitPlus', (int)$limitPlus, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
-
+    foreach ($paramsList as $k => $v) {
+      if ($k === ':limitPlus' || $k === ':offset') {
+        $stmt->bindValue($k, (int)$v, PDO::PARAM_INT);
+      } else {
+        $stmt->bindValue($k, $v);
+      }
+    }
     $stmt->execute();
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    // ✅ has_more real: si vino > limit, recortamos
+    // ✅ has_more real
     $hasMore = count($rows) > $limit;
     if ($hasMore) $rows = array_slice($rows, 0, $limit);
 
@@ -360,9 +380,8 @@ function movimientos_listar(PDO $pdo): void {
         'id_movimiento' => (int)$r['id_movimiento'],
         'fecha' => (string)($r['fecha'] ?? ''),
 
-        // ✅ devolvemos ambos por compat: backend standard + UI nueva
-        'periodo' => (string)($r['periodo'] ?? ''),                 // YYYY-MM
-        'periodo_ui' => periodo_yyyymm_to_mmyyyy((string)($r['periodo'] ?? '')), // MM-YYYY
+        'periodo' => (string)($r['periodo'] ?? ''), // YYYY-MM
+        'periodo_ui' => periodo_yyyymm_to_mmyyyy((string)($r['periodo'] ?? '')),
 
         'id_tipo_operacion' => $r['id_tipo_operacion'] === null ? null : (int)$r['id_tipo_operacion'],
         'id_clasificacion' => $r['id_clasificacion'] === null ? null : (int)$r['id_clasificacion'],
@@ -375,7 +394,6 @@ function movimientos_listar(PDO $pdo): void {
 
         'monto_total' => (float)($r['monto_total_final'] ?? 0),
 
-        // primer item (si existe)
         'cantidad'  => $r['item_cantidad'] === null ? null : (float)$r['item_cantidad'],
         'precio'    => $r['item_precio'] === null ? null : (float)$r['item_precio'],
         'iva_pct'   => $r['item_iva_pct'] === null ? null : (float)$r['item_iva_pct'],
@@ -400,18 +418,15 @@ function movimientos_listar(PDO $pdo): void {
     ok([
       'movimientos' => $data,
 
-      // ✅ paginado
       'limit' => $limit,
       'offset' => $offset,
       'has_more' => $hasMore,
       'next_offset' => $nextOffset,
 
-      // ✅ conteo real (para mostrar “X registros” bien)
       'total_count' => $total_count,
 
-      // ✅ para debug/compat
-      'periodo_norm' => $periodo,          // YYYY-MM
-      'periodo_ui' => periodo_yyyymm_to_mmyyyy($periodo), // MM-YYYY
+      'periodo_norm' => $periodo,
+      'periodo_ui' => periodo_yyyymm_to_mmyyyy($periodo),
     ]);
   } catch (Throwable $e) {
     fail('No se pudieron cargar movimientos. ' . $e->getMessage());
@@ -420,7 +435,6 @@ function movimientos_listar(PDO $pdo): void {
 
 /* =========================================================
    CREAR MOVIMIENTO (POST JSON)
-   ✅ periodo flexible (MM-YYYY incluido)
 ========================================================= */
 function movimientos_crear(PDO $pdo): void {
   require_post();
@@ -430,9 +444,7 @@ function movimientos_crear(PDO $pdo): void {
 
   $periodoRaw = (string)($in['periodo'] ?? '');
   $periodo = normalize_periodo_to_yyyymm($periodoRaw);
-
-  // si no vino periodo, lo sacamos de la fecha
-  if ($periodo === '' && $fecha) $periodo = substr($fecha, 0, 7); // YYYY-MM
+  if ($periodo === '' && $fecha) $periodo = substr($fecha, 0, 7);
 
   if ($periodo === '' || !is_valid_periodo_yyyymm($periodo)) {
     fail('Período inválido. Acepta YYYY-MM o MM-YYYY (y variantes con /).');
@@ -453,7 +465,6 @@ function movimientos_crear(PDO $pdo): void {
   $monto_total = as_dec($in['monto_total'] ?? ($in['total'] ?? 0), 2);
   if ($monto_total <= 0) fail('Monto total inválido. Debe ser > 0.');
 
-  // estos vienen del modal (si mandás items)
   $item_cantidad = array_key_exists('cantidad', $in) ? as_dec($in['cantidad'], 3) : null;
   $item_precio   = array_key_exists('precio', $in) ? as_dec($in['precio'], 2) : null;
   $item_iva_pct  = array_key_exists('iva_pct', $in) ? as_dec($in['iva_pct'], 2) : null;
@@ -535,7 +546,6 @@ function movimientos_crear(PDO $pdo): void {
 
 /* =========================================================
    CREAR BATCH (POST JSON)
-   ✅ periodo flexible (MM-YYYY incluido)
 ========================================================= */
 function movimientos_crear_batch(PDO $pdo): void {
   require_post();
@@ -641,7 +651,6 @@ function movimientos_crear_batch(PDO $pdo): void {
 
 /* =========================================================
    ACTUALIZAR MOVIMIENTO (POST JSON)
-   ✅ periodo flexible (MM-YYYY incluido)
 ========================================================= */
 function movimientos_actualizar(PDO $pdo): void {
   require_post();

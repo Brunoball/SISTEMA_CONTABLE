@@ -195,10 +195,7 @@ const LISTKEY_BY_CATALOGO = {
 
 /* =========================
    Mini Modal: alta rápida
-<<<<<<< HEAD
-   ✅ FIX: createPortal + overlay top-level
-=======
->>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
+
 ========================= */
 function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
@@ -594,10 +591,7 @@ export default function ModalEditarCompra({
     try {
       const { idUsuario } = getAuthInfo();
 
-<<<<<<< HEAD
-      // ✅ mismo endpoint que NuevaCompra
-=======
->>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
+
       const data = await apiPostJson(`${API}?action=catalogo_crear`, {
         catalogo: meta.catalogo,
         nombre,
@@ -1244,11 +1238,11 @@ export default function ModalEditarCompra({
 
         <AddCatalogMiniModal
           open={miniOpen}
-          title={miniTitle}
+
           value={addUI.text}
           saving={addUI.saving}
           onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
-<<<<<<< HEAD
+
           onCancel={() => {
             // revertir ADD_OPTION si cancelás
             setForm((p) => ({
@@ -1258,9 +1252,8 @@ export default function ModalEditarCompra({
             }));
             closeAddMini();
           }}
-=======
-          onCancel={cancelMini}
->>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
+
+
           onSave={guardarNuevoCatalogo}
           dark={dark}
         />

@@ -2594,3 +2594,37 @@ input[type="number"]::-webkit-outer-spin-button {
 .mi-cr-row .fl-select{
   padding: 0 !important;
 }
+/* =========================================================
+   ✅ FIX SELECTS en DARK:
+   el desplegable (<option>) queda blanco por default,
+   y como el select tiene texto blanco, no se ve.
+   Pegarlo AL FINAL del CSS.
+========================================================= */
+
+.mi-modal__container.mi-modal--dark select.fl-select,
+.mi-modal__container.mi-modal--dark select.fl-input{
+  background: rgba(255,255,255,.06) !important;
+  color: rgba(255,255,255,.92) !important;
+  border-color: rgba(255,255,255,.14) !important;
+}
+
+/* Dropdown (options) */
+.mi-modal__container.mi-modal--dark select.fl-select option,
+.mi-modal__container.mi-modal--dark select.fl-input option{
+  background: #071a2c !important;            /* fondo oscuro real */
+  color: rgba(255,255,255,.92) !important;  /* texto visible */
+}
+
+/* Optgroup si usás */
+.mi-modal__container.mi-modal--dark select.fl-select optgroup,
+.mi-modal__container.mi-modal--dark select.fl-input optgroup{
+  background: #071a2c !important;
+  color: rgba(255,255,255,.85) !important;
+}
+
+/* Hover/selected (algunos navegadores lo respetan) */
+.mi-modal__container.mi-modal--dark select.fl-select option:checked,
+.mi-modal__container.mi-modal--dark select.fl-input option:checked{
+  background: #0a2540 !important;
+  color: rgba(255,255,255,.95) !important;
+}

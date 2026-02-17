@@ -173,8 +173,7 @@ function getAuthInfo() {
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand =
-      u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    const cand = u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
@@ -182,11 +181,7 @@ function getAuthInfo() {
 }
 
 /* =========================
-<<<<<<< HEAD
-   ✅ ID robusto (clave dedupe/paginado)
-=======
-   ✅ ID robusto (CLAVE del bug)
->>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
+   ✅ ID robusto (CLAVE del bug: dedupe/paginado)
 ========================= */
 function getMovimientoId(r) {
   const cand =
@@ -364,8 +359,7 @@ export default function Ventas() {
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
-  // ✅ Skeleton: SIN timer para evitar “parpadeo doble”.
-  // Las líneas se muestran desde que empieza loadingRows hasta que termina.
+  // ✅ Skeleton estable (sin timer)
   const showSkeleton = loadingRows;
 
   useEffect(() => {
@@ -482,15 +476,11 @@ export default function Ventas() {
       setError("");
 
       try {
-<<<<<<< HEAD
-        if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
-=======
         // ✅ cache solo para carga principal offset=0
         if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
           // ✅ no tocar si ya no soy la request activa principal
           if (rowsReqIdRef.current !== myReqId) return null;
 
->>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
           const cached = cacheRef.current.get(cacheKey);
           const cachedRows = Array.isArray(cached?.rows) ? cached.rows : [];
           rowsRef.current = cachedRows;
@@ -498,7 +488,8 @@ export default function Ventas() {
           setHasMore(!!cached?.hasMore);
           setNextOffset(cached?.nextOffset ?? null);
 
-          setLoadingRows(false);
+          if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
+
           return {
             hasMore: !!cached?.hasMore,
             nextOffset: cached?.nextOffset ?? null,
@@ -864,6 +855,7 @@ export default function Ventas() {
     });
 
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
+    return data;
   };
 
   const confirmDelete = async () => {
@@ -901,11 +893,7 @@ export default function Ventas() {
   };
 
   /* =========================
-<<<<<<< HEAD
-     ✅ "Cargar todos"
-=======
      ✅ "Cargar todos" (loop seguro)
->>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
   ========================= */
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
@@ -941,14 +929,9 @@ export default function Ventas() {
         if (!res.hasMore || offset === null) break;
       }
 
-<<<<<<< HEAD
-      // fuerza re-render por las dudas
-      setRows([...rowsRef.current]);
-=======
       // fuerza render (por si el último append no cambió referencia)
       setRows([...rowsRef.current]);
 
->>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
       showToast("exito", `Listo: se cargaron ${rowsRef.current.length} ventas.`, 2600);
     } catch (e) {
       showToast("error", e?.message || "Error cargando todas.", 4200);
@@ -1048,13 +1031,14 @@ export default function Ventas() {
 
   return (
     <div className="mov-page">
-<<<<<<< HEAD
-      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
-=======
       {toast && (
-        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
       )}
->>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
 
       {errorListsCtx && (
         <div className="mov-alert" role="alert">
@@ -1204,88 +1188,13 @@ export default function Ventas() {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className={["mov-gridBody", "mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
-<<<<<<< HEAD
-            {showSkeleton && loadingRows ? (
-=======
             {/* ✅ Skeleton estable (sin parpadeo) */}
             {showSkeleton ? (
->>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
               </div>
             ) : (
               <>
-<<<<<<< HEAD
-                {loadingRows && !showSkeleton && (
-                  <div className="mov-emptyRow mov-emptyRow--loading">
-                    <GifCarga />
-                  </div>
-                )}
-
-                {!loadingRows &&
-                  filteredRows.map((r) => {
-                    const key = getRowKey(r);
-                    return (
-                      <div
-                        key={key}
-                        className="mov-gridTable mov-gridTable--row"
-                        style={{ gridTemplateColumns: gridCols }}
-                        role="row"
-                      >
-                        {columns.map((c) => {
-                          if (c.key === "acciones") {
-                            return (
-                              <div
-                                key={c.key}
-                                className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
-                                role="cell"
-                                data-label={c.label} // ✅ mobile label
-                              >
-                                <div className="mov-actionsInline">
-                                  <button
-                                    type="button"
-                                    className="mov-iconBtn"
-                                    title="Editar"
-                                    onClick={() => {
-                                      setSelectedRow(r);
-                                      setOpenEdit(true);
-                                    }}
-                                    disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx}
-                                  >
-                                    <FontAwesomeIcon icon={faPenToSquare} />
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    className="mov-iconBtn mov-iconBtn--danger"
-                                    title="Eliminar"
-                                    disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || deletingId === r.id_movimiento}
-                                    onClick={() => {
-                                      setSelectedRow(r);
-                                      setOpenDel(true);
-                                    }}
-                                  >
-                                    {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          const val = c.render ? c.render(r) : safeText(r[c.key]);
-                          return (
-                            <div
-                              key={c.key}
-                              className={[
-                                "mov-gridCell",
-                                c.align === "right" ? "is-right" : "",
-                                c.align === "center" ? "is-center" : "",
-                                c.strong ? "is-strong" : "",
-                              ].filter(Boolean).join(" ")}
-                              role="cell"
-                              data-label={c.label} // ✅ CLAVE para que en celu se vean “headers”
-                              title={typeof val === "string" ? val : undefined}
-=======
                 {filteredRows.map((r) => {
                   const key = getRowKey(r);
                   return (
@@ -1302,7 +1211,7 @@ export default function Ventas() {
                               key={c.key}
                               className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
                               role="cell"
->>>>>>> aafc488096f51e0fddbd67880a9532523dcc8c6d
+                              data-label={c.label} // ✅ mobile label
                             >
                               <div className="mov-actionsInline">
                                 <button
@@ -1342,6 +1251,7 @@ export default function Ventas() {
                         }
 
                         const val = c.render ? c.render(r) : safeText(r[c.key]);
+
                         return (
                           <div
                             key={c.key}
@@ -1354,6 +1264,7 @@ export default function Ventas() {
                               .filter(Boolean)
                               .join(" ")}
                             role="cell"
+                            data-label={c.label} // ✅ CLAVE para mobile
                             title={typeof val === "string" ? val : undefined}
                           >
                             <span className="mov-ellipsissss">{val}</span>
@@ -1367,7 +1278,9 @@ export default function Ventas() {
                 {/* ✅ FIX: NO mostrar empty mientras carga algo */}
                 {!isAnyLoading && filteredRows.length === 0 && (
                   <div className="mov-emptyRow">
-                    {!fPeriodo ? "No hay período disponible para cargar ventas." : "No hay ventas para mostrar en este período."}
+                    {!fPeriodo
+                      ? "No hay período disponible para cargar ventas."
+                      : "No hay ventas para mostrar en este período."}
                   </div>
                 )}
 

@@ -451,8 +451,9 @@
   /* wrapper: evitamos scroll raro y damos altura usable */
   .mov-page--compras .mov-tableWrap--compras {
     overflow: auto;
-    min-height: 43vh !important;
-    max-height: 43vh !important;
+    padding: 10px;
+    min-height: 46vh !important;
+    max-height: 46vh !important;
   }
 
   /* cada fila pasa a "card" */

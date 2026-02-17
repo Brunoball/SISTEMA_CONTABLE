@@ -173,12 +173,7 @@ function getAuthInfo() {
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand =
-      u?.idUsuarioMaster ??
-      u?.idUsuario ??
-      u?.id_usuario ??
-      u?.id ??
-      u?.user_id ??
-      0;
+      u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
@@ -186,9 +181,7 @@ function getAuthInfo() {
 }
 
 /* =========================
-   ✅ ID robusto (CLAVE del bug)
-   Si tu backend NO devuelve `id_movimiento` y devuelve otro nombre,
-   antes te estaba deduplicando mal y te quedabas en 100.
+   ✅ ID robusto (clave dedupe/paginado)
 ========================= */
 function getMovimientoId(r) {
   const cand =
@@ -211,7 +204,6 @@ function getRowKey(r) {
   const id = getMovimientoId(r);
   if (id) return `id:${id}`;
 
-  // fallback estable (por si NO hay id): fecha + cliente + detalle + monto
   const f = String(r?.fecha ?? "").trim();
   const c = String(r?.cliente ?? r?.cliente_nombre ?? "").trim();
   const d = String(r?.detalle ?? r?.descripcion ?? r?.concepto ?? "").trim();
@@ -223,17 +215,11 @@ function getRowKey(r) {
    ✅ FILTRO VENTAS (robusto)
 ========================= */
 function hasCliente(r) {
-  const idCli = Number(
-    r?.id_cliente ?? r?.cliente_id ?? r?.idCliente ?? r?.id_cliente_fk ?? 0
-  );
+  const idCli = Number(r?.id_cliente ?? r?.cliente_id ?? r?.idCliente ?? r?.id_cliente_fk ?? 0);
   if (Number.isFinite(idCli) && idCli > 0) return true;
 
   const cliTxt = String(
-    r?.cliente ??
-      r?.cliente_nombre ??
-      r?.nombre_cliente ??
-      r?.razon_social_cliente ??
-      ""
+    r?.cliente ?? r?.cliente_nombre ?? r?.nombre_cliente ?? r?.razon_social_cliente ?? ""
   ).trim();
   return cliTxt.length > 0;
 }
@@ -246,9 +232,7 @@ function hasTipoVentaId(r) {
   return Number.isFinite(id) && id > 0;
 }
 function isSalida(r) {
-  const tmTxt = normalizeSearchText(
-    r?.tipo_movimiento ?? r?.pago_tipo_movimiento ?? ""
-  );
+  const tmTxt = normalizeSearchText(r?.tipo_movimiento ?? r?.pago_tipo_movimiento ?? "");
   if (tmTxt.includes("salida")) return true;
 
   const id = Number(r?.id_tipo_movimiento ?? r?.tipo_movimiento_id ?? 0);
@@ -263,25 +247,19 @@ function isVentaRow(row) {
 
 /* =========================
    Normalizador de fila
-   ✅ fuerza `id_movimiento` si vino con otro nombre
 ========================= */
 function normalizeVentaRow(r) {
   const cliente =
-    r?.cliente ??
-    r?.cliente_nombre ??
-    r?.nombre_cliente ??
-    r?.razon_social_cliente ??
-    "";
+    r?.cliente ?? r?.cliente_nombre ?? r?.nombre_cliente ?? r?.razon_social_cliente ?? "";
 
   const tipoVentaTxt = r?.pago_tipo_venta ?? r?.tipo_venta ?? "";
-  const medioPagoNombre =
-    r?.medio_pago_nombre ?? r?.medio_pago ?? r?.pago_medio_pago ?? "";
+  const medioPagoNombre = r?.medio_pago_nombre ?? r?.medio_pago ?? r?.pago_medio_pago ?? "";
 
   const idMov = getMovimientoId(r);
 
   return {
     ...r,
-    id_movimiento: idMov ?? r?.id_movimiento ?? null, // ✅ garantizado si existe
+    id_movimiento: idMov ?? r?.id_movimiento ?? null,
     periodo: periodoToMMYYYY(r?.periodo),
     fecha: r?.fecha,
     cliente: String(cliente ?? "").trim() || "",
@@ -421,9 +399,7 @@ export default function Ventas() {
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(
-        `Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`
-      );
+      throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
     }
   }, []);
 
@@ -503,12 +479,7 @@ export default function Ventas() {
       setError("");
 
       try {
-        if (
-          !append &&
-          offset === 0 &&
-          cacheRef.current.has(cacheKey) &&
-          !FORCE_SHOW_LOADER_DEV
-        ) {
+        if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
           const cached = cacheRef.current.get(cacheKey);
           const cachedRows = Array.isArray(cached?.rows) ? cached.rows : [];
           rowsRef.current = cachedRows;
@@ -550,8 +521,7 @@ export default function Ventas() {
         const rawArr = Array.isArray(data[listKey]) ? data[listKey] : [];
         const normAll = rawArr.map(normalizeVentaRow);
 
-        let newHasMore =
-          data.has_more !== undefined ? !!data.has_more : normAll.length > PAGE_SIZE;
+        let newHasMore = data.has_more !== undefined ? !!data.has_more : normAll.length > PAGE_SIZE;
 
         let newNextOffset =
           data.next_offset !== undefined && data.next_offset !== null
@@ -718,7 +688,6 @@ export default function Ventas() {
 
   /* =========================
      Filtrado client-side
-     ✅ AHORA filteredRows es el TOTAL de filas cargadas que coinciden con el filtro
   ========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
@@ -824,9 +793,7 @@ export default function Ventas() {
         const pago = safeText(r.pago_tipo_venta ?? r.tipo_venta);
         const pagoNorm = normalizeSearchText(pago);
 
-        const medioPago = pagoNorm.includes("contado")
-          ? safeText(r.medio_pago_nombre)
-          : "—";
+        const medioPago = pagoNorm.includes("contado") ? safeText(r.medio_pago_nombre) : "—";
 
         return {
           FECHA: safeText(formatFechaDMY(r.fecha)),
@@ -917,9 +884,7 @@ export default function Ventas() {
   };
 
   /* =========================
-     ✅ "Cargar todos" MEJORADO
-     (termina de paginar hasta el final)
-     AHORA actualiza el contador correctamente
+     ✅ "Cargar todos"
   ========================= */
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
@@ -930,7 +895,6 @@ export default function Ventas() {
 
     let offset = nextOffset;
     let guard = 0;
-    let previousLength = rowsRef.current.length;
 
     try {
       while (offset !== null && guard < 3000) {
@@ -950,18 +914,14 @@ export default function Ventas() {
         guard += 1;
         offset = res.nextOffset;
 
-        // ✅ si no crece, no hay más real (o backend ignora offset)
         const afterLen = rowsRef.current.length;
         if (afterLen === beforeLen) break;
-
-        previousLength = afterLen;
 
         if (!res.hasMore || offset === null) break;
       }
 
-      // ✅ Forzar actualización del contador (aunque ya debería estar actualizado por los setRows)
-      setRows([...rowsRef.current]); // Esto fuerza re-render con el nuevo length
-      
+      // fuerza re-render por las dudas
+      setRows([...rowsRef.current]);
       showToast("exito", `Listo: se cargaron ${rowsRef.current.length} ventas.`, 2600);
     } catch (e) {
       showToast("error", e?.message || "Error cargando todas.", 4200);
@@ -1011,7 +971,7 @@ export default function Ventas() {
                 key={c.key}
                 className="mov-gridCell mov-gridCell--actions is-center"
                 role="cell"
-                data-label={c.label}
+                data-label={c.label} // ✅ mobile label
               >
                 <div className="mov-skelActions">
                   <span className="mov-skelIcon" />
@@ -1033,7 +993,7 @@ export default function Ventas() {
                 c.align === "center" ? "is-center" : "",
               ].join(" ")}
               role="cell"
-              data-label={c.label}
+              data-label={c.label} // ✅ mobile label
             >
               <span className="mov-skeletonBar" style={{ width: w }} />
             </div>
@@ -1058,14 +1018,7 @@ export default function Ventas() {
 
   return (
     <div className="mov-page">
-      {toast && (
-        <Toast
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={closeToast}
-        />
-      )}
+      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
 
       {errorListsCtx && (
         <div className="mov-alert" role="alert">
@@ -1085,7 +1038,6 @@ export default function Ventas() {
             <div>
               <div className="mov-card__title">Movimientos · Ventas</div>
 
-              {/* ✅ CONTADOR: AHORA REFLEJA CORRECTAMENTE LO QUE HAY EN TABLA */}
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> ventas
                 {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
@@ -1159,12 +1111,7 @@ export default function Ventas() {
                         setQ("");
                         skipSearchRef.current = true;
 
-                        await loadRows({
-                          periodo: fPeriodo,
-                          q: "",
-                          offset: 0,
-                          append: false,
-                        });
+                        await loadRows({ periodo: fPeriodo, q: "", offset: 0, append: false });
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
                       disabled={loadingAll}
@@ -1177,10 +1124,7 @@ export default function Ventas() {
             </div>
           </div>
 
-          <div
-            className="mov-card__actions"
-            style={{ display: "flex", gap: 10, alignItems: "center" }}
-          >
+          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <button
               type="button"
               className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
@@ -1204,11 +1148,7 @@ export default function Ventas() {
         </div>
 
         {/* HEADER */}
-        <div
-          className="mov-gridTable mov-gridTable--head"
-          style={{ gridTemplateColumns: gridCols }}
-          role="row"
-        >
+        <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
           {columns.map((c) => (
             <div
               key={c.key}
@@ -1227,13 +1167,7 @@ export default function Ventas() {
 
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
-          <div
-            className={[
-              "mov-gridBody",
-              "mov-gridBody--relative",
-              softLoading ? "mov-softLoading" : "",
-            ].join(" ")}
-          >
+          <div className={["mov-gridBody", "mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
             {showSkeleton && loadingRows ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
@@ -1263,6 +1197,7 @@ export default function Ventas() {
                                 key={c.key}
                                 className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
                                 role="cell"
+                                data-label={c.label} // ✅ mobile label
                               >
                                 <div className="mov-actionsInline">
                                   <button
@@ -1282,13 +1217,7 @@ export default function Ventas() {
                                     type="button"
                                     className="mov-iconBtn mov-iconBtn--danger"
                                     title="Eliminar"
-                                    disabled={
-                                      loadingRows ||
-                                      loadingMore ||
-                                      loadingAll ||
-                                      loadingListsCtx ||
-                                      deletingId === r.id_movimiento
-                                    }
+                                    disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || deletingId === r.id_movimiento}
                                     onClick={() => {
                                       setSelectedRow(r);
                                       setOpenDel(true);
@@ -1310,10 +1239,9 @@ export default function Ventas() {
                                 c.align === "right" ? "is-right" : "",
                                 c.align === "center" ? "is-center" : "",
                                 c.strong ? "is-strong" : "",
-                              ]
-                                .filter(Boolean)
-                                .join(" ")}
+                              ].filter(Boolean).join(" ")}
                               role="cell"
+                              data-label={c.label} // ✅ CLAVE para que en celu se vean “headers”
                               title={typeof val === "string" ? val : undefined}
                             >
                               <span className="mov-ellipsissss">{val}</span>
@@ -1326,9 +1254,7 @@ export default function Ventas() {
 
                 {!loadingRows && filteredRows.length === 0 && (
                   <div className="mov-emptyRow">
-                    {!fPeriodo
-                      ? "No hay período disponible para cargar ventas."
-                      : "No hay ventas para mostrar en este período."}
+                    {!fPeriodo ? "No hay período disponible para cargar ventas." : "No hay ventas para mostrar en este período."}
                   </div>
                 )}
 

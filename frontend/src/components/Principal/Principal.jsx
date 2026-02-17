@@ -154,13 +154,7 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
 function normalizeRol(value) {
   if (value == null) return "vista";
   const v = String(value).trim().toLowerCase();
-  if (
-    v === "1" ||
-    v === "admin" ||
-    v === "administrator" ||
-    v === "administrador" ||
-    v === "superadmin"
-  ) {
+  if (v === "1" || v === "admin" || v === "administrator" || v === "administrador" || v === "superadmin") {
     return "admin";
   }
   return "vista";
@@ -293,8 +287,6 @@ const Principal = () => {
 
   /* =========================
      ✅ Logout “duro” reutilizable (manual y automático)
-     - borra sesión en backend (si existe)
-     - limpia cliente SIEMPRE
   ========================= */
   const doLogout = useCallback(
     async ({ silent = false } = {}) => {
@@ -322,7 +314,6 @@ const Principal = () => {
             body: JSON.stringify({}),
           });
 
-          // si falla no importa: igual limpiamos cliente
           if (!r.ok) {
             const txt = await r.text().catch(() => "");
             console.warn("Logout backend falló:", r.status, txt);
@@ -425,7 +416,6 @@ const Principal = () => {
 
   /* =========================
      ✅ AUTO-LOGOUT por inactividad (30 min)
-     - Resetea timer ante interacción real del usuario
   ========================= */
   useEffect(() => {
     const resetIdle = () => {
@@ -438,7 +428,6 @@ const Principal = () => {
     const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
     events.forEach((e) => window.addEventListener(e, resetIdle, { passive: true }));
 
-    // ✅ arranca el conteo desde que entra al panel
     resetIdle();
 
     return () => {
@@ -453,6 +442,7 @@ const Principal = () => {
     const base = [
       {
         label: "Movimientos",
+        ruta: "/panel/movimientos", // ✅ IMPORTANTE: ruta real para navegar en mobile
         children: [
           { label: "Ventas", ruta: "/panel/ventas" },
           { label: "Compras", ruta: "/panel/compras" },
@@ -524,7 +514,6 @@ const Principal = () => {
 
   /* =========================
      ✅ toggle tema -> MASTER
-     - si devuelve 401/403 => logout
   ========================= */
   const toggleTema = async () => {
     const prevTema = tema;
@@ -551,7 +540,6 @@ const Principal = () => {
         body: JSON.stringify({ tema: nuevo }),
       });
 
-      // ✅ si expiró sesión, logout
       if (r.status === 401 || r.status === 403) {
         await doLogout({ silent: true });
         return;
@@ -566,7 +554,6 @@ const Principal = () => {
       if (!r.ok || !data?.exito) {
         console.error("Falló usuario_tema_actualizar:", r.status, txt);
 
-        // revertir UI + localStorage
         setTema(prevTema);
         applyTheme(prevTema);
         try {
@@ -580,7 +567,6 @@ const Principal = () => {
     } catch (e) {
       console.error("Error llamando usuario_tema_actualizar:", e);
 
-      // revertir UI + localStorage
       setTema(prevTema);
       applyTheme(prevTema);
       try {
@@ -728,19 +714,41 @@ const Principal = () => {
                   role="button"
                   tabIndex={0}
                   onClick={() => {
+                    // ✅ MOBILE: 1er tap abre submenú, 2do tap entra a Movimientos
                     if (hasSub && isNoHover()) {
-                      if (isMov) setOpenMovSub((v) => !v);
+                      if (isMov) {
+                        if (!openMovSub) {
+                          setOpenMovSub(true);
+                          return;
+                        }
+                        handleNavigate(item.ruta); // /panel/movimientos
+                        return;
+                      }
+                      // si algún día agregás otros con submenú:
+                      handleNavigate(item.ruta);
                       return;
                     }
+
+                    // ✅ DESKTOP: navega normal
                     handleNavigate(item.ruta);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
+
                       if (hasSub && isNoHover()) {
-                        if (isMov) setOpenMovSub((v) => !v);
+                        if (isMov) {
+                          if (!openMovSub) {
+                            setOpenMovSub(true);
+                            return;
+                          }
+                          handleNavigate(item.ruta);
+                          return;
+                        }
+                        handleNavigate(item.ruta);
                         return;
                       }
+
                       handleNavigate(item.ruta);
                     }
                   }}
@@ -808,7 +816,7 @@ const Principal = () => {
 
       {/* ================= CONTENT ================= */}
       <main className="pp-content">
-        <div className="pp-content__inner" >
+        <div className="pp-content__inner">
           <Outlet />
         </div>
       </main>

@@ -154,6 +154,13 @@ function periodoFromISODate(iso) {
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
 
+  // ✅ FIX: X-Session (según cómo lo guardes)
+  const sessionKey =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    "";
+
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
@@ -163,7 +170,7 @@ function getAuthInfo() {
     // ignore
   }
 
-  return { token, idUsuario };
+  return { token, sessionKey, idUsuario };
 }
 function isTemaOscuro() {
   return document.documentElement.getAttribute("data-theme") === "oscuro";
@@ -197,7 +204,16 @@ const LISTKEY_BY_CATALOGO = {
 /* =========================
    Mini Modal: alta rápida
 ========================= */
-function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
+function AddCatalogMiniModal({
+  open,
+  title,
+  value,
+  saving,
+  onChange,
+  onCancel,
+  onSave,
+  dark = false,
+}) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -252,11 +268,21 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
           </div>
 
           <div className="mi-mini__actions">
-            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>
+            <button
+              type="button"
+              className="mit-btn mit-btn--ghost"
+              onClick={onCancel}
+              disabled={saving}
+            >
               Cancelar
             </button>
 
-            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
+            <button
+              type="button"
+              className="mit-btn mit-btn--solid"
+              onClick={onSave}
+              disabled={saving}
+            >
               {saving ? "Guardando..." : "Guardar"}
             </button>
           </div>
@@ -513,7 +539,8 @@ export default function ModalEditarMovimiento({
   const getFlagsFromTipoOperacion = useCallback(
     (idTipoOp) => {
       const sid = String(idTipoOp ?? "").trim();
-      if (!sid || sid === NULL_OPTION || sid === ADD_OPTION) return { showCliente: false, showProveedor: false };
+      if (!sid || sid === NULL_OPTION || sid === ADD_OPTION)
+        return { showCliente: false, showProveedor: false };
 
       const tipoOp = (Array.isArray(safeLists.tiposOperacion) ? safeLists.tiposOperacion : []).find(
         (t) => String(t?.id) === sid
@@ -542,7 +569,8 @@ export default function ModalEditarMovimiento({
   const tipoVentaSeleccionado = form.id_tipo_venta;
 
   const tipoVentaEsContado = useMemo(() => {
-    if (!tipoVentaSeleccionado || tipoVentaSeleccionado === NULL_OPTION || tipoVentaSeleccionado === ADD_OPTION) return false;
+    if (!tipoVentaSeleccionado || tipoVentaSeleccionado === NULL_OPTION || tipoVentaSeleccionado === ADD_OPTION)
+      return false;
 
     const tipoVenta = safeLists.tiposVenta.find((t) => String(t?.id) === String(tipoVentaSeleccionado));
     if (!tipoVenta) return false;
@@ -552,7 +580,8 @@ export default function ModalEditarMovimiento({
   }, [tipoVentaSeleccionado, safeLists.tiposVenta]);
 
   const tipoVentaEsCuentaCorriente = useMemo(() => {
-    if (!tipoVentaSeleccionado || tipoVentaSeleccionado === NULL_OPTION || tipoVentaSeleccionado === ADD_OPTION) return false;
+    if (!tipoVentaSeleccionado || tipoVentaSeleccionado === NULL_OPTION || tipoVentaSeleccionado === ADD_OPTION)
+      return false;
 
     const tipoVenta = safeLists.tiposVenta.find((t) => String(t?.id) === String(tipoVentaSeleccionado));
     if (!tipoVenta) return false;
@@ -583,9 +612,18 @@ export default function ModalEditarMovimiento({
     });
   }, []);
 
-  const onCantidadChange = useCallback((v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }), [recalcFromItem]);
-  const onPrecioChange = useCallback((v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }), [recalcFromItem]);
-  const onIvaPctChange = useCallback((v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }), [recalcFromItem]);
+  const onCantidadChange = useCallback(
+    (v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }),
+    [recalcFromItem]
+  );
+  const onPrecioChange = useCallback(
+    (v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }),
+    [recalcFromItem]
+  );
+  const onIvaPctChange = useCallback(
+    (v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }),
+    [recalcFromItem]
+  );
 
   const onMontoTotalManual = useCallback((v) => {
     const mt = v === "" ? "" : Number(v);
@@ -624,8 +662,13 @@ export default function ModalEditarMovimiento({
 
   const apiPostJson = useCallback(
     async (url, payload) => {
-      const { token } = getAuthInfo();
+      const { token, sessionKey } = getAuthInfo();
       const headers = { "Content-Type": "application/json" };
+
+      // ✅ FIX 401: manda X-Session siempre que exista
+      if (sessionKey) headers["X-Session"] = sessionKey;
+
+      // ✅ si tu backend también acepta Bearer, lo dejamos
       if (token) headers.Authorization = `Bearer ${token}`;
 
       const res = await fetch(url, {
@@ -634,7 +677,14 @@ export default function ModalEditarMovimiento({
         body: JSON.stringify(payload ?? {}),
       });
 
-      return await parseJsonOrThrow(res);
+      const data = await parseJsonOrThrow(res);
+
+      // ✅ si HTTP no es OK, tiramos error con mensaje del backend
+      if (!res.ok) {
+        throw new Error(data?.mensaje || data?.error || `HTTP ${res.status}`);
+      }
+
+      return data;
     },
     [parseJsonOrThrow]
   );
@@ -895,7 +945,11 @@ export default function ModalEditarMovimiento({
       const hasAdd = addFields.filter(([k]) => form[k] === ADD_OPTION);
       if (hasAdd.length) {
         const labels = hasAdd.map((x) => x[1]).join(", ");
-        showToast("advertencia", `Tenés en "AGREGAR…" (${labels}). Se guardará sin ese campo (null).`, 3800);
+        showToast(
+          "advertencia",
+          `Tenés en "AGREGAR…" (${labels}). Se guardará sin ese campo (null).`,
+          3800
+        );
       }
 
       const cantidad = Math.max(0, safeNumber(form.cantidad));
@@ -949,7 +1003,7 @@ export default function ModalEditarMovimiento({
 
   // ✅ Handler especial para tipo_operacion:
   // - NO borra los dos
-  // - limpia SOLO el que deja de corresponder (por ejemplo proveedor si ya no se muestra)
+  // - limpia SOLO el que deja de corresponder
   const handleTipoOperacionChange = useCallback(
     (nextValue) => {
       if (nextValue === ADD_OPTION) {
@@ -1390,7 +1444,12 @@ export default function ModalEditarMovimiento({
                       </ul>
                     )}
 
-                    <button type="button" onClick={startAddCliente} disabled={saving || addUI.saving} className="mi-link">
+                    <button
+                      type="button"
+                      onClick={startAddCliente}
+                      disabled={saving || addUI.saving}
+                      className="mi-link"
+                    >
                       + Agregar nuevo cliente
                     </button>
                   </div>
@@ -1429,7 +1488,12 @@ export default function ModalEditarMovimiento({
                       </ul>
                     )}
 
-                    <button type="button" onClick={startAddProveedor} disabled={saving || addUI.saving} className="mi-link">
+                    <button
+                      type="button"
+                      onClick={startAddProveedor}
+                      disabled={saving || addUI.saving}
+                      className="mi-link"
+                    >
                       + Agregar nuevo proveedor
                     </button>
                   </div>
@@ -1440,7 +1504,12 @@ export default function ModalEditarMovimiento({
                     {saving ? "Guardando..." : "Guardar"}
                   </button>
 
-                  <button type="button" onClick={cerrar} disabled={saving} className="mit-btn mit-btn--ghost mit-btn--block">
+                  <button
+                    type="button"
+                    onClick={cerrar}
+                    disabled={saving}
+                    className="mit-btn mit-btn--ghost mit-btn--block"
+                  >
                     Cancelar
                   </button>
                 </div>

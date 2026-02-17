@@ -34,7 +34,7 @@
   min-height: 100%;
   color: var(--fc-text);
   background: var(--balto-bg);
-  padding: 14px;
+  padding: 0;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
 
@@ -228,7 +228,7 @@
 
 .fc-gridBody{
   overflow: auto;
-  max-height: calc(100vh - 370px);
+  max-height: calc(100vh - 340px);
   background: #fff;
 }
 

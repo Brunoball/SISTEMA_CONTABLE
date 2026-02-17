@@ -2487,3 +2487,110 @@ input[type="number"]::-webkit-outer-spin-button {
 .mi-modal--dark .mi-card__hint{
   color: rgba(226,232,240,.75);
 }
+/* =========================================================
+   ✅ DARK MODE – Mini modal (AddCatalogMiniModal)
+   Activación: .mi-mini__modal.mi-modal--dark  (ya lo agregás en JSX)
+========================================================= */
+
+/* Overlay del mini modal en oscuro (un toque más profundo) */
+.mi-mini__overlay:has(.mi-mini__modal.mi-modal--dark){
+  background: rgba(0,0,0,.68);
+  backdrop-filter: blur(3px);
+}
+
+/* Si querés evitar :has por compatibilidad, dejá esto también */
+
+/* Caja */
+.mi-mini__modal.mi-modal--dark{
+  background: rgba(6,18,28,.96) !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+  box-shadow: 0 28px 64px -24px rgba(0,0,0,.55) !important;
+  color: rgba(255,255,255,.92);
+}
+
+/* Header */
+.mi-mini__modal.mi-modal--dark .mi-mini__head{
+  background: linear-gradient(180deg, #0a2540, #071a2c) !important;
+  border-bottom: 1px solid rgba(255,255,255,.10) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .mi-mini__title{
+  color: rgba(255,255,255,.92) !important;
+}
+
+/* Botón cerrar */
+.mi-mini__modal.mi-modal--dark .mi-mini__close{
+  color: rgba(255,255,255,.92) !important;
+}
+.mi-mini__modal.mi-modal--dark .mi-mini__close:hover{
+  background: rgba(255,255,255,.10) !important;
+}
+
+/* Body */
+.mi-mini__modal.mi-modal--dark .mi-mini__body{
+  background: rgba(6,18,28,.96) !important;
+}
+
+/* Inputs / selects */
+.mi-mini__modal.mi-modal--dark .fl-input,
+.mi-mini__modal.mi-modal--dark .fl-select{
+  background: rgba(255,255,255,.06) !important;
+  border-color: rgba(255,255,255,.14) !important;
+  color: rgba(255,255,255,.92) !important;
+  box-shadow: none !important;
+}
+
+.mi-mini__modal.mi-modal--dark .fl-input:focus,
+.mi-mini__modal.mi-modal--dark .fl-select:focus{
+  border-color: rgba(0,85,187,.65) !important;
+  box-shadow: 0 0 0 3px rgba(0,85,187,.18) !important;
+}
+
+/* Placeholder */
+.mi-mini__modal.mi-modal--dark .fl-input::placeholder{
+  color: rgba(255,255,255,.45) !important;
+}
+
+/* Floating label con “corte” en oscuro */
+.mi-mini__modal.mi-modal--dark .fl-label{
+  color: rgba(226,232,240,.72) !important;
+}
+
+/* IMPORTANTE: cuando flota, el fondo debe ser oscuro (para cortar el borde) */
+.mi-mini__modal.mi-modal--dark .fl-input:focus + .fl-label,
+.mi-mini__modal.mi-modal--dark .fl-input:not(:placeholder-shown) + .fl-label,
+.mi-mini__modal.mi-modal--dark .fl-select + .fl-label{
+  background: rgba(6,18,28,.96) !important;
+  color: rgba(180,210,255,.92) !important;
+}
+
+/* Botones */
+.mi-mini__modal.mi-modal--dark .mit-btn--ghost{
+  background: rgba(255,255,255,.06) !important;
+  border-color: rgba(255,255,255,.14) !important;
+  color: rgba(255,255,255,.86) !important;
+}
+.mi-mini__modal.mi-modal--dark .mit-btn--ghost:hover{
+  background: rgba(255,255,255,.10) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .mit-btn--solid{
+  background: #0055BB !important;
+  border-color: rgba(0,85,187,.85) !important;
+  color: rgba(255,255,255,.96) !important;
+}
+.mi-mini__modal.mi-modal--dark .mit-btn--solid:hover{
+  filter: brightness(1.03);
+}
+
+/* Separación / bordecitos suaves */
+.mi-mini__modal.mi-modal--dark .mi-mini__actions{
+  border-top: 1px solid rgba(255,255,255,.08);
+  padding-top: 12px;
+}
+.mi-cr-col--ivaMonto,.Total--IVA{
+  margin: 10px 0 0 0;
+}
+.mi-cr-row .fl-select{
+  padding: 0 !important;
+}

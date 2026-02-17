@@ -1079,7 +1079,7 @@ export default function Compras() {
 
         {/* BODY */}
         <div className="mov-tableWrap mov-tableWrap--compras" role="rowgroup">
-          <div className={["mov-gridBody mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
+          <div className={["mov-gridBody mov-gridBody--relative mov-gridBody--woes", softLoading ? "mov-softLoading" : ""].join(" ")}>
             {showSkeleton && loadingRows ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}

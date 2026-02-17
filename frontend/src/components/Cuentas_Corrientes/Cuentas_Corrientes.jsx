@@ -128,7 +128,6 @@ export default function Cuentas_Corrientes() {
   const API = `${BASE_URL}/api.php`;
 
   const [q, setQ] = useState("");
-
   const [periodo, setPeriodo] = useState(() => readCachedPeriodo() || currentYYYYMM());
   const [periodOptions, setPeriodOptions] = useState([]);
   const [loadingPeriodos, setLoadingPeriodos] = useState(false);
@@ -318,19 +317,16 @@ export default function Cuentas_Corrientes() {
     if (!cols || typeof cols !== "object") return { deb: null, cre: null };
     const keys = Object.keys(cols);
     if (keys.length < 2) return { deb: keys[0] ?? null, cre: null };
-    // fallback simple: 1ro y 2do
     return { deb: keys[0], cre: keys[1] };
   }, []);
 
   const getDebitoCredito = useCallback((row) => {
-    // 1) si detectamos IDs reales, usamos esos
     if (debitoId != null || creditoId != null) {
       return {
         deb: debitoId != null ? getValueByCuenta(row, debitoId) : 0,
         cre: creditoId != null ? getValueByCuenta(row, creditoId) : 0,
       };
     }
-    // 2) fallback: 2 primeras keys de row.columnas
     const { deb, cre } = pickFallbackIds(row);
     const cols = row?.columnas || {};
     return {
@@ -663,13 +659,10 @@ export default function Cuentas_Corrientes() {
                   >
                     <div style={{ fontWeight: 800, marginBottom: 8, color: "rgba(10,37,64,.92)" }}>Totales</div>
 
-                    {/* Totales: si el backend trae totales por columnas, intentamos usar los IDs detectados */}
                     {(() => {
                       const cols = totales.columnas || {};
-                      const debT =
-                        debitoId != null ? Number(cols[String(debitoId)] || 0) : 0;
-                      const creT =
-                        creditoId != null ? Number(cols[String(creditoId)] || 0) : 0;
+                      const debT = debitoId != null ? Number(cols[String(debitoId)] || 0) : 0;
+                      const creT = creditoId != null ? Number(cols[String(creditoId)] || 0) : 0;
 
                       const saldoColor =
                         Number(totales.saldo) < 0
@@ -708,22 +701,23 @@ export default function Cuentas_Corrientes() {
           </div>
         ) : (
           /* =========================
-             DESKTOP: 1 solo scroll + header sticky fijo
+             DESKTOP: header en cc-tableWrap + tabla en cc-gridBody
           ========================= */
           <div className="cc-tableWrap">
-            <div className={["cc-gridBody", softLoading ? "cc-softLoading" : ""].join(" ")} role="rowgroup">
-              {/* ✅ Header fijo (SIEMPRE 4 columnas) */}
-              <div className="cc-grid cc-grid--head" style={{ gridTemplateColumns: gridColsDesktop }}>
-                <div className="cc-cell cc-name">CLIENTE</div>
-                <div className="cc-cell is-center" style={{ color: "rgba(225,61,69,.92)", fontWeight: 700 }}>
-                  DEBITO (SALIDA DE MERCADERIA)
-                </div>
-                <div className="cc-cell is-center" style={{ color: "rgba(34,173,92,.92)", fontWeight: 700 }}>
-                  CREDITO (COBRO DE MERCADERIA)
-                </div>
-                <div className="cc-cell is-center">SALDO</div>
+            {/* ✅ Header fijo dentro del scroller */}
+            <div className="cc-grid cc-grid--head" style={{ gridTemplateColumns: gridColsDesktop }}>
+              <div className="cc-cell cc-name">CLIENTE</div>
+              <div className="cc-cell is-center" style={{ color: "rgba(225,61,69,.92)", fontWeight: 700 }}>
+                DEBITO (SALIDA DE MERCADERIA)
               </div>
+              <div className="cc-cell is-center" style={{ color: "rgba(34,173,92,.92)", fontWeight: 700 }}>
+                CREDITO (COBRO DE MERCADERIA)
+              </div>
+              <div className="cc-cell is-center">SALDO</div>
+            </div>
 
+            {/* ✅ SOLO filas + totales */}
+            <div className={["cc-gridBody", softLoading ? "cc-softLoading" : ""].join(" ")} role="rowgroup">
               {showSkeleton && (loading || loadingPeriodos) ? (
                 <div className="cc-skeletonWrap" aria-busy="true">
                   {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRowDesktop(i))}
@@ -735,7 +729,7 @@ export default function Cuentas_Corrientes() {
                   {!loading &&
                     filtered.map((r) => {
                       const { deb, cre } = getDebitoCredito(r);
-                      const debCls = deb > 0 ? "is-negative" : deb < 0 ? "is-positive" : ""; // si tu debito siempre +, queda rojo igual por CSS
+                      const debCls = deb > 0 ? "is-negative" : deb < 0 ? "is-positive" : "";
                       const creCls = cre > 0 ? "is-positive" : cre < 0 ? "is-negative" : "";
 
                       const saldoCls =
@@ -774,23 +768,15 @@ export default function Cuentas_Corrientes() {
                         const creT = creditoId != null ? Number(cols[String(creditoId)] || 0) : 0;
                         return (
                           <>
-                            <div className="cc-cell cc-num is-center is-negative">
-                              {moneyARS(debT)}
-                            </div>
-                            <div className="cc-cell cc-num is-center is-positive">
-                              {moneyARS(creT)}
-                            </div>
+                            <div className="cc-cell cc-num is-center is-negative">{moneyARS(debT)}</div>
+                            <div className="cc-cell cc-num is-center is-positive">{moneyARS(creT)}</div>
                           </>
                         );
                       })()}
 
                       <div
                         className={`cc-cell cc-num is-center cc-saldo ${
-                          Number(totales.saldo) < 0
-                            ? "is-negative"
-                            : Number(totales.saldo) > 0
-                            ? "is-positive"
-                            : ""
+                          Number(totales.saldo) < 0 ? "is-negative" : Number(totales.saldo) > 0 ? "is-positive" : ""
                         }`}
                       >
                         <b>{moneyARS(totales.saldo)}</b>

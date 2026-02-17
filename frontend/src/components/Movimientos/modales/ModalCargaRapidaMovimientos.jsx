@@ -1028,7 +1028,7 @@ export default function ModalCargaRapidaMovimientos({
 
                       {/* Total */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--total mi-cr-center">
-                        <div className="mi-cr-money mi-cr-money--strong">{moneyARS(r.total)}</div>
+                        <div className="mi-cr-money mi-cr-money--strong Total--IVA">{moneyARS(r.total)}</div>
                       </div>
 
                       {/* Acción */}

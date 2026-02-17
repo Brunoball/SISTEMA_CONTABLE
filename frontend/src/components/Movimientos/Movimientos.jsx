@@ -952,28 +952,33 @@ export default function Movimientos() {
           </div>
 
           <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button
-              type="button"
-              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
-              onClick={exportToExcel}
-              disabled={loadingRows || filteredRows.length === 0}
-              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
-            >
-              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
-            </button>
+<button
+  type="button"
+  className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
+  onClick={exportToExcel}
+  disabled={loadingRows || filteredRows.length === 0}
+  title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
+>
+  <FontAwesomeIcon icon={faFileExcel} />
+  <span className="mov-btnText mov-btnText--desktop">Exportar Excel</span>
+  <span className="mov-btnText mov-btnText--mobile">Exportar</span>
+</button>
 
-            <button
-              type="button"
-              className="mov-btn mov-btn--primary"
-              onClick={async () => {
-                await ensureListsLoaded({ force: false, background: true }).catch(() => {});
-                setOpenAdd(true);
-              }}
-              disabled={!fPeriodo || loadingAll || loadingListsCtx}
-              title={!fPeriodo ? "Primero seleccioná un período" : "Nuevo Movimiento"}
-            >
-              <FontAwesomeIcon icon={faPlus} /> Nuevo Movimiento
-            </button>
+<button
+  type="button"
+  className="mov-btn mov-btn--primary"
+  onClick={async () => {
+    await ensureListsLoaded({ force: false, background: true }).catch(() => {});
+    setOpenAdd(true);
+  }}
+  disabled={!fPeriodo || loadingAll || loadingListsCtx}
+  title={!fPeriodo ? "Primero seleccioná un período" : "Nuevo Movimiento"}
+>
+  <FontAwesomeIcon icon={faPlus} />
+  <span className="mov-btnText mov-btnText--desktop">Nuevo Movimiento</span>
+  <span className="mov-btnText mov-btnText--mobile">Movimiento</span>
+</button>
+
           </div>
         </div>
 

@@ -27,7 +27,7 @@ function getDetalleId(d) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 function getGenericId(x) {
-  const cand = x?.id ?? x?.ID ?? x?.id_item ?? x?.idCatalogo ?? null;
+  const cand = x?.id ?? x?.ID ?? x?.id_item ?? x?.idCatalogo ?? x?.id_cuenta_corriente ?? x?.id_medio_pago ?? null;
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
@@ -62,6 +62,8 @@ function normalizeIncomingLists(lists) {
       ? src.mediosPago
       : Array.isArray(src.medios_pago)
       ? src.medios_pago
+      : Array.isArray(src.medios)
+      ? src.medios
       : [];
 
   return {
@@ -142,7 +144,7 @@ function periodoFromISODate(iso) {
 }
 
 /* =========================
-   Dark helper (igual a Venta)
+   Dark helper
 ========================= */
 function isTemaOscuro() {
   const byAttr = document.documentElement.getAttribute("data-theme") === "oscuro";
@@ -193,7 +195,7 @@ const LISTKEY_BY_CATALOGO = {
 
 /* =========================
    Mini Modal: alta rápida
-   ✅ soporta dark con mi-modal--dark
+   ✅ FIX: createPortal + overlay top-level
 ========================= */
 function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
@@ -216,9 +218,12 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="mi-mini__overlay" onMouseDown={onCancel}>
-      <div className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()} onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
           <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving} aria-label="Cerrar">
@@ -251,7 +256,8 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -557,6 +563,7 @@ export default function ModalEditarCompra({
 
   /* =========================
      Alta rápida catálogo (mini modal)
+     ✅ FIX 1: usar action=catalogo_crear (igual a NuevaCompra)
   ========================= */
   const closeAddMini = useCallback(() => {
     if (addUI.saving) return;
@@ -581,7 +588,8 @@ export default function ModalEditarCompra({
     try {
       const { idUsuario } = getAuthInfo();
 
-      const data = await apiPostJson(`${API}?action=compras_catalogo_crear`, {
+      // ✅ mismo endpoint que NuevaCompra
+      const data = await apiPostJson(`${API}?action=catalogo_crear`, {
         catalogo: meta.catalogo,
         nombre,
         idUsuario,
@@ -692,15 +700,15 @@ export default function ModalEditarCompra({
 
   const startAddProveedor = useCallback(() => {
     setProveedorFocus(false);
-    setAddUI({ open: true, field: "id_proveedor", text: "", saving: false });
+    setAddUI({ open: true, field: "id_proveedor", text: proveedorInput || "", saving: false });
     setForm((prev) => ({ ...prev, id_proveedor: ADD_OPTION }));
-  }, []);
+  }, [proveedorInput]);
 
   const startAddDetalle = useCallback(() => {
     setDetalleFocus(false);
-    setAddUI({ open: true, field: "id_detalle", text: "", saving: false });
+    setAddUI({ open: true, field: "id_detalle", text: detalleInput || "", saving: false });
     setForm((prev) => ({ ...prev, id_detalle: ADD_OPTION }));
-  }, []);
+  }, [detalleInput]);
 
   /* =========================
      Select con “OTRO (AGREGAR…)”
@@ -848,15 +856,6 @@ export default function ModalEditarCompra({
 
   const miniOpen = addUI.open && ["id_proveedor", "id_detalle"].includes(addUI.field);
   const miniTitle = addUI.field === "id_proveedor" ? "Nuevo proveedor" : "Nuevo detalle";
-
-  const cancelMini = () => {
-    setForm((p) => ({
-      ...p,
-      id_proveedor: addUI.field === "id_proveedor" ? NULL_OPTION : p.id_proveedor,
-      id_detalle: addUI.field === "id_detalle" ? NULL_OPTION : p.id_detalle,
-    }));
-    closeAddMini();
-  };
 
   if (!open) return null;
 
@@ -1022,7 +1021,12 @@ export default function ModalEditarCompra({
                     </div>
 
                     <div className="fl-field">
-                      <select className="fl-input fl-select" value={String(form.iva_pct)} onChange={(e) => onIvaPctChange(e.target.value)} disabled={saving}>
+                      <select
+                        className="fl-input fl-select"
+                        value={String(form.iva_pct)}
+                        onChange={(e) => onIvaPctChange(e.target.value)}
+                        disabled={saving}
+                      >
                         {IVA_OPTIONS.map((x) => (
                           <option key={x.value} value={x.value}>
                             {x.label}
@@ -1175,11 +1179,12 @@ export default function ModalEditarCompra({
 
         <AddCatalogMiniModal
           open={miniOpen}
-          title={addUI.field === "id_proveedor" ? "Nuevo proveedor" : "Nuevo detalle"}
+          title={miniTitle}
           value={addUI.text}
           saving={addUI.saving}
           onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
           onCancel={() => {
+            // revertir ADD_OPTION si cancelás
             setForm((p) => ({
               ...p,
               id_proveedor: addUI.field === "id_proveedor" ? NULL_OPTION : p.id_proveedor,

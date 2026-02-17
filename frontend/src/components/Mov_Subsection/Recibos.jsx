@@ -1151,7 +1151,7 @@ export default function Recibos() {
         </div>
 
         {/* BODY */}
-        <div className="mov-tableWrap" role="rowgroup">
+        <div className="mov-tableWrap mov-table---Wrap" role="rowgroup">
           <div className={["mov-gridBody mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
             {showSkeleton && loadingRows ? (
               <div className="mov-skeletonWrap" aria-busy="true">

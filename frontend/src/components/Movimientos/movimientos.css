@@ -507,8 +507,9 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
   flex: 1;
   min-height: 0;
   overflow: auto;
-  max-height: calc(100vh - 270px);
-  min-height: calc(100vh - 270px);
+  overflow-x: hidden;
+  max-height: calc(100vh - 250px);
+  min-height: calc(100vh - 250px);
 }
 .mov-tableWrap--mov{
     max-height: calc(100vh - 250px)  !important;
@@ -695,17 +696,12 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
 /* ✅ El que realmente scrollea */
 .mov-tableWrap,
 .mov-tableWrap--mov{
-  overflow: auto;                 /* siempre auto */
+  overflow: auto;      
+  overflow-x: hidden;           /* siempre auto */
   scrollbar-gutter: stable;       /* reserva espacio aunque no haya scroll */
 }
 
-/* (opcional) si querés reservar en ambos bordes (soporte depende del navegador) */
-/* 
-.mov-tableWrap,
-.mov-tableWrap--mov{
-  scrollbar-gutter: stable both-edges;
-}
-*/
+
 
 /* ✅ Si tenés scroll horizontal a veces, esto ayuda */
 .mov-gridTable--head{
@@ -798,17 +794,18 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
   }
 
   /* Evitar que el wrapper fuerce scroll horizontal */
-  .mov-tableWrap--mov {
+  .mov-tableWrap {
    overflow: auto;
-        min-height: 40vh !important;
-        max-height: 40vh !important;
+        min-height: 47vh !important;
+        max-height: 47vh !important;
   }
 
   /* Cada fila como card */
 .mov-gridTable--row {
     display: block !important; /* ⚠️ cambia grid por block */
-    padding: 12px;
-    margin: 10px 0;
+    padding: 6px;
+    width: 83vw;
+    margin: 10px;
     border: 1px solid var(--mi-border, rgba(255,255,255,0.08));
     border-radius: 16px;
     background: var(--mi-bg, #0e1a2b);
@@ -872,6 +869,7 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
 @media (max-width: 420px) {
   .mov-gridTable--row .mov-gridCell {
     grid-template-columns: 1fr 1fr;
+    padding: 2px 0;
   }
 
   .mov-card__title {
@@ -1070,4 +1068,55 @@ body.dark .mov-btn--loadAll{
 body.dark .mov-btn--loadAll:hover{
   background: rgba(0,85,187,.28);
   border-color: rgba(255,255,255,.22);
+}
+@media (max-width: 720px) {
+  /* IMPORTANTE: que el label sea visible siempre */
+  .mov-page--compras .mov-gridTable--row .mov-gridCell {
+    overflow: visible !important;
+    white-space: normal !important;
+    text-overflow: initial !important;
+  }
+
+  .mov-page--compras .mov-gridTable--row .mov-gridCell::before {
+    content: attr(data-label) !important;
+    display: block !important;
+    min-width: 0;
+    opacity: 1 !important;
+
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+
+    /* color que se nota en fondo oscuro y claro */
+    color: rgba(226,232,240,.65);
+  }
+
+  /* en claro, si tus cards son blancas, esto también sirve */
+  html:not([data-theme="oscuro"]) .mov-page--compras .mov-gridTable--row .mov-gridCell::before {
+    color: rgba(66,84,102,.70);
+  }
+  .mov-table---Wrap{
+        overflow: auto;
+        min-height: 47vh !important;
+        max-height: 47vh !important;
+}
+}
+/* =========================================================
+   Mobile: acortar textos de botones en header
+========================================================= */
+.mov-btnText--mobile { display: none; }
+
+@media (max-width: 720px){
+  .mov-btnText--desktop { display: none; }
+  .mov-btnText--mobile  { display: inline; }
+
+  /* Opcional: que queden más compactos */
+  .mov-card__actions .mov-btn{
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .mov-card__actions{
+  flex-wrap: nowrap;
+}
 }

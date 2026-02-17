@@ -71,7 +71,9 @@ async function apiFetch(path, options = {}) {
 
   if (res.status === 401 || res.status === 403) {
     try {
-      window.dispatchEvent(new CustomEvent("auth:unauthorized", { detail: { status: res.status } }));
+      window.dispatchEvent(
+        new CustomEvent("auth:unauthorized", { detail: { status: res.status } })
+      );
     } catch {}
   }
 
@@ -539,6 +541,7 @@ const Principal = () => {
     const base = [
       {
         label: "Movimientos",
+        ruta: "/panel/movimientos",
         children: [
           { label: "Ventas", ruta: "/panel/ventas" },
           { label: "Compras", ruta: "/panel/compras" },
@@ -808,19 +811,38 @@ const Principal = () => {
                   role="button"
                   tabIndex={0}
                   onClick={() => {
+                    // ✅ FIX MOBILE: 1er toque abre submenú, 2do toque navega a /panel/movimientos
                     if (hasSub && isNoHover()) {
-                      if (isMov) setOpenMovSub((v) => !v);
+                      if (isMov) {
+                        if (!openMovSub) {
+                          setOpenMovSub(true);
+                          return;
+                        }
+                        handleNavigate(item.ruta); // /panel/movimientos
+                        return;
+                      }
                       return;
                     }
+
                     handleNavigate(item.ruta);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
+
+                      // ✅ FIX MOBILE: 1er Enter abre submenú, 2do navega
                       if (hasSub && isNoHover()) {
-                        if (isMov) setOpenMovSub((v) => !v);
+                        if (isMov) {
+                          if (!openMovSub) {
+                            setOpenMovSub(true);
+                            return;
+                          }
+                          handleNavigate(item.ruta);
+                          return;
+                        }
                         return;
                       }
+
                       handleNavigate(item.ruta);
                     }
                   }}

@@ -141,7 +141,8 @@ function computeDerivedRows(rows) {
   else base.push(rowResultado);
 
   const idxVentas = base.findIndex((r) => safeText(r.id).toLowerCase() === "ventas");
-  if (idxVentas >= 0) base[idxVentas] = { ...base[idxVentas], concepto: "VENTAS", tipo: "ingreso", importe: ventas };
+  if (idxVentas >= 0)
+    base[idxVentas] = { ...base[idxVentas], concepto: "VENTAS", tipo: "ingreso", importe: ventas };
 
   const markTipo = (id, tipo) => {
     const i = base.findIndex((r) => safeText(r.id).toLowerCase() === id);
@@ -184,7 +185,6 @@ function authHeaders(extra = {}) {
   return h;
 }
 async function parseJsonOrThrow(res) {
-  // 401 claro
   if (res.status === 401) {
     throw new Error("401 (Unauthorized): Sesión vencida o no autorizada. Volvé a iniciar sesión.");
   }
@@ -246,9 +246,17 @@ function writeCachedPeriodo(v) {
 }
 
 /* =========================
-   Skeleton config (igual idea Flujo)
+   Skeleton config
+   (AJUSTÁ ACÁ el tamaño)
 ========================= */
-const SKELETON_ROWS = 10;
+// cantidad de filas skeleton (tabla)
+const SKELETON_TABLE_ROWS =5;
+
+// altura de barras (evita "gigante")
+const SKELETON_BAR_H = 5; // probá 8 / 10 / 12
+
+// padding vertical en filas skeleton
+const SKELETON_ROW_PAD_Y = 5; // probá 8 / 10 / 12
 
 export default function Analisis_Financiero() {
   const API = `${BASE_URL}/api.php`;
@@ -265,6 +273,9 @@ export default function Analisis_Financiero() {
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
 
+  // ✅ para evitar el “flash” de “no hay datos”
+  const [hasFetched, setHasFetched] = useState(false);
+
   /* =========================
      ✅ TOAST GLOBAL
   ========================= */
@@ -274,7 +285,7 @@ export default function Analisis_Financiero() {
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // ✅ Skeleton: delay anti-parpadeo (IGUAL FLUJO)
+  // ✅ Skeleton: delay anti-parpadeo
   const skelTimerRef = useRef(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
 
@@ -308,10 +319,7 @@ export default function Analisis_Financiero() {
   }, [periodo]);
 
   /* =========================================================
-     ✅ 1) Periodos desde Dashboard (global_obtener_listas)
-     - normaliza a YYYY-MM
-     - unique + sort desc
-     - si periodo actual no existe => setea el más nuevo
+     ✅ 1) Periodos desde Dashboard
   ========================================================= */
   const fetchPeriodosFromDashboard = useCallback(async () => {
     setLoadingPeriodos(true);
@@ -335,9 +343,7 @@ export default function Analisis_Financiero() {
         ? json.periodos
         : [];
 
-      const unique = Array.from(
-        new Set(raw.map((p) => periodoToYYYYMM(p)).filter(Boolean))
-      );
+      const unique = Array.from(new Set(raw.map((p) => periodoToYYYYMM(p)).filter(Boolean)));
 
       unique.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
       setPeriodOptions(unique);
@@ -345,7 +351,6 @@ export default function Analisis_Financiero() {
       if (unique.length) {
         if (!periodo || !unique.includes(periodo)) setPeriodo(unique[0]);
       } else {
-        // no pisamos el periodo (queda cache/fallback), pero avisamos
         showToast("error", "No hay períodos disponibles.", 3200);
       }
     } catch (e) {
@@ -353,7 +358,6 @@ export default function Analisis_Financiero() {
       setError(msg);
       showToast("error", msg, 4200);
       setPeriodOptions([]);
-      // no pisamos el periodo (queda cache/fallback)
     } finally {
       setLoadingPeriodos(false);
     }
@@ -366,8 +370,6 @@ export default function Analisis_Financiero() {
 
   /* =========================================================
      ✅ 2) Cargar análisis cuando hay período seleccionado
-     - tabla SIEMPRE visible
-     - skeleton SOLO en rows
   ========================================================= */
   const fetchAnalisis = useCallback(async () => {
     if (!periodo) return;
@@ -400,6 +402,7 @@ export default function Analisis_Financiero() {
       showToast("error", msg, 4200);
     } finally {
       setLoading(false);
+      setHasFetched(true);
       endSkeleton();
     }
   }, [API, periodo, showToast, beginSkeleton, endSkeleton]);
@@ -432,14 +435,15 @@ export default function Analisis_Financiero() {
   const showing = filteredRows.length;
 
   const ventas = allRows.find((r) => safeText(r.id).toLowerCase() === "ventas")?.importe ?? null;
-  const resultadoNeto = allRows.find((r) => safeText(r.id).toLowerCase() === "resultado_neto")?.importe ?? null;
-  const gastosPersonales = allRows.find((r) => safeText(r.id).toLowerCase() === "gastos_personales")?.importe ?? null;
+  const resultadoNeto =
+    allRows.find((r) => safeText(r.id).toLowerCase() === "resultado_neto")?.importe ?? null;
+  const gastosPersonales =
+    allRows.find((r) => safeText(r.id).toLowerCase() === "gastos_personales")?.importe ?? null;
 
   const resultadoIsNeg = Number(resultadoNeto) < 0;
 
-  // ✅ soft loading igual flujo
-  const softLoading = (loading || loadingPeriodos) && showSkeleton;
-  const disableUI = loadingPeriodos; // select bloqueado solo mientras llegan periodos
+  const isBusy = loading || loadingPeriodos;
+  const showSkel = showSkeleton && isBusy;
 
   /* =========================
      ✅ Exportar a Excel + Toast
@@ -487,32 +491,78 @@ export default function Analisis_Financiero() {
     }
   }, [filteredRows, data, periodo, ventas, resultadoNeto, gastosPersonales, showToast]);
 
-  // Skeleton widths (para parecer real)
+  /* =========================================================
+     ✅ Skeleton renderers (3 zonas)
+     - Tabla: header visible
+     - Subhead y Totales: skeleton propio
+  ========================================================= */
+
   const skelWidths = useMemo(() => {
     return {
-      concepto: ["42%", "58%", "50%", "64%", "46%"],
-      importe: ["32%", "38%", "28%", "40%", "34%"],
+      concepto: ["42%", "58%", "50%", "64%", "46%", "55%"],
+      importe: ["22%", "28%", "20%", "30%", "24%", "26%"],
     };
   }, []);
 
   const renderSkeletonRow = (idx) => {
-    const w = (key) => {
+    const pick = (key) => {
       const list = skelWidths[key] || ["50%"];
       return list[idx % list.length];
     };
 
     return (
       <div className="af-grid af-grid--row af-grid--excel af-row--skeleton" key={`skel-${idx}`}>
-        <div className="af-cell af-concept">
-          <span className="af-skeletonBar" style={{ width: w("concepto") }} />
+        <div className="af-cell af-concept" style={{ padding: `${SKELETON_ROW_PAD_Y}px 12px` }}>
+          <span className="af-skeletonBar" style={{ width: pick("concepto"), height: SKELETON_BAR_H }} />
         </div>
-        <div className="af-cell af-num is-right">
-          <span className="af-skeletonBar" style={{ width: w("importe") }} />
+        <div className="af-cell af-num is-right" style={{ padding: `${SKELETON_ROW_PAD_Y}px 12px` }}>
+          <span className="af-skeletonBar" style={{ width: pick("importe"), height: SKELETON_BAR_H }} />
         </div>
       </div>
     );
   };
 
+  const renderSubheadSkeleton = () => {
+    return (
+      <div className="af-subhead af-softLoading" aria-busy="true">
+        <div style={{ width: "100%" }}>
+          <div className="af-skeletonBar" style={{ width: "28%", height: 12 }} />
+          <div style={{ height: 8 }} />
+          <div className="af-skeletonBar" style={{ width: "54%", height: 10 }} />
+        </div>
+
+        <div style={{ width: "100%", display: "flex", justifyContent: "flex-end" }}>
+          <div className="af-skeletonBar" style={{ width: "40%", height: 10 }} />
+        </div>
+      </div>
+    );
+  };
+
+  const renderTotalsSkeleton = () => {
+    return (
+      <div className="af-footTotals af-softLoading" aria-busy="true">
+        <div className="af-totalCard">
+          <div className="af-skeletonBar" style={{ width: "36%", height: 4 }} />
+          <div style={{ height: 4 }} />
+          <div className="af-skeletonBar" style={{ width: "64%", height: 4 }} />
+          <div style={{ height: 4 }} />
+          <div className="af-skeletonBar" style={{ width: "58%", height: 4 }} />
+        </div>
+
+        <div className="af-totalCard">
+          <div className="af-skeletonBar" style={{ width: "40%", height: 4 }} />
+          <div style={{ height: 4 }} />
+          <div className="af-skeletonBar" style={{ width: "60%", height: 4 }} />
+          <div style={{ height: 4 }} />
+          <div className="af-skeletonBar" style={{ width: "52%", height: 4 }} />
+        </div>
+      </div>
+    );
+  };
+
+  /* =========================
+     Render
+  ========================= */
   return (
     <div className="af-page">
       {toast && (
@@ -547,9 +597,8 @@ export default function Analisis_Financiero() {
                 <select
                   value={periodo || ""}
                   onChange={(e) => setPeriodo(e.target.value)}
-                  disabled={disableUI}
+                  disabled={loadingPeriodos}
                 >
-                  {/* ✅ si todavía no llegó la lista, mostramos el periodo actual */}
                   {(!periodOptions.length || !periodOptions.includes(periodo)) && (
                     <option value={periodo}>{periodLabelMMYYYY(periodo)}</option>
                   )}
@@ -570,10 +619,10 @@ export default function Analisis_Financiero() {
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     placeholder="Ej: ventas, costo fijo, gastos..."
-                    disabled={loading || loadingPeriodos}
+                    disabled={isBusy}
                   />
 
-                  {q.trim() !== "" && !(loading || loadingPeriodos) && (
+                  {q.trim() !== "" && !isBusy && (
                     <button
                       type="button"
                       className="af-clearSearch"
@@ -596,7 +645,7 @@ export default function Analisis_Financiero() {
               type="button"
               className="af-btn af-btn--excel"
               onClick={handleExportExcel}
-              disabled={loading || loadingPeriodos || !data || filteredRows.length === 0}
+              disabled={isBusy || !data || filteredRows.length === 0}
               title={!data ? "Primero cargá datos" : "Exportar tabla a Excel"}
             >
               <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
@@ -604,22 +653,22 @@ export default function Analisis_Financiero() {
           </div>
         </div>
 
-        {/* ✅ TABLA SIEMPRE visible */}
-        <div className="af-tableWrap">
+        {/* ✅ TABLA (skeleton EN af-tableWrap, header visible) */}
+        <div className={["af-tableWrap", showSkel ? "af-softLoading" : ""].join(" ")}>
+          {/* ✅ HEADER SIEMPRE VISIBLE */}
           <div className="af-grid af-grid--head af-grid--excel">
             <div className="af-cell">CONCEPTO</div>
             <div className="af-cell is-right">IMPORTE</div>
           </div>
 
-          <div className={["af-gridBody", softLoading ? "af-softLoading" : ""].join(" ")}>
-            {/* ✅ Skeleton rows (carga) */}
-            {showSkeleton && (loading || loadingPeriodos) ? (
+          <div className="af-gridBody">
+            {showSkel ? (
               <div className="af-skeletonWrap" aria-busy="true">
-                {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
+                {Array.from({ length: SKELETON_TABLE_ROWS }).map((_, i) => renderSkeletonRow(i))}
               </div>
             ) : (
               <>
-                {data &&
+                {!!data &&
                   filteredRows.map((r) => {
                     const conceptoLower = safeText(r.concepto).toLowerCase();
 
@@ -652,71 +701,84 @@ export default function Analisis_Financiero() {
                     );
                   })}
 
-                {!data && !error && <div className="af-emptyRow">No hay datos para mostrar.</div>}
-
-                {!!data && filteredRows.length === 0 && (
-                  <div className="af-emptyRow">No hay datos para mostrar.</div>
+                {/* ✅ Empty states SIN flash */}
+                {hasFetched && !isBusy && !error && (
+                  <>
+                    {!data && <div className="af-emptyRow">No hay datos para mostrar.</div>}
+                    {!!data && filteredRows.length === 0 && (
+                      <div className="af-emptyRow">No hay datos para mostrar.</div>
+                    )}
+                  </>
                 )}
               </>
             )}
           </div>
         </div>
 
-        {/* ✅ RESTO del layout solo cuando hay data y NO está cargando */}
-        {!loading && !loadingPeriodos && data && (
+        {/* ✅ Subhead + Totales con skeleton propio */}
+        {showSkel ? (
           <>
-            <div className="af-subhead">
-              <div className="af-subhead__name">
-                Resumen
-                <div className="af-subhead__meta">
-                  Período {data?.periodo ?? periodo}
-                  {ventas != null ? (
-                    <>
-                      {" "}
-                      • Ventas: <b>{moneyARS(ventas)}</b>
-                    </>
-                  ) : null}
-                </div>
-              </div>
+            {renderSubheadSkeleton()}
+            {renderTotalsSkeleton()}
+          </>
+        ) : (
+          <>
+            {!loading && !loadingPeriodos && data && (
+              <>
+                <div className="af-subhead">
+                  <div className="af-subhead__name">
+                    Resumen
+                    <div className="af-subhead__meta">
+                      Período {data?.periodo ?? periodo}
+                      {ventas != null ? (
+                        <>
+                          {" "}
+                          • Ventas: <b>{moneyARS(ventas)}</b>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
 
-              <div className="af-miniHint">
-                Tabla horizontal tipo Excel (Concepto / Importe). Resultado Neto se resalta.
-              </div>
-            </div>
-
-            <div className="af-footTotals">
-              <div
-                className={`af-totalCard af-totalCard--primary ${
-                  resultadoIsNeg ? "is-negative" : "is-positive"
-                }`}
-              >
-                <div className="af-totalTop">
-                  <div className="af-totalLabel">Resultado Neto</div>
-                  <div className="af-chip">{resultadoIsNeg ? "↓ Pérdida" : "↑ Ganancia"}</div>
+                  <div className="af-miniHint">
+                    Tabla horizontal tipo Excel (Concepto / Importe). Resultado Neto se resalta.
+                  </div>
                 </div>
 
-                <div className="af-totalValue">
-                  {resultadoNeto == null ? "-" : moneyARS(resultadoNeto)}
-                </div>
+                <div className="af-footTotals">
+                  <div
+                    className={`af-totalCard af-totalCard--primary ${
+                      resultadoIsNeg ? "is-negative" : "is-positive"
+                    }`}
+                  >
+                    <div className="af-totalTop">
+                      <div className="af-totalLabel">Resultado Neto</div>
+                      <div className="af-chip">{resultadoIsNeg ? "↓ Pérdida" : "↑ Ganancia"}</div>
+                    </div>
 
-                <div className="af-totalSub">
-                  Resultado del período (ventas - costo variable - costo fijo - otros egresos)
-                </div>
-              </div>
+                    <div className="af-totalValue">
+                      {resultadoNeto == null ? "-" : moneyARS(resultadoNeto)}
+                    </div>
 
-              <div className="af-totalCard af-totalCard--danger">
-                <div className="af-totalTop">
-                  <div className="af-totalLabel">Gastos personales</div>
-                  <div className="af-chip is-danger">Control</div>
-                </div>
+                    <div className="af-totalSub">
+                      Resultado del período (ventas - costo variable - costo fijo - otros egresos)
+                    </div>
+                  </div>
 
-                <div className="af-totalValue">
-                  {gastosPersonales == null ? "-" : moneyARS(gastosPersonales)}
-                </div>
+                  <div className="af-totalCard af-totalCard--danger">
+                    <div className="af-totalTop">
+                      <div className="af-totalLabel">Gastos personales</div>
+                      <div className="af-chip is-danger">Control</div>
+                    </div>
 
-                <div className="af-totalSub">Se muestra aparte como en tu Excel</div>
-              </div>
-            </div>
+                    <div className="af-totalValue">
+                      {gastosPersonales == null ? "-" : moneyARS(gastosPersonales)}
+                    </div>
+
+                    <div className="af-totalSub">Se muestra aparte como en tu Excel</div>
+                  </div>
+                </div>
+              </>
+            )}
           </>
         )}
       </section>

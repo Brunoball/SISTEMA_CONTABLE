@@ -376,3 +376,27 @@ html[data-theme="oscuro"] .db-stat{
 html[data-theme="oscuro"] .db-stat:hover{
   background: linear-gradient(135deg, rgba(11,30,51,.92), rgba(0,85,187,.12));
 }
+/* =========================
+   MOBILE: apilar cajas (solo celular)
+   - Acceso rápido: botones uno debajo del otro
+   - Información: items uno debajo del otro
+========================= */
+@media (max-width: 720px){
+  /* el layout general ya lo pasás a 1 col a 1050px,
+     esto es específicamente para "cajas internas" en mobile */
+
+  /* ✅ Acceso rápido: 1 por fila */
+  .db-quick{
+    grid-template-columns: 1fr;
+  }
+
+  /* ✅ Información: 1 por fila */
+  .db-stats{
+    grid-template-columns: 1fr;
+  }
+
+  /* opcional: que el botón respire mejor en mobile */
+  .db-quick__item{
+    padding: 12px 12px;
+  }
+}

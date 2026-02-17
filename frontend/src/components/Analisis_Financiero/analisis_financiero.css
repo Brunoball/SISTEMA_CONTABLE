@@ -306,8 +306,9 @@
 .af-tableWrap{
   flex: 1;
   min-height: 0;
-  overflow: hidden;
-  max-height: calc(100vh - 435px);
+
+
+
 }
 
 /* =========================
@@ -340,7 +341,7 @@
 /* Body con scroll */
 .af-gridBody{
   overflow: auto;
-  max-height: calc(100vh - 300px);
+  max-height: calc(100vh - 430px);
   background: #fff;
 }
 
@@ -978,7 +979,7 @@ html[data-theme="oscuro"] .af-page .af-gridBody::-webkit-scrollbar-thumb{
 
   .af-gridBody{
     height: 100%;
-    min-height: 100vh;
+    min-height: 75vh;
     overflow-y: auto;        /* ✅ scroll real */
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
@@ -1317,4 +1318,122 @@ html[data-theme="oscuro"] .af-page .af-skeletonBar{
       rgba(226,232,240,.14) 75%,
       rgba(226,232,240,.07) 100%);
   background-size: 240% 100%;
+}
+/* el body es “la caja” a llenar */
+.af-gridBody{
+  position: relative;
+}
+
+/* wrapper del skeleton ocupa todo el alto visible */
+.af-skeletonWrap{
+  min-height: 100%;
+  height: 100%;
+  padding: 8px 0;
+}
+/* =========================================================
+   ✅ Skeleton por secciones (TableWrap / Subhead / Totals)
+========================================================= */
+
+
+.af-subhead.is-loading,
+.af-footTotals.is-loading{
+  position: relative;
+}
+
+/* líneas skeleton genéricas */
+.af-skeletonLine{
+  display: inline-block;
+  height: 12px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg,
+      rgba(10,37,64,.08) 0%,
+      rgba(10,37,64,.14) 25%,
+      rgba(10,37,64,.08) 50%,
+      rgba(10,37,64,.14) 75%,
+      rgba(10,37,64,.08) 100%);
+  background-size: 240% 100%;
+  animation: afShimmer 1.05s ease-in-out infinite;
+}
+
+.af-skeletonLine.h-22{ height: 2px; }
+
+.af-skeletonChip{
+  display: inline-block;
+  width: 82px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(10,37,64,.10);
+  background:
+    linear-gradient(90deg,
+      rgba(10,37,64,.07) 0%,
+      rgba(10,37,64,.12) 25%,
+      rgba(10,37,64,.07) 50%,
+      rgba(10,37,64,.12) 75%,
+      rgba(10,37,64,.07) 100%);
+  background-size: 240% 100%;
+  animation: afShimmer 1.05s ease-in-out infinite;
+}
+
+/* anchos rápidos */
+.w-28{ width: 28%; }
+.w-30{ width: 30%; }
+.w-34{ width: 34%; }
+.w-36{ width: 36%; }
+.w-40{ width: 40%; }
+.w-44{ width: 44%; }
+.w-52{ width: 52%; }
+.w-60{ width: 60%; }
+.w-64{ width: 64%; }
+.w-72{ width: 72%; }
+
+/* totals skeleton */
+.af-totalCard--skeleton{
+  background: rgba(10,37,64,.03);
+  border-color: rgba(10,37,64,.10);
+}
+
+/* Dark mode */
+html[data-theme="oscuro"] .af-page .af-skeletonLine,
+html[data-theme="oscuro"] .af-page .af-skeletonChip{
+  background:
+    linear-gradient(90deg,
+      rgba(226,232,240,.07) 0%,
+      rgba(226,232,240,.14) 25%,
+      rgba(226,232,240,.07) 50%,
+      rgba(226,232,240,.14) 75%,
+      rgba(226,232,240,.07) 100%);
+  background-size: 240% 100%;
+}
+/* ✅ Skeleton: Resumen + Totales NO deben crecer */
+.af-subhead.is-loading{
+  min-height: 86px;       /* altura fija */
+  align-items: center;
+}
+
+.af-subheadSkel{
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.af-footTotals.is-loading{
+  align-items: stretch;
+}
+
+/* cards skeleton compactas */
+.af-totalSkel{
+  min-height: 120px;      /* ✅ clave */
+  display: grid;
+  align-content: center;
+  gap: 12px;
+
+}
+.af-subheadSkel{padding: 0 !important;}
+/* barras skeleton más finas (no “bloques”) */
+.af-subheadSkel .af-skeletonBar,
+.af-totalSkel .af-skeletonBar{
+  height: 10px;
+  border-radius: 999px;
+
 }

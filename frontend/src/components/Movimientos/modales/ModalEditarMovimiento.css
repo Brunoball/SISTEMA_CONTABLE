@@ -2628,3 +2628,154 @@ input[type="number"]::-webkit-outer-spin-button {
   background: #0a2540 !important;
   color: rgba(255,255,255,.95) !important;
 }
+/* =========================================================
+   ✅ RESPONSIVE – ModalCargaRapidaMovimientos (planilla + filtros)
+   Objetivo:
+   - Desktop: 2 columnas (tabla + filtros)
+   - Mobile:  1 columna (tabla arriba, filtros abajo)
+   - Tabla: en mobile => scroll horizontal (no se rompe el grid)
+========================================================= */
+
+/* 1) Ajuste general para que no “explote” en pantallas chicas */
+.mi-modal__container--mov{
+  width: min(1180px, 96vw);
+}
+
+/* 2) Apilado: tabla y filtros en 1 columna */
+@media (max-width: 980px){
+  .mi-modal__overlay{
+    padding: 10px;
+  }
+
+  .mi-modal__container--mov{
+    min-height: 96vh;
+    max-height: 96vh;
+  }
+
+  .mi-modal__header--car{
+    padding: 12px 14px;
+  }
+
+  .mi-modal__content--car{
+    padding: 10px;
+  }
+
+  /* grid principal: 1 columna */
+  .mi-cr-grid{
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+
+  /* filtros: abajo */
+  .mi-cr-filters{
+    order: 2;
+  }
+
+  /* tabla: arriba */
+  .mi-cr-table{
+    order: 1;
+  }
+
+  /* fechas/período: 1 col para que no apriete */
+  .mi-cr-filters__dates{
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* 3) Tabla: modo “scroll horizontal” en mobile
+   - mantiene encabezado + filas como “tabla real”
+   - evita que las columnas se aplasten o salten de lugar
+*/
+@media (max-width: 720px){
+  /* Más compacto */
+  .mi-cr-table__head{
+    font-size: 12px;
+    padding: 10px 10px;
+  }
+
+  /* El wrapper scrollea en X si hace falta */
+  .mi-cr-table{
+    overflow: hidden; /* el scroll lo maneja el rows */
+  }
+
+  .mi-cr-table__rows{
+    overflow: auto; /* ya lo tenías, reforzamos */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Importante: fijamos ancho mínimo de la “tabla” (head + filas)
+     así las columnas no se rompen y aparece scroll horizontal */
+  .mi-cr-table__head,
+  .mi-cr-row{
+    min-width: 820px; /* ajustá si querés más/menos ancho total */
+  }
+
+  /* Un poquito menos padding por celda */
+  .mi-cr-col{
+    padding: 0 8px;
+  }
+
+  /* Inputs tabla: más compactos */
+  .mi-cr-row .fl-input{
+    height: 36px;
+    padding: 9px 10px;
+  }
+
+  /* Select IVA: que no se achique a nada */
+  .fl-select-iva--car{
+    width: 84px;
+    min-width: 84px;
+  }
+
+  /* Botón eliminar: centrado y cómodo */
+  .mi-cr-del{
+    margin: 8px auto 0;
+  }
+
+  /* Totales: que no se desborde */
+  .mi-cr-table__foot{
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .mi-cr-totals{
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+/* 4) Filtros: acciones “pegadas” abajo y cómodas en mobile */
+@media (max-width: 720px){
+  .mi-cr-filters__body{
+    padding: 10px;
+ 
+  }
+ .mi-cr-totalLine{
+  gap: 2px;
+ }
+  .mi-cr-filters__actions{
+    position: sticky;
+    bottom: 0;
+    background: inherit; /* respeta light/dark */
+    padding-top: 10px;
+    padding-bottom: 6px;
+  }
+
+  .mit-btn--block{
+    height: 44px;
+  }
+  .mi-cr-filters{
+overflow: auto;
+max-height: 30vh;
+  }
+}
+
+/* 5) Dark mode: asegurar que el sticky del panel no quede raro */
+.mi-modal__container.mi-modal--dark .mi-cr-filters__actions{
+  background: rgba(6,18,28,.92);
+}
+@media (max-width: 980px){
+  .mi-cr-filters__dates{
+    grid-template-columns:1fr 1fr !important;
+  }
+}

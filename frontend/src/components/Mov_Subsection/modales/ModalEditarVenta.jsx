@@ -1016,10 +1016,7 @@ export default function ModalEditarVenta({
                       </select>
                       <label className="fl-label">Tipo de venta</label>
                     </div>
-                  </div>
-
-                  <div className="mi-row2 fl-col-full">
-                    {/* ✅ Detalle autocomplete + agregar */}
+                                        {/* ✅ Detalle autocomplete + agregar */}
                     <div className="fl-field mi-autocomplete" style={{ position: "relative" }}>
                       <input
                         className="fl-input"
@@ -1069,34 +1066,8 @@ export default function ModalEditarVenta({
                         + Agregar nuevo detalle
                       </button>
                     </div>
-
-                    {/* ✅ Cuenta Corriente SOLO si es cuenta corriente */}
-                    {esCuentaCorriente ? (
-                      <div className="fl-field">
-                        <select
-                          className="fl-input fl-select"
-                          value={String(form.id_cuenta_corriente)}
-                          onChange={(e) =>
-                            setForm((p) => ({ ...p, id_cuenta_corriente: e.target.value }))
-                          }
-                          disabled={saving || addUI.open}
-                        >
-                          <option value={NULL_OPTION}>-- Seleccionar cuenta corriente --</option>
-                          {(safeLists.cuentasCorrientes || []).map((x) => (
-                            <option key={x.id} value={String(x.id)}>
-                              {x.nombre}
-                            </option>
-                          ))}
-                        </select>
-                        <label className="fl-label">Cuenta corriente (obligatoria)</label>
-                      </div>
-                    ) : (
-                      <div className="fl-field" style={{ opacity: 0.6 }}>
-                        <input className="fl-input" disabled value="No aplica" />
-                        <label className="fl-label">Cuenta corriente</label>
-                      </div>
-                    )}
                   </div>
+
 
                   <div className="mi-em-item fl-col-full">
                     <div className="mi-em-itemTitle">Ítem de la venta (editable)</div>
@@ -1213,6 +1184,31 @@ export default function ModalEditarVenta({
               </div>
 
               <div className="mi-em-asideBody">
+                {/* ✅ Cuenta Corriente SOLO si es cuenta corriente (derecha) */}
+{esCuentaCorriente ? (
+  <div className="fl-field">
+    <select
+      className="fl-input fl-select"
+      value={String(form.id_cuenta_corriente)}
+      onChange={(e) => setForm((p) => ({ ...p, id_cuenta_corriente: e.target.value }))}
+      disabled={saving || addUI.open}
+    >
+      <option value={NULL_OPTION}>-- Seleccionar cuenta corriente --</option>
+      {(safeLists.cuentasCorrientes || []).map((x) => (
+        <option key={x.id} value={String(x.id)}>
+          {x.nombre}
+        </option>
+      ))}
+    </select>
+    <label className="fl-label">Cuenta corriente (obligatoria)</label>
+  </div>
+) : (
+  <div className="fl-field" style={{ opacity: 0.6 }}>
+    <input className="fl-input" disabled value="No aplica" />
+    <label className="fl-label">Cuenta corriente</label>
+  </div>
+)}
+
                 {/* ✅ Medio de pago SOLO si es contado */}
                 {esContado ? (
                   <div className="fl-field">

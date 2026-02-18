@@ -1156,41 +1156,13 @@ export default function ModalEditarMovimiento({
                       {renderAddInline("id_tipo_operacion")}
                     </div>
 
-                    {/* Tipo de venta */}
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(form.id_tipo_venta)}
-                        onChange={(e) => {
-                          onSelectWithAdd("id_tipo_venta", e.target.value);
-                          setForm((p) => ({
-                            ...p,
-                            id_medio_pago: NULL_OPTION,
-                            id_cuenta_corriente: NULL_OPTION,
-                          }));
-                        }}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>-- Tipo de venta --</option>
-                        {(safeLists.tiposVenta || []).map((x) => {
-                          const xid = getIdGeneric(x);
-                          return (
-                            <option key={xid || x.id} value={String(xid || x.id || "")}>
-                              {x.nombre}
-                            </option>
-                          );
-                        })}
-                        <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                      </select>
-                      <label className="fl-label">Tipo de venta</label>
-                      {renderAddInline("id_tipo_venta")}
-                    </div>
+
                   </div>
 
                   {/* 2 cols */}
-                  <div className="mi-row2 fl-col-full">
+                  <div className="mi-row2 fl-col-full  ">
                     {/* Detalle */}
-                    <div className="fl-field mi-autocomplete">
+                    <div className="fl-field mi-autocomplete fl-col-full--detalle" >
                       <input
                         ref={detalleInputRef}
                         className="fl-input"
@@ -1229,30 +1201,7 @@ export default function ModalEditarMovimiento({
                       </button>
                     </div>
 
-                    {/* Cuenta corriente - condicional según tipo de venta */}
-                    {tipoVentaEsCuentaCorriente && (
-                      <div className="fl-field">
-                        <select
-                          className="fl-input fl-select"
-                          value={String(form.id_cuenta_corriente)}
-                          onChange={(e) => onSelectWithAdd("id_cuenta_corriente", e.target.value)}
-                          disabled={saving}
-                        >
-                          <option value={NULL_OPTION}>-- Cuenta corriente --</option>
-                          {(safeLists.cuentasCorrientes || []).map((x) => {
-                            const xid = getIdGeneric(x);
-                            return (
-                              <option key={xid || x.id} value={String(xid || x.id || "")}>
-                                {x.nombre}
-                              </option>
-                            );
-                          })}
-                          <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                        </select>
-                        <label className="fl-label">Cuenta corriente</label>
-                        {renderAddInline("id_cuenta_corriente")}
-                      </div>
-                    )}
+
                   </div>
 
                   {/* Item editable */}
@@ -1371,6 +1320,61 @@ export default function ModalEditarMovimiento({
               </div>
 
               <div className="mi-em-asideBody">
+              {/* Tipo de venta (derecha) */}
+<div className="fl-field">
+  <select
+    className="fl-input fl-select"
+    value={String(form.id_tipo_venta)}
+    onChange={(e) => {
+      onSelectWithAdd("id_tipo_venta", e.target.value);
+      setForm((p) => ({
+        ...p,
+        id_medio_pago: NULL_OPTION,
+        id_cuenta_corriente: NULL_OPTION,
+      }));
+    }}
+    disabled={saving}
+  >
+    <option value={NULL_OPTION}>-- Tipo de venta --</option>
+    {(safeLists.tiposVenta || []).map((x) => {
+      const xid = getIdGeneric(x);
+      return (
+        <option key={xid || x.id} value={String(xid || x.id || "")}>
+          {x.nombre}
+        </option>
+      );
+    })}
+    <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+  </select>
+  <label className="fl-label">Tipo de venta</label>
+  {renderAddInline("id_tipo_venta")}
+</div>
+
+{/* Cuenta corriente (derecha) */}
+{tipoVentaEsCuentaCorriente && (
+  <div className="fl-field">
+    <select
+      className="fl-input fl-select"
+      value={String(form.id_cuenta_corriente)}
+      onChange={(e) => onSelectWithAdd("id_cuenta_corriente", e.target.value)}
+      disabled={saving}
+    >
+      <option value={NULL_OPTION}>-- Cuenta corriente --</option>
+      {(safeLists.cuentasCorrientes || []).map((x) => {
+        const xid = getIdGeneric(x);
+        return (
+          <option key={xid || x.id} value={String(xid || x.id || "")}>
+            {x.nombre}
+          </option>
+        );
+      })}
+      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+    </select>
+    <label className="fl-label">Cuenta corriente</label>
+    {renderAddInline("id_cuenta_corriente")}
+  </div>
+)}
+
                 {/* Medio pago - condicional según tipo de venta */}
                 {tipoVentaEsContado && (
                   <div className="fl-field">

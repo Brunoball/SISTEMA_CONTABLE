@@ -983,31 +983,8 @@ export default function ModalEditarCompra({
                     {renderAddInline("id_clasificacion")}
                   </div>
 
-                  <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_cuenta_corriente)}
-                      onChange={(e) => onSelectWithAdd("id_cuenta_corriente", e.target.value)}
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
-                      {(safeLists.cuentasCorrientes || []).map((x) => {
-                        const xid = getGenericId(x) ?? Number(x?.id ?? x?.id_cuenta_corriente);
-                        return (
-                          <option key={xid ?? x?.nombre} value={String(xid ?? "")}>
-                            {x.nombre}
-                          </option>
-                        );
-                      })}
-                      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-                    </select>
-                    <label className="fl-label">Cuenta corriente</label>
-                    {renderAddInline("id_cuenta_corriente")}
-                  </div>
-                </div>
-
                 {/* Detalle (autocomplete) */}
-                <div className="fl-field mi-autocomplete fl-col-full" style={{ marginTop: 12 }}>
+                <div className="fl-field mi-autocomplete" style={{ marginTop: 12 }}>
                   <input
                     ref={detalleInputRef}
                     className="fl-input"
@@ -1045,6 +1022,9 @@ export default function ModalEditarCompra({
                     + Agregar nuevo detalle
                   </button>
                 </div>
+                </div>
+
+
 
                 {/* Ítem */}
                 <div className="mi-em-item fl-col-full">
@@ -1182,6 +1162,27 @@ export default function ModalEditarCompra({
                   <label className="fl-label">Medio de pago</label>
                   {renderAddInline("id_medio_pago")}
                 </div>
+<div className="fl-field">
+  <select
+    className="fl-input fl-select"
+    value={String(form.id_cuenta_corriente)}
+    onChange={(e) => onSelectWithAdd("id_cuenta_corriente", e.target.value)}
+    disabled={saving}
+  >
+    <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
+    {(safeLists.cuentasCorrientes || []).map((x) => {
+      const xid = getGenericId(x) ?? Number(x?.id ?? x?.id_cuenta_corriente);
+      return (
+        <option key={xid ?? x?.nombre} value={String(xid ?? "")}>
+          {x.nombre}
+        </option>
+      );
+    })}
+    <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
+  </select>
+  <label className="fl-label">Cuenta corriente</label>
+  {renderAddInline("id_cuenta_corriente")}
+</div>
 
                 <div className="fl-field mi-autocomplete">
                   <input

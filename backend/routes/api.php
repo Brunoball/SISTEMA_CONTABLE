@@ -8,12 +8,22 @@ require_once __DIR__ . '/../config/bootstrap_env.php';
 ini_set('display_errors', '1');
 error_reporting(E_ALL);
 
+date_default_timezone_set("America/Argentina/Cordoba");
+mb_internal_encoding("UTF-8");
+
+// Fatal -> JSON (sin romper headers)
 register_shutdown_function(function () {
   $err = error_get_last();
   if (!$err) return;
 
-  http_response_code(500);
-  header('Content-Type: application/json; charset=utf-8');
+  if (!headers_sent()) {
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+  } else {
+    http_response_code(500);
+  }
+
   echo json_encode([
     'exito' => false,
     'fatal' => true,
@@ -21,30 +31,33 @@ register_shutdown_function(function () {
   ], JSON_UNESCAPED_UNICODE);
 });
 
-$origin = $_SERVER["HTTP_ORIGIN"] ?? "*";
-header("Access-Control-Allow-Origin: $origin");
-header("Vary: Origin");
+// CORS
+$origin = $_SERVER["HTTP_ORIGIN"] ?? '';
+if ($origin !== '') {
+  header("Access-Control-Allow-Origin: $origin");
+  header("Vary: Origin");
+} else {
+  header("Access-Control-Allow-Origin: *");
+}
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Session");
 header("Access-Control-Max-Age: 86400");
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Content-Type: application/json; charset=utf-8");
 
 if (($_SERVER["REQUEST_METHOD"] ?? "") === "OPTIONS") {
-  http_response_code(200);
-  echo json_encode(["ok" => true], JSON_UNESCAPED_UNICODE);
+  http_response_code(204);
   exit;
 }
 
-date_default_timezone_set("America/Argentina/Cordoba");
-mb_internal_encoding("UTF-8");
-
-$action =
-  $_GET["action"] ?? $_POST["action"] ?? $_REQUEST["action"] ??
-  $_GET["accion"] ?? $_POST["accion"] ?? $_REQUEST["accion"] ?? "";
-
+// Action
+$action = $_GET["action"] ?? $_POST["action"] ?? $_REQUEST["action"] ?? '';
+if ($action === '') {
+  $action = $_GET["accion"] ?? $_POST["accion"] ?? $_REQUEST["accion"] ?? '';
+}
 $action = is_string($action) ? trim($action) : "";
 
-// Acciones públicas (NO exigen X-Session)
+// Acciones públicas
 $PUBLIC_ACTIONS = ['inicio', 'registro', 'logout', 'cerrar_sesion'];
 
 try {
@@ -56,8 +69,8 @@ try {
   require_once __DIR__ . "/../modules/global/route.php";
   require_once __DIR__ . "/../modules/login/route.php";
 
-  // ✅ Públicas
-  if (in_array($action, $PUBLIC_ACTIONS, true)) {
+  // Públicas
+  if (in_array(mb_strtolower($action), $PUBLIC_ACTIONS, true)) {
     if (function_exists("route_global") && route_global($action)) exit;
     if (function_exists("route_login") && route_login($action)) exit;
 
@@ -65,22 +78,21 @@ try {
     exit;
   }
 
-  // ✅ Privadas: validar sesión MASTER primero (expira a 30 min sin uso)
-  require_once __DIR__ . "/../config/db_master.php";                 // $pdo_master
-  require_once __DIR__ . "/../modules/login/require_session.php";    // require_session()
+  // Privadas: sesión MASTER
+  require_once __DIR__ . "/../config/db_master.php";
+  require_once __DIR__ . "/../modules/login/require_session.php";
 
-  $ses = require_session($pdo_master); // ← corta con 401 si está vencida/invalid
-  // Guardamos por si algún módulo lo necesita:
+  $ses = require_session($pdo_master);
+
   $GLOBALS['SESSION_MASTER'] = $ses;
-  // También, por conveniencia:
   $_SERVER['X_IDTENANT'] = (string)($ses['idTenant'] ?? '');
   $_SERVER['X_IDUSUARIO_MASTER'] = (string)($ses['idUsuarioMaster'] ?? '');
 
-  // ✅ Ahora sí: resolver tenant + crear $pdo tenant
+  // Tenant bootstrap => crea $pdo
   require_once __DIR__ . "/../modules/utils/tenant_resolver.php";
-  tenant_bootstrap_or_fail(); // crea $pdo tenant (y debería usar la sesión ya validada)
+  tenant_bootstrap_or_fail();
 
-  // Rutas de módulos privados
+  // Módulos privados
   require_once __DIR__ . "/../modules/movimientos/route.php";
   require_once __DIR__ . "/../modules/flujo_caja/route.php";
   require_once __DIR__ . "/../modules/cuentas_corrientes/route.php";

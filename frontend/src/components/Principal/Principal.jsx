@@ -289,7 +289,8 @@ function hardClientLogoutCleanup() {
 /* =========================
    ✅ AUTO-LOGOUT por inactividad
 ========================= */
-const IDLE_MS = 30 * 60 * 1000; // 30 minutos SIN INTERACCIÓN (PROD)
+const IDLE_MS = 1 * 60 * 1000; // 1 minuto SIN INTERACCIÓN
+
 
 /* =========================
    COMPONENTE

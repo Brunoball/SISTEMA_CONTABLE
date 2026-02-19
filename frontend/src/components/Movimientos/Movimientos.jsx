@@ -269,9 +269,10 @@ export default function Movimientos() {
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
-  // ✅ Skeleton (FIX anti-parpadeo):
-  // - se muestra INMEDIATO al arrancar loadingRows (sin delay)
-  // - nunca queda un “vacío” entre cambio de período y llegada de datos
+  // ✅ token para cortar loops de "cargar todos" si cambia periodo/q
+  const loadAllTokenRef = useRef(0);
+
+  // ✅ Skeleton (FIX anti-parpadeo)
   const [showSkeleton, setShowSkeleton] = useState(false);
 
   useEffect(() => {
@@ -330,7 +331,7 @@ export default function Movimientos() {
 
   const refreshPeriodos = useCallback(async () => {
     try {
-      await refreshLists(); // ✅ refresca TODO (periodos incluidos) en el Provider
+      await refreshLists();
     } catch {}
   }, [refreshLists]);
 
@@ -344,10 +345,7 @@ export default function Movimientos() {
 
   /* =========================
      LOAD ROWS (paginado real)
-     ✅ FIX anti-parpadeo:
-        - cache se aplica ANTES de prender loaders
-        - skeleton principal se mantiene constante hasta que llegan datos reales
-        - requests viejas NO tocan loaders
+     ✅ include_total por defecto OFF (SaaS)
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -376,18 +374,13 @@ export default function Movimientos() {
       const qKey = (qLocal || "").trim();
       const cacheKey = `${periodoAPI}|${qKey}`;
 
-      // ✅ ID global (descartar respuestas viejas)
       const myReqId = ++reqIdRef.current;
 
       // ✅ cache SOLO para carga principal offset=0
-      // IMPORTANTÍSIMO: aplicarlo ANTES de prender loaders, así no hay flash/skeleton extra.
       if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
         const cached = cacheRef.current.get(cacheKey);
 
-        // marcar request activa
         rowsReqIdRef.current = myReqId;
-
-        // si llegó tarde, no tocar UI
         if (rowsReqIdRef.current !== myReqId) return null;
 
         setShowSkeleton(false);
@@ -405,10 +398,9 @@ export default function Movimientos() {
         };
       }
 
-      // ✅ marcar request activa por tipo + prender loaders
       if (!append) {
         rowsReqIdRef.current = myReqId;
-        setShowSkeleton(true); // ✅ INMEDIATO (sin delay) => no hay “vacío”
+        setShowSkeleton(true);
         setLoadingRows(true);
       } else {
         moreReqIdRef.current = myReqId;
@@ -426,10 +418,13 @@ export default function Movimientos() {
         sp.set("limit", String(PAGE_SIZE));
         sp.set("offset", String(offset));
 
+        // ✅ FIX BUG: el backend espera include_total (no include_count)
+        // ✅ SaaS: COUNT pesado opcional (default 0)
+        sp.set("include_total", "0");
+
         const data = await apiGet(`${API}?${sp.toString()}`);
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar movimientos.");
 
-        // ✅ si llegó tarde, NO tocar loaders ni UI
         if (myReqId !== reqIdRef.current) return null;
 
         const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
@@ -468,13 +463,12 @@ export default function Movimientos() {
               });
             }
 
-            // ✅ apagar loader SOLO si sigue siendo la activa de ese tipo
             if (append) {
               if (moreReqIdRef.current === myReqId) setLoadingMore(false);
             } else {
               if (rowsReqIdRef.current === myReqId) {
                 setLoadingRows(false);
-                setShowSkeleton(false); // ✅ se apaga solo cuando hay datos reales aplicados
+                setShowSkeleton(false);
               }
             }
 
@@ -543,7 +537,7 @@ export default function Movimientos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ sync período si desaparece (periodos vienen del Provider)
+  // ✅ sync período si desaparece
   useEffect(() => {
     const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos : [];
 
@@ -566,7 +560,7 @@ export default function Movimientos() {
     }
   }, [listasCtx?.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
 
-  // debounce búsqueda (resetea paginado)
+  // debounce búsqueda
   useEffect(() => {
     if (!fPeriodo) return;
 
@@ -724,12 +718,15 @@ export default function Movimientos() {
     setQ("");
     skipSearchRef.current = true;
 
+    // ✅ corta "cargar todos" en curso
+    loadAllTokenRef.current += 1;
+
     invalidateCacheForPeriodo(ui);
     await loadRows({ periodo: ui, q: "", offset: 0, append: false });
   };
 
   /* =========================================================
-     ✅ BOTÓN: "Cargar todos"
+     ✅ BOTÓN: "Cargar todos" (robusto si cambia periodo/q)
   ========================================================= */
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
@@ -738,11 +735,16 @@ export default function Movimientos() {
     setLoadingAll(true);
     showToast("cargando", "Cargando todos los movimientos…", 12000);
 
+    const myToken = (loadAllTokenRef.current += 1);
+
     let offset = nextOffset;
     let guard = 0;
 
     try {
       while (offset !== null && guard < 3000) {
+        // ✅ si cambió periodo/q durante el loop, cortamos
+        if (myToken !== loadAllTokenRef.current) break;
+
         const currentPer = periodoToMMYYYY(fPeriodo);
         const currentQ = (q || "").trim();
 
@@ -755,18 +757,19 @@ export default function Movimientos() {
         if (!res.hasMore || offset === null) break;
       }
 
-      showToast("exito", "Listo: ya se cargaron todos.", 2600);
+      if (myToken === loadAllTokenRef.current) {
+        showToast("exito", "Listo: ya se cargaron todos.", 2600);
+      }
     } catch (e) {
       showToast("error", e?.message || "Error cargando todos.", 4200);
     } finally {
-      setLoadingAll(false);
+      // solo apagar si sigue siendo el loop vigente
+      if (myToken === loadAllTokenRef.current) setLoadingAll(false);
     }
   }, [hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll, nextOffset, fPeriodo, q, loadRows, showToast]);
 
-  // ✅ estado UX: difumina la tabla solo en carga principal
   const softLoading = loadingRows && showSkeleton;
 
-  // ✅ skeleton config por columna
   const skelWidths = useMemo(() => {
     return {
       descripcion: ["72%", "58%", "66%", "48%"],
@@ -824,7 +827,6 @@ export default function Movimientos() {
     );
   };
 
-  // ✅ listas a pasar a modales/UI (del Provider)
   const lists = listasCtx || {
     periodos: [],
     clasificaciones: [],
@@ -835,7 +837,7 @@ export default function Movimientos() {
     proveedores: [],
     tipos_movimiento: [],
     tipos_venta: [],
-    tipos_operacion: [], // ✅ NUEVO
+    tipos_operacion: [],
   };
 
   const listsSafe = useMemo(() => {
@@ -855,7 +857,6 @@ export default function Movimientos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listasCtx]);
 
-  // ✅ no mostrar empty-state mientras cualquier carga esté activa
   const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
   return (
@@ -864,7 +865,6 @@ export default function Movimientos() {
         <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
       )}
 
-      {/* Error listas globales (si falla provider) */}
       {errorListsCtx && (
         <div className="mov-alert" role="alert">
           {errorListsCtx}
@@ -952,33 +952,32 @@ export default function Movimientos() {
           </div>
 
           <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-<button
-  type="button"
-  className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
-  onClick={exportToExcel}
-  disabled={loadingRows || filteredRows.length === 0}
-  title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
->
-  <FontAwesomeIcon icon={faFileExcel} />
-  <span className="mov-btnText mov-btnText--desktop">Exportar Excel</span>
-  <span className="mov-btnText mov-btnText--mobile">Exportar</span>
-</button>
+            <button
+              type="button"
+              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
+              onClick={exportToExcel}
+              disabled={loadingRows || filteredRows.length === 0}
+              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
+            >
+              <FontAwesomeIcon icon={faFileExcel} />
+              <span className="mov-btnText mov-btnText--desktop">Exportar Excel</span>
+              <span className="mov-btnText mov-btnText--mobile">Exportar</span>
+            </button>
 
-<button
-  type="button"
-  className="mov-btn mov-btn--primary"
-  onClick={async () => {
-    await ensureListsLoaded({ force: false, background: true }).catch(() => {});
-    setOpenAdd(true);
-  }}
-  disabled={!fPeriodo || loadingAll || loadingListsCtx}
-  title={!fPeriodo ? "Primero seleccioná un período" : "Nuevo Movimiento"}
->
-  <FontAwesomeIcon icon={faPlus} />
-  <span className="mov-btnText mov-btnText--desktop">Nuevo Movimiento</span>
-  <span className="mov-btnText mov-btnText--mobile">Movimiento</span>
-</button>
-
+            <button
+              type="button"
+              className="mov-btn mov-btn--primary"
+              onClick={async () => {
+                await ensureListsLoaded({ force: false, background: true }).catch(() => {});
+                setOpenAdd(true);
+              }}
+              disabled={!fPeriodo || loadingAll || loadingListsCtx}
+              title={!fPeriodo ? "Primero seleccioná un período" : "Nuevo Movimiento"}
+            >
+              <FontAwesomeIcon icon={faPlus} />
+              <span className="mov-btnText mov-btnText--desktop">Nuevo Movimiento</span>
+              <span className="mov-btnText mov-btnText--mobile">Movimiento</span>
+            </button>
           </div>
         </div>
 
@@ -1003,7 +1002,6 @@ export default function Movimientos() {
         {/* BODY */}
         <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup">
           <div className={["mov-gridBody mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
-            {/* ✅ Skeleton principal (constante, sin parpadeo) */}
             {loadingRows && showSkeleton ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
@@ -1086,7 +1084,6 @@ export default function Movimientos() {
                   </div>
                 ))}
 
-                {/* ✅ NO mostrar empty mientras carga (evita “flash”) */}
                 {!isAnyLoading && filteredRows.length === 0 && (
                   <div className="mov-emptyRow">
                     {!fPeriodo
@@ -1095,7 +1092,6 @@ export default function Movimientos() {
                   </div>
                 )}
 
-                {/* ✅ BOTÓN: CARGAR TODOS */}
                 {!loadingRows && filteredRows.length > 0 && hasMore && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
@@ -1110,7 +1106,6 @@ export default function Movimientos() {
                   </div>
                 )}
 
-                {/* ✅ Skeleton “cargar más/todos” */}
                 {(loadingMore || loadingAll) && (
                   <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">
                     {Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}
@@ -1141,6 +1136,9 @@ export default function Movimientos() {
 
             setQ("");
             setFPeriodo(wantedUI);
+
+            // ✅ corta loops en curso
+            loadAllTokenRef.current += 1;
 
             invalidateCacheForPeriodo(wantedUI);
             await loadRows({ periodo: wantedUI, q: "", offset: 0, append: false });
@@ -1226,6 +1224,9 @@ export default function Movimientos() {
 
             setOpenDel(false);
             setSelectedRow(null);
+
+            // ✅ corta loops en curso
+            loadAllTokenRef.current += 1;
 
             invalidateCacheForPeriodo(fPeriodo);
             await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });

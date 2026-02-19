@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * ✅ ACCIONES:
- * - movimientos_listar (GET)  ✅ OPTIMIZADO + PAGINADO + total_count + periodo flexible
+ * - movimientos_listar (GET)  ✅ OPTIMIZADO + PAGINADO + total_count opcional + periodo flexible
  * - movimientos_periodos_listar (GET) ✅ devuelve periodos en YYYY-MM + MM-YYYY (para UI)
  * - movimientos_crear (POST JSON) ✅ acepta periodo en YYYY-MM / MM-YYYY / MM/YYYY / YYYY/MM / YYYYMM
  * - movimientos_crear_batch (POST JSON) ✅ idem
@@ -14,13 +14,25 @@ declare(strict_types=1);
  * ✅ MULTI-TENANT:
  * - NO incluir config/db.php
  * - $pdo ya viene creado por routes/api.php (tenant_resolver)
+ *
+ * ✅ OPTIMIZACIONES CLAVE:
+ * - Búsqueda (q) sin EXISTS (usa JOIN una vez dentro del CTE mov)
+ * - Si q es numérico: busca por id exacto (usa índice)
+ * - total_count opcional: include_total=1 (default 1) para no contar siempre si no querés
+ * - Paginado robusto: LIMIT+1 para has_more real
  */
 
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Session');
+/* =========================
+   Headers (no romper nada)
+========================= */
+if (!headers_sent()) {
+  header('Content-Type: application/json; charset=utf-8');
+  header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+  // ⚠️ Ideal mover CORS a routes/api.php (middleware), pero lo dejamos acá para no romper.
+  header('Access-Control-Allow-Origin: *');
+  header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+  header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Session');
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
   http_response_code(204);
@@ -43,6 +55,10 @@ function ok(array $arr = []): void {
   echo json_encode(array_merge(['exito' => true], $arr), JSON_UNESCAPED_UNICODE);
   exit;
 }
+
+/**
+ * ⚠️ Mantengo httpCode=200 por defecto para NO romper tu frontend.
+ */
 function fail(string $msg, int $httpCode = 200, array $extra = []): void {
   http_response_code($httpCode);
   echo json_encode(array_merge(['exito' => false, 'mensaje' => $msg], $extra), JSON_UNESCAPED_UNICODE);
@@ -54,20 +70,31 @@ function fail(string $msg, int $httpCode = 200, array $extra = []): void {
 ========================= */
 function read_json_body(): array {
   $raw = file_get_contents('php://input');
-  if (!$raw) return [];
+  if ($raw === false || $raw === '') return [];
+
   $j = json_decode($raw, true);
-  return is_array($j) ? $j : [];
+
+  if (!is_array($j)) {
+    if (trim($raw) === '') return [];
+    fail('JSON inválido en body.');
+  }
+  return $j;
 }
+
 function require_post(): void {
   if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     fail('Método no permitido. Usá POST.', 200);
   }
 }
+
 function as_int($v, int $default = 0): int {
   if ($v === null || $v === '' || $v === false) return $default;
-  if (!is_numeric($v)) return $default;
+  if (is_int($v)) return $v;
+  if (is_string($v)) $v = trim($v);
+  if ($v === '' || !is_numeric($v)) return $default;
   return (int)$v;
 }
+
 function as_int_or_null($v): ?int {
   if ($v === null || $v === '' || $v === false) return null;
   if (is_string($v) && trim($v) === '') return null;
@@ -75,11 +102,42 @@ function as_int_or_null($v): ?int {
   $n = (int)$v;
   return ($n > 0) ? $n : null;
 }
+
+/**
+ * ✅ as_dec robusto:
+ * - "1234,56"
+ * - "1.234,56"
+ * - "1,234.56"
+ */
 function as_dec($v, int $scale = 2): float {
+  if ($v === null || $v === '' || $v === false) return 0.0;
+
+  if (is_string($v)) {
+    $s = trim($v);
+    if ($s === '') return 0.0;
+
+    $s = str_replace(' ', '', $s);
+
+    if (preg_match('/^\d{1,3}(\.\d{3})*(,\d+)?$/', $s)) {
+      $s = str_replace('.', '', $s);
+      $s = str_replace(',', '.', $s);
+    } else {
+      if (preg_match('/^\d{1,3}(,\d{3})*(\.\d+)?$/', $s)) {
+        $s = str_replace(',', '', $s);
+      } else {
+        if (substr_count($s, ',') === 1 && substr_count($s, '.') === 0) {
+          $s = str_replace(',', '.', $s);
+        }
+      }
+    }
+    $v = $s;
+  }
+
   $n = (float)$v;
   $p = pow(10, $scale);
   return round($n * $p) / $p;
 }
+
 function as_date_or_null($v): ?string {
   $s = trim((string)$v);
   if ($s === '') return null;
@@ -98,37 +156,51 @@ function normalize_periodo_to_yyyymm(string $p): string {
   $p = trim($p);
   if ($p === '') return '';
 
-  if (preg_match('/^\d{4}\-\d{2}$/', $p)) return $p;
+  if (preg_match('/^\d{4}\-\d{1,2}$/', $p)) {
+    [$yyyy, $mmRaw] = explode('-', $p);
+    $mm = (int)$mmRaw;
+    if ($mm < 1 || $mm > 12) return $p;
+    return $yyyy . '-' . str_pad((string)$mm, 2, '0', STR_PAD_LEFT);
+  }
 
   if (preg_match('/^\d{1,2}\-\d{4}$/', $p)) {
-    [$mm, $yyyy] = explode('-', $p);
-    $mm = str_pad((string)((int)$mm), 2, '0', STR_PAD_LEFT);
-    return $yyyy . '-' . $mm;
+    [$mmRaw, $yyyy] = explode('-', $p);
+    $mm = (int)$mmRaw;
+    if ($mm < 1 || $mm > 12) return $p;
+    return $yyyy . '-' . str_pad((string)$mm, 2, '0', STR_PAD_LEFT);
   }
 
   if (preg_match('/^\d{4}\/\d{1,2}$/', $p)) {
-    [$yyyy, $mm] = explode('/', $p);
-    $mm = str_pad((string)((int)$mm), 2, '0', STR_PAD_LEFT);
-    return $yyyy . '-' . $mm;
+    [$yyyy, $mmRaw] = explode('/', $p);
+    $mm = (int)$mmRaw;
+    if ($mm < 1 || $mm > 12) return $p;
+    return $yyyy . '-' . str_pad((string)$mm, 2, '0', STR_PAD_LEFT);
   }
 
   if (preg_match('/^\d{1,2}\/\d{4}$/', $p)) {
-    [$mm, $yyyy] = explode('/', $p);
-    $mm = str_pad((string)((int)$mm), 2, '0', STR_PAD_LEFT);
-    return $yyyy . '-' . $mm;
+    [$mmRaw, $yyyy] = explode('/', $p);
+    $mm = (int)$mmRaw;
+    if ($mm < 1 || $mm > 12) return $p;
+    return $yyyy . '-' . str_pad((string)$mm, 2, '0', STR_PAD_LEFT);
   }
 
   if (preg_match('/^\d{6}$/', $p)) {
     $yyyy = substr($p, 0, 4);
-    $mm   = substr($p, 4, 2);
-    return $yyyy . '-' . $mm;
+    $mm   = (int)substr($p, 4, 2);
+    if ($mm < 1 || $mm > 12) return $p;
+    return $yyyy . '-' . str_pad((string)$mm, 2, '0', STR_PAD_LEFT);
   }
 
   return $p;
 }
+
 function is_valid_periodo_yyyymm(string $p): bool {
-  return (bool)preg_match('/^\d{4}\-\d{2}$/', $p);
+  if (!preg_match('/^\d{4}\-\d{2}$/', $p)) return false;
+  [, $mm] = explode('-', $p);
+  $m = (int)$mm;
+  return $m >= 1 && $m <= 12;
 }
+
 function periodo_yyyymm_to_mmyyyy(string $p): string {
   $p = trim($p);
   if (!is_valid_periodo_yyyymm($p)) return $p;
@@ -145,17 +217,29 @@ function load_movimiento_or_fail(PDO $pdo, int $id_movimiento): array {
 }
 
 /**
- * ✅ Builder del WHERE de búsqueda:
- * - Evita reutilizar el mismo placeholder (:q) muchas veces (PDO MySQL -> HY093)
- * - Genera placeholders únicos :q1..:q8 y los bindea todos
+ * ✅ WHERE de búsqueda OPTIMIZADO (sin EXISTS):
+ * - si q es numérico: m.id_movimiento = :qid
+ * - si q es texto: LIKE sobre nombres joineados
+ *
+ * IMPORTANTE: Esta función asume que en la query existe:
+ *   LEFT JOIN clasificaciones c ...
+ *   LEFT JOIN tipos_venta tv ...
+ *   LEFT JOIN cuentas_corrientes cc ...
+ *   LEFT JOIN clientes cl ...
+ *   LEFT JOIN proveedores pr ...
+ *   LEFT JOIN medios_pago mp ...
+ *   LEFT JOIN detalles d ...
  */
-function build_where_q(string $q, array &$params): string {
+function build_where_q_fast(string $q, array &$params): string {
   $q = trim($q);
   if ($q === '') return '';
 
-  $like = '%' . $q . '%';
+  if (preg_match('/^\d+$/', $q)) {
+    $params[':qid'] = (int)$q;
+    return " AND m.id_movimiento = :qid ";
+  }
 
-  // placeholders únicos
+  $like = '%' . $q . '%';
   $params[':q_id']  = $like;
   $params[':q_c']   = $like;
   $params[':q_tv']  = $like;
@@ -167,14 +251,14 @@ function build_where_q(string $q, array &$params): string {
 
   return "
     AND (
-      CAST(COALESCE(m.id_movimiento, 0) AS CHAR) LIKE :q_id OR
-      EXISTS (SELECT 1 FROM clasificaciones c WHERE c.id_clasificacion = m.id_clasificacion AND c.nombre LIKE :q_c) OR
-      EXISTS (SELECT 1 FROM tipos_venta tv WHERE tv.id_tipo_venta = m.id_tipo_venta AND tv.nombre LIKE :q_tv) OR
-      EXISTS (SELECT 1 FROM cuentas_corrientes cc WHERE cc.id_cuenta_corriente = m.id_cuenta_corriente AND cc.nombre LIKE :q_cc) OR
-      EXISTS (SELECT 1 FROM clientes cl WHERE cl.id_cliente = m.id_cliente AND cl.nombre LIKE :q_cl) OR
-      EXISTS (SELECT 1 FROM proveedores pr WHERE pr.id_proveedor = m.id_proveedor AND pr.nombre LIKE :q_pr) OR
-      EXISTS (SELECT 1 FROM medios_pago mp WHERE mp.id_medio_pago = m.id_medio_pago AND mp.nombre LIKE :q_mp) OR
-      EXISTS (SELECT 1 FROM detalles d WHERE d.id_detalle = m.id_detalle AND d.nombre LIKE :q_d)
+      CAST(m.id_movimiento AS CHAR) LIKE :q_id OR
+      COALESCE(c.nombre,'')  LIKE :q_c  OR
+      COALESCE(tv.nombre,'') LIKE :q_tv OR
+      COALESCE(cc.nombre,'') LIKE :q_cc OR
+      COALESCE(cl.nombre,'') LIKE :q_cl OR
+      COALESCE(pr.nombre,'') LIKE :q_pr OR
+      COALESCE(mp.nombre,'') LIKE :q_mp OR
+      COALESCE(d.nombre,'')  LIKE :q_d
     )
   ";
 }
@@ -214,10 +298,6 @@ function movimientos_periodos_listar(PDO $pdo): void {
 
 /* =========================================================
    LISTAR MOVIMIENTOS (GET)
-   ✅ periodo flexible (acepta MM-YYYY y lo normaliza)
-   ✅ paginado robusto (limit+1 => has_more real)
-   ✅ total_count real
-   ✅ FIX HY093: placeholders únicos para q
 ========================================================= */
 function movimientos_listar(PDO $pdo): void {
   $periodoRaw = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
@@ -225,6 +305,10 @@ function movimientos_listar(PDO $pdo): void {
 
   $limit  = as_int($_GET['limit'] ?? 300, 300);
   $offset = as_int($_GET['offset'] ?? 0, 0);
+
+  // ✅ FIX BUG: aceptar include_total y también include_count (compatibilidad)
+  // - default 1 para no romper llamadas viejas
+  $includeTotal = as_int($_GET['include_total'] ?? ($_GET['include_count'] ?? 1), 1) === 1;
 
   if ($limit < 1) $limit = 1;
   if ($limit > 1000) $limit = 1000;
@@ -238,32 +322,41 @@ function movimientos_listar(PDO $pdo): void {
   }
 
   try {
-    // ✅ total_count
-    $paramsCount = [':periodo' => $periodo];
-    $whereQ = build_where_q($q, $paramsCount);
+    $total_count = null;
 
-    $stCount = $pdo->prepare("
-      SELECT COUNT(*) AS cnt
-      FROM movimientos m
-      WHERE m.periodo = :periodo
-      $whereQ
-    ");
-    foreach ($paramsCount as $k => $v) {
-      $stCount->bindValue($k, $v);
+    if ($includeTotal) {
+      $paramsCount = [':periodo' => $periodo];
+      $whereQ = build_where_q_fast($q, $paramsCount);
+
+      // ✅ COUNT con JOIN (sin EXISTS)
+      $stCount = $pdo->prepare("
+        SELECT COUNT(*) AS cnt
+        FROM movimientos m
+          LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
+          LEFT JOIN tipos_venta tv          ON tv.id_tipo_venta = m.id_tipo_venta
+          LEFT JOIN cuentas_corrientes cc   ON cc.id_cuenta_corriente = m.id_cuenta_corriente
+          LEFT JOIN clientes cl             ON cl.id_cliente = m.id_cliente
+          LEFT JOIN proveedores pr          ON pr.id_proveedor = m.id_proveedor
+          LEFT JOIN medios_pago mp          ON mp.id_medio_pago = m.id_medio_pago
+          LEFT JOIN detalles d              ON d.id_detalle = m.id_detalle
+        WHERE m.periodo = :periodo
+        $whereQ
+      ");
+      foreach ($paramsCount as $k => $v) {
+        $stCount->bindValue($k, $v, is_int($v) ? PDO::PARAM_INT : PDO::PARAM_STR);
+      }
+      $stCount->execute();
+      $total_count = (int)($stCount->fetchColumn() ?: 0);
     }
-    $stCount->execute();
-    $total_count = (int)($stCount->fetchColumn() ?: 0);
 
-    // ✅ paginado robusto: pedimos 1 extra
     $limitPlus = $limit + 1;
 
-    // params para listar (independientes)
     $paramsList = [
       ':periodo' => $periodo,
       ':limitPlus' => (int)$limitPlus,
       ':offset' => (int)$offset,
     ];
-    $whereQ2 = build_where_q($q, $paramsList);
+    $whereQ2 = build_where_q_fast($q, $paramsList);
 
     $sql = "
       WITH mov AS (
@@ -280,8 +373,25 @@ function movimientos_listar(PDO $pdo): void {
           m.id_detalle,
           m.monto_total,
           m.id_medio_pago,
-          m.created_at
+          m.created_at,
+
+          COALESCE(c.nombre,'')  AS clasificacion,
+          COALESCE(tv.nombre,'') AS tipo_venta,
+          COALESCE(cc.nombre,'') AS cuenta_corriente,
+          COALESCE(cl.nombre,'') AS cliente,
+          COALESCE(pr.nombre,'') AS proveedor,
+          COALESCE(d.nombre,'')  AS detalle_mov,
+          COALESCE(mp.nombre,'') AS medio_pago_nombre
+
         FROM movimientos m
+          LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
+          LEFT JOIN tipos_venta tv          ON tv.id_tipo_venta = m.id_tipo_venta
+          LEFT JOIN cuentas_corrientes cc   ON cc.id_cuenta_corriente = m.id_cuenta_corriente
+          LEFT JOIN clientes cl             ON cl.id_cliente = m.id_cliente
+          LEFT JOIN proveedores pr          ON pr.id_proveedor = m.id_proveedor
+          LEFT JOIN detalles d              ON d.id_detalle = m.id_detalle
+          LEFT JOIN medios_pago mp          ON mp.id_medio_pago = m.id_medio_pago
+
         WHERE m.periodo = :periodo
         $whereQ2
         ORDER BY m.fecha DESC, m.id_movimiento DESC
@@ -330,34 +440,25 @@ function movimientos_listar(PDO $pdo): void {
 
         COALESCE(it.total_sum, m.monto_total, 0) AS monto_total_final,
 
-        COALESCE(c.nombre,'')  AS clasificacion,
-        COALESCE(tv.nombre,'') AS tipo_venta,
-        COALESCE(cc.nombre,'') AS cuenta_corriente,
-        COALESCE(cl.nombre,'') AS cliente,
-        COALESCE(pr.nombre,'') AS proveedor,
-        COALESCE(di.nombre, d.nombre, '') AS detalle,
-        COALESCE(mp.nombre,'') AS medio_pago_nombre,
+        m.clasificacion,
+        m.tipo_venta,
+        m.cuenta_corriente,
+        m.cliente,
+        m.proveedor,
+        COALESCE(di.nombre, m.detalle_mov, '') AS detalle,
+        m.medio_pago_nombre,
 
         m.created_at
       FROM mov m
-        LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
-        LEFT JOIN tipos_venta tv          ON tv.id_tipo_venta = m.id_tipo_venta
-        LEFT JOIN cuentas_corrientes cc   ON cc.id_cuenta_corriente = m.id_cuenta_corriente
-        LEFT JOIN clientes cl             ON cl.id_cliente = m.id_cliente
-        LEFT JOIN proveedores pr          ON pr.id_proveedor = m.id_proveedor
-        LEFT JOIN detalles d              ON d.id_detalle = m.id_detalle
-        LEFT JOIN medios_pago mp          ON mp.id_medio_pago = m.id_medio_pago
-
         LEFT JOIN items_sum it            ON it.id_movimiento = m.id_movimiento
         LEFT JOIN first_item fi           ON fi.id_movimiento = m.id_movimiento
         LEFT JOIN detalles di             ON di.id_detalle = fi.id_detalle
-
       ORDER BY m.fecha DESC, m.id_movimiento DESC
     ";
 
     $stmt = $pdo->prepare($sql);
     foreach ($paramsList as $k => $v) {
-      if ($k === ':limitPlus' || $k === ':offset') {
+      if ($k === ':limitPlus' || $k === ':offset' || $k === ':qid') {
         $stmt->bindValue($k, (int)$v, PDO::PARAM_INT);
       } else {
         $stmt->bindValue($k, $v);
@@ -366,7 +467,6 @@ function movimientos_listar(PDO $pdo): void {
     $stmt->execute();
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    // ✅ has_more real
     $hasMore = count($rows) > $limit;
     if ($hasMore) $rows = array_slice($rows, 0, $limit);
 
@@ -380,7 +480,7 @@ function movimientos_listar(PDO $pdo): void {
         'id_movimiento' => (int)$r['id_movimiento'],
         'fecha' => (string)($r['fecha'] ?? ''),
 
-        'periodo' => (string)($r['periodo'] ?? ''), // YYYY-MM
+        'periodo' => (string)($r['periodo'] ?? ''),
         'periodo_ui' => periodo_yyyymm_to_mmyyyy((string)($r['periodo'] ?? '')),
 
         'id_tipo_operacion' => $r['id_tipo_operacion'] === null ? null : (int)$r['id_tipo_operacion'],
@@ -415,19 +515,18 @@ function movimientos_listar(PDO $pdo): void {
 
     $nextOffset = $hasMore ? ($offset + $limit) : null;
 
-    ok([
+    $out = [
       'movimientos' => $data,
-
       'limit' => $limit,
       'offset' => $offset,
       'has_more' => $hasMore,
       'next_offset' => $nextOffset,
-
-      'total_count' => $total_count,
-
       'periodo_norm' => $periodo,
       'periodo_ui' => periodo_yyyymm_to_mmyyyy($periodo),
-    ]);
+    ];
+    if ($includeTotal) $out['total_count'] = (int)$total_count;
+
+    ok($out);
   } catch (Throwable $e) {
     fail('No se pudieron cargar movimientos. ' . $e->getMessage());
   }

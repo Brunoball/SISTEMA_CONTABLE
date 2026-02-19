@@ -984,7 +984,7 @@ export default function ModalEditarCompra({
                   </div>
 
                 {/* Detalle (autocomplete) */}
-                <div className="fl-field mi-autocomplete" style={{ marginTop: 12 }}>
+                <div className="fl-field mi-autocomplete" style={{ marginTop: 0 }}>
                   <input
                     ref={detalleInputRef}
                     className="fl-input"

@@ -27,9 +27,39 @@ function getDetalleId(d) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 function getGenericId(x) {
-  const cand = x?.id ?? x?.ID ?? x?.id_item ?? x?.idCatalogo ?? x?.id_cuenta_corriente ?? x?.id_medio_pago ?? null;
+  const cand =
+    x?.id ??
+    x?.ID ??
+    x?.id_item ??
+    x?.idCatalogo ??
+    x?.id_cuenta_corriente ??
+    x?.id_medio_pago ??
+    null;
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/* =========================
+   ✅ Cuenta Corriente: unificar (sin Débito/Crédito)
+========================= */
+function normalizeText(s) {
+  return String(s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+function buildSingleCuentaCorrienteOption(arrRaw) {
+  const arr = Array.isArray(arrRaw) ? arrRaw : [];
+  if (!arr.length) return { list: [], pickedId: null };
+
+  // elegimos la primera que sea "cuenta corriente" (sea debito/credito o no), si no existe, la primera del array
+  const hit = arr.find((x) => normalizeText(x?.nombre).includes("cuenta corriente")) || arr[0];
+
+  const pickedId = getGenericId(hit);
+  if (!pickedId) return { list: [], pickedId: null };
+
+  return { list: [{ id: pickedId, nombre: "Cuenta Corriente" }], pickedId };
 }
 
 /* =========================
@@ -195,7 +225,6 @@ const LISTKEY_BY_CATALOGO = {
 
 /* =========================
    Mini Modal: alta rápida
-
 ========================= */
 function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
@@ -226,7 +255,13 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
       >
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
-          <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving} aria-label="Cerrar">
+          <button
+            type="button"
+            className="mi-mini__close"
+            onClick={onCancel}
+            disabled={saving}
+            aria-label="Cerrar"
+          >
             ✕
           </button>
         </div>
@@ -391,6 +426,14 @@ export default function ModalEditarCompra({
   }, [lists]);
   const safeLists = useMemo(() => localLists, [localLists]);
 
+  // ✅ Cuenta Corriente unificada (solo “Cuenta Corriente”)
+  const ccNormalized = useMemo(
+    () => buildSingleCuentaCorrienteOption(safeLists.cuentasCorrientes),
+    [safeLists.cuentasCorrientes]
+  );
+  const cuentasCorrientesList = useMemo(() => ccNormalized.list, [ccNormalized.list]);
+  const cuentaCorrientePickedId = useMemo(() => ccNormalized.pickedId, [ccNormalized.pickedId]);
+
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => buildFormFromRowCompra(row, periodoDefault));
   const [addUI, setAddUI] = useState({ open: false, field: null, text: "", saving: false });
@@ -447,6 +490,22 @@ export default function ModalEditarCompra({
 
     setTimeout(() => closeBtnRef.current?.focus(), 0);
   }, [open]);
+
+  // ✅ si no hay CC seteada, auto-seteamos la opción unificada (si existe)
+  useEffect(() => {
+    if (!open) return;
+    setForm((p) => {
+      const hasCC =
+        p.id_cuenta_corriente &&
+        p.id_cuenta_corriente !== NULL_OPTION &&
+        p.id_cuenta_corriente !== ADD_OPTION;
+
+      if (hasCC) return p;
+      if (!cuentaCorrientePickedId) return p;
+
+      return { ...p, id_cuenta_corriente: String(cuentaCorrientePickedId) };
+    });
+  }, [open, cuentaCorrientePickedId]);
 
   useEffect(() => {
     if (!open) return;
@@ -566,7 +625,6 @@ export default function ModalEditarCompra({
 
   /* =========================
      Alta rápida catálogo (mini modal)
-     ✅ FIX 1: usar action=catalogo_crear (igual a NuevaCompra)
   ========================= */
   const closeAddMini = useCallback(() => {
     if (addUI.saving) return;
@@ -590,7 +648,6 @@ export default function ModalEditarCompra({
 
     try {
       const { idUsuario } = getAuthInfo();
-
 
       const data = await apiPostJson(`${API}?action=catalogo_crear`, {
         catalogo: meta.catalogo,
@@ -616,11 +673,9 @@ export default function ModalEditarCompra({
       const listKey = LISTKEY_BY_CATALOGO[meta.catalogo];
       if (!listKey) throw new Error("Catálogo desconocido para actualizar listas.");
 
-      // ✅ IMPORTANTE: guardamos con la key correcta para que getProveedorId/getDetalleId funcione SIEMPRE
       const pushNormalized = (catalogo, id, nombre) => {
         if (catalogo === "proveedores") return { id_proveedor: Number(id), nombre };
         if (catalogo === "detalles") return { id_detalle: Number(id), nombre };
-        // otros: fallback genérico
         return { id: Number(id), nombre };
       };
 
@@ -643,7 +698,6 @@ export default function ModalEditarCompra({
         return next;
       });
 
-      // ✅ setea el ID real en el form
       setForm((prev) => ({ ...prev, [addUI.field]: String(Number(newId)) }));
 
       if (addUI.field === "id_proveedor") {
@@ -689,7 +743,6 @@ export default function ModalEditarCompra({
   const handleProveedorInputChange = useCallback((e) => {
     const value = e.target.value;
     setProveedorInput(value);
-    // si escribe, dejamos el id "sin seleccionar" hasta que elija de la lista o coincida exacto al guardar
     setForm((prev) => ({ ...prev, id_proveedor: NULL_OPTION }));
   }, []);
 
@@ -784,27 +837,29 @@ export default function ModalEditarCompra({
   };
 
   /* =========================
-     ✅ FIX CLAVE: sync por nombre exacto (antes de guardar)
-     Si el input tiene un nombre válido y el ID quedó vacío, lo resolvemos.
+     ✅ Sync por nombre exacto (antes de guardar)
   ========================= */
-  const resolveIdByExactName = useCallback((kind) => {
-    const norm = (s) => String(s ?? "").trim().toLowerCase();
-    if (kind === "proveedor") {
-      const name = norm(proveedorInput);
-      if (!name) return null;
-      const all = Array.isArray(safeLists.proveedores) ? safeLists.proveedores : [];
-      const hit = all.find((p) => norm(p?.nombre) === name);
-      return hit ? getProveedorId(hit) : null;
-    }
-    if (kind === "detalle") {
-      const name = norm(detalleInput);
-      if (!name) return null;
-      const all = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
-      const hit = all.find((d) => norm(d?.nombre) === name);
-      return hit ? getDetalleId(hit) : null;
-    }
-    return null;
-  }, [proveedorInput, detalleInput, safeLists.proveedores, safeLists.detalles]);
+  const resolveIdByExactName = useCallback(
+    (kind) => {
+      const norm = (s) => String(s ?? "").trim().toLowerCase();
+      if (kind === "proveedor") {
+        const name = norm(proveedorInput);
+        if (!name) return null;
+        const all = Array.isArray(safeLists.proveedores) ? safeLists.proveedores : [];
+        const hit = all.find((p) => norm(p?.nombre) === name);
+        return hit ? getProveedorId(hit) : null;
+      }
+      if (kind === "detalle") {
+        const name = norm(detalleInput);
+        if (!name) return null;
+        const all = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
+        const hit = all.find((d) => norm(d?.nombre) === name);
+        return hit ? getDetalleId(hit) : null;
+      }
+      return null;
+    },
+    [proveedorInput, detalleInput, safeLists.proveedores, safeLists.detalles]
+  );
 
   /* =========================
      Payload final
@@ -915,6 +970,7 @@ export default function ModalEditarCompra({
   };
 
   const miniOpen = addUI.open && ["id_proveedor", "id_detalle"].includes(addUI.field);
+  const miniTitle = addUI.field ? `Nuevo ${CATALOGO_MAP[addUI.field]?.label || "registro"}` : "Nuevo registro";
 
   if (!open) return null;
 
@@ -922,12 +978,7 @@ export default function ModalEditarCompra({
     .join(" ")
     .trim();
 
-  const containerClass = [
-    "mi-modal__container",
-    "mi-modal__container--mov",
-    "mi-modal__container--compra",
-    dark ? "mi-modal--dark" : "",
-  ]
+  const containerClass = ["mi-modal__container", "mi-modal__container--mov", "mi-modal__container--compra", dark ? "mi-modal--dark" : ""]
     .join(" ")
     .trim();
 
@@ -961,6 +1012,7 @@ export default function ModalEditarCompra({
               <div className="mi-em-panelBody">
                 {/* Fila 1 */}
                 <div className="mi-row2">
+                  {/* Clasificación */}
                   <div className="fl-field">
                     <select
                       className="fl-input fl-select"
@@ -983,48 +1035,46 @@ export default function ModalEditarCompra({
                     {renderAddInline("id_clasificacion")}
                   </div>
 
-                {/* Detalle (autocomplete) */}
-                <div className="fl-field mi-autocomplete" style={{ marginTop: 0 }}>
-                  <input
-                    ref={detalleInputRef}
-                    className="fl-input"
-                    placeholder=" "
-                    value={detalleInput}
-                    onChange={handleDetalleInputChange}
-                    onFocus={() => setDetalleFocus(true)}
-                    onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
-                    disabled={saving || addUI.open}
-                    autoComplete="off"
-                  />
-                  <label className="fl-label">Detalle</label>
+                  {/* Detalle (autocomplete) */}
+                  <div className="fl-field mi-autocomplete">
+                    <input
+                      ref={detalleInputRef}
+                      className="fl-input"
+                      placeholder=" "
+                      value={detalleInput}
+                      onChange={handleDetalleInputChange}
+                      onFocus={() => setDetalleFocus(true)}
+                      onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
+                      disabled={saving || addUI.open}
+                      autoComplete="off"
+                    />
+                    <label className="fl-label">Detalle</label>
 
-                  {detalleFocus && filteredDetalles.length > 0 && (
-                    <ul className="mi-cr-suggest">
-                      {filteredDetalles.map((d) => {
-                        const did = getDetalleId(d);
-                        return (
-                          <li
-                            key={did ?? d?.nombre}
-                            className="mi-cr-suggest__item"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectDetalle(d);
-                            }}
-                          >
-                            <span className="mi-suggestText">{d.nombre}</span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
+                    {detalleFocus && filteredDetalles.length > 0 && (
+                      <ul className="mi-cr-suggest">
+                        {filteredDetalles.map((d) => {
+                          const did = getDetalleId(d);
+                          return (
+                            <li
+                              key={did ?? d?.nombre}
+                              className="mi-cr-suggest__item"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelectDetalle(d);
+                              }}
+                            >
+                              <span className="mi-suggestText">{d.nombre}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
 
-                  <button type="button" onClick={startAddDetalle} disabled={saving || addUI.saving} className="mi-link">
-                    + Agregar nuevo detalle
-                  </button>
+                    <button type="button" onClick={startAddDetalle} disabled={saving || addUI.saving} className="mi-link">
+                      + Agregar nuevo detalle
+                    </button>
+                  </div>
                 </div>
-                </div>
-
-
 
                 {/* Ítem */}
                 <div className="mi-em-item fl-col-full">
@@ -1141,6 +1191,7 @@ export default function ModalEditarCompra({
               </div>
 
               <div className="mi-em-asideBody">
+                {/* Medio pago */}
                 <div className="fl-field">
                   <select
                     className="fl-input fl-select"
@@ -1162,28 +1213,9 @@ export default function ModalEditarCompra({
                   <label className="fl-label">Medio de pago</label>
                   {renderAddInline("id_medio_pago")}
                 </div>
-<div className="fl-field">
-  <select
-    className="fl-input fl-select"
-    value={String(form.id_cuenta_corriente)}
-    onChange={(e) => onSelectWithAdd("id_cuenta_corriente", e.target.value)}
-    disabled={saving}
-  >
-    <option value={NULL_OPTION}>-- Sin cuenta corriente --</option>
-    {(safeLists.cuentasCorrientes || []).map((x) => {
-      const xid = getGenericId(x) ?? Number(x?.id ?? x?.id_cuenta_corriente);
-      return (
-        <option key={xid ?? x?.nombre} value={String(xid ?? "")}>
-          {x.nombre}
-        </option>
-      );
-    })}
-    <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-  </select>
-  <label className="fl-label">Cuenta corriente</label>
-  {renderAddInline("id_cuenta_corriente")}
-</div>
 
+
+                {/* Proveedor (autocomplete) */}
                 <div className="fl-field mi-autocomplete">
                   <input
                     ref={proveedorInputRef}
@@ -1228,7 +1260,12 @@ export default function ModalEditarCompra({
                     {saving ? "Guardando..." : "Guardar"}
                   </button>
 
-                  <button type="button" onClick={cerrar} disabled={saving} className="mit-btn mit-btn--ghost mit-btn--block">
+                  <button
+                    type="button"
+                    onClick={cerrar}
+                    disabled={saving}
+                    className="mit-btn mit-btn--ghost mit-btn--block"
+                  >
                     Cancelar
                   </button>
                 </div>
@@ -1239,11 +1276,10 @@ export default function ModalEditarCompra({
 
         <AddCatalogMiniModal
           open={miniOpen}
-
+          title={miniTitle}
           value={addUI.text}
           saving={addUI.saving}
           onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
-
           onCancel={() => {
             // revertir ADD_OPTION si cancelás
             setForm((p) => ({
@@ -1253,8 +1289,6 @@ export default function ModalEditarCompra({
             }));
             closeAddMini();
           }}
-
-
           onSave={guardarNuevoCatalogo}
           dark={dark}
         />

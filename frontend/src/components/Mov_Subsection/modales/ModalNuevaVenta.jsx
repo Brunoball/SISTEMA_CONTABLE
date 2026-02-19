@@ -409,12 +409,12 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const [fecha, setFecha] = useState(todayISO());
   const [periodoUI, setPeriodoUI] = useState(isoToMMYYYY(todayISO()));
 
-  const [filters, setFilters] = useState({
-    id_tipo_venta: NULL_OPTION,
-    id_medio_pago: NULL_OPTION,
-    id_cuenta_corriente: NULL_OPTION,
-    id_cliente: NULL_OPTION,
-  });
+const [filters, setFilters] = useState({
+  id_tipo_venta: NULL_OPTION,
+  id_medio_pago: NULL_OPTION,
+  id_cliente: NULL_OPTION,
+});
+
 
   // ✅ exactamente como compras pero para ventas: Guardar / Facturar
   const [accionContado, setAccionContado] = useState("facturar");
@@ -451,12 +451,12 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       setFecha(f);
       setPeriodoUI(isoToMMYYYY(f));
 
-      setFilters({
-        id_tipo_venta: NULL_OPTION,
-        id_medio_pago: NULL_OPTION,
-        id_cuenta_corriente: NULL_OPTION,
-        id_cliente: NULL_OPTION,
-      });
+setFilters({
+  id_tipo_venta: NULL_OPTION,
+  id_medio_pago: NULL_OPTION,
+  id_cliente: NULL_OPTION,
+});
+
 
       setAccionContado("facturar");
       setCliInput("");
@@ -646,20 +646,14 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const isContado = useMemo(() => isContadoTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
   const isCorriente = useMemo(() => isCorrienteTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
 
-  useEffect(() => {
-    if (!open) return;
+useEffect(() => {
+  if (!open) return;
 
-    setFilters((p) => {
-      // si contado => borrar cc
-      if (isContado && p.id_cuenta_corriente !== NULL_OPTION) return { ...p, id_cuenta_corriente: NULL_OPTION };
-      // si corriente => borrar medio pago
-      if (isCorriente && p.id_medio_pago !== NULL_OPTION) return { ...p, id_medio_pago: NULL_OPTION };
-      return p;
-    });
+  // Solo mantenemos la regla de contado: medio de pago obligatorio (validación)
+  // Si cambia a corriente, NO mostramos CC y no hacemos nada extra.
+  if (isCorriente) setAccionContado("guardar");
+}, [open, isCorriente]);
 
-    // igual que compras: en corriente no hay acción, queda pendiente.
-    if (isCorriente) setAccionContado("guardar");
-  }, [open, isContado, isCorriente]);
 
   const validate = useCallback(() => {
     const cliId = Number(filters.id_cliente);
@@ -679,11 +673,12 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         return { ok: false, msg: "Venta Contado: falta seleccionar el Medio de pago." };
     }
 
-    if (isCorriente) {
-      const cc = Number(filters.id_cuenta_corriente);
-      if (!Number.isFinite(cc) || cc <= 0)
-        return { ok: false, msg: "Cuenta Corriente: falta seleccionar la Cuenta Corriente." };
-    }
+if (isCorriente) {
+  const cc = Number(filters.id_cuenta_corriente);
+  if (!Number.isFinite(cc) || cc <= 0)
+    return { ok: false, msg: "Cuenta Corriente: falta seleccionar la Cuenta Corriente." };
+}
+
 
     const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
     if (!/^\d{4}-\d{2}$/.test(periodoApi)) {
@@ -770,8 +765,9 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
           id_tipo_venta: Number(filters.id_tipo_venta),
 
-          id_medio_pago: isContado ? Number(filters.id_medio_pago) : null,
-          id_cuenta_corriente: isCorriente ? Number(filters.id_cuenta_corriente) : null,
+id_medio_pago: isContado ? Number(filters.id_medio_pago) : null,
+id_cuenta_corriente: null,
+
 
           id_detalle: Number(r.id_detalle),
           cantidad: Math.round(Number(r.cantidad) * 100) / 100,
@@ -1186,34 +1182,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                   </>
                 )}
 
-                {/* Corriente */}
-                {isCorriente && (
-                  <>
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(filters.id_cuenta_corriente)}
-                        onChange={(e) => updateFilter("id_cuenta_corriente", e.target.value)}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>Cuenta Corriente *</option>
-                        {cuentasCorrientesList.map((x) => (
-                          <option key={x.id ?? x.id_cuenta_corriente} value={String(x.id ?? x.id_cuenta_corriente)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                      </select>
-                      <label className="fl-label">Cuenta Corriente</label>
-                    </div>
 
-                    <div className="mi-card mi-card--full">
-                      <div className="mi-card__title">En cuenta corriente</div>
-                      <div className="mi-card__hint">
-                        * Se registra en <b>Cuenta Corriente</b> y queda <b>pendiente</b>.
-                      </div>
-                    </div>
-                  </>
-                )}
 
                 <div className="mi-cr-filters__actions">
                   <button

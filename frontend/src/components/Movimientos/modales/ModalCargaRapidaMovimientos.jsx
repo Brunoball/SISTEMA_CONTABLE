@@ -827,7 +827,8 @@ export default function ModalCargaRapidaMovimientos({
           id_clasificacion: toNullableId(filters.id_clasificacion),
           id_tipo_operacion: toNullableId(filters.id_tipo_operacion),
           id_tipo_venta: toNullableId(filters.id_tipo_venta),
-          id_cuenta_corriente: toNullableId(filters.id_cuenta_corriente),
+id_cuenta_corriente: null,
+
           id_medio_pago: toNullableId(filters.id_medio_pago),
 
           id_cliente: toNullableId(filters.id_cliente),
@@ -1204,28 +1205,7 @@ export default function ModalCargaRapidaMovimientos({
                     </div>
                   )}
 
-                  {/* Cuenta corriente - solo si es cuenta corriente */}
-                  {tipoVentaEsCuentaCorriente && (
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(filters.id_cuenta_corriente)}
-                        onChange={(e) => updateFilter("id_cuenta_corriente", e.target.value)}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>Cuenta corriente (opcional)</option>
-                        {(listsNorm.cuentas_corrientes || []).map((x) => {
-                          const xid = getIdGeneric(x);
-                          return (
-                            <option key={xid || x.id} value={String(xid || x.id || "")}>
-                              {x.nombre}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <label className="fl-label">Cuenta Corriente</label>
-                    </div>
-                  )}
+
 
                   {/* CLIENTE - condicional según tipo operación */}
                   {mostrarCliente && (

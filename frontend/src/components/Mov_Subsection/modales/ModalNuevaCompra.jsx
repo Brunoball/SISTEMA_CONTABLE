@@ -55,6 +55,11 @@ function getProveedorId(p) {
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+function getCuentaCorrienteId(cc) {
+  const cand = cc?.id ?? cc?.id_cuenta_corriente ?? cc?.idCuentaCorriente ?? cc?.cuenta_corriente_id ?? null;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 /* =========================
    Período UI (MM-YYYY) <-> API (YYYY-MM)
@@ -187,6 +192,37 @@ function isTemaOscuro() {
   const byAttr = document.documentElement.getAttribute("data-theme") === "oscuro";
   const byBody = document.body?.classList?.contains("dark");
   return Boolean(byAttr || byBody);
+}
+
+/* =========================
+   ✅ Cuenta Corriente: UNIFICAR (sin Débito/Crédito)
+   - Si el backend trae "Cuenta Corriente Débito" / "Cuenta Corriente Crédito"
+     mostramos UNA sola opción: "Cuenta Corriente"
+   - Usamos el ID del primer ítem encontrado como id_cuenta_corriente real.
+========================= */
+function normalizeText(s) {
+  return String(s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+function buildSingleCuentaCorrienteOption(arrRaw) {
+  const arr = Array.isArray(arrRaw) ? arrRaw : [];
+  if (!arr.length) return { list: [], pickedId: null };
+
+  // elegimos la primera que sea "cuenta corriente" (sea débito/crédito o no)
+  const hit =
+    arr.find((x) => normalizeText(x?.nombre).includes("cuenta corriente")) ||
+    arr[0];
+
+  const pickedId = getCuentaCorrienteId(hit);
+  if (!pickedId) return { list: [], pickedId: null };
+
+  return {
+    list: [{ id: pickedId, nombre: "Cuenta Corriente" }],
+    pickedId,
+  };
 }
 
 /* =========================
@@ -342,8 +378,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     obsHtml.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
     const obsBody = new MutationObserver(update);
-    if (document.body)
-      obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    if (document.body) obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
 
     update();
     return () => {
@@ -375,10 +410,14 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     () => (Array.isArray(localLists.medios_pago) ? localLists.medios_pago : []),
     [localLists.medios_pago]
   );
-  const cuentasCorrientesList = useMemo(
-    () => (Array.isArray(localLists.cuentas_corrientes) ? localLists.cuentas_corrientes : []),
-    [localLists.cuentas_corrientes]
-  );
+
+  // ✅ AHORA: "Cuenta Corriente" solo (sin débito/crédito)
+  const ccNormalized = useMemo(() => {
+    return buildSingleCuentaCorrienteOption(localLists.cuentas_corrientes);
+  }, [localLists.cuentas_corrientes]);
+
+  const cuentasCorrientesList = useMemo(() => ccNormalized.list, [ccNormalized.list]);
+  const cuentaCorrientePickedId = useMemo(() => ccNormalized.pickedId, [ccNormalized.pickedId]);
 
   const [fecha, setFecha] = useState(todayISO());
   const [periodoUI, setPeriodoUI] = useState(isoToMMYYYY(todayISO()));
@@ -525,7 +564,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear.");
 
-      // ✅ tolerante: item puede traer id o id_detalle / id_proveedor
       const item = data?.item || {};
       const newId =
         kind === "detalles" ? (getDetalleId(item) ?? Number(item?.id)) : (getProveedorId(item) ?? Number(item?.id));
@@ -616,20 +654,30 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const isContado = useMemo(() => String(filters.forma) === "CONTADO", [filters.forma]);
   const isCorriente = useMemo(() => String(filters.forma) === "CUENTA_CORRIENTE", [filters.forma]);
 
+  // ✅ cuando elige "Cuenta Corriente", autoseleccionamos la única opción (Cuenta Corriente)
   useEffect(() => {
     if (!open) return;
 
     setFilters((p) => {
       const forma = String(p.forma || "");
-      if (forma === "CONTADO" && p.id_cuenta_corriente !== NULL_OPTION)
-        return { ...p, id_cuenta_corriente: NULL_OPTION };
-      if (forma === "CUENTA_CORRIENTE" && p.id_medio_pago !== NULL_OPTION)
-        return { ...p, id_medio_pago: NULL_OPTION };
+      // limpiar lo que no aplica
+      if (forma === "CONTADO" && p.id_cuenta_corriente !== NULL_OPTION) return { ...p, id_cuenta_corriente: NULL_OPTION };
+      if (forma === "CUENTA_CORRIENTE" && p.id_medio_pago !== NULL_OPTION) return { ...p, id_medio_pago: NULL_OPTION };
+
+      // auto-set de cuenta corriente única
+      if (
+        forma === "CUENTA_CORRIENTE" &&
+        (String(p.id_cuenta_corriente) === NULL_OPTION || !String(p.id_cuenta_corriente || "").trim()) &&
+        cuentaCorrientePickedId
+      ) {
+        return { ...p, id_cuenta_corriente: String(cuentaCorrientePickedId) };
+      }
+
       return p;
     });
 
     if (isCorriente) setAccionContado("guardar");
-  }, [open, isCorriente]);
+  }, [open, isCorriente, cuentaCorrientePickedId]);
 
   const validate = useCallback(() => {
     const provId = Number(filters.id_proveedor);
@@ -655,7 +703,8 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     }
 
     const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
-    if (!/^\d{4}-\d{2}$/.test(periodoApi)) return { ok: false, msg: "Período inválido. Usá MM-YYYY (ej: 02-2026)." };
+    if (!/^\d{4}-\d{2}$/.test(periodoApi))
+      return { ok: false, msg: "Período inválido. Usá MM-YYYY (ej: 02-2026)." };
 
     const problems = [];
     rowsCalc.forEach((r, idx) => {
@@ -1137,34 +1186,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                   </>
                 )}
 
-                {/* Corriente */}
-                {isCorriente && (
-                  <>
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(filters.id_cuenta_corriente)}
-                        onChange={(e) => updateFilter("id_cuenta_corriente", e.target.value)}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>Cuenta Corriente *</option>
-                        {cuentasCorrientesList.map((x) => (
-                          <option key={x.id ?? x.id_cuenta_corriente} value={String(x.id ?? x.id_cuenta_corriente)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                      </select>
-                      <label className="fl-label">Cuenta Corriente</label>
-                    </div>
-
-                    <div className="mi-card mi-card--full">
-                      <div className="mi-card__title">En cuenta corriente</div>
-                      <div className="mi-card__hint">
-                        * Se registra en <b>Cuenta Corriente</b> y queda <b>pendiente</b>.
-                      </div>
-                    </div>
-                  </>
-                )}
 
                 <div className="mi-cr-filters__actions">
                   <button

@@ -889,7 +889,8 @@ export default function ModalEditarMovimiento({
       id_clasificacion: toNullableId(form.id_clasificacion),
       id_tipo_operacion: toNullableId(form.id_tipo_operacion),
       id_tipo_venta: toNullableId(form.id_tipo_venta),
-      id_cuenta_corriente: toNullableId(form.id_cuenta_corriente),
+      id_cuenta_corriente: null,
+
 
       id_cliente: toNullableId(form.id_cliente),
       id_proveedor: toNullableId(form.id_proveedor),
@@ -1350,30 +1351,7 @@ export default function ModalEditarMovimiento({
   {renderAddInline("id_tipo_venta")}
 </div>
 
-{/* Cuenta corriente (derecha) */}
-{tipoVentaEsCuentaCorriente && (
-  <div className="fl-field">
-    <select
-      className="fl-input fl-select"
-      value={String(form.id_cuenta_corriente)}
-      onChange={(e) => onSelectWithAdd("id_cuenta_corriente", e.target.value)}
-      disabled={saving}
-    >
-      <option value={NULL_OPTION}>-- Cuenta corriente --</option>
-      {(safeLists.cuentasCorrientes || []).map((x) => {
-        const xid = getIdGeneric(x);
-        return (
-          <option key={xid || x.id} value={String(xid || x.id || "")}>
-            {x.nombre}
-          </option>
-        );
-      })}
-      <option value={ADD_OPTION}>OTRO (AGREGAR…)</option>
-    </select>
-    <label className="fl-label">Cuenta corriente</label>
-    {renderAddInline("id_cuenta_corriente")}
-  </div>
-)}
+
 
                 {/* Medio pago - condicional según tipo de venta */}
                 {tipoVentaEsContado && (

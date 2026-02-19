@@ -1185,29 +1185,7 @@ export default function ModalEditarVenta({
 
               <div className="mi-em-asideBody">
                 {/* ✅ Cuenta Corriente SOLO si es cuenta corriente (derecha) */}
-{esCuentaCorriente ? (
-  <div className="fl-field">
-    <select
-      className="fl-input fl-select"
-      value={String(form.id_cuenta_corriente)}
-      onChange={(e) => setForm((p) => ({ ...p, id_cuenta_corriente: e.target.value }))}
-      disabled={saving || addUI.open}
-    >
-      <option value={NULL_OPTION}>-- Seleccionar cuenta corriente --</option>
-      {(safeLists.cuentasCorrientes || []).map((x) => (
-        <option key={x.id} value={String(x.id)}>
-          {x.nombre}
-        </option>
-      ))}
-    </select>
-    <label className="fl-label">Cuenta corriente (obligatoria)</label>
-  </div>
-) : (
-  <div className="fl-field" style={{ opacity: 0.6 }}>
-    <input className="fl-input" disabled value="No aplica" />
-    <label className="fl-label">Cuenta corriente</label>
-  </div>
-)}
+
 
                 {/* ✅ Medio de pago SOLO si es contado */}
                 {esContado ? (

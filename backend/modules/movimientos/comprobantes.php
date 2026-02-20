@@ -49,8 +49,21 @@ if (!($pdo instanceof PDO)) {
 }
 
 /* =========================================================
-   Helpers
+   Helpers generales
 ========================================================= */
+function read_json_body(): array {
+  $raw = file_get_contents('php://input');
+  if (!$raw) return [];
+  $data = json_decode($raw, true);
+  return is_array($data) ? $data : [];
+}
+function n_int($v): ?int {
+  if ($v === null || $v === '') return null;
+  if (!is_numeric($v)) return null;
+  $n = (int)$v;
+  return $n > 0 ? $n : null;
+}
+
 function get_header_case_insensitive(string $key): string {
   $k = 'HTTP_' . strtoupper(str_replace('-', '_', $key));
   $v = $_SERVER[$k] ?? '';
@@ -78,14 +91,8 @@ function is_https_request(): bool {
 }
 
 /**
- * ✅ Root REAL: public_html (no BALTO, no api)
- * Este archivo está en: public_html/[BALTO]/api/modules/movimientos/comprobantes.php
- * __DIR__ = .../api/modules/movimientos
- * dirname(__DIR__, 3) = .../api
- * dirname(.../api) = .../public_html/[BALTO]   (si estás dentro de /BALTO)
- *
- * Pero vos pedís guardar en: public_html/uploads/tenants/...
- * O sea: dirname(public_html/[BALTO]) => public_html
+ * ✅ Root REAL: public_html
+ * Ajustado a tu estructura /BALTO/api/...
  */
 function get_public_html_dir(): string {
   $apiDir = realpath(dirname(__DIR__, 3));     // .../api
@@ -94,8 +101,7 @@ function get_public_html_dir(): string {
     if ($projectDir && is_dir($projectDir)) {
       $publicHtml = realpath($projectDir . '/..'); // .../public_html
       if ($publicHtml && is_dir($publicHtml)) return $publicHtml;
-      // fallback: si el proyecto está directo en public_html (sin carpeta)
-      return $projectDir;
+      return $projectDir; // fallback: si el proyecto está directo en public_html
     }
     return dirname($apiDir);
   }
@@ -136,22 +142,19 @@ function is_inside(string $path, string $baseDir): bool {
 }
 
 /**
- * ✅ URL absoluta al api.php real (tu endpoint)
- * Mantiene subcarpeta si existe (ej /BALTO/api/routes/api.php)
+ * ✅ URL absoluta al api.php real
  */
 function api_php_abs_url(): string {
   $scheme = is_https_request() ? 'https' : 'http';
   $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 
   $script = (string)($_SERVER['SCRIPT_NAME'] ?? '');
-  // si tu api vive en /BALTO/api/routes/api.php
   $pos = strpos($script, '/api/routes/api.php');
   if ($pos !== false) {
     $prefix = substr($script, 0, $pos); // "/BALTO" o ""
     return $scheme . '://' . $host . $prefix . '/api/routes/api.php';
   }
 
-  // fallback seguro
   return $scheme . '://' . $host . '/api/routes/api.php';
 }
 
@@ -167,7 +170,7 @@ if ($tenantId === '') $tenantId = get_header_case_insensitive('X-Id-Tenant');
 if ($tenantId === '' || !ctype_digit($tenantId)) $tenantId = '0';
 
 /* =========================================================
-   SUBIR PDF Y VINCULAR A COBRO
+   ✅ SUBIR PDF Y VINCULAR A COBRO (TU FLUJO ORIGINAL)
 ========================================================= */
 if ($action === 'comprobantes_subir') {
 
@@ -195,7 +198,7 @@ if ($action === 'comprobantes_subir') {
   $tipo = is_string($tipo) ? strtoupper(trim($tipo)) : 'RECIBO';
   if ($tipo === '') $tipo = 'RECIBO';
 
-  // ✅ resolver cobro + movimiento
+  // resolver cobro + movimiento
   $cobro = null;
 
   if ($idCobro > 0) {
@@ -255,7 +258,7 @@ if ($action === 'comprobantes_subir') {
   $sha = hash_file('sha256', $tmp);
   if (!$sha) comprobantes_fail('No se pudo calcular hash del archivo.', 500);
 
-  // ✅ public_html/uploads/tenants/...
+  // public_html/uploads/tenants/...
   $publicHtml = get_public_html_dir();
   $uploadsBase = $publicHtml . '/uploads';
   safe_mkdir($uploadsBase);
@@ -288,7 +291,7 @@ if ($action === 'comprobantes_subir') {
     ]);
   }
 
-  // ✅ guardamos ruta relativa a public_html
+  // guardamos ruta relativa a public_html
   $relPath = normalize_rel($absPath, $publicHtml);
 
   try {
@@ -303,7 +306,7 @@ if ($action === 'comprobantes_subir') {
 
     $ins->execute([
       ':tipo' => $tipo,
-      ':url'  => '', // placeholder
+      ':url'  => '',
       ':path' => $relPath,
       ':mime' => $mime !== '' ? $mime : 'application/pdf',
       ':size' => max(0, $size),
@@ -342,6 +345,218 @@ if ($action === 'comprobantes_subir') {
     if ($pdo->inTransaction()) $pdo->rollBack();
     @unlink($absPath);
     comprobantes_fail('Error DB al registrar comprobante: ' . $e->getMessage(), 500);
+  }
+}
+
+/* =========================================================
+   ✅ ASOCIAR 1x1 (POST JSON)
+   action = comprobantes_asociar_movimiento
+   body:
+   {
+     "id_comprobante": 123,
+     "id_movimiento": 456,   // o "id_cobro": 999
+     "force": false
+   }
+========================================================= */
+if ($action === 'comprobantes_asociar_movimiento') {
+
+  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    comprobantes_fail('Método inválido. Usá POST.', 405);
+  }
+
+  $body = read_json_body();
+  $src  = !empty($body) ? $body : ($_POST ?? []);
+
+  $idComp = n_int($src['id_comprobante'] ?? $src['idComp'] ?? null);
+  if (!$idComp) comprobantes_fail('Falta id_comprobante.', 400);
+
+  $force = (bool)($src['force'] ?? false);
+
+  // validar comprobante existe
+  $v = $pdo->prepare("SELECT 1 FROM comprobantes_archivos WHERE id_comprobante = :id LIMIT 1");
+  $v->execute([':id' => $idComp]);
+  if ((int)($v->fetchColumn() ?: 0) !== 1) {
+    comprobantes_fail('El id_comprobante no existe.', 404);
+  }
+
+  $idCobro = n_int($src['id_cobro'] ?? null);
+  $idMov   = n_int($src['id_movimiento'] ?? null);
+
+  if (!$idCobro && !$idMov) {
+    comprobantes_fail('Falta id_cobro o id_movimiento.', 400);
+  }
+
+  try {
+    $pdo->beginTransaction();
+
+    $cobro = null;
+
+    if ($idCobro) {
+      $st = $pdo->prepare("SELECT id_cobro, id_movimiento, id_comprobante FROM cobros WHERE id_cobro = :id LIMIT 1 FOR UPDATE");
+      $st->execute([':id' => $idCobro]);
+      $cobro = $st->fetch(PDO::FETCH_ASSOC);
+      if (!$cobro) {
+        $pdo->rollBack();
+        comprobantes_fail('El cobro no existe.', 404);
+      }
+    } else {
+      $st = $pdo->prepare("
+        SELECT id_cobro, id_movimiento, id_comprobante
+        FROM cobros
+        WHERE id_movimiento = :idMov
+        ORDER BY id_cobro DESC
+        LIMIT 1
+        FOR UPDATE
+      ");
+      $st->execute([':idMov' => $idMov]);
+      $cobro = $st->fetch(PDO::FETCH_ASSOC);
+      if (!$cobro) {
+        $pdo->rollBack();
+        comprobantes_fail('No existe cobro para ese movimiento (confirmá pago primero).', 404, [
+          'id_movimiento' => $idMov,
+        ]);
+      }
+      $idCobro = (int)$cobro['id_cobro'];
+    }
+
+    $prev = (int)($cobro['id_comprobante'] ?? 0);
+    if ($prev > 0 && !$force) {
+      $pdo->rollBack();
+      comprobantes_fail('Ese cobro ya tiene comprobante. Pasá force=true si querés reemplazar.', 409, [
+        'id_cobro' => (int)$idCobro,
+        'id_movimiento' => (int)($cobro['id_movimiento'] ?? 0),
+        'id_comprobante_actual' => $prev,
+      ]);
+    }
+
+    $up = $pdo->prepare("UPDATE cobros SET id_comprobante = :idComp WHERE id_cobro = :idCobro LIMIT 1");
+    $up->execute([':idComp' => $idComp, ':idCobro' => $idCobro]);
+
+    $pdo->commit();
+
+    comprobantes_ok([
+      'id_comprobante' => $idComp,
+      'id_cobro' => (int)$idCobro,
+      'id_movimiento' => (int)($cobro['id_movimiento'] ?? 0),
+      'reemplazo' => ($prev > 0),
+      'id_comprobante_anterior' => $prev,
+    ]);
+
+  } catch (Throwable $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    comprobantes_fail('No se pudo asociar comprobante: ' . $e->getMessage(), 500);
+  }
+}
+
+/* =========================================================
+   ✅ ASOCIAR BATCH (POST JSON)
+   action = comprobantes_asociar_movimientos
+   body:
+   {
+     "id_comprobante": 123,
+     "ids_movimiento": [1,2,3],
+     "force": false
+   }
+   -> asocia al ÚLTIMO cobro de cada movimiento
+========================================================= */
+if ($action === 'comprobantes_asociar_movimientos') {
+
+  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    comprobantes_fail('Método inválido. Usá POST.', 405);
+  }
+
+  $body = read_json_body();
+  $src  = !empty($body) ? $body : ($_POST ?? []);
+
+  $idComp = n_int($src['id_comprobante'] ?? $src['idComp'] ?? null);
+  if (!$idComp) comprobantes_fail('Falta id_comprobante.', 400);
+
+  $force = (bool)($src['force'] ?? false);
+
+  $ids = $src['ids_movimiento'] ?? $src['ids_movimientos'] ?? [];
+  if (!is_array($ids)) $ids = [];
+
+  $idsOk = [];
+  foreach ($ids as $x) {
+    $n = n_int($x);
+    if ($n) $idsOk[] = $n;
+  }
+  $idsOk = array_values(array_unique($idsOk));
+  if (!$idsOk) comprobantes_fail('Faltan ids_movimiento.', 400);
+
+  // validar comprobante existe
+  $v = $pdo->prepare("SELECT 1 FROM comprobantes_archivos WHERE id_comprobante = :id LIMIT 1");
+  $v->execute([':id' => $idComp]);
+  if ((int)($v->fetchColumn() ?: 0) !== 1) {
+    comprobantes_fail('El id_comprobante no existe.', 404);
+  }
+
+  try {
+    $pdo->beginTransaction();
+
+    $result = [
+      'asociados' => [],
+      'sin_cobro' => [],
+      'ya_tenian' => [],
+    ];
+
+    $sel = $pdo->prepare("
+      SELECT id_cobro, id_movimiento, id_comprobante
+      FROM cobros
+      WHERE id_movimiento = :idMov
+      ORDER BY id_cobro DESC
+      LIMIT 1
+      FOR UPDATE
+    ");
+
+    $upd = $pdo->prepare("
+      UPDATE cobros
+      SET id_comprobante = :idComp
+      WHERE id_cobro = :idCobro
+      LIMIT 1
+    ");
+
+    foreach ($idsOk as $idMov) {
+      $sel->execute([':idMov' => $idMov]);
+      $c = $sel->fetch(PDO::FETCH_ASSOC);
+
+      if (!$c) {
+        $result['sin_cobro'][] = (int)$idMov;
+        continue;
+      }
+
+      $idCobro = (int)($c['id_cobro'] ?? 0);
+      $prev    = (int)($c['id_comprobante'] ?? 0);
+
+      if ($prev > 0 && !$force) {
+        $result['ya_tenian'][] = [
+          'id_movimiento' => (int)$idMov,
+          'id_cobro' => $idCobro,
+          'id_comprobante_actual' => $prev,
+        ];
+        continue;
+      }
+
+      $upd->execute([':idComp' => $idComp, ':idCobro' => $idCobro]);
+      $result['asociados'][] = [
+        'id_movimiento' => (int)$idMov,
+        'id_cobro' => $idCobro,
+        'reemplazo' => ($prev > 0),
+        'id_comprobante_anterior' => $prev,
+      ];
+    }
+
+    $pdo->commit();
+
+    comprobantes_ok([
+      'id_comprobante' => $idComp,
+      'force' => $force,
+      'result' => $result,
+    ]);
+
+  } catch (Throwable $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    comprobantes_fail('No se pudo asociar batch: ' . $e->getMessage(), 500);
   }
 }
 
@@ -385,7 +600,6 @@ if ($action === 'comprobantes_descargar') {
     $filesize = (int)filesize($abs);
     $filename = 'comprobante_' . $id . '.pdf';
 
-    // ✅ PDF headers (NO JSON)
     if (!headers_sent()) {
       header('Content-Type: ' . $mime);
       header('Content-Disposition: inline; filename="' . $filename . '"');
@@ -393,7 +607,6 @@ if ($action === 'comprobantes_descargar') {
       header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
     }
 
-    // ✅ Range support
     $range = $_SERVER['HTTP_RANGE'] ?? '';
     if ($range && preg_match('/bytes=(\d+)-(\d*)/i', $range, $m)) {
       $start = (int)$m[1];

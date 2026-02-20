@@ -39,12 +39,18 @@ function getAuthInfo() {
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
+  let data;
   try {
-    return JSON.parse(text);
+    data = JSON.parse(text);
   } catch {
     const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
     throw new Error(`Respuesta inválida (no JSON). HTTP ${res.status}\n${preview}`);
   }
+  if (!res.ok) {
+    const msg = data?.mensaje || data?.error || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return data;
 }
 
 function buildAuthHeaders() {
@@ -249,8 +255,7 @@ function buildFormFromRowVenta(row, periodoDefault, fixedLocal) {
   const perByFecha = periodoFromISODate(fecha || todayISO());
   const pickPeriodo = perRow || perDef || perByFecha || "";
 
-  const nOrNull = (v) =>
-    Number.isFinite(Number(v)) && Number(v) > 0 ? String(Number(v)) : NULL_OPTION;
+  const nOrNull = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? String(Number(v)) : NULL_OPTION);
   const sOrNull = (v) => (v == null || v === "" || v === 0 ? NULL_OPTION : String(v));
 
   const cantidad = r.cantidad != null ? safeNumber(r.cantidad) : 1;
@@ -264,7 +269,6 @@ function buildFormFromRowVenta(row, periodoDefault, fixedLocal) {
   const total = r.total != null ? safeNumber(r.total) : totals.total;
   const monto_total = r.monto_total != null ? safeNumber(r.monto_total) : total;
 
-  // ⚠️ id_tipo_movimiento: el backend lo necesita, pero NO lo mostramos en UI
   const idSalida = fixedLocal?.idSalida ?? NULL_OPTION;
 
   return {
@@ -272,13 +276,11 @@ function buildFormFromRowVenta(row, periodoDefault, fixedLocal) {
     fecha,
     periodo: pickPeriodo,
 
-    id_cuenta_corriente: sOrNull(r.id_cuenta_corriente),
+    // ✅ NUEVO: ventas sin cuenta corriente (lo dejamos siempre NULL_OPTION)
+    id_cuenta_corriente: NULL_OPTION,
     id_medio_pago: nOrNull(r.id_medio_pago),
 
-    // ✅ editable en UI
     id_tipo_venta: nOrNull(r.id_tipo_venta),
-
-    // ✅ fijo interno (no UI)
     id_tipo_movimiento: idSalida !== NULL_OPTION ? idSalida : nOrNull(r.id_tipo_movimiento),
 
     id_cliente: sOrNull(r.id_cliente),
@@ -315,11 +317,6 @@ function isTipoVentaContado(tipoVentaObj) {
   return n.includes("contado") || n.includes("efectivo");
 }
 
-function isTipoVentaCuentaCorriente(tipoVentaObj) {
-  const n = String(tipoVentaObj?.nombre ?? "").toLowerCase();
-  return n.includes("cuenta") || n.includes("corriente");
-}
-
 /* =========================
    Theme helper
 ========================= */
@@ -332,17 +329,7 @@ function isTemaOscuro() {
 /* =========================
    ✅ Mini modal reutilizable
 ========================= */
-function AddCatalogMiniModal({
-  open,
-  title,
-  label = "Nombre",
-  value,
-  saving,
-  onChange,
-  onCancel,
-  onSave,
-  dark = false,
-}) {
+function AddCatalogMiniModal({ open, title, label = "Nombre", value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -365,10 +352,7 @@ function AddCatalogMiniModal({
 
   return createPortal(
     <div className="mi-mini__overlay" onMouseDown={onCancel}>
-      <div
-        className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()} onMouseDown={(e) => e.stopPropagation()}>
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
           <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving} aria-label="Cerrar">
@@ -414,17 +398,13 @@ export default function ModalEditarVenta({
   onClose,
   onSave,
   onToast,
-  onCatalogCreated, // ✅ NUEVO: avisar al padre
+  onCatalogCreated,
   dark: darkProp,
 }) {
   const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
 
-  const showToast = useCallback(
-    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
-    [onToast]
-  );
+  const showToast = useCallback((tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion), [onToast]);
 
-  // ✅ DARK automático + soporta prop
   const [darkAuto, setDarkAuto] = useState(isTemaOscuro());
   useEffect(() => {
     const update = () => setDarkAuto(isTemaOscuro());
@@ -443,7 +423,6 @@ export default function ModalEditarVenta({
   }, []);
   const dark = typeof darkProp === "boolean" ? darkProp : darkAuto;
 
-  // bloquear scroll del body
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
@@ -460,19 +439,14 @@ export default function ModalEditarVenta({
   useEffect(() => void (rowRef.current = row), [row]);
   useEffect(() => void (periodoDefaultRef.current = periodoDefault), [periodoDefault]);
 
-  const [localLists, setLocalLists] = useState(() => ({
-    ...SAFE_LISTS,
-    ...normalizeIncomingLists(lists),
-  }));
+  const [localLists, setLocalLists] = useState(() => ({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) }));
   useEffect(() => {
     setLocalLists({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) });
   }, [lists]);
 
   const safeLists = useMemo(() => localLists, [localLists]);
-
   const [saving, setSaving] = useState(false);
 
-  // --------- form ----------
   const [form, setForm] = useState(() => {
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(lists) };
     const fixedLocal = {
@@ -481,7 +455,6 @@ export default function ModalEditarVenta({
     };
     const built = buildFormFromRowVenta(row, periodoDefault, fixedLocal);
 
-    // si no hay cliente => consumidor final
     const hasCliente = String(built.id_cliente || "").trim() && String(built.id_cliente) !== NULL_OPTION;
     if (!hasCliente && fixedLocal.idConsumidorFinal !== NULL_OPTION) {
       built.id_cliente = String(fixedLocal.idConsumidorFinal);
@@ -489,7 +462,6 @@ export default function ModalEditarVenta({
     return built;
   });
 
-  // Autocomplete states
   const [clienteInput, setClienteInput] = useState(() => {
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(lists) };
     return nameById(merged.clientes, form.id_cliente);
@@ -505,13 +477,7 @@ export default function ModalEditarVenta({
   const closeBtnRef = useRef(null);
   const fechaRef = useRef(null);
 
-  // ✅ Mini modal: alta rápida (cliente/detalle)
-  const [addUI, setAddUI] = useState({
-    open: false,
-    catalogo: null, // "clientes" | "detalles"
-    text: "",
-    saving: false,
-  });
+  const [addUI, setAddUI] = useState({ open: false, catalogo: null, text: "", saving: false });
 
   const closeAddMini = useCallback(() => {
     if (addUI.saving) return;
@@ -548,20 +514,13 @@ export default function ModalEditarVenta({
     showToast("cargando", `Creando ${catalogo === "clientes" ? "cliente" : "detalle"}…`, 12000);
 
     try {
-      const data = await apiPostJson(API_CATALOGO, {
-        catalogo,
-        nombre,
-        idUsuario,
-      });
-
+      const data = await apiPostJson(API_CATALOGO, { catalogo, nombre, idUsuario });
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear el ítem.");
 
       const newId = Number(data?.item?.id);
       const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
-
       if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
 
-      // ✅ actualizar listas locales del modal
       setLocalLists((prev) => {
         const next = { ...prev };
         const key = catalogo === "clientes" ? "clientes" : "detalles";
@@ -571,13 +530,8 @@ export default function ModalEditarVenta({
         return next;
       });
 
-      // ✅ avisar al padre (Ventas.jsx) para que actualice SU estado lists
-      onCatalogCreated?.({
-        catalogo,
-        item: { id: newId, nombre: newNombre },
-      });
+      onCatalogCreated?.({ catalogo, item: { id: newId, nombre: newNombre } });
 
-      // setear en el form + input correspondiente
       if (catalogo === "clientes") {
         setForm((p) => ({ ...p, id_cliente: String(newId) }));
         setClienteInput(newNombre);
@@ -596,7 +550,6 @@ export default function ModalEditarVenta({
     }
   }, [API_CATALOGO, addUI.catalogo, addUI.text, showToast, onCatalogCreated]);
 
-  // abrir: reconstruir SIEMPRE
   const prevOpenRef = useRef(false);
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
@@ -618,22 +571,17 @@ export default function ModalEditarVenta({
 
     const hasCliente = String(built.id_cliente || "").trim() && String(built.id_cliente) !== NULL_OPTION;
     const nextBuilt = { ...built };
-    if (!hasCliente && fixedLocal.idConsumidorFinal !== NULL_OPTION) {
-      nextBuilt.id_cliente = String(fixedLocal.idConsumidorFinal);
-    }
+    if (!hasCliente && fixedLocal.idConsumidorFinal !== NULL_OPTION) nextBuilt.id_cliente = String(fixedLocal.idConsumidorFinal);
 
     setForm(nextBuilt);
-
     setClienteInput(nameById(merged.clientes, nextBuilt.id_cliente));
     setClienteFocus(false);
-
     setDetalleInput(nameById(merged.detalles, nextBuilt.id_detalle));
     setDetalleFocus(false);
 
     setTimeout(() => closeBtnRef.current?.focus(), 0);
   }, [open]);
 
-  // ESC cierra (si no está guardando ni mini modal)
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e) => {
@@ -679,9 +627,6 @@ export default function ModalEditarVenta({
     setForm((p) => ({ ...p, periodo: next }));
   }, []);
 
-  /* =========================
-     Item handlers
-  ========================= */
   const recalcFromItem = useCallback((nextPartial) => {
     setForm((p) => {
       const next = { ...p, ...nextPartial };
@@ -718,9 +663,6 @@ export default function ModalEditarVenta({
     });
   }, []);
 
-  /* =========================
-     Autocomplete: Cliente / Detalle
-  ========================= */
   const filteredClientes = useMemo(() => {
     const all = Array.isArray(safeLists.clientes) ? safeLists.clientes : [];
     const q = clienteInput.trim().toLowerCase();
@@ -744,10 +686,7 @@ export default function ModalEditarVenta({
   const handleSelectCliente = useCallback((cliente) => {
     const nombre = String(cliente?.nombre ?? "").trim();
     setClienteInput(nombre);
-    setForm((prev) => ({
-      ...prev,
-      id_cliente: cliente?.id != null ? String(cliente.id) : NULL_OPTION,
-    }));
+    setForm((prev) => ({ ...prev, id_cliente: cliente?.id != null ? String(cliente.id) : NULL_OPTION }));
     setClienteFocus(false);
   }, []);
 
@@ -760,14 +699,10 @@ export default function ModalEditarVenta({
   const handleSelectDetalle = useCallback((det) => {
     const nombre = String(det?.nombre ?? "").trim();
     setDetalleInput(nombre);
-    setForm((prev) => ({
-      ...prev,
-      id_detalle: det?.id != null ? String(det.id) : NULL_OPTION,
-    }));
+    setForm((prev) => ({ ...prev, id_detalle: det?.id != null ? String(det.id) : NULL_OPTION }));
     setDetalleFocus(false);
   }, []);
 
-  // ✅ Auto-fijar ID al salir del input si hay match exacto
   const autoFixClienteIdOnBlur = useCallback(() => {
     setTimeout(() => setClienteFocus(false), 120);
     setForm((p) => {
@@ -794,30 +729,21 @@ export default function ModalEditarVenta({
     });
   }, [detalleInput, safeLists.detalles]);
 
-  /* =========================
-     Mostrar/Ocultar según Tipo de venta
-  ========================= */
-  const tipoVentaObj = useMemo(
-    () => getTipoVentaObj(safeLists.tiposVenta, form.id_tipo_venta),
-    [safeLists.tiposVenta, form.id_tipo_venta]
-  );
+  const tipoVentaObj = useMemo(() => getTipoVentaObj(safeLists.tiposVenta, form.id_tipo_venta), [safeLists.tiposVenta, form.id_tipo_venta]);
   const esContado = useMemo(() => isTipoVentaContado(tipoVentaObj), [tipoVentaObj]);
-  const esCuentaCorriente = useMemo(() => isTipoVentaCuentaCorriente(tipoVentaObj), [tipoVentaObj]);
 
-  // Cuando cambia tipo venta, limpiamos el campo que no aplica
+  // ✅ NUEVO: cuando cambia tipo de venta, solo limpiamos medio_pago si NO contado
   useEffect(() => {
     if (!open) return;
     setForm((p) => {
       const next = { ...p };
-      if (esContado) next.id_cuenta_corriente = NULL_OPTION;
-      else if (esCuentaCorriente) next.id_medio_pago = NULL_OPTION;
+      if (!esContado) next.id_medio_pago = NULL_OPTION;
+      // ventas no usan CC
+      next.id_cuenta_corriente = NULL_OPTION;
       return next;
     });
-  }, [open, esContado, esCuentaCorriente]);
+  }, [open, esContado]);
 
-  /* =========================
-     Payload final (venta)
-========================= */
   const payload = useMemo(() => {
     const toNullableId = (v) => {
       if (v === NULL_OPTION || v === "" || v == null) return null;
@@ -839,8 +765,9 @@ export default function ModalEditarVenta({
       id_tipo_venta: toNullableId(form.id_tipo_venta),
       id_tipo_movimiento: toNullableId(form.id_tipo_movimiento),
 
-      id_cuenta_corriente: toNullableId(form.id_cuenta_corriente),
-      id_medio_pago: toNullableId(form.id_medio_pago),
+      // ✅ NUEVO: sin CC
+      id_cuenta_corriente: null,
+      id_medio_pago: esContado ? toNullableId(form.id_medio_pago) : null,
 
       id_cliente: toNullableId(form.id_cliente),
       id_proveedor: null,
@@ -855,7 +782,7 @@ export default function ModalEditarVenta({
       total: t.total,
       monto_total: Math.max(0, Math.round(t.total * 100) / 100),
     };
-  }, [form]);
+  }, [form, esContado]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -868,49 +795,30 @@ export default function ModalEditarVenta({
     showToast("cargando", "Guardando cambios…", 12000);
 
     try {
-      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) {
-        throw new Error("Fecha inválida.");
-      }
+      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) throw new Error("Fecha inválida.");
 
       const perUI = normalizePeriodoToMMYYYY(form.periodo);
       const perAuto = periodoFromISODate(form.fecha);
       const finalPer = perUI || perAuto;
 
-      // ✅ Tipo venta obligatorio
-      if (!form.id_tipo_venta || String(form.id_tipo_venta) === NULL_OPTION) {
-        throw new Error("En Ventas la Forma de venta (Tipo venta) es obligatoria.");
-      }
+      if (!form.id_tipo_venta || String(form.id_tipo_venta) === NULL_OPTION) throw new Error("En Ventas la Forma de venta (Tipo venta) es obligatoria.");
 
-      // ✅ Cliente obligatorio (con autofix por texto exacto)
       let finalIdCliente = form.id_cliente;
       if ((!finalIdCliente || finalIdCliente === NULL_OPTION) && clienteInput.trim()) {
         const foundId = findIdByExact(safeLists.clientes, clienteInput.trim());
         if (foundId !== NULL_OPTION) finalIdCliente = foundId;
       }
-      if (!finalIdCliente || finalIdCliente === NULL_OPTION || finalIdCliente === ADD_OPTION) {
-        throw new Error("En Ventas el Cliente es obligatorio (seleccioná uno).");
-      }
+      if (!finalIdCliente || finalIdCliente === NULL_OPTION || finalIdCliente === ADD_OPTION) throw new Error("En Ventas el Cliente es obligatorio (seleccioná uno).");
 
-      // ✅ Detalle obligatorio (con autofix por texto exacto)
       let finalIdDetalle = form.id_detalle;
       if ((!finalIdDetalle || finalIdDetalle === NULL_OPTION) && detalleInput.trim()) {
         const foundId = findIdByExact(safeLists.detalles, detalleInput.trim());
         if (foundId !== NULL_OPTION) finalIdDetalle = foundId;
       }
-      if (!finalIdDetalle || finalIdDetalle === NULL_OPTION || finalIdDetalle === ADD_OPTION) {
-        throw new Error("En Ventas el Detalle es obligatorio (seleccioná uno).");
-      }
+      if (!finalIdDetalle || finalIdDetalle === NULL_OPTION || finalIdDetalle === ADD_OPTION) throw new Error("En Ventas el Detalle es obligatorio (seleccioná uno).");
 
-      // ✅ Reglas por tipo venta
       if (esContado) {
-        if (!form.id_medio_pago || String(form.id_medio_pago) === NULL_OPTION) {
-          throw new Error("En ventas al contado el Medio de pago es obligatorio.");
-        }
-      }
-      if (esCuentaCorriente) {
-        if (!form.id_cuenta_corriente || String(form.id_cuenta_corriente) === NULL_OPTION) {
-          throw new Error("En ventas por Cuenta Corriente la Cuenta Corriente es obligatoria.");
-        }
+        if (!form.id_medio_pago || String(form.id_medio_pago) === NULL_OPTION) throw new Error("En ventas al contado el Medio de pago es obligatorio.");
       }
 
       const cantidad = Math.max(0, safeNumber(form.cantidad));
@@ -923,6 +831,8 @@ export default function ModalEditarVenta({
         periodo: periodoMMYYYY_to_YYYYMM(finalPer || ""),
         id_cliente: Number(finalIdCliente),
         id_detalle: Number(finalIdDetalle),
+        id_cuenta_corriente: null, // ✅ NUEVO
+        id_medio_pago: esContado ? payload.id_medio_pago : null,
         cantidad: Math.round(cantidad * 1000) / 1000,
         precio: Math.round(precio * 100) / 100,
         iva_pct: Math.round(iva_pct * 100) / 100,
@@ -944,62 +854,33 @@ export default function ModalEditarVenta({
 
   if (!open) return null;
 
-  const overlayClass = [
-    "mi-modal__overlay",
-    "mi-modal__overlay--mov",
-    dark ? "mi-modal__overlay--dark" : "",
-  ]
-    .join(" ")
-    .trim();
+  const overlayClass = ["mi-modal__overlay", "mi-modal__overlay--mov", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim();
+  const containerClass = ["mi-modal__container", "mi-modal__container--mov", "mi-modal__container--venta", dark ? "mi-modal--dark" : ""].join(" ").trim();
 
-  const containerClass = [
-    "mi-modal__container",
-    "mi-modal__container--mov",
-    "mi-modal__container--venta",
-    dark ? "mi-modal--dark" : "",
-  ]
-    .join(" ")
-    .trim();
-
-  const miniTitle =
-    addUI.catalogo === "clientes" ? "Nuevo cliente" : addUI.catalogo === "detalles" ? "Nuevo detalle" : "Nuevo";
+  const miniTitle = addUI.catalogo === "clientes" ? "Nuevo cliente" : addUI.catalogo === "detalles" ? "Nuevo detalle" : "Nuevo";
 
   return createPortal(
     <div className={overlayClass} onMouseDown={cerrar}>
-      <div
-        className={containerClass}
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className={containerClass} role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar venta</h2>
             <p className="mi-modal__subtitle">Cliente y Detalle obligatorios</p>
           </div>
 
-          <button
-            ref={closeBtnRef}
-            className="mi-modal__close"
-            onClick={cerrar}
-            aria-label="Cerrar"
-            disabled={saving || addUI.open}
-            type="button"
-          >
+          <button ref={closeBtnRef} className="mi-modal__close" onClick={cerrar} aria-label="Cerrar" disabled={saving || addUI.open} type="button">
             ✕
           </button>
         </div>
 
         <form onSubmit={submit} className="mi-em-form">
           <div className="mi-em-grid">
-            {/* Izquierda */}
             <section className="mi-em-panel">
               <div className="mi-em-panelHead">Datos de la venta</div>
 
               <div className="mi-em-panelBody">
                 <div className="fl-grid">
                   <div className="mi-row2 fl-col-full">
-                    {/* ✅ Tipo de venta editable */}
                     <div className="fl-field">
                       <select
                         className="fl-input fl-select"
@@ -1016,7 +897,7 @@ export default function ModalEditarVenta({
                       </select>
                       <label className="fl-label">Tipo de venta</label>
                     </div>
-                                        {/* ✅ Detalle autocomplete + agregar */}
+
                     <div className="fl-field mi-autocomplete" style={{ position: "relative" }}>
                       <input
                         className="fl-input"
@@ -1041,73 +922,34 @@ export default function ModalEditarVenta({
                                 handleSelectDetalle(d);
                               }}
                             >
-                              <span
-                                style={{
-                                  flex: 1,
-                                  whiteSpace: "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                }}
-                              >
-                                {d.nombre}
-                              </span>
+                              <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.nombre}</span>
                             </li>
                           ))}
                         </ul>
                       )}
 
-                      <button
-                        type="button"
-                        onClick={startAddDetalle}
-                        disabled={saving || addUI.open || addUI.saving}
-                        className="mi-cr-link"
-                        style={{ marginTop: 8 }}
-                      >
+                      <button type="button" onClick={startAddDetalle} disabled={saving || addUI.open || addUI.saving} className="mi-cr-link" style={{ marginTop: 8 }}>
                         + Agregar nuevo detalle
                       </button>
                     </div>
                   </div>
-
 
                   <div className="mi-em-item fl-col-full">
                     <div className="mi-em-itemTitle">Ítem de la venta (editable)</div>
 
                     <div className="mi-em-itemGrid3">
                       <div className="fl-field">
-                        <input
-                          className="fl-input"
-                          type="number"
-                          min="0"
-                          step="0.001"
-                          placeholder=" "
-                          value={form.cantidad}
-                          onChange={(e) => onCantidadChange(e.target.value)}
-                          disabled={saving || addUI.open}
-                        />
+                        <input className="fl-input" type="number" min="0" step="0.001" placeholder=" " value={form.cantidad} onChange={(e) => onCantidadChange(e.target.value)} disabled={saving || addUI.open} />
                         <label className="fl-label">Cantidad</label>
                       </div>
 
                       <div className="fl-field">
-                        <input
-                          className="fl-input"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder=" "
-                          value={form.precio}
-                          onChange={(e) => onPrecioChange(e.target.value)}
-                          disabled={saving || addUI.open}
-                        />
+                        <input className="fl-input" type="number" min="0" step="0.01" placeholder=" " value={form.precio} onChange={(e) => onPrecioChange(e.target.value)} disabled={saving || addUI.open} />
                         <label className="fl-label">Precio unitario</label>
                       </div>
 
                       <div className="fl-field">
-                        <select
-                          className="fl-input fl-select"
-                          value={String(form.iva_pct)}
-                          onChange={(e) => onIvaPctChange(e.target.value)}
-                          disabled={saving || addUI.open}
-                        >
+                        <select className="fl-input fl-select" value={String(form.iva_pct)} onChange={(e) => onIvaPctChange(e.target.value)} disabled={saving || addUI.open}>
                           {IVA_OPTIONS.map((x) => (
                             <option key={x.value} value={x.value}>
                               {x.label}
@@ -1135,23 +977,13 @@ export default function ModalEditarVenta({
                   </div>
 
                   <div className="fl-field fl-col-full">
-                    <input
-                      className="fl-input"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder=" "
-                      value={form.monto_total}
-                      onChange={(e) => onMontoTotalManual(e.target.value)}
-                      disabled={saving || addUI.open}
-                    />
+                    <input className="fl-input" type="number" min="0" step="0.01" placeholder=" " value={form.monto_total} onChange={(e) => onMontoTotalManual(e.target.value)} disabled={saving || addUI.open} />
                     <label className="fl-label">Monto total (ajusta el precio)</label>
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Derecha */}
             <aside className="mi-em-aside">
               <div className="mi-em-asideTitle">Relaciones y pago</div>
 
@@ -1171,31 +1003,15 @@ export default function ModalEditarVenta({
                 </div>
 
                 <div className="fl-field">
-                  <input
-                    className="fl-input"
-                    placeholder="MM-YYYY"
-                    inputMode="numeric"
-                    value={form.periodo}
-                    onChange={(e) => onPeriodoChange(e.target.value)}
-                    disabled={saving || addUI.open}
-                  />
+                  <input className="fl-input" placeholder="MM-YYYY" inputMode="numeric" value={form.periodo} onChange={(e) => onPeriodoChange(e.target.value)} disabled={saving || addUI.open} />
                   <label className="fl-label">Período</label>
                 </div>
               </div>
 
               <div className="mi-em-asideBody">
-                {/* ✅ Cuenta Corriente SOLO si es cuenta corriente (derecha) */}
-
-
-                {/* ✅ Medio de pago SOLO si es contado */}
                 {esContado ? (
                   <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_medio_pago)}
-                      onChange={(e) => setForm((p) => ({ ...p, id_medio_pago: e.target.value }))}
-                      disabled={saving || addUI.open}
-                    >
+                    <select className="fl-input fl-select" value={String(form.id_medio_pago)} onChange={(e) => setForm((p) => ({ ...p, id_medio_pago: e.target.value }))} disabled={saving || addUI.open}>
                       <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
                       {(safeLists.mediosPago || []).map((x) => (
                         <option key={x.id} value={String(x.id)}>
@@ -1212,7 +1028,6 @@ export default function ModalEditarVenta({
                   </div>
                 )}
 
-                {/* ✅ Cliente autocomplete + agregar */}
                 <div className="fl-field mi-autocomplete" style={{ position: "relative" }}>
                   <input
                     className="fl-input"
@@ -1237,47 +1052,23 @@ export default function ModalEditarVenta({
                             handleSelectCliente(c);
                           }}
                         >
-                          <span
-                            style={{
-                              flex: 1,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {c.nombre}
-                          </span>
+                          <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.nombre}</span>
                         </li>
                       ))}
                     </ul>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={startAddCliente}
-                    disabled={saving || addUI.open || addUI.saving}
-                    className="mi-cr-link"
-                    style={{ marginTop: 8 }}
-                  >
+                  <button type="button" onClick={startAddCliente} disabled={saving || addUI.open || addUI.saving} className="mi-cr-link" style={{ marginTop: 8 }}>
                     + Agregar nuevo cliente
                   </button>
                 </div>
 
                 <div className="mi-em-actions">
-                  <button
-                    type="submit"
-                    disabled={saving || addUI.open}
-                    className="mit-btn mit-btn--solid mit-btn--block"
-                  >
+                  <button type="submit" disabled={saving || addUI.open} className="mit-btn mit-btn--solid mit-btn--block">
                     {saving ? "Guardando..." : "Guardar"}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={cerrar}
-                    disabled={saving || addUI.open}
-                    className="mit-btn mit-btn--ghost mit-btn--block"
-                  >
+                  <button type="button" onClick={cerrar} disabled={saving || addUI.open} className="mit-btn mit-btn--ghost mit-btn--block">
                     Cancelar
                   </button>
                 </div>
@@ -1286,7 +1077,6 @@ export default function ModalEditarVenta({
           </div>
         </form>
 
-        {/* ✅ Mini modal (cliente/detalle) con dark */}
         <AddCatalogMiniModal
           open={addUI.open}
           title={miniTitle}

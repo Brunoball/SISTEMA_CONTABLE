@@ -14,9 +14,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
   exit;
 }
 
-// ✅ IMPORTANTE (multi-tenant):
-// NO volvemos a incluir db.php acá.
-// El $pdo debe venir desde routes/api.php (tenant_resolver) y estar en scope global.
+// ✅ multi-tenant: $pdo viene desde routes/api.php (tenant_resolver)
 require_once __DIR__ . '/../utils/auditoria.php';
 
 /* ----------------- Helpers ----------------- */
@@ -96,11 +94,6 @@ function base64url_decode(string $s): string {
   $out = base64_decode($s, true);
   return $out === false ? '' : $out;
 }
-
-/**
- * ✅ Si existe tabla `sesiones`, intenta resolver id_usuario desde X-Session
- * (si no existe, devuelve 0 y no rompe).
- */
 function get_id_usuario_from_x_session(PDO $pdo): int {
   $sessionKey = get_header_value('X-Session');
   if ($sessionKey === '') return 0;
@@ -110,7 +103,6 @@ function get_id_usuario_from_x_session(PDO $pdo): int {
     $exists = $chk ? (bool)$chk->fetchColumn() : false;
     if (!$exists) return 0;
 
-    // Ajustá nombres de columnas si tu tabla usa otros
     $st = $pdo->prepare("
       SELECT id_usuario
       FROM sesiones
@@ -125,7 +117,6 @@ function get_id_usuario_from_x_session(PDO $pdo): int {
     return 0;
   }
 }
-
 function get_id_usuario_from_request(PDO $pdo, array $body = []): int {
   // 1) JWT
   $token = get_bearer_token();
@@ -158,7 +149,7 @@ function get_id_usuario_from_request(PDO $pdo, array $body = []): int {
     if ($id > 0) return $id;
   }
 
-  // 3) X-Session (si existe tabla sesiones)
+  // 3) X-Session
   $idSess = get_id_usuario_from_x_session($pdo);
   if ($idSess > 0) return $idSess;
 
@@ -171,13 +162,11 @@ function audit_safe(PDO $pdo, int $idUsuario, string $accion, ?string $entidad, 
 }
 
 /* =========================================================
-   Constantes / helpers de tipo_operacion
+   ✅ FIX: tipo_operacion VENTA = 1 (FIJO)
 ========================================================= */
 function get_tipo_operacion_id_venta(PDO $pdo): int {
-  $st = $pdo->prepare("SELECT id_tipo_operacion FROM tipos_operacion WHERE activo = 1 AND UPPER(nombre) = 'VENTA' LIMIT 1");
-  $st->execute();
-  $id = $st->fetchColumn();
-  return $id ? (int)$id : 0;
+  // ✅ según lo que pediste: VENTA = 1
+  return 1;
 }
 
 /* =========================================================
@@ -248,8 +237,11 @@ function item_payload_from_src(array $src, float $monto_total, int $id_detalle):
 }
 
 /* =========================================================
-   VALIDACIÓN de venta (reglas requeridas)
-   ✅ además fuerza id_tipo_operacion=VENTA
+   ✅ VALIDACIÓN Venta
+   - id_tipo_operacion = 1 (VENTA)
+   - NO existe id_cuenta_corriente (eliminado)
+   - Contado => requiere id_medio_pago
+   - Cuenta Corriente => id_medio_pago = NULL
 ========================================================= */
 function validar_venta_or_fail(PDO $pdo, array $src): array {
   $fecha = trim((string)($src['fecha'] ?? ''));
@@ -258,49 +250,38 @@ function validar_venta_or_fail(PDO $pdo, array $src): array {
   $periodo = trim((string)($src['periodo'] ?? ''));
   if ($periodo === '' || !is_valid_periodo($periodo)) $periodo = periodo_from_fecha($fecha);
 
-  $id_clasificacion    = n_int($src['id_clasificacion'] ?? null);
-  $id_tipo_venta       = n_int($src['id_tipo_venta'] ?? null);
-  $id_medio_pago       = n_int($src['id_medio_pago'] ?? null);
-  $id_cuenta_corriente = n_int($src['id_cuenta_corriente'] ?? null);
-  $id_cliente          = n_int($src['id_cliente'] ?? null);
-  $id_detalle          = n_int($src['id_detalle'] ?? null);
+  $id_clasificacion = n_int($src['id_clasificacion'] ?? null);
+  $id_tipo_venta    = n_int($src['id_tipo_venta'] ?? null);
+  $id_medio_pago    = n_int($src['id_medio_pago'] ?? null);
+  $id_cliente       = n_int($src['id_cliente'] ?? null);
+  $id_detalle       = n_int($src['id_detalle'] ?? null);
 
   $monto_total = n_float($src['monto_total'] ?? null);
 
-  // ✅ tipo_operacion VENTA (obligatorio y fijo)
+  // ✅ tipo_operacion VENTA fijo
   $id_tipo_operacion_venta = get_tipo_operacion_id_venta($pdo);
-  if ($id_tipo_operacion_venta <= 0) {
-    fail("No existe el tipo_operacion 'VENTA' en tipos_operacion.");
-  }
+  if ($id_tipo_operacion_venta <= 0) fail("Tipo de operación VENTA inválido (id <= 0).");
 
   // ✅ Reglas base
   if (!$id_cliente || $id_cliente <= 0) fail('En Ventas el Cliente es obligatorio.');
   if (!$id_tipo_venta || $id_tipo_venta <= 0) fail('En Ventas la Forma de venta (Tipo venta) es obligatoria.');
   if (!$id_detalle || $id_detalle <= 0) fail('En Ventas el Detalle es obligatorio.');
 
-  // Reglas contado/corriente según nombre del tipo_venta
+  // ✅ Reglas Contado / Cuenta Corriente por nombre del tipo_venta
   $tipoVentaNombre = get_tipo_venta_nombre($pdo, $id_tipo_venta);
   $isContado = tipo_venta_is_contado($tipoVentaNombre);
   $isCorriente = tipo_venta_is_corriente($tipoVentaNombre);
 
+  // Si no match, igual lo dejamos pasar, pero con coherencia:
+  // - si no es contado => no obligamos medio_pago
+  // - si es contado => obligamos medio_pago
   if ($isContado) {
-    if (!$id_medio_pago || $id_medio_pago <= 0) fail('Venta Contado: el Medio de pago es obligatorio.');
-    $id_cuenta_corriente = null; // forzar null
-  }
-
-  if ($isCorriente) {
-    if (!$id_cuenta_corriente || $id_cuenta_corriente <= 0) {
-      fail('Venta en Cuenta Corriente: la Cuenta Corriente es obligatoria.');
+    if (!$id_medio_pago || $id_medio_pago <= 0) {
+      fail('Venta Contado: el Medio de pago es obligatorio.');
     }
-    $id_medio_pago = null; // forzar null
-  }
-
-  // ✅ Si no matchea "contado" ni "corriente", igual exigimos coherencia
-  if (!$isContado && !$isCorriente) {
-    $hasMP = ($id_medio_pago !== null && $id_medio_pago > 0);
-    $hasCC = ($id_cuenta_corriente !== null && $id_cuenta_corriente > 0);
-    if ($hasMP && $hasCC) fail('Tipo venta inválido: no puede tener medio_pago y cuenta_corriente a la vez.');
-    if (!$hasMP && !$hasCC) fail('Tipo venta inválido: debe tener medio_pago (contado) o cuenta_corriente (corriente).');
+  } else {
+    // ✅ Cuenta Corriente (o cualquier otro distinto a contado) => medio_pago NULL
+    $id_medio_pago = null;
   }
 
   // Totales desde item (prioridad) o monto_total
@@ -314,36 +295,36 @@ function validar_venta_or_fail(PDO $pdo, array $src): array {
     'id_clasificacion' => $id_clasificacion,
     'id_tipo_venta' => $id_tipo_venta,
     'id_medio_pago' => $id_medio_pago,
-    'id_cuenta_corriente' => $id_cuenta_corriente,
     'id_cliente' => $id_cliente,
     'id_proveedor' => null,
     'id_detalle' => $id_detalle,
     'monto_total' => $totalCabecera,
     'tipo_venta_nombre' => $tipoVentaNombre,
+    'is_contado' => $isContado,
+    'is_corriente' => $isCorriente,
     'item' => $item,
   ];
 }
 
 /* =========================================================
    LISTAR VENTAS (GET)
+   ✅ sin id_cuenta_corriente
 ========================================================= */
 function ventas_listar(PDO $pdo): void {
   $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
   $q       = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
 
-  // ✅ paginado (si no vienen, default)
   $limit  = isset($_GET['limit'])  ? (int)$_GET['limit']  : 100;
   $offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
 
   if ($limit < 1) $limit = 100;
-  if ($limit > 500) $limit = 500; // cap de seguridad
+  if ($limit > 500) $limit = 500;
   if ($offset < 0) $offset = 0;
 
-  // ✅ pedimos 1 extra para saber si hay más
   $limitPlus = $limit + 1;
 
   $idVenta = get_tipo_operacion_id_venta($pdo);
-  if ($idVenta <= 0) fail("No existe el tipo_operacion 'VENTA' en tipos_operacion.");
+  if ($idVenta <= 0) fail("Tipo_operacion VENTA inválido.");
 
   $where = [];
   $params = [];
@@ -354,13 +335,6 @@ function ventas_listar(PDO $pdo): void {
   $where[] = "m.id_cliente IS NOT NULL";
   $where[] = "(m.id_proveedor IS NULL OR m.id_proveedor = 0)";
   $where[] = "m.id_tipo_venta IS NOT NULL";
-
-  // ✅ reglas Ventas (contado/corriente)
-  $where[] = "(
-      (UPPER(tv.nombre) LIKE '%CONTADO%' AND m.id_medio_pago IS NOT NULL AND (m.id_cuenta_corriente IS NULL OR m.id_cuenta_corriente = 0))
-      OR
-      (UPPER(tv.nombre) LIKE '%CUENTA%' AND UPPER(tv.nombre) LIKE '%CORRIENTE%' AND m.id_cuenta_corriente IS NOT NULL AND (m.id_medio_pago IS NULL OR m.id_medio_pago = 0))
-    )";
 
   if ($periodo !== '') {
     $where[] = "m.periodo = :periodo";
@@ -376,7 +350,6 @@ function ventas_listar(PDO $pdo): void {
       m.id_tipo_operacion,
       m.id_clasificacion,
       m.id_tipo_venta,
-      m.id_cuenta_corriente,
       m.id_cliente,
       m.id_proveedor,
       m.id_detalle,
@@ -395,7 +368,6 @@ function ventas_listar(PDO $pdo): void {
 
       COALESCE(c.nombre,'')  AS clasificacion,
       COALESCE(tv.nombre,'') AS tipo_venta,
-      COALESCE(cc.nombre,'') AS cuenta_corriente,
       COALESCE(cl.nombre,'') AS cliente,
       COALESCE(pr.nombre,'') AS proveedor,
 
@@ -409,7 +381,6 @@ function ventas_listar(PDO $pdo): void {
       LEFT JOIN tipos_operacion tope   ON tope.id_tipo_operacion = m.id_tipo_operacion
       LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
       LEFT JOIN tipos_venta tv          ON tv.id_tipo_venta = m.id_tipo_venta
-      LEFT JOIN cuentas_corrientes cc   ON cc.id_cuenta_corriente = m.id_cuenta_corriente
       LEFT JOIN clientes cl             ON cl.id_cliente = m.id_cliente
       LEFT JOIN proveedores pr          ON pr.id_proveedor = m.id_proveedor
       LEFT JOIN detalles d              ON d.id_detalle = m.id_detalle
@@ -439,17 +410,15 @@ function ventas_listar(PDO $pdo): void {
     $where[] = "(
       UPPER(COALESCE(c.nombre,''))   LIKE UPPER(:q1) OR
       UPPER(COALESCE(tv.nombre,''))  LIKE UPPER(:q2) OR
-      UPPER(COALESCE(cc.nombre,''))  LIKE UPPER(:q3) OR
-      UPPER(COALESCE(cl.nombre,''))  LIKE UPPER(:q4) OR
-      UPPER(COALESCE(di.nombre, d.nombre,'')) LIKE UPPER(:q5) OR
-      UPPER(COALESCE(mp.nombre,''))  LIKE UPPER(:q6)
+      UPPER(COALESCE(cl.nombre,''))  LIKE UPPER(:q3) OR
+      UPPER(COALESCE(di.nombre, d.nombre,'')) LIKE UPPER(:q4) OR
+      UPPER(COALESCE(mp.nombre,''))  LIKE UPPER(:q5)
     )";
     $params[':q1'] = $like;
     $params[':q2'] = $like;
     $params[':q3'] = $like;
     $params[':q4'] = $like;
     $params[':q5'] = $like;
-    $params[':q6'] = $like;
   }
 
   $sql .= " WHERE " . implode(" AND ", $where);
@@ -457,20 +426,13 @@ function ventas_listar(PDO $pdo): void {
   $sql .= " LIMIT :lim OFFSET :off";
 
   $stmt = $pdo->prepare($sql);
-
-  // bind de params normales
-  foreach ($params as $k => $v) {
-    $stmt->bindValue($k, $v);
-  }
-
-  // bind paginado (INT)
+  foreach ($params as $k => $v) $stmt->bindValue($k, $v);
   $stmt->bindValue(':lim', $limitPlus, PDO::PARAM_INT);
   $stmt->bindValue(':off', $offset, PDO::PARAM_INT);
 
   $stmt->execute();
   $rowsAll = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-  // ✅ has_more real (por el +1)
   $hasMore = count($rowsAll) > $limit;
   $rows = $hasMore ? array_slice($rowsAll, 0, $limit) : $rowsAll;
   $nextOffset = $hasMore ? ($offset + $limit) : null;
@@ -494,19 +456,16 @@ function ventas_listar(PDO $pdo): void {
 
       'id_clasificacion' => $r['id_clasificacion'] === null ? null : (int)$r['id_clasificacion'],
       'id_tipo_venta' => $r['id_tipo_venta'] === null ? null : (int)$r['id_tipo_venta'],
-      'id_cuenta_corriente' => $r['id_cuenta_corriente'] === null ? null : (int)$r['id_cuenta_corriente'],
       'id_cliente' => $r['id_cliente'] === null ? null : (int)$r['id_cliente'],
       'id_proveedor' => $r['id_proveedor'] === null ? null : (int)$r['id_proveedor'],
       'id_detalle' => $id_detalle_final,
 
-      // ✅ para Ventas.jsx
       'pago_tipo_venta' => $tipoVentaTxt,
       'medio_pago_nombre' => $medioPagoTxt,
 
       'id_medio_pago' => $r['id_medio_pago'] === null ? null : (int)$r['id_medio_pago'],
       'monto_total' => (float)$r['monto_total_final'],
 
-      // primer item
       'cantidad'  => $r['item_cantidad'] === null ? null : (float)$r['item_cantidad'],
       'precio'    => $r['item_precio'] === null ? null : (float)$r['item_precio'],
       'iva_pct'   => $r['item_iva_pct'] === null ? null : (float)$r['item_iva_pct'],
@@ -514,10 +473,8 @@ function ventas_listar(PDO $pdo): void {
       'iva_monto' => $r['item_iva_monto'] === null ? null : (float)$r['item_iva_monto'],
       'total'     => $r['item_total'] === null ? null : (float)$r['item_total'],
 
-      // textos
       'clasificacion' => (string)($r['clasificacion'] ?? ''),
       'tipo_venta' => $tipoVentaTxt,
-      'cuenta_corriente' => (string)($r['cuenta_corriente'] ?? ''),
       'cliente' => (string)($r['cliente'] ?? ''),
       'proveedor' => (string)($r['proveedor'] ?? ''),
       'detalle' => (string)($r['detalle'] ?? ''),
@@ -533,7 +490,6 @@ function ventas_listar(PDO $pdo): void {
     'offset' => $offset,
   ]);
 }
-
 
 /* =========================================================
    CREAR 1 VENTA (POST)
@@ -554,13 +510,13 @@ function ventas_crear(PDO $pdo): void {
       INSERT INTO movimientos (
         fecha, periodo,
         id_tipo_operacion,
-        id_clasificacion, id_tipo_venta, id_cuenta_corriente,
+        id_clasificacion, id_tipo_venta,
         id_cliente, id_proveedor, id_detalle,
         monto_total, id_medio_pago
       ) VALUES (
         :fecha, :periodo,
         :id_tipo_operacion,
-        :id_clasificacion, :id_tipo_venta, :id_cuenta_corriente,
+        :id_clasificacion, :id_tipo_venta,
         :id_cliente, :id_proveedor, :id_detalle,
         :monto_total, :id_medio_pago
       )
@@ -569,15 +525,14 @@ function ventas_crear(PDO $pdo): void {
     $stmt->execute([
       ':fecha' => $v['fecha'],
       ':periodo' => $v['periodo'],
-      ':id_tipo_operacion' => $v['id_tipo_operacion'],
+      ':id_tipo_operacion' => $v['id_tipo_operacion'], // ✅ VENTA=1
       ':id_clasificacion' => $v['id_clasificacion'],
       ':id_tipo_venta' => $v['id_tipo_venta'],
-      ':id_cuenta_corriente' => $v['id_cuenta_corriente'],
       ':id_cliente' => $v['id_cliente'],
       ':id_proveedor' => null,
       ':id_detalle' => $v['id_detalle'],
       ':monto_total' => $v['monto_total'],
-      ':id_medio_pago' => $v['id_medio_pago'],
+      ':id_medio_pago' => $v['id_medio_pago'], // ✅ null si es CC
     ]);
 
     $newId = (int)$pdo->lastInsertId();
@@ -610,7 +565,6 @@ function ventas_crear(PDO $pdo): void {
           'id_tipo_operacion' => $v['id_tipo_operacion'],
           'id_clasificacion' => $v['id_clasificacion'],
           'id_tipo_venta' => $v['id_tipo_venta'],
-          'id_cuenta_corriente' => $v['id_cuenta_corriente'],
           'id_cliente' => $v['id_cliente'],
           'id_detalle' => $v['id_detalle'],
           'monto_total' => $v['monto_total'],
@@ -618,7 +572,7 @@ function ventas_crear(PDO $pdo): void {
           'tipo_venta_nombre' => $v['tipo_venta_nombre'],
         ],
         'item' => $it,
-      ]
+      ],
     ]);
 
     ok(['id_movimiento' => $newId]);
@@ -637,7 +591,6 @@ function ventas_crear_batch(PDO $pdo): void {
   $body = read_json_body();
   $src = !empty($body) ? $body : ($_POST ?? []);
 
-  // ✅ idUsuario: si viene array directo, el id puede venir por session/header
   $idUsuario = get_id_usuario_from_request($pdo, is_array($src) ? [] : $src);
 
   $items = [];
@@ -664,13 +617,13 @@ function ventas_crear_batch(PDO $pdo): void {
         INSERT INTO movimientos (
           fecha, periodo,
           id_tipo_operacion,
-          id_clasificacion, id_tipo_venta, id_cuenta_corriente,
+          id_clasificacion, id_tipo_venta,
           id_cliente, id_proveedor, id_detalle,
           monto_total, id_medio_pago
         ) VALUES (
           :fecha, :periodo,
           :id_tipo_operacion,
-          :id_clasificacion, :id_tipo_venta, :id_cuenta_corriente,
+          :id_clasificacion, :id_tipo_venta,
           :id_cliente, :id_proveedor, :id_detalle,
           :monto_total, :id_medio_pago
         )
@@ -681,7 +634,6 @@ function ventas_crear_batch(PDO $pdo): void {
         ':id_tipo_operacion' => $v['id_tipo_operacion'],
         ':id_clasificacion' => $v['id_clasificacion'],
         ':id_tipo_venta' => $v['id_tipo_venta'],
-        ':id_cuenta_corriente' => $v['id_cuenta_corriente'],
         ':id_cliente' => $v['id_cliente'],
         ':id_proveedor' => null,
         ':id_detalle' => $v['id_detalle'],
@@ -719,7 +671,6 @@ function ventas_crear_batch(PDO $pdo): void {
         'id_tipo_venta' => $v['id_tipo_venta'],
         'tipo_venta_nombre' => $v['tipo_venta_nombre'],
         'id_medio_pago' => $v['id_medio_pago'],
-        'id_cuenta_corriente' => $v['id_cuenta_corriente'],
         'monto_total' => $v['monto_total'],
         'item' => $it,
       ];
@@ -742,6 +693,7 @@ function ventas_crear_batch(PDO $pdo): void {
 
 /* =========================================================
    ACTUALIZAR VENTA (POST)
+   ✅ sin id_cuenta_corriente
 ========================================================= */
 function ventas_actualizar(PDO $pdo): void {
   if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
@@ -759,14 +711,14 @@ function ventas_actualizar(PDO $pdo): void {
   if (!$before) fail('La venta no existe: ' . $id_movimiento);
 
   $idVenta = get_tipo_operacion_id_venta($pdo);
-  if ($idVenta <= 0) fail("No existe el tipo_operacion 'VENTA' en tipos_operacion.");
   if ((int)($before['id_tipo_operacion'] ?? 0) !== $idVenta) {
     fail('Este movimiento no es una venta (tipo_operacion).');
   }
 
+  // merge: si no vienen campos, usamos lo anterior
   $merge = $src;
   foreach ([
-    'fecha','periodo','id_clasificacion','id_tipo_venta','id_medio_pago','id_cuenta_corriente',
+    'fecha','periodo','id_clasificacion','id_tipo_venta','id_medio_pago',
     'id_cliente','id_detalle','monto_total','cantidad','precio','iva_pct','subtotal','iva_monto','total'
   ] as $k) {
     if (!array_key_exists($k, $merge) && array_key_exists($k, $before)) {
@@ -786,7 +738,6 @@ function ventas_actualizar(PDO $pdo): void {
         id_tipo_operacion = :id_tipo_operacion,
         id_clasificacion = :id_clasificacion,
         id_tipo_venta = :id_tipo_venta,
-        id_cuenta_corriente = :id_cuenta_corriente,
         id_cliente = :id_cliente,
         id_proveedor = NULL,
         id_detalle = :id_detalle,
@@ -798,14 +749,13 @@ function ventas_actualizar(PDO $pdo): void {
     $upd->execute([
       ':fecha' => $v['fecha'],
       ':periodo' => $v['periodo'],
-      ':id_tipo_operacion' => $v['id_tipo_operacion'],
+      ':id_tipo_operacion' => $v['id_tipo_operacion'], // ✅ forzado VENTA=1
       ':id_clasificacion' => $v['id_clasificacion'],
       ':id_tipo_venta' => $v['id_tipo_venta'],
-      ':id_cuenta_corriente' => $v['id_cuenta_corriente'],
       ':id_cliente' => $v['id_cliente'],
       ':id_detalle' => $v['id_detalle'],
       ':monto_total' => $v['monto_total'],
-      ':id_medio_pago' => $v['id_medio_pago'],
+      ':id_medio_pago' => $v['id_medio_pago'], // ✅ null si es CC
       ':id_movimiento' => $id_movimiento,
     ]);
 
@@ -895,7 +845,6 @@ function ventas_eliminar(PDO $pdo): void {
   if (!$before) fail('La venta no existe.');
 
   $idVenta = get_tipo_operacion_id_venta($pdo);
-  if ($idVenta <= 0) fail("No existe el tipo_operacion 'VENTA' en tipos_operacion.");
   if ((int)($before['id_tipo_operacion'] ?? 0) !== $idVenta) {
     fail('Este movimiento no es una venta (tipo_operacion).');
   }

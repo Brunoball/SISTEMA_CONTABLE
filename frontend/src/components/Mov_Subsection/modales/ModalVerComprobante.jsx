@@ -1,6 +1,7 @@
+// src/components/Mov_Subsection/modales/ModalVerComprobante.jsx
 import React, { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import "../../Movimientos/modales/ModalEditarMovimiento.css"; // ✅ misma estética
+import "../../Movimientos/modales/ModalEditarMovimiento.css";
 
 function isPdfUrl(url) {
   const u = String(url || "").toLowerCase();
@@ -17,7 +18,7 @@ function isImageUrl(url) {
   );
 }
 
-export default function ModalVerComprobante({ open, url, onClose, title = "Comprobante" }) {
+export default function ModalVerComprobante({ open, url, mime = "", onClose, title = "Comprobante" }) {
   const closeBtnRef = useRef(null);
 
   // lock scroll
@@ -46,10 +47,16 @@ export default function ModalVerComprobante({ open, url, onClose, title = "Compr
 
   const kind = useMemo(() => {
     if (!url) return "none";
+
+    const m = String(mime || "").toLowerCase().trim();
+    if (m.includes("pdf")) return "pdf";
+    if (m.startsWith("image/")) return "img";
+
     if (isPdfUrl(url)) return "pdf";
     if (isImageUrl(url)) return "img";
+
     return "other";
-  }, [url]);
+  }, [url, mime]);
 
   if (!open) return null;
 
@@ -67,12 +74,7 @@ export default function ModalVerComprobante({ open, url, onClose, title = "Compr
             <h2 className="mi-modal__title">{title}</h2>
             <p className="mi-modal__subtitle">
               {url ? (
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ textDecoration: "underline" }}
-                >
+                <a href={url} target="_blank" rel="noreferrer" style={{ textDecoration: "underline" }}>
                   Abrir en nueva pestaña
                 </a>
               ) : (
@@ -81,13 +83,7 @@ export default function ModalVerComprobante({ open, url, onClose, title = "Compr
             </p>
           </div>
 
-          <button
-            ref={closeBtnRef}
-            className="mi-modal__close"
-            onClick={onClose}
-            aria-label="Cerrar"
-            type="button"
-          >
+          <button ref={closeBtnRef} className="mi-modal__close" onClick={onClose} aria-label="Cerrar" type="button">
             ✕
           </button>
         </div>

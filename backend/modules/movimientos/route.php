@@ -6,24 +6,30 @@ if (!function_exists('route_movimientos')) {
 
   function route_movimientos(string $action): bool
   {
-    // ✅ CLAVE: hacer visible el $pdo creado en routes/api.php
+    // ✅ CLAVE: usa el $pdo multi-tenant que ya crea routes/api.php
     global $pdo;
 
     $action = strtolower(trim((string)$action));
 
     switch ($action) {
 
+      /* =========================
+         ✅ CATÁLOGO
+      ========================= */
       case 'catalogo_crear':
         require __DIR__ . '/catalogo.php';
         return true;
 
-      /* ✅ CONFIRMAR PAGO (GENÉRICO) */
+      /* =========================
+         ✅ CONFIRMAR PAGO (GENÉRICO)
+      ========================= */
       case 'movimientos_confirmar_pago':
-        // ✅ usa $pdo multi-tenant (no include db.php)
         require __DIR__ . '/confirmar_pago.php';
         return true;
 
-      /* ✅ ÓRDENES DE PAGO */
+      /* =========================
+         ✅ ÓRDENES DE PAGO
+      ========================= */
       case 'ordenes_pago_listar':
       case 'ordenes_pago_actualizar':
       case 'ordenes_pago_eliminar':
@@ -31,15 +37,36 @@ if (!function_exists('route_movimientos')) {
         require __DIR__ . '/ordenes_pago.php';
         return true;
 
-      /* ✅ RECIBOS */
+      /* =========================
+         ✅ RECIBOS
+      ========================= */
       case 'recibos_listar':
+      case 'recibos_cliente_listar':
       case 'recibos_actualizar':
       case 'recibos_eliminar':
       case 'recibos_confirmar_pago':
         require __DIR__ . '/recibos.php';
         return true;
 
-      /* ✅ MOVIMIENTOS */
+      /* =========================
+         ✅ COMPROBANTES
+         - subir (guardar en uploads/tenants/...)
+         - link (URL firmada sin header)
+         - descargar_token (descarga con token)
+         - info (metadata)
+         - descargar (descarga con X-Session)
+      ========================= */
+      case 'comprobantes_subir':
+      case 'comprobantes_info':
+      case 'comprobantes_descargar':
+      case 'comprobantes_link':
+      case 'comprobantes_descargar_token':
+        require __DIR__ . '/comprobantes.php';
+        return true;
+
+      /* =========================
+         ✅ MOVIMIENTOS
+      ========================= */
       case 'movimientos_listar':
       case 'movimientos_periodos_listar':
       case 'movimientos_crear':
@@ -49,7 +76,9 @@ if (!function_exists('route_movimientos')) {
         require __DIR__ . '/movimientos.php';
         return true;
 
-      /* ✅ VENTAS */
+      /* =========================
+         ✅ VENTAS
+      ========================= */
       case 'ventas_listar':
       case 'ventas_crear':
       case 'ventas_crear_batch':
@@ -58,7 +87,9 @@ if (!function_exists('route_movimientos')) {
         require __DIR__ . '/ventas.php';
         return true;
 
-      /* ✅ COMPRAS */
+      /* =========================
+         ✅ COMPRAS
+      ========================= */
       case 'compras_listar':
       case 'compras_crear':
       case 'compras_crear_batch':

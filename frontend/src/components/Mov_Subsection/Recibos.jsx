@@ -1,13 +1,16 @@
 // src/components/Movimientos/Recibos.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../config/config";
-import "../Movimientos/movimientos.css"; // ✅ misma estética
+import "../Movimientos/movimientos.css";
 
 import Toast from "../Global/Toast.jsx";
 
 import ModalEditarRecibo from "./modales/ModalEditarRecibo";
 import ModalPagarRecibos from "./modales/ModalPagarRecibos";
 import ModalEliminarMovimientos from "../Movimientos/modales/ModalEliminarMovimientos";
+
+// ✅ NUEVO: Ver comprobante
+import ModalVerComprobante from "../Mov_Subsection/modales/ModalVerComprobante";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -17,19 +20,18 @@ import {
   faPenToSquare,
   faTrashCan,
   faMoneyBill1Wave,
+  faEye,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
-
-// ✅ IGUAL A MOVIMIENTOS: Listas desde Provider
 import { useListas } from "../../context/ListasContext";
 
 /* =========================
-   PERF (igual Movimientos)
+   PERF
 ========================= */
-const PAGE_SIZE = 100; // ✅ máximo 100 en carga inicial
-const MIN_LOADING_MS = 0; // 0 desactiva
-const FORCE_SHOW_LOADER_DEV = false; // true solo dev
+const PAGE_SIZE = 100;
+const MIN_LOADING_MS = 0;
+const FORCE_SHOW_LOADER_DEV = false;
 
 /* =========================
    Skeleton rows
@@ -50,14 +52,6 @@ function moneyARS(v) {
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "-";
-}
-function normalizeSearchText(v) {
-  return String(v ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
@@ -164,13 +158,7 @@ function getAuthInfo() {
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand =
-      u?.idUsuarioMaster ??
-      u?.idUsuario ??
-      u?.id_usuario ??
-      u?.id ??
-      u?.user_id ??
-      0;
+    const cand = u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
@@ -178,19 +166,12 @@ function getAuthInfo() {
 }
 
 /* =========================
-   ✅ Reglas Recibos
+   ✅ Recibos (PAGADO/PENDIENTE)
 ========================= */
-function isContadoTipoVenta(row) {
-  const label = String(
-    row?.tipo_venta ?? row?.tipoVenta ?? row?.condicion_venta ?? ""
-  ).trim();
-  const s = normalizeSearchText(label);
-  return s.includes("contado");
-}
 function isReciboPagado(row) {
-  const idMP = Number(row?.id_medio_pago ?? 0);
-  if (Number.isFinite(idMP) && idMP > 0) return true;
-  if (isContadoTipoVenta(row)) return true;
+  if (row?.pagado === true) return true;
+  const cob = Number(row?.cobrado_total ?? 0);
+  if (Number.isFinite(cob) && cob > 0.00001) return true;
   return false;
 }
 
@@ -203,6 +184,19 @@ function slugifySheetName(name) {
     .replace(/\s+/g, " ")
     .trim();
   return (s || "Recibos").slice(0, 31);
+}
+
+/* =========================
+   detect backend "acción no válida"
+========================= */
+function isAccionNoValidaErrorMessage(msg) {
+  const s = String(msg || "").toLowerCase();
+  return (
+    s.includes("acción no válida") ||
+    s.includes("accion no valida") ||
+    s.includes("action no válida") ||
+    s.includes("action no valida")
+  );
 }
 
 export default function Recibos() {
@@ -222,22 +216,19 @@ export default function Recibos() {
   ========================= */
   const [rows, setRows] = useState([]);
 
-  const [loadingRows, setLoadingRows] = useState(false); // carga principal (primer 100)
-  const [loadingMore, setLoadingMore] = useState(false); // append
-  const [loadingAll, setLoadingAll] = useState(false); // cargar todos
+  const [loadingRows, setLoadingRows] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingAll, setLoadingAll] = useState(false);
 
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
-  // filtros
   const [fPeriodo, setFPeriodo] = useState(""); // MM-YYYY
   const [q, setQ] = useState("");
 
-  // paginado (si el backend dice que hay más)
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(null);
 
-  // modales
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -246,6 +237,13 @@ export default function Recibos() {
   const [openPagar, setOpenPagar] = useState(false);
   const [pagarCliente, setPagarCliente] = useState(null);
   const [pagarDeudas, setPagarDeudas] = useState([]);
+  const [loadingClienteDeudas, setLoadingClienteDeudas] = useState(false);
+
+  // ✅ ver comprobante (SERVER URL REAL, NO blob)
+  const [openVer, setOpenVer] = useState(false);
+  const [verUrl, setVerUrl] = useState("");
+  const [verMime, setVerMime] = useState("");
+  const [verTitle, setVerTitle] = useState("Comprobante");
 
   // toast
   const [toast, setToast] = useState(null);
@@ -254,20 +252,12 @@ export default function Recibos() {
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // cache por periodoAPI|q  -> { rows, hasMore, nextOffset }
   const cacheRef = useRef(new Map());
-
-  // ✅ ignorar respuestas viejas
   const reqIdRef = useRef(0);
 
-  // ✅ Debounce búsqueda
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
-
-  // ✅ FIX: bloquea "No hay registros" durante transiciones (evita flash)
   const [uiPending, setUiPending] = useState(false);
-
-  // ✅ FIX: evita doble carga inicial (setFPeriodo del init dispara el debounce)
   const didInitRef = useRef(false);
 
   useEffect(() => {
@@ -300,19 +290,16 @@ export default function Recibos() {
       return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(
-        `Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`
-      );
+      throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
     }
   }, []);
 
   const apiGet = useCallback(
     async (url) => {
-      const res = await fetch(url, {
-        method: "GET",
-        headers: buildHeadersGET(),
-      });
-      return await parseJsonOrThrow(res);
+      const res = await fetch(url, { method: "GET", headers: buildHeadersGET() });
+      const data = await parseJsonOrThrow(res);
+      if (data?.exito === false) throw new Error(data?.mensaje || "Operación fallida.");
+      return data;
     },
     [buildHeadersGET, parseJsonOrThrow]
   );
@@ -324,7 +311,9 @@ export default function Recibos() {
         headers: buildHeaders(),
         body: JSON.stringify(payload ?? {}),
       });
-      return await parseJsonOrThrow(res);
+      const data = await parseJsonOrThrow(res);
+      if (data?.exito === false) throw new Error(data?.mensaje || "Operación fallida.");
+      return data;
     },
     [buildHeaders, parseJsonOrThrow]
   );
@@ -338,10 +327,47 @@ export default function Recibos() {
   }, []);
 
   /* =========================
-     ✅ LOAD ROWS
-     - Trae MÁX 100 en la primera carga
-     - Skeleton SIN DELAY (no parpadea)
-     - Evita "doble carga" por debounce inicial con didInitRef/skipSearchRef
+     ✅ VER COMPROBANTE (SIN BLOB)
+     - iframe no puede mandar headers => usamos ?session_key=
+  ========================= */
+  const openVerComprobante = useCallback(
+    async (row) => {
+      const idComp = Number(row?.id_comprobante || 0);
+      if (!idComp) {
+        showToast("error", "Este recibo no tiene comprobante asociado.", 2800);
+        return;
+      }
+
+      const { sessionKey } = getAuthInfo();
+      if (!sessionKey) {
+        showToast("error", "Sesión inválida (no hay X-Session).", 3200);
+        return;
+      }
+
+      const sp = new URLSearchParams();
+      sp.set("action", "comprobantes_descargar");
+      sp.set("id_comprobante", String(idComp));
+      sp.set("session_key", sessionKey); // ✅ para iframe/nueva pestaña (sin headers)
+
+      const serverUrl = `${API}?${sp.toString()}`;
+
+      setVerTitle(`Comprobante · ${safeText(row?.cliente)}`);
+      setVerMime(String(row?.comprobante_mime || row?.mime || "")); // opcional si lo traés del backend
+      setVerUrl(serverUrl);
+      setOpenVer(true);
+    },
+    [API, showToast]
+  );
+
+  const closeVerComprobante = useCallback(() => {
+    setOpenVer(false);
+    setVerUrl("");
+    setVerMime("");
+    setVerTitle("Comprobante");
+  }, []);
+
+  /* =========================
+     ✅ LOAD ROWS (lista principal)
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -371,25 +397,15 @@ export default function Recibos() {
       const myReqId = ++reqIdRef.current;
       const start = Date.now();
 
-      // ✅ FIX: evita flash de empty ANTES de loading
       if (!append) setUiPending(true);
 
-      // ✅ Skeleton fijo: sin delay
-      if (!append) {
-        setLoadingRows(true);
-      } else {
-        setLoadingMore(true);
-      }
+      if (!append) setLoadingRows(true);
+      else setLoadingMore(true);
+
       setError("");
 
       try {
-        // cache solo para carga principal
-        if (
-          !append &&
-          offset === 0 &&
-          cacheRef.current.has(cacheKey) &&
-          !FORCE_SHOW_LOADER_DEV
-        ) {
+        if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
           const cached = cacheRef.current.get(cacheKey);
           setRows(cached?.rows || []);
           setHasMore(!!cached?.hasMore);
@@ -407,12 +423,10 @@ export default function Recibos() {
         sp.set("action", "recibos_listar");
         sp.set("periodo", periodoAPI);
         if (qKey) sp.set("q", qKey);
-        sp.set("limit", String(PAGE_SIZE)); // ✅ 100
+        sp.set("limit", String(PAGE_SIZE));
         sp.set("offset", String(offset));
 
         const data = await apiGet(`${API}?${sp.toString()}`);
-        if (!data?.exito)
-          throw new Error(data?.mensaje || "No se pudieron cargar recibos.");
 
         if (myReqId !== reqIdRef.current) {
           if (append) setLoadingMore(false);
@@ -421,16 +435,11 @@ export default function Recibos() {
         }
 
         const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
-        const movsNorm = movs.map((r) => ({
-          ...r,
-          periodo: periodoToMMYYYY(r?.periodo),
-        }));
+        const movsNorm = movs.map((r) => ({ ...r, periodo: periodoToMMYYYY(r?.periodo) }));
 
         const newHasMore = !!data.has_more;
         const newNextOffset =
-          data.next_offset !== undefined && data.next_offset !== null
-            ? Number(data.next_offset)
-            : null;
+          data.next_offset !== undefined && data.next_offset !== null ? Number(data.next_offset) : null;
 
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
@@ -441,9 +450,7 @@ export default function Recibos() {
               setRows((prev) => {
                 const base = Array.isArray(prev) ? prev : [];
                 const seen = new Set(base.map((x) => String(x?.id_movimiento)));
-                const add = movsNorm.filter(
-                  (x) => !seen.has(String(x?.id_movimiento))
-                );
+                const add = movsNorm.filter((x) => !seen.has(String(x?.id_movimiento)));
                 return [...base, ...add];
               });
             } else {
@@ -466,11 +473,7 @@ export default function Recibos() {
 
             if (myReqId === reqIdRef.current) setUiPending(false);
 
-            resolve({
-              hasMore: newHasMore,
-              nextOffset: newNextOffset,
-              received: movsNorm.length,
-            });
+            resolve({ hasMore: newHasMore, nextOffset: newNextOffset, received: movsNorm.length });
           };
 
           if (remaining > 0) setTimeout(apply, remaining);
@@ -504,8 +507,7 @@ export default function Recibos() {
   );
 
   /* =========================
-     ✅ INIT: listas + primera página (100)
-     ✅ FIX: evita doble load (skipSearchRef + didInitRef)
+     ✅ INIT
   ========================= */
   useEffect(() => {
     let alive = true;
@@ -517,17 +519,13 @@ export default function Recibos() {
 
       if (!alive) return;
 
-      const periodos = Array.isArray(listasCtx?.periodos)
-        ? listasCtx.periodos.map(periodoToMMYYYY)
-        : [];
+      const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos.map(periodoToMMYYYY) : [];
       const perDefault = periodos[0] || "";
 
       if (perDefault) {
-        // ✅ bloquea el debounce por este set inicial
         skipSearchRef.current = true;
-
         setFPeriodo((prev) => prev || perDefault);
-        await loadRows({ periodo: perDefault, q: "", offset: 0, append: false }); // ✅ 100
+        await loadRows({ periodo: perDefault, q: "", offset: 0, append: false });
       } else {
         setRows([]);
         setHasMore(false);
@@ -536,7 +534,6 @@ export default function Recibos() {
         setUiPending(false);
       }
 
-      // ✅ ahora sí habilitamos el debounce normal
       if (alive) didInitRef.current = true;
     })();
 
@@ -548,9 +545,7 @@ export default function Recibos() {
 
   // ✅ sync período si desaparece
   useEffect(() => {
-    const periodos = Array.isArray(listasCtx?.periodos)
-      ? listasCtx.periodos.map(periodoToMMYYYY)
-      : [];
+    const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos.map(periodoToMMYYYY) : [];
 
     if (periodos.length === 0) {
       if (fPeriodo !== "") {
@@ -571,11 +566,9 @@ export default function Recibos() {
     }
   }, [listasCtx?.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
 
-  // ✅ debounce búsqueda (reinicia paginado)
+  // ✅ debounce búsqueda
   useEffect(() => {
     if (!fPeriodo) return;
-
-    // ✅ FIX: no dispares debounce hasta que termine el init real
     if (!didInitRef.current) return;
 
     if (skipSearchRef.current) {
@@ -585,12 +578,10 @@ export default function Recibos() {
 
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
-    // ✅ evita “flash” mientras espera debounce + fetch
     setUiPending(true);
 
     searchTimerRef.current = setTimeout(async () => {
       await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
-      // loadRows apaga uiPending si es la request vigente
     }, 250);
 
     return () => {
@@ -599,7 +590,7 @@ export default function Recibos() {
   }, [q, fPeriodo, loadRows]);
 
   /* =========================
-     ✅ visibles (backend ya filtra q)
+     visibles
   ========================= */
   const filteredRows = useMemo(() => {
     const fPer = periodoToMMYYYY(fPeriodo);
@@ -607,7 +598,6 @@ export default function Recibos() {
 
     return (Array.isArray(rows) ? rows : []).filter((r) => {
       const perRow = periodoToMMYYYY(r?.periodo);
-      // ✅ si el backend NO manda periodo por fila, NO filtramos ese registro afuera
       if (!perRow) return true;
       return String(perRow) === String(fPer);
     });
@@ -628,13 +618,7 @@ export default function Recibos() {
   ========================= */
   const columns = useMemo(() => {
     return [
-      {
-        key: "fecha",
-        label: "FECHA",
-        align: "center",
-        fr: 0.9,
-        render: (r) => safeText(formatFechaDMY(r.fecha)),
-      },
+      { key: "fecha", label: "FECHA", align: "center", fr: 0.9, render: (r) => safeText(formatFechaDMY(r.fecha)) },
       {
         key: "detalle",
         label: "DESCRIPCION",
@@ -643,13 +627,7 @@ export default function Recibos() {
         align: "left",
         render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
       },
-      {
-        key: "cliente",
-        label: "CLIENTE",
-        fr: 1.7,
-        align: "center",
-        render: (r) => safeText(r.cliente),
-      },
+      { key: "cliente", label: "CLIENTE", fr: 1.7, align: "center", render: (r) => safeText(r.cliente) },
       {
         key: "estado",
         label: "ESTADO",
@@ -664,13 +642,7 @@ export default function Recibos() {
           );
         },
       },
-      {
-        key: "monto",
-        label: "MONTO",
-        fr: 1.1,
-        align: "center",
-        render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
-      },
+      { key: "monto", label: "MONTO", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
       { key: "acciones", label: "ACCIONES", fr: 0.9, align: "center", render: () => null },
     ];
   }, []);
@@ -687,34 +659,66 @@ export default function Recibos() {
   }, [columns]);
 
   /* =========================
-     ✅ Pagar (modal)
+     ✅ FIX IMPORTANTE:
+     Traer registros del cliente con fallback de action
   ========================= */
-  const getRecibosCliente = useCallback(
-    (rowCliente) => {
+  const fetchRecibosCliente = useCallback(
+    async (rowCliente) => {
       const idCli = Number(rowCliente?.id_cliente || 0);
-      const nombreCli = String(rowCliente?.cliente || "").trim();
+      if (!idCli) throw new Error("El registro no tiene id_cliente.");
 
-      return (rows || []).filter((r) => {
-        const rid = Number(r?.id_cliente || 0);
-        const rnom = String(r?.cliente || "").trim();
+      const ACTIONS = [
+        "recibos_cliente_listar",
+        "recibos_listar_cliente",
+        "recibos_cliente",
+        "recibos_listar_por_cliente",
+      ];
 
-        const same =
-          (idCli > 0 && rid === idCli) ||
-          (!idCli && nombreCli && rnom.toLowerCase() === nombreCli.toLowerCase());
-        return same;
-      });
+      let lastErr = null;
+
+      for (const action of ACTIONS) {
+        try {
+          const sp = new URLSearchParams();
+          sp.set("action", action);
+          sp.set("id_cliente", String(idCli));
+
+          const data = await apiGet(`${API}?${sp.toString()}`);
+          const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
+          return movs;
+        } catch (e) {
+          const msg = e?.message || "";
+          if (isAccionNoValidaErrorMessage(msg)) {
+            lastErr = e;
+            continue;
+          }
+          throw e;
+        }
+      }
+
+      throw new Error(
+        `Tu backend no tiene ninguna action de listar recibos por cliente.\nProbé: ${ACTIONS.join(", ")}.\n` +
+          `Solución: agregá esa action en api.php o decime cuál nombre usaste.`
+      );
     },
-    [rows]
+    [API, apiGet]
   );
 
   const openPagarModal = useCallback(
-    (r) => {
-      const deudas = getRecibosCliente(r);
-      setPagarCliente(r);
-      setPagarDeudas(deudas);
-      setOpenPagar(true);
+    async (r) => {
+      try {
+        setLoadingClienteDeudas(true);
+        const deudas = await fetchRecibosCliente(r);
+
+        setPagarCliente(r);
+        setPagarDeudas(deudas);
+        setOpenPagar(true);
+      } catch (e) {
+        showToast("error", e?.message || "No se pudieron cargar los registros del cliente.", 5200);
+      } finally {
+        setLoadingClienteDeudas(false);
+      }
     },
-    [getRecibosCliente]
+    [fetchRecibosCliente, showToast]
   );
 
   /* =========================
@@ -728,9 +732,7 @@ export default function Recibos() {
         const ids =
           payload?.ids_movimiento ??
           payload?.ids_movimientos ??
-          payload?.seleccion
-            ?.map((x) => Number(x?.id_movimiento || 0))
-            .filter(Boolean) ??
+          payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ??
           [];
 
         const { idUsuario } = getAuthInfo();
@@ -740,8 +742,6 @@ export default function Recibos() {
           id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
           idUsuario,
         });
-
-        if (!data?.exito) throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
 
         invalidateCacheForPeriodo(fPeriodo);
         await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
@@ -777,8 +777,7 @@ export default function Recibos() {
       sp.set("action", "recibos_eliminar");
       sp.set("id_movimiento", String(id));
 
-      const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
+      await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
 
       setOpenDel(false);
       setSelectedRow(null);
@@ -884,10 +883,8 @@ export default function Recibos() {
     }
   }, [hasMore, loadingMore, loadingRows, loadingListsCtx, nextOffset, fPeriodo, q, loadRows, showToast]);
 
-  // ✅ UX: difumina tabla solo en carga principal
   const softLoading = loadingRows;
 
-  // ✅ skeleton config por columna
   const skelWidths = useMemo(() => {
     return {
       fecha: ["46%", "38%", "42%", "34%"],
@@ -947,7 +944,6 @@ export default function Recibos() {
     );
   };
 
-  // ✅ listas a pasar a modales
   const lists =
     listasCtx || {
       periodos: [],
@@ -961,11 +957,8 @@ export default function Recibos() {
       tipos_movimiento: [],
     };
 
-  /* =========================
-     ✅ FIX UI: evitar “flash” de empty
-  ========================= */
   const periodoUI = periodoToMMYYYY(fPeriodo);
-  const isInit = loadingListsCtx || !periodoUI; // todavía inicializando/período no listo
+  const isInit = loadingListsCtx || !periodoUI;
 
   const showEmpty =
     !isInit &&
@@ -978,12 +971,7 @@ export default function Recibos() {
   return (
     <div className="mov-page">
       {toast && (
-        <Toast
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={closeToast}
-        />
+        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
       )}
 
       {errorListsCtx && (
@@ -1004,8 +992,7 @@ export default function Recibos() {
             <div>
               <div className="mov-card__title">Movimientos · Recibos</div>
               <div className="mov-card__hint">
-                Total <b>{stats.total}</b> · Pendientes <b>{stats.pendientes}</b> · Pagados{" "}
-                <b>{stats.pagados}</b>
+                Total <b>{stats.total}</b> · Pendientes <b>{stats.pendientes}</b> · Pagados <b>{stats.pagados}</b>
                 {" · "}
                 Mostrando <b>{filteredRows.length}</b>
                 {hasMore ? " (hay más)" : ""}
@@ -1023,16 +1010,13 @@ export default function Recibos() {
                   onChange={async (e) => {
                     const ui = periodoToMMYYYY(e.target.value);
 
-                    // ✅ FIX: evita flash antes de que arranque loadRows
                     setUiPending(true);
-
                     setFPeriodo(ui);
                     setQ("");
 
-                    // ✅ bloquea debounce por este cambio manual
                     skipSearchRef.current = true;
 
-                    await loadRows({ periodo: ui, q: "", offset: 0, append: false }); // ✅ 100
+                    await loadRows({ periodo: ui, q: "", offset: 0, append: false });
                   }}
                   disabled={loadingRows || loadingListsCtx || loadingMore || loadingAll}
                 >
@@ -1143,6 +1127,7 @@ export default function Recibos() {
               <>
                 {filteredRows.map((r) => {
                   const pagado = isReciboPagado(r);
+                  const hasComp = Number(r?.id_comprobante || 0) > 0;
 
                   return (
                     <div
@@ -1161,12 +1146,23 @@ export default function Recibos() {
                               data-label={c.label}
                             >
                               <div className="mov-actionsInline">
+                                {/* ✅ VER COMPROBANTE (SERVER URL REAL) */}
+                                <button
+                                  type="button"
+                                  className={`mov-iconBtn ${!hasComp ? "mov-iconBtn--disabled" : ""}`}
+                                  title={hasComp ? "Ver comprobante" : "Sin comprobante"}
+                                  onClick={() => hasComp && openVerComprobante(r)}
+                                  disabled={!hasComp || loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                </button>
+
                                 <button
                                   type="button"
                                   className="mov-iconBtn"
-                                  title={pagado ? "Ya está pagado" : "Pagar"}
+                                  title="Pagar"
                                   onClick={() => openPagarModal(r)}
-                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || loadingClienteDeudas}
                                 >
                                   <FontAwesomeIcon icon={faMoneyBill1Wave} />
                                 </button>
@@ -1188,13 +1184,7 @@ export default function Recibos() {
                                   type="button"
                                   className="mov-iconBtn mov-iconBtn--danger"
                                   title="Eliminar"
-                                  disabled={
-                                    loadingRows ||
-                                    loadingMore ||
-                                    loadingAll ||
-                                    loadingListsCtx ||
-                                    deletingId === r.id_movimiento
-                                  }
+                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || deletingId === r.id_movimiento}
                                   onClick={() => {
                                     setSelectedRow(r);
                                     setOpenDel(true);
@@ -1231,10 +1221,8 @@ export default function Recibos() {
                   );
                 })}
 
-                {/* ✅ FIX: no mostrar empty durante init/carga/transiciones */}
                 {showEmpty && <div className="mov-emptyRow">No hay recibos para este período.</div>}
 
-                {/* ✅ BOTÓN: CARGAR TODOS */}
                 {!loadingRows && filteredRows.length > 0 && hasMore && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
@@ -1249,7 +1237,6 @@ export default function Recibos() {
                   </div>
                 )}
 
-                {/* ✅ Skeleton “cargar todos” */}
                 {(loadingMore || loadingAll) && (
                   <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">
                     {Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}
@@ -1260,6 +1247,9 @@ export default function Recibos() {
           </div>
         </div>
       </section>
+
+      {/* ✅ MODAL VER COMPROBANTE */}
+      <ModalVerComprobante open={openVer} url={verUrl} mime={verMime} title={verTitle} onClose={closeVerComprobante} />
 
       {/* PAGAR */}
       <ModalPagarRecibos
@@ -1294,8 +1284,6 @@ export default function Recibos() {
             ...payloadFinal,
             idUsuario,
           });
-
-          if (!data?.exito) throw new Error(data?.mensaje || "No se pudo actualizar.");
 
           invalidateCacheForPeriodo(fPeriodo);
           await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });

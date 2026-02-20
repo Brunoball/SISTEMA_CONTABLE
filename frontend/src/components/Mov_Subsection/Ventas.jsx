@@ -1158,11 +1158,15 @@ export default function Ventas() {
             <button
               type="button"
               className="mov-btn mov-btn--primary"
-              onClick={() => setOpenAdd(true)}
-              disabled={!fPeriodo || loadingAll || loadingListsCtx}
-              title={!fPeriodo ? "Primero seleccioná un período" : "Crear nueva venta"}
+              onClick={() => {
+                // SIEMPRE habilitado
+                // si querés avisar:
+                if (loadingListsCtx) showToast?.("cargando", "Cargando listas… podés ir completando igual.", 2400);
+                setOpenAdd(true);
+              }}
+              title="Crear nuevo movimiento"
             >
-              <FontAwesomeIcon icon={faPlus} /> Nueva Venta
+              <FontAwesomeIcon icon={faPlus} /> Nuevo Movimiento
             </button>
           </div>
         </div>

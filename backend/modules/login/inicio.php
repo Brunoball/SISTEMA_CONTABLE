@@ -66,8 +66,14 @@ try {
     fail('Faltan datos.');
   }
 
+  // ✅ FIX HORARIO: TZ consistente (PHP)
+  @date_default_timezone_set('America/Argentina/Cordoba');
+
   // 1) Conexión MASTER
   require_once __DIR__ . '/../../config/db_master.php'; // $pdo_master
+
+  // ✅ FIX HORARIO: TZ consistente (MySQL por conexión)
+  try { $pdo_master->exec("SET time_zone = '-03:00'"); } catch (Throwable $e) {}
 
   // 2) Buscar usuario master + tenant
   $sql = "
@@ -202,17 +208,18 @@ try {
   // ✅ 6) Crear sesión en MASTER (30 minutos PROD)
   $sessionKey = bin2hex(random_bytes(32)); // 64 chars
 
+  // ✅ FIX HORARIO: que MySQL ponga creado_en/ultimo_uso en hora AR
+  // (y expira_en también sale de NOW(), así no hay desfase)
   $ttlMinutes = 30; // ✅ PROD: 30 minutos
-  $expira = (new DateTimeImmutable())->modify("+{$ttlMinutes} minutes")->format("Y-m-d H:i:s");
 
   $pdo_master->prepare("
-    INSERT INTO sesiones (session_key, idUsuarioMaster, idTenant, expira_en, ip, user_agent, activo)
-    VALUES (:k, :u, :t, :exp, :ip, :ua, 1)
+    INSERT INTO sesiones (session_key, idUsuarioMaster, idTenant, creado_en, ultimo_uso, expira_en, ip, user_agent, activo)
+    VALUES (:k, :u, :t, NOW(), NOW(), DATE_ADD(NOW(), INTERVAL :ttl MINUTE), :ip, :ua, 1)
   ")->execute([
     ':k' => $sessionKey,
     ':u' => (int)$u['idUsuarioMaster'],
     ':t' => (int)$u['idTenant'],
-    ':exp' => $expira,
+    ':ttl' => $ttlMinutes,
     ':ip' => $ip,
     ':ua' => $ua,
   ]);

@@ -5,7 +5,6 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-// ✅ CORS (IMPORTANTE: permitir X-Session)
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Session');
@@ -15,7 +14,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
   exit;
 }
 
-// ✅ EN ESTRUCTURA NUEVA: el $pdo lo crea routes/api.php (tenant_resolver)
 global $pdo;
 
 require_once __DIR__ . '/../utils/auditoria.php';
@@ -61,7 +59,7 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
 }
 
 /* =========================================================
-   idUsuario (token/body) - queda por compat
+   idUsuario (token/body) - compat
 ========================================================= */
 function get_bearer_token(): string {
   $h = '';
@@ -165,35 +163,43 @@ function item_payload_from_src(array $src, float $monto_total, int $id_detalle):
 }
 
 /* =========================================================
-   LISTAR RECIBOS (GET) ✅ PAGINADO REAL (limit/offset)
-   - Devuelve max 100 por llamada
-   - has_more + next_offset
-   - total_count solo en offset=0
+   ✅ BASE FILTER RECIBOS:
+========================================================= */
+function recibos_base_filters(array &$where, array &$params): void {
+  $where[] = "m.id_tipo_operacion = :op_venta";
+  $params[':op_venta'] = 1;
+
+  $where[] = "m.id_tipo_venta = :tv_ctacte";
+  $params[':tv_ctacte'] = 2;
+}
+
+/* =========================================================
+   LISTAR RECIBOS (GET)
 ========================================================= */
 function recibos_listar(PDO $pdo): void
 {
   $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
   $q       = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
 
-  // ✅ paginado
   $limit  = isset($_GET['limit']) ? (int)$_GET['limit'] : 100;
   $offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
 
   if ($limit <= 0) $limit = 100;
-  if ($limit > 100) $limit = 100;   // ✅ clavado a 100
+  if ($limit > 100) $limit = 100;
   if ($offset < 0) $offset = 0;
 
-  $limitPlus = $limit + 1; // ✅ para detectar has_more sin COUNT siempre
+  $limitPlus = $limit + 1;
 
   $where = [];
   $params = [];
+
+  recibos_base_filters($where, $params);
 
   if ($periodo !== '') {
     $where[] = "m.periodo = :periodo";
     $params[':periodo'] = $periodo;
   }
 
-  // FROM/JOIN base (igual a tu query original, pero paginada)
   $from = "
     FROM movimientos m
       LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
@@ -213,7 +219,6 @@ function recibos_listar(PDO $pdo): void
           GROUP BY id_movimiento
         ) x ON x.id_movimiento = mi1.id_movimiento AND x.min_id_item = mi1.id_item
       ) fi ON fi.id_movimiento = m.id_movimiento
-
       LEFT JOIN detalles di ON di.id_detalle = fi.id_detalle
 
       LEFT JOIN (
@@ -221,6 +226,21 @@ function recibos_listar(PDO $pdo): void
         FROM movimientos_items
         GROUP BY id_movimiento
       ) it ON it.id_movimiento = m.id_movimiento
+
+      /* ✅ MODIFICADO: trae id_comprobante del cobro */
+      LEFT JOIN (
+        SELECT
+          id_movimiento,
+          SUM(monto) AS cobrado_total,
+          MAX(fecha_cobro) AS ultimo_cobro,
+          MAX(id_comprobante) AS ultimo_id_comprobante
+        FROM cobros
+        GROUP BY id_movimiento
+      ) cb ON cb.id_movimiento = m.id_movimiento
+
+      /* ✅ MODIFICADO: url del archivo */
+      LEFT JOIN comprobantes_archivos ca
+        ON ca.id_comprobante = cb.ultimo_id_comprobante
   ";
 
   if ($q !== '') {
@@ -247,13 +267,13 @@ function recibos_listar(PDO $pdo): void
 
   $whereSql = (!empty($where)) ? (" WHERE " . implode(" AND ", $where)) : "";
 
-  // ✅ Query paginada (trae 101 para saber si hay más)
   $sql = "
     SELECT
       m.id_movimiento,
       m.fecha,
       m.periodo,
 
+      m.id_tipo_operacion,
       m.id_clasificacion,
       m.id_tipo_venta,
       m.id_cuenta_corriente,
@@ -281,6 +301,13 @@ function recibos_listar(PDO $pdo): void
 
       COALESCE(di.nombre, d.nombre, '') AS detalle,
       COALESCE(mp.nombre,'') AS medio_pago_nombre,
+      COALESCE(cb.cobrado_total, 0) AS cobrado_total,
+      COALESCE(cb.ultimo_cobro, '') AS ultimo_cobro,
+
+      /* ✅ NUEVO */
+      COALESCE(cb.ultimo_id_comprobante, 0) AS id_comprobante,
+      COALESCE(ca.archivo_url, '') AS comprobante_url,
+
       m.created_at
     $from
     $whereSql
@@ -289,24 +316,18 @@ function recibos_listar(PDO $pdo): void
   ";
 
   $stmt = $pdo->prepare($sql);
-
-  // bind params normales
   foreach ($params as $k => $v) $stmt->bindValue($k, $v);
-
-  // bind paginado como INT sí o sí
   $stmt->bindValue(':lim', (int)$limitPlus, PDO::PARAM_INT);
   $stmt->bindValue(':off', (int)$offset, PDO::PARAM_INT);
 
   $stmt->execute();
   $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-  // ✅ has_more si vinieron más de 100
   $hasMore = count($rows) > $limit;
-  if ($hasMore) array_pop($rows); // dejamos exactamente 100
+  if ($hasMore) array_pop($rows);
 
   $nextOffset = $hasMore ? ($offset + $limit) : null;
 
-  // ✅ total_count SOLO en la primera página (para UI “total real”)
   $totalCount = null;
   if ($offset === 0) {
     $sqlCount = "
@@ -329,11 +350,18 @@ function recibos_listar(PDO $pdo): void
     $tipoVentaTxt = trim((string)($r['tipo_venta'] ?? ''));
     $medioPagoTxt = trim((string)($r['medio_pago_nombre'] ?? ''));
 
+    $montoFinal = (float)($r['monto_total_final'] ?? 0);
+    $cobrado = (float)($r['cobrado_total'] ?? 0);
+
+    // ✅ VERDAD: pagado SOLO si hay cobros
+    $pagado = ($cobrado > 0.00001);
+
     $data[] = [
       'id_movimiento' => (int)$r['id_movimiento'],
       'fecha' => (string)$r['fecha'],
       'periodo' => (string)$r['periodo'],
 
+      'id_tipo_operacion' => (int)$r['id_tipo_operacion'],
       'id_clasificacion' => $r['id_clasificacion'] === null ? null : (int)$r['id_clasificacion'],
       'id_tipo_venta' => $r['id_tipo_venta'] === null ? null : (int)$r['id_tipo_venta'],
       'id_cuenta_corriente' => $r['id_cuenta_corriente'] === null ? null : (int)$r['id_cuenta_corriente'],
@@ -345,7 +373,15 @@ function recibos_listar(PDO $pdo): void
       'medio_pago_nombre' => $medioPagoTxt,
       'id_medio_pago' => $r['id_medio_pago'] === null ? null : (int)$r['id_medio_pago'],
 
-      'monto_total' => (float)$r['monto_total_final'],
+      'monto_total' => $montoFinal,
+
+      'cobrado_total' => $cobrado,
+      'ultimo_cobro' => (string)($r['ultimo_cobro'] ?? ''),
+      'pagado' => $pagado,
+
+      /* ✅ NUEVO */
+      'id_comprobante' => (int)($r['id_comprobante'] ?? 0),
+      'comprobante_url' => (string)($r['comprobante_url'] ?? ''),
 
       'cantidad'  => $r['item_cantidad'] === null ? null : (float)$r['item_cantidad'],
       'precio'    => $r['item_precio'] === null ? null : (float)$r['item_precio'],
@@ -370,12 +406,141 @@ function recibos_listar(PDO $pdo): void
     'next_offset' => $nextOffset,
     'limit' => $limit,
     'offset' => $offset,
-    'total_count' => $totalCount, // null si offset>0
+    'total_count' => $totalCount,
+  ]);
+}
+
+/* =========================================================
+   LISTAR POR CLIENTE (GET)
+========================================================= */
+function recibos_cliente_listar(PDO $pdo): void
+{
+  $id_cliente = isset($_GET['id_cliente']) ? (int)$_GET['id_cliente'] : 0;
+  if ($id_cliente <= 0) fail('Falta id_cliente.');
+
+  $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
+  $limit   = isset($_GET['limit']) ? (int)$_GET['limit'] : 500;
+  if ($limit <= 0) $limit = 500;
+  if ($limit > 2000) $limit = 2000;
+
+  $where = [];
+  $params = [];
+
+  recibos_base_filters($where, $params);
+
+  $where[] = "m.id_cliente = :id_cliente";
+  $params[':id_cliente'] = $id_cliente;
+
+  if ($periodo !== '' && is_valid_periodo($periodo)) {
+    $where[] = "m.periodo = :periodo";
+    $params[':periodo'] = $periodo;
+  }
+
+  $whereSql = " WHERE " . implode(" AND ", $where);
+
+  $sql = "
+    SELECT
+      m.id_movimiento,
+      m.fecha,
+      m.periodo,
+      m.id_tipo_operacion,
+      m.id_tipo_venta,
+      m.id_cliente,
+      m.id_medio_pago,
+      COALESCE(it.total_sum, m.monto_total, 0) AS monto_total_final,
+      COALESCE(cl.nombre,'') AS cliente,
+      COALESCE(di.nombre, d.nombre, '') AS detalle,
+      COALESCE(cb.cobrado_total, 0) AS cobrado_total,
+      COALESCE(mp.nombre,'') AS medio_pago_nombre,
+
+      /* ✅ NUEVO */
+      COALESCE(cb.ultimo_id_comprobante, 0) AS id_comprobante,
+      COALESCE(ca.archivo_url, '') AS comprobante_url
+
+    FROM movimientos m
+      LEFT JOIN clientes cl ON cl.id_cliente = m.id_cliente
+      LEFT JOIN detalles d  ON d.id_detalle = m.id_detalle
+
+      LEFT JOIN (
+        SELECT mi1.*
+        FROM movimientos_items mi1
+        INNER JOIN (
+          SELECT id_movimiento, MIN(id_item) AS min_id_item
+          FROM movimientos_items
+          GROUP BY id_movimiento
+        ) x ON x.id_movimiento = mi1.id_movimiento AND x.min_id_item = mi1.id_item
+      ) fi ON fi.id_movimiento = m.id_movimiento
+      LEFT JOIN detalles di ON di.id_detalle = fi.id_detalle
+
+      LEFT JOIN (
+        SELECT id_movimiento, SUM(total) AS total_sum
+        FROM movimientos_items
+        GROUP BY id_movimiento
+      ) it ON it.id_movimiento = m.id_movimiento
+
+      /* ✅ MODIFICADO */
+      LEFT JOIN (
+        SELECT
+          id_movimiento,
+          SUM(monto) AS cobrado_total,
+          MAX(id_comprobante) AS ultimo_id_comprobante
+        FROM cobros
+        GROUP BY id_movimiento
+      ) cb ON cb.id_movimiento = m.id_movimiento
+
+      LEFT JOIN comprobantes_archivos ca
+        ON ca.id_comprobante = cb.ultimo_id_comprobante
+
+      LEFT JOIN medios_pago mp ON mp.id_medio_pago = m.id_medio_pago
+    $whereSql
+    ORDER BY m.fecha DESC, m.id_movimiento DESC
+    LIMIT :lim
+  ";
+
+  $st = $pdo->prepare($sql);
+  foreach ($params as $k => $v) $st->bindValue($k, $v);
+  $st->bindValue(':lim', (int)$limit, PDO::PARAM_INT);
+  $st->execute();
+
+  $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  $out = [];
+
+  foreach ($rows as $r) {
+    $cobrado = (float)($r['cobrado_total'] ?? 0);
+
+    // ✅ VERDAD: pagado SOLO si hay cobros
+    $pagado = ($cobrado > 0.00001);
+
+    $out[] = [
+      'id_movimiento' => (int)$r['id_movimiento'],
+      'fecha' => (string)$r['fecha'],
+      'periodo' => (string)$r['periodo'],
+      'id_tipo_operacion' => (int)$r['id_tipo_operacion'],
+      'id_tipo_venta' => (int)$r['id_tipo_venta'],
+      'id_cliente' => (int)$r['id_cliente'],
+      'cliente' => (string)($r['cliente'] ?? ''),
+      'detalle' => (string)($r['detalle'] ?? ''),
+      'monto_total' => (float)($r['monto_total_final'] ?? 0),
+      'id_medio_pago' => $r['id_medio_pago'] === null ? null : (int)$r['id_medio_pago'],
+      'medio_pago_nombre' => (string)($r['medio_pago_nombre'] ?? ''),
+      'cobrado_total' => $cobrado,
+      'pagado' => $pagado,
+
+      /* ✅ NUEVO */
+      'id_comprobante' => (int)($r['id_comprobante'] ?? 0),
+      'comprobante_url' => (string)($r['comprobante_url'] ?? ''),
+    ];
+  }
+
+  ok([
+    'movimientos' => $out,
+    'count' => count($out),
   ]);
 }
 
 /* =========================================================
    ACTUALIZAR RECIBO (POST)
+   ✅ NO permite marcar pago editando (id_medio_pago bloqueado)
 ========================================================= */
 function recibos_actualizar(PDO $pdo): void
 {
@@ -393,6 +558,10 @@ function recibos_actualizar(PDO $pdo): void
   $before = $beforeSt->fetch(PDO::FETCH_ASSOC);
   if (!$before) fail('El movimiento no existe: ' . $id_movimiento);
 
+  if ((int)($before['id_tipo_operacion'] ?? 0) !== 1 || (int)($before['id_tipo_venta'] ?? 0) !== 2) {
+    fail('Este movimiento no es un recibo (VENTA + CUENTA CORRIENTE).');
+  }
+
   $fecha = trim((string)($src['fecha'] ?? ''));
   if ($fecha === '' || !is_valid_fecha($fecha)) {
     $fecha = !empty($before['fecha']) ? (string)$before['fecha'] : today_iso();
@@ -405,7 +574,9 @@ function recibos_actualizar(PDO $pdo): void
 
   $id_clasificacion = array_key_exists('id_clasificacion', $src) ? n_int($src['id_clasificacion']) : n_int($before['id_clasificacion'] ?? null);
   $id_tipo_venta    = array_key_exists('id_tipo_venta', $src) ? n_int($src['id_tipo_venta']) : n_int($before['id_tipo_venta'] ?? null);
-  $id_medio_pago    = array_key_exists('id_medio_pago', $src) ? n_int($src['id_medio_pago']) : n_int($before['id_medio_pago'] ?? null);
+
+  // ✅ BLOQUEO: no se puede tocar id_medio_pago desde editar
+  $id_medio_pago = n_int($before['id_medio_pago'] ?? null);
 
   $id_cuenta_corriente = array_key_exists('id_cuenta_corriente', $src) ? n_int($src['id_cuenta_corriente']) : n_int($before['id_cuenta_corriente'] ?? null);
   $id_cliente          = array_key_exists('id_cliente', $src) ? n_int($src['id_cliente']) : n_int($before['id_cliente'] ?? null);
@@ -545,6 +716,12 @@ function recibos_eliminar(PDO $pdo): void
   $beforeSt->execute([':id' => $id]);
   $before = $beforeSt->fetch(PDO::FETCH_ASSOC);
 
+  if ($before) {
+    if ((int)($before['id_tipo_operacion'] ?? 0) !== 1 || (int)($before['id_tipo_venta'] ?? 0) !== 2) {
+      fail('Este movimiento no es un recibo (VENTA + CUENTA CORRIENTE).');
+    }
+  }
+
   try {
     $stmt = $pdo->prepare("DELETE FROM movimientos WHERE id_movimiento = :id");
     $stmt->execute([':id' => $id]);
@@ -561,24 +738,8 @@ function recibos_eliminar(PDO $pdo): void
 }
 
 /* =========================================================
-   CONFIRMAR PAGO (POST) ✅ ARREGLADO (SIN HY093)
+   CONFIRMAR PAGO (POST)
 ========================================================= */
-function find_id_tipo_venta_contado(PDO $pdo): ?int {
-  try {
-    $st = $pdo->query("SELECT id_tipo_venta, nombre FROM tipos_venta");
-    $rows = $st ? ($st->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
-    foreach ($rows as $r) {
-      $nom = strtolower(trim((string)($r['nombre'] ?? '')));
-      $nom = preg_replace('/\s+/', ' ', $nom);
-      if ($nom === 'contado' || str_contains($nom, 'contado')) {
-        $id = (int)($r['id_tipo_venta'] ?? 0);
-        return $id > 0 ? $id : null;
-      }
-    }
-  } catch (Throwable $e) {}
-  return null;
-}
-
 function recibos_confirmar_pago(PDO $pdo): void
 {
   if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
@@ -587,7 +748,6 @@ function recibos_confirmar_pago(PDO $pdo): void
   $src = !empty($body) ? $body : ($_POST ?? []);
   $idUsuario = get_id_usuario_from_request($src);
 
-  // ids_movimiento[]
   $ids = $src['ids_movimiento'] ?? $src['ids_movimientos'] ?? [];
   if (!is_array($ids)) $ids = [];
 
@@ -599,17 +759,13 @@ function recibos_confirmar_pago(PDO $pdo): void
   $idsOk = array_values(array_unique($idsOk));
   if (!$idsOk) fail('Faltan ids_movimiento para confirmar.');
 
-  // id_medio_pago obligatorio
   $id_medio_pago = n_int($src['id_medio_pago'] ?? null);
   if ($id_medio_pago === null || $id_medio_pago <= 0) fail('Falta id_medio_pago.');
-
-  // tipo_venta CONTADO (si existe)
-  $idTipoContado = find_id_tipo_venta_contado($pdo);
 
   try {
     $pdo->beginTransaction();
 
-    // Validar medio de pago (existe)
+    // validar medio de pago
     $vmp = $pdo->prepare("SELECT 1 FROM medios_pago WHERE id_medio_pago = :id LIMIT 1");
     $vmp->execute([':id' => (int)$id_medio_pago]);
     if ((int)($vmp->fetchColumn() ?: 0) !== 1) {
@@ -617,12 +773,9 @@ function recibos_confirmar_pago(PDO $pdo): void
       fail('id_medio_pago inválido.');
     }
 
-    // ✅ placeholders NOMBRADOS para IN (...)
+    // IN (...)
     $inNamed = [];
-    $params = [
-      ':id_medio_pago' => (int)$id_medio_pago,
-    ];
-
+    $params = [];
     foreach ($idsOk as $i => $id) {
       $ph = ':id' . $i;
       $inNamed[] = $ph;
@@ -630,54 +783,96 @@ function recibos_confirmar_pago(PDO $pdo): void
     }
     $inSql = implode(',', $inNamed);
 
-    // BEFORE para auditoría (opcional)
-    $onlyIdsParams = [];
-    foreach ($inNamed as $ph) $onlyIdsParams[$ph] = $params[$ph];
+    // traer montos (lock)
+    $sqlSel = "
+      SELECT
+        m.id_movimiento,
+        COALESCE(it.total_sum, m.monto_total, 0) AS monto_total_final
+      FROM movimientos m
+      LEFT JOIN (
+        SELECT id_movimiento, SUM(total) AS total_sum
+        FROM movimientos_items
+        GROUP BY id_movimiento
+      ) it ON it.id_movimiento = m.id_movimiento
+      WHERE m.id_movimiento IN ($inSql)
+        AND m.id_tipo_operacion = 1
+        AND m.id_tipo_venta = 2
+      FOR UPDATE
+    ";
+    $stSel = $pdo->prepare($sqlSel);
+    $stSel->execute($params);
+    $movs = $stSel->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    $beforeSt = $pdo->prepare("SELECT * FROM movimientos WHERE id_movimiento IN ($inSql)");
-    $beforeSt->execute($onlyIdsParams);
-    $before = $beforeSt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-    // UPDATE (todo nombrado => NO HY093)
-    if ($idTipoContado) {
-      $params[':id_tipo_venta'] = (int)$idTipoContado;
-
-      $sql = "
-        UPDATE movimientos
-        SET
-          id_medio_pago = :id_medio_pago,
-          id_tipo_venta = :id_tipo_venta
-        WHERE id_movimiento IN ($inSql)
-      ";
-    } else {
-      $sql = "
-        UPDATE movimientos
-        SET
-          id_medio_pago = :id_medio_pago
-        WHERE id_movimiento IN ($inSql)
-      ";
+    if (!$movs) {
+      $pdo->rollBack();
+      fail('No hay movimientos válidos para cobrar (deben ser VENTA + CUENTA CORRIENTE).');
     }
 
-    $st = $pdo->prepare($sql);
-    $st->execute($params);
+    // ✅ INSERT cobros con id_medio_pago
+    $ins = $pdo->prepare("
+      INSERT INTO cobros (id_movimiento, fecha_cobro, monto, id_medio_pago)
+      VALUES (:id_movimiento, :fecha_cobro, :monto, :id_medio_pago)
+    ");
+
+    $hoy = today_iso();
+    $insertados = 0;
+
+    foreach ($movs as $m) {
+      $idMov = (int)($m['id_movimiento'] ?? 0);
+      if ($idMov <= 0) continue;
+
+      $monto = (float)($m['monto_total_final'] ?? 0);
+      if ($monto < 0) $monto = 0;
+
+      $ins->execute([
+        ':id_movimiento' => $idMov,
+        ':fecha_cobro' => $hoy,
+        ':monto' => $monto,
+        ':id_medio_pago' => (int)$id_medio_pago,
+      ]);
+      $insertados++;
+    }
+
+    // ✅ UPDATE movimientos con id_medio_pago (lo tuyo)
+    $upd = $pdo->prepare("
+      UPDATE movimientos
+      SET id_medio_pago = :id_medio_pago
+      WHERE id_movimiento IN ($inSql)
+        AND id_tipo_operacion = 1
+        AND id_tipo_venta = 2
+    ");
+    $updParams = array_merge([':id_medio_pago' => (int)$id_medio_pago], $params);
+    $upd->execute($updParams);
+
+    // ✅ FIX CLAVE: si ya había cobros previos, ponerles id_medio_pago también (evita NULL)
+    $updCobros = $pdo->prepare("
+      UPDATE cobros
+      SET id_medio_pago = :id_medio_pago
+      WHERE id_movimiento IN ($inSql)
+        AND (id_medio_pago IS NULL OR id_medio_pago = 0)
+    ");
+    $updCobros->execute($updParams);
+    $cobrosActualizados = $updCobros->rowCount();
 
     $pdo->commit();
 
     audit_safe($pdo, $idUsuario, 'confirmar_pago', 'recibos', null, [
       'ids_movimiento' => $idsOk,
       'id_medio_pago' => $id_medio_pago,
-      'id_tipo_venta_contado' => $idTipoContado ?: null,
-      'actualizados' => $st->rowCount(),
-      'antes' => $before,
+      'cobros_insertados' => $insertados,
+      'cobros_actualizados' => $cobrosActualizados,
+      'movimientos_actualizados' => $upd->rowCount(),
     ]);
 
     ok([
-      'mensaje' => 'Pago confirmado.',
-      'actualizados' => $st->rowCount(),
+      'mensaje' => 'Pago registrado: cobros + medio de pago OK.',
+      'cobros_insertados' => $insertados,
+      'cobros_actualizados' => $cobrosActualizados,
+      'movimientos_actualizados' => $upd->rowCount(),
       'ids_movimiento' => $idsOk,
       'id_medio_pago' => $id_medio_pago,
-      'id_tipo_venta_contado' => $idTipoContado ?: null,
     ]);
+
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     fail('No se pudo confirmar el pago. ' . $e->getMessage());
@@ -695,6 +890,9 @@ try {
   switch ($action) {
     case 'recibos_listar':
       recibos_listar($pdo);
+      break;
+    case 'recibos_cliente_listar':
+      recibos_cliente_listar($pdo);
       break;
     case 'recibos_actualizar':
       recibos_actualizar($pdo);

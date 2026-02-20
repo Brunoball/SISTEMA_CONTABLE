@@ -1,9 +1,8 @@
 // src/components/Movimientos/modales/ModalPagarOrdenesPago.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import "../../Movimientos/modales/ModalEditarMovimiento.css"; // estética base
-import "./ModalPagarRecibos.css"; // ✅ reutilizamos el mismo CSS para misma estética
-
+import "../../Movimientos/modales/ModalEditarMovimiento.css";
+import "./ModalPagarRecibos.css";
 import BASE_URL from "../../../config/config";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -13,6 +12,8 @@ import {
   faListCheck,
   faMoneyBill1Wave,
   faCircleNotch,
+  faCircleCheck,
+  faClock,
 } from "@fortawesome/free-solid-svg-icons";
 
 /* =========================
@@ -43,39 +44,37 @@ function formatFechaDMY(v) {
   return s;
 }
 
-/* =========================
-   ✅ Dark mode helper
-========================= */
 function isTemaOscuro() {
   return document.documentElement.getAttribute("data-theme") === "oscuro";
 }
 
 /* =========================
-   ✅ Auth helpers (X-Session)
+   Auth helpers (X-Session)
 ========================= */
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
 
   const session =
-    localStorage.getItem("session_key") ||
-    localStorage.getItem("sessionKey") ||
-    localStorage.getItem("x_session") ||
-    localStorage.getItem("X-Session") ||
-    "";
+    (localStorage.getItem("session_key") ||
+      localStorage.getItem("sessionKey") ||
+      localStorage.getItem("x_session") ||
+      localStorage.getItem("X-Session") ||
+      "") + "";
 
-  return { token, session };
+  return { token, session: session.trim() };
 }
 
 function buildAuthHeaders() {
   const { token, session } = getAuthInfo();
   const headers = {};
-
   if (session) headers["X-Session"] = session;
   if (token) headers["Authorization"] = `Bearer ${token}`;
-
   return headers;
 }
 
+/* =========================
+   Normalizadores listas
+========================= */
 function normalizeMediosPago(raw) {
   const root = raw && typeof raw === "object" ? raw : {};
   const src = root.listas && typeof root.listas === "object" ? root.listas : root;
@@ -84,28 +83,61 @@ function normalizeMediosPago(raw) {
     ? src.medios_pago
     : Array.isArray(src.mediosPago)
     ? src.mediosPago
+    : Array.isArray(src.medios)
+    ? src.medios
     : [];
 
   return arr
     .map((x) => ({
-      id: Number(x?.id ?? x?.id_medio_pago ?? 0) || 0,
-      nombre: String(x?.nombre ?? x?.medio_pago ?? "").trim(),
+      id: Number(x?.id ?? x?.id_medio_pago ?? x?.idMedioPago ?? 0) || 0,
+      nombre: String(x?.nombre ?? x?.medio_pago ?? x?.medioPago ?? "").trim(),
     }))
     .filter((x) => x.id > 0 && x.nombre);
+}
+
+function isPagado(r) {
+  return Number(r?.pagado ?? 0) === 1;
+}
+
+/* =========================
+   ✅ Estado pill (MISMO que en OrdenesPago.jsx)
+========================= */
+function EstadoPill({ pagado }) {
+  const ok = !!pagado;
+  return (
+    <span
+      className={["mov-pill", ok ? "mov-pill--ok" : "mov-pill--warn"].join(" ")}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "6px 10px",
+        borderRadius: 999,
+        fontWeight: 800,
+        fontSize: 12,
+        whiteSpace: "nowrap",
+      }}
+      title={ok ? "Pagado (está en cobros)" : "Pendiente (no está en cobros)"}
+    >
+      <FontAwesomeIcon icon={ok ? faCircleCheck : faClock} />
+      {ok ? "PAGADO" : "PENDIENTE"}
+    </span>
+  );
 }
 
 export default function ModalPagarOrdenesPago({
   open,
   onClose,
-  onConfirm, // async ({ proveedor, seleccion, totalSeleccionado, nota, id_medio_pago, medio_pago }) => void
-  onToast, // (tipo,msg,ms)
+  onConfirm,
+  onToast,
   proveedor,
   deudas = [],
+  // ✅ si vienen listas del padre, las usamos (así queda todo “igual” y sin fetch extra)
+  lists = null,
 }) {
   const dialogRef = useRef(null);
   const firstFocusRef = useRef(null);
 
-  // ✅ dark automático leyendo data-theme
   const [dark, setDark] = useState(isTemaOscuro());
   useEffect(() => {
     const obs = new MutationObserver(() => setDark(isTemaOscuro()));
@@ -122,23 +154,31 @@ export default function ModalPagarOrdenesPago({
   const [nota, setNota] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Medios de pago (backend)
   const [mediosPago, setMediosPago] = useState([]);
   const [loadingMedios, setLoadingMedios] = useState(false);
 
-  // ✅ IMPORTANTE: arranca vacío => obliga a elegir
-  const [idMedioPago, setIdMedioPago] = useState(""); // string en UI
+  // ✅ obliga a elegir
+  const [idMedioPago, setIdMedioPago] = useState("");
+
+  const hydrateFromListsIfAny = useCallback(() => {
+    const mp = normalizeMediosPago(lists);
+    if (mp.length) {
+      setMediosPago(mp);
+      setLoadingMedios(false);
+      return true;
+    }
+    return false;
+  }, [lists]);
 
   const fetchMediosPago = useCallback(async () => {
+    // ✅ primero intentamos listas del padre
+    if (hydrateFromListsIfAny()) return;
+
     try {
       setLoadingMedios(true);
 
       const url = `${BASE_URL}/api.php?action=global_obtener_listas`;
-
-      const res = await fetch(url, {
-        method: "GET",
-        headers: buildAuthHeaders(),
-      });
+      const res = await fetch(url, { method: "GET", headers: buildAuthHeaders() });
 
       const text = await res.text();
       if (!text) throw new Error("Respuesta vacía del servidor.");
@@ -153,9 +193,6 @@ export default function ModalPagarOrdenesPago({
 
       const mp = normalizeMediosPago(data);
       setMediosPago(mp);
-
-      // ✅ NO auto-seleccionar el primero (queda en "")
-      // setIdMedioPago(prev => prev || (mp.length ? String(mp[0].id) : ""));
     } catch (e) {
       onToast?.("error", e?.message || "No se pudieron cargar los medios de pago.", 4200);
       setMediosPago([]);
@@ -163,9 +200,8 @@ export default function ModalPagarOrdenesPago({
     } finally {
       setLoadingMedios(false);
     }
-  }, [onToast]);
+  }, [hydrateFromListsIfAny, onToast]);
 
-  // Reset al abrir + cargar medios de pago
   useEffect(() => {
     if (!open) return;
 
@@ -175,13 +211,12 @@ export default function ModalPagarOrdenesPago({
     setLoading(false);
 
     setMediosPago([]);
-    setIdMedioPago(""); // ✅ siempre pedir selección
+    setIdMedioPago("");
     fetchMediosPago();
 
     setTimeout(() => firstFocusRef.current?.focus(), 50);
   }, [open, fetchMediosPago]);
 
-  // Esc
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
@@ -202,6 +237,13 @@ export default function ModalPagarOrdenesPago({
     return arr;
   }, [deudas]);
 
+  const pendientesIds = useMemo(() => {
+    return deudasOrdenadas
+      .filter((r) => !isPagado(r))
+      .map((r) => Number(r?.id_movimiento || 0))
+      .filter(Boolean);
+  }, [deudasOrdenadas]);
+
   const totalSeleccionado = useMemo(() => {
     let sum = 0;
     for (const r of deudasOrdenadas) {
@@ -218,13 +260,17 @@ export default function ModalPagarOrdenesPago({
     if (!id) return;
     if (loading) return;
 
+    const row = deudasOrdenadas.find((x) => Number(x?.id_movimiento || 0) === Number(id));
+    if (!row) return;
+    if (isPagado(row)) return; // ✅ no permitir seleccionar pagadas
+
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
 
-      if (next.size !== deudasOrdenadas.length) setPagaTodo(false);
-      if (next.size === deudasOrdenadas.length && deudasOrdenadas.length > 0) setPagaTodo(true);
+      if (next.size !== pendientesIds.length) setPagaTodo(false);
+      if (next.size === pendientesIds.length && pendientesIds.length > 0) setPagaTodo(true);
 
       return next;
     });
@@ -233,14 +279,12 @@ export default function ModalPagarOrdenesPago({
   const toggleAll = () => {
     if (loading) return;
 
-    const all = deudasOrdenadas.map((r) => Number(r?.id_movimiento || 0)).filter(Boolean);
-
     setSelectedIds((prev) => {
       const next = new Set();
-      const shouldSelectAll = prev.size !== all.length;
+      const shouldSelectAll = prev.size !== pendientesIds.length;
 
       if (shouldSelectAll) {
-        all.forEach((id) => next.add(id));
+        pendientesIds.forEach((id) => next.add(id));
         setPagaTodo(true);
       } else {
         setPagaTodo(false);
@@ -251,11 +295,17 @@ export default function ModalPagarOrdenesPago({
 
   const handleConfirm = async () => {
     if (!deudasOrdenadas.length) {
-      onToast?.("error", "Este proveedor no tiene deudas pendientes.", 2600);
+      onToast?.("error", "Este proveedor no tiene deudas.", 2600);
       return;
     }
-    if (selectedIds.size === 0) {
-      onToast?.("error", "Seleccioná al menos una deuda para pagar.", 2600);
+
+    // ✅ solo pendientes seleccionables
+    const seleccion = deudasOrdenadas.filter(
+      (r) => !isPagado(r) && selectedIds.has(Number(r?.id_movimiento || 0))
+    );
+
+    if (seleccion.length === 0) {
+      onToast?.("error", "Seleccioná al menos una deuda pendiente para pagar.", 2600);
       return;
     }
     if (!idMedioPago) {
@@ -266,8 +316,6 @@ export default function ModalPagarOrdenesPago({
       onToast?.("error", "Falta conectar la acción de confirmación (onConfirm).", 3200);
       return;
     }
-
-    const seleccion = deudasOrdenadas.filter((r) => selectedIds.has(Number(r?.id_movimiento || 0)));
 
     const mp = mediosPago.find((x) => String(x.id) === String(idMedioPago));
     if (!mp) {
@@ -300,31 +348,17 @@ export default function ModalPagarOrdenesPago({
 
   if (!open) return null;
 
-  // ✅ clases dark (igual patrón que ModalPagarRecibos)
-  const modalClass = [
-    "mi-modal__container",
-    "mi-modal__container--mov",
-    "mpr-modal",
-    dark ? "mi-modal--dark" : "",
-  ]
+  const modalClass = ["mi-modal__container", "mi-modal__container--mov", "mpr-modal", dark ? "mi-modal--dark" : ""]
     .join(" ")
     .trim();
 
-  const overlayClass = [
-    "mi-modal__overlay",
-    "mi-modal__overlay--mov",
-    dark ? "mi-modal__overlay--dark" : "",
-  ]
+  const overlayClass = ["mi-modal__overlay", "mi-modal__overlay--mov", dark ? "mi-modal__overlay--dark" : ""]
     .join(" ")
     .trim();
 
   return createPortal(
     <div className={overlayClass} role="dialog" aria-modal="true" onMouseDown={onClose}>
-      <div
-        className={modalClass}
-        ref={dialogRef}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className={modalClass} ref={dialogRef} onMouseDown={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="mi-modal__header mpr-header">
           <div className="mpr-headLeft">
@@ -342,7 +376,7 @@ export default function ModalPagarOrdenesPago({
             </div>
 
             <div className="mi-modal__subtitle mpr-subtitle">
-              Seleccioná una o más deudas pendientes
+              Seleccioná una o más deudas <b>pendientes</b> (las pagadas no se pueden seleccionar)
             </div>
           </div>
 
@@ -411,32 +445,44 @@ export default function ModalPagarOrdenesPago({
                       type="button"
                       className="mov-btn mov-btn--ghost mpr-btnWide mpr-btnInCard"
                       onClick={toggleAll}
-                      disabled={!deudasOrdenadas.length || loading}
-                      title="Seleccionar / deseleccionar todas"
+                      disabled={pendientesIds.length === 0 || loading}
+                      title="Seleccionar / deseleccionar todas las pendientes"
                     >
                       <FontAwesomeIcon icon={faListCheck} />
-                      {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
+                      {pagaTodo ? "Deseleccionar pendientes" : "Seleccionar pendientes"}
                     </button>
                   </div>
                 </div>
 
-                {/* Nota opcional */}
-                {/* <div className="mpr-note">
-                  <div className="mpr-noteTitle">Nota</div>
-                  <textarea className="mpr-textarea" value={nota} onChange={(e)=>setNota(e.target.value)} />
-                </div> */}
+                {/* Nota (opcional) – si ya la usás del lado backend */}
+                <div className="mpr-formRow" style={{ marginTop: 10 }}>
+                  <div className="mpr-field" style={{ width: "100%" }}>
+                    <label>Nota (opcional)</label>
+                    <input
+                      value={nota}
+                      onChange={(e) => setNota(e.target.value)}
+                      disabled={loading}
+                      className="mpr-input"
+                      placeholder="Ej: Pago por transferencia, comprobante #123…"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Tabla de deudas */}
             <div className="mpr-tableWrap">
               <div className="mpr-tableTitle">
-                <span>Deudas pendientes</span>
+                <span>Deudas</span>
 
                 <div className="mpr-actionsRight">
                   <div className="mpr-miniStat">
-                    <span>Deudas</span>
+                    <span>Total</span>
                     <b>{deudasOrdenadas.length}</b>
+                  </div>
+                  <div className="mpr-miniStat">
+                    <span>Pendientes</span>
+                    <b>{pendientesIds.length}</b>
                   </div>
                   <div className="mpr-miniStat">
                     <span>Seleccionadas</span>
@@ -448,6 +494,7 @@ export default function ModalPagarOrdenesPago({
               <div className="mpr-table">
                 <div className="mpr-thead" role="row">
                   <div className="mpr-th mpr-th--center">Sel</div>
+                  <div className="mpr-th mpr-th--center">Estado</div>
                   <div className="mpr-th">Fecha</div>
                   <div className="mpr-th">Descripción</div>
                   <div className="mpr-th mpr-th--right">Monto</div>
@@ -455,40 +502,45 @@ export default function ModalPagarOrdenesPago({
 
                 <div className="mpr-tbody">
                   {!deudasOrdenadas.length && (
-                    <div className="mpr-empty">No hay deudas pendientes para este proveedor.</div>
+                    <div className="mpr-empty">No hay deudas para este proveedor.</div>
                   )}
 
                   {deudasOrdenadas.map((r, idx) => {
                     const id = Number(r?.id_movimiento || 0);
+                    const pag = isPagado(r);
                     const checked = selectedIds.has(id);
                     const monto = Number(r?.monto_total ?? r?.total ?? 0) || 0;
 
                     return (
                       <div
                         key={id || `${r?.fecha}-${idx}`}
-                        className={`mpr-row ${checked ? "is-checked" : ""}`}
+                        className={`mpr-row ${checked ? "is-checked" : ""} ${pag ? "is-disabled" : ""}`}
                         role="row"
-                        onClick={() => id && toggleOne(id)}
+                        onClick={() => (id && !pag ? toggleOne(id) : null)}
+                        title={pag ? "Ya está pagada (está en cobros)" : "Pendiente"}
+                        style={{ opacity: pag ? 0.75 : 1 }}
                       >
                         <div className="mpr-td mpr-td--center" onClick={(e) => e.stopPropagation()}>
-                          <label className={`mpr-checkWrap ${!id || loading ? "is-disabled" : ""}`}>
+                          <label className={`mpr-checkWrap ${!id || loading || pag ? "is-disabled" : ""}`}>
                             <input
                               className="mpr-checkInput"
                               type="checkbox"
                               checked={checked}
                               onChange={() => toggleOne(id)}
-                              disabled={!id || loading}
+                              disabled={!id || loading || pag}
                             />
                             <span className="mpr-checkBox" aria-hidden="true" />
                           </label>
                         </div>
 
+                        {/* ✅ MISMO pill que la tabla */}
+                        <div className="mpr-td mpr-td--center">
+                          <EstadoPill pagado={pag} />
+                        </div>
+
                         <div className="mpr-td">{safeText(formatFechaDMY(r?.fecha))}</div>
 
-                        <div
-                          className="mpr-td mpr-td--desc"
-                          title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
-                        >
+                        <div className="mpr-td mpr-td--desc" title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}>
                           {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
                         </div>
 
@@ -515,7 +567,7 @@ export default function ModalPagarOrdenesPago({
             disabled={loading || selectedIds.size === 0 || !idMedioPago}
             title={
               selectedIds.size === 0
-                ? "Seleccioná al menos una deuda"
+                ? "Seleccioná al menos una deuda pendiente"
                 : !idMedioPago
                 ? "Seleccioná un medio de pago"
                 : "Confirmar pago"

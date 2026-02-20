@@ -22,10 +22,68 @@ import "./principal.css";
 import ModalPerfil from "../Perfil/ModalPerfil";
 
 /* =========================================================
-   ✅ OPTIMIZACIÓN PRO (prefetch rutas + prefetch listas)
+   ✅ API (unificado y BLINDADO)
+   - BASE_URL NO se toca (viene como .../api/routes)
+   - endpoint único: api.php (SIN /routes/)
+   - apiFetch agrega X-Session
+   - dispara auth:unauthorized si 401/403
 ========================================================= */
 
-// ⚡ Prefetch de módulos (mejora MUCHO el “primer click”)
+// ✅ Si BASE_URL = "https://balto.3devsnet.com/api/routes"
+// ✅ entonces el endpoint real es: "https://balto.3devsnet.com/api/routes/api.php"
+const API_RELATIVE = "api.php";
+
+// ✅ builder robusto: evita /routes/routes, //, etc
+function buildApiUrl(paramsObj) {
+  const baseRaw = String(BASE_URL || "").trim();
+
+  // normalizar base con 1 slash final
+  const base = baseRaw.replace(/\/+$/, "") + "/";
+
+  // arma URL final (api.php dentro de /api/routes/)
+  const url = new URL(API_RELATIVE, base);
+
+  const qs = new URLSearchParams();
+  Object.entries(paramsObj || {}).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    qs.set(k, String(v));
+  });
+
+  url.search = qs.toString();
+  return url.toString();
+}
+
+async function apiFetch(paramsObj, options = {}) {
+  const sessionKey = (localStorage.getItem("session_key") || "").trim();
+
+  const headers = new Headers(options.headers || {});
+  if (sessionKey) headers.set("X-Session", sessionKey);
+
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const url = buildApiUrl(paramsObj);
+
+  const res = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    try {
+      window.dispatchEvent(
+        new CustomEvent("auth:unauthorized", { detail: { status: res.status } })
+      );
+    } catch {}
+  }
+
+  return res;
+}
+
+/* =========================================================
+   ✅ PREFETCH
+========================================================= */
 const ROUTE_PREFETCH = {
   "/panel/movimientos": () => import("../Movimientos/Movimientos"),
   "/panel/ventas": () => import("../Mov_Subsection/Ventas"),
@@ -45,47 +103,16 @@ function prefetchRoute(ruta) {
 }
 
 /* =========================================================
-   ✅ AUTH HARDENING (100% seguro)
-   - apiFetch: agrega X-Session y dispara evento global si 401/403
-   - idle robusto: lastActivityTs + visibility/focus (suspensión)
+   ✅ IDLE / SUSPENSIÓN
 ========================================================= */
-
 const LAST_ACTIVITY_KEY = "balto_last_activity_ts";
-
-// wrapper fetch centralizado para este archivo
-async function apiFetch(path, options = {}) {
-  const sessionKey = (localStorage.getItem("session_key") || "").trim();
-
-  const headers = new Headers(options.headers || {});
-  if (sessionKey) headers.set("X-Session", sessionKey);
-
-  // si mandás body y no seteaste content-type, asumimos JSON
-  if (options.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
-
-  if (res.status === 401 || res.status === 403) {
-    try {
-      window.dispatchEvent(
-        new CustomEvent("auth:unauthorized", { detail: { status: res.status } })
-      );
-    } catch {}
-  }
-
-  return res;
-}
+const IDLE_MS = 30 * 60 * 1000; // ✅ 30 minutos
 
 function setLastActivityNow() {
   try {
     sessionStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
   } catch {}
 }
-
 function getLastActivityTs() {
   try {
     const v = sessionStorage.getItem(LAST_ACTIVITY_KEY);
@@ -100,7 +127,8 @@ function getLastActivityTs() {
    Cache simple de listas globales
 ========================= */
 const LISTAS_CACHE_KEY = "balto_listas_cache_v1";
-const LISTAS_TTL_MS = 10 * 60 * 1000; // 10 min
+const LISTAS_TTL_MS = 30 * 60 * 1000; // ✅ 30 minutos
+
 
 function safeJsonParse(s) {
   try {
@@ -109,7 +137,6 @@ function safeJsonParse(s) {
     return null;
   }
 }
-
 function getCachedListas() {
   const raw = sessionStorage.getItem(LISTAS_CACHE_KEY);
   const parsed = safeJsonParse(raw);
@@ -117,10 +144,12 @@ function getCachedListas() {
   if (Date.now() - Number(parsed.ts) > LISTAS_TTL_MS) return null;
   return parsed.data;
 }
-
 function setCachedListas(data) {
   try {
-    sessionStorage.setItem(LISTAS_CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+    sessionStorage.setItem(
+      LISTAS_CACHE_KEY,
+      JSON.stringify({ ts: Date.now(), data })
+    );
   } catch {}
 }
 
@@ -129,15 +158,10 @@ async function prefetchGlobalListas(onUnauthorized) {
     const cached = getCachedListas();
     if (cached) return cached;
 
-    const r = await apiFetch(`/api.php?action=global_obtener_listas`, {
-      method: "GET",
-    });
+    const r = await apiFetch({ action: "global_obtener_listas" }, { method: "GET" });
 
-    // ✅ si expiró sesión, forzar logout del cliente (igual ya dispara evento)
     if (r.status === 401 || r.status === 403) {
-      try {
-        onUnauthorized?.();
-      } catch {}
+      try { onUnauthorized?.(); } catch {}
       return null;
     }
 
@@ -167,7 +191,6 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
   }, [open, onClose]);
 
   if (!open) return null;
-
   const stop = (e) => e.stopPropagation();
 
   return (
@@ -176,7 +199,6 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
         <div className="pp-modal__icon">
           <FontAwesomeIcon icon={faSignOutAlt} />
         </div>
-
         <h3 className="pp-modal__title">Confirmar cierre de sesión</h3>
         <p className="pp-modal__text">¿Estás seguro de que deseas cerrar la sesión?</p>
 
@@ -204,18 +226,11 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
 function normalizeRol(value) {
   if (value == null) return "vista";
   const v = String(value).trim().toLowerCase();
-  if (
-    v === "1" ||
-    v === "admin" ||
-    v === "administrator" ||
-    v === "administrador" ||
-    v === "superadmin"
-  ) {
+  if (v === "1" || v === "admin" || v === "administrator" || v === "administrador" || v === "superadmin") {
     return "admin";
   }
   return "vista";
 }
-
 function normalizePlanNivel(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 1;
@@ -223,7 +238,6 @@ function normalizePlanNivel(value) {
   if (n === 2) return 2;
   return 3;
 }
-
 function slugify(name) {
   return (
     String(name ?? "")
@@ -235,7 +249,6 @@ function slugify(name) {
       .replace(/^-+|-+$/g, "") || "seccion"
   );
 }
-
 function pickIcon(label) {
   const s = String(label ?? "").toLowerCase();
   if (s.includes("movimientos")) return faMoneyBillTrendUp;
@@ -244,39 +257,21 @@ function pickIcon(label) {
   if (s.includes("analisis")) return faChartLine;
   return faChartLine;
 }
-
 function normalizeTema(value) {
   const t = String(value ?? "claro").trim().toLowerCase();
   return t === "oscuro" ? "oscuro" : "claro";
 }
-
-/**
- * ✅ Tema: data-theme + body.dark (compatibilidad)
- */
 function applyTheme(tema) {
   document.documentElement.setAttribute("data-theme", tema);
-  const isDark = tema === "oscuro";
-  document.body.classList.toggle("dark", isDark);
+  document.body.classList.toggle("dark", tema === "oscuro");
 }
 
 /* =========================
-   Dashboard una sola vez
-========================= */
-const DASH_SEEN_KEY = "pp_dashboard_seen_once";
-function markDashboardSeen() {
-  try {
-    sessionStorage.setItem(DASH_SEEN_KEY, "1");
-  } catch {}
-}
-
-/* =========================
-   ✅ Session key helper
+   Session helpers
 ========================= */
 function getSessionKey() {
-  const k = localStorage.getItem("session_key") || "";
-  return String(k || "").trim();
+  return String(localStorage.getItem("session_key") || "").trim();
 }
-
 function hardClientLogoutCleanup() {
   try {
     sessionStorage.clear();
@@ -285,12 +280,6 @@ function hardClientLogoutCleanup() {
     localStorage.removeItem("usuario");
   } catch {}
 }
-
-/* =========================
-   ✅ AUTO-LOGOUT por inactividad
-========================= */
-const IDLE_MS = 1 * 60 * 1000; // 1 minuto SIN INTERACCIÓN
-
 
 /* =========================
    COMPONENTE
@@ -305,48 +294,34 @@ const Principal = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showPerfilModal, setShowPerfilModal] = useState(false);
 
-  // ✅ Drawer mobile
   const [drawerOpen, setDrawerOpen] = useState(false);
-
-  // ✅ Submenú Movimientos
   const [openMovSub, setOpenMovSub] = useState(false);
 
-  // ✅ timers para abrir/cerrar con delay (desktop hover)
   const closeTimerRef = useRef(null);
   const openTimerRef = useRef(null);
 
-  // ✅ evita doble logout
   const closingRef = useRef(false);
   const [closingUI, setClosingUI] = useState(false);
 
-  // ✅ Idle timer
   const idleTimerRef = useRef(null);
 
   const closeSoon = (ms = 220) => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => setOpenMovSub(false), ms);
   };
-
   const openSoon = (ms = 500) => {
     if (openTimerRef.current) clearTimeout(openTimerRef.current);
     openTimerRef.current = setTimeout(() => setOpenMovSub(true), ms);
   };
-
   const cancelClose = () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = null;
   };
-
   const cancelOpen = () => {
     if (openTimerRef.current) clearTimeout(openTimerRef.current);
     openTimerRef.current = null;
   };
 
-  /* =========================
-     ✅ Logout “duro” reutilizable (manual y automático)
-     - borra sesión en backend (si existe)
-     - limpia cliente SIEMPRE
-  ========================= */
   const doLogout = useCallback(
     async ({ silent = false } = {}) => {
       if (closingRef.current) return;
@@ -354,7 +329,6 @@ const Principal = () => {
 
       if (!silent) setClosingUI(true);
 
-      // ✅ cortar el timer de inactividad
       if (idleTimerRef.current) {
         clearTimeout(idleTimerRef.current);
         idleTimerRef.current = null;
@@ -364,12 +338,10 @@ const Principal = () => {
 
       try {
         if (sessionKey) {
-          const r = await apiFetch(`/api.php?action=logout`, {
-            method: "POST",
-            body: JSON.stringify({}),
-          });
-
-          // si falla no importa: igual limpiamos cliente
+          const r = await apiFetch(
+            { action: "logout" },
+            { method: "POST", body: JSON.stringify({}) }
+          );
           if (!r.ok) {
             const txt = await r.text().catch(() => "");
             console.warn("Logout backend falló:", r.status, txt);
@@ -391,20 +363,12 @@ const Principal = () => {
     [navigate]
   );
 
-  /* =========================
-     ✅ Escuchar 401/403 global (cualquier request)
-  ========================= */
   useEffect(() => {
-    const onUnauthorized = () => {
-      doLogout({ silent: true });
-    };
+    const onUnauthorized = () => doLogout({ silent: true });
     window.addEventListener("auth:unauthorized", onUnauthorized);
     return () => window.removeEventListener("auth:unauthorized", onUnauthorized);
   }, [doLogout]);
 
-  /* =========================
-     ✅ Guard / carga usuario
-  ========================= */
   useEffect(() => {
     const sk = getSessionKey();
     if (!sk) {
@@ -431,13 +395,10 @@ const Principal = () => {
       applyTheme("claro");
     }
 
-    // ✅ iniciar last activity al entrar (para suspensión)
     setLastActivityNow();
 
-    // ✅ PRO: prefetch listas globales en background (calienta todo el panel)
     try {
       const onUnauthorized = () => doLogout({ silent: true });
-
       if (typeof window.requestIdleCallback === "function") {
         window.requestIdleCallback(() => prefetchGlobalListas(onUnauthorized), { timeout: 1200 });
       } else {
@@ -445,7 +406,7 @@ const Principal = () => {
       }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // solo una vez (intencional)
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -455,23 +416,18 @@ const Principal = () => {
     };
   }, []);
 
-  // ✅ si cambiás de ruta, cerrá el drawer (mobile) y el submenú
   useEffect(() => {
     setDrawerOpen(false);
     setOpenMovSub(false);
   }, [location.pathname]);
 
-  // ✅ ESC cierra drawer
   useEffect(() => {
     if (!drawerOpen) return;
-    const onKeyDown = (e) => {
-      if (e.key === "Escape") setDrawerOpen(false);
-    };
+    const onKeyDown = (e) => e.key === "Escape" && setDrawerOpen(false);
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [drawerOpen]);
 
-  // ✅ bloquear scroll del body cuando el drawer está abierto (mobile)
   useEffect(() => {
     if (!drawerOpen) return;
     const prev = document.body.style.overflow;
@@ -481,24 +437,16 @@ const Principal = () => {
     };
   }, [drawerOpen]);
 
-  /* =========================
-     ✅ AUTO-LOGOUT por inactividad (robusto)
-     - Resetea timer + guarda lastActivityTs
-  ========================= */
   useEffect(() => {
     const resetIdle = () => {
       setLastActivityNow();
-
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      idleTimerRef.current = setTimeout(() => {
-        doLogout({ silent: true });
-      }, IDLE_MS);
+      idleTimerRef.current = setTimeout(() => doLogout({ silent: true }), IDLE_MS);
     };
 
     const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
     events.forEach((e) => window.addEventListener(e, resetIdle, { passive: true }));
 
-    // ✅ arranca el conteo desde que entra al panel
     resetIdle();
 
     return () => {
@@ -507,19 +455,11 @@ const Principal = () => {
     };
   }, [doLogout]);
 
-  /* =========================
-     ✅ SUSPENSIÓN / TAB BACKGROUND:
-     - al volver a foco/visible, si ya pasaron 30 min => logout
-  ========================= */
   useEffect(() => {
     const checkExpiredOnWake = () => {
       const last = getLastActivityTs();
       if (!last) return;
-
-      const diff = Date.now() - last;
-      if (diff >= IDLE_MS) {
-        doLogout({ silent: true });
-      }
+      if (Date.now() - last >= IDLE_MS) doLogout({ silent: true });
     };
 
     const onFocus = () => checkExpiredOnWake();
@@ -554,16 +494,13 @@ const Principal = () => {
       { label: "Flujo de Caja", ruta: "/panel/flujo-de-caja" },
       { label: "Cuentas Corrientes", ruta: "/panel/cuentas-corrientes" },
       { label: "Análisis Financiero", ruta: "/panel/analisis-financiero" },
-    ].map((x) => {
-      const slug = slugify(x.label);
-      return {
-        key: slug,
-        label: x.label,
-        icon: pickIcon(x.label),
-        ruta: x.ruta || `/panel/${slug}`,
-        children: x.children || null,
-      };
-    });
+    ].map((x) => ({
+      key: slugify(x.label),
+      label: x.label,
+      icon: pickIcon(x.label),
+      ruta: x.ruta || `/panel/${slugify(x.label)}`,
+      children: x.children || null,
+    }));
 
     const limit = planNivel === 1 ? 1 : planNivel === 2 ? 2 : 4;
     return base.slice(0, limit);
@@ -583,7 +520,6 @@ const Principal = () => {
 
   const handleNavigate = useCallback(
     (ruta) => {
-      if (ruta && ruta !== "/panel/dashboard") markDashboardSeen();
       navigate(ruta);
       setDrawerOpen(false);
       setOpenMovSub(false);
@@ -605,16 +541,10 @@ const Principal = () => {
     }
   };
 
-  /* =========================
-     ✅ CIERRE DE SESIÓN (manual con modal)
-  ========================= */
   const confirmarCierreSesion = useCallback(async () => {
     await doLogout({ silent: false });
   }, [doLogout]);
 
-  /* =========================
-     ✅ toggle tema -> MASTER (con apiFetch + auto-logout 401/403)
-  ========================= */
   const toggleTema = async () => {
     const prevTema = tema;
     const nuevo = tema === "oscuro" ? "claro" : "oscuro";
@@ -630,27 +560,20 @@ const Principal = () => {
     } catch {}
 
     try {
-      const r = await apiFetch(`/api.php?action=usuario_tema_actualizar`, {
-        method: "POST",
-        body: JSON.stringify({ tema: nuevo }),
-      });
+      const r = await apiFetch(
+        { action: "usuario_tema_actualizar" },
+        { method: "POST", body: JSON.stringify({ tema: nuevo }) }
+      );
 
-      // ✅ si expiró sesión, logout (igual apiFetch dispara evento)
       if (r.status === 401 || r.status === 403) {
         await doLogout({ silent: true });
         return;
       }
 
       const txt = await r.text();
-      let data = null;
-      try {
-        data = JSON.parse(txt);
-      } catch {}
+      const data = safeJsonParse(txt);
 
       if (!r.ok || !data?.exito) {
-        console.error("Falló usuario_tema_actualizar:", r.status, txt);
-
-        // revertir UI + localStorage
         setTema(prevTema);
         applyTheme(prevTema);
         try {
@@ -659,12 +582,8 @@ const Principal = () => {
           localStorage.setItem("usuario", JSON.stringify(uPrev));
           setUsuario(uPrev);
         } catch {}
-        return;
       }
-    } catch (e) {
-      console.error("Error llamando usuario_tema_actualizar:", e);
-
-      // revertir UI + localStorage
+    } catch {
       setTema(prevTema);
       applyTheme(prevTema);
       try {
@@ -782,10 +701,8 @@ const Principal = () => {
           {navItems.map((item) => {
             const hasSub = Array.isArray(item.children) && item.children.length > 0;
             const isMov = item.key === "movimientos";
-
             const isActive =
               activeKey === item.key || (isMov && location.pathname.startsWith("/panel/movimientos"));
-
             const isOpen = isMov && openMovSub;
 
             return (
@@ -794,7 +711,6 @@ const Principal = () => {
                 className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${isOpen ? "is-open" : ""}`}
                 onMouseEnter={() => {
                   prefetchRoute(item.ruta);
-
                   if (!isNoHover() && isMov) {
                     cancelClose();
                     openSoon(300);
@@ -812,26 +728,22 @@ const Principal = () => {
                   role="button"
                   tabIndex={0}
                   onClick={() => {
-                    // ✅ FIX MOBILE: 1er toque abre submenú, 2do toque navega a /panel/movimientos
                     if (hasSub && isNoHover()) {
                       if (isMov) {
                         if (!openMovSub) {
                           setOpenMovSub(true);
                           return;
                         }
-                        handleNavigate(item.ruta); // /panel/movimientos
+                        handleNavigate(item.ruta);
                         return;
                       }
                       return;
                     }
-
                     handleNavigate(item.ruta);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-
-                      // ✅ FIX MOBILE: 1er Enter abre submenú, 2do navega
                       if (hasSub && isNoHover()) {
                         if (isMov) {
                           if (!openMovSub) {
@@ -843,7 +755,6 @@ const Principal = () => {
                         }
                         return;
                       }
-
                       handleNavigate(item.ruta);
                     }
                   }}
@@ -876,7 +787,6 @@ const Principal = () => {
                         }`}
                         onMouseEnter={() => prefetchRoute(sub.ruta)}
                         onClick={() => {
-                          markDashboardSeen();
                           navigate(sub.ruta);
                           setOpenMovSub(false);
                           setDrawerOpen(false);

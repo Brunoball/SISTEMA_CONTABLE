@@ -15,23 +15,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
 }
 
 /**
- * ✅ FIX CLAVE (tu problema):
- * A veces el frontend termina pegándole a compras_crear aunque venga id_movimiento,
- * entonces te "inserta" (crea una compra nueva) en vez de actualizar.
+ * ✅ Compras "como Ventas" pero:
+ * - tipo_operacion = COMPRA
+ * - id_cliente = NULL
+ * - usa id_proveedor
+ * - ✅ id_cuenta_corriente ELIMINADO (ya no existe)
  *
- * Solución: "upsert" seguro:
- * - Si llega id_movimiento > 0, tratamos la acción como compras_actualizar aunque haya venido compras_crear.
+ * ✅ FIX CLAVE (2026):
+ * - Respeta id_tipo_venta:
+ *   - 1 = CONTADO => requiere id_medio_pago
+ *   - 2 = CUENTA CORRIENTE => NO requiere id_medio_pago (NULL)
  *
- * ✅ Además: multi-tenant
- * - Si $pdo ya viene desde routes/api.php (tenant_resolver), NO volvemos a incluir db.php.
- * - Si $pdo no existe, recién ahí incluimos db.php.
+ * ✅ FIX:
+ * - Si llega id_movimiento > 0 en compras_crear => tratamos como compras_actualizar
+ *
+ * ✅ Multi-tenant:
+ * - si $pdo ya viene desde routes/api.php, NO incluimos db.php
  */
 
-// ✅ Multi-tenant: NO pisar $pdo si ya viene del router
 if (!isset($pdo) || !($pdo instanceof PDO)) {
   require_once __DIR__ . '/../../config/db.php';
 }
-
 require_once __DIR__ . '/../utils/auditoria.php';
 
 /* ----------------- Helpers ----------------- */
@@ -69,10 +73,7 @@ function periodo_from_fecha(string $fechaISO): string {
 function is_valid_fecha(string $f): bool { return (bool)preg_match('/^\d{4}\-\d{2}\-\d{2}$/', $f); }
 function is_valid_periodo(string $p): bool { return (bool)preg_match('/^\d{4}\-\d{2}$/', $p); }
 
-/* ----------------- PDO check ----------------- */
-if (!isset($pdo) || !($pdo instanceof PDO)) {
-  fail('No hay conexión a la base de datos.');
-}
+if (!isset($pdo) || !($pdo instanceof PDO)) fail('No hay conexión a la base de datos.');
 
 /* =========================================================
    idUsuario (token/body)
@@ -81,7 +82,6 @@ function get_bearer_token(): string {
   $h = '';
   if (!empty($_SERVER['HTTP_AUTHORIZATION'])) $h = (string)$_SERVER['HTTP_AUTHORIZATION'];
   elseif (!empty($_SERVER['Authorization'])) $h = (string)$_SERVER['Authorization'];
-
   $h = trim($h);
   if ($h === '') return '';
   if (stripos($h, 'Bearer ') === 0) return trim(substr($h, 7));
@@ -190,6 +190,9 @@ function item_payload_from_src(array $src, float $monto_total, int $id_detalle):
 
 /* =========================================================
    VALIDACIÓN de compra
+   ✅ RESPETA id_tipo_venta:
+      - 1 (CONTADO) => requiere id_medio_pago
+      - 2 (CUENTA CORRIENTE) => id_medio_pago puede ser NULL
 ========================================================= */
 function validar_compra_or_fail(PDO $pdo, array $src): array {
   $fecha = trim((string)($src['fecha'] ?? ''));
@@ -198,31 +201,39 @@ function validar_compra_or_fail(PDO $pdo, array $src): array {
   $periodo = trim((string)($src['periodo'] ?? ''));
   if ($periodo === '' || !is_valid_periodo($periodo)) $periodo = periodo_from_fecha($fecha);
 
-  $id_clasificacion    = n_int($src['id_clasificacion'] ?? null);
-  $id_medio_pago       = n_int($src['id_medio_pago'] ?? null);
-  $id_cuenta_corriente = n_int($src['id_cuenta_corriente'] ?? null);
+  $id_clasificacion = n_int($src['id_clasificacion'] ?? null);
 
+  // ✅ IMPORTANTÍSIMO: tipo de compra
+  // 1 = CONTADO, 2 = CUENTA_CORRIENTE
+  $id_tipo_venta = n_int($src['id_tipo_venta'] ?? null);
+  if ($id_tipo_venta === null || $id_tipo_venta <= 0) {
+    // compat: si no viene, inferimos por medio de pago
+    $maybeMp = n_int($src['id_medio_pago'] ?? null);
+    $id_tipo_venta = ($maybeMp && $maybeMp > 0) ? 1 : 2;
+  }
+  if (!in_array($id_tipo_venta, [1, 2], true)) {
+    fail('Compra inválida: id_tipo_venta debe ser 1 (CONTADO) o 2 (CUENTA CORRIENTE).');
+  }
+
+  $id_medio_pago    = n_int($src['id_medio_pago'] ?? null);
   $id_proveedor = n_int($src['id_proveedor'] ?? null);
   $id_detalle   = n_int($src['id_detalle'] ?? null);
 
   $monto_total = n_float($src['monto_total'] ?? null);
 
   $id_tipo_operacion_compra = get_tipo_operacion_id_compra($pdo);
-  if ($id_tipo_operacion_compra <= 0) {
-    fail("No existe el tipo_operacion 'COMPRA' en tipos_operacion.");
-  }
+  if ($id_tipo_operacion_compra <= 0) fail("No existe el tipo_operacion 'COMPRA' en tipos_operacion.");
 
   if (!$id_proveedor || $id_proveedor <= 0) fail('En Compras el Proveedor es obligatorio.');
   if (!$id_detalle || $id_detalle <= 0) fail('En Compras el Detalle es obligatorio.');
 
-  // ✅ coherencia pago: exactamente uno
-  $hasMP = ($id_medio_pago !== null && $id_medio_pago > 0);
-  $hasCC = ($id_cuenta_corriente !== null && $id_cuenta_corriente > 0);
-  if ($hasMP && $hasCC) fail('Compra inválida: no puede tener medio_pago y cuenta_corriente a la vez.');
-  if (!$hasMP && !$hasCC) fail('Compra inválida: debe tener medio_pago (contado) o cuenta_corriente (corriente).');
-
-  if ($hasMP) $id_cuenta_corriente = null;
-  if ($hasCC) $id_medio_pago = null;
+  // ✅ SOLO CONTADO exige medio de pago
+  if ($id_tipo_venta === 1) {
+    if (!$id_medio_pago || $id_medio_pago <= 0) fail('Compra inválida: falta medio de pago (solo Contado).');
+  } else {
+    // ✅ Cuenta Corriente: no aplica
+    $id_medio_pago = null;
+  }
 
   $item = item_payload_from_src($src, (float)($monto_total ?? 0.0), (int)$id_detalle);
   $totalCabecera = (float)$item['total'];
@@ -232,10 +243,9 @@ function validar_compra_or_fail(PDO $pdo, array $src): array {
     'periodo' => $periodo,
     'id_tipo_operacion' => $id_tipo_operacion_compra,
     'id_clasificacion' => $id_clasificacion,
-    'id_tipo_venta' => null,
+    'id_tipo_venta' => $id_tipo_venta,
     'id_cliente' => null,
-    'id_medio_pago' => $id_medio_pago,
-    'id_cuenta_corriente' => $id_cuenta_corriente,
+    'id_medio_pago' => $id_medio_pago, // null si CC
     'id_proveedor' => $id_proveedor,
     'id_detalle' => $id_detalle,
     'monto_total' => $totalCabecera,
@@ -276,13 +286,14 @@ function compras_listar(PDO $pdo): void {
 
   $where[] = "m.id_proveedor IS NOT NULL";
   $where[] = "(m.id_cliente IS NULL OR m.id_cliente = 0)";
-  $where[] = "(m.id_tipo_venta IS NULL OR m.id_tipo_venta = 0)";
 
+  // ✅ Aceptamos Contado(1) y Cuenta Corriente(2). Si viene NULL, lo tratamos como 1 por compat.
+  // ✅ Medio pago: requerido SOLO si (tipo_venta=1)
   $where[] = "(
-      (m.id_medio_pago IS NOT NULL AND (m.id_cuenta_corriente IS NULL OR m.id_cuenta_corriente = 0))
-      OR
-      (m.id_cuenta_corriente IS NOT NULL AND (m.id_medio_pago IS NULL OR m.id_medio_pago = 0))
-    )";
+    (COALESCE(m.id_tipo_venta, 1) = 1 AND (m.id_medio_pago IS NOT NULL AND m.id_medio_pago > 0))
+    OR
+    (COALESCE(m.id_tipo_venta, 1) = 2)
+  )";
 
   if ($periodo !== '') {
     $where[] = "m.periodo = :periodo";
@@ -298,7 +309,6 @@ function compras_listar(PDO $pdo): void {
       m.id_tipo_operacion,
       m.id_clasificacion,
       m.id_tipo_venta,
-      m.id_cuenta_corriente,
       m.id_cliente,
       m.id_proveedor,
       m.id_detalle,
@@ -317,7 +327,6 @@ function compras_listar(PDO $pdo): void {
 
       COALESCE(tope.nombre,'') AS tipo_operacion_nombre,
       COALESCE(c.nombre,'')    AS clasificacion,
-      COALESCE(cc.nombre,'')   AS cuenta_corriente,
       COALESCE(pr.nombre,'')   AS proveedor,
       COALESCE(di.nombre, d.nombre, '') AS detalle,
       COALESCE(mp.nombre,'') AS medio_pago_nombre,
@@ -326,7 +335,6 @@ function compras_listar(PDO $pdo): void {
     FROM movimientos m
       LEFT JOIN tipos_operacion tope   ON tope.id_tipo_operacion = m.id_tipo_operacion
       LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
-      LEFT JOIN cuentas_corrientes cc   ON cc.id_cuenta_corriente = m.id_cuenta_corriente
       LEFT JOIN proveedores pr          ON pr.id_proveedor = m.id_proveedor
       LEFT JOIN detalles d              ON d.id_detalle = m.id_detalle
       LEFT JOIN medios_pago mp          ON mp.id_medio_pago = m.id_medio_pago
@@ -354,16 +362,14 @@ function compras_listar(PDO $pdo): void {
     $like = '%' . $q . '%';
     $where[] = "(
       UPPER(COALESCE(c.nombre,''))   LIKE UPPER(:q1) OR
-      UPPER(COALESCE(cc.nombre,''))  LIKE UPPER(:q2) OR
-      UPPER(COALESCE(pr.nombre,''))  LIKE UPPER(:q3) OR
-      UPPER(COALESCE(di.nombre, d.nombre,'')) LIKE UPPER(:q4) OR
-      UPPER(COALESCE(mp.nombre,''))  LIKE UPPER(:q5)
+      UPPER(COALESCE(pr.nombre,''))  LIKE UPPER(:q2) OR
+      UPPER(COALESCE(di.nombre, d.nombre,'')) LIKE UPPER(:q3) OR
+      UPPER(COALESCE(mp.nombre,''))  LIKE UPPER(:q4)
     )";
     $params[':q1'] = $like;
     $params[':q2'] = $like;
     $params[':q3'] = $like;
     $params[':q4'] = $like;
-    $params[':q5'] = $like;
   }
 
   $sql .= " WHERE " . implode(" AND ", $where);
@@ -393,9 +399,9 @@ function compras_listar(PDO $pdo): void {
       'tipo_operacion' => (string)($r['tipo_operacion_nombre'] ?? ''),
 
       'id_clasificacion' => $r['id_clasificacion'] === null ? null : (int)$r['id_clasificacion'],
-      'id_tipo_venta' => null,
-      'id_cuenta_corriente' => $r['id_cuenta_corriente'] === null ? null : (int)$r['id_cuenta_corriente'],
+      'id_tipo_venta' => $r['id_tipo_venta'] === null ? 1 : (int)$r['id_tipo_venta'], // compat: null => 1
       'id_cliente' => null,
+
       'id_proveedor' => $r['id_proveedor'] === null ? null : (int)$r['id_proveedor'],
       'id_detalle' => $id_detalle_final,
 
@@ -412,7 +418,6 @@ function compras_listar(PDO $pdo): void {
       'total'     => $r['item_total'] === null ? null : (float)$r['item_total'],
 
       'clasificacion' => (string)($r['clasificacion'] ?? ''),
-      'cuenta_corriente' => (string)($r['cuenta_corriente'] ?? ''),
       'proveedor' => (string)($r['proveedor'] ?? ''),
       'detalle' => (string)($r['detalle'] ?? ''),
       'created_at' => (string)($r['created_at'] ?? ''),
@@ -430,7 +435,7 @@ function compras_listar(PDO $pdo): void {
 
 /* =========================================================
    CREAR 1 COMPRA (POST)
-   ✅ FIX: si llega id_movimiento => actualiza (evita inserción accidental)
+   ✅ FIX: si llega id_movimiento => actualiza
 ========================================================= */
 function compras_crear(PDO $pdo): void {
   if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
@@ -438,8 +443,6 @@ function compras_crear(PDO $pdo): void {
   $body = read_json_body();
   $src = !empty($body) ? $body : ($_POST ?? []);
 
-  // ✅ FIX CLAVE: si el frontend por error llama "crear" al editar,
-  // pero viene id_movimiento, lo tratamos como UPDATE.
   $maybeId = n_int($src['id_movimiento'] ?? null);
   if ($maybeId !== null && $maybeId > 0) {
     compras_actualizar($pdo);
@@ -456,13 +459,13 @@ function compras_crear(PDO $pdo): void {
       INSERT INTO movimientos (
         fecha, periodo,
         id_tipo_operacion,
-        id_clasificacion, id_tipo_venta, id_cuenta_corriente,
+        id_clasificacion, id_tipo_venta,
         id_cliente, id_proveedor, id_detalle,
         monto_total, id_medio_pago
       ) VALUES (
         :fecha, :periodo,
         :id_tipo_operacion,
-        :id_clasificacion, NULL, :id_cuenta_corriente,
+        :id_clasificacion, :id_tipo_venta,
         NULL, :id_proveedor, :id_detalle,
         :monto_total, :id_medio_pago
       )
@@ -473,11 +476,11 @@ function compras_crear(PDO $pdo): void {
       ':periodo' => $v['periodo'],
       ':id_tipo_operacion' => $v['id_tipo_operacion'],
       ':id_clasificacion' => $v['id_clasificacion'],
-      ':id_cuenta_corriente' => $v['id_cuenta_corriente'],
+      ':id_tipo_venta' => $v['id_tipo_venta'],
       ':id_proveedor' => $v['id_proveedor'],
       ':id_detalle' => $v['id_detalle'],
       ':monto_total' => $v['monto_total'],
-      ':id_medio_pago' => $v['id_medio_pago'],
+      ':id_medio_pago' => $v['id_medio_pago'], // null si CC
     ]);
 
     $newId = (int)$pdo->lastInsertId();
@@ -509,7 +512,7 @@ function compras_crear(PDO $pdo): void {
           'periodo' => $v['periodo'],
           'id_tipo_operacion' => $v['id_tipo_operacion'],
           'id_clasificacion' => $v['id_clasificacion'],
-          'id_cuenta_corriente' => $v['id_cuenta_corriente'],
+          'id_tipo_venta' => $v['id_tipo_venta'],
           'id_proveedor' => $v['id_proveedor'],
           'id_detalle' => $v['id_detalle'],
           'monto_total' => $v['monto_total'],
@@ -554,21 +557,19 @@ function compras_crear_batch(PDO $pdo): void {
     foreach ($items as $i => $one) {
       if (!is_array($one)) fail("Ítem batch inválido en índice $i.");
 
-      // Nota: acá NO hacemos update automático en batch para no mezclar semánticas.
-      // Si quisieras, se puede extender, pero no es tu caso actual.
       $v = validar_compra_or_fail($pdo, $one);
 
       $stmt = $pdo->prepare("
         INSERT INTO movimientos (
           fecha, periodo,
           id_tipo_operacion,
-          id_clasificacion, id_tipo_venta, id_cuenta_corriente,
+          id_clasificacion, id_tipo_venta,
           id_cliente, id_proveedor, id_detalle,
           monto_total, id_medio_pago
         ) VALUES (
           :fecha, :periodo,
           :id_tipo_operacion,
-          :id_clasificacion, NULL, :id_cuenta_corriente,
+          :id_clasificacion, :id_tipo_venta,
           NULL, :id_proveedor, :id_detalle,
           :monto_total, :id_medio_pago
         )
@@ -578,11 +579,11 @@ function compras_crear_batch(PDO $pdo): void {
         ':periodo' => $v['periodo'],
         ':id_tipo_operacion' => $v['id_tipo_operacion'],
         ':id_clasificacion' => $v['id_clasificacion'],
-        ':id_cuenta_corriente' => $v['id_cuenta_corriente'],
+        ':id_tipo_venta' => $v['id_tipo_venta'],
         ':id_proveedor' => $v['id_proveedor'],
         ':id_detalle' => $v['id_detalle'],
         ':monto_total' => $v['monto_total'],
-        ':id_medio_pago' => $v['id_medio_pago'],
+        ':id_medio_pago' => $v['id_medio_pago'], // null si CC
       ]);
 
       $newId = (int)$pdo->lastInsertId();
@@ -611,9 +612,9 @@ function compras_crear_batch(PDO $pdo): void {
         'fecha' => $v['fecha'],
         'periodo' => $v['periodo'],
         'id_tipo_operacion' => $v['id_tipo_operacion'],
+        'id_tipo_venta' => $v['id_tipo_venta'],
         'id_proveedor' => $v['id_proveedor'],
         'id_medio_pago' => $v['id_medio_pago'],
-        'id_cuenta_corriente' => $v['id_cuenta_corriente'],
         'monto_total' => $v['monto_total'],
         'item' => $it,
       ];
@@ -654,20 +655,17 @@ function compras_actualizar(PDO $pdo): void {
 
   $idCompra = get_tipo_operacion_id_compra($pdo);
   if ($idCompra <= 0) fail("No existe el tipo_operacion 'COMPRA' en tipos_operacion.");
-  if ((int)($before['id_tipo_operacion'] ?? 0) !== $idCompra) {
-    fail('Este movimiento no es una compra (tipo_operacion).');
-  }
+  if ((int)($before['id_tipo_operacion'] ?? 0) !== $idCompra) fail('Este movimiento no es una compra (tipo_operacion).');
 
-  // ✅ Merge: si el frontend no manda algún campo, tomamos el anterior.
-  // (id_proveedor / id_detalle SIEMPRE se espera que venga cuando cambiaste, y acá NO se pisa si viene)
+  // Merge (si faltan campos, toma anterior)
   $merge = $src;
   foreach ([
-    'fecha','periodo','id_clasificacion','id_medio_pago','id_cuenta_corriente',
-    'id_proveedor','id_detalle','monto_total','cantidad','precio','iva_pct','subtotal','iva_monto','total'
+    'fecha','periodo',
+    'id_clasificacion','id_tipo_venta','id_medio_pago',
+    'id_proveedor','id_detalle','monto_total',
+    'cantidad','precio','iva_pct','subtotal','iva_monto','total'
   ] as $k) {
-    if (!array_key_exists($k, $merge) && array_key_exists($k, $before)) {
-      $merge[$k] = $before[$k];
-    }
+    if (!array_key_exists($k, $merge) && array_key_exists($k, $before)) $merge[$k] = $before[$k];
   }
 
   $v = validar_compra_or_fail($pdo, $merge);
@@ -681,8 +679,7 @@ function compras_actualizar(PDO $pdo): void {
         periodo = :periodo,
         id_tipo_operacion = :id_tipo_operacion,
         id_clasificacion = :id_clasificacion,
-        id_tipo_venta = NULL,
-        id_cuenta_corriente = :id_cuenta_corriente,
+        id_tipo_venta = :id_tipo_venta,
         id_cliente = NULL,
         id_proveedor = :id_proveedor,
         id_detalle = :id_detalle,
@@ -696,11 +693,11 @@ function compras_actualizar(PDO $pdo): void {
       ':periodo' => $v['periodo'],
       ':id_tipo_operacion' => $v['id_tipo_operacion'],
       ':id_clasificacion' => $v['id_clasificacion'],
-      ':id_cuenta_corriente' => $v['id_cuenta_corriente'],
+      ':id_tipo_venta' => $v['id_tipo_venta'],
       ':id_proveedor' => $v['id_proveedor'],
       ':id_detalle' => $v['id_detalle'],
       ':monto_total' => $v['monto_total'],
-      ':id_medio_pago' => $v['id_medio_pago'],
+      ':id_medio_pago' => $v['id_medio_pago'], // null si CC
       ':id_movimiento' => $id_movimiento,
     ]);
 
@@ -791,9 +788,7 @@ function compras_eliminar(PDO $pdo): void {
 
   $idCompra = get_tipo_operacion_id_compra($pdo);
   if ($idCompra <= 0) fail("No existe el tipo_operacion 'COMPRA' en tipos_operacion.");
-  if ((int)($before['id_tipo_operacion'] ?? 0) !== $idCompra) {
-    fail('Este movimiento no es una compra (tipo_operacion).');
-  }
+  if ((int)($before['id_tipo_operacion'] ?? 0) !== $idCompra) fail('Este movimiento no es una compra (tipo_operacion).');
 
   try {
     $stmt = $pdo->prepare("DELETE FROM movimientos WHERE id_movimiento = :id");
@@ -816,14 +811,10 @@ function compras_eliminar(PDO $pdo): void {
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $action = is_string($action) ? trim($action) : '';
 
-// ✅ FIX EXTRA: si por cualquier motivo action=compras_crear pero llega id_movimiento,
-// lo convertimos en compras_actualizar (doble seguro).
 if ($action === 'compras_crear') {
   $tmp = read_json_body();
   $idMaybe = n_int(($tmp['id_movimiento'] ?? null));
-  if ($idMaybe !== null && $idMaybe > 0) {
-    $action = 'compras_actualizar';
-  }
+  if ($idMaybe !== null && $idMaybe > 0) $action = 'compras_actualizar';
 }
 
 try {

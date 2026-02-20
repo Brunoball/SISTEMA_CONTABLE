@@ -397,10 +397,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     () => (Array.isArray(localLists.medios_pago) ? localLists.medios_pago : []),
     [localLists.medios_pago]
   );
-  const cuentasCorrientesList = useMemo(
-    () => (Array.isArray(localLists.cuentas_corrientes) ? localLists.cuentas_corrientes : []),
-    [localLists.cuentas_corrientes]
-  );
   const tiposVentaList = useMemo(
     () => (Array.isArray(localLists.tipos_venta) ? localLists.tipos_venta : []),
     [localLists.tipos_venta]
@@ -409,12 +405,14 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const [fecha, setFecha] = useState(todayISO());
   const [periodoUI, setPeriodoUI] = useState(isoToMMYYYY(todayISO()));
 
-const [filters, setFilters] = useState({
-  id_tipo_venta: NULL_OPTION,
-  id_medio_pago: NULL_OPTION,
-  id_cliente: NULL_OPTION,
-});
-
+  // ✅ FIX: incluimos id_cuenta_corriente para evitar undefineds si en algún momento lo usás,
+  // pero NO lo validamos ni lo mostramos (según tu regla actual).
+  const [filters, setFilters] = useState({
+    id_tipo_venta: NULL_OPTION,
+    id_medio_pago: NULL_OPTION,
+    id_cliente: NULL_OPTION,
+    id_cuenta_corriente: NULL_OPTION,
+  });
 
   // ✅ exactamente como compras pero para ventas: Guardar / Facturar
   const [accionContado, setAccionContado] = useState("facturar");
@@ -451,12 +449,12 @@ const [filters, setFilters] = useState({
       setFecha(f);
       setPeriodoUI(isoToMMYYYY(f));
 
-setFilters({
-  id_tipo_venta: NULL_OPTION,
-  id_medio_pago: NULL_OPTION,
-  id_cliente: NULL_OPTION,
-});
-
+      setFilters({
+        id_tipo_venta: NULL_OPTION,
+        id_medio_pago: NULL_OPTION,
+        id_cliente: NULL_OPTION,
+        id_cuenta_corriente: NULL_OPTION,
+      });
 
       setAccionContado("facturar");
       setCliInput("");
@@ -551,7 +549,10 @@ setFilters({
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear.");
 
       const item = data?.item || {};
-      const newId = kind === "detalles" ? (getDetalleId(item) ?? Number(item?.id)) : (getClienteId(item) ?? Number(item?.id));
+      const newId =
+        kind === "detalles"
+          ? getDetalleId(item) ?? Number(item?.id)
+          : getClienteId(item) ?? Number(item?.id);
       const newNombre = String(item?.nombre ?? "").trim() || nombre;
 
       if (!Number.isFinite(Number(newId)) || Number(newId) <= 0) {
@@ -646,14 +647,12 @@ setFilters({
   const isContado = useMemo(() => isContadoTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
   const isCorriente = useMemo(() => isCorrienteTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
 
-useEffect(() => {
-  if (!open) return;
+  useEffect(() => {
+    if (!open) return;
 
-  // Solo mantenemos la regla de contado: medio de pago obligatorio (validación)
-  // Si cambia a corriente, NO mostramos CC y no hacemos nada extra.
-  if (isCorriente) setAccionContado("guardar");
-}, [open, isCorriente]);
-
+    // Regla: si es corriente => siempre guardado (pendiente)
+    if (isCorriente) setAccionContado("guardar");
+  }, [open, isCorriente]);
 
   const validate = useCallback(() => {
     const cliId = Number(filters.id_cliente);
@@ -667,18 +666,16 @@ useEffect(() => {
       return { ok: false, msg: "Falta seleccionar la Forma de venta." };
     }
 
+    // ✅ Contado: medio de pago obligatorio
     if (isContado) {
       const mp = Number(filters.id_medio_pago);
       if (!Number.isFinite(mp) || mp <= 0)
         return { ok: false, msg: "Venta Contado: falta seleccionar el Medio de pago." };
     }
 
-if (isCorriente) {
-  const cc = Number(filters.id_cuenta_corriente);
-  if (!Number.isFinite(cc) || cc <= 0)
-    return { ok: false, msg: "Cuenta Corriente: falta seleccionar la Cuenta Corriente." };
-}
-
+    // ✅ FIX IMPORTANTE:
+    // Corriente: NO pedimos Cuenta Corriente (porque no la mostrás en UI y dijiste que NO se use)
+    // Si más adelante querés volver a exigirla, recién ahí agregás UI + validación.
 
     const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
     if (!/^\d{4}-\d{2}$/.test(periodoApi)) {
@@ -707,7 +704,7 @@ if (isCorriente) {
     }
 
     return { ok: true, warn: problems.length > 0, periodoApi };
-  }, [filters, cliInput, isContado, isCorriente, periodoUI, fecha, rowsCalc]);
+  }, [filters, cliInput, isContado, periodoUI, fecha, rowsCalc]);
 
   const submit = useCallback(async () => {
     if (saving) return;
@@ -736,17 +733,12 @@ if (isCorriente) {
 
     try {
       const { idUsuario } = getAuthInfo();
-
       const periodoApi = v.periodoApi;
 
       // ✅ igual concepto que compras:
       // - si es corriente => siempre "guardar" (pendiente)
       // - si es contado => depende de botones Guardar / Facturar
       const accionFinal = isCorriente ? "guardar" : accionContado;
-
-      // si querés un flag, lo dejás así:
-      // Guardar => pendiente
-      // Facturar => "facturada" (o cobrada según tu backend)
       const esFacturadaFinal = isCorriente ? false : accionFinal === "facturar";
 
       const payloads = rowsCalc
@@ -765,9 +757,8 @@ if (isCorriente) {
 
           id_tipo_venta: Number(filters.id_tipo_venta),
 
-id_medio_pago: isContado ? Number(filters.id_medio_pago) : null,
-id_cuenta_corriente: null,
-
+          id_medio_pago: isContado ? Number(filters.id_medio_pago) : null,
+          id_cuenta_corriente: null, // (no se usa en UI actual)
 
           id_detalle: Number(r.id_detalle),
           cantidad: Math.round(Number(r.cantidad) * 100) / 100,
@@ -1143,7 +1134,6 @@ id_cuenta_corriente: null,
                       <label className="fl-label">Medio de pago</label>
                     </div>
 
-                    {/* ✅ EXACTO COMO COMPRAS (card + botones + hint dinámico) */}
                     <div className="mi-card mi-card--full">
                       <div className="mi-card__title">Facturación (Contado)</div>
 
@@ -1181,8 +1171,6 @@ id_cuenta_corriente: null,
                     </div>
                   </>
                 )}
-
-
 
                 <div className="mi-cr-filters__actions">
                   <button

@@ -2,13 +2,6 @@
 // backend/modules/movimientos/ordenes_pago.php
 declare(strict_types=1);
 
-/**
- * ✅ Este archivo se incluye desde routes/api.php mediante modules/movimientos/route.php
- * ✅ En SaaS multi-tenant, el $pdo YA existe (tenant_resolver). Por eso:
- *    - NO require db.php acá
- *    - NO headers CORS acá (van en routes/api.php)
- */
-
 require_once __DIR__ . '/../utils/auditoria.php';
 
 /* ----------------- Helpers response ----------------- */
@@ -117,28 +110,10 @@ function op_item_payload_from_src(array $src, float $monto_total, int $id_detall
 }
 
 /* =========================================================
-   Buscar ID "CONTADO" (si existe)
-========================================================= */
-function op_find_tipo_venta_contado_id(PDO $pdo): ?int {
-  $sql = "
-    SELECT id_tipo_venta
-    FROM tipos_venta
-    WHERE UPPER(nombre) = 'CONTADO'
-       OR UPPER(nombre) LIKE '%CONTADO%'
-    ORDER BY (UPPER(nombre) = 'CONTADO') DESC, id_tipo_venta ASC
-    LIMIT 1
-  ";
-  $st = $pdo->prepare($sql);
-  $st->execute();
-  $row = $st->fetch(PDO::FETCH_ASSOC);
-  if (!$row) return null;
-  $id = (int)($row['id_tipo_venta'] ?? 0);
-  return $id > 0 ? $id : null;
-}
-
-/* =========================================================
    LISTAR (GET)
-   - Devuelve "movimientos" (compatible con frontend)
+   - SOLO COMPRAS (id_tipo_operacion=2)
+   - SOLO CUENTA CORRIENTE (id_tipo_venta=2)
+   - pagado = EXISTS cobros
 ========================================================= */
 function ordenes_pago_listar(PDO $pdo): void
 {
@@ -147,6 +122,10 @@ function ordenes_pago_listar(PDO $pdo): void
 
   $where = [];
   $params = [];
+
+  // ✅ filtros duros
+  $where[] = "m.id_tipo_operacion = 2";
+  $where[] = "m.id_tipo_venta = 2";
 
   if ($periodo !== '') {
     $where[] = "m.periodo = :periodo";
@@ -158,7 +137,7 @@ function ordenes_pago_listar(PDO $pdo): void
       m.id_movimiento,
       m.fecha,
       m.periodo,
-
+      m.id_tipo_operacion,
       m.id_clasificacion,
       m.id_tipo_venta,
       m.id_cuenta_corriente,
@@ -167,6 +146,7 @@ function ordenes_pago_listar(PDO $pdo): void
       m.id_detalle,
       m.monto_total,
       m.id_medio_pago,
+      m.created_at,
 
       fi.id_detalle AS item_id_detalle,
       fi.cantidad   AS item_cantidad,
@@ -183,10 +163,15 @@ function ordenes_pago_listar(PDO $pdo): void
       COALESCE(cc.nombre,'') AS cuenta_corriente,
       COALESCE(cl.nombre,'') AS cliente,
       COALESCE(pr.nombre,'') AS proveedor,
-
       COALESCE(di.nombre, d.nombre, '') AS detalle,
       COALESCE(mp.nombre,'') AS medio_pago_nombre,
-      m.created_at
+
+      -- ✅ ESTADO por cobros (último cobro)
+      CASE WHEN cb.id_cobro IS NULL THEN 0 ELSE 1 END AS pagado,
+      cb.id_cobro,
+      cb.fecha_cobro,
+      cb.monto AS monto_cobrado,
+      COALESCE(mp2.nombre,'') AS medio_pago_cobro
     FROM movimientos m
       LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
       LEFT JOIN tipos_venta tv          ON tv.id_tipo_venta = m.id_tipo_venta
@@ -213,6 +198,19 @@ function ordenes_pago_listar(PDO $pdo): void
       ) fi ON fi.id_movimiento = m.id_movimiento
 
       LEFT JOIN detalles di ON di.id_detalle = fi.id_detalle
+
+      -- ✅ último cobro por movimiento
+      LEFT JOIN (
+        SELECT c1.*
+        FROM cobros c1
+        INNER JOIN (
+          SELECT id_movimiento, MAX(id_cobro) AS max_id
+          FROM cobros
+          GROUP BY id_movimiento
+        ) x2 ON x2.id_movimiento = c1.id_movimiento AND x2.max_id = c1.id_cobro
+      ) cb ON cb.id_movimiento = m.id_movimiento
+
+      LEFT JOIN medios_pago mp2 ON mp2.id_medio_pago = cb.id_medio_pago
   ";
 
   if ($q !== '') {
@@ -258,6 +256,7 @@ function ordenes_pago_listar(PDO $pdo): void
       'fecha' => (string)$r['fecha'],
       'periodo' => (string)$r['periodo'],
 
+      'id_tipo_operacion' => (int)($r['id_tipo_operacion'] ?? 0),
       'id_clasificacion' => $r['id_clasificacion'] === null ? null : (int)$r['id_clasificacion'],
       'id_tipo_venta' => $r['id_tipo_venta'] === null ? null : (int)$r['id_tipo_venta'],
       'id_cuenta_corriente' => $r['id_cuenta_corriente'] === null ? null : (int)$r['id_cuenta_corriente'],
@@ -265,16 +264,10 @@ function ordenes_pago_listar(PDO $pdo): void
       'id_proveedor' => $r['id_proveedor'] === null ? null : (int)$r['id_proveedor'],
       'id_detalle' => $id_detalle_final,
 
-      // Texto
-      'pago_tipo_venta' => $tipoVentaTxt,
-      'medio_pago_nombre' => $medioPagoTxt,
-
-      // IDs
       'id_medio_pago' => $r['id_medio_pago'] === null ? null : (int)$r['id_medio_pago'],
-
       'monto_total' => (float)$r['monto_total_final'],
 
-      // primer item (para edición)
+      // primer item
       'cantidad'  => $r['item_cantidad'] === null ? null : (float)$r['item_cantidad'],
       'precio'    => $r['item_precio'] === null ? null : (float)$r['item_precio'],
       'iva_pct'   => $r['item_iva_pct'] === null ? null : (float)$r['item_iva_pct'],
@@ -289,7 +282,15 @@ function ordenes_pago_listar(PDO $pdo): void
       'cliente' => (string)($r['cliente'] ?? ''),
       'proveedor' => (string)($r['proveedor'] ?? ''),
       'detalle' => (string)($r['detalle'] ?? ''),
+      'medio_pago_nombre' => $medioPagoTxt,
       'created_at' => (string)($r['created_at'] ?? ''),
+
+      // ✅ estado por cobros
+      'pagado' => (int)($r['pagado'] ?? 0),
+      'id_cobro' => $r['id_cobro'] === null ? null : (int)$r['id_cobro'],
+      'fecha_cobro' => (string)($r['fecha_cobro'] ?? ''),
+      'monto_cobrado' => $r['monto_cobrado'] === null ? null : (float)$r['monto_cobrado'],
+      'medio_pago_cobro' => (string)($r['medio_pago_cobro'] ?? ''),
     ];
   }
 
@@ -297,7 +298,8 @@ function ordenes_pago_listar(PDO $pdo): void
 }
 
 /* =========================================================
-   ACTUALIZAR (POST) - Orden de Pago
+   ACTUALIZAR (POST)
+   (lo mismo que ya tenías)
 ========================================================= */
 function ordenes_pago_actualizar(PDO $pdo): void
 {
@@ -349,7 +351,6 @@ function ordenes_pago_actualizar(PDO $pdo): void
   try {
     $pdo->beginTransaction();
 
-    // ✅ NO tocamos id_tipo_venta para no romper "pendiente"
     $sql = "
       UPDATE movimientos SET
         fecha = :fecha,
@@ -476,13 +477,12 @@ function ordenes_pago_eliminar(PDO $pdo): void
 
 /* =========================================================
    CONFIRMAR PAGO (POST)
-   Recibe:
-   - ids_movimiento: [1,2,3]
-   - id_medio_pago:  X
-   Efecto:
-   - setea id_medio_pago
-   - cambia id_tipo_venta a CONTADO si existe; si no, lo pone NULL
-   - limpia id_cuenta_corriente (queda como "pagado")
+   - ids_movimiento: [..]
+   - id_medio_pago: X
+   EFECTO:
+   - Inserta en cobros (si no existía)
+   - Actualiza movimientos.id_medio_pago
+   - Estado = EXISTE cobro
 ========================================================= */
 function ordenes_pago_confirmar_pago(PDO $pdo): void
 {
@@ -506,35 +506,97 @@ function ordenes_pago_confirmar_pago(PDO $pdo): void
   $id_medio_pago = op_n_int($src['id_medio_pago'] ?? null);
   if (!$id_medio_pago || $id_medio_pago <= 0) op_fail('Seleccioná un medio de pago.');
 
-  $idContado = op_find_tipo_venta_contado_id($pdo); // puede ser null
-
   try {
     $pdo->beginTransaction();
 
+    // validar que sean compras CC
     $placeholders = implode(',', array_fill(0, count($clean), '?'));
-
-    $sql = "
-      UPDATE movimientos
-      SET
-        id_medio_pago = ?,
-        id_tipo_venta = " . ($idContado ? (string)$idContado : "NULL") . ",
-        id_cuenta_corriente = NULL
+    $stChk = $pdo->prepare("
+      SELECT id_movimiento, monto_total
+      FROM movimientos
       WHERE id_movimiento IN ($placeholders)
-    ";
+        AND id_tipo_operacion = 2
+        AND id_tipo_venta = 2
+      FOR UPDATE
+    ");
+    $stChk->execute($clean);
+    $movs = $stChk->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    $params = array_merge([$id_medio_pago], $clean);
-    $st = $pdo->prepare($sql);
-    $st->execute($params);
+    if (!count($movs)) {
+      throw new RuntimeException('No se encontraron movimientos válidos (compra cuenta corriente).');
+    }
+
+    // map monto por id
+    $montoById = [];
+    foreach ($movs as $m) {
+      $mid = (int)$m['id_movimiento'];
+      $montoById[$mid] = (float)($m['monto_total'] ?? 0);
+    }
+
+    // ya pagados?
+    $stPaid = $pdo->prepare("SELECT id_movimiento FROM cobros WHERE id_movimiento IN ($placeholders)");
+    $stPaid->execute($clean);
+    $paidRows = $stPaid->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $alreadyPaid = [];
+    foreach ($paidRows as $r) $alreadyPaid[] = (int)$r['id_movimiento'];
+    $alreadyPaid = array_values(array_unique($alreadyPaid));
+
+    $toPay = array_values(array_diff($clean, $alreadyPaid));
+
+    $inserted = [];
+    $fechaCobro = op_today_iso();
+
+    if (count($toPay)) {
+      $ins = $pdo->prepare("
+        INSERT INTO cobros (id_movimiento, fecha_cobro, monto, id_medio_pago)
+        VALUES (:id_movimiento, :fecha_cobro, :monto, :id_medio_pago)
+      ");
+
+      $upd = $pdo->prepare("
+        UPDATE movimientos
+        SET id_medio_pago = :id_medio_pago
+        WHERE id_movimiento = :id_movimiento
+        LIMIT 1
+      ");
+
+      foreach ($toPay as $mid) {
+        $monto = $montoById[$mid] ?? 0.0;
+
+        $ins->execute([
+          ':id_movimiento' => $mid,
+          ':fecha_cobro' => $fechaCobro,
+          ':monto' => $monto,
+          ':id_medio_pago' => $id_medio_pago,
+        ]);
+
+        $upd->execute([
+          ':id_medio_pago' => $id_medio_pago,
+          ':id_movimiento' => $mid,
+        ]);
+
+        $inserted[] = $mid;
+      }
+    }
 
     $pdo->commit();
 
     op_audit_safe($pdo, $idUsuario, 'confirmar_pago', 'ordenes_pago', null, [
-      'ids_movimiento' => $clean,
+      'ids_solicitados' => $clean,
+      'ids_insertados_en_cobros' => $inserted,
+      'ids_ya_pagados' => $alreadyPaid,
       'id_medio_pago' => $id_medio_pago,
-      'id_tipo_venta_contado' => $idContado,
+      'fecha_cobro' => $fechaCobro,
     ]);
 
-    op_ok(['mensaje' => 'Pago confirmado.', 'ids' => $clean]);
+    $msg = 'Pago confirmado.';
+    if (count($alreadyPaid) && count($inserted)) $msg = 'Pago confirmado (algunos ya estaban pagados).';
+    else if (count($alreadyPaid) && !count($inserted)) $msg = 'Todos los movimientos seleccionados ya estaban pagados.';
+
+    op_ok([
+      'mensaje' => $msg,
+      'ids_insertados' => $inserted,
+      'ids_ya_pagados' => $alreadyPaid,
+    ]);
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     op_fail('No se pudo confirmar el pago. ' . $e->getMessage(), 500);
@@ -542,7 +604,7 @@ function ordenes_pago_confirmar_pago(PDO $pdo): void
 }
 
 /* =========================================================
-   DISPATCH (cuando se incluye desde route.php)
+   DISPATCH
 ========================================================= */
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $action = is_string($action) ? trim($action) : '';

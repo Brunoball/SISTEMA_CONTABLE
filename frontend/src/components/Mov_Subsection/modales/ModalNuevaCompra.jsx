@@ -50,13 +50,12 @@ function getDetalleId(d) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 function getProveedorId(p) {
-  const cand =
-    p?.id ?? p?.id_proveedor ?? p?.idProveedor ?? p?.proveedor_id ?? p?.idproveedor ?? null;
+  const cand = p?.id ?? p?.id_proveedor ?? p?.idProveedor ?? p?.proveedor_id ?? p?.idproveedor ?? null;
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
-function getCuentaCorrienteId(cc) {
-  const cand = cc?.id ?? cc?.id_cuenta_corriente ?? cc?.idCuentaCorriente ?? cc?.cuenta_corriente_id ?? null;
+function getMedioPagoId(mp) {
+  const cand = mp?.id ?? mp?.id_medio_pago ?? mp?.medio_pago_id ?? mp?.idMedioPago ?? null;
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
@@ -97,7 +96,6 @@ const SAFE_LISTS = {
   proveedores: [],
   detalles: [],
   medios_pago: [],
-  cuentas_corrientes: [],
 };
 
 function normalizeLists(lists) {
@@ -110,20 +108,14 @@ function normalizeLists(lists) {
       ? pick("medios_pago")
       : pick("mediosPago").length
       ? pick("mediosPago")
-      : pick("medios");
-
-  const cuentas =
-    pick("cuentas_corrientes").length
-      ? pick("cuentas_corrientes")
-      : pick("cuentasCorrientes").length
-      ? pick("cuentasCorrientes")
-      : pick("cuentas");
+      : pick("medios").length
+      ? pick("medios")
+      : pick("medios_de_pago");
 
   return {
     proveedores: pick("proveedores"),
     detalles: pick("detalles"),
     medios_pago: Array.isArray(mediosPago) ? mediosPago : [],
-    cuentas_corrientes: Array.isArray(cuentas) ? cuentas : [],
   };
 }
 
@@ -195,49 +187,9 @@ function isTemaOscuro() {
 }
 
 /* =========================
-   ✅ Cuenta Corriente: UNIFICAR (sin Débito/Crédito)
-   - Si el backend trae "Cuenta Corriente Débito" / "Cuenta Corriente Crédito"
-     mostramos UNA sola opción: "Cuenta Corriente"
-   - Usamos el ID del primer ítem encontrado como id_cuenta_corriente real.
-========================= */
-function normalizeText(s) {
-  return String(s ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-}
-function buildSingleCuentaCorrienteOption(arrRaw) {
-  const arr = Array.isArray(arrRaw) ? arrRaw : [];
-  if (!arr.length) return { list: [], pickedId: null };
-
-  // elegimos la primera que sea "cuenta corriente" (sea débito/crédito o no)
-  const hit =
-    arr.find((x) => normalizeText(x?.nombre).includes("cuenta corriente")) ||
-    arr[0];
-
-  const pickedId = getCuentaCorrienteId(hit);
-  if (!pickedId) return { list: [], pickedId: null };
-
-  return {
-    list: [{ id: pickedId, nombre: "Cuenta Corriente" }],
-    pickedId,
-  };
-}
-
-/* =========================
    Mini Modal: alta rápida (detalle / proveedor)
 ========================= */
-function AddCatalogMiniModal({
-  open,
-  title,
-  value,
-  saving,
-  onChange,
-  onCancel,
-  onSave,
-  dark = false,
-}) {
+function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -266,13 +218,7 @@ function AddCatalogMiniModal({
       >
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
-          <button
-            type="button"
-            className="mi-mini__close"
-            onClick={onCancel}
-            disabled={saving}
-            aria-label="Cerrar"
-          >
+          <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving} aria-label="Cerrar">
             ✕
           </button>
         </div>
@@ -292,21 +238,11 @@ function AddCatalogMiniModal({
           </div>
 
           <div className="mi-mini__actions">
-            <button
-              type="button"
-              className="mit-btn mit-btn--ghost"
-              onClick={onCancel}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>
               Cancelar
             </button>
 
-            <button
-              type="button"
-              className="mit-btn mit-btn--solid"
-              onClick={onSave}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
               {saving ? "Guardando..." : "Guardar"}
             </button>
           </div>
@@ -411,43 +347,33 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     [localLists.medios_pago]
   );
 
-  // ✅ AHORA: "Cuenta Corriente" solo (sin débito/crédito)
-  const ccNormalized = useMemo(() => {
-    return buildSingleCuentaCorrienteOption(localLists.cuentas_corrientes);
-  }, [localLists.cuentas_corrientes]);
-
-  const cuentasCorrientesList = useMemo(() => ccNormalized.list, [ccNormalized.list]);
-  const cuentaCorrientePickedId = useMemo(() => ccNormalized.pickedId, [ccNormalized.pickedId]);
-
   const [fecha, setFecha] = useState(todayISO());
   const [periodoUI, setPeriodoUI] = useState(isoToMMYYYY(todayISO()));
 
+  // ✅ forma define id_tipo_venta:
+  //   CONTADO => 1
+  //   CUENTA_CORRIENTE => 2
+  // En CUENTA_CORRIENTE no hay medio de pago
   const [filters, setFilters] = useState({
     forma: NULL_OPTION,
-    id_medio_pago: NULL_OPTION,
-    id_cuenta_corriente: NULL_OPTION,
+    id_medio_pago: NULL_OPTION, // solo aplica si CONTADO
     id_proveedor: NULL_OPTION,
     proveedor_cuit: "",
   });
 
-  const [accionContado, setAccionContado] = useState("pagar");
-
-  // proveedor autocomplete
   const [provInput, setProvInput] = useState("");
   const [provFocus, setProvFocus] = useState(false);
   const closeBtnRef = useRef(null);
 
-  // filas
   const [rows, setRows] = useState(() => [
     { id: uid(), id_detalle: NULL_OPTION, detalleText: "", cantidad: 1, precio: 0, ivaPct: 0 },
   ]);
 
   const [saving, setSaving] = useState(false);
 
-  // ✅ mini modal genérico: detalle / proveedor
   const [addUI, setAddUI] = useState({
     open: false,
-    kind: null, // "detalles" | "proveedores"
+    kind: null,
     rowId: null,
     text: "",
     saving: false,
@@ -467,12 +393,10 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       setFilters({
         forma: NULL_OPTION,
         id_medio_pago: NULL_OPTION,
-        id_cuenta_corriente: NULL_OPTION,
         id_proveedor: NULL_OPTION,
         proveedor_cuit: "",
       });
 
-      setAccionContado("pagar");
       setProvInput("");
       setProvFocus(false);
 
@@ -494,10 +418,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const onPeriodoChange = (raw) => setPeriodoUI(normalizePeriodoInput(raw));
 
   const addRow = () => {
-    setRows((prev) => [
-      ...prev,
-      { id: uid(), id_detalle: NULL_OPTION, detalleText: "", cantidad: 1, precio: 0, ivaPct: 0 },
-    ]);
+    setRows((prev) => [...prev, { id: uid(), id_detalle: NULL_OPTION, detalleText: "", cantidad: 1, precio: 0, ivaPct: 0 }]);
   };
   const removeRow = (id) => {
     setRows((prev) => {
@@ -505,28 +426,21 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       return next.length ? next : prev;
     });
   };
-  const updateRow = (id, patch) => {
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  };
+  const updateRow = (id, patch) => setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   /* ========= detalles sugerencias ========= */
-  const detallesList = useMemo(
-    () => (Array.isArray(localLists.detalles) ? localLists.detalles : []),
-    [localLists.detalles]
-  );
+  const detallesList = useMemo(() => (Array.isArray(localLists.detalles) ? localLists.detalles : []), [localLists.detalles]);
 
   const suggestDetalles = useCallback(
     (txt) => {
       const q = String(txt || "").trim().toLowerCase();
       if (!q) return [];
-      return detallesList
-        .filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q))
-        .slice(0, 18);
+      return detallesList.filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q)).slice(0, 18);
     },
     [detallesList]
   );
 
-  /* ========= mini modal: abrir/cerrar ========= */
+  /* ========= mini modal ========= */
   const startAddDetalleForRow = useCallback(
     (rowId) => {
       if (saving) return;
@@ -569,9 +483,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
         kind === "detalles" ? (getDetalleId(item) ?? Number(item?.id)) : (getProveedorId(item) ?? Number(item?.id));
       const newNombre = String(item?.nombre ?? "").trim() || nombre;
 
-      if (!Number.isFinite(Number(newId)) || Number(newId) <= 0) {
-        throw new Error("El servidor no devolvió un ID válido.");
-      }
+      if (!Number.isFinite(Number(newId)) || Number(newId) <= 0) throw new Error("El servidor no devolvió un ID válido.");
 
       setLocalLists((prev) => {
         const next = { ...prev };
@@ -603,17 +515,12 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   }, [API_CATALOGO, addUI, showToast]);
 
   /* ========= proveedor autocomplete ========= */
-  const proveedoresList = useMemo(
-    () => (Array.isArray(localLists.proveedores) ? localLists.proveedores : []),
-    [localLists.proveedores]
-  );
+  const proveedoresList = useMemo(() => (Array.isArray(localLists.proveedores) ? localLists.proveedores : []), [localLists.proveedores]);
 
   const filteredProveedores = useMemo(() => {
     const q = provInput.trim().toLowerCase();
     if (!provFocus || q.length < 1) return [];
-    return proveedoresList
-      .filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q))
-      .slice(0, 25);
+    return proveedoresList.filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
   }, [proveedoresList, provInput, provFocus]);
 
   const handleProveedorInputChange = useCallback((e) => {
@@ -625,7 +532,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const handleSelectProveedor = useCallback((prov) => {
     const nombre = String(prov?.nombre ?? "").trim();
     const pid = getProveedorId(prov);
-
     setProvInput(nombre);
     setFilters((p) => ({ ...p, id_proveedor: pid != null ? String(pid) : NULL_OPTION }));
     setProvFocus(false);
@@ -654,30 +560,17 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const isContado = useMemo(() => String(filters.forma) === "CONTADO", [filters.forma]);
   const isCorriente = useMemo(() => String(filters.forma) === "CUENTA_CORRIENTE", [filters.forma]);
 
-  // ✅ cuando elige "Cuenta Corriente", autoseleccionamos la única opción (Cuenta Corriente)
+  // ✅ Cuando cambia a CUENTA_CORRIENTE, limpiamos medio de pago (no aplica)
   useEffect(() => {
     if (!open) return;
-
     setFilters((p) => {
       const forma = String(p.forma || "");
-      // limpiar lo que no aplica
-      if (forma === "CONTADO" && p.id_cuenta_corriente !== NULL_OPTION) return { ...p, id_cuenta_corriente: NULL_OPTION };
-      if (forma === "CUENTA_CORRIENTE" && p.id_medio_pago !== NULL_OPTION) return { ...p, id_medio_pago: NULL_OPTION };
-
-      // auto-set de cuenta corriente única
-      if (
-        forma === "CUENTA_CORRIENTE" &&
-        (String(p.id_cuenta_corriente) === NULL_OPTION || !String(p.id_cuenta_corriente || "").trim()) &&
-        cuentaCorrientePickedId
-      ) {
-        return { ...p, id_cuenta_corriente: String(cuentaCorrientePickedId) };
+      if (forma === "CUENTA_CORRIENTE" && p.id_medio_pago !== NULL_OPTION) {
+        return { ...p, id_medio_pago: NULL_OPTION };
       }
-
       return p;
     });
-
-    if (isCorriente) setAccionContado("guardar");
-  }, [open, isCorriente, cuentaCorrientePickedId]);
+  }, [open, isCorriente]);
 
   const validate = useCallback(() => {
     const provId = Number(filters.id_proveedor);
@@ -690,21 +583,18 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       return { ok: false, msg: "Falta seleccionar el Tipo de compra (Contado / Cuenta Corriente)." };
     }
 
+    // ✅ SOLO CONTADO exige medio de pago
     if (isContado) {
       const mp = Number(filters.id_medio_pago);
-      if (!Number.isFinite(mp) || mp <= 0)
+      if (!Number.isFinite(mp) || mp <= 0) {
         return { ok: false, msg: "Compra Contado: falta seleccionar el Medio de pago." };
-    }
-
-    if (isCorriente) {
-      const cc = Number(filters.id_cuenta_corriente);
-      if (!Number.isFinite(cc) || cc <= 0)
-        return { ok: false, msg: "Cuenta Corriente: falta seleccionar la Cuenta Corriente." };
+      }
     }
 
     const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
-    if (!/^\d{4}-\d{2}$/.test(periodoApi))
+    if (!/^\d{4}-\d{2}$/.test(periodoApi)) {
       return { ok: false, msg: "Período inválido. Usá MM-YYYY (ej: 02-2026)." };
+    }
 
     const problems = [];
     rowsCalc.forEach((r, idx) => {
@@ -728,7 +618,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     }
 
     return { ok: true, warn: problems.length > 0, periodoApi };
-  }, [filters, provInput, isContado, isCorriente, periodoUI, fecha, rowsCalc]);
+  }, [filters, provInput, isContado, periodoUI, fecha, rowsCalc]);
 
   const submit = useCallback(async () => {
     if (saving) return;
@@ -757,10 +647,21 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
     try {
       const { idUsuario } = getAuthInfo();
-
       const periodoApi = v.periodoApi;
-      const accionFinal = isCorriente ? "guardar" : accionContado;
-      const esPagadaFinal = isCorriente ? false : accionFinal === "pagar";
+
+      // ✅ id_tipo_venta según tipo
+      // CONTADO => 1
+      // CUENTA_CORRIENTE => 2
+      const idTipoVenta = isCorriente ? 2 : 1;
+
+      // ✅ SIN PANEL: comportamiento fijo
+      // - Contado: siempre pagada
+      // - Cuenta corriente: siempre pendiente
+      const accionFinal = isCorriente ? "guardar" : "pagar";
+      const esPagadaFinal = isCorriente ? false : true;
+
+      const proveedorIdFinal = Number(filters.id_proveedor) > 0 ? Number(filters.id_proveedor) : null;
+      const medioPagoIdFinal = isContado && Number(filters.id_medio_pago) > 0 ? Number(filters.id_medio_pago) : null;
 
       const payloads = rowsCalc
         .filter((r) => {
@@ -768,31 +669,47 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
           const total = Number(r.total || 0);
           return Number.isFinite(det) && det > 0 && total > 0;
         })
-        .map((r) => ({
-          idUsuario,
-          fecha,
-          periodo: periodoApi,
+        .map((r) => {
+          const base = {
+            idUsuario,
+            fecha,
+            periodo: periodoApi,
 
-          id_proveedor: Number(filters.id_proveedor) > 0 ? Number(filters.id_proveedor) : null,
-          proveedor_nombre: String(provInput || "").trim() || null,
-          proveedor_cuit: String(filters.proveedor_cuit || "").trim() || null,
+            id_tipo_venta: idTipoVenta,
 
-          id_medio_pago: isContado ? Number(filters.id_medio_pago) : null,
-          id_cuenta_corriente: isCorriente ? Number(filters.id_cuenta_corriente) : null,
+            // proveedor
+            id_proveedor: proveedorIdFinal,
+            proveedor_nombre: String(provInput || "").trim() || null,
+            proveedor_cuit: String(filters.proveedor_cuit || "").trim() || null,
 
-          id_detalle: Number(r.id_detalle),
-          cantidad: Math.round(Number(r.cantidad) * 100) / 100,
-          precio: Math.round(Number(r.precio) * 100) / 100,
-          iva_pct: Math.round(Number(r.ivaPct) * 100) / 100,
-          subtotal: Math.round(Number(r.subtotal) * 100) / 100,
-          iva_monto: Math.round(Number(r.ivaMonto) * 100) / 100,
-          total: Math.round(Number(r.total) * 100) / 100,
+            // líneas
+            id_detalle: Number(r.id_detalle),
+            cantidad: Math.round(Number(r.cantidad) * 100) / 100,
+            precio: Math.round(Number(r.precio) * 100) / 100,
+            iva_pct: Math.round(Number(r.ivaPct) * 100) / 100,
+            subtotal: Math.round(Number(r.subtotal) * 100) / 100,
+            iva_monto: Math.round(Number(r.ivaMonto) * 100) / 100,
+            total: Math.round(Number(r.total) * 100) / 100,
 
-          monto_total: Math.round(Number(r.total) * 100) / 100,
+            monto_total: Math.round(Number(r.total) * 100) / 100,
 
-          accion_compra: accionFinal,
-          es_pagada: esPagadaFinal,
-        }));
+            accion_compra: accionFinal,
+            es_pagada: esPagadaFinal,
+          };
+
+          // ✅ SOLO si es contado mandamos medio de pago
+          if (isContado) {
+            return {
+              ...base,
+              id_medio_pago: medioPagoIdFinal,
+              medio_pago_id: medioPagoIdFinal,
+              idMedioPago: medioPagoIdFinal,
+            };
+          }
+
+          // ✅ Cuenta corriente: no mandamos medio de pago
+          return base;
+        });
 
       if (!payloads.length) {
         showToast("advertencia", "No hay filas válidas para guardar.", 4200);
@@ -816,7 +733,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     validate,
     showToast,
     isCorriente,
-    accionContado,
     rowsCalc,
     fecha,
     filters,
@@ -934,9 +850,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                           min="0"
                           step="1"
                           value={r.cantidad}
-                          onChange={(e) =>
-                            updateRow(r.id, { cantidad: e.target.value === "" ? "" : Number(e.target.value) })
-                          }
+                          onChange={(e) => updateRow(r.id, { cantidad: e.target.value === "" ? "" : Number(e.target.value) })}
                           disabled={saving}
                         />
                       </div>
@@ -949,9 +863,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                           min="0"
                           step="0.01"
                           value={r.precio}
-                          onChange={(e) =>
-                            updateRow(r.id, { precio: e.target.value === "" ? "" : Number(e.target.value) })
-                          }
+                          onChange={(e) => updateRow(r.id, { precio: e.target.value === "" ? "" : Number(e.target.value) })}
                           disabled={saving}
                         />
                       </div>
@@ -984,13 +896,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
                       {/* Acción */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--action">
-                        <button
-                          type="button"
-                          onClick={() => removeRow(r.id)}
-                          disabled={saving}
-                          title="Eliminar fila"
-                          className="mi-cr-del"
-                        >
+                        <button type="button" onClick={() => removeRow(r.id)} disabled={saving} title="Eliminar fila" className="mi-cr-del">
                           ×
                         </button>
                       </div>
@@ -1030,13 +936,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
                 <div className="mi-cr-filters__dates">
                   <div className="fl-field">
-                    <input
-                      className="fl-input"
-                      type="date"
-                      value={fecha}
-                      onChange={(e) => onFechaChange(e.target.value)}
-                      disabled={saving}
-                    />
+                    <input className="fl-input" type="date" value={fecha} onChange={(e) => onFechaChange(e.target.value)} disabled={saving} />
                     <label className="fl-label">Fecha</label>
                   </div>
 
@@ -1089,12 +989,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                     </ul>
                   )}
 
-                  <button
-                    type="button"
-                    className="mi-cr-link"
-                    onClick={startAddProveedor}
-                    disabled={saving || addUI.saving}
-                  >
+                  <button type="button" className="mi-cr-link" onClick={startAddProveedor} disabled={saving || addUI.saving}>
                     + Agregar nuevo proveedor
                   </button>
                 </div>
@@ -1113,7 +1008,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                   <label className="fl-label">CUIT Proveedor (opcional)</label>
                 </div>
 
-                {/* Forma */}
+                {/* Tipo */}
                 <div className="fl-field">
                   <select
                     className="fl-input fl-select"
@@ -1128,72 +1023,42 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                   <label className="fl-label">Tipo de compra</label>
                 </div>
 
-                {/* Contado */}
+                {/* Contado: Medio de pago */}
                 {isContado && (
-                  <>
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(filters.id_medio_pago)}
-                        onChange={(e) => updateFilter("id_medio_pago", e.target.value)}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>Medio de pago *</option>
-                        {mediosPagoList.map((x) => (
-                          <option key={x.id ?? x.id_medio_pago} value={String(x.id ?? x.id_medio_pago)}>
-                            {x.nombre}
+                  <div className="fl-field">
+                    <select
+                      className="fl-input fl-select"
+                      value={String(filters.id_medio_pago)}
+                      onChange={(e) => updateFilter("id_medio_pago", e.target.value)}
+                      disabled={saving}
+                    >
+                      <option value={NULL_OPTION}>Medio de pago *</option>
+                      {mediosPagoList.map((x) => {
+                        const idMp = getMedioPagoId(x);
+                        const nombre = String(x?.nombre ?? "").trim();
+                        return (
+                          <option key={idMp ?? nombre ?? uid()} value={idMp != null ? String(idMp) : ""}>
+                            {nombre || "Medio"}
                           </option>
-                        ))}
-                      </select>
-                      <label className="fl-label">Medio de pago</label>
-                    </div>
-
-                    <div className="mi-card mi-card--full">
-                      <div className="mi-card__title">Pago (Contado)</div>
-
-                      <div className="mi-card__actionsRow">
-                        <button
-                          type="button"
-                          className={`mit-btn ${accionContado === "guardar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
-                          onClick={() => setAccionContado("guardar")}
-                          disabled={saving}
-                        >
-                          Guardar
-                        </button>
-
-                        <button
-                          type="button"
-                          className={`mit-btn ${accionContado === "pagar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
-                          onClick={() => setAccionContado("pagar")}
-                          disabled={saving}
-                        >
-                          Pagar
-                        </button>
-                      </div>
-
-                      <div className="mi-card__hint">
-                        {accionContado === "guardar" ? (
-                          <>
-                            * <b>Guardar</b>: queda <b>pendiente</b>.
-                          </>
-                        ) : (
-                          <>
-                            * <b>Pagar</b>: queda <b>pagada</b>.
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </>
+                        );
+                      })}
+                    </select>
+                    <label className="fl-label">Medio de pago</label>
+                  </div>
                 )}
 
+                {/* ✅ CUENTA CORRIENTE */}
+                {isCorriente && (
+                  <div className="mi-card mi-card--full">
+                    <div className="mi-card__title">Cuenta Corriente</div>
+                    <div className="mi-card__hint">
+                      * Se guardará como <b>Cuenta Corriente</b> y quedará <b>pendiente</b>.
+                    </div>
+                  </div>
+                )}
 
                 <div className="mi-cr-filters__actions">
-                  <button
-                    type="button"
-                    onClick={submit}
-                    disabled={saving}
-                    className="mit-btn mit-btn--solid mit-btn--block"
-                  >
+                  <button type="button" onClick={submit} disabled={saving} className="mit-btn mit-btn--solid mit-btn--block">
                     {saving ? "Guardando..." : "Guardar compra"}
                   </button>
 
@@ -1211,7 +1076,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
           </div>
         </div>
 
-        {/* Mini modal */}
         <AddCatalogMiniModal
           open={miniOpen}
           title={miniTitle}

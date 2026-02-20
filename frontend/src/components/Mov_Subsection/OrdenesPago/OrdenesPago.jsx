@@ -1,4 +1,6 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/components/Movimientos/OrdenesPago.jsx
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
 import "../../Global/Global_Section.css";
@@ -7,6 +9,9 @@ import "../../Global/Global_Section.css";
 import ModalPagarOrdenesPago from "./modales/ModalPagarOrdenesPago.jsx";
 import ModalEditarOrdenPago from "./modales/ModalEditarOrdenPago.jsx";
 import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
+
+// ✅ NUEVO: ver comprobante (iframe/pdf)
+import ModalVerComprobante from "../modales/ModalVerComprobante";
 
 // ✅ Toast
 import Toast from "../../Global/Toast.jsx";
@@ -19,8 +24,7 @@ import {
   faPenToSquare,
   faTrashCan,
   faMoneyBill1Wave,
-  faCircleCheck,
-  faClock,
+  faEye,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -173,8 +177,8 @@ function getAuthInfo() {
 /* =========================
    ORDENES PAGO = COMPRAS CC
 ========================= */
-const ID_TIPO_OPERACION_COMPRA = 2; // compras
-const ID_TIPO_VENTA_CUENTA_CORRIENTE = 2; // cuenta corriente
+const ID_TIPO_OPERACION_COMPRA = 2;
+const ID_TIPO_VENTA_CUENTA_CORRIENTE = 2;
 
 function isCompraCuentaCorriente(row) {
   const op = Number(row?.id_tipo_operacion ?? row?.idTipoOperacion ?? 0);
@@ -182,9 +186,38 @@ function isCompraCuentaCorriente(row) {
   return op === ID_TIPO_OPERACION_COMPRA && tv === ID_TIPO_VENTA_CUENTA_CORRIENTE;
 }
 
-// ✅ pagado viene del backend (EXISTS cobros)
 function isPagado(row) {
   return Number(row?.pagado ?? 0) === 1;
+}
+
+/* ✅ obtener id_comprobante desde la fila */
+function getIdComprobanteFromRow(row) {
+  const cand =
+    row?.id_comprobante ??
+    row?.comprobante_id ??
+    row?.idComprobante ??
+    row?.id_comprobante_archivo ??
+    row?.idComprobanteArchivo ??
+    0;
+  const n = Number(cand || 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/* ✅ si ya viene archivo_url desde backend */
+function getArchivoUrlFromRow(row) {
+  const u = row?.archivo_url ?? row?.comprobante_url ?? row?.url_comprobante ?? "";
+  const s = String(u || "").trim();
+  return s || "";
+}
+
+/* ✅ para iframe: si no manda X-Session, agregamos session_key en la URL */
+function appendSessionKey(url, sessionKey) {
+  const u = String(url || "").trim();
+  const sk = String(sessionKey || "").trim();
+  if (!u || !sk) return u;
+  if (u.toLowerCase().includes("session_key=")) return u;
+  const sep = u.includes("?") ? "&" : "?";
+  return `${u}${sep}session_key=${encodeURIComponent(sk)}`;
 }
 
 /* =========================
@@ -250,8 +283,6 @@ function yyyymmToMMYYYY(yyyymm) {
   return periodoToMMYYYY(s);
 }
 
-
-
 export default function OrdenesPago() {
   const API = `${BASE_URL}/api.php`;
 
@@ -267,7 +298,7 @@ export default function OrdenesPago() {
   const [loadingRows, setLoadingRows] = useState(false);
   const [error, setError] = useState("");
 
-  const [fPeriodo, setFPeriodo] = useState(""); // UI MM-YYYY
+  const [fPeriodo, setFPeriodo] = useState("");
   const [q, setQ] = useState("");
 
   const [showAll, setShowAll] = useState(false);
@@ -400,7 +431,6 @@ export default function OrdenesPago() {
         return null;
       }
 
-      // ✅ Cache hit
       if (cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
         const cached = cacheRef.current.get(cacheKey) || [];
         setError("");
@@ -409,7 +439,6 @@ export default function OrdenesPago() {
         return cached;
       }
 
-      // ✅ DEDUPE inflight
       const inflight = inflightRef.current.get(cacheKey);
       if (inflight?.promise) return await inflight.promise;
 
@@ -440,11 +469,13 @@ export default function OrdenesPago() {
             ? data.ordenes
             : [];
 
-          // ✅ pagado viene del backend (EXISTS cobros)
+          // ✅ normalizamos: periodo + pagado + id_comprobante/archivo_url
           const norm = list.map((r) => ({
             ...r,
             periodo: periodoToMMYYYY(r?.periodo),
             pagado: Number(r?.pagado ?? 0) === 1 ? 1 : 0,
+            id_comprobante: getIdComprobanteFromRow(r) || 0,
+            archivo_url: getArchivoUrlFromRow(r) || "",
           }));
 
           cacheRef.current.set(cacheKey, norm);
@@ -510,7 +541,6 @@ export default function OrdenesPago() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ sync período si desaparece
   useEffect(() => {
     const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos : [];
 
@@ -537,7 +567,6 @@ export default function OrdenesPago() {
     }
   }, [listasCtx?.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
 
-  // ✅ debounce búsqueda
   useEffect(() => {
     if (!fPeriodo) return;
 
@@ -557,6 +586,38 @@ export default function OrdenesPago() {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
   }, [q, fPeriodo, loadRows]);
+
+  /* =========================
+     ✅ Modal Ver Comprobante (OJITO)
+  ========================= */
+  const [openVer, setOpenVer] = useState(false);
+  const [verUrl, setVerUrl] = useState("");
+  const closeVerModal = useCallback(() => {
+    setOpenVer(false);
+    setVerUrl("");
+  }, []);
+
+  const openVerModal = useCallback((row) => {
+    const { sessionKey } = getAuthInfo();
+
+    const idComp = getIdComprobanteFromRow(row);
+    if (!idComp) {
+      // no abras modal si no hay comprobante
+      return;
+    }
+
+    // ✅ mejor: siempre usar el endpoint de descarga por id (consistente)
+    let u = `${BASE_URL}/api.php?action=comprobantes_descargar&id_comprobante=${idComp}`;
+
+    // (si querés, podés usar archivo_url del backend como alternativa)
+    // const urlFromRow = getArchivoUrlFromRow(row);
+    // if (urlFromRow) u = urlFromRow;
+
+    u = appendSessionKey(u, sessionKey);
+
+    setVerUrl(u);
+    setOpenVer(true);
+  }, []);
 
   /* =========================
      Modales
@@ -650,10 +711,16 @@ export default function OrdenesPago() {
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
 
         invalidateCacheForPeriodo(fPeriodo);
-        await loadRows({ periodo: fPeriodo, q });
 
-        await refreshLists?.();
-        showToast("exito", data?.mensaje || "Pago confirmado.", 2400);
+        Promise.resolve().then(async () => {
+          try {
+            await loadRows({ periodo: fPeriodo, q });
+            await refreshLists?.();
+          } catch {}
+        });
+
+        showToast("exito", data?.mensaje || "Pago confirmado.", 1800);
+        return true;
       } catch (e) {
         showToast("error", e?.message || "Error confirmando pago.", 4200);
         throw e;
@@ -733,7 +800,7 @@ export default function OrdenesPago() {
   ]);
 
   /* =========================
-     Filtrado final (SIN tabs)
+     Filtrado final
   ========================= */
   const displayKey = loadedKey || currentKey;
   const display = useMemo(() => splitKey(displayKey), [displayKey]);
@@ -744,7 +811,6 @@ export default function OrdenesPago() {
 
     const displayQ = display?.qKey || "";
 
-    // ✅ mismo filtrado que antes, pero ahora mostramos TODO (pagado y pendiente)
     return (Array.isArray(rows) ? rows : [])
       .filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(periodoToMMYYYY(fPer)))
       .filter((r) => isCompraCuentaCorriente(r))
@@ -765,50 +831,24 @@ export default function OrdenesPago() {
   ========================= */
   const columns = useMemo(() => {
     return [
-
+      { key: "fecha", label: "FECHA", align: "center", fr: 0.9, render: (r) => safeText(formatFechaDMY(r.fecha)) },
+      { key: "detalle", label: "DESCRIPCIÓN", fr: 2.4, strong: true, align: "left", render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto) },
+      { key: "proveedor", label: "PROVEEDOR", fr: 1.8, align: "center", render: (r) => safeText(r.proveedor) },
       {
-        key: "fecha",
-        label: "FECHA",
+        key: "estado",
+        label: "ESTADO",
         align: "center",
-        fr: 0.9,
-        render: (r) => safeText(formatFechaDMY(r.fecha)),
+        fr: 1.0,
+        render: (r) => {
+          const pag = isPagado(r);
+          return (
+            <span className={`mov-chip ${pag ? "mov-chip--ok" : "mov-chip--warn"}`}>
+              {pag ? "PAGADO" : "PENDIENTE"}
+            </span>
+          );
+        },
       },
-      {
-        key: "detalle",
-        label: "DESCRIPCIÓN",
-        fr: 2.4,
-        strong: true,
-        align: "left",
-        render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
-      },
-      {
-        key: "proveedor",
-        label: "PROVEEDOR",
-        fr: 1.8,
-        align: "center",
-        render: (r) => safeText(r.proveedor),
-      },
-      {
-  key: "estado",
-  label: "ESTADO",
-  align: "center",
-  fr: 1.0,
-  render: (r) => {
-    const pag = isPagado(r);
-    return (
-      <span className={`mov-chip ${pag ? "mov-chip--ok" : "mov-chip--warn"}`}>
-        {pag ? "PAGADO" : "PENDIENTE"}
-      </span>
-    );
-  },
-},
-      {
-        key: "monto",
-        label: "MONTO",
-        fr: 1.1,
-        align: "center",
-        render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
-      },
+      { key: "monto", label: "MONTO", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
       { key: "acciones", label: "ACCIONES", fr: 0.9, align: "center", render: () => null },
     ];
   }, []);
@@ -846,13 +886,9 @@ export default function OrdenesPago() {
         {columns.map((c) => {
           if (c.key === "acciones") {
             return (
-              <div
-                key={c.key}
-                className="mov-gridCell mov-gridCell--actions is-center"
-                role="cell"
-                data-label={c.label}
-              >
+              <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
                 <div className="mov-skelActions">
+                  <span className="mov-skelIcon" />
                   <span className="mov-skelIcon" />
                   <span className="mov-skelIcon" />
                 </div>
@@ -883,7 +919,7 @@ export default function OrdenesPago() {
   };
 
   /* =========================
-     Excel (SIN tabs)
+     Excel
   ========================= */
   const exportToExcel = useCallback(() => {
     try {
@@ -933,53 +969,26 @@ export default function OrdenesPago() {
   return (
     <div className="mov-page mov-page--ordenesPago">
       {toast && (
-        <Toast
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={closeToast}
-        />
+        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
       )}
 
-      {errorListsCtx && (
-        <div className="mov-alert" role="alert">
-          {errorListsCtx}
-        </div>
-      )}
-      {error && (
-        <div className="mov-alert" role="alert">
-          {error}
-        </div>
-      )}
+      {errorListsCtx && <div className="mov-alert" role="alert">{errorListsCtx}</div>}
+      {error && <div className="mov-alert" role="alert">{error}</div>}
 
       <section className="mov-card mov-card--table">
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
             <div>
               <div className="mov-card__title">Movimientos · Órdenes de Pago (Compras)</div>
-
               <div className="mov-card__hint">
                 Mostrando <b>{mostrando}</b>
-                {hayMas ? (
-                  <>
-                    {" "}
-                    de <b>{total}</b>
-                  </>
-                ) : (
-                  <>
-                    {" "}
-                    (Total: <b>{total}</b>)
-                  </>
-                )}
+                {hayMas ? <> de <b>{total}</b></> : <> (Total: <b>{total}</b>)</>}
               </div>
             </div>
 
             <div className="mov-headFilters">
               <div className="mov-filter">
-                <label>
-                  <FontAwesomeIcon icon={faCalendarDays} /> Período
-                </label>
-
+                <label><FontAwesomeIcon icon={faCalendarDays} /> Período</label>
                 <select
                   value={periodoToMMYYYY(fPeriodo)}
                   onChange={(e) => handleChangePeriodo(e.target.value)}
@@ -987,27 +996,17 @@ export default function OrdenesPago() {
                 >
                   {(lists.periodos || []).map((p) => {
                     const ui = periodoToMMYYYY(p);
-                    return (
-                      <option key={ui} value={ui}>
-                        {ui}
-                      </option>
-                    );
+                    return <option key={ui} value={ui}>{ui}</option>;
                   })}
                 </select>
               </div>
 
               <div className="mov-search">
-                <label>
-                  <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                </label>
-
+                <label><FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda</label>
                 <div className="mov-searchInput">
                   <input
                     value={q}
-                    onChange={(e) => {
-                      setQ(e.target.value);
-                      setShowAll(false);
-                    }}
+                    onChange={(e) => { setQ(e.target.value); setShowAll(false); }}
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
@@ -1057,7 +1056,6 @@ export default function OrdenesPago() {
           </div>
         </div>
 
-        {/* HEADER */}
         <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
           {columns.map((c) => (
             <div
@@ -1075,14 +1073,9 @@ export default function OrdenesPago() {
           ))}
         </div>
 
-        {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div
-            className={[
-              "mov-gridBody",
-              "mov-gridBody--relative",
-              softLoading ? "mov-softLoading" : "",
-            ].join(" ")}
+            className={["mov-gridBody", "mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}
             style={{ position: "relative" }}
           >
             {visibleRows.map((r) => (
@@ -1095,6 +1088,8 @@ export default function OrdenesPago() {
                 {columns.map((c) => {
                   if (c.key === "acciones") {
                     const pag = isPagado(r);
+                    const idComp = getIdComprobanteFromRow(r);
+                    const hasPdf = pag && idComp > 0;
 
                     return (
                       <div
@@ -1104,6 +1099,22 @@ export default function OrdenesPago() {
                         role="cell"
                       >
                         <div className="mov-actionsInline">
+                          <button
+                            type="button"
+                            className="mov-iconBtn"
+                            title={
+                              hasPdf
+                                ? "Ver comprobante"
+                                : pag
+                                ? "Pagado, pero sin comprobante"
+                                : "Primero confirmá el pago"
+                            }
+                            onClick={() => hasPdf && openVerModal(r)}
+                            disabled={loadingRows || loadingListsCtx || !hasPdf}
+                          >
+                            <FontAwesomeIcon icon={faEye} />
+                          </button>
+
                           <button
                             type="button"
                             className="mov-iconBtn"
@@ -1149,9 +1160,7 @@ export default function OrdenesPago() {
                         c.align === "right" ? "is-right" : "",
                         c.align === "center" ? "is-center" : "",
                         c.strong ? "is-strong" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
+                      ].filter(Boolean).join(" ")}
                       role="cell"
                       title={typeof val === "string" ? val : undefined}
                     >
@@ -1196,7 +1205,13 @@ export default function OrdenesPago() {
         </div>
       </section>
 
-      {/* MODAL PAGAR */}
+      <ModalVerComprobante
+        open={openVer}
+        url={verUrl}
+        onClose={closeVerModal}
+        title="Comprobante (Orden de Pago)"
+      />
+
       <ModalPagarOrdenesPago
         open={openPagar}
         onClose={closePagarModal}
@@ -1207,7 +1222,6 @@ export default function OrdenesPago() {
         lists={listasCtx || {}}
       />
 
-      {/* MODAL EDITAR */}
       <ModalEditarOrdenPago
         open={openEditar}
         row={editRow}
@@ -1218,7 +1232,6 @@ export default function OrdenesPago() {
         onSave={onSaveEditar}
       />
 
-      {/* DELETE */}
       <ModalEliminarMovimientos
         open={openDel}
         row={selectedRow}

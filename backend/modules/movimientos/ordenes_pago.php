@@ -114,6 +114,7 @@ function op_item_payload_from_src(array $src, float $monto_total, int $id_detall
    - SOLO COMPRAS (id_tipo_operacion=2)
    - SOLO CUENTA CORRIENTE (id_tipo_venta=2)
    - pagado = EXISTS cobros
+   ✅ FIX: devolver id_comprobante + archivo_url (para habilitar ojo)
 ========================================================= */
 function ordenes_pago_listar(PDO $pdo): void
 {
@@ -171,6 +172,9 @@ function ordenes_pago_listar(PDO $pdo): void
       cb.id_cobro,
       cb.fecha_cobro,
       cb.monto AS monto_cobrado,
+      cb.id_comprobante AS id_comprobante,             -- ✅ FIX
+      COALESCE(ca.archivo_url,'') AS archivo_url,      -- ✅ FIX
+      COALESCE(ca.archivo_mime,'') AS archivo_mime,    -- (opcional)
       COALESCE(mp2.nombre,'') AS medio_pago_cobro
     FROM movimientos m
       LEFT JOIN clasificaciones c       ON c.id_clasificacion = m.id_clasificacion
@@ -210,6 +214,7 @@ function ordenes_pago_listar(PDO $pdo): void
         ) x2 ON x2.id_movimiento = c1.id_movimiento AND x2.max_id = c1.id_cobro
       ) cb ON cb.id_movimiento = m.id_movimiento
 
+      LEFT JOIN comprobantes_archivos ca ON ca.id_comprobante = cb.id_comprobante  -- ✅ FIX
       LEFT JOIN medios_pago mp2 ON mp2.id_medio_pago = cb.id_medio_pago
   ";
 
@@ -291,6 +296,11 @@ function ordenes_pago_listar(PDO $pdo): void
       'fecha_cobro' => (string)($r['fecha_cobro'] ?? ''),
       'monto_cobrado' => $r['monto_cobrado'] === null ? null : (float)$r['monto_cobrado'],
       'medio_pago_cobro' => (string)($r['medio_pago_cobro'] ?? ''),
+
+      // ✅ FIX: para el “ojo”
+      'id_comprobante' => (int)($r['id_comprobante'] ?? 0),
+      'archivo_url' => (string)($r['archivo_url'] ?? ''),
+      'archivo_mime' => (string)($r['archivo_mime'] ?? ''),
     ];
   }
 
@@ -299,7 +309,6 @@ function ordenes_pago_listar(PDO $pdo): void
 
 /* =========================================================
    ACTUALIZAR (POST)
-   (lo mismo que ya tenías)
 ========================================================= */
 function ordenes_pago_actualizar(PDO $pdo): void
 {
@@ -477,12 +486,6 @@ function ordenes_pago_eliminar(PDO $pdo): void
 
 /* =========================================================
    CONFIRMAR PAGO (POST)
-   - ids_movimiento: [..]
-   - id_medio_pago: X
-   EFECTO:
-   - Inserta en cobros (si no existía)
-   - Actualiza movimientos.id_medio_pago
-   - Estado = EXISTE cobro
 ========================================================= */
 function ordenes_pago_confirmar_pago(PDO $pdo): void
 {
@@ -526,14 +529,12 @@ function ordenes_pago_confirmar_pago(PDO $pdo): void
       throw new RuntimeException('No se encontraron movimientos válidos (compra cuenta corriente).');
     }
 
-    // map monto por id
     $montoById = [];
     foreach ($movs as $m) {
       $mid = (int)$m['id_movimiento'];
       $montoById[$mid] = (float)($m['monto_total'] ?? 0);
     }
 
-    // ya pagados?
     $stPaid = $pdo->prepare("SELECT id_movimiento FROM cobros WHERE id_movimiento IN ($placeholders)");
     $stPaid->execute($clean);
     $paidRows = $stPaid->fetchAll(PDO::FETCH_ASSOC) ?: [];

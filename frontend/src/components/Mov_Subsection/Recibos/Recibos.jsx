@@ -1,13 +1,17 @@
 // src/components/Movimientos/Recibos.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
-import "../../Global/Global_Section.css"; // ✅ misma estética
+import "../../Global/Global_Section.css";
 
 import Toast from "../../Global/Toast.jsx";
 
 import ModalEditarRecibo from "./modales/ModalEditarRecibo.jsx";
 import ModalPagarRecibos from "./modales/ModalPagarRecibos.jsx";
 import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
+
+
+// ✅ Ver comprobante
+import ModalVerComprobante from "../modales/ModalVerComprobante.jsx";
 
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -156,7 +160,13 @@ function getAuthInfo() {
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand = u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
@@ -267,16 +277,16 @@ export default function Recibos() {
   /* =========================
      API helpers (X-Session)
   ========================= */
-  const buildHeaders = useCallback(() => {
+  const buildHeadersGET = useCallback(() => {
     const { sessionKey } = getAuthInfo();
-    const h = { "Content-Type": "application/json" };
+    const h = {};
     if (sessionKey) h["X-Session"] = sessionKey;
     return h;
   }, []);
 
-  const buildHeadersGET = useCallback(() => {
+  const buildHeaders = useCallback(() => {
     const { sessionKey } = getAuthInfo();
-    const h = {};
+    const h = { "Content-Type": "application/json" };
     if (sessionKey) h["X-Session"] = sessionKey;
     return h;
   }, []);
@@ -325,20 +335,23 @@ export default function Recibos() {
   }, []);
 
   /* =========================
-     ✅ helper: aplicar comprobante al row (activa ojo al instante)
+     ✅ helper: aplicar comprobante a UNO o VARIOS movimientos
   ========================= */
-  const applyComprobanteToRow = useCallback((idMovimiento, idComprobante) => {
-    const idMov = Number(idMovimiento || 0);
+  const applyComprobanteToRows = useCallback((idsMovimiento, idComprobante) => {
     const idComp = Number(idComprobante || 0);
-    if (!idMov || !idComp) return;
+    if (!idComp) return;
+
+    const ids = Array.isArray(idsMovimiento)
+      ? idsMovimiento.map((x) => Number(x || 0)).filter(Boolean)
+      : [Number(idsMovimiento || 0)].filter(Boolean);
+
+    if (!ids.length) return;
 
     setRows((prev) =>
       (Array.isArray(prev) ? prev : []).map((r) => {
-        if (Number(r?.id_movimiento || 0) !== idMov) return r;
-        return {
-          ...r,
-          id_comprobante: idComp,
-        };
+        const idMov = Number(r?.id_movimiento || 0);
+        if (!idMov || !ids.includes(idMov)) return r;
+        return { ...r, id_comprobante: idComp };
       })
     );
   }, []);
@@ -537,7 +550,9 @@ export default function Recibos() {
 
       if (!alive) return;
 
-      const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos.map(periodoToMMYYYY) : [];
+      const periodos = Array.isArray(listasCtx?.periodos)
+        ? listasCtx.periodos.map(periodoToMMYYYY)
+        : [];
       const perDefault = periodos[0] || "";
 
       if (perDefault) {
@@ -563,7 +578,9 @@ export default function Recibos() {
 
   // ✅ sync período si desaparece
   useEffect(() => {
-    const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos.map(periodoToMMYYYY) : [];
+    const periodos = Array.isArray(listasCtx?.periodos)
+      ? listasCtx.periodos.map(periodoToMMYYYY)
+      : [];
 
     if (periodos.length === 0) {
       if (fPeriodo !== "") {
@@ -636,7 +653,13 @@ export default function Recibos() {
   ========================= */
   const columns = useMemo(() => {
     return [
-      { key: "fecha", label: "FECHA", align: "center", fr: 0.9, render: (r) => safeText(formatFechaDMY(r.fecha)) },
+      {
+        key: "fecha",
+        label: "FECHA",
+        align: "center",
+        fr: 0.9,
+        render: (r) => safeText(formatFechaDMY(r.fecha)),
+      },
       {
         key: "detalle",
         label: "DESCRIPCION",
@@ -645,7 +668,13 @@ export default function Recibos() {
         align: "left",
         render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
       },
-      { key: "cliente", label: "CLIENTE", fr: 1.7, align: "center", render: (r) => safeText(r.cliente) },
+      {
+        key: "cliente",
+        label: "CLIENTE",
+        fr: 1.7,
+        align: "center",
+        render: (r) => safeText(r.cliente),
+      },
       {
         key: "estado",
         label: "ESTADO",
@@ -660,8 +689,16 @@ export default function Recibos() {
           );
         },
       },
-      { key: "monto", label: "MONTO", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
-      { key: "acciones", label: "ACCIONES", fr: 1.2, align: "center", render: () => null },
+
+      {
+        key: "monto",
+        label: "MONTO",
+        fr: 1.1,
+        align: "center",
+        render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
+      },
+      { key: "acciones", label: "ACCIONES", fr: 0.9, align: "center", render: () => null },
+
     ];
   }, []);
 
@@ -735,34 +772,39 @@ export default function Recibos() {
 
   /* =========================
      ✅ callback: cuando se FINALIZA el recibo y se guarda el comprobante
-     (esto es lo que te activa el ojo sin recargar)
+     AHORA: aplica el comprobante a TODOS los movimientos pagados.
   ========================= */
   const onReciboFinalizado = useCallback(
     async (saved, fallback = {}) => {
-      // intentamos resolver IDs de forma tolerante
-      const idMov =
-        Number(saved?.id_movimiento || saved?.idMovimiento || saved?.movimiento_id || 0) ||
-        Number(fallback?.idMovimiento || 0) ||
-        0;
-
       const idComp =
         Number(saved?.id_comprobante || saved?.idComprobante || saved?.comprobante_id || saved?.id || 0) ||
         Number(fallback?.idComprobante || 0) ||
         0;
 
-      if (idMov > 0 && idComp > 0) {
-        // ✅ 1) update optimista -> activa el ojo al toque
-        applyComprobanteToRow(idMov, idComp);
+      const ids =
+        (Array.isArray(saved?.ids_movimiento) ? saved.ids_movimiento : null) ||
+        (Array.isArray(fallback?.idsMovimiento) ? fallback.idsMovimiento : null) ||
+        (Array.isArray(fallback?.ids_movimiento) ? fallback.ids_movimiento : null) ||
+        null;
+
+      if (idComp > 0 && ids && ids.length) {
+        // ✅ 1) update optimista -> activa el ojo al toque EN TODOS
+        applyComprobanteToRows(ids, idComp);
+      } else if (idComp > 0) {
+        // fallback viejo: si solo viene uno
+        const idMov =
+          Number(saved?.id_movimiento || saved?.idMovimiento || saved?.movimiento_id || 0) ||
+          Number(fallback?.idMovimiento || 0) ||
+          0;
+        if (idMov > 0) applyComprobanteToRows([idMov], idComp);
       }
 
-      // ✅ 2) refresh real -> traer data fresca y que quede igual a DB
+      // ✅ 2) refresh real
       try {
         const per = periodoToMMYYYY(fPeriodo);
         const qq = (q || "").trim();
 
         invalidateCacheForPeriodo(per);
-
-        // evitamos que el debounce nos pise
         skipSearchRef.current = true;
 
         await loadRows({ periodo: per, q: qq, offset: 0, append: false });
@@ -771,21 +813,12 @@ export default function Recibos() {
           await refreshLists();
         } catch {}
 
-        showToast("exito", "Comprobante guardado. Ya podés abrirlo con el ojo.", 2600);
+        showToast("exito", "Comprobante guardado y vinculado a todos los pagos ✅", 2600);
       } catch (e) {
-        // igual queda el update optimista; esto es solo por si falla el refresh
         showToast("error", e?.message || "El comprobante se guardó, pero no pude refrescar la lista.", 4200);
       }
     },
-    [
-      applyComprobanteToRow,
-      fPeriodo,
-      q,
-      invalidateCacheForPeriodo,
-      loadRows,
-      refreshLists,
-      showToast,
-    ]
+    [applyComprobanteToRows, fPeriodo, q, invalidateCacheForPeriodo, loadRows, refreshLists, showToast]
   );
 
   /* =========================
@@ -810,7 +843,6 @@ export default function Recibos() {
           idUsuario,
         });
 
-        // OJO: acá todavía no hay comprobante, se genera al FINALIZAR en el otro modal.
         invalidateCacheForPeriodo(fPeriodo);
         await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
 
@@ -1061,7 +1093,8 @@ export default function Recibos() {
             <div>
               <div className="mov-card__title">Movimientos · Recibos</div>
               <div className="mov-card__hint">
-                Total <b>{stats.total}</b> · Pendientes <b>{stats.pendientes}</b> · Pagados <b>{stats.pagados}</b>
+                Total <b>{stats.total}</b> · Pendientes <b>{stats.pendientes}</b> · Pagados{" "}
+                <b>{stats.pagados}</b>
                 {" · "}
                 Mostrando <b>{filteredRows.length}</b>
                 {hasMore ? " (hay más)" : ""}
@@ -1230,7 +1263,13 @@ export default function Recibos() {
                                   className="mov-iconBtn"
                                   title="Pagar"
                                   onClick={() => openPagarModal(r)}
-                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || loadingClienteDeudas}
+                                  disabled={
+                                    loadingRows ||
+                                    loadingMore ||
+                                    loadingAll ||
+                                    loadingListsCtx ||
+                                    loadingClienteDeudas
+                                  }
                                 >
                                   <FontAwesomeIcon icon={faMoneyBill1Wave} />
                                 </button>
@@ -1253,7 +1292,11 @@ export default function Recibos() {
                                   className="mov-iconBtn mov-iconBtn--danger"
                                   title="Eliminar"
                                   disabled={
-                                    loadingRows || loadingMore || loadingAll || loadingListsCtx || deletingId === r.id_movimiento
+                                    loadingRows ||
+                                    loadingMore ||
+                                    loadingAll ||
+                                    loadingListsCtx ||
+                                    deletingId === r.id_movimiento
                                   }
                                   onClick={() => {
                                     setSelectedRow(r);
@@ -1333,7 +1376,7 @@ export default function Recibos() {
         cliente={pagarCliente}
         deudas={pagarDeudas}
         lists={lists}
-        // ✅ CLAVE: cuando el recibo se FINALIZA y se guarda el comprobante
+        // ✅ CLAVE: ahora llega ids_movimiento y se aplica a todos
         onReciboFinalizado={onReciboFinalizado}
       />
 

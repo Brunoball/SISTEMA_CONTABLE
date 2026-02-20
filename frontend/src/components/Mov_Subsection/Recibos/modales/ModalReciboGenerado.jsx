@@ -1,4 +1,3 @@
-// src/components/Mov_Subsection/modales/ModalReciboGenerado.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_Modals.css";
@@ -115,7 +114,16 @@ function copyComputedStylesDeep(srcNode, dstNode, srcWin) {
 }
 
 function getSessionKey() {
-  const keys = ["session_key", "SESSION_KEY", "balto_session_key", "BALTO_SESSION_KEY", "x_session", "X_SESSION", "X-Session", "x-session"];
+  const keys = [
+    "session_key",
+    "SESSION_KEY",
+    "balto_session_key",
+    "BALTO_SESSION_KEY",
+    "x_session",
+    "X_SESSION",
+    "X-Session",
+    "x-session",
+  ];
   for (const k of keys) {
     const v = localStorage.getItem(k);
     if (v && String(v).trim() !== "") return String(v).trim();
@@ -144,6 +152,31 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 60000) {
   }
 }
 
+async function parseJsonFromResponse(res) {
+  const text = await res.text();
+  if (!text) return { ok: false, data: null, text: "" };
+  try {
+    return { ok: true, data: JSON.parse(text), text };
+  } catch {
+    return { ok: false, data: null, text };
+  }
+}
+
+function extractIdComprobante(data) {
+  const cand =
+    data?.id_comprobante ??
+    data?.idComprobante ??
+    data?.comprobante_id ??
+    data?.data?.id_comprobante ??
+    data?.data?.idComprobante ??
+    data?.data?.comprobante_id ??
+    data?.data?.id ??
+    data?.id ??
+    0;
+  const n = Number(cand || 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 export default function ModalReciboGenerado({
   open,
   onClose,
@@ -151,7 +184,8 @@ export default function ModalReciboGenerado({
   html,
   title = "Recibo",
   onToast,
-  idMovimiento = null,
+  // ✅ AHORA: varios movimientos
+  idsMovimientos = [],
   idCobro = null,
 }) {
   const firstFocusRef = useRef(null);
@@ -160,21 +194,35 @@ export default function ModalReciboGenerado({
 
   const [busy, setBusy] = useState(false);
 
+  // ✅ evita doble guardado
+  const savedRef = useRef(null);
+  const savingRef = useRef(false);
+
   const fullHtml = useMemo(() => ensureFullHtmlDocument(html, title), [html, title]);
+
+  const idsMovs = useMemo(() => {
+    const arr = Array.isArray(idsMovimientos) ? idsMovimientos : [idsMovimientos];
+    return arr.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0);
+  }, [idsMovimientos]);
 
   useEffect(() => {
     if (!open) return;
     setTimeout(() => firstFocusRef.current?.focus(), 50);
   }, [open]);
 
+  // ✅ ESC ahora cierra pero GUARDANDO
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
-      if (e.key === "Escape") onClose?.();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        requestCloseAndSave("escape");
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const buildWrapperForPdf = useCallback(async () => {
     const iframe = viewFrameRef.current;
@@ -272,6 +320,7 @@ export default function ModalReciboGenerado({
     }
   }, [title, onToast, buildWrapperForPdf]);
 
+  // ✅ 1) SUBE PDF (una sola vez)
   const uploadPdfToServer = useCallback(
     async (pdfBlob) => {
       const sessionKey = getSessionKey();
@@ -285,8 +334,12 @@ export default function ModalReciboGenerado({
       fd.append("tipo", "RECIBO");
       fd.append("titulo", String(title || "Recibo"));
 
-      const mov = Number(idMovimiento);
-      if (Number.isFinite(mov) && mov > 0) fd.append("id_movimiento", String(mov));
+      // ✅ compat: mandamos también 1 id_movimiento “principal”
+      if (idsMovs[0]) fd.append("id_movimiento", String(idsMovs[0]));
+
+      // ✅ NUEVO: mandamos TODOS los ids (si tu backend los acepta)
+      // (no rompe nada si el backend los ignora)
+      idsMovs.forEach((id) => fd.append("ids_movimiento[]", String(id)));
 
       const cob = Number(idCobro);
       if (Number.isFinite(cob) && cob > 0) fd.append("id_cobro", String(cob));
@@ -305,36 +358,132 @@ export default function ModalReciboGenerado({
         60000
       );
 
-      const text = await res.text();
-      let data = null;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = null;
-      }
+      const { ok, data, text } = await parseJsonFromResponse(res);
 
-      if (!res.ok || !data?.exito) {
+      if (!res.ok || !ok || !data?.exito) {
         const msg =
           data?.mensaje ||
-          `No se pudo guardar el comprobante (HTTP ${res.status}).` + (text ? ` Respuesta: ${text.slice(0, 250)}` : "");
+          `No se pudo guardar el comprobante (HTTP ${res.status}).` +
+            (text ? ` Respuesta: ${text.slice(0, 250)}` : "");
         throw new Error(msg);
       }
 
-      const serverUrl = String(data?.archivo_url || data?.data?.archivo_url || "").trim();
-      if (!serverUrl) throw new Error("El backend respondió OK pero no devolvió archivo_url.");
+      const idComp = extractIdComprobante(data);
+      if (!idComp) {
+        // igual puede funcionar si el backend devuelve id dentro de otro campo:
+        // si no hay id, no podemos asociar a múltiples
+        throw new Error("El backend guardó el PDF pero no devolvió id_comprobante (necesario para vincular a varios).");
+      }
 
-      return { ...data, archivo_url: serverUrl };
+      return { ...data, id_comprobante: idComp };
     },
-    [title, idMovimiento, idCobro]
+    [title, idsMovs, idCobro]
   );
 
-  const handleFinalizar = useCallback(async () => {
+  // ✅ 2) ASOCIAR id_comprobante A TODOS los movimientos
+  const asociarComprobanteAMovimientos = useCallback(async (idComprobante, ids) => {
+    const sessionKey = getSessionKey();
+    if (!sessionKey) throw new Error("Sesión inválida (no hay X-Session).");
+
+    const url = getApiPhpUrl();
+
+    const ACTIONS_BATCH = [
+      "comprobantes_asociar_movimientos",
+      "comprobantes_vincular_movimientos",
+      "comprobantes_asignar_movimientos",
+      "comprobantes_set_movimientos",
+    ];
+
+    const ACTIONS_ONE = [
+      "comprobantes_asociar_movimiento",
+      "comprobantes_vincular_movimiento",
+      "comprobantes_asignar_movimiento",
+      "comprobantes_set_movimiento",
+    ];
+
+    const postJson = async (action, payload) => {
+      const res = await fetchWithTimeout(
+        `${url}?action=${encodeURIComponent(action)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Session": sessionKey },
+          body: JSON.stringify(payload || {}),
+        },
+        60000
+      );
+      const { ok, data, text } = await parseJsonFromResponse(res);
+      if (!res.ok || !ok || !data?.exito) {
+        const msg = data?.mensaje || `HTTP ${res.status}` + (text ? ` ${text.slice(0, 200)}` : "");
+        throw new Error(msg);
+      }
+      return data;
+    };
+
+    // ✅ primero intentamos batch (1 request)
+    for (const action of ACTIONS_BATCH) {
+      try {
+        const data = await postJson(action, {
+          id_comprobante: Number(idComprobante),
+          ids_movimiento: ids,
+        });
+        return data;
+      } catch (e) {
+        const msg = String(e?.message || "").toLowerCase();
+        if (msg.includes("acción no válida") || msg.includes("accion no valida") || msg.includes("action no valida")) {
+          continue;
+        }
+        // si falla por otra cosa, cortamos
+        throw e;
+      }
+    }
+
+    // ✅ si no existe batch, intentamos uno por uno
+    for (const id of ids) {
+      let okOne = false;
+      for (const action of ACTIONS_ONE) {
+        try {
+          await postJson(action, {
+            id_comprobante: Number(idComprobante),
+            id_movimiento: Number(id),
+          });
+          okOne = true;
+          break;
+        } catch (e) {
+          const msg = String(e?.message || "").toLowerCase();
+          if (msg.includes("acción no válida") || msg.includes("accion no valida") || msg.includes("action no valida")) {
+            continue;
+          }
+          throw e;
+        }
+      }
+      if (!okOne) {
+        throw new Error(
+          `Tu backend no tiene action para asociar comprobante a movimientos.\n` +
+            `Probé batch: ${ACTIONS_BATCH.join(", ")}\n` +
+            `Probé 1x1: ${ACTIONS_ONE.join(", ")}\n` +
+            `Decime cómo se llama tu action y la conecto.`
+        );
+      }
+    }
+
+    return { exito: true };
+  }, []);
+
+  // ✅ Guardado central (para X / Escape / Finalizar)
+  const ensureSaved = useCallback(async () => {
+    if (savedRef.current) return savedRef.current;
+    if (savingRef.current) {
+      while (savingRef.current) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 80));
+      }
+      if (savedRef.current) return savedRef.current;
+    }
+
+    if (!idsMovs.length) throw new Error("Faltan idsMovimientos válidos para vincular el recibo.");
+
+    savingRef.current = true;
     try {
-      setBusy(true);
-
-      const mov = Number(idMovimiento);
-      if (!Number.isFinite(mov) || mov <= 0) throw new Error("Falta idMovimiento válido para vincular el recibo.");
-
       const wrapper = await buildWrapperForPdf();
 
       const opt = {
@@ -353,30 +502,62 @@ export default function ModalReciboGenerado({
         pagebreak: { mode: ["css", "legacy"] },
       };
 
-      // ✅ Genera BLOB SOLO para subirlo
+      // ✅ BLOB para subir
       const worker = html2pdf().set(opt).from(wrapper).toPdf();
       const pdfBlob = await worker.output("blob");
       if (!pdfBlob) throw new Error("No se pudo generar el PDF (blob).");
 
+      // 1) subir
       const saved = await uploadPdfToServer(pdfBlob);
+      const idComp = extractIdComprobante(saved);
 
-      onToast?.("exito", "Recibo guardado correctamente ✅", 2500);
+      // 2) asociar a TODOS
+      await asociarComprobanteAMovimientos(idComp, idsMovs);
 
-      // ✅ Pasamos URL REAL (server), NO blob
-      onFinalizar?.(saved);
+      const finalSaved = { ...saved, id_comprobante: idComp, ids_movimiento: idsMovs };
+      savedRef.current = finalSaved;
 
-      onClose?.();
-    } catch (e) {
-      onToast?.("error", e?.message || "No se pudo finalizar y guardar.", 4500);
+      onToast?.("exito", "Recibo guardado y vinculado a todos los registros ✅", 2600);
+      return finalSaved;
     } finally {
-      setBusy(false);
+      savingRef.current = false;
     }
-  }, [buildWrapperForPdf, uploadPdfToServer, onFinalizar, onClose, onToast, idMovimiento]);
+  }, [idsMovs, buildWrapperForPdf, uploadPdfToServer, asociarComprobanteAMovimientos, onToast]);
+
+  // ✅ Cerrar SIEMPRE guardando
+  const requestCloseAndSave = useCallback(
+    async (reason = "close") => {
+      if (busy) return;
+      try {
+        setBusy(true);
+
+        const saved = await ensureSaved();
+
+        // ✅ avisamos al padre SIEMPRE (para activar el ojo sin recargar)
+        onFinalizar?.(saved);
+
+        // ✅ cerramos modal
+        onClose?.();
+      } catch (e) {
+        onToast?.("error", e?.message || "No se pudo guardar el recibo.", 4500);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, ensureSaved, onFinalizar, onClose, onToast]
+  );
+
+  const handleFinalizar = useCallback(() => requestCloseAndSave("finalizar"), [requestCloseAndSave]);
 
   if (!open) return null;
 
   return createPortal(
-    <div className="mi-modal__overlay mi-modal__overlay--mov" role="dialog" aria-modal="true" onMouseDown={busy ? undefined : onClose}>
+    <div
+      className="mi-modal__overlay mi-modal__overlay--mov"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => e.preventDefault()}
+    >
       <div
         className="mi-modal__container mi-modal__container--mov"
         style={{ width: "min(980px, 96vw)", maxWidth: "980px", position: "relative" }}
@@ -385,7 +566,14 @@ export default function ModalReciboGenerado({
         <div className="mi-modal__header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div className="mi-modal__title">{title}</div>
 
-          <button ref={firstFocusRef} type="button" className="mi-modal__close" onClick={onClose} title="Cerrar" disabled={busy}>
+          <button
+            ref={firstFocusRef}
+            type="button"
+            className="mi-modal__close"
+            onClick={() => requestCloseAndSave("x")}
+            title="Cerrar"
+            disabled={busy}
+          >
             <FontAwesomeIcon icon={faXmark} />
           </button>
         </div>
@@ -415,7 +603,16 @@ export default function ModalReciboGenerado({
 
         <div
           ref={exportHostRef}
-          style={{ position: "fixed", left: "0", top: "0", width: "794px", opacity: 0, pointerEvents: "none", zIndex: -1, background: "#fff" }}
+          style={{
+            position: "fixed",
+            left: "0",
+            top: "0",
+            width: "794px",
+            opacity: 0,
+            pointerEvents: "none",
+            zIndex: -1,
+            background: "#fff",
+          }}
         />
       </div>
     </div>,

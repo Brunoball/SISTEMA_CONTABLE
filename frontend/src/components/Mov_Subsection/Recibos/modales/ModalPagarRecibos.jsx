@@ -1,6 +1,4 @@
-// ✅ REEMPLAZAR COMPLETO
 // src/components/Movimientos/modales/ModalPagarRecibos.jsx
-
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_Modals.css";
@@ -8,9 +6,15 @@ import "./ModalPagarRecibos.css";
 import BASE_URL from "../../../../config/config";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faXmark, faCheck, faListCheck, faMoneyBill1Wave, faCircleNotch } from "@fortawesome/free-solid-svg-icons";
+import {
+  faXmark,
+  faCheck,
+  faListCheck,
+  faMoneyBill1Wave,
+  faCircleNotch,
+} from "@fortawesome/free-solid-svg-icons";
 
-// ✅ NUEVO
+// ✅ Modal recibo
 import ModalReciboGenerado from "./ModalReciboGenerado";
 import { buildReciboHTML } from "../../../../utils/reciboTemplate";
 
@@ -163,8 +167,8 @@ export default function ModalPagarRecibos({
   const [reciboHtml, setReciboHtml] = useState("");
   const [reciboTitle, setReciboTitle] = useState("Recibo");
 
-  // ✅ guardar id_movimiento pagado (para asociar comprobante)
-  const [ultimoMovimientoIdPago, setUltimoMovimientoIdPago] = useState(null);
+  // ✅ AHORA guardamos TODOS los ids_movimiento pagados
+  const [idsMovimientosPagados, setIdsMovimientosPagados] = useState([]);
   const [ultimoCobroId, setUltimoCobroId] = useState(null);
 
   const fetchMediosPago = useCallback(async () => {
@@ -205,7 +209,7 @@ export default function ModalPagarRecibos({
     setOpenRecibo(false);
     setReciboHtml("");
     setReciboTitle("Recibo");
-    setUltimoMovimientoIdPago(null);
+    setIdsMovimientosPagados([]);
     setUltimoCobroId(null);
 
     setTimeout(() => firstFocusRef.current?.focus(), 50);
@@ -369,13 +373,14 @@ export default function ModalPagarRecibos({
           nota: nota.trim(),
           id_medio_pago: mp.id,
           medio_pago: mp.nombre,
+          ids_movimiento: ids,
         });
       } else {
         resp = await confirmPagoDefault({ ids_movimiento: ids, id_medio_pago: mp.id });
       }
 
-      const firstMov = Number(seleccion?.[0]?.id_movimiento || ids?.[0] || 0) || null;
-      setUltimoMovimientoIdPago(firstMov);
+      // ✅ Guardamos TODOS los ids pagados para que el PDF se vincule a todos
+      setIdsMovimientosPagados(ids);
 
       const firstCobro = Number(resp?.ids_cobro?.[0] || resp?.id_cobro || 0) || null;
       setUltimoCobroId(firstCobro);
@@ -681,13 +686,13 @@ export default function ModalPagarRecibos({
         title={reciboTitle}
         onToast={onToast}
         onClose={() => setOpenRecibo(false)}
-        idMovimiento={ultimoMovimientoIdPago}
+        // ✅ IMPORTANTE: pasamos TODOS los movimientos pagados
+        idsMovimientos={idsMovimientosPagados}
         idCobro={ultimoCobroId}
         onFinalizar={(saved) => {
-          // ✅ CLAVE: avisar a la pantalla Recibos para que active el ojo SIN RECARGAR
+          // ✅ avisar a Recibos: id_comprobante + ids_movimiento
           onReciboFinalizado?.(saved, {
-            idMovimiento: ultimoMovimientoIdPago,
-            idCobro: ultimoCobroId,
+            idsMovimiento: idsMovimientosPagados,
           });
 
           // cerrar modales

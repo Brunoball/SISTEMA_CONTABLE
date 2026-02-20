@@ -6,7 +6,6 @@ if (!function_exists('route_movimientos')) {
 
   function route_movimientos(string $action): bool
   {
-    // ✅ CLAVE: usa el $pdo multi-tenant que ya crea routes/api.php
     global $pdo;
 
     $action = strtolower(trim((string)$action));
@@ -50,17 +49,16 @@ if (!function_exists('route_movimientos')) {
 
       /* =========================
          ✅ COMPROBANTES
-         - subir (guardar en uploads/tenants/...)
-         - link (URL firmada sin header)
-         - descargar_token (descarga con token)
-         - info (metadata)
-         - descargar (descarga con X-Session)
       ========================= */
       case 'comprobantes_subir':
       case 'comprobantes_info':
       case 'comprobantes_descargar':
       case 'comprobantes_link':
       case 'comprobantes_descargar_token':
+
+      // ✅ NUEVAS actions (asociación)
+      case 'comprobantes_asociar_movimiento':     // 1x1
+      case 'comprobantes_asociar_movimientos':    // batch
         require __DIR__ . '/comprobantes.php';
         return true;
 

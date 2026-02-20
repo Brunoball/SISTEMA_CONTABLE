@@ -3,16 +3,16 @@
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import "../../Global/Global_Modals.css";
+import "../../../Global/Global_Modals.css";
 import "./ModalPagarRecibos.css";
-import BASE_URL from "../../../config/config";
+import BASE_URL from "../../../../config/config";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark, faCheck, faListCheck, faMoneyBill1Wave, faCircleNotch } from "@fortawesome/free-solid-svg-icons";
 
 // ✅ NUEVO
 import ModalReciboGenerado from "./ModalReciboGenerado";
-import { buildReciboHTML } from "../../../utils/reciboTemplate";
+import { buildReciboHTML } from "../../../../utils/reciboTemplate";
 
 /* =========================
    Helpers

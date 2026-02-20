@@ -14,8 +14,8 @@ import Dashboard from "./components/Dashboard/Dashboard";
 import Movimientos from "./components/Movimientos/Movimientos";
 import Ventas from "./components/Mov_Subsection/Ventas/Ventas";
 import Compras from "./components/Mov_Subsection/Compra/Compras";
-import Recibos from "./components/Mov_Subsection/Recibos";
-import OrdenesPago from "./components/Mov_Subsection/OrdenesPago";
+import Recibos from "./components/Mov_Subsection/Recibos/Recibos";
+import OrdenesPago from "./components/Mov_Subsection//OrdenesPago/OrdenesPago";
 import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 
 /* ✅ IMPORT ROBUSTO (default o named) */

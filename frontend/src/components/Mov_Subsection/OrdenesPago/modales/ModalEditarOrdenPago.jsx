@@ -1,8 +1,8 @@
 // src/components/Movimientos/modales/ModalEditarOrdenPago.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import "../../Global/Global_Modals.css";
-import BASE_URL from "../../../config/config";
+import "../../../Global/Global_Modals.css";
+import BASE_URL from "../../../../config/config";
 
 const NULL_OPTION = "";
 

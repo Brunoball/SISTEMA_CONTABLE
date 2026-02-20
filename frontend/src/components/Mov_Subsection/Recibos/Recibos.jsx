@@ -1,16 +1,16 @@
 // src/components/Movimientos/Recibos.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import BASE_URL from "../../config/config";
-import "../Global/Global_Section.css";
+import BASE_URL from "../../../config/config.jsx";
+import "../../Global/Global_Section.css"; // ✅ misma estética
 
-import Toast from "../Global/Toast.jsx";
+import Toast from "../../Global/Toast.jsx";
 
-import ModalEditarRecibo from "./modales/ModalEditarRecibo";
-import ModalPagarRecibos from "./modales/ModalPagarRecibos";
-import ModalEliminarMovimientos from "../Movimientos/modales/ModalEliminarMovimientos";
+import ModalEditarRecibo from "./modales/ModalEditarRecibo.jsx";
+import ModalPagarRecibos from "./modales/ModalPagarRecibos.jsx";
+import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 
 // ✅ NUEVO: Ver comprobante
-import ModalVerComprobante from "../Mov_Subsection/modales/ModalVerComprobante";
+import ModalVerComprobante from "../modales/ModalVerComprobante.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -24,7 +24,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
-import { useListas } from "../../context/ListasContext";
+import { useListas } from "../../../context/ListasContext.jsx";
 
 /* =========================
    PERF

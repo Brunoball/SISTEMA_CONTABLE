@@ -1,15 +1,15 @@
 // src/components/Movimientos/OrdenesPago.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import BASE_URL from "../../config/config";
-import "../Global/Global_Section.css";
+import BASE_URL from "../../../config/config.jsx";
+import "../../Global/Global_Section.css";
 
 // ✅ MODALES
-import ModalPagarOrdenesPago from "./modales/ModalPagarOrdenesPago";
-import ModalEditarOrdenPago from "./modales/ModalEditarOrdenPago";
-import ModalEliminarMovimientos from "../Movimientos/modales/ModalEliminarMovimientos";
+import ModalPagarOrdenesPago from "./modales/ModalPagarOrdenesPago.jsx";
+import ModalEditarOrdenPago from "./modales/ModalEditarOrdenPago.jsx";
+import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 
 // ✅ Toast
-import Toast from "../Global/Toast.jsx";
+import Toast from "../../Global/Toast.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -24,7 +24,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
-import { useListas } from "../../context/ListasContext";
+import { useListas } from "../../../context/ListasContext.jsx";
 
 /* =========================
    PERF
@@ -250,31 +250,7 @@ function yyyymmToMMYYYY(yyyymm) {
   return periodoToMMYYYY(s);
 }
 
-/* =========================
-   ✅ Estado pill (MISMO en tabla y modal)
-========================= */
-function EstadoPill({ pagado }) {
-  const ok = !!pagado;
-  return (
-    <span
-      className={["mov-pill", ok ? "mov-pill--ok" : "mov-pill--warn"].join(" ")}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "6px 10px",
-        borderRadius: 999,
-        fontWeight: 800,
-        fontSize: 12,
-        whiteSpace: "nowrap",
-      }}
-      title={ok ? "Pagado (está en cobros)" : "Pendiente (no está en cobros)"}
-    >
-      <FontAwesomeIcon icon={ok ? faCircleCheck : faClock} />
-      {ok ? "PAGADO" : "PENDIENTE"}
-    </span>
-  );
-}
+
 
 export default function OrdenesPago() {
   const API = `${BASE_URL}/api.php`;
@@ -789,13 +765,7 @@ export default function OrdenesPago() {
   ========================= */
   const columns = useMemo(() => {
     return [
-      {
-        key: "estado",
-        label: "ESTADO",
-        align: "center",
-        fr: 1.0,
-        render: (r) => <EstadoPill pagado={isPagado(r)} />,
-      },
+
       {
         key: "fecha",
         label: "FECHA",
@@ -818,6 +788,20 @@ export default function OrdenesPago() {
         align: "center",
         render: (r) => safeText(r.proveedor),
       },
+      {
+  key: "estado",
+  label: "ESTADO",
+  align: "center",
+  fr: 1.0,
+  render: (r) => {
+    const pag = isPagado(r);
+    return (
+      <span className={`mov-chip ${pag ? "mov-chip--ok" : "mov-chip--warn"}`}>
+        {pag ? "PAGADO" : "PENDIENTE"}
+      </span>
+    );
+  },
+},
       {
         key: "monto",
         label: "MONTO",

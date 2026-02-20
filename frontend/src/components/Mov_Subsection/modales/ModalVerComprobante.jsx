@@ -1,12 +1,18 @@
-// src/components/Mov_Subsection/modales/ModalVerComprobante.jsx
+// ✅ src/components/Mov_Subsection/modales/ModalVerComprobante.jsx
 import React, { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import "../../Movimientos/modales/ModalEditarMovimiento.css";
 
 function isPdfUrl(url) {
   const u = String(url || "").toLowerCase();
+
+  // ✅ caso típico: endpoint que devuelve PDF inline pero NO termina en .pdf
+  if (u.includes("action=comprobantes_descargar")) return true;
+  if (u.includes("comprobantes_descargar")) return true;
+
   return u.includes(".pdf") || u.startsWith("data:application/pdf");
 }
+
 function isImageUrl(url) {
   const u = String(url || "").toLowerCase();
   return (
@@ -18,7 +24,13 @@ function isImageUrl(url) {
   );
 }
 
-export default function ModalVerComprobante({ open, url, mime = "", onClose, title = "Comprobante" }) {
+export default function ModalVerComprobante({
+  open,
+  url,
+  mime = "",
+  onClose,
+  title = "Comprobante",
+}) {
   const closeBtnRef = useRef(null);
 
   // lock scroll
@@ -49,9 +61,12 @@ export default function ModalVerComprobante({ open, url, mime = "", onClose, tit
     if (!url) return "none";
 
     const m = String(mime || "").toLowerCase().trim();
+
+    // ✅ si mime viene bien, listo
     if (m.includes("pdf")) return "pdf";
     if (m.startsWith("image/")) return "img";
 
+    // ✅ fallback robusto por URL
     if (isPdfUrl(url)) return "pdf";
     if (isImageUrl(url)) return "img";
 
@@ -83,7 +98,13 @@ export default function ModalVerComprobante({ open, url, mime = "", onClose, tit
             </p>
           </div>
 
-          <button ref={closeBtnRef} className="mi-modal__close" onClick={onClose} aria-label="Cerrar" type="button">
+          <button
+            ref={closeBtnRef}
+            className="mi-modal__close"
+            onClick={onClose}
+            aria-label="Cerrar"
+            type="button"
+          >
             ✕
           </button>
         </div>
@@ -100,6 +121,7 @@ export default function ModalVerComprobante({ open, url, mime = "", onClose, tit
                 height: "70vh",
                 border: "1px solid rgba(255,255,255,.10)",
                 borderRadius: 12,
+                background: "#fff",
               }}
             />
           )}

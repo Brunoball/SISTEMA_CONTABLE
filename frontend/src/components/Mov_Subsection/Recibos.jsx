@@ -239,7 +239,7 @@ export default function Recibos() {
   const [pagarDeudas, setPagarDeudas] = useState([]);
   const [loadingClienteDeudas, setLoadingClienteDeudas] = useState(false);
 
-  // ✅ ver comprobante (SERVER URL REAL, NO blob)
+  // ✅ ver comprobante
   const [openVer, setOpenVer] = useState(false);
   const [verUrl, setVerUrl] = useState("");
   const [verMime, setVerMime] = useState("");
@@ -327,8 +327,26 @@ export default function Recibos() {
   }, []);
 
   /* =========================
-     ✅ VER COMPROBANTE (SIN BLOB)
-     - iframe no puede mandar headers => usamos ?session_key=
+     ✅ helper: aplicar comprobante al row (activa ojo al instante)
+  ========================= */
+  const applyComprobanteToRow = useCallback((idMovimiento, idComprobante) => {
+    const idMov = Number(idMovimiento || 0);
+    const idComp = Number(idComprobante || 0);
+    if (!idMov || !idComp) return;
+
+    setRows((prev) =>
+      (Array.isArray(prev) ? prev : []).map((r) => {
+        if (Number(r?.id_movimiento || 0) !== idMov) return r;
+        return {
+          ...r,
+          id_comprobante: idComp,
+        };
+      })
+    );
+  }, []);
+
+  /* =========================
+    ✅ VER COMPROBANTE
   ========================= */
   const openVerComprobante = useCallback(
     async (row) => {
@@ -347,12 +365,12 @@ export default function Recibos() {
       const sp = new URLSearchParams();
       sp.set("action", "comprobantes_descargar");
       sp.set("id_comprobante", String(idComp));
-      sp.set("session_key", sessionKey); // ✅ para iframe/nueva pestaña (sin headers)
+      sp.set("session_key", sessionKey);
 
       const serverUrl = `${API}?${sp.toString()}`;
 
       setVerTitle(`Comprobante · ${safeText(row?.cliente)}`);
-      setVerMime(String(row?.comprobante_mime || row?.mime || "")); // opcional si lo traés del backend
+      setVerMime("application/pdf");
       setVerUrl(serverUrl);
       setOpenVer(true);
     },
@@ -361,13 +379,15 @@ export default function Recibos() {
 
   const closeVerComprobante = useCallback(() => {
     setOpenVer(false);
-    setVerUrl("");
-    setVerMime("");
-    setVerTitle("Comprobante");
+    setTimeout(() => {
+      setVerUrl("");
+      setVerMime("");
+      setVerTitle("Comprobante");
+    }, 100);
   }, []);
 
   /* =========================
-     ✅ LOAD ROWS (lista principal)
+     ✅ LOAD ROWS
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -659,8 +679,7 @@ export default function Recibos() {
   }, [columns]);
 
   /* =========================
-     ✅ FIX IMPORTANTE:
-     Traer registros del cliente con fallback de action
+     ✅ listar recibos por cliente (fallback actions)
   ========================= */
   const fetchRecibosCliente = useCallback(
     async (rowCliente) => {
@@ -674,8 +693,6 @@ export default function Recibos() {
         "recibos_listar_por_cliente",
       ];
 
-      let lastErr = null;
-
       for (const action of ACTIONS) {
         try {
           const sp = new URLSearchParams();
@@ -687,10 +704,7 @@ export default function Recibos() {
           return movs;
         } catch (e) {
           const msg = e?.message || "";
-          if (isAccionNoValidaErrorMessage(msg)) {
-            lastErr = e;
-            continue;
-          }
+          if (isAccionNoValidaErrorMessage(msg)) continue;
           throw e;
         }
       }
@@ -722,6 +736,61 @@ export default function Recibos() {
   );
 
   /* =========================
+     ✅ callback: cuando se FINALIZA el recibo y se guarda el comprobante
+     (esto es lo que te activa el ojo sin recargar)
+  ========================= */
+  const onReciboFinalizado = useCallback(
+    async (saved, fallback = {}) => {
+      // intentamos resolver IDs de forma tolerante
+      const idMov =
+        Number(saved?.id_movimiento || saved?.idMovimiento || saved?.movimiento_id || 0) ||
+        Number(fallback?.idMovimiento || 0) ||
+        0;
+
+      const idComp =
+        Number(saved?.id_comprobante || saved?.idComprobante || saved?.comprobante_id || saved?.id || 0) ||
+        Number(fallback?.idComprobante || 0) ||
+        0;
+
+      if (idMov > 0 && idComp > 0) {
+        // ✅ 1) update optimista -> activa el ojo al toque
+        applyComprobanteToRow(idMov, idComp);
+      }
+
+      // ✅ 2) refresh real -> traer data fresca y que quede igual a DB
+      try {
+        const per = periodoToMMYYYY(fPeriodo);
+        const qq = (q || "").trim();
+
+        invalidateCacheForPeriodo(per);
+
+        // evitamos que el debounce nos pise
+        skipSearchRef.current = true;
+
+        await loadRows({ periodo: per, q: qq, offset: 0, append: false });
+
+        try {
+          await refreshLists();
+        } catch {}
+
+        showToast("exito", "Comprobante guardado. Ya podés abrirlo con el ojo.", 2600);
+      } catch (e) {
+        // igual queda el update optimista; esto es solo por si falla el refresh
+        showToast("error", e?.message || "El comprobante se guardó, pero no pude refrescar la lista.", 4200);
+      }
+    },
+    [
+      applyComprobanteToRow,
+      fPeriodo,
+      q,
+      invalidateCacheForPeriodo,
+      loadRows,
+      refreshLists,
+      showToast,
+    ]
+  );
+
+  /* =========================
      Confirmar pago
   ========================= */
   const onConfirmPago = useCallback(
@@ -743,6 +812,7 @@ export default function Recibos() {
           idUsuario,
         });
 
+        // OJO: acá todavía no hay comprobante, se genera al FINALIZAR en el otro modal.
         invalidateCacheForPeriodo(fPeriodo);
         await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
 
@@ -751,6 +821,7 @@ export default function Recibos() {
         } catch {}
 
         showToast("exito", data?.mensaje || "Pago confirmado.", 2400);
+        return data;
       } catch (e) {
         showToast("error", e?.message || "Error confirmando pago.", 4200);
         throw e;
@@ -1146,7 +1217,6 @@ export default function Recibos() {
                               data-label={c.label}
                             >
                               <div className="mov-actionsInline">
-                                {/* ✅ VER COMPROBANTE (SERVER URL REAL) */}
                                 <button
                                   type="button"
                                   className={`mov-iconBtn ${!hasComp ? "mov-iconBtn--disabled" : ""}`}
@@ -1184,7 +1254,9 @@ export default function Recibos() {
                                   type="button"
                                   className="mov-iconBtn mov-iconBtn--danger"
                                   title="Eliminar"
-                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || deletingId === r.id_movimiento}
+                                  disabled={
+                                    loadingRows || loadingMore || loadingAll || loadingListsCtx || deletingId === r.id_movimiento
+                                  }
                                   onClick={() => {
                                     setSelectedRow(r);
                                     setOpenDel(true);
@@ -1264,6 +1336,8 @@ export default function Recibos() {
         cliente={pagarCliente}
         deudas={pagarDeudas}
         lists={lists}
+        // ✅ CLAVE: cuando el recibo se FINALIZA y se guarda el comprobante
+        onReciboFinalizado={onReciboFinalizado}
       />
 
       {/* EDITAR */}

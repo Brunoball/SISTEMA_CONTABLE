@@ -9,8 +9,6 @@ import ModalEditarRecibo from "./modales/ModalEditarRecibo.jsx";
 import ModalPagarRecibos from "./modales/ModalPagarRecibos.jsx";
 import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 
-// ✅ NUEVO: Ver comprobante
-import ModalVerComprobante from "../modales/ModalVerComprobante.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -663,7 +661,7 @@ export default function Recibos() {
         },
       },
       { key: "monto", label: "MONTO", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
-      { key: "acciones", label: "ACCIONES", fr: 0.9, align: "center", render: () => null },
+      { key: "acciones", label: "ACCIONES", fr: 1.2, align: "center", render: () => null },
     ];
   }, []);
 
@@ -1321,7 +1319,6 @@ export default function Recibos() {
       </section>
 
       {/* ✅ MODAL VER COMPROBANTE */}
-      <ModalVerComprobante open={openVer} url={verUrl} mime={verMime} title={verTitle} onClose={closeVerComprobante} />
 
       {/* PAGAR */}
       <ModalPagarRecibos

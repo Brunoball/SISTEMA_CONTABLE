@@ -11,8 +11,8 @@ import Toast from "../../Global/Toast.jsx";
 import GifCarga from "../../Global/Gif_Carga.jsx";
 import "../../Global/gif_carga.css";
 
-import ModalNuevaVenta from "./modales_ventas/ModalNuevaVenta.jsx";
-import ModalEditarVenta from "./modales_ventas/ModalEditarVenta.jsx";
+import ModalNuevaVenta from "./modales/ModalNuevaVenta.jsx";
+import ModalEditarVenta from "./modales/ModalEditarVenta.jsx";
 import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";

@@ -5,8 +5,8 @@ import "../../Global/Global_Section.css";
 import "../../Global/Global_oscuro.css";
 import Toast from "../../Global/Toast.jsx";
 
-import ModalNuevaCompra from "./modales_compra/ModalNuevaCompra.jsx";
-import ModalEditarCompra from "./modales_compra/ModalEditarCompra.jsx";
+import ModalNuevaCompra from "./modales/ModalNuevaCompra.jsx";
+import ModalEditarCompra from "./modales/ModalEditarCompra.jsx";
 import ModalVerComprobante from "../modales/ModalVerComprobante.jsx";
 import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 
@@ -676,14 +676,14 @@ export default function Compras() {
       {
         key: "proveedor",
         label: "PROVEEDOR",
-        fr: 1.6,
+        fr: 1.8,
         align: "left",
         render: (r) => safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")),
       },
       {
         key: "pago",
         label: "PAGO",
-        fr: 1.2,
+        fr: 1,
         align: "center",
         render: (r) => safeText(getCompraPagoLabel(r)),
       },

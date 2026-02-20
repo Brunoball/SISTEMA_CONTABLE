@@ -1,0 +1,417 @@
+/* =========================================================
+   ✅ RESPONSIVE – ModalEditarMovimiento (solo mobile/tablet)
+   Objetivo:
+   - Desktop/monitor: NO CAMBIA NADA
+   - < 980px: apila panel (form) + aside (relaciones)
+   - < 720px: compacta paddings + acciones full width
+========================================================= */
+
+/* 1) Tablet / Mobile: apilar columnas */
+@media (max-width: 980px){
+
+  /* overlay más cómodo */
+  .mi-modal__overlay{
+    padding: 10px;
+  }
+
+  /* el modal ocupa casi toda la pantalla */
+  .mi-modal__container{
+    width: min(1180px, 98vw);
+    max-height: 96vh;
+  }
+
+  /* el form debe permitir scroll interno sin romper */
+  .mi-em-form{
+    padding: 10px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* ✅ grid principal: de 2 columnas a 1 columna */
+  .mi-em-grid{
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+
+  /* orden: primero datos, después relaciones */
+  .mi-em-panel{ order: 1; }
+  .mi-em-aside{ order: 2; }
+
+  /* paneles un toque más compactos */
+  .mi-em-panelBody{
+    padding: 10px;
+  }
+  .mi-em-aside{
+    padding: 10px;
+  }
+
+  /* fechas/período apiladas (evita que apriete) */
+  .mi-em-dates{
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px;
+  }
+
+  /* si algún contenedor se desborda, no rompas layout */
+  .mi-em-panel,
+  .mi-em-aside,
+  .mi-em-panelBody,
+  .mi-em-asideBody{
+    min-width: 0;
+  }
+}
+
+/* 2) Mobile: más compacto + botones cómodos */
+@media (max-width: 720px){
+
+  /* header más compacto */
+  .mi-modal__header{
+    padding: 12px 14px;
+  }
+
+  .mi-modal__title{
+    font-size: 1.1rem;
+  }
+  .mi-modal__subtitle{
+    font-size: .85rem;
+  }
+
+  /* inputs un toque más compactos */
+  .fl-input{
+    padding: 14px 12px 10px;
+  }
+
+  /* ✅ acciones del aside: full width y sticky abajo */
+  .mi-em-actions{
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px;
+    position: sticky;
+    bottom: 0;
+    padding: 10px 0 0;
+    background: inherit; /* respeta light/dark */
+  }
+
+  /* el body del aside con scroll si queda alto */
+  .mi-em-asideBody{
+    max-height: 42vh;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+
+  /* dropdown de sugerencias no se va fuera de pantalla */
+  .mi-cr-suggest{
+    max-height: 200px;
+  }
+
+  /* totales del item en 1 col (ya tenés responsive en varias cosas,
+     pero esto asegura que no se apachurre) */
+  .mi-em-itemTotalsGrid3,
+  .mi-em-itemGrid3{
+    grid-template-columns: 1fr !important;
+    gap: 10px;
+  }
+}
+
+/* 3) Dark mode: asegurar que el sticky del aside no quede raro */
+@media (max-width: 720px){
+  .mi-modal--dark .mi-em-actions{
+    background: rgba(6,18,28,.92);
+  }
+}/* =========================================================
+   ✅ FIX SCROLL – ModalEditarMovimiento (solo mobile/tablet)
+   Problema: contenido cortado sin scroll por overflow:hidden
+   Solución: scroll en el body del modal (form)
+========================================================= */
+
+@media (max-width: 980px){
+
+  /* Importante: el modal tiene alto fijo */
+  .mi-modal__container{
+    max-height: 96vh;
+  }
+
+  /* ✅ El form debe ocupar el espacio y scrollear */
+  .mi-em-form{
+    flex: 1;
+    min-height: 0;
+    overflow: auto !important;   /* ✅ habilita scroll */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* El grid no debe forzar alturas raras */
+  .mi-em-grid{
+    height: auto !important;
+    min-height: 0;
+  }
+
+  /* Por si algún panel estaba “encerrado” */
+  .mi-em-panel,
+  .mi-em-aside{
+    min-height: 0;
+    overflow: visible !important;
+  }
+}
+
+/* =========================================================
+   ✅ Mobile extra: botones siempre visibles
+========================================================= */
+@media (max-width: 720px){
+
+  /* Si usás sticky actions, asegurá que el form tenga padding abajo
+     para que el final no quede tapado por los botones */
+  .mi-em-form{
+    padding-bottom: 16px;
+  }
+
+  .mi-em-actions{
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    background: inherit;
+    padding-top: 10px;
+  }
+}
+
+/* Dark: fondo correcto del sticky */
+@media (max-width: 720px){
+  .mi-modal--dark .mi-em-actions{
+    background: rgba(6,18,28,.92);
+  }
+}
+@media (max-width: 980px){
+  .mi-em-grid{
+    grid-template-columns: 1fr;
+  }
+  .mi-em-dates{
+    grid-template-columns: 1fr;
+  }
+  .mi-row3{ grid-template-columns: 1fr; }
+  .mi-row2{ grid-template-columns: 1fr; }
+  .mi-em-itemGrid3{ grid-template-columns: 1fr; }
+  .mi-em-itemTotalsGrid3{ grid-template-columns: 1fr; }
+  .mi-em-actions{ grid-template-columns: 1fr; }
+}
+
+/* =========================================================
+    RESPONSIVE – ModalCargas
+========================================================= *//* =========================================================
+   ✅ RESPONSIVE NUEVO (CARD ROWS) – Carga Rápida
+   - Desktop/monitor intacto
+   - < 980px: 1 columna + filas en formato "card"
+========================================================= */
+
+@media (max-width: 980px){
+
+  /* Modal: un toque más cómodo en pantallas chicas */
+  .mi-modal__container--mov{
+    width: min(980px, 96vw) !important;
+    max-height: 92vh !important;
+    min-height: 92vh !important;
+  }
+
+  /* Grid: 1 columna */
+  .mi-cr-grid{
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  /* Ocultamos el header de tabla (ya no hace falta en modo cards) */
+  .mi-cr-table__head{
+    display: none !important;
+  }
+
+  /* Panel tabla: más “card container” */
+  .mi-cr-table{
+    border-radius: 16px !important;
+    overflow: hidden !important;
+  }
+
+  /* Área de filas: con aire */
+  .mi-cr-table__rows{
+    padding: 10px !important;
+    overflow: auto !important;
+  }
+
+  /* =========================
+     ✅ FILA => CARD
+  ========================= */
+  .mi-cr-row.mi-cr-row--car{
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    grid-template-areas:
+      "desc desc"
+      "qty  price"
+      "iva  ivaMonto"
+      "total action";
+    gap: 10px !important;
+
+    padding: 12px !important;
+    border: 1px solid rgba(148,163,184,.35) !important;
+    border-radius: 16px !important;
+    background: #fff !important;
+    box-shadow: 0 10px 22px rgba(15,23,42,.06) !important;
+    margin-bottom: 12px !important;
+  }
+
+  /* Zebra ya no aplica como tabla */
+  .mi-cr-row:nth-child(odd){
+    background: #fff !important;
+  }
+
+  /* Asignar áreas por clase */
+  .mi-cr-col--desc{ grid-area: desc !important; padding: 0 !important; }
+  .mi-cr-col--qty{ grid-area: qty !important; padding: 0 !important; }
+  .mi-cr-col--price{ grid-area: price !important; padding: 0 !important; }
+  .mi-cr-col--iva{ grid-area: iva !important; padding: 0 !important; }
+  .mi-cr-col--ivaMonto{ grid-area: ivaMonto !important; padding: 0 !important; }
+  .mi-cr-col--total{ grid-area: total !important; padding: 0 !important; }
+  .mi-cr-col--action{ grid-area: action !important; padding: 0 !important; display: flex; justify-content: flex-end; align-items: flex-end; }
+
+  /* Inputs en cards: full width */
+  .mi-cr-row .fl-input,
+  .mi-cr-row .fl-select{
+    width: 100% !important;
+  }
+
+  /* Labels arriba (mini título) en cada campo numérico */
+  .mi-cr-col--qty::before,
+  .mi-cr-col--price::before,
+  .mi-cr-col--iva::before,
+  .mi-cr-col--ivaMonto::before,
+  .mi-cr-col--total::before{
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(81,97,115,.95);
+    margin: 0 0 6px 2px;
+    letter-spacing: .2px;
+  }
+
+  .mi-cr-col--qty::before{ content: "Cantidad"; }
+  .mi-cr-col--price::before{ content: "Precio"; }
+  .mi-cr-col--iva::before{ content: "% IVA"; }
+  .mi-cr-col--ivaMonto::before{ content: "IVA"; }
+  .mi-cr-col--total::before{ content: "Total"; }
+
+  /* Total: más destacado */
+  .mi-cr-col--total .mi-cr-money{
+    display: inline-flex;
+    width: 100%;
+    justify-content: flex-start;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(16,185,129,.25);
+    background: rgba(16,185,129,.08);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Botón borrar: más claro, abajo a la derecha */
+  .mi-cr-del{
+    height: 34px !important;
+    width: 34px !important;
+    border-radius: 12px !important;
+  }
+
+  /* Link “Agregar detalle” que no se vea pegado */
+  .mi-cr-col--desc .mi-cr-link{
+    margin-top: 10px !important;
+  }
+
+  /* =========================
+     ✅ FOOTER TABLA (agregar + totales)
+  ========================= */
+  .mi-cr-table__foot{
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .mi-cr-addrow{
+    justify-self: start !important;
+  }
+
+  .mi-cr-totals{
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
+    gap: 2px !important;
+  }
+  .mi-cr-totalLine{
+    gap: 0;
+  }
+
+  /* =========================
+     ✅ FILTROS: abajo con acciones sticky
+  ========================= */
+  .mi-cr-filters__body{
+   overflow: visible;
+
+  }
+  .mi-cr-filters{
+    border-radius: 16px !important;
+    overflow: scroll !important;
+    max-height: 38vh;
+  }
+
+
+  .mi-cr-filters__dates{
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+
+  .mi-cr-filters__actions{
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    background: #fff;
+    padding: 10px 0 0;
+  }
+}
+
+/* Móvil chico: fechas en 1 columna */
+@media (max-width: 560px){
+  .mi-cr-filters__dates{
+    grid-template-columns: 1fr  1fr!important;
+  }
+
+  /* Cards más compactas */
+  .mi-cr-row.mi-cr-row--car{
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+      "desc"
+      "qty"
+      "price"
+      "iva"
+      "ivaMonto"
+      "total"
+      "action";
+  }
+
+  .mi-cr-col--action{
+    justify-content: flex-start !important;
+  }
+}
+
+/* Dark mode: cards y sticky coherentes */
+@media (max-width: 980px){
+  .mi-modal__container.mi-modal--dark .mi-cr-row.mi-cr-row--car{
+    background: rgba(6,18,28,.82) !important;
+    border-color: rgba(255,255,255,.10) !important;
+    box-shadow: 0 18px 45px rgba(0,0,0,.45) !important;
+  }
+
+  .mi-modal__container.mi-modal--dark .mi-cr-col--qty::before,
+  .mi-modal__container.mi-modal--dark .mi-cr-col--price::before,
+  .mi-modal__container.mi-modal--dark .mi-cr-col--iva::before,
+  .mi-modal__container.mi-modal--dark .mi-cr-col--ivaMonto::before,
+  .mi-modal__container.mi-modal--dark .mi-cr-col--total::before{
+    color: rgba(226,232,240,.78) !important;
+  }
+
+  .mi-modal__container.mi-modal--dark .mi-cr-col--total .mi-cr-money{
+    border-color: rgba(16,185,129,.22) !important;
+    background: rgba(16,185,129,.10) !important;
+  }
+
+  .mi-modal__container.mi-modal--dark .mi-cr-filters__actions{
+    background: var(--balto-bg) !important;
+  }
+}

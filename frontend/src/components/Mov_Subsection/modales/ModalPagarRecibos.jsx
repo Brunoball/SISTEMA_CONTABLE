@@ -8,13 +8,7 @@ import "./ModalPagarRecibos.css";
 import BASE_URL from "../../../config/config";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faXmark,
-  faCheck,
-  faListCheck,
-  faMoneyBill1Wave,
-  faCircleNotch,
-} from "@fortawesome/free-solid-svg-icons";
+import { faXmark, faCheck, faListCheck, faMoneyBill1Wave, faCircleNotch } from "@fortawesome/free-solid-svg-icons";
 
 // ✅ NUEVO
 import ModalReciboGenerado from "./ModalReciboGenerado";
@@ -97,7 +91,7 @@ function normalizeMediosPago(raw) {
 }
 
 /* =========================
-   Estado (pagado/pendiente) ✅ VERDAD (solo cobro real)
+   Estado (pagado/pendiente)
 ========================= */
 function isPagadoRow(row) {
   if (row?.pagado === true) return true;
@@ -139,6 +133,8 @@ export default function ModalPagarRecibos({
   cliente,
   deudas = [],
   onFactura,
+  // ✅ NUEVO: callback cuando se FINALIZA el recibo (se guarda comprobante)
+  onReciboFinalizado,
 }) {
   const dialogRef = useRef(null);
   const firstFocusRef = useRef(null);
@@ -162,14 +158,14 @@ export default function ModalPagarRecibos({
   const [loadingMedios, setLoadingMedios] = useState(false);
   const [idMedioPago, setIdMedioPago] = useState("");
 
-  // ✅ NUEVO: modal de recibo
+  // ✅ modal de recibo
   const [openRecibo, setOpenRecibo] = useState(false);
   const [reciboHtml, setReciboHtml] = useState("");
   const [reciboTitle, setReciboTitle] = useState("Recibo");
 
-  // ✅ FIX CLAVE: guardar id_movimiento real pagado (no depender de selectedIds)
+  // ✅ guardar id_movimiento pagado (para asociar comprobante)
   const [ultimoMovimientoIdPago, setUltimoMovimientoIdPago] = useState(null);
-  const [ultimoCobroId, setUltimoCobroId] = useState(null); // opcional
+  const [ultimoCobroId, setUltimoCobroId] = useState(null);
 
   const fetchMediosPago = useCallback(async () => {
     try {
@@ -206,7 +202,6 @@ export default function ModalPagarRecibos({
     setIdMedioPago("");
     fetchMediosPago();
 
-    // reset recibo
     setOpenRecibo(false);
     setReciboHtml("");
     setReciboTitle("Recibo");
@@ -303,7 +298,6 @@ export default function ModalPagarRecibos({
     });
   };
 
-  // arma el recibo (HTML) con lo pagado
   const buildReciboFromSeleccion = useCallback(
     ({ clienteInfo, mp, seleccion }) => {
       const items = seleccion.map((r) => ({
@@ -366,7 +360,6 @@ export default function ModalPagarRecibos({
     try {
       setLoading(true);
 
-      // ✅ confirma pago
       let resp = null;
       if (onConfirm) {
         resp = await onConfirm({
@@ -381,15 +374,13 @@ export default function ModalPagarRecibos({
         resp = await confirmPagoDefault({ ids_movimiento: ids, id_medio_pago: mp.id });
       }
 
-      // ✅ FIX: guardar id_movimiento para el recibo (usamos el primero pagado)
       const firstMov = Number(seleccion?.[0]?.id_movimiento || ids?.[0] || 0) || null;
       setUltimoMovimientoIdPago(firstMov);
 
-      // opcional: si el backend devuelve id_cobro lo guardamos
       const firstCobro = Number(resp?.ids_cobro?.[0] || resp?.id_cobro || 0) || null;
       setUltimoCobroId(firstCobro);
 
-      // UX instantánea: marcar pagado
+      // UX: marcar pagado local
       setRows((prev) =>
         (Array.isArray(prev) ? prev : []).map((r) => {
           const id = Number(r?.id_movimiento || 0);
@@ -400,14 +391,12 @@ export default function ModalPagarRecibos({
 
       onAfterPaid?.(ids, mp);
 
-      // abrir modal recibo
       const clienteInfo = { id_cliente: cliente?.id_cliente ?? null, nombre: cliente?.cliente ?? "" };
       const built = buildReciboFromSeleccion({ clienteInfo, mp, seleccion });
       setReciboHtml(built.html);
       setReciboTitle(built.title);
       setOpenRecibo(true);
 
-      // ahora sí reset selección
       setSelectedIds(new Set());
       setPagaTodo(false);
 
@@ -482,7 +471,6 @@ export default function ModalPagarRecibos({
     <>
       <div className={overlayClass} role="dialog" aria-modal="true" onMouseDown={() => (!openRecibo ? onClose?.() : null)}>
         <div className={modalClass} ref={dialogRef} onMouseDown={(e) => e.stopPropagation()}>
-          {/* Header */}
           <div className="mi-modal__header mpr-header">
             <div className="mpr-headLeft">
               <div className="mi-modal__title mpr-title">
@@ -515,7 +503,6 @@ export default function ModalPagarRecibos({
             </button>
           </div>
 
-          {/* Body */}
           <div className="mi-modal__body mpr-body">
             <div className="mpr-content">
               <div className="mpr-card">
@@ -576,7 +563,6 @@ export default function ModalPagarRecibos({
                 </div>
               </div>
 
-              {/* Tabla */}
               <div className="mpr-tableWrap">
                 <div className="mpr-tableTitle">
                   <span>Registros del cliente</span>
@@ -651,7 +637,6 @@ export default function ModalPagarRecibos({
             </div>
           </div>
 
-          {/* Footer */}
           <div className="mi-modal__footer mpr-footer">
             <button type="button" className="mpr-btn mpr-btn--ghost" onClick={onClose} disabled={loading || openRecibo}>
               Cancelar
@@ -696,11 +681,16 @@ export default function ModalPagarRecibos({
         title={reciboTitle}
         onToast={onToast}
         onClose={() => setOpenRecibo(false)}
-        // ✅ FIX: pasamos el movimiento real ya pagado
         idMovimiento={ultimoMovimientoIdPago}
-        // opcional (si el backend lo devuelve o lo resolvemos en backend)
         idCobro={ultimoCobroId}
         onFinalizar={(saved) => {
+          // ✅ CLAVE: avisar a la pantalla Recibos para que active el ojo SIN RECARGAR
+          onReciboFinalizado?.(saved, {
+            idMovimiento: ultimoMovimientoIdPago,
+            idCobro: ultimoCobroId,
+          });
+
+          // cerrar modales
           setOpenRecibo(false);
           onClose?.();
         }}

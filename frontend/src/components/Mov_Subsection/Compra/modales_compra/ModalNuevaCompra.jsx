@@ -1,4 +1,4 @@
-// src/components/Mov_Subsection/modales/ModalNuevaCompra.jsx
+// src/components/Compras/modales_compra/ModalNuevaCompra.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_Modals.css";
@@ -350,13 +350,9 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const [fecha, setFecha] = useState(todayISO());
   const [periodoUI, setPeriodoUI] = useState(isoToMMYYYY(todayISO()));
 
-  // ✅ forma define id_tipo_venta:
-  //   CONTADO => 1
-  //   CUENTA_CORRIENTE => 2
-  // En CUENTA_CORRIENTE no hay medio de pago
   const [filters, setFilters] = useState({
     forma: NULL_OPTION,
-    id_medio_pago: NULL_OPTION, // solo aplica si CONTADO
+    id_medio_pago: NULL_OPTION,
     id_proveedor: NULL_OPTION,
     proveedor_cuit: "",
   });
@@ -560,7 +556,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const isContado = useMemo(() => String(filters.forma) === "CONTADO", [filters.forma]);
   const isCorriente = useMemo(() => String(filters.forma) === "CUENTA_CORRIENTE", [filters.forma]);
 
-  // ✅ Cuando cambia a CUENTA_CORRIENTE, limpiamos medio de pago (no aplica)
   useEffect(() => {
     if (!open) return;
     setFilters((p) => {
@@ -583,7 +578,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       return { ok: false, msg: "Falta seleccionar el Tipo de compra (Contado / Cuenta Corriente)." };
     }
 
-    // ✅ SOLO CONTADO exige medio de pago
     if (isContado) {
       const mp = Number(filters.id_medio_pago);
       if (!Number.isFinite(mp) || mp <= 0) {
@@ -649,14 +643,8 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       const { idUsuario } = getAuthInfo();
       const periodoApi = v.periodoApi;
 
-      // ✅ id_tipo_venta según tipo
-      // CONTADO => 1
-      // CUENTA_CORRIENTE => 2
       const idTipoVenta = isCorriente ? 2 : 1;
 
-      // ✅ SIN PANEL: comportamiento fijo
-      // - Contado: siempre pagada
-      // - Cuenta corriente: siempre pendiente
       const accionFinal = isCorriente ? "guardar" : "pagar";
       const esPagadaFinal = isCorriente ? false : true;
 
@@ -677,12 +665,10 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
             id_tipo_venta: idTipoVenta,
 
-            // proveedor
             id_proveedor: proveedorIdFinal,
             proveedor_nombre: String(provInput || "").trim() || null,
             proveedor_cuit: String(filters.proveedor_cuit || "").trim() || null,
 
-            // líneas
             id_detalle: Number(r.id_detalle),
             cantidad: Math.round(Number(r.cantidad) * 100) / 100,
             precio: Math.round(Number(r.precio) * 100) / 100,
@@ -697,7 +683,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
             es_pagada: esPagadaFinal,
           };
 
-          // ✅ SOLO si es contado mandamos medio de pago
           if (isContado) {
             return {
               ...base,
@@ -707,7 +692,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
             };
           }
 
-          // ✅ Cuenta corriente: no mandamos medio de pago
           return base;
         });
 
@@ -720,8 +704,18 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       const data = await apiPostJson(API_BATCH, payloads);
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar el batch de compras.");
 
+      // ✅ FIX CLAVE: siempre devolver periodoUI + periodoApi al padre (para recargar tabla)
+      const infoForParent = {
+        ...data,
+        periodoUI: String(periodoUI || "").trim(),
+        periodoApi: String(periodoApi || "").trim(),
+      };
+
       showToast("exito", `Listo: ${data?.creados ?? payloads.length} ítems guardados.`, 2800);
-      onSaved?.(data);
+
+      // ✅ si el padre es async, lo esperamos: evita que cierre antes de recargar
+      await Promise.resolve(onSaved?.(infoForParent));
+
       onClose?.();
     } catch (e) {
       showToast("error", e?.message || "Error guardando.", 4500);
@@ -741,6 +735,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     API_BATCH,
     onSaved,
     onClose,
+    periodoUI,
   ]);
 
   if (!open) return null;
@@ -870,15 +865,15 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
                       {/* IVA */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--iva mi-cr-center">
-<select
-  className="fl-input fl-select fl-select-iva--car fl-select-iva--compra"
-  value={String(r.ivaPct)}
-  onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
-  onKeyDown={(e) => {
-    if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
-  }}
-  disabled={saving}
->
+                        <select
+                          className="fl-input fl-select fl-select-iva--car fl-select-iva--compra"
+                          value={String(r.ivaPct)}
+                          onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
+                          onKeyDown={(e) => {
+                            if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+                          }}
+                          disabled={saving}
+                        >
                           {IVA_OPTIONS.map((x) => (
                             <option key={x.value} value={x.value}>
                               {x.label}

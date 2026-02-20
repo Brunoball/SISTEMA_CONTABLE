@@ -1,12 +1,13 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/components/Movimientos/Ventas.jsx
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
-import "../../Global/Global_Section.css"; // ✅ misma estética
+import "../../Global/Global_Section.css";
 
 import Toast from "../../Global/Toast.jsx";
 
-// ✅ Loader overlay (fallback) — lo dejamos importado por si lo usás en otro lado,
-// pero en ESTA tabla NO lo usamos para evitar “parpadeo doble”.
+// (no lo usamos en esta tabla, pero lo dejás si querés)
 import GifCarga from "../../Global/Gif_Carga.jsx";
 import "../../Global/gif_carga.css";
 
@@ -25,17 +26,15 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
-
-// ✅ IGUAL A MOVIMIENTOS: Listas desde Provider
 import { useListas } from "../../../context/ListasContext.jsx";
 
 /* =========================
-   PERF (igual Movimientos)
+   PERF
 ========================= */
-const MIN_LOADING_MS = 0; // 0 desactiva
-const FORCE_SHOW_LOADER_DEV = false; // true solo dev
-const PAGE_SIZE = 100; // ✅ SIEMPRE 100 de arranque
-const PROBE_LIMIT = PAGE_SIZE + 1; // ✅ pedimos 101 para saber si hay más
+const MIN_LOADING_MS = 0;
+const FORCE_SHOW_LOADER_DEV = false;
+const PAGE_SIZE = 100;
+const PROBE_LIMIT = PAGE_SIZE + 1;
 const SKELETON_ROWS = 10;
 
 /* =========================
@@ -83,7 +82,7 @@ function formatFechaDMY(v) {
 }
 
 /* =========================
-   Período helpers (UI MM-YYYY) <-> (API YYYY-MM)
+   Período helpers
 ========================= */
 function periodoToMMYYYY(input) {
   const s = String(input ?? "").trim();
@@ -158,7 +157,7 @@ function periodoToYYYYMM(input) {
 }
 
 /* =========================
-   Auth helpers (X-Session + Bearer)
+   Auth helpers
 ========================= */
 function getAuthInfo() {
   const token = (localStorage.getItem("token") || "").trim();
@@ -181,7 +180,7 @@ function getAuthInfo() {
 }
 
 /* =========================
-   ✅ ID robusto (CLAVE del bug: dedupe/paginado)
+   ✅ ID robusto
 ========================= */
 function getMovimientoId(r) {
   const cand =
@@ -212,7 +211,7 @@ function getRowKey(r) {
 }
 
 /* =========================
-   ✅ FILTRO VENTAS (robusto)
+   ✅ FILTRO VENTAS
 ========================= */
 function hasCliente(r) {
   const idCli = Number(r?.id_cliente ?? r?.cliente_id ?? r?.idCliente ?? r?.id_cliente_fk ?? 0);
@@ -246,7 +245,7 @@ function isVentaRow(row) {
 }
 
 /* =========================
-   Normalizador de fila
+   Normalizador
 ========================= */
 function normalizeVentaRow(r) {
   const cliente =
@@ -269,7 +268,7 @@ function normalizeVentaRow(r) {
 }
 
 /* =========================
-   Full-text match (client-side)
+   Full-text match
 ========================= */
 function rowMatchesQuery(row, query) {
   const qq = normalizeSearchText(query);
@@ -317,8 +316,6 @@ export default function Ventas() {
   } = useListas();
 
   const [rows, setRows] = useState([]);
-
-  // ✅ fuente de verdad inmediata para append/merge
   const rowsRef = useRef([]);
   useEffect(() => {
     rowsRef.current = Array.isArray(rows) ? rows : [];
@@ -349,17 +346,13 @@ export default function Ventas() {
 
   const cacheRef = useRef(new Map());
 
-  // ✅ request id global (stale response guard)
   const reqIdRef = useRef(0);
-
-  // ✅ request id por tipo (para que una request vieja NO apague loaders de la nueva)
   const rowsReqIdRef = useRef(0);
   const moreReqIdRef = useRef(0);
 
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
-  // ✅ Skeleton estable (sin timer)
   const showSkeleton = loadingRows;
 
   useEffect(() => {
@@ -434,8 +427,6 @@ export default function Ventas() {
 
   /* =========================
      LOAD ROWS (paginado)
-     ✅ Fix “No hay ventas...” (race)
-     ✅ Fix “parpadeo doble” (solo skeleton estable)
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -465,7 +456,6 @@ export default function Ventas() {
       const myReqId = ++reqIdRef.current;
       const start = Date.now();
 
-      // ✅ set active request id by type
       if (!append) {
         rowsReqIdRef.current = myReqId;
         setLoadingRows(true);
@@ -476,9 +466,7 @@ export default function Ventas() {
       setError("");
 
       try {
-        // ✅ cache solo para carga principal offset=0
         if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
-          // ✅ no tocar si ya no soy la request activa principal
           if (rowsReqIdRef.current !== myReqId) return null;
 
           const cached = cacheRef.current.get(cacheKey);
@@ -507,7 +495,6 @@ export default function Ventas() {
         const data = await apiGet(`${API}?${sp.toString()}`);
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar ventas.");
 
-        // ✅ stale response: NO tocar loaders/UI
         if (myReqId !== reqIdRef.current) return null;
 
         const listKey = Array.isArray(data.ventas)
@@ -535,7 +522,6 @@ export default function Ventas() {
 
         return await new Promise((resolve) => {
           const apply = () => {
-            // ✅ si ya no soy la request activa, no tocar nada
             if (myReqId !== reqIdRef.current) return resolve(null);
 
             if (append) {
@@ -551,7 +537,6 @@ export default function Ventas() {
               rowsRef.current = merged;
               setRows(merged);
 
-              // ✅ si no agregamos nada, probablemente backend ignora offset
               if (add.length === 0) {
                 newHasMore = false;
                 newNextOffset = null;
@@ -560,7 +545,6 @@ export default function Ventas() {
               setHasMore(newHasMore);
               setNextOffset(newNextOffset);
 
-              // ✅ apagar loader SOLO si sigo siendo la request activa "more"
               if (moreReqIdRef.current === myReqId) setLoadingMore(false);
             } else {
               rowsRef.current = page;
@@ -577,7 +561,6 @@ export default function Ventas() {
                 });
               }
 
-              // ✅ apagar loader SOLO si sigo siendo la request activa "rows"
               if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
             }
 
@@ -597,7 +580,6 @@ export default function Ventas() {
 
         return await new Promise((resolve) => {
           setTimeout(() => {
-            // ✅ stale response: NO tocar loaders/UI
             if (myReqId !== reqIdRef.current) return resolve(null);
 
             setError(e.message || "Error cargando ventas.");
@@ -617,7 +599,7 @@ export default function Ventas() {
   );
 
   /* =========================
-     ✅ INIT
+     INIT
   ========================= */
   useEffect(() => {
     let alive = true;
@@ -839,7 +821,7 @@ export default function Ventas() {
   /* =========================
      Guardar / eliminar
   ========================= */
-  const saveMovimiento = async (payload, isEdit) => {
+  const apiPostSave = async (payload, isEdit) => {
     setError("");
     const { idUsuario } = getAuthInfo();
     const action = isEdit ? "ventas_actualizar" : "ventas_crear";
@@ -893,7 +875,7 @@ export default function Ventas() {
   };
 
   /* =========================
-     ✅ "Cargar todos" (loop seguro)
+     ✅ "Cargar todos"
   ========================= */
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
@@ -929,9 +911,7 @@ export default function Ventas() {
         if (!res.hasMore || offset === null) break;
       }
 
-      // fuerza render (por si el último append no cambió referencia)
       setRows([...rowsRef.current]);
-
       showToast("exito", `Listo: se cargaron ${rowsRef.current.length} ventas.`, 2600);
     } catch (e) {
       showToast("error", e?.message || "Error cargando todas.", 4200);
@@ -951,8 +931,7 @@ export default function Ventas() {
     showToast,
   ]);
 
-  // ✅ estado UX
-  const softLoading = loadingRows; // (skeleton estable)
+  const softLoading = loadingRows;
 
   const skelWidths = useMemo(() => {
     return {
@@ -981,7 +960,7 @@ export default function Ventas() {
                 key={c.key}
                 className="mov-gridCell mov-gridCell--actions is-center"
                 role="cell"
-                data-label={c.label} // ✅ mobile label
+                data-label={c.label}
               >
                 <div className="mov-skelActions">
                   <span className="mov-skelIcon" />
@@ -1003,7 +982,7 @@ export default function Ventas() {
                 c.align === "center" ? "is-center" : "",
               ].join(" ")}
               role="cell"
-              data-label={c.label} // ✅ mobile label
+              data-label={c.label}
             >
               <span className="mov-skeletonBar" style={{ width: w }} />
             </div>
@@ -1026,7 +1005,6 @@ export default function Ventas() {
       tipos_movimiento: [],
     };
 
-  // ✅ clave: NO mostrar empty-state mientras esté cargando algo
   const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
   return (
@@ -1159,9 +1137,8 @@ export default function Ventas() {
               type="button"
               className="mov-btn mov-btn--primary"
               onClick={() => {
-                // SIEMPRE habilitado
-                // si querés avisar:
-                if (loadingListsCtx) showToast?.("cargando", "Cargando listas… podés ir completando igual.", 2400);
+                if (loadingListsCtx)
+                  showToast?.("cargando", "Cargando listas… podés ir completando igual.", 2400);
                 setOpenAdd(true);
               }}
               title="Crear nuevo movimiento"
@@ -1192,7 +1169,6 @@ export default function Ventas() {
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className={["mov-gridBody", "mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
-            {/* ✅ Skeleton estable (sin parpadeo) */}
             {showSkeleton ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
@@ -1215,7 +1191,7 @@ export default function Ventas() {
                               key={c.key}
                               className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
                               role="cell"
-                              data-label={c.label} // ✅ mobile label
+                              data-label={c.label}
                             >
                               <div className="mov-actionsInline">
                                 <button
@@ -1268,7 +1244,7 @@ export default function Ventas() {
                               .filter(Boolean)
                               .join(" ")}
                             role="cell"
-                            data-label={c.label} // ✅ CLAVE para mobile
+                            data-label={c.label}
                             title={typeof val === "string" ? val : undefined}
                           >
                             <span className="mov-ellipsissss">{val}</span>
@@ -1279,7 +1255,6 @@ export default function Ventas() {
                   );
                 })}
 
-                {/* ✅ FIX: NO mostrar empty mientras carga algo */}
                 {!isAnyLoading && filteredRows.length === 0 && (
                   <div className="mov-emptyRow">
                     {!fPeriodo
@@ -1288,7 +1263,6 @@ export default function Ventas() {
                   </div>
                 )}
 
-                {/* ✅ BOTÓN CARGAR TODOS */}
                 {!loadingRows && hasMore && filteredRows.length > 0 && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
@@ -1322,18 +1296,26 @@ export default function Ventas() {
         onClose={() => setOpenAdd(false)}
         onToast={showToast}
         onSaved={async (info) => {
+          // ✅ FIX CLAVE:
+          // - cuando NO había periodos / registros, fPeriodo era "".
+          // - ahora el modal SIEMPRE nos devuelve periodoUI.
           try {
-            const ui = periodoToMMYYYY(info?.periodoUI || fPeriodo);
+            const uiFromModal = periodoToMMYYYY(info?.periodoUI || "");
+            const ui = uiFromModal || periodoToMMYYYY(fPeriodo) || "";
 
             setOpenAdd(false);
             setQ("");
-            setFPeriodo(ui);
+            skipSearchRef.current = true;
 
+            // refrescá listas (para que aparezca el período en el select)
+            await refreshPeriodos();
+
+            // fijá período y recargá
+            if (ui) setFPeriodo(ui);
             invalidateCacheForPeriodo(ui);
             await loadRows({ periodo: ui, q: "", offset: 0, append: false });
 
-            await refreshPeriodos();
-            showToast("exito", "Ventas guardadas y tabla actualizada.", 2400);
+            showToast("exito", "Venta guardada y tabla actualizada.", 2400);
           } catch (e) {
             showToast("error", e?.message || "Se guardó, pero falló la recarga.", 4200);
           }
@@ -1354,7 +1336,7 @@ export default function Ventas() {
         onSave={async (payload) => {
           try {
             showToast("cargando", "Guardando cambios…", 12000);
-            await saveMovimiento(payload, true);
+            await apiPostSave(payload, true);
 
             invalidateCacheForPeriodo(fPeriodo);
             await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });

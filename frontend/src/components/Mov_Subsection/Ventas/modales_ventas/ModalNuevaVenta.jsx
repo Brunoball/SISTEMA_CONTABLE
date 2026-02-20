@@ -1,4 +1,5 @@
-// src/components/Ventas/modales/ModalNuevaVenta.jsx
+// ✅ REEMPLAZAR COMPLETO
+// src/components/Movimientos/modales_ventas/ModalNuevaVenta.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_Modals.css";
@@ -191,7 +192,7 @@ async function apiPostJson(url, payload) {
 }
 
 /* =========================
-   Theme helper (body.dark OR data-theme="oscuro")
+   Theme helper
 ========================= */
 function isTemaOscuro() {
   const byAttr = document.documentElement.getAttribute("data-theme") === "oscuro";
@@ -200,18 +201,9 @@ function isTemaOscuro() {
 }
 
 /* =========================
-   Mini Modal: alta rápida (detalle / cliente)
+   Mini Modal: alta rápida
 ========================= */
-function AddCatalogMiniModal({
-  open,
-  title,
-  value,
-  saving,
-  onChange,
-  onCancel,
-  onSave,
-  dark = false,
-}) {
+function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -266,21 +258,11 @@ function AddCatalogMiniModal({
           </div>
 
           <div className="mi-mini__actions">
-            <button
-              type="button"
-              className="mit-btn mit-btn--ghost"
-              onClick={onCancel}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>
               Cancelar
             </button>
 
-            <button
-              type="button"
-              className="mit-btn mit-btn--solid"
-              onClick={onSave}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
               {saving ? "Guardando..." : "Guardar"}
             </button>
           </div>
@@ -292,7 +274,7 @@ function AddCatalogMiniModal({
 }
 
 /* =========================
-   Validación filas (mensajes)
+   Validación filas
 ========================= */
 function describeLineProblem(r, idx1based) {
   const detId = Number(r.id_detalle);
@@ -333,7 +315,7 @@ function describeLineProblem(r, idx1based) {
 }
 
 /* =========================
-   Tipo venta => reglas UI (contado/corriente)
+   Tipo venta => reglas UI
 ========================= */
 function isContadoTipoVenta(tvObj) {
   const name = String(tvObj?.nombre ?? "").toLowerCase();
@@ -405,8 +387,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const [fecha, setFecha] = useState(todayISO());
   const [periodoUI, setPeriodoUI] = useState(isoToMMYYYY(todayISO()));
 
-  // ✅ FIX: incluimos id_cuenta_corriente para evitar undefineds si en algún momento lo usás,
-  // pero NO lo validamos ni lo mostramos (según tu regla actual).
   const [filters, setFilters] = useState({
     id_tipo_venta: NULL_OPTION,
     id_medio_pago: NULL_OPTION,
@@ -414,25 +394,21 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     id_cuenta_corriente: NULL_OPTION,
   });
 
-  // ✅ exactamente como compras pero para ventas: Guardar / Facturar
   const [accionContado, setAccionContado] = useState("facturar");
 
-  // cliente autocomplete
   const [cliInput, setCliInput] = useState("");
   const [cliFocus, setCliFocus] = useState(false);
   const closeBtnRef = useRef(null);
 
-  // filas
   const [rows, setRows] = useState(() => [
     { id: uid(), id_detalle: NULL_OPTION, detalleText: "", cantidad: 1, precio: 0, ivaPct: 0 },
   ]);
 
   const [saving, setSaving] = useState(false);
 
-  // ✅ mini modal genérico: detalle / cliente
   const [addUI, setAddUI] = useState({
     open: false,
-    kind: null, // "detalles" | "clientes"
+    kind: null,
     rowId: null,
     text: "",
     saving: false,
@@ -493,7 +469,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   };
 
-  /* ========= detalles sugerencias ========= */
   const detallesList = useMemo(
     () => (Array.isArray(localLists.detalles) ? localLists.detalles : []),
     [localLists.detalles]
@@ -510,7 +485,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     [detallesList]
   );
 
-  /* ========= mini modal: abrir/cerrar ========= */
   const startAddDetalleForRow = useCallback(
     (rowId) => {
       if (saving) return;
@@ -588,7 +562,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }
   }, [API_CATALOGO, addUI, showToast]);
 
-  /* ========= cliente autocomplete ========= */
   const clientesList = useMemo(
     () => (Array.isArray(localLists.clientes) ? localLists.clientes : []),
     [localLists.clientes]
@@ -617,7 +590,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     setCliFocus(false);
   }, []);
 
-  /* ========= cálculos ========= */
   const rowsCalc = useMemo(() => {
     return rows.map((r) => {
       const cantidad = Math.max(0, safeNumber(r.cantidad));
@@ -637,7 +609,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     return { subtotal, iva, total };
   }, [rowsCalc]);
 
-  /* ========= tipo venta contado/corriente ========= */
   const tipoVentaSelected = useMemo(() => {
     const id = Number(filters.id_tipo_venta);
     if (!Number.isFinite(id) || id <= 0) return null;
@@ -649,8 +620,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
   useEffect(() => {
     if (!open) return;
-
-    // Regla: si es corriente => siempre guardado (pendiente)
     if (isCorriente) setAccionContado("guardar");
   }, [open, isCorriente]);
 
@@ -666,16 +635,11 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       return { ok: false, msg: "Falta seleccionar la Forma de venta." };
     }
 
-    // ✅ Contado: medio de pago obligatorio
     if (isContado) {
       const mp = Number(filters.id_medio_pago);
       if (!Number.isFinite(mp) || mp <= 0)
         return { ok: false, msg: "Venta Contado: falta seleccionar el Medio de pago." };
     }
-
-    // ✅ FIX IMPORTANTE:
-    // Corriente: NO pedimos Cuenta Corriente (porque no la mostrás en UI y dijiste que NO se use)
-    // Si más adelante querés volver a exigirla, recién ahí agregás UI + validación.
 
     const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
     if (!/^\d{4}-\d{2}$/.test(periodoApi)) {
@@ -735,9 +699,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       const { idUsuario } = getAuthInfo();
       const periodoApi = v.periodoApi;
 
-      // ✅ igual concepto que compras:
-      // - si es corriente => siempre "guardar" (pendiente)
-      // - si es contado => depende de botones Guardar / Facturar
       const accionFinal = isCorriente ? "guardar" : accionContado;
       const esFacturadaFinal = isCorriente ? false : accionFinal === "facturar";
 
@@ -758,7 +719,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           id_tipo_venta: Number(filters.id_tipo_venta),
 
           id_medio_pago: isContado ? Number(filters.id_medio_pago) : null,
-          id_cuenta_corriente: null, // (no se usa en UI actual)
+          id_cuenta_corriente: null,
 
           id_detalle: Number(r.id_detalle),
           cantidad: Math.round(Number(r.cantidad) * 100) / 100,
@@ -783,9 +744,20 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       const data = await apiPostJson(API_BATCH, payloads);
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar el batch de ventas.");
 
+      // ✅ FIX CLAVE:
+      // Devolvemos SIEMPRE periodoUI/periodoApi al padre para que recargue aunque no existan periodos aún.
+      const infoToParent = {
+        ...data,
+        periodoUI,      // "MM-YYYY"
+        periodoApi,     // "YYYY-MM"
+        fecha,          // "YYYY-MM-DD"
+      };
+
       showToast("exito", `Listo: ${data?.creados ?? payloads.length} ítems guardados.`, 2800);
-      onSaved?.(data);
-      onClose?.();
+
+      // ⚠️ NO cerramos acá con onClose para evitar carreras.
+      // El padre cierra y recarga.
+      onSaved?.(infoToParent);
     } catch (e) {
       showToast("error", e?.message || "Error guardando.", 4500);
       setSaving(false);
@@ -804,7 +776,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     isContado,
     API_BATCH,
     onSaved,
-    onClose,
+    periodoUI,
   ]);
 
   if (!open) return null;
@@ -814,21 +786,13 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
   const modalJSX = (
     <div
-      className={[
-        "mi-modal__overlay",
-        "mi-modal__overlay--mov",
-        dark ? "mi-modal__overlay--dark" : "",
-      ]
+      className={["mi-modal__overlay", "mi-modal__overlay--mov", dark ? "mi-modal__overlay--dark" : ""]
         .join(" ")
         .trim()}
       onMouseDown={() => (!saving ? onClose?.() : null)}
     >
       <div
-        className={[
-          "mi-modal__container",
-          "mi-modal__container--mov",
-          dark ? "mi-modal--dark" : "",
-        ]
+        className={["mi-modal__container", "mi-modal__container--mov", dark ? "mi-modal--dark" : ""]
           .join(" ")
           .trim()}
         role="dialog"
@@ -883,9 +847,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                           className="fl-input"
                           placeholder="Escribí o seleccioná un detalle…"
                           value={r.detalleText}
-                          onChange={(e) =>
-                            updateRow(r.id, { detalleText: e.target.value, id_detalle: NULL_OPTION })
-                          }
+                          onChange={(e) => updateRow(r.id, { detalleText: e.target.value, id_detalle: NULL_OPTION })}
                           disabled={saving || addUI.open}
                           autoComplete="off"
                         />
@@ -946,30 +908,28 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                           min="0"
                           step="0.01"
                           value={r.precio}
-                          onChange={(e) =>
-                            updateRow(r.id, { precio: e.target.value === "" ? "" : Number(e.target.value) })
-                          }
+                          onChange={(e) => updateRow(r.id, { precio: e.target.value === "" ? "" : Number(e.target.value) })}
                           disabled={saving}
                         />
                       </div>
 
                       {/* IVA */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--iva mi-cr-center">
-<select
-  className="fl-input fl-select fl-select-iva--car"
-  value={String(r.ivaPct)}
-  onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
-  onKeyDown={(e) => {
-    if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
-  }}
-  disabled={saving}
->
-  {IVA_OPTIONS.map((x) => (
-    <option key={x.value} value={x.value}>
-      {x.label}
-    </option>
-  ))}
-</select>
+                        <select
+                          className="fl-input fl-select fl-select-iva--car"
+                          value={String(r.ivaPct)}
+                          onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
+                          onKeyDown={(e) => {
+                            if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+                          }}
+                          disabled={saving}
+                        >
+                          {IVA_OPTIONS.map((x) => (
+                            <option key={x.value} value={x.value}>
+                              {x.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       {/* IVA monto */}
@@ -1199,7 +1159,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           </div>
         </div>
 
-        {/* Mini modal */}
         <AddCatalogMiniModal
           open={miniOpen}
           title={miniTitle}

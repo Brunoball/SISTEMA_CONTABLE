@@ -971,8 +971,8 @@ export default function Movimientos() {
                 await ensureListsLoaded({ force: false, background: true }).catch(() => {});
                 setOpenAdd(true);
               }}
-              disabled={!fPeriodo || loadingAll || loadingListsCtx}
-              title={!fPeriodo ? "Primero seleccioná un período" : "Nuevo Movimiento"}
+              disabled={false}   // ✅ SIEMPRE HABILITADO
+              title="Nuevo Movimiento"
             >
               <FontAwesomeIcon icon={faPlus} />
               <span className="mov-btnText mov-btnText--desktop">Nuevo Movimiento</span>

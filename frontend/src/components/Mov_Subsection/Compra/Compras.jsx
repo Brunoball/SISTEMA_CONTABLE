@@ -315,7 +315,6 @@ export default function Compras() {
     if (!text) throw new Error("Respuesta vacía del servidor.");
     try {
       const data = JSON.parse(text);
-      // si el backend devuelve {exito:false,...} igual lo tomamos y lo manejamos afuera
       return data;
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
@@ -350,7 +349,10 @@ export default function Compras() {
   }, [refreshLists]);
 
   const invalidateCacheForPeriodo = useCallback((periodoUI) => {
-    const periodoAPI = periodoToYYYYMM(periodoUI);
+    const perUI = periodoToMMYYYY(periodoUI);
+    const periodoAPI = periodoToYYYYMM(perUI);
+    if (!periodoAPI) return;
+
     const prefix = `${periodoAPI}|`;
     for (const k of cacheRef.current.keys()) {
       if (String(k).startsWith(prefix)) cacheRef.current.delete(k);
@@ -359,7 +361,6 @@ export default function Compras() {
 
   /* =========================
      ✅ FIX: endpoint real de edición
-     - intenta varios nombres de action para no clavarte
   ========================= */
   const editarCompraEnBackend = useCallback(
     async (payloadFinal) => {
@@ -367,10 +368,8 @@ export default function Compras() {
       const id = payloadFinal?.id_movimiento ?? payloadFinal?.id ?? getRowId(selectedRow);
       if (!id) throw new Error("No encuentro id_movimiento para editar.");
 
-      // aseguramos id_movimiento en el payload
       const body = { ...payloadFinal, id_movimiento: Number(id), idUsuario };
 
-      // probamos acciones posibles
       const candidates = ["compras_editar", "compras_actualizar", "movimientos_editar"];
 
       let lastErr = null;
@@ -378,14 +377,12 @@ export default function Compras() {
         try {
           const sp = new URLSearchParams();
           sp.set("action", action);
-          // algunos backends esperan id_movimiento en query también
           sp.set("id_movimiento", String(id));
 
           const data = await apiPostJson(`${API}?${sp.toString()}`, body);
 
           if (data?.exito) return data;
 
-          // si el endpoint existe pero respondió exito:false
           const msg = data?.mensaje || `No se pudo editar (action=${action}).`;
           lastErr = new Error(msg);
         } catch (e) {
@@ -414,6 +411,7 @@ export default function Compras() {
 
       const perUI = periodoToMMYYYY(periodoUI);
 
+      // ✅ si no hay periodo: limpiar y marcar listo
       if (!perUI) {
         setRows([]);
         setHasMore(false);
@@ -535,10 +533,10 @@ export default function Compras() {
                 if (id === null || id === undefined) return true;
                 return !seen.has(String(id));
               });
-              appendedCount = add.length; // best-effort
+              appendedCount = add.length;
               return [...prevArr, ...add];
             });
-            appendedCount = page.length; // best-effort
+            appendedCount = page.length;
           }
         } else {
           setRows(page);
@@ -763,19 +761,44 @@ export default function Compras() {
     setCompUrl("");
   };
 
+  /* =========================
+     ✅ FIX CLAVE: refrescar tras guardar (sin F5)
+     - si guardaste en otro período, cambiamos fPeriodo
+     - recargamos usando ese período
+  ========================= */
   const refreshAfterSave = useCallback(
     async (periodoGuardado) => {
       const perUI = periodoToMMYYYY(periodoGuardado || fPeriodo);
+
       setOpenNueva(false);
       setOpenEdit(false);
       setSelectedRow(null);
 
-      invalidateCacheForPeriodo(perUI);
-      await loadRows({ periodo: perUI, q, offset: 0, append: false, mode: "initial" });
+      // ✅ si el modal guardó en otro período, lo adoptamos para que se vea
+      if (perUI && perUI !== periodoToMMYYYY(fPeriodo)) {
+        skipSearchRef.current = true; // evita doble fetch por debounce
+        setReady(false);
+        setFPeriodo(perUI);
+        setQ(""); // recomendado: evitar que una búsqueda oculte el registro nuevo
+      }
+
+      const finalPer = perUI || periodoToMMYYYY(fPeriodo);
+
+      if (finalPer) {
+        invalidateCacheForPeriodo(finalPer);
+        await loadRows({ periodo: finalPer, q: "", offset: 0, append: false, mode: "initial" });
+      } else {
+        setRows([]);
+        setHasMore(false);
+        setNextOffset(null);
+        setLoadingRows(false);
+        setReady(true);
+        endSkeleton();
+      }
 
       await refreshPeriodos();
     },
-    [fPeriodo, q, invalidateCacheForPeriodo, loadRows, refreshPeriodos]
+    [fPeriodo, invalidateCacheForPeriodo, loadRows, refreshPeriodos, endSkeleton]
   );
 
   /* =========================
@@ -794,7 +817,7 @@ export default function Compras() {
         showToast("exito", "Compra actualizada.", 2400);
       } catch (e) {
         showToast("error", e?.message || "Error guardando compra.", 4200);
-        throw e; // 👈 importante: el modal corta saving si falla
+        throw e;
       }
     },
     [editarCompraEnBackend, fPeriodo, refreshAfterSave, showToast]
@@ -1072,8 +1095,8 @@ export default function Compras() {
               type="button"
               className="mov-btn mov-btn--primary"
               onClick={() => setOpenNueva(true)}
-              disabled={!fPeriodo || loadingListsCtx || loadingAll}
-              title={!fPeriodo ? "Primero seleccioná un período" : "Crear nueva compra"}
+              disabled={false}
+              title="Crear nueva compra"
             >
               <FontAwesomeIcon icon={faPlus} /> Nueva Compra
             </button>
@@ -1237,7 +1260,13 @@ export default function Compras() {
         onClose={() => setOpenNueva(false)}
         onToast={showToast}
         onSaved={async (info) => {
-          const per = info?.periodoUI || info?.periodo || info?.periodoApi || fPeriodo;
+          // ✅ FIX: SIEMPRE usar periodoUI/periodoApi del modal
+          const per =
+            periodoToMMYYYY(info?.periodoUI) ||
+            periodoToMMYYYY(info?.periodo) ||
+            periodoToMMYYYY(info?.periodoApi) ||
+            periodoToMMYYYY(fPeriodo);
+
           await refreshAfterSave(per);
           showToast("exito", "Compra creada.", 2200);
         }}
@@ -1253,7 +1282,7 @@ export default function Compras() {
           setSelectedRow(null);
         }}
         onToast={showToast}
-        onSave={handleSaveEdit} // ✅ AHORA SI: guarda en backend
+        onSave={handleSaveEdit}
       />
 
       <ModalVerComprobante open={openVerComp} url={compUrl} onClose={closeComprobanteModal} title="Comprobante de compra" />

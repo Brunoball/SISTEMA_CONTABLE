@@ -1,7 +1,7 @@
 // src/components/Movimientos/modales/ModalEditarMovimiento.jsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import "./ModalEditarMovimiento.css";
+import "../../Global/Global_Modals.css";
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";

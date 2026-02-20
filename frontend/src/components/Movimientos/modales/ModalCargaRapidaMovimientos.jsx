@@ -1,7 +1,7 @@
 // src/components/Movimientos/modales/ModalCargaRapidaMovimientos.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import "./ModalEditarMovimiento.css";
+import "../../Global/Global_Modals.css";
 import BASE_URL from "../../../config/config";
 
 const NULL_OPTION = "";
@@ -1008,18 +1008,26 @@ id_cuenta_corriente: null,
 
                       {/* % IVA */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--iva mi-cr-center">
-                        <select
-                          className="fl-input fl-select fl-select-iva--car"
-                          value={String(r.ivaPct)}
-                          onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
-                          disabled={saving}
-                        >
-                          {IVA_OPTIONS.map((x) => (
-                            <option key={x.value} value={x.value}>
-                              {x.label}
-                            </option>
-                          ))}
-                        </select>
+<select
+  className="fl-input fl-select fl-select-iva--car"
+  value={String(r.ivaPct)}
+  onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
+  onKeyDown={(e) => {
+    // Evita cambiar opciones con flechas cuando el select está enfocado
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+  }}
+  onWheel={(e) => {
+    // Evita que la ruedita cambie el valor
+    e.currentTarget.blur();
+  }}
+  disabled={saving}
+>
+  {IVA_OPTIONS.map((x) => (
+    <option key={x.value} value={x.value}>
+      {x.label}
+    </option>
+  ))}
+</select>
                       </div>
 
                       {/* IVA monto */}

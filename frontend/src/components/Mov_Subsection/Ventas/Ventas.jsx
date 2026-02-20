@@ -1,18 +1,18 @@
 // src/components/Movimientos/Ventas.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import BASE_URL from "../../config/config";
-import "../Movimientos/movimientos.css"; // ✅ misma estética
+import BASE_URL from "../../../config/config.jsx";
+import "../../Global/Global_Section.css"; // ✅ misma estética
 
-import Toast from "../Global/Toast.jsx";
+import Toast from "../../Global/Toast.jsx";
 
 // ✅ Loader overlay (fallback) — lo dejamos importado por si lo usás en otro lado,
 // pero en ESTA tabla NO lo usamos para evitar “parpadeo doble”.
-import GifCarga from "../Global/Gif_Carga.jsx";
-import "../Global/gif_carga.css";
+import GifCarga from "../../Global/Gif_Carga.jsx";
+import "../../Global/gif_carga.css";
 
-import ModalNuevaVenta from "./modales/ModalNuevaVenta";
-import ModalEditarVenta from "./modales/ModalEditarVenta";
-import ModalEliminarMovimientos from "../Movimientos/modales/ModalEliminarMovimientos";
+import ModalNuevaVenta from "./modales_ventas/ModalNuevaVenta.jsx";
+import ModalEditarVenta from "./modales_ventas/ModalEditarVenta.jsx";
+import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -27,7 +27,7 @@ import {
 import * as XLSX from "xlsx";
 
 // ✅ IGUAL A MOVIMIENTOS: Listas desde Provider
-import { useListas } from "../../context/ListasContext";
+import { useListas } from "../../../context/ListasContext.jsx";
 
 /* =========================
    PERF (igual Movimientos)
@@ -1166,7 +1166,7 @@ export default function Ventas() {
               }}
               title="Crear nuevo movimiento"
             >
-              <FontAwesomeIcon icon={faPlus} /> Nuevo Movimiento
+              <FontAwesomeIcon icon={faPlus} /> Nueva Venta
             </button>
           </div>
         </div>

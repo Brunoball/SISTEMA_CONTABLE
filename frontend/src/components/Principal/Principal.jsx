@@ -86,8 +86,8 @@ async function apiFetch(paramsObj, options = {}) {
 ========================================================= */
 const ROUTE_PREFETCH = {
   "/panel/movimientos": () => import("../Movimientos/Movimientos"),
-  "/panel/ventas": () => import("../Mov_Subsection/Ventas"),
-  "/panel/compras": () => import("../Mov_Subsection/Compras"),
+  "/panel/ventas": () => import("../Mov_Subsection/Ventas/Ventas"),
+  "/panel/compras": () => import("../Mov_Subsection/Compra/Compras"),
   "/panel/recibos": () => import("../Mov_Subsection/Recibos"),
   "/panel/OrdenesPago": () => import("../Mov_Subsection/OrdenesPago"),
   "/panel/flujo-de-caja": () => import("../Flujo_de_Caja/Flujo_Caja"),
@@ -127,7 +127,7 @@ function getLastActivityTs() {
    Cache simple de listas globales
 ========================= */
 const LISTAS_CACHE_KEY = "balto_listas_cache_v1";
-const LISTAS_TTL_MS = 30 * 60 * 1000; // ✅ 30 minutos
+const LISTAS_TTL_MS = 30 * 60 * 10000; // ✅ 30 minutos
 
 
 function safeJsonParse(s) {

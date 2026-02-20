@@ -1,7 +1,7 @@
 // src/components/Movimientos/Movimientos.jsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import BASE_URL from "../../config/config";
-import "./movimientos.css";
+import "../Global/Global_Section.css";
 
 // ✅ MODALES
 import ModalCargaRapidaMovimientos from "./modales/ModalCargaRapidaMovimientos";

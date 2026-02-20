@@ -1,14 +1,14 @@
 // src/components/Compras/Compras.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import BASE_URL from "../../config/config";
-import "../Movimientos/movimientos.css";
-import "./compras.css";
-import Toast from "../Global/Toast.jsx";
+import BASE_URL from "../../../config/config.jsx";
+import "../../Global/Global_Section.css";
+import "../../Global/Global_oscuro.css";
+import Toast from "../../Global/Toast.jsx";
 
-import ModalNuevaCompra from "./modales/ModalNuevaCompra";
-import ModalEditarCompra from "./modales/ModalEditarCompra";
-import ModalVerComprobante from "./modales/ModalVerComprobante";
-import ModalEliminarMovimientos from "../Movimientos/modales/ModalEliminarMovimientos";
+import ModalNuevaCompra from "./modales_compra/ModalNuevaCompra.jsx";
+import ModalEditarCompra from "./modales_compra/ModalEditarCompra.jsx";
+import ModalVerComprobante from "../modales/ModalVerComprobante.jsx";
+import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -22,7 +22,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
-import { useListas } from "../../context/ListasContext";
+import { useListas } from "../../../context/ListasContext.jsx";
 
 /* =========================
    PERF: paginado

@@ -1,7 +1,7 @@
 // src/components/Movimientos/OrdenesPago.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../config/config";
-import "../Movimientos/movimientos.css";
+import "../Global/Global_Section.css";
 
 // ✅ MODALES
 import ModalPagarOrdenesPago from "./modales/ModalPagarOrdenesPago";

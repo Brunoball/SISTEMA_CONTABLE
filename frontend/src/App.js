@@ -12,8 +12,8 @@ import Principal from "./components/Principal/Principal";
 /* Secciones */
 import Dashboard from "./components/Dashboard/Dashboard";
 import Movimientos from "./components/Movimientos/Movimientos";
-import Ventas from "./components/Mov_Subsection/Ventas";
-import Compras from "./components/Mov_Subsection/Compras";
+import Ventas from "./components/Mov_Subsection/Ventas/Ventas";
+import Compras from "./components/Mov_Subsection/Compra/Compras";
 import Recibos from "./components/Mov_Subsection/Recibos";
 import OrdenesPago from "./components/Mov_Subsection/OrdenesPago";
 import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";

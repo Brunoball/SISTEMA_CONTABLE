@@ -127,15 +127,53 @@ export function buildReciboHTML(payload) {
       color:var(--text);
       background:white;
     }
-    .paper{
-      width: 210mm;
-      min-height: 297mm;
-      margin: 0 auto;
-      padding: 18mm 16mm;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: white;
-    }
+@page { size: A4; margin: 0; }
+
+/* ✅ PRINT ÚNICO (sin duplicados) */
+@page { size: A4; margin: 10mm; }
+
+@media print{
+  html, body{
+    margin:0 !important;
+    padding:0 !important;
+    background:#fff !important;
+  }
+
+  .paper{
+    width: 100% !important;
+    max-width: 190mm !important;  /* entra siempre */
+    margin: 0 auto !important;
+
+    /* ✅ evita hoja extra en blanco */
+    height: auto !important;
+    min-height: 0 !important;
+
+    padding: 0 !important;        /* el margen lo maneja @page */
+    border: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* evita cortes raros/overflow mínimo */
+  .top, .grid, .tbl, .totals, .footer{
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
+}
+@page { size: A4; margin: 0; }
+
+@media print{
+  .paper{
+    width: 210mm !important;
+    height: 297mm !important;      /* ✅ fijo */
+    padding: 12mm !important;      /* ojo: cuenta dentro del height */
+    overflow: hidden !important;   /* evita desborde */
+  }
+}
     .top{
       display:flex;
       justify-content:space-between;

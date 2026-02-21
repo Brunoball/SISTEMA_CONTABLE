@@ -1,7 +1,7 @@
 // src/components/Movimientos/Recibos.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
-import "../../Global/Global_Section.css";
+import "../../Global/Global_css/Global_Section.css";
 
 import Toast from "../../Global/Toast.jsx";
 
@@ -697,7 +697,7 @@ export default function Recibos() {
         align: "center",
         render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
       },
-      { key: "acciones", label: "ACCIONES", fr: 0.9, align: "center", render: () => null },
+      { key: "acciones", label: "ACCIONES", fr: 1.2, align: "center", render: () => null },
 
     ];
   }, []);

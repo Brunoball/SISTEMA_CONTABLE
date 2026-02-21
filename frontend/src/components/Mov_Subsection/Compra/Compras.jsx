@@ -1,8 +1,8 @@
 // src/components/Compras/Compras.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
-import "../../Global/Global_Section.css";
-import "../../Global/Global_oscuro.css";
+import "../../Global/Global_css/Global_Section.css";
+import "../../Global/Global_css/Global_oscuro.css";
 import Toast from "../../Global/Toast.jsx";
 
 import ModalNuevaCompra from "./modales/ModalNuevaCompra.jsx";

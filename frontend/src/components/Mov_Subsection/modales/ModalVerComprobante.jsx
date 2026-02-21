@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import "../../Global/Global_Modals.css";
+import "../../Global/Global_css/Global_Modals.css";
 
 function isPdfUrl(url) {
   const u = String(url || "").toLowerCase();

@@ -7,7 +7,7 @@ import Toast from "../../Global/Toast.jsx";
 
 import ModalNuevaCompra from "./modales/ModalNuevaCompra.jsx";
 import ModalEditarCompra from "./modales/ModalEditarCompra.jsx";
-import ModalVerComprobante from "../modales/ModalVerComprobante.jsx";
+import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";

@@ -136,10 +136,13 @@ export default function ModalPagarOrdenesPago({
   proveedor,
   deudas = [],
   lists = null,
+
+  // ✅✅✅ NUEVO: callback que viene desde OrdenesPago.jsx
+  // Se dispara cuando el comprobante se guardó/asoció (Finalizar)
+  onAfterComprobanteSaved,
 }) {
   const dialogRef = useRef(null);
   const firstFocusRef = useRef(null);
-
   const prevOpenRef = useRef(false);
 
   const [dark, setDark] = useState(isTemaOscuro());
@@ -204,6 +207,16 @@ export default function ModalPagarOrdenesPago({
     setOpenGenerado(false);
     onClose?.(); // ✅ cierra también el modal de pago
   }, [onClose]);
+
+  // ✅✅✅ CLAVE: se ejecuta cuando el modal generado confirma “Finalizar”
+  // -> le avisa a la pantalla padre que recargue el listado (activar ojo)
+  const handleComprobanteSaved = useCallback(async () => {
+    try {
+      await onAfterComprobanteSaved?.();
+    } catch {
+      // no romper UX si falla la recarga
+    }
+  }, [onAfterComprobanteSaved]);
 
   // ✅ IMPORTANTE: inicializar SOLO cuando open pasa a true (no por renders)
   useEffect(() => {
@@ -615,6 +628,9 @@ export default function ModalPagarOrdenesPago({
         html={generadoHTML}
         idsMovimiento={generadoIdsMov}
         titulo="Comprobante · Orden de Pago"
+
+        // ✅✅✅ CLAVE: cuando el generado guarda/asocia -> avisamos a la pantalla padre
+        onSaved={handleComprobanteSaved}
       />
     </>,
     document.body

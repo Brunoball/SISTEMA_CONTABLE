@@ -1,4 +1,6 @@
-// src/components/Movimientos/Recibos.jsx
+// ✅ REEMPLAZAR COMPLETO
+// src/components/Mov_Subsection/Recibos/Recibos.jsx
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
 import "../../Global/Global_css/Global_Section.css";
@@ -9,10 +11,8 @@ import ModalEditarRecibo from "./modales/ModalEditarRecibo.jsx";
 import ModalPagarRecibos from "./modales/ModalPagarRecibos.jsx";
 import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 
-
-// ✅ Ver comprobante
-import ModalVerComprobante from "../modales/ModalVerComprobante.jsx";
-
+// ✅ ✅ MODAL GLOBAL (según tu estructura real)
+import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -689,7 +689,6 @@ export default function Recibos() {
           );
         },
       },
-
       {
         key: "monto",
         label: "MONTO",
@@ -698,7 +697,6 @@ export default function Recibos() {
         render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
       },
       { key: "acciones", label: "ACCIONES", fr: 1.2, align: "center", render: () => null },
-
     ];
   }, []);
 
@@ -772,7 +770,6 @@ export default function Recibos() {
 
   /* =========================
      ✅ callback: cuando se FINALIZA el recibo y se guarda el comprobante
-     AHORA: aplica el comprobante a TODOS los movimientos pagados.
   ========================= */
   const onReciboFinalizado = useCallback(
     async (saved, fallback = {}) => {
@@ -788,10 +785,8 @@ export default function Recibos() {
         null;
 
       if (idComp > 0 && ids && ids.length) {
-        // ✅ 1) update optimista -> activa el ojo al toque EN TODOS
         applyComprobanteToRows(ids, idComp);
       } else if (idComp > 0) {
-        // fallback viejo: si solo viene uno
         const idMov =
           Number(saved?.id_movimiento || saved?.idMovimiento || saved?.movimiento_id || 0) ||
           Number(fallback?.idMovimiento || 0) ||
@@ -799,7 +794,6 @@ export default function Recibos() {
         if (idMov > 0) applyComprobanteToRows([idMov], idComp);
       }
 
-      // ✅ 2) refresh real
       try {
         const per = periodoToMMYYYY(fPeriodo);
         const qq = (q || "").trim();
@@ -1263,13 +1257,7 @@ export default function Recibos() {
                                   className="mov-iconBtn"
                                   title="Pagar"
                                   onClick={() => openPagarModal(r)}
-                                  disabled={
-                                    loadingRows ||
-                                    loadingMore ||
-                                    loadingAll ||
-                                    loadingListsCtx ||
-                                    loadingClienteDeudas
-                                  }
+                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || loadingClienteDeudas}
                                 >
                                   <FontAwesomeIcon icon={faMoneyBill1Wave} />
                                 </button>
@@ -1291,13 +1279,7 @@ export default function Recibos() {
                                   type="button"
                                   className="mov-iconBtn mov-iconBtn--danger"
                                   title="Eliminar"
-                                  disabled={
-                                    loadingRows ||
-                                    loadingMore ||
-                                    loadingAll ||
-                                    loadingListsCtx ||
-                                    deletingId === r.id_movimiento
-                                  }
+                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || deletingId === r.id_movimiento}
                                   onClick={() => {
                                     setSelectedRow(r);
                                     setOpenDel(true);
@@ -1319,9 +1301,7 @@ export default function Recibos() {
                               c.align === "right" ? "is-right" : "",
                               c.align === "center" ? "is-center" : "",
                               c.strong ? "is-strong" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
+                            ].filter(Boolean).join(" ")}
                             role="cell"
                             data-label={c.label}
                             title={typeof val === "string" ? val : undefined}
@@ -1361,7 +1341,14 @@ export default function Recibos() {
         </div>
       </section>
 
-      {/* ✅ MODAL VER COMPROBANTE */}
+      {/* ✅✅✅ MODAL VER COMPROBANTE (AHORA SÍ, RENDERIZADO) */}
+      <ModalVerComprobante
+        open={openVer}
+        url={verUrl}
+        mime={verMime}
+        title={verTitle}
+        onClose={closeVerComprobante}
+      />
 
       {/* PAGAR */}
       <ModalPagarRecibos
@@ -1376,7 +1363,6 @@ export default function Recibos() {
         cliente={pagarCliente}
         deudas={pagarDeudas}
         lists={lists}
-        // ✅ CLAVE: ahora llega ids_movimiento y se aplica a todos
         onReciboFinalizado={onReciboFinalizado}
       />
 

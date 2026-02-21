@@ -1,9 +1,6 @@
-// ✅ REEMPLAZAR COMPLETO
-// src/components/Mov_Subsection/modales/ModalVerComprobante.jsx
-
 import React, { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import "../../Global/Global_css/Global_Modals.css";
+import "../Global_css/Global_Modals.css";
 
 function isPdfUrl(url) {
   const u = String(url || "").toLowerCase();
@@ -32,7 +29,7 @@ export default function ModalVerComprobante({
 }) {
   const closeBtnRef = useRef(null);
 
-  // lock scroll
+  // Lock scroll
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
@@ -52,6 +49,7 @@ export default function ModalVerComprobante({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
+  // Focus close
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => closeBtnRef.current?.focus(), 0);
@@ -86,12 +84,7 @@ export default function ModalVerComprobante({
             </div>
             <div className="mi-modal__subtitle mpr-subtitle">
               {url ? (
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ textDecoration: "underline" }}
-                >
+                <a href={url} target="_blank" rel="noreferrer" style={{ textDecoration: "underline" }}>
                   Abrir en nueva pestaña
                 </a>
               ) : (
@@ -148,12 +141,7 @@ export default function ModalVerComprobante({
               {!!url && kind === "other" && (
                 <div className="mov-emptyRow" style={{ padding: 14 }}>
                   No se puede previsualizar este archivo.{" "}
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ textDecoration: "underline" }}
-                  >
+                  <a href={url} target="_blank" rel="noreferrer" style={{ textDecoration: "underline" }}>
                     Abrir
                   </a>
                 </div>

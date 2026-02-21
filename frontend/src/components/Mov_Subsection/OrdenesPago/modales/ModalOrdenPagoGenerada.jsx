@@ -124,6 +124,10 @@ export default function ModalOrdenPagoGenerada({
   html,
   idsMovimiento = [],
   titulo = "Comprobante · Orden de Pago",
+
+  // ✅ NUEVO: cuando se guardó y asoció OK, avisamos al padre
+  // Firma sugerida: onSaved({ id_comprobante, ids_movimiento })
+  onSaved,
 }) {
   const firstRef = useRef(null);
   const previewRef = useRef(null);
@@ -239,10 +243,18 @@ export default function ModalOrdenPagoGenerada({
     });
 
     setIdComprobante(newIdComp);
+
+    // ✅ NUEVO: avisar al padre para que recargue la tabla y se active el ojito
+    try {
+      onSaved?.({ id_comprobante: newIdComp, ids_movimiento: idsOk });
+    } catch {
+      // no rompe el flujo por un callback
+    }
+
     onToast?.("exito", "Comprobante guardado y asociado ✅", 2400);
 
     return newIdComp;
-  }, [html, idsOk, idComprobante, onToast]);
+  }, [html, idsOk, idComprobante, onToast, onSaved]);
 
   // ✅ Cerrar = guardar primero (si falla, NO cierra)
   const requestClose = useCallback(async () => {

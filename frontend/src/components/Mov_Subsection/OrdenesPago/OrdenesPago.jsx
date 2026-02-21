@@ -1,5 +1,11 @@
 // ✅ REEMPLAZAR COMPLETO
-// src/components/Movimientos/OrdenesPago.jsx
+// src/components/Mov_Subsection/OrdenesPago/OrdenesPago.jsx
+// (o donde tengas tu componente de Órdenes de Pago)
+
+// ✅ IMPORTANTE:
+// Este archivo usa el modal GLOBAL:
+// src/components/Global/Ver_Comprobantes/ModalVerComprobante.jsx
+// (ajustá el path si tu carpeta real difiere)
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
@@ -10,8 +16,8 @@ import ModalPagarOrdenesPago from "./modales/ModalPagarOrdenesPago.jsx";
 import ModalEditarOrdenPago from "./modales/ModalEditarOrdenPago.jsx";
 import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 
-// ✅ NUEVO: ver comprobante (iframe/pdf)
-import ModalVerComprobante from "../modales/ModalVerComprobante";
+// ✅ ✅ MODAL GLOBAL: ver comprobante
+import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 
 // ✅ Toast
 import Toast from "../../Global/Toast.jsx";
@@ -201,13 +207,6 @@ function getIdComprobanteFromRow(row) {
     0;
   const n = Number(cand || 0);
   return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
-/* ✅ si ya viene archivo_url desde backend */
-function getArchivoUrlFromRow(row) {
-  const u = row?.archivo_url ?? row?.comprobante_url ?? row?.url_comprobante ?? "";
-  const s = String(u || "").trim();
-  return s || "";
 }
 
 /* ✅ para iframe: si no manda X-Session, agregamos session_key en la URL */
@@ -469,13 +468,11 @@ export default function OrdenesPago() {
             ? data.ordenes
             : [];
 
-          // ✅ normalizamos: periodo + pagado + id_comprobante/archivo_url
           const norm = list.map((r) => ({
             ...r,
             periodo: periodoToMMYYYY(r?.periodo),
             pagado: Number(r?.pagado ?? 0) === 1 ? 1 : 0,
             id_comprobante: getIdComprobanteFromRow(r) || 0,
-            archivo_url: getArchivoUrlFromRow(r) || "",
           }));
 
           cacheRef.current.set(cacheKey, norm);
@@ -588,36 +585,35 @@ export default function OrdenesPago() {
   }, [q, fPeriodo, loadRows]);
 
   /* =========================
-     ✅ Modal Ver Comprobante (OJITO)
+     ✅ Modal Ver Comprobante (GLOBAL)
   ========================= */
   const [openVer, setOpenVer] = useState(false);
   const [verUrl, setVerUrl] = useState("");
+  const [verTitle, setVerTitle] = useState("Comprobante");
   const closeVerModal = useCallback(() => {
     setOpenVer(false);
-    setVerUrl("");
+    setTimeout(() => {
+      setVerUrl("");
+      setVerTitle("Comprobante");
+    }, 80);
   }, []);
 
-  const openVerModal = useCallback((row) => {
-    const { sessionKey } = getAuthInfo();
+  const openVerModal = useCallback(
+    (row) => {
+      const { sessionKey } = getAuthInfo();
+      const idComp = getIdComprobanteFromRow(row);
+      if (!idComp) return;
 
-    const idComp = getIdComprobanteFromRow(row);
-    if (!idComp) {
-      // no abras modal si no hay comprobante
-      return;
-    }
+      // ✅ Usamos siempre el endpoint consistente
+      let u = `${API}?action=comprobantes_descargar&id_comprobante=${idComp}`;
+      u = appendSessionKey(u, sessionKey);
 
-    // ✅ mejor: siempre usar el endpoint de descarga por id (consistente)
-    let u = `${BASE_URL}/api.php?action=comprobantes_descargar&id_comprobante=${idComp}`;
-
-    // (si querés, podés usar archivo_url del backend como alternativa)
-    // const urlFromRow = getArchivoUrlFromRow(row);
-    // if (urlFromRow) u = urlFromRow;
-
-    u = appendSessionKey(u, sessionKey);
-
-    setVerUrl(u);
-    setOpenVer(true);
-  }, []);
+      setVerTitle(`Comprobante · ${safeText(row?.proveedor)}`);
+      setVerUrl(u);
+      setOpenVer(true);
+    },
+    [API]
+  );
 
   /* =========================
      Modales
@@ -670,7 +666,6 @@ export default function OrdenesPago() {
     setOpenEditar(false);
     setEditRow(null);
   }, []);
-
   const openEditarModal = useCallback((r) => {
     setEditRow(r);
     setOpenEditar(true);
@@ -798,6 +793,21 @@ export default function OrdenesPago() {
     selectedRow,
     showToast,
   ]);
+
+  /* =========================
+     ✅ NUEVO: recarga tras guardar comprobante (Finalizar)
+     Esto hace que se active el ojito sin F5.
+  ========================= */
+  const handleAfterComprobanteSaved = useCallback(async () => {
+    try {
+      // borramos cache del período actual y pedimos de nuevo el listado
+      invalidateCacheForPeriodo(fPeriodo);
+      await loadRows({ periodo: fPeriodo, q });
+      await refreshLists?.();
+    } catch {
+      // no rompemos UX si falla
+    }
+  }, [fPeriodo, invalidateCacheForPeriodo, loadRows, q, refreshLists]);
 
   /* =========================
      Filtrado final
@@ -963,14 +973,11 @@ export default function OrdenesPago() {
     await loadRows({ periodo: ui, q: "" });
   };
 
-  const canShowEmpty =
-    !loadingRows && loadedKey !== "" && loadedKey === currentKey && filteredRows.length === 0;
+  const canShowEmpty = !loadingRows && loadedKey !== "" && loadedKey === currentKey && filteredRows.length === 0;
 
   return (
     <div className="mov-page mov-page--ordenesPago">
-      {toast && (
-        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
-      )}
+      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
 
       {errorListsCtx && <div className="mov-alert" role="alert">{errorListsCtx}</div>}
       {error && <div className="mov-alert" role="alert">{error}</div>}
@@ -1074,10 +1081,7 @@ export default function OrdenesPago() {
         </div>
 
         <div className="mov-tableWrap" role="rowgroup">
-          <div
-            className={["mov-gridBody", "mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}
-            style={{ position: "relative" }}
-          >
+          <div className={["mov-gridBody", "mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
             {visibleRows.map((r) => (
               <div
                 key={r.id_movimiento}
@@ -1101,14 +1105,8 @@ export default function OrdenesPago() {
                         <div className="mov-actionsInline">
                           <button
                             type="button"
-                            className="mov-iconBtn"
-                            title={
-                              hasPdf
-                                ? "Ver comprobante"
-                                : pag
-                                ? "Pagado, pero sin comprobante"
-                                : "Primero confirmá el pago"
-                            }
+                            className={`mov-iconBtn ${!hasPdf ? "mov-iconBtn--disabled" : ""}`}
+                            title={hasPdf ? "Ver comprobante" : pag ? "Pagado, pero sin comprobante" : "Primero confirmá el pago"}
                             onClick={() => hasPdf && openVerModal(r)}
                             disabled={loadingRows || loadingListsCtx || !hasPdf}
                           >
@@ -1193,11 +1191,7 @@ export default function OrdenesPago() {
             )}
 
             {showSkeleton && loadingRows && (
-              <div
-                className="mov-skeletonWrap"
-                aria-busy="true"
-                style={{ position: "absolute", inset: 0, paddingTop: 0, pointerEvents: "none" }}
-              >
+              <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
               </div>
             )}
@@ -1205,12 +1199,8 @@ export default function OrdenesPago() {
         </div>
       </section>
 
-      <ModalVerComprobante
-        open={openVer}
-        url={verUrl}
-        onClose={closeVerModal}
-        title="Comprobante (Orden de Pago)"
-      />
+      {/* ✅ MODAL GLOBAL (iframe/pdf) */}
+      <ModalVerComprobante open={openVer} url={verUrl} onClose={closeVerModal} title={verTitle} />
 
       <ModalPagarOrdenesPago
         open={openPagar}
@@ -1220,6 +1210,10 @@ export default function OrdenesPago() {
         onToast={showToast}
         onConfirm={onConfirmPago}
         lists={listasCtx || {}}
+
+        // ✅✅✅ ESTA ES LA CLAVE:
+        // Cuando Finalizar guarda el comprobante, recargamos el listado y se activa el ojo.
+        onAfterComprobanteSaved={handleAfterComprobanteSaved}
       />
 
       <ModalEditarOrdenPago

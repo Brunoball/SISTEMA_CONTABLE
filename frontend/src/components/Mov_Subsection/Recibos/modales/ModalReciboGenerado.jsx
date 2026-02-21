@@ -26,7 +26,7 @@ function ensureFullHtmlDocument(html, title) {
 
   const printCss = `
     <style>
-      @page { size: A4; margin: 12mm; }
+      @page { size: A4; margin: 10mm; }
       html, body { background: #fff; }
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     </style>
@@ -114,16 +114,7 @@ function copyComputedStylesDeep(srcNode, dstNode, srcWin) {
 }
 
 function getSessionKey() {
-  const keys = [
-    "session_key",
-    "SESSION_KEY",
-    "balto_session_key",
-    "BALTO_SESSION_KEY",
-    "x_session",
-    "X_SESSION",
-    "X-Session",
-    "x-session",
-  ];
+  const keys = ["session_key", "SESSION_KEY", "balto_session_key", "BALTO_SESSION_KEY", "x_session", "X_SESSION", "X-Session", "x-session"];
   for (const k of keys) {
     const v = localStorage.getItem(k);
     if (v && String(v).trim() !== "") return String(v).trim();
@@ -131,11 +122,6 @@ function getSessionKey() {
   return "";
 }
 
-/**
- * ✅ URL BLINDADA:
- * - BASE_URL = https://dominio.com/api/routes   => https://dominio.com/api/routes/api.php
- * - BASE_URL = https://dominio.com/api/routes/api.php => queda igual
- */
 function getApiPhpUrl() {
   const base = String(BASE_URL || "").replace(/\/+$/, "");
   if (/\/api\.php$/i.test(base)) return base;
@@ -177,6 +163,9 @@ function extractIdComprobante(data) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+// ✅ px por mm a 96dpi
+const mmToPx = (mm) => Math.round((mm * 96) / 25.4);
+
 export default function ModalReciboGenerado({
   open,
   onClose,
@@ -184,7 +173,6 @@ export default function ModalReciboGenerado({
   html,
   title = "Recibo",
   onToast,
-  // ✅ AHORA: varios movimientos
   idsMovimientos = [],
   idCobro = null,
 }) {
@@ -194,7 +182,6 @@ export default function ModalReciboGenerado({
 
   const [busy, setBusy] = useState(false);
 
-  // ✅ evita doble guardado
   const savedRef = useRef(null);
   const savingRef = useRef(false);
 
@@ -210,7 +197,6 @@ export default function ModalReciboGenerado({
     setTimeout(() => firstFocusRef.current?.focus(), 50);
   }, [open]);
 
-  // ✅ ESC ahora cierra pero GUARDANDO
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
@@ -224,6 +210,10 @@ export default function ModalReciboGenerado({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  /* =========================
+     ✅ EXPORT: CLONAMOS SOLO .paper (NO el body)
+     Esto elimina el corrimiento a la derecha.
+  ========================= */
   const buildWrapperForPdf = useCallback(async () => {
     const iframe = viewFrameRef.current;
     if (!iframe) throw new Error("No se pudo preparar el PDF.");
@@ -241,20 +231,34 @@ export default function ModalReciboGenerado({
 
     host.innerHTML = "";
 
-    const srcBody = srcDoc.body;
-    const clone = srcBody.cloneNode(true);
+    // ✅ Tomamos SOLO el recibo
+    const srcPaper = srcDoc.querySelector(".paper") || srcDoc.body;
+    const clone = srcPaper.cloneNode(true);
 
-    copyComputedStylesDeep(srcBody, clone, srcWin);
+    // ✅ Copiamos estilos computados SOLO de ese árbol
+    copyComputedStylesDeep(srcPaper, clone, srcWin);
+
+    // ✅ A4 ancho (px) + padding (10mm)
+    const A4_W = 794; // aprox a 96dpi
+    const pad = mmToPx(10); // 10mm
 
     const wrapper = document.createElement("div");
-    wrapper.style.width = "794px"; // A4 @ 96dpi
-    wrapper.style.minHeight = "1123px";
+    wrapper.style.width = `${A4_W}px`;
     wrapper.style.background = "#ffffff";
-    wrapper.style.padding = "0";
     wrapper.style.margin = "0";
+    wrapper.style.padding = `${pad}px`;
     wrapper.style.boxSizing = "border-box";
-    wrapper.appendChild(clone);
+    wrapper.style.display = "block";
+    wrapper.style.height = "auto";
+    wrapper.style.overflow = "hidden";
 
+    // ✅ FORZAMOS centrado real dentro del wrapper
+    clone.style.marginLeft = "auto";
+    clone.style.marginRight = "auto";
+    clone.style.width = "100%";
+    clone.style.maxWidth = `${A4_W - pad * 2}px`;
+
+    wrapper.appendChild(clone);
     host.appendChild(wrapper);
 
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -295,7 +299,11 @@ export default function ModalReciboGenerado({
       const wrapper = await buildWrapperForPdf();
       const filename = `${sanitizeFileName(title)}.pdf`;
 
+      const contentH = Math.ceil(wrapper.scrollHeight || 0);
+
       const opt = {
+        // ✅ margen 0: ya lo damos con padding del wrapper (10mm)
+        margin: 0,
         filename,
         image: { type: "jpeg", quality: 0.98 },
         html2canvas: {
@@ -306,13 +314,14 @@ export default function ModalReciboGenerado({
           scrollX: 0,
           scrollY: 0,
           windowWidth: 794,
+          windowHeight: contentH > 0 ? contentH : undefined,
         },
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"] },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
       };
 
       await html2pdf().set(opt).from(wrapper).save();
-      onToast?.("exito", "PDF exportado con el mismo diseño.", 2400);
+      onToast?.("exito", "PDF exportado centrado ✅", 2400);
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo exportar el PDF.", 4200);
     } finally {
@@ -320,7 +329,6 @@ export default function ModalReciboGenerado({
     }
   }, [title, onToast, buildWrapperForPdf]);
 
-  // ✅ 1) SUBE PDF (una sola vez)
   const uploadPdfToServer = useCallback(
     async (pdfBlob) => {
       const sessionKey = getSessionKey();
@@ -334,11 +342,7 @@ export default function ModalReciboGenerado({
       fd.append("tipo", "RECIBO");
       fd.append("titulo", String(title || "Recibo"));
 
-      // ✅ compat: mandamos también 1 id_movimiento “principal”
       if (idsMovs[0]) fd.append("id_movimiento", String(idsMovs[0]));
-
-      // ✅ NUEVO: mandamos TODOS los ids (si tu backend los acepta)
-      // (no rompe nada si el backend los ignora)
       idsMovs.forEach((id) => fd.append("ids_movimiento[]", String(id)));
 
       const cob = Number(idCobro);
@@ -350,11 +354,7 @@ export default function ModalReciboGenerado({
 
       const res = await fetchWithTimeout(
         url,
-        {
-          method: "POST",
-          headers: { "X-Session": sessionKey },
-          body: fd,
-        },
+        { method: "POST", headers: { "X-Session": sessionKey }, body: fd },
         60000
       );
 
@@ -370,8 +370,6 @@ export default function ModalReciboGenerado({
 
       const idComp = extractIdComprobante(data);
       if (!idComp) {
-        // igual puede funcionar si el backend devuelve id dentro de otro campo:
-        // si no hay id, no podemos asociar a múltiples
         throw new Error("El backend guardó el PDF pero no devolvió id_comprobante (necesario para vincular a varios).");
       }
 
@@ -380,7 +378,6 @@ export default function ModalReciboGenerado({
     [title, idsMovs, idCobro]
   );
 
-  // ✅ 2) ASOCIAR id_comprobante A TODOS los movimientos
   const asociarComprobanteAMovimientos = useCallback(async (idComprobante, ids) => {
     const sessionKey = getSessionKey();
     if (!sessionKey) throw new Error("Sesión inválida (no hay X-Session).");
@@ -419,7 +416,6 @@ export default function ModalReciboGenerado({
       return data;
     };
 
-    // ✅ primero intentamos batch (1 request)
     for (const action of ACTIONS_BATCH) {
       try {
         const data = await postJson(action, {
@@ -429,15 +425,11 @@ export default function ModalReciboGenerado({
         return data;
       } catch (e) {
         const msg = String(e?.message || "").toLowerCase();
-        if (msg.includes("acción no válida") || msg.includes("accion no valida") || msg.includes("action no valida")) {
-          continue;
-        }
-        // si falla por otra cosa, cortamos
+        if (msg.includes("acción no válida") || msg.includes("accion no valida") || msg.includes("action no valida")) continue;
         throw e;
       }
     }
 
-    // ✅ si no existe batch, intentamos uno por uno
     for (const id of ids) {
       let okOne = false;
       for (const action of ACTIONS_ONE) {
@@ -450,9 +442,7 @@ export default function ModalReciboGenerado({
           break;
         } catch (e) {
           const msg = String(e?.message || "").toLowerCase();
-          if (msg.includes("acción no válida") || msg.includes("accion no valida") || msg.includes("action no valida")) {
-            continue;
-          }
+          if (msg.includes("acción no válida") || msg.includes("accion no valida") || msg.includes("action no valida")) continue;
           throw e;
         }
       }
@@ -469,7 +459,6 @@ export default function ModalReciboGenerado({
     return { exito: true };
   }, []);
 
-  // ✅ Guardado central (para X / Escape / Finalizar)
   const ensureSaved = useCallback(async () => {
     if (savedRef.current) return savedRef.current;
     if (savingRef.current) {
@@ -485,9 +474,10 @@ export default function ModalReciboGenerado({
     savingRef.current = true;
     try {
       const wrapper = await buildWrapperForPdf();
+      const contentH = Math.ceil(wrapper.scrollHeight || 0);
 
       const opt = {
-        margin: 0,
+        margin: 0, // ✅ wrapper ya tiene padding 10mm
         image: { type: "jpeg", quality: 0.98 },
         html2canvas: {
           scale: 2,
@@ -497,21 +487,19 @@ export default function ModalReciboGenerado({
           scrollX: 0,
           scrollY: 0,
           windowWidth: 794,
+          windowHeight: contentH > 0 ? contentH : undefined,
         },
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"] },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
       };
 
-      // ✅ BLOB para subir
       const worker = html2pdf().set(opt).from(wrapper).toPdf();
       const pdfBlob = await worker.output("blob");
       if (!pdfBlob) throw new Error("No se pudo generar el PDF (blob).");
 
-      // 1) subir
       const saved = await uploadPdfToServer(pdfBlob);
       const idComp = extractIdComprobante(saved);
 
-      // 2) asociar a TODOS
       await asociarComprobanteAMovimientos(idComp, idsMovs);
 
       const finalSaved = { ...saved, id_comprobante: idComp, ids_movimiento: idsMovs };
@@ -524,19 +512,13 @@ export default function ModalReciboGenerado({
     }
   }, [idsMovs, buildWrapperForPdf, uploadPdfToServer, asociarComprobanteAMovimientos, onToast]);
 
-  // ✅ Cerrar SIEMPRE guardando
   const requestCloseAndSave = useCallback(
-    async (reason = "close") => {
+    async () => {
       if (busy) return;
       try {
         setBusy(true);
-
         const saved = await ensureSaved();
-
-        // ✅ avisamos al padre SIEMPRE (para activar el ojo sin recargar)
         onFinalizar?.(saved);
-
-        // ✅ cerramos modal
         onClose?.();
       } catch (e) {
         onToast?.("error", e?.message || "No se pudo guardar el recibo.", 4500);
@@ -547,17 +529,12 @@ export default function ModalReciboGenerado({
     [busy, ensureSaved, onFinalizar, onClose, onToast]
   );
 
-  const handleFinalizar = useCallback(() => requestCloseAndSave("finalizar"), [requestCloseAndSave]);
+  const handleFinalizar = useCallback(() => requestCloseAndSave(), [requestCloseAndSave]);
 
   if (!open) return null;
 
   return createPortal(
-    <div
-      className="mi-modal__overlay mi-modal__overlay--mov"
-      role="dialog"
-      aria-modal="true"
-      onMouseDown={(e) => e.preventDefault()}
-    >
+    <div className="mi-modal__overlay mi-modal__overlay--mov" role="dialog" aria-modal="true" onMouseDown={(e) => e.preventDefault()}>
       <div
         className="mi-modal__container mi-modal__container--mov"
         style={{ width: "min(980px, 96vw)", maxWidth: "980px", position: "relative" }}
@@ -566,14 +543,7 @@ export default function ModalReciboGenerado({
         <div className="mi-modal__header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div className="mi-modal__title">{title}</div>
 
-          <button
-            ref={firstFocusRef}
-            type="button"
-            className="mi-modal__close"
-            onClick={() => requestCloseAndSave("x")}
-            title="Cerrar"
-            disabled={busy}
-          >
+          <button ref={firstFocusRef} type="button" className="mi-modal__close" onClick={handleFinalizar} title="Cerrar" disabled={busy}>
             <FontAwesomeIcon icon={faXmark} />
           </button>
         </div>

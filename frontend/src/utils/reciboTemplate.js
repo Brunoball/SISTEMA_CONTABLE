@@ -63,7 +63,6 @@ export function buildReciboHTML(payload) {
   const clienteNom = esc(payload?.cliente?.nombre || payload?.cliente?.cliente || "—");
   const clienteId = payload?.cliente?.id_cliente ? esc(payload.cliente.id_cliente) : "";
   const medioPago = esc(payload?.medio_pago?.nombre || "—");
-
   const total = moneyARS(payload?.total || 0);
 
   const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -119,61 +118,49 @@ export function buildReciboHTML(payload) {
       --soft:#f8fafc;
       --accent:#0ea5e9;
     }
-    *{box-sizing:border-box}
-    body{
+    *{ box-sizing:border-box; }
+    html, body{
       margin:0;
-      padding:24px;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      padding:0;
+      background:#fff;
       color:var(--text);
-      background:white;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
-@page { size: A4; margin: 0; }
 
-/* ✅ PRINT ÚNICO (sin duplicados) */
-@page { size: A4; margin: 10mm; }
+    /* ✅ UNA SOLA DEFINICIÓN DE PÁGINA */
+    @page { size: A4; margin: 10mm; }
 
-@media print{
-  html, body{
-    margin:0 !important;
-    padding:0 !important;
-    background:#fff !important;
-  }
+    /* Vista normal (iframe) */
+    body{ padding: 24px; }
 
-  .paper{
-    width: 100% !important;
-    max-width: 190mm !important;  /* entra siempre */
-    margin: 0 auto !important;
+    /* ✅ PRINT: SIN ALTURAS FIJAS, SIN OVERFLOW QUE EMPUJE A 2DA HOJA */
+    @media print{
+      body{ padding:0 !important; }
+      .paper{
+        margin:0 !important;
+        width: 100% !important;
+        max-width: 190mm !important; /* entra siempre con margen @page */
+        border:none !important;
+        border-radius:0 !important;
+        padding:0 !important; /* el margen lo maneja @page */
+        overflow: visible !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+      .top, .grid, .tbl, .totals, .footer{
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
+    }
 
-    /* ✅ evita hoja extra en blanco */
-    height: auto !important;
-    min-height: 0 !important;
+    .paper{
+      max-width: 920px;
+      margin: 0 auto;
+      background:#fff;
+    }
 
-    padding: 0 !important;        /* el margen lo maneja @page */
-    border: none !important;
-    border-radius: 0 !important;
-    overflow: visible !important;
-
-    page-break-after: avoid !important;
-    break-after: avoid !important;
-  }
-
-  /* evita cortes raros/overflow mínimo */
-  .top, .grid, .tbl, .totals, .footer{
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
-  }
-}
-}
-@page { size: A4; margin: 0; }
-
-@media print{
-  .paper{
-    width: 210mm !important;
-    height: 297mm !important;      /* ✅ fijo */
-    padding: 12mm !important;      /* ojo: cuenta dentro del height */
-    overflow: hidden !important;   /* evita desborde */
-  }
-}
     .top{
       display:flex;
       justify-content:space-between;
@@ -262,9 +249,9 @@ export function buildReciboHTML(payload) {
       vertical-align:top;
     }
     .tbl tbody tr:last-child td{ border-bottom:none; }
-    .center{text-align:center}
-    .right{text-align:right}
-    .muted{color:var(--muted); font-size:12px}
+    .center{ text-align:center; }
+    .right{ text-align:right; }
+    .muted{ color:var(--muted); font-size:12px; }
 
     .totals{
       display:flex;
@@ -295,17 +282,6 @@ export function buildReciboHTML(payload) {
       gap:10px;
       color:var(--muted);
       font-size:11px;
-    }
-
-    @media print{
-      body{ padding:0; }
-      .paper{
-        border:none;
-        border-radius:0;
-        width:auto;
-        min-height:auto;
-        padding: 10mm 10mm;
-      }
     }
   </style>
 </head>

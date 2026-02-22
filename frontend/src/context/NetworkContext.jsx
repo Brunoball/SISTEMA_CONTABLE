@@ -1,9 +1,9 @@
 // src/context/NetworkContext.jsx
 import React, { createContext, useContext, useEffect, useState, useRef, useMemo } from "react";
 import BASE_URL from "../config/config";
-
-// ✅ Usa tu Toast global
 import Toast from "../components/Global/Toast.jsx";
+
+import "../components/Global/Global_css/roots.css";
 
 const NetworkContext = createContext(null);
 export const useNetwork = () => useContext(NetworkContext);
@@ -15,14 +15,11 @@ function buildPingUrl() {
 
 export default function NetworkProvider({ children }) {
   const [offline, setOffline] = useState(!navigator.onLine);
-
-  // ✅ Toast global "Conexión restablecida"
   const [toastOk, setToastOk] = useState(false);
 
   const retryTimer = useRef(null);
   const prevOfflineRef = useRef(offline);
 
-  // 🔴 Navegador detecta conexión
   useEffect(() => {
     const goOffline = () => setOffline(true);
     const goOnline = () => setOffline(false);
@@ -36,17 +33,12 @@ export default function NetworkProvider({ children }) {
     };
   }, []);
 
-  // 🔴 Cualquier fetch fallido (por tu patch global)
   useEffect(() => {
-    const handler = () => {
-      setOffline(true);
-    };
-
+    const handler = () => setOffline(true);
     window.addEventListener("net:fetch_failed", handler);
     return () => window.removeEventListener("net:fetch_failed", handler);
   }, []);
 
-  // ✅ Ping al backend real (para levantar overlay cuando vuelve todo)
   useEffect(() => {
     if (!offline) {
       if (retryTimer.current) clearInterval(retryTimer.current);
@@ -57,7 +49,6 @@ export default function NetworkProvider({ children }) {
     const pingUrl = buildPingUrl();
 
     const tick = async () => {
-      // si el browser sigue offline, ni gastes
       if (!navigator.onLine) return;
 
       try {
@@ -91,14 +82,9 @@ export default function NetworkProvider({ children }) {
     };
   }, [offline]);
 
-  // ✅ Mostrar Toast global cuando pasamos de OFFLINE -> ONLINE
   useEffect(() => {
     const prev = prevOfflineRef.current;
-
-    if (prev === true && offline === false) {
-      setToastOk(true);
-    }
-
+    if (prev === true && offline === false) setToastOk(true);
     prevOfflineRef.current = offline;
   }, [offline]);
 
@@ -114,33 +100,29 @@ export default function NetworkProvider({ children }) {
     <NetworkContext.Provider value={value}>
       {children}
 
-      {/* ✅ Toast GLOBAL del sistema */}
       {toastOk && (
         <Toast
           tipo="exito"
           mensaje="Conexión restablecida"
-          duracion={4500}   // ✅ antes 2500 -> ahora más tiempo
+          duracion={4500}
           onClose={() => setToastOk(false)}
         />
       )}
 
-      {/* OVERLAY GLOBAL */}
       {offline && (
-        <div style={overlayStyle}>
-          <div style={boxStyle}>
-            {/* ✅ ICONO WIFI OFF */}
-            <div style={iconWrapStyle} aria-hidden="true">
+        <div className="net-overlay">
+          <div className="net-box">
+            <div className="net-iconWrap" aria-hidden="true">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="72"
                 height="72"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#facc15"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="lucide lucide-wifi-off"
+                className="net-icon"
               >
                 <path d="M12 20h.01" />
                 <path d="M8.5 16.429a5 5 0 0 1 7 0" />
@@ -152,21 +134,21 @@ export default function NetworkProvider({ children }) {
               </svg>
             </div>
 
-            <h2 style={{ marginTop: 0 }}>Sin conexión</h2>
+            <h2 className="net-title">Sin conexión</h2>
 
-            <p style={{ margin: "10px 0 0" }}>
+            <p className="net-text">
               No pudimos comunicarnos con Internet o con el servidor.
               <br />
               Estamos reintentando automáticamente…
             </p>
 
-            <div style={actionsStyle}>
-              <button style={btnStyle} onClick={() => window.location.reload()}>
+            <div className="net-actions">
+              <button className="net-btn" onClick={() => window.location.reload()}>
                 Reintentar ahora
               </button>
 
               <button
-                style={btnGhostStyle}
+                className="net-btnGhost"
                 onClick={() => {
                   try {
                     sessionStorage.clear();
@@ -181,78 +163,8 @@ export default function NetworkProvider({ children }) {
               </button>
             </div>
           </div>
-
-          <style>{pulseCss}</style>
         </div>
       )}
     </NetworkContext.Provider>
   );
 }
-
-/* =========================
-   Styles
-========================= */
-
-const overlayStyle = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.65)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 999999,
-  padding: 16,
-};
-
-const boxStyle = {
-  width: 440,
-  maxWidth: "95%",
-  background: "#111",
-  color: "#fff",
-  borderRadius: 14,
-  padding: 22,
-  textAlign: "center",
-  boxShadow: "0 20px 60px rgba(0,0,0,.6)",
-  border: "1px solid rgba(255,255,255,.08)",
-};
-
-const iconWrapStyle = {
-  display: "flex",
-  justifyContent: "center",
-  marginBottom: 10,
-  animation: "baltoPulse 1.6s ease-in-out infinite",
-};
-
-const actionsStyle = {
-  marginTop: 16,
-  display: "flex",
-  gap: 10,
-  justifyContent: "center",
-  flexWrap: "wrap",
-};
-
-const btnStyle = {
-  padding: "10px 14px",
-  borderRadius: 10,
-  border: "none",
-  cursor: "pointer",
-  fontWeight: "bold",
-};
-
-const btnGhostStyle = {
-  padding: "10px 14px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,.25)",
-  background: "transparent",
-  color: "#fff",
-  cursor: "pointer",
-  fontWeight: "bold",
-};
-
-const pulseCss = `
-@keyframes baltoPulse {
-  0% { transform: scale(1); opacity: 0.95; }
-  50% { transform: scale(1.05); opacity: 1; }
-  100% { transform: scale(1); opacity: 0.95; }
-}
-`;

@@ -422,7 +422,7 @@
 
   /* modal más usable en celu */
   .mpr-header{ padding: 12px 12px; }
-  .mpr-body{ padding: 12px 12px; }
+  .mpr-body{ padding: 12px 12px; overflow: auto !important; }
   .mpr-footer{ padding: 10px 12px; gap: 8px; }
 
   /* título: que pueda bajar de línea sin romper */

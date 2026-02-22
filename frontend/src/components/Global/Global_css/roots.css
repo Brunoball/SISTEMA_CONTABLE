@@ -1,39 +1,199 @@
-/* =========================
-   PALETA AZUL INSTITUCIONAL
-   ========================= */
-:root {
-  --blue-inst-primary: #1D428A;
-  --blue-inst-primary-light: #2E5CBF;
-  --blue-inst-primary-dark: #102E6A;
 
-  --blue-inst-secondary: #0B5ED7;
-  --blue-inst-accent: #0B5ED7;
 
-  --blue-inst-success: #10B981;
-  --blue-inst-warning: #F59E0B;
-  --blue-inst-danger:  #D32F2F;
+:root{
+  /* ✅ Paleta oficial del cliente */
+  --blue-midnight: #0A2540; /* azul medianoche */
+  --blue-action:   #0055BB; /* azul de acción */
 
-  --blue-inst-light: #F8FAFC;
-  --blue-inst-dark:  #0F172A;
+  /* Neutrales */
+  --mi-bg: #ffffff;
+  --mi-bg-soft: #F6F8FB;
+  --mi-border: #D9E2EF;
 
-  --blue-inst-gray-100: #F1F5F9;
-  --blue-inst-gray-200: #E2E8F0;
-  --blue-inst-gray-300: #CBD5E1;
-  --blue-inst-gray-400: #94A3B8;
-  --blue-inst-gray-500: #64748B;
-  --blue-inst-gray-600: #475569;
-  --blue-inst-gray-700: #334155;
-  --blue-inst-gray-800: #1E293B;
-  --blue-inst-gray-900: #0F172A;
+  --mi-text: #0A2540;
+  --mi-muted: #516173;
 
-  --blue-inst-radius: 12px;
-  --blue-inst-radius-lg: 18px;
-  --blue-inst-radius-xl: 24px;
+  /* Variables ya usadas */
+  --mi-primary: #0A2540;
+  --mi-primary-600: #0055BB;
 
-  --blue-inst-transition: all .25s cubic-bezier(.4,0,.2,1);
+  --mi-shadow: 0 28px 64px -24px rgba(0,0,0,.28);
 
-  --blue-inst-shadow-sm: 0 1px 3px rgba(0,0,0,.06);
-  --blue-inst-shadow-md: 0 6px 18px rgba(0,0,0,.10);
-  --blue-inst-shadow-lg: 0 16px 36px -10px rgba(0,0,0,.20);
-  --blue-inst-shadow-xl: 0 28px 64px -24px rgba(0,0,0,.28);
+  --mi-radius-md: 12px;
+  --mi-radius-lg: 18px;
+}
+
+/* =========================================================
+   Overlay Offline (LIGHT por defecto)
+========================================================= */
+
+.net-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  padding: 16px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(10, 37, 64, 0.45); /* azul medianoche con alpha */
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.net-box{
+  width: 440px;
+  max-width: 95%;
+  border-radius: var(--mi-radius-lg);
+
+  background: var(--mi-bg);
+  color: var(--mi-text);
+
+  border: 1px solid var(--mi-border);
+  box-shadow: var(--mi-shadow);
+
+  padding: 22px;
+  text-align: center;
+}
+
+.net-iconWrap{
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+  animation: baltoPulse 1.6s ease-in-out infinite;
+}
+
+.net-title{
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600; /* no ultra-bold */
+  letter-spacing: .2px;
+  color: var(--mi-primary);
+}
+
+.net-text{
+  margin: 10px 0 0;
+  color: var(--mi-muted);
+  line-height: 1.35;
+}
+
+.net-actions{
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.net-btn{
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+
+  border: 1px solid transparent;
+  background: var(--mi-primary-600);
+  color: #fff;
+
+  font-weight: 600;
+  letter-spacing: .2px;
+
+  transition: transform .08s ease, filter .12s ease, box-shadow .12s ease;
+}
+
+.net-btn:hover{ filter: brightness(1.05); }
+.net-btn:active{ transform: translateY(1px); }
+
+.net-btn:focus-visible{
+  outline: 3px solid rgba(0, 85, 187, 0.25);
+  outline-offset: 2px;
+}
+
+.net-btnGhost{
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+
+  background: transparent;
+  color: var(--mi-primary);
+
+  border: 1px solid var(--mi-border);
+
+  font-weight: 600;
+  letter-spacing: .2px;
+
+  transition: background .12s ease, border-color .12s ease, transform .08s ease;
+}
+
+.net-btnGhost:hover{
+  background: var(--mi-bg-soft);
+  border-color: rgba(0,0,0,.12);
+}
+
+.net-btnGhost:active{ transform: translateY(1px); }
+
+.net-btnGhost:focus-visible{
+  outline: 3px solid rgba(0, 85, 187, 0.18);
+  outline-offset: 2px;
+}
+
+/* Icono (SVG) */
+.net-icon{
+  width: 72px;
+  height: 72px;
+  stroke: var(--mi-primary-600); /* azul acción */
+  opacity: .95;
+}
+
+/* Animación */
+@keyframes baltoPulse {
+  0% { transform: scale(1); opacity: 0.92; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.92; }
+}
+
+/* =========================================================
+   MODO OSCURO
+   - Por clase en body: body.dark
+   - O por clase en overlay: .net-overlay--dark (si preferís)
+========================================================= */
+
+body.dark .net-overlay,
+.net-overlay--dark{
+  background: rgba(0, 0, 0, 0.68);
+}
+
+body.dark .net-box,
+.net-overlay--dark .net-box{
+  background: #0b1622; /* oscuro con tinte midnight */
+  color: #eaf0f7;
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 28px 80px -28px rgba(0,0,0,.75);
+}
+
+body.dark .net-title,
+.net-overlay--dark .net-title{
+  color: #eaf0f7;
+}
+
+body.dark .net-text,
+.net-overlay--dark .net-text{
+  color: rgba(234,240,247,.78);
+}
+
+body.dark .net-btnGhost,
+.net-overlay--dark .net-btnGhost{
+  color: #eaf0f7;
+  border-color: rgba(255,255,255,.18);
+}
+
+body.dark .net-btnGhost:hover,
+.net-overlay--dark .net-btnGhost:hover{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.22);
+}
+
+body.dark .net-icon,
+.net-overlay--dark .net-icon{
+  stroke: #66a6ff; /* azul claro para contraste */
 }

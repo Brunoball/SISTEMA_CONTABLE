@@ -536,3 +536,86 @@ html[data-theme="oscuro"] .mov-page--compras .mov-gridTable--row {
 html[data-theme="oscuro"] .mov-page--compras .mov-gridTable--row .mov-gridCell::before {
   color: rgba(226,232,240,.60) !important;
 }
+html[data-theme="oscuro"] .mpr-modal {
+  background: rgba(6,18,28,.92);
+  border: 1px solid rgba(255,255,255,.10);
+}
+
+html[data-theme="oscuro"] .mpr-header {
+  background: linear-gradient(180deg, #0a2540, #071a2c);
+}
+
+html[data-theme="oscuro"] .mpr-card {
+  background: rgba(10,25,40,.62);
+  border: 1px solid rgba(255,255,255,.10);
+}
+
+html[data-theme="oscuro"] .mpr-btn {
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.14);
+  color: rgba(255,255,255,.88);
+}/* ✅ Dark – ModalVerComprobante (fuera del iframe) */
+html[data-theme="oscuro"] .mpr-modal{
+  background: rgba(6,18,28,.92) !important;
+}
+
+html[data-theme="oscuro"] .mpr-body,
+html[data-theme="oscuro"] .mpr-content{
+  background: rgba(6,18,28,.60) !important;
+}
+
+/* la tarjeta que envuelve el preview */
+html[data-theme="oscuro"] .mpr-card,
+html[data-theme="oscuro"] .mpr-viewCard{
+  background: rgba(10,25,40,.62) !important;
+  border-color: rgba(255,255,255,.10) !important;
+}
+
+/* el contenedor scrolleable donde está el iframe/img */
+html[data-theme="oscuro"] .mpr-previewScroll{
+  background: rgba(6,18,28,.55) !important;
+  border: 1px solid rgba(255,255,255,.08) !important;
+}
+
+/* footer para que no quede franja blanca */
+html[data-theme="oscuro"] .mpr-footer{
+  background: rgba(6,18,28,.92) !important;
+  border-top-color: rgba(255,255,255,.10) !important;
+}/* =========================================================
+   ✅ PAPER (preview) — SIEMPRE CLARO aunque esté en dark
+========================================================= */
+.mpr-paper{
+  background: #fff !important;
+  color: #111 !important;
+  border-radius: 0;
+  padding: 0;
+  /* esto le dice al browser que esta zona es "light" */
+  color-scheme: light;
+}
+
+/* si adentro viene HTML con body, tablas, etc */
+.mpr-paper__inner{
+  background: #fff !important;
+  color: #111 !important;
+  color-scheme: light;
+}
+
+/* Si tu dark global cambia fuentes/colores por selector amplio,
+   esto “resetea” lo importante dentro del comprobante */
+html[data-theme="oscuro"] .mpr-paper,
+html[data-theme="oscuro"] .mpr-paper *{
+  color-scheme: light;
+}
+
+/* Evitar que reglas dark globales te metan backgrounds oscuros */
+html[data-theme="oscuro"] .mpr-paper__inner,
+html[data-theme="oscuro"] .mpr-paper__inner *{
+  background-color: transparent;
+}
+
+/* pero el "papel" siempre blanco */
+html[data-theme="oscuro"] .mpr-paper,
+html[data-theme="oscuro"] .mpr-paper__inner{
+  background: #fff !important;
+  color: #111 !important;
+}

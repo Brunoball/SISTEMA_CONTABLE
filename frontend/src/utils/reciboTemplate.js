@@ -141,10 +141,10 @@ export function buildReciboHTML(payload) {
       .paper{
         margin:0 !important;
         width: 100% !important;
-        max-width: 190mm !important; /* entra siempre con margen @page */
+        max-width: 190mm !important;
         border:none !important;
         border-radius:0 !important;
-        padding:0 !important; /* el margen lo maneja @page */
+        padding:0 !important;
         overflow: visible !important;
         page-break-after: avoid !important;
         break-after: avoid !important;
@@ -170,20 +170,43 @@ export function buildReciboHTML(payload) {
       border-bottom:1px solid var(--line);
       margin-bottom:14px;
     }
+
     .brand{
       display:flex;
       flex-direction:column;
-      gap:6px;
+      gap:8px;
+      min-width: 0;
     }
+
+    /* ✅ NUEVO: fila título + chip */
+    .headRow{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap: wrap;
+    }
+
+    /* ✅ título más fino */
     .brand .title{
       font-size:18px;
-      font-weight:800;
+      font-weight:600; /* antes 800 */
       letter-spacing:0.2px;
+      margin:0;
     }
-    .brand .sub{
+
+    /* ✅ chip medio al lado del título */
+    .pill{
+      display:inline-block;
+      padding:6px 10px;
+      border-radius:999px;
+      background:var(--soft);
+      border:1px solid var(--line);
+      color:var(--text);
+      font-weight:600; /* antes 700 */
       font-size:12px;
-      color:var(--muted);
+      white-space: nowrap;
     }
+
     .meta{
       text-align:right;
       font-size:12px;
@@ -192,16 +215,7 @@ export function buildReciboHTML(payload) {
       flex-direction:column;
       gap:6px;
     }
-    .pill{
-      display:inline-block;
-      padding:6px 10px;
-      border-radius:999px;
-      background:var(--soft);
-      border:1px solid var(--line);
-      color:var(--text);
-      font-weight:700;
-      font-size:12px;
-    }
+
     .grid{
       display:grid;
       grid-template-columns: 1fr 1fr;
@@ -269,8 +283,12 @@ export function buildReciboHTML(payload) {
     .totalBox .k{
       font-size:11px; color:var(--muted); margin-bottom:4px;
     }
+
+    /* ✅ monto más fino */
     .totalBox .v{
-      font-size:20px; font-weight:900; letter-spacing:0.2px;
+      font-size:20px;
+      font-weight:600; /* antes 900 */
+      letter-spacing:0.2px;
     }
 
     .footer{
@@ -289,13 +307,18 @@ export function buildReciboHTML(payload) {
   <div class="paper">
     <div class="top">
       <div class="brand">
-        <div class="title">RECIBO DE COBRO</div>
-        <div class="sub">Sistema Contable · Comprobante interno</div>
+        <!-- ✅ título + medio al lado -->
+        <div class="headRow">
+          <div class="title">RECIBO DE COBRO</div>
+          <div class="pill">Medio: ${medioPago}</div>
+        </div>
+
+        <!-- ✅ ELIMINADO: “Sistema Contable · Comprobante interno” -->
         ${nro ? `<div class="pill">N° ${nro}</div>` : ``}
       </div>
+
       <div class="meta">
         <div><b>Fecha de cobro:</b> ${fechaCobro}</div>
-        <div class="pill">Medio: ${medioPago}</div>
       </div>
     </div>
 

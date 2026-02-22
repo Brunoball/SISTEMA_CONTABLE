@@ -1,6 +1,14 @@
+// ✅ REEMPLAZAR COMPLETO
+// src/components/Movimientos/modales/ModalVerComprobante.jsx   (ajustá la ruta si lo tenés en otra carpeta)
+
 import React, { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import "../Global_css/Global_Modals.css";
+import "../Global_css/Global_oscuro.css";
+import "../../Mov_Subsection/Recibos/modales/ModalPagarRecibos.css"; // ✅ reutiliza estética mpr-*
+
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faXmark, faUpRightFromSquare } from "@fortawesome/free-solid-svg-icons";
 
 function isPdfUrl(url) {
   const u = String(url || "").toLowerCase();
@@ -29,7 +37,7 @@ export default function ModalVerComprobante({
 }) {
   const closeBtnRef = useRef(null);
 
-  // Lock scroll
+  // Lock scroll del body
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
@@ -68,96 +76,96 @@ export default function ModalVerComprobante({
 
   if (!open) return null;
 
-  const modal = (
-    <div className="mi-modal__overlay mi-modal__overlay--mov" onMouseDown={onClose}>
+  const overlayClass = "mi-modal__overlay mi-modal__overlay--mov";
+  const modalClass = "mi-modal__container mi-modal__container--mov mpr-modal";
+
+  return createPortal(
+    <div className={overlayClass} role="dialog" aria-modal="true" onMouseDown={onClose}>
       <div
-        className="mi-modal__container mi-modal__container--mov"
-        role="dialog"
-        aria-modal="true"
+        className={modalClass}
         onMouseDown={(e) => e.stopPropagation()}
         style={{ maxWidth: 1100 }}
       >
+        {/* HEADER (igual estilo Orden de Pago) */}
         <div className="mi-modal__header mpr-header">
           <div className="mpr-headLeft">
             <div className="mi-modal__title mpr-title">
               <span>{title}</span>
             </div>
             <div className="mi-modal__subtitle mpr-subtitle">
-              {url ? (
-                <a href={url} target="_blank" rel="noreferrer" style={{ textDecoration: "underline" }}>
-                  Abrir en nueva pestaña
-                </a>
-              ) : (
-                "—"
-              )}
+              {url ? "Vista previa del comprobante" : "—"}
             </div>
           </div>
 
           <button
             ref={closeBtnRef}
+            type="button"
             className="mi-modal__close"
             onClick={onClose}
             aria-label="Cerrar"
-            type="button"
+            title="Cerrar"
           >
-            ✕
+            <FontAwesomeIcon icon={faXmark} />
           </button>
         </div>
 
+        {/* BODY */}
         <div className="mi-modal__body mpr-body">
           <div className="mpr-content">
-            <div className="mpr-card" style={{ overflow: "hidden" }}>
+            <div className="mpr-card mpr-viewCard">
               {!url && <div className="mov-emptyRow">No hay comprobante.</div>}
 
               {!!url && kind === "pdf" && (
-                <iframe
-                  title="Comprobante PDF"
-                  src={url}
-                  style={{
-                    width: "100%",
-                    height: "74vh",
-                    border: "0",
-                    background: "#fff",
-                  }}
-                />
+                <div className="mpr-previewScroll" aria-label="Vista previa PDF">
+                  {/* ✅ Importante: el scroll lo hace ESTE contenedor */}
+                  <iframe
+                    title="Comprobante PDF"
+                    src={url}
+                    className="mpr-pdfFrame"
+                    // sandbox opcional si querés endurecer seguridad:
+                    // sandbox="allow-same-origin allow-scripts allow-downloads allow-forms"
+                  />
+                </div>
               )}
 
               {!!url && kind === "img" && (
-                <div style={{ width: "100%", textAlign: "center", padding: 10 }}>
-                  <img
-                    src={url}
-                    alt="Comprobante"
-                    style={{
-                      maxWidth: "100%",
-                      maxHeight: "74vh",
-                      borderRadius: 12,
-                      border: "1px solid rgba(0,0,0,.10)",
-                      background: "#fff",
-                    }}
-                  />
+                <div className="mpr-previewScroll" aria-label="Vista previa imagen">
+                  <div className="mpr-imgWrap">
+                    <img src={url} alt="Comprobante" className="mpr-img" />
+                  </div>
                 </div>
               )}
 
               {!!url && kind === "other" && (
                 <div className="mov-emptyRow" style={{ padding: 14 }}>
-                  No se puede previsualizar este archivo.{" "}
-                  <a href={url} target="_blank" rel="noreferrer" style={{ textDecoration: "underline" }}>
-                    Abrir
-                  </a>
+                  No se puede previsualizar este archivo.
                 </div>
               )}
             </div>
           </div>
         </div>
 
+        {/* FOOTER (botones abajo como pediste) */}
         <div className="mi-modal__footer mpr-footer">
-          <button type="button" className="mpr-btn mpr-btn--primary" onClick={onClose}>
-            Cerrar
-          </button>
+          <div style={{ display: "flex", gap: 10, width: "100%", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              className="mpr-btn"
+              onClick={() => url && window.open(url, "_blank", "noopener,noreferrer")}
+              disabled={!url}
+              title="Abrir en nueva pestaña"
+            >
+              <FontAwesomeIcon icon={faUpRightFromSquare} style={{ marginRight: 8 }} />
+              Abrir
+            </button>
+
+            <button type="button" className="mpr-btn mpr-btn--primary" onClick={onClose}>
+              Cerrar
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
-
-  return createPortal(modal, document.body);
 }

@@ -414,4 +414,241 @@
   .mi-modal__container.mi-modal--dark .mi-cr-filters__actions{
     background: var(--balto-bg) !important;
   }
+}/* =========================================================
+   ✅ RESPONSIVE (SOLO MOBILE) — NO TOCA MONITOR
+   Pegar al final de ModalPagarRecibos.css
+========================================================= */
+@media (max-width: 720px){
+
+  /* modal más usable en celu */
+  .mpr-header{ padding: 12px 12px; }
+  .mpr-body{ padding: 12px 12px; }
+  .mpr-footer{ padding: 10px 12px; gap: 8px; }
+
+  /* título: que pueda bajar de línea sin romper */
+  .mpr-title{
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .mpr-clientName{
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mpr-clientIdPill{
+    margin-left: 0;
+  }
+
+  /* card superior: todo a 1 columna */
+  .mpr-formRow{
+    grid-template-columns: 1fr !important;
+  }
+
+  /* tabla: en mobile la convertimos a "cards" */
+  .mpr-thead{ display: none; }
+
+  .mpr-tableTitle{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .mpr-actionsRight{
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .mpr-row{
+    grid-template-columns: 1fr !important;
+    gap: 0;
+    padding: 10px 10px;
+    border-bottom: 1px solid rgba(148,163,184,.22);
+    background: transparent;
+    cursor: default; /* evita toques raros */
+  }
+
+  /* cada celda como fila label/valor */
+  .mpr-td{
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 13px;
+  }
+
+  /* checkbox centrado */
+  .mpr-td--center{
+    justify-content: flex-start;
+  }
+
+  /* descripción ocupa toda la línea y puede cortar */
+
+
+  /* monto un poco más visible */
+  .mpr-td--right{
+    justify-content: space-between;
+    font-weight: 600;
+  }
+
+  /* labels para cada campo */
+  .mpr-td::before{
+    content: "";
+    font-size: 12px;
+    opacity: .72;
+    font-weight: 500;
+  }
+
+  /* orden + etiquetas segun columna (por posición) */
+  .mpr-row > .mpr-td:nth-child(1)::before{ content: "Sel"; }
+  .mpr-row > .mpr-td:nth-child(2)::before{ content: "Fecha"; }
+  .mpr-row > .mpr-td:nth-child(3)::before{ content: "Descripción"; }
+  .mpr-row > .mpr-td:nth-child(4)::before{ content: "Estado"; }
+  .mpr-row > .mpr-td:nth-child(5)::before{ content: "Monto"; }
+
+  /* el checkbox no necesita label pegado si molesta: podés apagarlo */
+
+
+  /* filas “card” */
+  .mpr-row{
+    border-radius: 12px;
+    background: rgba(241,245,249,.55);
+    margin: 8px 10px;
+  }
+  .mi-modal--dark .mpr-row{
+    background: rgba(255,255,255,.04);
+  }
+
+  /* tbody scroll: más cómodo en mobile */
+  .mpr-previewScroll{ max-height: 68vh; }
+}/* =========================================================
+   ✅ MOBILE FIX (solo celular) — título + scroll correcto
+   Pegalo AL FINAL de ModalPagarRecibos.css
+========================================================= */
+@media (max-width: 520px){
+
+  /* --- 1) HEADER: que el título no se corte --- */
+  .mpr-headLeft{ min-width: 0; }             /* CLAVE para que el ellipsis funcione */
+  .mpr-title{ min-width: 0; flex-wrap: wrap; }
+  .mpr-clientName{
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;                    /* si preferís 2 líneas, decime y lo clampo */
+    display: block;
+  }
+
+  /* si querés que el "ID pill" no empuje al nombre */
+  .mpr-clientIdPill{ flex: 0 0 auto; }
+
+  /* --- 2) MODAL: layout full alto y scroll interno prolijo --- */
+  .mpr-modal{
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+
+.mpr-body{
+  overflow: auto;
+}
+.mpr-td--center{
+  justify-content: space-between;
+}
+
+  .mpr-content{
+    min-height: 0;
+  }
+
+  /* --- 3) TABLA: que ocupe el resto y scrollee el tbody --- */
+  .mpr-tableWrap{
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mpr-table{
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mpr-tbody{
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    max-height: none;                       /* NO usar calc(100vh - ...) en mobile */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* --- 4) Ajustes de columnas en mobile (que no se rompa) --- */
+  .mpr-thead,
+  .mpr-row{
+    grid-template-columns: 54px 92px 1fr 110px 110px; /* más compacto */
+  }
+
+  .mpr-td{ font-size: 12.5px; }
+  .mpr-th{ padding: 10px 10px; }
+  .mpr-td{ padding: 10px 10px; }
+
+  /* --- 5) Footer: botones que entren --- */
+  .mpr-footer{
+    padding: 10px 12px;
+  }
+  .mpr-btn{
+    height: 42px;
+    padding: 0 12px;
+  }
+  .mi-modal__close{
+    display: none;
+  }
+}
+
+
+
+/* =========================================================
+   ✅ MOBILE: Header simplificado en 2 columnas
+   (Acciones | Información)
+   NO toca monitor
+========================================================= */
+@media (max-width: 520px){
+
+  /* Header en 2 columnas */
+  .mpr-thead{
+    display: grid;
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Ocultamos las columnas extra */
+  .mpr-thead .mpr-th:nth-child(n+3){
+    display: none;
+  }
+
+  /* Cambiamos los títulos */
+  .mpr-thead .mpr-th:nth-child(1){
+    text-align: center;
+  }
+
+  .mpr-thead .mpr-th:nth-child(1)::after{
+    content: "Acciones";
+  }
+
+  .mpr-thead .mpr-th:nth-child(2)::after{
+    content: "Información";
+  }
+
+  /* Ocultamos el texto original */
+  .mpr-thead .mpr-th{
+    font-size: 0;
+  }
+
+  .mpr-thead .mpr-th::after{
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+
+
+
 }

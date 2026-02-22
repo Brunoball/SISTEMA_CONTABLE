@@ -696,7 +696,7 @@ export default function Recibos() {
         align: "center",
         render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
       },
-      { key: "acciones", label: "ACCIONES", fr: 1.2, align: "center", render: () => null },
+      { key: "acciones", label: "ACCIONES", fr: 1.4, align: "center", render: () => null },
     ];
   }, []);
 

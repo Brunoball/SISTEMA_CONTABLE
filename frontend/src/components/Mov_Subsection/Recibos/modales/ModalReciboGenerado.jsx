@@ -1,7 +1,10 @@
+// ✅ REEMPLAZAR COMPLETO
+// src/components/Movimientos/modales/ModalReciboGenerado.jsx
+
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
-
+import "../../Recibos/modales/ModalPagarRecibos.css";
 import BASE_URL from "../../../../config/config";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -53,64 +56,25 @@ function ensureFullHtmlDocument(html, title) {
 </html>`;
 }
 
-async function waitIframeReady(iframe) {
-  if (!iframe) throw new Error("No se encontró el iframe.");
-  const doc = iframe.contentDocument;
-  if (!doc) throw new Error("No se pudo acceder al documento del iframe.");
+function extractBodyWithStyles(fullHtml) {
+  const s = String(fullHtml || "").trim();
+  if (!s) return { styles: "", body: "" };
 
-  if (doc.readyState === "complete" || doc.readyState === "interactive") return;
-
-  await new Promise((resolve) => {
-    const onLoad = () => {
-      iframe.removeEventListener("load", onLoad);
-      resolve();
-    };
-    iframe.addEventListener("load", onLoad);
-  });
-}
-
-async function waitAssetsInDoc(doc) {
   try {
-    if (doc.fonts && doc.fonts.ready) await doc.fonts.ready;
-  } catch {}
+    const doc = new DOMParser().parseFromString(s, "text/html");
+    const styles = Array.from(doc.querySelectorAll("style"))
+      .map((x) => x.textContent || "")
+      .join("\n");
 
-  const imgs = Array.from(doc.images || []);
-  if (!imgs.length) return;
-
-  await Promise.all(
-    imgs.map(
-      (img) =>
-        new Promise((resolve) => {
-          if (img.complete) return resolve();
-          img.onload = () => resolve();
-          img.onerror = () => resolve();
-        })
-    )
-  );
+    const body = doc.body ? doc.body.innerHTML : s;
+    return { styles, body };
+  } catch {
+    return { styles: "", body: s };
+  }
 }
 
-/* =========================
-   ✅ INLINE COMPUTED STYLES
-========================= */
-function copyComputedStylesDeep(srcNode, dstNode, srcWin) {
-  if (!srcNode || !dstNode) return;
-
-  if (srcNode.nodeType === 1 && dstNode.nodeType === 1) {
-    const cs = srcWin.getComputedStyle(srcNode);
-    for (let i = 0; i < cs.length; i++) {
-      const prop = cs[i];
-      try {
-        dstNode.style.setProperty(prop, cs.getPropertyValue(prop), cs.getPropertyPriority(prop));
-      } catch {}
-    }
-    dstNode.style.webkitPrintColorAdjust = "exact";
-    dstNode.style.printColorAdjust = "exact";
-  }
-
-  const srcChildren = srcNode.childNodes || [];
-  const dstChildren = dstNode.childNodes || [];
-  const len = Math.min(srcChildren.length, dstChildren.length);
-  for (let i = 0; i < len; i++) copyComputedStylesDeep(srcChildren[i], dstChildren[i], srcWin);
+function normalizeText(s) {
+  return String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function getSessionKey() {
@@ -159,12 +123,141 @@ function extractIdComprobante(data) {
     data?.data?.id ??
     data?.id ??
     0;
+
   const n = Number(cand || 0);
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 // ✅ px por mm a 96dpi
 const mmToPx = (mm) => Math.round((mm * 96) / 25.4);
+
+/* =========================
+   ✅ CSS EXTRA (sin parpadeo)
+   - oculta subtítulo
+   - baja font-weight título y total
+   - chip al lado del título (cuando lo reubicamos)
+========================= */
+const EXTRA_RECIBO_CSS = `
+/* Título más fino */
+.paper .rc-title{
+  font-weight: 600 !important;
+  letter-spacing: .2px !important;
+}
+
+/* Chip al lado del título */
+.paper .rc-headRow{
+  display:flex !important;
+  align-items:center !important;
+  gap:10px !important;
+  flex-wrap: wrap !important;
+}
+.paper .rc-chip{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:6px 10px !important;
+  border-radius:999px !important;
+  background: rgba(241,245,249,.75) !important;
+  border: 1px solid rgba(226,232,240,1) !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  white-space: nowrap !important;
+}
+
+/* Ocultar "Sistema Contable · Comprobante interno" (si quedó) */
+.paper .recibo-subtitle,
+.paper .rc-subtitle{
+  display:none !important;
+}
+
+/* Total más fino */
+.paper .totalBox .v,
+.paper .totalBox .amount,
+.paper .rc-totalValue,
+.paper .total-amount{
+  font-weight: 600 !important;
+}
+`;
+
+/* =========================
+   ✅ PREPROCESAR HTML (ANTES DE RENDER)
+   Evita el salto visual: acá movemos el chip en el string.
+========================= */
+function transformReciboBodyHtml(bodyHtml) {
+  const s = String(bodyHtml || "").trim();
+  if (!s) return s;
+
+  try {
+    const doc = new DOMParser().parseFromString(`<body>${s}</body>`, "text/html");
+    const root = doc.body;
+
+    // 1) borrar el texto exacto del subtítulo si existe en el HTML
+    //    ("Sistema Contable · Comprobante interno")
+    const allEls = Array.from(root.querySelectorAll("*"));
+    for (const el of allEls) {
+      const t = normalizeText(el.textContent);
+      if (t === "sistema contable · comprobante interno" || t === "sistema contable · comprobante interno.") {
+        el.remove();
+        break;
+      }
+    }
+
+    // 2) encontrar título "RECIBO DE COBRO"
+    let titleEl = null;
+    for (const el of allEls) {
+      const t = normalizeText(el.textContent);
+      if (t === "recibo de cobro" || t.includes("recibo de cobro")) {
+        // elegimos el primero que sea “corto” (evita agarrar un contenedor grande)
+        if (String(el.textContent || "").trim().length <= 40) {
+          titleEl = el;
+          break;
+        }
+      }
+    }
+
+    // 3) encontrar chip “Medio: …” o “Medio de pago: …”
+    let chipEl = null;
+    const allEls2 = Array.from(root.querySelectorAll("*"));
+    for (const el of allEls2) {
+      const t = normalizeText(el.textContent);
+      if (t.startsWith("medio:") || t.startsWith("medio de pago:")) {
+        // evitamos agarrar un contenedor gigante
+        if (String(el.textContent || "").trim().length <= 60) {
+          chipEl = el;
+          break;
+        }
+      }
+    }
+
+    // 4) reubicar: chip al lado del título (sin animación / sin efecto)
+    if (titleEl) {
+      titleEl.classList.add("rc-title");
+
+      // si el chip existe, lo metemos al lado
+      if (chipEl) {
+        chipEl.classList.add("rc-chip");
+
+        // si ya están juntos, no hacemos nada
+        const alreadyRow = titleEl.parentElement && titleEl.parentElement.classList.contains("rc-headRow");
+        if (!alreadyRow) {
+          const row = doc.createElement("div");
+          row.className = "rc-headRow";
+
+          const parent = titleEl.parentElement;
+          if (parent) {
+            parent.insertBefore(row, titleEl);
+            row.appendChild(titleEl);
+            row.appendChild(chipEl);
+          }
+        }
+      }
+    }
+
+    return root.innerHTML;
+  } catch {
+    return s;
+  }
+}
 
 export default function ModalReciboGenerado({
   open,
@@ -177,7 +270,7 @@ export default function ModalReciboGenerado({
   idCobro = null,
 }) {
   const firstFocusRef = useRef(null);
-  const viewFrameRef = useRef(null);
+  const previewRef = useRef(null);
   const exportHostRef = useRef(null);
 
   const [busy, setBusy] = useState(false);
@@ -187,6 +280,17 @@ export default function ModalReciboGenerado({
 
   const fullHtml = useMemo(() => ensureFullHtmlDocument(html, title), [html, title]);
 
+  // ✅ parse styles + body
+  const extracted = useMemo(() => extractBodyWithStyles(fullHtml), [fullHtml]);
+
+  // ✅ transform BEFORE render (sin parpadeo)
+  const previewMarkup = useMemo(() => {
+    const transformedBody = transformReciboBodyHtml(extracted.body || "");
+    const mergedStyles = `${extracted.styles || ""}\n${EXTRA_RECIBO_CSS}`.trim();
+    const stylesTag = mergedStyles ? `<style>${mergedStyles}</style>` : "";
+    return `${stylesTag}${transformedBody || ""}`;
+  }, [extracted.styles, extracted.body]);
+
   const idsMovs = useMemo(() => {
     const arr = Array.isArray(idsMovimientos) ? idsMovimientos : [idsMovimientos];
     return arr.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0);
@@ -194,15 +298,17 @@ export default function ModalReciboGenerado({
 
   useEffect(() => {
     if (!open) return;
-    setTimeout(() => firstFocusRef.current?.focus(), 50);
+    const t = setTimeout(() => firstFocusRef.current?.focus(), 50);
+    return () => clearTimeout(t);
   }, [open]);
 
+  // ESC = finalizar (guarda)
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        requestCloseAndSave("escape");
+        requestCloseAndSave();
       }
     };
     document.addEventListener("keydown", onKey);
@@ -211,35 +317,20 @@ export default function ModalReciboGenerado({
   }, [open]);
 
   /* =========================
-     ✅ EXPORT: CLONAMOS SOLO .paper (NO el body)
-     Esto elimina el corrimiento a la derecha.
+     ✅ buildWrapperForPdf desde PREVIEW INLINE
   ========================= */
   const buildWrapperForPdf = useCallback(async () => {
-    const iframe = viewFrameRef.current;
-    if (!iframe) throw new Error("No se pudo preparar el PDF.");
-
-    await waitIframeReady(iframe);
-
-    const srcDoc = iframe.contentDocument;
-    const srcWin = iframe.contentWindow;
-    if (!srcDoc || !srcWin) throw new Error("No se pudo acceder al documento del recibo.");
-
-    await waitAssetsInDoc(srcDoc);
+    if (!previewRef.current) throw new Error("No hay vista previa para exportar.");
 
     const host = exportHostRef.current;
     if (!host) throw new Error("No se pudo preparar el área de exportación.");
 
     host.innerHTML = "";
 
-    // ✅ Tomamos SOLO el recibo
-    const srcPaper = srcDoc.querySelector(".paper") || srcDoc.body;
-    const clone = srcPaper.cloneNode(true);
+    const src = previewRef.current;
+    const clone = src.cloneNode(true);
 
-    // ✅ Copiamos estilos computados SOLO de ese árbol
-    copyComputedStylesDeep(srcPaper, clone, srcWin);
-
-    // ✅ A4 ancho (px) + padding (10mm)
-    const A4_W = 794; // aprox a 96dpi
+    const A4_W = 794; // 96dpi aprox
     const pad = mmToPx(10); // 10mm
 
     const wrapper = document.createElement("div");
@@ -252,7 +343,6 @@ export default function ModalReciboGenerado({
     wrapper.style.height = "auto";
     wrapper.style.overflow = "hidden";
 
-    // ✅ FORZAMOS centrado real dentro del wrapper
     clone.style.marginLeft = "auto";
     clone.style.marginRight = "auto";
     clone.style.width = "100%";
@@ -265,32 +355,24 @@ export default function ModalReciboGenerado({
     return wrapper;
   }, []);
 
-  const handlePrint = useCallback(async () => {
+  const handlePrint = useCallback(() => {
     try {
-      setBusy(true);
+      if (!fullHtml) throw new Error("No hay HTML para imprimir.");
 
-      const iframe = viewFrameRef.current;
-      if (!iframe) throw new Error("No se pudo preparar la impresión.");
+      const w = window.open("", "_blank");
+      if (!w) throw new Error("El navegador bloqueó el popup de impresión.");
 
-      await waitIframeReady(iframe);
-
-      const w = iframe.contentWindow;
-      const doc = iframe.contentDocument;
-      if (!w || !doc) throw new Error("No se pudo acceder al contenido para imprimir.");
-
-      await waitAssetsInDoc(doc);
-      await new Promise((r) => setTimeout(r, 80));
-
+      w.document.open();
+      w.document.write(fullHtml);
+      w.document.close();
       w.focus();
       w.print();
 
       onToast?.("exito", "Panel de impresión abierto.", 2200);
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo imprimir.", 4200);
-    } finally {
-      setBusy(false);
     }
-  }, [onToast]);
+  }, [fullHtml, onToast]);
 
   const handleExportPdf = useCallback(async () => {
     try {
@@ -302,8 +384,7 @@ export default function ModalReciboGenerado({
       const contentH = Math.ceil(wrapper.scrollHeight || 0);
 
       const opt = {
-        // ✅ margen 0: ya lo damos con padding del wrapper (10mm)
-        margin: 0,
+        margin: 0, // wrapper ya tiene padding 10mm
         filename,
         image: { type: "jpeg", quality: 0.98 },
         html2canvas: {
@@ -321,7 +402,7 @@ export default function ModalReciboGenerado({
       };
 
       await html2pdf().set(opt).from(wrapper).save();
-      onToast?.("exito", "PDF exportado centrado ✅", 2400);
+      onToast?.("exito", "PDF exportado ✅", 2400);
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo exportar el PDF.", 4200);
     } finally {
@@ -352,11 +433,7 @@ export default function ModalReciboGenerado({
 
       const url = getApiPhpUrl();
 
-      const res = await fetchWithTimeout(
-        url,
-        { method: "POST", headers: { "X-Session": sessionKey }, body: fd },
-        60000
-      );
+      const res = await fetchWithTimeout(url, { method: "POST", headers: { "X-Session": sessionKey }, body: fd }, 60000);
 
       const { ok, data, text } = await parseJsonFromResponse(res);
 
@@ -369,9 +446,7 @@ export default function ModalReciboGenerado({
       }
 
       const idComp = extractIdComprobante(data);
-      if (!idComp) {
-        throw new Error("El backend guardó el PDF pero no devolvió id_comprobante (necesario para vincular a varios).");
-      }
+      if (!idComp) throw new Error("El backend guardó el PDF pero no devolvió id_comprobante.");
 
       return { ...data, id_comprobante: idComp };
     },
@@ -384,19 +459,8 @@ export default function ModalReciboGenerado({
 
     const url = getApiPhpUrl();
 
-    const ACTIONS_BATCH = [
-      "comprobantes_asociar_movimientos",
-      "comprobantes_vincular_movimientos",
-      "comprobantes_asignar_movimientos",
-      "comprobantes_set_movimientos",
-    ];
-
-    const ACTIONS_ONE = [
-      "comprobantes_asociar_movimiento",
-      "comprobantes_vincular_movimiento",
-      "comprobantes_asignar_movimiento",
-      "comprobantes_set_movimiento",
-    ];
+    const ACTIONS_BATCH = ["comprobantes_asociar_movimientos", "comprobantes_vincular_movimientos", "comprobantes_asignar_movimientos", "comprobantes_set_movimientos"];
+    const ACTIONS_ONE = ["comprobantes_asociar_movimiento", "comprobantes_vincular_movimiento", "comprobantes_asignar_movimiento", "comprobantes_set_movimiento"];
 
     const postJson = async (action, payload) => {
       const res = await fetchWithTimeout(
@@ -408,6 +472,7 @@ export default function ModalReciboGenerado({
         },
         60000
       );
+
       const { ok, data, text } = await parseJsonFromResponse(res);
       if (!res.ok || !ok || !data?.exito) {
         const msg = data?.mensaje || `HTTP ${res.status}` + (text ? ` ${text.slice(0, 200)}` : "");
@@ -416,13 +481,10 @@ export default function ModalReciboGenerado({
       return data;
     };
 
+    // 1) batch
     for (const action of ACTIONS_BATCH) {
       try {
-        const data = await postJson(action, {
-          id_comprobante: Number(idComprobante),
-          ids_movimiento: ids,
-        });
-        return data;
+        return await postJson(action, { id_comprobante: Number(idComprobante), ids_movimiento: ids });
       } catch (e) {
         const msg = String(e?.message || "").toLowerCase();
         if (msg.includes("acción no válida") || msg.includes("accion no valida") || msg.includes("action no valida")) continue;
@@ -430,14 +492,12 @@ export default function ModalReciboGenerado({
       }
     }
 
+    // 2) 1x1
     for (const id of ids) {
       let okOne = false;
       for (const action of ACTIONS_ONE) {
         try {
-          await postJson(action, {
-            id_comprobante: Number(idComprobante),
-            id_movimiento: Number(id),
-          });
+          await postJson(action, { id_comprobante: Number(idComprobante), id_movimiento: Number(id) });
           okOne = true;
           break;
         } catch (e) {
@@ -450,8 +510,7 @@ export default function ModalReciboGenerado({
         throw new Error(
           `Tu backend no tiene action para asociar comprobante a movimientos.\n` +
             `Probé batch: ${ACTIONS_BATCH.join(", ")}\n` +
-            `Probé 1x1: ${ACTIONS_ONE.join(", ")}\n` +
-            `Decime cómo se llama tu action y la conecto.`
+            `Probé 1x1: ${ACTIONS_ONE.join(", ")}`
         );
       }
     }
@@ -461,6 +520,7 @@ export default function ModalReciboGenerado({
 
   const ensureSaved = useCallback(async () => {
     if (savedRef.current) return savedRef.current;
+
     if (savingRef.current) {
       while (savingRef.current) {
         // eslint-disable-next-line no-await-in-loop
@@ -477,7 +537,7 @@ export default function ModalReciboGenerado({
       const contentH = Math.ceil(wrapper.scrollHeight || 0);
 
       const opt = {
-        margin: 0, // ✅ wrapper ya tiene padding 10mm
+        margin: 0,
         image: { type: "jpeg", quality: 0.98 },
         html2canvas: {
           scale: 2,
@@ -505,72 +565,91 @@ export default function ModalReciboGenerado({
       const finalSaved = { ...saved, id_comprobante: idComp, ids_movimiento: idsMovs };
       savedRef.current = finalSaved;
 
-      onToast?.("exito", "Recibo guardado y vinculado a todos los registros ✅", 2600);
+      onToast?.("exito", "Recibo guardado y vinculado ✅", 2600);
       return finalSaved;
     } finally {
       savingRef.current = false;
     }
   }, [idsMovs, buildWrapperForPdf, uploadPdfToServer, asociarComprobanteAMovimientos, onToast]);
 
-  const requestCloseAndSave = useCallback(
-    async () => {
-      if (busy) return;
-      try {
-        setBusy(true);
-        const saved = await ensureSaved();
-        onFinalizar?.(saved);
-        onClose?.();
-      } catch (e) {
-        onToast?.("error", e?.message || "No se pudo guardar el recibo.", 4500);
-      } finally {
-        setBusy(false);
-      }
-    },
-    [busy, ensureSaved, onFinalizar, onClose, onToast]
-  );
+  const requestCloseAndSave = useCallback(async () => {
+    if (busy) return;
+    try {
+      setBusy(true);
+      const saved = await ensureSaved();
+      onFinalizar?.(saved);
+      onClose?.();
+    } catch (e) {
+      onToast?.("error", e?.message || "No se pudo guardar el recibo.", 4500);
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, ensureSaved, onFinalizar, onClose, onToast]);
 
   const handleFinalizar = useCallback(() => requestCloseAndSave(), [requestCloseAndSave]);
 
   if (!open) return null;
 
-  return createPortal(
-    <div className="mi-modal__overlay mi-modal__overlay--mov" role="dialog" aria-modal="true" onMouseDown={(e) => e.preventDefault()}>
-      <div
-        className="mi-modal__container mi-modal__container--mov"
-        style={{ width: "min(980px, 96vw)", maxWidth: "980px", position: "relative" }}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="mi-modal__header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div className="mi-modal__title">{title}</div>
+  const overlayClass = "mi-modal__overlay mi-modal__overlay--mov";
+  const modalClass = "mi-modal__container mi-modal__container--mov mpr-modal";
 
-          <button ref={firstFocusRef} type="button" className="mi-modal__close" onClick={handleFinalizar} title="Cerrar" disabled={busy}>
-            <FontAwesomeIcon icon={faXmark} />
+  return createPortal(
+    <div className={overlayClass} role="dialog" aria-modal="true" onMouseDown={handleFinalizar}>
+      <div className={modalClass} style={{ width: "min(980px, 96vw)", maxWidth: "980px" }} onMouseDown={(e) => e.stopPropagation()}>
+        {/* HEADER (igual Orden de Pago) */}
+        <div className="mi-modal__header mpr-header">
+          <div className="mpr-headLeft">
+            <div className="mi-modal__title mpr-title">
+              <span>{title}</span>
+            </div>
+            <div className="mi-modal__subtitle mpr-subtitle">Vista previa · Acciones abajo · Finalizar (guarda automático)</div>
+          </div>
+
+          <button
+            ref={firstFocusRef}
+            type="button"
+            className="mi-modal__close"
+            onClick={handleFinalizar}
+            title="Cerrar (guarda)"
+            disabled={busy}
+          >
+            <FontAwesomeIcon icon={busy ? faCircleNotch : faXmark} spin={busy} />
           </button>
         </div>
 
-        <div className="mi-modal__body" style={{ padding: 0 }}>
-          <iframe
-            ref={viewFrameRef}
-            title="Vista previa del recibo"
-            srcDoc={fullHtml}
-            style={{ width: "100%", height: "70vh", border: "0", borderRadius: "10px", background: "white" }}
-          />
+        {/* BODY */}
+        <div className="mi-modal__body mpr-body">
+          <div className="mpr-content">
+            <div className="mpr-card mpr-viewCard">
+              <div className="mpr-previewScroll">
+                <div
+                  ref={previewRef}
+                  style={{ background: "#fff", padding: 12, borderRadius: 10 }}
+                  dangerouslySetInnerHTML={{
+                    __html: previewMarkup || "<div style='padding:12px'>Sin vista previa</div>",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="mi-modal__footer" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button type="button" className="mov-btn mov-btn--ghost" onClick={handlePrint} disabled={busy}>
+        {/* FOOTER */}
+        <div className="mi-modal__footer mpr-footer">
+          <button type="button" className="mpr-btn mpr-btn--ghost" onClick={handlePrint} disabled={busy}>
             <FontAwesomeIcon icon={busy ? faCircleNotch : faPrint} spin={busy} /> Imprimir
           </button>
 
-          <button type="button" className="mov-btn mov-btn--ghost" onClick={handleExportPdf} disabled={busy}>
+          <button type="button" className="mpr-btn mpr-btn--ghost" onClick={handleExportPdf} disabled={busy}>
             <FontAwesomeIcon icon={busy ? faCircleNotch : faFilePdf} spin={busy} /> Exportar PDF
           </button>
 
-          <button type="button" className="mov-btn mov-btn--primary" onClick={handleFinalizar} disabled={busy}>
+          <button type="button" className="mpr-btn mpr-btn--primary" onClick={handleFinalizar} disabled={busy}>
             <FontAwesomeIcon icon={busy ? faCircleNotch : faCheck} spin={busy} /> Finalizar
           </button>
         </div>
 
+        {/* host invisible para export */}
         <div
           ref={exportHostRef}
           style={{

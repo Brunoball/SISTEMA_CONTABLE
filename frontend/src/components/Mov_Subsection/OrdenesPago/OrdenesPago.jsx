@@ -842,7 +842,7 @@ export default function OrdenesPago() {
   const columns = useMemo(() => {
     return [
       { key: "fecha", label: "FECHA", align: "center", fr: 0.9, render: (r) => safeText(formatFechaDMY(r.fecha)) },
-      { key: "detalle", label: "DESCRIPCIÓN", fr: 2.4, strong: true, align: "left", render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto) },
+      { key: "detalle", label: "DESCRIPCIÓN", fr: 2.3, strong: true, align: "left", render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto) },
       { key: "proveedor", label: "PROVEEDOR", fr: 1.8, align: "center", render: (r) => safeText(r.proveedor) },
       {
         key: "estado",
@@ -859,7 +859,7 @@ export default function OrdenesPago() {
         },
       },
       { key: "monto", label: "MONTO", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
-      { key: "acciones", label: "ACCIONES", fr: 0.9, align: "center", render: () => null },
+      { key: "acciones", label: "ACCIONES", fr: 1.4, align: "center", render: () => null },
     ];
   }, []);
 

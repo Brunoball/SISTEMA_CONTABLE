@@ -4,23 +4,23 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
-import "../../Recibos/modales/ModalPagarRecibos.css"; // reutiliza estética
+import "../../Recibos/modales/ModalPagarRecibos.css";
 import BASE_URL from "../../../../config/config";
+
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faXmark,
-  faEye,
   faPrint,
   faCircleNotch,
   faCheck,
   faFilePdf,
 } from "@fortawesome/free-solid-svg-icons";
 
-import jsPDF from "jspdf";
-
 /* =========================
-   Helpers
+  Helpers
 ========================= */
 function safeText(v) {
   const s = String(v ?? "").trim();
@@ -73,7 +73,7 @@ async function fetchJsonOrThrow(url, opts = {}) {
 }
 
 /* =========================
-   ✅ EXTRAER <style> + <body> del HTML
+  ✅ EXTRAER <style> + <body> del HTML
 ========================= */
 function extractBodyWithStyles(fullHtml) {
   const s = String(fullHtml || "").trim();
@@ -93,26 +93,52 @@ function extractBodyWithStyles(fullHtml) {
 }
 
 /* =========================
-   ✅ HTML -> PDF desde un nodo REAL
+  ✅ HTML -> PDF desde un nodo REAL (html2canvas + jsPDF)
+  - Captura SOLO el "papel" (mpr-paper) para que no afecte el modo oscuro
 ========================= */
-async function nodeToPdfBlob(node, filename = "comprobante.pdf") {
-  if (!node) throw new Error("No se encontró el nodo para exportar a PDF.");
+async function nodeToPdfBlob(containerNode, filename = "comprobante.pdf") {
+  if (!containerNode) throw new Error("No se encontró el nodo para exportar a PDF.");
 
-  const doc = new jsPDF("p", "pt", "a4");
+  // ✅ Capturar SOLO el comprobante (papel) si existe
+  const target =
+    containerNode.querySelector(".mpr-paper") ||
+    containerNode.querySelector(".wrap") ||
+    containerNode.querySelector(".page") ||
+    containerNode;
 
-  await doc.html(node, {
-    x: 18,
-    y: 18,
-    width: 559, // 595 - 36
-    windowWidth: node.scrollWidth || 794,
-    html2canvas: {
-      scale: 0.95,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-    },
+  const canvas = await html2canvas(target, {
+    scale: 2,
+    backgroundColor: "#fff", // ✅ siempre blanco
+    useCORS: true,
+    scrollX: 0,
+    scrollY: 0,
+    windowWidth: target.scrollWidth || target.offsetWidth,
+    windowHeight: target.scrollHeight || target.offsetHeight,
   });
 
-  const blob = doc.output("blob");
+  const imgData = canvas.toDataURL("image/png");
+
+  const pdf = new jsPDF("p", "pt", "a4");
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+
+  const margin = 18;
+  const maxW = pageW - margin * 2;
+  const maxH = pageH - margin * 2;
+
+  const imgW = canvas.width;
+  const imgH = canvas.height;
+  const ratio = Math.min(maxW / imgW, maxH / imgH);
+
+  const renderW = imgW * ratio;
+  const renderH = imgH * ratio;
+
+  const x = (pageW - renderW) / 2;
+  const y = margin;
+
+  pdf.addImage(imgData, "PNG", x, y, renderW, renderH, undefined, "FAST");
+
+  const blob = pdf.output("blob");
   const file = new File([blob], filename, { type: "application/pdf" });
   return { blob, file };
 }
@@ -124,8 +150,6 @@ export default function ModalOrdenPagoGenerada({
   html,
   idsMovimiento = [],
   titulo = "Comprobante · Orden de Pago",
-
-  // ✅ NUEVO: cuando se guardó y asoció OK, avisamos al padre
   // Firma sugerida: onSaved({ id_comprobante, ids_movimiento })
   onSaved,
 }) {
@@ -146,7 +170,8 @@ export default function ModalOrdenPagoGenerada({
     if (!open) return;
     setSaving(false);
     setIdComprobante(null);
-    setTimeout(() => firstRef.current?.focus(), 50);
+    const t = setTimeout(() => firstRef.current?.focus(), 50);
+    return () => clearTimeout(t);
   }, [open]);
 
   const idsOk = useMemo(() => {
@@ -211,7 +236,7 @@ export default function ModalOrdenPagoGenerada({
 
     setSaving(true);
 
-    // ✅ 1) Generar PDF desde el nodo
+    // ✅ 1) Generar PDF desde el nodo (captura papel blanco)
     const { file } = await nodeToPdfBlob(previewRef.current, "orden_pago.pdf");
 
     // ✅ 2) Subir
@@ -244,12 +269,10 @@ export default function ModalOrdenPagoGenerada({
 
     setIdComprobante(newIdComp);
 
-    // ✅ NUEVO: avisar al padre para que recargue la tabla y se active el ojito
+    // ✅ avisar al padre
     try {
       onSaved?.({ id_comprobante: newIdComp, ids_movimiento: idsOk });
-    } catch {
-      // no rompe el flujo por un callback
-    }
+    } catch {}
 
     onToast?.("exito", "Comprobante guardado y asociado ✅", 2400);
 
@@ -261,10 +284,9 @@ export default function ModalOrdenPagoGenerada({
     if (saving) return;
     try {
       await saveToServerIfNeeded();
-      onClose?.(); // ✅ además el padre cierra el modal de pago
+      onClose?.();
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo guardar el comprobante.", 4500);
-      // no cerramos
     } finally {
       setSaving(false);
     }
@@ -282,8 +304,20 @@ export default function ModalOrdenPagoGenerada({
 
   if (!open) return null;
 
-  const overlayClass = "mi-modal__overlay mi-modal__overlay--mov";
+  // ✅ Dark del modal según tu theme global (sin props)
+  const isDark = typeof document !== "undefined"
+    ? document.documentElement.getAttribute("data-theme") === "oscuro"
+    : false;
+
+  const overlayClass =
+    "mi-modal__overlay mi-modal__overlay--mov" + (isDark ? " mi-modal__overlay--dark" : "");
+
   const modalClass = "mi-modal__container mi-modal__container--mov mpr-modal";
+
+  const canPrint = !!html && !saving;
+  const canExport = !!previewMarkup && !saving;
+  const canFinalize = !saving;
+  const canView = !!idComprobante && !saving;
 
   return createPortal(
     <div className={overlayClass} role="dialog" aria-modal="true" onMouseDown={requestClose}>
@@ -300,7 +334,7 @@ export default function ModalOrdenPagoGenerada({
               ) : null}
             </div>
             <div className="mi-modal__subtitle mpr-subtitle">
-              Vista previa · Imprimir · Exportar PDF · Finalizar (guarda automático)
+              Vista previa · Acciones abajo · Finalizar (guarda automático)
             </div>
           </div>
 
@@ -319,83 +353,79 @@ export default function ModalOrdenPagoGenerada({
         {/* BODY */}
         <div className="mi-modal__body mpr-body">
           <div className="mpr-content">
-            {/* ✅ ACCIONES */}
-            <div className="mpr-card" style={{ marginBottom: 12 }}>
-              <div className="mpr-formRow" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-                <button
-                  type="button"
-                  className="mov-btn mov-btn--ghost mpr-btnWide mpr-btnInCard"
-                  onClick={handlePrint}
-                  disabled={!html || saving}
-                  title="Imprimir"
-                >
-                  <FontAwesomeIcon icon={faPrint} />
-                  Imprimir
-                </button>
-
-                <button
-                  type="button"
-                  className="mov-btn mov-btn--ghost mpr-btnWide mpr-btnInCard"
-                  onClick={handleExportPdfLocal}
-                  disabled={!previewMarkup || saving}
-                  title="Exportar PDF (sin guardar en servidor)"
-                >
-                  <FontAwesomeIcon icon={saving ? faCircleNotch : faFilePdf} spin={saving} />
-                  Exportar PDF
-                </button>
-
-                <button
-                  type="button"
-                  className="mov-btn mov-btn--primary mpr-btnWide mpr-btnInCard"
-                  onClick={requestClose}
-                  disabled={saving}
-                  title="Finalizar (guarda automático)"
-                >
-                  <FontAwesomeIcon icon={saving ? faCircleNotch : faCheck} spin={saving} />
-                  {saving ? "Guardando…" : "Finalizar"}
-                </button>
-              </div>
-
-              {/* ✅ Acciones extra (solo si ya guardó y tiene ID) */}
-              <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "center" }}>
+            <div className="mpr-card mpr-viewCard">
+              <div style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "center" }}>
                 <div style={{ fontSize: 12, color: "#777" }}>
                   Movimientos asociados: <b>{idsOk.length}</b>
                 </div>
-
                 <div style={{ flex: 1 }} />
-
-                <button
-                  type="button"
-                  className="mov-btn mov-btn--ghost"
-                  onClick={handleView}
-                  disabled={!idComprobante || saving}
-                  title="Ver PDF guardado (URL linda)"
-                >
-                  <FontAwesomeIcon icon={faEye} /> Ver PDF
-                </button>
+                {idComprobante ? (
+                  <div style={{ fontSize: 12, color: "#777" }}>
+                    ID: <b>#{idComprobante}</b>
+                  </div>
+                ) : null}
               </div>
-            </div>
 
-            {/* ✅ VISTA PREVIA */}
-            <div className="mpr-card" style={{ overflow: "auto", maxHeight: "60vh" }}>
-              <div
-                ref={previewRef}
-                style={{
-                  background: "#fff",
-                  padding: 12,
-                  borderRadius: 10,
-                }}
-                dangerouslySetInnerHTML={{
-                  __html: previewMarkup || "<div style='padding:12px'>Sin vista previa</div>",
-                }}
-              />
+              <div className="mpr-previewScroll">
+                {/* ✅ "PAPEL": SIEMPRE CLARO, NO afectado por dark */}
+                <div className="mpr-paper" ref={previewRef}>
+                  <div
+                    className="mpr-paper__inner"
+                    dangerouslySetInnerHTML={{
+                      __html: previewMarkup || "<div style='padding:12px'>Sin vista previa</div>",
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* FOOTER */}
+        {/* FOOTER (✅ botones abajo) */}
         <div className="mi-modal__footer mpr-footer">
-          <button type="button" className="mpr-btn mpr-btn--primary" onClick={requestClose} disabled={saving}>
+          <button
+            type="button"
+            className="mpr-btn mpr-btn--ghost"
+            onClick={handlePrint}
+            disabled={!canPrint}
+            title="Imprimir"
+          >
+            <FontAwesomeIcon icon={faPrint} />
+            Imprimir
+          </button>
+
+          <button
+            type="button"
+            className="mpr-btn mpr-btn--ghost"
+            onClick={handleExportPdfLocal}
+            disabled={!canExport}
+            title="Exportar PDF (sin guardar en servidor)"
+          >
+            <FontAwesomeIcon icon={saving ? faCircleNotch : faFilePdf} spin={saving} />
+            Exportar PDF
+          </button>
+
+          {/* Si querés recuperar "Ver PDF" después, descomentá:
+          <button
+            type="button"
+            className="mpr-btn mpr-btn--ghost"
+            onClick={handleView}
+            disabled={!canView}
+            title="Ver PDF guardado"
+          >
+            <FontAwesomeIcon icon={faEye} />
+            Ver
+          </button>
+          */}
+
+          <button
+            type="button"
+            className="mpr-btn mpr-btn--primary"
+            onClick={requestClose}
+            disabled={!canFinalize}
+            title="Finalizar (guarda automático)"
+          >
+            <FontAwesomeIcon icon={saving ? faCircleNotch : faCheck} spin={saving} />
             {saving ? "Guardando…" : "Finalizar"}
           </button>
         </div>

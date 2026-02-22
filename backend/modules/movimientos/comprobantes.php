@@ -163,6 +163,34 @@ function build_download_url(int $idComp): string {
 }
 
 /* =========================================================
+   ✅ NUEVO: tipo -> carpeta segura
+   - Subdivide dentro del mes: .../YYYY/MM/<tipo>/
+========================================================= */
+function tipo_to_folder(string $tipo): string {
+  $t = strtoupper(trim($tipo));
+  if ($t === '') $t = 'RECIBO';
+
+  // si querés nombres “lindos”, mapealos acá:
+  $map = [
+    'RECIBO' => 'recibo',
+    'ORDEN_PAGO' => 'orden_pago',
+    'ORDEN DE PAGO' => 'orden_pago',
+    'FACTURA' => 'factura',
+    'NOTA_CREDITO' => 'nota_credito',
+    'NOTA_DEBITO' => 'nota_debito',
+  ];
+  if (isset($map[$t])) return $map[$t];
+
+  // fallback: slug seguro
+  $t = strtolower($t);
+  $t = str_replace([' ', '-', '.'], '_', $t);
+  $t = preg_replace('/[^a-z0-9_]/', '', $t) ?? '';
+  $t = trim((string)$t, '_');
+  if ($t === '') $t = 'otros';
+  return $t;
+}
+
+/* =========================================================
    Tenant ID
 ========================================================= */
 $tenantId = get_header_case_insensitive('X-IdTenant');
@@ -170,7 +198,8 @@ if ($tenantId === '') $tenantId = get_header_case_insensitive('X-Id-Tenant');
 if ($tenantId === '' || !ctype_digit($tenantId)) $tenantId = '0';
 
 /* =========================================================
-   ✅ SUBIR PDF Y VINCULAR A COBRO (TU FLUJO ORIGINAL)
+   ✅ SUBIR PDF Y VINCULAR A COBRO
+   (ahora: carpeta por tipo dentro del mes)
 ========================================================= */
 if ($action === 'comprobantes_subir') {
 
@@ -197,6 +226,9 @@ if ($action === 'comprobantes_subir') {
   $tipo = $_POST['tipo'] ?? 'RECIBO';
   $tipo = is_string($tipo) ? strtoupper(trim($tipo)) : 'RECIBO';
   if ($tipo === '') $tipo = 'RECIBO';
+
+  // ✅ NUEVO: carpeta por tipo
+  $tipoFolder = tipo_to_folder($tipo);
 
   // resolver cobro + movimiento
   $cobro = null;
@@ -263,12 +295,19 @@ if ($action === 'comprobantes_subir') {
   $uploadsBase = $publicHtml . '/uploads';
   safe_mkdir($uploadsBase);
 
-  $tenantDir = $uploadsBase . '/tenants/t_' . $tenantId . '/comprobantes/' . date('Y') . '/' . date('m');
+  // ✅ MODIFICADO: .../YYYY/MM/<tipoFolder>
+  $tenantDir = $uploadsBase
+    . '/tenants/t_' . $tenantId
+    . '/comprobantes/' . date('Y')
+    . '/' . date('m')
+    . '/' . $tipoFolder;
+
   safe_mkdir($tenantDir);
 
   $idMov = (int)($cobro['id_movimiento'] ?? $idMovFromPost);
   if ($idMov <= 0) comprobantes_fail('No se pudo resolver id_movimiento.', 500);
 
+  // (nombre igual que antes, solo cambia ubicación)
   $finalName = 'cobro_' . $idCobro . '__mov_' . $idMov . '__' . $sha . '.pdf';
   $absPath = $tenantDir . '/' . $finalName;
 
@@ -288,6 +327,8 @@ if ($action === 'comprobantes_subir') {
       'tenantDir' => $tenantDir,
       'public_html' => $publicHtml,
       'uploadsBase' => $uploadsBase,
+      'tipo' => $tipo,
+      'tipoFolder' => $tipoFolder,
     ]);
   }
 
@@ -338,6 +379,8 @@ if ($action === 'comprobantes_subir') {
         'public_html' => $publicHtml,
         'uploadsBase' => $uploadsBase,
         'tenantDir' => $tenantDir,
+        'tipo' => $tipo,
+        'tipoFolder' => $tipoFolder,
       ],
     ]);
 
@@ -350,13 +393,6 @@ if ($action === 'comprobantes_subir') {
 
 /* =========================================================
    ✅ ASOCIAR 1x1 (POST JSON)
-   action = comprobantes_asociar_movimiento
-   body:
-   {
-     "id_comprobante": 123,
-     "id_movimiento": 456,   // o "id_cobro": 999
-     "force": false
-   }
 ========================================================= */
 if ($action === 'comprobantes_asociar_movimiento') {
 
@@ -450,14 +486,6 @@ if ($action === 'comprobantes_asociar_movimiento') {
 
 /* =========================================================
    ✅ ASOCIAR BATCH (POST JSON)
-   action = comprobantes_asociar_movimientos
-   body:
-   {
-     "id_comprobante": 123,
-     "ids_movimiento": [1,2,3],
-     "force": false
-   }
-   -> asocia al ÚLTIMO cobro de cada movimiento
 ========================================================= */
 if ($action === 'comprobantes_asociar_movimientos') {
 

@@ -96,6 +96,15 @@ if (!function_exists('route_movimientos')) {
         require __DIR__ . '/compras.php';
         return true;
 
+      /* =========================
+         ✅ ARCA / PADRÓN (consultar CUIT)
+         - Solo consulta datos de CUIT (no factura)
+      ========================= */
+      case 'padron_cuit':
+      case 'arca_padron_cuit':
+        require __DIR__ . '/facturacion/padron.php';
+        return true;
+
       default:
         return false;
     }

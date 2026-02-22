@@ -1,3 +1,4 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/components/Movimientos/Movimientos.jsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import BASE_URL from "../../config/config";
@@ -7,6 +8,9 @@ import "../Global/Global_css/Global_Section.css";
 import ModalCargaRapidaMovimientos from "./modales/ModalCargaRapidaMovimientos";
 import ModalEditarMovimiento from "./modales/ModalEditarMovimiento";
 import ModalEliminarMovimientos from "./modales/ModalEliminarMovimientos";
+
+// ✅ NUEVO: FACTURACIÓN (buscar cliente)
+import ModalFacturaBuscarCliente from "../Mov_Subsection/Facturacion/ModalFacturaBuscarCliente.jsx";
 
 // ✅ Toast global
 import Toast from "../Global/Toast.jsx";
@@ -19,6 +23,7 @@ import {
   faMagnifyingGlass,
   faCalendarDays,
   faFileExcel,
+  faFileInvoiceDollar, // ✅ NUEVO
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -247,6 +252,9 @@ export default function Movimientos() {
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+
+  // ✅ NUEVO: modal facturar
+  const [openFacturar, setOpenFacturar] = useState(false);
 
   // toast
   const [toast, setToast] = useState(null);
@@ -697,7 +705,7 @@ export default function Movimientos() {
         periodo: periodoToYYYYMM(p?.periodo),
       }));
 
-      const data = await apiPostJson(`${API}?action=movimientos_crear_batch`, {
+      const data = await apiPostJson(`${API}?action=movimientos_crear_batch}`, {
         movimientos,
         idUsuario,
       });
@@ -742,7 +750,6 @@ export default function Movimientos() {
 
     try {
       while (offset !== null && guard < 3000) {
-        // ✅ si cambió periodo/q durante el loop, cortamos
         if (myToken !== loadAllTokenRef.current) break;
 
         const currentPer = periodoToMMYYYY(fPeriodo);
@@ -763,7 +770,6 @@ export default function Movimientos() {
     } catch (e) {
       showToast("error", e?.message || "Error cargando todos.", 4200);
     } finally {
-      // solo apagar si sigue siendo el loop vigente
       if (myToken === loadAllTokenRef.current) setLoadingAll(false);
     }
   }, [hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll, nextOffset, fPeriodo, q, loadRows, showToast]);
@@ -952,6 +958,22 @@ export default function Movimientos() {
           </div>
 
           <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {/* ✅ NUEVO: FACTURAR */}
+            <button
+              type="button"
+              className="mov-btn mov-btn--ghost mov-btn--clear"
+              onClick={async () => {
+                await ensureListsLoaded({ force: false, background: true }).catch(() => {});
+                setOpenFacturar(true);
+              }}
+              disabled={loadingListsCtx || loadingRows || loadingMore || loadingAll}
+              title="Facturar"
+            >
+              <FontAwesomeIcon icon={faFileInvoiceDollar} />
+              <span className="mov-btnText mov-btnText--desktop">Facturar</span>
+              <span className="mov-btnText mov-btnText--mobile">Facturar</span>
+            </button>
+
             <button
               type="button"
               className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
@@ -971,7 +993,7 @@ export default function Movimientos() {
                 await ensureListsLoaded({ force: false, background: true }).catch(() => {});
                 setOpenAdd(true);
               }}
-              disabled={false}   // ✅ SIEMPRE HABILITADO
+              disabled={false} // ✅ SIEMPRE HABILITADO
               title="Nuevo Movimiento"
             >
               <FontAwesomeIcon icon={faPlus} />
@@ -1116,6 +1138,15 @@ export default function Movimientos() {
           </div>
         </div>
       </section>
+
+      {/* ✅ NUEVO: MODAL FACTURAR (Buscar Cliente) */}
+      <ModalFacturaBuscarCliente
+        open={openFacturar}
+        lists={listsSafe}
+        periodoDefault={fPeriodo}
+        onToast={showToast}
+        onClose={() => setOpenFacturar(false)}
+      />
 
       {/* MODAL CARGA RAPIDA */}
       <ModalCargaRapidaMovimientos

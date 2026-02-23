@@ -1088,7 +1088,7 @@ export default function Compras() {
               disabled={loadingRows || filteredRows.length === 0}
               title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
             >
-              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
+              <FontAwesomeIcon icon={faFileExcel} /> Exportar 
             </button>
 
             <button

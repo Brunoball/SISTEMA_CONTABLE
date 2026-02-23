@@ -1025,3 +1025,15 @@ button{ font-family: inherit; }
   box-shadow: 0 0 0 4px rgba(255,255,255,.14), 0 10px 18px rgba(2,6,23,.16);
 }
 
+.pp-nav__item,
+.pp-navSub__item{
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* como ahora pp-nav__item es button */
+.pp-nav__item{
+  appearance: none;
+  -webkit-appearance: none;
+}

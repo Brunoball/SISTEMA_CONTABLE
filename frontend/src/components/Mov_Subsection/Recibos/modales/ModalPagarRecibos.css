@@ -220,10 +220,10 @@
   text-transform: uppercase;
   font-weight: 600;
   position: sticky;
-  overflow: auto;
-  scrollbar-gutter: stable;
   top: 0;
   z-index: 4;
+    overflow: hidden;        /* ✅ no scroll en header */
+  scrollbar-gutter: auto;
 }
 .mpr-th{ padding: 10px 12px; }
 .mpr-th--center{ text-align:center; }
@@ -233,7 +233,7 @@
   max-height: calc(100vh - 358px);
     min-height: calc(100vh - 358px);
   overflow:auto;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
 }
 .mpr-tbody--pr{
     max-height: calc(100vh - 380px);
@@ -1204,4 +1204,8 @@ html[data-theme="oscuro"] body{
 .paper .total-amount,
 .paper .rc-totalValue{
   font-weight: 600;      /* antes suele estar 800/900 */
+}
+/* ✅ Solo si el tbody realmente tiene scroll */
+.mpr-table--hasScroll .mpr-tbody{
+  scrollbar-gutter: stable;
 }

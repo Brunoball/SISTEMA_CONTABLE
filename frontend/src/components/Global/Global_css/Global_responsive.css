@@ -652,3 +652,30 @@
 
 
 }
+/* =========================================================
+   ✅ Movimientos — Header actions en MOBILE:
+   2 arriba (Facturar / Exportar) + 1 abajo (Movimiento)
+   Solo <= 720px — NO afecta desktop
+========================================================= */
+@media (max-width: 720px){
+  /* el contenedor de botones */
+  .mov-card__actions{
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items: stretch;
+    justify-content: stretch !important;
+    flex-wrap: initial !important; /* anula el nowrap que pusiste */
+  }
+
+  /* cada botón ocupa ancho completo de su celda */
+  .mov-card__actions .mov-btn{
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* ✅ 3er botón (Nuevo Movimiento) baja y ocupa 2 columnas */
+  .mov-card__actions .mov-btn:nth-child(3){
+    grid-column: 1 / -1;
+  }
+}

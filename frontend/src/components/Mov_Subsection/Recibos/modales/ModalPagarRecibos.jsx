@@ -1,4 +1,6 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/components/Movimientos/modales/ModalPagarRecibos.jsx
+
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
@@ -106,7 +108,11 @@ function isPagadoRow(row) {
 
 function EstadoChip({ estado }) {
   const isOk = String(estado).toUpperCase() === "PAGADO";
-  return <span className={`mpr-chip ${isOk ? "mpr-chip--ok" : "mpr-chip--warn"}`}>{estado}</span>;
+  return (
+    <span className={`mpr-chip ${isOk ? "mpr-chip--ok" : "mpr-chip--warn"}`}>
+      {estado}
+    </span>
+  );
 }
 
 /* =========================
@@ -137,11 +143,15 @@ export default function ModalPagarRecibos({
   cliente,
   deudas = [],
   onFactura,
-  // ✅ NUEVO: callback cuando se FINALIZA el recibo (se guarda comprobante)
+  // ✅ callback cuando se FINALIZA el recibo (se guarda comprobante)
   onReciboFinalizado,
 }) {
   const dialogRef = useRef(null);
   const firstFocusRef = useRef(null);
+
+  // ✅ NUEVO: detectar scroll real en tbody para activar gutter stable SOLO cuando aparece scroll
+  const tbodyRef = useRef(null);
+  const [tbodyHasScroll, setTbodyHasScroll] = useState(false);
 
   const [dark, setDark] = useState(isTemaOscuro());
   useEffect(() => {
@@ -167,7 +177,7 @@ export default function ModalPagarRecibos({
   const [reciboHtml, setReciboHtml] = useState("");
   const [reciboTitle, setReciboTitle] = useState("Recibo");
 
-  // ✅ AHORA guardamos TODOS los ids_movimiento pagados
+  // ✅ guardamos TODOS los ids_movimiento pagados
   const [idsMovimientosPagados, setIdsMovimientosPagados] = useState([]);
   const [ultimoCobroId, setUltimoCobroId] = useState(null);
 
@@ -249,6 +259,40 @@ export default function ModalPagarRecibos({
   }, [deudasOrdenadas, selectedIds]);
 
   const cantSeleccionadas = useMemo(() => selectedIds.size, [selectedIds]);
+
+  // ✅ NUEVO: recompute scroll real del tbody
+  const recomputeTbodyScroll = useCallback(() => {
+    const el = tbodyRef.current;
+    if (!el) return;
+    // +1 para evitar falsos positivos por subpíxeles
+    setTbodyHasScroll(el.scrollHeight > el.clientHeight + 1);
+  }, []);
+
+  // ✅ NUEVO: observar cambios de tamaño/contenido para activar/desactivar gutter stable
+  useEffect(() => {
+    if (!open) return;
+
+    const t = setTimeout(recomputeTbodyScroll, 0);
+
+    const el = tbodyRef.current;
+    if (!el) return () => clearTimeout(t);
+
+    const ro = new ResizeObserver(() => recomputeTbodyScroll());
+    ro.observe(el);
+
+    const mo = new MutationObserver(() => recomputeTbodyScroll());
+    mo.observe(el, { childList: true, subtree: true });
+
+    window.addEventListener("resize", recomputeTbodyScroll);
+
+    return () => {
+      clearTimeout(t);
+      ro.disconnect();
+      mo.disconnect();
+      window.removeEventListener("resize", recomputeTbodyScroll);
+    };
+    // deudasOrdenadas.length para recalcular cuando cambia el listado
+  }, [open, recomputeTbodyScroll, deudasOrdenadas.length]);
 
   const toggleOne = (id, row) => {
     if (!id) return;
@@ -406,6 +450,9 @@ export default function ModalPagarRecibos({
       setPagaTodo(false);
 
       onToast?.("exito", "Pago confirmado. Generá el recibo antes de finalizar.", 2600);
+
+      // ✅ recalcular scroll luego de marcar pagado / cambiar filas
+      setTimeout(recomputeTbodyScroll, 0);
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo registrar el pago.", 4200);
     } finally {
@@ -464,17 +511,31 @@ export default function ModalPagarRecibos({
 
   if (!open) return null;
 
-  const modalClass = ["mi-modal__container", "mi-modal__container--mov", "mpr-modal", dark ? "mi-modal--dark" : ""]
+  const modalClass = [
+    "mi-modal__container",
+    "mi-modal__container--mov",
+    "mpr-modal",
+    dark ? "mi-modal--dark" : "",
+  ]
     .join(" ")
     .trim();
 
-  const overlayClass = ["mi-modal__overlay", "mi-modal__overlay--mov", dark ? "mi-modal__overlay--dark" : ""]
+  const overlayClass = [
+    "mi-modal__overlay",
+    "mi-modal__overlay--mov",
+    dark ? "mi-modal__overlay--dark" : "",
+  ]
     .join(" ")
     .trim();
 
   return createPortal(
     <>
-      <div className={overlayClass} role="dialog" aria-modal="true" onMouseDown={() => (!openRecibo ? onClose?.() : null)}>
+      <div
+        className={overlayClass}
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={() => (!openRecibo ? onClose?.() : null)}
+      >
         <div className={modalClass} ref={dialogRef} onMouseDown={(e) => e.stopPropagation()}>
           <div className="mi-modal__header mpr-header">
             <div className="mpr-headLeft">
@@ -523,7 +584,9 @@ export default function ModalPagarRecibos({
                         className="mpr-select"
                       >
                         <option value="">
-                          {loadingMedios ? "Cargando medios de pago…" : "Seleccioná un medio de pago…"}
+                          {loadingMedios
+                            ? "Cargando medios de pago…"
+                            : "Seleccioná un medio de pago…"}
                         </option>
 
                         {!loadingMedios && mediosPago.length === 0 && (
@@ -583,7 +646,8 @@ export default function ModalPagarRecibos({
                   </div>
                 </div>
 
-                <div className="mpr-table">
+                {/* ✅ NUEVO: clase condicional cuando el tbody tiene scroll real */}
+                <div className={`mpr-table ${tbodyHasScroll ? "mpr-table--hasScroll" : ""}`}>
                   <div className="mpr-thead" role="row">
                     <div className="mpr-th mpr-th--center">Sel</div>
                     <div className="mpr-th">Fecha</div>
@@ -592,8 +656,11 @@ export default function ModalPagarRecibos({
                     <div className="mpr-th mpr-th--right">Monto</div>
                   </div>
 
-                  <div className="mpr-tbody">
-                    {!deudasOrdenadas.length && <div className="mpr-empty">No hay registros para este cliente.</div>}
+                  {/* ✅ NUEVO: ref para medir si hay scroll */}
+                  <div ref={tbodyRef} className="mpr-tbody">
+                    {!deudasOrdenadas.length && (
+                      <div className="mpr-empty">No hay registros para este cliente.</div>
+                    )}
 
                     {deudasOrdenadas.map((r, idx) => {
                       const id = Number(r?.id_movimiento || 0);
@@ -604,7 +671,9 @@ export default function ModalPagarRecibos({
                       return (
                         <div
                           key={id || `${r?.fecha}-${idx}`}
-                          className={`mpr-row ${checked ? "is-checked" : ""} ${pagado ? "is-paid" : ""}`}
+                          className={`mpr-row ${checked ? "is-checked" : ""} ${
+                            pagado ? "is-paid" : ""
+                          }`}
                           role="row"
                           onClick={() => id && toggleOne(id, r)}
                           title={pagado ? "Este registro ya está PAGADO" : undefined}
@@ -686,14 +755,11 @@ export default function ModalPagarRecibos({
         title={reciboTitle}
         onToast={onToast}
         onClose={() => setOpenRecibo(false)}
-        // ✅ IMPORTANTE: pasamos TODOS los movimientos pagados
+        // ✅ pasamos TODOS los movimientos pagados
         idsMovimientos={idsMovimientosPagados}
         idCobro={ultimoCobroId}
         onFinalizar={(saved) => {
-          // ✅ avisar a Recibos: id_comprobante + ids_movimiento
-          onReciboFinalizado?.(saved, {
-            idsMovimiento: idsMovimientosPagados,
-          });
+          onReciboFinalizado?.(saved, { idsMovimiento: idsMovimientosPagados });
 
           // cerrar modales
           setOpenRecibo(false);

@@ -1189,7 +1189,7 @@ export default function Recibos() {
               disabled={loadingRows || filteredRows.length === 0}
               title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
             >
-              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
+              <FontAwesomeIcon icon={faFileExcel} /> Exportar
             </button>
           </div>
         </div>
@@ -1252,15 +1252,22 @@ export default function Recibos() {
                                   <FontAwesomeIcon icon={faEye} />
                                 </button>
 
-                                <button
-                                  type="button"
-                                  className="mov-iconBtn"
-                                  title="Pagar"
-                                  onClick={() => openPagarModal(r)}
-                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || loadingClienteDeudas}
-                                >
-                                  <FontAwesomeIcon icon={faMoneyBill1Wave} />
-                                </button>
+<button
+  type="button"
+  className={`mov-iconBtn ${pagado ? "mov-iconBtn--disabled" : ""}`}
+  title={pagado ? "Ya está pagado" : "Pagar"}
+  onClick={() => !pagado && openPagarModal(r)}
+  disabled={
+    pagado ||
+    loadingRows ||
+    loadingMore ||
+    loadingAll ||
+    loadingListsCtx ||
+    loadingClienteDeudas
+  }
+>
+  <FontAwesomeIcon icon={faMoneyBill1Wave} />
+</button>
 
                                 <button
                                   type="button"

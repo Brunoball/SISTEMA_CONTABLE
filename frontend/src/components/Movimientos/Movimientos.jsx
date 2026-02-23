@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import BASE_URL from "../../config/config";
 import "../Global/Global_css/Global_Section.css";
+import "../Global/Global_css/Global_responsive.css";
 
 // ✅ MODALES
 import ModalCargaRapidaMovimientos from "./modales/ModalCargaRapidaMovimientos";
@@ -886,7 +887,7 @@ export default function Movimientos() {
       <section className="mov-card mov-card--table">
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
-            <div>
+            <div className="title-mov">
               <div className="mov-card__title">Movimientos</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> registros{hasMore ? " (hay más)" : ""}
@@ -982,7 +983,7 @@ export default function Movimientos() {
               title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
             >
               <FontAwesomeIcon icon={faFileExcel} />
-              <span className="mov-btnText mov-btnText--desktop">Exportar Excel</span>
+              <span className="mov-btnText mov-btnText--desktop">Exportar </span>
               <span className="mov-btnText mov-btnText--mobile">Exportar</span>
             </button>
 

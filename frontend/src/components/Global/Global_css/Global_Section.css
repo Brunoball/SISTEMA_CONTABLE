@@ -1120,3 +1120,8 @@ body.dark .mov-btn--loadAll:hover{
   flex-wrap: nowrap;
 }
 }
+.title-mov{
+  display: flex;
+  justify-content: space-between;
+
+}

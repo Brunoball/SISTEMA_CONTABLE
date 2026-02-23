@@ -106,7 +106,7 @@ function prefetchRoute(ruta) {
    ✅ IDLE / SUSPENSIÓN
 ========================================================= */
 const LAST_ACTIVITY_KEY = "balto_last_activity_ts";
-const IDLE_MS = 30 * 60 * 1000; // ✅ 30 minutos
+const IDLE_MS = 30 * 60 * 100; // ✅ 30 minutos
 
 function setLastActivityNow() {
   try {
@@ -723,47 +723,31 @@ const Principal = () => {
                   }
                 }}
               >
-                <div
-                  className={`pp-nav__item ${isActive ? "is-active" : ""}`}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    if (hasSub && isNoHover()) {
-                      if (isMov) {
-                        if (!openMovSub) {
-                          setOpenMovSub(true);
-                          return;
-                        }
-                        handleNavigate(item.ruta);
-                        return;
-                      }
-                      return;
-                    }
-                    handleNavigate(item.ruta);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      if (hasSub && isNoHover()) {
-                        if (isMov) {
-                          if (!openMovSub) {
-                            setOpenMovSub(true);
-                            return;
-                          }
-                          handleNavigate(item.ruta);
-                          return;
-                        }
-                        return;
-                      }
-                      handleNavigate(item.ruta);
-                    }
-                  }}
-                >
-                  <span className="pp-nav__icon">
-                    <FontAwesomeIcon icon={item.icon} />
-                  </span>
-                  <span className="pp-nav__label">{item.label}</span>
-                </div>
+<button
+  type="button"
+  className={`pp-nav__item ${isActive ? "is-active" : ""}`}
+  onClick={() => {
+    // ✅ MOBILE: 1er toque abre submenú, 2do toque navega
+    if (hasSub && isNoHover() && isMov) {
+      if (!openMovSub) {
+        setOpenMovSub(true);
+        return; // 👈 no navegar en el primer toque
+      }
+      handleNavigate(item.ruta); // 👈 segundo toque: ir a /panel/movimientos
+      return;
+    }
+
+    // ✅ resto (desktop o items sin sub)
+    handleNavigate(item.ruta);
+  }}
+  aria-expanded={hasSub ? (isMov ? openMovSub : undefined) : undefined}
+  aria-haspopup={hasSub ? "menu" : undefined}
+>
+  <span className="pp-nav__icon">
+    <FontAwesomeIcon icon={item.icon} />
+  </span>
+  <span className="pp-nav__label">{item.label}</span>
+</button>
 
                 {hasSub && (
                   <div

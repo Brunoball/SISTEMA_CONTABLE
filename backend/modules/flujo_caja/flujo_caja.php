@@ -39,6 +39,9 @@ function fail(string $msg, int $http = 200, array $extra = []): void {
 function isValidPeriodo(string $p): bool {
   return (bool)preg_match('/^\d{4}\-\d{2}$/', $p);
 }
+function isValidDate(string $d): bool {
+  return (bool)preg_match('/^\d{4}\-\d{2}\-\d{2}$/', $d);
+}
 function monthStart(string $periodo): string { return $periodo . '-01'; }
 function monthEnd(string $periodo): string {
   $dt = DateTime::createFromFormat('Y-m-d', $periodo . '-01');
@@ -48,12 +51,9 @@ function monthEnd(string $periodo): string {
 }
 
 /** @return array<int, string> */
-function buildDays(string $periodo): array {
-  $start = monthStart($periodo);
-  $end   = monthEnd($periodo);
-
+function buildDaysFromRange(string $start, string $end): array {
   $out = [];
-  $dt = DateTime::createFromFormat('Y-m-d', $start);
+  $dt    = DateTime::createFromFormat('Y-m-d', $start);
   $dtEnd = DateTime::createFromFormat('Y-m-d', $end);
   if (!$dt || !$dtEnd) return $out;
 
@@ -68,13 +68,11 @@ try {
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
 
-  // Este archivo responde 3 actions:
-  // flujo_caja_periodos | flujo_caja_clientes | flujo_caja_resumen
   $action = $_GET['action'] ?? $_POST['action'] ?? '';
   $action = strtolower(trim(is_string($action) ? $action : ''));
 
   /* ==========================================================
-     ✅ LISTAR PERIODOS DISPONIBLES EN movimientos.periodo
+     ✅ LISTAR PERIODOS DISPONIBLES
      action=flujo_caja_periodos
   ========================================================== */
   if ($action === 'flujo_caja_periodos') {
@@ -92,12 +90,12 @@ try {
 
     ok([
       'periodos' => $periodos,
-      'total' => count($periodos),
+      'total'    => count($periodos),
     ]);
   }
 
   /* ==========================================================
-     ✅ FLUJO POR CLIENTES (total absoluto por periodo opcional)
+     ✅ FLUJO POR CLIENTES
      action=flujo_caja_clientes
   ========================================================== */
   if ($action === 'flujo_caja_clientes') {
@@ -105,10 +103,10 @@ try {
     $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
     $filtrarPeriodo = ($periodo !== '' && isValidPeriodo($periodo));
 
-    $params = [];
+    $params     = [];
     $whereExtra = "";
     if ($filtrarPeriodo) {
-      $whereExtra = " AND m.periodo = :periodo ";
+      $whereExtra      = " AND m.periodo = :periodo ";
       $params[':periodo'] = $periodo;
     }
 
@@ -138,38 +136,59 @@ try {
     }
 
     ok([
-      'periodo' => $filtrarPeriodo ? $periodo : null,
-      'rows' => $rows,
-      'total_clientes' => count($rows),
+      'periodo'         => $filtrarPeriodo ? $periodo : null,
+      'rows'            => $rows,
+      'total_clientes'  => count($rows),
     ]);
   }
 
   /* ==========================================================
-     ✅ FLUJO DIARIO TIPO EXCEL (COMPATIBLE CON TU REACT)
+     ✅ FLUJO DIARIO TIPO EXCEL
      action=flujo_caja_resumen
 
-     ✅ REGLA:
-     - ingresos = SUM(ABS(monto_total)) donde id_tipo_operacion = 1 (VENTA)
-     - egresos  = SUM(ABS(monto_total)) donde id_tipo_operacion = 2 (COMPRA)
-     - otros    = SUM(MOVIMIENTOS) donde id_tipo_operacion = 3
-                 * VERDE (+) si clasificacion = 'VENTAS' o 'OTROS INGRESOS'
-                 * ROJO  (-) para el resto (COSTO FIJO, COSTO VARIABLE, GASTOS PERSONALES, OTROS EGRESOS, etc.)
+     Acepta DOS formas de pasar el rango:
+       A) ?periodo=YYYY-MM          (legado, rango = mes completo)
+       B) ?fecha_desde=YYYY-MM-DD&fecha_hasta=YYYY-MM-DD  (nuevo, desde Calendario)
   ========================================================== */
   if ($action === 'flujo_caja_resumen') {
 
-    $periodo = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
-    if ($periodo === '' || !isValidPeriodo($periodo)) {
-      fail('Parámetro "periodo" inválido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodo]);
+    // ── Resolver start / end ─────────────────────────────────
+    $periodoParam  = isset($_GET['periodo'])     ? trim((string)$_GET['periodo'])     : '';
+    $fechaDesde    = isset($_GET['fecha_desde']) ? trim((string)$_GET['fecha_desde']) : '';
+    $fechaHasta    = isset($_GET['fecha_hasta']) ? trim((string)$_GET['fecha_hasta']) : '';
+
+    if ($fechaDesde !== '' && $fechaHasta !== '') {
+      // Modo B: rango libre
+      if (!isValidDate($fechaDesde)) {
+        fail('Parámetro "fecha_desde" inválido. Formato esperado YYYY-MM-DD', 200, ['recibido' => $fechaDesde]);
+      }
+      if (!isValidDate($fechaHasta)) {
+        fail('Parámetro "fecha_hasta" inválido. Formato esperado YYYY-MM-DD', 200, ['recibido' => $fechaHasta]);
+      }
+      if ($fechaDesde > $fechaHasta) {
+        // invertir silenciosamente
+        [$fechaDesde, $fechaHasta] = [$fechaHasta, $fechaDesde];
+      }
+      $start        = $fechaDesde;
+      $end          = $fechaHasta;
+      $periodoLabel = substr($fechaDesde, 0, 7); // YYYY-MM del primer día (para label)
+    } elseif ($periodoParam !== '') {
+      // Modo A: periodo mensual clásico
+      if (!isValidPeriodo($periodoParam)) {
+        fail('Parámetro "periodo" inválido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodoParam]);
+      }
+      $start        = monthStart($periodoParam);
+      $end          = monthEnd($periodoParam);
+      $periodoLabel = $periodoParam;
+    } else {
+      fail('Se requiere "fecha_desde"+"fecha_hasta" o "periodo".', 200);
     }
+    // ─────────────────────────────────────────────────────────
 
-    $start = monthStart($periodo);
-    $end   = monthEnd($periodo);
-
-    $days = buildDays($periodo);
+    $days  = buildDaysFromRange($start, $end);
     $today = (new DateTime('today'))->format('Y-m-d');
 
-    // ✅ Clasificaciones que cuentan como "ingreso" dentro de OTROS
-    // (por nombre, porque tus IDs pueden variar en otros tenants)
+    // Clasificaciones que cuentan como "ingreso" dentro de OTROS
     $sqlIngresoClasif = "
       SELECT id_clasificacion
       FROM clasificaciones
@@ -180,23 +199,21 @@ try {
     $ingresoClasifIds = $stClas->fetchAll(PDO::FETCH_COLUMN) ?: [];
     $ingresoClasifIds = array_values(array_filter(array_map(fn($x) => (int)$x, $ingresoClasifIds)));
 
-    // placeholders IN (...)
     $inPlaceholders = '';
-    $inParams = [];
+    $inParams       = [];
     if (count($ingresoClasifIds) > 0) {
       $tmp = [];
       foreach ($ingresoClasifIds as $i => $idc) {
-        $k = ":c$i";
-        $tmp[] = $k;
+        $k      = ":c$i";
+        $tmp[]  = $k;
         $inParams[$k] = $idc;
       }
       $inPlaceholders = implode(',', $tmp);
     } else {
-      // Si no existieran esas clasificaciones, OTROS se tomará como egreso (negativo) por defecto
       $inPlaceholders = 'NULL';
     }
 
-    // 1) ingresos/egresos/otros por día
+    // 1) ingresos / egresos / otros por día
     $sqlDia = "
       SELECT
         m.fecha,
@@ -216,23 +233,23 @@ try {
       WHERE m.fecha BETWEEN :desde AND :hasta
       GROUP BY m.fecha
     ";
-    $stDia = $pdo->prepare($sqlDia);
+    $stDia    = $pdo->prepare($sqlDia);
     $paramsDia = array_merge([':desde' => $start, ':hasta' => $end], $inParams);
     $stDia->execute($paramsDia);
 
-    $mapDia = []; // fecha => [ingresos, egresos, otros]
+    $mapDia = [];
     while ($r = $stDia->fetch(PDO::FETCH_ASSOC)) {
       $f = (string)($r['fecha'] ?? '');
       if ($f !== '') {
         $mapDia[$f] = [
           'ingresos' => (float)($r['ingresos'] ?? 0),
-          'egresos'  => (float)($r['egresos'] ?? 0),
-          'otros'    => (float)($r['otros'] ?? 0), // ✅ signed
+          'egresos'  => (float)($r['egresos']  ?? 0),
+          'otros'    => (float)($r['otros']    ?? 0),
         ];
       }
     }
 
-    // 2) saldo base anterior al mes (incluye otros)
+    // 2) saldo base: todo lo anterior a $start
     $sqlSaldoBase = "
       SELECT
         COALESCE(SUM(CASE WHEN m.id_tipo_operacion = 1 THEN ABS(m.monto_total) ELSE 0 END), 0) AS ingresos,
@@ -250,55 +267,55 @@ try {
       FROM movimientos m
       WHERE m.fecha < :desde
     ";
-    $stBase = $pdo->prepare($sqlSaldoBase);
+    $stBase    = $pdo->prepare($sqlSaldoBase);
     $paramsBase = array_merge([':desde' => $start], $inParams);
     $stBase->execute($paramsBase);
 
-    $base = $stBase->fetch(PDO::FETCH_ASSOC) ?: ['ingresos' => 0, 'egresos' => 0, 'otros' => 0];
+    $base      = $stBase->fetch(PDO::FETCH_ASSOC) ?: ['ingresos' => 0, 'egresos' => 0, 'otros' => 0];
     $saldoBase = (float)($base['ingresos'] ?? 0) + (float)($base['otros'] ?? 0) - (float)($base['egresos'] ?? 0);
 
-    // 3) construir filas (saldo acumulado)
+    // 3) construir filas con saldo acumulado
     $saldo = $saldoBase;
-    $rows = [];
+    $rows  = [];
 
     foreach ($days as $iso) {
       $isFuture = ($iso > $today);
 
       $ing = (float)($mapDia[$iso]['ingresos'] ?? 0.0);
-      $egr = (float)($mapDia[$iso]['egresos'] ?? 0.0);
-      $otr = (float)($mapDia[$iso]['otros'] ?? 0.0);
+      $egr = (float)($mapDia[$iso]['egresos']  ?? 0.0);
+      $otr = (float)($mapDia[$iso]['otros']    ?? 0.0);
 
       if ($isFuture) {
         $rows[] = [
-          'fecha' => $iso,
+          'fecha'    => $iso,
           'ingresos' => null,
-          'egresos' => null,
-          'otros' => null,
-          'saldo' => $saldo,
+          'egresos'  => null,
+          'otros'    => null,
+          'saldo'    => $saldo,
         ];
         continue;
       }
 
-      // ✅ saldo = saldo + ingresos + otros - egresos
-      $saldo = $saldo + $ing + $otr - $egr;
+      $saldo  = $saldo + $ing + $otr - $egr;
 
       $rows[] = [
-        'fecha' => $iso,
+        'fecha'    => $iso,
         'ingresos' => $ing,
-        'egresos' => $egr,
-        'otros' => $otr, // ✅ signed
-        'saldo' => $saldo,
+        'egresos'  => $egr,
+        'otros'    => $otr,
+        'saldo'    => $saldo,
       ];
     }
 
     ok([
-      'periodo' => $periodo,
+      'periodo' => $periodoLabel,
+      'rango'   => ['desde' => $start, 'hasta' => $end],
       'tiendas' => [[
-        'id_tienda' => 0,
-        'nombre' => 'GENERAL',
-        'saldo_base' => $saldoBase,
-        'rows' => $rows,
-        'debug_clasif_ingreso' => $ingresoClasifIds, // podés borrarlo si no querés
+        'id_tienda'             => 0,
+        'nombre'                => 'GENERAL',
+        'saldo_base'            => $saldoBase,
+        'rows'                  => $rows,
+        'debug_clasif_ingreso'  => $ingresoClasifIds,
       ]],
     ]);
   }

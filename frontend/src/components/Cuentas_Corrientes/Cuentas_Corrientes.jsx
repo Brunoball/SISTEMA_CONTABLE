@@ -8,6 +8,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCalendarDays, faFileExcel } from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../Global/Toast.jsx";
+import Calendario from "../Global/Calendario/Calendario.jsx";
 
 /* =========================
    Helpers
@@ -21,53 +22,24 @@ function moneyARS(v) {
   }
 }
 
-function periodLabelMMYYYY(yyyyMM) {
-  const [y, m] = String(yyyyMM || "").split("-");
-  if (!y || !m) return String(yyyyMM || "");
-  return `${m}-${y}`;
-}
-
-function periodoToYYYYMM(input) {
-  const s = String(input ?? "").trim();
-  if (!s) return "";
-
-  if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
-    const [yyyy, mmRaw] = s.split(/[-/]/);
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
-    const [mmRaw, yyyy] = s.split(/[-/]/);
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      const yyyy = s.slice(0, 4);
-      const mm = String(Number(s.slice(4))).padStart(2, "0");
-      return `${yyyy}-${mm}`;
-    } else {
-      const mm = String(Number(s.slice(0, 2))).padStart(2, "0");
-      const yyyy = s.slice(2);
-      return `${yyyy}-${mm}`;
-    }
-  }
-  return "";
-}
-
-function currentYYYYMM() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  return `${yyyy}-${mm}`;
-}
-
 function normTxt(s) {
   return String(s || "")
     .toUpperCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function formatDateISO(d) {
+  if (!d) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatDateLabel(d) {
+  if (!d) return "";
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
 /* =========================
@@ -86,10 +58,8 @@ async function parseJsonOrThrow(res) {
       "401 (Unauthorized): Sesión vencida o no autorizada. Volvé a iniciar sesión."
     );
   }
-
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
-
   try {
     return JSON.parse(text);
   } catch {
@@ -104,19 +74,42 @@ async function apiGet(url) {
 }
 
 /* =========================
-   Period cache
+   Date range cache
 ========================= */
-const CC_PERIOD_CACHE_KEY = "cc_periodo_cache";
+const CC_DATE_CACHE_KEY = "cc_daterange_cache";
 
-function readCachedPeriodo() {
-  const v = (localStorage.getItem(CC_PERIOD_CACHE_KEY) || "").trim();
-  const norm = periodoToYYYYMM(v);
-  return norm || "";
+function readCachedRange() {
+  try {
+    const raw = localStorage.getItem(CC_DATE_CACHE_KEY);
+    if (!raw) return { from: null, to: null };
+    const parsed = JSON.parse(raw);
+    return {
+      from: parsed.from ? new Date(parsed.from) : null,
+      to: parsed.to ? new Date(parsed.to) : null,
+    };
+  } catch {
+    return { from: null, to: null };
+  }
 }
 
-function writeCachedPeriodo(v) {
-  const norm = periodoToYYYYMM(v);
-  if (norm) localStorage.setItem(CC_PERIOD_CACHE_KEY, norm);
+function writeCachedRange(range) {
+  try {
+    localStorage.setItem(
+      CC_DATE_CACHE_KEY,
+      JSON.stringify({
+        from: range.from ? range.from.toISOString() : null,
+        to: range.to ? range.to.toISOString() : null,
+      })
+    );
+  } catch {}
+}
+
+/* Default range: current month */
+function defaultRange() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { from, to };
 }
 
 /* =========================
@@ -128,9 +121,13 @@ export default function Cuentas_Corrientes() {
   const API = `${BASE_URL}/api.php`;
 
   const [q, setQ] = useState("");
-  const [periodo, setPeriodo] = useState(() => readCachedPeriodo() || currentYYYYMM());
-  const [periodOptions, setPeriodOptions] = useState([]);
-  const [loadingPeriodos, setLoadingPeriodos] = useState(false);
+
+  /* Date range (replaces periodo) */
+  const [dateRange, setDateRange] = useState(() => {
+    const cached = readCachedRange();
+    return cached.from ? cached : defaultRange();
+  });
+  const [calOpen, setCalOpen] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -138,7 +135,6 @@ export default function Cuentas_Corrientes() {
   const [rows, setRows] = useState([]);
   const [totales, setTotales] = useState({ columnas: {}, saldo: 0 });
 
-  // ✅ IDs “reales” para DEBITO/CREDITO (si están en catálogo)
   const [debitoId, setDebitoId] = useState(null);
   const [creditoId, setCreditoId] = useState(null);
 
@@ -160,10 +156,8 @@ export default function Cuentas_Corrientes() {
     if (typeof window === "undefined") return;
     const mq = window.matchMedia("(max-width: 720px)");
     const onChange = () => setIsMobile(mq.matches);
-
     if (mq.addEventListener) mq.addEventListener("change", onChange);
     else mq.addListener(onChange);
-
     onChange();
     return () => {
       if (mq.removeEventListener) mq.removeEventListener("change", onChange);
@@ -178,10 +172,10 @@ export default function Cuentas_Corrientes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // guardar periodo
+  // guardar rango de fechas
   useEffect(() => {
-    if (periodo) writeCachedPeriodo(periodo);
-  }, [periodo]);
+    writeCachedRange(dateRange);
+  }, [dateRange]);
 
   /* =========================================================
      Skeleton delay anti-parpadeo
@@ -205,28 +199,13 @@ export default function Cuentas_Corrientes() {
   }, []);
 
   /* =========================================================
-     1) Listas globales: periodos + detectar IDs debito/credito
+     1) Listas globales: detectar IDs debito/credito
   ========================================================= */
   const fetchDashboardLists = useCallback(async () => {
-    setLoadingPeriodos(true);
     try {
       const data = await apiGet(`${API}?action=global_obtener_listas`);
       if (!data || data.exito !== true) throw new Error(data?.mensaje || "Error al cargar listas.");
 
-      // periodos
-      const rawPeriodos = Array.isArray(data?.listas?.periodos)
-        ? data.listas.periodos
-        : Array.isArray(data?.periodos)
-        ? data.periodos
-        : [];
-
-      const unique = Array.from(new Set(rawPeriodos.map(periodoToYYYYMM).filter(Boolean)));
-      unique.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
-      setPeriodOptions(unique);
-
-      if (unique.length && (!periodo || !unique.includes(periodo))) setPeriodo(unique[0]);
-
-      // catálogo CC (para detectar IDs)
       const rawCC =
         Array.isArray(data?.listas?.cuentasCorrientes) ? data.listas.cuentasCorrientes :
         Array.isArray(data?.listas?.cuentas_corrientes) ? data.listas.cuentas_corrientes :
@@ -235,21 +214,17 @@ export default function Cuentas_Corrientes() {
         [];
 
       const cc = Array.isArray(rawCC) ? rawCC : [];
-
       const deb = cc.find((c) => normTxt(c?.nombre).includes("DEBITO"));
       const cre = cc.find((c) => normTxt(c?.nombre).includes("CREDITO"));
 
       setDebitoId(deb?.id_cuenta_corriente ?? null);
       setCreditoId(cre?.id_cuenta_corriente ?? null);
     } catch (e) {
-      setPeriodOptions([]);
       setDebitoId(null);
       setCreditoId(null);
       showToast("error", e?.message || "Error cargando listas", 4200);
-    } finally {
-      setLoadingPeriodos(false);
     }
-  }, [API, showToast, periodo]);
+  }, [API, showToast]);
 
   useEffect(() => {
     fetchDashboardLists();
@@ -257,10 +232,10 @@ export default function Cuentas_Corrientes() {
   }, []);
 
   /* =========================================================
-     2) Resumen por período
+     2) Resumen por rango de fechas
   ========================================================= */
   const fetchResumen = useCallback(async () => {
-    if (!periodo) return;
+    if (!dateRange.from) return;
 
     setLoading(true);
     setErr("");
@@ -269,7 +244,8 @@ export default function Cuentas_Corrientes() {
     try {
       const sp = new URLSearchParams();
       sp.set("action", "cc_resumen");
-      sp.set("periodo", periodo);
+      sp.set("fecha_desde", formatDateISO(dateRange.from));
+      sp.set("fecha_hasta", formatDateISO(dateRange.to || dateRange.from));
 
       const data = await apiGet(`${API}?${sp.toString()}`);
       if (!data || data.exito !== true) throw new Error(data?.mensaje || "Error al cargar resumen.");
@@ -286,7 +262,7 @@ export default function Cuentas_Corrientes() {
       setLoading(false);
       endSkeleton();
     }
-  }, [API, periodo, showToast, beginSkeleton, endSkeleton]);
+  }, [API, dateRange, showToast, beginSkeleton, endSkeleton]);
 
   useEffect(() => {
     fetchResumen();
@@ -304,7 +280,7 @@ export default function Cuentas_Corrientes() {
   const visibleCount = filtered.length;
 
   /* =========================
-     Valores DEBITO / CREDITO (sin depender del header)
+     Valores DEBITO / CREDITO
   ========================= */
   const getValueByCuenta = useCallback((row, cuentaId) => {
     const cols = row && typeof row === "object" ? row.columnas : null;
@@ -336,6 +312,16 @@ export default function Cuentas_Corrientes() {
   }, [debitoId, creditoId, getValueByCuenta, pickFallbackIds]);
 
   /* =========================
+     Label del rango para el botón
+  ========================= */
+  const rangeLabel = useMemo(() => {
+    const { from, to } = dateRange;
+    if (!from) return "Seleccionar período";
+    if (!to || formatDateISO(from) === formatDateISO(to)) return formatDateLabel(from);
+    return `${formatDateLabel(from)} → ${formatDateLabel(to)}`;
+  }, [dateRange]);
+
+  /* =========================
      Export Excel (4 columnas fijas)
   ========================= */
   const exportExcel = useCallback(() => {
@@ -364,31 +350,30 @@ export default function Cuentas_Corrientes() {
       XLSX.utils.book_append_sheet(wb, ws, "Cuentas Corrientes");
 
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
-      XLSX.writeFile(wb, `cuentas_corrientes_${periodo}_${stamp}.xlsx`);
+      const rangeStamp = `${formatDateISO(dateRange.from)}_${formatDateISO(dateRange.to || dateRange.from)}`;
+      XLSX.writeFile(wb, `cuentas_corrientes_${rangeStamp}_${stamp}.xlsx`);
 
       showToast("exito", "Excel exportado.", 2200);
     } catch (e) {
       showToast("error", e?.message || "Error exportando Excel.", 3500);
     }
-  }, [filtered, getDebitoCredito, showToast, periodo]);
+  }, [filtered, getDebitoCredito, showToast, dateRange]);
 
   /* =========================
      Mobile expand/collapse
   ========================= */
   const [openId, setOpenId] = useState(null);
-  useEffect(() => setOpenId(null), [q, periodo]);
+  useEffect(() => setOpenId(null), [q, dateRange]);
 
   const toggleOpen = useCallback((id) => {
     setOpenId((prev) => (prev === id ? null : id));
   }, []);
 
-  // ✅ grid fijo 4 columnas
   const gridColsDesktop = useMemo(() => {
     return `260px minmax(320px, 1fr) minmax(320px, 1fr) minmax(160px, .6fr)`;
   }, []);
 
-  const softLoading = (loading || loadingPeriodos) && showSkeleton;
-  const selectDisabled = loadingPeriodos;
+  const softLoading = loading && showSkeleton;
 
   const renderSkeletonRowDesktop = (idx) => {
     const widths = ["44%", "58%", "36%", "52%"];
@@ -443,28 +428,37 @@ export default function Cuentas_Corrientes() {
             </div>
 
             <div className="cc-headFilters">
-              <div className="cc-filter">
+              {/* ============ Calendario (reemplaza el selector de período) ============ */}
+              <div className="cc-filter cc-filter--cal" style={{ position: "relative" }}>
                 <label>
                   <FontAwesomeIcon icon={faCalendarDays} /> Período
                 </label>
 
-                <select
-                  value={periodo || ""}
-                  onChange={(e) => setPeriodo(e.target.value)}
-                  disabled={selectDisabled}
+                <button
+                  type="button"
+                  className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
+                  onClick={() => setCalOpen((v) => !v)}
                 >
-                  {(!periodOptions.length || !periodOptions.includes(periodo)) && (
-                    <option value={periodo}>{periodLabelMMYYYY(periodo)}</option>
-                  )}
+                  {rangeLabel}
+                  <span className="cc-calTrigger__arrow">{calOpen ? "▲" : "▼"}</span>
+                </button>
 
-                  {periodOptions.map((p) => (
-                    <option key={p} value={p}>
-                      {periodLabelMMYYYY(p)}
-                    </option>
-                  ))}
-                </select>
+                {calOpen && (
+                  <div className="cc-calDropdown">
+                    <Calendario
+                      value={dateRange}
+                      onChange={(range) => {
+                        setDateRange(range);
+                        // close only when both dates are set
+                        if (range.from && range.to) setCalOpen(false);
+                      }}
+                      onClose={() => setCalOpen(false)}
+                    />
+                  </div>
+                )}
               </div>
 
+              {/* ============ Buscar ============ */}
               <div className="cc-filter cc-filter--search">
                 <label>Buscar</label>
 
@@ -511,18 +505,18 @@ export default function Cuentas_Corrientes() {
           <div className="cc-subhead__name">
             Resumen por cliente
             <div className="cc-subhead__meta">
-              Período {periodo} •{" "}
+              {rangeLabel} •{" "}
               {isMobile ? "Vista móvil: tocá un cliente para ver el detalle." : "Totales en el pie."}
             </div>
           </div>
         </div>
 
         {/* =========================
-            MOBILE (sin scroll horizontal)
+            MOBILE
         ========================= */}
         {isMobile ? (
           <div className="cc-mobileList" style={{ padding: 12 }}>
-            {showSkeleton && (loading || loadingPeriodos) ? (
+            {showSkeleton && loading ? (
               <div className={["cc-skeletonWrap", softLoading ? "cc-softLoading" : ""].join(" ")}>
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
                   <div
@@ -701,10 +695,9 @@ export default function Cuentas_Corrientes() {
           </div>
         ) : (
           /* =========================
-             DESKTOP: header en cc-tableWrap + tabla en cc-gridBody
+             DESKTOP
           ========================= */
           <div className="cc-tableWrap">
-            {/* ✅ Header fijo dentro del scroller */}
             <div className="cc-grid cc-grid--head" style={{ gridTemplateColumns: gridColsDesktop }}>
               <div className="cc-cell cc-name">CLIENTE</div>
               <div className="cc-cell is-center" style={{ color: "rgba(225,61,69,.92)", fontWeight: 700 }}>
@@ -716,9 +709,8 @@ export default function Cuentas_Corrientes() {
               <div className="cc-cell is-center">SALDO</div>
             </div>
 
-            {/* ✅ SOLO filas + totales */}
             <div className={["cc-gridBody", softLoading ? "cc-softLoading" : ""].join(" ")} role="rowgroup">
-              {showSkeleton && (loading || loadingPeriodos) ? (
+              {showSkeleton && loading ? (
                 <div className="cc-skeletonWrap" aria-busy="true">
                   {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRowDesktop(i))}
                 </div>
@@ -731,7 +723,6 @@ export default function Cuentas_Corrientes() {
                       const { deb, cre } = getDebitoCredito(r);
                       const debCls = deb > 0 ? "is-negative" : deb < 0 ? "is-positive" : "";
                       const creCls = cre > 0 ? "is-positive" : cre < 0 ? "is-negative" : "";
-
                       const saldoCls =
                         Number(r.saldo) < 0 ? "is-negative" : Number(r.saldo) > 0 ? "is-positive" : "";
 
@@ -742,15 +733,12 @@ export default function Cuentas_Corrientes() {
                           style={{ gridTemplateColumns: gridColsDesktop }}
                         >
                           <div className="cc-cell cc-name">{r.nombre}</div>
-
                           <div className={`cc-cell cc-num is-center is-negative ${debCls}`}>
                             {moneyARS(deb)}
                           </div>
-
                           <div className={`cc-cell cc-num is-center is-positive ${creCls}`}>
                             {moneyARS(cre)}
                           </div>
-
                           <div className={`cc-cell cc-num is-center cc-saldo ${saldoCls}`}>
                             <b>{moneyARS(r.saldo)}</b>
                           </div>

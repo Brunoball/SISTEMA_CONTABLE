@@ -5,6 +5,9 @@ import "../../Global/Global_css/Global_Section.css";
 import "../../Global/Global_css/Global_oscuro.css";
 import Toast from "../../Global/Toast.jsx";
 
+import Calendario from "../../Global/Calendario/Calendario.jsx";
+import "../../Global/Calendario/calendario.css";
+
 import ModalNuevaCompra from "./modales/ModalNuevaCompra.jsx";
 import ModalEditarCompra from "./modales/ModalEditarCompra.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
@@ -32,7 +35,7 @@ const SKELETON_ROWS = 10;
 const PAGE_LIMIT_API = PAGE_SIZE + 1;
 
 /* =========================
-   Helpers
+   Helpers generales
 ========================= */
 function moneyARS(v) {
   const n = Number(v || 0);
@@ -63,7 +66,6 @@ function getRowId(r) {
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "—";
-
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
     const yyyy = m1[1];
@@ -71,7 +73,6 @@ function formatFechaDMY(v) {
     const dd = String(Number(m1[3])).padStart(2, "0");
     return `${dd}/${mm}/${yyyy}`;
   }
-
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) {
     const dd = String(Number(m2[1])).padStart(2, "0");
@@ -79,84 +80,59 @@ function formatFechaDMY(v) {
     const yyyy = m2[3];
     return `${dd}/${mm}/${yyyy}`;
   }
-
   return s;
 }
 
-/* Período UI (MM-YYYY) */
-function periodoToMMYYYY(input) {
-  const s = String(input ?? "").trim();
-  if (!s) return "";
-
-  let m = "";
-  let y = "";
-
-  if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    y = parts[0];
-    m = parts[1];
-  } else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    m = parts[0];
-    y = parts[1];
-  } else if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      y = s.slice(0, 4);
-      m = s.slice(4);
-    } else {
-      m = s.slice(0, 2);
-      y = s.slice(2);
-    }
-  } else {
-    return s;
-  }
-
-  const mm = String(Number(m)).padStart(2, "0");
-  const yyyy = String(y);
-  return `${mm}-${yyyy}`;
+/* =========================
+   Fecha helpers para rango
+========================= */
+function startOfDay(d) {
+  if (!d) return null;
+  const c = new Date(d);
+  c.setHours(0, 0, 0, 0);
+  return c;
 }
 
-/* API período (YYYY-MM) */
-function periodoToYYYYMM(input) {
-  const s = String(input ?? "").trim();
-  if (!s) return "";
-
-  if (/^\d{1,2}-\d{4}$/.test(s)) {
-    const [mmRaw, yyyy] = s.split("-");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{4}-\d{1,2}$/.test(s)) {
-    const [yyyy, mmRaw] = s.split("-");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{4}\/\d{1,2}$/.test(s)) {
-    const [yyyy, mmRaw] = s.split("/");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{1,2}\/\d{4}$/.test(s)) {
-    const [mmRaw, yyyy] = s.split("/");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      const yyyy = s.slice(0, 4);
-      const mm = String(Number(s.slice(4))).padStart(2, "0");
-      return `${yyyy}-${mm}`;
-    } else {
-      const mm = String(Number(s.slice(0, 2))).padStart(2, "0");
-      const yyyy = s.slice(2);
-      return `${yyyy}-${mm}`;
-    }
-  }
-  return s;
+function parseRowFecha(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m1) return startOfDay(new Date(Number(m1[1]), Number(m1[2]) - 1, Number(m1[3])));
+  const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m2) return startOfDay(new Date(Number(m2[3]), Number(m2[2]) - 1, Number(m2[1])));
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : startOfDay(d);
 }
 
+function dateToAPI(d) {
+  if (!d) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatDateUI(d) {
+  if (!d) return "—";
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+function rowInDateRange(row, from, to) {
+  if (!from && !to) return true;
+  const fecha = parseRowFecha(row?.fecha);
+  if (!fecha) return true;
+  if (from && fecha < startOfDay(from)) return false;
+  if (to) {
+    const toEnd = startOfDay(to);
+    toEnd.setHours(23, 59, 59, 999);
+    if (fecha > toEnd) return false;
+  }
+  return true;
+}
+
+/* =========================
+   Auth
+========================= */
 function getAuthInfo() {
   const token = (localStorage.getItem("token") || "").trim();
   const sessionKey = (
@@ -166,17 +142,18 @@ function getAuthInfo() {
     localStorage.getItem("x_session") ||
     ""
   ).trim();
-
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
-
   return { token, sessionKey, idUsuario };
 }
 
+/* =========================
+   Helpers de compras
+========================= */
 function getCompraPagoLabel(r) {
   const cc = String(r?.cuenta_corriente ?? "").trim();
   if (cc) return "CUENTA CORRIENTE";
@@ -186,14 +163,8 @@ function getCompraPagoLabel(r) {
 
 function getComprobanteUrl(r) {
   const candidates = [
-    r?.factura_url,
-    r?.factura,
-    r?.comprobante_url,
-    r?.comprobante,
-    r?.archivo_url,
-    r?.url_factura,
-    r?.path_factura,
-    r?.factura_path,
+    r?.factura_url, r?.factura, r?.comprobante_url, r?.comprobante,
+    r?.archivo_url, r?.url_factura, r?.path_factura, r?.factura_path,
   ];
   const raw = candidates.find((x) => typeof x === "string" && x.trim() !== "");
   if (!raw) return "";
@@ -215,7 +186,6 @@ function slugifySheetName(name) {
 function buildExportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((r) => ({
     FECHA: safeText(formatFechaDMY(pick(r, ["fecha"], ""))),
-    PERIODO: safeText(periodoToMMYYYY(pick(r, ["periodo"], ""))),
     DESCRIPCION: safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
     PROVEEDOR: safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")),
     PAGO: safeText(getCompraPagoLabel(r)),
@@ -223,6 +193,9 @@ function buildExportRows(rows) {
   }));
 }
 
+/* =========================
+   COMPONENTE
+========================= */
 export default function Compras() {
   const API = `${BASE_URL}/api.php`;
 
@@ -240,7 +213,16 @@ export default function Compras() {
   const [loadingAll, setLoadingAll] = useState(false);
   const [error, setError] = useState("");
 
-  const [fPeriodo, setFPeriodo] = useState("");
+  // Rango de fechas — arranca con el mes actual
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date();
+    return {
+      from: new Date(now.getFullYear(), now.getMonth(), 1),
+      to: new Date(now.getFullYear(), now.getMonth() + 1, 0),
+    };
+  });
+  const [showCalendario, setShowCalendario] = useState(false);
+
   const [q, setQ] = useState("");
 
   const [hasMore, setHasMore] = useState(false);
@@ -249,7 +231,6 @@ export default function Compras() {
   const [openNueva, setOpenNueva] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
-
   const [openVerComp, setOpenVerComp] = useState(false);
   const [compUrl, setCompUrl] = useState("");
 
@@ -264,14 +245,11 @@ export default function Compras() {
 
   const cacheRef = useRef(new Map());
   const reqIdRef = useRef(0);
-
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
   const skelTimerRef = useRef(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
-
-  // ✅ evita “No hay…” antes de terminar la carga (y evita flash entre cargas)
   const [ready, setReady] = useState(false);
 
   const beginSkeleton = useCallback(() => {
@@ -312,13 +290,12 @@ export default function Compras() {
 
   const parseJsonOrThrow = useCallback(async (res) => {
     const text = await res.text();
-    if (!text) throw new Error("Respuesta vacía del servidor.");
+    if (!text) throw new Error("Respuesta vacia del servidor.");
     try {
-      const data = JSON.parse(text);
-      return data;
+      return JSON.parse(text);
     } catch {
       const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-      throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
+      throw new Error(`Respuesta invalida (no es JSON). HTTP ${res.status}\n${preview}`);
     }
   }, []);
 
@@ -343,24 +320,11 @@ export default function Compras() {
   );
 
   const refreshPeriodos = useCallback(async () => {
-    try {
-      await refreshLists();
-    } catch {}
+    try { await refreshLists(); } catch {}
   }, [refreshLists]);
 
-  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
-    const perUI = periodoToMMYYYY(periodoUI);
-    const periodoAPI = periodoToYYYYMM(perUI);
-    if (!periodoAPI) return;
-
-    const prefix = `${periodoAPI}|`;
-    for (const k of cacheRef.current.keys()) {
-      if (String(k).startsWith(prefix)) cacheRef.current.delete(k);
-    }
-  }, []);
-
   /* =========================
-     ✅ FIX: endpoint real de edición
+     Editar en backend
   ========================= */
   const editarCompraEnBackend = useCallback(
     async (payloadFinal) => {
@@ -369,7 +333,6 @@ export default function Compras() {
       if (!id) throw new Error("No encuentro id_movimiento para editar.");
 
       const body = { ...payloadFinal, id_movimiento: Number(id), idUsuario };
-
       const candidates = ["compras_editar", "compras_actualizar", "movimientos_editar"];
 
       let lastErr = null;
@@ -378,56 +341,35 @@ export default function Compras() {
           const sp = new URLSearchParams();
           sp.set("action", action);
           sp.set("id_movimiento", String(id));
-
           const data = await apiPostJson(`${API}?${sp.toString()}`, body);
-
           if (data?.exito) return data;
-
-          const msg = data?.mensaje || `No se pudo editar (action=${action}).`;
-          lastErr = new Error(msg);
+          lastErr = new Error(data?.mensaje || `No se pudo editar (action=${action}).`);
         } catch (e) {
           lastErr = e;
         }
       }
-
-      throw lastErr || new Error("No se pudo editar la compra (ningún endpoint respondió OK).");
+      throw lastErr || new Error("No se pudo editar la compra.");
     },
     [API, apiPostJson, selectedRow]
   );
 
   /* =========================
-     LOAD
+     LOAD ROWS — usa fecha_desde / fecha_hasta
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
-      const periodoUI = typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
+      const fromDate = opts.from !== undefined ? opts.from : dateRange.from;
+      const toDate = opts.to !== undefined ? opts.to : dateRange.to;
       const qLocal = typeof opts.q === "string" ? opts.q : q;
-
       const append = !!opts.append;
       const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
       const mode = String(opts.mode || (append ? "more" : "initial"));
-
       const seenIdsExternal = opts.seenIds instanceof Set ? opts.seenIds : null;
 
-      const perUI = periodoToMMYYYY(periodoUI);
-
-      // ✅ si no hay periodo: limpiar y marcar listo
-      if (!perUI) {
-        setRows([]);
-        setHasMore(false);
-        setNextOffset(null);
-        setLoadingRows(false);
-        setLoadingMore(false);
-        setLoadingAll(false);
-        setError("");
-        setReady(true);
-        endSkeleton();
-        return { hasMore: false, nextOffset: null, received: 0, appended: 0, pageIds: [] };
-      }
-
-      const periodoAPI = periodoToYYYYMM(perUI);
+      const fromAPI = dateToAPI(fromDate);
+      const toAPI = dateToAPI(toDate);
       const qKey = (qLocal || "").trim();
-      const cacheKey = `${periodoAPI}|${qKey}`;
+      const cacheKey = `${fromAPI}|${toAPI}|${qKey}`;
 
       const myReqId = ++reqIdRef.current;
 
@@ -442,6 +384,7 @@ export default function Compras() {
       setError("");
 
       try {
+        // Cache
         if (!append && offset === 0 && cacheRef.current.has(cacheKey)) {
           const cached = cacheRef.current.get(cacheKey);
           setRows(cached?.rows || []);
@@ -456,15 +399,14 @@ export default function Compras() {
             received: Array.isArray(cached?.rows) ? cached.rows.length : 0,
             appended: 0,
             pageIds: (Array.isArray(cached?.rows) ? cached.rows : [])
-              .map((x) => getRowId(x))
-              .filter((id) => id !== null && id !== undefined)
-              .map(String),
+              .map((x) => getRowId(x)).filter(Boolean).map(String),
           };
         }
 
         const sp = new URLSearchParams();
         sp.set("action", "compras_listar");
-        sp.set("periodo", periodoAPI);
+        if (fromAPI) sp.set("fecha_desde", fromAPI);
+        if (toAPI) sp.set("fecha_hasta", toAPI);
         if (qKey) sp.set("q", qKey);
         sp.set("limit", String(PAGE_LIMIT_API));
         sp.set("offset", String(offset));
@@ -473,23 +415,19 @@ export default function Compras() {
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar compras.");
 
         if (myReqId !== reqIdRef.current) {
-          if (append) {
-            if (mode !== "all") setLoadingMore(false);
-          } else setLoadingRows(false);
+          if (append) { if (mode !== "all") setLoadingMore(false); }
+          else setLoadingRows(false);
           endSkeleton();
           return null;
         }
 
         const raw = Array.isArray(data.compras) ? data.compras : [];
-        const rawNorm = raw.map((r) => ({ ...r, periodo: periodoToMMYYYY(r?.periodo) }));
 
-        const backendHasMore =
-          data.has_more !== undefined && data.has_more !== null ? !!data.has_more : null;
+        const backendHasMore = data.has_more !== undefined ? !!data.has_more : null;
+        const backendNextOffset = data.next_offset !== undefined && data.next_offset !== null
+          ? Number(data.next_offset) : null;
 
-        const backendNextOffset =
-          data.next_offset !== undefined && data.next_offset !== null ? Number(data.next_offset) : null;
-
-        const page = rawNorm.slice(0, PAGE_SIZE);
+        const page = raw.slice(0, PAGE_SIZE);
         let newHasMore = false;
         let newNextOffset = null;
 
@@ -500,15 +438,11 @@ export default function Compras() {
             newNextOffset = offset + page.length;
           }
         } else {
-          newHasMore = rawNorm.length > PAGE_SIZE;
+          newHasMore = raw.length > PAGE_SIZE;
           newNextOffset = newHasMore ? offset + PAGE_SIZE : null;
         }
 
-        const pageIds = page
-          .map((x) => getRowId(x))
-          .filter((id) => id !== null && id !== undefined)
-          .map(String);
-
+        const pageIds = page.map((x) => getRowId(x)).filter(Boolean).map(String);
         let appendedCount = 0;
 
         if (append) {
@@ -519,11 +453,7 @@ export default function Compras() {
               return !seenIdsExternal.has(String(id));
             });
             appendedCount = add.length;
-
-            setRows((prev) => {
-              const prevArr = Array.isArray(prev) ? prev : [];
-              return [...prevArr, ...add];
-            });
+            setRows((prev) => [...(Array.isArray(prev) ? prev : []), ...add]);
           } else {
             setRows((prev) => {
               const prevArr = Array.isArray(prev) ? prev : [];
@@ -536,7 +466,6 @@ export default function Compras() {
               appendedCount = add.length;
               return [...prevArr, ...add];
             });
-            appendedCount = page.length;
           }
         } else {
           setRows(page);
@@ -554,35 +483,23 @@ export default function Compras() {
         }
 
         endSkeleton();
+        return { hasMore: newHasMore, nextOffset: newNextOffset, received: page.length, appended: appendedCount, pageIds };
 
-        return {
-          hasMore: newHasMore,
-          nextOffset: newNextOffset,
-          received: page.length,
-          appended: appendedCount,
-          pageIds,
-        };
       } catch (e) {
         if (myReqId !== reqIdRef.current) {
-          if (append) {
-            if (mode !== "all") setLoadingMore(false);
-          } else setLoadingRows(false);
+          if (append) { if (mode !== "all") setLoadingMore(false); }
+          else setLoadingRows(false);
           endSkeleton();
           return null;
         }
-
         setError(e?.message || "Error cargando compras.");
-        if (append) {
-          if (mode !== "all") setLoadingMore(false);
-        } else {
-          setLoadingRows(false);
-          setReady(true);
-        }
+        if (append) { if (mode !== "all") setLoadingMore(false); }
+        else { setLoadingRows(false); setReady(true); }
         endSkeleton();
         return null;
       }
     },
-    [API, apiGet, fPeriodo, q, beginSkeleton, endSkeleton]
+    [API, apiGet, dateRange, q, beginSkeleton, endSkeleton]
   );
 
   /* =========================
@@ -590,127 +507,110 @@ export default function Compras() {
   ========================= */
   useEffect(() => {
     let alive = true;
-
     (async () => {
-      try {
-        await ensureListsLoaded({ force: false, background: true });
-      } catch {}
-
+      try { await ensureListsLoaded({ force: false, background: true }); } catch {}
       if (!alive) return;
-
-      const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos : [];
-      const perDefault = periodos[0] || "";
-
-      if (perDefault) {
-        skipSearchRef.current = true;
-        setReady(false);
-        setFPeriodo((prev) => prev || perDefault);
-        await loadRows({ periodo: perDefault, q: "", offset: 0, append: false, mode: "initial" });
-      } else {
-        setRows([]);
-        setHasMore(false);
-        setNextOffset(null);
-        setLoadingRows(false);
-        setReady(true);
-        endSkeleton();
-      }
+      const now = new Date();
+      const initFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+      const initTo = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      await loadRows({ from: initFrom, to: initTo, q: "", offset: 0, append: false, mode: "initial" });
     })();
-
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* =========================
-     Debounce búsqueda
-  ========================= */
+  // Debounce busqueda
   useEffect(() => {
-    if (!fPeriodo) return;
-
     if (skipSearchRef.current) {
       skipSearchRef.current = false;
       return;
     }
-
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-
     searchTimerRef.current = setTimeout(() => {
-      loadRows({ periodo: fPeriodo, q, offset: 0, append: false, mode: "initial" });
+      loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false, mode: "initial" });
     }, 250);
-
-    return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    };
-  }, [q, fPeriodo, loadRows]);
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
 
   /* =========================
-     Data derivada
+     Handler cambio de rango
+  ========================= */
+  const handleDateRangeChange = useCallback(
+    async (newRange) => {
+      if (!newRange.from && !newRange.to) return;
+      setDateRange(newRange);
+      cacheRef.current.clear();
+      skipSearchRef.current = true;
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      await loadRows({ from: newRange.from, to: newRange.to, q, offset: 0, append: false, mode: "initial" });
+    },
+    [loadRows, q]
+  );
+
+  /* =========================
+     Filtrado client-side
   ========================= */
   const filteredRows = useMemo(() => {
-    const fPer = periodoToMMYYYY(fPeriodo);
-    if (!fPer) return [];
-    return (Array.isArray(rows) ? rows : []).filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer));
-  }, [rows, fPeriodo]);
+    return (Array.isArray(rows) ? rows : [])
+      .filter((r) => rowInDateRange(r, dateRange.from, dateRange.to));
+  }, [rows, dateRange]);
+
+  /* =========================
+     Label boton calendario
+  ========================= */
+  const dateRangeLabel = useMemo(() => {
+    const { from, to } = dateRange;
+    if (!from && !to) return "Seleccionar fechas";
+    if (from && to) {
+      if (
+        from.getFullYear() === to.getFullYear() &&
+        from.getMonth() === to.getMonth() &&
+        from.getDate() === to.getDate()
+      ) return formatDateUI(from);
+      return `${formatDateUI(from)} -> ${formatDateUI(to)}`;
+    }
+    if (from) return `Desde ${formatDateUI(from)}`;
+    return `Hasta ${formatDateUI(to)}`;
+  }, [dateRange]);
 
   /* =========================
      Columnas
   ========================= */
-  const columns = useMemo(() => {
-    return [
-      {
-        key: "fecha",
-        label: "FECHA",
-        fr: 0.9,
-        align: "center",
-        render: (r) => safeText(formatFechaDMY(pick(r, ["fecha"], ""))),
-      },
-      {
-        key: "detalle",
-        label: "DESCRIPCIÓN",
-        fr: 2.2,
-        strong: true,
-        align: "left",
-        render: (r) => safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
-      },
-      {
-        key: "proveedor",
-        label: "PROVEEDOR",
-        fr: 1.8,
-        align: "left",
-        render: (r) => safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")),
-      },
-      {
-        key: "pago",
-        label: "PAGO",
-        fr: 1,
-        align: "center",
-        render: (r) => safeText(getCompraPagoLabel(r)),
-      },
-      {
-        key: "total",
-        label: "TOTAL",
-        fr: 1.1,
-        align: "center",
-        render: (r) => moneyARS(pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)),
-      },
-      { key: "acciones", label: "ACCIONES", fr: 0.95, align: "center", render: () => null },
-    ];
-  }, []);
+  const columns = useMemo(() => [
+    {
+      key: "fecha", label: "FECHA", fr: 0.9, align: "center",
+      render: (r) => safeText(formatFechaDMY(pick(r, ["fecha"], ""))),
+    },
+    {
+      key: "detalle", label: "DESCRIPCION", fr: 2.2, strong: true, align: "left",
+      render: (r) => safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
+    },
+    {
+      key: "proveedor", label: "PROVEEDOR", fr: 1.8, align: "left",
+      render: (r) => safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")),
+    },
+    {
+      key: "pago", label: "PAGO", fr: 1, align: "center",
+      render: (r) => safeText(getCompraPagoLabel(r)),
+    },
+    {
+      key: "total", label: "TOTAL", fr: 1.1, align: "center",
+      render: (r) => moneyARS(pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)),
+    },
+    { key: "acciones", label: "ACCIONES", fr: 0.95, align: "center", render: () => null },
+  ], []);
 
   const gridCols = useMemo(() => {
-    const fallback = `repeat(${columns.length}, minmax(0, 1fr))`;
-    if (!Array.isArray(columns) || !columns.length) return fallback;
-    return columns
-      .map((c) => {
-        const n = Number(c.fr);
-        return Number.isFinite(n) && n > 0 ? `${n}fr` : "1fr";
-      })
-      .join(" ");
+    if (!columns.length) return `repeat(${columns.length}, minmax(0, 1fr))`;
+    return columns.map((c) => {
+      const n = Number(c.fr);
+      return Number.isFinite(n) && n > 0 ? `${n}fr` : "1fr";
+    }).join(" ");
   }, [columns]);
 
   /* =========================
-     Exportar Excel
+     Excel
   ========================= */
   const exportToExcel = useCallback(() => {
     try {
@@ -720,130 +620,92 @@ export default function Compras() {
         return;
       }
       if (hasMore) {
-        showToast(
-          "error",
-          "Ojo: faltan registros sin cargar. Si querés exportar todo, tocá “Cargar todos” primero.",
-          5200
-        );
+        showToast("error", "Ojo: faltan registros sin cargar. Toca 'Cargar todos' primero.", 5200);
       }
-
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(dataToExport);
-      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Compras"));
-
-      const per = periodoToMMYYYY(fPeriodo) || "SIN_PERIODO";
-      XLSX.writeFile(wb, `compras_${per}.xlsx`);
+      const { from, to } = dateRange;
+      const sufijo = from && to
+        ? `${dateToAPI(from)}_${dateToAPI(to)}`
+        : from ? `desde_${dateToAPI(from)}` : "todos";
+      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`Compras_${sufijo}`));
+      XLSX.writeFile(wb, `compras_${sufijo}.xlsx`);
       showToast("exito", "Excel exportado.", 2200);
     } catch (e) {
       showToast("error", e?.message || "Error exportando Excel.", 3500);
     }
-  }, [filteredRows, fPeriodo, showToast, hasMore]);
+  }, [filteredRows, dateRange, showToast, hasMore]);
 
   /* =========================
      Acciones UI
   ========================= */
-  const openEditModal = (r) => {
-    setSelectedRow(r);
-    setOpenEdit(true);
-  };
-  const openDeleteModal = (r) => {
-    setSelectedRow(r);
-    setOpenDel(true);
-  };
+  const openEditModal = (r) => { setSelectedRow(r); setOpenEdit(true); };
+  const openDeleteModal = (r) => { setSelectedRow(r); setOpenDel(true); };
   const openComprobanteModal = (r) => {
     const url = getComprobanteUrl(r);
     if (!url) return;
     setCompUrl(url);
     setOpenVerComp(true);
   };
-  const closeComprobanteModal = () => {
-    setOpenVerComp(false);
-    setCompUrl("");
-  };
+  const closeComprobanteModal = () => { setOpenVerComp(false); setCompUrl(""); };
 
   /* =========================
-     ✅ FIX CLAVE: refrescar tras guardar (sin F5)
-     - si guardaste en otro período, cambiamos fPeriodo
-     - recargamos usando ese período
+     Refresh tras guardar
   ========================= */
-  const refreshAfterSave = useCallback(
-    async (periodoGuardado) => {
-      const perUI = periodoToMMYYYY(periodoGuardado || fPeriodo);
-
-      setOpenNueva(false);
-      setOpenEdit(false);
-      setSelectedRow(null);
-
-      // ✅ si el modal guardó en otro período, lo adoptamos para que se vea
-      if (perUI && perUI !== periodoToMMYYYY(fPeriodo)) {
-        skipSearchRef.current = true; // evita doble fetch por debounce
-        setReady(false);
-        setFPeriodo(perUI);
-        setQ(""); // recomendado: evitar que una búsqueda oculte el registro nuevo
-      }
-
-      const finalPer = perUI || periodoToMMYYYY(fPeriodo);
-
-      if (finalPer) {
-        invalidateCacheForPeriodo(finalPer);
-        await loadRows({ periodo: finalPer, q: "", offset: 0, append: false, mode: "initial" });
-      } else {
-        setRows([]);
-        setHasMore(false);
-        setNextOffset(null);
-        setLoadingRows(false);
-        setReady(true);
-        endSkeleton();
-      }
-
-      await refreshPeriodos();
-    },
-    [fPeriodo, invalidateCacheForPeriodo, loadRows, refreshPeriodos, endSkeleton]
-  );
+  const refreshAfterSave = useCallback(async () => {
+    setOpenNueva(false);
+    setOpenEdit(false);
+    setSelectedRow(null);
+    cacheRef.current.clear();
+    await loadRows({
+      from: dateRange.from,
+      to: dateRange.to,
+      q: "",
+      offset: 0,
+      append: false,
+      mode: "initial",
+    });
+    await refreshPeriodos();
+  }, [dateRange, loadRows, refreshPeriodos]);
 
   /* =========================
-     ✅ FIX: GUARDAR EDICIÓN (real)
+     Guardar edicion
   ========================= */
   const handleSaveEdit = useCallback(
     async (payloadFinal) => {
-      showToast("cargando", "Guardando cambios…", 12000);
+      showToast("cargando", "Guardando cambios...", 12000);
       try {
         const data = await editarCompraEnBackend(payloadFinal);
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo actualizar.");
-
-        const per = payloadFinal?.periodo || fPeriodo;
-        await refreshAfterSave(per);
-
+        await refreshAfterSave();
         showToast("exito", "Compra actualizada.", 2400);
       } catch (e) {
         showToast("error", e?.message || "Error guardando compra.", 4200);
         throw e;
       }
     },
-    [editarCompraEnBackend, fPeriodo, refreshAfterSave, showToast]
+    [editarCompraEnBackend, refreshAfterSave, showToast]
   );
 
+  /* =========================
+     Eliminar
+  ========================= */
   const confirmDelete = async () => {
     const id = getRowId(selectedRow);
     if (!id) return;
     setDeletingId(id);
-
     try {
       const { idUsuario } = getAuthInfo();
       const sp = new URLSearchParams();
       sp.set("action", "compras_eliminar");
       sp.set("id_movimiento", String(id));
-
-      showToast("cargando", "Eliminando compra…", 12000);
+      showToast("cargando", "Eliminando compra...", 12000);
       const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
-
       setOpenDel(false);
       setSelectedRow(null);
-
-      invalidateCacheForPeriodo(fPeriodo);
-      await loadRows({ periodo: fPeriodo, q, offset: 0, append: false, mode: "initial" });
-
+      cacheRef.current.clear();
+      await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false, mode: "initial" });
       await refreshPeriodos();
       showToast("exito", "Compra eliminada.", 2600);
     } catch (e) {
@@ -853,113 +715,63 @@ export default function Compras() {
     }
   };
 
+  /* =========================
+     Cargar mas / todos
+  ========================= */
   const handleLoadMore = useCallback(async () => {
     if (!hasMore || loadingRows || loadingMore || loadingAll || loadingListsCtx) return;
     if (nextOffset === null) return;
+    showToast("cargando", "Cargando mas...", 6000);
+    await loadRows({ from: dateRange.from, to: dateRange.to, q: (q || "").trim(), offset: nextOffset, append: true, mode: "more" });
+  }, [hasMore, loadingRows, loadingMore, loadingAll, loadingListsCtx, nextOffset, dateRange, q, loadRows, showToast]);
 
-    const currentPer = periodoToMMYYYY(fPeriodo);
-    const currentQ = (q || "").trim();
-
-    showToast("cargando", "Cargando más…", 6000);
-    await loadRows({
-      periodo: currentPer,
-      q: currentQ,
-      offset: nextOffset,
-      append: true,
-      mode: "more",
-    });
-  }, [hasMore, loadingRows, loadingMore, loadingAll, loadingListsCtx, nextOffset, fPeriodo, q, loadRows, showToast]);
-
-  // ✅ CARGAR TODOS
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingRows || loadingMore || loadingAll || loadingListsCtx) return;
     if (nextOffset === null) return;
 
     setLoadingAll(true);
-    showToast("cargando", "Cargando todas las compras…", 12000);
+    showToast("cargando", "Cargando todas las compras...", 12000);
 
     let offset = nextOffset;
     let guard = 0;
-
     const seen = new Set(
-      (Array.isArray(rows) ? rows : [])
-        .map((x) => getRowId(x))
-        .filter((id) => id !== null && id !== undefined)
-        .map(String)
+      (Array.isArray(rows) ? rows : []).map((x) => getRowId(x)).filter(Boolean).map(String)
     );
-
     let finishedOk = false;
     let stoppedNoProgress = false;
 
     try {
       while (offset !== null && guard < 3000) {
-        const currentPer = periodoToMMYYYY(fPeriodo);
-        const currentQ = (q || "").trim();
-
         const res = await loadRows({
-          periodo: currentPer,
-          q: currentQ,
+          from: dateRange.from,
+          to: dateRange.to,
+          q: (q || "").trim(),
           offset,
           append: true,
           mode: "all",
           seenIds: seen,
         });
-
         if (!res) break;
-
         (res.pageIds || []).forEach((id) => seen.add(String(id)));
-
-        if (res.hasMore && res.appended === 0) {
-          stoppedNoProgress = true;
-          break;
-        }
-        if (res.nextOffset === offset) {
-          stoppedNoProgress = true;
-          break;
-        }
-
+        if (res.hasMore && res.appended === 0) { stoppedNoProgress = true; break; }
+        if (res.nextOffset === offset) { stoppedNoProgress = true; break; }
         offset = res.nextOffset;
         guard += 1;
-
-        if (!res.hasMore || offset === null) {
-          finishedOk = true;
-          break;
-        }
+        if (!res.hasMore || offset === null) { finishedOk = true; break; }
       }
-
-      if (finishedOk) {
-        showToast("exito", "Listo: ya se cargaron todas.", 2600);
-      } else if (stoppedNoProgress) {
-        showToast(
-          "error",
-          "Se detuvo: el backend no está avanzando el paginado (next_offset/has_more). Revisá el endpoint compras_listar.",
-          6500
-        );
-      } else {
-        showToast("error", "No se pudo completar la carga total.", 4200);
-      }
+      if (finishedOk) showToast("exito", "Listo: ya se cargaron todas.", 2600);
+      else if (stoppedNoProgress) showToast("error", "Se detuvo: el backend no avanza el paginado.", 6500);
+      else showToast("error", "No se pudo completar la carga total.", 4200);
     } catch (e) {
       showToast("error", e?.message || "Error cargando todas.", 4200);
     } finally {
       setLoadingAll(false);
     }
-  }, [hasMore, loadingRows, loadingMore, loadingAll, loadingListsCtx, nextOffset, fPeriodo, q, loadRows, showToast, rows]);
+  }, [hasMore, loadingRows, loadingMore, loadingAll, loadingListsCtx, nextOffset, dateRange, q, loadRows, showToast, rows]);
 
-  const softLoading = loadingRows && showSkeleton;
-  const lists = listasCtx || { periodos: [] };
-
-  const handleChangePeriodo = async (valueUI) => {
-    const ui = periodoToMMYYYY(valueUI);
-
-    skipSearchRef.current = true;
-
-    setReady(false);
-    setFPeriodo(ui);
-    setQ("");
-
-    await loadRows({ periodo: ui, q: "", offset: 0, append: false, mode: "initial" });
-  };
-
+  /* =========================
+     Skeleton
+  ========================= */
   const renderSkeletonRow = (idx) => (
     <div
       key={`skel-${idx}`}
@@ -981,26 +793,21 @@ export default function Compras() {
     </div>
   );
 
-  // ✅ si hay 100 exactos, mostrar SOLO cargar todos
+  const softLoading = loadingRows && showSkeleton;
+  const canShowEmpty = ready && !loadingRows && !loadingListsCtx && filteredRows.length === 0;
   const showLoadMoreBtn = !loadingRows && hasMore && filteredRows.length > 0 && filteredRows.length < PAGE_SIZE;
   const showLoadAllBtn = !loadingRows && hasMore && filteredRows.length > 0;
+  const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
-  const canShowEmpty = ready && !loadingRows && !loadingListsCtx && filteredRows.length === 0;
-
+  /* =========================
+     RENDER
+  ========================= */
   return (
     <div className="mov-page mov-page--compras">
       {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
 
-      {errorListsCtx && (
-        <div className="mov-alert" role="alert">
-          {errorListsCtx}
-        </div>
-      )}
-      {error && (
-        <div className="mov-alert" role="alert">
-          {error}
-        </div>
-      )}
+      {errorListsCtx && <div className="mov-alert" role="alert">{errorListsCtx}</div>}
+      {error && <div className="mov-alert" role="alert">{error}</div>}
 
       <section className="mov-card mov-card--table">
         <div className="mov-card__head">
@@ -1008,36 +815,59 @@ export default function Compras() {
             <div>
               <div className="mov-card__title">Movimientos · Compras</div>
               <div className="mov-card__hint">
-                Mostrando <b>{filteredRows.length}</b> registros{hasMore ? " (hay más)" : ""}
+                Mostrando <b>{filteredRows.length}</b> registros{hasMore ? " (hay mas)" : ""}
               </div>
             </div>
 
             <div className="mov-headFilters">
-              <div className="mov-filter">
+
+              {/* Calendario — reemplaza el select de periodo */}
+              <div className="mov-filter" style={{ position: "relative" }}>
                 <label>
-                  <FontAwesomeIcon icon={faCalendarDays} /> Período
+                  <FontAwesomeIcon icon={faCalendarDays} /> Fecha
                 </label>
-                <select
-                  value={periodoToMMYYYY(fPeriodo)}
-                  onChange={(e) => handleChangePeriodo(e.target.value)}
-                  disabled={loadingRows || loadingListsCtx || loadingMore || loadingAll}
+
+                <button
+                  type="button"
+                  className="mov-btn mov-btn--ghost"
+                  style={{ minWidth: 220, justifyContent: "flex-start", textAlign: "left" }}
+                  onClick={() => setShowCalendario((v) => !v)}
+                  disabled={isAnyLoading || loadingListsCtx}
+                  title="Seleccionar rango de fechas"
                 >
-                  {(lists.periodos || []).map((p) => {
-                    const ui = periodoToMMYYYY(p);
-                    return (
-                      <option key={ui} value={ui}>
-                        {ui}
-                      </option>
-                    );
-                  })}
-                </select>
+                  {dateRangeLabel}
+                </button>
+
+                {showCalendario && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "100%",
+                      left: 0,
+                      zIndex: 999,
+                      marginTop: 6,
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+                      borderRadius: 10,
+                      background: "var(--color-surface, #fff)",
+                    }}
+                  >
+                    <Calendario
+                      value={dateRange}
+                      onChange={async (newRange) => {
+                        if (newRange.from && newRange.to) setShowCalendario(false);
+                        await handleDateRangeChange(newRange);
+                      }}
+                      onClose={() => setShowCalendario(false)}
+                    />
+                  </div>
+                )}
               </div>
 
+              {/* Busqueda */}
               <div className="mov-search">
                 <label>
-                  <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                  <FontAwesomeIcon icon={faMagnifyingGlass} /> Busqueda
                 </label>
-
                 <div className="mov-searchInput">
                   <input
                     value={q}
@@ -1048,7 +878,8 @@ export default function Compras() {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         skipSearchRef.current = true;
                         await loadRows({
-                          periodo: fPeriodo,
+                          from: dateRange.from,
+                          to: dateRange.to,
                           q: e.currentTarget.value,
                           offset: 0,
                           append: false,
@@ -1056,23 +887,24 @@ export default function Compras() {
                         });
                       }
                     }}
-                    placeholder="Buscar por proveedor, descripción, monto, fecha…"
+                    placeholder="Buscar por proveedor, descripcion, monto, fecha..."
                     disabled={loadingListsCtx || loadingAll}
                   />
                   {q.trim() !== "" && (
                     <button
                       type="button"
                       className="mov-clearSearch"
-                      title="Limpiar búsqueda"
+                      title="Limpiar busqueda"
                       onClick={async () => {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
                         skipSearchRef.current = true;
-                        await loadRows({ periodo: fPeriodo, q: "", offset: 0, append: false, mode: "initial" });
+                        await loadRows({ from: dateRange.from, to: dateRange.to, q: "", offset: 0, append: false, mode: "initial" });
+                        document.querySelector(".mov-searchInput input")?.focus();
                       }}
                       disabled={loadingAll}
                     >
-                      ×
+                      x
                     </button>
                   )}
                 </div>
@@ -1088,14 +920,13 @@ export default function Compras() {
               disabled={loadingRows || filteredRows.length === 0}
               title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
             >
-              <FontAwesomeIcon icon={faFileExcel} /> Exportar 
+              <FontAwesomeIcon icon={faFileExcel} /> Exportar
             </button>
 
             <button
               type="button"
               className="mov-btn mov-btn--primary"
               onClick={() => setOpenNueva(true)}
-              disabled={false}
               title="Crear nueva compra"
             >
               <FontAwesomeIcon icon={faPlus} /> Nueva Compra
@@ -1112,9 +943,7 @@ export default function Compras() {
           {columns.map((c) => (
             <div
               key={c.key}
-              className={["mov-gridCell", "mov-gridCell--head", c.align === "center" ? "is-center" : "", c.align === "right" ? "is-right" : ""].join(
-                " "
-              )}
+              className={["mov-gridCell", "mov-gridCell--head", c.align === "center" ? "is-center" : "", c.align === "right" ? "is-right" : ""].join(" ")}
               role="columnheader"
             >
               {c.label}
@@ -1138,7 +967,12 @@ export default function Compras() {
                   const isDeleting = deletingId !== null && String(deletingId) === String(rowId);
 
                   return (
-                    <div key={rowId} className="mov-gridTable mov-gridTable--row" style={{ gridTemplateColumns: gridCols }} role="row">
+                    <div
+                      key={rowId}
+                      className="mov-gridTable mov-gridTable--row"
+                      style={{ gridTemplateColumns: gridCols }}
+                      role="row"
+                    >
                       <div className="mov-gridCell is-center" role="cell" data-label="FECHA">
                         {safeText(formatFechaDMY(pick(r, ["fecha"], "")))}
                       </div>
@@ -1146,10 +980,12 @@ export default function Compras() {
                       <div
                         className="mov-gridCell is-strong"
                         role="cell"
-                        data-label="DESCRIPCIÓN"
+                        data-label="DESCRIPCION"
                         title={safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], ""))}
                       >
-                        <span className="mov-ellipsissss">{safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], ""))}</span>
+                        <span className="mov-ellipsissss">
+                          {safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], ""))}
+                        </span>
                       </div>
 
                       <div
@@ -1158,7 +994,9 @@ export default function Compras() {
                         data-label="PROVEEDOR"
                         title={safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""))}
                       >
-                        <span className="mov-ellipsissss">{safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""))}</span>
+                        <span className="mov-ellipsissss">
+                          {safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""))}
+                        </span>
                       </div>
 
                       <div className="mov-gridCell is-center" role="cell" data-label="PAGO">
@@ -1176,7 +1014,7 @@ export default function Compras() {
                             className={`mov-iconBtn ${!canSee ? "is-disabled" : ""}`}
                             title={canSee ? "Ver comprobante" : "Sin comprobante"}
                             onClick={() => canSee && openComprobanteModal(r)}
-                            disabled={!canSee || loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                            disabled={!canSee || isAnyLoading || loadingListsCtx}
                           >
                             <FontAwesomeIcon icon={faEye} />
                           </button>
@@ -1186,7 +1024,7 @@ export default function Compras() {
                             className="mov-iconBtn"
                             title="Editar"
                             onClick={() => openEditModal(r)}
-                            disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                            disabled={isAnyLoading || loadingListsCtx}
                           >
                             <FontAwesomeIcon icon={faPenToSquare} />
                           </button>
@@ -1195,7 +1033,7 @@ export default function Compras() {
                             type="button"
                             className="mov-iconBtn mov-iconBtn--danger"
                             title="Eliminar"
-                            disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || isDeleting}
+                            disabled={isAnyLoading || loadingListsCtx || isDeleting}
                             onClick={() => openDeleteModal(r)}
                           >
                             {isDeleting ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
@@ -1206,14 +1044,12 @@ export default function Compras() {
                   );
                 })}
 
-                {/* ✅ EMPTY (solo cuando terminó la carga) */}
                 {canShowEmpty && (
                   <div className="mov-emptyRow">
-                    {!fPeriodo ? "No hay período disponible para cargar compras." : "No hay compras para mostrar en este período."}
+                    No hay compras para mostrar en el rango de fechas seleccionado.
                   </div>
                 )}
 
-                {/* BOTONES */}
                 {!loadingRows && filteredRows.length > 0 && hasMore && (
                   <div style={{ display: "flex", justifyContent: "center", gap: 10, padding: "12px 0" }}>
                     {showLoadMoreBtn && (
@@ -1222,12 +1058,11 @@ export default function Compras() {
                         className="mov-btn mov-btn--ghost"
                         onClick={handleLoadMore}
                         disabled={loadingMore || loadingRows || loadingAll || loadingListsCtx}
-                        title="Cargar 100 registros más"
+                        title="Cargar 100 registros mas"
                       >
-                        {loadingMore ? "Cargando…" : "Cargar más"}
+                        {loadingMore ? "Cargando..." : "Cargar mas"}
                       </button>
                     )}
-
                     {showLoadAllBtn && (
                       <button
                         type="button"
@@ -1236,14 +1071,14 @@ export default function Compras() {
                         disabled={loadingMore || loadingRows || loadingAll || loadingListsCtx}
                         title="Cargar todas las compras restantes"
                       >
-                        {loadingAll ? "Cargando todas…" : "Cargar todos"}
+                        {loadingAll ? "Cargando todas..." : "Cargar todos"}
                       </button>
                     )}
                   </div>
                 )}
 
                 {(loadingMore || loadingAll) && (
-                  <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">
+                  <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando mas registros">
                     {Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}
                   </div>
                 )}
@@ -1259,15 +1094,8 @@ export default function Compras() {
         lists={listasCtx || { periodos: [] }}
         onClose={() => setOpenNueva(false)}
         onToast={showToast}
-        onSaved={async (info) => {
-          // ✅ FIX: SIEMPRE usar periodoUI/periodoApi del modal
-          const per =
-            periodoToMMYYYY(info?.periodoUI) ||
-            periodoToMMYYYY(info?.periodo) ||
-            periodoToMMYYYY(info?.periodoApi) ||
-            periodoToMMYYYY(fPeriodo);
-
-          await refreshAfterSave(per);
+        onSaved={async () => {
+          await refreshAfterSave();
           showToast("exito", "Compra creada.", 2200);
         }}
       />
@@ -1276,25 +1104,28 @@ export default function Compras() {
         open={openEdit}
         lists={listasCtx || { periodos: [] }}
         row={selectedRow}
-        periodoDefault={fPeriodo}
-        onClose={() => {
-          setOpenEdit(false);
-          setSelectedRow(null);
-        }}
+        periodoDefault={
+          dateRange.from
+            ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}`
+            : ""
+        }
+        onClose={() => { setOpenEdit(false); setSelectedRow(null); }}
         onToast={showToast}
         onSave={handleSaveEdit}
       />
 
-      <ModalVerComprobante open={openVerComp} url={compUrl} onClose={closeComprobanteModal} title="Comprobante de compra" />
+      <ModalVerComprobante
+        open={openVerComp}
+        url={compUrl}
+        onClose={closeComprobanteModal}
+        title="Comprobante de compra"
+      />
 
       <ModalEliminarMovimientos
         open={openDel}
         row={selectedRow}
         loading={deletingId !== null && String(deletingId) === String(getRowId(selectedRow))}
-        onClose={() => {
-          setOpenDel(false);
-          setSelectedRow(null);
-        }}
+        onClose={() => { setOpenDel(false); setSelectedRow(null); }}
         onConfirm={confirmDelete}
         onToast={showToast}
       />

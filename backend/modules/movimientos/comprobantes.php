@@ -14,7 +14,7 @@ if (!headers_sent()) {
     header("Access-Control-Allow-Origin: *");
   }
   header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-  header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Session, Range');
+  header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Session, X-IdTenant, X-Id-Tenant, Range');
   header('Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges');
   header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 }
@@ -163,14 +163,12 @@ function build_download_url(int $idComp): string {
 }
 
 /* =========================================================
-   ✅ NUEVO: tipo -> carpeta segura
-   - Subdivide dentro del mes: .../YYYY/MM/<tipo>/
+   ✅ tipo -> carpeta segura
 ========================================================= */
 function tipo_to_folder(string $tipo): string {
   $t = strtoupper(trim($tipo));
   if ($t === '') $t = 'RECIBO';
 
-  // si querés nombres “lindos”, mapealos acá:
   $map = [
     'RECIBO' => 'recibo',
     'ORDEN_PAGO' => 'orden_pago',
@@ -181,7 +179,6 @@ function tipo_to_folder(string $tipo): string {
   ];
   if (isset($map[$t])) return $map[$t];
 
-  // fallback: slug seguro
   $t = strtolower($t);
   $t = str_replace([' ', '-', '.'], '_', $t);
   $t = preg_replace('/[^a-z0-9_]/', '', $t) ?? '';
@@ -191,15 +188,39 @@ function tipo_to_folder(string $tipo): string {
 }
 
 /* =========================================================
-   Tenant ID
+   ✅ SAAS: Tenant REAL resuelto por api.php (sesión master)
+   - NO re-conecta master acá
+   - NO confía en headers del cliente
 ========================================================= */
-$tenantId = get_header_case_insensitive('X-IdTenant');
-if ($tenantId === '') $tenantId = get_header_case_insensitive('X-Id-Tenant');
-if ($tenantId === '' || !ctype_digit($tenantId)) $tenantId = '0';
+function resolve_tenant_id_or_fail() {
+  // api.php guarda sesión master acá:
+  // $GLOBALS['SESSION_MASTER'] = $ses;
+  $ses = $GLOBALS['SESSION_MASTER'] ?? null;
+  if (is_array($ses)) {
+    $idT = (int)($ses['idTenant'] ?? 0);
+    if ($idT > 0) return $idT;
+  }
+
+  // fallback: api.php también setea esto:
+  // $_SERVER['X_IDTENANT'] = ...
+  $srv = $_SERVER['X_IDTENANT'] ?? $_SERVER['HTTP_X_IDTENANT'] ?? '';
+  $srv = is_string($srv) ? trim($srv) : '';
+  if ($srv !== '' && ctype_digit($srv) && (int)$srv > 0) {
+    return (int)$srv;
+  }
+
+  // Si llegó directo a este archivo sin pasar por api.php
+  comprobantes_fail(
+    'Tenant no resuelto. Llamá a este módulo siempre a través de api/routes/api.php (con sesión válida).',
+    401
+  );
+}
+
+// ✅ ESTE ES EL TENANT REAL (t_1, t_2, etc)
+$tenantId = resolve_tenant_id_or_fail();
 
 /* =========================================================
    ✅ SUBIR PDF Y VINCULAR A COBRO
-   (ahora: carpeta por tipo dentro del mes)
 ========================================================= */
 if ($action === 'comprobantes_subir') {
 
@@ -227,7 +248,6 @@ if ($action === 'comprobantes_subir') {
   $tipo = is_string($tipo) ? strtoupper(trim($tipo)) : 'RECIBO';
   if ($tipo === '') $tipo = 'RECIBO';
 
-  // ✅ NUEVO: carpeta por tipo
   $tipoFolder = tipo_to_folder($tipo);
 
   // resolver cobro + movimiento
@@ -295,7 +315,7 @@ if ($action === 'comprobantes_subir') {
   $uploadsBase = $publicHtml . '/uploads';
   safe_mkdir($uploadsBase);
 
-  // ✅ MODIFICADO: .../YYYY/MM/<tipoFolder>
+  // ✅ CLAVE SAAS: carpeta por tenant real
   $tenantDir = $uploadsBase
     . '/tenants/t_' . $tenantId
     . '/comprobantes/' . date('Y')
@@ -307,11 +327,9 @@ if ($action === 'comprobantes_subir') {
   $idMov = (int)($cobro['id_movimiento'] ?? $idMovFromPost);
   if ($idMov <= 0) comprobantes_fail('No se pudo resolver id_movimiento.', 500);
 
-  // (nombre igual que antes, solo cambia ubicación)
   $finalName = 'cobro_' . $idCobro . '__mov_' . $idMov . '__' . $sha . '.pdf';
   $absPath = $tenantDir . '/' . $finalName;
 
-  // mover con fallback hostinger
   $moved = false;
   if (is_uploaded_file($tmp) && @move_uploaded_file($tmp, $absPath)) {
     $moved = true;
@@ -329,10 +347,10 @@ if ($action === 'comprobantes_subir') {
       'uploadsBase' => $uploadsBase,
       'tipo' => $tipo,
       'tipoFolder' => $tipoFolder,
+      'tenantId' => $tenantId,
     ]);
   }
 
-  // guardamos ruta relativa a public_html
   $relPath = normalize_rel($absPath, $publicHtml);
 
   try {
@@ -376,6 +394,7 @@ if ($action === 'comprobantes_subir') {
       'sha256' => $sha,
       'filename' => $finalName,
       'debug' => [
+        'tenantId' => $tenantId,
         'public_html' => $publicHtml,
         'uploadsBase' => $uploadsBase,
         'tenantDir' => $tenantDir,
@@ -408,7 +427,6 @@ if ($action === 'comprobantes_asociar_movimiento') {
 
   $force = (bool)($src['force'] ?? false);
 
-  // validar comprobante existe
   $v = $pdo->prepare("SELECT 1 FROM comprobantes_archivos WHERE id_comprobante = :id LIMIT 1");
   $v->execute([':id' => $idComp]);
   if ((int)($v->fetchColumn() ?: 0) !== 1) {
@@ -512,7 +530,6 @@ if ($action === 'comprobantes_asociar_movimientos') {
   $idsOk = array_values(array_unique($idsOk));
   if (!$idsOk) comprobantes_fail('Faltan ids_movimiento.', 400);
 
-  // validar comprobante existe
   $v = $pdo->prepare("SELECT 1 FROM comprobantes_archivos WHERE id_comprobante = :id LIMIT 1");
   $v->execute([':id' => $idComp]);
   if ((int)($v->fetchColumn() ?: 0) !== 1) {

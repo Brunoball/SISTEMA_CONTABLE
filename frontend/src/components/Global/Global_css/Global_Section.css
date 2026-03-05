@@ -1125,3 +1125,78 @@ body.dark .mov-btn--loadAll:hover{
   justify-content: space-between;
 
 }
+
+
+/* =============================================
+   Agregar al final del CSS de Movimientos
+   Estilos para el trigger del Calendario
+============================================= */
+
+.mov-filter--cal {
+  position: relative;
+}
+
+.mov-calTrigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  background: #fff;
+  border: 1px solid rgba(10, 37, 64, 0.22);
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: rgba(10, 37, 64, 0.85);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 150ms, box-shadow 150ms, background 150ms;
+  min-width: 200px;
+  font-family: inherit;
+}
+
+.mov-calTrigger:hover:not(:disabled) {
+  border-color: rgba(10, 37, 64, 0.45);
+  box-shadow: 0 1px 4px rgba(10, 37, 64, 0.08);
+}
+
+.mov-calTrigger.is-open {
+  border-color: #0a2540;
+  box-shadow: 0 0 0 2px rgba(10, 37, 64, 0.12);
+  background: rgba(10, 37, 64, 0.02);
+}
+
+.mov-calTrigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mov-calTrigger__arrow {
+  margin-left: auto;
+  font-size: 10px;
+  color: rgba(10, 37, 64, 0.4);
+}
+
+.mov-calDropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 999;
+  animation: mov-calFadeIn 140ms ease;
+}
+
+@keyframes mov-calFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 720px) {
+  .mov-calDropdown {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .mov-calTrigger {
+    min-width: 160px;
+    font-size: 12.5px;
+  }
+}

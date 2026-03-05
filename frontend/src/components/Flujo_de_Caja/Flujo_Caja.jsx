@@ -7,6 +7,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCalendarDays, faFileExcel } from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../Global/Toast.jsx";
+import Calendario from "../Global/Calendario/Calendario.jsx";
 
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -39,44 +40,17 @@ function fmtDateES(iso) {
   return `${d}/${m}/${y}`;
 }
 
-/* ✅ Período label */
-function periodLabelMMYYYY(yyyyMM) {
-  const [y, m] = String(yyyyMM || "").split("-");
-  if (!y || !m) return String(yyyyMM || "");
-  return `${m}-${y}`;
+function formatDateISO(d) {
+  if (!d) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
-/* ✅ normaliza a YYYY-MM */
-function periodoToYYYYMM(input) {
-  const s = String(input ?? "").trim();
-  if (!s) return "";
-
-  // YYYY-MM o YYYY/M
-  if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
-    const [yyyy, mmRaw] = s.split(/[-/]/);
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  // MM-YYYY o MM/YYYY
-  if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
-    const [mmRaw, yyyy] = s.split(/[-/]/);
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  // 202601 / 012026
-  if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      const yyyy = s.slice(0, 4);
-      const mm = String(Number(s.slice(4))).padStart(2, "0");
-      return `${yyyy}-${mm}`;
-    } else {
-      const mm = String(Number(s.slice(0, 2))).padStart(2, "0");
-      const yyyy = s.slice(2);
-      return `${yyyy}-${mm}`;
-    }
-  }
-  return "";
+function formatDateLabel(d) {
+  if (!d) return "";
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
 function normalizeRows(rawRows) {
@@ -115,17 +89,41 @@ function authHeaders(extra = {}) {
 }
 
 /* =========================
-   Period cache (instant set)
+   Date range cache
 ========================= */
-const PERIOD_CACHE_KEY = "fc_periodo_cache";
-function readCachedPeriodo() {
-  const v = (localStorage.getItem(PERIOD_CACHE_KEY) || "").trim();
-  const norm = periodoToYYYYMM(v);
-  return norm || "";
+const FC_DATE_CACHE_KEY = "fc_daterange_cache";
+
+function readCachedRange() {
+  try {
+    const raw = localStorage.getItem(FC_DATE_CACHE_KEY);
+    if (!raw) return { from: null, to: null };
+    const parsed = JSON.parse(raw);
+    return {
+      from: parsed.from ? new Date(parsed.from) : null,
+      to: parsed.to ? new Date(parsed.to) : null,
+    };
+  } catch {
+    return { from: null, to: null };
+  }
 }
-function writeCachedPeriodo(v) {
-  const norm = periodoToYYYYMM(v);
-  if (norm) localStorage.setItem(PERIOD_CACHE_KEY, norm);
+
+function writeCachedRange(range) {
+  try {
+    localStorage.setItem(
+      FC_DATE_CACHE_KEY,
+      JSON.stringify({
+        from: range.from ? range.from.toISOString() : null,
+        to: range.to ? range.to.toISOString() : null,
+      })
+    );
+  } catch {}
+}
+
+function defaultRange() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { from, to };
 }
 
 /* =========================
@@ -136,11 +134,12 @@ const SKELETON_ROWS = 10;
 export default function Flujo_Caja() {
   const API = `${BASE_URL}/api.php`;
 
-  // ✅ PERÍODO instantáneo (cache primero, sino fallback)
-  const [periodo, setPeriodo] = useState(() => readCachedPeriodo() || "2026-01");
-
-  const [periodOptions, setPeriodOptions] = useState([]); // YYYY-MM[]
-  const [loadingPeriodos, setLoadingPeriodos] = useState(false);
+  /* Date range (reemplaza periodo) */
+  const [dateRange, setDateRange] = useState(() => {
+    const cached = readCachedRange();
+    return cached.from ? cached : defaultRange();
+  });
+  const [calOpen, setCalOpen] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -152,7 +151,7 @@ export default function Flujo_Caja() {
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // ✅ Skeleton: delay anti-parpadeo
+  // Skeleton delay anti-parpadeo
   const skelTimerRef = useRef(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
 
@@ -173,78 +172,23 @@ export default function Flujo_Caja() {
     };
   }, []);
 
-  // ✅ check simple sesión
+  // check sesión
   useEffect(() => {
     const k = getSessionKey();
     if (!k) showToast("advertencia", "Falta session_key. Iniciá sesión de nuevo.", 4200);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ guardar periodo al cambiar (instant)
+  // guardar rango al cambiar
   useEffect(() => {
-    if (periodo) writeCachedPeriodo(periodo);
-  }, [periodo]);
+    writeCachedRange(dateRange);
+  }, [dateRange]);
 
   /* =========================================================
-     ✅ 1) Periodos desde Dashboard (global_obtener_listas)
-     - normaliza a YYYY-MM
-     - si el periodo actual no existe, setea el más nuevo
-  ========================================================= */
-  const fetchPeriodosFromDashboard = useCallback(async () => {
-    setLoadingPeriodos(true);
-    try {
-      const res = await fetch(`${API}?action=global_obtener_listas`, {
-        method: "GET",
-        headers: authHeaders(),
-      });
-
-      const json = await parseJsonOrThrow(res);
-
-      if (!res.ok || !json?.exito) {
-        throw new Error(json?.mensaje || `Error cargando períodos (HTTP ${res.status})`);
-      }
-
-      const raw = Array.isArray(json?.listas?.periodos)
-        ? json.listas.periodos
-        : Array.isArray(json?.periodos)
-        ? json.periodos
-        : [];
-
-      const unique = Array.from(
-        new Set(raw.map((p) => periodoToYYYYMM(p)).filter(Boolean))
-      );
-
-      unique.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
-
-      setPeriodOptions(unique);
-
-      // ✅ si el periodo actual no está en la lista, agarrá el más reciente
-      if (unique.length) {
-        if (!periodo || !unique.includes(periodo)) {
-          setPeriodo(unique[0]);
-        }
-      }
-    } catch (e) {
-      showToast("error", e?.message || "Error cargando períodos", 4200);
-      setPeriodOptions([]);
-      // no pisamos el periodo; queda el cache/fallback
-    } finally {
-      setLoadingPeriodos(false);
-    }
-  }, [API, showToast, periodo]);
-
-  useEffect(() => {
-    fetchPeriodosFromDashboard();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /* =========================================================
-     ✅ 2) Resumen
-     - tabla SIEMPRE visible
-     - skeleton SOLO en rows
+     Resumen por rango de fechas
   ========================================================= */
   const fetchResumen = useCallback(async () => {
-    if (!periodo) return;
+    if (!dateRange.from) return;
 
     setLoading(true);
     setError("");
@@ -253,7 +197,8 @@ export default function Flujo_Caja() {
     try {
       const sp = new URLSearchParams();
       sp.set("action", "flujo_caja_resumen");
-      sp.set("periodo", periodo);
+      sp.set("fecha_desde", formatDateISO(dateRange.from));
+      sp.set("fecha_hasta", formatDateISO(dateRange.to || dateRange.from));
 
       const res = await fetch(`${API}?${sp.toString()}`, {
         method: "GET",
@@ -276,20 +221,32 @@ export default function Flujo_Caja() {
       setLoading(false);
       endSkeleton();
     }
-  }, [API, periodo, showToast, beginSkeleton, endSkeleton]);
+  }, [API, dateRange, showToast, beginSkeleton, endSkeleton]);
 
   useEffect(() => {
     fetchResumen();
   }, [fetchResumen]);
 
-  // ✅ si no hay data todavía, igual mostramos tabla fija
   const bloque = data?.tiendas?.[0] || null;
   const rowsRaw = bloque?.rows || [];
   const rows = useMemo(() => normalizeRows(rowsRaw), [rowsRaw]);
 
   const showing = rows.length;
-  const softLoading = (loading || loadingPeriodos) && showSkeleton;
+  const softLoading = loading && showSkeleton;
 
+  /* =========================
+     Label del rango para el botón
+  ========================= */
+  const rangeLabel = useMemo(() => {
+    const { from, to } = dateRange;
+    if (!from) return "Seleccionar período";
+    if (!to || formatDateISO(from) === formatDateISO(to)) return formatDateLabel(from);
+    return `${formatDateLabel(from)} → ${formatDateLabel(to)}`;
+  }, [dateRange]);
+
+  /* =========================
+     Export Excel
+  ========================= */
   const exportExcel = useCallback(() => {
     try {
       if (!rows.length) {
@@ -311,9 +268,10 @@ export default function Flujo_Caja() {
       ws["!cols"] = [{ wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
 
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, `Flujo ${periodo}`);
+      const rangeStamp = `${formatDateISO(dateRange.from)}_${formatDateISO(dateRange.to || dateRange.from)}`;
+      XLSX.utils.book_append_sheet(wb, ws, `Flujo ${rangeStamp}`);
 
-      const fileName = `flujo_caja_${String(periodo).replace("-", "_")}.xlsx`;
+      const fileName = `flujo_caja_${rangeStamp}.xlsx`;
       const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
       saveAs(new Blob([wbout], { type: "application/octet-stream" }), fileName);
 
@@ -321,28 +279,22 @@ export default function Flujo_Caja() {
     } catch (e) {
       showToast("error", e?.message || "Error exportando Excel.", 3500);
     }
-  }, [rows, periodo, showToast]);
+  }, [rows, dateRange, showToast]);
 
-  // ✅ Select siempre usable: si no hay options todavía, igual deja el valor actual
-  const selectDisabled = loadingPeriodos;
-
-  // Skeleton widths (parece data real)
-  const skelWidths = useMemo(() => {
-    return {
-      fecha: ["34%", "42%", "38%", "46%"],
-      ingresos: ["48%", "40%", "52%", "36%"],
-      egresos: ["44%", "56%", "38%", "46%"],
-      otros: ["42%", "36%", "50%", "40%"],
-      saldo: ["52%", "46%", "38%", "56%"],
-    };
-  }, []);
+  // Skeleton widths
+  const skelWidths = useMemo(() => ({
+    fecha: ["34%", "42%", "38%", "46%"],
+    ingresos: ["48%", "40%", "52%", "36%"],
+    egresos: ["44%", "56%", "38%", "46%"],
+    otros: ["42%", "36%", "50%", "40%"],
+    saldo: ["52%", "46%", "38%", "56%"],
+  }), []);
 
   const renderSkeletonRow = (idx) => {
     const w = (key) => {
       const list = skelWidths[key] || ["50%"];
       return list[idx % list.length];
     };
-
     return (
       <div className="fc-grid fc-grid--row fc-grid--excel fc-row--skeleton" key={`skel-${idx}`}>
         <div className="fc-cell fc-date">
@@ -392,27 +344,33 @@ export default function Flujo_Caja() {
             </div>
 
             <div className="fc-headFilters">
-              <div className="fc-filter">
+              {/* ============ Calendario (reemplaza el selector de período) ============ */}
+              <div className="fc-filter fc-filter--cal" style={{ position: "relative" }}>
                 <label>
                   <FontAwesomeIcon icon={faCalendarDays} /> Período
                 </label>
 
-                <select
-                  value={periodo || ""}
-                  onChange={(e) => setPeriodo(e.target.value)}
-                  disabled={selectDisabled}
+                <button
+                  type="button"
+                  className={`fc-calTrigger ${calOpen ? "is-open" : ""}`}
+                  onClick={() => setCalOpen((v) => !v)}
                 >
-                  {/* ✅ si todavía no llegó la lista, mostramos el periodo actual */}
-                  {(!periodOptions.length || !periodOptions.includes(periodo)) && (
-                    <option value={periodo}>{periodLabelMMYYYY(periodo)}</option>
-                  )}
+                  {rangeLabel}
+                  <span className="fc-calTrigger__arrow">{calOpen ? "▲" : "▼"}</span>
+                </button>
 
-                  {periodOptions.map((p) => (
-                    <option key={p} value={p}>
-                      {periodLabelMMYYYY(p)}
-                    </option>
-                  ))}
-                </select>
+                {calOpen && (
+                  <div className="fc-calDropdown">
+                    <Calendario
+                      value={dateRange}
+                      onChange={(range) => {
+                        setDateRange(range);
+                        if (range.from && range.to) setCalOpen(false);
+                      }}
+                      onClose={() => setCalOpen(false)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -429,18 +387,18 @@ export default function Flujo_Caja() {
           </div>
         </div>
 
-        {/* ✅ Subhead siempre visible (aunque no haya data todavía) */}
+        {/* Subhead */}
         <div className="fc-subhead">
           <div className="fc-subhead__name">
             Caja diaria
             <div className="fc-subhead__meta">
-              Período {data?.periodo ?? periodo} • Saldo base:{" "}
+              {rangeLabel} • Saldo base:{" "}
               <b>{moneyARS(bloque?.saldo_base ?? 0)}</b>
             </div>
           </div>
         </div>
 
-        {/* ✅ TABLA SIEMPRE visible */}
+        {/* Tabla */}
         <div className="fc-tableWrap">
           <div className="fc-grid fc-grid--head fc-grid--excel">
             <div className="fc-cell">FECHA</div>
@@ -451,8 +409,7 @@ export default function Flujo_Caja() {
           </div>
 
           <div className={["fc-gridBody", softLoading ? "fc-softLoading" : ""].join(" ")}>
-            {/* ✅ Skeleton en rows (carga) */}
-            {showSkeleton && (loading || loadingPeriodos) ? (
+            {showSkeleton && loading ? (
               <div className="fc-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
               </div>
@@ -474,11 +431,7 @@ export default function Flujo_Caja() {
                         {moneyARS(r.egresos)}
                       </div>
 
-                      <div
-                        className={`fc-cell fc-num is-center ${
-                          otrosIsNeg ? "fc-eg" : "fc-in"
-                        }`}
-                      >
+                      <div className={`fc-cell fc-num is-center ${otrosIsNeg ? "fc-eg" : "fc-in"}`}>
                         {otros == null ? "-" : moneyARSAbs(otros)}
                       </div>
 
@@ -493,7 +446,7 @@ export default function Flujo_Caja() {
                   );
                 })}
 
-                {!rows.length && !loading && !loadingPeriodos && (
+                {!rows.length && !loading && (
                   <div className="fc-emptyRow">No hay datos para mostrar.</div>
                 )}
               </>
@@ -502,7 +455,7 @@ export default function Flujo_Caja() {
         </div>
 
         <div className="fc-footnote">
-          * El saldo del día 01 arranca desde el “Saldo base” y se actualiza con (ingresos
+          * El saldo del día 01 arranca desde el "Saldo base" y se actualiza con (ingresos
           + otros − egresos) de cada día.
         </div>
       </section>

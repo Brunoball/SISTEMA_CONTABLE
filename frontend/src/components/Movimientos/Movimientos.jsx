@@ -1,52 +1,97 @@
-// ✅ REEMPLAZAR COMPLETO
 // src/components/Movimientos/Movimientos.jsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import BASE_URL from "../../config/config";
 import "../Global/Global_css/Global_Section.css";
 import "../Global/Global_css/Global_responsive.css";
 
-// ✅ MODALES
-import ModalCargaRapidaMovimientos from "./modales/ModalCargaRapidaMovimientos";
+// MODALES
 import ModalEditarMovimiento from "./modales/ModalEditarMovimiento";
 import ModalEliminarMovimientos from "./modales/ModalEliminarMovimientos";
 
-// ✅ NUEVO: FACTURACIÓN (buscar cliente)
+// FACTURACIÓN
 import ModalFacturaBuscarCliente from "../Mov_Subsection/Facturacion/ModalFacturaBuscarCliente.jsx";
 
-// ✅ Toast global
+// Toast global
 import Toast from "../Global/Toast.jsx";
+
+// Calendario
+import Calendario from "../Global/Calendario/Calendario.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPenToSquare,
   faTrashCan,
-  faPlus,
   faMagnifyingGlass,
   faCalendarDays,
   faFileExcel,
-  faFileInvoiceDollar, // ✅ NUEVO
+  faFileInvoiceDollar,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
 
-// ✅ NUEVO: Listas desde Dashboard/Provider
 import { useListas } from "../../context/ListasContext";
 
 /* =========================
-   DEV: Loader mínimo (opcional)
+   Config
 ========================= */
-const MIN_LOADING_MS = 0; // 0 desactiva
-const FORCE_SHOW_LOADER_DEV = false; // true solo dev
-
-/* =========================
-   PERF: paginado
-========================= */
-const PAGE_SIZE = 100; // ✅ SIEMPRE 100 de arranque
-
-/* =========================
-   Skeleton rows (shimmer)
-========================= */
+const MIN_LOADING_MS = 0;
+const FORCE_SHOW_LOADER_DEV = false;
+const PAGE_SIZE = 100;
 const SKELETON_ROWS = 10;
+
+/* =========================
+   Date helpers
+========================= */
+function formatDateISO(d) {
+  if (!d) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatDateLabel(d) {
+  if (!d) return "";
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}/${d.getFullYear()}`;
+}
+
+function defaultRange() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { from, to };
+}
+
+const MOV_DATE_CACHE_KEY = "mov_daterange_cache";
+
+function readCachedRange() {
+  try {
+    const raw = localStorage.getItem(MOV_DATE_CACHE_KEY);
+    if (!raw) return { from: null, to: null };
+    const parsed = JSON.parse(raw);
+    return {
+      from: parsed.from ? new Date(parsed.from) : null,
+      to: parsed.to ? new Date(parsed.to) : null,
+    };
+  } catch {
+    return { from: null, to: null };
+  }
+}
+
+function writeCachedRange(range) {
+  try {
+    localStorage.setItem(
+      MOV_DATE_CACHE_KEY,
+      JSON.stringify({
+        from: range.from ? range.from.toISOString() : null,
+        to: range.to ? range.to.toISOString() : null,
+      })
+    );
+  } catch {}
+}
 
 /* =========================
    Helpers
@@ -77,42 +122,36 @@ function pick(obj, keys, fallback = "") {
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "-";
-
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
-    const yyyy = m1[1];
-    const mm = String(Number(m1[2])).padStart(2, "0");
-    const dd = String(Number(m1[3])).padStart(2, "0");
-    return `${dd}/${mm}/${yyyy}`;
+    return `${String(Number(m1[3])).padStart(2, "0")}/${String(Number(m1[2])).padStart(
+      2,
+      "0"
+    )}/${m1[1]}`;
   }
-
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) {
-    const dd = String(Number(m2[1])).padStart(2, "0");
-    const mm = String(Number(m2[2])).padStart(2, "0");
-    const yyyy = m2[3];
-    return `${dd}/${mm}/${yyyy}`;
+    return `${String(Number(m2[1])).padStart(2, "0")}/${String(Number(m2[2])).padStart(
+      2,
+      "0"
+    )}/${m2[3]}`;
   }
-
   return s;
 }
 
-/* ✅ Período helpers (UI MM-YYYY) <-> (API YYYY-MM) */
 function periodoToMMYYYY(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
-
-  let m = "";
-  let y = "";
-
+  let m = "",
+    y = "";
   if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    y = parts[0];
-    m = parts[1];
+    const p = s.split(/[-/]/);
+    y = p[0];
+    m = p[1];
   } else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    m = parts[0];
-    y = parts[1];
+    const p = s.split(/[-/]/);
+    m = p[0];
+    y = p[1];
   } else if (/^\d{6}$/.test(s)) {
     const a = Number(s.slice(0, 4));
     if (a >= 1900 && a <= 2100) {
@@ -122,59 +161,27 @@ function periodoToMMYYYY(input) {
       m = s.slice(0, 2);
       y = s.slice(2);
     }
-  } else {
-    return s;
-  }
-
-  const mm = String(Number(m)).padStart(2, "0");
-  const yyyy = String(y);
-  return `${mm}-${yyyy}`;
+  } else return s;
+  return `${String(Number(m)).padStart(2, "0")}-${y}`;
 }
 
 function periodoToYYYYMM(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
-
   if (/^\d{1,2}-\d{4}$/.test(s)) {
     const [mmRaw, yyyy] = s.split("-");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
+    return `${yyyy}-${String(Number(mmRaw)).padStart(2, "0")}`;
   }
   if (/^\d{4}-\d{1,2}$/.test(s)) {
     const [yyyy, mmRaw] = s.split("-");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
+    return `${yyyy}-${String(Number(mmRaw)).padStart(2, "0")}`;
   }
-  if (/^\d{4}\/\d{1,2}$/.test(s)) {
-    const [yyyy, mmRaw] = s.split("/");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{1,2}\/\d{4}$/.test(s)) {
-    const [mmRaw, yyyy] = s.split("/");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      const yyyy = s.slice(0, 4);
-      const mm = String(Number(s.slice(4))).padStart(2, "0");
-      return `${yyyy}-${mm}`;
-    } else {
-      const mm = String(Number(s.slice(0, 2))).padStart(2, "0");
-      const yyyy = s.slice(2);
-      return `${yyyy}-${mm}`;
-    }
-  }
-
   return s;
 }
 
-/* ✅ Auth (X-Session) */
+/* Auth */
 function getAuthInfo() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
-
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
@@ -187,11 +194,10 @@ function getAuthInfo() {
       0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
-
   return { sessionKey, idUsuario };
 }
 
-/* ✅ Excel */
+/* Excel */
 function slugifySheetName(name) {
   const s = String(name || "Movimientos")
     .replace(/[\[\]\*\/\\\?\:]/g, " ")
@@ -203,14 +209,13 @@ function slugifySheetName(name) {
 function buildExportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((r) => {
     const total = pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0);
-
     const cliente = safeText(pick(r, ["cliente", "nombre_cliente", "razon_social_cliente"], ""));
-    const proveedor = safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""));
+    const proveedor = safeText(
+      pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")
+    );
     const tercero = cliente !== "-" ? cliente : proveedor;
-
     return {
       FECHA: safeText(formatFechaDMY(pick(r, ["fecha", "fecha_movimiento", "created_at"], ""))),
-      PERIODO: safeText(periodoToMMYYYY(pick(r, ["periodo"], ""))),
       DESCRIPCION: safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
       "TIPO PAGO": safeText(pick(r, ["medio_pago_nombre", "medio_pago", "tipo_pago", "forma_pago"], "")),
       "CLIENTE/PROVEEDOR": tercero,
@@ -222,87 +227,88 @@ function buildExportRows(rows) {
 export default function Movimientos() {
   const API = `${BASE_URL}/api.php`;
 
-  // ✅ LISTAS CENTRALIZADAS (ya precargadas en Dashboard)
   const {
     lists: listasCtx,
     loadingLists: loadingListsCtx,
     errorLists: errorListsCtx,
     ensureListsLoaded,
-    refreshLists,
   } = useListas();
 
   const [rows, setRows] = useState([]);
-
-  const [loadingRows, setLoadingRows] = useState(false); // carga principal
-  const [loadingMore, setLoadingMore] = useState(false); // cargar más / cargar todos
-  const [loadingAll, setLoadingAll] = useState(false); // ✅ cargar todos
-
+  const [loadingRows, setLoadingRows] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingAll, setLoadingAll] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
-  // filtros
-  const [fPeriodo, setFPeriodo] = useState(""); // MM-YYYY
+  /* Date range (reemplaza periodo) */
+  const [dateRange, setDateRange] = useState(() => {
+    const cached = readCachedRange();
+    return cached.from ? cached : defaultRange();
+  });
+  const [calOpen, setCalOpen] = useState(false);
+
   const [q, setQ] = useState("");
 
-  // paginado
+  /* paginado */
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(null);
 
-  // modales
-  const [openAdd, setOpenAdd] = useState(false);
+  /* modales */
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
-
-  // ✅ NUEVO: modal facturar
   const [openFacturar, setOpenFacturar] = useState(false);
 
-  // toast
+  /* toast */
   const [toast, setToast] = useState(null);
-  const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
-    setToast({ tipo, mensaje, duracion });
-  }, []);
+  const showToast = useCallback(
+    (tipo, mensaje, duracion = 2800) => setToast({ tipo, mensaje, duracion }),
+    []
+  );
   const closeToast = useCallback(() => setToast(null), []);
 
-  // cache por periodoAPI|q  -> { rows, hasMore, nextOffset }
   const cacheRef = useRef(new Map());
-
-  // ✅ ID global monotónico (para descartar respuestas viejas)
   const reqIdRef = useRef(0);
-
-  // ✅ tokens por tipo de carga (evita que una request vieja apague loaders)
-  const rowsReqIdRef = useRef(0); // request activa de "carga principal"
-  const moreReqIdRef = useRef(0); // request activa de "append"
-
-  // ✅ Debounce búsqueda
+  const rowsReqIdRef = useRef(0);
+  const moreReqIdRef = useRef(0);
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
-
-  // ✅ token para cortar loops de "cargar todos" si cambia periodo/q
   const loadAllTokenRef = useRef(0);
 
-  // ✅ Skeleton (FIX anti-parpadeo)
   const [showSkeleton, setShowSkeleton] = useState(false);
 
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    };
-  }, []);
+    },
+    []
+  );
 
-  /* =========================
-     API helpers (X-Session)
-  ========================= */
-  const buildHeaders = useCallback(() => {
+  /* guardar rango */
+  useEffect(() => {
+    writeCachedRange(dateRange);
+  }, [dateRange]);
+
+  /* label del botón trigger */
+  const rangeLabel = useMemo(() => {
+    const { from, to } = dateRange;
+    if (!from) return "Seleccionar período";
+    if (!to || formatDateISO(from) === formatDateISO(to)) return formatDateLabel(from);
+    return `${formatDateLabel(from)} → ${formatDateLabel(to)}`;
+  }, [dateRange]);
+
+  /* API helpers */
+  const buildHeadersGET = useCallback(() => {
     const { sessionKey } = getAuthInfo();
-    const h = { "Content-Type": "application/json" };
+    const h = {};
     if (sessionKey) h["X-Session"] = sessionKey;
     return h;
   }, []);
 
-  const buildHeadersGET = useCallback(() => {
+  const buildHeaders = useCallback(() => {
     const { sessionKey } = getAuthInfo();
-    const h = {};
+    const h = { "Content-Type": "application/json" };
     if (sessionKey) h["X-Session"] = sessionKey;
     return h;
   }, []);
@@ -338,36 +344,17 @@ export default function Movimientos() {
     [buildHeaders, parseJsonOrThrow]
   );
 
-  const refreshPeriodos = useCallback(async () => {
-    try {
-      await refreshLists();
-    } catch {}
-  }, [refreshLists]);
-
-  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
-    const periodoAPI = periodoToYYYYMM(periodoUI);
-    const prefix = `${periodoAPI}|`;
-    for (const k of cacheRef.current.keys()) {
-      if (String(k).startsWith(prefix)) cacheRef.current.delete(k);
-    }
-  }, []);
-
-  /* =========================
-     LOAD ROWS (paginado real)
-     ✅ include_total por defecto OFF (SaaS)
-  ========================= */
+  /* =========================================================
+     LOAD ROWS por rango de fechas
+  ========================================================= */
   const loadRows = useCallback(
     async (opts = {}) => {
-      const periodoUI = typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
+      const range = opts.dateRange ?? dateRange;
       const qLocal = typeof opts.q === "string" ? opts.q : q;
-
       const append = !!opts.append;
       const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
 
-      const perUI = periodoToMMYYYY(periodoUI);
-
-      // ⛔ sin período => limpiar
-      if (!perUI) {
+      if (!range?.from) {
         setRows([]);
         setHasMore(false);
         setNextOffset(null);
@@ -379,27 +366,26 @@ export default function Movimientos() {
         return { hasMore: false, nextOffset: null, received: 0 };
       }
 
-      const periodoAPI = periodoToYYYYMM(perUI);
+      const desde = formatDateISO(range.from);
+      const hasta = formatDateISO(range.to || range.from);
       const qKey = (qLocal || "").trim();
-      const cacheKey = `${periodoAPI}|${qKey}`;
-
+      const cacheKey = `${desde}|${hasta}|${qKey}`;
       const myReqId = ++reqIdRef.current;
 
-      // ✅ cache SOLO para carga principal offset=0
-      if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
+      if (
+        !append &&
+        offset === 0 &&
+        cacheRef.current.has(cacheKey) &&
+        !FORCE_SHOW_LOADER_DEV
+      ) {
         const cached = cacheRef.current.get(cacheKey);
-
         rowsReqIdRef.current = myReqId;
-        if (rowsReqIdRef.current !== myReqId) return null;
-
         setShowSkeleton(false);
         setLoadingRows(false);
-
         setRows(Array.isArray(cached?.rows) ? cached.rows : []);
         setHasMore(!!cached?.hasMore);
         setNextOffset(cached?.nextOffset ?? null);
         setError("");
-
         return {
           hasMore: !!cached?.hasMore,
           nextOffset: cached?.nextOffset ?? null,
@@ -422,13 +408,11 @@ export default function Movimientos() {
       try {
         const sp = new URLSearchParams();
         sp.set("action", "movimientos_listar");
-        sp.set("periodo", periodoAPI);
+        sp.set("fecha_desde", desde);
+        sp.set("fecha_hasta", hasta);
         if (qKey) sp.set("q", qKey);
         sp.set("limit", String(PAGE_SIZE));
         sp.set("offset", String(offset));
-
-        // ✅ FIX BUG: el backend espera include_total (no include_count)
-        // ✅ SaaS: COUNT pesado opcional (default 0)
         sp.set("include_total", "0");
 
         const data = await apiGet(`${API}?${sp.toString()}`);
@@ -441,7 +425,9 @@ export default function Movimientos() {
 
         const newHasMore = !!data.has_more;
         const newNextOffset =
-          data.next_offset !== undefined && data.next_offset !== null ? Number(data.next_offset) : null;
+          data.next_offset !== undefined && data.next_offset !== null
+            ? Number(data.next_offset)
+            : null;
 
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
@@ -454,8 +440,7 @@ export default function Movimientos() {
               setRows((prev) => {
                 const base = Array.isArray(prev) ? prev : [];
                 const seen = new Set(base.map((x) => String(x?.id_movimiento)));
-                const add = movsNorm.filter((x) => !seen.has(String(x?.id_movimiento)));
-                return [...base, ...add];
+                return [...base, ...movsNorm.filter((x) => !seen.has(String(x?.id_movimiento)))];
               });
             } else {
               setRows(movsNorm);
@@ -490,13 +475,10 @@ export default function Movimientos() {
       } catch (e) {
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
-
         return await new Promise((resolve) => {
           setTimeout(() => {
             if (myReqId !== reqIdRef.current) return resolve(null);
-
             setError(e?.message || "Error cargando movimientos.");
-
             if (append) {
               if (moreReqIdRef.current === myReqId) setLoadingMore(false);
             } else {
@@ -505,100 +487,69 @@ export default function Movimientos() {
                 setShowSkeleton(false);
               }
             }
-
             resolve(null);
           }, remaining);
         });
       }
     },
-    [API, apiGet, fPeriodo, q]
+    [API, apiGet, dateRange, q]
   );
 
-  /* =========================
-     ✅ INIT: asegurar listas + cargar rows
-  ========================= */
+  /* Init */
   useEffect(() => {
     let alive = true;
-
     (async () => {
-      const loadedLists = await ensureListsLoaded({ force: false, background: true }).catch(() => null);
+      await ensureListsLoaded({ force: false, background: true }).catch(() => null);
       if (!alive) return;
-
-      const periodosSrc = loadedLists?.periodos ?? listasCtx?.periodos;
-      const periodos = Array.isArray(periodosSrc) ? periodosSrc : [];
-      const perDefault = periodos[0] || "";
-
-      if (perDefault) {
-        setFPeriodo((prev) => prev || perDefault);
-        await loadRows({ periodo: perDefault, q: "", offset: 0, append: false });
-      } else {
-        setRows([]);
-        setHasMore(false);
-        setNextOffset(null);
-        setLoadingRows(false);
-        setShowSkeleton(false);
-      }
+      await loadRows({ dateRange, q: "", offset: 0, append: false });
     })();
-
     return () => {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ sync período si desaparece
+  /* Debounce búsqueda */
   useEffect(() => {
-    const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos : [];
-
-    if (periodos.length === 0) {
-      if (fPeriodo !== "") {
-        setFPeriodo("");
-        setRows([]);
-        setHasMore(false);
-        setNextOffset(null);
-      }
-      return;
-    }
-
-    const current = periodoToMMYYYY(fPeriodo);
-    if (current && !periodos.includes(current)) {
-      const next = periodos[0];
-      setFPeriodo(next);
-      invalidateCacheForPeriodo(next);
-      loadRows({ periodo: next, q: "", offset: 0, append: false });
-    }
-  }, [listasCtx?.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
-
-  // debounce búsqueda
-  useEffect(() => {
-    if (!fPeriodo) return;
-
     if (skipSearchRef.current) {
       skipSearchRef.current = false;
       return;
     }
-
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-
     searchTimerRef.current = setTimeout(() => {
-      loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
+      loadRows({ dateRange, q, offset: 0, append: false });
     }, 250);
-
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [q, fPeriodo, loadRows]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, dateRange]);
 
-  const filteredRows = useMemo(() => {
-    const fPer = periodoToMMYYYY(fPeriodo);
-    if (!fPer) return [];
-    return (Array.isArray(rows) ? rows : []).filter(
-      (r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer)
-    );
-  }, [rows, fPeriodo]);
+  const invalidateCache = useCallback(() => {
+    cacheRef.current.clear();
+  }, []);
 
-  const columns = useMemo(() => {
-    return [
+  /* Cambio de rango */
+  const handleRangeChange = useCallback(
+    (range) => {
+      setDateRange(range);
+      setQ("");
+      skipSearchRef.current = true;
+      loadAllTokenRef.current += 1;
+      invalidateCache();
+      if (range.from && range.to) {
+        setCalOpen(false);
+        loadRows({ dateRange: range, q: "", offset: 0, append: false });
+      }
+    },
+    [loadRows, invalidateCache]
+  );
+
+  /* filteredRows */
+  const filteredRows = useMemo(() => (Array.isArray(rows) ? rows : []), [rows]);
+
+  const columns = useMemo(
+    () => [
       {
         key: "descripcion",
         label: "DESCRIPCIÓN",
@@ -619,9 +570,8 @@ export default function Movimientos() {
         align: "left",
         fr: 1.6,
         render: (r) => {
-          const cliente = safeText(pick(r, ["cliente", "nombre_cliente", "razon_social_cliente"], ""));
-          if (cliente !== "-") return cliente;
-          return safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""));
+          const c = safeText(pick(r, ["cliente", "nombre_cliente", "razon_social_cliente"], ""));
+          return c !== "-" ? c : safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""));
         },
       },
       {
@@ -629,255 +579,158 @@ export default function Movimientos() {
         label: "TOTAL",
         align: "center",
         fr: 1.0,
-        render: (r) => {
-          const total = pick(r, ["monto_total", "monto_total_final", "total", "importe_total", "monto", "importe"], 0);
-          return moneyARS(total);
-        },
+        render: (r) =>
+          moneyARS(pick(r, ["monto_total", "monto_total_final", "total", "importe_total", "monto", "importe"], 0)),
       },
       { key: "acciones", label: "ACCIONES", align: "center", fr: 0.8, render: () => null },
-    ];
-  }, []);
+    ],
+    []
+  );
 
   const gridCols = useMemo(() => columns.map((c) => `${Number(c.fr) || 1}fr`).join(" "), [columns]);
 
+  /* Export Excel */
   const exportToExcel = useCallback(() => {
     try {
       const dataToExport = buildExportRows(filteredRows);
-
       if (!dataToExport.length) {
         showToast("error", "No hay datos para exportar.", 2500);
         return;
       }
 
+      // ✅ ARREGLO: escapar comillas internas
       if (hasMore) {
-        showToast(
-          "error",
-          "Ojo: faltan registros sin cargar. Si querés exportar todo, tocá “Cargar todos” primero.",
-          5200
-        );
+        showToast("error", "Faltan registros sin cargar. Tocá \"Cargar todos\" primero.", 5200);
       }
 
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(dataToExport);
       XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Movimientos_Vista"));
-
-      const per = periodoToMMYYYY(fPeriodo) || "SIN_PERIODO";
-      XLSX.writeFile(wb, `movimientos_vista_${per}.xlsx`);
+      XLSX.writeFile(
+        wb,
+        `movimientos_${formatDateISO(dateRange.from)}_${formatDateISO(dateRange.to || dateRange.from)}.xlsx`
+      );
       showToast("exito", "Excel exportado.", 2200);
     } catch (e) {
       showToast("error", e?.message || "Error exportando Excel.", 3500);
     }
-  }, [filteredRows, fPeriodo, showToast, hasMore]);
+  }, [filteredRows, dateRange, showToast, hasMore]);
 
-  /* =========================================================
-     ✅ Guardar 1 movimiento
-  ========================================================= */
+  /* Save movimiento (edit) */
   const saveMovimiento = async (payload, isEdit) => {
     setError("");
-
     const { idUsuario } = getAuthInfo();
     const action = isEdit ? "movimientos_actualizar" : "movimientos_crear";
-
-    const payloadNorm = {
-      ...(payload || {}),
-      periodo: periodoToYYYYMM(payload?.periodo),
-    };
-
-    const data = await apiPostJson(`${API}?action=${action}`, {
-      ...payloadNorm,
-      idUsuario,
-    });
-
+    const payloadNorm = { ...(payload || {}), periodo: periodoToYYYYMM(payload?.periodo) };
+    const data = await apiPostJson(`${API}?action=${action}`, { ...payloadNorm, idUsuario });
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
   };
 
-  /* =========================================================
-     ✅ Guardar BATCH (CARGA RÁPIDA)
-  ========================================================= */
-  const saveBatchMovimientos = useCallback(
-    async (payloads) => {
-      const arr = Array.isArray(payloads) ? payloads : [];
-      if (!arr.length) throw new Error("No hay filas para guardar.");
-
-      const { idUsuario } = getAuthInfo();
-
-      const movimientos = arr.map((p) => ({
-        ...(p || {}),
-        periodo: periodoToYYYYMM(p?.periodo),
-      }));
-
-      const data = await apiPostJson(`${API}?action=movimientos_crear_batch}`, {
-        movimientos,
-        idUsuario,
-      });
-
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la carga rápida.");
-
-      invalidateCacheForPeriodo(fPeriodo);
-      await loadRows({ periodo: fPeriodo, q: "", offset: 0, append: false });
-
-      return data;
-    },
-    [API, apiPostJson, fPeriodo, invalidateCacheForPeriodo, loadRows]
-  );
-
-  const handleChangePeriodo = async (valueUI) => {
-    const ui = periodoToMMYYYY(valueUI);
-    setFPeriodo(ui);
-    setQ("");
-    skipSearchRef.current = true;
-
-    // ✅ corta "cargar todos" en curso
-    loadAllTokenRef.current += 1;
-
-    invalidateCacheForPeriodo(ui);
-    await loadRows({ periodo: ui, q: "", offset: 0, append: false });
-  };
-
-  /* =========================================================
-     ✅ BOTÓN: "Cargar todos" (robusto si cambia periodo/q)
-  ========================================================= */
+  /* Cargar todos */
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
     if (nextOffset === null) return;
-
     setLoadingAll(true);
     showToast("cargando", "Cargando todos los movimientos…", 12000);
-
     const myToken = (loadAllTokenRef.current += 1);
-
     let offset = nextOffset;
     let guard = 0;
-
     try {
       while (offset !== null && guard < 3000) {
         if (myToken !== loadAllTokenRef.current) break;
-
-        const currentPer = periodoToMMYYYY(fPeriodo);
-        const currentQ = (q || "").trim();
-
-        const res = await loadRows({ periodo: currentPer, q: currentQ, offset, append: true });
+        const res = await loadRows({ dateRange, q: (q || "").trim(), offset, append: true });
         if (!res) break;
-
         offset = res.nextOffset;
         guard += 1;
-
         if (!res.hasMore || offset === null) break;
       }
-
-      if (myToken === loadAllTokenRef.current) {
-        showToast("exito", "Listo: ya se cargaron todos.", 2600);
-      }
+      if (myToken === loadAllTokenRef.current) showToast("exito", "Listo: ya se cargaron todos.", 2600);
     } catch (e) {
       showToast("error", e?.message || "Error cargando todos.", 4200);
     } finally {
       if (myToken === loadAllTokenRef.current) setLoadingAll(false);
     }
-  }, [hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll, nextOffset, fPeriodo, q, loadRows, showToast]);
+  }, [hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll, nextOffset, dateRange, q, loadRows, showToast]);
 
   const softLoading = loadingRows && showSkeleton;
 
-  const skelWidths = useMemo(() => {
-    return {
+  const skelWidths = useMemo(
+    () => ({
       descripcion: ["72%", "58%", "66%", "48%"],
       tipo_pago: ["44%", "34%", "40%", "30%"],
       tercero: ["62%", "54%", "46%", "58%"],
       total: ["38%", "30%", "34%", "28%"],
-    };
-  }, []);
+    }),
+    []
+  );
 
-  const renderSkeletonRow = (idx) => {
-    return (
-      <div
-        key={`skel-${idx}`}
-        className="mov-gridTable mov-gridTable--row mov-row--skeleton"
-        style={{ gridTemplateColumns: gridCols }}
-        role="row"
-        aria-hidden="true"
-      >
-        {columns.map((c) => {
-          if (c.key === "acciones") {
-            return (
-              <div
-                key={c.key}
-                className="mov-gridCell mov-gridCell--actions is-center"
-                role="cell"
-                data-label={c.label}
-              >
-                <div className="mov-skelActions">
-                  <span className="mov-skelIcon" />
-                  <span className="mov-skelIcon" />
-                </div>
-              </div>
-            );
-          }
-
-          const list = skelWidths[c.key] || ["60%"];
-          const w = list[idx % list.length];
-
+  const renderSkeletonRow = (idx) => (
+    <div
+      key={`skel-${idx}`}
+      className="mov-gridTable mov-gridTable--row mov-row--skeleton"
+      style={{ gridTemplateColumns: gridCols }}
+      role="row"
+      aria-hidden="true"
+    >
+      {columns.map((c) => {
+        if (c.key === "acciones")
           return (
             <div
               key={c.key}
-              className={[
-                "mov-gridCell",
-                c.align === "right" ? "is-right" : "",
-                c.align === "center" ? "is-center" : "",
-              ].join(" ")}
+              className="mov-gridCell mov-gridCell--actions is-center"
               role="cell"
               data-label={c.label}
             >
-              <span className="mov-skeletonBar" style={{ width: w }} />
+              <div className="mov-skelActions">
+                <span className="mov-skelIcon" />
+                <span className="mov-skelIcon" />
+              </div>
             </div>
           );
-        })}
-      </div>
-    );
-  };
-
-  const lists = listasCtx || {
-    periodos: [],
-    clasificaciones: [],
-    clientes: [],
-    cuentas_corrientes: [],
-    detalles: [],
-    medios_pago: [],
-    proveedores: [],
-    tipos_movimiento: [],
-    tipos_venta: [],
-    tipos_operacion: [],
-  };
+        const list = skelWidths[c.key] || ["60%"];
+        const w = list[idx % list.length];
+        return (
+          <div
+            key={c.key}
+            className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")}
+            role="cell"
+            data-label={c.label}
+          >
+            <span className="mov-skeletonBar" style={{ width: w }} />
+          </div>
+        );
+      })}
+    </div>
+  );
 
   const listsSafe = useMemo(() => {
     const src = listasCtx || {};
+    const safe = (k) => (Array.isArray(src[k]) ? src[k] : []);
     return {
-      periodos: Array.isArray(src.periodos) ? src.periodos : lists.periodos,
-      clasificaciones: Array.isArray(src.clasificaciones) ? src.clasificaciones : lists.clasificaciones,
-      clientes: Array.isArray(src.clientes) ? src.clientes : lists.clientes,
-      cuentas_corrientes: Array.isArray(src.cuentas_corrientes) ? src.cuentas_corrientes : lists.cuentas_corrientes,
-      detalles: Array.isArray(src.detalles) ? src.detalles : lists.detalles,
-      medios_pago: Array.isArray(src.medios_pago) ? src.medios_pago : lists.medios_pago,
-      proveedores: Array.isArray(src.proveedores) ? src.proveedores : lists.proveedores,
-      tipos_movimiento: Array.isArray(src.tipos_movimiento) ? src.tipos_movimiento : lists.tipos_movimiento,
-      tipos_venta: Array.isArray(src.tipos_venta) ? src.tipos_venta : lists.tipos_venta,
-      tipos_operacion: Array.isArray(src.tipos_operacion) ? src.tipos_operacion : lists.tipos_operacion,
+      periodos: safe("periodos"),
+      clasificaciones: safe("clasificaciones"),
+      clientes: safe("clientes"),
+      cuentas_corrientes: safe("cuentas_corrientes"),
+      detalles: safe("detalles"),
+      medios_pago: safe("medios_pago"),
+      proveedores: safe("proveedores"),
+      tipos_movimiento: safe("tipos_movimiento"),
+      tipos_venta: safe("tipos_venta"),
+      tipos_operacion: safe("tipos_operacion"),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listasCtx]);
 
   const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
   return (
     <div className="mov-page">
-      {toast && (
-        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
-      )}
+      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
 
       {errorListsCtx && (
         <div className="mov-alert" role="alert">
           {errorListsCtx}
         </div>
       )}
-
       {error && (
         <div className="mov-alert" role="alert">
           {error}
@@ -896,26 +749,30 @@ export default function Movimientos() {
             </div>
 
             <div className="mov-headFilters">
-              <div className="mov-filter">
+              {/* Calendario */}
+              <div className="mov-filter mov-filter--cal" style={{ position: "relative" }}>
                 <label>
                   <FontAwesomeIcon icon={faCalendarDays} /> Período
                 </label>
-                <select
-                  value={periodoToMMYYYY(fPeriodo)}
-                  onChange={(e) => handleChangePeriodo(e.target.value)}
-                  disabled={loadingRows || loadingListsCtx || loadingMore || loadingAll}
+
+                <button
+                  type="button"
+                  className={`mov-calTrigger ${calOpen ? "is-open" : ""}`}
+                  onClick={() => setCalOpen((v) => !v)}
+                  disabled={isAnyLoading || loadingListsCtx}
                 >
-                  {(listsSafe.periodos || []).map((p) => {
-                    const ui = periodoToMMYYYY(p);
-                    return (
-                      <option key={ui} value={ui}>
-                        {ui}
-                      </option>
-                    );
-                  })}
-                </select>
+                  {rangeLabel}
+                  <span className="mov-calTrigger__arrow">{calOpen ? "▲" : "▼"}</span>
+                </button>
+
+                {calOpen && (
+                  <div className="mov-calDropdown">
+                    <Calendario value={dateRange} onChange={handleRangeChange} onClose={() => setCalOpen(false)} />
+                  </div>
+                )}
               </div>
 
+              {/* Búsqueda */}
               <div className="mov-search">
                 <label>
                   <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
@@ -929,13 +786,12 @@ export default function Movimientos() {
                         e.preventDefault();
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         skipSearchRef.current = true;
-                        await loadRows({ periodo: fPeriodo, q: e.currentTarget.value, offset: 0, append: false });
+                        await loadRows({ dateRange, q: e.currentTarget.value, offset: 0, append: false });
                       }
                     }}
                     placeholder="Buscar…"
                     disabled={loadingListsCtx || loadingAll}
                   />
-
                   {q.trim() !== "" && (
                     <button
                       type="button"
@@ -945,7 +801,7 @@ export default function Movimientos() {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
                         skipSearchRef.current = true;
-                        await loadRows({ periodo: fPeriodo, q: "", offset: 0, append: false });
+                        await loadRows({ dateRange, q: "", offset: 0, append: false });
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
                       disabled={loadingAll}
@@ -959,7 +815,7 @@ export default function Movimientos() {
           </div>
 
           <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            {/* ✅ NUEVO: FACTURAR */}
+            {/* Facturar */}
             <button
               type="button"
               className="mov-btn mov-btn--ghost mov-btn--clear"
@@ -975,6 +831,7 @@ export default function Movimientos() {
               <span className="mov-btnText mov-btnText--mobile">Facturar</span>
             </button>
 
+            {/* Exportar Excel */}
             <button
               type="button"
               className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
@@ -983,23 +840,8 @@ export default function Movimientos() {
               title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
             >
               <FontAwesomeIcon icon={faFileExcel} />
-              <span className="mov-btnText mov-btnText--desktop">Exportar </span>
+              <span className="mov-btnText mov-btnText--desktop">Exportar</span>
               <span className="mov-btnText mov-btnText--mobile">Exportar</span>
-            </button>
-
-            <button
-              type="button"
-              className="mov-btn mov-btn--primary"
-              onClick={async () => {
-                await ensureListsLoaded({ force: false, background: true }).catch(() => {});
-                setOpenAdd(true);
-              }}
-              disabled={false} // ✅ SIEMPRE HABILITADO
-              title="Nuevo Movimiento"
-            >
-              <FontAwesomeIcon icon={faPlus} />
-              <span className="mov-btnText mov-btnText--desktop">Nuevo Movimiento</span>
-              <span className="mov-btnText mov-btnText--mobile">Movimiento</span>
             </button>
           </div>
         </div>
@@ -1009,12 +851,7 @@ export default function Movimientos() {
           {columns.map((c) => (
             <div
               key={c.key}
-              className={[
-                "mov-gridCell",
-                "mov-gridCell--head",
-                c.align === "right" ? "is-right" : "",
-                c.align === "center" ? "is-center" : "",
-              ].join(" ")}
+              className={["mov-gridCell", "mov-gridCell--head", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")}
               role="columnheader"
             >
               {c.label}
@@ -1066,13 +903,7 @@ export default function Movimientos() {
                                 type="button"
                                 className="mov-iconBtn mov-iconBtn--danger"
                                 title="Eliminar"
-                                disabled={
-                                  loadingRows ||
-                                  loadingMore ||
-                                  loadingAll ||
-                                  loadingListsCtx ||
-                                  deletingId === r.id_movimiento
-                                }
+                                disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || deletingId === r.id_movimiento}
                                 onClick={() => {
                                   setSelectedRow(r);
                                   setOpenDel(true);
@@ -1089,13 +920,7 @@ export default function Movimientos() {
                       return (
                         <div
                           key={c.key}
-                          className={[
-                            "mov-gridCell",
-                            c.align === "right" ? "is-right" : "",
-                            c.align === "center" ? "is-center" : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
+                          className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].filter(Boolean).join(" ")}
                           role="cell"
                           data-label={c.label}
                           title={typeof val === "string" ? val : undefined}
@@ -1108,11 +933,7 @@ export default function Movimientos() {
                 ))}
 
                 {!isAnyLoading && filteredRows.length === 0 && (
-                  <div className="mov-emptyRow">
-                    {!fPeriodo
-                      ? "No hay período disponible para cargar movimientos."
-                      : "No hay movimientos para mostrar en este período."}
-                  </div>
+                  <div className="mov-emptyRow">No hay movimientos para mostrar en este rango de fechas.</div>
                 )}
 
                 {!loadingRows && filteredRows.length > 0 && hasMore && (
@@ -1140,56 +961,21 @@ export default function Movimientos() {
         </div>
       </section>
 
-      {/* ✅ NUEVO: MODAL FACTURAR (Buscar Cliente) */}
+      {/* Modal Facturar */}
       <ModalFacturaBuscarCliente
         open={openFacturar}
         lists={listsSafe}
-        periodoDefault={fPeriodo}
+        periodoDefault=""
         onToast={showToast}
         onClose={() => setOpenFacturar(false)}
       />
 
-      {/* MODAL CARGA RAPIDA */}
-      <ModalCargaRapidaMovimientos
-        open={openAdd}
-        lists={listsSafe}
-        periodoDefault={fPeriodo}
-        onClose={() => setOpenAdd(false)}
-        onToast={showToast}
-        onSaveBatch={async (payloads) => {
-          try {
-            showToast("cargando", "Guardando carga rápida…", 12000);
-
-            await saveBatchMovimientos(payloads);
-            await refreshPeriodos();
-
-            const firstPer = Array.isArray(payloads) && payloads[0]?.periodo ? payloads[0].periodo : "";
-            const wantedUI = periodoToMMYYYY(firstPer) || fPeriodo;
-
-            setQ("");
-            setFPeriodo(wantedUI);
-
-            // ✅ corta loops en curso
-            loadAllTokenRef.current += 1;
-
-            invalidateCacheForPeriodo(wantedUI);
-            await loadRows({ periodo: wantedUI, q: "", offset: 0, append: false });
-
-            setOpenAdd(false);
-            showToast("exito", "Carga rápida guardada.", 2400);
-          } catch (e) {
-            showToast("error", e?.message || "Error guardando carga rápida.", 4200);
-            throw e;
-          }
-        }}
-      />
-
-      {/* EDIT */}
+      {/* Modal Editar */}
       <ModalEditarMovimiento
         open={openEdit}
         lists={listsSafe}
         row={selectedRow}
-        periodoDefault={fPeriodo}
+        periodoDefault=""
         onClose={() => {
           setOpenEdit(false);
           setSelectedRow(null);
@@ -1199,11 +985,8 @@ export default function Movimientos() {
           try {
             showToast("cargando", "Guardando cambios…", 12000);
             await saveMovimiento(payload, true);
-
-            invalidateCacheForPeriodo(fPeriodo);
-            await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
-            await refreshPeriodos();
-
+            invalidateCache();
+            await loadRows({ dateRange, q, offset: 0, append: false });
             setOpenEdit(false);
             setSelectedRow(null);
             showToast("exito", "Movimiento actualizado.", 2600);
@@ -1214,7 +997,7 @@ export default function Movimientos() {
         }}
       />
 
-      {/* DELETE */}
+      {/* Modal Eliminar */}
       <ModalEliminarMovimientos
         open={openDel}
         row={selectedRow}
@@ -1225,46 +1008,27 @@ export default function Movimientos() {
         }}
         onConfirm={async () => {
           if (!selectedRow?.id_movimiento) return;
-
           const id = selectedRow.id_movimiento;
           setDeletingId(id);
           setError("");
-
           showToast("cargando", "Eliminando movimiento…", 12000);
-
           try {
-            const { idUsuario } = getAuthInfo();
-
+            const { idUsuario, sessionKey } = getAuthInfo();
             const sp = new URLSearchParams();
             sp.set("action", "movimientos_eliminar");
             sp.set("id_movimiento", String(id));
-
-            const data = await (async () => {
-              const res = await fetch(`${API}?${sp.toString()}`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  ...(getAuthInfo().sessionKey ? { "X-Session": getAuthInfo().sessionKey } : {}),
-                },
-                body: JSON.stringify({ idUsuario }),
-              });
-              const txt = await res.text();
-              return JSON.parse(txt || "{}");
-            })();
-
+            const res = await fetch(`${API}?${sp.toString()}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...(sessionKey ? { "X-Session": sessionKey } : {}) },
+              body: JSON.stringify({ idUsuario }),
+            });
+            const data = JSON.parse((await res.text()) || "{}");
             if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
-
             setOpenDel(false);
             setSelectedRow(null);
-
-            // ✅ corta loops en curso
             loadAllTokenRef.current += 1;
-
-            invalidateCacheForPeriodo(fPeriodo);
-            await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
-
-            await refreshPeriodos();
-
+            invalidateCache();
+            await loadRows({ dateRange, q, offset: 0, append: false });
             showToast("exito", "Movimiento eliminado.", 2600);
           } catch (e) {
             setError(e?.message || "Error eliminando movimiento.");

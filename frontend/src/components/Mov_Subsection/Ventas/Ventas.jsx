@@ -1,15 +1,15 @@
-// ✅ REEMPLAZAR COMPLETO
-// src/components/Movimientos/Ventas.jsx
+// src/components/Movimientos/Ventas/Ventas.jsx
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
 import "../../Global/Global_css/Global_Section.css";
 
 import Toast from "../../Global/Toast.jsx";
-
-// (no lo usamos en esta tabla, pero lo dejás si querés)
 import GifCarga from "../../Global/Gif_Carga.jsx";
 import "../../Global/gif_carga.css";
+
+import Calendario from "../../Global/Calendario/Calendario.jsx";
+import "../../Global/Calendario/calendario.css";
 
 import ModalNuevaVenta from "./modales/ModalNuevaVenta.jsx";
 import ModalEditarVenta from "./modales/ModalEditarVenta.jsx";
@@ -63,7 +63,6 @@ function normalizeSearchText(v) {
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "—";
-
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
     const yyyy = m1[1];
@@ -82,78 +81,40 @@ function formatFechaDMY(v) {
 }
 
 /* =========================
-   Período helpers
+   Fecha helpers para rango
 ========================= */
-function periodoToMMYYYY(input) {
-  const s = String(input ?? "").trim();
-  if (!s) return "";
-
-  let m = "";
-  let y = "";
-
-  if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    y = parts[0];
-    m = parts[1];
-  } else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    m = parts[0];
-    y = parts[1];
-  } else if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      y = s.slice(0, 4);
-      m = s.slice(4);
-    } else {
-      m = s.slice(0, 2);
-      y = s.slice(2);
-    }
-  } else {
-    return s;
-  }
-
-  const mm = String(Number(m)).padStart(2, "0");
-  const yyyy = String(y);
-  return `${mm}-${yyyy}`;
+function startOfDay(d) {
+  if (!d) return null;
+  const c = new Date(d);
+  c.setHours(0, 0, 0, 0);
+  return c;
 }
 
-function periodoToYYYYMM(input) {
-  const s = String(input ?? "").trim();
-  if (!s) return "";
+/** Convierte "YYYY-MM-DD" o "DD/MM/YYYY" a Date (sin hora) */
+function parseRowFecha(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m1) return startOfDay(new Date(Number(m1[1]), Number(m1[2]) - 1, Number(m1[3])));
+  const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m2) return startOfDay(new Date(Number(m2[3]), Number(m2[2]) - 1, Number(m2[1])));
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : startOfDay(d);
+}
 
-  if (/^\d{1,2}-\d{4}$/.test(s)) {
-    const [mmRaw, yyyy] = s.split("-");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{4}-\d{1,2}$/.test(s)) {
-    const [yyyy, mmRaw] = s.split("-");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{4}\/\d{1,2}$/.test(s)) {
-    const [yyyy, mmRaw] = s.split("/");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{1,2}\/\d{4}$/.test(s)) {
-    const [mmRaw, yyyy] = s.split("/");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      const yyyy = s.slice(0, 4);
-      const mm = String(Number(s.slice(4))).padStart(2, "0");
-      return `${yyyy}-${mm}`;
-    } else {
-      const mm = String(Number(s.slice(0, 2))).padStart(2, "0");
-      const yyyy = s.slice(2);
-      return `${yyyy}-${mm}`;
-    }
-  }
-  return s;
+/** Formatea Date → "YYYY-MM-DD" para la API */
+function dateToAPI(d) {
+  if (!d) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** "DD/MM/YYYY" para mostrar */
+function formatDateUI(d) {
+  if (!d) return "—";
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
 /* =========================
@@ -161,26 +122,23 @@ function periodoToYYYYMM(input) {
 ========================= */
 function getAuthInfo() {
   const token = (localStorage.getItem("token") || "").trim();
-
   const sessionKey = (
     localStorage.getItem("session_key") ||
     localStorage.getItem("sessionKey") ||
     localStorage.getItem("X-Session") ||
     ""
   ).trim();
-
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
-
   return { token, sessionKey, idUsuario };
 }
 
 /* =========================
-   ✅ ID robusto
+   ID robusto
 ========================= */
 function getMovimientoId(r) {
   const cand =
@@ -194,7 +152,6 @@ function getMovimientoId(r) {
     r?.movimiento_id ??
     r?.id_movimiento_fk ??
     null;
-
   const n = Number(cand);
   if (Number.isFinite(n) && n > 0) return n;
   return null;
@@ -202,7 +159,6 @@ function getMovimientoId(r) {
 function getRowKey(r) {
   const id = getMovimientoId(r);
   if (id) return `id:${id}`;
-
   const f = String(r?.fecha ?? "").trim();
   const c = String(r?.cliente ?? r?.cliente_nombre ?? "").trim();
   const d = String(r?.detalle ?? r?.descripcion ?? r?.concepto ?? "").trim();
@@ -211,12 +167,11 @@ function getRowKey(r) {
 }
 
 /* =========================
-   ✅ FILTRO VENTAS
+   FILTRO VENTAS
 ========================= */
 function hasCliente(r) {
   const idCli = Number(r?.id_cliente ?? r?.cliente_id ?? r?.idCliente ?? r?.id_cliente_fk ?? 0);
   if (Number.isFinite(idCli) && idCli > 0) return true;
-
   const cliTxt = String(
     r?.cliente ?? r?.cliente_nombre ?? r?.nombre_cliente ?? r?.razon_social_cliente ?? ""
   ).trim();
@@ -233,7 +188,6 @@ function hasTipoVentaId(r) {
 function isSalida(r) {
   const tmTxt = normalizeSearchText(r?.tipo_movimiento ?? r?.pago_tipo_movimiento ?? "");
   if (tmTxt.includes("salida")) return true;
-
   const id = Number(r?.id_tipo_movimiento ?? r?.tipo_movimiento_id ?? 0);
   return Number.isFinite(id) && id > 0;
 }
@@ -250,16 +204,12 @@ function isVentaRow(row) {
 function normalizeVentaRow(r) {
   const cliente =
     r?.cliente ?? r?.cliente_nombre ?? r?.nombre_cliente ?? r?.razon_social_cliente ?? "";
-
   const tipoVentaTxt = r?.pago_tipo_venta ?? r?.tipo_venta ?? "";
   const medioPagoNombre = r?.medio_pago_nombre ?? r?.medio_pago ?? r?.pago_medio_pago ?? "";
-
   const idMov = getMovimientoId(r);
-
   return {
     ...r,
     id_movimiento: idMov ?? r?.id_movimiento ?? null,
-    periodo: periodoToMMYYYY(r?.periodo),
     fecha: r?.fecha,
     cliente: String(cliente ?? "").trim() || "",
     pago_tipo_venta: String(tipoVentaTxt ?? "").trim() || "",
@@ -273,10 +223,8 @@ function normalizeVentaRow(r) {
 function rowMatchesQuery(row, query) {
   const qq = normalizeSearchText(query);
   if (!qq) return true;
-
   const montoNum = Number(row?.monto_total || row?.total || 0);
   const parts = [];
-
   if (row && typeof row === "object") {
     for (const k of Object.keys(row)) {
       const val = row[k];
@@ -284,13 +232,26 @@ function rowMatchesQuery(row, query) {
       parts.push(String(val ?? ""));
     }
   }
-
   parts.push(formatFechaDMY(row?.fecha));
-  parts.push(periodoToMMYYYY(row?.periodo));
   parts.push(String(montoNum), String(Math.trunc(montoNum)), moneyARS(montoNum));
-
   const hay = normalizeSearchText(parts.join(" | "));
   return hay.includes(qq);
+}
+
+/* =========================
+   Filtro por rango de fechas
+========================= */
+function rowInDateRange(row, from, to) {
+  if (!from && !to) return true;
+  const fecha = parseRowFecha(row?.fecha);
+  if (!fecha) return true; // si no tiene fecha, no filtrar
+  if (from && fecha < startOfDay(from)) return false;
+  if (to) {
+    const toEnd = startOfDay(to);
+    toEnd.setHours(23, 59, 59, 999);
+    if (fecha > toEnd) return false;
+  }
+  return true;
 }
 
 /* =========================
@@ -327,7 +288,16 @@ export default function Ventas() {
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
-  const [fPeriodo, setFPeriodo] = useState(""); // UI MM-YYYY
+  // Arranca con el mes actual por defecto (igual que Flujo de Caja)
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date();
+    return {
+      from: new Date(now.getFullYear(), now.getMonth(), 1),
+      to: new Date(now.getFullYear(), now.getMonth() + 1, 0),
+    };
+  });
+  const [showCalendario, setShowCalendario] = useState(false);
+
   const [q, setQ] = useState("");
 
   const [hasMore, setHasMore] = useState(false);
@@ -345,11 +315,9 @@ export default function Ventas() {
   const closeToast = useCallback(() => setToast(null), []);
 
   const cacheRef = useRef(new Map());
-
   const reqIdRef = useRef(0);
   const rowsReqIdRef = useRef(0);
   const moreReqIdRef = useRef(0);
-
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
@@ -417,41 +385,21 @@ export default function Ventas() {
     } catch {}
   }, [refreshLists]);
 
-  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
-    const periodoAPI = periodoToYYYYMM(periodoToMMYYYY(periodoUI));
-    const prefix = `${periodoAPI}|`;
-    for (const k of cacheRef.current.keys()) {
-      if (String(k).startsWith(prefix)) cacheRef.current.delete(k);
-    }
-  }, []);
-
   /* =========================
-     LOAD ROWS (paginado)
+     LOAD ROWS (paginado) — ahora usa fecha_desde / fecha_hasta
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
-      const periodoUI = typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
+      const fromDate = opts.from !== undefined ? opts.from : dateRange.from;
+      const toDate = opts.to !== undefined ? opts.to : dateRange.to;
       const qLocal = typeof opts.q === "string" ? opts.q : q;
-
       const append = !!opts.append;
       const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
 
-      const perUI = periodoToMMYYYY(periodoUI);
-      if (!perUI) {
-        rowsRef.current = [];
-        setRows([]);
-        setHasMore(false);
-        setNextOffset(null);
-        setLoadingRows(false);
-        setLoadingMore(false);
-        setLoadingAll(false);
-        setError("");
-        return { hasMore: false, nextOffset: null, received: 0 };
-      }
-
-      const periodoAPI = periodoToYYYYMM(perUI);
+      const fromAPI = dateToAPI(fromDate);
+      const toAPI = dateToAPI(toDate);
       const qKey = (qLocal || "").trim();
-      const cacheKey = `${periodoAPI}|${qKey}`;
+      const cacheKey = `${fromAPI}|${toAPI}|${qKey}`;
 
       const myReqId = ++reqIdRef.current;
       const start = Date.now();
@@ -468,16 +416,13 @@ export default function Ventas() {
       try {
         if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
           if (rowsReqIdRef.current !== myReqId) return null;
-
           const cached = cacheRef.current.get(cacheKey);
           const cachedRows = Array.isArray(cached?.rows) ? cached.rows : [];
           rowsRef.current = cachedRows;
           setRows(cachedRows);
           setHasMore(!!cached?.hasMore);
           setNextOffset(cached?.nextOffset ?? null);
-
           if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
-
           return {
             hasMore: !!cached?.hasMore,
             nextOffset: cached?.nextOffset ?? null,
@@ -487,7 +432,8 @@ export default function Ventas() {
 
         const sp = new URLSearchParams();
         sp.set("action", "ventas_listar");
-        sp.set("periodo", periodoAPI);
+        if (fromAPI) sp.set("fecha_desde", fromAPI);
+        if (toAPI) sp.set("fecha_hasta", toAPI);
         if (qKey) sp.set("q", qKey);
         sp.set("limit", String(PROBE_LIMIT));
         sp.set("offset", String(offset));
@@ -507,7 +453,6 @@ export default function Ventas() {
         const normAll = rawArr.map(normalizeVentaRow);
 
         let newHasMore = data.has_more !== undefined ? !!data.has_more : normAll.length > PAGE_SIZE;
-
         let newNextOffset =
           data.next_offset !== undefined && data.next_offset !== null
             ? Number(data.next_offset)
@@ -516,7 +461,6 @@ export default function Ventas() {
             : null;
 
         const page = newHasMore ? normAll.slice(0, PAGE_SIZE) : normAll;
-
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
 
@@ -527,32 +471,25 @@ export default function Ventas() {
             if (append) {
               const base = Array.isArray(rowsRef.current) ? rowsRef.current : [];
               const seen = new Set(base.map((x) => getRowKey(x)));
-
               const add = page.filter((x) => {
                 const k = getRowKey(x);
                 return k && !seen.has(k);
               });
-
               const merged = [...base, ...add];
               rowsRef.current = merged;
               setRows(merged);
-
               if (add.length === 0) {
                 newHasMore = false;
                 newNextOffset = null;
               }
-
               setHasMore(newHasMore);
               setNextOffset(newNextOffset);
-
               if (moreReqIdRef.current === myReqId) setLoadingMore(false);
             } else {
               rowsRef.current = page;
               setRows(page);
-
               setHasMore(newHasMore);
               setNextOffset(newNextOffset);
-
               if (offset === 0) {
                 cacheRef.current.set(cacheKey, {
                   rows: page,
@@ -560,7 +497,6 @@ export default function Ventas() {
                   nextOffset: newNextOffset,
                 });
               }
-
               if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
             }
 
@@ -577,117 +513,91 @@ export default function Ventas() {
       } catch (e) {
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
-
         return await new Promise((resolve) => {
           setTimeout(() => {
             if (myReqId !== reqIdRef.current) return resolve(null);
-
             setError(e.message || "Error cargando ventas.");
-
             if (append) {
               if (moreReqIdRef.current === myReqId) setLoadingMore(false);
             } else {
               if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
             }
-
             resolve(null);
           }, remaining);
         });
       }
     },
-    [API, apiGet, fPeriodo, q]
+    [API, apiGet, dateRange, q]
   );
 
   /* =========================
-     INIT
+     INIT — carga con mes actual por defecto
   ========================= */
   useEffect(() => {
     let alive = true;
-
     (async () => {
       try {
         await ensureListsLoaded({ force: false, background: true });
       } catch {}
-
       if (!alive) return;
-
-      const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos : [];
-      const perDefault = periodos[0] || "";
-
-      if (perDefault) {
-        setFPeriodo((prev) => prev || perDefault);
-        await loadRows({ periodo: perDefault, q: "", offset: 0, append: false });
-      } else {
-        rowsRef.current = [];
-        setRows([]);
-        setHasMore(false);
-        setNextOffset(null);
-        setLoadingRows(false);
-      }
+      // Carga inicial con el mes actual por defecto
+      const now = new Date();
+      const initFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+      const initTo = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      await loadRows({ from: initFrom, to: initTo, q: "", offset: 0, append: false });
     })();
-
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ sync período si desaparece
+  // Debounce búsqueda
   useEffect(() => {
-    const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos : [];
-
-    if (periodos.length === 0) {
-      if (fPeriodo !== "") {
-        setFPeriodo("");
-        rowsRef.current = [];
-        setRows([]);
-        setHasMore(false);
-        setNextOffset(null);
-      }
-      return;
-    }
-
-    const current = periodoToMMYYYY(fPeriodo);
-    if (current && !periodos.includes(current)) {
-      const next = periodos[0];
-      setFPeriodo(next);
-      invalidateCacheForPeriodo(next);
-      loadRows({ periodo: next, q: "", offset: 0, append: false });
-    }
-  }, [listasCtx?.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
-
-  // ✅ debounce búsqueda
-  useEffect(() => {
-    if (!fPeriodo) return;
-
     if (skipSearchRef.current) {
       skipSearchRef.current = false;
       return;
     }
-
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-
     searchTimerRef.current = setTimeout(() => {
-      loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
+      loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
     }, 250);
-
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [q, fPeriodo, loadRows]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
+
+  /* =========================
+     Handler cambio de rango de fechas
+  ========================= */
+  const handleDateRangeChange = useCallback(
+    async (newRange) => {
+      // Nunca permitir rango vacío — siempre debe haber al menos from
+      if (!newRange.from && !newRange.to) return;
+      setDateRange(newRange);
+      cacheRef.current.clear();
+      skipSearchRef.current = true;
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      // Solo disparar carga si hay rango completo (from + to) o al menos from
+      await loadRows({
+        from: newRange.from,
+        to: newRange.to,
+        q,
+        offset: 0,
+        append: false,
+      });
+    },
+    [loadRows, q]
+  );
 
   /* =========================
      Filtrado client-side
   ========================= */
   const filteredRows = useMemo(() => {
-    const fPer = periodoToMMYYYY(fPeriodo);
-    if (!fPer) return [];
-
     return (Array.isArray(rows) ? rows : [])
-      .filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(fPer))
       .filter((r) => isVentaRow(r))
+      .filter((r) => rowInDateRange(r, dateRange.from, dateRange.to))
       .filter((r) => rowMatchesQuery(r, q));
-  }, [rows, fPeriodo, q]);
+  }, [rows, dateRange, q]);
 
   /* =========================
      Columnas
@@ -762,7 +672,27 @@ export default function Ventas() {
   }, [columns]);
 
   /* =========================
-     Excel “Ventas”
+     Label para el botón del calendario
+  ========================= */
+  const dateRangeLabel = useMemo(() => {
+    const { from, to } = dateRange;
+    if (!from && !to) return "Seleccionar fechas";
+    if (from && to) {
+      if (
+        from.getFullYear() === to.getFullYear() &&
+        from.getMonth() === to.getMonth() &&
+        from.getDate() === to.getDate()
+      ) {
+        return formatDateUI(from);
+      }
+      return `${formatDateUI(from)} → ${formatDateUI(to)}`;
+    }
+    if (from) return `Desde ${formatDateUI(from)}`;
+    return `Hasta ${formatDateUI(to)}`;
+  }, [dateRange]);
+
+  /* =========================
+     Excel
   ========================= */
   const exportToExcel = useCallback(() => {
     try {
@@ -770,11 +700,10 @@ export default function Ventas() {
         showToast("error", "No hay datos para exportar.", 2500);
         return;
       }
-
       if (hasMore) {
         showToast(
           "error",
-          "Ojo: faltan registros sin cargar. Si querés exportar todo, tocá “Cargar todos” primero.",
+          "Ojo: faltan registros sin cargar. Si queres exportar todo, toca 'Cargar todos' primero.",
           5200
         );
       }
@@ -782,9 +711,7 @@ export default function Ventas() {
       const dataToExport = filteredRows.map((r) => {
         const pago = safeText(r.pago_tipo_venta ?? r.tipo_venta);
         const pagoNorm = normalizeSearchText(pago);
-
         const medioPago = pagoNorm.includes("contado") ? safeText(r.medio_pago_nombre) : "—";
-
         return {
           FECHA: safeText(formatFechaDMY(r.fecha)),
           DESCRIPCION: safeText(r.detalle ?? r.descripcion ?? r.concepto),
@@ -809,14 +736,21 @@ export default function Ventas() {
         }
       }
 
-      const per = periodoToMMYYYY(fPeriodo) || "SIN_PERIODO";
-      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`Ventas_${per}`));
-      XLSX.writeFile(wb, `ventas_${per}.xlsx`);
+      const { from, to } = dateRange;
+      const sufijo =
+        from && to
+          ? `${dateToAPI(from)}_${dateToAPI(to)}`
+          : from
+          ? `desde_${dateToAPI(from)}`
+          : "todos";
+
+      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`Ventas_${sufijo}`));
+      XLSX.writeFile(wb, `ventas_${sufijo}.xlsx`);
       showToast("exito", "Excel exportado.", 2200);
     } catch (e) {
       showToast("error", e?.message || "Error exportando Excel.", 3500);
     }
-  }, [filteredRows, fPeriodo, showToast, hasMore]);
+  }, [filteredRows, dateRange, showToast, hasMore]);
 
   /* =========================
      Guardar / eliminar
@@ -825,45 +759,37 @@ export default function Ventas() {
     setError("");
     const { idUsuario } = getAuthInfo();
     const action = isEdit ? "ventas_actualizar" : "ventas_crear";
-
-    const payloadNorm = {
-      ...(payload || {}),
-      periodo: periodoToYYYYMM(payload?.periodo),
-    };
-
     const data = await apiPostJson(`${API}?action=${action}`, {
-      ...payloadNorm,
+      ...(payload || {}),
       idUsuario,
     });
-
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
     return data;
   };
 
   const confirmDelete = async () => {
     if (!selectedRow?.id_movimiento) return;
-
     const id = selectedRow.id_movimiento;
     setDeletingId(id);
     setError("");
     showToast("cargando", "Eliminando venta…", 12000);
-
     try {
       const { idUsuario } = getAuthInfo();
-
       const sp = new URLSearchParams();
       sp.set("action", "ventas_eliminar");
       sp.set("id_movimiento", String(id));
-
       const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
-
       setOpenDel(false);
       setSelectedRow(null);
-
-      invalidateCacheForPeriodo(fPeriodo);
-      await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
-
+      cacheRef.current.clear();
+      await loadRows({
+        from: dateRange.from,
+        to: dateRange.to,
+        q,
+        offset: 0,
+        append: false,
+      });
       await refreshPeriodos();
       showToast("exito", "Venta eliminada.", 2600);
     } catch (e) {
@@ -875,7 +801,7 @@ export default function Ventas() {
   };
 
   /* =========================
-     ✅ "Cargar todos"
+     "Cargar todos"
   ========================= */
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
@@ -889,28 +815,21 @@ export default function Ventas() {
 
     try {
       while (offset !== null && guard < 3000) {
-        const currentPer = periodoToMMYYYY(fPeriodo);
-        const currentQ = (q || "").trim();
-
         const beforeLen = rowsRef.current.length;
-
         const res = await loadRows({
-          periodo: currentPer,
-          q: currentQ,
+          from: dateRange.from,
+          to: dateRange.to,
+          q: (q || "").trim(),
           offset,
           append: true,
         });
         if (!res) break;
-
         guard += 1;
         offset = res.nextOffset;
-
         const afterLen = rowsRef.current.length;
         if (afterLen === beforeLen) break;
-
         if (!res.hasMore || offset === null) break;
       }
-
       setRows([...rowsRef.current]);
       showToast("exito", `Listo: se cargaron ${rowsRef.current.length} ventas.`, 2600);
     } catch (e) {
@@ -919,94 +838,74 @@ export default function Ventas() {
       setLoadingAll(false);
     }
   }, [
-    hasMore,
-    loadingMore,
-    loadingRows,
-    loadingListsCtx,
-    loadingAll,
-    nextOffset,
-    fPeriodo,
-    q,
-    loadRows,
-    showToast,
+    hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll,
+    nextOffset, dateRange, q, loadRows, showToast,
   ]);
-
-  const softLoading = loadingRows;
-
-  const skelWidths = useMemo(() => {
-    return {
-      fecha: ["44%", "38%", "40%", "36%"],
-      detalle: ["72%", "58%", "66%", "48%"],
-      cliente: ["62%", "54%", "46%", "58%"],
-      pago: ["44%", "34%", "40%", "30%"],
-      medio_pago_nombre: ["52%", "44%", "48%", "36%"],
-      total: ["38%", "30%", "34%", "28%"],
-    };
-  }, []);
-
-  const renderSkeletonRow = (idx) => {
-    return (
-      <div
-        key={`skel-${idx}`}
-        className="mov-gridTable mov-gridTable--row mov-row--skeleton"
-        style={{ gridTemplateColumns: gridCols }}
-        role="row"
-        aria-hidden="true"
-      >
-        {columns.map((c) => {
-          if (c.key === "acciones") {
-            return (
-              <div
-                key={c.key}
-                className="mov-gridCell mov-gridCell--actions is-center"
-                role="cell"
-                data-label={c.label}
-              >
-                <div className="mov-skelActions">
-                  <span className="mov-skelIcon" />
-                  <span className="mov-skelIcon" />
-                </div>
-              </div>
-            );
-          }
-
-          const list = skelWidths[c.key] || ["60%"];
-          const w = list[idx % list.length];
-
-          return (
-            <div
-              key={c.key}
-              className={[
-                "mov-gridCell",
-                c.align === "right" ? "is-right" : "",
-                c.align === "center" ? "is-center" : "",
-              ].join(" ")}
-              role="cell"
-              data-label={c.label}
-            >
-              <span className="mov-skeletonBar" style={{ width: w }} />
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const lists =
-    listasCtx || {
-      periodos: [],
-      clientes: [],
-      medios_pago: [],
-      tipos_venta: [],
-      clasificaciones: [],
-      cuentas_corrientes: [],
-      detalles: [],
-      proveedores: [],
-      tipos_movimiento: [],
-    };
 
   const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
+  /* =========================
+     Skeleton
+  ========================= */
+  const skelWidths = useMemo(() => ({
+    fecha: ["44%", "38%", "40%", "36%"],
+    detalle: ["72%", "58%", "66%", "48%"],
+    cliente: ["62%", "54%", "46%", "58%"],
+    pago: ["44%", "34%", "40%", "30%"],
+    medio_pago_nombre: ["52%", "44%", "48%", "36%"],
+    total: ["38%", "30%", "34%", "28%"],
+  }), []);
+
+  const renderSkeletonRow = (idx) => (
+    <div
+      key={`skel-${idx}`}
+      className="mov-gridTable mov-gridTable--row mov-row--skeleton"
+      style={{ gridTemplateColumns: gridCols }}
+      role="row"
+      aria-hidden="true"
+    >
+      {columns.map((c) => {
+        if (c.key === "acciones") {
+          return (
+            <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
+              <div className="mov-skelActions">
+                <span className="mov-skelIcon" />
+                <span className="mov-skelIcon" />
+              </div>
+            </div>
+          );
+        }
+        const list = skelWidths[c.key] || ["60%"];
+        const w = list[idx % list.length];
+        return (
+          <div
+            key={c.key}
+            className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")}
+            role="cell"
+            data-label={c.label}
+          >
+            <span className="mov-skeletonBar" style={{ width: w }} />
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const lists = listasCtx || {
+    periodos: [],
+    clientes: [],
+    medios_pago: [],
+    tipos_venta: [],
+    clasificaciones: [],
+    cuentas_corrientes: [],
+    detalles: [],
+    proveedores: [],
+    tipos_movimiento: [],
+  };
+
+  /* =========================
+     RENDER
+  ========================= */
   return (
     <div className="mov-page">
       {toast && (
@@ -1019,15 +918,10 @@ export default function Ventas() {
       )}
 
       {errorListsCtx && (
-        <div className="mov-alert" role="alert">
-          {errorListsCtx}
-        </div>
+        <div className="mov-alert" role="alert">{errorListsCtx}</div>
       )}
-
       {error && (
-        <div className="mov-alert" role="alert">
-          {error}
-        </div>
+        <div className="mov-alert" role="alert">{error}</div>
       )}
 
       <section className="mov-card mov-card--table">
@@ -1035,7 +929,6 @@ export default function Ventas() {
           <div className="mov-card__headLeft">
             <div>
               <div className="mov-card__title">Movimientos · Ventas</div>
-
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> ventas
                 {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
@@ -1043,40 +936,58 @@ export default function Ventas() {
             </div>
 
             <div className="mov-headFilters">
-              <div className="mov-filter">
+
+              {/* ✅ REEMPLAZA el <select> de período → Botón + Calendario */}
+              <div className="mov-filter" style={{ position: "relative" }}>
                 <label>
-                  <FontAwesomeIcon icon={faCalendarDays} /> Período
+                  <FontAwesomeIcon icon={faCalendarDays} /> Fecha
                 </label>
 
-                <select
-                  value={periodoToMMYYYY(fPeriodo)}
-                  onChange={async (e) => {
-                    const ui = periodoToMMYYYY(e.target.value);
-                    setFPeriodo(ui);
-                    setQ("");
-                    skipSearchRef.current = true;
-
-                    invalidateCacheForPeriodo(ui);
-                    await loadRows({ periodo: ui, q: "", offset: 0, append: false });
-                  }}
-                  disabled={loadingRows || loadingListsCtx || loadingMore || loadingAll}
+                <button
+                  type="button"
+                  className="mov-btn mov-btn--ghost"
+                  style={{ minWidth: 220, justifyContent: "flex-start", textAlign: "left" }}
+                  onClick={() => setShowCalendario((v) => !v)}
+                  disabled={isAnyLoading || loadingListsCtx}
+                  title="Seleccionar rango de fechas"
                 >
-                  {(lists.periodos || []).map((p) => {
-                    const ui = periodoToMMYYYY(p);
-                    return (
-                      <option key={ui} value={ui}>
-                        {ui}
-                      </option>
-                    );
-                  })}
-                </select>
+                  {dateRangeLabel}
+                </button>
+
+                {/* Dropdown del Calendario */}
+                {showCalendario && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "100%",
+                      left: 0,
+                      zIndex: 999,
+                      marginTop: 6,
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+                      borderRadius: 10,
+                      background: "var(--color-surface, #fff)",
+                    }}
+                  >
+                    <Calendario
+                      value={dateRange}
+                      onChange={async (newRange) => {
+                        // Si ya tiene from y to → cerrar el calendario automáticamente
+                        if (newRange.from && newRange.to) {
+                          setShowCalendario(false);
+                        }
+                        await handleDateRangeChange(newRange);
+                      }}
+                      onClose={() => setShowCalendario(false)}
+                    />
+                  </div>
+                )}
               </div>
 
+              {/* Búsqueda */}
               <div className="mov-search">
                 <label>
                   <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
                 </label>
-
                 <div className="mov-searchInput">
                   <input
                     value={q}
@@ -1086,9 +997,9 @@ export default function Ventas() {
                         e.preventDefault();
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         skipSearchRef.current = true;
-
                         await loadRows({
-                          periodo: fPeriodo,
+                          from: dateRange.from,
+                          to: dateRange.to,
                           q: e.currentTarget.value,
                           offset: 0,
                           append: false,
@@ -1098,7 +1009,6 @@ export default function Ventas() {
                     placeholder="Buscar por fecha, cliente, descripción, monto…"
                     disabled={loadingListsCtx || loadingAll}
                   />
-
                   {q.trim() !== "" && (
                     <button
                       type="button"
@@ -1108,8 +1018,13 @@ export default function Ventas() {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
                         skipSearchRef.current = true;
-
-                        await loadRows({ periodo: fPeriodo, q: "", offset: 0, append: false });
+                        await loadRows({
+                          from: dateRange.from,
+                          to: dateRange.to,
+                          q: "",
+                          offset: 0,
+                          append: false,
+                        });
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
                       disabled={loadingAll}
@@ -1130,7 +1045,7 @@ export default function Ventas() {
               disabled={loadingRows || filteredRows.length === 0}
               title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
             >
-              <FontAwesomeIcon icon={faFileExcel} /> Exportar 
+              <FontAwesomeIcon icon={faFileExcel} /> Exportar
             </button>
 
             <button
@@ -1149,13 +1064,16 @@ export default function Ventas() {
         </div>
 
         {/* HEADER */}
-        <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
+        <div
+          className="mov-gridTable mov-gridTable--head"
+          style={{ gridTemplateColumns: gridCols }}
+          role="row"
+        >
           {columns.map((c) => (
             <div
               key={c.key}
               className={[
-                "mov-gridCell",
-                "mov-gridCell--head",
+                "mov-gridCell", "mov-gridCell--head",
                 c.align === "right" ? "is-right" : "",
                 c.align === "center" ? "is-center" : "",
               ].join(" ")}
@@ -1168,7 +1086,7 @@ export default function Ventas() {
 
         {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
-          <div className={["mov-gridBody", "mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
+          <div className={["mov-gridBody", "mov-gridBody--relative", showSkeleton ? "mov-softLoading" : ""].join(" ")}>
             {showSkeleton ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
@@ -1198,30 +1116,17 @@ export default function Ventas() {
                                   type="button"
                                   className="mov-iconBtn"
                                   title="Editar"
-                                  onClick={() => {
-                                    setSelectedRow(r);
-                                    setOpenEdit(true);
-                                  }}
-                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                                  onClick={() => { setSelectedRow(r); setOpenEdit(true); }}
+                                  disabled={isAnyLoading || loadingListsCtx}
                                 >
                                   <FontAwesomeIcon icon={faPenToSquare} />
                                 </button>
-
                                 <button
                                   type="button"
                                   className="mov-iconBtn mov-iconBtn--danger"
                                   title="Eliminar"
-                                  disabled={
-                                    loadingRows ||
-                                    loadingMore ||
-                                    loadingAll ||
-                                    loadingListsCtx ||
-                                    deletingId === r.id_movimiento
-                                  }
-                                  onClick={() => {
-                                    setSelectedRow(r);
-                                    setOpenDel(true);
-                                  }}
+                                  disabled={isAnyLoading || loadingListsCtx || deletingId === r.id_movimiento}
+                                  onClick={() => { setSelectedRow(r); setOpenDel(true); }}
                                 >
                                   {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
                                 </button>
@@ -1231,7 +1136,6 @@ export default function Ventas() {
                         }
 
                         const val = c.render ? c.render(r) : safeText(r[c.key]);
-
                         return (
                           <div
                             key={c.key}
@@ -1240,9 +1144,7 @@ export default function Ventas() {
                               c.align === "right" ? "is-right" : "",
                               c.align === "center" ? "is-center" : "",
                               c.strong ? "is-strong" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
+                            ].filter(Boolean).join(" ")}
                             role="cell"
                             data-label={c.label}
                             title={typeof val === "string" ? val : undefined}
@@ -1257,9 +1159,7 @@ export default function Ventas() {
 
                 {!isAnyLoading && filteredRows.length === 0 && (
                   <div className="mov-emptyRow">
-                    {!fPeriodo
-                      ? "No hay período disponible para cargar ventas."
-                      : "No hay ventas para mostrar en este período."}
+                    No hay ventas para mostrar en el rango de fechas seleccionado.
                   </div>
                 )}
 
@@ -1288,33 +1188,31 @@ export default function Ventas() {
         </div>
       </section>
 
-      {/* ✅ MODAL NUEVA VENTA */}
+      {/* MODAL NUEVA VENTA */}
       <ModalNuevaVenta
         open={openAdd}
         lists={lists}
-        periodoDefault={fPeriodo}
+        periodoDefault={
+          dateRange.from
+            ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}`
+            : ""
+        }
         onClose={() => setOpenAdd(false)}
         onToast={showToast}
         onSaved={async (info) => {
-          // ✅ FIX CLAVE:
-          // - cuando NO había periodos / registros, fPeriodo era "".
-          // - ahora el modal SIEMPRE nos devuelve periodoUI.
           try {
-            const uiFromModal = periodoToMMYYYY(info?.periodoUI || "");
-            const ui = uiFromModal || periodoToMMYYYY(fPeriodo) || "";
-
             setOpenAdd(false);
             setQ("");
             skipSearchRef.current = true;
-
-            // refrescá listas (para que aparezca el período en el select)
             await refreshPeriodos();
-
-            // fijá período y recargá
-            if (ui) setFPeriodo(ui);
-            invalidateCacheForPeriodo(ui);
-            await loadRows({ periodo: ui, q: "", offset: 0, append: false });
-
+            cacheRef.current.clear();
+            await loadRows({
+              from: dateRange.from,
+              to: dateRange.to,
+              q: "",
+              offset: 0,
+              append: false,
+            });
             showToast("exito", "Venta guardada y tabla actualizada.", 2400);
           } catch (e) {
             showToast("error", e?.message || "Se guardó, pero falló la recarga.", 4200);
@@ -1327,22 +1225,26 @@ export default function Ventas() {
         open={openEdit}
         lists={lists}
         row={selectedRow}
-        periodoDefault={fPeriodo}
-        onClose={() => {
-          setOpenEdit(false);
-          setSelectedRow(null);
-        }}
+        periodoDefault={
+          dateRange.from
+            ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}`
+            : ""
+        }
+        onClose={() => { setOpenEdit(false); setSelectedRow(null); }}
         onToast={showToast}
         onSave={async (payload) => {
           try {
             showToast("cargando", "Guardando cambios…", 12000);
             await apiPostSave(payload, true);
-
-            invalidateCacheForPeriodo(fPeriodo);
-            await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
-
+            cacheRef.current.clear();
+            await loadRows({
+              from: dateRange.from,
+              to: dateRange.to,
+              q,
+              offset: 0,
+              append: false,
+            });
             await refreshPeriodos();
-
             setOpenEdit(false);
             setSelectedRow(null);
             showToast("exito", "Venta actualizada.", 2600);
@@ -1353,15 +1255,12 @@ export default function Ventas() {
         }}
       />
 
-      {/* DELETE */}
+      {/* MODAL ELIMINAR */}
       <ModalEliminarMovimientos
         open={openDel}
         row={selectedRow}
         loading={deletingId === selectedRow?.id_movimiento}
-        onClose={() => {
-          setOpenDel(false);
-          setSelectedRow(null);
-        }}
+        onClose={() => { setOpenDel(false); setSelectedRow(null); }}
         onConfirm={confirmDelete}
         onToast={showToast}
       />

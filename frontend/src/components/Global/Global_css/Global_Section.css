@@ -291,7 +291,7 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
 .mov-headFilters{
   display:flex;
   align-items: flex-end;
-  gap: 12px;
+  gap: 58px;
   min-width: 0;
   flex-wrap: wrap;
 }

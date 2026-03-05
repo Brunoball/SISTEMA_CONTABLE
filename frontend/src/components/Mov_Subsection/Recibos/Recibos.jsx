@@ -1,4 +1,3 @@
-// ✅ REEMPLAZAR COMPLETO
 // src/components/Mov_Subsection/Recibos/Recibos.jsx
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -7,11 +6,13 @@ import "../../Global/Global_css/Global_Section.css";
 
 import Toast from "../../Global/Toast.jsx";
 
+import Calendario from "../../Global/Calendario/Calendario.jsx";
+import "../../Global/Calendario/calendario.css";
+
 import ModalEditarRecibo from "./modales/ModalEditarRecibo.jsx";
 import ModalPagarRecibos from "./modales/ModalPagarRecibos.jsx";
 import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 
-// ✅ ✅ MODAL GLOBAL (según tu estructura real)
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -32,12 +33,9 @@ import { useListas } from "../../../context/ListasContext.jsx";
    PERF
 ========================= */
 const PAGE_SIZE = 100;
+const PROBE_LIMIT = PAGE_SIZE + 1;
 const MIN_LOADING_MS = 0;
 const FORCE_SHOW_LOADER_DEV = false;
-
-/* =========================
-   Skeleton rows
-========================= */
 const SKELETON_ROWS = 10;
 
 /* =========================
@@ -58,7 +56,6 @@ function safeText(v) {
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "-";
-
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
     const yyyy = m1[1];
@@ -77,86 +74,57 @@ function formatFechaDMY(v) {
 }
 
 /* =========================
-   Período helpers (UI MM-YYYY) <-> (API YYYY-MM)
+   Fecha helpers para rango (igual que Ventas)
 ========================= */
-function periodoToMMYYYY(input) {
-  const s = String(input ?? "").trim();
-  if (!s) return "";
-
-  let m = "";
-  let y = "";
-
-  if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    y = parts[0];
-    m = parts[1];
-  } else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    m = parts[0];
-    y = parts[1];
-  } else if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      y = s.slice(0, 4);
-      m = s.slice(4);
-    } else {
-      m = s.slice(0, 2);
-      y = s.slice(2);
-    }
-  } else {
-    return s;
-  }
-
-  const mm = String(Number(m)).padStart(2, "0");
-  const yyyy = String(y);
-  return `${mm}-${yyyy}`;
+function startOfDay(d) {
+  if (!d) return null;
+  const c = new Date(d);
+  c.setHours(0, 0, 0, 0);
+  return c;
 }
 
-function periodoToYYYYMM(input) {
-  const s = String(input ?? "").trim();
-  if (!s) return "";
+function parseRowFecha(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m1) return startOfDay(new Date(Number(m1[1]), Number(m1[2]) - 1, Number(m1[3])));
+  const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m2) return startOfDay(new Date(Number(m2[3]), Number(m2[2]) - 1, Number(m2[1])));
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : startOfDay(d);
+}
 
-  if (/^\d{1,2}-\d{4}$/.test(s)) {
-    const [mmRaw, yyyy] = s.split("-");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
+function dateToAPI(d) {
+  if (!d) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatDateUI(d) {
+  if (!d) return "—";
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+function rowInDateRange(row, from, to) {
+  if (!from && !to) return true;
+  const fecha = parseRowFecha(row?.fecha);
+  if (!fecha) return true;
+  if (from && fecha < startOfDay(from)) return false;
+  if (to) {
+    const toEnd = startOfDay(to);
+    toEnd.setHours(23, 59, 59, 999);
+    if (fecha > toEnd) return false;
   }
-  if (/^\d{4}-\d{1,2}$/.test(s)) {
-    const [yyyy, mmRaw] = s.split("-");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{4}\/\d{1,2}$/.test(s)) {
-    const [yyyy, mmRaw] = s.split("/");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{1,2}\/\d{4}$/.test(s)) {
-    const [mmRaw, yyyy] = s.split("/");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      const yyyy = s.slice(0, 4);
-      const mm = String(Number(s.slice(4))).padStart(2, "0");
-      return `${yyyy}-${mm}`;
-    } else {
-      const mm = String(Number(s.slice(0, 2))).padStart(2, "0");
-      const yyyy = s.slice(2);
-      return `${yyyy}-${mm}`;
-    }
-  }
-  return s;
+  return true;
 }
 
 /* =========================
-   ✅ Auth (X-Session)
+   Auth helpers
 ========================= */
 function getAuthInfo() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
-
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
@@ -169,18 +137,30 @@ function getAuthInfo() {
       0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
-
   return { sessionKey, idUsuario };
 }
 
 /* =========================
-   ✅ Recibos (PAGADO/PENDIENTE)
+   Recibos (PAGADO/PENDIENTE)
 ========================= */
 function isReciboPagado(row) {
   if (row?.pagado === true) return true;
   const cob = Number(row?.cobrado_total ?? 0);
   if (Number.isFinite(cob) && cob > 0.00001) return true;
   return false;
+}
+
+/* =========================
+   Row key robusto
+========================= */
+function getRowKey(r) {
+  const id = Number(r?.id_movimiento ?? 0);
+  if (id > 0) return `id:${id}`;
+  const f = String(r?.fecha ?? "").trim();
+  const c = String(r?.cliente ?? "").trim();
+  const d = String(r?.detalle ?? r?.descripcion ?? "").trim();
+  const m = String(Number(r?.monto_total ?? r?.total ?? 0) || 0);
+  return `fx:${f}|${c}|${d}|${m}`;
 }
 
 /* =========================
@@ -194,9 +174,6 @@ function slugifySheetName(name) {
   return (s || "Recibos").slice(0, 31);
 }
 
-/* =========================
-   detect backend "acción no válida"
-========================= */
 function isAccionNoValidaErrorMessage(msg) {
   const s = String(msg || "").toLowerCase();
   return (
@@ -210,7 +187,6 @@ function isAccionNoValidaErrorMessage(msg) {
 export default function Recibos() {
   const API = `${BASE_URL}/api.php`;
 
-  // ✅ LISTAS CENTRALIZADAS
   const {
     lists: listasCtx,
     loadingLists: loadingListsCtx,
@@ -223,15 +199,27 @@ export default function Recibos() {
      STATE
   ========================= */
   const [rows, setRows] = useState([]);
+  const rowsRef = useRef([]);
+  useEffect(() => {
+    rowsRef.current = Array.isArray(rows) ? rows : [];
+  }, [rows]);
 
   const [loadingRows, setLoadingRows] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadingAll, setLoadingAll] = useState(false);
-
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
-  const [fPeriodo, setFPeriodo] = useState(""); // MM-YYYY
+  // ✅ Rango de fechas (igual que Ventas) — arranca con el mes actual
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date();
+    return {
+      from: new Date(now.getFullYear(), now.getMonth(), 1),
+      to: new Date(now.getFullYear(), now.getMonth() + 1, 0),
+    };
+  });
+  const [showCalendario, setShowCalendario] = useState(false);
+
   const [q, setQ] = useState("");
 
   const [hasMore, setHasMore] = useState(false);
@@ -247,7 +235,7 @@ export default function Recibos() {
   const [pagarDeudas, setPagarDeudas] = useState([]);
   const [loadingClienteDeudas, setLoadingClienteDeudas] = useState(false);
 
-  // ✅ ver comprobante
+  // ver comprobante
   const [openVer, setOpenVer] = useState(false);
   const [verUrl, setVerUrl] = useState("");
   const [verMime, setVerMime] = useState("");
@@ -262,11 +250,10 @@ export default function Recibos() {
 
   const cacheRef = useRef(new Map());
   const reqIdRef = useRef(0);
-
+  const rowsReqIdRef = useRef(0);
+  const moreReqIdRef = useRef(0);
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
-  const [uiPending, setUiPending] = useState(false);
-  const didInitRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -275,7 +262,7 @@ export default function Recibos() {
   }, []);
 
   /* =========================
-     API helpers (X-Session)
+     API helpers
   ========================= */
   const buildHeadersGET = useCallback(() => {
     const { sessionKey } = getAuthInfo();
@@ -305,9 +292,7 @@ export default function Recibos() {
   const apiGet = useCallback(
     async (url) => {
       const res = await fetch(url, { method: "GET", headers: buildHeadersGET() });
-      const data = await parseJsonOrThrow(res);
-      if (data?.exito === false) throw new Error(data?.mensaje || "Operación fallida.");
-      return data;
+      return await parseJsonOrThrow(res);
     },
     [buildHeadersGET, parseJsonOrThrow]
   );
@@ -319,45 +304,13 @@ export default function Recibos() {
         headers: buildHeaders(),
         body: JSON.stringify(payload ?? {}),
       });
-      const data = await parseJsonOrThrow(res);
-      if (data?.exito === false) throw new Error(data?.mensaje || "Operación fallida.");
-      return data;
+      return await parseJsonOrThrow(res);
     },
     [buildHeaders, parseJsonOrThrow]
   );
 
-  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
-    const periodoAPI = periodoToYYYYMM(periodoUI);
-    const prefix = `${periodoAPI}|`;
-    for (const k of cacheRef.current.keys()) {
-      if (String(k).startsWith(prefix)) cacheRef.current.delete(k);
-    }
-  }, []);
-
   /* =========================
-     ✅ helper: aplicar comprobante a UNO o VARIOS movimientos
-  ========================= */
-  const applyComprobanteToRows = useCallback((idsMovimiento, idComprobante) => {
-    const idComp = Number(idComprobante || 0);
-    if (!idComp) return;
-
-    const ids = Array.isArray(idsMovimiento)
-      ? idsMovimiento.map((x) => Number(x || 0)).filter(Boolean)
-      : [Number(idsMovimiento || 0)].filter(Boolean);
-
-    if (!ids.length) return;
-
-    setRows((prev) =>
-      (Array.isArray(prev) ? prev : []).map((r) => {
-        const idMov = Number(r?.id_movimiento || 0);
-        if (!idMov || !ids.includes(idMov)) return r;
-        return { ...r, id_comprobante: idComp };
-      })
-    );
-  }, []);
-
-  /* =========================
-    ✅ VER COMPROBANTE
+     Ver comprobante
   ========================= */
   const openVerComprobante = useCallback(
     async (row) => {
@@ -366,23 +319,19 @@ export default function Recibos() {
         showToast("error", "Este recibo no tiene comprobante asociado.", 2800);
         return;
       }
-
       const { sessionKey } = getAuthInfo();
       if (!sessionKey) {
         showToast("error", "Sesión inválida (no hay X-Session).", 3200);
         return;
       }
-
       const sp = new URLSearchParams();
       sp.set("action", "comprobantes_descargar");
       sp.set("id_comprobante", String(idComp));
       sp.set("session_key", sessionKey);
 
-      const serverUrl = `${API}?${sp.toString()}`;
-
       setVerTitle(`Comprobante · ${safeText(row?.cliente)}`);
       setVerMime("application/pdf");
-      setVerUrl(serverUrl);
+      setVerUrl(`${API}?${sp.toString()}`);
       setOpenVer(true);
     },
     [API, showToast]
@@ -398,113 +347,137 @@ export default function Recibos() {
   }, []);
 
   /* =========================
-     ✅ LOAD ROWS
+     Comprobante helpers
+  ========================= */
+  const applyComprobanteToRows = useCallback((idsMovimiento, idComprobante) => {
+    const idComp = Number(idComprobante || 0);
+    if (!idComp) return;
+    const ids = Array.isArray(idsMovimiento)
+      ? idsMovimiento.map((x) => Number(x || 0)).filter(Boolean)
+      : [Number(idsMovimiento || 0)].filter(Boolean);
+    if (!ids.length) return;
+    setRows((prev) =>
+      (Array.isArray(prev) ? prev : []).map((r) => {
+        const idMov = Number(r?.id_movimiento || 0);
+        if (!idMov || !ids.includes(idMov)) return r;
+        return { ...r, id_comprobante: idComp };
+      })
+    );
+  }, []);
+
+  /* =========================
+     LOAD ROWS — usa fecha_desde / fecha_hasta (igual que Ventas)
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
-      const periodoUI = typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
+      const fromDate = opts.from !== undefined ? opts.from : dateRange.from;
+      const toDate = opts.to !== undefined ? opts.to : dateRange.to;
       const qLocal = typeof opts.q === "string" ? opts.q : q;
-
       const append = !!opts.append;
       const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
 
-      const perUI = periodoToMMYYYY(periodoUI);
-      if (!perUI) {
-        setRows([]);
-        setHasMore(false);
-        setNextOffset(null);
-        setLoadingRows(false);
-        setLoadingMore(false);
-        setLoadingAll(false);
-        setError("");
-        setUiPending(false);
-        return { hasMore: false, nextOffset: null, received: 0 };
-      }
-
-      const periodoAPI = periodoToYYYYMM(perUI);
+      const fromAPI = dateToAPI(fromDate);
+      const toAPI = dateToAPI(toDate);
       const qKey = (qLocal || "").trim();
-      const cacheKey = `${periodoAPI}|${qKey}`;
+      const cacheKey = `${fromAPI}|${toAPI}|${qKey}`;
 
       const myReqId = ++reqIdRef.current;
       const start = Date.now();
 
-      if (!append) setUiPending(true);
-
-      if (!append) setLoadingRows(true);
-      else setLoadingMore(true);
-
+      if (!append) {
+        rowsReqIdRef.current = myReqId;
+        setLoadingRows(true);
+      } else {
+        moreReqIdRef.current = myReqId;
+        setLoadingMore(true);
+      }
       setError("");
 
       try {
         if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
+          if (rowsReqIdRef.current !== myReqId) return null;
           const cached = cacheRef.current.get(cacheKey);
-          setRows(cached?.rows || []);
+          const cachedRows = Array.isArray(cached?.rows) ? cached.rows : [];
+          rowsRef.current = cachedRows;
+          setRows(cachedRows);
           setHasMore(!!cached?.hasMore);
           setNextOffset(cached?.nextOffset ?? null);
-          setLoadingRows(false);
-          if (myReqId === reqIdRef.current) setUiPending(false);
+          if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
           return {
             hasMore: !!cached?.hasMore,
             nextOffset: cached?.nextOffset ?? null,
-            received: Array.isArray(cached?.rows) ? cached.rows.length : 0,
+            received: cachedRows.length,
           };
         }
 
         const sp = new URLSearchParams();
         sp.set("action", "recibos_listar");
-        sp.set("periodo", periodoAPI);
+        if (fromAPI) sp.set("fecha_desde", fromAPI);
+        if (toAPI) sp.set("fecha_hasta", toAPI);
         if (qKey) sp.set("q", qKey);
-        sp.set("limit", String(PAGE_SIZE));
+        sp.set("limit", String(PROBE_LIMIT));
         sp.set("offset", String(offset));
 
         const data = await apiGet(`${API}?${sp.toString()}`);
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar recibos.");
 
-        if (myReqId !== reqIdRef.current) {
-          if (append) setLoadingMore(false);
-          else setLoadingRows(false);
-          return null;
-        }
+        if (myReqId !== reqIdRef.current) return null;
 
-        const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
-        const movsNorm = movs.map((r) => ({ ...r, periodo: periodoToMMYYYY(r?.periodo) }));
+        const rawArr = Array.isArray(data.movimientos) ? data.movimientos : [];
 
-        const newHasMore = !!data.has_more;
-        const newNextOffset =
-          data.next_offset !== undefined && data.next_offset !== null ? Number(data.next_offset) : null;
+        let newHasMore = data.has_more !== undefined ? !!data.has_more : rawArr.length > PAGE_SIZE;
+        let newNextOffset =
+          data.next_offset !== undefined && data.next_offset !== null
+            ? Number(data.next_offset)
+            : newHasMore
+            ? offset + PAGE_SIZE
+            : null;
 
+        const page = newHasMore ? rawArr.slice(0, PAGE_SIZE) : rawArr;
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
 
         return await new Promise((resolve) => {
           const apply = () => {
+            if (myReqId !== reqIdRef.current) return resolve(null);
+
             if (append) {
-              setRows((prev) => {
-                const base = Array.isArray(prev) ? prev : [];
-                const seen = new Set(base.map((x) => String(x?.id_movimiento)));
-                const add = movsNorm.filter((x) => !seen.has(String(x?.id_movimiento)));
-                return [...base, ...add];
+              const base = Array.isArray(rowsRef.current) ? rowsRef.current : [];
+              const seen = new Set(base.map((x) => getRowKey(x)));
+              const add = page.filter((x) => {
+                const k = getRowKey(x);
+                return k && !seen.has(k);
               });
+              const merged = [...base, ...add];
+              rowsRef.current = merged;
+              setRows(merged);
+              if (add.length === 0) {
+                newHasMore = false;
+                newNextOffset = null;
+              }
+              setHasMore(newHasMore);
+              setNextOffset(newNextOffset);
+              if (moreReqIdRef.current === myReqId) setLoadingMore(false);
             } else {
-              setRows(movsNorm);
+              rowsRef.current = page;
+              setRows(page);
+              setHasMore(newHasMore);
+              setNextOffset(newNextOffset);
+              if (offset === 0) {
+                cacheRef.current.set(cacheKey, {
+                  rows: page,
+                  hasMore: newHasMore,
+                  nextOffset: newNextOffset,
+                });
+              }
+              if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
             }
 
-            setHasMore(newHasMore);
-            setNextOffset(newNextOffset);
-
-            if (!append && offset === 0) {
-              cacheRef.current.set(cacheKey, {
-                rows: movsNorm,
-                hasMore: newHasMore,
-                nextOffset: newNextOffset,
-              });
-            }
-
-            if (append) setLoadingMore(false);
-            else setLoadingRows(false);
-
-            if (myReqId === reqIdRef.current) setUiPending(false);
-
-            resolve({ hasMore: newHasMore, nextOffset: newNextOffset, received: movsNorm.length });
+            resolve({
+              hasMore: newHasMore,
+              nextOffset: newNextOffset,
+              received: page.length,
+            });
           };
 
           if (remaining > 0) setTimeout(apply, remaining);
@@ -513,130 +486,106 @@ export default function Recibos() {
       } catch (e) {
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
-
         return await new Promise((resolve) => {
           setTimeout(() => {
-            if (myReqId !== reqIdRef.current) {
-              if (append) setLoadingMore(false);
-              else setLoadingRows(false);
-              resolve(null);
-              return;
-            }
-
+            if (myReqId !== reqIdRef.current) return resolve(null);
             setError(e.message || "Error cargando recibos.");
-            if (append) setLoadingMore(false);
-            else setLoadingRows(false);
-
-            if (myReqId === reqIdRef.current) setUiPending(false);
-
+            if (append) {
+              if (moreReqIdRef.current === myReqId) setLoadingMore(false);
+            } else {
+              if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
+            }
             resolve(null);
           }, remaining);
         });
       }
     },
-    [API, apiGet, fPeriodo, q]
+    [API, apiGet, dateRange, q]
   );
 
   /* =========================
-     ✅ INIT
+     INIT — carga con mes actual por defecto
   ========================= */
   useEffect(() => {
     let alive = true;
-
     (async () => {
       try {
         await ensureListsLoaded({ force: false, background: true });
       } catch {}
-
       if (!alive) return;
-
-      const periodos = Array.isArray(listasCtx?.periodos)
-        ? listasCtx.periodos.map(periodoToMMYYYY)
-        : [];
-      const perDefault = periodos[0] || "";
-
-      if (perDefault) {
-        skipSearchRef.current = true;
-        setFPeriodo((prev) => prev || perDefault);
-        await loadRows({ periodo: perDefault, q: "", offset: 0, append: false });
-      } else {
-        setRows([]);
-        setHasMore(false);
-        setNextOffset(null);
-        setLoadingRows(false);
-        setUiPending(false);
-      }
-
-      if (alive) didInitRef.current = true;
+      const now = new Date();
+      const initFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+      const initTo = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      await loadRows({ from: initFrom, to: initTo, q: "", offset: 0, append: false });
     })();
-
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ sync período si desaparece
+  // Debounce búsqueda
   useEffect(() => {
-    const periodos = Array.isArray(listasCtx?.periodos)
-      ? listasCtx.periodos.map(periodoToMMYYYY)
-      : [];
-
-    if (periodos.length === 0) {
-      if (fPeriodo !== "") {
-        setFPeriodo("");
-        setRows([]);
-        setHasMore(false);
-        setNextOffset(null);
-      }
-      return;
-    }
-
-    const current = periodoToMMYYYY(fPeriodo);
-    if (current && !periodos.includes(current)) {
-      const next = periodos[0];
-      setFPeriodo(next);
-      invalidateCacheForPeriodo(next);
-      loadRows({ periodo: next, q: "", offset: 0, append: false });
-    }
-  }, [listasCtx?.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
-
-  // ✅ debounce búsqueda
-  useEffect(() => {
-    if (!fPeriodo) return;
-    if (!didInitRef.current) return;
-
     if (skipSearchRef.current) {
       skipSearchRef.current = false;
       return;
     }
-
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-
-    setUiPending(true);
-
-    searchTimerRef.current = setTimeout(async () => {
-      await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
+    searchTimerRef.current = setTimeout(() => {
+      loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
     }, 250);
-
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [q, fPeriodo, loadRows]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
 
   /* =========================
-     visibles
+     Handler cambio de rango de fechas (igual que Ventas)
+  ========================= */
+  const handleDateRangeChange = useCallback(
+    async (newRange) => {
+      if (!newRange.from && !newRange.to) return;
+      setDateRange(newRange);
+      cacheRef.current.clear();
+      skipSearchRef.current = true;
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      await loadRows({
+        from: newRange.from,
+        to: newRange.to,
+        q,
+        offset: 0,
+        append: false,
+      });
+    },
+    [loadRows, q]
+  );
+
+  /* =========================
+     Label para el botón del calendario
+  ========================= */
+  const dateRangeLabel = useMemo(() => {
+    const { from, to } = dateRange;
+    if (!from && !to) return "Seleccionar fechas";
+    if (from && to) {
+      if (
+        from.getFullYear() === to.getFullYear() &&
+        from.getMonth() === to.getMonth() &&
+        from.getDate() === to.getDate()
+      ) {
+        return formatDateUI(from);
+      }
+      return `${formatDateUI(from)} → ${formatDateUI(to)}`;
+    }
+    if (from) return `Desde ${formatDateUI(from)}`;
+    return `Hasta ${formatDateUI(to)}`;
+  }, [dateRange]);
+
+  /* =========================
+     Filtrado client-side
   ========================= */
   const filteredRows = useMemo(() => {
-    const fPer = periodoToMMYYYY(fPeriodo);
-    if (!fPer) return [];
-
-    return (Array.isArray(rows) ? rows : []).filter((r) => {
-      const perRow = periodoToMMYYYY(r?.periodo);
-      if (!perRow) return true;
-      return String(perRow) === String(fPer);
-    });
-  }, [rows, fPeriodo]);
+    return (Array.isArray(rows) ? rows : [])
+      .filter((r) => rowInDateRange(r, dateRange.from, dateRange.to));
+  }, [rows, dateRange]);
 
   const stats = useMemo(() => {
     let pagados = 0;
@@ -712,7 +661,7 @@ export default function Recibos() {
   }, [columns]);
 
   /* =========================
-     ✅ listar recibos por cliente (fallback actions)
+     listar recibos por cliente
   ========================= */
   const fetchRecibosCliente = useCallback(
     async (rowCliente) => {
@@ -731,7 +680,6 @@ export default function Recibos() {
           const sp = new URLSearchParams();
           sp.set("action", action);
           sp.set("id_cliente", String(idCli));
-
           const data = await apiGet(`${API}?${sp.toString()}`);
           const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
           return movs;
@@ -743,8 +691,7 @@ export default function Recibos() {
       }
 
       throw new Error(
-        `Tu backend no tiene ninguna action de listar recibos por cliente.\nProbé: ${ACTIONS.join(", ")}.\n` +
-          `Solución: agregá esa action en api.php o decime cuál nombre usaste.`
+        `Tu backend no tiene ninguna action de listar recibos por cliente.\nProbé: ${ACTIONS.join(", ")}.`
       );
     },
     [API, apiGet]
@@ -755,7 +702,6 @@ export default function Recibos() {
       try {
         setLoadingClienteDeudas(true);
         const deudas = await fetchRecibosCliente(r);
-
         setPagarCliente(r);
         setPagarDeudas(deudas);
         setOpenPagar(true);
@@ -769,7 +715,7 @@ export default function Recibos() {
   );
 
   /* =========================
-     ✅ callback: cuando se FINALIZA el recibo y se guarda el comprobante
+     Callback: recibo finalizado
   ========================= */
   const onReciboFinalizado = useCallback(
     async (saved, fallback = {}) => {
@@ -795,24 +741,16 @@ export default function Recibos() {
       }
 
       try {
-        const per = periodoToMMYYYY(fPeriodo);
-        const qq = (q || "").trim();
-
-        invalidateCacheForPeriodo(per);
+        cacheRef.current.clear();
         skipSearchRef.current = true;
-
-        await loadRows({ periodo: per, q: qq, offset: 0, append: false });
-
-        try {
-          await refreshLists();
-        } catch {}
-
+        await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
+        try { await refreshLists(); } catch {}
         showToast("exito", "Comprobante guardado y vinculado a todos los pagos ✅", 2600);
       } catch (e) {
         showToast("error", e?.message || "El comprobante se guardó, pero no pude refrescar la lista.", 4200);
       }
     },
-    [applyComprobanteToRows, fPeriodo, q, invalidateCacheForPeriodo, loadRows, refreshLists, showToast]
+    [applyComprobanteToRows, dateRange, q, loadRows, refreshLists, showToast]
   );
 
   /* =========================
@@ -837,12 +775,9 @@ export default function Recibos() {
           idUsuario,
         });
 
-        invalidateCacheForPeriodo(fPeriodo);
-        await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
-
-        try {
-          await refreshLists();
-        } catch {}
+        cacheRef.current.clear();
+        await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
+        try { await refreshLists(); } catch {}
 
         showToast("exito", data?.mensaje || "Pago confirmado.", 2400);
         return data;
@@ -851,39 +786,29 @@ export default function Recibos() {
         throw e;
       }
     },
-    [API, apiPostJson, fPeriodo, q, invalidateCacheForPeriodo, loadRows, refreshLists, showToast]
+    [API, apiPostJson, dateRange, q, loadRows, refreshLists, showToast]
   );
 
   /* =========================
-     ✅ Eliminar
+     Eliminar
   ========================= */
   const confirmDelete = async () => {
     if (!selectedRow?.id_movimiento) return;
-
     const id = selectedRow.id_movimiento;
     setDeletingId(id);
     setError("");
     showToast("cargando", "Eliminando…", 12000);
-
     try {
       const { idUsuario } = getAuthInfo();
-
       const sp = new URLSearchParams();
       sp.set("action", "recibos_eliminar");
       sp.set("id_movimiento", String(id));
-
       await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
-
       setOpenDel(false);
       setSelectedRow(null);
-
-      invalidateCacheForPeriodo(fPeriodo);
-      await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
-
-      try {
-        await refreshLists();
-      } catch {}
-
+      cacheRef.current.clear();
+      await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
+      try { await refreshLists(); } catch {}
       showToast("exito", "Registro eliminado.", 2400);
     } catch (e) {
       setError(e.message || "Error eliminando.");
@@ -902,11 +827,10 @@ export default function Recibos() {
         showToast("error", "No hay datos para exportar.", 2500);
         return;
       }
-
       if (hasMore) {
         showToast(
           "error",
-          "Ojo: faltan recibos sin cargar. Si querés exportar todo, tocá “Cargar todos” primero.",
+          "Ojo: faltan recibos sin cargar. Si querés exportar todo, tocá 'Cargar todos' primero.",
           5200
         );
       }
@@ -933,21 +857,27 @@ export default function Recibos() {
         }
       }
 
-      const per = periodoToMMYYYY(fPeriodo) || "SIN_PERIODO";
-      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`Recibos_${per}`));
-      XLSX.writeFile(wb, `recibos_${per}.xlsx`);
+      const { from, to } = dateRange;
+      const sufijo =
+        from && to
+          ? `${dateToAPI(from)}_${dateToAPI(to)}`
+          : from
+          ? `desde_${dateToAPI(from)}`
+          : "todos";
 
+      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`Recibos_${sufijo}`));
+      XLSX.writeFile(wb, `recibos_${sufijo}.xlsx`);
       showToast("exito", "Excel exportado.", 2200);
     } catch (e) {
       showToast("error", e?.message || "Error exportando Excel.", 3500);
     }
-  }, [filteredRows, fPeriodo, showToast, hasMore]);
+  }, [filteredRows, dateRange, showToast, hasMore]);
 
   /* =========================
-     ✅ BOTÓN: "Cargar todos"
+     "Cargar todos"
   ========================= */
   const handleLoadAll = useCallback(async () => {
-    if (!hasMore || loadingMore || loadingRows || loadingListsCtx) return;
+    if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
     if (nextOffset === null) return;
 
     setLoadingAll(true);
@@ -958,111 +888,97 @@ export default function Recibos() {
 
     try {
       while (offset !== null && guard < 3000) {
-        const currentPer = periodoToMMYYYY(fPeriodo);
-        const currentQ = (q || "").trim();
-
-        const res = await loadRows({ periodo: currentPer, q: currentQ, offset, append: true });
+        const beforeLen = rowsRef.current.length;
+        const res = await loadRows({
+          from: dateRange.from,
+          to: dateRange.to,
+          q: (q || "").trim(),
+          offset,
+          append: true,
+        });
         if (!res) break;
-
-        offset = res.nextOffset;
         guard += 1;
-
+        offset = res.nextOffset;
+        const afterLen = rowsRef.current.length;
+        if (afterLen === beforeLen) break;
         if (!res.hasMore || offset === null) break;
       }
-
-      showToast("exito", "Listo: ya se cargaron todos.", 2600);
+      setRows([...rowsRef.current]);
+      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} recibos.`, 2600);
     } catch (e) {
       showToast("error", e?.message || "Error cargando todos.", 4200);
     } finally {
       setLoadingAll(false);
     }
-  }, [hasMore, loadingMore, loadingRows, loadingListsCtx, nextOffset, fPeriodo, q, loadRows, showToast]);
+  }, [
+    hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll,
+    nextOffset, dateRange, q, loadRows, showToast,
+  ]);
 
-  const softLoading = loadingRows;
+  const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
-  const skelWidths = useMemo(() => {
-    return {
-      fecha: ["46%", "38%", "42%", "34%"],
-      detalle: ["72%", "58%", "66%", "48%"],
-      cliente: ["62%", "54%", "46%", "58%"],
-      estado: ["44%", "34%", "40%", "30%"],
-      monto: ["38%", "30%", "34%", "28%"],
-    };
-  }, []);
+  /* =========================
+     Skeleton
+  ========================= */
+  const skelWidths = useMemo(() => ({
+    fecha: ["46%", "38%", "42%", "34%"],
+    detalle: ["72%", "58%", "66%", "48%"],
+    cliente: ["62%", "54%", "46%", "58%"],
+    estado: ["44%", "34%", "40%", "30%"],
+    monto: ["38%", "30%", "34%", "28%"],
+  }), []);
 
-  const renderSkeletonRow = (idx) => {
-    return (
-      <div
-        key={`skel-${idx}`}
-        className="mov-gridTable mov-gridTable--row mov-row--skeleton"
-        style={{ gridTemplateColumns: gridCols }}
-        role="row"
-        aria-hidden="true"
-      >
-        {columns.map((c) => {
-          if (c.key === "acciones") {
-            return (
-              <div
-                key={c.key}
-                className="mov-gridCell mov-gridCell--actions is-center"
-                role="cell"
-                data-label={c.label}
-              >
-                <div className="mov-skelActions">
-                  <span className="mov-skelIcon" />
-                  <span className="mov-skelIcon" />
-                  <span className="mov-skelIcon" />
-                </div>
-              </div>
-            );
-          }
-
-          const list = skelWidths[c.key] || ["60%"];
-          const w = list[idx % list.length];
-
+  const renderSkeletonRow = (idx) => (
+    <div
+      key={`skel-${idx}`}
+      className="mov-gridTable mov-gridTable--row mov-row--skeleton"
+      style={{ gridTemplateColumns: gridCols }}
+      role="row"
+      aria-hidden="true"
+    >
+      {columns.map((c) => {
+        if (c.key === "acciones") {
           return (
-            <div
-              key={c.key}
-              className={[
-                "mov-gridCell",
-                c.align === "right" ? "is-right" : "",
-                c.align === "center" ? "is-center" : "",
-              ].join(" ")}
-              role="cell"
-              data-label={c.label}
-            >
-              <span className="mov-skeletonBar" style={{ width: w }} />
+            <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
+              <div className="mov-skelActions">
+                <span className="mov-skelIcon" />
+                <span className="mov-skelIcon" />
+                <span className="mov-skelIcon" />
+              </div>
             </div>
           );
-        })}
-      </div>
-    );
+        }
+        const list = skelWidths[c.key] || ["60%"];
+        const w = list[idx % list.length];
+        return (
+          <div
+            key={c.key}
+            className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")}
+            role="cell"
+            data-label={c.label}
+          >
+            <span className="mov-skeletonBar" style={{ width: w }} />
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const lists = listasCtx || {
+    periodos: [],
+    clientes: [],
+    medios_pago: [],
+    tipos_venta: [],
+    clasificaciones: [],
+    cuentas_corrientes: [],
+    detalles: [],
+    proveedores: [],
+    tipos_movimiento: [],
   };
 
-  const lists =
-    listasCtx || {
-      periodos: [],
-      clientes: [],
-      medios_pago: [],
-      tipos_venta: [],
-      clasificaciones: [],
-      cuentas_corrientes: [],
-      detalles: [],
-      proveedores: [],
-      tipos_movimiento: [],
-    };
-
-  const periodoUI = periodoToMMYYYY(fPeriodo);
-  const isInit = loadingListsCtx || !periodoUI;
-
-  const showEmpty =
-    !isInit &&
-    !uiPending &&
-    !loadingRows &&
-    !loadingMore &&
-    !loadingAll &&
-    filteredRows.length === 0;
-
+  /* =========================
+     RENDER
+  ========================= */
   return (
     <div className="mov-page">
       {toast && (
@@ -1070,15 +986,10 @@ export default function Recibos() {
       )}
 
       {errorListsCtx && (
-        <div className="mov-alert" role="alert">
-          {errorListsCtx}
-        </div>
+        <div className="mov-alert" role="alert">{errorListsCtx}</div>
       )}
-
       {error && (
-        <div className="mov-alert" role="alert">
-          {error}
-        </div>
+        <div className="mov-alert" role="alert">{error}</div>
       )}
 
       <section className="mov-card mov-card--table">
@@ -1091,47 +1002,61 @@ export default function Recibos() {
                 <b>{stats.pagados}</b>
                 {" · "}
                 Mostrando <b>{filteredRows.length}</b>
-                {hasMore ? " (hay más)" : ""}
+                {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
               </div>
             </div>
 
             <div className="mov-headFilters">
-              <div className="mov-filter">
+
+              {/* ✅ Botón + Calendario (igual que Ventas) */}
+              <div className="mov-filter" style={{ position: "relative" }}>
                 <label>
-                  <FontAwesomeIcon icon={faCalendarDays} /> Período
+                  <FontAwesomeIcon icon={faCalendarDays} /> Fecha
                 </label>
 
-                <select
-                  value={periodoToMMYYYY(fPeriodo)}
-                  onChange={async (e) => {
-                    const ui = periodoToMMYYYY(e.target.value);
-
-                    setUiPending(true);
-                    setFPeriodo(ui);
-                    setQ("");
-
-                    skipSearchRef.current = true;
-
-                    await loadRows({ periodo: ui, q: "", offset: 0, append: false });
-                  }}
-                  disabled={loadingRows || loadingListsCtx || loadingMore || loadingAll}
+                <button
+                  type="button"
+                  className="mov-btn mov-btn--ghost"
+                  style={{ minWidth: 220, justifyContent: "flex-start", textAlign: "left" }}
+                  onClick={() => setShowCalendario((v) => !v)}
+                  disabled={isAnyLoading || loadingListsCtx}
+                  title="Seleccionar rango de fechas"
                 >
-                  {(lists.periodos || []).map((p) => {
-                    const ui = periodoToMMYYYY(p);
-                    return (
-                      <option key={ui} value={ui}>
-                        {ui}
-                      </option>
-                    );
-                  })}
-                </select>
+                  {dateRangeLabel}
+                </button>
+
+                {showCalendario && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "100%",
+                      left: 0,
+                      zIndex: 999,
+                      marginTop: 6,
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+                      borderRadius: 10,
+                      background: "var(--color-surface, #fff)",
+                    }}
+                  >
+                    <Calendario
+                      value={dateRange}
+                      onChange={async (newRange) => {
+                        if (newRange.from && newRange.to) {
+                          setShowCalendario(false);
+                        }
+                        await handleDateRangeChange(newRange);
+                      }}
+                      onClose={() => setShowCalendario(false)}
+                    />
+                  </div>
+                )}
               </div>
 
+              {/* Búsqueda */}
               <div className="mov-search">
                 <label>
                   <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
                 </label>
-
                 <div className="mov-searchInput">
                   <input
                     value={q}
@@ -1140,12 +1065,10 @@ export default function Recibos() {
                       if (e.key === "Enter") {
                         e.preventDefault();
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-
-                        setUiPending(true);
-
                         skipSearchRef.current = true;
                         await loadRows({
-                          periodo: fPeriodo,
+                          from: dateRange.from,
+                          to: dateRange.to,
                           q: e.currentTarget.value,
                           offset: 0,
                           append: false,
@@ -1155,7 +1078,6 @@ export default function Recibos() {
                     placeholder="Buscar por fecha, cliente, descripción, monto…"
                     disabled={loadingListsCtx || loadingAll}
                   />
-
                   {q.trim() !== "" && (
                     <button
                       type="button"
@@ -1164,11 +1086,14 @@ export default function Recibos() {
                       onClick={async () => {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
-
-                        setUiPending(true);
-
                         skipSearchRef.current = true;
-                        await loadRows({ periodo: fPeriodo, q: "", offset: 0, append: false });
+                        await loadRows({
+                          from: dateRange.from,
+                          to: dateRange.to,
+                          q: "",
+                          offset: 0,
+                          append: false,
+                        });
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
                       disabled={loadingAll}
@@ -1195,13 +1120,16 @@ export default function Recibos() {
         </div>
 
         {/* HEADER */}
-        <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
+        <div
+          className="mov-gridTable mov-gridTable--head"
+          style={{ gridTemplateColumns: gridCols }}
+          role="row"
+        >
           {columns.map((c) => (
             <div
               key={c.key}
               className={[
-                "mov-gridCell",
-                "mov-gridCell--head",
+                "mov-gridCell", "mov-gridCell--head",
                 c.align === "right" ? "is-right" : "",
                 c.align === "center" ? "is-center" : "",
               ].join(" ")}
@@ -1214,7 +1142,7 @@ export default function Recibos() {
 
         {/* BODY */}
         <div className="mov-tableWrap mov-table---Wrap" role="rowgroup">
-          <div className={["mov-gridBody mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
+          <div className={["mov-gridBody", "mov-gridBody--relative", loadingRows ? "mov-softLoading" : ""].join(" ")}>
             {loadingRows ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
@@ -1222,12 +1150,13 @@ export default function Recibos() {
             ) : (
               <>
                 {filteredRows.map((r) => {
+                  const key = getRowKey(r);
                   const pagado = isReciboPagado(r);
                   const hasComp = Number(r?.id_comprobante || 0) > 0;
 
                   return (
                     <div
-                      key={r.id_movimiento}
+                      key={key}
                       className={`mov-gridTable mov-gridTable--row ${pagado ? "mov-row--paid" : ""}`}
                       style={{ gridTemplateColumns: gridCols }}
                       role="row"
@@ -1247,37 +1176,32 @@ export default function Recibos() {
                                   className={`mov-iconBtn ${!hasComp ? "mov-iconBtn--disabled" : ""}`}
                                   title={hasComp ? "Ver comprobante" : "Sin comprobante"}
                                   onClick={() => hasComp && openVerComprobante(r)}
-                                  disabled={!hasComp || loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                                  disabled={!hasComp || isAnyLoading || loadingListsCtx}
                                 >
                                   <FontAwesomeIcon icon={faEye} />
                                 </button>
 
-<button
-  type="button"
-  className={`mov-iconBtn ${pagado ? "mov-iconBtn--disabled" : ""}`}
-  title={pagado ? "Ya está pagado" : "Pagar"}
-  onClick={() => !pagado && openPagarModal(r)}
-  disabled={
-    pagado ||
-    loadingRows ||
-    loadingMore ||
-    loadingAll ||
-    loadingListsCtx ||
-    loadingClienteDeudas
-  }
->
-  <FontAwesomeIcon icon={faMoneyBill1Wave} />
-</button>
+                                <button
+                                  type="button"
+                                  className={`mov-iconBtn ${pagado ? "mov-iconBtn--disabled" : ""}`}
+                                  title={pagado ? "Ya está pagado" : "Pagar"}
+                                  onClick={() => !pagado && openPagarModal(r)}
+                                  disabled={
+                                    pagado ||
+                                    isAnyLoading ||
+                                    loadingListsCtx ||
+                                    loadingClienteDeudas
+                                  }
+                                >
+                                  <FontAwesomeIcon icon={faMoneyBill1Wave} />
+                                </button>
 
                                 <button
                                   type="button"
                                   className="mov-iconBtn"
                                   title="Editar"
-                                  onClick={() => {
-                                    setSelectedRow(r);
-                                    setOpenEdit(true);
-                                  }}
-                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                                  onClick={() => { setSelectedRow(r); setOpenEdit(true); }}
+                                  disabled={isAnyLoading || loadingListsCtx}
                                 >
                                   <FontAwesomeIcon icon={faPenToSquare} />
                                 </button>
@@ -1286,11 +1210,8 @@ export default function Recibos() {
                                   type="button"
                                   className="mov-iconBtn mov-iconBtn--danger"
                                   title="Eliminar"
-                                  disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || deletingId === r.id_movimiento}
-                                  onClick={() => {
-                                    setSelectedRow(r);
-                                    setOpenDel(true);
-                                  }}
+                                  disabled={isAnyLoading || loadingListsCtx || deletingId === r.id_movimiento}
+                                  onClick={() => { setSelectedRow(r); setOpenDel(true); }}
                                 >
                                   {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
                                 </button>
@@ -1321,9 +1242,13 @@ export default function Recibos() {
                   );
                 })}
 
-                {showEmpty && <div className="mov-emptyRow">No hay recibos para este período.</div>}
+                {!isAnyLoading && filteredRows.length === 0 && (
+                  <div className="mov-emptyRow">
+                    No hay recibos para mostrar en el rango de fechas seleccionado.
+                  </div>
+                )}
 
-                {!loadingRows && filteredRows.length > 0 && hasMore && (
+                {!loadingRows && hasMore && filteredRows.length > 0 && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
                       type="button"
@@ -1332,7 +1257,7 @@ export default function Recibos() {
                       disabled={loadingMore || loadingAll || loadingListsCtx}
                       title="Cargar todos los recibos restantes"
                     >
-                      {loadingAll ? "Cargando todos…" : "Cargar todos"}
+                      {loadingAll ? "Cargando todas…" : "Cargar todos"}
                     </button>
                   </div>
                 )}
@@ -1348,7 +1273,7 @@ export default function Recibos() {
         </div>
       </section>
 
-      {/* ✅✅✅ MODAL VER COMPROBANTE (AHORA SÍ, RENDERIZADO) */}
+      {/* MODAL VER COMPROBANTE */}
       <ModalVerComprobante
         open={openVer}
         url={verUrl}
@@ -1378,27 +1303,22 @@ export default function Recibos() {
         open={openEdit}
         row={selectedRow}
         lists={lists}
-        periodoDefault={fPeriodo}
-        onClose={() => {
-          setOpenEdit(false);
-          setSelectedRow(null);
-        }}
+        periodoDefault={
+          dateRange.from
+            ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}`
+            : ""
+        }
+        onClose={() => { setOpenEdit(false); setSelectedRow(null); }}
         onToast={showToast}
         onSave={async (payloadFinal) => {
           const { idUsuario } = getAuthInfo();
-
           const data = await apiPostJson(`${API}?action=recibos_actualizar`, {
             ...payloadFinal,
             idUsuario,
           });
-
-          invalidateCacheForPeriodo(fPeriodo);
-          await loadRows({ periodo: fPeriodo, q, offset: 0, append: false });
-
-          try {
-            await refreshLists();
-          } catch {}
-
+          cacheRef.current.clear();
+          await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
+          try { await refreshLists(); } catch {}
           return data;
         }}
       />
@@ -1408,10 +1328,7 @@ export default function Recibos() {
         open={openDel}
         row={selectedRow}
         loading={deletingId === selectedRow?.id_movimiento}
-        onClose={() => {
-          setOpenDel(false);
-          setSelectedRow(null);
-        }}
+        onClose={() => { setOpenDel(false); setSelectedRow(null); }}
         onConfirm={confirmDelete}
         onToast={showToast}
       />

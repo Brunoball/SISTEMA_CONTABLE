@@ -1,11 +1,4 @@
-// ✅ REEMPLAZAR COMPLETO
 // src/components/Mov_Subsection/OrdenesPago/OrdenesPago.jsx
-// (o donde tengas tu componente de Órdenes de Pago)
-
-// ✅ IMPORTANTE:
-// Este archivo usa el modal GLOBAL:
-// src/components/Global/Ver_Comprobantes/ModalVerComprobante.jsx
-// (ajustá el path si tu carpeta real difiere)
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
@@ -16,8 +9,12 @@ import ModalPagarOrdenesPago from "./modales/ModalPagarOrdenesPago.jsx";
 import ModalEditarOrdenPago from "./modales/ModalEditarOrdenPago.jsx";
 import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 
-// ✅ ✅ MODAL GLOBAL: ver comprobante
+// ✅ MODAL GLOBAL: ver comprobante
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
+
+// ✅ Calendario
+import Calendario from "../../Global/Calendario/Calendario.jsx";
+import "../../Global/Calendario/calendario.css";
 
 // ✅ Toast
 import Toast from "../../Global/Toast.jsx";
@@ -41,11 +38,10 @@ import { useListas } from "../../../context/ListasContext.jsx";
 ========================= */
 const PAGE_SIZE = 100;
 const SKELETON_ROWS = 10;
-const SKELETON_DELAY_MS = 140;
 const FORCE_SHOW_LOADER_DEV = false;
 
 /* =========================
-   Helpers
+   Helpers generales
 ========================= */
 function moneyARS(v) {
   const n = Number(v || 0);
@@ -87,83 +83,68 @@ function formatFechaDMY(v) {
   return s;
 }
 
-/* ✅ Período helpers (UI MM-YYYY) <-> (API YYYY-MM) */
-function periodoToMMYYYY(input) {
-  const s = String(input ?? "").trim();
-  if (!s) return "";
-
-  let m = "";
-  let y = "";
-
-  if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    y = parts[0];
-    m = parts[1];
-  } else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    m = parts[0];
-    y = parts[1];
-  } else if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      y = s.slice(0, 4);
-      m = s.slice(4);
-    } else {
-      m = s.slice(0, 2);
-      y = s.slice(2);
-    }
-  } else {
-    return s;
-  }
-
-  const mm = String(Number(m)).padStart(2, "0");
-  const yyyy = String(y);
-  return `${mm}-${yyyy}`;
+/* =========================
+   Fecha helpers para rango (igual que Ventas)
+========================= */
+function startOfDay(d) {
+  if (!d) return null;
+  const c = new Date(d);
+  c.setHours(0, 0, 0, 0);
+  return c;
 }
 
-function periodoToYYYYMM(input) {
-  const s = String(input ?? "").trim();
-  if (!s) return "";
-
-  if (/^\d{1,2}-\d{4}$/.test(s)) {
-    const [mmRaw, yyyy] = s.split("-");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{4}-\d{1,2}$/.test(s)) {
-    const [yyyy, mmRaw] = s.split("-");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{4}\/\d{1,2}$/.test(s)) {
-    const [yyyy, mmRaw] = s.split("/");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{1,2}\/\d{4}$/.test(s)) {
-    const [mmRaw, yyyy] = s.split("/");
-    const mm = String(Number(mmRaw)).padStart(2, "0");
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      const yyyy = s.slice(0, 4);
-      const mm = String(Number(s.slice(4))).padStart(2, "0");
-      return `${yyyy}-${mm}`;
-    } else {
-      const mm = String(Number(s.slice(0, 2))).padStart(2, "0");
-      const yyyy = s.slice(2);
-      return `${yyyy}-${mm}`;
-    }
-  }
-  return s;
+/** Convierte "YYYY-MM-DD" o "DD/MM/YYYY" a Date (sin hora) */
+function parseRowFecha(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m1) return startOfDay(new Date(Number(m1[1]), Number(m1[2]) - 1, Number(m1[3])));
+  const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m2) return startOfDay(new Date(Number(m2[3]), Number(m2[2]) - 1, Number(m2[1])));
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : startOfDay(d);
 }
 
-/* ✅ Auth */
+/** Formatea Date → "YYYY-MM-DD" para la API */
+function dateToAPI(d) {
+  if (!d) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** "DD/MM/YYYY" para mostrar */
+function formatDateUI(d) {
+  if (!d) return "—";
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+/** Filtro por rango de fechas (igual que Ventas) */
+function rowInDateRange(row, from, to) {
+  if (!from && !to) return true;
+  const fecha = parseRowFecha(row?.fecha);
+  if (!fecha) return true;
+  if (from && fecha < startOfDay(from)) return false;
+  if (to) {
+    const toEnd = startOfDay(to);
+    toEnd.setHours(23, 59, 59, 999);
+    if (fecha > toEnd) return false;
+  }
+  return true;
+}
+
+/* =========================
+   Auth helpers
+========================= */
 function getAuthInfo() {
-  const sessionKey = (localStorage.getItem("session_key") || "").trim();
-
+  const token = (localStorage.getItem("token") || "").trim();
+  const sessionKey = (
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    ""
+  ).trim();
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
@@ -176,8 +157,7 @@ function getAuthInfo() {
       0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
-
-  return { sessionKey, idUsuario };
+  return { token, sessionKey, idUsuario };
 }
 
 /* =========================
@@ -196,7 +176,6 @@ function isPagado(row) {
   return Number(row?.pagado ?? 0) === 1;
 }
 
-/* ✅ obtener id_comprobante desde la fila */
 function getIdComprobanteFromRow(row) {
   const cand =
     row?.id_comprobante ??
@@ -209,7 +188,6 @@ function getIdComprobanteFromRow(row) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-/* ✅ para iframe: si no manda X-Session, agregamos session_key en la URL */
 function appendSessionKey(url, sessionKey) {
   const u = String(url || "").trim();
   const sk = String(sessionKey || "").trim();
@@ -220,15 +198,13 @@ function appendSessionKey(url, sessionKey) {
 }
 
 /* =========================
-   Full-text match (front)
+   Full-text match
 ========================= */
 function rowMatchesQuery(row, query) {
   const qq = normalizeSearchText(query);
   if (!qq) return true;
-
   const montoNum = Number(row?.monto_total || row?.total || 0);
   const parts = [];
-
   if (row && typeof row === "object") {
     for (const k of Object.keys(row)) {
       const val = row[k];
@@ -236,11 +212,8 @@ function rowMatchesQuery(row, query) {
       parts.push(String(val ?? ""));
     }
   }
-
   parts.push(formatFechaDMY(row?.fecha));
-  parts.push(periodoToMMYYYY(row?.periodo));
   parts.push(String(montoNum), String(Math.trunc(montoNum)), moneyARS(montoNum));
-
   const hay = normalizeSearchText(parts.join(" | "));
   return hay.includes(qq);
 }
@@ -256,32 +229,6 @@ function slugifySheetName(name) {
   return (s || "OrdenesPago").slice(0, 31);
 }
 
-/* =========================
-   Key helpers (para NO parpadeo)
-========================= */
-function makeKeyFromPeriodoQ(periodoUI, q) {
-  const perUI = periodoToMMYYYY(periodoUI);
-  if (!perUI) return "";
-  const perAPI = periodoToYYYYMM(perUI);
-  const qKey = String(q || "").trim();
-  return `${perAPI}|${qKey}`;
-}
-function splitKey(key) {
-  const s = String(key || "");
-  const idx = s.indexOf("|");
-  if (idx === -1) return { periodoAPI: s, qKey: "" };
-  return { periodoAPI: s.slice(0, idx), qKey: s.slice(idx + 1) };
-}
-function yyyymmToMMYYYY(yyyymm) {
-  const s = String(yyyymm || "").trim();
-  if (!s) return "";
-  if (/^\d{4}-\d{2}$/.test(s)) {
-    const [yyyy, mm] = s.split("-");
-    return `${mm}-${yyyy}`;
-  }
-  return periodoToMMYYYY(s);
-}
-
 export default function OrdenesPago() {
   const API = `${BASE_URL}/api.php`;
 
@@ -294,11 +241,31 @@ export default function OrdenesPago() {
   } = useListas();
 
   const [rows, setRows] = useState([]);
+  const rowsRef = useRef([]);
+  useEffect(() => {
+    rowsRef.current = Array.isArray(rows) ? rows : [];
+  }, [rows]);
+
   const [loadingRows, setLoadingRows] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
-  const [fPeriodo, setFPeriodo] = useState("");
+  // ✅ Arranca con el mes actual por defecto (igual que Ventas)
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date();
+    return {
+      from: new Date(now.getFullYear(), now.getMonth(), 1),
+      to: new Date(now.getFullYear(), now.getMonth() + 1, 0),
+    };
+  });
+  const [showCalendario, setShowCalendario] = useState(false);
+
   const [q, setQ] = useState("");
+
+  const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState(null);
 
   const [showAll, setShowAll] = useState(false);
 
@@ -310,59 +277,35 @@ export default function OrdenesPago() {
 
   const cacheRef = useRef(new Map());
   const reqIdRef = useRef(0);
-  const inflightRef = useRef(new Map());
-
+  const rowsReqIdRef = useRef(0);
+  const moreReqIdRef = useRef(0);
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
-  const skelTimerRef = useRef(null);
-  const loadingRef = useRef(false);
-  const [showSkeleton, setShowSkeleton] = useState(false);
-
-  const [loadedKey, setLoadedKey] = useState("");
-
-  const clearSkeletonTimer = useCallback(() => {
-    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
-    skelTimerRef.current = null;
-  }, []);
-
-  const startSkeleton = useCallback(
-    (myReqId) => {
-      clearSkeletonTimer();
-      const hasAnyData = rows.length > 0 || !!loadedKey;
-      const delay = hasAnyData ? SKELETON_DELAY_MS : 0;
-      skelTimerRef.current = setTimeout(() => {
-        if (loadingRef.current && myReqId === reqIdRef.current) setShowSkeleton(true);
-      }, delay);
-    },
-    [clearSkeletonTimer, rows.length, loadedKey]
-  );
-
-  const stopSkeleton = useCallback(() => {
-    clearSkeletonTimer();
-    setShowSkeleton(false);
-  }, [clearSkeletonTimer]);
+  const showSkeleton = loadingRows;
 
   useEffect(() => {
     return () => {
-      clearSkeletonTimer();
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [clearSkeletonTimer]);
+  }, []);
 
   /* =========================
-     API helpers (X-Session)
+     API helpers
   ========================= */
   const buildHeadersGET = useCallback(() => {
-    const { sessionKey } = getAuthInfo();
+    const { token, sessionKey } = getAuthInfo();
     const h = {};
     if (sessionKey) h["X-Session"] = sessionKey;
+    if (token) h.Authorization = `Bearer ${token}`;
     return h;
   }, []);
-  const buildHeaders = useCallback(() => {
-    const { sessionKey } = getAuthInfo();
+
+  const buildHeadersPOST = useCallback(() => {
+    const { token, sessionKey } = getAuthInfo();
     const h = { "Content-Type": "application/json" };
     if (sessionKey) h["X-Session"] = sessionKey;
+    if (token) h.Authorization = `Bearer ${token}`;
     return h;
   }, []);
 
@@ -389,207 +332,303 @@ export default function OrdenesPago() {
     async (url, payload) => {
       const res = await fetch(url, {
         method: "POST",
-        headers: buildHeaders(),
+        headers: buildHeadersPOST(),
         body: JSON.stringify(payload ?? {}),
       });
       return await parseJsonOrThrow(res);
     },
-    [buildHeaders, parseJsonOrThrow]
+    [buildHeadersPOST, parseJsonOrThrow]
   );
 
-  const invalidateCacheForPeriodo = useCallback((periodoUI) => {
-    const periodoAPI = periodoToYYYYMM(periodoToMMYYYY(periodoUI));
-    const prefix = `${periodoAPI}|`;
-    for (const k of cacheRef.current.keys()) {
-      if (String(k).startsWith(prefix)) cacheRef.current.delete(k);
-    }
-    for (const k of inflightRef.current.keys()) {
-      if (String(k).startsWith(prefix)) inflightRef.current.delete(k);
-    }
-  }, []);
-
-  const currentKey = useMemo(() => makeKeyFromPeriodoQ(fPeriodo, q), [fPeriodo, q]);
-
   /* =========================
-     ✅ Cargar órdenes (listado)
+     LOAD ROWS — usa fecha_desde / fecha_hasta (igual que Ventas)
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
-      const periodoUI = typeof opts.periodo === "string" ? opts.periodo : fPeriodo;
+      const fromDate = opts.from !== undefined ? opts.from : dateRange.from;
+      const toDate = opts.to !== undefined ? opts.to : dateRange.to;
       const qLocal = typeof opts.q === "string" ? opts.q : q;
+      const append = !!opts.append;
+      const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
 
-      const cacheKey = makeKeyFromPeriodoQ(periodoUI, qLocal);
+      const fromAPI = dateToAPI(fromDate);
+      const toAPI = dateToAPI(toDate);
+      const qKey = (qLocal || "").trim();
+      const cacheKey = `${fromAPI}|${toAPI}|${qKey}`;
 
-      if (!cacheKey) {
-        setRows([]);
-        setLoadedKey("");
-        setError("");
-        setLoadingRows(false);
-        loadingRef.current = false;
-        stopSkeleton();
-        return null;
-      }
-
-      if (cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
-        const cached = cacheRef.current.get(cacheKey) || [];
-        setError("");
-        setRows(cached);
-        setLoadedKey(cacheKey);
-        return cached;
-      }
-
-      const inflight = inflightRef.current.get(cacheKey);
-      if (inflight?.promise) return await inflight.promise;
-
+      const PROBE_LIMIT = PAGE_SIZE + 1;
       const myReqId = ++reqIdRef.current;
+      const start = Date.now();
 
-      loadingRef.current = true;
-      setLoadingRows(true);
+      if (!append) {
+        rowsReqIdRef.current = myReqId;
+        setLoadingRows(true);
+      } else {
+        moreReqIdRef.current = myReqId;
+        setLoadingMore(true);
+      }
       setError("");
-      startSkeleton(myReqId);
 
-      const { periodoAPI, qKey } = splitKey(cacheKey);
-
-      const promise = (async () => {
-        try {
-          const sp = new URLSearchParams();
-          sp.set("action", "ordenes_pago_listar");
-          sp.set("periodo", periodoAPI);
-          if (qKey) sp.set("q", qKey);
-
-          const data = await apiGet(`${API}?${sp.toString()}`);
-          if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar órdenes de pago.");
-
-          if (myReqId !== reqIdRef.current) return null;
-
-          const list = Array.isArray(data.movimientos)
-            ? data.movimientos
-            : Array.isArray(data.ordenes)
-            ? data.ordenes
-            : [];
-
-          const norm = list.map((r) => ({
-            ...r,
-            periodo: periodoToMMYYYY(r?.periodo),
-            pagado: Number(r?.pagado ?? 0) === 1 ? 1 : 0,
-            id_comprobante: getIdComprobanteFromRow(r) || 0,
-          }));
-
-          cacheRef.current.set(cacheKey, norm);
-          setRows(norm);
-          setLoadedKey(cacheKey);
-          return norm;
-        } catch (e) {
-          if (myReqId !== reqIdRef.current) return null;
-          setError(e?.message || "Error cargando órdenes de pago.");
-          return null;
-        } finally {
-          if (myReqId === reqIdRef.current) {
-            loadingRef.current = false;
-            setLoadingRows(false);
-            stopSkeleton();
-          }
-          const curr = inflightRef.current.get(cacheKey);
-          if (curr?.reqId === myReqId) inflightRef.current.delete(cacheKey);
+      try {
+        if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
+          if (rowsReqIdRef.current !== myReqId) return null;
+          const cached = cacheRef.current.get(cacheKey);
+          const cachedRows = Array.isArray(cached?.rows) ? cached.rows : [];
+          rowsRef.current = cachedRows;
+          setRows(cachedRows);
+          setHasMore(!!cached?.hasMore);
+          setNextOffset(cached?.nextOffset ?? null);
+          if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
+          return {
+            hasMore: !!cached?.hasMore,
+            nextOffset: cached?.nextOffset ?? null,
+            received: cachedRows.length,
+          };
         }
-      })();
 
-      inflightRef.current.set(cacheKey, { promise, reqId: myReqId });
-      return await promise;
+        const sp = new URLSearchParams();
+        sp.set("action", "ordenes_pago_listar");
+        if (fromAPI) sp.set("fecha_desde", fromAPI);
+        if (toAPI) sp.set("fecha_hasta", toAPI);
+        if (qKey) sp.set("q", qKey);
+        sp.set("limit", String(PROBE_LIMIT));
+        sp.set("offset", String(offset));
+
+        const data = await apiGet(`${API}?${sp.toString()}`);
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar órdenes de pago.");
+
+        if (myReqId !== reqIdRef.current) return null;
+
+        const listKey = Array.isArray(data.movimientos)
+          ? "movimientos"
+          : Array.isArray(data.ordenes)
+          ? "ordenes"
+          : "movimientos";
+
+        const rawArr = Array.isArray(data[listKey]) ? data[listKey] : [];
+
+        const norm = rawArr.map((r) => ({
+          ...r,
+          pagado: Number(r?.pagado ?? 0) === 1 ? 1 : 0,
+          id_comprobante: getIdComprobanteFromRow(r) || 0,
+        }));
+
+        let newHasMore = data.has_more !== undefined ? !!data.has_more : norm.length > PAGE_SIZE;
+        let newNextOffset =
+          data.next_offset !== undefined && data.next_offset !== null
+            ? Number(data.next_offset)
+            : newHasMore
+            ? offset + PAGE_SIZE
+            : null;
+
+        const page = newHasMore ? norm.slice(0, PAGE_SIZE) : norm;
+        const elapsed = Date.now() - start;
+        const remaining = Math.max(0, 0 - elapsed);
+
+        return await new Promise((resolve) => {
+          const apply = () => {
+            if (myReqId !== reqIdRef.current) return resolve(null);
+
+            if (append) {
+              const base = Array.isArray(rowsRef.current) ? rowsRef.current : [];
+              const seen = new Set(base.map((x) => String(x?.id_movimiento ?? "")));
+              const add = page.filter((x) => {
+                const k = String(x?.id_movimiento ?? "");
+                return k && !seen.has(k);
+              });
+              const merged = [...base, ...add];
+              rowsRef.current = merged;
+              setRows(merged);
+              if (add.length === 0) {
+                newHasMore = false;
+                newNextOffset = null;
+              }
+              setHasMore(newHasMore);
+              setNextOffset(newNextOffset);
+              if (moreReqIdRef.current === myReqId) setLoadingMore(false);
+            } else {
+              rowsRef.current = page;
+              setRows(page);
+              setHasMore(newHasMore);
+              setNextOffset(newNextOffset);
+              if (offset === 0) {
+                cacheRef.current.set(cacheKey, {
+                  rows: page,
+                  hasMore: newHasMore,
+                  nextOffset: newNextOffset,
+                });
+              }
+              if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
+            }
+
+            resolve({
+              hasMore: newHasMore,
+              nextOffset: newNextOffset,
+              received: page.length,
+            });
+          };
+
+          if (remaining > 0) setTimeout(apply, remaining);
+          else apply();
+        });
+      } catch (e) {
+        return await new Promise((resolve) => {
+          setTimeout(() => {
+            if (myReqId !== reqIdRef.current) return resolve(null);
+            setError(e.message || "Error cargando órdenes de pago.");
+            if (append) {
+              if (moreReqIdRef.current === myReqId) setLoadingMore(false);
+            } else {
+              if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
+            }
+            resolve(null);
+          }, 0);
+        });
+      }
     },
-    [API, apiGet, fPeriodo, q, startSkeleton, stopSkeleton]
+    [API, apiGet, dateRange, q]
   );
 
   /* =========================
-     INIT: listas + período default + load
+     INIT — carga con mes actual por defecto
   ========================= */
   useEffect(() => {
     let alive = true;
-
     (async () => {
       try {
         await ensureListsLoaded({ force: false, background: true });
       } catch {}
-
       if (!alive) return;
-
-      const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos : [];
-      const perDefault = periodos[0] || "";
-
-      if (perDefault) {
-        skipSearchRef.current = true;
-        setQ("");
-        setFPeriodo((prev) => prev || perDefault);
-        setShowAll(false);
-
-        await loadRows({ periodo: perDefault, q: "" });
-      } else {
-        setRows([]);
-        setLoadedKey("");
-        setLoadingRows(false);
-        loadingRef.current = false;
-        stopSkeleton();
-      }
+      const now = new Date();
+      const initFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+      const initTo = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      await loadRows({ from: initFrom, to: initTo, q: "", offset: 0, append: false });
     })();
-
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Debounce búsqueda
   useEffect(() => {
-    const periodos = Array.isArray(listasCtx?.periodos) ? listasCtx.periodos : [];
-
-    if (periodos.length === 0) {
-      if (fPeriodo !== "") {
-        skipSearchRef.current = true;
-        setFPeriodo("");
-        setRows([]);
-        setShowAll(false);
-        setLoadedKey("");
-      }
-      return;
-    }
-
-    const current = periodoToMMYYYY(fPeriodo);
-    if (current && !periodos.includes(current)) {
-      const next = periodos[0];
-      skipSearchRef.current = true;
-      setQ("");
-      setFPeriodo(next);
-      setShowAll(false);
-      invalidateCacheForPeriodo(next);
-      loadRows({ periodo: next, q: "" });
-    }
-  }, [listasCtx?.periodos, fPeriodo, invalidateCacheForPeriodo, loadRows]);
-
-  useEffect(() => {
-    if (!fPeriodo) return;
-
     if (skipSearchRef.current) {
       skipSearchRef.current = false;
       return;
     }
-
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    setShowAll(false);
-
     searchTimerRef.current = setTimeout(() => {
-      loadRows({ periodo: fPeriodo, q });
+      loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
     }, 250);
-
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [q, fPeriodo, loadRows]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
 
   /* =========================
-     ✅ Modal Ver Comprobante (GLOBAL)
+     Handler cambio de rango de fechas (igual que Ventas)
+  ========================= */
+  const handleDateRangeChange = useCallback(
+    async (newRange) => {
+      if (!newRange.from && !newRange.to) return;
+      setDateRange(newRange);
+      cacheRef.current.clear();
+      skipSearchRef.current = true;
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      await loadRows({
+        from: newRange.from,
+        to: newRange.to,
+        q,
+        offset: 0,
+        append: false,
+      });
+    },
+    [loadRows, q]
+  );
+
+  /* =========================
+     "Cargar todos"
+  ========================= */
+  const handleLoadAll = useCallback(async () => {
+    if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
+    if (nextOffset === null) return;
+
+    setLoadingAll(true);
+    showToast("cargando", "Cargando todas las órdenes de pago…", 12000);
+
+    let offset = nextOffset;
+    let guard = 0;
+
+    try {
+      while (offset !== null && guard < 3000) {
+        const beforeLen = rowsRef.current.length;
+        const res = await loadRows({
+          from: dateRange.from,
+          to: dateRange.to,
+          q: (q || "").trim(),
+          offset,
+          append: true,
+        });
+        if (!res) break;
+        guard += 1;
+        offset = res.nextOffset;
+        const afterLen = rowsRef.current.length;
+        if (afterLen === beforeLen) break;
+        if (!res.hasMore || offset === null) break;
+      }
+      setRows([...rowsRef.current]);
+      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} órdenes.`, 2600);
+    } catch (e) {
+      showToast("error", e?.message || "Error cargando todas.", 4200);
+    } finally {
+      setLoadingAll(false);
+    }
+  }, [
+    hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll,
+    nextOffset, dateRange, q, loadRows, showToast,
+  ]);
+
+  /* =========================
+     Filtrado client-side
+  ========================= */
+  const filteredRows = useMemo(() => {
+    return (Array.isArray(rows) ? rows : [])
+      .filter((r) => isCompraCuentaCorriente(r))
+      .filter((r) => rowInDateRange(r, dateRange.from, dateRange.to))
+      .filter((r) => rowMatchesQuery(r, q));
+  }, [rows, dateRange, q]);
+
+  const visibleRows = useMemo(() => {
+    if (showAll) return filteredRows;
+    return filteredRows;
+  }, [filteredRows, showAll]);
+
+  /* =========================
+     Label para el botón del calendario (igual que Ventas)
+  ========================= */
+  const dateRangeLabel = useMemo(() => {
+    const { from, to } = dateRange;
+    if (!from && !to) return "Seleccionar fechas";
+    if (from && to) {
+      if (
+        from.getFullYear() === to.getFullYear() &&
+        from.getMonth() === to.getMonth() &&
+        from.getDate() === to.getDate()
+      ) {
+        return formatDateUI(from);
+      }
+      return `${formatDateUI(from)} → ${formatDateUI(to)}`;
+    }
+    if (from) return `Desde ${formatDateUI(from)}`;
+    return `Hasta ${formatDateUI(to)}`;
+  }, [dateRange]);
+
+  /* =========================
+     Modal Ver Comprobante
   ========================= */
   const [openVer, setOpenVer] = useState(false);
   const [verUrl, setVerUrl] = useState("");
   const [verTitle, setVerTitle] = useState("Comprobante");
+
   const closeVerModal = useCallback(() => {
     setOpenVer(false);
     setTimeout(() => {
@@ -603,11 +642,8 @@ export default function OrdenesPago() {
       const { sessionKey } = getAuthInfo();
       const idComp = getIdComprobanteFromRow(row);
       if (!idComp) return;
-
-      // ✅ Usamos siempre el endpoint consistente
       let u = `${API}?action=comprobantes_descargar&id_comprobante=${idComp}`;
       u = appendSessionKey(u, sessionKey);
-
       setVerTitle(`Comprobante · ${safeText(row?.proveedor)}`);
       setVerUrl(u);
       setOpenVer(true);
@@ -616,7 +652,7 @@ export default function OrdenesPago() {
   );
 
   /* =========================
-     Modales
+     Modales Pagar / Editar / Eliminar
   ========================= */
   const [openPagar, setOpenPagar] = useState(false);
   const [pagarProveedor, setPagarProveedor] = useState(null);
@@ -632,16 +668,13 @@ export default function OrdenesPago() {
     (rowProv) => {
       const idProv = Number(rowProv?.id_proveedor || rowProv?.proveedor_id || 0);
       const nombreProv = String(rowProv?.proveedor || "").trim();
-
       return (rows || [])
         .filter((r) => {
           const rid = Number(r?.id_proveedor || r?.proveedor_id || 0);
           const rnom = String(r?.proveedor || "").trim();
-
           const same =
             (idProv > 0 && rid === idProv) ||
             (!idProv && nombreProv && rnom.toLowerCase() === nombreProv.toLowerCase());
-
           return same;
         })
         .filter((r) => isCompraCuentaCorriente(r));
@@ -673,7 +706,6 @@ export default function OrdenesPago() {
 
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
 
   const openDeleteModal = useCallback((r) => {
     setSelectedRow(r);
@@ -687,33 +719,33 @@ export default function OrdenesPago() {
   /* =========================
      Acciones backend
   ========================= */
+  const refreshAfterMutation = useCallback(async () => {
+    cacheRef.current.clear();
+    await loadRows({
+      from: dateRange.from,
+      to: dateRange.to,
+      q,
+      offset: 0,
+      append: false,
+    });
+    try { await refreshLists?.(); } catch {}
+  }, [dateRange, loadRows, q, refreshLists]);
+
   const onConfirmPago = useCallback(
     async (payload) => {
       try {
         showToast("cargando", "Confirmando pago…", 12000);
-
         const ids =
           payload?.ids_movimiento ??
           payload?.ids_movimientos ??
           payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ??
           [];
-
         const data = await apiPostJson(`${API}?action=ordenes_pago_confirmar_pago`, {
           ids_movimiento: ids,
           id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
         });
-
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
-
-        invalidateCacheForPeriodo(fPeriodo);
-
-        Promise.resolve().then(async () => {
-          try {
-            await loadRows({ periodo: fPeriodo, q });
-            await refreshLists?.();
-          } catch {}
-        });
-
+        await refreshAfterMutation();
         showToast("exito", data?.mensaje || "Pago confirmado.", 1800);
         return true;
       } catch (e) {
@@ -721,7 +753,7 @@ export default function OrdenesPago() {
         throw e;
       }
     },
-    [API, apiPostJson, fPeriodo, invalidateCacheForPeriodo, loadRows, q, refreshLists, showToast]
+    [API, apiPostJson, refreshAfterMutation, showToast]
   );
 
   const onSaveEditar = useCallback(
@@ -729,51 +761,36 @@ export default function OrdenesPago() {
       try {
         showToast("cargando", "Guardando cambios…", 12000);
         const { idUsuario } = getAuthInfo();
-
         const data = await apiPostJson(`${API}?action=ordenes_pago_actualizar`, {
           ...payloadFinal,
           idUsuario,
         });
-
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la orden de pago.");
-
-        invalidateCacheForPeriodo(fPeriodo);
-        await loadRows({ periodo: fPeriodo, q });
-
-        await refreshLists?.();
+        await refreshAfterMutation();
         showToast("exito", data?.mensaje || "Orden de pago actualizada.", 2400);
       } catch (e) {
         showToast("error", e?.message || "Error guardando orden de pago.", 4200);
         throw e;
       }
     },
-    [API, apiPostJson, fPeriodo, invalidateCacheForPeriodo, loadRows, q, refreshLists, showToast]
+    [API, apiPostJson, refreshAfterMutation, showToast]
   );
 
   const confirmDelete = useCallback(async () => {
     if (!selectedRow?.id_movimiento) return;
-
     const id = selectedRow.id_movimiento;
     setDeletingId(id);
     setError("");
     showToast("cargando", "Eliminando orden de pago…", 12000);
-
     try {
       const { idUsuario } = getAuthInfo();
-
       const data = await apiPostJson(`${API}?action=ordenes_pago_eliminar`, {
         id_movimiento: Number(id),
         idUsuario,
       });
-
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
-
       closeDeleteModal();
-
-      invalidateCacheForPeriodo(fPeriodo);
-      await loadRows({ periodo: fPeriodo, q });
-
-      await refreshLists?.();
+      await refreshAfterMutation();
       showToast("exito", "Orden de pago eliminada.", 2600);
     } catch (e) {
       setError(e.message || "Error eliminando orden de pago.");
@@ -781,69 +798,84 @@ export default function OrdenesPago() {
     } finally {
       setDeletingId(null);
     }
-  }, [
-    API,
-    apiPostJson,
-    closeDeleteModal,
-    fPeriodo,
-    invalidateCacheForPeriodo,
-    loadRows,
-    q,
-    refreshLists,
-    selectedRow,
-    showToast,
-  ]);
+  }, [API, apiPostJson, closeDeleteModal, refreshAfterMutation, selectedRow, showToast]);
 
-  /* =========================
-     ✅ NUEVO: recarga tras guardar comprobante (Finalizar)
-     Esto hace que se active el ojito sin F5.
-  ========================= */
   const handleAfterComprobanteSaved = useCallback(async () => {
     try {
-      // borramos cache del período actual y pedimos de nuevo el listado
-      invalidateCacheForPeriodo(fPeriodo);
-      await loadRows({ periodo: fPeriodo, q });
-      await refreshLists?.();
-    } catch {
-      // no rompemos UX si falla
-    }
-  }, [fPeriodo, invalidateCacheForPeriodo, loadRows, q, refreshLists]);
+      await refreshAfterMutation();
+    } catch {}
+  }, [refreshAfterMutation]);
 
   /* =========================
-     Filtrado final
+     Excel
   ========================= */
-  const displayKey = loadedKey || currentKey;
-  const display = useMemo(() => splitKey(displayKey), [displayKey]);
+  const exportToExcel = useCallback(() => {
+    try {
+      if (!filteredRows.length) {
+        showToast("error", "No hay datos para exportar.", 2500);
+        return;
+      }
+      if (hasMore) {
+        showToast(
+          "error",
+          "Ojo: faltan registros sin cargar. Si querés exportar todo, tocá 'Cargar todos' primero.",
+          5200
+        );
+      }
+      const dataToExport = filteredRows.map((r) => ({
+        ESTADO: isPagado(r) ? "PAGADO" : "PENDIENTE",
+        FECHA: safeText(formatFechaDMY(r.fecha)),
+        DESCRIPCION: safeText(r.detalle ?? r.descripcion ?? r.concepto),
+        PROVEEDOR: safeText(r.proveedor),
+        MONTO: Number(r.monto_total ?? r.total ?? 0) || 0,
+      }));
 
-  const filteredRows = useMemo(() => {
-    const fPer = yyyymmToMMYYYY(display?.periodoAPI);
-    if (!fPer) return [];
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
 
-    const displayQ = display?.qKey || "";
+      const { from, to } = dateRange;
+      const sufijo =
+        from && to
+          ? `${dateToAPI(from)}_${dateToAPI(to)}`
+          : from
+          ? `desde_${dateToAPI(from)}`
+          : "todos";
 
-    return (Array.isArray(rows) ? rows : [])
-      .filter((r) => String(periodoToMMYYYY(r?.periodo)) === String(periodoToMMYYYY(fPer)))
-      .filter((r) => isCompraCuentaCorriente(r))
-      .filter((r) => rowMatchesQuery(r, displayQ));
-  }, [rows, display]);
-
-  const visibleRows = useMemo(() => {
-    if (showAll) return filteredRows;
-    return filteredRows.slice(0, PAGE_SIZE);
-  }, [filteredRows, showAll]);
-
-  const total = filteredRows.length;
-  const mostrando = visibleRows.length;
-  const hayMas = !showAll && total > PAGE_SIZE;
+      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`OP_${sufijo}`));
+      XLSX.writeFile(wb, `ordenes_pago_${sufijo}.xlsx`);
+      showToast("exito", "Excel exportado.", 2200);
+    } catch (e) {
+      showToast("error", e?.message || "Error exportando Excel.", 3500);
+    }
+  }, [filteredRows, dateRange, showToast, hasMore]);
 
   /* =========================
      Columnas / grilla
   ========================= */
   const columns = useMemo(() => {
     return [
-      { key: "fecha", label: "FECHA", align: "center", fr: 0.9, render: (r) => safeText(formatFechaDMY(r.fecha)) },
-      { key: "detalle", label: "DESCRIPCIÓN", fr: 2.3, strong: true, align: "left", render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto) },
-      { key: "proveedor", label: "PROVEEDOR", fr: 1.8, align: "center", render: (r) => safeText(r.proveedor) },
+      {
+        key: "fecha",
+        label: "FECHA",
+        align: "center",
+        fr: 0.9,
+        render: (r) => safeText(formatFechaDMY(r.fecha)),
+      },
+      {
+        key: "detalle",
+        label: "DESCRIPCIÓN",
+        fr: 2.3,
+        strong: true,
+        align: "left",
+        render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
+      },
+      {
+        key: "proveedor",
+        label: "PROVEEDOR",
+        fr: 1.8,
+        align: "center",
+        render: (r) => safeText(r.proveedor),
+      },
       {
         key: "estado",
         label: "ESTADO",
@@ -858,7 +890,13 @@ export default function OrdenesPago() {
           );
         },
       },
-      { key: "monto", label: "MONTO", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
+      {
+        key: "monto",
+        label: "MONTO",
+        fr: 1.1,
+        align: "center",
+        render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
+      },
       { key: "acciones", label: "ACCIONES", fr: 1.4, align: "center", render: () => null },
     ];
   }, []);
@@ -874,110 +912,72 @@ export default function OrdenesPago() {
       .join(" ");
   }, [columns]);
 
-  const skelWidths = useMemo(() => {
-    return {
-      estado: ["52%", "44%", "58%", "50%"],
-      fecha: ["44%", "38%", "50%", "42%"],
-      detalle: ["72%", "58%", "66%", "48%"],
-      proveedor: ["62%", "54%", "46%", "58%"],
-      monto: ["38%", "30%", "34%", "28%"],
-    };
-  }, []);
+  const skelWidths = useMemo(() => ({
+    fecha: ["44%", "38%", "50%", "42%"],
+    detalle: ["72%", "58%", "66%", "48%"],
+    proveedor: ["62%", "54%", "46%", "58%"],
+    estado: ["52%", "44%", "58%", "50%"],
+    monto: ["38%", "30%", "34%", "28%"],
+  }), []);
 
-  const renderSkeletonRow = (idx) => {
-    return (
-      <div
-        key={`skel-${idx}`}
-        className="mov-gridTable mov-gridTable--row mov-row--skeleton"
-        style={{ gridTemplateColumns: gridCols }}
-        role="row"
-        aria-hidden="true"
-      >
-        {columns.map((c) => {
-          if (c.key === "acciones") {
-            return (
-              <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
-                <div className="mov-skelActions">
-                  <span className="mov-skelIcon" />
-                  <span className="mov-skelIcon" />
-                  <span className="mov-skelIcon" />
-                </div>
-              </div>
-            );
-          }
-
-          const list = skelWidths[c.key] || ["60%"];
-          const w = list[idx % list.length];
-
+  const renderSkeletonRow = (idx) => (
+    <div
+      key={`skel-${idx}`}
+      className="mov-gridTable mov-gridTable--row mov-row--skeleton"
+      style={{ gridTemplateColumns: gridCols }}
+      role="row"
+      aria-hidden="true"
+    >
+      {columns.map((c) => {
+        if (c.key === "acciones") {
           return (
-            <div
-              key={c.key}
-              className={[
-                "mov-gridCell",
-                c.align === "right" ? "is-right" : "",
-                c.align === "center" ? "is-center" : "",
-              ].join(" ")}
-              role="cell"
-              data-label={c.label}
-            >
-              <span className="mov-skeletonBar" style={{ width: w }} />
+            <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
+              <div className="mov-skelActions">
+                <span className="mov-skelIcon" />
+                <span className="mov-skelIcon" />
+                <span className="mov-skelIcon" />
+                <span className="mov-skelIcon" />
+              </div>
             </div>
           );
-        })}
-      </div>
-    );
-  };
+        }
+        const list = skelWidths[c.key] || ["60%"];
+        const w = list[idx % list.length];
+        return (
+          <div
+            key={c.key}
+            className={[
+              "mov-gridCell",
+              c.align === "right" ? "is-right" : "",
+              c.align === "center" ? "is-center" : "",
+            ].join(" ")}
+            role="cell"
+            data-label={c.label}
+          >
+            <span className="mov-skeletonBar" style={{ width: w }} />
+          </div>
+        );
+      })}
+    </div>
+  );
 
-  /* =========================
-     Excel
-  ========================= */
-  const exportToExcel = useCallback(() => {
-    try {
-      if (!filteredRows.length) {
-        showToast("error", "No hay datos para exportar.", 2500);
-        return;
-      }
-
-      const dataToExport = filteredRows.map((r) => ({
-        ESTADO: isPagado(r) ? "PAGADO" : "PENDIENTE",
-        FECHA: safeText(formatFechaDMY(r.fecha)),
-        PERIODO: safeText(periodoToMMYYYY(r.periodo)),
-        DESCRIPCION: safeText(r.detalle ?? r.descripcion ?? r.concepto),
-        PROVEEDOR: safeText(r.proveedor),
-        MONTO: Number(r.monto_total ?? r.total ?? 0) || 0,
-      }));
-
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(dataToExport);
-
-      const per = periodoToMMYYYY(fPeriodo) || "SIN_PERIODO";
-      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`OP_${per}`));
-      XLSX.writeFile(wb, `ordenes_pago_${per}.xlsx`);
-      showToast("exito", "Excel exportado.", 2200);
-    } catch (e) {
-      showToast("error", e?.message || "Error exportando Excel.", 3500);
-    }
-  }, [filteredRows, fPeriodo, showToast]);
+  const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
   const lists = listasCtx || { periodos: [] };
-  const softLoading = loadingRows && showSkeleton;
 
-  const handleChangePeriodo = async (valueUI) => {
-    const ui = periodoToMMYYYY(valueUI);
-    skipSearchRef.current = true;
-
-    setFPeriodo(ui);
-    setQ("");
-    setShowAll(false);
-
-    await loadRows({ periodo: ui, q: "" });
-  };
-
-  const canShowEmpty = !loadingRows && loadedKey !== "" && loadedKey === currentKey && filteredRows.length === 0;
-
+  /* =========================
+     RENDER
+  ========================= */
   return (
     <div className="mov-page mov-page--ordenesPago">
-      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
+      {toast && (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
+      )}
 
       {errorListsCtx && <div className="mov-alert" role="alert">{errorListsCtx}</div>}
       {error && <div className="mov-alert" role="alert">{error}</div>}
@@ -988,45 +988,83 @@ export default function OrdenesPago() {
             <div>
               <div className="mov-card__title">Movimientos · Órdenes de Pago (Compras)</div>
               <div className="mov-card__hint">
-                Mostrando <b>{mostrando}</b>
-                {hayMas ? <> de <b>{total}</b></> : <> (Total: <b>{total}</b>)</>}
+                Mostrando <b>{filteredRows.length}</b> órdenes
+                {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
               </div>
             </div>
 
             <div className="mov-headFilters">
-              <div className="mov-filter">
-                <label><FontAwesomeIcon icon={faCalendarDays} /> Período</label>
-                <select
-                  value={periodoToMMYYYY(fPeriodo)}
-                  onChange={(e) => handleChangePeriodo(e.target.value)}
-                  disabled={loadingRows || loadingListsCtx}
+
+              {/* ✅ Botón + Calendario (igual que Ventas) */}
+              <div className="mov-filter" style={{ position: "relative" }}>
+                <label>
+                  <FontAwesomeIcon icon={faCalendarDays} /> Fecha
+                </label>
+
+                <button
+                  type="button"
+                  className="mov-btn mov-btn--ghost"
+                  style={{ minWidth: 220, justifyContent: "flex-start", textAlign: "left" }}
+                  onClick={() => setShowCalendario((v) => !v)}
+                  disabled={isAnyLoading || loadingListsCtx}
+                  title="Seleccionar rango de fechas"
                 >
-                  {(lists.periodos || []).map((p) => {
-                    const ui = periodoToMMYYYY(p);
-                    return <option key={ui} value={ui}>{ui}</option>;
-                  })}
-                </select>
+                  {dateRangeLabel}
+                </button>
+
+                {showCalendario && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "100%",
+                      left: 0,
+                      zIndex: 999,
+                      marginTop: 6,
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+                      borderRadius: 10,
+                      background: "var(--color-surface, #fff)",
+                    }}
+                  >
+                    <Calendario
+                      value={dateRange}
+                      onChange={async (newRange) => {
+                        if (newRange.from && newRange.to) {
+                          setShowCalendario(false);
+                        }
+                        await handleDateRangeChange(newRange);
+                      }}
+                      onClose={() => setShowCalendario(false)}
+                    />
+                  </div>
+                )}
               </div>
 
+              {/* Búsqueda */}
               <div className="mov-search">
-                <label><FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda</label>
+                <label>
+                  <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                </label>
                 <div className="mov-searchInput">
                   <input
                     value={q}
-                    onChange={(e) => { setQ(e.target.value); setShowAll(false); }}
+                    onChange={(e) => setQ(e.target.value)}
                     onKeyDown={async (e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         skipSearchRef.current = true;
-                        setShowAll(false);
-                        await loadRows({ periodo: fPeriodo, q: e.currentTarget.value });
+                        await loadRows({
+                          from: dateRange.from,
+                          to: dateRange.to,
+                          q: e.currentTarget.value,
+                          offset: 0,
+                          append: false,
+                        });
                       }
                     }}
                     placeholder="Buscar por fecha, proveedor, descripción, monto…"
-                    disabled={loadingListsCtx}
+                    disabled={loadingListsCtx || loadingAll}
                   />
-
                   {q.trim() !== "" && (
                     <button
                       type="button"
@@ -1034,13 +1072,18 @@ export default function OrdenesPago() {
                       title="Limpiar búsqueda"
                       onClick={async () => {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                        skipSearchRef.current = true;
                         setQ("");
-                        setShowAll(false);
-                        await loadRows({ periodo: fPeriodo, q: "" });
+                        skipSearchRef.current = true;
+                        await loadRows({
+                          from: dateRange.from,
+                          to: dateRange.to,
+                          q: "",
+                          offset: 0,
+                          append: false,
+                        });
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
-                      disabled={loadingListsCtx}
+                      disabled={loadingAll}
                     >
                       ×
                     </button>
@@ -1058,12 +1101,17 @@ export default function OrdenesPago() {
               disabled={loadingRows || filteredRows.length === 0}
               title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
             >
-              <FontAwesomeIcon icon={faFileExcel} /> Exportar 
+              <FontAwesomeIcon icon={faFileExcel} /> Exportar
             </button>
           </div>
         </div>
 
-        <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
+        {/* HEADER */}
+        <div
+          className="mov-gridTable mov-gridTable--head"
+          style={{ gridTemplateColumns: gridCols }}
+          role="row"
+        >
           {columns.map((c) => (
             <div
               key={c.key}
@@ -1080,126 +1128,139 @@ export default function OrdenesPago() {
           ))}
         </div>
 
+        {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
-          <div className={["mov-gridBody", "mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
-            {visibleRows.map((r) => (
-              <div
-                key={r.id_movimiento}
-                className="mov-gridTable mov-gridTable--row"
-                style={{ gridTemplateColumns: gridCols }}
-                role="row"
-              >
-                {columns.map((c) => {
-                  if (c.key === "acciones") {
-                    const pag = isPagado(r);
-                    const idComp = getIdComprobanteFromRow(r);
-                    const hasPdf = pag && idComp > 0;
-
-                    return (
-                      <div
-                        key={c.key}
-                        data-label={c.label}
-                        className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
-                        role="cell"
-                      >
-                        <div className="mov-actionsInline">
-                          <button
-                            type="button"
-                            className={`mov-iconBtn ${!hasPdf ? "mov-iconBtn--disabled" : ""}`}
-                            title={hasPdf ? "Ver comprobante" : pag ? "Pagado, pero sin comprobante" : "Primero confirmá el pago"}
-                            onClick={() => hasPdf && openVerModal(r)}
-                            disabled={loadingRows || loadingListsCtx || !hasPdf}
-                          >
-                            <FontAwesomeIcon icon={faEye} />
-                          </button>
-
-                          <button
-                            type="button"
-                            className="mov-iconBtn"
-                            title={pag ? "Ya está pagada" : "Pagar"}
-                            onClick={() => openPagarModal(r)}
-                            disabled={loadingRows || loadingListsCtx || pag}
-                          >
-                            <FontAwesomeIcon icon={faMoneyBill1Wave} />
-                          </button>
-
-                          <button
-                            type="button"
-                            className="mov-iconBtn"
-                            title="Editar"
-                            onClick={() => openEditarModal(r)}
-                            disabled={loadingRows || loadingListsCtx}
-                          >
-                            <FontAwesomeIcon icon={faPenToSquare} />
-                          </button>
-
-                          <button
-                            type="button"
-                            className="mov-iconBtn mov-iconBtn--danger"
-                            title="Eliminar"
-                            disabled={loadingRows || loadingListsCtx || deletingId === r.id_movimiento}
-                            onClick={() => openDeleteModal(r)}
-                          >
-                            {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  const val = c.render ? c.render(r) : safeText(r[c.key]);
-
-                  return (
-                    <div
-                      key={c.key}
-                      data-label={c.label}
-                      className={[
-                        "mov-gridCell",
-                        c.align === "right" ? "is-right" : "",
-                        c.align === "center" ? "is-center" : "",
-                        c.strong ? "is-strong" : "",
-                      ].filter(Boolean).join(" ")}
-                      role="cell"
-                      title={typeof val === "string" ? val : undefined}
-                    >
-                      <span className="mov-ellipsis">{val}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-
-            {!loadingRows && hayMas && (
-              <div style={{ padding: "12px 10px", display: "flex", justifyContent: "center" }}>
-                <button
-                  type="button"
-                  className="mov-btn mov-btn--loadAll"
-                  onClick={() => setShowAll(true)}
-                  title={`Cargar todos (${total - PAGE_SIZE} más)`}
-                >
-                  Cargar todos ({total - PAGE_SIZE} más)
-                </button>
-              </div>
-            )}
-
-            {canShowEmpty && (
-              <div className="mov-emptyRow">
-                {!fPeriodo
-                  ? "No hay período disponible para cargar órdenes de pago."
-                  : "No hay órdenes de pago para este período con el filtro actual."}
-              </div>
-            )}
-
-            {showSkeleton && loadingRows && (
+          <div className={["mov-gridBody", "mov-gridBody--relative", showSkeleton ? "mov-softLoading" : ""].join(" ")}>
+            {showSkeleton ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
               </div>
+            ) : (
+              <>
+                {visibleRows.map((r) => (
+                  <div
+                    key={r.id_movimiento}
+                    className="mov-gridTable mov-gridTable--row"
+                    style={{ gridTemplateColumns: gridCols }}
+                    role="row"
+                  >
+                    {columns.map((c) => {
+                      if (c.key === "acciones") {
+                        const pag = isPagado(r);
+                        const idComp = getIdComprobanteFromRow(r);
+                        const hasPdf = pag && idComp > 0;
+
+                        return (
+                          <div
+                            key={c.key}
+                            data-label={c.label}
+                            className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
+                            role="cell"
+                          >
+                            <div className="mov-actionsInline">
+                              <button
+                                type="button"
+                                className={`mov-iconBtn ${!hasPdf ? "mov-iconBtn--disabled" : ""}`}
+                                title={
+                                  hasPdf
+                                    ? "Ver comprobante"
+                                    : pag
+                                    ? "Pagado, pero sin comprobante"
+                                    : "Primero confirmá el pago"
+                                }
+                                onClick={() => hasPdf && openVerModal(r)}
+                                disabled={isAnyLoading || loadingListsCtx || !hasPdf}
+                              >
+                                <FontAwesomeIcon icon={faEye} />
+                              </button>
+
+                              <button
+                                type="button"
+                                className="mov-iconBtn"
+                                title={pag ? "Ya está pagada" : "Pagar"}
+                                onClick={() => openPagarModal(r)}
+                                disabled={isAnyLoading || loadingListsCtx || pag}
+                              >
+                                <FontAwesomeIcon icon={faMoneyBill1Wave} />
+                              </button>
+
+                              <button
+                                type="button"
+                                className="mov-iconBtn"
+                                title="Editar"
+                                onClick={() => openEditarModal(r)}
+                                disabled={isAnyLoading || loadingListsCtx}
+                              >
+                                <FontAwesomeIcon icon={faPenToSquare} />
+                              </button>
+
+                              <button
+                                type="button"
+                                className="mov-iconBtn mov-iconBtn--danger"
+                                title="Eliminar"
+                                disabled={isAnyLoading || loadingListsCtx || deletingId === r.id_movimiento}
+                                onClick={() => openDeleteModal(r)}
+                              >
+                                {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      const val = c.render ? c.render(r) : safeText(r[c.key]);
+                      return (
+                        <div
+                          key={c.key}
+                          data-label={c.label}
+                          className={[
+                            "mov-gridCell",
+                            c.align === "right" ? "is-right" : "",
+                            c.align === "center" ? "is-center" : "",
+                            c.strong ? "is-strong" : "",
+                          ].filter(Boolean).join(" ")}
+                          role="cell"
+                          title={typeof val === "string" ? val : undefined}
+                        >
+                          <span className="mov-ellipsis">{val}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+
+                {!isAnyLoading && filteredRows.length === 0 && (
+                  <div className="mov-emptyRow">
+                    No hay órdenes de pago para mostrar en el rango de fechas seleccionado.
+                  </div>
+                )}
+
+                {!loadingRows && hasMore && filteredRows.length > 0 && (
+                  <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
+                    <button
+                      type="button"
+                      className="mov-btn mov-btn--loadAll"
+                      onClick={handleLoadAll}
+                      disabled={loadingMore || loadingAll || loadingListsCtx}
+                      title="Cargar todas las órdenes restantes"
+                    >
+                      {loadingAll ? "Cargando todas…" : "Cargar todos"}
+                    </button>
+                  </div>
+                )}
+
+                {(loadingMore || loadingAll) && (
+                  <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">
+                    {Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
       </section>
 
-      {/* ✅ MODAL GLOBAL (iframe/pdf) */}
+      {/* MODAL GLOBAL ver comprobante */}
       <ModalVerComprobante open={openVer} url={verUrl} onClose={closeVerModal} title={verTitle} />
 
       <ModalPagarOrdenesPago
@@ -1209,18 +1270,19 @@ export default function OrdenesPago() {
         deudas={pagarDeudas}
         onToast={showToast}
         onConfirm={onConfirmPago}
-        lists={listasCtx || {}}
-
-        // ✅✅✅ ESTA ES LA CLAVE:
-        // Cuando Finalizar guarda el comprobante, recargamos el listado y se activa el ojo.
+        lists={lists}
         onAfterComprobanteSaved={handleAfterComprobanteSaved}
       />
 
       <ModalEditarOrdenPago
         open={openEditar}
         row={editRow}
-        lists={listasCtx || {}}
-        periodoDefault={fPeriodo}
+        lists={lists}
+        periodoDefault={
+          dateRange.from
+            ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}`
+            : ""
+        }
         onClose={closeEditarModal}
         onToast={showToast}
         onSave={onSaveEditar}

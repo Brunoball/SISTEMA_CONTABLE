@@ -1,4 +1,6 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/components/Analisis_Financiero/Analisis_Financiero.jsx
+
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import BASE_URL from "../../config/config";
 import "./analisis_financiero.css";
@@ -9,6 +11,9 @@ import Toast from "../Global/Toast.jsx";
 import Calendario from "../Global/Calendario/Calendario.jsx";
 
 import * as XLSX from "xlsx";
+
+// ✅ ✅ CONTEXTO GLOBAL DE RANGO DE FECHAS
+import { useDateRange } from "../../context/DateRangeContext.jsx";
 
 /* =========================
    Helpers
@@ -66,15 +71,20 @@ function normalizeRows(raw) {
     const resultadoNeto = ventas - costoVar - costoFijo - otrosEgresos;
 
     const out = [
-      { id: "ventas",          concepto: "VENTAS",          importe: ventas,         tipo: "ingreso"   },
-      { id: "costo_variable",  concepto: "COSTO VARIABLE",  importe: costoVar,        tipo: "egreso"    },
-      { id: "costo_fijo",      concepto: "COSTO FIJO",      importe: costoFijo,       tipo: "egreso"    },
-      { id: "otros_egresos",   concepto: "OTROS EGRESOS",   importe: otrosEgresos,    tipo: "egreso"    },
-      { id: "resultado_neto",  concepto: "RESULTADO NETO",  importe: resultadoNeto,   tipo: "resultado" },
+      { id: "ventas", concepto: "VENTAS", importe: ventas, tipo: "ingreso" },
+      { id: "costo_variable", concepto: "COSTO VARIABLE", importe: costoVar, tipo: "egreso" },
+      { id: "costo_fijo", concepto: "COSTO FIJO", importe: costoFijo, tipo: "egreso" },
+      { id: "otros_egresos", concepto: "OTROS EGRESOS", importe: otrosEgresos, tipo: "egreso" },
+      { id: "resultado_neto", concepto: "RESULTADO NETO", importe: resultadoNeto, tipo: "resultado" },
     ];
 
     if (Number.isFinite(gastosPers) && gastosPers !== 0) {
-      out.push({ id: "gastos_personales", concepto: "GASTOS PERSONALES", importe: gastosPers, tipo: "egreso" });
+      out.push({
+        id: "gastos_personales",
+        concepto: "GASTOS PERSONALES",
+        importe: gastosPers,
+        tipo: "egreso",
+      });
     }
 
     return out;
@@ -104,15 +114,15 @@ function findImporte(rows, keys) {
 function computeDerivedRows(rows) {
   const base = Array.isArray(rows) ? [...rows] : [];
 
-  const ventas       = findImporte(base, [{ id: "ventas" },         { includes: ["ventas", "ingresos", "venta"] }]);
-  const costoVar     = findImporte(base, [{ id: "costo_variable" }, { includes: ["costo variable", "variable"] }]);
-  const costoFijo    = findImporte(base, [{ id: "costo_fijo" },     { includes: ["costo fijo", "fijo"] }]);
-  const otrosEgresos = findImporte(base, [{ id: "otros_egresos" },  { includes: ["otros egresos", "egresos"] }]);
+  const ventas = findImporte(base, [{ id: "ventas" }, { includes: ["ventas", "ingresos", "venta"] }]);
+  const costoVar = findImporte(base, [{ id: "costo_variable" }, { includes: ["costo variable", "variable"] }]);
+  const costoFijo = findImporte(base, [{ id: "costo_fijo" }, { includes: ["costo fijo", "fijo"] }]);
+  const otrosEgresos = findImporte(base, [{ id: "otros_egresos" }, { includes: ["otros egresos", "egresos"] }]);
   const resultadoNeto = ventas - costoVar - costoFijo - otrosEgresos;
 
   const idxRes = base.findIndex((r) => {
     const id = safeText(r.id).toLowerCase();
-    const c  = safeText(r.concepto).toLowerCase();
+    const c = safeText(r.concepto).toLowerCase();
     return id === "resultado_neto" || c === "resultado neto" || (c.includes("resultado") && c.includes("neto"));
   });
 
@@ -121,16 +131,15 @@ function computeDerivedRows(rows) {
   else base.push(rowResultado);
 
   const idxVentas = base.findIndex((r) => safeText(r.id).toLowerCase() === "ventas");
-  if (idxVentas >= 0)
-    base[idxVentas] = { ...base[idxVentas], concepto: "VENTAS", tipo: "ingreso", importe: ventas };
+  if (idxVentas >= 0) base[idxVentas] = { ...base[idxVentas], concepto: "VENTAS", tipo: "ingreso", importe: ventas };
 
   const markTipo = (id, tipo) => {
     const i = base.findIndex((r) => safeText(r.id).toLowerCase() === id);
     if (i >= 0) base[i] = { ...base[i], tipo };
   };
   markTipo("costo_variable", "egreso");
-  markTipo("costo_fijo",     "egreso");
-  markTipo("otros_egresos",  "egreso");
+  markTipo("costo_fijo", "egreso");
+  markTipo("otros_egresos", "egreso");
 
   return base;
 }
@@ -170,65 +179,27 @@ async function parseJsonOrThrow(res) {
 }
 
 /* =========================
-   Date range cache
-========================= */
-const AF_DATE_CACHE_KEY = "af_daterange_cache";
-
-function readCachedRange() {
-  try {
-    const raw = localStorage.getItem(AF_DATE_CACHE_KEY);
-    if (!raw) return { from: null, to: null };
-    const parsed = JSON.parse(raw);
-    return {
-      from: parsed.from ? new Date(parsed.from) : null,
-      to:   parsed.to   ? new Date(parsed.to)   : null,
-    };
-  } catch {
-    return { from: null, to: null };
-  }
-}
-
-function writeCachedRange(range) {
-  try {
-    localStorage.setItem(AF_DATE_CACHE_KEY, JSON.stringify({
-      from: range.from ? range.from.toISOString() : null,
-      to:   range.to   ? range.to.toISOString()   : null,
-    }));
-  } catch {}
-}
-
-function defaultRange() {
-  const now  = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to   = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return { from, to };
-}
-
-/* =========================
    Skeleton config
 ========================= */
 const SKELETON_TABLE_ROWS = 5;
-const SKELETON_BAR_H      = 5;
-const SKELETON_ROW_PAD_Y  = 5;
+const SKELETON_BAR_H = 5;
+const SKELETON_ROW_PAD_Y = 5;
 
 export default function Analisis_Financiero() {
   const API = `${BASE_URL}/api.php`;
 
-  /* Date range (reemplaza periodo) */
-  const [dateRange, setDateRange] = useState(() => {
-    const cached = readCachedRange();
-    return cached.from ? cached : defaultRange();
-  });
+  // ✅ ✅ RANGO GLOBAL (compartido entre secciones)
+  const { dateRange, setDateRange } = useDateRange();
   const [calOpen, setCalOpen] = useState(false);
 
   const [q, setQ] = useState("");
 
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState("");
-  const [data,       setData]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [data, setData] = useState(null);
   const [hasFetched, setHasFetched] = useState(false);
 
-  const [toast,    setToast]    = useState(null);
+  const [toast, setToast] = useState(null);
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => setToast({ tipo, mensaje, duracion }), []);
   const closeToast = useCallback(() => setToast(null), []);
 
@@ -247,7 +218,9 @@ export default function Analisis_Financiero() {
     setShowSkeleton(false);
   }, []);
 
-  useEffect(() => () => { if (skelTimerRef.current) clearTimeout(skelTimerRef.current); }, []);
+  useEffect(() => () => {
+    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
+  }, []);
 
   // check sesión
   useEffect(() => {
@@ -256,24 +229,22 @@ export default function Analisis_Financiero() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // guardar rango al cambiar
-  useEffect(() => { writeCachedRange(dateRange); }, [dateRange]);
-
   /* =========================
      Label del rango para el botón
   ========================= */
   const rangeLabel = useMemo(() => {
-    const { from, to } = dateRange;
+    const from = dateRange?.from || null;
+    const to = dateRange?.to || null;
     if (!from) return "Seleccionar período";
     if (!to || formatDateISO(from) === formatDateISO(to)) return formatDateLabel(from);
     return `${formatDateLabel(from)} → ${formatDateLabel(to)}`;
   }, [dateRange]);
 
   /* =========================================================
-     Cargar análisis cuando cambia el rango
+     Cargar análisis cuando cambia el rango (GLOBAL)
   ========================================================= */
   const fetchAnalisis = useCallback(async () => {
-    if (!dateRange.from) return;
+    if (!dateRange?.from) return;
 
     setLoading(true);
     setError("");
@@ -281,11 +252,11 @@ export default function Analisis_Financiero() {
 
     try {
       const sp = new URLSearchParams();
-      sp.set("action",       "analisis_financiero_resumen");
-      sp.set("fecha_desde",  formatDateISO(dateRange.from));
-      sp.set("fecha_hasta",  formatDateISO(dateRange.to || dateRange.from));
+      sp.set("action", "analisis_financiero_resumen");
+      sp.set("fecha_desde", formatDateISO(dateRange.from));
+      sp.set("fecha_hasta", formatDateISO(dateRange.to || dateRange.from));
 
-      const res  = await fetch(`${API}?${sp.toString()}`, { method: "GET", headers: authHeaders() });
+      const res = await fetch(`${API}?${sp.toString()}`, { method: "GET", headers: authHeaders() });
       const json = await parseJsonOrThrow(res);
 
       if (!res.ok || !json?.exito) throw new Error(json?.mensaje || `Error desconocido en API (HTTP ${res.status})`);
@@ -303,18 +274,24 @@ export default function Analisis_Financiero() {
     }
   }, [API, dateRange, showToast, beginSkeleton, endSkeleton]);
 
-  useEffect(() => { fetchAnalisis(); }, [fetchAnalisis]);
+  useEffect(() => {
+    fetchAnalisis();
+  }, [fetchAnalisis]);
 
   /* =========================
      Datos / normalización
   ========================= */
   const rawRows =
-    data?.rows ?? data?.data?.rows ??
-    data?.valores ?? data?.data?.valores ??
-    data?.analisis ?? data?.data?.analisis ?? null;
+    data?.rows ??
+    data?.data?.rows ??
+    data?.valores ??
+    data?.data?.valores ??
+    data?.analisis ??
+    data?.data?.analisis ??
+    null;
 
-  const normalized   = useMemo(() => normalizeRows(rawRows),          [rawRows]);
-  const allRows      = useMemo(() => computeDerivedRows(normalized),  [normalized]);
+  const normalized = useMemo(() => normalizeRows(rawRows), [rawRows]);
+  const allRows = useMemo(() => computeDerivedRows(normalized), [normalized]);
 
   const filteredRows = useMemo(() => {
     const needle = safeText(q).toLowerCase();
@@ -324,12 +301,12 @@ export default function Analisis_Financiero() {
 
   const showing = filteredRows.length;
 
-  const ventas           = allRows.find((r) => safeText(r.id).toLowerCase() === "ventas")?.importe ?? null;
-  const resultadoNeto    = allRows.find((r) => safeText(r.id).toLowerCase() === "resultado_neto")?.importe ?? null;
+  const ventas = allRows.find((r) => safeText(r.id).toLowerCase() === "ventas")?.importe ?? null;
+  const resultadoNeto = allRows.find((r) => safeText(r.id).toLowerCase() === "resultado_neto")?.importe ?? null;
   const gastosPersonales = allRows.find((r) => safeText(r.id).toLowerCase() === "gastos_personales")?.importe ?? null;
 
   const resultadoIsNeg = Number(resultadoNeto) < 0;
-  const isBusy  = loading;
+  const isBusy = loading;
   const showSkel = showSkeleton && isBusy;
 
   /* =========================
@@ -346,14 +323,14 @@ export default function Analisis_Financiero() {
 
       const tableData = filteredRows.map((r) => ({
         CONCEPTO: safeText(r.concepto),
-        IMPORTE:  numOrNull(r.importe),
+        IMPORTE: numOrNull(r.importe),
       }));
 
       const resumenData = [
-        { CAMPO: "DESDE",             VALOR: formatDateISO(dateRange.from) },
-        { CAMPO: "HASTA",             VALOR: formatDateISO(dateRange.to || dateRange.from) },
-        { CAMPO: "VENTAS",            VALOR: numOrNull(ventas) },
-        { CAMPO: "RESULTADO_NETO",    VALOR: numOrNull(resultadoNeto) },
+        { CAMPO: "DESDE", VALOR: formatDateISO(dateRange.from) },
+        { CAMPO: "HASTA", VALOR: formatDateISO(dateRange.to || dateRange.from) },
+        { CAMPO: "VENTAS", VALOR: numOrNull(ventas) },
+        { CAMPO: "RESULTADO_NETO", VALOR: numOrNull(resultadoNeto) },
         { CAMPO: "GASTOS_PERSONALES", VALOR: numOrNull(gastosPersonales) },
       ];
 
@@ -365,7 +342,7 @@ export default function Analisis_Financiero() {
       const wsResumen = XLSX.utils.json_to_sheet(resumenData, { header: ["CAMPO", "VALOR"] });
       wsResumen["!cols"] = [{ wch: 22 }, { wch: 24 }];
 
-      XLSX.utils.book_append_sheet(wb, wsTabla,   "Analisis");
+      XLSX.utils.book_append_sheet(wb, wsTabla, "Analisis");
       XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
       const rangeStamp = `${formatDateISO(dateRange.from)}_${formatDateISO(dateRange.to || dateRange.from)}`;
@@ -382,13 +359,19 @@ export default function Analisis_Financiero() {
   /* =========================
      Skeleton renderers
   ========================= */
-  const skelWidths = useMemo(() => ({
-    concepto: ["42%", "58%", "50%", "64%", "46%", "55%"],
-    importe:  ["22%", "28%", "20%", "30%", "24%", "26%"],
-  }), []);
+  const skelWidths = useMemo(
+    () => ({
+      concepto: ["42%", "58%", "50%", "64%", "46%", "55%"],
+      importe: ["22%", "28%", "20%", "30%", "24%", "26%"],
+    }),
+    []
+  );
 
   const renderSkeletonRow = (idx) => {
-    const pick = (key) => { const list = skelWidths[key] || ["50%"]; return list[idx % list.length]; };
+    const pick = (key) => {
+      const list = skelWidths[key] || ["50%"];
+      return list[idx % list.length];
+    };
     return (
       <div className="af-grid af-grid--row af-grid--excel af-row--skeleton" key={`skel-${idx}`}>
         <div className="af-cell af-concept" style={{ padding: `${SKELETON_ROW_PAD_Y}px 12px` }}>
@@ -438,11 +421,13 @@ export default function Analisis_Financiero() {
   ========================= */
   return (
     <div className="af-page">
-      {toast && (
-        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
-      )}
+      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
 
-      {error && <div className="af-alert" role="alert">{error}</div>}
+      {error && (
+        <div className="af-alert" role="alert">
+          {error}
+        </div>
+      )}
 
       <section className="af-card af-card--table">
         <div className="af-card__head">
@@ -455,8 +440,7 @@ export default function Analisis_Financiero() {
             </div>
 
             <div className="af-headFilters">
-
-              {/* ============ Calendario (reemplaza el selector de período) ============ */}
+              {/* ✅ Calendario con rango GLOBAL */}
               <div className="af-filter af-filter--cal" style={{ position: "relative" }}>
                 <label>
                   <FontAwesomeIcon icon={faCalendarDays} /> Período
@@ -466,6 +450,7 @@ export default function Analisis_Financiero() {
                   type="button"
                   className={`af-calTrigger ${calOpen ? "is-open" : ""}`}
                   onClick={() => setCalOpen((v) => !v)}
+                  disabled={isBusy}
                 >
                   {rangeLabel}
                   <span className="af-calTrigger__arrow">{calOpen ? "▲" : "▼"}</span>
@@ -476,8 +461,8 @@ export default function Analisis_Financiero() {
                     <Calendario
                       value={dateRange}
                       onChange={(range) => {
-                        setDateRange(range);
-                        if (range.from && range.to) setCalOpen(false);
+                        setDateRange(range); // ✅ guarda global
+                        if (range?.from && range?.to) setCalOpen(false);
                       }}
                       onClose={() => setCalOpen(false)}
                     />
@@ -485,7 +470,7 @@ export default function Analisis_Financiero() {
                 )}
               </div>
 
-              {/* ============ Buscar ============ */}
+              {/* Buscar */}
               <div className="af-filter af-filter--search">
                 <label>Buscar</label>
                 <div className="af-searchInput">
@@ -500,7 +485,10 @@ export default function Analisis_Financiero() {
                       type="button"
                       className="af-clearSearch"
                       title="Limpiar búsqueda"
-                      onClick={() => { setQ(""); document.querySelector(".af-searchInput input")?.focus(); }}
+                      onClick={() => {
+                        setQ("");
+                        document.querySelector(".af-searchInput input")?.focus();
+                      }}
                     >
                       ×
                     </button>
@@ -537,23 +525,30 @@ export default function Analisis_Financiero() {
               </div>
             ) : (
               <>
-                {!!data && filteredRows.map((r) => {
-                  const conceptoLower  = safeText(r.concepto).toLowerCase();
-                  const isResultado    = conceptoLower === "resultado neto" || r.tipo === "resultado" || safeText(r.id).toLowerCase() === "resultado_neto";
-                  const isGastoPersonal = conceptoLower.includes("gastos personales") || safeText(r.id).toLowerCase() === "gastos_personales";
+                {!!data &&
+                  filteredRows.map((r) => {
+                    const conceptoLower = safeText(r.concepto).toLowerCase();
+                    const isResultado =
+                      conceptoLower === "resultado neto" ||
+                      r.tipo === "resultado" ||
+                      safeText(r.id).toLowerCase() === "resultado_neto";
+                    const isGastoPersonal =
+                      conceptoLower.includes("gastos personales") || safeText(r.id).toLowerCase() === "gastos_personales";
 
-                  return (
-                    <div
-                      className={`af-grid af-grid--row af-grid--excel ${isResultado ? "is-resultado" : ""} ${isGastoPersonal ? "is-gp" : ""}`}
-                      key={r.id}
-                    >
-                      <div className="af-cell af-concept">{r.concepto}</div>
-                      <div className={`af-cell af-num is-right ${Number(r.importe) < 0 ? "is-negative" : ""}`}>
-                        {moneyARS(r.importe)}
+                    return (
+                      <div
+                        className={`af-grid af-grid--row af-grid--excel ${isResultado ? "is-resultado" : ""} ${
+                          isGastoPersonal ? "is-gp" : ""
+                        }`}
+                        key={r.id}
+                      >
+                        <div className="af-cell af-concept">{r.concepto}</div>
+                        <div className={`af-cell af-num is-right ${Number(r.importe) < 0 ? "is-negative" : ""}`}>
+                          {moneyARS(r.importe)}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
 
                 {hasFetched && !isBusy && !error && (
                   <>
@@ -581,12 +576,15 @@ export default function Analisis_Financiero() {
                     Resumen
                     <div className="af-subhead__meta">
                       {rangeLabel}
-                      {ventas != null ? <> • Ventas: <b>{moneyARS(ventas)}</b></> : null}
+                      {ventas != null ? (
+                        <>
+                          {" "}
+                          • Ventas: <b>{moneyARS(ventas)}</b>
+                        </>
+                      ) : null}
                     </div>
                   </div>
-                  <div className="af-miniHint">
-                    Tabla horizontal tipo Excel (Concepto / Importe). Resultado Neto se resalta.
-                  </div>
+                  <div className="af-miniHint">Tabla horizontal tipo Excel (Concepto / Importe). Resultado Neto se resalta.</div>
                 </div>
 
                 <div className="af-footTotals">
@@ -596,7 +594,9 @@ export default function Analisis_Financiero() {
                       <div className="af-chip">{resultadoIsNeg ? "↓ Pérdida" : "↑ Ganancia"}</div>
                     </div>
                     <div className="af-totalValue">{resultadoNeto == null ? "-" : moneyARS(resultadoNeto)}</div>
-                    <div className="af-totalSub">Resultado del período (ventas - costo variable - costo fijo - otros egresos)</div>
+                    <div className="af-totalSub">
+                      Resultado del período (ventas - costo variable - costo fijo - otros egresos)
+                    </div>
                   </div>
 
                   <div className="af-totalCard af-totalCard--danger">

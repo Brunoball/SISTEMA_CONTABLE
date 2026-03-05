@@ -28,6 +28,9 @@ import {
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 
+// ✅ CONTEXTO GLOBAL DE FECHAS
+import { useDateRange } from "../../../context/DateRangeContext";
+
 /* =========================
    PERF
 ========================= */
@@ -90,7 +93,6 @@ function startOfDay(d) {
   return c;
 }
 
-/** Convierte "YYYY-MM-DD" o "DD/MM/YYYY" a Date (sin hora) */
 function parseRowFecha(v) {
   const s = String(v ?? "").trim();
   if (!s) return null;
@@ -102,7 +104,6 @@ function parseRowFecha(v) {
   return isNaN(d.getTime()) ? null : startOfDay(d);
 }
 
-/** Formatea Date → "YYYY-MM-DD" para la API */
 function dateToAPI(d) {
   if (!d) return "";
   const yyyy = d.getFullYear();
@@ -111,7 +112,6 @@ function dateToAPI(d) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-/** "DD/MM/YYYY" para mostrar */
 function formatDateUI(d) {
   if (!d) return "—";
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
@@ -244,7 +244,7 @@ function rowMatchesQuery(row, query) {
 function rowInDateRange(row, from, to) {
   if (!from && !to) return true;
   const fecha = parseRowFecha(row?.fecha);
-  if (!fecha) return true; // si no tiene fecha, no filtrar
+  if (!fecha) return true;
   if (from && fecha < startOfDay(from)) return false;
   if (to) {
     const toEnd = startOfDay(to);
@@ -276,6 +276,9 @@ export default function Ventas() {
     refreshLists,
   } = useListas();
 
+  // ✅ Usar contexto global en lugar de estado local
+  const { dateRange, setDateRange } = useDateRange();
+
   const [rows, setRows] = useState([]);
   const rowsRef = useRef([]);
   useEffect(() => {
@@ -288,14 +291,6 @@ export default function Ventas() {
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
-  // Arranca con el mes actual por defecto (igual que Flujo de Caja)
-  const [dateRange, setDateRange] = useState(() => {
-    const now = new Date();
-    return {
-      from: new Date(now.getFullYear(), now.getMonth(), 1),
-      to: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-    };
-  });
   const [showCalendario, setShowCalendario] = useState(false);
 
   const [q, setQ] = useState("");
@@ -386,7 +381,7 @@ export default function Ventas() {
   }, [refreshLists]);
 
   /* =========================
-     LOAD ROWS (paginado) — ahora usa fecha_desde / fecha_hasta
+     LOAD ROWS
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -531,7 +526,7 @@ export default function Ventas() {
   );
 
   /* =========================
-     INIT — carga con mes actual por defecto
+     INIT
   ========================= */
   useEffect(() => {
     let alive = true;
@@ -540,11 +535,8 @@ export default function Ventas() {
         await ensureListsLoaded({ force: false, background: true });
       } catch {}
       if (!alive) return;
-      // Carga inicial con el mes actual por defecto
-      const now = new Date();
-      const initFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-      const initTo = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      await loadRows({ from: initFrom, to: initTo, q: "", offset: 0, append: false });
+      // ✅ Usa el dateRange del contexto global (ya tiene valor al montar)
+      await loadRows({ from: dateRange.from, to: dateRange.to, q: "", offset: 0, append: false });
     })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -564,20 +556,18 @@ export default function Ventas() {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
+  }, [q, dateRange]);
 
   /* =========================
-     Handler cambio de rango de fechas
+     ✅ Handler cambio de rango — actualiza contexto global
   ========================= */
   const handleDateRangeChange = useCallback(
     async (newRange) => {
-      // Nunca permitir rango vacío — siempre debe haber al menos from
       if (!newRange.from && !newRange.to) return;
-      setDateRange(newRange);
+      setDateRange(newRange); // ← escribe en el contexto global
       cacheRef.current.clear();
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-      // Solo disparar carga si hay rango completo (from + to) o al menos from
       await loadRows({
         from: newRange.from,
         to: newRange.to,
@@ -586,7 +576,7 @@ export default function Ventas() {
         append: false,
       });
     },
-    [loadRows, q]
+    [setDateRange, loadRows, q]
   );
 
   /* =========================
@@ -937,7 +927,7 @@ export default function Ventas() {
 
             <div className="mov-headFilters">
 
-              {/* ✅ REEMPLAZA el <select> de período → Botón + Calendario */}
+              {/* Calendario */}
               <div className="mov-filter" style={{ position: "relative" }}>
                 <label>
                   <FontAwesomeIcon icon={faCalendarDays} /> Fecha
@@ -954,7 +944,6 @@ export default function Ventas() {
                   {dateRangeLabel}
                 </button>
 
-                {/* Dropdown del Calendario */}
                 {showCalendario && (
                   <div
                     style={{
@@ -971,7 +960,6 @@ export default function Ventas() {
                     <Calendario
                       value={dateRange}
                       onChange={async (newRange) => {
-                        // Si ya tiene from y to → cerrar el calendario automáticamente
                         if (newRange.from && newRange.to) {
                           setShowCalendario(false);
                         }

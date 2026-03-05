@@ -1,3 +1,4 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/components/Mov_Subsection/OrdenesPago/OrdenesPago.jsx
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -32,6 +33,9 @@ import {
 
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
+
+// ✅ ✅ CONTEXTO GLOBAL DE RANGO DE FECHAS
+import { useDateRange } from "../../../context/DateRangeContext.jsx";
 
 /* =========================
    PERF
@@ -240,6 +244,10 @@ export default function OrdenesPago() {
     refreshLists,
   } = useListas();
 
+  // ✅ ✅ RANGO GLOBAL (se comparte entre secciones)
+  const { dateRange, setDateRange } = useDateRange();
+  const [showCalendario, setShowCalendario] = useState(false);
+
   const [rows, setRows] = useState([]);
   const rowsRef = useRef([]);
   useEffect(() => {
@@ -251,16 +259,6 @@ export default function OrdenesPago() {
   const [loadingAll, setLoadingAll] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
-
-  // ✅ Arranca con el mes actual por defecto (igual que Ventas)
-  const [dateRange, setDateRange] = useState(() => {
-    const now = new Date();
-    return {
-      from: new Date(now.getFullYear(), now.getMonth(), 1),
-      to: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-    };
-  });
-  const [showCalendario, setShowCalendario] = useState(false);
 
   const [q, setQ] = useState("");
 
@@ -281,6 +279,8 @@ export default function OrdenesPago() {
   const moreReqIdRef = useRef(0);
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
+
+  const didInitRef = useRef(false);
 
   const showSkeleton = loadingRows;
 
@@ -345,8 +345,8 @@ export default function OrdenesPago() {
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
-      const fromDate = opts.from !== undefined ? opts.from : dateRange.from;
-      const toDate = opts.to !== undefined ? opts.to : dateRange.to;
+      const fromDate = opts.from !== undefined ? opts.from : dateRange?.from;
+      const toDate = opts.to !== undefined ? opts.to : dateRange?.to;
       const qLocal = typeof opts.q === "string" ? opts.q : q;
       const append = !!opts.append;
       const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
@@ -358,7 +358,6 @@ export default function OrdenesPago() {
 
       const PROBE_LIMIT = PAGE_SIZE + 1;
       const myReqId = ++reqIdRef.current;
-      const start = Date.now();
 
       if (!append) {
         rowsReqIdRef.current = myReqId;
@@ -422,75 +421,62 @@ export default function OrdenesPago() {
             : null;
 
         const page = newHasMore ? norm.slice(0, PAGE_SIZE) : norm;
-        const elapsed = Date.now() - start;
-        const remaining = Math.max(0, 0 - elapsed);
 
-        return await new Promise((resolve) => {
-          const apply = () => {
-            if (myReqId !== reqIdRef.current) return resolve(null);
+        if (myReqId !== reqIdRef.current) return null;
 
-            if (append) {
-              const base = Array.isArray(rowsRef.current) ? rowsRef.current : [];
-              const seen = new Set(base.map((x) => String(x?.id_movimiento ?? "")));
-              const add = page.filter((x) => {
-                const k = String(x?.id_movimiento ?? "");
-                return k && !seen.has(k);
-              });
-              const merged = [...base, ...add];
-              rowsRef.current = merged;
-              setRows(merged);
-              if (add.length === 0) {
-                newHasMore = false;
-                newNextOffset = null;
-              }
-              setHasMore(newHasMore);
-              setNextOffset(newNextOffset);
-              if (moreReqIdRef.current === myReqId) setLoadingMore(false);
-            } else {
-              rowsRef.current = page;
-              setRows(page);
-              setHasMore(newHasMore);
-              setNextOffset(newNextOffset);
-              if (offset === 0) {
-                cacheRef.current.set(cacheKey, {
-                  rows: page,
-                  hasMore: newHasMore,
-                  nextOffset: newNextOffset,
-                });
-              }
-              if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
-            }
-
-            resolve({
+        if (append) {
+          const base = Array.isArray(rowsRef.current) ? rowsRef.current : [];
+          const seen = new Set(base.map((x) => String(x?.id_movimiento ?? "")));
+          const add = page.filter((x) => {
+            const k = String(x?.id_movimiento ?? "");
+            return k && !seen.has(k);
+          });
+          const merged = [...base, ...add];
+          rowsRef.current = merged;
+          setRows(merged);
+          if (add.length === 0) {
+            newHasMore = false;
+            newNextOffset = null;
+          }
+          setHasMore(newHasMore);
+          setNextOffset(newNextOffset);
+          if (moreReqIdRef.current === myReqId) setLoadingMore(false);
+        } else {
+          rowsRef.current = page;
+          setRows(page);
+          setHasMore(newHasMore);
+          setNextOffset(newNextOffset);
+          if (offset === 0) {
+            cacheRef.current.set(cacheKey, {
+              rows: page,
               hasMore: newHasMore,
               nextOffset: newNextOffset,
-              received: page.length,
             });
-          };
+          }
+          if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
+        }
 
-          if (remaining > 0) setTimeout(apply, remaining);
-          else apply();
-        });
+        return {
+          hasMore: newHasMore,
+          nextOffset: newNextOffset,
+          received: page.length,
+        };
       } catch (e) {
-        return await new Promise((resolve) => {
-          setTimeout(() => {
-            if (myReqId !== reqIdRef.current) return resolve(null);
-            setError(e.message || "Error cargando órdenes de pago.");
-            if (append) {
-              if (moreReqIdRef.current === myReqId) setLoadingMore(false);
-            } else {
-              if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
-            }
-            resolve(null);
-          }, 0);
-        });
+        if (myReqId !== reqIdRef.current) return null;
+        setError(e.message || "Error cargando órdenes de pago.");
+        if (append) {
+          if (moreReqIdRef.current === myReqId) setLoadingMore(false);
+        } else {
+          if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
+        }
+        return null;
       }
     },
     [API, apiGet, dateRange, q]
   );
 
   /* =========================
-     INIT — carga con mes actual por defecto
+     INIT — usa el rango GLOBAL (NO lo resetea)
   ========================= */
   useEffect(() => {
     let alive = true;
@@ -498,15 +484,46 @@ export default function OrdenesPago() {
       try {
         await ensureListsLoaded({ force: false, background: true });
       } catch {}
+
       if (!alive) return;
-      const now = new Date();
-      const initFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-      const initTo = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      await loadRows({ from: initFrom, to: initTo, q: "", offset: 0, append: false });
+
+      // ✅ primera carga con rango global actual
+      await loadRows({
+        from: dateRange?.from,
+        to: dateRange?.to,
+        q: "",
+        offset: 0,
+        append: false,
+      });
+
+      didInitRef.current = true;
     })();
-    return () => { alive = false; };
+
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* =========================
+     Cuando cambie el rango GLOBAL desde otra sección → recargar acá
+  ========================= */
+  useEffect(() => {
+    if (!didInitRef.current) return;
+    // si cambia en otra sección, acá se refresca
+    cacheRef.current.clear();
+    skipSearchRef.current = true;
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    loadRows({
+      from: dateRange?.from,
+      to: dateRange?.to,
+      q,
+      offset: 0,
+      append: false,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange?.from?.getTime?.(), dateRange?.to?.getTime?.()]);
 
   // Debounce búsqueda
   useEffect(() => {
@@ -516,7 +533,7 @@ export default function OrdenesPago() {
     }
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
-      loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
+      loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
     }, 250);
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -525,15 +542,19 @@ export default function OrdenesPago() {
   }, [q]);
 
   /* =========================
-     Handler cambio de rango de fechas (igual que Ventas)
+     Handler cambio de rango de fechas (usa setDateRange GLOBAL)
   ========================= */
   const handleDateRangeChange = useCallback(
     async (newRange) => {
-      if (!newRange.from && !newRange.to) return;
-      setDateRange(newRange);
+      if (!newRange?.from && !newRange?.to) return;
+
+      setDateRange(newRange); // ✅ guarda global
       cacheRef.current.clear();
+
+      // para que NO dispare doble (debounce) y recargue instantáneo
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
       await loadRows({
         from: newRange.from,
         to: newRange.to,
@@ -542,7 +563,7 @@ export default function OrdenesPago() {
         append: false,
       });
     },
-    [loadRows, q]
+    [loadRows, q, setDateRange]
   );
 
   /* =========================
@@ -562,8 +583,8 @@ export default function OrdenesPago() {
       while (offset !== null && guard < 3000) {
         const beforeLen = rowsRef.current.length;
         const res = await loadRows({
-          from: dateRange.from,
-          to: dateRange.to,
+          from: dateRange?.from,
+          to: dateRange?.to,
           q: (q || "").trim(),
           offset,
           append: true,
@@ -583,8 +604,16 @@ export default function OrdenesPago() {
       setLoadingAll(false);
     }
   }, [
-    hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll,
-    nextOffset, dateRange, q, loadRows, showToast,
+    hasMore,
+    loadingMore,
+    loadingRows,
+    loadingListsCtx,
+    loadingAll,
+    nextOffset,
+    dateRange,
+    q,
+    loadRows,
+    showToast,
   ]);
 
   /* =========================
@@ -593,7 +622,7 @@ export default function OrdenesPago() {
   const filteredRows = useMemo(() => {
     return (Array.isArray(rows) ? rows : [])
       .filter((r) => isCompraCuentaCorriente(r))
-      .filter((r) => rowInDateRange(r, dateRange.from, dateRange.to))
+      .filter((r) => rowInDateRange(r, dateRange?.from, dateRange?.to))
       .filter((r) => rowMatchesQuery(r, q));
   }, [rows, dateRange, q]);
 
@@ -606,7 +635,9 @@ export default function OrdenesPago() {
      Label para el botón del calendario (igual que Ventas)
   ========================= */
   const dateRangeLabel = useMemo(() => {
-    const { from, to } = dateRange;
+    const from = dateRange?.from || null;
+    const to = dateRange?.to || null;
+
     if (!from && !to) return "Seleccionar fechas";
     if (from && to) {
       if (
@@ -722,13 +753,15 @@ export default function OrdenesPago() {
   const refreshAfterMutation = useCallback(async () => {
     cacheRef.current.clear();
     await loadRows({
-      from: dateRange.from,
-      to: dateRange.to,
+      from: dateRange?.from,
+      to: dateRange?.to,
       q,
       offset: 0,
       append: false,
     });
-    try { await refreshLists?.(); } catch {}
+    try {
+      await refreshLists?.();
+    } catch {}
   }, [dateRange, loadRows, q, refreshLists]);
 
   const onConfirmPago = useCallback(
@@ -833,7 +866,9 @@ export default function OrdenesPago() {
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(dataToExport);
 
-      const { from, to } = dateRange;
+      const from = dateRange?.from || null;
+      const to = dateRange?.to || null;
+
       const sufijo =
         from && to
           ? `${dateToAPI(from)}_${dateToAPI(to)}`
@@ -912,13 +947,16 @@ export default function OrdenesPago() {
       .join(" ");
   }, [columns]);
 
-  const skelWidths = useMemo(() => ({
-    fecha: ["44%", "38%", "50%", "42%"],
-    detalle: ["72%", "58%", "66%", "48%"],
-    proveedor: ["62%", "54%", "46%", "58%"],
-    estado: ["52%", "44%", "58%", "50%"],
-    monto: ["38%", "30%", "34%", "28%"],
-  }), []);
+  const skelWidths = useMemo(
+    () => ({
+      fecha: ["44%", "38%", "50%", "42%"],
+      detalle: ["72%", "58%", "66%", "48%"],
+      proveedor: ["62%", "54%", "46%", "58%"],
+      estado: ["52%", "44%", "58%", "50%"],
+      monto: ["38%", "30%", "34%", "28%"],
+    }),
+    []
+  );
 
   const renderSkeletonRow = (idx) => (
     <div
@@ -962,7 +1000,6 @@ export default function OrdenesPago() {
   );
 
   const isAnyLoading = loadingRows || loadingMore || loadingAll;
-
   const lists = listasCtx || { periodos: [] };
 
   /* =========================
@@ -971,12 +1008,7 @@ export default function OrdenesPago() {
   return (
     <div className="mov-page mov-page--ordenesPago">
       {toast && (
-        <Toast
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={closeToast}
-        />
+        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
       )}
 
       {errorListsCtx && <div className="mov-alert" role="alert">{errorListsCtx}</div>}
@@ -994,8 +1026,7 @@ export default function OrdenesPago() {
             </div>
 
             <div className="mov-headFilters">
-
-              {/* ✅ Botón + Calendario (igual que Ventas) */}
+              {/* ✅ Botón + Calendario (usa rango GLOBAL) */}
               <div className="mov-filter" style={{ position: "relative" }}>
                 <label>
                   <FontAwesomeIcon icon={faCalendarDays} /> Fecha
@@ -1028,9 +1059,7 @@ export default function OrdenesPago() {
                     <Calendario
                       value={dateRange}
                       onChange={async (newRange) => {
-                        if (newRange.from && newRange.to) {
-                          setShowCalendario(false);
-                        }
+                        if (newRange?.from && newRange?.to) setShowCalendario(false);
                         await handleDateRangeChange(newRange);
                       }}
                       onClose={() => setShowCalendario(false)}
@@ -1054,8 +1083,8 @@ export default function OrdenesPago() {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         skipSearchRef.current = true;
                         await loadRows({
-                          from: dateRange.from,
-                          to: dateRange.to,
+                          from: dateRange?.from,
+                          to: dateRange?.to,
                           q: e.currentTarget.value,
                           offset: 0,
                           append: false,
@@ -1075,8 +1104,8 @@ export default function OrdenesPago() {
                         setQ("");
                         skipSearchRef.current = true;
                         await loadRows({
-                          from: dateRange.from,
-                          to: dateRange.to,
+                          from: dateRange?.from,
+                          to: dateRange?.to,
                           q: "",
                           offset: 0,
                           append: false,
@@ -1107,11 +1136,7 @@ export default function OrdenesPago() {
         </div>
 
         {/* HEADER */}
-        <div
-          className="mov-gridTable mov-gridTable--head"
-          style={{ gridTemplateColumns: gridCols }}
-          role="row"
-        >
+        <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
           {columns.map((c) => (
             <div
               key={c.key}
@@ -1230,9 +1255,7 @@ export default function OrdenesPago() {
                 ))}
 
                 {!isAnyLoading && filteredRows.length === 0 && (
-                  <div className="mov-emptyRow">
-                    No hay órdenes de pago para mostrar en el rango de fechas seleccionado.
-                  </div>
+                  <div className="mov-emptyRow">No hay órdenes de pago para mostrar en el rango de fechas seleccionado.</div>
                 )}
 
                 {!loadingRows && hasMore && filteredRows.length > 0 && (
@@ -1279,7 +1302,7 @@ export default function OrdenesPago() {
         row={editRow}
         lists={lists}
         periodoDefault={
-          dateRange.from
+          dateRange?.from
             ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}`
             : ""
         }

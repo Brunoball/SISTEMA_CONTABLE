@@ -1,4 +1,6 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/components/Flujo_de_Caja/Flujo_Caja.jsx
+
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import BASE_URL from "../../config/config";
 import "./flujo_caja.css";
@@ -11,6 +13,9 @@ import Calendario from "../Global/Calendario/Calendario.jsx";
 
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+
+// ✅ ✅ CONTEXTO GLOBAL DE RANGO DE FECHAS
+import { useDateRange } from "../../context/DateRangeContext.jsx";
 
 /* =========================
    Helpers
@@ -89,44 +94,6 @@ function authHeaders(extra = {}) {
 }
 
 /* =========================
-   Date range cache
-========================= */
-const FC_DATE_CACHE_KEY = "fc_daterange_cache";
-
-function readCachedRange() {
-  try {
-    const raw = localStorage.getItem(FC_DATE_CACHE_KEY);
-    if (!raw) return { from: null, to: null };
-    const parsed = JSON.parse(raw);
-    return {
-      from: parsed.from ? new Date(parsed.from) : null,
-      to: parsed.to ? new Date(parsed.to) : null,
-    };
-  } catch {
-    return { from: null, to: null };
-  }
-}
-
-function writeCachedRange(range) {
-  try {
-    localStorage.setItem(
-      FC_DATE_CACHE_KEY,
-      JSON.stringify({
-        from: range.from ? range.from.toISOString() : null,
-        to: range.to ? range.to.toISOString() : null,
-      })
-    );
-  } catch {}
-}
-
-function defaultRange() {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return { from, to };
-}
-
-/* =========================
    Skeleton config
 ========================= */
 const SKELETON_ROWS = 10;
@@ -134,11 +101,8 @@ const SKELETON_ROWS = 10;
 export default function Flujo_Caja() {
   const API = `${BASE_URL}/api.php`;
 
-  /* Date range (reemplaza periodo) */
-  const [dateRange, setDateRange] = useState(() => {
-    const cached = readCachedRange();
-    return cached.from ? cached : defaultRange();
-  });
+  // ✅ ✅ RANGO GLOBAL (compartido entre secciones)
+  const { dateRange, setDateRange } = useDateRange();
   const [calOpen, setCalOpen] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -179,16 +143,11 @@ export default function Flujo_Caja() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // guardar rango al cambiar
-  useEffect(() => {
-    writeCachedRange(dateRange);
-  }, [dateRange]);
-
   /* =========================================================
-     Resumen por rango de fechas
+     Resumen por rango de fechas (usa dateRange GLOBAL)
   ========================================================= */
   const fetchResumen = useCallback(async () => {
-    if (!dateRange.from) return;
+    if (!dateRange?.from) return;
 
     setLoading(true);
     setError("");
@@ -223,6 +182,7 @@ export default function Flujo_Caja() {
     }
   }, [API, dateRange, showToast, beginSkeleton, endSkeleton]);
 
+  // ✅ se actualiza cuando cambia el rango global
   useEffect(() => {
     fetchResumen();
   }, [fetchResumen]);
@@ -238,7 +198,8 @@ export default function Flujo_Caja() {
      Label del rango para el botón
   ========================= */
   const rangeLabel = useMemo(() => {
-    const { from, to } = dateRange;
+    const from = dateRange?.from || null;
+    const to = dateRange?.to || null;
     if (!from) return "Seleccionar período";
     if (!to || formatDateISO(from) === formatDateISO(to)) return formatDateLabel(from);
     return `${formatDateLabel(from)} → ${formatDateLabel(to)}`;
@@ -268,7 +229,9 @@ export default function Flujo_Caja() {
       ws["!cols"] = [{ wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
 
       const wb = XLSX.utils.book_new();
-      const rangeStamp = `${formatDateISO(dateRange.from)}_${formatDateISO(dateRange.to || dateRange.from)}`;
+      const from = dateRange?.from || null;
+      const to = dateRange?.to || null;
+      const rangeStamp = `${formatDateISO(from)}_${formatDateISO(to || from)}`;
       XLSX.utils.book_append_sheet(wb, ws, `Flujo ${rangeStamp}`);
 
       const fileName = `flujo_caja_${rangeStamp}.xlsx`;
@@ -282,13 +245,16 @@ export default function Flujo_Caja() {
   }, [rows, dateRange, showToast]);
 
   // Skeleton widths
-  const skelWidths = useMemo(() => ({
-    fecha: ["34%", "42%", "38%", "46%"],
-    ingresos: ["48%", "40%", "52%", "36%"],
-    egresos: ["44%", "56%", "38%", "46%"],
-    otros: ["42%", "36%", "50%", "40%"],
-    saldo: ["52%", "46%", "38%", "56%"],
-  }), []);
+  const skelWidths = useMemo(
+    () => ({
+      fecha: ["34%", "42%", "38%", "46%"],
+      ingresos: ["48%", "40%", "52%", "36%"],
+      egresos: ["44%", "56%", "38%", "46%"],
+      otros: ["42%", "36%", "50%", "40%"],
+      saldo: ["52%", "46%", "38%", "56%"],
+    }),
+    []
+  );
 
   const renderSkeletonRow = (idx) => {
     const w = (key) => {
@@ -319,12 +285,7 @@ export default function Flujo_Caja() {
   return (
     <div className="fc-page">
       {toast && (
-        <Toast
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={closeToast}
-        />
+        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
       )}
 
       {error && (
@@ -344,7 +305,7 @@ export default function Flujo_Caja() {
             </div>
 
             <div className="fc-headFilters">
-              {/* ============ Calendario (reemplaza el selector de período) ============ */}
+              {/* ✅ Calendario (usa rango GLOBAL) */}
               <div className="fc-filter fc-filter--cal" style={{ position: "relative" }}>
                 <label>
                   <FontAwesomeIcon icon={faCalendarDays} /> Período
@@ -354,6 +315,7 @@ export default function Flujo_Caja() {
                   type="button"
                   className={`fc-calTrigger ${calOpen ? "is-open" : ""}`}
                   onClick={() => setCalOpen((v) => !v)}
+                  disabled={loading}
                 >
                   {rangeLabel}
                   <span className="fc-calTrigger__arrow">{calOpen ? "▲" : "▼"}</span>
@@ -364,8 +326,8 @@ export default function Flujo_Caja() {
                     <Calendario
                       value={dateRange}
                       onChange={(range) => {
-                        setDateRange(range);
-                        if (range.from && range.to) setCalOpen(false);
+                        setDateRange(range); // ✅ guarda global
+                        if (range?.from && range?.to) setCalOpen(false);
                       }}
                       onClose={() => setCalOpen(false)}
                     />
@@ -392,8 +354,7 @@ export default function Flujo_Caja() {
           <div className="fc-subhead__name">
             Caja diaria
             <div className="fc-subhead__meta">
-              {rangeLabel} • Saldo base:{" "}
-              <b>{moneyARS(bloque?.saldo_base ?? 0)}</b>
+              {rangeLabel} • Saldo base: <b>{moneyARS(bloque?.saldo_base ?? 0)}</b>
             </div>
           </div>
         </div>
@@ -423,13 +384,9 @@ export default function Flujo_Caja() {
                     <div className="fc-grid fc-grid--row fc-grid--excel" key={r.fecha}>
                       <div className="fc-cell fc-date">{fmtDateES(r.fecha)}</div>
 
-                      <div className="fc-cell fc-num is-center fc-in">
-                        {moneyARS(r.ingresos)}
-                      </div>
+                      <div className="fc-cell fc-num is-center fc-in">{moneyARS(r.ingresos)}</div>
 
-                      <div className="fc-cell fc-num is-center fc-eg">
-                        {moneyARS(r.egresos)}
-                      </div>
+                      <div className="fc-cell fc-num is-center fc-eg">{moneyARS(r.egresos)}</div>
 
                       <div className={`fc-cell fc-num is-center ${otrosIsNeg ? "fc-eg" : "fc-in"}`}>
                         {otros == null ? "-" : moneyARSAbs(otros)}
@@ -446,17 +403,14 @@ export default function Flujo_Caja() {
                   );
                 })}
 
-                {!rows.length && !loading && (
-                  <div className="fc-emptyRow">No hay datos para mostrar.</div>
-                )}
+                {!rows.length && !loading && <div className="fc-emptyRow">No hay datos para mostrar.</div>}
               </>
             )}
           </div>
         </div>
 
         <div className="fc-footnote">
-          * El saldo del día 01 arranca desde el "Saldo base" y se actualiza con (ingresos
-          + otros − egresos) de cada día.
+          * El saldo del día 01 arranca desde el "Saldo base" y se actualiza con (ingresos + otros − egresos) de cada día.
         </div>
       </section>
     </div>

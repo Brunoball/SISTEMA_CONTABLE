@@ -1,4 +1,6 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/components/Principal/Principal.jsx
+
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -23,24 +25,12 @@ import ModalPerfil from "../Perfil/ModalPerfil";
 
 /* =========================================================
    ✅ API (unificado y BLINDADO)
-   - BASE_URL NO se toca (viene como .../api/routes)
-   - endpoint único: api.php (SIN /routes/)
-   - apiFetch agrega X-Session
-   - dispara auth:unauthorized si 401/403
 ========================================================= */
-
-// ✅ Si BASE_URL = "https://balto.3devsnet.com/api/routes"
-// ✅ entonces el endpoint real es: "https://balto.3devsnet.com/api/routes/api.php"
 const API_RELATIVE = "api.php";
 
-// ✅ builder robusto: evita /routes/routes, //, etc
 function buildApiUrl(paramsObj) {
   const baseRaw = String(BASE_URL || "").trim();
-
-  // normalizar base con 1 slash final
   const base = baseRaw.replace(/\/+$/, "") + "/";
-
-  // arma URL final (api.php dentro de /api/routes/)
   const url = new URL(API_RELATIVE, base);
 
   const qs = new URLSearchParams();
@@ -91,8 +81,14 @@ const ROUTE_PREFETCH = {
   "/panel/recibos": () => import("../Mov_Subsection/Recibos/Recibos"),
   "/panel/OrdenesPago": () => import("../Mov_Subsection/OrdenesPago/OrdenesPago"),
   "/panel/flujo-de-caja": () => import("../Flujo_de_Caja/Flujo_Caja"),
+
+  // ✅ CC layout + sub
   "/panel/cuentas-corrientes": () => import("../Cuentas_Corrientes/Cuentas_Corrientes"),
-  "/panel/analisis-financiero": () => import("../Analisis_Financiero/Analisis_Financiero"),
+  "/panel/cuentas-corrientes/clientes": () => import("../Cuentas_Corrientes/Clientes/Clientes"),
+  "/panel/cuentas-corrientes/proveedores": () => import("../Cuentas_Corrientes/Proveedores/Proveedores"),
+
+  "/panel/analisis-financiero": () =>
+    import("../Analisis_Financiero/Analisis_Financiero"),
 };
 
 function prefetchRoute(ruta) {
@@ -106,7 +102,7 @@ function prefetchRoute(ruta) {
    ✅ IDLE / SUSPENSIÓN
 ========================================================= */
 const LAST_ACTIVITY_KEY = "balto_last_activity_ts";
-const IDLE_MS = 30 * 60 * 100; // ✅ 30 minutos
+const IDLE_MS = 30 * 60 * 1000;
 
 function setLastActivityNow() {
   try {
@@ -127,8 +123,7 @@ function getLastActivityTs() {
    Cache simple de listas globales
 ========================= */
 const LISTAS_CACHE_KEY = "balto_listas_cache_v1";
-const LISTAS_TTL_MS = 30 * 60 * 10000; // ✅ 30 minutos
-
+const LISTAS_TTL_MS = 30 * 60 * 1000;
 
 function safeJsonParse(s) {
   try {
@@ -158,10 +153,15 @@ async function prefetchGlobalListas(onUnauthorized) {
     const cached = getCachedListas();
     if (cached) return cached;
 
-    const r = await apiFetch({ action: "global_obtener_listas" }, { method: "GET" });
+    const r = await apiFetch(
+      { action: "global_obtener_listas" },
+      { method: "GET" }
+    );
 
     if (r.status === 401 || r.status === 403) {
-      try { onUnauthorized?.(); } catch {}
+      try {
+        onUnauthorized?.();
+      } catch {}
       return null;
     }
 
@@ -194,13 +194,20 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
   const stop = (e) => e.stopPropagation();
 
   return (
-    <div className="pp-modal-overlay" onMouseDown={onClose} role="dialog" aria-modal="true">
+    <div
+      className="pp-modal-overlay"
+      onMouseDown={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
       <div className="pp-modal" onMouseDown={stop}>
         <div className="pp-modal__icon">
           <FontAwesomeIcon icon={faSignOutAlt} />
         </div>
         <h3 className="pp-modal__title">Confirmar cierre de sesión</h3>
-        <p className="pp-modal__text">¿Estás seguro de que deseas cerrar la sesión?</p>
+        <p className="pp-modal__text">
+          ¿Estás seguro de que deseas cerrar la sesión?
+        </p>
 
         <div className="pp-modal__actions">
           <button
@@ -211,7 +218,11 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
           >
             Cancelar
           </button>
-          <button className="pp-btn pp-btn--danger" onClick={onConfirm} disabled={loading}>
+          <button
+            className="pp-btn pp-btn--danger"
+            onClick={onConfirm}
+            disabled={loading}
+          >
             {loading ? "Cerrando..." : "Confirmar"}
           </button>
         </div>
@@ -226,7 +237,13 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
 function normalizeRol(value) {
   if (value == null) return "vista";
   const v = String(value).trim().toLowerCase();
-  if (v === "1" || v === "admin" || v === "administrator" || v === "administrador" || v === "superadmin") {
+  if (
+    v === "1" ||
+    v === "admin" ||
+    v === "administrator" ||
+    v === "administrador" ||
+    v === "superadmin"
+  ) {
     return "admin";
   }
   return "vista";
@@ -295,16 +312,23 @@ const Principal = () => {
   const [showPerfilModal, setShowPerfilModal] = useState(false);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // ✅ dropdowns
   const [openMovSub, setOpenMovSub] = useState(false);
+  const [openCCSub, setOpenCCSub] = useState(false);
 
   const closeTimerRef = useRef(null);
   const openTimerRef = useRef(null);
+
+  const closeCCTimerRef = useRef(null);
+  const openCCTimerRef = useRef(null);
 
   const closingRef = useRef(false);
   const [closingUI, setClosingUI] = useState(false);
 
   const idleTimerRef = useRef(null);
 
+  // ✅ Mov timers
   const closeSoon = (ms = 220) => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => setOpenMovSub(false), ms);
@@ -320,6 +344,24 @@ const Principal = () => {
   const cancelOpen = () => {
     if (openTimerRef.current) clearTimeout(openTimerRef.current);
     openTimerRef.current = null;
+  };
+
+  // ✅ CC timers
+  const closeCCSoon = (ms = 220) => {
+    if (closeCCTimerRef.current) clearTimeout(closeCCTimerRef.current);
+    closeCCTimerRef.current = setTimeout(() => setOpenCCSub(false), ms);
+  };
+  const openCCSoon = (ms = 500) => {
+    if (openCCTimerRef.current) clearTimeout(openCCTimerRef.current);
+    openCCTimerRef.current = setTimeout(() => setOpenCCSub(true), ms);
+  };
+  const cancelCCClose = () => {
+    if (closeCCTimerRef.current) clearTimeout(closeCCTimerRef.current);
+    closeCCTimerRef.current = null;
+  };
+  const cancelCCOpen = () => {
+    if (openCCTimerRef.current) clearTimeout(openCCTimerRef.current);
+    openCCTimerRef.current = null;
   };
 
   const doLogout = useCallback(
@@ -354,6 +396,7 @@ const Principal = () => {
         setShowLogoutModal(false);
         setDrawerOpen(false);
         setOpenMovSub(false);
+        setOpenCCSub(false);
         navigate("/", { replace: true });
 
         if (!silent) setClosingUI(false);
@@ -400,7 +443,10 @@ const Principal = () => {
     try {
       const onUnauthorized = () => doLogout({ silent: true });
       if (typeof window.requestIdleCallback === "function") {
-        window.requestIdleCallback(() => prefetchGlobalListas(onUnauthorized), { timeout: 1200 });
+        window.requestIdleCallback(
+          () => prefetchGlobalListas(onUnauthorized),
+          { timeout: 1200 }
+        );
       } else {
         setTimeout(() => prefetchGlobalListas(onUnauthorized), 200);
       }
@@ -412,6 +458,8 @@ const Principal = () => {
     return () => {
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
       if (openTimerRef.current) clearTimeout(openTimerRef.current);
+      if (closeCCTimerRef.current) clearTimeout(closeCCTimerRef.current);
+      if (openCCTimerRef.current) clearTimeout(openCCTimerRef.current);
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
   }, []);
@@ -419,6 +467,7 @@ const Principal = () => {
   useEffect(() => {
     setDrawerOpen(false);
     setOpenMovSub(false);
+    setOpenCCSub(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -431,30 +480,39 @@ const Principal = () => {
   useEffect(() => {
     if (!drawerOpen) return;
     const prev = document.body.style.overflow;
+    document.body.classList.add("pp-lockScroll");
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
+      document.body.classList.remove("pp-lockScroll");
     };
   }, [drawerOpen]);
 
+  // ✅ IDLE TIMER
   useEffect(() => {
     const resetIdle = () => {
       setLastActivityNow();
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      idleTimerRef.current = setTimeout(() => doLogout({ silent: true }), IDLE_MS);
+      idleTimerRef.current = setTimeout(
+        () => doLogout({ silent: true }),
+        IDLE_MS
+      );
     };
 
     const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
-    events.forEach((e) => window.addEventListener(e, resetIdle, { passive: true }));
+    events.forEach((ev) =>
+      window.addEventListener(ev, resetIdle, { passive: true })
+    );
 
     resetIdle();
 
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      events.forEach((e) => window.removeEventListener(e, resetIdle));
+      events.forEach((ev) => window.removeEventListener(ev, resetIdle));
     };
   }, [doLogout]);
 
+  // ✅ si vuelve del sleep / cambia pestaña
   useEffect(() => {
     const checkExpiredOnWake = () => {
       const last = getLastActivityTs();
@@ -478,6 +536,7 @@ const Principal = () => {
 
   const planNivel = normalizePlanNivel(usuario?.plan_nivel ?? 1);
 
+  // ✅ nav con children también para Cuentas Corrientes
   const navItems = useMemo(() => {
     const base = [
       {
@@ -492,7 +551,14 @@ const Principal = () => {
         ],
       },
       { label: "Flujo de Caja", ruta: "/panel/flujo-de-caja" },
-      { label: "Cuentas Corrientes", ruta: "/panel/cuentas-corrientes" },
+      {
+        label: "Cuentas Corrientes",
+        ruta: "/panel/cuentas-corrientes",
+        children: [
+          { label: "Clientes", ruta: "/panel/cuentas-corrientes/clientes" },
+          { label: "Proveedores", ruta: "/panel/cuentas-corrientes/proveedores" },
+        ],
+      },
       { label: "Análisis Financiero", ruta: "/panel/analisis-financiero" },
     ].map((x) => ({
       key: slugify(x.label),
@@ -508,12 +574,14 @@ const Principal = () => {
 
   const activeKey = useMemo(() => {
     if (location.pathname.startsWith("/panel/movimientos")) return "movimientos";
+    if (location.pathname.startsWith("/panel/cuentas-corrientes")) return "cuentas-corrientes";
     const found = navItems.find((x) => location.pathname.startsWith(x.ruta));
     return found?.key || "";
   }, [location.pathname, navItems]);
 
   const activeLabel = useMemo(() => {
     if (location.pathname.startsWith("/panel/movimientos")) return "Movimientos";
+    if (location.pathname.startsWith("/panel/cuentas-corrientes")) return "Cuentas Corrientes";
     const found = navItems.find((x) => location.pathname.startsWith(x.ruta));
     return found?.label || "Dashboard";
   }, [location.pathname, navItems]);
@@ -523,6 +591,7 @@ const Principal = () => {
       navigate(ruta);
       setDrawerOpen(false);
       setOpenMovSub(false);
+      setOpenCCSub(false);
     },
     [navigate]
   );
@@ -531,6 +600,7 @@ const Principal = () => {
     navigate("/panel/dashboard");
     setDrawerOpen(false);
     setOpenMovSub(false);
+    setOpenCCSub(false);
   }, [navigate]);
 
   const isNoHover = () => {
@@ -595,6 +665,9 @@ const Principal = () => {
     }
   };
 
+  const isMovDropdown = (itemKey) => itemKey === "movimientos";
+  const isCCDropdown = (itemKey) => itemKey === "cuentas-corrientes";
+
   return (
     <div className="pp-shell">
       {/* ================= HEADER ================= */}
@@ -610,8 +683,16 @@ const Principal = () => {
             <FontAwesomeIcon icon={faBars} />
           </button>
 
-          <button className="mov-topbar__logo" onClick={handleLogoClick} title="Ir al dashboard">
-            <img src={LogoBalto} alt="Logo Balto" className="mov-topbar__logoImg" />
+          <button
+            className="mov-topbar__logo"
+            onClick={handleLogoClick}
+            title="Ir al dashboard"
+          >
+            <img
+              src={LogoBalto}
+              alt="Logo Balto"
+              className="mov-topbar__logoImg"
+            />
           </button>
 
           <div className="mov-topbar__titles">
@@ -666,7 +747,12 @@ const Principal = () => {
       {/* ================= SIDEBAR ================= */}
       <aside className={`pp-sidebar ${drawerOpen ? "is-drawerOpen" : ""}`}>
         <div className="pp-drawerHeader">
-          <div className="pp-drawerBrand" onClick={handleLogoClick} role="button" tabIndex={0}>
+          <div
+            className="pp-drawerBrand"
+            onClick={handleLogoClick}
+            role="button"
+            tabIndex={0}
+          >
             <div className="pp-drawerBrand__mark">
               <FontAwesomeIcon icon={faChartLine} />
             </div>
@@ -700,10 +786,56 @@ const Principal = () => {
         <nav className="pp-nav">
           {navItems.map((item) => {
             const hasSub = Array.isArray(item.children) && item.children.length > 0;
-            const isMov = item.key === "movimientos";
+
+            const isMov = isMovDropdown(item.key);
+            const isCC = isCCDropdown(item.key);
+
             const isActive =
-              activeKey === item.key || (isMov && location.pathname.startsWith("/panel/movimientos"));
-            const isOpen = isMov && openMovSub;
+              activeKey === item.key ||
+              (isMov && location.pathname.startsWith("/panel/movimientos")) ||
+              (isCC && location.pathname.startsWith("/panel/cuentas-corrientes"));
+
+            const isOpen = (isMov && openMovSub) || (isCC && openCCSub);
+
+            const openSub = () => {
+              if (isMov) setOpenMovSub(true);
+              if (isCC) setOpenCCSub(true);
+            };
+            const closeSub = () => {
+              if (isMov) setOpenMovSub(false);
+              if (isCC) setOpenCCSub(false);
+            };
+
+            const openSoonLocal = (ms = 300) => {
+              if (isMov) {
+                cancelClose();
+                openSoon(ms);
+              }
+              if (isCC) {
+                cancelCCClose();
+                openCCSoon(ms);
+              }
+            };
+            const closeSoonLocal = (ms = 220) => {
+              if (isMov) {
+                cancelOpen();
+                closeSoon(ms);
+              }
+              if (isCC) {
+                cancelCCOpen();
+                closeCCSoon(ms);
+              }
+            };
+            const cancelAllTimersLocal = () => {
+              if (isMov) {
+                cancelClose();
+                cancelOpen();
+              }
+              if (isCC) {
+                cancelCCClose();
+                cancelCCOpen();
+              }
+            };
 
             return (
               <div
@@ -711,56 +843,58 @@ const Principal = () => {
                 className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${isOpen ? "is-open" : ""}`}
                 onMouseEnter={() => {
                   prefetchRoute(item.ruta);
-                  if (!isNoHover() && isMov) {
-                    cancelClose();
-                    openSoon(300);
+                  if (!isNoHover() && (isMov || isCC)) {
+                    openSoonLocal(300);
                   }
                 }}
                 onMouseLeave={() => {
-                  if (!isNoHover() && isMov) {
-                    cancelOpen();
-                    closeSoon(220);
+                  if (!isNoHover() && (isMov || isCC)) {
+                    closeSoonLocal(220);
                   }
                 }}
               >
-<button
-  type="button"
-  className={`pp-nav__item ${isActive ? "is-active" : ""}`}
-  onClick={() => {
-    // ✅ MOBILE: 1er toque abre submenú, 2do toque navega
-    if (hasSub && isNoHover() && isMov) {
-      if (!openMovSub) {
-        setOpenMovSub(true);
-        return; // 👈 no navegar en el primer toque
-      }
-      handleNavigate(item.ruta); // 👈 segundo toque: ir a /panel/movimientos
-      return;
-    }
+                <button
+                  type="button"
+                  className={`pp-nav__item ${isActive ? "is-active" : ""}`}
+                  onClick={() => {
+                    // ✅ MOBILE: 1er toque abre submenú, 2do toque navega
+                    if (hasSub && isNoHover() && (isMov || isCC)) {
+                      const currentlyOpen = isMov ? openMovSub : openCCSub;
+                      if (!currentlyOpen) {
+                        openSub();
+                        return;
+                      }
+                      handleNavigate(item.ruta);
+                      return;
+                    }
 
-    // ✅ resto (desktop o items sin sub)
-    handleNavigate(item.ruta);
-  }}
-  aria-expanded={hasSub ? (isMov ? openMovSub : undefined) : undefined}
-  aria-haspopup={hasSub ? "menu" : undefined}
->
-  <span className="pp-nav__icon">
-    <FontAwesomeIcon icon={item.icon} />
-  </span>
-  <span className="pp-nav__label">{item.label}</span>
-</button>
+                    // ✅ resto (desktop o items sin sub)
+                    handleNavigate(item.ruta);
+                  }}
+                  aria-expanded={hasSub ? (isMov ? openMovSub : isCC ? openCCSub : undefined) : undefined}
+                  aria-haspopup={hasSub ? "menu" : undefined}
+                >
+                  <span className="pp-nav__icon">
+                    <FontAwesomeIcon icon={item.icon} />
+                  </span>
+                  <span className="pp-nav__label">{item.label}</span>
+                </button>
 
                 {hasSub && (
                   <div
                     className="pp-navSub"
                     onMouseEnter={() => {
-                      if (!isNoHover() && isMov) {
-                        cancelClose();
-                        cancelOpen();
-                        setOpenMovSub(true);
+                      if (!isNoHover() && (isMov || isCC)) {
+                        cancelAllTimersLocal();
+                        if (isMov) setOpenMovSub(true);
+                        if (isCC) setOpenCCSub(true);
                       }
                     }}
                     onMouseLeave={() => {
-                      if (!isNoHover() && isMov) closeSoon(220);
+                      if (!isNoHover() && (isMov || isCC)) {
+                        if (isMov) closeSoon(220);
+                        if (isCC) closeCCSoon(220);
+                      }
                     }}
                   >
                     {item.children.map((sub) => (
@@ -773,6 +907,7 @@ const Principal = () => {
                         onClick={() => {
                           navigate(sub.ruta);
                           setOpenMovSub(false);
+                          setOpenCCSub(false);
                           setDrawerOpen(false);
                         }}
                       >

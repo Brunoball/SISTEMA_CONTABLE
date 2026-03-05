@@ -17,6 +17,9 @@ import Toast from "../Global/Toast.jsx";
 // Calendario
 import Calendario from "../Global/Calendario/Calendario.jsx";
 
+// ✅ CONTEXTO GLOBAL DE FECHAS
+import { useDateRange } from "../../context/DateRangeContext";
+
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPenToSquare,
@@ -56,41 +59,6 @@ function formatDateLabel(d) {
     2,
     "0"
   )}/${d.getFullYear()}`;
-}
-
-function defaultRange() {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return { from, to };
-}
-
-const MOV_DATE_CACHE_KEY = "mov_daterange_cache";
-
-function readCachedRange() {
-  try {
-    const raw = localStorage.getItem(MOV_DATE_CACHE_KEY);
-    if (!raw) return { from: null, to: null };
-    const parsed = JSON.parse(raw);
-    return {
-      from: parsed.from ? new Date(parsed.from) : null,
-      to: parsed.to ? new Date(parsed.to) : null,
-    };
-  } catch {
-    return { from: null, to: null };
-  }
-}
-
-function writeCachedRange(range) {
-  try {
-    localStorage.setItem(
-      MOV_DATE_CACHE_KEY,
-      JSON.stringify({
-        from: range.from ? range.from.toISOString() : null,
-        to: range.to ? range.to.toISOString() : null,
-      })
-    );
-  } catch {}
 }
 
 /* =========================
@@ -234,6 +202,9 @@ export default function Movimientos() {
     ensureListsLoaded,
   } = useListas();
 
+  // ✅ Usar contexto global en lugar de estado local
+  const { dateRange, setDateRange } = useDateRange();
+
   const [rows, setRows] = useState([]);
   const [loadingRows, setLoadingRows] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -241,11 +212,6 @@ export default function Movimientos() {
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
-  /* Date range (reemplaza periodo) */
-  const [dateRange, setDateRange] = useState(() => {
-    const cached = readCachedRange();
-    return cached.from ? cached : defaultRange();
-  });
   const [calOpen, setCalOpen] = useState(false);
 
   const [q, setQ] = useState("");
@@ -284,11 +250,6 @@ export default function Movimientos() {
     },
     []
   );
-
-  /* guardar rango */
-  useEffect(() => {
-    writeCachedRange(dateRange);
-  }, [dateRange]);
 
   /* label del botón trigger */
   const rangeLabel = useMemo(() => {
@@ -529,10 +490,10 @@ export default function Movimientos() {
     cacheRef.current.clear();
   }, []);
 
-  /* Cambio de rango */
+  /* ✅ Cambio de rango: ahora actualiza el contexto global */
   const handleRangeChange = useCallback(
     (range) => {
-      setDateRange(range);
+      setDateRange(range); // ← escribe en el contexto global (compartido entre secciones)
       setQ("");
       skipSearchRef.current = true;
       loadAllTokenRef.current += 1;
@@ -542,7 +503,7 @@ export default function Movimientos() {
         loadRows({ dateRange: range, q: "", offset: 0, append: false });
       }
     },
-    [loadRows, invalidateCache]
+    [setDateRange, loadRows, invalidateCache]
   );
 
   /* filteredRows */
@@ -598,7 +559,6 @@ export default function Movimientos() {
         return;
       }
 
-      // ✅ ARREGLO: escapar comillas internas
       if (hasMore) {
         showToast("error", "Faltan registros sin cargar. Tocá \"Cargar todos\" primero.", 5200);
       }

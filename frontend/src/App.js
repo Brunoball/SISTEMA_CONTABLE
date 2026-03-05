@@ -1,4 +1,6 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/App.js
+
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
@@ -22,8 +24,13 @@ import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 import * as CuentasCorrientesModule from "./components/Cuentas_Corrientes/Cuentas_Corrientes";
 import * as AnalisisFinancieroModule from "./components/Analisis_Financiero/Analisis_Financiero";
 
-/* ✅ NUEVO: Provider global de listas */
+/* ✅ NUEVOS: sub-secciones CC */
+import ClientesCC from "./components/Cuentas_Corrientes/Clientes/Clientes";
+import ProveedoresCC from "./components/Cuentas_Corrientes/Proveedores/Proveedores";
+
+/* Providers globales */
 import { ListasProvider } from "./context/ListasContext";
+import { DateRangeProvider } from "./context/DateRangeContext";
 
 /* =========================================================
    ✅ Helpers: resolver componente (default o named)
@@ -66,27 +73,16 @@ const AnalisisFinanciero = resolveComponent(AnalisisFinancieroModule, [
 ]);
 
 /* =========================================================
-   ✅ Auth (SaaS REAL)
-   - En tu sistema NO usás "token"
-   - Usás session_key + usuario en localStorage
+   ✅ Auth
 ========================================================= */
 function isAuthenticated() {
   try {
     const sessionKey = (localStorage.getItem("session_key") || "").trim();
     const rawUser = localStorage.getItem("usuario");
-
-    // ✅ debe existir session_key
     if (!sessionKey) return false;
-
-    // ✅ y un usuario JSON válido
     if (!rawUser) return false;
-
     const u = JSON.parse(rawUser);
     if (!u || typeof u !== "object") return false;
-
-    // opcional: chequear campos mínimos
-    // if (!u.idTenant) return false;
-
     return true;
   } catch {
     return false;
@@ -113,10 +109,11 @@ export default function App() {
           path="/panel"
           element={
             <RutaProtegida>
-              {/* ✅ Provider vive acá: afecta a TODO el panel */}
-              <ListasProvider>
-                <Principal />
-              </ListasProvider>
+              <DateRangeProvider>
+                <ListasProvider>
+                  <Principal />
+                </ListasProvider>
+              </DateRangeProvider>
             </RutaProtegida>
           }
         >
@@ -131,7 +128,14 @@ export default function App() {
           <Route path="OrdenesPago" element={<OrdenesPago />} />
 
           <Route path="flujo-de-caja" element={<Flujo_Caja />} />
-          <Route path="cuentas-corrientes" element={<CuentasCorrientes />} />
+
+          {/* ✅ Cuentas Corrientes con sub-rutas */}
+          <Route path="cuentas-corrientes" element={<CuentasCorrientes />}>
+            <Route index element={<div style={{ padding: 12 }} />} />
+            <Route path="clientes" element={<ClientesCC />} />
+            <Route path="proveedores" element={<ProveedoresCC />} />
+          </Route>
+
           <Route path="analisis-financiero" element={<AnalisisFinanciero />} />
         </Route>
 

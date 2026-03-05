@@ -1,3 +1,4 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/components/Mov_Subsection/Recibos/Recibos.jsx
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -28,6 +29,9 @@ import {
 
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
+
+// ✅ ✅ FECHA GLOBAL (context)
+import { useDateRange } from "../../../context/DateRangeContext.jsx";
 
 /* =========================
    PERF
@@ -74,7 +78,7 @@ function formatFechaDMY(v) {
 }
 
 /* =========================
-   Fecha helpers para rango (igual que Ventas)
+   Fecha helpers para rango
 ========================= */
 function startOfDay(d) {
   if (!d) return null;
@@ -195,6 +199,10 @@ export default function Recibos() {
     refreshLists,
   } = useListas();
 
+  // ✅ ✅ FECHA GLOBAL
+  const { dateRange, setDateRange } = useDateRange();
+  const [showCalendario, setShowCalendario] = useState(false);
+
   /* =========================
      STATE
   ========================= */
@@ -209,16 +217,6 @@ export default function Recibos() {
   const [loadingAll, setLoadingAll] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
-
-  // ✅ Rango de fechas (igual que Ventas) — arranca con el mes actual
-  const [dateRange, setDateRange] = useState(() => {
-    const now = new Date();
-    return {
-      from: new Date(now.getFullYear(), now.getMonth(), 1),
-      to: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-    };
-  });
-  const [showCalendario, setShowCalendario] = useState(false);
 
   const [q, setQ] = useState("");
 
@@ -366,12 +364,12 @@ export default function Recibos() {
   }, []);
 
   /* =========================
-     LOAD ROWS — usa fecha_desde / fecha_hasta (igual que Ventas)
+     LOAD ROWS — usa fecha_desde / fecha_hasta
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
-      const fromDate = opts.from !== undefined ? opts.from : dateRange.from;
-      const toDate = opts.to !== undefined ? opts.to : dateRange.to;
+      const fromDate = opts.from !== undefined ? opts.from : dateRange?.from;
+      const toDate = opts.to !== undefined ? opts.to : dateRange?.to;
       const qLocal = typeof opts.q === "string" ? opts.q : q;
       const append = !!opts.append;
       const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
@@ -504,7 +502,7 @@ export default function Recibos() {
   );
 
   /* =========================
-     INIT — carga con mes actual por defecto
+     INIT — carga con rango global actual
   ========================= */
   useEffect(() => {
     let alive = true;
@@ -513,14 +511,32 @@ export default function Recibos() {
         await ensureListsLoaded({ force: false, background: true });
       } catch {}
       if (!alive) return;
-      const now = new Date();
-      const initFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-      const initTo = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      await loadRows({ from: initFrom, to: initTo, q: "", offset: 0, append: false });
+      await loadRows({ from: dateRange?.from, to: dateRange?.to, q: "", offset: 0, append: false });
     })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* =========================
+     Si cambiaste el rango en otra sección, refresca acá
+  ========================= */
+  const prevRangeKeyRef = useRef("");
+  useEffect(() => {
+    const k = `${dateToAPI(dateRange?.from)}|${dateToAPI(dateRange?.to)}`;
+    if (!k || k === "||") return;
+    if (prevRangeKeyRef.current === "") {
+      prevRangeKeyRef.current = k;
+      return;
+    }
+    if (prevRangeKeyRef.current !== k) {
+      prevRangeKeyRef.current = k;
+      cacheRef.current.clear();
+      skipSearchRef.current = true;
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange?.from, dateRange?.to]);
 
   // Debounce búsqueda
   useEffect(() => {
@@ -530,7 +546,7 @@ export default function Recibos() {
     }
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
-      loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
+      loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
     }, 250);
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -539,12 +555,12 @@ export default function Recibos() {
   }, [q]);
 
   /* =========================
-     Handler cambio de rango de fechas (igual que Ventas)
+     Handler cambio de rango (SET GLOBAL)
   ========================= */
   const handleDateRangeChange = useCallback(
     async (newRange) => {
       if (!newRange.from && !newRange.to) return;
-      setDateRange(newRange);
+      setDateRange(newRange); // ✅ global
       cacheRef.current.clear();
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -556,14 +572,15 @@ export default function Recibos() {
         append: false,
       });
     },
-    [loadRows, q]
+    [loadRows, q, setDateRange]
   );
 
   /* =========================
      Label para el botón del calendario
   ========================= */
   const dateRangeLabel = useMemo(() => {
-    const { from, to } = dateRange;
+    const from = dateRange?.from || null;
+    const to = dateRange?.to || null;
     if (!from && !to) return "Seleccionar fechas";
     if (from && to) {
       if (
@@ -584,7 +601,7 @@ export default function Recibos() {
   ========================= */
   const filteredRows = useMemo(() => {
     return (Array.isArray(rows) ? rows : [])
-      .filter((r) => rowInDateRange(r, dateRange.from, dateRange.to));
+      .filter((r) => rowInDateRange(r, dateRange?.from, dateRange?.to));
   }, [rows, dateRange]);
 
   const stats = useMemo(() => {
@@ -743,7 +760,7 @@ export default function Recibos() {
       try {
         cacheRef.current.clear();
         skipSearchRef.current = true;
-        await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
+        await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
         try { await refreshLists(); } catch {}
         showToast("exito", "Comprobante guardado y vinculado a todos los pagos ✅", 2600);
       } catch (e) {
@@ -776,7 +793,7 @@ export default function Recibos() {
         });
 
         cacheRef.current.clear();
-        await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
+        await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
         try { await refreshLists(); } catch {}
 
         showToast("exito", data?.mensaje || "Pago confirmado.", 2400);
@@ -807,7 +824,7 @@ export default function Recibos() {
       setOpenDel(false);
       setSelectedRow(null);
       cacheRef.current.clear();
-      await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
+      await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
       try { await refreshLists(); } catch {}
       showToast("exito", "Registro eliminado.", 2400);
     } catch (e) {
@@ -857,7 +874,8 @@ export default function Recibos() {
         }
       }
 
-      const { from, to } = dateRange;
+      const from = dateRange?.from || null;
+      const to = dateRange?.to || null;
       const sufijo =
         from && to
           ? `${dateToAPI(from)}_${dateToAPI(to)}`
@@ -890,8 +908,8 @@ export default function Recibos() {
       while (offset !== null && guard < 3000) {
         const beforeLen = rowsRef.current.length;
         const res = await loadRows({
-          from: dateRange.from,
-          to: dateRange.to,
+          from: dateRange?.from,
+          to: dateRange?.to,
           q: (q || "").trim(),
           offset,
           append: true,
@@ -1008,7 +1026,7 @@ export default function Recibos() {
 
             <div className="mov-headFilters">
 
-              {/* ✅ Botón + Calendario (igual que Ventas) */}
+              {/* ✅ Fecha GLOBAL */}
               <div className="mov-filter" style={{ position: "relative" }}>
                 <label>
                   <FontAwesomeIcon icon={faCalendarDays} /> Fecha
@@ -1067,8 +1085,8 @@ export default function Recibos() {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         skipSearchRef.current = true;
                         await loadRows({
-                          from: dateRange.from,
-                          to: dateRange.to,
+                          from: dateRange?.from,
+                          to: dateRange?.to,
                           q: e.currentTarget.value,
                           offset: 0,
                           append: false,
@@ -1088,8 +1106,8 @@ export default function Recibos() {
                         setQ("");
                         skipSearchRef.current = true;
                         await loadRows({
-                          from: dateRange.from,
-                          to: dateRange.to,
+                          from: dateRange?.from,
+                          to: dateRange?.to,
                           q: "",
                           offset: 0,
                           append: false,
@@ -1186,12 +1204,7 @@ export default function Recibos() {
                                   className={`mov-iconBtn ${pagado ? "mov-iconBtn--disabled" : ""}`}
                                   title={pagado ? "Ya está pagado" : "Pagar"}
                                   onClick={() => !pagado && openPagarModal(r)}
-                                  disabled={
-                                    pagado ||
-                                    isAnyLoading ||
-                                    loadingListsCtx ||
-                                    loadingClienteDeudas
-                                  }
+                                  disabled={pagado || isAnyLoading || loadingListsCtx || loadingClienteDeudas}
                                 >
                                   <FontAwesomeIcon icon={faMoneyBill1Wave} />
                                 </button>
@@ -1304,7 +1317,7 @@ export default function Recibos() {
         row={selectedRow}
         lists={lists}
         periodoDefault={
-          dateRange.from
+          dateRange?.from
             ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}`
             : ""
         }
@@ -1317,7 +1330,7 @@ export default function Recibos() {
             idUsuario,
           });
           cacheRef.current.clear();
-          await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
+          await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
           try { await refreshLists(); } catch {}
           return data;
         }}

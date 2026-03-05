@@ -1,4 +1,7 @@
-// src/components/Compras/Compras.jsx
+// ✅ REEMPLAZAR COMPLETO
+// src/components/Mov_Subsection/Compra/Compras.jsx
+// (si tu ruta real es otra, mantené el mismo contenido y solo ajustá el path del archivo)
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
 import "../../Global/Global_css/Global_Section.css";
@@ -26,6 +29,9 @@ import {
 
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
+
+// ✅ FECHA GLOBAL (Contexto)
+import { useDateRange } from "../../../context/DateRangeContext.jsx";
 
 /* =========================
    PERF: paginado
@@ -61,7 +67,15 @@ function pick(obj, keys, fallback = "") {
   return fallback;
 }
 function getRowId(r) {
-  return r?.id_compra ?? r?.idCompra ?? r?.id_movimiento ?? r?.idMovimiento ?? r?.id ?? r?.ID ?? null;
+  return (
+    r?.id_compra ??
+    r?.idCompra ??
+    r?.id_movimiento ??
+    r?.idMovimiento ??
+    r?.id ??
+    r?.ID ??
+    null
+  );
 }
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
@@ -114,7 +128,10 @@ function dateToAPI(d) {
 
 function formatDateUI(d) {
   if (!d) return "—";
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}/${d.getFullYear()}`;
 }
 
 function rowInDateRange(row, from, to) {
@@ -163,8 +180,14 @@ function getCompraPagoLabel(r) {
 
 function getComprobanteUrl(r) {
   const candidates = [
-    r?.factura_url, r?.factura, r?.comprobante_url, r?.comprobante,
-    r?.archivo_url, r?.url_factura, r?.path_factura, r?.factura_path,
+    r?.factura_url,
+    r?.factura,
+    r?.comprobante_url,
+    r?.comprobante,
+    r?.archivo_url,
+    r?.url_factura,
+    r?.path_factura,
+    r?.factura_path,
   ];
   const raw = candidates.find((x) => typeof x === "string" && x.trim() !== "");
   if (!raw) return "";
@@ -207,22 +230,16 @@ export default function Compras() {
     refreshLists,
   } = useListas();
 
+  // ✅ Fecha global (compartida con Movimientos/Ventas/Recibos/etc.)
+  const { dateRange, setDateRange } = useDateRange();
+
   const [rows, setRows] = useState([]);
   const [loadingRows, setLoadingRows] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadingAll, setLoadingAll] = useState(false);
   const [error, setError] = useState("");
 
-  // Rango de fechas — arranca con el mes actual
-  const [dateRange, setDateRange] = useState(() => {
-    const now = new Date();
-    return {
-      from: new Date(now.getFullYear(), now.getMonth(), 1),
-      to: new Date(now.getFullYear(), now.getMonth() + 1, 0),
-    };
-  });
   const [showCalendario, setShowCalendario] = useState(false);
-
   const [q, setQ] = useState("");
 
   const [hasMore, setHasMore] = useState(false);
@@ -320,7 +337,9 @@ export default function Compras() {
   );
 
   const refreshPeriodos = useCallback(async () => {
-    try { await refreshLists(); } catch {}
+    try {
+      await refreshLists();
+    } catch {}
   }, [refreshLists]);
 
   /* =========================
@@ -355,11 +374,14 @@ export default function Compras() {
 
   /* =========================
      LOAD ROWS — usa fecha_desde / fecha_hasta
+     ✅ ahora toma el rango desde dateRange (contexto)
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
-      const fromDate = opts.from !== undefined ? opts.from : dateRange.from;
-      const toDate = opts.to !== undefined ? opts.to : dateRange.to;
+      const range = opts.dateRange ?? dateRange;
+      const fromDate = opts.from !== undefined ? opts.from : range?.from;
+      const toDate = opts.to !== undefined ? opts.to : range?.to;
+
       const qLocal = typeof opts.q === "string" ? opts.q : q;
       const append = !!opts.append;
       const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
@@ -372,6 +394,20 @@ export default function Compras() {
       const cacheKey = `${fromAPI}|${toAPI}|${qKey}`;
 
       const myReqId = ++reqIdRef.current;
+
+      // ✅ si no hay rango seleccionado, vaciamos y salimos
+      if (!fromDate && !toDate) {
+        setRows([]);
+        setHasMore(false);
+        setNextOffset(null);
+        setLoadingRows(false);
+        setLoadingMore(false);
+        setLoadingAll(false);
+        setError("");
+        setReady(true);
+        endSkeleton();
+        return { hasMore: false, nextOffset: null, received: 0, appended: 0, pageIds: [] };
+      }
 
       if (!append && offset === 0) setReady(false);
 
@@ -399,7 +435,9 @@ export default function Compras() {
             received: Array.isArray(cached?.rows) ? cached.rows.length : 0,
             appended: 0,
             pageIds: (Array.isArray(cached?.rows) ? cached.rows : [])
-              .map((x) => getRowId(x)).filter(Boolean).map(String),
+              .map((x) => getRowId(x))
+              .filter(Boolean)
+              .map(String),
           };
         }
 
@@ -415,8 +453,9 @@ export default function Compras() {
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar compras.");
 
         if (myReqId !== reqIdRef.current) {
-          if (append) { if (mode !== "all") setLoadingMore(false); }
-          else setLoadingRows(false);
+          if (append) {
+            if (mode !== "all") setLoadingMore(false);
+          } else setLoadingRows(false);
           endSkeleton();
           return null;
         }
@@ -424,8 +463,8 @@ export default function Compras() {
         const raw = Array.isArray(data.compras) ? data.compras : [];
 
         const backendHasMore = data.has_more !== undefined ? !!data.has_more : null;
-        const backendNextOffset = data.next_offset !== undefined && data.next_offset !== null
-          ? Number(data.next_offset) : null;
+        const backendNextOffset =
+          data.next_offset !== undefined && data.next_offset !== null ? Number(data.next_offset) : null;
 
         const page = raw.slice(0, PAGE_SIZE);
         let newHasMore = false;
@@ -484,17 +523,21 @@ export default function Compras() {
 
         endSkeleton();
         return { hasMore: newHasMore, nextOffset: newNextOffset, received: page.length, appended: appendedCount, pageIds };
-
       } catch (e) {
         if (myReqId !== reqIdRef.current) {
-          if (append) { if (mode !== "all") setLoadingMore(false); }
-          else setLoadingRows(false);
+          if (append) {
+            if (mode !== "all") setLoadingMore(false);
+          } else setLoadingRows(false);
           endSkeleton();
           return null;
         }
         setError(e?.message || "Error cargando compras.");
-        if (append) { if (mode !== "all") setLoadingMore(false); }
-        else { setLoadingRows(false); setReady(true); }
+        if (append) {
+          if (mode !== "all") setLoadingMore(false);
+        } else {
+          setLoadingRows(false);
+          setReady(true);
+        }
         endSkeleton();
         return null;
       }
@@ -504,22 +547,42 @@ export default function Compras() {
 
   /* =========================
      INIT
+     ✅ usa el rango global ya existente
   ========================= */
   useEffect(() => {
     let alive = true;
     (async () => {
-      try { await ensureListsLoaded({ force: false, background: true }); } catch {}
+      try {
+        await ensureListsLoaded({ force: false, background: true });
+      } catch {}
+
       if (!alive) return;
-      const now = new Date();
-      const initFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-      const initTo = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      await loadRows({ from: initFrom, to: initTo, q: "", offset: 0, append: false, mode: "initial" });
+
+      // ✅ si por algún motivo no viniera rango (muy raro), lo seteamos al mes actual en el contexto
+      if (!dateRange?.from || !dateRange?.to) {
+        const now = new Date();
+        const init = {
+          from: new Date(now.getFullYear(), now.getMonth(), 1),
+          to: new Date(now.getFullYear(), now.getMonth() + 1, 0),
+        };
+        setDateRange(init);
+        await loadRows({ dateRange: init, q: "", offset: 0, append: false, mode: "initial" });
+        return;
+      }
+
+      await loadRows({ dateRange, q: "", offset: 0, append: false, mode: "initial" });
     })();
-    return () => { alive = false; };
+
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounce busqueda
+  /* =========================
+     Debounce busqueda
+     ✅ ahora depende de [q, dateRange] (rango global)
+  ========================= */
   useEffect(() => {
     if (skipSearchRef.current) {
       skipSearchRef.current = false;
@@ -527,47 +590,51 @@ export default function Compras() {
     }
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
-      loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false, mode: "initial" });
+      loadRows({ dateRange, q, offset: 0, append: false, mode: "initial" });
     }, 250);
-    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
+  }, [q, dateRange]);
 
   /* =========================
      Handler cambio de rango
+     ✅ guarda en contexto global
   ========================= */
   const handleDateRangeChange = useCallback(
     async (newRange) => {
-      if (!newRange.from && !newRange.to) return;
-      setDateRange(newRange);
+      if (!newRange?.from && !newRange?.to) return;
+      setDateRange(newRange);          // ✅ global
       cacheRef.current.clear();
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-      await loadRows({ from: newRange.from, to: newRange.to, q, offset: 0, append: false, mode: "initial" });
+      await loadRows({ dateRange: newRange, q, offset: 0, append: false, mode: "initial" });
     },
-    [loadRows, q]
+    [setDateRange, loadRows, q]
   );
 
   /* =========================
      Filtrado client-side
   ========================= */
   const filteredRows = useMemo(() => {
-    return (Array.isArray(rows) ? rows : [])
-      .filter((r) => rowInDateRange(r, dateRange.from, dateRange.to));
+    return (Array.isArray(rows) ? rows : []).filter((r) => rowInDateRange(r, dateRange?.from, dateRange?.to));
   }, [rows, dateRange]);
 
   /* =========================
      Label boton calendario
   ========================= */
   const dateRangeLabel = useMemo(() => {
-    const { from, to } = dateRange;
+    const from = dateRange?.from;
+    const to = dateRange?.to;
     if (!from && !to) return "Seleccionar fechas";
     if (from && to) {
       if (
         from.getFullYear() === to.getFullYear() &&
         from.getMonth() === to.getMonth() &&
         from.getDate() === to.getDate()
-      ) return formatDateUI(from);
+      )
+        return formatDateUI(from);
       return `${formatDateUI(from)} -> ${formatDateUI(to)}`;
     }
     if (from) return `Desde ${formatDateUI(from)}`;
@@ -577,36 +644,57 @@ export default function Compras() {
   /* =========================
      Columnas
   ========================= */
-  const columns = useMemo(() => [
-    {
-      key: "fecha", label: "FECHA", fr: 0.9, align: "center",
-      render: (r) => safeText(formatFechaDMY(pick(r, ["fecha"], ""))),
-    },
-    {
-      key: "detalle", label: "DESCRIPCION", fr: 2.2, strong: true, align: "left",
-      render: (r) => safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
-    },
-    {
-      key: "proveedor", label: "PROVEEDOR", fr: 1.8, align: "left",
-      render: (r) => safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")),
-    },
-    {
-      key: "pago", label: "PAGO", fr: 1, align: "center",
-      render: (r) => safeText(getCompraPagoLabel(r)),
-    },
-    {
-      key: "total", label: "TOTAL", fr: 1.1, align: "center",
-      render: (r) => moneyARS(pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)),
-    },
-    { key: "acciones", label: "ACCIONES", fr: 0.95, align: "center", render: () => null },
-  ], []);
+  const columns = useMemo(
+    () => [
+      {
+        key: "fecha",
+        label: "FECHA",
+        fr: 0.9,
+        align: "center",
+        render: (r) => safeText(formatFechaDMY(pick(r, ["fecha"], ""))),
+      },
+      {
+        key: "detalle",
+        label: "DESCRIPCION",
+        fr: 2.2,
+        strong: true,
+        align: "left",
+        render: (r) => safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
+      },
+      {
+        key: "proveedor",
+        label: "PROVEEDOR",
+        fr: 1.8,
+        align: "left",
+        render: (r) => safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")),
+      },
+      {
+        key: "pago",
+        label: "PAGO",
+        fr: 1,
+        align: "center",
+        render: (r) => safeText(getCompraPagoLabel(r)),
+      },
+      {
+        key: "total",
+        label: "TOTAL",
+        fr: 1.1,
+        align: "center",
+        render: (r) => moneyARS(pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)),
+      },
+      { key: "acciones", label: "ACCIONES", fr: 0.95, align: "center", render: () => null },
+    ],
+    []
+  );
 
   const gridCols = useMemo(() => {
     if (!columns.length) return `repeat(${columns.length}, minmax(0, 1fr))`;
-    return columns.map((c) => {
-      const n = Number(c.fr);
-      return Number.isFinite(n) && n > 0 ? `${n}fr` : "1fr";
-    }).join(" ");
+    return columns
+      .map((c) => {
+        const n = Number(c.fr);
+        return Number.isFinite(n) && n > 0 ? `${n}fr` : "1fr";
+      })
+      .join(" ");
   }, [columns]);
 
   /* =========================
@@ -624,10 +712,10 @@ export default function Compras() {
       }
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(dataToExport);
-      const { from, to } = dateRange;
-      const sufijo = from && to
-        ? `${dateToAPI(from)}_${dateToAPI(to)}`
-        : from ? `desde_${dateToAPI(from)}` : "todos";
+      const from = dateRange?.from;
+      const to = dateRange?.to;
+      const sufijo =
+        from && to ? `${dateToAPI(from)}_${dateToAPI(to)}` : from ? `desde_${dateToAPI(from)}` : "todos";
       XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`Compras_${sufijo}`));
       XLSX.writeFile(wb, `compras_${sufijo}.xlsx`);
       showToast("exito", "Excel exportado.", 2200);
@@ -639,15 +727,24 @@ export default function Compras() {
   /* =========================
      Acciones UI
   ========================= */
-  const openEditModal = (r) => { setSelectedRow(r); setOpenEdit(true); };
-  const openDeleteModal = (r) => { setSelectedRow(r); setOpenDel(true); };
+  const openEditModal = (r) => {
+    setSelectedRow(r);
+    setOpenEdit(true);
+  };
+  const openDeleteModal = (r) => {
+    setSelectedRow(r);
+    setOpenDel(true);
+  };
   const openComprobanteModal = (r) => {
     const url = getComprobanteUrl(r);
     if (!url) return;
     setCompUrl(url);
     setOpenVerComp(true);
   };
-  const closeComprobanteModal = () => { setOpenVerComp(false); setCompUrl(""); };
+  const closeComprobanteModal = () => {
+    setOpenVerComp(false);
+    setCompUrl("");
+  };
 
   /* =========================
      Refresh tras guardar
@@ -657,14 +754,7 @@ export default function Compras() {
     setOpenEdit(false);
     setSelectedRow(null);
     cacheRef.current.clear();
-    await loadRows({
-      from: dateRange.from,
-      to: dateRange.to,
-      q: "",
-      offset: 0,
-      append: false,
-      mode: "initial",
-    });
+    await loadRows({ dateRange, q: "", offset: 0, append: false, mode: "initial" });
     await refreshPeriodos();
   }, [dateRange, loadRows, refreshPeriodos]);
 
@@ -705,7 +795,7 @@ export default function Compras() {
       setOpenDel(false);
       setSelectedRow(null);
       cacheRef.current.clear();
-      await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false, mode: "initial" });
+      await loadRows({ dateRange, q, offset: 0, append: false, mode: "initial" });
       await refreshPeriodos();
       showToast("exito", "Compra eliminada.", 2600);
     } catch (e) {
@@ -722,7 +812,7 @@ export default function Compras() {
     if (!hasMore || loadingRows || loadingMore || loadingAll || loadingListsCtx) return;
     if (nextOffset === null) return;
     showToast("cargando", "Cargando mas...", 6000);
-    await loadRows({ from: dateRange.from, to: dateRange.to, q: (q || "").trim(), offset: nextOffset, append: true, mode: "more" });
+    await loadRows({ dateRange, q: (q || "").trim(), offset: nextOffset, append: true, mode: "more" });
   }, [hasMore, loadingRows, loadingMore, loadingAll, loadingListsCtx, nextOffset, dateRange, q, loadRows, showToast]);
 
   const handleLoadAll = useCallback(async () => {
@@ -734,17 +824,14 @@ export default function Compras() {
 
     let offset = nextOffset;
     let guard = 0;
-    const seen = new Set(
-      (Array.isArray(rows) ? rows : []).map((x) => getRowId(x)).filter(Boolean).map(String)
-    );
+    const seen = new Set((Array.isArray(rows) ? rows : []).map((x) => getRowId(x)).filter(Boolean).map(String));
     let finishedOk = false;
     let stoppedNoProgress = false;
 
     try {
       while (offset !== null && guard < 3000) {
         const res = await loadRows({
-          from: dateRange.from,
-          to: dateRange.to,
+          dateRange,
           q: (q || "").trim(),
           offset,
           append: true,
@@ -753,11 +840,20 @@ export default function Compras() {
         });
         if (!res) break;
         (res.pageIds || []).forEach((id) => seen.add(String(id)));
-        if (res.hasMore && res.appended === 0) { stoppedNoProgress = true; break; }
-        if (res.nextOffset === offset) { stoppedNoProgress = true; break; }
+        if (res.hasMore && res.appended === 0) {
+          stoppedNoProgress = true;
+          break;
+        }
+        if (res.nextOffset === offset) {
+          stoppedNoProgress = true;
+          break;
+        }
         offset = res.nextOffset;
         guard += 1;
-        if (!res.hasMore || offset === null) { finishedOk = true; break; }
+        if (!res.hasMore || offset === null) {
+          finishedOk = true;
+          break;
+        }
       }
       if (finishedOk) showToast("exito", "Listo: ya se cargaron todas.", 2600);
       else if (stoppedNoProgress) showToast("error", "Se detuvo: el backend no avanza el paginado.", 6500);
@@ -820,8 +916,7 @@ export default function Compras() {
             </div>
 
             <div className="mov-headFilters">
-
-              {/* Calendario — reemplaza el select de periodo */}
+              {/* Calendario — usa fecha global */}
               <div className="mov-filter" style={{ position: "relative" }}>
                 <label>
                   <FontAwesomeIcon icon={faCalendarDays} /> Fecha
@@ -854,7 +949,8 @@ export default function Compras() {
                     <Calendario
                       value={dateRange}
                       onChange={async (newRange) => {
-                        if (newRange.from && newRange.to) setShowCalendario(false);
+                        // ✅ cierra al completar rango
+                        if (newRange?.from && newRange?.to) setShowCalendario(false);
                         await handleDateRangeChange(newRange);
                       }}
                       onClose={() => setShowCalendario(false)}
@@ -878,8 +974,7 @@ export default function Compras() {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         skipSearchRef.current = true;
                         await loadRows({
-                          from: dateRange.from,
-                          to: dateRange.to,
+                          dateRange,
                           q: e.currentTarget.value,
                           offset: 0,
                           append: false,
@@ -899,7 +994,7 @@ export default function Compras() {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
                         skipSearchRef.current = true;
-                        await loadRows({ from: dateRange.from, to: dateRange.to, q: "", offset: 0, append: false, mode: "initial" });
+                        await loadRows({ dateRange, q: "", offset: 0, append: false, mode: "initial" });
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
                       disabled={loadingAll}
@@ -1045,9 +1140,7 @@ export default function Compras() {
                 })}
 
                 {canShowEmpty && (
-                  <div className="mov-emptyRow">
-                    No hay compras para mostrar en el rango de fechas seleccionado.
-                  </div>
+                  <div className="mov-emptyRow">No hay compras para mostrar en el rango de fechas seleccionado.</div>
                 )}
 
                 {!loadingRows && filteredRows.length > 0 && hasMore && (
@@ -1105,27 +1198,28 @@ export default function Compras() {
         lists={listasCtx || { periodos: [] }}
         row={selectedRow}
         periodoDefault={
-          dateRange.from
+          dateRange?.from
             ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}`
             : ""
         }
-        onClose={() => { setOpenEdit(false); setSelectedRow(null); }}
+        onClose={() => {
+          setOpenEdit(false);
+          setSelectedRow(null);
+        }}
         onToast={showToast}
         onSave={handleSaveEdit}
       />
 
-      <ModalVerComprobante
-        open={openVerComp}
-        url={compUrl}
-        onClose={closeComprobanteModal}
-        title="Comprobante de compra"
-      />
+      <ModalVerComprobante open={openVerComp} url={compUrl} onClose={closeComprobanteModal} title="Comprobante de compra" />
 
       <ModalEliminarMovimientos
         open={openDel}
         row={selectedRow}
         loading={deletingId !== null && String(deletingId) === String(getRowId(selectedRow))}
-        onClose={() => { setOpenDel(false); setSelectedRow(null); }}
+        onClose={() => {
+          setOpenDel(false);
+          setSelectedRow(null);
+        }}
         onConfirm={confirmDelete}
         onToast={showToast}
       />

@@ -322,7 +322,7 @@ export default function Flujo_Caja() {
                 </button>
 
                 {calOpen && (
-                  <div className="fc-calDropdown">
+                  <div className="fc-calDropdown" style={{left:"-200px"}}>
                     <Calendario
                       value={dateRange}
                       onChange={(range) => {

@@ -1,6 +1,7 @@
 // src/components/Global/Calendario/Calendario.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./calendario.css";
+import "../Global_css/Global_oscuro.css";
 
 /* =============================================
    Helpers
@@ -60,9 +61,7 @@ function buildMonthGrid(year, month) {
   const startDow = first.getDay(); // 0=Sun
   const cells = [];
 
-  // leading blanks
   for (let i = 0; i < startDow; i++) cells.push(null);
-  // days
   for (let d = 1; d <= last.getDate(); d++) cells.push(new Date(year, month, d));
 
   return cells;
@@ -74,12 +73,11 @@ function buildMonthGrid(year, month) {
      onChange: ({ from, to }) => void
      minDate?: Date
      maxDate?: Date
-     onClose?: () => void   // called when user clicks outside
+     onClose?: () => void
 ============================================= */
 export default function Calendario({ value, onChange, minDate, maxDate, onClose }) {
   const today = startOfDay(new Date());
 
-  // which month is shown (left panel)
   const [viewDate, setViewDate] = useState(() => {
     const base = value?.from ? new Date(value.from) : new Date();
     base.setDate(1);
@@ -88,21 +86,15 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
   });
 
   const rightViewDate = useMemo(() => addMonths(viewDate, 1), [viewDate]);
-
-  // hover for live range preview
   const [hovered, setHovered] = useState(null);
-
-  // double-click detection
   const lastClickRef = useRef({ day: null, time: 0 });
 
   const from = value?.from ? startOfDay(value.from) : null;
   const to = value?.to ? startOfDay(value.to) : null;
 
-  /* ---- navigation ---- */
   const prevMonth = () => setViewDate((v) => addMonths(v, -1));
   const nextMonth = () => setViewDate((v) => addMonths(v, 1));
 
-  /* ---- click logic ---- */
   const handleDayClick = useCallback((day) => {
     if (!day) return;
     const now = Date.now();
@@ -113,17 +105,13 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
     lastClickRef.current = { day, time: now };
 
     if (isDoubleClick) {
-      // double click → single day selection
       onChange({ from: startOfDay(day), to: startOfDay(day) });
       return;
     }
 
-    // single click logic
     if (!from || (from && to)) {
-      // start new range
       onChange({ from: startOfDay(day), to: null });
     } else {
-      // set end
       if (sameDay(day, from)) {
         onChange({ from: startOfDay(day), to: startOfDay(day) });
       } else if (isBefore(day, from)) {
@@ -134,7 +122,6 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
     }
   }, [from, to, onChange]);
 
-  /* ---- day cell classification ---- */
   const previewEnd = from && !to ? hovered : null;
 
   const getDayClass = useCallback((day) => {
@@ -146,7 +133,6 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
     const isFrom = from && sameDay(d, from);
     const isTo = to ? sameDay(d, to) : (previewEnd && sameDay(d, previewEnd));
 
-    // range boundary
     const rangeEnd = to || previewEnd;
     const inR = rangeEnd ? inRange(d, from, rangeEnd) : false;
 
@@ -156,18 +142,15 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
     if (isFrom && isTo) classes.push("cal-day--single");
     if (inR) classes.push("cal-day--inrange");
 
-    // edge: is first/last in range
     if (isFrom && rangeEnd && !sameDay(from, rangeEnd)) classes.push("cal-day--range-start");
     if (isTo && from && !sameDay(from, rangeEnd)) classes.push("cal-day--range-end");
 
-    // disabled
     if (minDate && isBefore(d, minDate)) classes.push("cal-day--disabled");
     if (maxDate && isAfter(d, maxDate)) classes.push("cal-day--disabled");
 
     return classes.join(" ");
   }, [from, to, previewEnd, today, minDate, maxDate]);
 
-  /* ---- outside click ---- */
   const wrapRef = useRef(null);
   useEffect(() => {
     if (!onClose) return;
@@ -178,7 +161,6 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
 
-  /* ---- render one month panel ---- */
   const renderMonth = (baseDate) => {
     const year = baseDate.getFullYear();
     const month = baseDate.getMonth();
@@ -222,19 +204,19 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
 
   return (
     <div className="cal-wrap" ref={wrapRef}>
-      {/* Header info */}
+      {/* Header */}
       <div className="cal-header">
         <div className="cal-header__slot">
           <span className="cal-header__label">Desde</span>
           <span className={`cal-header__date ${from ? "is-set" : "is-empty"}`}>
-            {from ? formatDate(from) : "—"}
+            {from ? formatDate(from) : "——/——/————"}
           </span>
         </div>
         <div className="cal-header__arrow">→</div>
         <div className="cal-header__slot">
           <span className="cal-header__label">Hasta</span>
           <span className={`cal-header__date ${rangeEnd ? "is-set" : "is-empty"}`}>
-            {rangeEnd ? formatDate(rangeEnd) : "—"}
+            {rangeEnd ? formatDate(rangeEnd) : "——/——/————"}
           </span>
         </div>
         {(from || to) && (
@@ -251,7 +233,6 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
 
       {/* Months */}
       <div className="cal-panels">
-        {/* Left nav */}
         <button type="button" className="cal-nav cal-nav--prev" onClick={prevMonth} aria-label="Mes anterior">
           ‹
         </button>
@@ -259,7 +240,6 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
         {renderMonth(viewDate)}
         {renderMonth(rightViewDate)}
 
-        {/* Right nav */}
         <button type="button" className="cal-nav cal-nav--next" onClick={nextMonth} aria-label="Mes siguiente">
           ›
         </button>
@@ -267,16 +247,16 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
 
       {/* Footer hint */}
       <div className="cal-footer">
-        {!from && <span>Hacé clic en un día para seleccionar el inicio del rango.</span>}
-        {from && !to && <span>Hacé clic en otro día para terminar el rango, o doble clic para un solo día.</span>}
+        {!from && <span>Seleccioná la fecha de inicio del período.</span>}
+        {from && !to && <span>Seleccioná la fecha de fin, o doble clic para un día exacto.</span>}
         {from && to && hasRange && (
           <span>
-            Rango seleccionado: <b>{formatDate(from)}</b> → <b>{formatDate(to)}</b>
+            Período: <b>{formatDate(from)}</b> — <b>{formatDate(to)}</b>
           </span>
         )}
         {from && to && !hasRange && (
           <span>
-            Día exacto: <b>{formatDate(from)}</b>
+            Fecha exacta: <b>{formatDate(from)}</b>
           </span>
         )}
       </div>

@@ -619,3 +619,183 @@ html[data-theme="oscuro"] .mpr-paper__inner{
   background: #fff !important;
   color: #111 !important;
 }
+/* =============================================
+   Modo oscuro
+   Se activa con: html[data-theme="oscuro"]
+============================================= */
+html[data-theme="oscuro"] .cal-wrap {
+  --mi-bg: #0f1724;
+  --mi-bg-soft: #162132;
+  --mi-border: #243246;
+  --mi-text: #e8eef7;
+  --mi-muted: #9fb0c6;
+  --mi-primary: #8eb8ff;
+  --mi-primary-600: #5d9bff;
+  --mi-shadow: 0 28px 64px -24px rgba(0, 0, 0, 0.55);
+
+  background: var(--mi-bg);
+  box-shadow:
+    0 0 0 1px var(--mi-border),
+    var(--mi-shadow);
+}
+
+/* Header */
+html[data-theme="oscuro"] .cal-header {
+  background: #0a1422;
+}
+
+html[data-theme="oscuro"] .cal-header__slot + .cal-header__slot {
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="oscuro"] .cal-header__label {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+html[data-theme="oscuro"] .cal-header__date {
+  color: #f4f8ff;
+}
+
+html[data-theme="oscuro"] .cal-header__date.is-empty {
+  color: rgba(255, 255, 255, 0.24);
+}
+
+html[data-theme="oscuro"] .cal-header__arrow {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+html[data-theme="oscuro"] .cal-clear {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.62);
+}
+
+html[data-theme="oscuro"] .cal-clear:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+/* Panels */
+html[data-theme="oscuro"] .cal-panels {
+  background: var(--mi-bg);
+}
+
+/* Nav */
+html[data-theme="oscuro"] .cal-nav {
+  background: #111b2a;
+  border-color: var(--mi-border);
+  color: #c3d1e4;
+}
+
+html[data-theme="oscuro"] .cal-nav:hover {
+  background: #182436;
+  color: #ffffff;
+  border-color: #355077;
+}
+
+/* Month */
+html[data-theme="oscuro"] .cal-month + .cal-month {
+  border-left: 1px solid var(--mi-border);
+}
+
+html[data-theme="oscuro"] .cal-month__label {
+  color: #d9e5f5;
+}
+
+/* Grid / DOW */
+html[data-theme="oscuro"] .cal-dow {
+  color: var(--mi-muted);
+}
+
+/* Días */
+html[data-theme="oscuro"] .cal-day {
+  color: var(--mi-text);
+}
+
+html[data-theme="oscuro"] .cal-day:hover:not(.cal-day--disabled):not(.cal-day--from):not(.cal-day--to) {
+  background: #192536;
+  color: #ffffff;
+}
+
+/* Today */
+html[data-theme="oscuro"] .cal-day--today:not(.cal-day--from):not(.cal-day--to) {
+  color: #6ea8ff;
+}
+
+html[data-theme="oscuro"] .cal-day--today:not(.cal-day--from):not(.cal-day--to)::after {
+  background: #6ea8ff;
+}
+
+/* In range */
+html[data-theme="oscuro"] .cal-day--inrange {
+  background: rgba(93, 155, 255, 0.16);
+  color: #eaf2ff;
+}
+
+/* Range start */
+html[data-theme="oscuro"] .cal-day--from.cal-day--range-start {
+  background: rgba(93, 155, 255, 0.16);
+  color: #ffffff;
+}
+
+html[data-theme="oscuro"] .cal-day--from.cal-day--range-start::before {
+  background: #1f5fbf;
+}
+
+/* Range end */
+html[data-theme="oscuro"] .cal-day--to.cal-day--range-end {
+  background: rgba(93, 155, 255, 0.16);
+  color: #ffffff;
+}
+
+html[data-theme="oscuro"] .cal-day--to.cal-day--range-end::before {
+  background: #1f5fbf;
+}
+
+/* Single */
+html[data-theme="oscuro"] .cal-day--from.cal-day--single,
+html[data-theme="oscuro"] .cal-day--to.cal-day--single {
+  color: #ffffff;
+}
+
+html[data-theme="oscuro"] .cal-day--from.cal-day--single::before,
+html[data-theme="oscuro"] .cal-day--to.cal-day--single::before {
+  background: #1f5fbf;
+}
+
+/* Generic from / to */
+html[data-theme="oscuro"] .cal-day--from:not(.cal-day--range-start):not(.cal-day--single),
+html[data-theme="oscuro"] .cal-day--to:not(.cal-day--range-end):not(.cal-day--single) {
+  color: #ffffff;
+}
+
+html[data-theme="oscuro"] .cal-day--from:not(.cal-day--range-start):not(.cal-day--single)::before,
+html[data-theme="oscuro"] .cal-day--to:not(.cal-day--range-end):not(.cal-day--single)::before {
+  background: #1f5fbf;
+}
+
+/* Disabled */
+html[data-theme="oscuro"] .cal-day--disabled {
+  color: #58677b !important;
+  background: transparent !important;
+}
+
+/* Footer */
+html[data-theme="oscuro"] .cal-footer {
+  background: #121c2b;
+  border-top: 1px solid var(--mi-border);
+  color: var(--mi-muted);
+}
+
+html[data-theme="oscuro"] .cal-footer b {
+  color: #eaf2ff;
+}
+
+/* Responsive dark */
+@media (max-width: 560px) {
+  html[data-theme="oscuro"] .cal-month + .cal-month {
+    border-top: 1px solid var(--mi-border);
+    border-left: none;
+  }
+}

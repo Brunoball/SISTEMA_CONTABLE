@@ -2,16 +2,6 @@
 // backend/modules/cuentas_corrientes/cuentas_corrientes.php
 declare(strict_types=1);
 
-/**
- * ✅ ACCIONES:
- * - cc_resumen  (GET)  alias: cuentas_corrientes_resumen
- * - cc_detalle  (GET)  alias: cuenta_corriente_detalle
- *
- * ✅ MULTI-TENANT:
- * - NO incluir config/db.php
- * - $pdo ya viene creado por tenant_bootstrap_or_fail() en routes/api.php
- */
-
 header('Content-Type: application/json; charset=utf-8');
 
 if (!isset($pdo) || !($pdo instanceof PDO)) {
@@ -24,39 +14,351 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
 }
 
 /* =========================
-   Response helpers
+   Helpers respuesta
 ========================= */
 function cc_ok(array $arr = []): void {
   echo json_encode(array_merge(['exito' => true], $arr), JSON_UNESCAPED_UNICODE);
   exit;
 }
+
 function cc_fail(string $msg, int $http = 200, array $extra = []): void {
   http_response_code($http);
   echo json_encode(array_merge(['exito' => false, 'mensaje' => $msg], $extra), JSON_UNESCAPED_UNICODE);
   exit;
 }
 
-/* =========================
-   Params
-========================= */
 function cc_param(string $k, $default = null) {
   return $_GET[$k] ?? $_POST[$k] ?? $default;
 }
 
-/* =========================
-   Helpers contables
-   - Detecta columnas crédito/débito por nombre
-   - Si no coincide, NO suma al saldo (pero sí muestra la columna)
-========================= */
+function cc_safe_text($v): string {
+  return trim((string)($v ?? ''));
+}
+
+function cc_like_term(string $s): string {
+  return '%' . $s . '%';
+}
+
+function cc_format_date(?string $date): string {
+  if (!$date) return '';
+  $ts = strtotime($date);
+  if (!$ts) return $date;
+  return date('d/m/Y', $ts);
+}
+
 function cc_sign_from_nombre(string $nombre): int {
   $n = mb_strtolower(trim($nombre), 'UTF-8');
-
-  // normalizo acentos rápido (por si viene "débito")
   $n = str_replace(['á','é','í','ó','ú','ü','ñ'], ['a','e','i','o','u','u','n'], $n);
 
-  if (str_contains($n, 'credito')) return +1; // suma
-  if (str_contains($n, 'debito'))  return -1; // resta
-  return 0; // otras cuentas: solo se muestran, no afectan saldo
+  if (str_contains($n, 'credito')) return +1;
+  if (str_contains($n, 'debito'))  return -1;
+  return 0;
+}
+
+/* =========================
+   Helpers búsqueda personas
+========================= */
+function cc_find_cliente_id(PDO $pdo, string $q): int
+{
+  $q = cc_safe_text($q);
+  if ($q === '') return 0;
+
+  $sql = "
+    SELECT c.id_cliente
+    FROM clientes c
+    WHERE c.activo = 1
+      AND (
+        c.nombre LIKE :q
+      )
+    ORDER BY
+      CASE WHEN c.nombre = :exacto THEN 0 ELSE 1 END,
+      c.nombre ASC
+    LIMIT 1
+  ";
+  $st = $pdo->prepare($sql);
+  $st->execute([
+    ':q' => cc_like_term($q),
+    ':exacto' => $q,
+  ]);
+  return (int)($st->fetchColumn() ?: 0);
+}
+
+function cc_find_proveedor_id(PDO $pdo, string $q): int
+{
+  $q = cc_safe_text($q);
+  if ($q === '') return 0;
+
+  $sql = "
+    SELECT p.id_proveedor
+    FROM proveedores p
+    WHERE COALESCE(p.activo, 1) = 1
+      AND (
+        COALESCE(p.razon_social, '') LIKE :q
+        OR COALESCE(p.nombre, '') LIKE :q
+      )
+    ORDER BY
+      CASE
+        WHEN COALESCE(p.razon_social, '') = :exacto THEN 0
+        WHEN COALESCE(p.nombre, '') = :exacto THEN 0
+        ELSE 1
+      END,
+      COALESCE(NULLIF(p.razon_social, ''), p.nombre) ASC
+    LIMIT 1
+  ";
+  $st = $pdo->prepare($sql);
+  $st->execute([
+    ':q' => cc_like_term($q),
+    ':exacto' => $q,
+  ]);
+  return (int)($st->fetchColumn() ?: 0);
+}
+
+/* =========================
+   Normalizar URL/archivo comprobante
+========================= */
+function cc_pick_comprobante_url(array $row): string
+{
+  $url = cc_safe_text($row['archivo_url'] ?? '');
+  $path = cc_safe_text($row['archivo_path'] ?? '');
+
+  if ($url !== '') return $url;
+  if ($path !== '') return $path;
+
+  return '';
+}
+
+/* =========================
+   Historial tipo cuenta corriente
+   - Un movimiento genera DÉBITO
+   - Un cobro del movimiento genera CRÉDITO
+========================= */
+function cc_historial_por_entidad(PDO $pdo, array $cfg): array
+{
+  $entityType      = $cfg['entityType'];      // cliente | proveedor
+  $idField         = $cfg['idField'];         // id_cliente | id_proveedor
+  $entityId        = (int)$cfg['entityId'];
+  $tipoOperacion   = (int)$cfg['tipoOperacion'];
+  $tipoVenta       = (int)$cfg['tipoVenta'];
+  $fechaDesde      = cc_safe_text($cfg['fechaDesde']);
+  $fechaHasta      = cc_safe_text($cfg['fechaHasta']);
+
+  if ($entityId <= 0) {
+    return [
+      'rows' => [],
+      'totales' => [
+        'debito' => 0,
+        'credito' => 0,
+        'saldo' => 0,
+      ],
+    ];
+  }
+
+  $whereFechasMov = "";
+  $paramsMov = [
+    ':entityId' => $entityId,
+    ':tipoOperacion' => $tipoOperacion,
+    ':tipoVenta' => $tipoVenta,
+  ];
+
+  if ($fechaDesde !== '') {
+    $whereFechasMov .= " AND m.fecha >= :fechaDesde ";
+    $paramsMov[':fechaDesde'] = $fechaDesde;
+  }
+  if ($fechaHasta !== '') {
+    $whereFechasMov .= " AND m.fecha <= :fechaHasta ";
+    $paramsMov[':fechaHasta'] = $fechaHasta;
+  }
+
+  $sqlMov = "
+    SELECT
+      m.id_movimiento,
+      m.fecha,
+      m.periodo,
+      m.monto_total,
+      m.id_cuenta_corriente,
+      m.id_detalle,
+      m.id_medio_pago
+    FROM movimientos m
+    WHERE m.{$idField} = :entityId
+      AND m.id_tipo_operacion = :tipoOperacion
+      AND m.id_tipo_venta = :tipoVenta
+      {$whereFechasMov}
+    ORDER BY m.fecha ASC, m.id_movimiento ASC
+  ";
+  $stMov = $pdo->prepare($sqlMov);
+  $stMov->execute($paramsMov);
+  $movimientos = $stMov->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+  if (!$movimientos) {
+    return [
+      'rows' => [],
+      'totales' => [
+        'debito' => 0,
+        'credito' => 0,
+        'saldo' => 0,
+      ],
+    ];
+  }
+
+  $movIds = array_map(
+    static fn($r) => (int)$r['id_movimiento'],
+    $movimientos
+  );
+  $movIds = array_values(array_filter($movIds, static fn($n) => $n > 0));
+
+  $cobrosByMov = [];
+  if ($movIds) {
+    $in = implode(',', array_fill(0, count($movIds), '?'));
+
+    $sqlCobros = "
+      SELECT
+        c.id_cobro,
+        c.id_movimiento,
+        c.fecha_cobro,
+        c.monto,
+        c.id_comprobante,
+        c.id_medio_pago,
+        ca.archivo_url,
+        ca.archivo_path,
+        ca.archivo_mime,
+        ca.archivo_size,
+        ca.tipo AS tipo_archivo
+      FROM cobros c
+      LEFT JOIN comprobantes_archivos ca
+        ON ca.id_comprobante = c.id_comprobante
+      WHERE c.id_movimiento IN ($in)
+      ORDER BY c.fecha_cobro ASC, c.id_cobro ASC
+    ";
+
+    $stCob = $pdo->prepare($sqlCobros);
+    $stCob->execute($movIds);
+    $cobros = $stCob->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    foreach ($cobros as $c) {
+      $mid = (int)($c['id_movimiento'] ?? 0);
+      if ($mid <= 0) continue;
+      if (!isset($cobrosByMov[$mid])) $cobrosByMov[$mid] = [];
+      $cobrosByMov[$mid][] = $c;
+    }
+  }
+
+  $ledger = [];
+
+  foreach ($movimientos as $m) {
+    $idMov   = (int)($m['id_movimiento'] ?? 0);
+    $fecha   = (string)($m['fecha'] ?? '');
+    $periodo = cc_safe_text($m['periodo'] ?? '');
+    $monto   = (float)($m['monto_total'] ?? 0);
+
+    $comprobanteMovimiento = $entityType === 'cliente'
+      ? 'Factura / Movimiento #' . $idMov
+      : 'Comprobante / Movimiento #' . $idMov;
+
+    if ($periodo !== '') {
+      $comprobanteMovimiento .= ' · ' . $periodo;
+    }
+
+    // ✅ fila DÉBITO
+    $ledger[] = [
+      'tipo_registro'   => 'movimiento',
+      'id'              => 'mov_' . $idMov,
+      'id_movimiento'   => $idMov,
+      'id_cobro'        => null,
+      'id_comprobante'  => null,
+      'fecha_raw'       => $fecha,
+      'fecha'           => cc_format_date($fecha),
+      'comprobante'     => $comprobanteMovimiento,
+      'detalle'         => $entityType === 'cliente'
+        ? 'Cargo generado al cliente'
+        : 'Cargo generado al proveedor',
+      'debito'          => $monto,
+      'credito'         => 0,
+      'comprobante_url' => '',
+      'comprobante_mime'=> '',
+      'sort_fecha'      => $fecha ?: '0000-00-00',
+      'sort_tipo'       => 1,
+      'meta'            => [
+        'periodo' => $periodo,
+        'id_detalle' => $m['id_detalle'] ?? null,
+        'id_medio_pago' => $m['id_medio_pago'] ?? null,
+      ],
+    ];
+
+    // ✅ filas CRÉDITO por cobros
+    $cobrosDelMovimiento = $cobrosByMov[$idMov] ?? [];
+    foreach ($cobrosDelMovimiento as $c) {
+      $fechaCobro      = (string)($c['fecha_cobro'] ?? '');
+      $montoCobro      = (float)($c['monto'] ?? 0);
+      $idCobro         = (int)($c['id_cobro'] ?? 0);
+      $idComprobante   = (int)($c['id_comprobante'] ?? 0);
+      $comprobanteUrl  = cc_pick_comprobante_url($c);
+      $comprobanteMime = cc_safe_text($c['archivo_mime'] ?? '');
+
+      $ledger[] = [
+        'tipo_registro'   => 'cobro',
+        'id'              => 'cob_' . $idCobro,
+        'id_movimiento'   => $idMov,
+        'id_cobro'        => $idCobro,
+        'id_comprobante'  => $idComprobante > 0 ? $idComprobante : null,
+        'fecha_raw'       => $fechaCobro,
+        'fecha'           => cc_format_date($fechaCobro),
+        'comprobante'     => 'Recibo X-' . str_pad((string)$idCobro, 3, '0', STR_PAD_LEFT),
+        'detalle'         => 'Cancelación / pago del movimiento #' . $idMov,
+        'debito'          => 0,
+        'credito'         => $montoCobro,
+        'comprobante_url' => $comprobanteUrl,
+        'comprobante_mime'=> $comprobanteMime,
+        'sort_fecha'      => $fechaCobro ?: '0000-00-00',
+        'sort_tipo'       => 2,
+        'meta'            => [
+          'id_comprobante' => $c['id_comprobante'] ?? null,
+          'id_medio_pago'  => $c['id_medio_pago'] ?? null,
+          'archivo_url'    => $c['archivo_url'] ?? null,
+          'archivo_path'   => $c['archivo_path'] ?? null,
+          'archivo_mime'   => $c['archivo_mime'] ?? null,
+          'archivo_size'   => $c['archivo_size'] ?? null,
+          'tipo_archivo'   => $c['tipo_archivo'] ?? null,
+        ],
+      ];
+    }
+  }
+
+  usort($ledger, static function(array $a, array $b): int {
+    $cmpFecha = strcmp((string)$a['sort_fecha'], (string)$b['sort_fecha']);
+    if ($cmpFecha !== 0) return $cmpFecha;
+
+    $cmpTipo = ((int)$a['sort_tipo']) <=> ((int)$b['sort_tipo']);
+    if ($cmpTipo !== 0) return $cmpTipo;
+
+    return strcmp((string)$a['id'], (string)$b['id']);
+  });
+
+  $saldo = 0.0;
+  $debitoTotal = 0.0;
+  $creditoTotal = 0.0;
+  $rows = [];
+
+  foreach ($ledger as $r) {
+    $debito = (float)($r['debito'] ?? 0);
+    $credito = (float)($r['credito'] ?? 0);
+
+    $debitoTotal += $debito;
+    $creditoTotal += $credito;
+    $saldo += $debito - $credito;
+
+    $r['saldo'] = $saldo;
+    unset($r['sort_fecha'], $r['sort_tipo']);
+    $rows[] = $r;
+  }
+
+  return [
+    'rows' => $rows,
+    'totales' => [
+      'debito' => $debitoTotal,
+      'credito' => $creditoTotal,
+      'saldo' => $saldo,
+    ],
+  ];
 }
 
 /* =========================
@@ -66,24 +368,17 @@ $action = $_GET['action'] ?? $_POST['action'] ?? '';
 $action = is_string($action) ? trim($action) : '';
 
 try {
-  // ✅ ERRMODE por si no viene seteado en bootstrap
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
 
-  // ✅ alias
+  // alias viejos
   if ($action === 'cuentas_corrientes_resumen') $action = 'cc_resumen';
   if ($action === 'cuenta_corriente_detalle')  $action = 'cc_detalle';
 
   /* =========================================================
-     ✅ RESUMEN HISTÓRICO (SIN PERÍODO):
-     - Columnas = TODOS los registros de cuentas_corrientes (activo=1)
-     - Celdas = SUM(m.movimientos.monto_total) agrupado por cliente + cuenta
-     - Saldo = suma de cuentas con "credito" - suma de cuentas con "debito"
-       (detectado por nombre en cuentas_corrientes)
+     RESUMEN HISTÓRICO GENERAL
   ========================================================= */
   if ($action === 'cc_resumen') {
-
-    // 1) traer cuentas corrientes (para columnas)
     $stC = $pdo->query("
       SELECT id_cuenta_corriente, nombre
       FROM cuentas_corrientes
@@ -92,7 +387,6 @@ try {
     ");
     $cuentas = $stC->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    // map id => nombre, y signo para saldo
     $ccName = [];
     $ccSign = [];
     foreach ($cuentas as $c) {
@@ -104,7 +398,6 @@ try {
       }
     }
 
-    // si no hay cuentas, devolvemos vacío
     if (count($ccName) === 0) {
       cc_ok([
         'cuentas' => [],
@@ -114,7 +407,6 @@ try {
       ]);
     }
 
-    // 2) traer todos los clientes activos
     $stCli = $pdo->query("
       SELECT id_cliente, nombre
       FROM clientes
@@ -123,7 +415,6 @@ try {
     ");
     $clientes = $stCli->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    // 3) traer movimientos agrupados por cliente + cuenta (HISTÓRICO, sin periodo)
     $sqlMov = "
       SELECT
         m.id_cliente,
@@ -138,7 +429,6 @@ try {
     $stM->execute();
     $movAgg = $stM->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    // index: clienteId => (cuentaId => total)
     $idx = [];
     foreach ($movAgg as $r) {
       $cid = (int)($r['id_cliente'] ?? 0);
@@ -146,15 +436,14 @@ try {
       $tot = (float)($r['total'] ?? 0);
 
       if ($cid <= 0 || $ccid <= 0) continue;
-      if (!isset($ccName[$ccid])) continue; // solo cuentas activas conocidas
+      if (!isset($ccName[$ccid])) continue;
 
       if (!isset($idx[$cid])) $idx[$cid] = [];
       $idx[$cid][$ccid] = $tot;
     }
 
-    // 4) armar salida: filas con columnas completas (todas las cuentas)
     $rowsOut = [];
-    $totCols = []; // cuentaId => total
+    $totCols = [];
     foreach (array_keys($ccName) as $ccid) $totCols[$ccid] = 0.0;
     $totSaldo = 0.0;
 
@@ -169,11 +458,8 @@ try {
       foreach ($ccName as $ccid => $_nm) {
         $val = (float)($idx[$cid][$ccid] ?? 0.0);
         $cols[(string)$ccid] = $val;
-
-        // total por columna
         $totCols[$ccid] += $val;
 
-        // saldo según signo (credito +, debito -)
         $sgn = (int)($ccSign[$ccid] ?? 0);
         if ($sgn !== 0) $saldo += ($sgn * $val);
       }
@@ -188,13 +474,12 @@ try {
       ];
     }
 
-    // 5) devolver
     $cuentasOut = [];
     foreach ($ccName as $ccid => $nm) {
       $cuentasOut[] = [
         'id_cuenta_corriente' => (int)$ccid,
         'nombre' => (string)$nm,
-        'signo_saldo' => (int)($ccSign[$ccid] ?? 0), // útil para debug
+        'signo_saldo' => (int)($ccSign[$ccid] ?? 0),
       ];
     }
 
@@ -210,14 +495,14 @@ try {
   }
 
   /* =========================================================
-     ✅ DETALLE por cliente (HISTÓRICO, sin período)
+     DETALLE SIMPLE VIEJO
   ========================================================= */
   if ($action === 'cc_detalle') {
-
     $idCliente = (int)cc_param('id_cliente', 0);
-    if ($idCliente <= 0) cc_fail('Falta id_cliente válido.', 200, ['id_recibido' => $idCliente]);
+    if ($idCliente <= 0) {
+      cc_fail('Falta id_cliente válido.', 200, ['id_recibido' => $idCliente]);
+    }
 
-    // map cuentas activas y signo por nombre
     $stC = $pdo->query("
       SELECT id_cuenta_corriente, nombre
       FROM cuentas_corrientes
@@ -280,6 +565,72 @@ try {
       'saldo_final' => $saldo,
       'total_movimientos' => count($detalle),
     ]);
+  }
+
+  /* =========================================================
+     NUEVO: HISTORIAL CLIENTE
+  ========================================================= */
+  if ($action === 'cc_historial_cliente') {
+    $idCliente = (int)cc_param('id_cliente', 0);
+    $q = cc_safe_text((string)cc_param('q', ''));
+    $fechaDesde = cc_safe_text((string)cc_param('fecha_desde', ''));
+    $fechaHasta = cc_safe_text((string)cc_param('fecha_hasta', ''));
+
+    if ($idCliente <= 0 && $q !== '') {
+      $idCliente = cc_find_cliente_id($pdo, $q);
+    }
+
+    if ($idCliente <= 0) {
+      cc_ok([
+        'rows' => [],
+        'totales' => ['debito' => 0, 'credito' => 0, 'saldo' => 0],
+      ]);
+    }
+
+    $data = cc_historial_por_entidad($pdo, [
+      'entityType'    => 'cliente',
+      'idField'       => 'id_cliente',
+      'entityId'      => $idCliente,
+      'tipoOperacion' => 1,
+      'tipoVenta'     => 2,
+      'fechaDesde'    => $fechaDesde,
+      'fechaHasta'    => $fechaHasta,
+    ]);
+
+    cc_ok($data);
+  }
+
+  /* =========================================================
+     NUEVO: HISTORIAL PROVEEDOR
+  ========================================================= */
+  if ($action === 'cc_historial_proveedor') {
+    $idProveedor = (int)cc_param('proveedor_id', 0);
+    $q = cc_safe_text((string)cc_param('q', ''));
+    $fechaDesde = cc_safe_text((string)cc_param('fecha_desde', ''));
+    $fechaHasta = cc_safe_text((string)cc_param('fecha_hasta', ''));
+
+    if ($idProveedor <= 0 && $q !== '') {
+      $idProveedor = cc_find_proveedor_id($pdo, $q);
+    }
+
+    if ($idProveedor <= 0) {
+      cc_ok([
+        'rows' => [],
+        'totales' => ['debito' => 0, 'credito' => 0, 'saldo' => 0],
+      ]);
+    }
+
+    $data = cc_historial_por_entidad($pdo, [
+      'entityType'    => 'proveedor',
+      'idField'       => 'id_proveedor',
+      'entityId'      => $idProveedor,
+      'tipoOperacion' => 2,
+      'tipoVenta'     => 2,
+      'fechaDesde'    => $fechaDesde,
+      'fechaHasta'    => $fechaHasta,
+    ]);
+
+    cc_ok($data);
   }
 
   cc_fail('Acción no soportada en cuentas_corrientes.php', 200, ['action' => $action]);

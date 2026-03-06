@@ -1,19 +1,5 @@
 // ✅ REEMPLAZAR COMPLETO
 // src/components/Cuentas_Corrientes/Proveedores/Proveedores.jsx
-// ✅ Buscador IGUAL al Modal (como ClientesCC corregido):
-// - Sugerencias CLIENT-SIDE desde ListasContext.lists.proveedores
-// - Filtro: toLowerCase().includes()
-// - Dropdown: onMouseDown + blur con delay
-// - Al seleccionar: carga historial automáticamente
-// - Botón Buscar: opcional (usa selected si existe, si no usa texto)
-
-// 🔥 IMPORTANTE BACKEND:
-// Este componente usa action=cc_historial_proveedor y envía proveedor_id (id_proveedor).
-// Asegurate que tu backend soporte:
-//   - action=cc_historial_proveedor
-//   - proveedor_id
-//   - fecha_desde / fecha_hasta
-// y devuelva { exito:true, rows:[], totales:{saldo:...} }
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
@@ -27,10 +13,12 @@ import {
   faMagnifyingGlass,
   faTimes,
   faChevronDown,
+  faEye,
 } from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../../Global/Toast.jsx";
 import Calendario from "../../Global/Calendario/Calendario.jsx";
+import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 
@@ -70,8 +58,53 @@ function normLower(s) {
   return safeText(s).toLowerCase();
 }
 
+function formatDisplayDate(value) {
+  const v = safeText(value);
+  if (!v) return "";
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(v)) return v;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const [y, m, d] = v.split("-");
+    return `${d}/${m}/${y}`;
+  }
+  return v;
+}
+
+function getBaseOrigin() {
+  try {
+    return new URL(BASE_URL, window.location.origin).origin;
+  } catch {
+    return window.location.origin;
+  }
+}
+
+function resolveFileUrl(rawUrl) {
+  const url = safeText(rawUrl);
+  if (!url) return "";
+
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("data:") ||
+    url.startsWith("blob:")
+  ) {
+    return url;
+  }
+
+  const origin = getBaseOrigin();
+  if (url.startsWith("/")) return `${origin}${url}`;
+
+  return `${origin}/${url.replace(/^\.?\//, "")}`;
+}
+
+function canPreviewComprobante(row) {
+  return (
+    Number(row?.credito || 0) > 0 &&
+    (safeText(row?.comprobante_url) !== "" || Number(row?.id_comprobante || 0) > 0)
+  );
+}
+
 /* =========================
-   Auth (X-Session)
+   Auth
 ========================= */
 function buildHeadersGET() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
@@ -102,7 +135,7 @@ async function apiGet(url) {
 }
 
 /* =========================
-   Proveedores (id + label) robusto
+   Proveedor helpers
 ========================= */
 function getProveedorId(p) {
   const cand =
@@ -118,7 +151,6 @@ function getProveedorId(p) {
 }
 
 function getProveedorLabel(p) {
-  // si viene razon_social/nombre/label/descripcion
   const parts = [
     p?.razon_social,
     p?.razonSocial,
@@ -135,38 +167,42 @@ function getProveedorLabel(p) {
   return parts[0] || "";
 }
 
+function makeComprobanteAccessUrl(row, API) {
+  const idComprobante = Number(row?.id_comprobante || 0);
+  if (idComprobante > 0) {
+    return `${API}?action=comprobantes_descargar&id_comprobante=${idComprobante}`;
+  }
+
+  return resolveFileUrl(row?.comprobante_url);
+}
+
 /* =========================
    Component
 ========================= */
 export default function ProveedoresCC() {
   const API = `${BASE_URL}/api.php`;
 
-  // ✅ listas globales (para sugerencias tipo modal)
   const { lists: listasCtx, loadingLists, errorLists, ensureListsLoaded } = useListas();
-
-  // ✅ rango global
   const { dateRange, setDateRange } = useDateRange();
-  const [calOpen, setCalOpen] = useState(false);
 
-  // UI
+  const [calOpen, setCalOpen] = useState(false);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // ✅ selección actual
-  const [selected, setSelected] = useState(null); // {id,label}
-
-  // ✅ tabla vacía hasta buscar
+  const [selected, setSelected] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [queryUsed, setQueryUsed] = useState("");
-
-  // dropdown (igual modal)
   const [openSug, setOpenSug] = useState(false);
 
-  // datos
   const [rows, setRows] = useState([]);
-  const [totales, setTotales] = useState({ saldo: 0 });
+  const [totales, setTotales] = useState({ debito: 0, credito: 0, saldo: 0 });
 
-  // toast
+  const [previewComprobante, setPreviewComprobante] = useState({
+    open: false,
+    url: "",
+    mime: "",
+    title: "Comprobante",
+  });
+
   const [toast, setToast] = useState(null);
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => setToast({ tipo, mensaje, duracion }),
@@ -174,11 +210,9 @@ export default function ProveedoresCC() {
   );
   const closeToast = useCallback(() => setToast(null), []);
 
-  // asegurar listas
   useEffect(() => {
     ensureListsLoaded?.({ force: false, background: true }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ensureListsLoaded]);
 
   const rangeLabel = useMemo(() => {
     const from = dateRange?.from || null;
@@ -188,9 +222,6 @@ export default function ProveedoresCC() {
     return `${formatDateLabel(from)} → ${formatDateLabel(to)}`;
   }, [dateRange]);
 
-  /* =========================
-     Proveedores list (autocompletar)
-  ========================= */
   const proveedoresList = useMemo(() => {
     const arr = Array.isArray(listasCtx?.proveedores) ? listasCtx.proveedores : [];
     return arr
@@ -202,20 +233,12 @@ export default function ProveedoresCC() {
       .filter((x) => safeText(x.label).length > 0);
   }, [listasCtx?.proveedores]);
 
-  /* =========================
-     Sugerencias (igual ModalNuevaVenta)
-  ========================= */
   const suggestions = useMemo(() => {
     const needle = normLower(q);
     if (!openSug || needle.length < 1) return [];
-    return proveedoresList
-      .filter((p) => normLower(p.label).includes(needle))
-      .slice(0, 25);
+    return proveedoresList.filter((p) => normLower(p.label).includes(needle)).slice(0, 25);
   }, [proveedoresList, q, openSug]);
 
-  /* =========================
-     Al escribir: invalida selección previa
-  ========================= */
   useEffect(() => {
     const text = safeText(q);
     setSelected((prev) => {
@@ -225,9 +248,6 @@ export default function ProveedoresCC() {
     });
   }, [q]);
 
-  /* =========================
-     Buscar historial
-  ========================= */
   const loadHistorial = useCallback(
     async (proveedorId, proveedorLabel) => {
       if (!dateRange?.from) {
@@ -251,7 +271,6 @@ export default function ProveedoresCC() {
         const sp = new URLSearchParams();
         sp.set("action", "cc_historial_proveedor");
 
-        // ✅ preferimos ID si existe (como cliente)
         if (idOk) sp.set("proveedor_id", String(proveedorId));
         else sp.set("q", txt);
 
@@ -265,10 +284,10 @@ export default function ProveedoresCC() {
         }
 
         setRows(Array.isArray(data.rows) ? data.rows : []);
-        setTotales(data.totales || { saldo: 0 });
+        setTotales(data.totales || { debito: 0, credito: 0, saldo: 0 });
       } catch (e) {
         setRows([]);
-        setTotales({ saldo: 0 });
+        setTotales({ debito: 0, credito: 0, saldo: 0 });
         showToast("error", e?.message || "Error inesperado", 4200);
       } finally {
         setLoading(false);
@@ -277,10 +296,9 @@ export default function ProveedoresCC() {
     [API, dateRange, showToast]
   );
 
-  // ✅ cambia período => vuelve a vacío
   useEffect(() => {
     setRows([]);
-    setTotales({ saldo: 0 });
+    setTotales({ debito: 0, credito: 0, saldo: 0 });
     setHasSearched(false);
     setQueryUsed("");
     setSelected(null);
@@ -288,9 +306,6 @@ export default function ProveedoresCC() {
     setOpenSug(false);
   }, [dateRange]);
 
-  /* =========================
-     Selección (igual patrón modal)
-  ========================= */
   const handleSelect = useCallback(
     (opt) => {
       if (!opt) return;
@@ -298,8 +313,6 @@ export default function ProveedoresCC() {
       setSelected(sel);
       setQ(opt.label);
       setOpenSug(false);
-
-      // 🔥 automático
       loadHistorial(opt.id, opt.label);
     },
     [loadHistorial]
@@ -330,9 +343,6 @@ export default function ProveedoresCC() {
     [openSug, suggestions, handleSelect, q, selected, loadHistorial, showToast]
   );
 
-  /* =========================
-     Excel
-  ========================= */
   const exportExcel = useCallback(() => {
     if (!hasSearched || !rows.length) {
       showToast("advertencia", "Primero seleccioná un proveedor y cargá resultados.", 2500);
@@ -343,26 +353,26 @@ export default function ProveedoresCC() {
       showToast("cargando", "Generando Excel…", 9000);
 
       const data = rows.map((r) => ({
-        Fecha: r.fecha || r.fecha_mov || "",
-        Tipo: r.tipo || r.movimiento || "",
-        Comprobante: r.comprobante || r.numero || "",
-        Débito: Number(r.debito || 0),
-        Crédito: Number(r.credito || 0),
+        Fecha: formatDisplayDate(r.fecha || r.fecha_raw || ""),
+        Comprobante: r.comprobante || "",
+        Detalle: r.detalle || "",
+        "Débito (Debe)": Number(r.debito || 0),
+        "Crédito (Haber)": Number(r.credito || 0),
         Saldo: Number(r.saldo || 0),
       }));
 
       const ws = XLSX.utils.json_to_sheet(data);
       ws["!cols"] = [
-        { wch: 12 },
+        { wch: 14 },
+        { wch: 28 },
+        { wch: 28 },
         { wch: 16 },
-        { wch: 22 },
-        { wch: 14 },
-        { wch: 14 },
-        { wch: 14 },
+        { wch: 16 },
+        { wch: 16 },
       ];
 
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Historial Proveedor");
+      XLSX.utils.book_append_sheet(wb, ws, "Cuenta Corriente Proveedor");
 
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
       const safeName = String(queryUsed || "proveedor").replace(/[^\w.-]+/g, "_");
@@ -374,11 +384,51 @@ export default function ProveedoresCC() {
     }
   }, [hasSearched, rows, queryUsed, showToast]);
 
+  const openComprobante = useCallback(
+    (row) => {
+      const accessUrl = makeComprobanteAccessUrl(row, API);
+      const mime = safeText(row?.comprobante_mime);
+
+      if (!accessUrl) {
+        showToast("advertencia", "Este cobro no tiene comprobante asociado.", 2600);
+        return;
+      }
+
+      setPreviewComprobante({
+        open: true,
+        url: accessUrl,
+        mime,
+        title: row?.comprobante ? `Comprobante · ${row.comprobante}` : "Comprobante",
+      });
+    },
+    [API, showToast]
+  );
+
   return (
     <div style={{ padding: 12 }}>
       {toast && (
-        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
       )}
+
+      <ModalVerComprobante
+        open={previewComprobante.open}
+        url={previewComprobante.url}
+        mime={previewComprobante.mime}
+        title={previewComprobante.title}
+        onClose={() =>
+          setPreviewComprobante({
+            open: false,
+            url: "",
+            mime: "",
+            title: "Comprobante",
+          })
+        }
+      />
 
       {errorLists && (
         <div className="cc-footnote" style={{ marginBottom: 10 }}>
@@ -398,7 +448,6 @@ export default function ProveedoresCC() {
       <div className="cc-card__head" style={{ paddingTop: 10 }}>
         <div className="cc-card__headLeft" style={{ width: "100%" }}>
           <div className="cc-headFilters" style={{ width: "100%" }}>
-            {/* Período */}
             <div className="cc-filter cc-filter--cal" style={{ position: "relative" }}>
               <label>
                 <FontAwesomeIcon icon={faCalendarDays} /> Período
@@ -428,7 +477,6 @@ export default function ProveedoresCC() {
               )}
             </div>
 
-            {/* Buscar proveedor (autocomplete igual modal) */}
             <div
               className="cc-filter cc-filter--search"
               style={{ minWidth: 360, flex: 1, position: "relative" }}
@@ -463,7 +511,6 @@ export default function ProveedoresCC() {
                     <FontAwesomeIcon icon={faChevronDown} />
                   </span>
 
-                  {/* Dropdown */}
                   {openSug && suggestions.length > 0 && (
                     <div
                       style={{
@@ -542,19 +589,13 @@ export default function ProveedoresCC() {
                   <FontAwesomeIcon icon={faMagnifyingGlass} /> Buscar
                 </button>
               </div>
-
-              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
-                * Seleccioná una opción del desplegable para cargar el historial.
-              </div>
             </div>
 
             <button
               className="cc-btnex cc-btn--excel"
               onClick={exportExcel}
               disabled={loading || !hasSearched || !rows.length}
-              title={
-                !hasSearched ? "Seleccioná un proveedor primero" : rows.length ? "Exportar a Excel" : "No hay datos"
-              }
+              title={!hasSearched ? "Seleccioná un proveedor primero" : rows.length ? "Exportar a Excel" : "No hay datos"}
             >
               <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
             </button>
@@ -562,7 +603,6 @@ export default function ProveedoresCC() {
         </div>
       </div>
 
-      {/* TABLA */}
       {!hasSearched ? (
         <div style={{ padding: 16 }}>
           <div className="cc-footnote">
@@ -570,70 +610,135 @@ export default function ProveedoresCC() {
           </div>
         </div>
       ) : loading ? (
-        <div style={{ padding: 16 }}>Cargando historial del proveedor…</div>
+        <div style={{ padding: 16 }}>Cargando cuenta corriente del proveedor…</div>
       ) : rows.length === 0 ? (
         <div style={{ padding: 16 }}>
           <div className="cc-emptyRow">No se encontraron movimientos para “{queryUsed}”.</div>
         </div>
       ) : (
-        <div className="cc-tableWrap" style={{ marginTop: 10 }}>
+        <div
+          style={{
+            marginTop: 12,
+            background: "#fff",
+            borderRadius: 16,
+            overflow: "hidden",
+            boxShadow: "0 8px 28px rgba(0,0,0,.08)",
+            border: "1px solid rgba(0,0,0,.08)",
+          }}
+        >
           <div
-            className="cc-grid cc-grid--head"
-            style={{ gridTemplateColumns: "120px 160px 1fr 160px 160px 160px" }}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "130px 1.4fr 160px 160px 160px 90px",
+              gap: 0,
+              background: "#f3f4f6",
+              borderBottom: "1px solid rgba(0,0,0,.08)",
+              fontWeight: 700,
+              color: "#333",
+            }}
           >
-            <div className="cc-cell">FECHA</div>
-            <div className="cc-cell">TIPO</div>
-            <div className="cc-cell">DETALLE</div>
-            <div className="cc-cell is-center" style={{ fontWeight: 700 }}>
-              DÉBITO
-            </div>
-            <div className="cc-cell is-center" style={{ fontWeight: 700 }}>
-              CRÉDITO
-            </div>
-            <div className="cc-cell is-center" style={{ fontWeight: 700 }}>
-              SALDO
-            </div>
+            <div style={{ padding: "14px 16px" }}>Fecha</div>
+            <div style={{ padding: "14px 16px" }}>Comprobante</div>
+            <div style={{ padding: "14px 16px", textAlign: "right" }}>Débito (Debe)</div>
+            <div style={{ padding: "14px 16px", textAlign: "right" }}>Crédito (Haber)</div>
+            <div style={{ padding: "14px 16px", textAlign: "right" }}>Saldo</div>
+            <div style={{ padding: "14px 16px", textAlign: "center" }}>Ver</div>
           </div>
 
-          <div className="cc-gridBody" role="rowgroup">
-            {rows.map((r, i) => (
-              <div
-                key={r.id_mov || r.id || `${i}`}
-                className="cc-grid cc-grid--row"
-                style={{ gridTemplateColumns: "120px 160px 1fr 160px 160px 160px" }}
-              >
-                <div className="cc-cell">{r.fecha || r.fecha_mov || ""}</div>
-                <div className="cc-cell">{r.tipo || r.movimiento || ""}</div>
-                <div className="cc-cell" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {r.detalle || r.descripcion || r.comprobante || r.numero || "-"}
-                </div>
-                <div className="cc-cell cc-num is-center is-negative">{moneyARS(r.debito || 0)}</div>
-                <div className="cc-cell cc-num is-center is-positive">{moneyARS(r.credito || 0)}</div>
-                <div className="cc-cell cc-num is-center cc-saldo">
-                  <b>{moneyARS(r.saldo || 0)}</b>
-                </div>
-              </div>
-            ))}
+          {rows.map((r, i) => {
+            const verHabilitado = canPreviewComprobante(r);
 
-            <div
-              className="cc-grid cc-grid--tfoot"
-              style={{ gridTemplateColumns: "120px 160px 1fr 160px 160px 160px" }}
-            >
-              <div className="cc-cell cc-tfootLabel" style={{ gridColumn: "1 / 4" }}>
-                Total / Saldo final
+            return (
+              <div
+                key={r.id || `${i}`}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "130px 1.4fr 160px 160px 160px 90px",
+                  borderBottom: i === rows.length - 1 ? "none" : "1px solid rgba(0,0,0,.06)",
+                  alignItems: "center",
+                  background: i % 2 === 0 ? "#fff" : "#fcfcfd",
+                }}
+              >
+                <div style={{ padding: "14px 16px", color: "#444" }}>
+                  {formatDisplayDate(r.fecha || r.fecha_raw)}
+                </div>
+
+                <div style={{ padding: "14px 16px" }}>
+                  <div style={{ fontWeight: 600, color: "#2d2d2d" }}>{r.comprobante || "-"}</div>
+                  {r.detalle ? (
+                    <div style={{ fontSize: 12, opacity: 0.72, marginTop: 3 }}>{r.detalle}</div>
+                  ) : null}
+                </div>
+
+                <div style={{ padding: "14px 16px", textAlign: "right", color: Number(r.debito || 0) > 0 ? "#1f2937" : "#9ca3af" }}>
+                  {Number(r.debito || 0) > 0 ? moneyARS(r.debito || 0) : ""}
+                </div>
+
+                <div style={{ padding: "14px 16px", textAlign: "right", color: Number(r.credito || 0) > 0 ? "#1f2937" : "#9ca3af" }}>
+                  {Number(r.credito || 0) > 0 ? moneyARS(r.credito || 0) : ""}
+                </div>
+
+                <div style={{ padding: "14px 16px", textAlign: "right", fontWeight: 700, color: "#111827" }}>
+                  {moneyARS(r.saldo || 0)}
+                </div>
+
+                <div style={{ padding: "14px 16px", textAlign: "center", display: "flex", justifyContent: "center" }}>
+                  <button
+                    type="button"
+                    onClick={() => verHabilitado && openComprobante(r)}
+                    disabled={!verHabilitado}
+                    title={
+                      verHabilitado
+                        ? "Ver comprobante"
+                        : Number(r.credito || 0) > 0
+                        ? "Este cobro no tiene comprobante"
+                        : "Solo disponible en registros de crédito"
+                    }
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      border: "1px solid rgba(0,0,0,.12)",
+                      background: verHabilitado ? "#fff" : "#f3f4f6",
+                      color: verHabilitado ? "#111827" : "#9ca3af",
+                      cursor: verHabilitado ? "pointer" : "not-allowed",
+                      opacity: verHabilitado ? 1 : 0.7,
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faEye} />
+                  </button>
+                </div>
               </div>
-              <div className="cc-cell cc-num is-center is-negative">-</div>
-              <div className="cc-cell cc-num is-center is-positive">-</div>
-              <div className="cc-cell cc-num is-center cc-saldo">
-                <b>{moneyARS(totales?.saldo || 0)}</b>
-              </div>
+            );
+          })}
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "130px 1.4fr 160px 160px 160px 90px",
+              background: "#f8fafc",
+              borderTop: "1px solid rgba(0,0,0,.08)",
+              fontWeight: 700,
+            }}
+          >
+            <div style={{ padding: "14px 16px" }} />
+            <div style={{ padding: "14px 16px" }}>Totales</div>
+            <div style={{ padding: "14px 16px", textAlign: "right" }}>
+              {moneyARS(totales?.debito || 0)}
             </div>
+            <div style={{ padding: "14px 16px", textAlign: "right" }}>
+              {moneyARS(totales?.credito || 0)}
+            </div>
+            <div style={{ padding: "14px 16px", textAlign: "right" }}>
+              {moneyARS(totales?.saldo || 0)}
+            </div>
+            <div style={{ padding: "14px 16px" }} />
           </div>
         </div>
       )}
 
       <div className="cc-footnote" style={{ marginTop: 10 }}>
-        * Historial por proveedor: se carga automáticamente al seleccionar del desplegable.
+        * Débito = movimiento cargado al proveedor • Crédito = cobro registrado • Saldo = acumulado.
       </div>
     </div>
   );

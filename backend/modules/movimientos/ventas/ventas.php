@@ -15,7 +15,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
 }
 
 // ✅ multi-tenant: $pdo viene desde routes/api.php (tenant_resolver)
-require_once __DIR__ . '/../utils/auditoria.php';
+require_once __DIR__ . '/../../utils/auditoria.php';
 
 /* ----------------- Helpers ----------------- */
 function ok(array $arr = []): void {
@@ -864,6 +864,61 @@ function ventas_eliminar(PDO $pdo): void {
   }
 }
 
+function facturacion_config_get(PDO $pdo): void
+{
+    header('Content-Type: application/json; charset=utf-8');
+
+    try {
+        $sql = "
+            SELECT
+                idConfigFacturacion,
+                razon_social,
+                nombre_fantasia,
+                cuit,
+                ingresos_brutos,
+                condicion_iva,
+                domicilio_comercial,
+                fecha_inicio_actividades,
+                punto_venta,
+                tipo_comprobante_default,
+                codigo_comprobante,
+                email_facturacion,
+                telefono_facturacion,
+                sitio_web,
+                logo_url,
+                activo
+            FROM config_facturacion
+            WHERE activo = 1
+            ORDER BY idConfigFacturacion DESC
+            LIMIT 1
+        ";
+
+        $st = $pdo->query($sql);
+        $row = $st ? $st->fetch(PDO::FETCH_ASSOC) : false;
+
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode([
+                'exito' => false,
+                'mensaje' => 'No hay configuración de facturación activa.'
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        echo json_encode([
+            'exito' => true,
+            'config' => $row
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        http_response_code(500);
+        echo json_encode([
+            'exito' => false,
+            'mensaje' => 'Error obteniendo config_facturacion.',
+            'error' => $e->getMessage()
+        ], JSON_UNESCAPED_UNICODE);
+    }
+}
+
 /* =========================================================
    DISPATCH
 ========================================================= */
@@ -891,6 +946,10 @@ try {
     case 'ventas_eliminar':
       ventas_eliminar($pdo);
       break;
+
+    case 'config_facturacion_get':
+      facturacion_config_get($pdo);
+      exit;
 
     default:
       fail('Acción no válida en ventas: ' . $action);

@@ -1,11 +1,10 @@
 <?php
 // backend/modules/movimientos/comprobantes.php
-declare(strict_types=1);
 
 /* =========================================================
    CORS ROBUSTO
 ========================================================= */
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
 if (!headers_sent()) {
   if ($origin !== '') {
     header("Access-Control-Allow-Origin: $origin");
@@ -19,7 +18,7 @@ if (!headers_sent()) {
   header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 }
 
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   http_response_code(204);
   exit;
 }
@@ -27,46 +26,75 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
 /* =========================================================
    RESP JSON
 ========================================================= */
-function comprobantes_ok(array $arr = []): void {
-  if (!headers_sent()) header('Content-Type: application/json; charset=utf-8');
-  echo json_encode(array_merge(['exito' => true], $arr), JSON_UNESCAPED_UNICODE);
+function comprobantes_ok($arr = array()) {
+  if (!headers_sent()) {
+    header('Content-Type: application/json; charset=utf-8');
+  }
+  echo json_encode(array_merge(array('exito' => true), $arr));
   exit;
 }
-function comprobantes_fail(string $msg, int $httpCode = 400, array $extra = []): void {
-  if (!headers_sent()) header('Content-Type: application/json; charset=utf-8');
-  http_response_code($httpCode);
-  echo json_encode(array_merge(['exito' => false, 'mensaje' => $msg], $extra), JSON_UNESCAPED_UNICODE);
+
+function comprobantes_fail($msg, $httpCode = 400, $extra = array()) {
+  if (!headers_sent()) {
+    header('Content-Type: application/json; charset=utf-8');
+  }
+  http_response_code((int)$httpCode);
+  echo json_encode(array_merge(array('exito' => false, 'mensaje' => $msg), $extra));
   exit;
 }
 
 global $pdo;
 
-$action = $_GET['action'] ?? $_POST['action'] ?? $_REQUEST['action'] ?? '';
+$action = '';
+if (isset($_GET['action'])) {
+  $action = $_GET['action'];
+} elseif (isset($_POST['action'])) {
+  $action = $_POST['action'];
+} elseif (isset($_REQUEST['action'])) {
+  $action = $_REQUEST['action'];
+}
 $action = is_string($action) ? strtolower(trim($action)) : '';
 
-if (!($pdo instanceof PDO)) {
+if (!isset($pdo) || !($pdo instanceof PDO)) {
   comprobantes_fail('PDO tenant no disponible.', 500);
 }
 
 /* =========================================================
    Helpers generales
 ========================================================= */
-function read_json_body(): array {
+function read_json_body() {
   $raw = file_get_contents('php://input');
-  if (!$raw) return [];
+  if (!$raw) return array();
+
   $data = json_decode($raw, true);
-  return is_array($data) ? $data : [];
+  return is_array($data) ? $data : array();
 }
-function n_int($v): ?int {
+
+function n_int($v) {
   if ($v === null || $v === '') return null;
   if (!is_numeric($v)) return null;
   $n = (int)$v;
-  return $n > 0 ? $n : null;
+  return ($n > 0) ? $n : null;
 }
 
-function get_header_case_insensitive(string $key): string {
+function str_starts_with_compat($haystack, $needle) {
+  return substr($haystack, 0, strlen($needle)) === $needle;
+}
+
+function dirname_n($path, $levels) {
+  $levels = (int)$levels;
+  $out = $path;
+  $i = 0;
+  while ($i < $levels) {
+    $out = dirname($out);
+    $i++;
+  }
+  return $out;
+}
+
+function get_header_case_insensitive($key) {
   $k = 'HTTP_' . strtoupper(str_replace('-', '_', $key));
-  $v = $_SERVER[$k] ?? '';
+  $v = isset($_SERVER[$k]) ? $_SERVER[$k] : '';
   if (is_string($v) && trim($v) !== '') return trim($v);
 
   if (function_exists('getallheaders')) {
@@ -82,55 +110,134 @@ function get_header_case_insensitive(string $key): string {
   return '';
 }
 
-function is_https_request(): bool {
+function is_https_request() {
   if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') return true;
-  if ((string)($_SERVER['SERVER_PORT'] ?? '') === '443') return true;
-  $xfp = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '';
+  if (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443') return true;
+
+  $xfp = isset($_SERVER['HTTP_X_FORWARDED_PROTO']) ? $_SERVER['HTTP_X_FORWARDED_PROTO'] : '';
   if (is_string($xfp) && strtolower($xfp) === 'https') return true;
+
   return false;
 }
 
 /**
  * ✅ Root REAL: public_html
- * Ajustado a tu estructura /BALTO/api/...
  */
-function get_public_html_dir(): string {
-  $apiDir = realpath(dirname(__DIR__, 3));     // .../api
+function get_public_html_dir() {
+  $apiDir = realpath(dirname_n(__DIR__, 3)); // .../api
   if ($apiDir && is_dir($apiDir)) {
-    $projectDir = realpath($apiDir . '/..');   // .../[BALTO]
+    $projectDir = realpath($apiDir . '/..'); // .../[BALTO]
     if ($projectDir && is_dir($projectDir)) {
       $publicHtml = realpath($projectDir . '/..'); // .../public_html
       if ($publicHtml && is_dir($publicHtml)) return $publicHtml;
-      return $projectDir; // fallback: si el proyecto está directo en public_html
+      return $projectDir;
     }
     return dirname($apiDir);
   }
-  return dirname(__DIR__, 5);
+
+  return dirname_n(__DIR__, 5);
 }
 
-function safe_mkdir(string $path): void {
+/**
+ * ✅ Root REAL: balto_private
+ */
+function get_balto_private_dir() {
+  $publicHtml = get_public_html_dir();
+  $homeDir = realpath($publicHtml . '/..');
+
+  if ($homeDir && is_dir($homeDir . '/balto_private')) {
+    $cand = realpath($homeDir . '/balto_private');
+    if ($cand && is_dir($cand)) return $cand;
+  }
+
+  $apiDir = realpath(dirname_n(__DIR__, 3));
+  if ($apiDir) {
+    $projectDir = realpath($apiDir . '/..');
+    if ($projectDir) {
+      $cand1 = realpath($projectDir . '/../balto_private');
+      if ($cand1 && is_dir($cand1)) return $cand1;
+
+      $cand2 = realpath($projectDir . '/../../balto_private');
+      if ($cand2 && is_dir($cand2)) return $cand2;
+    }
+  }
+
+  comprobantes_fail('No se encontró la carpeta balto_private.', 500, array(
+    'public_html' => $publicHtml,
+  ));
+}
+
+function get_private_uploads_dir() {
+  $baltoPrivate = get_balto_private_dir();
+  $uploads = $baltoPrivate . '/uploads';
+
+  if (!is_dir($uploads)) {
+    comprobantes_fail('No existe la carpeta balto_private/uploads.', 500, array(
+      'balto_private' => $baltoPrivate,
+      'uploads' => $uploads,
+    ));
+  }
+
+  return $uploads;
+}
+
+function safe_mkdir($path) {
   if (is_dir($path)) {
     if (!is_writable($path)) {
-      comprobantes_fail('Carpeta existe pero NO es writable (permisos).', 500, ['path' => $path]);
+      comprobantes_fail('Carpeta existe pero NO es writable (permisos).', 500, array('path' => $path));
     }
     return;
   }
+
   if (!@mkdir($path, 0775, true) && !is_dir($path)) {
-    comprobantes_fail('No se pudo crear carpeta (permisos).', 500, ['path' => $path]);
+    comprobantes_fail('No se pudo crear carpeta (permisos).', 500, array('path' => $path));
   }
+
   if (!is_writable($path)) {
-    comprobantes_fail('Carpeta creada pero NO es writable (permisos).', 500, ['path' => $path]);
+    comprobantes_fail('Carpeta creada pero NO es writable (permisos).', 500, array('path' => $path));
   }
 }
 
-function normalize_rel(string $abs, string $root): string {
+/**
+ * Guarda en DB:
+ * uploads/tenants/t_X/comprobantes/...
+ */
+function normalize_rel_from_private_uploads($abs, $uploadsBase) {
   $abs = str_replace('\\', '/', $abs);
-  $root = rtrim(str_replace('\\', '/', $root), '/');
-  if (strpos($abs, $root . '/') === 0) return ltrim(substr($abs, strlen($root)), '/');
-  return $abs;
+  $uploadsBase = rtrim(str_replace('\\', '/', $uploadsBase), '/');
+
+  if (strpos($abs, $uploadsBase . '/') === 0) {
+    return 'uploads/' . ltrim(substr($abs, strlen($uploadsBase)), '/');
+  }
+
+  return ltrim($abs, '/');
 }
 
-function is_inside(string $path, string $baseDir): bool {
+/**
+ * Normaliza rutas guardadas en DB
+ */
+function normalize_db_rel_path($path) {
+  $p = trim(str_replace('\\', '/', $path));
+  $p = preg_replace('#/+#', '/', $p);
+
+  while (strpos($p, './') === 0) {
+    $p = substr($p, 2);
+  }
+
+  $p = ltrim($p, '/');
+
+  if (strpos($p, 'balto_private/uploads/') === 0) {
+    $p = substr($p, strlen('balto_private/'));
+  }
+
+  if (strpos($p, 'public_html/uploads/') === 0) {
+    $p = substr($p, strlen('public_html/'));
+  }
+
+  return $p;
+}
+
+function is_inside($path, $baseDir) {
   $pathReal = realpath($path);
   $baseReal = realpath($baseDir);
   if (!$pathReal || !$baseReal) return false;
@@ -138,85 +245,86 @@ function is_inside(string $path, string $baseDir): bool {
   $pathReal = rtrim(str_replace('\\', '/', $pathReal), '/');
   $baseReal = rtrim(str_replace('\\', '/', $baseReal), '/');
 
-  return strpos($pathReal, $baseReal . '/') === 0 || $pathReal === $baseReal;
+  return (strpos($pathReal, $baseReal . '/') === 0 || $pathReal === $baseReal);
 }
 
 /**
  * ✅ URL absoluta al api.php real
  */
-function api_php_abs_url(): string {
+function api_php_abs_url() {
   $scheme = is_https_request() ? 'https' : 'http';
-  $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+  $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost';
 
-  $script = (string)($_SERVER['SCRIPT_NAME'] ?? '');
+  $script = isset($_SERVER['SCRIPT_NAME']) ? (string)$_SERVER['SCRIPT_NAME'] : '';
   $pos = strpos($script, '/api/routes/api.php');
+
   if ($pos !== false) {
-    $prefix = substr($script, 0, $pos); // "/BALTO" o ""
+    $prefix = substr($script, 0, $pos);
     return $scheme . '://' . $host . $prefix . '/api/routes/api.php';
   }
 
   return $scheme . '://' . $host . '/api/routes/api.php';
 }
 
-function build_download_url(int $idComp): string {
-  return api_php_abs_url() . '?action=comprobantes_descargar&id_comprobante=' . $idComp;
+function build_download_url($idComp) {
+  return api_php_abs_url() . '?action=comprobantes_descargar&id_comprobante=' . (int)$idComp;
 }
 
 /* =========================================================
    ✅ tipo -> carpeta segura
 ========================================================= */
-function tipo_to_folder(string $tipo): string {
+function tipo_to_folder($tipo) {
   $t = strtoupper(trim($tipo));
   if ($t === '') $t = 'RECIBO';
 
-  $map = [
+  $map = array(
     'RECIBO' => 'recibo',
     'ORDEN_PAGO' => 'orden_pago',
     'ORDEN DE PAGO' => 'orden_pago',
     'FACTURA' => 'factura',
     'NOTA_CREDITO' => 'nota_credito',
     'NOTA_DEBITO' => 'nota_debito',
-  ];
+  );
+
   if (isset($map[$t])) return $map[$t];
 
   $t = strtolower($t);
-  $t = str_replace([' ', '-', '.'], '_', $t);
-  $t = preg_replace('/[^a-z0-9_]/', '', $t) ?? '';
+  $t = str_replace(array(' ', '-', '.'), '_', $t);
+  $t = preg_replace('/[^a-z0-9_]/', '', $t);
   $t = trim((string)$t, '_');
   if ($t === '') $t = 'otros';
+
   return $t;
 }
 
 /* =========================================================
-   ✅ SAAS: Tenant REAL resuelto por api.php (sesión master)
-   - NO re-conecta master acá
-   - NO confía en headers del cliente
+   ✅ SAAS: Tenant REAL resuelto por api.php
 ========================================================= */
 function resolve_tenant_id_or_fail() {
-  // api.php guarda sesión master acá:
-  // $GLOBALS['SESSION_MASTER'] = $ses;
-  $ses = $GLOBALS['SESSION_MASTER'] ?? null;
+  $ses = isset($GLOBALS['SESSION_MASTER']) ? $GLOBALS['SESSION_MASTER'] : null;
   if (is_array($ses)) {
-    $idT = (int)($ses['idTenant'] ?? 0);
+    $idT = isset($ses['idTenant']) ? (int)$ses['idTenant'] : 0;
     if ($idT > 0) return $idT;
   }
 
-  // fallback: api.php también setea esto:
-  // $_SERVER['X_IDTENANT'] = ...
-  $srv = $_SERVER['X_IDTENANT'] ?? $_SERVER['HTTP_X_IDTENANT'] ?? '';
+  $srv = '';
+  if (isset($_SERVER['X_IDTENANT'])) {
+    $srv = $_SERVER['X_IDTENANT'];
+  } elseif (isset($_SERVER['HTTP_X_IDTENANT'])) {
+    $srv = $_SERVER['HTTP_X_IDTENANT'];
+  }
+
   $srv = is_string($srv) ? trim($srv) : '';
   if ($srv !== '' && ctype_digit($srv) && (int)$srv > 0) {
     return (int)$srv;
   }
 
-  // Si llegó directo a este archivo sin pasar por api.php
   comprobantes_fail(
     'Tenant no resuelto. Llamá a este módulo siempre a través de api/routes/api.php (con sesión válida).',
     401
   );
 }
 
-// ✅ ESTE ES EL TENANT REAL (t_1, t_2, etc)
 $tenantId = resolve_tenant_id_or_fail();
 
 /* =========================================================
@@ -224,12 +332,12 @@ $tenantId = resolve_tenant_id_or_fail();
 ========================================================= */
 if ($action === 'comprobantes_subir') {
 
-  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+  if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     comprobantes_fail('Método inválido. Usá POST.', 405);
   }
 
-  $idCobroRaw = $_POST['id_cobro'] ?? null;
-  $idMovRaw   = $_POST['id_movimiento'] ?? null;
+  $idCobroRaw = isset($_POST['id_cobro']) ? $_POST['id_cobro'] : null;
+  $idMovRaw   = isset($_POST['id_movimiento']) ? $_POST['id_movimiento'] : null;
 
   $idCobroStr = is_string($idCobroRaw) ? trim($idCobroRaw) : (is_numeric($idCobroRaw) ? (string)$idCobroRaw : '');
   $idMovStr   = is_string($idMovRaw) ? trim($idMovRaw) : (is_numeric($idMovRaw) ? (string)$idMovRaw : '');
@@ -237,31 +345,36 @@ if ($action === 'comprobantes_subir') {
   $idCobro = 0;
   $idMovFromPost = 0;
 
-  if ($idCobroStr !== '' && ctype_digit($idCobroStr) && (int)$idCobroStr > 0) $idCobro = (int)$idCobroStr;
-  if ($idMovStr !== '' && ctype_digit($idMovStr) && (int)$idMovStr > 0) $idMovFromPost = (int)$idMovStr;
+  if ($idCobroStr !== '' && ctype_digit($idCobroStr) && (int)$idCobroStr > 0) {
+    $idCobro = (int)$idCobroStr;
+  }
+  if ($idMovStr !== '' && ctype_digit($idMovStr) && (int)$idMovStr > 0) {
+    $idMovFromPost = (int)$idMovStr;
+  }
 
   if ($idCobro <= 0 && $idMovFromPost <= 0) {
     comprobantes_fail('Falta id_cobro o id_movimiento válido.', 400);
   }
 
-  $tipo = $_POST['tipo'] ?? 'RECIBO';
+  $tipo = isset($_POST['tipo']) ? $_POST['tipo'] : 'RECIBO';
   $tipo = is_string($tipo) ? strtoupper(trim($tipo)) : 'RECIBO';
   if ($tipo === '') $tipo = 'RECIBO';
 
   $tipoFolder = tipo_to_folder($tipo);
 
-  // resolver cobro + movimiento
   $cobro = null;
 
   if ($idCobro > 0) {
     $stc = $pdo->prepare("SELECT id_cobro, id_movimiento, id_comprobante FROM cobros WHERE id_cobro = :id LIMIT 1");
-    $stc->execute([':id' => $idCobro]);
+    $stc->execute(array(':id' => $idCobro));
     $cobro = $stc->fetch(PDO::FETCH_ASSOC);
+
     if (!$cobro) comprobantes_fail('El cobro no existe.', 404);
+
     if (!empty($cobro['id_comprobante'])) {
-      comprobantes_fail('Este cobro ya tiene un comprobante vinculado.', 409, [
+      comprobantes_fail('Este cobro ya tiene un comprobante vinculado.', 409, array(
         'id_comprobante' => (int)$cobro['id_comprobante'],
-      ]);
+      ));
     }
   } else {
     $stc = $pdo->prepare("
@@ -271,51 +384,61 @@ if ($action === 'comprobantes_subir') {
       ORDER BY id_cobro DESC
       LIMIT 1
     ");
-    $stc->execute([':idMov' => $idMovFromPost]);
+    $stc->execute(array(':idMov' => $idMovFromPost));
     $cobro = $stc->fetch(PDO::FETCH_ASSOC);
 
     if (!$cobro) {
-      comprobantes_fail('No existe cobro para ese id_movimiento. Confirmá el pago antes de guardar el recibo.', 404, [
+      comprobantes_fail('No existe cobro para ese id_movimiento. Confirmá el pago antes de guardar el recibo.', 404, array(
         'id_movimiento' => $idMovFromPost,
-      ]);
+      ));
     }
 
-    $idCobro = (int)($cobro['id_cobro'] ?? 0);
-    if ($idCobro <= 0) comprobantes_fail('No se pudo resolver id_cobro para el movimiento.', 500);
+    $idCobro = isset($cobro['id_cobro']) ? (int)$cobro['id_cobro'] : 0;
+    if ($idCobro <= 0) {
+      comprobantes_fail('No se pudo resolver id_cobro para el movimiento.', 500);
+    }
 
     if (!empty($cobro['id_comprobante'])) {
-      comprobantes_fail('Este cobro ya tiene un comprobante vinculado.', 409, [
+      comprobantes_fail('Este cobro ya tiene un comprobante vinculado.', 409, array(
         'id_comprobante' => (int)$cobro['id_comprobante'],
         'id_cobro' => $idCobro,
-      ]);
+      ));
     }
   }
 
-  if (!isset($_FILES['archivo'])) comprobantes_fail('Falta archivo (campo "archivo").', 400);
+  if (!isset($_FILES['archivo'])) {
+    comprobantes_fail('Falta archivo (campo "archivo").', 400);
+  }
 
   $f = $_FILES['archivo'];
-  $err = (int)($f['error'] ?? UPLOAD_ERR_NO_FILE);
-  if ($err !== UPLOAD_ERR_OK) comprobantes_fail('Error al subir archivo (UPLOAD_ERR=' . $err . ').', 400);
+  $err = isset($f['error']) ? (int)$f['error'] : UPLOAD_ERR_NO_FILE;
+  if ($err !== UPLOAD_ERR_OK) {
+    comprobantes_fail('Error al subir archivo (UPLOAD_ERR=' . $err . ').', 400);
+  }
 
-  $tmp = (string)($f['tmp_name'] ?? '');
-  if ($tmp === '' || !is_file($tmp)) comprobantes_fail('Archivo temporal inválido.', 400);
+  $tmp = isset($f['tmp_name']) ? (string)$f['tmp_name'] : '';
+  if ($tmp === '' || !is_file($tmp)) {
+    comprobantes_fail('Archivo temporal inválido.', 400);
+  }
 
-  $origName = (string)($f['name'] ?? 'comprobante.pdf');
-  $mime = (string)($f['type'] ?? 'application/pdf');
-  $size = (int)($f['size'] ?? 0);
+  $origName = isset($f['name']) ? (string)$f['name'] : 'comprobante.pdf';
+  $mime = isset($f['type']) ? (string)$f['type'] : 'application/pdf';
+  $size = isset($f['size']) ? (int)$f['size'] : 0;
 
   $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-  if ($ext !== 'pdf') comprobantes_fail('El archivo debe ser PDF.', 400);
+  if ($ext !== 'pdf') {
+    comprobantes_fail('El archivo debe ser PDF.', 400);
+  }
 
   $sha = hash_file('sha256', $tmp);
-  if (!$sha) comprobantes_fail('No se pudo calcular hash del archivo.', 500);
+  if (!$sha) {
+    comprobantes_fail('No se pudo calcular hash del archivo.', 500);
+  }
 
-  // public_html/uploads/tenants/...
-  $publicHtml = get_public_html_dir();
-  $uploadsBase = $publicHtml . '/uploads';
+  // ✅ AHORA guarda en balto_private/uploads
+  $uploadsBase = get_private_uploads_dir();
   safe_mkdir($uploadsBase);
 
-  // ✅ CLAVE SAAS: carpeta por tenant real
   $tenantDir = $uploadsBase
     . '/tenants/t_' . $tenantId
     . '/comprobantes/' . date('Y')
@@ -324,8 +447,10 @@ if ($action === 'comprobantes_subir') {
 
   safe_mkdir($tenantDir);
 
-  $idMov = (int)($cobro['id_movimiento'] ?? $idMovFromPost);
-  if ($idMov <= 0) comprobantes_fail('No se pudo resolver id_movimiento.', 500);
+  $idMov = isset($cobro['id_movimiento']) ? (int)$cobro['id_movimiento'] : $idMovFromPost;
+  if ($idMov <= 0) {
+    comprobantes_fail('No se pudo resolver id_movimiento.', 500);
+  }
 
   $finalName = 'cobro_' . $idCobro . '__mov_' . $idMov . '__' . $sha . '.pdf';
   $absPath = $tenantDir . '/' . $finalName;
@@ -334,24 +459,28 @@ if ($action === 'comprobantes_subir') {
   if (is_uploaded_file($tmp) && @move_uploaded_file($tmp, $absPath)) {
     $moved = true;
   } else {
-    if (@rename($tmp, $absPath)) $moved = true;
-    else if (@copy($tmp, $absPath)) { $moved = true; @unlink($tmp); }
+    if (@rename($tmp, $absPath)) {
+      $moved = true;
+    } else if (@copy($tmp, $absPath)) {
+      $moved = true;
+      @unlink($tmp);
+    }
   }
 
   if (!$moved || !is_file($absPath) || (int)filesize($absPath) <= 0) {
-    comprobantes_fail('No se pudo guardar el archivo en el servidor.', 500, [
+    comprobantes_fail('No se pudo guardar el archivo en el servidor.', 500, array(
       'tmp' => $tmp,
       'absPath' => $absPath,
       'tenantDir' => $tenantDir,
-      'public_html' => $publicHtml,
       'uploadsBase' => $uploadsBase,
       'tipo' => $tipo,
       'tipoFolder' => $tipoFolder,
       'tenantId' => $tenantId,
-    ]);
+    ));
   }
 
-  $relPath = normalize_rel($absPath, $publicHtml);
+  // ✅ en DB queda uploads/tenants/...
+  $relPath = normalize_rel_from_private_uploads($absPath, $uploadsBase);
 
   try {
     $pdo->beginTransaction();
@@ -363,29 +492,31 @@ if ($action === 'comprobantes_subir') {
         (:tipo, :url, :path, :mime, :size, :sha)
     ");
 
-    $ins->execute([
+    $ins->execute(array(
       ':tipo' => $tipo,
       ':url'  => '',
       ':path' => $relPath,
-      ':mime' => $mime !== '' ? $mime : 'application/pdf',
+      ':mime' => ($mime !== '' ? $mime : 'application/pdf'),
       ':size' => max(0, $size),
       ':sha'  => $sha,
-    ]);
+    ));
 
     $idComp = (int)$pdo->lastInsertId();
-    if ($idComp <= 0) throw new RuntimeException('No se pudo obtener id_comprobante.');
+    if ($idComp <= 0) {
+      throw new Exception('No se pudo obtener id_comprobante.');
+    }
 
     $realUrl = build_download_url($idComp);
 
     $upUrl = $pdo->prepare("UPDATE comprobantes_archivos SET archivo_url = :u WHERE id_comprobante = :id LIMIT 1");
-    $upUrl->execute([':u' => $realUrl, ':id' => $idComp]);
+    $upUrl->execute(array(':u' => $realUrl, ':id' => $idComp));
 
     $upCob = $pdo->prepare("UPDATE cobros SET id_comprobante = :idComp WHERE id_cobro = :idCobro LIMIT 1");
-    $upCob->execute([':idComp' => $idComp, ':idCobro' => $idCobro]);
+    $upCob->execute(array(':idComp' => $idComp, ':idCobro' => $idCobro));
 
     $pdo->commit();
 
-    comprobantes_ok([
+    comprobantes_ok(array(
       'id_comprobante' => $idComp,
       'id_cobro' => $idCobro,
       'id_movimiento' => $idMov,
@@ -393,17 +524,16 @@ if ($action === 'comprobantes_subir') {
       'archivo_path' => $relPath,
       'sha256' => $sha,
       'filename' => $finalName,
-      'debug' => [
+      'debug' => array(
         'tenantId' => $tenantId,
-        'public_html' => $publicHtml,
         'uploadsBase' => $uploadsBase,
         'tenantDir' => $tenantDir,
         'tipo' => $tipo,
         'tipoFolder' => $tipoFolder,
-      ],
-    ]);
+      ),
+    ));
 
-  } catch (Throwable $e) {
+  } catch (Exception $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     @unlink($absPath);
     comprobantes_fail('Error DB al registrar comprobante: ' . $e->getMessage(), 500);
@@ -415,26 +545,30 @@ if ($action === 'comprobantes_subir') {
 ========================================================= */
 if ($action === 'comprobantes_asociar_movimiento') {
 
-  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+  if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     comprobantes_fail('Método inválido. Usá POST.', 405);
   }
 
   $body = read_json_body();
-  $src  = !empty($body) ? $body : ($_POST ?? []);
+  $src  = !empty($body) ? $body : (isset($_POST) ? $_POST : array());
 
-  $idComp = n_int($src['id_comprobante'] ?? $src['idComp'] ?? null);
+  $idComp = n_int(isset($src['id_comprobante']) ? $src['id_comprobante'] : (isset($src['idComp']) ? $src['idComp'] : null));
   if (!$idComp) comprobantes_fail('Falta id_comprobante.', 400);
 
-  $force = (bool)($src['force'] ?? false);
+  $force = !empty($src['force']) ? true : false;
 
   $v = $pdo->prepare("SELECT 1 FROM comprobantes_archivos WHERE id_comprobante = :id LIMIT 1");
-  $v->execute([':id' => $idComp]);
-  if ((int)($v->fetchColumn() ?: 0) !== 1) {
-    comprobantes_fail('El id_comprobante no existe.', 404);
+  $v->execute(array(':id' => $idComp));
+  if ((int)($v->fetchColumn() ? $v->fetchColumn() : 0) !== 1) {
+    $v = $pdo->prepare("SELECT 1 FROM comprobantes_archivos WHERE id_comprobante = :id LIMIT 1");
+    $v->execute(array(':id' => $idComp));
+    if ((int)($v->fetchColumn() ?: 0) !== 1) {
+      comprobantes_fail('El id_comprobante no existe.', 404);
+    }
   }
 
-  $idCobro = n_int($src['id_cobro'] ?? null);
-  $idMov   = n_int($src['id_movimiento'] ?? null);
+  $idCobro = n_int(isset($src['id_cobro']) ? $src['id_cobro'] : null);
+  $idMov   = n_int(isset($src['id_movimiento']) ? $src['id_movimiento'] : null);
 
   if (!$idCobro && !$idMov) {
     comprobantes_fail('Falta id_cobro o id_movimiento.', 400);
@@ -446,9 +580,10 @@ if ($action === 'comprobantes_asociar_movimiento') {
     $cobro = null;
 
     if ($idCobro) {
-      $st = $pdo->prepare("SELECT id_cobro, id_movimiento, id_comprobante FROM cobros WHERE id_cobro = :id LIMIT 1 FOR UPDATE");
-      $st->execute([':id' => $idCobro]);
+      $st = $pdo->prepare("SELECT id_cobro, id_movimiento, id_comprobante FROM cobros WHERE id_cobro = :id LIMIT 1");
+      $st->execute(array(':id' => $idCobro));
       $cobro = $st->fetch(PDO::FETCH_ASSOC);
+
       if (!$cobro) {
         $pdo->rollBack();
         comprobantes_fail('El cobro no existe.', 404);
@@ -460,43 +595,43 @@ if ($action === 'comprobantes_asociar_movimiento') {
         WHERE id_movimiento = :idMov
         ORDER BY id_cobro DESC
         LIMIT 1
-        FOR UPDATE
       ");
-      $st->execute([':idMov' => $idMov]);
+      $st->execute(array(':idMov' => $idMov));
       $cobro = $st->fetch(PDO::FETCH_ASSOC);
+
       if (!$cobro) {
         $pdo->rollBack();
-        comprobantes_fail('No existe cobro para ese movimiento (confirmá pago primero).', 404, [
+        comprobantes_fail('No existe cobro para ese movimiento (confirmá pago primero).', 404, array(
           'id_movimiento' => $idMov,
-        ]);
+        ));
       }
       $idCobro = (int)$cobro['id_cobro'];
     }
 
-    $prev = (int)($cobro['id_comprobante'] ?? 0);
+    $prev = isset($cobro['id_comprobante']) ? (int)$cobro['id_comprobante'] : 0;
     if ($prev > 0 && !$force) {
       $pdo->rollBack();
-      comprobantes_fail('Ese cobro ya tiene comprobante. Pasá force=true si querés reemplazar.', 409, [
+      comprobantes_fail('Ese cobro ya tiene comprobante. Pasá force=true si querés reemplazar.', 409, array(
         'id_cobro' => (int)$idCobro,
-        'id_movimiento' => (int)($cobro['id_movimiento'] ?? 0),
+        'id_movimiento' => isset($cobro['id_movimiento']) ? (int)$cobro['id_movimiento'] : 0,
         'id_comprobante_actual' => $prev,
-      ]);
+      ));
     }
 
     $up = $pdo->prepare("UPDATE cobros SET id_comprobante = :idComp WHERE id_cobro = :idCobro LIMIT 1");
-    $up->execute([':idComp' => $idComp, ':idCobro' => $idCobro]);
+    $up->execute(array(':idComp' => $idComp, ':idCobro' => $idCobro));
 
     $pdo->commit();
 
-    comprobantes_ok([
+    comprobantes_ok(array(
       'id_comprobante' => $idComp,
       'id_cobro' => (int)$idCobro,
-      'id_movimiento' => (int)($cobro['id_movimiento'] ?? 0),
+      'id_movimiento' => isset($cobro['id_movimiento']) ? (int)$cobro['id_movimiento'] : 0,
       'reemplazo' => ($prev > 0),
       'id_comprobante_anterior' => $prev,
-    ]);
+    ));
 
-  } catch (Throwable $e) {
+  } catch (Exception $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     comprobantes_fail('No se pudo asociar comprobante: ' . $e->getMessage(), 500);
   }
@@ -507,43 +642,45 @@ if ($action === 'comprobantes_asociar_movimiento') {
 ========================================================= */
 if ($action === 'comprobantes_asociar_movimientos') {
 
-  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+  if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     comprobantes_fail('Método inválido. Usá POST.', 405);
   }
 
   $body = read_json_body();
-  $src  = !empty($body) ? $body : ($_POST ?? []);
+  $src  = !empty($body) ? $body : (isset($_POST) ? $_POST : array());
 
-  $idComp = n_int($src['id_comprobante'] ?? $src['idComp'] ?? null);
+  $idComp = n_int(isset($src['id_comprobante']) ? $src['id_comprobante'] : (isset($src['idComp']) ? $src['idComp'] : null));
   if (!$idComp) comprobantes_fail('Falta id_comprobante.', 400);
 
-  $force = (bool)($src['force'] ?? false);
+  $force = !empty($src['force']) ? true : false;
 
-  $ids = $src['ids_movimiento'] ?? $src['ids_movimientos'] ?? [];
-  if (!is_array($ids)) $ids = [];
+  $ids = isset($src['ids_movimiento']) ? $src['ids_movimiento'] : (isset($src['ids_movimientos']) ? $src['ids_movimientos'] : array());
+  if (!is_array($ids)) $ids = array();
 
-  $idsOk = [];
+  $idsOk = array();
   foreach ($ids as $x) {
     $n = n_int($x);
     if ($n) $idsOk[] = $n;
   }
   $idsOk = array_values(array_unique($idsOk));
+
   if (!$idsOk) comprobantes_fail('Faltan ids_movimiento.', 400);
 
   $v = $pdo->prepare("SELECT 1 FROM comprobantes_archivos WHERE id_comprobante = :id LIMIT 1");
-  $v->execute([':id' => $idComp]);
-  if ((int)($v->fetchColumn() ?: 0) !== 1) {
+  $v->execute(array(':id' => $idComp));
+  $exists = $v->fetchColumn();
+  if ((int)($exists ? $exists : 0) !== 1) {
     comprobantes_fail('El id_comprobante no existe.', 404);
   }
 
   try {
     $pdo->beginTransaction();
 
-    $result = [
-      'asociados' => [],
-      'sin_cobro' => [],
-      'ya_tenian' => [],
-    ];
+    $result = array(
+      'asociados' => array(),
+      'sin_cobro' => array(),
+      'ya_tenian' => array(),
+    );
 
     $sel = $pdo->prepare("
       SELECT id_cobro, id_movimiento, id_comprobante
@@ -551,7 +688,6 @@ if ($action === 'comprobantes_asociar_movimientos') {
       WHERE id_movimiento = :idMov
       ORDER BY id_cobro DESC
       LIMIT 1
-      FOR UPDATE
     ");
 
     $upd = $pdo->prepare("
@@ -562,7 +698,7 @@ if ($action === 'comprobantes_asociar_movimientos') {
     ");
 
     foreach ($idsOk as $idMov) {
-      $sel->execute([':idMov' => $idMov]);
+      $sel->execute(array(':idMov' => $idMov));
       $c = $sel->fetch(PDO::FETCH_ASSOC);
 
       if (!$c) {
@@ -570,36 +706,36 @@ if ($action === 'comprobantes_asociar_movimientos') {
         continue;
       }
 
-      $idCobro = (int)($c['id_cobro'] ?? 0);
-      $prev    = (int)($c['id_comprobante'] ?? 0);
+      $idCobro = isset($c['id_cobro']) ? (int)$c['id_cobro'] : 0;
+      $prev = isset($c['id_comprobante']) ? (int)$c['id_comprobante'] : 0;
 
       if ($prev > 0 && !$force) {
-        $result['ya_tenian'][] = [
+        $result['ya_tenian'][] = array(
           'id_movimiento' => (int)$idMov,
           'id_cobro' => $idCobro,
           'id_comprobante_actual' => $prev,
-        ];
+        );
         continue;
       }
 
-      $upd->execute([':idComp' => $idComp, ':idCobro' => $idCobro]);
-      $result['asociados'][] = [
+      $upd->execute(array(':idComp' => $idComp, ':idCobro' => $idCobro));
+      $result['asociados'][] = array(
         'id_movimiento' => (int)$idMov,
         'id_cobro' => $idCobro,
         'reemplazo' => ($prev > 0),
         'id_comprobante_anterior' => $prev,
-      ];
+      );
     }
 
     $pdo->commit();
 
-    comprobantes_ok([
+    comprobantes_ok(array(
       'id_comprobante' => $idComp,
       'force' => $force,
       'result' => $result,
-    ]);
+    ));
 
-  } catch (Throwable $e) {
+  } catch (Exception $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     comprobantes_fail('No se pudo asociar batch: ' . $e->getMessage(), 500);
   }
@@ -607,11 +743,13 @@ if ($action === 'comprobantes_asociar_movimientos') {
 
 /* =========================================================
    DESCARGAR PDF (INLINE)
+   ✅ AHORA LEE DESDE balto_private/uploads
 ========================================================= */
 if ($action === 'comprobantes_descargar') {
 
-  $id = $_GET['id_comprobante'] ?? $_GET['id'] ?? '';
+  $id = isset($_GET['id_comprobante']) ? $_GET['id_comprobante'] : (isset($_GET['id']) ? $_GET['id'] : '');
   $id = is_string($id) ? trim($id) : '';
+
   if ($id === '' || !ctype_digit($id) || (int)$id <= 0) {
     comprobantes_fail('Falta id_comprobante válido.', 400);
   }
@@ -619,31 +757,62 @@ if ($action === 'comprobantes_descargar') {
 
   try {
     $st = $pdo->prepare("
-      SELECT id_comprobante, archivo_path, archivo_mime
+      SELECT id_comprobante, archivo_path, archivo_url, archivo_mime
       FROM comprobantes_archivos
       WHERE id_comprobante = :id
       LIMIT 1
     ");
-    $st->execute([':id' => $id]);
+    $st->execute(array(':id' => $id));
     $row = $st->fetch(PDO::FETCH_ASSOC);
 
-    if (!$row) comprobantes_fail('Comprobante no encontrado.', 404);
+    if (!$row) {
+      comprobantes_fail('Comprobante no encontrado.', 404);
+    }
 
-    $publicHtml = get_public_html_dir();
-    $uploadsBase = $publicHtml . '/uploads';
+    $uploadsBase = get_private_uploads_dir();
 
-    $rel = (string)($row['archivo_path'] ?? '');
-    if ($rel === '') comprobantes_fail('Comprobante sin ruta.', 500);
+    $rel = isset($row['archivo_path']) ? (string)$row['archivo_path'] : '';
+    if ($rel === '') {
+      $rel = isset($row['archivo_url']) ? (string)$row['archivo_url'] : '';
+    }
 
-    $abs = $publicHtml . '/' . ltrim($rel, '/');
-    if (!is_file($abs)) comprobantes_fail('Archivo no existe en disco.', 404, ['abs' => $abs, 'rel' => $rel, 'public_html' => $publicHtml]);
-    if (!is_inside($abs, $uploadsBase)) comprobantes_fail('Ruta inválida.', 403);
+    $rel = normalize_db_rel_path($rel);
 
-    $mime = (string)($row['archivo_mime'] ?? 'application/pdf');
+    if ($rel === '') {
+      comprobantes_fail('Comprobante sin ruta.', 500);
+    }
+
+    if (strpos($rel, 'uploads/') === 0) {
+      $relWithoutUploads = substr($rel, strlen('uploads/'));
+    } else {
+      $relWithoutUploads = ltrim($rel, '/');
+    }
+
+    $abs = rtrim($uploadsBase, '/') . '/' . $relWithoutUploads;
+
+    if (!is_file($abs)) {
+      comprobantes_fail('Archivo no existe en disco.', 404, array(
+        'abs' => $abs,
+        'rel' => $rel,
+        'uploadsBase' => $uploadsBase,
+      ));
+    }
+
+    if (!is_inside($abs, $uploadsBase)) {
+      comprobantes_fail('Ruta inválida.', 403, array(
+        'abs' => $abs,
+        'uploadsBase' => $uploadsBase,
+      ));
+    }
+
+    $mime = isset($row['archivo_mime']) ? (string)$row['archivo_mime'] : 'application/pdf';
     if ($mime === '') $mime = 'application/pdf';
 
     $filesize = (int)filesize($abs);
-    $filename = 'comprobante_' . $id . '.pdf';
+    $ext = strtolower((string)pathinfo($abs, PATHINFO_EXTENSION));
+    if ($ext === '') $ext = 'pdf';
+
+    $filename = 'comprobante_' . $id . '.' . $ext;
 
     if (!headers_sent()) {
       header('Content-Type: ' . $mime);
@@ -652,10 +821,11 @@ if ($action === 'comprobantes_descargar') {
       header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
     }
 
-    $range = $_SERVER['HTTP_RANGE'] ?? '';
+    $range = isset($_SERVER['HTTP_RANGE']) ? $_SERVER['HTTP_RANGE'] : '';
     if ($range && preg_match('/bytes=(\d+)-(\d*)/i', $range, $m)) {
       $start = (int)$m[1];
       $end = ($m[2] !== '') ? (int)$m[2] : ($filesize - 1);
+
       if ($end >= $filesize) $end = $filesize - 1;
       if ($start < 0) $start = 0;
 
@@ -675,6 +845,7 @@ if ($action === 'comprobantes_descargar') {
 
       $fh = fopen($abs, 'rb');
       if ($fh === false) exit;
+
       fseek($fh, $start);
 
       $buf = 8192;
@@ -697,7 +868,7 @@ if ($action === 'comprobantes_descargar') {
     readfile($abs);
     exit;
 
-  } catch (Throwable $e) {
+  } catch (Exception $e) {
     comprobantes_fail('Error al descargar: ' . $e->getMessage(), 500);
   }
 }
@@ -707,8 +878,9 @@ if ($action === 'comprobantes_descargar') {
 ========================================================= */
 if ($action === 'comprobantes_info') {
 
-  $id = $_GET['id_comprobante'] ?? $_GET['id'] ?? '';
+  $id = isset($_GET['id_comprobante']) ? $_GET['id_comprobante'] : (isset($_GET['id']) ? $_GET['id'] : '');
   $id = is_string($id) ? trim($id) : '';
+
   if ($id === '' || !ctype_digit($id) || (int)$id <= 0) {
     comprobantes_fail('Falta id_comprobante válido.', 400);
   }
@@ -716,12 +888,15 @@ if ($action === 'comprobantes_info') {
 
   try {
     $st = $pdo->prepare("SELECT * FROM comprobantes_archivos WHERE id_comprobante = :id LIMIT 1");
-    $st->execute([':id' => $id]);
+    $st->execute(array(':id' => $id));
     $row = $st->fetch(PDO::FETCH_ASSOC);
-    if (!$row) comprobantes_fail('Comprobante no encontrado.', 404);
 
-    comprobantes_ok(['data' => $row]);
-  } catch (Throwable $e) {
+    if (!$row) {
+      comprobantes_fail('Comprobante no encontrado.', 404);
+    }
+
+    comprobantes_ok(array('data' => $row));
+  } catch (Exception $e) {
     comprobantes_fail('Error: ' . $e->getMessage(), 500);
   }
 }

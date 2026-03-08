@@ -24,7 +24,7 @@ import "./principal.css";
 import ModalPerfil from "../Perfil/ModalPerfil";
 
 /* =========================================================
-   ✅ API (unificado y BLINDADO)
+   API
 ========================================================= */
 const API_RELATIVE = "api.php";
 
@@ -41,6 +41,15 @@ function buildApiUrl(paramsObj) {
 
   url.search = qs.toString();
   return url.toString();
+}
+
+function isLocalApiBase() {
+  try {
+    const base = String(BASE_URL || "").toLowerCase().trim();
+    return base.includes("localhost") || base.includes("127.0.0.1");
+  } catch {
+    return false;
+  }
 }
 
 async function apiFetch(paramsObj, options = {}) {
@@ -72,7 +81,7 @@ async function apiFetch(paramsObj, options = {}) {
 }
 
 /* =========================================================
-   ✅ PREFETCH
+   PREFETCH
 ========================================================= */
 const ROUTE_PREFETCH = {
   "/panel/movimientos": () => import("../Movimientos/Movimientos"),
@@ -81,12 +90,11 @@ const ROUTE_PREFETCH = {
   "/panel/recibos": () => import("../Mov_Subsection/Recibos/Recibos"),
   "/panel/OrdenesPago": () => import("../Mov_Subsection/OrdenesPago/OrdenesPago"),
   "/panel/flujo-de-caja": () => import("../Flujo_de_Caja/Flujo_Caja"),
-
-  // ✅ CC layout + sub
   "/panel/cuentas-corrientes": () => import("../Cuentas_Corrientes/Cuentas_Corrientes"),
-  "/panel/cuentas-corrientes/clientes": () => import("../Cuentas_Corrientes/Clientes/Clientes"),
-  "/panel/cuentas-corrientes/proveedores": () => import("../Cuentas_Corrientes/Proveedores/Proveedores"),
-
+  "/panel/cuentas-corrientes/clientes": () =>
+    import("../Cuentas_Corrientes/Clientes/Clientes"),
+  "/panel/cuentas-corrientes/proveedores": () =>
+    import("../Cuentas_Corrientes/Proveedores/Proveedores"),
   "/panel/analisis-financiero": () =>
     import("../Analisis_Financiero/Analisis_Financiero"),
 };
@@ -99,7 +107,7 @@ function prefetchRoute(ruta) {
 }
 
 /* =========================================================
-   ✅ IDLE / SUSPENSIÓN
+   IDLE
 ========================================================= */
 const LAST_ACTIVITY_KEY = "balto_last_activity_ts";
 const IDLE_MS = 30 * 60 * 1000;
@@ -120,7 +128,7 @@ function getLastActivityTs() {
 }
 
 /* =========================
-   Cache simple de listas globales
+   Cache listas
 ========================= */
 const LISTAS_CACHE_KEY = "balto_listas_cache_v1";
 const LISTAS_TTL_MS = 30 * 60 * 1000;
@@ -177,7 +185,7 @@ async function prefetchGlobalListas(onUnauthorized) {
 }
 
 /* =========================
-   Modal cierre de sesión
+   Modal cierre sesión
 ========================= */
 const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
   const cancelBtnRef = useRef(null);
@@ -283,9 +291,6 @@ function applyTheme(tema) {
   document.body.classList.toggle("dark", tema === "oscuro");
 }
 
-/* =========================
-   Session helpers
-========================= */
 function getSessionKey() {
   return String(localStorage.getItem("session_key") || "").trim();
 }
@@ -307,19 +312,18 @@ const Principal = () => {
 
   const [usuario, setUsuario] = useState(null);
   const [tema, setTema] = useState("claro");
+  const [tenantLogoSrc, setTenantLogoSrc] = useState("");
+  const [tenantLogoLoaded, setTenantLogoLoaded] = useState(false);
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showPerfilModal, setShowPerfilModal] = useState(false);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-
-  // ✅ dropdowns
   const [openMovSub, setOpenMovSub] = useState(false);
   const [openCCSub, setOpenCCSub] = useState(false);
 
   const closeTimerRef = useRef(null);
   const openTimerRef = useRef(null);
-
   const closeCCTimerRef = useRef(null);
   const openCCTimerRef = useRef(null);
 
@@ -327,8 +331,8 @@ const Principal = () => {
   const [closingUI, setClosingUI] = useState(false);
 
   const idleTimerRef = useRef(null);
+  const tenantLogoObjectUrlRef = useRef("");
 
-  // ✅ Mov timers
   const closeSoon = (ms = 220) => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => setOpenMovSub(false), ms);
@@ -346,7 +350,6 @@ const Principal = () => {
     openTimerRef.current = null;
   };
 
-  // ✅ CC timers
   const closeCCSoon = (ms = 220) => {
     if (closeCCTimerRef.current) clearTimeout(closeCCTimerRef.current);
     closeCCTimerRef.current = setTimeout(() => setOpenCCSub(false), ms);
@@ -363,6 +366,89 @@ const Principal = () => {
     if (openCCTimerRef.current) clearTimeout(openCCTimerRef.current);
     openCCTimerRef.current = null;
   };
+
+  const revokeTenantLogoObjectUrl = useCallback(() => {
+    try {
+      if (tenantLogoObjectUrlRef.current) {
+        URL.revokeObjectURL(tenantLogoObjectUrlRef.current);
+        tenantLogoObjectUrlRef.current = "";
+      }
+    } catch {}
+  }, []);
+
+  const buildTenantLogoUrl = useCallback(() => {
+    return buildApiUrl({ action: "tenant_logo_ver" });
+  }, []);
+
+  const loadTenantLogo = useCallback(async () => {
+    try {
+      revokeTenantLogoObjectUrl();
+      setTenantLogoSrc("");
+      setTenantLogoLoaded(false);
+
+      const sessionKey = getSessionKey();
+      if (!sessionKey) return;
+
+      if (isLocalApiBase()) {
+        return;
+      }
+
+      const usuarioLocal = safeJsonParse(localStorage.getItem("usuario")) || {};
+      const logoDb = String(
+        usuarioLocal?.tenant_logo_url_db ||
+          usuario?.tenant_logo_url_db ||
+          ""
+      ).trim();
+
+      if (!logoDb) {
+        return;
+      }
+
+      const logoUrl = buildTenantLogoUrl();
+
+      const res = await fetch(logoUrl, {
+        method: "GET",
+        headers: {
+          "X-Session": sessionKey,
+        },
+        cache: "no-store",
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        try {
+          window.dispatchEvent(
+            new CustomEvent("auth:unauthorized", { detail: { status: res.status } })
+          );
+        } catch {}
+        return;
+      }
+
+      if (res.status === 404 || res.status === 500) {
+        return;
+      }
+
+      if (!res.ok) {
+        return;
+      }
+
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        return;
+      }
+
+      const blob = await res.blob();
+      if (!blob || !blob.size) return;
+
+      const objectUrl = URL.createObjectURL(blob);
+      tenantLogoObjectUrlRef.current = objectUrl;
+
+      setTenantLogoSrc(objectUrl);
+      setTenantLogoLoaded(true);
+    } catch {
+      setTenantLogoSrc("");
+      setTenantLogoLoaded(false);
+    }
+  }, [buildTenantLogoUrl, revokeTenantLogoObjectUrl, usuario]);
 
   const doLogout = useCallback(
     async ({ silent = false } = {}) => {
@@ -392,6 +478,9 @@ const Principal = () => {
       } catch (e) {
         console.warn("Error llamando logout:", e);
       } finally {
+        revokeTenantLogoObjectUrl();
+        setTenantLogoSrc("");
+        setTenantLogoLoaded(false);
         hardClientLogoutCleanup();
         setShowLogoutModal(false);
         setDrawerOpen(false);
@@ -403,7 +492,7 @@ const Principal = () => {
         closingRef.current = false;
       }
     },
-    [navigate]
+    [navigate, revokeTenantLogoObjectUrl]
   );
 
   useEffect(() => {
@@ -451,8 +540,11 @@ const Principal = () => {
         setTimeout(() => prefetchGlobalListas(onUnauthorized), 200);
       }
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [doLogout, navigate]);
+
+  useEffect(() => {
+    loadTenantLogo();
+  }, [usuario, loadTenantLogo]);
 
   useEffect(() => {
     return () => {
@@ -461,8 +553,9 @@ const Principal = () => {
       if (closeCCTimerRef.current) clearTimeout(closeCCTimerRef.current);
       if (openCCTimerRef.current) clearTimeout(openCCTimerRef.current);
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      revokeTenantLogoObjectUrl();
     };
-  }, []);
+  }, [revokeTenantLogoObjectUrl]);
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -488,7 +581,6 @@ const Principal = () => {
     };
   }, [drawerOpen]);
 
-  // ✅ IDLE TIMER
   useEffect(() => {
     const resetIdle = () => {
       setLastActivityNow();
@@ -512,7 +604,6 @@ const Principal = () => {
     };
   }, [doLogout]);
 
-  // ✅ si vuelve del sleep / cambia pestaña
   useEffect(() => {
     const checkExpiredOnWake = () => {
       const last = getLastActivityTs();
@@ -536,7 +627,6 @@ const Principal = () => {
 
   const planNivel = normalizePlanNivel(usuario?.plan_nivel ?? 1);
 
-  // ✅ nav con children también para Cuentas Corrientes
   const navItems = useMemo(() => {
     const base = [
       {
@@ -581,7 +671,8 @@ const Principal = () => {
 
   const activeLabel = useMemo(() => {
     if (location.pathname.startsWith("/panel/movimientos")) return "Movimientos";
-    if (location.pathname.startsWith("/panel/cuentas-corrientes")) return "Cuentas Corrientes";
+    if (location.pathname.startsWith("/panel/cuentas-corrientes/clientes")) return "Cuentas Corrientes";
+    if (location.pathname.startsWith("/panel/cuentas-corrientes/proveedores")) return "Cuentas Corrientes";
     const found = navItems.find((x) => location.pathname.startsWith(x.ruta));
     return found?.label || "Dashboard";
   }, [location.pathname, navItems]);
@@ -670,7 +761,6 @@ const Principal = () => {
 
   return (
     <div className="pp-shell">
-      {/* ================= HEADER ================= */}
       <header className="mov-topbar">
         <div className="mov-topbar__left">
           <button
@@ -690,7 +780,7 @@ const Principal = () => {
           >
             <img
               src={LogoBalto}
-              alt="Logo Balto"
+              alt="Logo de Balto"
               className="mov-topbar__logoImg"
             />
           </button>
@@ -732,19 +822,39 @@ const Principal = () => {
             className="mov-topbar__usericon"
             onClick={() => setShowPerfilModal(true)}
             title="Perfil"
+            style={{
+              overflow: "hidden",
+              padding: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
-            <FontAwesomeIcon icon={faUserCircle} />
+            {tenantLogoLoaded && tenantLogoSrc ? (
+              <img
+                src={tenantLogoSrc}
+                alt="Logo de la empresa"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  display: "block",
+                  padding: "8px",
+                  borderRadius: "50%",
+                }}
+              />
+            ) : (
+              <FontAwesomeIcon icon={faUserCircle} />
+            )}
           </button>
         </div>
       </header>
 
-      {/* ✅ OVERLAY drawer */}
       <div
         className={`pp-drawerOverlay ${drawerOpen ? "is-open" : ""}`}
         onMouseDown={() => setDrawerOpen(false)}
       />
 
-      {/* ================= SIDEBAR ================= */}
       <aside className={`pp-sidebar ${drawerOpen ? "is-drawerOpen" : ""}`}>
         <div className="pp-drawerHeader">
           <div
@@ -801,9 +911,14 @@ const Principal = () => {
               if (isMov) setOpenMovSub(true);
               if (isCC) setOpenCCSub(true);
             };
-            const closeSub = () => {
-              if (isMov) setOpenMovSub(false);
-              if (isCC) setOpenCCSub(false);
+
+            const toggleSub = () => {
+              if (isMov) {
+                setOpenMovSub((prev) => !prev);
+              }
+              if (isCC) {
+                setOpenCCSub((prev) => !prev);
+              }
             };
 
             const openSoonLocal = (ms = 300) => {
@@ -816,6 +931,7 @@ const Principal = () => {
                 openCCSoon(ms);
               }
             };
+
             const closeSoonLocal = (ms = 220) => {
               if (isMov) {
                 cancelOpen();
@@ -826,6 +942,7 @@ const Principal = () => {
                 closeCCSoon(ms);
               }
             };
+
             const cancelAllTimersLocal = () => {
               if (isMov) {
                 cancelClose();
@@ -857,21 +974,33 @@ const Principal = () => {
                   type="button"
                   className={`pp-nav__item ${isActive ? "is-active" : ""}`}
                   onClick={() => {
-                    // ✅ MOBILE: 1er toque abre submenú, 2do toque navega
-                    if (hasSub && isNoHover() && (isMov || isCC)) {
-                      const currentlyOpen = isMov ? openMovSub : openCCSub;
-                      if (!currentlyOpen) {
-                        openSub();
+                    /* ✅ CUENTAS CORRIENTES: SOLO ABRE/CIERRA, NO NAVEGA */
+                    if (isCC && hasSub) {
+                      toggleSub();
+                      return;
+                    }
+
+                    /* ✅ MOVIMIENTOS: mantiene comportamiento anterior */
+                    if (hasSub && isNoHover() && isMov) {
+                      if (!openMovSub) {
+                        setOpenMovSub(true);
                         return;
                       }
                       handleNavigate(item.ruta);
                       return;
                     }
 
-                    // ✅ resto (desktop o items sin sub)
                     handleNavigate(item.ruta);
                   }}
-                  aria-expanded={hasSub ? (isMov ? openMovSub : isCC ? openCCSub : undefined) : undefined}
+                  aria-expanded={
+                    hasSub
+                      ? isMov
+                        ? openMovSub
+                        : isCC
+                        ? openCCSub
+                        : undefined
+                      : undefined
+                  }
                   aria-haspopup={hasSub ? "menu" : undefined}
                 >
                   <span className="pp-nav__icon">
@@ -938,18 +1067,17 @@ const Principal = () => {
         </div>
       </aside>
 
-      {/* ================= CONTENT ================= */}
       <main className="pp-content">
         <div className="pp-content__inner">
           <Outlet />
         </div>
       </main>
 
-      {/* ================= MODALES ================= */}
       <ModalPerfil
         open={showPerfilModal}
         onClose={() => setShowPerfilModal(false)}
         usuario={usuario}
+        logoSrc={tenantLogoLoaded && tenantLogoSrc ? tenantLogoSrc : ""}
         onLogoutRequest={() => {
           setShowPerfilModal(false);
           setShowLogoutModal(true);

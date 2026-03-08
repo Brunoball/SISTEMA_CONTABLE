@@ -5,8 +5,6 @@ import BASE_URL from "../../../config/config.jsx";
 import "../../Global/Global_css/Global_Section.css";
 
 import Toast from "../../Global/Toast.jsx";
-import GifCarga from "../../Global/Gif_Carga.jsx";
-import "../../Global/gif_carga.css";
 
 import Calendario from "../../Global/Calendario/Calendario.jsx";
 import "../../Global/Calendario/calendario.css";
@@ -14,6 +12,9 @@ import "../../Global/Calendario/calendario.css";
 import ModalNuevaVenta from "./modales/ModalNuevaVenta.jsx";
 import ModalEditarVenta from "./modales/ModalEditarVenta.jsx";
 import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
+
+// ✅ BOTÓN EXPORTAR GLOBAL
+import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -114,7 +115,10 @@ function dateToAPI(d) {
 
 function formatDateUI(d) {
   if (!d) return "—";
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}/${d.getFullYear()}`;
 }
 
 /* =========================
@@ -131,7 +135,8 @@ function getAuthInfo() {
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand = u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    const cand =
+      u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
   return { token, sessionKey, idUsuario };
@@ -255,7 +260,7 @@ function rowInDateRange(row, from, to) {
 }
 
 /* =========================
-   Excel
+   Export helpers
 ========================= */
 function slugifySheetName(name) {
   const s = String(name || "Ventas")
@@ -263,6 +268,41 @@ function slugifySheetName(name) {
     .replace(/\s+/g, " ")
     .trim();
   return (s || "Ventas").slice(0, 31);
+}
+
+function buildExportRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map((r) => {
+    const pago = safeText(r?.pago_tipo_venta ?? r?.tipo_venta);
+    const pagoNorm = normalizeSearchText(pago);
+    const medioPago = pagoNorm.includes("contado") ? safeText(r?.medio_pago_nombre) : "—";
+
+    return {
+      FECHA: safeText(formatFechaDMY(r?.fecha)),
+      DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
+      CLIENTE: safeText(r?.cliente),
+      PAGO: pago || "—",
+      MEDIO_DE_PAGO: medioPago,
+      TOTAL: Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0,
+    };
+  });
+}
+
+function escapeCSV(value) {
+  const s = String(value ?? "");
+  if (/[",;\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function downloadBlob(content, fileName, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export default function Ventas() {
@@ -276,7 +316,6 @@ export default function Ventas() {
     refreshLists,
   } = useListas();
 
-  // ✅ Usar contexto global en lugar de estado local
   const { dateRange, setDateRange } = useDateRange();
 
   const [rows, setRows] = useState([]);
@@ -535,14 +574,17 @@ export default function Ventas() {
         await ensureListsLoaded({ force: false, background: true });
       } catch {}
       if (!alive) return;
-      // ✅ Usa el dateRange del contexto global (ya tiene valor al montar)
       await loadRows({ from: dateRange.from, to: dateRange.to, q: "", offset: 0, append: false });
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounce búsqueda
+  /* =========================
+     Debounce búsqueda
+  ========================= */
   useEffect(() => {
     if (skipSearchRef.current) {
       skipSearchRef.current = false;
@@ -559,12 +601,12 @@ export default function Ventas() {
   }, [q, dateRange]);
 
   /* =========================
-     ✅ Handler cambio de rango — actualiza contexto global
+     Cambio de rango
   ========================= */
   const handleDateRangeChange = useCallback(
     async (newRange) => {
       if (!newRange.from && !newRange.to) return;
-      setDateRange(newRange); // ← escribe en el contexto global
+      setDateRange(newRange);
       cacheRef.current.clear();
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -662,7 +704,7 @@ export default function Ventas() {
   }, [columns]);
 
   /* =========================
-     Label para el botón del calendario
+     Label calendario
   ========================= */
   const dateRangeLabel = useMemo(() => {
     const { from, to } = dateRange;
@@ -682,65 +724,122 @@ export default function Ventas() {
   }, [dateRange]);
 
   /* =========================
-     Excel
+     Export base name
   ========================= */
+  const exportBaseName = useMemo(() => {
+    const { from, to } = dateRange;
+    if (from && to) return `ventas_${dateToAPI(from)}_${dateToAPI(to)}`;
+    if (from) return `ventas_desde_${dateToAPI(from)}`;
+    return "ventas_todos";
+  }, [dateRange]);
+
+  const getExportData = useCallback(() => {
+    const dataToExport = buildExportRows(filteredRows);
+    if (!dataToExport.length) throw new Error("No hay datos para exportar.");
+    return dataToExport;
+  }, [filteredRows]);
+
   const exportToExcel = useCallback(() => {
-    try {
-      if (!filteredRows.length) {
-        showToast("error", "No hay datos para exportar.", 2500);
-        return;
+    const dataToExport = getExportData();
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+
+    const headers = Object.keys(dataToExport[0] || {});
+    const totalColIndex = headers.findIndex((h) => h === "TOTAL");
+    if (totalColIndex >= 0 && ws["!ref"]) {
+      const colLetter = XLSX.utils.encode_col(totalColIndex);
+      const range = XLSX.utils.decode_range(ws["!ref"]);
+      for (let r = range.s.r + 1; r <= range.e.r; r++) {
+        const cell = ws[`${colLetter}${r + 1}`];
+        if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
       }
-      if (hasMore) {
-        showToast(
-          "error",
-          "Ojo: faltan registros sin cargar. Si queres exportar todo, toca 'Cargar todos' primero.",
-          5200
-        );
-      }
-
-      const dataToExport = filteredRows.map((r) => {
-        const pago = safeText(r.pago_tipo_venta ?? r.tipo_venta);
-        const pagoNorm = normalizeSearchText(pago);
-        const medioPago = pagoNorm.includes("contado") ? safeText(r.medio_pago_nombre) : "—";
-        return {
-          FECHA: safeText(formatFechaDMY(r.fecha)),
-          DESCRIPCION: safeText(r.detalle ?? r.descripcion ?? r.concepto),
-          CLIENTE: safeText(r.cliente),
-          PAGO: pago || "—",
-          MEDIO_DE_PAGO: medioPago,
-          TOTAL: Number(r.monto_total ?? r.total ?? 0) || 0,
-        };
-      });
-
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(dataToExport);
-
-      const headers = Object.keys(dataToExport[0] || {});
-      const totalColIndex = headers.findIndex((h) => h === "TOTAL");
-      if (totalColIndex >= 0 && ws["!ref"]) {
-        const colLetter = XLSX.utils.encode_col(totalColIndex);
-        const range = XLSX.utils.decode_range(ws["!ref"]);
-        for (let r = range.s.r + 1; r <= range.e.r; r++) {
-          const cell = ws[`${colLetter}${r + 1}`];
-          if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
-        }
-      }
-
-      const { from, to } = dateRange;
-      const sufijo =
-        from && to
-          ? `${dateToAPI(from)}_${dateToAPI(to)}`
-          : from
-          ? `desde_${dateToAPI(from)}`
-          : "todos";
-
-      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`Ventas_${sufijo}`));
-      XLSX.writeFile(wb, `ventas_${sufijo}.xlsx`);
-      showToast("exito", "Excel exportado.", 2200);
-    } catch (e) {
-      showToast("error", e?.message || "Error exportando Excel.", 3500);
     }
-  }, [filteredRows, dateRange, showToast, hasMore]);
+
+    XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Ventas_Vista"));
+    XLSX.writeFile(wb, `${exportBaseName}.xlsx`);
+  }, [getExportData, exportBaseName]);
+
+  const exportToCSV = useCallback(() => {
+    const dataToExport = getExportData();
+    const headers = Object.keys(dataToExport[0] || {});
+    const lines = [
+      headers.join(";"),
+      ...dataToExport.map((row) => headers.map((h) => escapeCSV(row[h])).join(";")),
+    ];
+    const csvContent = "\uFEFF" + lines.join("\n");
+    downloadBlob(csvContent, `${exportBaseName}.csv`, "text/csv;charset=utf-8;");
+  }, [getExportData, exportBaseName]);
+
+  const exportToTXT = useCallback(() => {
+    const dataToExport = getExportData();
+    const lines = dataToExport.map((row, index) => {
+      return [
+        `REGISTRO ${index + 1}`,
+        `FECHA: ${row.FECHA ?? ""}`,
+        `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
+        `CLIENTE: ${row.CLIENTE ?? ""}`,
+        `PAGO: ${row.PAGO ?? ""}`,
+        `MEDIO DE PAGO: ${row.MEDIO_DE_PAGO ?? ""}`,
+        `TOTAL: ${row.TOTAL ?? ""}`,
+        "----------------------------------------",
+      ].join("\n");
+    });
+    const txtContent = lines.join("\n");
+    downloadBlob(txtContent, `${exportBaseName}.txt`, "text/plain;charset=utf-8;");
+  }, [getExportData, exportBaseName]);
+
+  const handleExport = useCallback(
+    async (type) => {
+      try {
+        if (hasMore) {
+          showToast("error", 'Faltan registros sin cargar. Tocá "Cargar todos" primero.', 5200);
+          return;
+        }
+
+        if (type === "excel") {
+          exportToExcel();
+          showToast("exito", "Excel exportado.", 2200);
+          return;
+        }
+
+        if (type === "csv") {
+          exportToCSV();
+          showToast("exito", "CSV exportado.", 2200);
+          return;
+        }
+
+        if (type === "txt") {
+          exportToTXT();
+          showToast("exito", "TXT exportado.", 2200);
+        }
+      } catch (e) {
+        showToast("error", e?.message || "Error exportando archivo.", 3500);
+      }
+    },
+    [hasMore, exportToExcel, exportToCSV, exportToTXT, showToast]
+  );
+
+  const exportOptions = useMemo(
+    () => [
+      {
+        key: "excel",
+        label: "Exportar Excel (.xlsx)",
+        icon: faFileExcel,
+        onClick: () => handleExport("excel"),
+      },
+      {
+        key: "csv",
+        label: "Exportar CSV (.csv)",
+        onClick: () => handleExport("csv"),
+      },
+      {
+        key: "txt",
+        label: "Exportar TXT (.txt)",
+        onClick: () => handleExport("txt"),
+      },
+    ],
+    [handleExport]
+  );
 
   /* =========================
      Guardar / eliminar
@@ -791,7 +890,7 @@ export default function Ventas() {
   };
 
   /* =========================
-     "Cargar todos"
+     Cargar todos
   ========================= */
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
@@ -828,8 +927,16 @@ export default function Ventas() {
       setLoadingAll(false);
     }
   }, [
-    hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll,
-    nextOffset, dateRange, q, loadRows, showToast,
+    hasMore,
+    loadingMore,
+    loadingRows,
+    loadingListsCtx,
+    loadingAll,
+    nextOffset,
+    dateRange,
+    q,
+    loadRows,
+    showToast,
   ]);
 
   const isAnyLoading = loadingRows || loadingMore || loadingAll;
@@ -837,14 +944,17 @@ export default function Ventas() {
   /* =========================
      Skeleton
   ========================= */
-  const skelWidths = useMemo(() => ({
-    fecha: ["44%", "38%", "40%", "36%"],
-    detalle: ["72%", "58%", "66%", "48%"],
-    cliente: ["62%", "54%", "46%", "58%"],
-    pago: ["44%", "34%", "40%", "30%"],
-    medio_pago_nombre: ["52%", "44%", "48%", "36%"],
-    total: ["38%", "30%", "34%", "28%"],
-  }), []);
+  const skelWidths = useMemo(
+    () => ({
+      fecha: ["44%", "38%", "40%", "36%"],
+      detalle: ["72%", "58%", "66%", "48%"],
+      cliente: ["62%", "54%", "46%", "58%"],
+      pago: ["44%", "34%", "40%", "30%"],
+      medio_pago_nombre: ["52%", "44%", "48%", "36%"],
+      total: ["38%", "30%", "34%", "28%"],
+    }),
+    []
+  );
 
   const renderSkeletonRow = (idx) => (
     <div
@@ -857,7 +967,12 @@ export default function Ventas() {
       {columns.map((c) => {
         if (c.key === "acciones") {
           return (
-            <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
+            <div
+              key={c.key}
+              className="mov-gridCell mov-gridCell--actions is-center"
+              role="cell"
+              data-label={c.label}
+            >
               <div className="mov-skelActions">
                 <span className="mov-skelIcon" />
                 <span className="mov-skelIcon" />
@@ -870,7 +985,11 @@ export default function Ventas() {
         return (
           <div
             key={c.key}
-            className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")}
+            className={[
+              "mov-gridCell",
+              c.align === "right" ? "is-right" : "",
+              c.align === "center" ? "is-center" : "",
+            ].join(" ")}
             role="cell"
             data-label={c.label}
           >
@@ -893,9 +1012,6 @@ export default function Ventas() {
     tipos_movimiento: [],
   };
 
-  /* =========================
-     RENDER
-  ========================= */
   return (
     <div className="mov-page">
       {toast && (
@@ -907,12 +1023,8 @@ export default function Ventas() {
         />
       )}
 
-      {errorListsCtx && (
-        <div className="mov-alert" role="alert">{errorListsCtx}</div>
-      )}
-      {error && (
-        <div className="mov-alert" role="alert">{error}</div>
-      )}
+      {errorListsCtx && <div className="mov-alert" role="alert">{errorListsCtx}</div>}
+      {error && <div className="mov-alert" role="alert">{error}</div>}
 
       <section className="mov-card mov-card--table">
         <div className="mov-card__head">
@@ -926,8 +1038,6 @@ export default function Ventas() {
             </div>
 
             <div className="mov-headFilters">
-
-              {/* Calendario */}
               <div className="mov-filter" style={{ position: "relative" }}>
                 <label>
                   <FontAwesomeIcon icon={faCalendarDays} /> Fecha
@@ -971,7 +1081,6 @@ export default function Ventas() {
                 )}
               </div>
 
-              {/* Búsqueda */}
               <div className="mov-search">
                 <label>
                   <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
@@ -1026,22 +1135,22 @@ export default function Ventas() {
           </div>
 
           <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button
-              type="button"
-              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
-              onClick={exportToExcel}
+            <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
-              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
-            >
-              <FontAwesomeIcon icon={faFileExcel} /> Exportar
-            </button>
+              loading={loadingAll}
+              label="Exportar"
+              title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"}
+              opciones={exportOptions}
+              align="right"
+            />
 
             <button
               type="button"
               className="mov-btn mov-btn--primary"
               onClick={() => {
-                if (loadingListsCtx)
+                if (loadingListsCtx) {
                   showToast?.("cargando", "Cargando listas… podés ir completando igual.", 2400);
+                }
                 setOpenAdd(true);
               }}
               title="Crear nuevo movimiento"
@@ -1051,7 +1160,6 @@ export default function Ventas() {
           </div>
         </div>
 
-        {/* HEADER */}
         <div
           className="mov-gridTable mov-gridTable--head"
           style={{ gridTemplateColumns: gridCols }}
@@ -1061,7 +1169,8 @@ export default function Ventas() {
             <div
               key={c.key}
               className={[
-                "mov-gridCell", "mov-gridCell--head",
+                "mov-gridCell",
+                "mov-gridCell--head",
                 c.align === "right" ? "is-right" : "",
                 c.align === "center" ? "is-center" : "",
               ].join(" ")}
@@ -1072,9 +1181,14 @@ export default function Ventas() {
           ))}
         </div>
 
-        {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
-          <div className={["mov-gridBody", "mov-gridBody--relative", showSkeleton ? "mov-softLoading" : ""].join(" ")}>
+          <div
+            className={[
+              "mov-gridBody",
+              "mov-gridBody--relative",
+              showSkeleton ? "mov-softLoading" : "",
+            ].join(" ")}
+          >
             {showSkeleton ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
@@ -1104,7 +1218,10 @@ export default function Ventas() {
                                   type="button"
                                   className="mov-iconBtn"
                                   title="Editar"
-                                  onClick={() => { setSelectedRow(r); setOpenEdit(true); }}
+                                  onClick={() => {
+                                    setSelectedRow(r);
+                                    setOpenEdit(true);
+                                  }}
                                   disabled={isAnyLoading || loadingListsCtx}
                                 >
                                   <FontAwesomeIcon icon={faPenToSquare} />
@@ -1114,7 +1231,10 @@ export default function Ventas() {
                                   className="mov-iconBtn mov-iconBtn--danger"
                                   title="Eliminar"
                                   disabled={isAnyLoading || loadingListsCtx || deletingId === r.id_movimiento}
-                                  onClick={() => { setSelectedRow(r); setOpenDel(true); }}
+                                  onClick={() => {
+                                    setSelectedRow(r);
+                                    setOpenDel(true);
+                                  }}
                                 >
                                   {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
                                 </button>
@@ -1132,7 +1252,9 @@ export default function Ventas() {
                               c.align === "right" ? "is-right" : "",
                               c.align === "center" ? "is-center" : "",
                               c.strong ? "is-strong" : "",
-                            ].filter(Boolean).join(" ")}
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
                             role="cell"
                             data-label={c.label}
                             title={typeof val === "string" ? val : undefined}
@@ -1176,7 +1298,6 @@ export default function Ventas() {
         </div>
       </section>
 
-      {/* MODAL NUEVA VENTA */}
       <ModalNuevaVenta
         open={openAdd}
         lists={lists}
@@ -1187,7 +1308,7 @@ export default function Ventas() {
         }
         onClose={() => setOpenAdd(false)}
         onToast={showToast}
-        onSaved={async (info) => {
+        onSaved={async () => {
           try {
             setOpenAdd(false);
             setQ("");
@@ -1208,7 +1329,6 @@ export default function Ventas() {
         }}
       />
 
-      {/* MODAL EDITAR */}
       <ModalEditarVenta
         open={openEdit}
         lists={lists}
@@ -1218,7 +1338,10 @@ export default function Ventas() {
             ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}`
             : ""
         }
-        onClose={() => { setOpenEdit(false); setSelectedRow(null); }}
+        onClose={() => {
+          setOpenEdit(false);
+          setSelectedRow(null);
+        }}
         onToast={showToast}
         onSave={async (payload) => {
           try {
@@ -1243,12 +1366,14 @@ export default function Ventas() {
         }}
       />
 
-      {/* MODAL ELIMINAR */}
       <ModalEliminarMovimientos
         open={openDel}
         row={selectedRow}
         loading={deletingId === selectedRow?.id_movimiento}
-        onClose={() => { setOpenDel(false); setSelectedRow(null); }}
+        onClose={() => {
+          setOpenDel(false);
+          setSelectedRow(null);
+        }}
         onConfirm={confirmDelete}
         onToast={showToast}
       />

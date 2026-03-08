@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FaSearch, FaCheck, FaTimes } from "react-icons/fa";
+import "./ModalFacturaBalto.css";
+import ModalFacturaDatos from "./ModalFacturaDatos.jsx";
+import ModalFacturaBaltoResumen from "./ModalFacturaBaltoResumen.jsx";
 import BASE_URL from "../../../config/config";
 
 const DOC_TIPOS = [
@@ -24,9 +27,11 @@ const IVA_OPTIONS = [
 function onlyDigits(s) {
   return String(s || "").replace(/\D/g, "");
 }
+
 function safeStr(x) {
   return String(x ?? "").trim();
 }
+
 function safeJsonParse(text) {
   try {
     return JSON.parse(text);
@@ -34,11 +39,13 @@ function safeJsonParse(text) {
     return null;
   }
 }
+
 function normalizeApiBase(apiBaseProp) {
   const raw = String(apiBaseProp || BASE_URL || "").trim();
   if (!raw) return "";
   return raw.replace(/\/+$/, "");
 }
+
 function buildApiUrl(apiBaseProp, params = {}) {
   const base = normalizeApiBase(apiBaseProp);
   if (!base) return "";
@@ -56,12 +63,14 @@ function buildApiUrl(apiBaseProp, params = {}) {
 
   return `${finalUrl}?${usp.toString()}`;
 }
+
 function getAuthHeaders() {
   const headers = new Headers({ Accept: "application/json" });
   const sessionKey = String(localStorage.getItem("session_key") || "").trim();
   if (sessionKey) headers.set("X-Session", sessionKey);
   return headers;
 }
+
 function humanizeFetchError(err) {
   const msg = String(err?.message || err || "").trim();
   if (
@@ -74,22 +83,53 @@ function humanizeFetchError(err) {
   }
   return msg || "No se pudo consultar ARCA.";
 }
+
 function renderValue(v) {
   const s = safeStr(v);
   return s || "—";
 }
 
-export default function ModalFacturaBuscarCliente({
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function plusDaysISO(days = 10) {
+  const d = new Date();
+  d.setDate(d.getDate() + Number(days || 0));
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function buildInitialItem() {
+  return {
+    id: `it_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    descripcion: "",
+    cantidad: "1",
+    precio_unitario: "",
+    bonif_pct: "0",
+    subtotal: 0,
+  };
+}
+
+export default function ModalFacturaBalto({
   open,
   onClose,
   apiBase,
-  initialDocTipo = 80,
-  initialDocNro = "",
-  initialManualData = null,
-  onSelect,
+  action = "movimientos",
+  data,
+  onFacturada,
+  onDone,
 }) {
-  const [docTipo, setDocTipo] = useState(Number(initialDocTipo) || 80);
-  const [docNro, setDocNro] = useState(onlyDigits(initialDocNro));
+  const [step, setStep] = useState(1);
+
+  const [docTipo, setDocTipo] = useState(80);
+  const [docNro, setDocNro] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
@@ -98,33 +138,70 @@ export default function ModalFacturaBuscarCliente({
   const [manualIva, setManualIva] = useState("Consumidor Final");
   const [manualDomicilio, setManualDomicilio] = useState("");
 
-  const firstRef = useRef(null);
+  const [clienteFact, setClienteFact] = useState(null);
 
+  const [formFactura, setFormFactura] = useState({
+    fecha_cbte_iso: todayISO(),
+    vto_pago_iso: plusDaysISO(10),
+    cbte_tipo: 11,
+    pto_vta: 2,
+    items_facturacion: [buildInitialItem()],
+    total_ars: 0,
+    observaciones: "",
+  });
+
+  const firstRef = useRef(null);
   const apiRootResolved = useMemo(() => normalizeApiBase(apiBase), [apiBase]);
 
-  useEffect(() => {
-    if (!open) return;
+  const nombreCliente = useMemo(
+    () => data?.labelCliente || data?.cliente || "",
+    [data]
+  );
 
+  const nombreSistema = useMemo(
+    () => data?.labelSistema || data?.sistema || "",
+    [data]
+  );
+
+  const resetAll = useCallback(() => {
+    const cf = data?.cliente_facturacion ?? null;
+
+    setStep(1);
     setError("");
     setLoading(false);
     setResult(null);
 
-    setDocTipo(Number(initialDocTipo) || 80);
-    setDocNro(onlyDigits(initialDocNro));
+    setClienteFact(cf || null);
+    setDocTipo(Number(cf?.doc_tipo || 80));
+    setDocNro(onlyDigits(cf?.doc_nro || ""));
 
-    setManualRazon(safeStr(initialManualData?.razon_social));
-    setManualIva(safeStr(initialManualData?.cond_iva) || "Consumidor Final");
-    setManualDomicilio(safeStr(initialManualData?.domicilio));
+    setManualRazon(safeStr(cf?.razon_social));
+    setManualIva(safeStr(cf?.cond_iva) || "Consumidor Final");
+    setManualDomicilio(safeStr(cf?.domicilio));
 
-    setTimeout(() => firstRef.current?.focus?.(), 0);
-  }, [open, initialDocTipo, initialDocNro, initialManualData]);
+    setFormFactura({
+      fecha_cbte_iso: todayISO(),
+      vto_pago_iso: plusDaysISO(10),
+      cbte_tipo: 11,
+      pto_vta: 2,
+      items_facturacion: [buildInitialItem()],
+      total_ars: 0,
+      observaciones: "",
+    });
+  }, [data]);
 
   useEffect(() => {
     if (!open) return;
+    resetAll();
+    setTimeout(() => firstRef.current?.focus?.(), 0);
+  }, [open, resetAll]);
+
+  useEffect(() => {
+    if (!open || step !== 1) return;
     const onKey = (e) => e.key === "Escape" && onClose?.();
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, step, onClose]);
 
   const fetchJSON = useCallback(async (url, opts = {}) => {
     if (!url) {
@@ -229,8 +306,8 @@ export default function ModalFacturaBuscarCliente({
       });
 
       const j = await fetchJSON(url, { method: "GET" });
-      const data = j?.data ?? j;
-      const summary = data?.summary ?? null;
+      const responseData = j?.data ?? j;
+      const summary = responseData?.summary ?? null;
 
       if (!summary) {
         throw new Error("ARCA no devolvió datos del cliente.");
@@ -282,11 +359,13 @@ export default function ModalFacturaBuscarCliente({
       origen: Number(docTipo) === 96 ? "manual_dni" : "arca_cuit",
     };
 
-    onSelect?.(payload);
+    setClienteFact(payload);
+    setDocTipo(payload.doc_tipo);
+    setDocNro(payload.doc_nro);
+    setStep(2);
   }, [
     docNro,
     docTipo,
-    onSelect,
     result,
     validar,
     validarManualDni,
@@ -295,8 +374,80 @@ export default function ModalFacturaBuscarCliente({
     manualDomicilio,
   ]);
 
+  const handleGuardarDatosFactura = useCallback((payload) => {
+    setFormFactura({
+      fecha_cbte_iso: payload?.fecha_cbte_iso || todayISO(),
+      vto_pago_iso: payload?.vto_pago_iso || plusDaysISO(10),
+      cbte_tipo: Number(payload?.cbte_tipo || 11),
+      pto_vta: Number(payload?.pto_vta || 2),
+      items_facturacion: Array.isArray(payload?.items_facturacion)
+        ? payload.items_facturacion
+        : [buildInitialItem()],
+      total_ars: Number(payload?.total_ars || 0),
+      observaciones: safeStr(payload?.observaciones),
+    });
+    setStep(3);
+  }, []);
+
   if (!open) return null;
 
+  // ── Step 2: Datos de la factura ──────────────────────────────────────────
+  if (step === 2) {
+    return (
+      <ModalFacturaDatos
+        open={true}
+        onClose={onClose}
+        onBack={() => setStep(1)}
+        data={data}
+        clienteFact={clienteFact}
+        docTipo={docTipo}
+        docNro={docNro}
+        initialData={formFactura}
+        nombreCliente={nombreCliente}
+        nombreSistema={nombreSistema}
+        onNext={handleGuardarDatosFactura}
+      />
+    );
+  }
+
+  // ── Step 3: Resumen y emisión ─────────────────────────────────────────────
+  if (step === 3) {
+    return (
+      <ModalFacturaBaltoResumen
+        open={true}
+        onClose={() => setStep(2)}
+        onBack={() => setStep(2)}
+        onCloseAll={onClose}
+        apiBase={apiBase}
+        action={action}
+        data={{
+          ...data,
+          cliente_facturacion: clienteFact,
+          labelCliente: nombreCliente,
+          labelSistema: nombreSistema,
+          fecha_cbte_iso: formFactura.fecha_cbte_iso,
+          vto_pago_iso: formFactura.vto_pago_iso,
+          cbte_tipo: formFactura.cbte_tipo,
+          pto_vta: formFactura.pto_vta,
+          items_facturacion: formFactura.items_facturacion,
+          total_ars: formFactura.total_ars,
+          monto: formFactura.total_ars,
+          importe: formFactura.total_ars,
+          observaciones: formFactura.observaciones,
+        }}
+        docTipo={docTipo}
+        docNro={docNro}
+        cbteTipo={formFactura.cbte_tipo}
+        ptoVta={String(formFactura.pto_vta)}
+        onFacturada={onFacturada}
+        onDone={onDone}
+        forceTestAmount={false}
+        testAmount={null}
+      />
+    );
+  }
+
+  // ── Step 1: Búsqueda / carga de cliente ───────────────────────────────────
   const s = result?.summary || null;
   const isDni = Number(docTipo) === 96;
 
@@ -315,7 +466,7 @@ export default function ModalFacturaBuscarCliente({
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Buscar / completar cliente</h2>
             <p className="mi-modal__subtitle">
-              Si usás CUIT consulta ARCA. Si usás DNI, completás los datos manualmente.
+              Paso 1 de 3. Si usás CUIT consulta ARCA. Si usás DNI, completás los datos manualmente.
             </p>
           </div>
 
@@ -393,7 +544,7 @@ export default function ModalFacturaBuscarCliente({
               {isDni && (
                 <div style={{ marginTop: 16 }}>
                   <div className="arca-alert arca-alert--info" style={{ marginBottom: 12 }}>
-                    Con <b>DNI</b> la factura se completa a mano. Estos datos se usarán en el PDF y al emitir.
+                    Con <b>DNI</b> la factura se completa a mano. Estos datos se usarán después en la factura.
                   </div>
 
                   <div className="fl-grid">
@@ -474,7 +625,7 @@ export default function ModalFacturaBuscarCliente({
               {s ? (
                 <div className="arca-alert arca-alert--info" style={{ marginTop: 12 }}>
                   <div className="arca-alert__title">
-                    <strong>Datos para la factura</strong>
+                    <strong>Datos encontrados</strong>
                   </div>
 
                   {s?.nota ? (

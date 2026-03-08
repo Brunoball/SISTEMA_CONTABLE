@@ -55,10 +55,8 @@ if (!function_exists('route_movimientos')) {
       case 'comprobantes_descargar':
       case 'comprobantes_link':
       case 'comprobantes_descargar_token':
-
-      // ✅ NUEVAS actions (asociación)
-      case 'comprobantes_asociar_movimiento':     // 1x1
-      case 'comprobantes_asociar_movimientos':    // batch
+      case 'comprobantes_asociar_movimiento':
+      case 'comprobantes_asociar_movimientos':
         require __DIR__ . '/comprobantes.php';
         return true;
 
@@ -75,14 +73,30 @@ if (!function_exists('route_movimientos')) {
         return true;
 
       /* =========================
-         ✅ VENTAS
+         ✅ VENTAS  →  movimientos/ventas/
       ========================= */
       case 'ventas_listar':
       case 'ventas_crear':
       case 'ventas_crear_batch':
       case 'ventas_actualizar':
       case 'ventas_eliminar':
-        require __DIR__ . '/ventas.php';
+        require __DIR__ . '/ventas/ventas.php';
+        return true;
+
+      /* =========================
+         ✅ CLIENTES FISCALES  →  movimientos/ventas/
+      ========================= */
+      case 'cliente_fiscal_get':
+      case 'cliente_fiscal_upsert':
+        require __DIR__ . '/ventas/clientes_fiscales.php';
+        return true;
+
+      /* =========================
+         ✅ CONFIG FACTURACIÓN
+         trae datos del emisor desde config_facturacion
+      ========================= */
+      case 'config_facturacion_get':
+        require __DIR__ . '/ventas/ventas.php';
         return true;
 
       /* =========================
@@ -98,7 +112,6 @@ if (!function_exists('route_movimientos')) {
 
       /* =========================
          ✅ ARCA / PADRÓN (consultar CUIT)
-         - Solo consulta datos de CUIT (no factura)
       ========================= */
       case 'padron_cuit':
       case 'arca_padron_cuit':

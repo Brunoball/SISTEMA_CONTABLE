@@ -1,7 +1,9 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/components/Perfil/ModalPerfil.jsx
-import React, { useEffect, useMemo, useRef } from "react";
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUserCircle, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import "./ModalPerfil.css";
 
 function normalizeRolLabel(value) {
@@ -25,12 +27,6 @@ function planLabelFromBackend(u) {
   return "Plan Básico";
 }
 
-/**
- * ✅ Devuelve SOLO FECHA en es-AR: DD/MM/AAAA
- * Acepta:
- * - "YYYY-MM-DD"
- * - "YYYY-MM-DD HH:MM:SS"
- */
 function formatMySQLDateOnly(value) {
   if (!value) return "-";
   try {
@@ -53,14 +49,15 @@ export default function ModalPerfil({
   open,
   onClose,
   usuario,
-  onLogoutRequest, // ✅ NUEVO: para abrir el confirm logout desde Principal
+  logoSrc,
+  onLogoutRequest,
 }) {
   const closeBtnRef = useRef(null);
+  const [logoError, setLogoError] = useState(false);
 
   useEffect(() => {
     if (!open) return;
 
-    // foco al botón cerrar
     setTimeout(() => closeBtnRef.current?.focus(), 0);
 
     const onKeyDown = (e) => {
@@ -69,6 +66,10 @@ export default function ModalPerfil({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
+
+  useEffect(() => {
+    setLogoError(false);
+  }, [logoSrc, open]);
 
   const view = useMemo(() => {
     if (!usuario) return null;
@@ -80,11 +81,15 @@ export default function ModalPerfil({
       usuario.usuario ||
       "Usuario";
 
-    const avatar = String(nombre).trim().slice(0, 1).toUpperCase();
+    const tenantNombre =
+      usuario.tenant_nombre ||
+      usuario.nombre_empresa ||
+      usuario.empresa ||
+      "Cliente";
 
     return {
       nombre,
-      avatar,
+      tenantNombre,
       idUsuario: usuario.idUsuario ?? "-",
       rol: normalizeRolLabel(usuario.rol),
       plan: planLabelFromBackend(usuario),
@@ -95,6 +100,7 @@ export default function ModalPerfil({
   if (!open || !view) return null;
 
   const cerrar = () => onClose?.();
+  const showLogo = Boolean(logoSrc) && !logoError;
 
   return (
     <div
@@ -110,7 +116,6 @@ export default function ModalPerfil({
         aria-labelledby="perfil-modal-title"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* HEADER */}
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 id="perfil-modal-title" className="mi-modal__title">
@@ -133,17 +138,54 @@ export default function ModalPerfil({
           </button>
         </div>
 
-        {/* BODY */}
         <div className="perfil-body">
           <div className="perfil-inner">
-            {/* CARD PRINCIPAL */}
             <div className="perfil-card">
-              <div className="perfil-card__icon" aria-hidden="true">
-                <FontAwesomeIcon icon={faUserCircle} />
-              </div>
-
-              <div className="perfil-avatar" aria-hidden="true">
-                {view.avatar}
+              <div
+                className="perfil-logoWrap"
+                aria-hidden="true"
+                style={{
+                  width: 96,
+                  height: 96,
+                  borderRadius: 18,
+                  background: "rgba(255,255,255,0.06)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                  margin: "0 auto 14px auto",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                {showLogo ? (
+                  <img
+                    src={logoSrc}
+                    alt={`Logo de ${view.tenantNombre}`}
+                    style={{
+                      maxWidth: "88%",
+                      maxHeight: "88%",
+                      objectFit: "contain",
+                      display: "block",
+                    }}
+                    onError={() => setLogoError(true)}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 14,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 800,
+                      fontSize: 22,
+                      background: "rgba(255,255,255,0.08)",
+                    }}
+                  >
+                    {String(view.tenantNombre || "C").trim().charAt(0).toUpperCase()}
+                  </div>
+                )}
               </div>
 
               <div className="perfil-who">
@@ -151,10 +193,12 @@ export default function ModalPerfil({
                 <div className="perfil-meta">
                   ID Usuario: <b>{view.idUsuario}</b>
                 </div>
+                <div className="perfil-meta" style={{ marginTop: 6 }}>
+                  Empresa: <b>{view.tenantNombre}</b>
+                </div>
               </div>
             </div>
 
-            {/* DATOS */}
             <div className="perfil-grid">
               <div className="perfil-field">
                 <div className="perfil-field__label">Rol</div>
@@ -174,11 +218,9 @@ export default function ModalPerfil({
           </div>
         </div>
 
-        {/* FOOTER acciones */}
         <div className="mit-actions">
           <div className="mit-help"> </div>
 
-          {/* ✅ Botón cerrar sesión dentro del panel */}
           <button
             type="button"
             className="mit-btn mit-btn--danger"

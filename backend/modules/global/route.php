@@ -11,9 +11,8 @@ if (!function_exists('route_global')) {
    */
   function route_global(string $action): bool
   {
-    // ✅ CLAVE: traer $pdo del scope global (routes/api.php)
-    // Si no, los require_once dentro de esta función NO ven $pdo y revientan.
-    global $pdo;
+    // ✅ CLAVE: traer ambos PDO desde el scope global
+    global $pdo, $pdo_master;
 
     // ✅ Normalización fuerte
     $action = strtolower(trim((string)$action));
@@ -37,6 +36,16 @@ if (!function_exists('route_global')) {
       case 'global_usuario_tema_actualizar':
       case 'tema_actualizar':
         require __DIR__ . '/usuario_tema_actualizar.php';
+        return true;
+
+      /* =========================
+         LOGO DEL TENANT
+      ========================= */
+      case 'tenant_logo_ver':
+      case 'global_tenant_logo_ver':
+      case 'logo_tenant_ver':
+      case 'ver_logo_tenant':
+        require __DIR__ . '/tenant_logo.php';
         return true;
 
       default:

@@ -8,14 +8,17 @@ import "../Global/Global_css/Global_responsive.css";
 import ModalEditarMovimiento from "./modales/ModalEditarMovimiento";
 import ModalEliminarMovimientos from "./modales/ModalEliminarMovimientos";
 
-// FACTURACIÓN
-import ModalFacturaBuscarCliente from "../Mov_Subsection/Facturacion/ModalFacturaBuscarCliente.jsx";
+// ✅ FACTURACIÓN: AHORA VA EL MODAL PADRE, NO EL BUSCADOR SOLO
+import ModalFacturaBalto from "../Mov_Subsection/Facturacion/ModalFacturaBalto.jsx";
 
 // Toast global
 import Toast from "../Global/Toast.jsx";
 
 // Calendario
 import Calendario from "../Global/Calendario/Calendario.jsx";
+
+// ✅ BOTÓN EXPORTAR GLOBAL
+import BotonExportar from "../Global/Boton_Exportar/BotonExportar.jsx";
 
 // ✅ CONTEXTO GLOBAL DE FECHAS
 import { useDateRange } from "../../context/DateRangeContext";
@@ -110,8 +113,9 @@ function formatFechaDMY(v) {
 function periodoToMMYYYY(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
-  let m = "",
-    y = "";
+  let m = "";
+  let y = "";
+
   if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
     const p = s.split(/[-/]/);
     y = p[0];
@@ -129,7 +133,10 @@ function periodoToMMYYYY(input) {
       m = s.slice(0, 2);
       y = s.slice(2);
     }
-  } else return s;
+  } else {
+    return s;
+  }
+
   return `${String(Number(m)).padStart(2, "0")}-${y}`;
 }
 
@@ -151,6 +158,7 @@ function periodoToYYYYMM(input) {
 function getAuthInfo() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
   let idUsuario = 0;
+
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand =
@@ -160,17 +168,20 @@ function getAuthInfo() {
       u?.id ??
       u?.user_id ??
       0;
+
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
+
   return { sessionKey, idUsuario };
 }
 
-/* Excel */
+/* Excel / export */
 function slugifySheetName(name) {
   const s = String(name || "Movimientos")
     .replace(/[\[\]\*\/\\\?\:]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
   return (s || "Movimientos").slice(0, 31);
 }
 
@@ -182,14 +193,39 @@ function buildExportRows(rows) {
       pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")
     );
     const tercero = cliente !== "-" ? cliente : proveedor;
+
     return {
       FECHA: safeText(formatFechaDMY(pick(r, ["fecha", "fecha_movimiento", "created_at"], ""))),
-      DESCRIPCION: safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
-      "TIPO PAGO": safeText(pick(r, ["medio_pago_nombre", "medio_pago", "tipo_pago", "forma_pago"], "")),
+      DESCRIPCION: safeText(
+        pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")
+      ),
+      "TIPO PAGO": safeText(
+        pick(r, ["medio_pago_nombre", "medio_pago", "tipo_pago", "forma_pago"], "")
+      ),
       "CLIENTE/PROVEEDOR": tercero,
       TOTAL: numOrZero(total),
     };
   });
+}
+
+function escapeCSV(value) {
+  const s = String(value ?? "");
+  if (/[",;\n]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+function downloadBlob(content, fileName, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export default function Movimientos() {
@@ -202,7 +238,6 @@ export default function Movimientos() {
     ensureListsLoaded,
   } = useListas();
 
-  // ✅ Usar contexto global en lugar de estado local
   const { dateRange, setDateRange } = useDateRange();
 
   const [rows, setRows] = useState([]);
@@ -216,17 +251,17 @@ export default function Movimientos() {
 
   const [q, setQ] = useState("");
 
-  /* paginado */
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(null);
 
-  /* modales */
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
-  const [openFacturar, setOpenFacturar] = useState(false);
 
-  /* toast */
+  // ✅ FACTURACIÓN
+  const [openFacturar, setOpenFacturar] = useState(false);
+  const [factData, setFactData] = useState(null);
+
   const [toast, setToast] = useState(null);
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => setToast({ tipo, mensaje, duracion }),
@@ -251,7 +286,6 @@ export default function Movimientos() {
     []
   );
 
-  /* label del botón trigger */
   const rangeLabel = useMemo(() => {
     const { from, to } = dateRange;
     if (!from) return "Seleccionar período";
@@ -259,7 +293,12 @@ export default function Movimientos() {
     return `${formatDateLabel(from)} → ${formatDateLabel(to)}`;
   }, [dateRange]);
 
-  /* API helpers */
+  const exportBaseName = useMemo(() => {
+    const from = formatDateISO(dateRange?.from);
+    const to = formatDateISO(dateRange?.to || dateRange?.from);
+    return `movimientos_${from}_${to}`;
+  }, [dateRange]);
+
   const buildHeadersGET = useCallback(() => {
     const { sessionKey } = getAuthInfo();
     const h = {};
@@ -305,9 +344,6 @@ export default function Movimientos() {
     [buildHeaders, parseJsonOrThrow]
   );
 
-  /* =========================================================
-     LOAD ROWS por rango de fechas
-  ========================================================= */
   const loadRows = useCallback(
     async (opts = {}) => {
       const range = opts.dateRange ?? dateRange;
@@ -427,7 +463,11 @@ export default function Movimientos() {
               }
             }
 
-            resolve({ hasMore: newHasMore, nextOffset: newNextOffset, received: movsNorm.length });
+            resolve({
+              hasMore: newHasMore,
+              nextOffset: newNextOffset,
+              received: movsNorm.length,
+            });
           };
 
           if (remaining > 0) setTimeout(apply, remaining);
@@ -456,7 +496,6 @@ export default function Movimientos() {
     [API, apiGet, dateRange, q]
   );
 
-  /* Init */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -467,10 +506,8 @@ export default function Movimientos() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ensureListsLoaded, loadRows, dateRange]);
 
-  /* Debounce búsqueda */
   useEffect(() => {
     if (skipSearchRef.current) {
       skipSearchRef.current = false;
@@ -483,17 +520,15 @@ export default function Movimientos() {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, dateRange]);
+  }, [q, dateRange, loadRows]);
 
   const invalidateCache = useCallback(() => {
     cacheRef.current.clear();
   }, []);
 
-  /* ✅ Cambio de rango: ahora actualiza el contexto global */
   const handleRangeChange = useCallback(
     (range) => {
-      setDateRange(range); // ← escribe en el contexto global (compartido entre secciones)
+      setDateRange(range);
       setQ("");
       skipSearchRef.current = true;
       loadAllTokenRef.current += 1;
@@ -506,7 +541,6 @@ export default function Movimientos() {
     [setDateRange, loadRows, invalidateCache]
   );
 
-  /* filteredRows */
   const filteredRows = useMemo(() => (Array.isArray(rows) ? rows : []), [rows]);
 
   const columns = useMemo(
@@ -516,14 +550,16 @@ export default function Movimientos() {
         label: "DESCRIPCIÓN",
         align: "left",
         fr: 2.2,
-        render: (r) => safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
+        render: (r) =>
+          safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
       },
       {
         key: "tipo_pago",
         label: "TIPO PAGO",
         align: "center",
         fr: 1.1,
-        render: (r) => safeText(pick(r, ["medio_pago_nombre", "medio_pago", "tipo_pago", "forma_pago"], "")),
+        render: (r) =>
+          safeText(pick(r, ["medio_pago_nombre", "medio_pago", "tipo_pago", "forma_pago"], "")),
       },
       {
         key: "tercero",
@@ -532,7 +568,9 @@ export default function Movimientos() {
         fr: 1.6,
         render: (r) => {
           const c = safeText(pick(r, ["cliente", "nombre_cliente", "razon_social_cliente"], ""));
-          return c !== "-" ? c : safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""));
+          return c !== "-"
+            ? c
+            : safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""));
         },
       },
       {
@@ -541,7 +579,13 @@ export default function Movimientos() {
         align: "center",
         fr: 1.0,
         render: (r) =>
-          moneyARS(pick(r, ["monto_total", "monto_total_final", "total", "importe_total", "monto", "importe"], 0)),
+          moneyARS(
+            pick(
+              r,
+              ["monto_total", "monto_total_final", "total", "importe_total", "monto", "importe"],
+              0
+            )
+          ),
       },
       { key: "acciones", label: "ACCIONES", align: "center", fr: 0.8, render: () => null },
     ],
@@ -550,33 +594,82 @@ export default function Movimientos() {
 
   const gridCols = useMemo(() => columns.map((c) => `${Number(c.fr) || 1}fr`).join(" "), [columns]);
 
-  /* Export Excel */
-  const exportToExcel = useCallback(() => {
-    try {
-      const dataToExport = buildExportRows(filteredRows);
-      if (!dataToExport.length) {
-        showToast("error", "No hay datos para exportar.", 2500);
-        return;
-      }
-
-      if (hasMore) {
-        showToast("error", "Faltan registros sin cargar. Tocá \"Cargar todos\" primero.", 5200);
-      }
-
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(dataToExport);
-      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Movimientos_Vista"));
-      XLSX.writeFile(
-        wb,
-        `movimientos_${formatDateISO(dateRange.from)}_${formatDateISO(dateRange.to || dateRange.from)}.xlsx`
-      );
-      showToast("exito", "Excel exportado.", 2200);
-    } catch (e) {
-      showToast("error", e?.message || "Error exportando Excel.", 3500);
+  const getExportData = useCallback(() => {
+    const dataToExport = buildExportRows(filteredRows);
+    if (!dataToExport.length) {
+      throw new Error("No hay datos para exportar.");
     }
-  }, [filteredRows, dateRange, showToast, hasMore]);
+    return dataToExport;
+  }, [filteredRows]);
 
-  /* Save movimiento (edit) */
+  const exportToExcel = useCallback(() => {
+    const dataToExport = getExportData();
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Movimientos_Vista"));
+    XLSX.writeFile(wb, `${exportBaseName}.xlsx`);
+  }, [getExportData, exportBaseName]);
+
+  const exportToCSV = useCallback(() => {
+    const dataToExport = getExportData();
+    const headers = Object.keys(dataToExport[0] || {});
+    const lines = [
+      headers.join(";"),
+      ...dataToExport.map((row) => headers.map((h) => escapeCSV(row[h])).join(";")),
+    ];
+    const csvContent = "\uFEFF" + lines.join("\n");
+    downloadBlob(csvContent, `${exportBaseName}.csv`, "text/csv;charset=utf-8;");
+  }, [getExportData, exportBaseName]);
+
+  const exportToTXT = useCallback(() => {
+    const dataToExport = getExportData();
+    const lines = dataToExport.map((row, index) => {
+      return [
+        `REGISTRO ${index + 1}`,
+        `FECHA: ${row.FECHA ?? ""}`,
+        `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
+        `TIPO PAGO: ${row["TIPO PAGO"] ?? ""}`,
+        `CLIENTE/PROVEEDOR: ${row["CLIENTE/PROVEEDOR"] ?? ""}`,
+        `TOTAL: ${row.TOTAL ?? ""}`,
+        "----------------------------------------",
+      ].join("\n");
+    });
+
+    const txtContent = lines.join("\n");
+    downloadBlob(txtContent, `${exportBaseName}.txt`, "text/plain;charset=utf-8;");
+  }, [getExportData, exportBaseName]);
+
+  const handleExport = useCallback(
+    async (type) => {
+      try {
+        if (hasMore) {
+          showToast("error", 'Faltan registros sin cargar. Tocá "Cargar todos" primero.', 5200);
+          return;
+        }
+
+        if (type === "excel") {
+          exportToExcel();
+          showToast("exito", "Excel exportado.", 2200);
+          return;
+        }
+
+        if (type === "csv") {
+          exportToCSV();
+          showToast("exito", "CSV exportado.", 2200);
+          return;
+        }
+
+        if (type === "txt") {
+          exportToTXT();
+          showToast("exito", "TXT exportado.", 2200);
+        }
+      } catch (e) {
+        showToast("error", e?.message || "Error exportando archivo.", 3500);
+      }
+    },
+    [hasMore, exportToExcel, exportToCSV, exportToTXT, showToast]
+  );
+
   const saveMovimiento = async (payload, isEdit) => {
     setError("");
     const { idUsuario } = getAuthInfo();
@@ -586,7 +679,6 @@ export default function Movimientos() {
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
   };
 
-  /* Cargar todos */
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
     if (nextOffset === null) return;
@@ -604,13 +696,26 @@ export default function Movimientos() {
         guard += 1;
         if (!res.hasMore || offset === null) break;
       }
-      if (myToken === loadAllTokenRef.current) showToast("exito", "Listo: ya se cargaron todos.", 2600);
+      if (myToken === loadAllTokenRef.current) {
+        showToast("exito", "Listo: ya se cargaron todos.", 2600);
+      }
     } catch (e) {
       showToast("error", e?.message || "Error cargando todos.", 4200);
     } finally {
       if (myToken === loadAllTokenRef.current) setLoadingAll(false);
     }
-  }, [hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll, nextOffset, dateRange, q, loadRows, showToast]);
+  }, [
+    hasMore,
+    loadingMore,
+    loadingRows,
+    loadingListsCtx,
+    loadingAll,
+    nextOffset,
+    dateRange,
+    q,
+    loadRows,
+    showToast,
+  ]);
 
   const softLoading = loadingRows && showSkeleton;
 
@@ -633,7 +738,7 @@ export default function Movimientos() {
       aria-hidden="true"
     >
       {columns.map((c) => {
-        if (c.key === "acciones")
+        if (c.key === "acciones") {
           return (
             <div
               key={c.key}
@@ -647,12 +752,19 @@ export default function Movimientos() {
               </div>
             </div>
           );
+        }
+
         const list = skelWidths[c.key] || ["60%"];
         const w = list[idx % list.length];
+
         return (
           <div
             key={c.key}
-            className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")}
+            className={[
+              "mov-gridCell",
+              c.align === "right" ? "is-right" : "",
+              c.align === "center" ? "is-center" : "",
+            ].join(" ")}
             role="cell"
             data-label={c.label}
           >
@@ -682,15 +794,45 @@ export default function Movimientos() {
 
   const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
+  const exportOptions = useMemo(
+    () => [
+      {
+        key: "excel",
+        label: "Exportar Excel (.xlsx)",
+        icon: faFileExcel,
+        onClick: () => handleExport("excel"),
+      },
+      {
+        key: "csv",
+        label: "Exportar CSV (.csv)",
+        onClick: () => handleExport("csv"),
+      },
+      {
+        key: "txt",
+        label: "Exportar TXT (.txt)",
+        onClick: () => handleExport("txt"),
+      },
+    ],
+    [handleExport]
+  );
+
   return (
     <div className="mov-page">
-      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
+      {toast && (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
+      )}
 
       {errorListsCtx && (
         <div className="mov-alert" role="alert">
           {errorListsCtx}
         </div>
       )}
+
       {error && (
         <div className="mov-alert" role="alert">
           {error}
@@ -703,13 +845,13 @@ export default function Movimientos() {
             <div className="title-mov">
               <div className="mov-card__title">Movimientos</div>
               <div className="mov-card__hint">
-                Mostrando <b>{filteredRows.length}</b> registros{hasMore ? " (hay más)" : ""}
+                Mostrando <b>{filteredRows.length}</b> registros
+                {hasMore ? " (hay más)" : ""}
                 {loadingAll ? " (cargando…)" : ""}
               </div>
             </div>
 
             <div className="mov-headFilters">
-              {/* Calendario */}
               <div className="mov-filter mov-filter--cal" style={{ position: "relative" }}>
                 <label>
                   <FontAwesomeIcon icon={faCalendarDays} /> Período
@@ -727,12 +869,15 @@ export default function Movimientos() {
 
                 {calOpen && (
                   <div className="mov-calDropdown">
-                    <Calendario value={dateRange} onChange={handleRangeChange} onClose={() => setCalOpen(false)} />
+                    <Calendario
+                      value={dateRange}
+                      onChange={handleRangeChange}
+                      onClose={() => setCalOpen(false)}
+                    />
                   </div>
                 )}
               </div>
 
-              {/* Búsqueda */}
               <div className="mov-search">
                 <label>
                   <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
@@ -746,7 +891,12 @@ export default function Movimientos() {
                         e.preventDefault();
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         skipSearchRef.current = true;
-                        await loadRows({ dateRange, q: e.currentTarget.value, offset: 0, append: false });
+                        await loadRows({
+                          dateRange,
+                          q: e.currentTarget.value,
+                          offset: 0,
+                          append: false,
+                        });
                       }
                     }}
                     placeholder="Buscar…"
@@ -774,13 +924,16 @@ export default function Movimientos() {
             </div>
           </div>
 
-          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            {/* Facturar */}
+          <div
+            className="mov-card__actions"
+            style={{ display: "flex", gap: 10, alignItems: "center" }}
+          >
             <button
               type="button"
               className="mov-btn mov-btn--ghost mov-btn--clear"
               onClick={async () => {
                 await ensureListsLoaded({ force: false, background: true }).catch(() => {});
+                setFactData(null);
                 setOpenFacturar(true);
               }}
               disabled={loadingListsCtx || loadingRows || loadingMore || loadingAll}
@@ -791,27 +944,31 @@ export default function Movimientos() {
               <span className="mov-btnText mov-btnText--mobile">Facturar</span>
             </button>
 
-            {/* Exportar Excel */}
-            <button
-              type="button"
-              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
-              onClick={exportToExcel}
+            <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
-              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
-            >
-              <FontAwesomeIcon icon={faFileExcel} />
-              <span className="mov-btnText mov-btnText--desktop">Exportar</span>
-              <span className="mov-btnText mov-btnText--mobile">Exportar</span>
-            </button>
+              loading={loadingAll}
+              label="Exportar"
+              title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"}
+              opciones={exportOptions}
+              align="right"
+            />
           </div>
         </div>
 
-        {/* HEADER */}
-        <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
+        <div
+          className="mov-gridTable mov-gridTable--head"
+          style={{ gridTemplateColumns: gridCols }}
+          role="row"
+        >
           {columns.map((c) => (
             <div
               key={c.key}
-              className={["mov-gridCell", "mov-gridCell--head", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")}
+              className={[
+                "mov-gridCell",
+                "mov-gridCell--head",
+                c.align === "right" ? "is-right" : "",
+                c.align === "center" ? "is-center" : "",
+              ].join(" ")}
               role="columnheader"
             >
               {c.label}
@@ -819,9 +976,13 @@ export default function Movimientos() {
           ))}
         </div>
 
-        {/* BODY */}
         <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup">
-          <div className={["mov-gridBody mov-gridBody--relative", softLoading ? "mov-softLoading" : ""].join(" ")}>
+          <div
+            className={[
+              "mov-gridBody mov-gridBody--relative",
+              softLoading ? "mov-softLoading" : "",
+            ].join(" ")}
+          >
             {loadingRows && showSkeleton ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
@@ -861,9 +1022,29 @@ export default function Movimientos() {
 
                               <button
                                 type="button"
+                                className="mov-iconBtn"
+                                title="Facturar este movimiento"
+                                onClick={async () => {
+                                  await ensureListsLoaded({ force: false, background: true }).catch(() => {});
+                                  setFactData(r);
+                                  setOpenFacturar(true);
+                                }}
+                                disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                              >
+                                <FontAwesomeIcon icon={faFileInvoiceDollar} />
+                              </button>
+
+                              <button
+                                type="button"
                                 className="mov-iconBtn mov-iconBtn--danger"
                                 title="Eliminar"
-                                disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx || deletingId === r.id_movimiento}
+                                disabled={
+                                  loadingRows ||
+                                  loadingMore ||
+                                  loadingAll ||
+                                  loadingListsCtx ||
+                                  deletingId === r.id_movimiento
+                                }
                                 onClick={() => {
                                   setSelectedRow(r);
                                   setOpenDel(true);
@@ -880,7 +1061,13 @@ export default function Movimientos() {
                       return (
                         <div
                           key={c.key}
-                          className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].filter(Boolean).join(" ")}
+                          className={[
+                            "mov-gridCell",
+                            c.align === "right" ? "is-right" : "",
+                            c.align === "center" ? "is-center" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
                           role="cell"
                           data-label={c.label}
                           title={typeof val === "string" ? val : undefined}
@@ -893,7 +1080,9 @@ export default function Movimientos() {
                 ))}
 
                 {!isAnyLoading && filteredRows.length === 0 && (
-                  <div className="mov-emptyRow">No hay movimientos para mostrar en este rango de fechas.</div>
+                  <div className="mov-emptyRow">
+                    No hay movimientos para mostrar en este rango de fechas.
+                  </div>
                 )}
 
                 {!loadingRows && filteredRows.length > 0 && hasMore && (
@@ -911,7 +1100,11 @@ export default function Movimientos() {
                 )}
 
                 {(loadingMore || loadingAll) && (
-                  <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">
+                  <div
+                    className="mov-skeletonMore"
+                    aria-busy="true"
+                    aria-label="Cargando más registros"
+                  >
                     {Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}
                   </div>
                 )}
@@ -921,16 +1114,38 @@ export default function Movimientos() {
         </div>
       </section>
 
-      {/* Modal Facturar */}
-      <ModalFacturaBuscarCliente
+      {/* ✅ AHORA ABRÍS EL MODAL PADRE */}
+      <ModalFacturaBalto
         open={openFacturar}
-        lists={listsSafe}
-        periodoDefault=""
-        onToast={showToast}
-        onClose={() => setOpenFacturar(false)}
+        onClose={() => {
+          setOpenFacturar(false);
+          setFactData(null);
+        }}
+        apiBase={API}
+        action="movimientos"
+        data={
+          factData || {
+            id_pago: null,
+            id_sistema: null,
+            labelCliente: "",
+            labelSistema: "",
+            cliente: "",
+            sistema: "",
+            anio: new Date().getFullYear(),
+            mes: "",
+            id_mes: new Date().getMonth() + 1,
+            fecha_pago: new Date().toISOString().slice(0, 10),
+          }
+        }
+        onFacturada={() => {
+          showToast("exito", "Factura emitida correctamente.", 3200);
+        }}
+        onDone={async () => {
+          invalidateCache();
+          await loadRows({ dateRange, q, offset: 0, append: false });
+        }}
       />
 
-      {/* Modal Editar */}
       <ModalEditarMovimiento
         open={openEdit}
         lists={listsSafe}
@@ -957,7 +1172,6 @@ export default function Movimientos() {
         }}
       />
 
-      {/* Modal Eliminar */}
       <ModalEliminarMovimientos
         open={openDel}
         row={selectedRow}
@@ -979,7 +1193,10 @@ export default function Movimientos() {
             sp.set("id_movimiento", String(id));
             const res = await fetch(`${API}?${sp.toString()}`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", ...(sessionKey ? { "X-Session": sessionKey } : {}) },
+              headers: {
+                "Content-Type": "application/json",
+                ...(sessionKey ? { "X-Session": sessionKey } : {}),
+              },
               body: JSON.stringify({ idUsuario }),
             });
             const data = JSON.parse((await res.text()) || "{}");

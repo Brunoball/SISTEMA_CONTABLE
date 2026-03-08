@@ -34,7 +34,7 @@ function verify_password(string $inputPass, string $storedHash): bool {
     return hash_equals(strtolower($stored), strtolower($calc));
   }
 
-  if (str_starts_with($stored, '$2y$') || str_starts_with($stored, '$argon2')) {
+  if (strpos($stored, '$2y$') === 0 || strpos($stored, '$argon2') === 0) {
     return password_verify($inputPass, $stored);
   }
 
@@ -46,8 +46,28 @@ function client_ip(): string {
     ?? $_SERVER['HTTP_X_FORWARDED_FOR']
     ?? $_SERVER['REMOTE_ADDR']
     ?? '';
-  if (is_string($ip) && str_contains($ip, ',')) $ip = trim(explode(',', $ip)[0]);
+  if (is_string($ip) && strpos($ip, ',') !== false) $ip = trim(explode(',', $ip)[0]);
   return trim((string)$ip);
+}
+
+function build_base_url_login(): string {
+  $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || ((string)($_SERVER['SERVER_PORT'] ?? '') === '443');
+
+  $scheme = $https ? 'https' : 'http';
+  $host   = (string)($_SERVER['HTTP_HOST'] ?? '');
+  if ($host === '') {
+    $host = (string)($_SERVER['SERVER_NAME'] ?? 'localhost');
+  }
+
+  $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+  $dir = rtrim(str_replace('\\', '/', dirname($scriptName)), '/');
+
+  if ($dir === '/' || $dir === '\\') {
+    $dir = '';
+  }
+
+  return $scheme . '://' . $host . $dir;
 }
 
 try {
@@ -66,16 +86,12 @@ try {
     fail('Faltan datos.');
   }
 
-  // ✅ FIX HORARIO: TZ consistente (PHP)
   @date_default_timezone_set('America/Argentina/Cordoba');
 
-  // 1) Conexión MASTER
-  require_once __DIR__ . '/../../config/db_master.php'; // $pdo_master
+  require_once __DIR__ . '/../../config/db_master.php';
 
-  // ✅ FIX HORARIO: TZ consistente (MySQL por conexión)
   try { $pdo_master->exec("SET time_zone = '-03:00'"); } catch (Throwable $e) {}
 
-  // 2) Buscar usuario master + tenant
   $sql = "
     SELECT
       um.idUsuarioMaster,
@@ -88,6 +104,7 @@ try {
       um.fecha_creacion,
 
       t.nombre     AS tenant_nombre,
+      t.logo_url,
       t.db_host,
       t.db_name,
       t.db_user,
@@ -108,7 +125,6 @@ try {
   $stmt->execute([':usuario' => $nombre]);
   $u = $stmt->fetch(PDO::FETCH_ASSOC);
 
-  // auditoría login
   $ip = client_ip();
   $ua = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
 
@@ -175,14 +191,12 @@ try {
     fail('Credenciales incorrectas.', 401);
   }
 
-  // 3) Rol/tema
   $rol = strtolower(trim((string)($u['rol'] ?? 'vista')));
   $rol = in_array($rol, ['admin', 'vista'], true) ? $rol : 'vista';
 
   $tema = strtolower(trim((string)($u['tema'] ?? 'claro')));
   $tema = in_array($tema, ['claro', 'oscuro'], true) ? $tema : 'claro';
 
-  // 4) Plan
   $planNivel = (int)($u['plan_nivel'] ?? 1);
   if ($planNivel < 1 || $planNivel > 3) $planNivel = 1;
 
@@ -195,7 +209,6 @@ try {
     $planNombre = 'basico';
   }
 
-  // 5) Auditoría OK
   $audit->execute([
     ':idUsuarioMaster' => (int)$u['idUsuarioMaster'],
     ':idTenant' => (int)$u['idTenant'],
@@ -205,12 +218,8 @@ try {
     ':exito' => 1,
   ]);
 
-  // ✅ 6) Crear sesión en MASTER (30 minutos PROD)
-  $sessionKey = bin2hex(random_bytes(32)); // 64 chars
-
-  // ✅ FIX HORARIO: que MySQL ponga creado_en/ultimo_uso en hora AR
-  // (y expira_en también sale de NOW(), así no hay desfase)
-  $ttlMinutes = 30; // ✅ PROD: 30 minutos
+  $sessionKey = bin2hex(random_bytes(32));
+  $ttlMinutes = 30;
 
   $pdo_master->prepare("
     INSERT INTO sesiones (session_key, idUsuarioMaster, idTenant, creado_en, ultimo_uso, expira_en, ip, user_agent, activo)
@@ -224,7 +233,9 @@ try {
     ':ua' => $ua,
   ]);
 
-  // 7) Respuesta
+  $apiBase = build_base_url_login();
+  $tenantLogoViewUrl = $apiBase . '/api.php?action=tenant_logo_ver';
+
   ok([
     'exito' => true,
     'session_key' => $sessionKey,
@@ -233,6 +244,8 @@ try {
       'idUsuarioMaster' => (int)$u['idUsuarioMaster'],
       'idTenant' => (int)$u['idTenant'],
       'tenant_nombre' => (string)($u['tenant_nombre'] ?? ''),
+      'tenant_logo_url_db' => (string)($u['logo_url'] ?? ''),
+      'tenant_logo_view_url' => $tenantLogoViewUrl,
       'Nombre_Completo' => (string)$u['usuario'],
       'nombre' => (string)$u['usuario'],
       'rol' => $rol,

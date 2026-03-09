@@ -799,3 +799,371 @@ html[data-theme="oscuro"] .cal-footer b {
     border-left: none;
   }
 }
+html[data-theme="oscuro"] .cc-calTrigger {
+  background: rgba(15, 23, 42, 0.88) !important;
+  color: rgba(226, 232, 240, 0.92) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+html[data-theme="oscuro"] .cc-calTrigger:hover {
+  border-color: rgba(96, 165, 250, 0.34) !important;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.28) !important;
+  background: rgba(15, 23, 42, 0.96) !important;
+}
+
+html[data-theme="oscuro"] .cc-calTrigger.is-open {
+  background: rgba(15, 23, 42, 0.96) !important;
+  color: rgba(226, 232, 240, 0.96) !important;
+  border-color: rgba(96, 165, 250, 0.38) !important;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.14) !important;
+}
+
+html[data-theme="oscuro"] .cc-calTrigger__arrow {
+  color: rgba(226, 232, 240, 0.6) !important;
+}/* =========================================================
+   DARK MODE
+========================================================= */
+html[data-theme="oscuro"] .contenedor-cards{
+  background: transparent !important;
+  color: rgba(226,232,240,.92) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-alert{
+  background: rgba(225,61,69,.12) !important;
+  border-color: rgba(225,61,69,.24) !important;
+  color: rgba(255,255,255,.92) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-card{
+  background: rgba(15,23,42,.62) !important;
+  border-color: rgba(148,163,184,.14) !important;
+  box-shadow: 0 16px 40px -26px rgba(0,0,0,.62) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-card__head{
+  background:
+    radial-gradient(900px 180px at 0% 0%, rgba(78,161,255,.12), transparent 55%),
+    linear-gradient(180deg, rgba(15,23,42,.85), rgba(15,23,42,.62)) !important;
+  border-bottom-color: rgba(148,163,184,.12) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-card__title{
+  color: rgba(226,232,240,.92) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-card__hint{
+  color: rgba(226,232,240,.62) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-card__hint b{
+  color: rgba(226,232,240,.92) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-filter label{
+  color: rgba(226,232,240,.65) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-filter select{
+  background: rgba(15,23,42,.88) !important;
+  color: rgba(226,232,240,.92) !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-filter select:hover{
+  border-color: rgba(148,163,184,.30) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-filter select:focus{
+  background: rgba(15,23,42,.96) !important;
+  border-color: rgba(78,161,255,.45) !important;
+  box-shadow: 0 0 0 3px rgba(78,161,255,.18) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-input{
+  background: rgba(15,23,42,.88) !important;
+  color: rgba(226,232,240,.92) !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-input::placeholder{
+  color: rgba(226,232,240,.40) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-input:hover{
+  border-color: rgba(148,163,184,.30) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-input:focus{
+  background: rgba(15,23,42,.96) !important;
+  border-color: rgba(78,161,255,.45) !important;
+  box-shadow: 0 0 0 3px rgba(78,161,255,.18) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-clearSearch{
+  background: rgba(15,23,42,.90) !important;
+  color: rgba(226,232,240,.72) !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-clearSearch:hover{
+  background: rgba(225,61,69,.14) !important;
+  border-color: rgba(225,61,69,.30) !important;
+  color: rgba(240,120,120,.95) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-subhead{
+  background: linear-gradient(180deg, rgba(15,23,42,.85), rgba(15,23,42,.62)) !important;
+  border-bottom-color: rgba(148,163,184,.12) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-subhead__name{
+  color: rgba(226,232,240,.92) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-subhead__meta{
+  color: rgba(226,232,240,.58) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-btn--excel{
+  background: rgba(34,173,92,.90) !important;
+  border-color: rgba(34,173,92,.45) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 24px rgba(34,173,92,.18) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-btn--excel:hover:not(:disabled){
+  background: rgba(34,173,92,1) !important;
+  box-shadow: 0 10px 28px rgba(34,173,92,.28) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-btnex{
+  background: rgba(15,23,42,.80) !important;
+  border-color: rgba(78,161,255,.28) !important;
+  color: rgba(226,232,240,.88) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-btnex:hover:not(:disabled){
+  background: rgba(78,161,255,.18) !important;
+  border-color: rgba(78,161,255,.50) !important;
+  color: rgba(226,232,240,.96) !important;
+  box-shadow: 0 6px 20px rgba(78,161,255,.20) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-calTrigger{
+  background: rgba(15,23,42,.88) !important;
+  border-color: rgba(148,163,184,.18) !important;
+  color: rgba(226,232,240,.85) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-calTrigger:hover{
+  border-color: rgba(148,163,184,.30) !important;
+  background: rgba(15,23,42,.95) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-calTrigger.is-open{
+  border-color: rgba(78,161,255,.50) !important;
+  box-shadow: 0 0 0 3px rgba(78,161,255,.16) !important;
+  background: rgba(15,23,42,.96) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-calTrigger__arrow{
+  color: rgba(226,232,240,.52) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-calDropdown{
+  filter: drop-shadow(0 16px 34px rgba(0,0,0,.45)) !important;
+}
+
+/* tabla principal que armaste inline en React */
+html[data-theme="oscuro"] .contenedor-cards > div[style*="background: #fff"]{
+  background: rgba(15,23,42,.72) !important;
+  border-color: rgba(148,163,184,.14) !important;
+  box-shadow: 0 16px 40px -26px rgba(0,0,0,.62) !important;
+}
+
+/* header de tabla */
+html[data-theme="oscuro"] .contenedor-cards > div[style*="background: #fff"] > div:first-child{
+  background: rgba(30,41,59,.92) !important;
+  border-bottom-color: rgba(148,163,184,.14) !important;
+  color: rgba(226,232,240,.84) !important;
+}
+
+/* filas */
+html[data-theme="oscuro"] .contenedor-cards > div[style*="background: #fff"] > div:not(:first-child):not(:last-child){
+  border-bottom-color: rgba(148,163,184,.10) !important;
+}
+
+/* texto general tabla */
+html[data-theme="oscuro"] .contenedor-cards > div[style*="background: #fff"] div{
+  color: rgba(226,232,240,.88);
+}
+
+/* zebra rows */
+html[data-theme="oscuro"] .contenedor-cards > div[style*="background: #fff"] > div[style*="background: #fcfcfd"]{
+  background: rgba(15,23,42,.86) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards > div[style*="background: #fff"] > div[style*="background: #fff"]{
+  background: rgba(15,23,42,.72) !important;
+}
+
+/* bloque vacío / loading */
+html[data-theme="oscuro"] .contenedor-cards > div[style*="background: #fff"] > div[style*="text-align: center"]{
+  background: rgba(15,23,42,.72) !important;
+  color: rgba(226,232,240,.58) !important;
+}
+
+/* footer de totales */
+html[data-theme="oscuro"] .contenedor-cards > div[style*="background: #fff"] > div:last-child{
+  background: rgba(30,41,59,.82) !important;
+  border-top-color: rgba(148,163,184,.14) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-emptyRow{
+  color: rgba(226,232,240,.55) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards .cc-footnote{
+  background: rgba(15,23,42,.62) !important;
+  border-top-color: rgba(148,163,184,.10) !important;
+  color: rgba(226,232,240,.58) !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards{
+  --cc-skel-a: rgba(226,232,240,.07);
+  --cc-skel-b: rgba(226,232,240,.14);
+}/* =========================================================
+   🌙 MODO OSCURO - CUENTAS CORRIENTES TABLA
+========================================================= */
+
+html[data-theme="oscuro"] .cc-cliente-table{
+  background:#0f172a;
+  border:1px solid rgba(255,255,255,0.06);
+  box-shadow:0 10px 28px rgba(0,0,0,0.55);
+}
+
+/* HEADER */
+
+html[data-theme="oscuro"] .cc-cliente-table__headWrap{
+  background:#111827;
+  border-bottom:1px solid rgba(255,255,255,0.06);
+}
+
+html[data-theme="oscuro"] .cc-cliente-table__head{
+  background:#111827;
+  color:#e5e7eb;
+}
+
+/* FILAS */
+
+html[data-theme="oscuro"] .cc-cliente-table__row{
+  background:#0f172a;
+}
+
+html[data-theme="oscuro"] .cc-cliente-table__row.is-alt{
+  background:#111827;
+}
+
+html[data-theme="oscuro"] .cc-cliente-table__row:hover{
+  background:#172554;
+}
+
+/* BORDES */
+
+html[data-theme="oscuro"] .cc-cliente-table__row:not(:last-child){
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+
+/* CELDAS */
+
+html[data-theme="oscuro"] .cc-cliente-table__cell{
+  color:#e5e7eb;
+}
+
+/* DETALLE */
+
+html[data-theme="oscuro"] .cc-cliente-table__detail{
+  color:#9ca3af;
+}
+
+/* SALDO */
+
+html[data-theme="oscuro"] .cc-cliente-table__saldo{
+  color:#93c5fd;
+}
+
+/* TOTALES */
+
+html[data-theme="oscuro"] .cc-cliente-table__footWrap{
+  background:#111827;
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+
+html[data-theme="oscuro"] .cc-cliente-table__totals{
+  background:#111827;
+  color:#f9fafb;
+}
+
+/* EMPTY STATE */
+
+html[data-theme="oscuro"] .cc-emptyIcon{
+  color:#6b7280;
+}
+
+html[data-theme="oscuro"] .cc-emptyText{
+  color:#9ca3af;
+}
+
+/* BOTON VER */
+
+html[data-theme="oscuro"] .cc-verBtn{
+  background:rgba(0,85,187,0.15);
+  border:1px solid rgba(0,85,187,0.25);
+  color:#93c5fd;
+}
+
+html[data-theme="oscuro"] .cc-verBtn:hover{
+  background:#0055BB;
+  border-color:#0055BB;
+  color:#fff;
+}
+
+/* SCROLL */
+
+html[data-theme="oscuro"] .cc-cliente-table__body::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,0.18);
+}
+
+html[data-theme="oscuro"] .cc-cliente-table__body::-webkit-scrollbar-track{
+  background:transparent;
+}/* =========================
+   Dark mode checklist
+========================= */
+
+html[data-theme="oscuro"] .mfb-check{
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.10);
+}
+
+html[data-theme="oscuro"] .mfb-check:hover{
+  background: rgba(255,255,255,.07);
+  border-color: rgba(0,85,187,.35);
+}
+
+html[data-theme="oscuro"] .mfb-check__box{
+  background: rgba(255,255,255,.05);
+  border-color: rgba(255,255,255,.20);
+}
+
+html[data-theme="oscuro"] .mfb-check__text{
+  color: rgba(255,255,255,.90);
+}
+
+html[data-theme="oscuro"] .mfb-check__input:checked + .mfb-check__box{
+  background: #0055BB;
+  border-color: #0055BB;
+}
+
+html[data-theme="oscuro"] .mfb-check__input:focus-visible + .mfb-check__box{
+  box-shadow: 0 0 0 3px rgba(0,85,187,.35);
+}

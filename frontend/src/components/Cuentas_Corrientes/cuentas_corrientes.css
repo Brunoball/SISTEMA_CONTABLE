@@ -4,16 +4,14 @@
    Paleta BALTO (desde Excel)
 ========================= */
 :root{
-  /* === BALTO (Excel) === */
-  --b-midnight: #0A2540; /* Azul Medianoche */
-  --b-action: #0055BB;   /* Azul de Acción */
-  --b-bg: #F6F9FC;       /* Fondo App */
-  --b-text: #425466;     /* Gris Texto */
-  --b-white: #FFFFFF;    /* Blanco */
-  --b-success: #22AD5C;  /* Verde Éxito */
-  --b-danger: #E13D45;   /* Rojo Alerta */
+  --b-midnight: #0A2540;
+  --b-action: #0055BB;
+  --b-bg: #F6F9FC;
+  --b-text: #425466;
+  --b-white: #FFFFFF;
+  --b-success: #22AD5C;
+  --b-danger: #E13D45;
 
-  /* === Derivados === */
   --cc-text: rgba(10, 37, 64, 0.92);
   --cc-muted: rgba(66, 84, 102, 0.70);
   --cc-border: rgba(10, 37, 64, 0.14);
@@ -35,7 +33,6 @@
   --cc-shadow-md: 0 10px 26px rgba(10, 37, 64, 0.14);
   --cc-transition: 140ms ease;
 
-  /* Skeleton */
   --cc-skel-h: 12px;
   --cc-skel-radius: 999px;
   --cc-skel-a: rgba(10,37,64,.08);
@@ -57,12 +54,14 @@
 ========================= */
 .cc-alert{
   margin: 0 0 12px;
-  padding: 10px 12px;
+  padding: 12px 16px;
   border-radius: 12px;
-  background: rgba(225, 61, 69, 0.10);
-  border: 1px solid rgba(225, 61, 69, 0.25);
+  background: rgba(225, 61, 69, 0.08);
+  border: 1px solid rgba(225, 61, 69, 0.22);
   color: rgba(10, 37, 64, 0.92);
   font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.01em;
 }
 
 /* =========================
@@ -76,7 +75,6 @@
   overflow: hidden;
 }
 
-/* scroll SOLO body */
 .cc-card--table{
   display: flex;
   flex-direction: column;
@@ -91,8 +89,8 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
-  border-bottom: 1px solid rgba(10, 37, 64, 0.10);
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(10, 37, 64, 0.08);
   background: var(--b-white);
 }
 
@@ -111,17 +109,18 @@
 }
 
 .cc-card__title{
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 17px;
   color: var(--b-midnight);
 }
 
 .cc-card__hint{
-  margin-top: 4px;
+  margin-top: 5px;
   font-size: 12px;
   color: var(--cc-muted);
   font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .cc-card__actions{
@@ -142,77 +141,139 @@
 }
 
 .cc-filter{
-  display:flex;
+  display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
 .cc-filter label{
   display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(66, 84, 102, 0.85);
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(66, 84, 102, 0.75);
   margin-bottom: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
 }
 
 .cc-filter label svg{
-  margin-right: 6px;
-  opacity: .9;
+  margin-right: 5px;
+  opacity: .8;
 }
 
 .cc-filter select{
   width: 100%;
   height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(10, 37, 64, 0.16);
+  border-radius: 10px;
+  border: 1.5px solid rgba(10, 37, 64, 0.14);
   background: #fff;
-  padding: 0 12px;
+  padding: 0 14px;
   outline: none;
   font-weight: 500;
+  font-size: 13px;
   color: rgba(10, 37, 64, 0.90);
   min-width: 180px;
+  transition: border-color var(--cc-transition), box-shadow var(--cc-transition);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
 }
 
 .cc-input{
   width: 100%;
   height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(10, 37, 64, 0.16);
+  border-radius: 10px;
+  border: 1.5px solid rgba(10, 37, 64, 0.14);
   background: #fff;
-  padding: 0 12px;
+  padding: 0 38px 0 14px;
   outline: none;
   font-weight: 500;
+  font-size: 13px;
   color: rgba(10, 37, 64, 0.90);
-  min-width: 240px;
+  min-width: 340px;
+  transition: border-color var(--cc-transition), box-shadow var(--cc-transition);
+}
+
+.cc-filter select:hover,
+.cc-input:hover{
+  border-color: rgba(10, 37, 64, 0.28);
 }
 
 .cc-filter select:focus,
 .cc-input:focus{
   border-color: rgba(0, 85, 187, 0.55);
-  box-shadow: 0 0 0 4px var(--cc-focus);
+  box-shadow: 0 0 0 3px var(--cc-focus);
+  background: #fafcff;
 }
 
-/* (si usás .cc-btn en otras acciones) */
+/* Botón estándar */
 .cc-btn{
   height: 40px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 85, 187, 0.30);
-  background: rgba(0, 85, 187, 0.10);
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(0, 85, 187, 0.28);
+  background: rgba(0, 85, 187, 0.08);
   color: rgba(10, 37, 64, 0.92);
   font-weight: 600;
+  font-size: 13px;
   cursor: pointer;
-  transition: transform var(--cc-transition), box-shadow var(--cc-transition), background var(--cc-transition);
+  transition: all var(--cc-transition);
+  letter-spacing: 0.01em;
 }
 
 .cc-btn:hover{
   background: rgba(0, 85, 187, 0.14);
+  border-color: rgba(0, 85, 187, 0.45);
   box-shadow: var(--cc-shadow-sm);
   transform: translateY(-1px);
 }
 
+.cc-btn:active{
+  transform: translateY(0);
+  box-shadow: none;
+}
+
 .cc-btn:disabled{
-  opacity: 0.6;
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Botón buscar (acción primaria) */
+.cc-btnex{
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(0, 85, 187, 0.28);
+  background: rgba(0, 85, 187, 0.08);
+  color: var(--b-midnight);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--cc-transition);
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.cc-btnex:hover:not(:disabled){
+  background: var(--b-action);
+  border-color: var(--b-action);
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(0, 85, 187, 0.28);
+  transform: translateY(-1px);
+}
+
+.cc-btnex:active:not(:disabled){
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.cc-btnex:disabled{
+  opacity: 0.48;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
@@ -225,20 +286,22 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  padding: 12px 16px 10px;
-  border-bottom: 1px solid rgba(10, 37, 64, 0.10);
-  background: rgba(10, 37, 64, 0.03);
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid rgba(10, 37, 64, 0.08);
+  background: rgba(10, 37, 64, 0.025);
 }
 
 .cc-subhead__name{
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 15px;
   color: var(--b-midnight);
+  letter-spacing: -0.01em;
 }
 
 .cc-subhead__meta{
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: 12px;
-  color: rgba(66, 84, 102, 0.78);
+  color: rgba(66, 84, 102, 0.72);
   font-weight: 500;
 }
 
@@ -248,19 +311,18 @@
 .cc-tableWrap{
   flex: 1;
   min-height: 0;
-  overflow: hidden;       /* clave */
+  overflow: hidden;
   max-height: 520px;
 }
 
 /* =========================
-   "Tabla" con DIVs (grid)
+   Grid
 ========================= */
 .cc-grid{
   display: grid;
-  min-width: 920px; /* evita que se rompa con muchas columnas */
+  min-width: 920px;
 }
 
-/* Header sticky */
 .cc-grid--head{
   position: sticky;
   top: 0;
@@ -269,7 +331,6 @@
   border-bottom: 1px solid rgba(10, 37, 64, 0.14);
 }
 
-/* ✅ 1 solo scroll container (horizontal + vertical) */
 .cc-gridScroll{
   overflow: auto;
   max-height: calc(100vh - 340px);
@@ -277,39 +338,32 @@
   scrollbar-gutter: stable both-edges;
 }
 
-/* ✅ header sticky dentro del scroller */
-
-
-/* ✅ body ya no scrollea: lo scrollea el wrapper */
 .cc-gridBody{
-  overflow: visible;
-  max-height: none;
-  background: transparent;
-}
-
-
-.cc-grid--head .cc-cell{
-  color: rgba(10, 37, 64, 0.72);
-  font-weight: 600;
-  letter-spacing: .04em;
-  font-size: 12px;
-  padding: 12px 12px;
-  white-space: nowrap;
-  border-bottom: none;
-}
-
-/* Body con scroll */
-.cc-gridBody{
-  overflow: auto;            /* clave */
+  overflow: auto;
   max-height: calc(100vh - 340px);
-    min-height: calc(100vh - 340px);
+  min-height: calc(100vh - 340px);
   background: #fff;
   scrollbar-gutter: both-edges stable;
 }
 
-/* scrollbar thumb */
+.cc-grid--head .cc-cell{
+  color: rgba(10, 37, 64, 0.60);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  text-transform: uppercase;
+  padding: 13px 14px;
+  white-space: nowrap;
+  border-bottom: none;
+}
+
+/* scrollbar */
+.cc-gridBody::-webkit-scrollbar{
+  width: 6px;
+  height: 6px;
+}
 .cc-gridBody::-webkit-scrollbar-thumb{
-  background: rgba(10, 37, 64, 0.16);
+  background: rgba(10, 37, 64, 0.14);
   border-radius: 999px;
 }
 .cc-gridBody::-webkit-scrollbar-track{
@@ -319,16 +373,17 @@
 /* filas */
 .cc-grid--row{
   background: #fff;
+  transition: background var(--cc-transition);
 }
 .cc-grid--row:hover{
-  background: var(--cc-hover);
+  background: rgba(0, 85, 187, 0.035);
 }
 
 /* celdas */
 .cc-cell{
-  padding: 12px 12px;
-  border-bottom: 1px solid rgba(10, 37, 64, 0.08);
-  color: rgba(10, 37, 64, 0.88);
+  padding: 13px 14px;
+  border-bottom: 1px solid rgba(10, 37, 64, 0.06);
+  color: rgba(10, 37, 64, 0.82);
   font-size: 13px;
   white-space: nowrap;
   min-width: 0;
@@ -344,23 +399,27 @@
 
 .cc-num{
   text-align: right;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
 }
 
-/* centrado */
 .is-center{
   text-align: center;
 }
 
-/* vacio */
+/* =========================
+   Empty state
+========================= */
 .cc-emptyRow{
-  padding: 24px 12px;
+  padding: 40px 20px;
   text-align: center;
-  color: rgba(66, 84, 102, 0.78);
-  font-weight: 600;
+  color: rgba(66, 84, 102, 0.65);
+  font-weight: 500;
+  font-size: 13.5px;
 }
 
 /* =========================
-   Pos/Neg (paleta Excel)
+   Pos/Neg
 ========================= */
 .cc-cell.is-positive{
   color: var(--cc-success);
@@ -371,72 +430,88 @@
   font-weight: 600;
 }
 
-/* saldo destacado */
 .cc-saldo{
-  font-weight: 600;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 /* =========================
    Tfoot
 ========================= */
 .cc-grid--tfoot{
-  background: rgba(10, 37, 64, 0.03);
+  background: rgba(10, 37, 64, 0.025);
+  border-top: 1.5px solid rgba(10, 37, 64, 0.10);
 }
+
+.cc-grid--tfoot .cc-cell{
+  font-weight: 700;
+  color: rgba(10, 37, 64, 0.90);
+  font-size: 13px;
+  border-bottom: none;
+  padding: 14px 14px;
+}
+
 .cc-tfootLabel{
-  font-weight: 600;
+  font-weight: 700;
   color: rgba(10, 37, 64, 0.90);
 }
 
 /* footnote */
 .cc-footnote{
-  padding: 10px 14px;
-  color: rgba(66, 84, 102, 0.80);
-  font-size: 12px;
-  border-top: 1px solid rgba(10, 37, 64, 0.10);
-  background: #fff;
+  padding: 10px 20px;
+  color: rgba(66, 84, 102, 0.72);
+  font-size: 11.5px;
+  border-top: 1px solid rgba(10, 37, 64, 0.08);
+  background: rgba(10, 37, 64, 0.015);
   font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 /* =========================
-   Botón Exportar Excel (verde oficial)
+   Botón Exportar Excel
 ========================= */
 .cc-btn--excel{
   height: 40px;
-  padding: 0 12px;
-  border-radius: 12px;
-
-  border: 1px solid rgba(34, 173, 92, 0.85);
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(34, 173, 92, 0.75);
   background: var(--cc-success);
   color: #fff;
-
-  font-weight: 600;
-  font-size: 0.9rem;
-  letter-spacing: 0.2px;
-
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.01em;
   cursor: pointer;
   transition: all .18s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(34, 173, 92, 0.18);
 }
 
 .cc-btn--excel:hover:not(:disabled){
-  background: #ffffff;
-  color: var(--cc-success);
-  box-shadow: 0 10px 22px rgba(10, 37, 64, 0.10);
+  background: #1d9e52;
+  border-color: #1d9e52;
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(34, 173, 92, 0.30);
   transform: translateY(-1px);
 }
 
 .cc-btn--excel:active:not(:disabled){
   transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(34, 173, 92, 0.18);
 }
 
 .cc-btn--excel:disabled{
-  opacity: 0.55;
+  opacity: 0.48;
   cursor: not-allowed;
   filter: grayscale(0.2);
   box-shadow: none;
+  transform: none;
 }
 
 /* =========================
-   Clear (X) en buscador CC
+   Buscador / Clear
 ========================= */
 .cc-searchInput{
   position: relative;
@@ -444,55 +519,52 @@
 }
 
 .cc-searchInput .cc-input{
-  padding-right: 44px; /* espacio para la X */
+  padding-right: 44px;
 }
 
 .cc-clearSearch{
   position: absolute;
-  right: 10px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  border: 1px solid rgba(10, 37, 64, 0.14);
-  background: #fff;
-  color: rgba(10, 37, 64, 0.72);
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid rgba(10, 37, 64, 0.12);
+  background: rgba(10, 37, 64, 0.04);
+  color: rgba(10, 37, 64, 0.55);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 600;
-  transition: 140ms ease;
+  transition: all 140ms ease;
 }
 
 .cc-clearSearch:hover{
-  background: rgba(10, 37, 64, 0.04);
-  transform: translateY(-50%) translateY(-1px);
-  box-shadow: 0 10px 20px rgba(10, 37, 64, 0.10);
+  background: rgba(225, 61, 69, 0.08);
+  border-color: rgba(225, 61, 69, 0.25);
+  color: var(--cc-danger);
+  transform: translateY(-50%) scale(1.08);
 }
 
 .cc-clearSearch:active{
-  transform: translateY(-50%);
-  box-shadow: none;
+  transform: translateY(-50%) scale(1);
 }
 
 /* =========================
    Colores columnas Débito / Crédito
-   (depende de que sean col 2 y 3)
 ========================= */
-/* HEADER */
 .cc-grid--head .cc-cell:nth-child(2){
-  color: rgba(225, 61, 69, 0.92);
-  font-weight: 600;
+  color: rgba(225, 61, 69, 0.80);
+  font-weight: 700;
 }
 .cc-grid--head .cc-cell:nth-child(3){
-  color: rgba(34, 173, 92, 0.92);
-  font-weight: 600;
+  color: rgba(34, 173, 92, 0.85);
+  font-weight: 700;
 }
 
-/* BODY */
 .cc-grid--row .cc-cell:nth-child(2){
   color: var(--cc-danger);
   font-weight: 600;
@@ -502,14 +574,148 @@
   font-weight: 600;
 }
 
-/* FOOTER */
 .cc-grid--tfoot .cc-cell:nth-child(2){
   color: var(--cc-danger);
-  font-weight: 600;
+  font-weight: 700;
 }
 .cc-grid--tfoot .cc-cell:nth-child(3){
   color: var(--cc-success);
-  font-weight: 600;
+  font-weight: 700;
+}
+
+/* =========================
+   Calendario trigger
+========================= */
+.cc-filter--cal {
+  position: relative;
+}
+
+.cc-calTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
+  background: #fff;
+  border: 1.5px solid rgba(10, 37, 64, 0.14);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(10, 37, 64, 0.85);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 150ms ease;
+  min-width: 200px;
+  font-family: inherit;
+}
+
+.cc-calTrigger:hover {
+  border-color: rgba(10, 37, 64, 0.32);
+  background: rgba(10, 37, 64, 0.02);
+  box-shadow: 0 2px 8px rgba(10, 37, 64, 0.06);
+}
+
+.cc-calTrigger.is-open {
+  border-color: var(--b-action);
+  box-shadow: 0 0 0 3px rgba(0, 85, 187, 0.14);
+  background: #fafcff;
+  color: var(--b-midnight);
+}
+
+.cc-calTrigger__arrow {
+  margin-left: auto;
+  font-size: 10px;
+  color: rgba(10, 37, 64, 0.35);
+  transition: transform 150ms ease;
+}
+
+.cc-calTrigger.is-open .cc-calTrigger__arrow {
+  transform: rotate(180deg);
+}
+
+.cc-calDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 999;
+  animation: cc-calFadeIn 150ms ease;
+  filter: drop-shadow(0 12px 32px rgba(10, 37, 64, 0.14));
+}
+
+@keyframes cc-calFadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* =========================
+   Skeleton
+========================= */
+.cc-softLoading{
+  opacity: .98;
+}
+
+.cc-skeletonWrap{
+  padding: 0;
+}
+
+.cc-row--skeleton{
+  pointer-events: none;
+}
+
+.cc-row--skeleton:hover{
+  background: #fff !important;
+}
+
+.cc-row--skeleton .cc-cell{
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.cc-row--skeleton .cc-cell.cc-name{
+  justify-content: flex-start;
+}
+.cc-row--skeleton .cc-cell.cc-num{
+  justify-content: flex-end;
+}
+.cc-row--skeleton .cc-cell.is-center{
+  justify-content: center;
+}
+
+.cc-skeletonBar{
+  display: block;
+  height: var(--cc-skel-h);
+  border-radius: var(--cc-skel-radius);
+  max-width: 100%;
+  min-width: 48px;
+  background:
+    linear-gradient(90deg,
+      var(--cc-skel-a) 0%,
+      var(--cc-skel-b) 22%,
+      var(--cc-skel-a) 48%,
+      var(--cc-skel-b) 72%,
+      var(--cc-skel-a) 100%);
+  background-size: 240% 100%;
+  animation: ccShimmer 1.05s ease-in-out infinite;
+}
+
+.cc-row--skeleton .cc-cell.cc-num .cc-skeletonBar{
+  min-width: 36px;
+}
+.cc-row--skeleton .cc-cell.cc-name .cc-skeletonBar{
+  height: calc(var(--cc-skel-h) + 1px);
+}
+
+@keyframes ccShimmer{
+  0%{ background-position: 100% 0; }
+  100%{ background-position: 0% 0; }
+}
+
+.cc-mobileCard.cc-row--skeleton{
+  background: #fff;
+}
+.cc-mobileCard.cc-row--skeleton .cc-skeletonBar{
+  height: 12px;
 }
 
 /* =========================
@@ -525,132 +731,46 @@
     min-width: 0;
     width: 100%;
   }
-  .cc-btn--excel{
+  .cc-btn--excel,
+  .cc-btnex{
     width: 100%;
+    justify-content: center;
   }
   .cc-page{
     max-height: 85vh;
     overflow: auto;
   }
+  .cc-calDropdown {
+    left: 50%;
+    transform: translateX(-50%);
+    top: calc(100% + 8px);
+  }
+  .cc-calTrigger {
+    min-width: 160px;
+    font-size: 12.5px;
+  }
 }
 
 /* =========================================================
-   ✅ SKELETON (alineado EXACTO a las celdas)
-   - Nada de barras "a lo ancho"
-   - Cada celda muestra su propia barrita centrada/alineada
-========================================================= */
-
-/* leve "soft loading" como Flujo */
-.cc-softLoading{
-  opacity: .98;
-}
-
-/* contenedor skeleton dentro del body */
-.cc-skeletonWrap{
-  padding: 0;
-}
-
-/* fila skeleton: mismo alto/spacing que una fila real */
-.cc-row--skeleton{
-  pointer-events: none;
-}
-
-/* Evita hover en skeleton */
-.cc-row--skeleton:hover{
-  background: #fff !important;
-}
-
-/* ✅ CLAVE: cada celda se convierte en contenedor flex
-   para que la barrita quede EXACTAMENTE donde iría el texto */
-.cc-row--skeleton .cc-cell{
-  display: flex;
-  align-items: center;
-  gap: 0;
-}
-
-/* alineaciones según tipo de celda */
-.cc-row--skeleton .cc-cell.cc-name{
-  justify-content: flex-start;
-}
-.cc-row--skeleton .cc-cell.cc-num{
-  justify-content: flex-end; /* números */
-}
-.cc-row--skeleton .cc-cell.is-center{
-  justify-content: center;   /* columnas centradas */
-}
-
-/* barrita skeleton */
-.cc-skeletonBar{
-  display: block;
-  height: var(--cc-skel-h);
-  border-radius: var(--cc-skel-radius);
-
-  /* ✅ el ancho lo define el inline style (width: "40%" etc)
-     pero SIEMPRE está limitado al ancho real de la celda */
-  max-width: 100%;
-  min-width: 48px;
-
-  background:
-    linear-gradient(90deg,
-      var(--cc-skel-a) 0%,
-      var(--cc-skel-b) 22%,
-      var(--cc-skel-a) 48%,
-      var(--cc-skel-b) 72%,
-      var(--cc-skel-a) 100%);
-  background-size: 240% 100%;
-  animation: ccShimmer 1.05s ease-in-out infinite;
-}
-
-/* en celdas numéricas, que se vea como un número (más "cortita") */
-.cc-row--skeleton .cc-cell.cc-num .cc-skeletonBar{
-  min-width: 36px;
-}
-
-/* en la celda del nombre, un poquito más alta para parecer texto */
-.cc-row--skeleton .cc-cell.cc-name .cc-skeletonBar{
-  height: calc(var(--cc-skel-h) + 1px);
-}
-
-/* shimmer */
-@keyframes ccShimmer{
-  0%{ background-position: 100% 0; }
-  100%{ background-position: 0% 0; }
-}
-
-/* =========================================================
-   ✅ MOBILE skeleton (tarjetas)
-========================================================= */
-.cc-mobileCard.cc-row--skeleton{
-  background: #fff;
-}
-.cc-mobileCard.cc-row--skeleton .cc-skeletonBar{
-  height: 12px;
-}
-
-/* =========================================================
-   CUENTAS CORRIENTES — DARK MODE (override)
-   Pegalo AL FINAL de cuentas_corrientes.css
+   DARK MODE
 ========================================================= */
 html[data-theme="oscuro"] .cc-page{
   background: #0B1220 !important;
   color: rgba(226,232,240,.92) !important;
 }
 
-/* Alert */
 html[data-theme="oscuro"] .cc-page .cc-alert{
   background: rgba(225,61,69,.12) !important;
   border-color: rgba(225,61,69,.24) !important;
   color: rgba(255,255,255,.92) !important;
 }
 
-/* Card */
 html[data-theme="oscuro"] .cc-page .cc-card{
   background: rgba(15,23,42,.62) !important;
   border-color: rgba(148,163,184,.14) !important;
   box-shadow: 0 16px 40px -26px rgba(0,0,0,.62) !important;
 }
 
-/* Head */
 html[data-theme="oscuro"] .cc-page .cc-card__head{
   background:
     radial-gradient(900px 180px at 0% 0%, rgba(78,161,255,.12), transparent 55%),
@@ -668,51 +788,52 @@ html[data-theme="oscuro"] .cc-page .cc-card__hint b{
   color: rgba(226,232,240,.92) !important;
 }
 
-/* Labels */
 html[data-theme="oscuro"] .cc-page .cc-filter label{
-  color: rgba(226,232,240,.72) !important;
+  color: rgba(226,232,240,.65) !important;
 }
 
-/* Select período */
 html[data-theme="oscuro"] .cc-page .cc-filter select{
   background: rgba(15,23,42,.88) !important;
   color: rgba(226,232,240,.92) !important;
   border-color: rgba(148,163,184,.18) !important;
 }
+html[data-theme="oscuro"] .cc-page .cc-filter select:hover{
+  border-color: rgba(148,163,184,.30) !important;
+}
 html[data-theme="oscuro"] .cc-page .cc-filter select:focus{
   background: rgba(15,23,42,.96) !important;
   border-color: rgba(78,161,255,.45) !important;
-  box-shadow: 0 0 0 4px rgba(78,161,255,.18) !important;
+  box-shadow: 0 0 0 3px rgba(78,161,255,.18) !important;
 }
 
-/* Input buscador */
 html[data-theme="oscuro"] .cc-page .cc-input{
   background: rgba(15,23,42,.88) !important;
   color: rgba(226,232,240,.92) !important;
   border-color: rgba(148,163,184,.18) !important;
 }
 html[data-theme="oscuro"] .cc-page .cc-input::placeholder{
-  color: rgba(226,232,240,.45) !important;
+  color: rgba(226,232,240,.40) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-input:hover{
+  border-color: rgba(148,163,184,.30) !important;
 }
 html[data-theme="oscuro"] .cc-page .cc-input:focus{
   background: rgba(15,23,42,.96) !important;
   border-color: rgba(78,161,255,.45) !important;
-  box-shadow: 0 0 0 4px rgba(78,161,255,.18) !important;
+  box-shadow: 0 0 0 3px rgba(78,161,255,.18) !important;
 }
 
-/* Botón X limpiar búsqueda */
 html[data-theme="oscuro"] .cc-page .cc-clearSearch{
-  background: rgba(15,23,42,.95) !important;
-  color: rgba(226,232,240,.85) !important;
+  background: rgba(15,23,42,.90) !important;
+  color: rgba(226,232,240,.72) !important;
   border-color: rgba(148,163,184,.18) !important;
 }
 html[data-theme="oscuro"] .cc-page .cc-clearSearch:hover{
-  background: rgba(78,161,255,.12) !important;
-  border-color: rgba(78,161,255,.25) !important;
-  color: rgba(226,232,240,.95) !important;
+  background: rgba(225,61,69,.14) !important;
+  border-color: rgba(225,61,69,.30) !important;
+  color: rgba(240, 120, 120, 0.95) !important;
 }
 
-/* Subhead */
 html[data-theme="oscuro"] .cc-page .cc-subhead{
   background: linear-gradient(180deg, rgba(15,23,42,.85), rgba(15,23,42,.62)) !important;
   border-bottom-color: rgba(148,163,184,.12) !important;
@@ -721,41 +842,36 @@ html[data-theme="oscuro"] .cc-page .cc-subhead__name{
   color: rgba(226,232,240,.92) !important;
 }
 html[data-theme="oscuro"] .cc-page .cc-subhead__meta{
-  color: rgba(226,232,240,.62) !important;
+  color: rgba(226,232,240,.58) !important;
 }
 
-/* Header tabla */
 html[data-theme="oscuro"] .cc-page .cc-grid--head{
   background: rgba(15,23,42,.95) !important;
   border-bottom-color: rgba(148,163,184,.14) !important;
 }
 html[data-theme="oscuro"] .cc-page .cc-grid--head .cc-cell{
-  color: rgba(226,232,240,.82) !important;
+  color: rgba(226,232,240,.70) !important;
 }
 
-/* Body scroll */
 html[data-theme="oscuro"] .cc-page .cc-gridBody{
   background: rgba(15,23,42,.40) !important;
 }
 
-/* Filas */
 html[data-theme="oscuro"] .cc-page .cc-grid--row{
   background: rgba(15,23,42,.40) !important;
 }
 html[data-theme="oscuro"] .cc-page .cc-grid--row:hover{
-  background: rgba(78,161,255,.10) !important;
+  background: rgba(78,161,255,.08) !important;
 }
 
-/* Celdas */
 html[data-theme="oscuro"] .cc-page .cc-cell{
-  color: rgba(226,232,240,.86) !important;
-  border-bottom-color: rgba(148,163,184,.12) !important;
+  color: rgba(226,232,240,.82) !important;
+  border-bottom-color: rgba(148,163,184,.10) !important;
 }
 html[data-theme="oscuro"] .cc-page .cc-name{
   color: rgba(226,232,240,.92) !important;
 }
 
-/* Pos/Neg */
 html[data-theme="oscuro"] .cc-page .cc-cell.is-positive,
 html[data-theme="oscuro"] .cc-page .cc-saldo.is-positive{
   color: color-mix(in srgb, var(--cc-success) 76%, #e2e8f0) !important;
@@ -765,121 +881,444 @@ html[data-theme="oscuro"] .cc-page .cc-saldo.is-negative{
   color: color-mix(in srgb, var(--cc-danger) 76%, #e2e8f0) !important;
 }
 
-/* Footer totales (tfoot) */
 html[data-theme="oscuro"] .cc-page .cc-grid--tfoot{
-  background: rgba(15,23,42,.62) !important;
+  background: rgba(15,23,42,.70) !important;
+  border-top-color: rgba(148,163,184,.14) !important;
 }
 html[data-theme="oscuro"] .cc-page .cc-tfootLabel{
   color: rgba(226,232,240,.86) !important;
 }
 
-/* Footnote */
 html[data-theme="oscuro"] .cc-page .cc-footnote{
   background: rgba(15,23,42,.62) !important;
-  border-top-color: rgba(148,163,184,.12) !important;
-  color: rgba(226,232,240,.62) !important;
+  border-top-color: rgba(148,163,184,.10) !important;
+  color: rgba(226,232,240,.58) !important;
 }
 
-/* Botón excel */
 html[data-theme="oscuro"] .cc-page .cc-btn--excel{
-  background: rgba(34,173,92,.92) !important;
-  border-color: rgba(34,173,92,.50) !important;
-  color: #071018 !important;
-  box-shadow: 0 14px 28px rgba(34,173,92,.16) !important;
+  background: rgba(34,173,92,.90) !important;
+  border-color: rgba(34,173,92,.45) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 24px rgba(34,173,92,.18) !important;
 }
 html[data-theme="oscuro"] .cc-page .cc-btn--excel:hover:not(:disabled){
   background: rgba(34,173,92,1) !important;
-  color: #071018 !important;
+  box-shadow: 0 10px 28px rgba(34,173,92,.28) !important;
 }
 
-/* Empty row */
+html[data-theme="oscuro"] .cc-page .cc-btnex{
+  background: rgba(15,23,42,.80) !important;
+  border-color: rgba(78,161,255,.28) !important;
+  color: rgba(226,232,240,.88) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-btnex:hover:not(:disabled){
+  background: rgba(78,161,255,.18) !important;
+  border-color: rgba(78,161,255,.50) !important;
+  color: rgba(226,232,240,.96) !important;
+  box-shadow: 0 6px 20px rgba(78,161,255,.20) !important;
+}
+
+html[data-theme="oscuro"] .cc-page .cc-calTrigger{
+  background: rgba(15,23,42,.88) !important;
+  border-color: rgba(148,163,184,.18) !important;
+  color: rgba(226,232,240,.85) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-calTrigger:hover{
+  border-color: rgba(148,163,184,.30) !important;
+  background: rgba(15,23,42,.95) !important;
+}
+html[data-theme="oscuro"] .cc-page .cc-calTrigger.is-open{
+  border-color: rgba(78,161,255,.50) !important;
+  box-shadow: 0 0 0 3px rgba(78,161,255,.16) !important;
+  background: rgba(15,23,42,.96) !important;
+}
+
 html[data-theme="oscuro"] .cc-page .cc-emptyRow{
-  color: rgba(226,232,240,.65) !important;
+  color: rgba(226,232,240,.55) !important;
 }
 
-/* Scrollbar */
 html[data-theme="oscuro"] .cc-page .cc-gridBody::-webkit-scrollbar-thumb{
-  background: rgba(148,163,184,.22) !important;
+  background: rgba(148,163,184,.20) !important;
 }
 
-/* ✅ Skeleton en dark (más “gris” y parejo) */
 html[data-theme="oscuro"] .cc-page{
   --cc-skel-a: rgba(226,232,240,.07);
   --cc-skel-b: rgba(226,232,240,.14);
 }
+.contenedor-cards{
+  height: calc(100% - 100px);
 
+}
 
-/* =============================================
-   Agregar al final de cuentas_corrientes.css
-   Estilos para el trigger del Calendario
-============================================= */
+/* =========================
+   ClientesCC — estilos movidos desde inline
+========================= */
 
-/* Contenedor del filtro de calendario */
+.cc-subhead {
+  margin-top: 0;
+}
+
+.cc-footnote--error {
+  margin-bottom: 10px;
+}
+
+.cc-card__head--clientes {
+  padding-top: 10px;
+}
+
+.cc-card__headLeft--full {
+  width: 100%;
+}
+
+.cc-headFilters--full {
+  width: 100%;
+}
+
 .cc-filter--cal {
   position: relative;
 }
 
-/* Botón trigger que reemplaza el <select> */
-.cc-calTrigger {
+.cc-filter--search {
+  min-width: 360px;
+  flex: 1;
+  position: relative;
+}
+
+.cc-searchInput {
   display: flex;
-  align-items: center;
   gap: 8px;
-  height: 36px;
-  padding: 0 12px;
-  background: #fff;
-  border: 1px solid rgba(10, 37, 64, 0.22);
-  border-radius: 8px;
-  font-size: 13.5px;
-  font-weight: 500;
-  color: rgba(10, 37, 64, 0.85);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: border-color 150ms, box-shadow 150ms, background 150ms;
-  min-width: 200px;
-  font-family: inherit;
+  align-items: center;
 }
 
-.cc-calTrigger:hover {
-  border-color: rgba(10, 37, 64, 0.45);
-  box-shadow: 0 1px 4px rgba(10, 37, 64, 0.08);
+.cc-searchInput__fieldWrap {
+  position: relative;
+  flex: 1;
 }
 
-.cc-calTrigger.is-open {
-  border-color: #0a2540;
-  box-shadow: 0 0 0 2px rgba(10, 37, 64, 0.12);
-  background: rgba(10, 37, 64, 0.02);
-}
-
-.cc-calTrigger__arrow {
-  margin-left: auto;
-  font-size: 10px;
-  color: rgba(10, 37, 64, 0.4);
-}
-
-/* Dropdown que contiene el Calendario */
-.cc-calDropdown {
+.cc-searchInput__arrow {
   position: absolute;
-  top: calc(100% + 6px);
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.6;
+  pointer-events: none;
+  font-size: 12px;
+}
+
+.cc-suggestions {
+  position: absolute;
   left: 0;
-  z-index: 999;
-  animation: cc-calFadeIn 140ms ease;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 1000;
+  background: var(--card-bg, #fff);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
 }
 
-@keyframes cc-calFadeIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
+.cc-suggestions__scroll {
+  max-height: 260px;
+  overflow: auto;
 }
 
-/* On mobile: full width dropdown */
-@media (max-width: 720px) {
-  .cc-calDropdown {
-    left: 50%;
-    transform: translateX(-50%);
-    top: calc(100% + 6px);
+.cc-suggestions__item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cc-suggestions__item:hover {
+  background: rgba(0, 85, 187, 0.08);
+}
+
+.cc-cliente-table {
+  margin-top: 12px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.cc-cliente-table__head,
+.cc-cliente-table__row {
+  display: grid;
+  grid-template-columns: 130px 1.4fr 160px 160px 160px 90px;
+  gap: 0;
+  align-items: center;
+}
+
+.cc-cliente-table__head {
+  background: #f3f4f6;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  font-weight: 700;
+  color: #333;
+}
+
+.cc-cliente-table__row {
+  background: #fff;
+}
+
+.cc-cliente-table__row.is-alt {
+  background: #fcfcfd;
+}
+
+.cc-cliente-table__row:not(:last-of-type) {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.cc-cliente-table__cell {
+  padding: 10px 16px;
+}
+
+.cc-cliente-table__cell--center {
+  text-align: center;
+}
+
+.cc-cliente-table__cell--right {
+  text-align: right;
+}
+
+.cc-cliente-table__cell--date {
+  color: #444;
+}
+
+.cc-cliente-table__title {
+  font-weight: 600;
+
+}
+
+.cc-cliente-table__detail {
+  font-size: 12px;
+  opacity: 0.72;
+  margin-top: 3px;
+}
+
+.cc-cliente-table__amount--active {
+  color: #1f2937;
+}
+
+.cc-cliente-table__amount--muted {
+  color: #9ca3af;
+}
+
+.cc-cliente-table__saldo {
+  font-weight: 700;
+  color: #111827;
+}
+
+.cc-verBtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  color: #111827;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cc-verBtn.is-disabled,
+.cc-verBtn:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.cc-cliente-table__loading {
+  padding: 18px 16px;
+  text-align: center;
+  color: #6b7280;
+  background: #fff;
+}
+
+.cc-cliente-table__empty {
+  padding: 26px 16px;
+  text-align: center;
+  color: #6b7280;
+  font-weight: 500;
+
+}
+
+.cc-cliente-table__totals {
+  background: #f8fafc;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  font-weight: 700;
+}
+
+/* =========================
+   Responsive
+========================= */
+@media (max-width: 1100px) {
+  .cc-cliente-table {
+    overflow-x: auto;
   }
 
-  .cc-calTrigger {
-    min-width: 160px;
-    font-size: 12.5px;
+  .cc-cliente-table__head,
+  .cc-cliente-table__row,
+  .cc-cliente-table__totals {
+    min-width: 890px;
   }
+}
+
+@media (max-width: 768px) {
+  .cc-filter--search {
+    min-width: 100%;
+  }
+
+  .cc-searchInput {
+    flex-wrap: wrap;
+  }
+
+  .cc-searchInput__fieldWrap {
+    min-width: 100%;
+  }
+}/* =========================
+   Empty state icon
+========================= */
+
+.cc-emptyState{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  height: 100%;
+  gap:10px;
+  padding:30px 16px;
+}
+
+.cc-emptyIcon{
+  font-size:28px;
+  opacity:.45;
+  color:#6b7280;
+}
+
+.cc-emptyText{
+  font-size:13px;
+  color:#6b7280;
+}.cc-clearSearch--inside{
+  position:absolute;
+  right:34px;
+  top:50%;
+  transform:translateY(-50%);
+}.cc-input{
+  padding-right:70px;
+}/* =========================
+   Tabs activas (Clientes / Proveedores)
+========================= */
+
+.cc-headFilters .cc-btnex{
+  text-decoration: none;
+}
+
+.cc-headFilters .cc-btnex.is-open{
+  background: var(--b-action);
+  border-color: var(--b-action);
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(0, 85, 187, 0.28);
+}
+
+.cc-headFilters .cc-btnex.is-open:hover{
+  background: var(--b-action);
+  border-color: var(--b-action);
+  color: #fff;
+  transform: none;
+  box-shadow: 0 8px 22px rgba(0, 85, 187, 0.28);
+}
+
+.cc-headFilters .cc-btnex.is-open:active{
+  transform: none;
+  box-shadow: 0 8px 22px rgba(0, 85, 187, 0.28);
+}
+
+/* opcional: estilo más suave para la pestaña no activa */
+.cc-headFilters .cc-btnex:not(.is-open){
+  background: rgba(0, 85, 187, 0.06);
+  border-color: rgba(0, 85, 187, 0.20);
+  color: var(--b-midnight);
+}/* =========================
+   Tabla con header y footer fijos
+   + body con scroll
+========================= */
+
+.cc-cliente-table{
+  margin-top: 12px;
+  background: #fff;
+
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.cc-cliente-table__headWrap{
+  background: #f3f4f6;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.cc-cliente-table__footWrap{
+  background: #f8fafc;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.cc-cliente-table__body{
+  height: calc(100vh - 430px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+
+
+/* misma grilla para head / rows / totals */
+.cc-cliente-table__head,
+.cc-cliente-table__row{
+  display: grid;
+  grid-template-columns: .8fr 2.2fr 1fr 1fr 1fr 0.7fr;
+  gap: 0;
+  align-items: center;
+}
+.cc-cliente-table__totals{
+  display: 
+  grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+
+}
+
+.cc-cliente-table__head{
+  background: #f3f4f6;
+  font-weight: 700;
+  color: #333;
+}
+
+.cc-cliente-table__row{
+  background: #fff;
+}
+
+.cc-cliente-table__row.is-alt{
+  background: #fcfcfd;
+}
+
+.cc-cliente-table__row:not(:last-child){
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.cc-cliente-table__totals{
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.cc-cliente-table__loading,
+.cc-cliente-table__empty{
+  padding: 26px 16px;
+  text-align: center;
+  color: #6b7280;
+
 }

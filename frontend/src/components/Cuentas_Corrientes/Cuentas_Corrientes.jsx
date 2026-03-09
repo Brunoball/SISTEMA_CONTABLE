@@ -15,26 +15,30 @@ export default function Cuentas_Corrientes() {
   return (
     <div className="cc-page">
       <section className="cc-card cc-card--table">
-        <div className="cc-card__head">
-          <div className="cc-card__headLeft">
+        <div className="cc-card__head cc-card__head--module">
+          <div className="cc-card__headLeft cc-card__headLeft--stack">
             <div className="cc-headTitle">
               <div className="cc-card__title">Cuentas Corrientes</div>
-              <div className="cc-card__hint">Elegí una opción para buscar historial</div>
+              <div className="cc-card__hint">
+                Elegí una opción para buscar historial
+              </div>
             </div>
 
-            <div className="cc-headFilters" style={{ gap: 10 }}>
+            <div className="cc-headFilters cc-headFilters--tabs">
               <NavLink
                 to="clientes"
-                className={({ isActive }) => `cc-btnex ${isActive ? "is-open" : ""}`}
-                style={{ textDecoration: "none" }}
+                className={({ isActive }) =>
+                  `cc-btnex cc-btnex--tab ${isActive ? "is-open" : ""}`
+                }
               >
                 Clientes
               </NavLink>
 
               <NavLink
                 to="proveedores"
-                className={({ isActive }) => `cc-btnex ${isActive ? "is-open" : ""}`}
-                style={{ textDecoration: "none" }}
+                className={({ isActive }) =>
+                  `cc-btnex cc-btnex--tab ${isActive ? "is-open" : ""}`
+                }
               >
                 Proveedores
               </NavLink>
@@ -42,15 +46,15 @@ export default function Cuentas_Corrientes() {
           </div>
         </div>
 
-        {/* ✅ Si está en la raíz, no mostramos nada más */}
         {isRoot ? (
-          <div style={{ padding: 16 }}>
+          <div className="cc-card__bodyEmpty">
             <div className="cc-footnote">
-              * Esta sección ahora es un contenedor. Entrá a <b>Clientes</b> o <b>Proveedores</b> para buscar y ver el historial.
+              * Entrá a <b>Clientes</b> o <b>Proveedores</b> para buscar y ver
+              el historial.
             </div>
           </div>
         ) : (
-          <div style={{ paddingTop: 6 }}>
+          <div className="cc-card__outlet">
             <Outlet />
           </div>
         )}

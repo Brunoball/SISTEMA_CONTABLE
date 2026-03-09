@@ -106,7 +106,6 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  background: var(--mi-bg-soft);
 }
 
 .mi-tabpanel{
@@ -114,7 +113,6 @@
   min-height: 0;
   overflow: auto;
   padding: 22px;
-  background: linear-gradient(180deg, #fff 0%, #fbfcff 100%);
 }
 
 /* =========================
@@ -141,7 +139,6 @@
 
 .mi-card{
   grid-column: span 6;
-  background: #fff;
   border: 1px solid var(--mi-border);
   border-radius: var(--mi-radius-md);
   padding: 16px;
@@ -153,7 +150,6 @@
 .mi-card__title{
   margin: 0 0 12px;
   font-size: 1rem;
-  color: var(--mi-text);
   letter-spacing: -0.01em;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--mi-border);

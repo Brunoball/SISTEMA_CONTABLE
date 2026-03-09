@@ -184,11 +184,11 @@
 ========================= */
 .perfil-card{
   display: grid;
-  grid-template-columns: 56px 64px 1fr;
+  grid-template-columns: 110px minmax(0, 1fr);
   align-items: center;
-  gap: 14px;
+  gap: 18px;
 
-  padding: 14px;
+  padding: 18px;
   border-radius: var(--r-lg);
   background: rgba(255,255,255,.92);
   border: 1px solid rgba(214, 222, 234, 0.95);
@@ -197,7 +197,26 @@
   margin-bottom: 14px;
   min-width: 0;
 }
+.perfil-logoWrap{
+  width: 96px;
+  height: 96px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid rgba(214, 222, 234, 0.95);
+  margin: 0;
+  flex-shrink: 0;
+}
 
+.perfil-logoWrap img{
+  max-width: 88%;
+  max-height: 88%;
+  object-fit: contain;
+  display: block;
+}
 /* Ícono izquierdo (cuadro) */
 .perfil-card__icon{
   width: 56px;
@@ -353,12 +372,29 @@
    Responsive
 ========================= */
 @media (max-width: 640px){
-  .perfil-grid{ grid-template-columns: 1fr; }
-  .perfil-card{ grid-template-columns: 52px 60px 1fr; }
-  .perfil-card__icon{ width: 52px; height: 52px; border-radius: 16px; }
-  .perfil-avatar{ width: 60px; height: 60px; border-radius: 18px; }
-  .mi-modal__container{ border-radius: 18px; }
-  .perfil-inner{ padding: 14px; }
+  .perfil-grid{
+    grid-template-columns: 1fr;
+  }
+
+  .perfil-card{
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .perfil-logoWrap{
+    width: 84px;
+    height: 84px;
+    border-radius: 16px;
+  }
+
+  .mi-modal__container{
+    border-radius: 18px;
+  }
+
+  .perfil-inner{
+    padding: 14px;
+  }
 }
 /* ===== Ajuste: tipografías menos gruesas (override) ===== */
 .mi-modal__title{ font-weight: 700; }

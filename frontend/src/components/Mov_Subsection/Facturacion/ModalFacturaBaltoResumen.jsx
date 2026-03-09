@@ -1,6 +1,8 @@
 import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { FaCheck } from "react-icons/fa";
 import "./ModalFacturaBalto.css";
+import "../../Global/Global_css/Global_oscuro.css";
+
 import { saveBaltoInvoicePdf, buildBaltoInvoicePdf } from "../../../utils/FacturaPdfBuilder";
 
 const DOC_TIPOS = [
@@ -76,6 +78,7 @@ export default function ModalFacturaBaltoResumen({
   const [previewUrl, setPreviewUrl] = useState("");
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState(false);
+  const [tabActiva, setTabActiva] = useState("resumen");
   const firstRef = useRef(null);
 
   const docLabel = useMemo(() => {
@@ -126,16 +129,33 @@ export default function ModalFacturaBaltoResumen({
       comprobante: `Factura C (${String(cbteTipo || 11).padStart(3, "0")})`,
       receptorTxt: doc ? `${docLabel}: ${doc}` : "—",
       pvTxt: pv || "—",
-      iva: data?.cliente_facturacion?.cond_iva || data?.cliente_facturacion?.condicion_iva || "—",
+      iva:
+        data?.cliente_facturacion?.cond_iva ||
+        data?.cliente_facturacion?.condicion_iva ||
+        "—",
       domicilio: data?.cliente_facturacion?.domicilio || "—",
       observaciones: safeText(data?.observaciones),
     };
-  }, [idPago, idSistema, nombreCliente, nombreSistema, fechaCbteISO, vtoPagoISO, monto, docNro, ptoVta, docLabel, data, cbteTipo]);
+  }, [
+    idPago,
+    idSistema,
+    nombreCliente,
+    nombreSistema,
+    fechaCbteISO,
+    vtoPagoISO,
+    monto,
+    docNro,
+    ptoVta,
+    docLabel,
+    data,
+    cbteTipo,
+  ]);
 
   useEffect(() => {
     if (!open) return;
     setError("");
     setConfirm(false);
+    setTabActiva("resumen");
     setTimeout(() => firstRef.current?.focus?.(), 0);
   }, [open]);
 
@@ -159,10 +179,14 @@ export default function ModalFacturaBaltoResumen({
           pto_vta: Number(ptoVta) || 2,
           cbte_tipo: Number(cbteTipo) || 11,
           cbte_nro: 1,
-          fecha_cbte: isoToYmd8(fechaCbteISO || new Date().toISOString().slice(0, 10)),
+          fecha_cbte: isoToYmd8(
+            fechaCbteISO || new Date().toISOString().slice(0, 10)
+          ),
           importe: Number(monto) || 0,
           cae: "00000000000000",
-          cae_vto: isoToYmd8(vtoPagoISO || new Date().toISOString().slice(0, 10)),
+          cae_vto: isoToYmd8(
+            vtoPagoISO || new Date().toISOString().slice(0, 10)
+          ),
           qr_url: "",
           emisor_nombre: emisorNombre || "BALTO",
           emisor_domicilio: emisorDomicilio || "",
@@ -170,8 +194,12 @@ export default function ModalFacturaBaltoResumen({
           cond_iva_emisor: emisorCondIva || "",
           ingresos_brutos_emisor: emisorIibb || "",
           fecha_inicio_actividades_emisor: emisorFechaInicio || "",
-          receptor_nombre: data?.cliente_facturacion?.razon_social || nombreCliente,
-          receptor_domicilio: data?.cliente_facturacion?.domicilio || data?.cliente_domicilio || "",
+          receptor_nombre:
+            data?.cliente_facturacion?.razon_social || nombreCliente,
+          receptor_domicilio:
+            data?.cliente_facturacion?.domicilio ||
+            data?.cliente_domicilio ||
+            "",
           cond_iva_receptor:
             data?.cliente_facturacion?.cond_iva ||
             data?.cliente_facturacion?.condicion_iva ||
@@ -247,33 +275,40 @@ export default function ModalFacturaBaltoResumen({
     }
   }, []);
 
-  const fetchJSON = useCallback(async (url, opts) => {
-    const headers = getAuthHeaders(opts?.headers || {});
-    const res = await fetch(url, { ...opts, headers });
-    const raw = await res.text();
-    const trimmed = (raw || "").trim();
+  const fetchJSON = useCallback(
+    async (url, opts) => {
+      const headers = getAuthHeaders(opts?.headers || {});
+      const res = await fetch(url, { ...opts, headers });
+      const raw = await res.text();
+      const trimmed = (raw || "").trim();
 
-    if (trimmed.startsWith("<")) {
-      throw new Error("Backend devolvió HTML (error PHP).");
-    }
+      if (trimmed.startsWith("<")) {
+        throw new Error("Backend devolvió HTML (error PHP).");
+      }
 
-    let j = null;
-    try {
-      j = trimmed ? JSON.parse(trimmed) : null;
-    } catch {
-      j = null;
-    }
+      let j = null;
+      try {
+        j = trimmed ? JSON.parse(trimmed) : null;
+      } catch {
+        j = null;
+      }
 
-    const pickErr = () =>
-      toText(j?.mensaje) || toText(j?.error) || toText(j?.message) || toText(j?.detail) || "";
+      const pickErr = () =>
+        toText(j?.mensaje) ||
+        toText(j?.error) ||
+        toText(j?.message) ||
+        toText(j?.detail) ||
+        "";
 
-    if (!res.ok) throw new Error(pickErr() || `HTTP ${res.status}`);
-    if (j && typeof j === "object" && j.exito === false) {
-      throw new Error(pickErr() || "Error servidor");
-    }
-    if (j == null) throw new Error("Respuesta inválida (no JSON)");
-    return j;
-  }, [toText]);
+      if (!res.ok) throw new Error(pickErr() || `HTTP ${res.status}`);
+      if (j && typeof j === "object" && j.exito === false) {
+        throw new Error(pickErr() || "Error servidor");
+      }
+      if (j == null) throw new Error("Respuesta inválida (no JSON)");
+      return j;
+    },
+    [toText]
+  );
 
   const validar = useCallback(() => {
     const doc = String(docNro ?? "").replace(/\D/g, "");
@@ -291,14 +326,20 @@ export default function ModalFacturaBaltoResumen({
     }
 
     if (!safeText(data?.cliente_facturacion?.razon_social)) {
-      return { ok: false, msg: "Falta razón social / apellido y nombre del cliente." };
+      return {
+        ok: false,
+        msg: "Falta razón social / apellido y nombre del cliente.",
+      };
     }
 
     if (
       !safeText(data?.cliente_facturacion?.cond_iva) &&
       !safeText(data?.cliente_facturacion?.condicion_iva)
     ) {
-      return { ok: false, msg: "Falta condición frente al IVA del cliente." };
+      return {
+        ok: false,
+        msg: "Falta condición frente al IVA del cliente.",
+      };
     }
 
     if (!safeText(data?.cliente_facturacion?.domicilio)) {
@@ -334,76 +375,98 @@ export default function ModalFacturaBaltoResumen({
       id_pago: idPago ? Number(idPago) : null,
       id_sistema: idSistema ? Number(idSistema) : null,
     };
-  }, [data, docNro, ptoVta, docTipo, idPago, idSistema, fechaCbteISO, vtoPagoISO, items, monto]);
+  }, [
+    data,
+    docNro,
+    ptoVta,
+    docTipo,
+    idPago,
+    idSistema,
+    fechaCbteISO,
+    vtoPagoISO,
+    items,
+    monto,
+  ]);
 
-  const guardarFacturaEnDB = useCallback(async ({ blob, filename, fact, estado }) => {
-    if (estado !== "emitida") return { exito: true, skip: true };
+  const guardarFacturaEnDB = useCallback(
+    async ({ blob, filename, fact, estado }) => {
+      if (estado !== "emitida") return { exito: true, skip: true };
 
-    if (!data?.id_pago && !data?.id_sistema) {
-      return { exito: true, skip: true };
-    }
+      if (!data?.id_pago && !data?.id_sistema) {
+        return { exito: true, skip: true };
+      }
 
-    const url = `${apiBase}?action=${action}&op=facturacion_guardar_pdf`;
+      const url = `${apiBase}?action=${action}&op=facturacion_guardar_pdf`;
 
-    const payload = {
-      estado: "emitida",
-      id_pago: data?.id_pago ?? null,
-      id_sistema: data?.id_sistema ?? null,
-      anio: Number(fact?.anio || 0),
-      id_mes: Number(fact?.id_mes || 0),
-      monto_ars: Number(fact?.importe ?? data?.monto ?? data?.importe ?? 0),
+      const payload = {
+        estado: "emitida",
+        id_pago: data?.id_pago ?? null,
+        id_sistema: data?.id_sistema ?? null,
+        anio: Number(fact?.anio || 0),
+        id_mes: Number(fact?.id_mes || 0),
+        monto_ars: Number(fact?.importe ?? data?.monto ?? data?.importe ?? 0),
 
-      doc_tipo: Number(docTipo),
-      doc_nro: String(docNro || "").replace(/\D/g, ""),
-      cbte_tipo: Number(cbteTipo),
-      pto_vta: Number(ptoVta),
+        doc_tipo: Number(docTipo),
+        doc_nro: String(docNro || "").replace(/\D/g, ""),
+        cbte_tipo: Number(cbteTipo),
+        pto_vta: Number(ptoVta),
 
-      razon_social: data?.cliente_facturacion?.razon_social || null,
-      cond_iva:
-        data?.cliente_facturacion?.cond_iva ||
-        data?.cliente_facturacion?.condicion_iva ||
-        null,
-      domicilio: data?.cliente_facturacion?.domicilio || null,
+        razon_social: data?.cliente_facturacion?.razon_social || null,
+        cond_iva:
+          data?.cliente_facturacion?.cond_iva ||
+          data?.cliente_facturacion?.condicion_iva ||
+          null,
+        domicilio: data?.cliente_facturacion?.domicilio || null,
 
-      cae: fact?.cae ?? null,
-      cae_vto: fact?.cae_vto ?? null,
-      cbte_nro: fact?.cbte_nro ?? null,
-      fecha_cbte: fact?.fecha_cbte ?? null,
+        cae: fact?.cae ?? null,
+        cae_vto: fact?.cae_vto ?? null,
+        cbte_nro: fact?.cbte_nro ?? null,
+        fecha_cbte: fact?.fecha_cbte ?? null,
 
-      items_facturacion: Array.isArray(data?.items_facturacion) ? data.items_facturacion : [],
-      total_ars: data?.total_ars ?? null,
-      vto_pago: isoToYmd8(vtoPagoISO) || null,
-      observaciones: data?.observaciones ?? "",
-    };
+        items_facturacion: Array.isArray(data?.items_facturacion)
+          ? data.items_facturacion
+          : [],
+        total_ars: data?.total_ars ?? null,
+        vto_pago: isoToYmd8(vtoPagoISO) || null,
+        observaciones: data?.observaciones ?? "",
+      };
 
-    const fd = new FormData();
-    fd.append("meta", JSON.stringify(payload));
-    fd.append("pdf", blob, filename || "factura.pdf");
+      const fd = new FormData();
+      fd.append("meta", JSON.stringify(payload));
+      fd.append("pdf", blob, filename || "factura.pdf");
 
-    const res = await fetch(url, {
-      method: "POST",
-      body: fd,
-      headers: getAuthHeaders(),
-    });
+      const res = await fetch(url, {
+        method: "POST",
+        body: fd,
+        headers: getAuthHeaders(),
+      });
 
-    const raw = await res.text();
-    let j = null;
-    try {
-      j = raw ? JSON.parse(raw) : null;
-    } catch {
-      j = null;
-    }
+      const raw = await res.text();
+      let j = null;
+      try {
+        j = raw ? JSON.parse(raw) : null;
+      } catch {
+        j = null;
+      }
 
-    if (!res.ok) throw new Error(j?.mensaje || j?.error || `HTTP ${res.status}`);
-    if (j && typeof j === "object" && j.exito === false) throw new Error(j?.mensaje || "Error guardando factura");
-    return j;
-  }, [apiBase, action, data, docTipo, docNro, cbteTipo, ptoVta, vtoPagoISO]);
+      if (!res.ok) {
+        throw new Error(j?.mensaje || j?.error || `HTTP ${res.status}`);
+      }
+      if (j && typeof j === "object" && j.exito === false) {
+        throw new Error(j?.mensaje || "Error guardando factura");
+      }
+      return j;
+    },
+    [apiBase, action, data, docTipo, docNro, cbteTipo, ptoVta, vtoPagoISO]
+  );
 
   const exportarSoloPDF = useCallback(async () => {
     setError("");
     const v = validar();
     if (!v.ok) return setError(v.msg);
-    if (!confirm) return setError("Tenés que confirmar antes de descargar el PDF.");
+    if (!confirm) {
+      return setError("Tenés que confirmar antes de descargar el PDF.");
+    }
 
     setLoadingPdf(true);
     try {
@@ -424,8 +487,12 @@ export default function ModalFacturaBaltoResumen({
         cond_iva_emisor: emisorCondIva || "",
         ingresos_brutos_emisor: emisorIibb || "",
         fecha_inicio_actividades_emisor: emisorFechaInicio || "",
-        receptor_nombre: data?.cliente_facturacion?.razon_social || nombreCliente,
-        receptor_domicilio: data?.cliente_facturacion?.domicilio || data?.cliente_domicilio || "",
+        receptor_nombre:
+          data?.cliente_facturacion?.razon_social || nombreCliente,
+        receptor_domicilio:
+          data?.cliente_facturacion?.domicilio ||
+          data?.cliente_domicilio ||
+          "",
         cond_iva_receptor:
           data?.cliente_facturacion?.cond_iva ||
           data?.cliente_facturacion?.condicion_iva ||
@@ -535,9 +602,12 @@ export default function ModalFacturaBaltoResumen({
           cuit_emisor: emisorCuit || fact?.cuit_emisor,
           cond_iva_emisor: emisorCondIva || fact?.cond_iva_emisor,
           ingresos_brutos_emisor: emisorIibb || fact?.ingresos_brutos_emisor,
-          fecha_inicio_actividades_emisor: emisorFechaInicio || fact?.fecha_inicio_actividades_emisor,
-          receptor_nombre: data?.cliente_facturacion?.razon_social || fact?.receptor_nombre,
-          receptor_domicilio: data?.cliente_facturacion?.domicilio || fact?.receptor_domicilio,
+          fecha_inicio_actividades_emisor:
+            emisorFechaInicio || fact?.fecha_inicio_actividades_emisor,
+          receptor_nombre:
+            data?.cliente_facturacion?.razon_social || fact?.receptor_nombre,
+          receptor_domicilio:
+            data?.cliente_facturacion?.domicilio || fact?.receptor_domicilio,
           cond_iva_receptor:
             data?.cliente_facturacion?.cond_iva ||
             data?.cliente_facturacion?.condicion_iva ||
@@ -559,7 +629,8 @@ export default function ModalFacturaBaltoResumen({
         download: true,
       });
 
-      const blob = out?.blob instanceof Blob ? out.blob : out instanceof Blob ? out : null;
+      const blob =
+        out?.blob instanceof Blob ? out.blob : out instanceof Blob ? out : null;
       const filename = out?.filename || "factura.pdf";
       if (!blob) throw new Error("No se pudo generar el PDF.");
 
@@ -629,14 +700,15 @@ export default function ModalFacturaBaltoResumen({
   return (
     <div
       className="mi-modal__overlay"
-      onClick={(e) => e.target.classList.contains("mi-modal__overlay") && cerrar()}
+      onClick={(e) =>
+        e.target.classList.contains("mi-modal__overlay") && cerrar()
+      }
     >
       <div
-        className="mi-modal__container"
+        className="mi-modal__container mfb-modal-container"
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 1180 }}
       >
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
@@ -646,167 +718,140 @@ export default function ModalFacturaBaltoResumen({
             </p>
           </div>
 
-          <button className="mi-modal__close" onClick={cerrar} aria-label="Cerrar" type="button">
+          <button
+            className="mi-modal__close"
+            onClick={cerrar}
+            aria-label="Cerrar"
+            type="button"
+          >
             ×
           </button>
         </div>
 
         <div className="mit-modal__body">
-          <div className="mi-grid" style={{ gridTemplateColumns: "390px 1fr", gap: 16 }}>
-            <div className="mi-card">
-              {error && (
-                <div className="arca-alert arca-alert--error" role="alert">
-                  {error}
-                </div>
-              )}
+          <div className="mfb-tabs">
+            <button
+              type="button"
+              className={`mfb-tab ${tabActiva === "resumen" ? "is-active" : ""}`}
+              onClick={() => setTabActiva("resumen")}
+            >
+              Resumen de facturación
+            </button>
 
-              <div className="arca-alert arca-alert--info">
-                <div className="arca-alert__title">
-                  <strong>Resumen de facturación</strong>
-                </div>
+            <button
+              type="button"
+              className={`mfb-tab ${tabActiva === "preview" ? "is-active" : ""}`}
+              onClick={() => setTabActiva("preview")}
+            >
+              Vista previa PDF
+            </button>
+          </div>
 
-                <div className="arca-resumen arca-resumen--2col">
-                  <div className="arca-row">
-                    <b>Cliente:</b>
-                    <span>{resumen.cliente}</span>
+          {error && (
+            <div className="mov-mi-error mfb-error-top" role="alert">
+              {error}
+            </div>
+          )}
+
+          {tabActiva === "resumen" && (
+            <div className="mi-tabpanel padding-tabpanel">
+              <div className="mi-card">
+                <div className="arca-alert arca-alert--info">
+                  <div className="arca-alert__title">
+                    <strong>Resumen de facturación</strong>
                   </div>
 
-                  <div className="arca-row">
-                    <b>Sistema:</b>
-                    <span>{resumen.sistema}</span>
-                  </div>
+<div className="arca-resumen-grid">
+  <div className="arca-col">
+    <div className="arca-row"><b>Cliente:</b><span>{resumen.cliente}</span></div>
+    <div className="arca-row"><b>Sistema:</b><span>{resumen.sistema}</span></div>
+    <div className="arca-row"><b>Fecha:</b><span>{ymdToHuman(resumen.fechaISO)}</span></div>
+    <div className="arca-row"><b>Vencimiento:</b><span>{ymdToHuman(resumen.vtoISO)}</span></div>
+    <div className="arca-row"><b>Receptor:</b><span>{resumen.receptorTxt}</span></div>
+    <div className="arca-row"><b>Punto de venta:</b><span>{resumen.pvTxt}</span></div>
+    <div className="arca-row"><b>IVA cliente:</b><span>{resumen.iva}</span></div>
+    <div className="arca-row"><b>Domicilio cliente:</b><span>{resumen.domicilio}</span></div>
+  </div>
 
-                  <div className="arca-row">
-                    <b>Monto total:</b>
-                    <span>{resumen.montoTxt}</span>
-                  </div>
+  <div className="arca-col">
+    <div className="arca-row"><b>Emisor:</b><span>{emisorNombre}</span></div>
+    <div className="arca-row"><b>CUIT emisor:</b><span>{emisorCuit}</span></div>
+    <div className="arca-row"><b>IVA emisor:</b><span>{emisorCondIva}</span></div>
+    <div className="arca-row"><b>Domicilio comercial:</b><span>{emisorDomicilio}</span></div>
+    <div className="arca-row"><b>Ing. Brutos:</b><span>{emisorIibb}</span></div>
+    <div className="arca-row"><b>Inicio actividades:</b><span>{emisorFechaInicio}</span></div>
 
-                  <div className="arca-row">
-                    <b>Comprobante:</b>
-                    <span>{resumen.comprobante}</span>
-                  </div>
+    <div className="arca-row"><b>Monto total:</b><span>{resumen.montoTxt}</span></div>
+    <div className="arca-row"><b>Comprobante:</b><span>{resumen.comprobante}</span></div>
+  </div>
+</div>
 
-                  <div className="arca-row">
-                    <b>Fecha:</b>
-                    <span>{ymdToHuman(resumen.fechaISO)}</span>
-                  </div>
+                  <div className="mfb-mt14">
+                    <strong>Detalle</strong>
 
-                  <div className="arca-row">
-                    <b>Vencimiento:</b>
-                    <span>{ymdToHuman(resumen.vtoISO)}</span>
-                  </div>
-
-                  <div className="arca-row">
-                    <b>Receptor:</b>
-                    <span>{resumen.receptorTxt}</span>
-                  </div>
-
-                  <div className="arca-row">
-                    <b>Punto de venta:</b>
-                    <span>{resumen.pvTxt}</span>
-                  </div>
-
-                  <div className="arca-row">
-                    <b>IVA cliente:</b>
-                    <span>{resumen.iva}</span>
-                  </div>
-
-                  <div className="arca-row arca-row--full">
-                    <b>Domicilio cliente:</b>
-                    <span>{resumen.domicilio}</span>
-                  </div>
-
-                  <div className="arca-row arca-row--full">
-                    <b>Emisor:</b>
-                    <span>{emisorNombre || "—"}</span>
-                  </div>
-
-                  <div className="arca-row">
-                    <b>CUIT emisor:</b>
-                    <span>{emisorCuit || "—"}</span>
-                  </div>
-
-                  <div className="arca-row">
-                    <b>IVA emisor:</b>
-                    <span>{emisorCondIva || "—"}</span>
-                  </div>
-
-                  <div className="arca-row arca-row--full">
-                    <b>Domicilio comercial:</b>
-                    <span>{emisorDomicilio || "—"}</span>
-                  </div>
-
-                  <div className="arca-row">
-                    <b>Ing. Brutos:</b>
-                    <span>{emisorIibb || "—"}</span>
-                  </div>
-
-                  <div className="arca-row">
-                    <b>Inicio actividades:</b>
-                    <span>{emisorFechaInicio || "—"}</span>
-                  </div>
-
-                  {resumen.observaciones ? (
-                    <div className="arca-row arca-row--full">
-                      <b>Observaciones:</b>
-                      <span>{resumen.observaciones}</span>
+                    <div className="mfb-mt8">
+                      {(items || []).map((it, idx) => (
+                        <div
+                          key={`${it?.id || idx}_${idx}`}
+                          className="arca-mini mfb-mb6"
+                        >
+                          {idx + 1}. {it.descripcion} — Cant: {it.cantidad} — P.Unit:{" "}
+                          {moneyARS(it.precio_unitario || it.precio || 0)} — IVA:{" "}
+                          {moneyARS(it.iva_monto || 0)} — Total:{" "}
+                          {moneyARS(it.total || it.ars || it.subtotal || 0)}
+                        </div>
+                      ))}
                     </div>
-                  ) : null}
-                </div>
-
-                <div style={{ marginTop: 14 }}>
-                  <strong>Detalle</strong>
-                  <div style={{ marginTop: 8 }}>
-                    {(items || []).map((it, idx) => (
-                      <div key={`${it?.id || idx}_${idx}`} className="arca-mini" style={{ marginBottom: 6 }}>
-                        {idx + 1}. {it.descripcion} — Cant: {it.cantidad} — P.Unit: {moneyARS(it.precio_unitario || it.precio || 0)} — IVA: {moneyARS(it.iva_monto || 0)} — Total: {moneyARS(it.total || it.ars || it.subtotal || 0)}
-                      </div>
-                    ))}
                   </div>
-                </div>
 
-                <div className="arca-confirm" style={{ marginTop: 14 }}>
-                  <label className="arca-check">
-                    <input
-                      ref={firstRef}
-                      type="checkbox"
-                      checked={confirm}
-                      onChange={(e) => setConfirm(e.target.checked)}
-                      disabled={loading || loadingPdf}
-                    />
-                    <span className="arca-check__circle" />
-                    <span className="arca-check__text">
-                      Confirmo que los <b>datos del cliente</b>, del <b>emisor</b>, el <b>detalle</b> y el <b>monto</b> son correctos.
-                    </span>
-                  </label>
+                  <div className="arca-confirm mfb-mt14">
+                    <label className="arca-check mfb-check">
+                      <input
+                        ref={firstRef}
+                        type="checkbox"
+                        checked={confirm}
+                        onChange={(e) => setConfirm(e.target.checked)}
+                        disabled={loading || loadingPdf}
+                        className="mfb-check__input"
+                      />
+
+                      <span className="mfb-check__box">
+                        <FaCheck className="mfb-check__icon" />
+                      </span>
+
+                      <span className="mfb-check__text">
+                        Confirmo que los <b>datos del cliente</b>, del <b>emisor</b>, el <b>detalle</b> y el <b>monto</b> son correctos.
+                      </span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
+          )}
 
-            <div className="mi-card">
-              <h3 className="mi-card__title">Vista previa del PDF</h3>
+          {tabActiva === "preview" && (
+            <div className="mi-tabpanel ">
+              <div className="mi-card">
+                <h3 className="mi-card__title">Vista previa del PDF</h3>
 
-              {loadingPreview ? (
-                <div className="arca-alert arca-alert--info">Generando vista previa...</div>
-              ) : previewUrl ? (
-                <iframe
-                  title="Vista previa factura PDF"
-                  src={previewUrl}
-                  style={{
-                    width: "100%",
-                    height: "70vh",
-                    border: "1px solid rgba(255,255,255,.08)",
-                    borderRadius: 12,
-                    background: "#fff",
-                  }}
-                />
-              ) : (
-                <div className="arca-alert arca-alert--error">
-                  No se pudo generar la vista previa del PDF.
-                </div>
-              )}
+                {loadingPreview ? (
+                  <div className="arca-alert arca-alert--info">
+                    Generando vista previa...
+                  </div>
+                ) : previewUrl ? (
+                  <iframe
+                    title="Vista previa factura PDF"
+                    src={previewUrl}
+                    className="mfb-preview"
+                  />
+                ) : (
+                  <div className="arca-alert arca-alert--error">
+                    No se pudo generar la vista previa del PDF.
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="mit-actions">
             <button
@@ -833,7 +878,13 @@ export default function ModalFacturaBaltoResumen({
               onClick={emitir}
               disabled={loading || loadingPdf || !confirm}
             >
-              {loading ? "Emitiendo..." : <>Emitir + PDF <FaCheck style={{ marginLeft: 8 }} /></>}
+              {loading ? (
+                "Emitiendo..."
+              ) : (
+                <>
+                  Emitir + PDF <FaCheck className="mfb-icon" />
+                </>
+              )}
             </button>
           </div>
         </div>

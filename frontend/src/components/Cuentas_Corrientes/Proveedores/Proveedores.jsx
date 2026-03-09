@@ -1,10 +1,8 @@
-// ✅ REEMPLAZAR COMPLETO
-// src/components/Cuentas_Corrientes/Proveedores/Proveedores.jsx
-
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import BASE_URL from "../../../config/config";
 import "../cuentas_corrientes.css";
+import "../../Global/Global_css/Global_oscuro.css";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -14,6 +12,7 @@ import {
   faTimes,
   faChevronDown,
   faEye,
+  faBoxOpen,
 } from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../../Global/Toast.jsx";
@@ -405,7 +404,7 @@ export default function ProveedoresCC() {
   );
 
   return (
-    <div style={{ padding: 12 }}>
+    <div className="contenedor-cards">
       {toast && (
         <Toast
           tipo={toast.tipo}
@@ -430,25 +429,12 @@ export default function ProveedoresCC() {
         }
       />
 
-      {errorLists && (
-        <div className="cc-footnote" style={{ marginBottom: 10 }}>
-          {errorLists}
-        </div>
-      )}
+      {errorLists && <div className="cc-footnote">{errorLists}</div>}
 
-      <div className="cc-subhead" style={{ marginTop: 0 }}>
-        <div className="cc-subhead__name">
-          Proveedores
-          <div className="cc-subhead__meta">
-            Seleccioná un proveedor del desplegable • {rangeLabel}
-          </div>
-        </div>
-      </div>
-
-      <div className="cc-card__head" style={{ paddingTop: 10 }}>
-        <div className="cc-card__headLeft" style={{ width: "100%" }}>
-          <div className="cc-headFilters" style={{ width: "100%" }}>
-            <div className="cc-filter cc-filter--cal" style={{ position: "relative" }}>
+      <div className="cc-card__head">
+        <div className="cc-card__headLeft">
+          <div className="cc-headFilters">
+            <div className="cc-filter cc-filter--cal">
               <label>
                 <FontAwesomeIcon icon={faCalendarDays} /> Período
               </label>
@@ -477,14 +463,11 @@ export default function ProveedoresCC() {
               )}
             </div>
 
-            <div
-              className="cc-filter cc-filter--search"
-              style={{ minWidth: 360, flex: 1, position: "relative" }}
-            >
+            <div className="cc-filter cc-filter--search">
               <label>Buscar proveedor</label>
 
-              <div className="cc-searchInput" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <div style={{ position: "relative", flex: 1 }}>
+              <div className="cc-searchInput">
+                <div className="cc-searchInput__fieldWrap">
                   <input
                     className="cc-input"
                     value={q}
@@ -497,36 +480,32 @@ export default function ProveedoresCC() {
                     autoComplete="off"
                   />
 
-                  <span
-                    style={{
-                      position: "absolute",
-                      right: 10,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      opacity: 0.6,
-                      pointerEvents: "none",
-                      fontSize: 12,
-                    }}
-                  >
+                  {safeText(q) !== "" && !loading && (
+                    <button
+                      type="button"
+                      className="cc-clearSearch cc-clearSearch--inside"
+                      title="Limpiar"
+                      onClick={() => {
+                        setQ("");
+                        setSelected(null);
+                        setOpenSug(false);
+                        setRows([]);
+                        setTotales({ debito: 0, credito: 0, saldo: 0 });
+                        setHasSearched(false);
+                        setQueryUsed("");
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faTimes} />
+                    </button>
+                  )}
+
+                  <span className="cc-searchInput__arrow">
                     <FontAwesomeIcon icon={faChevronDown} />
                   </span>
 
                   {openSug && suggestions.length > 0 && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        right: 0,
-                        top: "calc(100% + 6px)",
-                        zIndex: 1000,
-                        background: "var(--card-bg, #fff)",
-                        border: "1px solid rgba(0,0,0,.12)",
-                        borderRadius: 10,
-                        overflow: "hidden",
-                        boxShadow: "0 12px 30px rgba(0,0,0,.18)",
-                      }}
-                    >
-                      <div style={{ maxHeight: 260, overflow: "auto" }}>
+                    <div className="cc-suggestions">
+                      <div className="cc-suggestions__scroll">
                         {suggestions.map((opt) => (
                           <button
                             key={`${opt.id ?? "temp"}-${opt.label}`}
@@ -535,16 +514,7 @@ export default function ProveedoresCC() {
                               e.preventDefault();
                               handleSelect(opt);
                             }}
-                            style={{
-                              width: "100%",
-                              textAlign: "left",
-                              padding: "10px 12px",
-                              border: "none",
-                              background: "transparent",
-                              cursor: "pointer",
-                              fontSize: 13,
-                              fontWeight: 500,
-                            }}
+                            className="cc-suggestions__item"
                             title={opt.label}
                           >
                             {opt.label}
@@ -555,189 +525,140 @@ export default function ProveedoresCC() {
                   )}
                 </div>
 
-                {safeText(q) !== "" && !loading && (
-                  <button
-                    type="button"
-                    className="cc-clearSearch"
-                    title="Limpiar"
-                    onClick={() => {
-                      setQ("");
-                      setSelected(null);
-                      setOpenSug(false);
-                      setRows([]);
-                      setHasSearched(false);
-                      setQueryUsed("");
-                    }}
-                    style={{ position: "static" }}
-                  >
-                    <FontAwesomeIcon icon={faTimes} />
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  className="cc-btnex"
-                  onClick={() => {
-                    const text = safeText(q);
-                    if (selected?.id) loadHistorial(selected.id, selected.label);
-                    else if (text.length >= 2) loadHistorial(null, text);
-                    else showToast("advertencia", "Escribí al menos 2 caracteres o seleccioná un proveedor.", 2600);
-                  }}
-                  disabled={loading || loadingLists}
-                  title="Buscar"
-                >
-                  <FontAwesomeIcon icon={faMagnifyingGlass} /> Buscar
-                </button>
               </div>
             </div>
 
-            <button
+
+          </div>
+        </div>
+                    <button
               className="cc-btnex cc-btn--excel"
               onClick={exportExcel}
               disabled={loading || !hasSearched || !rows.length}
-              title={!hasSearched ? "Seleccioná un proveedor primero" : rows.length ? "Exportar a Excel" : "No hay datos"}
+              title={
+                !hasSearched
+                  ? "Seleccioná un proveedor primero"
+                  : rows.length
+                  ? "Exportar a Excel"
+                  : "No hay datos"
+              }
             >
               <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
             </button>
+      </div>
+
+      <div className="cc-cliente-table">
+<div
+  className="mov-gridTable mov-gridTable--head"
+  style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr .7fr" }}
+>
+  <div className="mov-gridCell mov-gridCell--head">Fecha</div>
+  <div className="mov-gridCell mov-gridCell--head">Comprobante</div>
+  <div className="mov-gridCell mov-gridCell--head is-center">Débito</div>
+  <div className="mov-gridCell mov-gridCell--head is-center">Crédito</div>
+  <div className="mov-gridCell mov-gridCell--head is-center">Saldo</div>
+  <div className="mov-gridCell mov-gridCell--head is-center">Ver</div>
+</div>
+
+        <div className="cc-cliente-table__body">
+          {loading ? (
+            <div className="cc-cliente-table__loading">
+              Cargando cuenta corriente del proveedor…
+            </div>
+          ) : rows.length > 0 ? (
+            rows.map((r, i) => {
+              const verHabilitado = canPreviewComprobante(r);
+
+              return (
+                <div
+                  key={r.id || `${i}`}
+                  className={`cc-cliente-table__row ${i % 2 !== 0 ? "is-alt" : ""}`}
+                >
+                  <div className="cc-cliente-table__cell cc-cliente-table__cell--date">
+                    {formatDisplayDate(r.fecha || r.fecha_raw)}
+                  </div>
+
+                  <div className="cc-cliente-table__cell">
+                    <div className="cc-cliente-table__title">{r.comprobante || "-"}</div>
+                    {r.detalle ? (
+                      <div className="cc-cliente-table__detail">{r.detalle}</div>
+                    ) : null}
+                  </div>
+
+                  <div
+                    className={`cc-cliente-table__cell cc-cliente-table__cell--center ${
+                      Number(r.debito || 0) > 0
+                        ? "cc-cliente-table__amount--active"
+                        : "cc-cliente-table__amount--muted"
+                    }`}
+                  >
+                    {Number(r.debito || 0) > 0 ? moneyARS(r.debito || 0) : ""}
+                  </div>
+
+                  <div
+                    className={`cc-cliente-table__cell cc-cliente-table__cell--center ${
+                      Number(r.credito || 0) > 0
+                        ? "cc-cliente-table__amount--active"
+                        : "cc-cliente-table__amount--muted"
+                    }`}
+                  >
+                    {Number(r.credito || 0) > 0 ? moneyARS(r.credito || 0) : ""}
+                  </div>
+
+                  <div className="cc-cliente-table__cell cc-cliente-table__cell--center cc-cliente-table__saldo">
+                    {moneyARS(r.saldo || 0)}
+                  </div>
+
+                  <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
+                    <button
+                      type="button"
+                      onClick={() => verHabilitado && openComprobante(r)}
+                      disabled={!verHabilitado}
+                      title={
+                        verHabilitado
+                          ? "Ver comprobante"
+                          : Number(r.credito || 0) > 0
+                          ? "Este cobro no tiene comprobante"
+                          : "Solo disponible en registros de crédito"
+                      }
+                      className={`cc-verBtn ${verHabilitado ? "" : "is-disabled"}`}
+                    >
+                      <FontAwesomeIcon icon={faEye} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="cc-cliente-table__empty cc-emptyState">
+              <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+              <div className="cc-emptyText">
+                {hasSearched
+                  ? `No se encontraron movimientos para “${queryUsed}”.`
+                  : "Sin movimientos para mostrar."}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="cc-cliente-table__footWrap">
+          <div className="cc-cliente-table__totals">
+            <div className="cc-cliente-table__cell">Totales</div>
+            <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
+              {moneyARS(totales?.debito || 0)}
+            </div>
+            <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
+              {moneyARS(totales?.credito || 0)}
+            </div>
+            <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
+              {moneyARS(totales?.saldo || 0)}
+            </div>
+
           </div>
         </div>
       </div>
 
-      {!hasSearched ? (
-        <div style={{ padding: 16 }}>
-          <div className="cc-footnote">
-            * La tabla está vacía hasta que selecciones un proveedor del desplegable.
-          </div>
-        </div>
-      ) : loading ? (
-        <div style={{ padding: 16 }}>Cargando cuenta corriente del proveedor…</div>
-      ) : rows.length === 0 ? (
-        <div style={{ padding: 16 }}>
-          <div className="cc-emptyRow">No se encontraron movimientos para “{queryUsed}”.</div>
-        </div>
-      ) : (
-        <div
-          style={{
-            marginTop: 12,
-            background: "#fff",
-            borderRadius: 16,
-            overflow: "hidden",
-            boxShadow: "0 8px 28px rgba(0,0,0,.08)",
-            border: "1px solid rgba(0,0,0,.08)",
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "130px 1.4fr 160px 160px 160px 90px",
-              gap: 0,
-              background: "#f3f4f6",
-              borderBottom: "1px solid rgba(0,0,0,.08)",
-              fontWeight: 700,
-              color: "#333",
-            }}
-          >
-            <div style={{ padding: "14px 16px" }}>Fecha</div>
-            <div style={{ padding: "14px 16px" }}>Comprobante</div>
-            <div style={{ padding: "14px 16px", textAlign: "right" }}>Débito (Debe)</div>
-            <div style={{ padding: "14px 16px", textAlign: "right" }}>Crédito (Haber)</div>
-            <div style={{ padding: "14px 16px", textAlign: "right" }}>Saldo</div>
-            <div style={{ padding: "14px 16px", textAlign: "center" }}>Ver</div>
-          </div>
-
-          {rows.map((r, i) => {
-            const verHabilitado = canPreviewComprobante(r);
-
-            return (
-              <div
-                key={r.id || `${i}`}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "130px 1.4fr 160px 160px 160px 90px",
-                  borderBottom: i === rows.length - 1 ? "none" : "1px solid rgba(0,0,0,.06)",
-                  alignItems: "center",
-                  background: i % 2 === 0 ? "#fff" : "#fcfcfd",
-                }}
-              >
-                <div style={{ padding: "14px 16px", color: "#444" }}>
-                  {formatDisplayDate(r.fecha || r.fecha_raw)}
-                </div>
-
-                <div style={{ padding: "14px 16px" }}>
-                  <div style={{ fontWeight: 600, color: "#2d2d2d" }}>{r.comprobante || "-"}</div>
-                  {r.detalle ? (
-                    <div style={{ fontSize: 12, opacity: 0.72, marginTop: 3 }}>{r.detalle}</div>
-                  ) : null}
-                </div>
-
-                <div style={{ padding: "14px 16px", textAlign: "right", color: Number(r.debito || 0) > 0 ? "#1f2937" : "#9ca3af" }}>
-                  {Number(r.debito || 0) > 0 ? moneyARS(r.debito || 0) : ""}
-                </div>
-
-                <div style={{ padding: "14px 16px", textAlign: "right", color: Number(r.credito || 0) > 0 ? "#1f2937" : "#9ca3af" }}>
-                  {Number(r.credito || 0) > 0 ? moneyARS(r.credito || 0) : ""}
-                </div>
-
-                <div style={{ padding: "14px 16px", textAlign: "right", fontWeight: 700, color: "#111827" }}>
-                  {moneyARS(r.saldo || 0)}
-                </div>
-
-                <div style={{ padding: "14px 16px", textAlign: "center", display: "flex", justifyContent: "center" }}>
-                  <button
-                    type="button"
-                    onClick={() => verHabilitado && openComprobante(r)}
-                    disabled={!verHabilitado}
-                    title={
-                      verHabilitado
-                        ? "Ver comprobante"
-                        : Number(r.credito || 0) > 0
-                        ? "Este cobro no tiene comprobante"
-                        : "Solo disponible en registros de crédito"
-                    }
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 10,
-                      border: "1px solid rgba(0,0,0,.12)",
-                      background: verHabilitado ? "#fff" : "#f3f4f6",
-                      color: verHabilitado ? "#111827" : "#9ca3af",
-                      cursor: verHabilitado ? "pointer" : "not-allowed",
-                      opacity: verHabilitado ? 1 : 0.7,
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faEye} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "130px 1.4fr 160px 160px 160px 90px",
-              background: "#f8fafc",
-              borderTop: "1px solid rgba(0,0,0,.08)",
-              fontWeight: 700,
-            }}
-          >
-            <div style={{ padding: "14px 16px" }} />
-            <div style={{ padding: "14px 16px" }}>Totales</div>
-            <div style={{ padding: "14px 16px", textAlign: "right" }}>
-              {moneyARS(totales?.debito || 0)}
-            </div>
-            <div style={{ padding: "14px 16px", textAlign: "right" }}>
-              {moneyARS(totales?.credito || 0)}
-            </div>
-            <div style={{ padding: "14px 16px", textAlign: "right" }}>
-              {moneyARS(totales?.saldo || 0)}
-            </div>
-            <div style={{ padding: "14px 16px" }} />
-          </div>
-        </div>
-      )}
-
-      <div className="cc-footnote" style={{ marginTop: 10 }}>
+      <div className="cc-footnote">
         * Débito = movimiento cargado al proveedor • Crédito = cobro registrado • Saldo = acumulado.
       </div>
     </div>

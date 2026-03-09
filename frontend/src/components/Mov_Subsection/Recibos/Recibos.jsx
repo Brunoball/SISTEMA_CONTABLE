@@ -16,6 +16,9 @@ import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMov
 
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 
+// ✅ BOTÓN EXPORTAR GLOBAL (igual que Ventas)
+import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
+
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarDays,
@@ -25,12 +28,14 @@ import {
   faTrashCan,
   faMoneyBill1Wave,
   faEye,
+  faChevronDown,
+  faArrowRightLong,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 
-// ✅ ✅ FECHA GLOBAL (context)
+// ✅ FECHA GLOBAL (context)
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 
 /* =========================
@@ -55,11 +60,11 @@ function moneyARS(v) {
 }
 function safeText(v) {
   const s = String(v ?? "").trim();
-  return s ? s : "-";
+  return s ? s : "—";
 }
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
-  if (!s) return "-";
+  if (!s) return "—";
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
     const yyyy = m1[1];
@@ -168,7 +173,7 @@ function getRowKey(r) {
 }
 
 /* =========================
-   Excel
+   Export helpers (igual que Ventas)
 ========================= */
 function slugifySheetName(name) {
   const s = String(name || "Recibos")
@@ -176,6 +181,34 @@ function slugifySheetName(name) {
     .replace(/\s+/g, " ")
     .trim();
   return (s || "Recibos").slice(0, 31);
+}
+
+function buildExportRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map((r) => ({
+    FECHA: safeText(formatFechaDMY(r?.fecha)),
+    DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
+    CLIENTE: safeText(r?.cliente),
+    ESTADO: isReciboPagado(r) ? "PAGADO" : "PENDIENTE",
+    MONTO: Number(r?.monto_total ?? r?.total ?? 0) || 0,
+  }));
+}
+
+function escapeCSV(value) {
+  const s = String(value ?? "");
+  if (/[",;\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function downloadBlob(content, fileName, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 function isAccionNoValidaErrorMessage(msg) {
@@ -199,7 +232,7 @@ export default function Recibos() {
     refreshLists,
   } = useListas();
 
-  // ✅ ✅ FECHA GLOBAL
+  // ✅ FECHA GLOBAL
   const { dateRange, setDateRange } = useDateRange();
   const [showCalendario, setShowCalendario] = useState(false);
 
@@ -364,7 +397,7 @@ export default function Recibos() {
   }, []);
 
   /* =========================
-     LOAD ROWS — usa fecha_desde / fecha_hasta
+     LOAD ROWS
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -502,7 +535,7 @@ export default function Recibos() {
   );
 
   /* =========================
-     INIT — carga con rango global actual
+     INIT
   ========================= */
   useEffect(() => {
     let alive = true;
@@ -518,7 +551,7 @@ export default function Recibos() {
   }, []);
 
   /* =========================
-     Si cambiaste el rango en otra sección, refresca acá
+     Refresco cuando cambia rango global
   ========================= */
   const prevRangeKeyRef = useRef("");
   useEffect(() => {
@@ -538,7 +571,9 @@ export default function Recibos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange?.from, dateRange?.to]);
 
-  // Debounce búsqueda
+  /* =========================
+     Debounce búsqueda
+  ========================= */
   useEffect(() => {
     if (skipSearchRef.current) {
       skipSearchRef.current = false;
@@ -560,7 +595,7 @@ export default function Recibos() {
   const handleDateRangeChange = useCallback(
     async (newRange) => {
       if (!newRange.from && !newRange.to) return;
-      setDateRange(newRange); // ✅ global
+      setDateRange(newRange);
       cacheRef.current.clear();
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -574,27 +609,6 @@ export default function Recibos() {
     },
     [loadRows, q, setDateRange]
   );
-
-  /* =========================
-     Label para el botón del calendario
-  ========================= */
-  const dateRangeLabel = useMemo(() => {
-    const from = dateRange?.from || null;
-    const to = dateRange?.to || null;
-    if (!from && !to) return "Seleccionar fechas";
-    if (from && to) {
-      if (
-        from.getFullYear() === to.getFullYear() &&
-        from.getMonth() === to.getMonth() &&
-        from.getDate() === to.getDate()
-      ) {
-        return formatDateUI(from);
-      }
-      return `${formatDateUI(from)} → ${formatDateUI(to)}`;
-    }
-    if (from) return `Desde ${formatDateUI(from)}`;
-    return `Hasta ${formatDateUI(to)}`;
-  }, [dateRange]);
 
   /* =========================
      Filtrado client-side
@@ -613,6 +627,158 @@ export default function Recibos() {
     }
     return { pagados, pendientes, total: filteredRows.length };
   }, [filteredRows]);
+
+  /* =========================
+     Label calendario (igual que Ventas)
+  ========================= */
+  const dateRangeLabel = useMemo(() => {
+    const { from, to } = dateRange;
+
+    if (!from && !to) return "Seleccionar fechas";
+
+    if (from && to) {
+      if (
+        from.getFullYear() === to.getFullYear() &&
+        from.getMonth() === to.getMonth() &&
+        from.getDate() === to.getDate()
+      ) {
+        return formatDateUI(from);
+      }
+
+      return (
+        <>
+          <span>{formatDateUI(from)}</span>
+          <span className="mov-rangeArrow">
+            <FontAwesomeIcon icon={faArrowRightLong} />
+          </span>
+          <span>{formatDateUI(to)}</span>
+        </>
+      );
+    }
+
+    if (from) return `Desde ${formatDateUI(from)}`;
+    return `Hasta ${formatDateUI(to)}`;
+  }, [dateRange]);
+
+  /* =========================
+     Export base name
+  ========================= */
+  const exportBaseName = useMemo(() => {
+    const { from, to } = dateRange;
+    if (from && to) return `recibos_${dateToAPI(from)}_${dateToAPI(to)}`;
+    if (from) return `recibos_desde_${dateToAPI(from)}`;
+    return "recibos_todos";
+  }, [dateRange]);
+
+  /* =========================
+     Export helpers (igual que Ventas)
+  ========================= */
+  const getExportData = useCallback(() => {
+    const dataToExport = buildExportRows(filteredRows);
+    if (!dataToExport.length) throw new Error("No hay datos para exportar.");
+    return dataToExport;
+  }, [filteredRows]);
+
+  const exportToExcel = useCallback(() => {
+    const dataToExport = getExportData();
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+
+    const headers = Object.keys(dataToExport[0] || {});
+    const montoColIndex = headers.findIndex((h) => h === "MONTO");
+    if (montoColIndex >= 0 && ws["!ref"]) {
+      const colLetter = XLSX.utils.encode_col(montoColIndex);
+      const range = XLSX.utils.decode_range(ws["!ref"]);
+      for (let r = range.s.r + 1; r <= range.e.r; r++) {
+        const cell = ws[`${colLetter}${r + 1}`];
+        if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Recibos_Vista"));
+    XLSX.writeFile(wb, `${exportBaseName}.xlsx`);
+  }, [getExportData, exportBaseName]);
+
+  const exportToCSV = useCallback(() => {
+    const dataToExport = getExportData();
+    const headers = Object.keys(dataToExport[0] || {});
+    const lines = [
+      headers.join(";"),
+      ...dataToExport.map((row) => headers.map((h) => escapeCSV(row[h])).join(";")),
+    ];
+    const csvContent = "\uFEFF" + lines.join("\n");
+    downloadBlob(csvContent, `${exportBaseName}.csv`, "text/csv;charset=utf-8;");
+  }, [getExportData, exportBaseName]);
+
+  const exportToTXT = useCallback(() => {
+    const dataToExport = getExportData();
+    const lines = dataToExport.map((row, index) => {
+      return [
+        `REGISTRO ${index + 1}`,
+        `FECHA: ${row.FECHA ?? ""}`,
+        `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
+        `CLIENTE: ${row.CLIENTE ?? ""}`,
+        `ESTADO: ${row.ESTADO ?? ""}`,
+        `MONTO: ${row.MONTO ?? ""}`,
+        "----------------------------------------",
+      ].join("\n");
+    });
+    const txtContent = lines.join("\n");
+    downloadBlob(txtContent, `${exportBaseName}.txt`, "text/plain;charset=utf-8;");
+  }, [getExportData, exportBaseName]);
+
+  const handleExport = useCallback(
+    async (type) => {
+      try {
+        if (hasMore) {
+          showToast("error", 'Faltan registros sin cargar. Tocá "Cargar todos" primero.', 5200);
+          return;
+        }
+
+        if (type === "excel") {
+          exportToExcel();
+          showToast("exito", "Excel exportado.", 2200);
+          return;
+        }
+
+        if (type === "csv") {
+          exportToCSV();
+          showToast("exito", "CSV exportado.", 2200);
+          return;
+        }
+
+        if (type === "txt") {
+          exportToTXT();
+          showToast("exito", "TXT exportado.", 2200);
+        }
+      } catch (e) {
+        showToast("error", e?.message || "Error exportando archivo.", 3500);
+      }
+    },
+    [hasMore, exportToExcel, exportToCSV, exportToTXT, showToast]
+  );
+
+  const exportOptions = useMemo(
+    () => [
+      {
+        key: "excel",
+        label: "Exportar Excel (.xlsx)",
+        icon: faFileExcel,
+        onClick: () => handleExport("excel"),
+      },
+      {
+        key: "csv",
+        label: "Exportar CSV (.csv)",
+        onClick: () => handleExport("csv"),
+      },
+      {
+        key: "txt",
+        label: "Exportar TXT (.txt)",
+        onClick: () => handleExport("txt"),
+      },
+    ],
+    [handleExport]
+  );
 
   /* =========================
      Columnas
@@ -678,7 +844,7 @@ export default function Recibos() {
   }, [columns]);
 
   /* =========================
-     listar recibos por cliente
+     Listar recibos por cliente
   ========================= */
   const fetchRecibosCliente = useCallback(
     async (rowCliente) => {
@@ -836,62 +1002,6 @@ export default function Recibos() {
   };
 
   /* =========================
-     Excel
-  ========================= */
-  const exportToExcel = useCallback(() => {
-    try {
-      if (!filteredRows.length) {
-        showToast("error", "No hay datos para exportar.", 2500);
-        return;
-      }
-      if (hasMore) {
-        showToast(
-          "error",
-          "Ojo: faltan recibos sin cargar. Si querés exportar todo, tocá 'Cargar todos' primero.",
-          5200
-        );
-      }
-
-      const dataToExport = filteredRows.map((r) => ({
-        FECHA: safeText(formatFechaDMY(r.fecha)),
-        DESCRIPCION: safeText(r.detalle ?? r.descripcion ?? r.concepto),
-        CLIENTE: safeText(r.cliente),
-        ESTADO: isReciboPagado(r) ? "PAGADO" : "PENDIENTE",
-        MONTO: Number(r.monto_total ?? r.total ?? 0) || 0,
-      }));
-
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(dataToExport);
-
-      const headers = Object.keys(dataToExport[0] || {});
-      const montoColIndex = headers.findIndex((h) => h === "MONTO");
-      if (montoColIndex >= 0 && ws["!ref"]) {
-        const colLetter = XLSX.utils.encode_col(montoColIndex);
-        const range = XLSX.utils.decode_range(ws["!ref"]);
-        for (let r = range.s.r + 1; r <= range.e.r; r++) {
-          const cell = ws[`${colLetter}${r + 1}`];
-          if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
-        }
-      }
-
-      const from = dateRange?.from || null;
-      const to = dateRange?.to || null;
-      const sufijo =
-        from && to
-          ? `${dateToAPI(from)}_${dateToAPI(to)}`
-          : from
-          ? `desde_${dateToAPI(from)}`
-          : "todos";
-
-      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`Recibos_${sufijo}`));
-      XLSX.writeFile(wb, `recibos_${sufijo}.xlsx`);
-      showToast("exito", "Excel exportado.", 2200);
-    } catch (e) {
-      showToast("error", e?.message || "Error exportando Excel.", 3500);
-    }
-  }, [filteredRows, dateRange, showToast, hasMore]);
-
-  /* =========================
      "Cargar todos"
   ========================= */
   const handleLoadAll = useCallback(async () => {
@@ -1011,9 +1121,11 @@ export default function Recibos() {
       )}
 
       <section className="mov-card mov-card--table">
+        {/* ===== HEAD ===== */}
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
-            <div>
+            {/* Título + hint */}
+            <div className="title-mov">
               <div className="mov-card__title">Movimientos · Recibos</div>
               <div className="mov-card__hint">
                 Total <b>{stats.total}</b> · Pendientes <b>{stats.pendientes}</b> · Pagados{" "}
@@ -1024,38 +1136,30 @@ export default function Recibos() {
               </div>
             </div>
 
+            {/* ===== FILTROS (igual que Ventas) ===== */}
             <div className="mov-headFilters">
 
-              {/* ✅ Fecha GLOBAL */}
-              <div className="mov-filter" style={{ position: "relative" }}>
-                <label>
-                  <FontAwesomeIcon icon={faCalendarDays} /> Fecha
-                </label>
-
+              {/* Calendario — estilo Ventas con floatingField */}
+              <div className="mov-filter mov-filter--cal floatingField">
                 <button
                   type="button"
-                  className="mov-btn mov-btn--ghost"
-                  style={{ minWidth: 220, justifyContent: "flex-start", textAlign: "left" }}
+                  className={`mov-calTrigger  cc-calTrigger ${showCalendario ? "is-open" : ""}`}
                   onClick={() => setShowCalendario((v) => !v)}
                   disabled={isAnyLoading || loadingListsCtx}
                   title="Seleccionar rango de fechas"
                 >
                   {dateRangeLabel}
+                  <span className="mov-calTrigger__arrow">
+                    <FontAwesomeIcon icon={faChevronDown} />
+                  </span>
                 </button>
 
+                <span className="floatingLabel floatingLabel--active">
+                  <FontAwesomeIcon icon={faCalendarDays} /> Período
+                </span>
+
                 {showCalendario && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      zIndex: 999,
-                      marginTop: 6,
-                      boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-                      borderRadius: 10,
-                      background: "var(--color-surface, #fff)",
-                    }}
-                  >
+                  <div className="mov-calDropdown">
                     <Calendario
                       value={dateRange}
                       onChange={async (newRange) => {
@@ -1070,13 +1174,15 @@ export default function Recibos() {
                 )}
               </div>
 
-              {/* Búsqueda */}
-              <div className="mov-search">
-                <label>
-                  <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                </label>
+              {/* Buscador — estilo Ventas con floatingField */}
+              <div
+                className={`mov-search floatingField floatingField--search ${
+                  q.trim() ? "is-active" : ""
+                }`}
+              >
                 <div className="mov-searchInput">
                   <input
+                    className="mov-input--floating"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     onKeyDown={async (e) => {
@@ -1093,13 +1199,18 @@ export default function Recibos() {
                         });
                       }
                     }}
-                    placeholder="Buscar por fecha, cliente, descripción, monto…"
+                    placeholder=" "
                     disabled={loadingListsCtx || loadingAll}
                   />
+
+                  <span className="floatingLabel">
+                    <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                  </span>
+
                   {q.trim() !== "" && (
                     <button
                       type="button"
-                      className="mov-clearSearch"
+                      className="mov-clearSearch clearSearch--inside"
                       title="Limpiar búsqueda"
                       onClick={async () => {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -1124,20 +1235,23 @@ export default function Recibos() {
             </div>
           </div>
 
-          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button
-              type="button"
-              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
-              onClick={exportToExcel}
+          {/* ===== ACCIONES: BotonExportar (igual que Ventas, sin botón Nueva) ===== */}
+          <div
+            className="mov-card__actions"
+            style={{ display: "flex", gap: 10, alignItems: "center" }}
+          >
+            <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
-              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
-            >
-              <FontAwesomeIcon icon={faFileExcel} /> Exportar
-            </button>
+              loading={loadingAll}
+              label="Exportar"
+              title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"}
+              opciones={exportOptions}
+              align="right"
+            />
           </div>
         </div>
 
-        {/* HEADER */}
+        {/* ===== HEADER TABLA ===== */}
         <div
           className="mov-gridTable mov-gridTable--head"
           style={{ gridTemplateColumns: gridCols }}
@@ -1158,7 +1272,7 @@ export default function Recibos() {
           ))}
         </div>
 
-        {/* BODY */}
+        {/* ===== BODY ===== */}
         <div className="mov-tableWrap mov-table---Wrap" role="rowgroup">
           <div className={["mov-gridBody", "mov-gridBody--relative", loadingRows ? "mov-softLoading" : ""].join(" ")}>
             {loadingRows ? (
@@ -1286,7 +1400,7 @@ export default function Recibos() {
         </div>
       </section>
 
-      {/* MODAL VER COMPROBANTE */}
+      {/* ===== MODAL VER COMPROBANTE ===== */}
       <ModalVerComprobante
         open={openVer}
         url={verUrl}
@@ -1295,7 +1409,7 @@ export default function Recibos() {
         onClose={closeVerComprobante}
       />
 
-      {/* PAGAR */}
+      {/* ===== PAGAR ===== */}
       <ModalPagarRecibos
         open={openPagar}
         onClose={() => {
@@ -1311,7 +1425,7 @@ export default function Recibos() {
         onReciboFinalizado={onReciboFinalizado}
       />
 
-      {/* EDITAR */}
+      {/* ===== EDITAR ===== */}
       <ModalEditarRecibo
         open={openEdit}
         row={selectedRow}
@@ -1336,7 +1450,7 @@ export default function Recibos() {
         }}
       />
 
-      {/* DELETE */}
+      {/* ===== DELETE ===== */}
       <ModalEliminarMovimientos
         open={openDel}
         row={selectedRow}

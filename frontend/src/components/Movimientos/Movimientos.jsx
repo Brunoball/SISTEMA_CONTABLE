@@ -31,6 +31,8 @@ import {
   faCalendarDays,
   faFileExcel,
   faFileInvoiceDollar,
+  faChevronDown,
+  faArrowRightLong,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -286,12 +288,25 @@ export default function Movimientos() {
     []
   );
 
-  const rangeLabel = useMemo(() => {
-    const { from, to } = dateRange;
-    if (!from) return "Seleccionar período";
-    if (!to || formatDateISO(from) === formatDateISO(to)) return formatDateLabel(from);
-    return `${formatDateLabel(from)} → ${formatDateLabel(to)}`;
-  }, [dateRange]);
+const rangeLabel = useMemo(() => {
+  const { from, to } = dateRange;
+
+  if (!from) return "Seleccionar período";
+
+  if (!to || formatDateISO(from) === formatDateISO(to)) {
+    return formatDateLabel(from);
+  }
+
+  return (
+    <>
+      <span>{formatDateLabel(from)}</span>
+      <span className="cc-rangeArrow">
+        <FontAwesomeIcon icon={faArrowRightLong} />
+      </span>
+      <span>{formatDateLabel(to)}</span>
+    </>
+  );
+}, [dateRange]);
 
   const exportBaseName = useMemo(() => {
     const from = formatDateISO(dateRange?.from);
@@ -852,19 +867,21 @@ export default function Movimientos() {
             </div>
 
             <div className="mov-headFilters">
-              <div className="mov-filter mov-filter--cal" style={{ position: "relative" }}>
-                <label>
+              <div className="cc-filter cc-filter--cal" style={{ position: "relative" }}>
+                <span className="floatingLabel floatingLabel--active">
                   <FontAwesomeIcon icon={faCalendarDays} /> Período
-                </label>
+                </span>
 
                 <button
                   type="button"
-                  className={`mov-calTrigger ${calOpen ? "is-open" : ""}`}
+                  className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
                   onClick={() => setCalOpen((v) => !v)}
                   disabled={isAnyLoading || loadingListsCtx}
                 >
                   {rangeLabel}
-                  <span className="mov-calTrigger__arrow">{calOpen ? "▲" : "▼"}</span>
+                          <span className="boton-exportar-trigger__right">
+                            <FontAwesomeIcon icon={faChevronDown} />
+                          </span>
                 </button>
 
                 {calOpen && (
@@ -878,49 +895,57 @@ export default function Movimientos() {
                 )}
               </div>
 
-              <div className="mov-search">
-                <label>
-                  <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                </label>
-                <div className="mov-searchInput">
-                  <input
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    onKeyDown={async (e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                        skipSearchRef.current = true;
-                        await loadRows({
-                          dateRange,
-                          q: e.currentTarget.value,
-                          offset: 0,
-                          append: false,
-                        });
-                      }
-                    }}
-                    placeholder="Buscar…"
-                    disabled={loadingListsCtx || loadingAll}
-                  />
-                  {q.trim() !== "" && (
-                    <button
-                      type="button"
-                      className="mov-clearSearch"
-                      title="Limpiar búsqueda"
-                      onClick={async () => {
-                        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                        setQ("");
-                        skipSearchRef.current = true;
-                        await loadRows({ dateRange, q: "", offset: 0, append: false });
-                        document.querySelector(".mov-searchInput input")?.focus();
-                      }}
-                      disabled={loadingAll}
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              </div>
+<div
+  className={`mov-search floatingField floatingField--search ${
+    q.trim() !== "" ? "is-active" : ""
+  }`}
+>
+  <div className="mov-searchInput">
+    <input
+      className="mov-input mov-input--floating"
+      value={q}
+      onChange={(e) => setQ(e.target.value)}
+      onKeyDown={async (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+          skipSearchRef.current = true;
+          await loadRows({
+            dateRange,
+            q: e.currentTarget.value,
+            offset: 0,
+            append: false,
+          });
+        }
+      }}
+      placeholder=" "
+      disabled={loadingListsCtx || loadingAll}
+      autoComplete="off"
+    />
+
+    <span className="floatingLabel">
+      <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+    </span>
+
+    {q.trim() !== "" && (
+      <button
+        type="button"
+        className="mov-clearSearch clearSearch clearSearch--inside"
+        title="Limpiar búsqueda"
+        onClick={async () => {
+          if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+          setQ("");
+          skipSearchRef.current = true;
+          await loadRows({ dateRange, q: "", offset: 0, append: false });
+          document.querySelector(".mov-searchInput input")?.focus();
+        }}
+        disabled={loadingAll}
+      >
+        ×
+      </button>
+    )}
+  </div>
+</div>
             </div>
           </div>
 
@@ -928,21 +953,7 @@ export default function Movimientos() {
             className="mov-card__actions"
             style={{ display: "flex", gap: 10, alignItems: "center" }}
           >
-            <button
-              type="button"
-              className="mov-btn mov-btn--ghost mov-btn--clear"
-              onClick={async () => {
-                await ensureListsLoaded({ force: false, background: true }).catch(() => {});
-                setFactData(null);
-                setOpenFacturar(true);
-              }}
-              disabled={loadingListsCtx || loadingRows || loadingMore || loadingAll}
-              title="Facturar"
-            >
-              <FontAwesomeIcon icon={faFileInvoiceDollar} />
-              <span className="mov-btnText mov-btnText--desktop">Facturar</span>
-              <span className="mov-btnText mov-btnText--mobile">Facturar</span>
-            </button>
+
 
             <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}

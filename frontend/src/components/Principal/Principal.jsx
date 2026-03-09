@@ -90,7 +90,6 @@ const ROUTE_PREFETCH = {
   "/panel/recibos": () => import("../Mov_Subsection/Recibos/Recibos"),
   "/panel/OrdenesPago": () => import("../Mov_Subsection/OrdenesPago/OrdenesPago"),
   "/panel/flujo-de-caja": () => import("../Flujo_de_Caja/Flujo_Caja"),
-  "/panel/cuentas-corrientes": () => import("../Cuentas_Corrientes/Cuentas_Corrientes"),
   "/panel/cuentas-corrientes/clientes": () =>
     import("../Cuentas_Corrientes/Clientes/Clientes"),
   "/panel/cuentas-corrientes/proveedores": () =>

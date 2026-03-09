@@ -382,4 +382,11 @@
   .cal-wrap {
     border-radius: var(--mi-radius-md);
   }
+}.cal-header__arrow{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--b-action);
+  opacity: .8;
 }

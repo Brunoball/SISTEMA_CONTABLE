@@ -21,7 +21,6 @@ import OrdenesPago from "./components/Mov_Subsection//OrdenesPago/OrdenesPago";
 import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 
 /* ✅ IMPORT ROBUSTO (default o named) */
-import * as CuentasCorrientesModule from "./components/Cuentas_Corrientes/Cuentas_Corrientes";
 import * as AnalisisFinancieroModule from "./components/Analisis_Financiero/Analisis_Financiero";
 
 /* ✅ NUEVOS: sub-secciones CC */
@@ -60,11 +59,6 @@ function resolveComponent(mod, fallbacks = []) {
     );
   };
 }
-
-const CuentasCorrientes = resolveComponent(CuentasCorrientesModule, [
-  "CuentasCorrientes",
-  "Cuentas_Corrientes",
-]);
 
 const AnalisisFinanciero = resolveComponent(AnalisisFinancieroModule, [
   "AnalisisFinanciero",
@@ -130,11 +124,8 @@ export default function App() {
           <Route path="flujo-de-caja" element={<Flujo_Caja />} />
 
           {/* ✅ Cuentas Corrientes con sub-rutas */}
-          <Route path="cuentas-corrientes" element={<CuentasCorrientes />}>
-            <Route index element={<div style={{ padding: 12 }} />} />
-            <Route path="clientes" element={<ClientesCC />} />
-            <Route path="proveedores" element={<ProveedoresCC />} />
-          </Route>
+<Route path="cuentas-corrientes/clientes" element={<ClientesCC />} />
+<Route path="cuentas-corrientes/proveedores" element={<ProveedoresCC />} />
 
           <Route path="analisis-financiero" element={<AnalisisFinanciero />} />
         </Route>

@@ -1,5 +1,7 @@
 // src/components/Global/Calendario/Calendario.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faArrowRightLong } from "@fortawesome/free-solid-svg-icons";
 import "./calendario.css";
 import "../Global_css/Global_oscuro.css";
 
@@ -212,7 +214,9 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
             {from ? formatDate(from) : "——/——/————"}
           </span>
         </div>
-        <div className="cal-header__arrow">→</div>
+        <div className="cal-header__arrow">
+  <FontAwesomeIcon icon={faArrowRightLong} />
+</div>
         <div className="cal-header__slot">
           <span className="cal-header__label">Hasta</span>
           <span className={`cal-header__date ${rangeEnd ? "is-set" : "is-empty"}`}>

@@ -49,6 +49,10 @@
   background: var(--b-bg);
 }
 
+.contenedor-cards{
+  height: calc(100% - 100px);
+}
+
 /* =========================
    Alert
 ========================= */
@@ -94,6 +98,10 @@
   background: var(--b-white);
 }
 
+.cc-card__head--clientes{
+  padding-top: 10px;
+}
+
 .cc-card__headLeft{
   display: flex;
   justify-content: space-between;
@@ -101,17 +109,23 @@
   width: 100%;
   min-width: 0;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: flex-end;
+}
+
+.cc-card__headLeft--full{
+  width: 100%;
 }
 
 .cc-headTitle{
-  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .cc-card__title{
   font-weight: 700;
-  letter-spacing: -0.02em;
-  font-size: 17px;
+  letter-spacing: -0.03em;
+  font-size: 16px;
   color: var(--b-midnight);
 }
 
@@ -140,6 +154,10 @@
   flex-wrap: wrap;
 }
 
+.cc-headFilters--full{
+  width: 100%;
+}
+
 .cc-filter{
   display: flex;
   flex-direction: column;
@@ -163,7 +181,7 @@
 
 .cc-filter select{
   width: 100%;
-  height: 40px;
+  height: 45px;
   border-radius: 10px;
   border: 1.5px solid rgba(10, 37, 64, 0.14);
   background: #fff;
@@ -185,7 +203,7 @@
   border-radius: 10px;
   border: 1.5px solid rgba(10, 37, 64, 0.14);
   background: #fff;
-  padding: 0 38px 0 14px;
+  padding: 0 70px 0 14px;
   outline: none;
   font-weight: 500;
   font-size: 13px;
@@ -240,43 +258,70 @@
   box-shadow: none;
 }
 
-/* Botón buscar (acción primaria) */
-.cc-btnex{
-  height: 40px;
-  padding: 0 18px;
-  border-radius: 10px;
-  border: 1.5px solid rgba(0, 85, 187, 0.28);
-  background: rgba(0, 85, 187, 0.08);
-  color: var(--b-midnight);
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all var(--cc-transition);
-  letter-spacing: 0.01em;
+/* =========================
+   Tabs — estética propia
+========================= */
+/* =========================
+   Tabs — estilo Google
+========================= */
+.cc-headFilters--tabs{
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid rgba(10, 37, 64, 0.10);
+  box-shadow: none;
+}
+
+.cc-btnex.cc-btnex--tab{
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  background: transparent;
+  color: rgba(10, 37, 64, 0.48);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   white-space: nowrap;
-}
-
-.cc-btnex:hover:not(:disabled){
-  background: var(--b-action);
-  border-color: var(--b-action);
-  color: #fff;
-  box-shadow: 0 6px 20px rgba(0, 85, 187, 0.28);
-  transform: translateY(-1px);
-}
-
-.cc-btnex:active:not(:disabled){
-  transform: translateY(0);
+  cursor: pointer;
   box-shadow: none;
+  transition: color 150ms ease, border-color 150ms ease;
 }
 
-.cc-btnex:disabled{
-  opacity: 0.48;
+.cc-btnex.cc-btnex--tab:hover:not(:disabled){
+  color: rgba(10, 37, 64, 0.80);
+  background: rgba(10, 37, 64, 0.04);
+  border-radius: 4px 4px 0 0;
+}
+
+.cc-btnex.cc-btnex--tab.is-open{
+  color: var(--b-action);
+  border-bottom: 2px solid var(--b-action);
+  font-weight: 600;
+}
+
+.cc-btnex.cc-btnex--tab.is-open:hover{
+  color: var(--b-action);
+  background: rgba(0, 85, 187, 0.04);
+  border-radius: 4px 4px 0 0;
+}
+
+.cc-btnex.cc-btnex--tab:active:not(:disabled){
+  background: rgba(10, 37, 64, 0.07);
+}
+
+.cc-btnex.cc-btnex--tab:disabled{
+  opacity: 0.35;
   cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
 }
 
 /* =========================
@@ -289,6 +334,7 @@
   padding: 14px 20px 12px;
   border-bottom: 1px solid rgba(10, 37, 64, 0.08);
   background: rgba(10, 37, 64, 0.025);
+  margin-top: 0;
 }
 
 .cc-subhead__name{
@@ -327,7 +373,7 @@
   position: sticky;
   top: 0;
   z-index: 5;
-  background: var(--balto-white);
+  background: #fff;
   border-bottom: 1px solid rgba(10, 37, 64, 0.14);
 }
 
@@ -418,6 +464,27 @@
   font-size: 13.5px;
 }
 
+.cc-emptyState{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  height: 100%;
+  gap:10px;
+  padding:30px 16px;
+}
+
+.cc-emptyIcon{
+  font-size:28px;
+  opacity:.45;
+  color:#6b7280;
+}
+
+.cc-emptyText{
+  font-size:13px;
+  color:#6b7280;
+}
+
 /* =========================
    Pos/Neg
 ========================= */
@@ -465,6 +532,10 @@
   background: rgba(10, 37, 64, 0.015);
   font-weight: 500;
   letter-spacing: 0.01em;
+}
+
+.cc-footnote--error{
+  margin-bottom: 10px;
 }
 
 /* =========================
@@ -516,10 +587,28 @@
 .cc-searchInput{
   position: relative;
   width: 100%;
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .cc-searchInput .cc-input{
-  padding-right: 44px;
+  padding-right: 70px;
+}
+
+.cc-searchInput__fieldWrap{
+  position: relative;
+  flex: 1;
+}
+
+.cc-searchInput__arrow{
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.6;
+  pointer-events: none;
+  font-size: 12px;
 }
 
 .cc-clearSearch{
@@ -551,6 +640,49 @@
 
 .cc-clearSearch:active{
   transform: translateY(-50%) scale(1);
+}
+
+.cc-clearSearch--inside{
+  position:absolute;
+
+  top:50%;
+  transform:translateY(-50%);
+}
+
+/* =========================
+   Suggestions
+========================= */
+.cc-suggestions{
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 1000;
+  background: var(--card-bg, #fff);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+.cc-suggestions__scroll{
+  max-height: 260px;
+  overflow: auto;
+}
+
+.cc-suggestions__item{
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cc-suggestions__item:hover{
+  background: rgba(0, 85, 187, 0.08);
 }
 
 /* =========================
@@ -586,11 +718,17 @@
 /* =========================
    Calendario trigger
 ========================= */
-.cc-filter--cal {
+.cc-filter--cal{
   position: relative;
 }
 
-.cc-calTrigger {
+.cc-filter--search{
+  min-width: 320px;
+  flex: 1;
+  position: relative;
+}
+
+.cc-calTrigger{
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -609,31 +747,31 @@
   font-family: inherit;
 }
 
-.cc-calTrigger:hover {
+.cc-calTrigger:hover{
   border-color: rgba(10, 37, 64, 0.32);
   background: rgba(10, 37, 64, 0.02);
   box-shadow: 0 2px 8px rgba(10, 37, 64, 0.06);
 }
 
-.cc-calTrigger.is-open {
+.cc-calTrigger.is-open{
   border-color: var(--b-action);
   box-shadow: 0 0 0 3px rgba(0, 85, 187, 0.14);
   background: #fafcff;
   color: var(--b-midnight);
 }
 
-.cc-calTrigger__arrow {
+.cc-calTrigger__arrow{
   margin-left: auto;
   font-size: 10px;
   color: rgba(10, 37, 64, 0.35);
   transition: transform 150ms ease;
 }
 
-.cc-calTrigger.is-open .cc-calTrigger__arrow {
+.cc-calTrigger.is-open .cc-calTrigger__arrow{
   transform: rotate(180deg);
 }
 
-.cc-calDropdown {
+.cc-calDropdown{
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
@@ -642,9 +780,141 @@
   filter: drop-shadow(0 12px 32px rgba(10, 37, 64, 0.14));
 }
 
-@keyframes cc-calFadeIn {
+@keyframes cc-calFadeIn{
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* =========================
+   Tabla clientes
+========================= */
+.cc-cliente-table{
+  margin-top: 12px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.cc-cliente-table__headWrap{
+  background: #f3f4f6;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.cc-cliente-table__footWrap{
+  background: #f8fafc;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.cc-cliente-table__body{
+  height: calc(100vh - 345px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Reserva espacio SOLO cuando no hay scroll real */
+.cc-cliente-table__body--stable{
+  scrollbar-gutter: stable;
+}
+
+.cc-cliente-table__head,
+.cc-cliente-table__row{
+  display: grid;
+  grid-template-columns: .8fr 2.2fr 1fr 1fr 1fr .7fr;
+  gap: 0;
+  align-items: center;
+}
+
+.cc-cliente-table__totals{
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.cc-cliente-table__head{
+  background: #f3f4f6;
+  font-weight: 700;
+  color: #333;
+}
+
+.cc-cliente-table__row{
+  background: #fff;
+}
+
+.cc-cliente-table__row.is-alt{
+  background: #fcfcfd;
+}
+
+.cc-cliente-table__row:not(:last-child){
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.cc-cliente-table__cell{
+  padding: 10px 16px;
+}
+
+.cc-cliente-table__cell--center{
+  text-align: center;
+}
+
+.cc-cliente-table__cell--right{
+  text-align: right;
+}
+
+.cc-cliente-table__cell--date{
+  color: #444;
+}
+
+.cc-cliente-table__title{
+  font-weight: 600;
+}
+
+.cc-cliente-table__detail{
+  font-size: 12px;
+  opacity: 0.72;
+  margin-top: 3px;
+}
+
+.cc-cliente-table__amount--active{
+  color: #1f2937;
+}
+
+.cc-cliente-table__amount--muted{
+  color: #9ca3af;
+}
+
+.cc-cliente-table__saldo{
+  font-weight: 700;
+  color: #111827;
+}
+
+.cc-cliente-table__loading,
+.cc-cliente-table__empty{
+  padding: 26px 16px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.cc-verBtn{
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  color: #111827;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cc-verBtn.is-disabled,
+.cc-verBtn:disabled{
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 /* =========================
@@ -689,12 +959,14 @@
   max-width: 100%;
   min-width: 48px;
   background:
-    linear-gradient(90deg,
+    linear-gradient(
+      90deg,
       var(--cc-skel-a) 0%,
       var(--cc-skel-b) 22%,
       var(--cc-skel-a) 48%,
       var(--cc-skel-b) 72%,
-      var(--cc-skel-a) 100%);
+      var(--cc-skel-a) 100%
+    );
   background-size: 240% 100%;
   animation: ccShimmer 1.05s ease-in-out infinite;
 }
@@ -721,604 +993,175 @@
 /* =========================
    Responsive
 ========================= */
-@media (max-width: 720px){
-  .cc-card__headLeft{
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .cc-filter select,
-  .cc-input{
-    min-width: 0;
-    width: 100%;
-  }
-  .cc-btn--excel,
-  .cc-btnex{
-    width: 100%;
-    justify-content: center;
-  }
-  .cc-page{
-    max-height: 85vh;
-    overflow: auto;
-  }
-  .cc-calDropdown {
-    left: 50%;
-    transform: translateX(-50%);
-    top: calc(100% + 8px);
-  }
-  .cc-calTrigger {
-    min-width: 160px;
-    font-size: 12.5px;
-  }
-}
-
-/* =========================================================
-   DARK MODE
-========================================================= */
-html[data-theme="oscuro"] .cc-page{
-  background: #0B1220 !important;
-  color: rgba(226,232,240,.92) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-alert{
-  background: rgba(225,61,69,.12) !important;
-  border-color: rgba(225,61,69,.24) !important;
-  color: rgba(255,255,255,.92) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-card{
-  background: rgba(15,23,42,.62) !important;
-  border-color: rgba(148,163,184,.14) !important;
-  box-shadow: 0 16px 40px -26px rgba(0,0,0,.62) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-card__head{
-  background:
-    radial-gradient(900px 180px at 0% 0%, rgba(78,161,255,.12), transparent 55%),
-    linear-gradient(180deg, rgba(15,23,42,.85), rgba(15,23,42,.62)) !important;
-  border-bottom-color: rgba(148,163,184,.12) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-card__title{
-  color: rgba(226,232,240,.92) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-card__hint{
-  color: rgba(226,232,240,.62) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-card__hint b{
-  color: rgba(226,232,240,.92) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-filter label{
-  color: rgba(226,232,240,.65) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-filter select{
-  background: rgba(15,23,42,.88) !important;
-  color: rgba(226,232,240,.92) !important;
-  border-color: rgba(148,163,184,.18) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-filter select:hover{
-  border-color: rgba(148,163,184,.30) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-filter select:focus{
-  background: rgba(15,23,42,.96) !important;
-  border-color: rgba(78,161,255,.45) !important;
-  box-shadow: 0 0 0 3px rgba(78,161,255,.18) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-input{
-  background: rgba(15,23,42,.88) !important;
-  color: rgba(226,232,240,.92) !important;
-  border-color: rgba(148,163,184,.18) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-input::placeholder{
-  color: rgba(226,232,240,.40) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-input:hover{
-  border-color: rgba(148,163,184,.30) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-input:focus{
-  background: rgba(15,23,42,.96) !important;
-  border-color: rgba(78,161,255,.45) !important;
-  box-shadow: 0 0 0 3px rgba(78,161,255,.18) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-clearSearch{
-  background: rgba(15,23,42,.90) !important;
-  color: rgba(226,232,240,.72) !important;
-  border-color: rgba(148,163,184,.18) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-clearSearch:hover{
-  background: rgba(225,61,69,.14) !important;
-  border-color: rgba(225,61,69,.30) !important;
-  color: rgba(240, 120, 120, 0.95) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-subhead{
-  background: linear-gradient(180deg, rgba(15,23,42,.85), rgba(15,23,42,.62)) !important;
-  border-bottom-color: rgba(148,163,184,.12) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-subhead__name{
-  color: rgba(226,232,240,.92) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-subhead__meta{
-  color: rgba(226,232,240,.58) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-grid--head{
-  background: rgba(15,23,42,.95) !important;
-  border-bottom-color: rgba(148,163,184,.14) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-grid--head .cc-cell{
-  color: rgba(226,232,240,.70) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-gridBody{
-  background: rgba(15,23,42,.40) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-grid--row{
-  background: rgba(15,23,42,.40) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-grid--row:hover{
-  background: rgba(78,161,255,.08) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-cell{
-  color: rgba(226,232,240,.82) !important;
-  border-bottom-color: rgba(148,163,184,.10) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-name{
-  color: rgba(226,232,240,.92) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-cell.is-positive,
-html[data-theme="oscuro"] .cc-page .cc-saldo.is-positive{
-  color: color-mix(in srgb, var(--cc-success) 76%, #e2e8f0) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-cell.is-negative,
-html[data-theme="oscuro"] .cc-page .cc-saldo.is-negative{
-  color: color-mix(in srgb, var(--cc-danger) 76%, #e2e8f0) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-grid--tfoot{
-  background: rgba(15,23,42,.70) !important;
-  border-top-color: rgba(148,163,184,.14) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-tfootLabel{
-  color: rgba(226,232,240,.86) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-footnote{
-  background: rgba(15,23,42,.62) !important;
-  border-top-color: rgba(148,163,184,.10) !important;
-  color: rgba(226,232,240,.58) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-btn--excel{
-  background: rgba(34,173,92,.90) !important;
-  border-color: rgba(34,173,92,.45) !important;
-  color: #fff !important;
-  box-shadow: 0 8px 24px rgba(34,173,92,.18) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-btn--excel:hover:not(:disabled){
-  background: rgba(34,173,92,1) !important;
-  box-shadow: 0 10px 28px rgba(34,173,92,.28) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-btnex{
-  background: rgba(15,23,42,.80) !important;
-  border-color: rgba(78,161,255,.28) !important;
-  color: rgba(226,232,240,.88) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-btnex:hover:not(:disabled){
-  background: rgba(78,161,255,.18) !important;
-  border-color: rgba(78,161,255,.50) !important;
-  color: rgba(226,232,240,.96) !important;
-  box-shadow: 0 6px 20px rgba(78,161,255,.20) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-calTrigger{
-  background: rgba(15,23,42,.88) !important;
-  border-color: rgba(148,163,184,.18) !important;
-  color: rgba(226,232,240,.85) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-calTrigger:hover{
-  border-color: rgba(148,163,184,.30) !important;
-  background: rgba(15,23,42,.95) !important;
-}
-html[data-theme="oscuro"] .cc-page .cc-calTrigger.is-open{
-  border-color: rgba(78,161,255,.50) !important;
-  box-shadow: 0 0 0 3px rgba(78,161,255,.16) !important;
-  background: rgba(15,23,42,.96) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-emptyRow{
-  color: rgba(226,232,240,.55) !important;
-}
-
-html[data-theme="oscuro"] .cc-page .cc-gridBody::-webkit-scrollbar-thumb{
-  background: rgba(148,163,184,.20) !important;
-}
-
-html[data-theme="oscuro"] .cc-page{
-  --cc-skel-a: rgba(226,232,240,.07);
-  --cc-skel-b: rgba(226,232,240,.14);
-}
-.contenedor-cards{
-  height: calc(100% - 100px);
-
-}
-
-/* =========================
-   ClientesCC — estilos movidos desde inline
-========================= */
-
-.cc-subhead {
-  margin-top: 0;
-}
-
-.cc-footnote--error {
-  margin-bottom: 10px;
-}
-
-.cc-card__head--clientes {
-  padding-top: 10px;
-}
-
-.cc-card__headLeft--full {
-  width: 100%;
-}
-
-.cc-headFilters--full {
-  width: 100%;
-}
-
-.cc-filter--cal {
-  position: relative;
-}
-
-.cc-filter--search {
-  min-width: 360px;
-  flex: 1;
-  position: relative;
-}
-
-.cc-searchInput {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.cc-searchInput__fieldWrap {
-  position: relative;
-  flex: 1;
-}
-
-.cc-searchInput__arrow {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  opacity: 0.6;
-  pointer-events: none;
-  font-size: 12px;
-}
-
-.cc-suggestions {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 1000;
-  background: var(--card-bg, #fff);
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
-}
-
-.cc-suggestions__scroll {
-  max-height: 260px;
-  overflow: auto;
-}
-
-.cc-suggestions__item {
-  width: 100%;
-  text-align: left;
-  padding: 10px 12px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.cc-suggestions__item:hover {
-  background: rgba(0, 85, 187, 0.08);
-}
-
-.cc-cliente-table {
-  margin-top: 12px;
-  background: #fff;
-  overflow: hidden;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.cc-cliente-table__head,
-.cc-cliente-table__row {
-  display: grid;
-  grid-template-columns: 130px 1.4fr 160px 160px 160px 90px;
-  gap: 0;
-  align-items: center;
-}
-
-.cc-cliente-table__head {
-  background: #f3f4f6;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  font-weight: 700;
-  color: #333;
-}
-
-.cc-cliente-table__row {
-  background: #fff;
-}
-
-.cc-cliente-table__row.is-alt {
-  background: #fcfcfd;
-}
-
-.cc-cliente-table__row:not(:last-of-type) {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-.cc-cliente-table__cell {
-  padding: 10px 16px;
-}
-
-.cc-cliente-table__cell--center {
-  text-align: center;
-}
-
-.cc-cliente-table__cell--right {
-  text-align: right;
-}
-
-.cc-cliente-table__cell--date {
-  color: #444;
-}
-
-.cc-cliente-table__title {
-  font-weight: 600;
-
-}
-
-.cc-cliente-table__detail {
-  font-size: 12px;
-  opacity: 0.72;
-  margin-top: 3px;
-}
-
-.cc-cliente-table__amount--active {
-  color: #1f2937;
-}
-
-.cc-cliente-table__amount--muted {
-  color: #9ca3af;
-}
-
-.cc-cliente-table__saldo {
-  font-weight: 700;
-  color: #111827;
-}
-
-.cc-verBtn {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: #fff;
-  color: #111827;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cc-verBtn.is-disabled,
-.cc-verBtn:disabled {
-  background: #f3f4f6;
-  color: #9ca3af;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.cc-cliente-table__loading {
-  padding: 18px 16px;
-  text-align: center;
-  color: #6b7280;
-  background: #fff;
-}
-
-.cc-cliente-table__empty {
-  padding: 26px 16px;
-  text-align: center;
-  color: #6b7280;
-  font-weight: 500;
-
-}
-
-.cc-cliente-table__totals {
-  background: #f8fafc;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-  font-weight: 700;
-}
-
-/* =========================
-   Responsive
-========================= */
-@media (max-width: 1100px) {
-  .cc-cliente-table {
+@media (max-width: 1100px){
+  .cc-cliente-table{
     overflow-x: auto;
   }
 
   .cc-cliente-table__head,
   .cc-cliente-table__row,
-  .cc-cliente-table__totals {
+  .cc-cliente-table__totals{
     min-width: 890px;
   }
 }
 
-@media (max-width: 768px) {
-  .cc-filter--search {
+@media (max-width: 768px){
+  .cc-filter--search{
     min-width: 100%;
   }
 
-  .cc-searchInput {
+  .cc-searchInput{
     flex-wrap: wrap;
   }
 
-  .cc-searchInput__fieldWrap {
+  .cc-searchInput__fieldWrap{
     min-width: 100%;
   }
-}/* =========================
-   Empty state icon
+}
+
+@media (max-width: 720px){
+  .cc-card__headLeft{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cc-filter select,
+  .cc-input{
+    min-width: 0;
+    width: 100%;
+  }
+
+  .cc-btn--excel{
+    width: 100%;
+    justify-content: center;
+  }
+
+  .cc-page{
+    max-height: 85vh;
+    overflow: auto;
+  }
+
+  .cc-calDropdown{
+    left: 50%;
+    transform: translateX(-50%);
+    top: calc(100% + 8px);
+  }
+
+  .cc-calTrigger{
+    min-width: 160px;
+    font-size: 12.5px;
+  }
+
+  .cc-headFilters--tabs{
+    width: fit-content;
+    max-width: 100%;
+    align-self: flex-start;
+  }
+
+  .cc-btnex.cc-btnex--tab{
+    height: 40px;
+    padding: 0 14px;
+    font-size: 13px;
+  }
+}
+
+/* =========================
+   Floating label
 ========================= */
-
-.cc-emptyState{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  height: 100%;
-  gap:10px;
-  padding:30px 16px;
+.cc-floatingField{
+  position: relative;
+  min-width: 0;
 }
 
-.cc-emptyIcon{
-  font-size:28px;
-  opacity:.45;
-  color:#6b7280;
+.cc-floatingField .cc-input,
+.cc-floatingField .cc-calTrigger{
+  width: 100%;
 }
 
-.cc-emptyText{
-  font-size:13px;
-  color:#6b7280;
-}.cc-clearSearch--inside{
-  position:absolute;
-  right:34px;
-  top:50%;
-  transform:translateY(-50%);
-}.cc-input{
-  padding-right:70px;
-}/* =========================
-   Tabs activas (Clientes / Proveedores)
-========================= */
 
-.cc-headFilters .cc-btnex{
-  text-decoration: none;
-}
-
-.cc-headFilters .cc-btnex.is-open{
-  background: var(--b-action);
-  border-color: var(--b-action);
-  color: #fff;
-  box-shadow: 0 8px 22px rgba(0, 85, 187, 0.28);
-}
-
-.cc-headFilters .cc-btnex.is-open:hover{
-  background: var(--b-action);
-  border-color: var(--b-action);
-  color: #fff;
-  transform: none;
-  box-shadow: 0 8px 22px rgba(0, 85, 187, 0.28);
-}
-
-.cc-headFilters .cc-btnex.is-open:active{
-  transform: none;
-  box-shadow: 0 8px 22px rgba(0, 85, 187, 0.28);
-}
-
-/* opcional: estilo más suave para la pestaña no activa */
-.cc-headFilters .cc-btnex:not(.is-open){
-  background: rgba(0, 85, 187, 0.06);
-  border-color: rgba(0, 85, 187, 0.20);
-  color: var(--b-midnight);
-}/* =========================
-   Tabla con header y footer fijos
-   + body con scroll
-========================= */
-
-.cc-cliente-table{
-  margin-top: 12px;
+.cc-floatingLabel{
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(66, 84, 102, 0.76);
+  pointer-events: none;
   background: #fff;
-
-  overflow: hidden;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 0 6px;
+  margin-left: -6px;
+  transition:
+    top 150ms ease,
+    transform 150ms ease,
+    font-size 150ms ease,
+    color 150ms ease,
+    opacity 150ms ease;
+  z-index: 2;
 }
 
-.cc-cliente-table__headWrap{
-  background: #f3f4f6;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.cc-cliente-table__footWrap{
-  background: #f8fafc;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.cc-cliente-table__body{
-  height: calc(100vh - 430px);
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-
-
-/* misma grilla para head / rows / totals */
-.cc-cliente-table__head,
-.cc-cliente-table__row{
-  display: grid;
-  grid-template-columns: .8fr 2.2fr 1fr 1fr 1fr 0.7fr;
-  gap: 0;
-  align-items: center;
-}
-.cc-cliente-table__totals{
-  display: 
-  grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
-
-}
-
-.cc-cliente-table__head{
-  background: #f3f4f6;
+.cc-floatingField.is-active .cc-floatingLabel,
+.cc-floatingField:focus-within .cc-floatingLabel,
+.cc-input--floating:not(:placeholder-shown) + .cc-floatingLabel,
+.cc-floatingLabel--active{
+  top: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
   font-weight: 700;
-  color: #333;
+  color: var(--b-action);
+  letter-spacing: 0.02em;
 }
 
-.cc-cliente-table__row{
-  background: #fff;
+/* =========================
+   Search floating
+========================= */
+.cc-floatingField--search{
+  width: 100%;
 }
 
-.cc-cliente-table__row.is-alt{
-  background: #fcfcfd;
+.cc-floatingField--search .cc-searchInput{
+  width: 100%;
 }
 
-.cc-cliente-table__row:not(:last-child){
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+.cc-floatingField--search .cc-searchInput__fieldWrap{
+  position: relative;
 }
 
-.cc-cliente-table__totals{
-  background: #f8fafc;
-  font-weight: 700;
+.cc-floatingField--search .cc-clearSearch--inside{
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
 }
 
-.cc-cliente-table__loading,
-.cc-cliente-table__empty{
-  padding: 26px 16px;
-  text-align: center;
-  color: #6b7280;
+/* =========================
+   Calendar floating
+========================= */
+.cc-floatingField--calendar{
+  min-width: 100%;
+}
 
+
+.cc-floatingField--calendar.is-active .cc-floatingLabel{
+  color: var(--b-action);
+}
+
+/* =========================
+   Ajustes visuales inputs
+========================= */
+.cc-floatingField .cc-input:hover,
+.cc-floatingField .cc-calTrigger:hover{
+  border-color: rgba(10, 37, 64, 0.28);
+}
+
+.cc-floatingField:focus-within .cc-input,
+.cc-floatingField:focus-within .cc-calTrigger,
+.cc-floatingField.is-open .cc-calTrigger{
+  border-color: rgba(0, 85, 187, 0.55);
+  box-shadow: 0 0 0 3px var(--cc-focus);
+  background: #fafcff;
+}
+
+.cc-floatingField:focus-within .cc-floatingLabel{
+  color: var(--b-action);
 }

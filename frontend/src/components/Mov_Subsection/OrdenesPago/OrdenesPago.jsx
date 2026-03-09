@@ -20,6 +20,9 @@ import "../../Global/Calendario/calendario.css";
 // ✅ Toast
 import Toast from "../../Global/Toast.jsx";
 
+// ✅ BOTÓN EXPORTAR GLOBAL (igual que Ventas)
+import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
+
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarDays,
@@ -29,12 +32,14 @@ import {
   faTrashCan,
   faMoneyBill1Wave,
   faEye,
+  faChevronDown,
+  faArrowRightLong,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 
-// ✅ ✅ CONTEXTO GLOBAL DE RANGO DE FECHAS
+// ✅ CONTEXTO GLOBAL DE RANGO DE FECHAS
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 
 /* =========================
@@ -57,7 +62,7 @@ function moneyARS(v) {
 }
 function safeText(v) {
   const s = String(v ?? "").trim();
-  return s ? s : "-";
+  return s ? s : "—";
 }
 function normalizeSearchText(v) {
   return String(v ?? "")
@@ -69,7 +74,7 @@ function normalizeSearchText(v) {
 }
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
-  if (!s) return "-";
+  if (!s) return "—";
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
     const yyyy = m1[1];
@@ -88,7 +93,7 @@ function formatFechaDMY(v) {
 }
 
 /* =========================
-   Fecha helpers para rango (igual que Ventas)
+   Fecha helpers para rango
 ========================= */
 function startOfDay(d) {
   if (!d) return null;
@@ -97,7 +102,6 @@ function startOfDay(d) {
   return c;
 }
 
-/** Convierte "YYYY-MM-DD" o "DD/MM/YYYY" a Date (sin hora) */
 function parseRowFecha(v) {
   const s = String(v ?? "").trim();
   if (!s) return null;
@@ -109,7 +113,6 @@ function parseRowFecha(v) {
   return isNaN(d.getTime()) ? null : startOfDay(d);
 }
 
-/** Formatea Date → "YYYY-MM-DD" para la API */
 function dateToAPI(d) {
   if (!d) return "";
   const yyyy = d.getFullYear();
@@ -118,13 +121,11 @@ function dateToAPI(d) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-/** "DD/MM/YYYY" para mostrar */
 function formatDateUI(d) {
   if (!d) return "—";
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-/** Filtro por rango de fechas (igual que Ventas) */
 function rowInDateRange(row, from, to) {
   if (!from && !to) return true;
   const fecha = parseRowFecha(row?.fecha);
@@ -153,12 +154,7 @@ function getAuthInfo() {
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand =
-      u?.idUsuarioMaster ??
-      u?.idUsuario ??
-      u?.id_usuario ??
-      u?.id ??
-      u?.user_id ??
-      0;
+      u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
   return { token, sessionKey, idUsuario };
@@ -182,12 +178,8 @@ function isPagado(row) {
 
 function getIdComprobanteFromRow(row) {
   const cand =
-    row?.id_comprobante ??
-    row?.comprobante_id ??
-    row?.idComprobante ??
-    row?.id_comprobante_archivo ??
-    row?.idComprobanteArchivo ??
-    0;
+    row?.id_comprobante ?? row?.comprobante_id ?? row?.idComprobante ??
+    row?.id_comprobante_archivo ?? row?.idComprobanteArchivo ?? 0;
   const n = Number(cand || 0);
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
@@ -223,7 +215,7 @@ function rowMatchesQuery(row, query) {
 }
 
 /* =========================
-   Excel
+   Export helpers (igual que Ventas)
 ========================= */
 function slugifySheetName(name) {
   const s = String(name || "OrdenesPago")
@@ -231,6 +223,34 @@ function slugifySheetName(name) {
     .replace(/\s+/g, " ")
     .trim();
   return (s || "OrdenesPago").slice(0, 31);
+}
+
+function buildExportRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map((r) => ({
+    FECHA: safeText(formatFechaDMY(r?.fecha)),
+    DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
+    PROVEEDOR: safeText(r?.proveedor),
+    ESTADO: isPagado(r) ? "PAGADO" : "PENDIENTE",
+    MONTO: Number(r?.monto_total ?? r?.total ?? 0) || 0,
+  }));
+}
+
+function escapeCSV(value) {
+  const s = String(value ?? "");
+  if (/[",;\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function downloadBlob(content, fileName, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export default function OrdenesPago() {
@@ -244,7 +264,7 @@ export default function OrdenesPago() {
     refreshLists,
   } = useListas();
 
-  // ✅ ✅ RANGO GLOBAL (se comparte entre secciones)
+  // ✅ RANGO GLOBAL
   const { dateRange, setDateRange } = useDateRange();
   const [showCalendario, setShowCalendario] = useState(false);
 
@@ -265,8 +285,6 @@ export default function OrdenesPago() {
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(null);
 
-  const [showAll, setShowAll] = useState(false);
-
   const [toast, setToast] = useState(null);
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
     setToast({ tipo, mensaje, duracion });
@@ -279,7 +297,6 @@ export default function OrdenesPago() {
   const moreReqIdRef = useRef(0);
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
-
   const didInitRef = useRef(false);
 
   const showSkeleton = loadingRows;
@@ -341,7 +358,7 @@ export default function OrdenesPago() {
   );
 
   /* =========================
-     LOAD ROWS — usa fecha_desde / fecha_hasta (igual que Ventas)
+     LOAD ROWS
   ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -378,11 +395,7 @@ export default function OrdenesPago() {
           setHasMore(!!cached?.hasMore);
           setNextOffset(cached?.nextOffset ?? null);
           if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
-          return {
-            hasMore: !!cached?.hasMore,
-            nextOffset: cached?.nextOffset ?? null,
-            received: cachedRows.length,
-          };
+          return { hasMore: !!cached?.hasMore, nextOffset: cached?.nextOffset ?? null, received: cachedRows.length };
         }
 
         const sp = new URLSearchParams();
@@ -398,12 +411,7 @@ export default function OrdenesPago() {
 
         if (myReqId !== reqIdRef.current) return null;
 
-        const listKey = Array.isArray(data.movimientos)
-          ? "movimientos"
-          : Array.isArray(data.ordenes)
-          ? "ordenes"
-          : "movimientos";
-
+        const listKey = Array.isArray(data.movimientos) ? "movimientos" : Array.isArray(data.ordenes) ? "ordenes" : "movimientos";
         const rawArr = Array.isArray(data[listKey]) ? data[listKey] : [];
 
         const norm = rawArr.map((r) => ({
@@ -416,9 +424,7 @@ export default function OrdenesPago() {
         let newNextOffset =
           data.next_offset !== undefined && data.next_offset !== null
             ? Number(data.next_offset)
-            : newHasMore
-            ? offset + PAGE_SIZE
-            : null;
+            : newHasMore ? offset + PAGE_SIZE : null;
 
         const page = newHasMore ? norm.slice(0, PAGE_SIZE) : norm;
 
@@ -427,17 +433,11 @@ export default function OrdenesPago() {
         if (append) {
           const base = Array.isArray(rowsRef.current) ? rowsRef.current : [];
           const seen = new Set(base.map((x) => String(x?.id_movimiento ?? "")));
-          const add = page.filter((x) => {
-            const k = String(x?.id_movimiento ?? "");
-            return k && !seen.has(k);
-          });
+          const add = page.filter((x) => { const k = String(x?.id_movimiento ?? ""); return k && !seen.has(k); });
           const merged = [...base, ...add];
           rowsRef.current = merged;
           setRows(merged);
-          if (add.length === 0) {
-            newHasMore = false;
-            newNextOffset = null;
-          }
+          if (add.length === 0) { newHasMore = false; newNextOffset = null; }
           setHasMore(newHasMore);
           setNextOffset(newNextOffset);
           if (moreReqIdRef.current === myReqId) setLoadingMore(false);
@@ -446,29 +446,16 @@ export default function OrdenesPago() {
           setRows(page);
           setHasMore(newHasMore);
           setNextOffset(newNextOffset);
-          if (offset === 0) {
-            cacheRef.current.set(cacheKey, {
-              rows: page,
-              hasMore: newHasMore,
-              nextOffset: newNextOffset,
-            });
-          }
+          if (offset === 0) cacheRef.current.set(cacheKey, { rows: page, hasMore: newHasMore, nextOffset: newNextOffset });
           if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
         }
 
-        return {
-          hasMore: newHasMore,
-          nextOffset: newNextOffset,
-          received: page.length,
-        };
+        return { hasMore: newHasMore, nextOffset: newNextOffset, received: page.length };
       } catch (e) {
         if (myReqId !== reqIdRef.current) return null;
         setError(e.message || "Error cargando órdenes de pago.");
-        if (append) {
-          if (moreReqIdRef.current === myReqId) setLoadingMore(false);
-        } else {
-          if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
-        }
+        if (append) { if (moreReqIdRef.current === myReqId) setLoadingMore(false); }
+        else { if (rowsReqIdRef.current === myReqId) setLoadingRows(false); }
         return null;
       }
     },
@@ -476,145 +463,59 @@ export default function OrdenesPago() {
   );
 
   /* =========================
-     INIT — usa el rango GLOBAL (NO lo resetea)
+     INIT
   ========================= */
   useEffect(() => {
     let alive = true;
     (async () => {
-      try {
-        await ensureListsLoaded({ force: false, background: true });
-      } catch {}
-
+      try { await ensureListsLoaded({ force: false, background: true }); } catch {}
       if (!alive) return;
-
-      // ✅ primera carga con rango global actual
-      await loadRows({
-        from: dateRange?.from,
-        to: dateRange?.to,
-        q: "",
-        offset: 0,
-        append: false,
-      });
-
+      await loadRows({ from: dateRange?.from, to: dateRange?.to, q: "", offset: 0, append: false });
       didInitRef.current = true;
     })();
-
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* =========================
-     Cuando cambie el rango GLOBAL desde otra sección → recargar acá
+     Refresco cuando cambia rango global
   ========================= */
   useEffect(() => {
     if (!didInitRef.current) return;
-    // si cambia en otra sección, acá se refresca
     cacheRef.current.clear();
     skipSearchRef.current = true;
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-
-    loadRows({
-      from: dateRange?.from,
-      to: dateRange?.to,
-      q,
-      offset: 0,
-      append: false,
-    });
+    loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange?.from?.getTime?.(), dateRange?.to?.getTime?.()]);
 
-  // Debounce búsqueda
+  /* =========================
+     Debounce búsqueda
+  ========================= */
   useEffect(() => {
-    if (skipSearchRef.current) {
-      skipSearchRef.current = false;
-      return;
-    }
+    if (skipSearchRef.current) { skipSearchRef.current = false; return; }
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
       loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
     }, 250);
-    return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    };
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
   /* =========================
-     Handler cambio de rango de fechas (usa setDateRange GLOBAL)
+     Handler cambio de rango (SET GLOBAL)
   ========================= */
   const handleDateRangeChange = useCallback(
     async (newRange) => {
       if (!newRange?.from && !newRange?.to) return;
-
-      setDateRange(newRange); // ✅ guarda global
+      setDateRange(newRange);
       cacheRef.current.clear();
-
-      // para que NO dispare doble (debounce) y recargue instantáneo
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-
-      await loadRows({
-        from: newRange.from,
-        to: newRange.to,
-        q,
-        offset: 0,
-        append: false,
-      });
+      await loadRows({ from: newRange.from, to: newRange.to, q, offset: 0, append: false });
     },
     [loadRows, q, setDateRange]
   );
-
-  /* =========================
-     "Cargar todos"
-  ========================= */
-  const handleLoadAll = useCallback(async () => {
-    if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
-    if (nextOffset === null) return;
-
-    setLoadingAll(true);
-    showToast("cargando", "Cargando todas las órdenes de pago…", 12000);
-
-    let offset = nextOffset;
-    let guard = 0;
-
-    try {
-      while (offset !== null && guard < 3000) {
-        const beforeLen = rowsRef.current.length;
-        const res = await loadRows({
-          from: dateRange?.from,
-          to: dateRange?.to,
-          q: (q || "").trim(),
-          offset,
-          append: true,
-        });
-        if (!res) break;
-        guard += 1;
-        offset = res.nextOffset;
-        const afterLen = rowsRef.current.length;
-        if (afterLen === beforeLen) break;
-        if (!res.hasMore || offset === null) break;
-      }
-      setRows([...rowsRef.current]);
-      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} órdenes.`, 2600);
-    } catch (e) {
-      showToast("error", e?.message || "Error cargando todas.", 4200);
-    } finally {
-      setLoadingAll(false);
-    }
-  }, [
-    hasMore,
-    loadingMore,
-    loadingRows,
-    loadingListsCtx,
-    loadingAll,
-    nextOffset,
-    dateRange,
-    q,
-    loadRows,
-    showToast,
-  ]);
 
   /* =========================
      Filtrado client-side
@@ -626,18 +527,11 @@ export default function OrdenesPago() {
       .filter((r) => rowMatchesQuery(r, q));
   }, [rows, dateRange, q]);
 
-  const visibleRows = useMemo(() => {
-    if (showAll) return filteredRows;
-    return filteredRows;
-  }, [filteredRows, showAll]);
-
   /* =========================
-     Label para el botón del calendario (igual que Ventas)
+     Label calendario (igual que Ventas)
   ========================= */
   const dateRangeLabel = useMemo(() => {
-    const from = dateRange?.from || null;
-    const to = dateRange?.to || null;
-
+    const { from, to } = dateRange;
     if (!from && !to) return "Seleccionar fechas";
     if (from && to) {
       if (
@@ -647,11 +541,130 @@ export default function OrdenesPago() {
       ) {
         return formatDateUI(from);
       }
-      return `${formatDateUI(from)} → ${formatDateUI(to)}`;
+      return (
+        <>
+          <span>{formatDateUI(from)}</span>
+          <span className="mov-rangeArrow"><FontAwesomeIcon icon={faArrowRightLong} /></span>
+          <span>{formatDateUI(to)}</span>
+        </>
+      );
     }
     if (from) return `Desde ${formatDateUI(from)}`;
     return `Hasta ${formatDateUI(to)}`;
   }, [dateRange]);
+
+  /* =========================
+     Export base name
+  ========================= */
+  const exportBaseName = useMemo(() => {
+    const { from, to } = dateRange;
+    if (from && to) return `ordenes_pago_${dateToAPI(from)}_${dateToAPI(to)}`;
+    if (from) return `ordenes_pago_desde_${dateToAPI(from)}`;
+    return "ordenes_pago_todos";
+  }, [dateRange]);
+
+  /* =========================
+     Export helpers (igual que Ventas)
+  ========================= */
+  const getExportData = useCallback(() => {
+    const dataToExport = buildExportRows(filteredRows);
+    if (!dataToExport.length) throw new Error("No hay datos para exportar.");
+    return dataToExport;
+  }, [filteredRows]);
+
+  const exportToExcel = useCallback(() => {
+    const dataToExport = getExportData();
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const headers = Object.keys(dataToExport[0] || {});
+    const montoColIndex = headers.findIndex((h) => h === "MONTO");
+    if (montoColIndex >= 0 && ws["!ref"]) {
+      const colLetter = XLSX.utils.encode_col(montoColIndex);
+      const range = XLSX.utils.decode_range(ws["!ref"]);
+      for (let r = range.s.r + 1; r <= range.e.r; r++) {
+        const cell = ws[`${colLetter}${r + 1}`];
+        if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
+      }
+    }
+    XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("OrdenesPago_Vista"));
+    XLSX.writeFile(wb, `${exportBaseName}.xlsx`);
+  }, [getExportData, exportBaseName]);
+
+  const exportToCSV = useCallback(() => {
+    const dataToExport = getExportData();
+    const headers = Object.keys(dataToExport[0] || {});
+    const lines = [
+      headers.join(";"),
+      ...dataToExport.map((row) => headers.map((h) => escapeCSV(row[h])).join(";")),
+    ];
+    downloadBlob("\uFEFF" + lines.join("\n"), `${exportBaseName}.csv`, "text/csv;charset=utf-8;");
+  }, [getExportData, exportBaseName]);
+
+  const exportToTXT = useCallback(() => {
+    const dataToExport = getExportData();
+    const lines = dataToExport.map((row, index) => [
+      `REGISTRO ${index + 1}`,
+      `FECHA: ${row.FECHA ?? ""}`,
+      `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
+      `PROVEEDOR: ${row.PROVEEDOR ?? ""}`,
+      `ESTADO: ${row.ESTADO ?? ""}`,
+      `MONTO: ${row.MONTO ?? ""}`,
+      "----------------------------------------",
+    ].join("\n"));
+    downloadBlob(lines.join("\n"), `${exportBaseName}.txt`, "text/plain;charset=utf-8;");
+  }, [getExportData, exportBaseName]);
+
+  const handleExport = useCallback(
+    async (type) => {
+      try {
+        if (hasMore) {
+          showToast("error", 'Faltan registros sin cargar. Tocá "Cargar todos" primero.', 5200);
+          return;
+        }
+        if (type === "excel") { exportToExcel(); showToast("exito", "Excel exportado.", 2200); return; }
+        if (type === "csv")   { exportToCSV();   showToast("exito", "CSV exportado.",   2200); return; }
+        if (type === "txt")   { exportToTXT();   showToast("exito", "TXT exportado.",   2200); }
+      } catch (e) {
+        showToast("error", e?.message || "Error exportando archivo.", 3500);
+      }
+    },
+    [hasMore, exportToExcel, exportToCSV, exportToTXT, showToast]
+  );
+
+  const exportOptions = useMemo(() => [
+    { key: "excel", label: "Exportar Excel (.xlsx)", icon: faFileExcel, onClick: () => handleExport("excel") },
+    { key: "csv",   label: "Exportar CSV (.csv)",               onClick: () => handleExport("csv")   },
+    { key: "txt",   label: "Exportar TXT (.txt)",               onClick: () => handleExport("txt")   },
+  ], [handleExport]);
+
+  /* =========================
+     "Cargar todos"
+  ========================= */
+  const handleLoadAll = useCallback(async () => {
+    if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
+    if (nextOffset === null) return;
+    setLoadingAll(true);
+    showToast("cargando", "Cargando todas las órdenes de pago…", 12000);
+    let offset = nextOffset;
+    let guard = 0;
+    try {
+      while (offset !== null && guard < 3000) {
+        const beforeLen = rowsRef.current.length;
+        const res = await loadRows({ from: dateRange?.from, to: dateRange?.to, q: (q || "").trim(), offset, append: true });
+        if (!res) break;
+        guard += 1;
+        offset = res.nextOffset;
+        if (rowsRef.current.length === beforeLen) break;
+        if (!res.hasMore || offset === null) break;
+      }
+      setRows([...rowsRef.current]);
+      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} órdenes.`, 2600);
+    } catch (e) {
+      showToast("error", e?.message || "Error cargando todas.", 4200);
+    } finally {
+      setLoadingAll(false);
+    }
+  }, [hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll, nextOffset, dateRange, q, loadRows, showToast]);
 
   /* =========================
      Modal Ver Comprobante
@@ -662,25 +675,19 @@ export default function OrdenesPago() {
 
   const closeVerModal = useCallback(() => {
     setOpenVer(false);
-    setTimeout(() => {
-      setVerUrl("");
-      setVerTitle("Comprobante");
-    }, 80);
+    setTimeout(() => { setVerUrl(""); setVerTitle("Comprobante"); }, 80);
   }, []);
 
-  const openVerModal = useCallback(
-    (row) => {
-      const { sessionKey } = getAuthInfo();
-      const idComp = getIdComprobanteFromRow(row);
-      if (!idComp) return;
-      let u = `${API}?action=comprobantes_descargar&id_comprobante=${idComp}`;
-      u = appendSessionKey(u, sessionKey);
-      setVerTitle(`Comprobante · ${safeText(row?.proveedor)}`);
-      setVerUrl(u);
-      setOpenVer(true);
-    },
-    [API]
-  );
+  const openVerModal = useCallback((row) => {
+    const { sessionKey } = getAuthInfo();
+    const idComp = getIdComprobanteFromRow(row);
+    if (!idComp) return;
+    let u = `${API}?action=comprobantes_descargar&id_comprobante=${idComp}`;
+    u = appendSessionKey(u, sessionKey);
+    setVerTitle(`Comprobante · ${safeText(row?.proveedor)}`);
+    setVerUrl(u);
+    setOpenVer(true);
+  }, [API]);
 
   /* =========================
      Modales Pagar / Editar / Eliminar
@@ -690,137 +697,79 @@ export default function OrdenesPago() {
   const [pagarDeudas, setPagarDeudas] = useState([]);
 
   const closePagarModal = useCallback(() => {
-    setOpenPagar(false);
-    setPagarProveedor(null);
-    setPagarDeudas([]);
+    setOpenPagar(false); setPagarProveedor(null); setPagarDeudas([]);
   }, []);
 
-  const getDeudasProveedor = useCallback(
-    (rowProv) => {
-      const idProv = Number(rowProv?.id_proveedor || rowProv?.proveedor_id || 0);
-      const nombreProv = String(rowProv?.proveedor || "").trim();
-      return (rows || [])
-        .filter((r) => {
-          const rid = Number(r?.id_proveedor || r?.proveedor_id || 0);
-          const rnom = String(r?.proveedor || "").trim();
-          const same =
-            (idProv > 0 && rid === idProv) ||
-            (!idProv && nombreProv && rnom.toLowerCase() === nombreProv.toLowerCase());
-          return same;
-        })
-        .filter((r) => isCompraCuentaCorriente(r));
-    },
-    [rows]
-  );
+  const getDeudasProveedor = useCallback((rowProv) => {
+    const idProv = Number(rowProv?.id_proveedor || rowProv?.proveedor_id || 0);
+    const nombreProv = String(rowProv?.proveedor || "").trim();
+    return (rows || []).filter((r) => {
+      const rid = Number(r?.id_proveedor || r?.proveedor_id || 0);
+      const rnom = String(r?.proveedor || "").trim();
+      return ((idProv > 0 && rid === idProv) || (!idProv && nombreProv && rnom.toLowerCase() === nombreProv.toLowerCase())) && isCompraCuentaCorriente(r);
+    });
+  }, [rows]);
 
-  const openPagarModal = useCallback(
-    (r) => {
-      const deudas = getDeudasProveedor(r);
-      setPagarProveedor(r);
-      setPagarDeudas(deudas);
-      setOpenPagar(true);
-    },
-    [getDeudasProveedor]
-  );
+  const openPagarModal = useCallback((r) => {
+    setPagarProveedor(r); setPagarDeudas(getDeudasProveedor(r)); setOpenPagar(true);
+  }, [getDeudasProveedor]);
 
   const [openEditar, setOpenEditar] = useState(false);
   const [editRow, setEditRow] = useState(null);
-
-  const closeEditarModal = useCallback(() => {
-    setOpenEditar(false);
-    setEditRow(null);
-  }, []);
-  const openEditarModal = useCallback((r) => {
-    setEditRow(r);
-    setOpenEditar(true);
-  }, []);
+  const closeEditarModal = useCallback(() => { setOpenEditar(false); setEditRow(null); }, []);
+  const openEditarModal = useCallback((r) => { setEditRow(r); setOpenEditar(true); }, []);
 
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
-
-  const openDeleteModal = useCallback((r) => {
-    setSelectedRow(r);
-    setOpenDel(true);
-  }, []);
-  const closeDeleteModal = useCallback(() => {
-    setOpenDel(false);
-    setSelectedRow(null);
-  }, []);
+  const openDeleteModal = useCallback((r) => { setSelectedRow(r); setOpenDel(true); }, []);
+  const closeDeleteModal = useCallback(() => { setOpenDel(false); setSelectedRow(null); }, []);
 
   /* =========================
      Acciones backend
   ========================= */
   const refreshAfterMutation = useCallback(async () => {
     cacheRef.current.clear();
-    await loadRows({
-      from: dateRange?.from,
-      to: dateRange?.to,
-      q,
-      offset: 0,
-      append: false,
-    });
-    try {
-      await refreshLists?.();
-    } catch {}
+    await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
+    try { await refreshLists?.(); } catch {}
   }, [dateRange, loadRows, q, refreshLists]);
 
-  const onConfirmPago = useCallback(
-    async (payload) => {
-      try {
-        showToast("cargando", "Confirmando pago…", 12000);
-        const ids =
-          payload?.ids_movimiento ??
-          payload?.ids_movimientos ??
-          payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ??
-          [];
-        const data = await apiPostJson(`${API}?action=ordenes_pago_confirmar_pago`, {
-          ids_movimiento: ids,
-          id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
-        });
-        if (!data?.exito) throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
-        await refreshAfterMutation();
-        showToast("exito", data?.mensaje || "Pago confirmado.", 1800);
-        return true;
-      } catch (e) {
-        showToast("error", e?.message || "Error confirmando pago.", 4200);
-        throw e;
-      }
-    },
-    [API, apiPostJson, refreshAfterMutation, showToast]
-  );
+  const onConfirmPago = useCallback(async (payload) => {
+    try {
+      showToast("cargando", "Confirmando pago…", 12000);
+      const ids = payload?.ids_movimiento ?? payload?.ids_movimientos ?? payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ?? [];
+      const data = await apiPostJson(`${API}?action=ordenes_pago_confirmar_pago`, { ids_movimiento: ids, id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0) });
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
+      await refreshAfterMutation();
+      showToast("exito", data?.mensaje || "Pago confirmado.", 1800);
+      return true;
+    } catch (e) {
+      showToast("error", e?.message || "Error confirmando pago.", 4200);
+      throw e;
+    }
+  }, [API, apiPostJson, refreshAfterMutation, showToast]);
 
-  const onSaveEditar = useCallback(
-    async (payloadFinal) => {
-      try {
-        showToast("cargando", "Guardando cambios…", 12000);
-        const { idUsuario } = getAuthInfo();
-        const data = await apiPostJson(`${API}?action=ordenes_pago_actualizar`, {
-          ...payloadFinal,
-          idUsuario,
-        });
-        if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la orden de pago.");
-        await refreshAfterMutation();
-        showToast("exito", data?.mensaje || "Orden de pago actualizada.", 2400);
-      } catch (e) {
-        showToast("error", e?.message || "Error guardando orden de pago.", 4200);
-        throw e;
-      }
-    },
-    [API, apiPostJson, refreshAfterMutation, showToast]
-  );
+  const onSaveEditar = useCallback(async (payloadFinal) => {
+    try {
+      showToast("cargando", "Guardando cambios…", 12000);
+      const { idUsuario } = getAuthInfo();
+      const data = await apiPostJson(`${API}?action=ordenes_pago_actualizar`, { ...payloadFinal, idUsuario });
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la orden de pago.");
+      await refreshAfterMutation();
+      showToast("exito", data?.mensaje || "Orden de pago actualizada.", 2400);
+    } catch (e) {
+      showToast("error", e?.message || "Error guardando orden de pago.", 4200);
+      throw e;
+    }
+  }, [API, apiPostJson, refreshAfterMutation, showToast]);
 
   const confirmDelete = useCallback(async () => {
     if (!selectedRow?.id_movimiento) return;
     const id = selectedRow.id_movimiento;
-    setDeletingId(id);
-    setError("");
+    setDeletingId(id); setError("");
     showToast("cargando", "Eliminando orden de pago…", 12000);
     try {
       const { idUsuario } = getAuthInfo();
-      const data = await apiPostJson(`${API}?action=ordenes_pago_eliminar`, {
-        id_movimiento: Number(id),
-        idUsuario,
-      });
+      const data = await apiPostJson(`${API}?action=ordenes_pago_eliminar`, { id_movimiento: Number(id), idUsuario });
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
       closeDeleteModal();
       await refreshAfterMutation();
@@ -834,164 +783,55 @@ export default function OrdenesPago() {
   }, [API, apiPostJson, closeDeleteModal, refreshAfterMutation, selectedRow, showToast]);
 
   const handleAfterComprobanteSaved = useCallback(async () => {
-    try {
-      await refreshAfterMutation();
-    } catch {}
+    try { await refreshAfterMutation(); } catch {}
   }, [refreshAfterMutation]);
-
-  /* =========================
-     Excel
-  ========================= */
-  const exportToExcel = useCallback(() => {
-    try {
-      if (!filteredRows.length) {
-        showToast("error", "No hay datos para exportar.", 2500);
-        return;
-      }
-      if (hasMore) {
-        showToast(
-          "error",
-          "Ojo: faltan registros sin cargar. Si querés exportar todo, tocá 'Cargar todos' primero.",
-          5200
-        );
-      }
-      const dataToExport = filteredRows.map((r) => ({
-        ESTADO: isPagado(r) ? "PAGADO" : "PENDIENTE",
-        FECHA: safeText(formatFechaDMY(r.fecha)),
-        DESCRIPCION: safeText(r.detalle ?? r.descripcion ?? r.concepto),
-        PROVEEDOR: safeText(r.proveedor),
-        MONTO: Number(r.monto_total ?? r.total ?? 0) || 0,
-      }));
-
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(dataToExport);
-
-      const from = dateRange?.from || null;
-      const to = dateRange?.to || null;
-
-      const sufijo =
-        from && to
-          ? `${dateToAPI(from)}_${dateToAPI(to)}`
-          : from
-          ? `desde_${dateToAPI(from)}`
-          : "todos";
-
-      XLSX.utils.book_append_sheet(wb, ws, slugifySheetName(`OP_${sufijo}`));
-      XLSX.writeFile(wb, `ordenes_pago_${sufijo}.xlsx`);
-      showToast("exito", "Excel exportado.", 2200);
-    } catch (e) {
-      showToast("error", e?.message || "Error exportando Excel.", 3500);
-    }
-  }, [filteredRows, dateRange, showToast, hasMore]);
 
   /* =========================
      Columnas / grilla
   ========================= */
-  const columns = useMemo(() => {
-    return [
-      {
-        key: "fecha",
-        label: "FECHA",
-        align: "center",
-        fr: 0.9,
-        render: (r) => safeText(formatFechaDMY(r.fecha)),
+  const columns = useMemo(() => [
+    { key: "fecha",     label: "FECHA",       align: "center", fr: 0.9, render: (r) => safeText(formatFechaDMY(r.fecha)) },
+    { key: "detalle",   label: "DESCRIPCIÓN", fr: 2.3, strong: true, align: "left", render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto) },
+    { key: "proveedor", label: "PROVEEDOR",   fr: 1.8, align: "center", render: (r) => safeText(r.proveedor) },
+    {
+      key: "estado", label: "ESTADO", align: "center", fr: 1.0,
+      render: (r) => {
+        const pag = isPagado(r);
+        return <span className={`mov-chip ${pag ? "mov-chip--ok" : "mov-chip--warn"}`}>{pag ? "PAGADO" : "PENDIENTE"}</span>;
       },
-      {
-        key: "detalle",
-        label: "DESCRIPCIÓN",
-        fr: 2.3,
-        strong: true,
-        align: "left",
-        render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
-      },
-      {
-        key: "proveedor",
-        label: "PROVEEDOR",
-        fr: 1.8,
-        align: "center",
-        render: (r) => safeText(r.proveedor),
-      },
-      {
-        key: "estado",
-        label: "ESTADO",
-        align: "center",
-        fr: 1.0,
-        render: (r) => {
-          const pag = isPagado(r);
-          return (
-            <span className={`mov-chip ${pag ? "mov-chip--ok" : "mov-chip--warn"}`}>
-              {pag ? "PAGADO" : "PENDIENTE"}
-            </span>
-          );
-        },
-      },
-      {
-        key: "monto",
-        label: "MONTO",
-        fr: 1.1,
-        align: "center",
-        render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
-      },
-      { key: "acciones", label: "ACCIONES", fr: 1.4, align: "center", render: () => null },
-    ];
-  }, []);
+    },
+    { key: "monto", label: "MONTO", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
+    { key: "acciones", label: "ACCIONES", fr: 1.4, align: "center", render: () => null },
+  ], []);
 
   const gridCols = useMemo(() => {
     const fallback = `repeat(${columns.length}, minmax(0, 1fr))`;
-    if (!Array.isArray(columns) || !columns.length) return fallback;
-    return columns
-      .map((c) => {
-        const n = Number(c.fr);
-        return Number.isFinite(n) && n > 0 ? `${n}fr` : "1fr";
-      })
-      .join(" ");
+    if (!columns.length) return fallback;
+    return columns.map((c) => { const n = Number(c.fr); return Number.isFinite(n) && n > 0 ? `${n}fr` : "1fr"; }).join(" ");
   }, [columns]);
 
-  const skelWidths = useMemo(
-    () => ({
-      fecha: ["44%", "38%", "50%", "42%"],
-      detalle: ["72%", "58%", "66%", "48%"],
-      proveedor: ["62%", "54%", "46%", "58%"],
-      estado: ["52%", "44%", "58%", "50%"],
-      monto: ["38%", "30%", "34%", "28%"],
-    }),
-    []
-  );
+  const skelWidths = useMemo(() => ({
+    fecha:     ["44%", "38%", "50%", "42%"],
+    detalle:   ["72%", "58%", "66%", "48%"],
+    proveedor: ["62%", "54%", "46%", "58%"],
+    estado:    ["52%", "44%", "58%", "50%"],
+    monto:     ["38%", "30%", "34%", "28%"],
+  }), []);
 
   const renderSkeletonRow = (idx) => (
-    <div
-      key={`skel-${idx}`}
-      className="mov-gridTable mov-gridTable--row mov-row--skeleton"
-      style={{ gridTemplateColumns: gridCols }}
-      role="row"
-      aria-hidden="true"
-    >
+    <div key={`skel-${idx}`} className="mov-gridTable mov-gridTable--row mov-row--skeleton" style={{ gridTemplateColumns: gridCols }} role="row" aria-hidden="true">
       {columns.map((c) => {
-        if (c.key === "acciones") {
-          return (
-            <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
-              <div className="mov-skelActions">
-                <span className="mov-skelIcon" />
-                <span className="mov-skelIcon" />
-                <span className="mov-skelIcon" />
-                <span className="mov-skelIcon" />
-              </div>
+        if (c.key === "acciones") return (
+          <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
+            <div className="mov-skelActions">
+              <span className="mov-skelIcon" /><span className="mov-skelIcon" />
+              <span className="mov-skelIcon" /><span className="mov-skelIcon" />
             </div>
-          );
-        }
-        const list = skelWidths[c.key] || ["60%"];
-        const w = list[idx % list.length];
+          </div>
+        );
+        const w = (skelWidths[c.key] || ["60%"])[idx % (skelWidths[c.key]?.length || 1)];
         return (
-          <div
-            key={c.key}
-            className={[
-              "mov-gridCell",
-              c.align === "right" ? "is-right" : "",
-              c.align === "center" ? "is-center" : "",
-            ].join(" ")}
-            role="cell"
-            data-label={c.label}
-          >
+          <div key={c.key} className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")} role="cell" data-label={c.label}>
             <span className="mov-skeletonBar" style={{ width: w }} />
           </div>
         );
@@ -1007,17 +847,16 @@ export default function OrdenesPago() {
   ========================= */
   return (
     <div className="mov-page mov-page--ordenesPago">
-      {toast && (
-        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
-      )}
-
+      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
       {errorListsCtx && <div className="mov-alert" role="alert">{errorListsCtx}</div>}
       {error && <div className="mov-alert" role="alert">{error}</div>}
 
       <section className="mov-card mov-card--table">
+        {/* ===== HEAD ===== */}
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
-            <div>
+            {/* Título + hint */}
+            <div className="title-mov">
               <div className="mov-card__title">Movimientos · Órdenes de Pago (Compras)</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> órdenes
@@ -1025,37 +864,30 @@ export default function OrdenesPago() {
               </div>
             </div>
 
+            {/* ===== FILTROS (igual que Ventas) ===== */}
             <div className="mov-headFilters">
-              {/* ✅ Botón + Calendario (usa rango GLOBAL) */}
-              <div className="mov-filter" style={{ position: "relative" }}>
-                <label>
-                  <FontAwesomeIcon icon={faCalendarDays} /> Fecha
-                </label>
 
+              {/* Calendario — estilo Ventas con floatingField */}
+              <div className="mov-filter mov-filter--cal floatingField">
                 <button
                   type="button"
-                  className="mov-btn mov-btn--ghost"
-                  style={{ minWidth: 220, justifyContent: "flex-start", textAlign: "left" }}
+                  className={`mov-calTrigger cc-calTrigger ${showCalendario ? "is-open" : ""}`}
                   onClick={() => setShowCalendario((v) => !v)}
                   disabled={isAnyLoading || loadingListsCtx}
                   title="Seleccionar rango de fechas"
                 >
                   {dateRangeLabel}
+                  <span className="mov-calTrigger__arrow">
+                    <FontAwesomeIcon icon={faChevronDown} />
+                  </span>
                 </button>
 
+                <span className="floatingLabel floatingLabel--active">
+                  <FontAwesomeIcon icon={faCalendarDays} /> Período
+                </span>
+
                 {showCalendario && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      zIndex: 999,
-                      marginTop: 6,
-                      boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-                      borderRadius: 10,
-                      background: "var(--color-surface, #fff)",
-                    }}
-                  >
+                  <div className="mov-calDropdown">
                     <Calendario
                       value={dateRange}
                       onChange={async (newRange) => {
@@ -1068,13 +900,11 @@ export default function OrdenesPago() {
                 )}
               </div>
 
-              {/* Búsqueda */}
-              <div className="mov-search">
-                <label>
-                  <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                </label>
+              {/* Buscador — estilo Ventas con floatingField */}
+              <div className={`mov-search floatingField floatingField--search ${q.trim() ? "is-active" : ""}`}>
                 <div className="mov-searchInput">
                   <input
+                    className="mov-input--floating"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     onKeyDown={async (e) => {
@@ -1082,70 +912,53 @@ export default function OrdenesPago() {
                         e.preventDefault();
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         skipSearchRef.current = true;
-                        await loadRows({
-                          from: dateRange?.from,
-                          to: dateRange?.to,
-                          q: e.currentTarget.value,
-                          offset: 0,
-                          append: false,
-                        });
+                        await loadRows({ from: dateRange?.from, to: dateRange?.to, q: e.currentTarget.value, offset: 0, append: false });
                       }
                     }}
-                    placeholder="Buscar por fecha, proveedor, descripción, monto…"
+                    placeholder=" "
                     disabled={loadingListsCtx || loadingAll}
                   />
+                  <span className="floatingLabel">
+                    <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                  </span>
                   {q.trim() !== "" && (
                     <button
                       type="button"
-                      className="mov-clearSearch"
+                      className="mov-clearSearch clearSearch--inside"
                       title="Limpiar búsqueda"
                       onClick={async () => {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                        setQ("");
-                        skipSearchRef.current = true;
-                        await loadRows({
-                          from: dateRange?.from,
-                          to: dateRange?.to,
-                          q: "",
-                          offset: 0,
-                          append: false,
-                        });
+                        setQ(""); skipSearchRef.current = true;
+                        await loadRows({ from: dateRange?.from, to: dateRange?.to, q: "", offset: 0, append: false });
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
                       disabled={loadingAll}
-                    >
-                      ×
-                    </button>
+                    >×</button>
                   )}
                 </div>
               </div>
             </div>
           </div>
 
+          {/* ===== ACCIONES: BotonExportar (igual que Ventas) ===== */}
           <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button
-              type="button"
-              className="mov-btn mov-btn--ghost mov-btn--clear mov-btn--excel"
-              onClick={exportToExcel}
+            <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
-              title={filteredRows.length ? "Exportar a Excel" : "No hay datos para exportar"}
-            >
-              <FontAwesomeIcon icon={faFileExcel} /> Exportar
-            </button>
+              loading={loadingAll}
+              label="Exportar"
+              title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"}
+              opciones={exportOptions}
+              align="right"
+            />
           </div>
         </div>
 
-        {/* HEADER */}
+        {/* ===== HEADER TABLA ===== */}
         <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
           {columns.map((c) => (
             <div
               key={c.key}
-              className={[
-                "mov-gridCell",
-                "mov-gridCell--head",
-                c.align === "right" ? "is-right" : "",
-                c.align === "center" ? "is-center" : "",
-              ].join(" ")}
+              className={["mov-gridCell", "mov-gridCell--head", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")}
               role="columnheader"
             >
               {c.label}
@@ -1153,7 +966,7 @@ export default function OrdenesPago() {
           ))}
         </div>
 
-        {/* BODY */}
+        {/* ===== BODY ===== */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className={["mov-gridBody", "mov-gridBody--relative", showSkeleton ? "mov-softLoading" : ""].join(" ")}>
             {showSkeleton ? (
@@ -1162,92 +975,44 @@ export default function OrdenesPago() {
               </div>
             ) : (
               <>
-                {visibleRows.map((r) => (
-                  <div
-                    key={r.id_movimiento}
-                    className="mov-gridTable mov-gridTable--row"
-                    style={{ gridTemplateColumns: gridCols }}
-                    role="row"
-                  >
+                {filteredRows.map((r) => (
+                  <div key={r.id_movimiento} className="mov-gridTable mov-gridTable--row" style={{ gridTemplateColumns: gridCols }} role="row">
                     {columns.map((c) => {
                       if (c.key === "acciones") {
                         const pag = isPagado(r);
                         const idComp = getIdComprobanteFromRow(r);
                         const hasPdf = pag && idComp > 0;
-
                         return (
-                          <div
-                            key={c.key}
-                            data-label={c.label}
-                            className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
-                            role="cell"
-                          >
+                          <div key={c.key} data-label={c.label} className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")} role="cell">
                             <div className="mov-actionsInline">
-                              <button
-                                type="button"
-                                className={`mov-iconBtn ${!hasPdf ? "mov-iconBtn--disabled" : ""}`}
-                                title={
-                                  hasPdf
-                                    ? "Ver comprobante"
-                                    : pag
-                                    ? "Pagado, pero sin comprobante"
-                                    : "Primero confirmá el pago"
-                                }
-                                onClick={() => hasPdf && openVerModal(r)}
-                                disabled={isAnyLoading || loadingListsCtx || !hasPdf}
-                              >
+                              <button type="button" className={`mov-iconBtn ${!hasPdf ? "mov-iconBtn--disabled" : ""}`}
+                                title={hasPdf ? "Ver comprobante" : pag ? "Pagado, pero sin comprobante" : "Primero confirmá el pago"}
+                                onClick={() => hasPdf && openVerModal(r)} disabled={isAnyLoading || loadingListsCtx || !hasPdf}>
                                 <FontAwesomeIcon icon={faEye} />
                               </button>
-
-                              <button
-                                type="button"
-                                className="mov-iconBtn"
-                                title={pag ? "Ya está pagada" : "Pagar"}
-                                onClick={() => openPagarModal(r)}
-                                disabled={isAnyLoading || loadingListsCtx || pag}
-                              >
+                              <button type="button" className="mov-iconBtn" title={pag ? "Ya está pagada" : "Pagar"}
+                                onClick={() => openPagarModal(r)} disabled={isAnyLoading || loadingListsCtx || pag}>
                                 <FontAwesomeIcon icon={faMoneyBill1Wave} />
                               </button>
-
-                              <button
-                                type="button"
-                                className="mov-iconBtn"
-                                title="Editar"
-                                onClick={() => openEditarModal(r)}
-                                disabled={isAnyLoading || loadingListsCtx}
-                              >
+                              <button type="button" className="mov-iconBtn" title="Editar"
+                                onClick={() => openEditarModal(r)} disabled={isAnyLoading || loadingListsCtx}>
                                 <FontAwesomeIcon icon={faPenToSquare} />
                               </button>
-
-                              <button
-                                type="button"
-                                className="mov-iconBtn mov-iconBtn--danger"
-                                title="Eliminar"
+                              <button type="button" className="mov-iconBtn mov-iconBtn--danger" title="Eliminar"
                                 disabled={isAnyLoading || loadingListsCtx || deletingId === r.id_movimiento}
-                                onClick={() => openDeleteModal(r)}
-                              >
+                                onClick={() => openDeleteModal(r)}>
                                 {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
                               </button>
                             </div>
                           </div>
                         );
                       }
-
                       const val = c.render ? c.render(r) : safeText(r[c.key]);
                       return (
-                        <div
-                          key={c.key}
-                          data-label={c.label}
-                          className={[
-                            "mov-gridCell",
-                            c.align === "right" ? "is-right" : "",
-                            c.align === "center" ? "is-center" : "",
-                            c.strong ? "is-strong" : "",
-                          ].filter(Boolean).join(" ")}
-                          role="cell"
-                          title={typeof val === "string" ? val : undefined}
-                        >
-                          <span className="mov-ellipsis">{val}</span>
+                        <div key={c.key} data-label={c.label}
+                          className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : "", c.strong ? "is-strong" : ""].filter(Boolean).join(" ")}
+                          role="cell" title={typeof val === "string" ? val : undefined}>
+                          <span className="mov-ellipsissss">{val}</span>
                         </div>
                       );
                     })}
@@ -1260,13 +1025,8 @@ export default function OrdenesPago() {
 
                 {!loadingRows && hasMore && filteredRows.length > 0 && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
-                    <button
-                      type="button"
-                      className="mov-btn mov-btn--loadAll"
-                      onClick={handleLoadAll}
-                      disabled={loadingMore || loadingAll || loadingListsCtx}
-                      title="Cargar todas las órdenes restantes"
-                    >
+                    <button type="button" className="mov-btn mov-btn--loadAll" onClick={handleLoadAll}
+                      disabled={loadingMore || loadingAll || loadingListsCtx} title="Cargar todas las órdenes restantes">
                       {loadingAll ? "Cargando todas…" : "Cargar todos"}
                     </button>
                   </div>
@@ -1283,41 +1043,26 @@ export default function OrdenesPago() {
         </div>
       </section>
 
-      {/* MODAL GLOBAL ver comprobante */}
+      {/* ===== MODALES ===== */}
       <ModalVerComprobante open={openVer} url={verUrl} onClose={closeVerModal} title={verTitle} />
 
       <ModalPagarOrdenesPago
-        open={openPagar}
-        onClose={closePagarModal}
-        proveedor={pagarProveedor}
-        deudas={pagarDeudas}
-        onToast={showToast}
-        onConfirm={onConfirmPago}
-        lists={lists}
-        onAfterComprobanteSaved={handleAfterComprobanteSaved}
+        open={openPagar} onClose={closePagarModal}
+        proveedor={pagarProveedor} deudas={pagarDeudas}
+        onToast={showToast} onConfirm={onConfirmPago}
+        lists={lists} onAfterComprobanteSaved={handleAfterComprobanteSaved}
       />
 
       <ModalEditarOrdenPago
-        open={openEditar}
-        row={editRow}
-        lists={lists}
-        periodoDefault={
-          dateRange?.from
-            ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}`
-            : ""
-        }
-        onClose={closeEditarModal}
-        onToast={showToast}
-        onSave={onSaveEditar}
+        open={openEditar} row={editRow} lists={lists}
+        periodoDefault={dateRange?.from ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}` : ""}
+        onClose={closeEditarModal} onToast={showToast} onSave={onSaveEditar}
       />
 
       <ModalEliminarMovimientos
-        open={openDel}
-        row={selectedRow}
+        open={openDel} row={selectedRow}
         loading={deletingId === selectedRow?.id_movimiento}
-        onClose={closeDeleteModal}
-        onConfirm={confirmDelete}
-        onToast={showToast}
+        onClose={closeDeleteModal} onConfirm={confirmDelete} onToast={showToast}
       />
     </div>
   );

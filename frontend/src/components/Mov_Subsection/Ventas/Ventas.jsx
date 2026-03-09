@@ -24,6 +24,8 @@ import {
   faFileExcel,
   faPenToSquare,
   faTrashCan,
+  faChevronDown,
+  faArrowRightLong,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -706,22 +708,34 @@ export default function Ventas() {
   /* =========================
      Label calendario
   ========================= */
-  const dateRangeLabel = useMemo(() => {
-    const { from, to } = dateRange;
-    if (!from && !to) return "Seleccionar fechas";
-    if (from && to) {
-      if (
-        from.getFullYear() === to.getFullYear() &&
-        from.getMonth() === to.getMonth() &&
-        from.getDate() === to.getDate()
-      ) {
-        return formatDateUI(from);
-      }
-      return `${formatDateUI(from)} → ${formatDateUI(to)}`;
+const dateRangeLabel = useMemo(() => {
+  const { from, to } = dateRange;
+
+  if (!from && !to) return "Seleccionar fechas";
+
+  if (from && to) {
+    if (
+      from.getFullYear() === to.getFullYear() &&
+      from.getMonth() === to.getMonth() &&
+      from.getDate() === to.getDate()
+    ) {
+      return formatDateUI(from);
     }
-    if (from) return `Desde ${formatDateUI(from)}`;
-    return `Hasta ${formatDateUI(to)}`;
-  }, [dateRange]);
+
+    return (
+      <>
+        <span>{formatDateUI(from)}</span>
+        <span className="mov-rangeArrow">
+          <FontAwesomeIcon icon={faArrowRightLong} />
+        </span>
+        <span>{formatDateUI(to)}</span>
+      </>
+    );
+  }
+
+  if (from) return `Desde ${formatDateUI(from)}`;
+  return `Hasta ${formatDateUI(to)}`;
+}, [dateRange]);
 
   /* =========================
      Export base name
@@ -1023,13 +1037,21 @@ export default function Ventas() {
         />
       )}
 
-      {errorListsCtx && <div className="mov-alert" role="alert">{errorListsCtx}</div>}
-      {error && <div className="mov-alert" role="alert">{error}</div>}
+      {errorListsCtx && (
+        <div className="mov-alert" role="alert">
+          {errorListsCtx}
+        </div>
+      )}
+      {error && (
+        <div className="mov-alert" role="alert">
+          {error}
+        </div>
+      )}
 
       <section className="mov-card mov-card--table">
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
-            <div>
+            <div className="title-mov">
               <div className="mov-card__title">Movimientos · Ventas</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> ventas
@@ -1038,35 +1060,26 @@ export default function Ventas() {
             </div>
 
             <div className="mov-headFilters">
-              <div className="mov-filter" style={{ position: "relative" }}>
-                <label>
-                  <FontAwesomeIcon icon={faCalendarDays} /> Fecha
-                </label>
-
+              <div className="mov-filter mov-filter--cal floatingField">
                 <button
                   type="button"
-                  className="mov-btn mov-btn--ghost"
-                  style={{ minWidth: 220, justifyContent: "flex-start", textAlign: "left" }}
+                  className={`mov-calTrigger  cc-calTrigger ${showCalendario ? "is-open" : ""}`}
                   onClick={() => setShowCalendario((v) => !v)}
                   disabled={isAnyLoading || loadingListsCtx}
                   title="Seleccionar rango de fechas"
                 >
                   {dateRangeLabel}
+                  <span className="mov-calTrigger__arrow">
+  <FontAwesomeIcon icon={faChevronDown} />
+</span>
                 </button>
 
+                <span className="floatingLabel floatingLabel--active">
+                  <FontAwesomeIcon icon={faCalendarDays} /> Período
+                </span>
+
                 {showCalendario && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      zIndex: 999,
-                      marginTop: 6,
-                      boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-                      borderRadius: 10,
-                      background: "var(--color-surface, #fff)",
-                    }}
-                  >
+                  <div className="mov-calDropdown">
                     <Calendario
                       value={dateRange}
                       onChange={async (newRange) => {
@@ -1081,12 +1094,14 @@ export default function Ventas() {
                 )}
               </div>
 
-              <div className="mov-search">
-                <label>
-                  <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                </label>
+              <div
+                className={`mov-search floatingField floatingField--search ${
+                  q.trim() ? "is-active" : ""
+                }`}
+              >
                 <div className="mov-searchInput">
                   <input
+                    className="mov-input--floating"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     onKeyDown={async (e) => {
@@ -1103,13 +1118,18 @@ export default function Ventas() {
                         });
                       }
                     }}
-                    placeholder="Buscar por fecha, cliente, descripción, monto…"
+                    placeholder=" "
                     disabled={loadingListsCtx || loadingAll}
                   />
+
+                  <span className="floatingLabel">
+                    <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                  </span>
+
                   {q.trim() !== "" && (
                     <button
                       type="button"
-                      className="mov-clearSearch"
+                      className="mov-clearSearch clearSearch--inside"
                       title="Limpiar búsqueda"
                       onClick={async () => {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -1134,7 +1154,10 @@ export default function Ventas() {
             </div>
           </div>
 
-          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div
+            className="mov-card__actions"
+            style={{ display: "flex", gap: 10, alignItems: "center" }}
+          >
             <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
               loading={loadingAll}
@@ -1209,7 +1232,9 @@ export default function Ventas() {
                           return (
                             <div
                               key={c.key}
-                              className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
+                              className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(
+                                " "
+                              )}
                               role="cell"
                               data-label={c.label}
                             >

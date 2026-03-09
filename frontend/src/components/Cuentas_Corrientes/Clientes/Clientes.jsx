@@ -1,6 +1,6 @@
 // src/components/Cuentas_Corrientes/Clientes/Clientes.jsx
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import BASE_URL from "../../../config/config";
@@ -237,6 +237,8 @@ export default function ClientesCC() {
   const [hasSearched, setHasSearched] = useState(false);
   const [queryUsed, setQueryUsed] = useState("");
   const [openSug, setOpenSug] = useState(false);
+  const tableBodyRef = useRef(null);
+const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
 
   const [rows, setRows] = useState([]);
   const [totales, setTotales] = useState({ debito: 0, credito: 0, saldo: 0 });
@@ -258,7 +260,31 @@ export default function ClientesCC() {
   useEffect(() => {
     ensureListsLoaded?.({ force: false, background: true }).catch(() => {});
   }, [ensureListsLoaded]);
+useEffect(() => {
+  const el = tableBodyRef.current;
+  if (!el) return;
 
+  const checkScroll = () => {
+    const hasScroll = el.scrollHeight > el.clientHeight + 1;
+    setHasVerticalScroll(hasScroll);
+  };
+
+  checkScroll();
+
+  const ro = new ResizeObserver(() => checkScroll());
+  ro.observe(el);
+
+  const mo = new MutationObserver(() => checkScroll());
+  mo.observe(el, { childList: true, subtree: true });
+
+  window.addEventListener("resize", checkScroll);
+
+  return () => {
+    ro.disconnect();
+    mo.disconnect();
+    window.removeEventListener("resize", checkScroll);
+  };
+}, [rows, loading]);
 const rangeLabel = useMemo(() => {
   const from = dateRange?.from || null;
   const to = dateRange?.to || null;
@@ -560,21 +586,14 @@ const rangeLabel = useMemo(() => {
       <div className="cc-card__head cc-card__head--module">
         <div className="cc-card__headLeft cc-card__headLeft--stack">
           <div className="cc-headTitle">
-            <div className="cc-card__title">Cuentas Corrientes</div>
+            <div className="cc-headTitle">
+  <div className="cc-card__title">Cuentas Corrientes</div>
 
-            <div className="cc-headFilters cc-headFilters--tabs">
-              <button type="button" className="cc-btnex cc-btnex--tab is-open">
-                Clientes
-              </button>
+  <div className="mov-card__hint">
+    Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
+  </div>
+</div>
 
-              <button
-                type="button"
-                className="cc-btnex cc-btnex--tab"
-                onClick={() => navigate("/panel/cuentas-corrientes/proveedores")}
-              >
-                Proveedores
-              </button>
-            </div>
           </div>
 
 <div className="cc-headFilters">
@@ -721,7 +740,10 @@ const rangeLabel = useMemo(() => {
           <div className="mov-gridCell mov-gridCell--head is-center">Ver</div>
         </div>
 
-        <div className="cc-cliente-table__body">
+        <div
+  ref={tableBodyRef}
+  className={`cc-cliente-table__body ${!hasVerticalScroll ? "cc-cliente-table__body--stable" : ""}`}
+>
           {loading ? (
             <div className="cc-cliente-table__loading">
               Cargando cuenta corriente del cliente…
@@ -807,6 +829,7 @@ const rangeLabel = useMemo(() => {
         <div className="cc-cliente-table__footWrap">
           <div className="cc-cliente-table__totals">
             <div className="cc-cliente-table__cell">Totales</div>
+                        <div className="cc-cliente-table__cell"></div>
 
             <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
               {moneyARS(totales?.debito || 0)}
@@ -819,6 +842,7 @@ const rangeLabel = useMemo(() => {
             <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
               {moneyARS(totales?.saldo || 0)}
             </div>
+            <div className="cc-cliente-table__cell"></div>
           </div>
         </div>
       </div>

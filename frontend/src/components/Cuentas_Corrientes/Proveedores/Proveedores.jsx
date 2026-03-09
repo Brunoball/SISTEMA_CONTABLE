@@ -583,20 +583,10 @@ const rangeLabel = useMemo(() => {
         <div className="cc-card__headLeft cc-card__headLeft--stack">
           <div className="cc-headTitle">
             <div className="cc-card__title">Cuentas Corrientes</div>
+  <div className="mov-card__hint">
+    Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
+  </div>
 
-            <div className="cc-headFilters cc-headFilters--tabs">
-              <button
-                type="button"
-                className="cc-btnex cc-btnex--tab"
-                onClick={() => navigate("/panel/cuentas-corrientes/clientes")}
-              >
-                Clientes
-              </button>
-
-              <button type="button" className="cc-btnex cc-btnex--tab is-open">
-                Proveedores
-              </button>
-            </div>
           </div>
 
 <div className="cc-headFilters">
@@ -824,6 +814,7 @@ const rangeLabel = useMemo(() => {
         <div className="cc-cliente-table__footWrap">
           <div className="cc-cliente-table__totals">
             <div className="cc-cliente-table__cell">Totales</div>
+            <div className="cc-cliente-table__cell"></div>
             <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
               {moneyARS(totales?.debito || 0)}
             </div>
@@ -832,7 +823,9 @@ const rangeLabel = useMemo(() => {
             </div>
             <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
               {moneyARS(totales?.saldo || 0)}
+
             </div>
+            <div className="cc-cliente-table__cell"></div>
           </div>
         </div>
       </div>

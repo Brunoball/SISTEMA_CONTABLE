@@ -42,7 +42,7 @@ function cc_like_term(string $s): string {
 function cc_format_date(?string $date): string {
   if (!$date) return '';
   $ts = strtotime($date);
-  if (!$ts) return $date;
+  if (!$ts) return (string)$date;
   return date('d/m/Y', $ts);
 }
 
@@ -50,8 +50,8 @@ function cc_sign_from_nombre(string $nombre): int {
   $n = mb_strtolower(trim($nombre), 'UTF-8');
   $n = str_replace(['á','é','í','ó','ú','ü','ñ'], ['a','e','i','o','u','u','n'], $n);
 
-  if (str_contains($n, 'credito')) return +1;
-  if (str_contains($n, 'debito'))  return -1;
+  if (strpos($n, 'credito') !== false) return +1;
+  if (strpos($n, 'debito') !== false)  return -1;
   return 0;
 }
 
@@ -128,6 +128,118 @@ function cc_pick_comprobante_url(array $row): string
 }
 
 /* =========================
+   Helpers comprobantes
+========================= */
+function cc_get_movimiento_docs_map(PDO $pdo, array $movIds): array
+{
+  $movIds = array_values(array_unique(array_filter(array_map('intval', $movIds), static function($n) {
+    return $n > 0;
+  })));
+
+  if (!$movIds) return [];
+
+  $placeholders = implode(',', array_fill(0, count($movIds), '?'));
+
+  $sql = "
+    SELECT
+      mc.id_movimiento,
+      mc.id_comprobante,
+      mc.tipo_relacion,
+      mc.principal,
+      ca.tipo AS archivo_tipo,
+      ca.archivo_url,
+      ca.archivo_path,
+      ca.archivo_mime,
+      ca.archivo_size
+    FROM movimientos_comprobantes mc
+    INNER JOIN comprobantes_archivos ca
+      ON ca.id_comprobante = mc.id_comprobante
+    WHERE mc.id_movimiento IN ($placeholders)
+    ORDER BY
+      mc.id_movimiento ASC,
+      CASE
+        WHEN mc.tipo_relacion = 'FACTURA' AND mc.principal = 1 THEN 0
+        WHEN mc.tipo_relacion = 'FACTURA' THEN 1
+        WHEN mc.principal = 1 THEN 2
+        WHEN mc.tipo_relacion = 'NOTA_DEBITO' THEN 3
+        WHEN mc.tipo_relacion = 'NOTA_CREDITO' THEN 4
+        ELSE 9
+      END ASC,
+      mc.id_movimiento_comprobante DESC
+  ";
+
+  $st = $pdo->prepare($sql);
+  $st->execute($movIds);
+  $docs = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+  $map = [];
+  foreach ($docs as $d) {
+    $idMov = (int)($d['id_movimiento'] ?? 0);
+    if ($idMov <= 0) continue;
+
+    if (!isset($map[$idMov])) {
+      $map[$idMov] = [
+        'id_comprobante'   => (int)($d['id_comprobante'] ?? 0),
+        'tipo_relacion'    => cc_safe_text($d['tipo_relacion'] ?? ''),
+        'principal'        => (int)($d['principal'] ?? 0),
+        'comprobante_url'  => cc_pick_comprobante_url($d),
+        'comprobante_mime' => cc_safe_text($d['archivo_mime'] ?? ''),
+        'archivo_tipo'     => cc_safe_text($d['archivo_tipo'] ?? ''),
+        'archivo_path'     => cc_safe_text($d['archivo_path'] ?? ''),
+        'archivo_size'     => isset($d['archivo_size']) ? (int)$d['archivo_size'] : null,
+      ];
+    }
+  }
+
+  return $map;
+}
+
+function cc_get_cobros_by_movimiento(PDO $pdo, array $movIds): array
+{
+  $movIds = array_values(array_unique(array_filter(array_map('intval', $movIds), static function($n) {
+    return $n > 0;
+  })));
+
+  if (!$movIds) return [];
+
+  $in = implode(',', array_fill(0, count($movIds), '?'));
+
+  $sqlCobros = "
+    SELECT
+      c.id_cobro,
+      c.id_movimiento,
+      c.fecha_cobro,
+      c.monto,
+      c.id_comprobante,
+      c.id_medio_pago,
+      ca.archivo_url,
+      ca.archivo_path,
+      ca.archivo_mime,
+      ca.archivo_size,
+      ca.tipo AS tipo_archivo
+    FROM cobros c
+    LEFT JOIN comprobantes_archivos ca
+      ON ca.id_comprobante = c.id_comprobante
+    WHERE c.id_movimiento IN ($in)
+    ORDER BY c.fecha_cobro ASC, c.id_cobro ASC
+  ";
+
+  $stCob = $pdo->prepare($sqlCobros);
+  $stCob->execute($movIds);
+  $cobros = $stCob->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+  $cobrosByMov = [];
+  foreach ($cobros as $c) {
+    $mid = (int)($c['id_movimiento'] ?? 0);
+    if ($mid <= 0) continue;
+    if (!isset($cobrosByMov[$mid])) $cobrosByMov[$mid] = [];
+    $cobrosByMov[$mid][] = $c;
+  }
+
+  return $cobrosByMov;
+}
+
+/* =========================
    Historial tipo cuenta corriente
    - Un movimiento genera DÉBITO
    - Un cobro del movimiento genera CRÉDITO
@@ -178,15 +290,8 @@ function cc_historial_por_entidad(PDO $pdo, array $cfg): array
       m.id_cuenta_corriente,
       m.id_detalle,
       m.id_medio_pago,
-      m.id_comprobante,
-      cam.archivo_url  AS mov_archivo_url,
-      cam.archivo_path AS mov_archivo_path,
-      cam.archivo_mime AS mov_archivo_mime,
-      cam.archivo_size AS mov_archivo_size,
-      cam.tipo         AS mov_tipo_archivo
+      m.id_comprobante
     FROM movimientos m
-    LEFT JOIN comprobantes_archivos cam
-      ON cam.id_comprobante = m.id_comprobante
     WHERE m.{$idField} = :entityId
       AND m.id_tipo_operacion = :tipoOperacion
       AND m.id_tipo_venta = :tipoVenta
@@ -208,47 +313,17 @@ function cc_historial_por_entidad(PDO $pdo, array $cfg): array
     ];
   }
 
-  $movIds = array_map(
-    static fn($r) => (int)$r['id_movimiento'],
-    $movimientos
-  );
-  $movIds = array_values(array_filter($movIds, static fn($n) => $n > 0));
+  $movIds = array_values(array_filter(array_map(static function($r) {
+    return (int)($r['id_movimiento'] ?? 0);
+  }, $movimientos), static function($n) {
+    return $n > 0;
+  }));
 
-  $cobrosByMov = [];
-  if ($movIds) {
-    $in = implode(',', array_fill(0, count($movIds), '?'));
+  // ✅ NUEVO: docs documentales del movimiento (facturas/notas/etc.)
+  $movDocsMap = cc_get_movimiento_docs_map($pdo, $movIds);
 
-    $sqlCobros = "
-      SELECT
-        c.id_cobro,
-        c.id_movimiento,
-        c.fecha_cobro,
-        c.monto,
-        c.id_comprobante,
-        c.id_medio_pago,
-        ca.archivo_url,
-        ca.archivo_path,
-        ca.archivo_mime,
-        ca.archivo_size,
-        ca.tipo AS tipo_archivo
-      FROM cobros c
-      LEFT JOIN comprobantes_archivos ca
-        ON ca.id_comprobante = c.id_comprobante
-      WHERE c.id_movimiento IN ($in)
-      ORDER BY c.fecha_cobro ASC, c.id_cobro ASC
-    ";
-
-    $stCob = $pdo->prepare($sqlCobros);
-    $stCob->execute($movIds);
-    $cobros = $stCob->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-    foreach ($cobros as $c) {
-      $mid = (int)($c['id_movimiento'] ?? 0);
-      if ($mid <= 0) continue;
-      if (!isset($cobrosByMov[$mid])) $cobrosByMov[$mid] = [];
-      $cobrosByMov[$mid][] = $c;
-    }
-  }
+  // ✅ Cobros del movimiento (recibos)
+  $cobrosByMov = cc_get_cobros_by_movimiento($pdo, $movIds);
 
   $ledger = [];
 
@@ -257,54 +332,89 @@ function cc_historial_por_entidad(PDO $pdo, array $cfg): array
     $fecha            = (string)($m['fecha'] ?? '');
     $periodo          = cc_safe_text($m['periodo'] ?? '');
     $monto            = (float)($m['monto_total'] ?? 0);
-    $idComprobanteMov = (int)($m['id_comprobante'] ?? 0);
-    $movUrl           = cc_pick_comprobante_url([
-      'archivo_url'  => $m['mov_archivo_url'] ?? '',
-      'archivo_path' => $m['mov_archivo_path'] ?? '',
-    ]);
-    $movMime          = cc_safe_text($m['mov_archivo_mime'] ?? '');
 
-    $comprobanteMovimiento = $entityType === 'cliente'
-      ? 'Factura / Movimiento #' . $idMov
-      : 'Comprobante / Movimiento #' . $idMov;
+    $docMov = $movDocsMap[$idMov] ?? null;
+
+    // fallback viejo: por si todavía hay algo guardado en movimientos.id_comprobante
+    $idComprobanteMov = $docMov
+      ? (int)($docMov['id_comprobante'] ?? 0)
+      : (int)($m['id_comprobante'] ?? 0);
+
+    $movUrl = $docMov
+      ? cc_safe_text($docMov['comprobante_url'] ?? '')
+      : '';
+
+    $movMime = $docMov
+      ? cc_safe_text($docMov['comprobante_mime'] ?? '')
+      : '';
+
+    $movTipoRelacion = $docMov
+      ? cc_safe_text($docMov['tipo_relacion'] ?? '')
+      : '';
+
+    $comprobanteMovimiento = '';
+    if ($entityType === 'cliente') {
+      if ($movTipoRelacion === 'FACTURA') {
+        $comprobanteMovimiento = 'Factura / Movimiento #' . $idMov;
+      } elseif ($movTipoRelacion === 'NOTA_CREDITO') {
+        $comprobanteMovimiento = 'Nota de crédito / Movimiento #' . $idMov;
+      } elseif ($movTipoRelacion === 'NOTA_DEBITO') {
+        $comprobanteMovimiento = 'Nota de débito / Movimiento #' . $idMov;
+      } else {
+        $comprobanteMovimiento = 'Factura / Movimiento #' . $idMov;
+      }
+    } else {
+      if ($movTipoRelacion === 'FACTURA') {
+        $comprobanteMovimiento = 'Factura proveedor / Movimiento #' . $idMov;
+      } elseif ($movTipoRelacion === 'NOTA_CREDITO') {
+        $comprobanteMovimiento = 'Nota de crédito proveedor / Movimiento #' . $idMov;
+      } elseif ($movTipoRelacion === 'NOTA_DEBITO') {
+        $comprobanteMovimiento = 'Nota de débito proveedor / Movimiento #' . $idMov;
+      } else {
+        $comprobanteMovimiento = 'Comprobante / Movimiento #' . $idMov;
+      }
+    }
 
     if ($periodo !== '') {
       $comprobanteMovimiento .= ' · ' . $periodo;
     }
 
-    // ✅ fila DÉBITO (ahora también trae id_comprobante del movimiento)
+    // ✅ fila DÉBITO: usa movimientos_comprobantes si existe
     $ledger[] = [
-      'tipo_registro'   => 'movimiento',
-      'id'              => 'mov_' . $idMov,
-      'id_movimiento'   => $idMov,
-      'id_cobro'        => null,
-      'id_comprobante'  => $idComprobanteMov > 0 ? $idComprobanteMov : null,
-      'fecha_raw'       => $fecha,
-      'fecha'           => cc_format_date($fecha),
-      'comprobante'     => $comprobanteMovimiento,
-      'detalle'         => $entityType === 'cliente'
+      'tipo_registro'    => 'movimiento',
+      'id'               => 'mov_' . $idMov,
+      'id_movimiento'    => $idMov,
+      'id_cobro'         => null,
+      'id_comprobante'   => $idComprobanteMov > 0 ? $idComprobanteMov : null,
+      'fecha_raw'        => $fecha,
+      'fecha'            => cc_format_date($fecha),
+      'comprobante'      => $comprobanteMovimiento,
+      'detalle'          => $entityType === 'cliente'
         ? 'Cargo generado al cliente'
         : 'Cargo generado al proveedor',
-      'debito'          => $monto,
-      'credito'         => 0,
-      'comprobante_url' => $movUrl,
-      'comprobante_mime'=> $movMime,
-      'sort_fecha'      => $fecha ?: '0000-00-00',
-      'sort_tipo'       => 1,
-      'meta'            => [
-        'periodo'         => $periodo,
-        'id_detalle'      => $m['id_detalle'] ?? null,
-        'id_medio_pago'   => $m['id_medio_pago'] ?? null,
-        'id_comprobante'  => $m['id_comprobante'] ?? null,
-        'archivo_url'     => $m['mov_archivo_url'] ?? null,
-        'archivo_path'    => $m['mov_archivo_path'] ?? null,
-        'archivo_mime'    => $m['mov_archivo_mime'] ?? null,
-        'archivo_size'    => $m['mov_archivo_size'] ?? null,
-        'tipo_archivo'    => $m['mov_tipo_archivo'] ?? null,
+      'debito'           => $monto,
+      'credito'          => 0,
+      'comprobante_url'  => $movUrl,
+      'comprobante_mime' => $movMime,
+      'sort_fecha'       => $fecha ?: '0000-00-00',
+      'sort_tipo'        => 1,
+      'meta'             => [
+        'periodo'          => $periodo,
+        'id_detalle'       => $m['id_detalle'] ?? null,
+        'id_medio_pago'    => $m['id_medio_pago'] ?? null,
+        'id_comprobante'   => $idComprobanteMov > 0 ? $idComprobanteMov : null,
+        'tipo_relacion'    => $movTipoRelacion,
+        'principal'        => $docMov['principal'] ?? null,
+        'archivo_url'      => $docMov['comprobante_url'] ?? null,
+        'archivo_path'     => $docMov['archivo_path'] ?? null,
+        'archivo_mime'     => $movMime,
+        'archivo_size'     => $docMov['archivo_size'] ?? null,
+        'tipo_archivo'     => $docMov['archivo_tipo'] ?? null,
+        'origen_documento' => $docMov ? 'movimientos_comprobantes' : ((int)($m['id_comprobante'] ?? 0) > 0 ? 'movimientos.id_comprobante' : null),
       ],
     ];
 
-    // ✅ filas CRÉDITO por cobros
+    // ✅ filas CRÉDITO por cobros: usan cobros.id_comprobante
     $cobrosDelMovimiento = $cobrosByMov[$idMov] ?? [];
     foreach ($cobrosDelMovimiento as $c) {
       $fechaCobro      = (string)($c['fecha_cobro'] ?? '');
@@ -315,29 +425,30 @@ function cc_historial_por_entidad(PDO $pdo, array $cfg): array
       $comprobanteMime = cc_safe_text($c['archivo_mime'] ?? '');
 
       $ledger[] = [
-        'tipo_registro'   => 'cobro',
-        'id'              => 'cob_' . $idCobro,
-        'id_movimiento'   => $idMov,
-        'id_cobro'        => $idCobro,
-        'id_comprobante'  => $idComprobante > 0 ? $idComprobante : null,
-        'fecha_raw'       => $fechaCobro,
-        'fecha'           => cc_format_date($fechaCobro),
-        'comprobante'     => 'Recibo X-' . str_pad((string)$idCobro, 3, '0', STR_PAD_LEFT),
-        'detalle'         => 'Cancelación / pago del movimiento #' . $idMov,
-        'debito'          => 0,
-        'credito'         => $montoCobro,
-        'comprobante_url' => $comprobanteUrl,
-        'comprobante_mime'=> $comprobanteMime,
-        'sort_fecha'      => $fechaCobro ?: '0000-00-00',
-        'sort_tipo'       => 2,
-        'meta'            => [
-          'id_comprobante' => $c['id_comprobante'] ?? null,
-          'id_medio_pago'  => $c['id_medio_pago'] ?? null,
-          'archivo_url'    => $c['archivo_url'] ?? null,
-          'archivo_path'   => $c['archivo_path'] ?? null,
-          'archivo_mime'   => $c['archivo_mime'] ?? null,
-          'archivo_size'   => $c['archivo_size'] ?? null,
-          'tipo_archivo'   => $c['tipo_archivo'] ?? null,
+        'tipo_registro'    => 'cobro',
+        'id'               => 'cob_' . $idCobro,
+        'id_movimiento'    => $idMov,
+        'id_cobro'         => $idCobro,
+        'id_comprobante'   => $idComprobante > 0 ? $idComprobante : null,
+        'fecha_raw'        => $fechaCobro,
+        'fecha'            => cc_format_date($fechaCobro),
+        'comprobante'      => 'Recibo X-' . str_pad((string)$idCobro, 3, '0', STR_PAD_LEFT),
+        'detalle'          => 'Cancelación / pago del movimiento #' . $idMov,
+        'debito'           => 0,
+        'credito'          => $montoCobro,
+        'comprobante_url'  => $comprobanteUrl,
+        'comprobante_mime' => $comprobanteMime,
+        'sort_fecha'       => $fechaCobro ?: '0000-00-00',
+        'sort_tipo'        => 2,
+        'meta'             => [
+          'id_comprobante'   => $c['id_comprobante'] ?? null,
+          'id_medio_pago'    => $c['id_medio_pago'] ?? null,
+          'archivo_url'      => $c['archivo_url'] ?? null,
+          'archivo_path'     => $c['archivo_path'] ?? null,
+          'archivo_mime'     => $c['archivo_mime'] ?? null,
+          'archivo_size'     => $c['archivo_size'] ?? null,
+          'tipo_archivo'     => $c['tipo_archivo'] ?? null,
+          'origen_documento' => 'cobros.id_comprobante',
         ],
       ];
     }

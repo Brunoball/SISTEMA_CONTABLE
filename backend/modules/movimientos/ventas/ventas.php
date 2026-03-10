@@ -22,32 +22,41 @@ function ok(array $arr = []): void {
   echo json_encode(array_merge(['exito' => true], $arr), JSON_UNESCAPED_UNICODE);
   exit;
 }
+
 function fail(string $msg, int $httpCode = 200, array $extra = []): void {
   http_response_code($httpCode);
   echo json_encode(array_merge(['exito' => false, 'mensaje' => $msg], $extra), JSON_UNESCAPED_UNICODE);
   exit;
 }
+
 function read_json_body(): array {
   $raw = file_get_contents('php://input');
   if (!$raw) return [];
   $data = json_decode($raw, true);
   return is_array($data) ? $data : [];
 }
+
 function n_int($v): ?int {
   if ($v === null || $v === '') return null;
   if (!is_numeric($v)) return null;
   $n = (int)$v;
   return $n >= 0 ? $n : null;
 }
+
 function n_float($v): ?float {
   if ($v === null || $v === '') return null;
   if (!is_numeric($v)) return null;
   return (float)$v;
 }
-function today_iso(): string { return date('Y-m-d'); }
+
+function today_iso(): string {
+  return date('Y-m-d');
+}
+
 function is_valid_fecha(string $f): bool {
   return (bool)preg_match('/^\d{4}\-\d{2}\-\d{2}$/', $f);
 }
+
 function norm_text(string $s): string {
   $s = mb_strtolower(trim($s), 'UTF-8');
   $s = str_replace(
@@ -73,6 +82,7 @@ function get_header_value(string $key): string {
   if (!is_string($v)) $v = '';
   return trim($v);
 }
+
 function get_bearer_token(): string {
   $h = get_header_value('Authorization');
   if ($h === '') $h = trim((string)($_SERVER['HTTP_AUTHORIZATION'] ?? ''));
@@ -80,6 +90,7 @@ function get_bearer_token(): string {
   if (stripos($h, 'Bearer ') === 0) return trim(substr($h, 7));
   return '';
 }
+
 function base64url_decode(string $s): string {
   $s = str_replace(['-', '_'], ['+', '/'], $s);
   $pad = strlen($s) % 4;
@@ -87,6 +98,7 @@ function base64url_decode(string $s): string {
   $out = base64_decode($s, true);
   return $out === false ? '' : $out;
 }
+
 function get_id_usuario_from_x_session(PDO $pdo): int {
   $sessionKey = get_header_value('X-Session');
   if ($sessionKey === '') return 0;
@@ -110,8 +122,8 @@ function get_id_usuario_from_x_session(PDO $pdo): int {
     return 0;
   }
 }
+
 function get_id_usuario_from_request(PDO $pdo, array $body = []): int {
-  // 1) JWT
   $token = get_bearer_token();
   if ($token !== '' && substr_count($token, '.') === 2) {
     $parts = explode('.', $token);
@@ -135,14 +147,12 @@ function get_id_usuario_from_request(PDO $pdo, array $body = []): int {
     }
   }
 
-  // 2) body / post / get
   $id = $body['idUsuario'] ?? $body['id_usuario'] ?? $_POST['idUsuario'] ?? $_GET['idUsuario'] ?? null;
   if (is_numeric($id)) {
     $id = (int)$id;
     if ($id > 0) return $id;
   }
 
-  // 3) X-Session
   $idSess = get_id_usuario_from_x_session($pdo);
   if ($idSess > 0) return $idSess;
 
@@ -171,10 +181,12 @@ function get_tipo_venta_nombre(PDO $pdo, ?int $idTipoVenta): string {
   $row = $st->fetch(PDO::FETCH_ASSOC);
   return isset($row['nombre']) ? (string)$row['nombre'] : '';
 }
+
 function tipo_venta_is_contado(string $nombre): bool {
   $n = norm_text($nombre);
   return (strpos($n, 'contado') !== false) || (strpos($n, 'efectivo') !== false);
 }
+
 function tipo_venta_is_corriente(string $nombre): bool {
   $n = norm_text($nombre);
   return (strpos($n, 'corriente') !== false) || (strpos($n, 'cuenta corriente') !== false);
@@ -283,10 +295,132 @@ function validar_venta_or_fail(PDO $pdo, array $src): array {
 }
 
 /* =========================================================
+   Helpers comprobantes/documentos de venta
+========================================================= */
+function has_table(PDO $pdo, string $table): bool {
+  try {
+    $st = $pdo->prepare("SHOW TABLES LIKE :t");
+    $st->execute([':t' => $table]);
+    return (bool)$st->fetchColumn();
+  } catch (Throwable $e) {
+    return false;
+  }
+}
+
+/**
+ * ✅ FACTURA:
+ * se obtiene SIEMPRE desde movimientos_comprobantes para ese id_movimiento
+ * tipo_relacion = FACTURA
+ * principal = 1 prioritario; si no existe, toma el último
+ *
+ * ✅ RECIBO:
+ * sale del último cobro asociado a ese movimiento
+ */
+function ventas_join_documentos(PDO $pdo): array {
+  $hasMovComp = has_table($pdo, 'movimientos_comprobantes');
+
+  if ($hasMovComp) {
+    return [
+      'join_sql' => "
+        LEFT JOIN (
+          SELECT mcx.id_movimiento, mcx.id_comprobante
+          FROM movimientos_comprobantes mcx
+          INNER JOIN (
+            SELECT
+              id_movimiento,
+              COALESCE(
+                MAX(CASE WHEN tipo_relacion = 'FACTURA' AND principal = 1 THEN id_movimiento_comprobante END),
+                MAX(CASE WHEN tipo_relacion = 'FACTURA' THEN id_movimiento_comprobante END)
+              ) AS pick_id
+            FROM movimientos_comprobantes
+            GROUP BY id_movimiento
+          ) pick
+            ON pick.pick_id = mcx.id_movimiento_comprobante
+        ) mcfac ON mcfac.id_movimiento = m.id_movimiento
+
+        LEFT JOIN comprobantes_archivos cafac
+          ON cafac.id_comprobante = mcfac.id_comprobante
+
+        LEFT JOIN (
+          SELECT
+            cbx.id_movimiento,
+            cbx.id_cobro,
+            cbx.id_comprobante,
+            cbx.fecha_cobro,
+            cbx.created_at
+          FROM cobros cbx
+          INNER JOIN (
+            SELECT id_movimiento, MAX(id_cobro) AS max_id_cobro
+            FROM cobros
+            GROUP BY id_movimiento
+          ) cbu ON cbu.max_id_cobro = cbx.id_cobro
+        ) cbult ON cbult.id_movimiento = m.id_movimiento
+
+        LEFT JOIN comprobantes_archivos carec
+          ON carec.id_comprobante = cbult.id_comprobante
+      ",
+      'select_sql' => "
+        COALESCE(mcfac.id_comprobante, 0) AS factura_id_comprobante,
+        COALESCE(cafac.archivo_url, '') AS factura_comprobante_url,
+        COALESCE(cafac.archivo_mime, '') AS factura_comprobante_mime,
+        COALESCE(cafac.tipo, '') AS factura_comprobante_tipo,
+
+        COALESCE(cbult.id_cobro, 0) AS recibo_id_cobro,
+        COALESCE(cbult.id_comprobante, 0) AS recibo_id_comprobante,
+        COALESCE(cbult.fecha_cobro, '') AS recibo_fecha_cobro,
+        COALESCE(carec.archivo_url, '') AS recibo_comprobante_url,
+        COALESCE(carec.archivo_mime, '') AS recibo_comprobante_mime,
+        COALESCE(carec.tipo, '') AS recibo_comprobante_tipo
+      ",
+    ];
+  }
+
+  return [
+    'join_sql' => "
+      LEFT JOIN comprobantes_archivos cafac
+        ON cafac.id_comprobante = m.id_comprobante
+
+      LEFT JOIN (
+        SELECT
+          cbx.id_movimiento,
+          cbx.id_cobro,
+          cbx.id_comprobante,
+          cbx.fecha_cobro,
+          cbx.created_at
+        FROM cobros cbx
+        INNER JOIN (
+          SELECT id_movimiento, MAX(id_cobro) AS max_id_cobro
+          FROM cobros
+          GROUP BY id_movimiento
+        ) cbu ON cbu.max_id_cobro = cbx.id_cobro
+      ) cbult ON cbult.id_movimiento = m.id_movimiento
+
+      LEFT JOIN comprobantes_archivos carec
+        ON carec.id_comprobante = cbult.id_comprobante
+    ",
+    'select_sql' => "
+      COALESCE(m.id_comprobante, 0) AS factura_id_comprobante,
+      COALESCE(cafac.archivo_url, '') AS factura_comprobante_url,
+      COALESCE(cafac.archivo_mime, '') AS factura_comprobante_mime,
+      COALESCE(cafac.tipo, '') AS factura_comprobante_tipo,
+
+      COALESCE(cbult.id_cobro, 0) AS recibo_id_cobro,
+      COALESCE(cbult.id_comprobante, 0) AS recibo_id_comprobante,
+      COALESCE(cbult.fecha_cobro, '') AS recibo_fecha_cobro,
+      COALESCE(carec.archivo_url, '') AS recibo_comprobante_url,
+      COALESCE(carec.archivo_mime, '') AS recibo_comprobante_mime,
+      COALESCE(carec.tipo, '') AS recibo_comprobante_tipo
+    ",
+  ];
+}
+
+/* =========================================================
    LISTAR VENTAS (GET)
 ========================================================= */
 function ventas_listar(PDO $pdo): void {
-  $q       = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+  $q = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+  $fechaDesde = isset($_GET['fecha_desde']) ? trim((string)$_GET['fecha_desde']) : '';
+  $fechaHasta = isset($_GET['fecha_hasta']) ? trim((string)$_GET['fecha_hasta']) : '';
 
   $limit  = isset($_GET['limit'])  ? (int)$_GET['limit']  : 100;
   $offset = isset($_GET['offset']) ? (int)$_GET['offset'] : 0;
@@ -310,10 +444,21 @@ function ventas_listar(PDO $pdo): void {
   $where[] = "(m.id_proveedor IS NULL OR m.id_proveedor = 0)";
   $where[] = "m.id_tipo_venta IS NOT NULL";
 
+  if ($fechaDesde !== '' && is_valid_fecha($fechaDesde)) {
+    $where[] = "m.fecha >= :fecha_desde";
+    $params[':fecha_desde'] = $fechaDesde;
+  }
+
+  if ($fechaHasta !== '' && is_valid_fecha($fechaHasta)) {
+    $where[] = "m.fecha <= :fecha_hasta";
+    $params[':fecha_hasta'] = $fechaHasta;
+  }
+
   $sql = "
     SELECT
       m.id_movimiento,
       m.fecha,
+      m.periodo,
 
       m.id_tipo_operacion,
       m.id_clasificacion,
@@ -323,7 +468,7 @@ function ventas_listar(PDO $pdo): void {
       m.id_detalle,
       m.monto_total,
       m.id_medio_pago,
-      m.id_comprobante,
+      m.id_comprobante AS id_comprobante_legacy,
 
       fi.id_detalle AS item_id_detalle,
       fi.cantidad   AS item_cantidad,
@@ -339,12 +484,29 @@ function ventas_listar(PDO $pdo): void {
       COALESCE(tv.nombre,'') AS tipo_venta,
       COALESCE(cl.nombre,'') AS cliente,
       COALESCE(pr.nombre,'') AS proveedor,
-
       COALESCE(di.nombre, d.nombre, '') AS detalle,
       COALESCE(mp.nombre,'') AS medio_pago_nombre,
-
       COALESCE(tope.nombre,'') AS tipo_operacion_nombre,
-      COALESCE(ca.archivo_url,'') AS comprobante_url,
+
+      /* ✅ FACTURA PRINCIPAL DEL MOVIMIENTO */
+      mc_fact.id_comprobante AS factura_id_comprobante,
+      COALESCE(ca_fact.archivo_url, '') AS factura_comprobante_url,
+      COALESCE(ca_fact.archivo_mime, '') AS factura_comprobante_mime,
+      COALESCE(ca_fact.tipo, '') AS factura_comprobante_tipo,
+
+      /* ✅ RECIBO DEL ÚLTIMO COBRO */
+      cbult.id_cobro AS recibo_id_cobro,
+      cbult.id_comprobante AS recibo_id_comprobante,
+      COALESCE(cbult.fecha_cobro, '') AS recibo_fecha_cobro,
+      COALESCE(ca_rec.archivo_url, '') AS recibo_comprobante_url,
+      COALESCE(ca_rec.archivo_mime, '') AS recibo_comprobante_mime,
+      COALESCE(ca_rec.tipo, '') AS recibo_comprobante_tipo,
+
+      /* ✅ DEBUG */
+      CASE
+        WHEN mc_fact.id_comprobante IS NOT NULL THEN 'SI'
+        ELSE 'NO'
+      END AS debug_factura_join,
 
       m.created_at
     FROM movimientos m
@@ -355,7 +517,6 @@ function ventas_listar(PDO $pdo): void {
       LEFT JOIN proveedores pr         ON pr.id_proveedor = m.id_proveedor
       LEFT JOIN detalles d             ON d.id_detalle = m.id_detalle
       LEFT JOIN medios_pago mp         ON mp.id_medio_pago = m.id_medio_pago
-      LEFT JOIN comprobantes_archivos ca ON ca.id_comprobante = m.id_comprobante
 
       LEFT JOIN (
         SELECT id_movimiento, SUM(total) AS total_sum
@@ -374,16 +535,41 @@ function ventas_listar(PDO $pdo): void {
       ) fi ON fi.id_movimiento = m.id_movimiento
 
       LEFT JOIN detalles di ON di.id_detalle = fi.id_detalle
+
+      /* ✅ FACTURA PRINCIPAL */
+      LEFT JOIN movimientos_comprobantes mc_fact
+        ON mc_fact.id_movimiento = m.id_movimiento
+       AND mc_fact.tipo_relacion = 'FACTURA'
+       AND mc_fact.principal = 1
+
+      LEFT JOIN comprobantes_archivos ca_fact
+        ON ca_fact.id_comprobante = mc_fact.id_comprobante
+
+      /* ✅ ÚLTIMO COBRO */
+      LEFT JOIN (
+        SELECT c1.*
+        FROM cobros c1
+        INNER JOIN (
+          SELECT id_movimiento, MAX(id_cobro) AS max_id_cobro
+          FROM cobros
+          GROUP BY id_movimiento
+        ) c2
+          ON c2.id_movimiento = c1.id_movimiento
+         AND c2.max_id_cobro = c1.id_cobro
+      ) cbult ON cbult.id_movimiento = m.id_movimiento
+
+      LEFT JOIN comprobantes_archivos ca_rec
+        ON ca_rec.id_comprobante = cbult.id_comprobante
   ";
 
   if ($q !== '') {
     $like = '%' . $q . '%';
     $where[] = "(
-      UPPER(COALESCE(c.nombre,''))   LIKE UPPER(:q1) OR
-      UPPER(COALESCE(tv.nombre,''))  LIKE UPPER(:q2) OR
-      UPPER(COALESCE(cl.nombre,''))  LIKE UPPER(:q3) OR
+      UPPER(COALESCE(c.nombre,'')) LIKE UPPER(:q1) OR
+      UPPER(COALESCE(tv.nombre,'')) LIKE UPPER(:q2) OR
+      UPPER(COALESCE(cl.nombre,'')) LIKE UPPER(:q3) OR
       UPPER(COALESCE(di.nombre, d.nombre,'')) LIKE UPPER(:q4) OR
-      UPPER(COALESCE(mp.nombre,''))  LIKE UPPER(:q5)
+      UPPER(COALESCE(mp.nombre,'')) LIKE UPPER(:q5)
     )";
     $params[':q1'] = $like;
     $params[':q2'] = $like;
@@ -397,11 +583,13 @@ function ventas_listar(PDO $pdo): void {
   $sql .= " LIMIT :lim OFFSET :off";
 
   $stmt = $pdo->prepare($sql);
-  foreach ($params as $k => $v) $stmt->bindValue($k, $v);
+  foreach ($params as $k => $v) {
+    $stmt->bindValue($k, $v);
+  }
   $stmt->bindValue(':lim', $limitPlus, PDO::PARAM_INT);
   $stmt->bindValue(':off', $offset, PDO::PARAM_INT);
-
   $stmt->execute();
+
   $rowsAll = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
   $hasMore = count($rowsAll) > $limit;
@@ -417,9 +605,14 @@ function ventas_listar(PDO $pdo): void {
     $tipoVentaTxt = trim((string)($r['tipo_venta'] ?? ''));
     $medioPagoTxt = trim((string)($r['medio_pago_nombre'] ?? ''));
 
+    $facturaIdComp = isset($r['factura_id_comprobante']) ? (int)$r['factura_id_comprobante'] : 0;
+    $legacyIdComp  = isset($r['id_comprobante_legacy']) ? (int)$r['id_comprobante_legacy'] : 0;
+    $idComprobanteFinal = $facturaIdComp > 0 ? $facturaIdComp : ($legacyIdComp > 0 ? $legacyIdComp : null);
+
     $data[] = [
       'id_movimiento' => (int)$r['id_movimiento'],
       'fecha' => (string)$r['fecha'],
+      'periodo' => (string)($r['periodo'] ?? ''),
 
       'id_tipo_operacion' => $r['id_tipo_operacion'] === null ? null : (int)$r['id_tipo_operacion'],
       'tipo_operacion' => (string)($r['tipo_operacion_nombre'] ?? ''),
@@ -432,7 +625,6 @@ function ventas_listar(PDO $pdo): void {
 
       'pago_tipo_venta' => $tipoVentaTxt,
       'medio_pago_nombre' => $medioPagoTxt,
-
       'id_medio_pago' => $r['id_medio_pago'] === null ? null : (int)$r['id_medio_pago'],
       'monto_total' => (float)$r['monto_total_final'],
 
@@ -443,8 +635,26 @@ function ventas_listar(PDO $pdo): void {
       'iva_monto' => $r['item_iva_monto'] === null ? null : (float)$r['item_iva_monto'],
       'total'     => $r['item_total'] === null ? null : (float)$r['item_total'],
 
-      'id_comprobante' => $r['id_comprobante'] === null ? null : (int)$r['id_comprobante'],
-      'comprobante_url' => (string)($r['comprobante_url'] ?? ''),
+      /* ✅ EL FRONT USA ESTO */
+      'id_comprobante' => $idComprobanteFinal,
+      'comprobante_url' => (string)($r['factura_comprobante_url'] ?? ''),
+      'archivo_mime' => (string)($r['factura_comprobante_mime'] ?? ''),
+
+      /* ✅ EXPLÍCITOS */
+      'factura_id_comprobante' => $facturaIdComp > 0 ? $facturaIdComp : null,
+      'factura_comprobante_url' => (string)($r['factura_comprobante_url'] ?? ''),
+      'factura_comprobante_mime' => (string)($r['factura_comprobante_mime'] ?? ''),
+      'factura_comprobante_tipo' => (string)($r['factura_comprobante_tipo'] ?? ''),
+
+      'recibo_id_cobro' => isset($r['recibo_id_cobro']) && (int)$r['recibo_id_cobro'] > 0 ? (int)$r['recibo_id_cobro'] : null,
+      'recibo_id_comprobante' => isset($r['recibo_id_comprobante']) && (int)$r['recibo_id_comprobante'] > 0 ? (int)$r['recibo_id_comprobante'] : null,
+      'recibo_fecha_cobro' => (string)($r['recibo_fecha_cobro'] ?? ''),
+      'recibo_comprobante_url' => (string)($r['recibo_comprobante_url'] ?? ''),
+      'recibo_comprobante_mime' => (string)($r['recibo_comprobante_mime'] ?? ''),
+      'recibo_comprobante_tipo' => (string)($r['recibo_comprobante_tipo'] ?? ''),
+
+      /* ✅ DEBUG */
+      'debug_factura_join' => (string)($r['debug_factura_join'] ?? 'NO'),
 
       'clasificacion' => (string)($r['clasificacion'] ?? ''),
       'tipo_venta' => $tipoVentaTxt,
@@ -482,12 +692,14 @@ function ventas_crear(PDO $pdo): void {
     $stmt = $pdo->prepare("
       INSERT INTO movimientos (
         fecha,
+        periodo,
         id_tipo_operacion,
         id_clasificacion, id_tipo_venta,
         id_cliente, id_proveedor, id_detalle,
         monto_total, id_medio_pago, id_comprobante
       ) VALUES (
         :fecha,
+        :periodo,
         :id_tipo_operacion,
         :id_clasificacion, :id_tipo_venta,
         :id_cliente, :id_proveedor, :id_detalle,
@@ -497,6 +709,7 @@ function ventas_crear(PDO $pdo): void {
 
     $stmt->execute([
       ':fecha' => $v['fecha'],
+      ':periodo' => substr($v['fecha'], 0, 7),
       ':id_tipo_operacion' => $v['id_tipo_operacion'],
       ':id_clasificacion' => $v['id_clasificacion'],
       ':id_tipo_venta' => $v['id_tipo_venta'],
@@ -533,6 +746,7 @@ function ventas_crear(PDO $pdo): void {
       'nuevo' => [
         'movimiento' => [
           'fecha' => $v['fecha'],
+          'periodo' => substr($v['fecha'], 0, 7),
           'id_tipo_operacion' => $v['id_tipo_operacion'],
           'id_clasificacion' => $v['id_clasificacion'],
           'id_tipo_venta' => $v['id_tipo_venta'],
@@ -555,7 +769,7 @@ function ventas_crear(PDO $pdo): void {
 }
 
 /* =========================================================
-   CREAR BATCH (POST) - ModalNuevaVenta
+   CREAR BATCH (POST)
 ========================================================= */
 function ventas_crear_batch(PDO $pdo): void {
   if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Método no permitido.', 405);
@@ -588,12 +802,14 @@ function ventas_crear_batch(PDO $pdo): void {
       $stmt = $pdo->prepare("
         INSERT INTO movimientos (
           fecha,
+          periodo,
           id_tipo_operacion,
           id_clasificacion, id_tipo_venta,
           id_cliente, id_proveedor, id_detalle,
           monto_total, id_medio_pago, id_comprobante
         ) VALUES (
           :fecha,
+          :periodo,
           :id_tipo_operacion,
           :id_clasificacion, :id_tipo_venta,
           :id_cliente, :id_proveedor, :id_detalle,
@@ -602,6 +818,7 @@ function ventas_crear_batch(PDO $pdo): void {
       ");
       $stmt->execute([
         ':fecha' => $v['fecha'],
+        ':periodo' => substr($v['fecha'], 0, 7),
         ':id_tipo_operacion' => $v['id_tipo_operacion'],
         ':id_clasificacion' => $v['id_clasificacion'],
         ':id_tipo_venta' => $v['id_tipo_venta'],
@@ -636,6 +853,7 @@ function ventas_crear_batch(PDO $pdo): void {
       $auditPack[] = [
         'id' => $newId,
         'fecha' => $v['fecha'],
+        'periodo' => substr($v['fecha'], 0, 7),
         'id_tipo_operacion' => $v['id_tipo_operacion'],
         'id_cliente' => $v['id_cliente'],
         'id_tipo_venta' => $v['id_tipo_venta'],
@@ -703,6 +921,7 @@ function ventas_actualizar(PDO $pdo): void {
     $upd = $pdo->prepare("
       UPDATE movimientos SET
         fecha = :fecha,
+        periodo = :periodo,
         id_tipo_operacion = :id_tipo_operacion,
         id_clasificacion = :id_clasificacion,
         id_tipo_venta = :id_tipo_venta,
@@ -716,6 +935,7 @@ function ventas_actualizar(PDO $pdo): void {
     ");
     $upd->execute([
       ':fecha' => $v['fecha'],
+      ':periodo' => substr($v['fecha'], 0, 7),
       ':id_tipo_operacion' => $v['id_tipo_operacion'],
       ':id_clasificacion' => $v['id_clasificacion'],
       ':id_tipo_venta' => $v['id_tipo_venta'],
@@ -833,57 +1053,57 @@ function ventas_eliminar(PDO $pdo): void {
 
 function facturacion_config_get(PDO $pdo): void
 {
-    header('Content-Type: application/json; charset=utf-8');
+  header('Content-Type: application/json; charset=utf-8');
 
-    try {
-        $sql = "
-            SELECT
-                idConfigFacturacion,
-                razon_social,
-                nombre_fantasia,
-                cuit,
-                ingresos_brutos,
-                condicion_iva,
-                domicilio_comercial,
-                fecha_inicio_actividades,
-                punto_venta,
-                tipo_comprobante_default,
-                codigo_comprobante,
-                email_facturacion,
-                telefono_facturacion,
-                sitio_web,
-                logo_url,
-                activo
-            FROM config_facturacion
-            WHERE activo = 1
-            ORDER BY idConfigFacturacion DESC
-            LIMIT 1
-        ";
+  try {
+    $sql = "
+      SELECT
+        idConfigFacturacion,
+        razon_social,
+        nombre_fantasia,
+        cuit,
+        ingresos_brutos,
+        condicion_iva,
+        domicilio_comercial,
+        fecha_inicio_actividades,
+        punto_venta,
+        tipo_comprobante_default,
+        codigo_comprobante,
+        email_facturacion,
+        telefono_facturacion,
+        sitio_web,
+        logo_url,
+        activo
+      FROM config_facturacion
+      WHERE activo = 1
+      ORDER BY idConfigFacturacion DESC
+      LIMIT 1
+    ";
 
-        $st = $pdo->query($sql);
-        $row = $st ? $st->fetch(PDO::FETCH_ASSOC) : false;
+    $st = $pdo->query($sql);
+    $row = $st ? $st->fetch(PDO::FETCH_ASSOC) : false;
 
-        if (!$row) {
-            http_response_code(404);
-            echo json_encode([
-                'exito' => false,
-                'mensaje' => 'No hay configuración de facturación activa.'
-            ], JSON_UNESCAPED_UNICODE);
-            return;
-        }
-
-        echo json_encode([
-            'exito' => true,
-            'config' => $row
-        ], JSON_UNESCAPED_UNICODE);
-    } catch (Throwable $e) {
-        http_response_code(500);
-        echo json_encode([
-            'exito' => false,
-            'mensaje' => 'Error obteniendo config_facturacion.',
-            'error' => $e->getMessage()
-        ], JSON_UNESCAPED_UNICODE);
+    if (!$row) {
+      http_response_code(404);
+      echo json_encode([
+        'exito' => false,
+        'mensaje' => 'No hay configuración de facturación activa.'
+      ], JSON_UNESCAPED_UNICODE);
+      return;
     }
+
+    echo json_encode([
+      'exito' => true,
+      'config' => $row
+    ], JSON_UNESCAPED_UNICODE);
+  } catch (Throwable $e) {
+    http_response_code(500);
+    echo json_encode([
+      'exito' => false,
+      'mensaje' => 'Error obteniendo config_facturacion.',
+      'error' => $e->getMessage()
+    ], JSON_UNESCAPED_UNICODE);
+  }
 }
 
 /* =========================================================

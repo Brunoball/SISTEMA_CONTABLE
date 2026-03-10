@@ -300,27 +300,103 @@ function movimiento_exists($pdo, $idMovimiento) {
     return (bool)$st->fetch(PDO::FETCH_ASSOC);
 }
 
-function cobro_by_movimiento($pdo, $idMovimiento) {
-    try {
-        $st = $pdo->prepare("
-            SELECT id_cobro, id_movimiento, id_comprobante
-            FROM cobros
-            WHERE id_movimiento = :idMov
-            ORDER BY id_cobro DESC
-            LIMIT 1
-        ");
-        $st->execute(array(':idMov' => $idMovimiento));
-        $row = $st->fetch(PDO::FETCH_ASSOC);
-        return $row ? $row : null;
-    } catch (Exception $e) {
-        return null;
-    }
+function comprobante_exists($pdo, $idComprobante) {
+    $st = $pdo->prepare("SELECT id_comprobante FROM comprobantes_archivos WHERE id_comprobante = :id LIMIT 1");
+    $st->execute(array(':id' => $idComprobante));
+    return (bool)$st->fetch(PDO::FETCH_ASSOC);
+}
+
+function get_comprobante_tipo($pdo, $idComprobante) {
+    $st = $pdo->prepare("
+        SELECT tipo
+        FROM comprobantes_archivos
+        WHERE id_comprobante = :id
+        LIMIT 1
+    ");
+    $st->execute(array(':id' => $idComprobante));
+    $tipo = $st->fetchColumn();
+    return strtoupper(trim((string)$tipo));
+}
+
+function tipo_relacion_from_tipo($tipo) {
+    $t = strtoupper(trim((string)$tipo));
+    if ($t === 'FACTURA') return 'FACTURA';
+    if ($t === 'NOTA_CREDITO') return 'NOTA_CREDITO';
+    if ($t === 'NOTA_DEBITO') return 'NOTA_DEBITO';
+    return 'OTRO';
+}
+
+function tipo_es_documento_de_movimiento($tipo) {
+    $t = strtoupper(trim((string)$tipo));
+    return in_array($t, array('FACTURA', 'NOTA_CREDITO', 'NOTA_DEBITO', 'OTRO'), true);
+}
+
+function tipo_es_documento_de_cobro($tipo) {
+    $t = strtoupper(trim((string)$tipo));
+    return $t === 'RECIBO';
+}
+
+function get_last_cobro_by_movimiento($pdo, $idMovimiento) {
+    $st = $pdo->prepare("
+        SELECT id_cobro, id_movimiento, id_comprobante, fecha_cobro, created_at
+        FROM cobros
+        WHERE id_movimiento = :idMov
+        ORDER BY id_cobro DESC
+        LIMIT 1
+    ");
+    $st->execute(array(':idMov' => $idMovimiento));
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    return $row ? $row : null;
 }
 
 /* =========================================================
-   VINCULAR DIRECTO
+   MOVIMIENTOS_COMPROBANTES
 ========================================================= */
-function vincular_comprobante_a_movimiento($pdo, $idMovimiento, $idComprobante, $force) {
+function ensure_movimiento_comprobante_table_exists($pdo) {
+    $st = $pdo->query("SHOW TABLES LIKE 'movimientos_comprobantes'");
+    $exists = $st ? (bool)$st->fetchColumn() : false;
+
+    if (!$exists) {
+        throw new Exception(
+            "La tabla movimientos_comprobantes no existe. Creala manualmente antes de usar comprobantes."
+        );
+    }
+}
+
+function get_movimiento_comprobante_row($pdo, $idMovimiento, $idComprobante, $tipoRelacion) {
+    $st = $pdo->prepare("
+        SELECT *
+        FROM movimientos_comprobantes
+        WHERE id_movimiento = :idMov
+          AND id_comprobante = :idComp
+          AND tipo_relacion = :tipo
+        LIMIT 1
+    ");
+    $st->execute(array(
+        ':idMov' => $idMovimiento,
+        ':idComp' => $idComprobante,
+        ':tipo' => $tipoRelacion,
+    ));
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    return $row ? $row : null;
+}
+
+function get_movimiento_factura_principal($pdo, $idMovimiento) {
+    $st = $pdo->prepare("
+        SELECT *
+        FROM movimientos_comprobantes
+        WHERE id_movimiento = :idMov
+          AND tipo_relacion = 'FACTURA'
+          AND principal = 1
+        ORDER BY id_movimiento_comprobante DESC
+        LIMIT 1
+    ");
+    $st->execute(array(':idMov' => $idMovimiento));
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    return $row ? $row : null;
+}
+
+function link_comprobante_to_movimiento_docs($pdo, $idMovimiento, $idComprobante, $tipo, $force) {
     if ((int)$idMovimiento <= 0) {
         throw new Exception('id_movimiento inválido.');
     }
@@ -333,125 +409,168 @@ function vincular_comprobante_a_movimiento($pdo, $idMovimiento, $idComprobante, 
         throw new Exception('El movimiento no existe.');
     }
 
-    $result = array(
+    ensure_movimiento_comprobante_table_exists($pdo);
+
+    $tipoRelacion = tipo_relacion_from_tipo($tipo);
+    $principal = ($tipoRelacion === 'FACTURA') ? 1 : 0;
+
+    $existingSame = get_movimiento_comprobante_row($pdo, $idMovimiento, $idComprobante, $tipoRelacion);
+    if ($existingSame) {
+        if ($principal === 1 && (int)$existingSame['principal'] !== 1) {
+            $upSame = $pdo->prepare("
+                UPDATE movimientos_comprobantes
+                SET principal = 1
+                WHERE id_movimiento_comprobante = :id
+                LIMIT 1
+            ");
+            $upSame->execute(array(':id' => (int)$existingSame['id_movimiento_comprobante']));
+        }
+
+        return array(
+            'modo' => 'movimiento_documental',
+            'tipo_documento' => $tipo,
+            'tipo_relacion' => $tipoRelacion,
+            'id_movimiento' => (int)$idMovimiento,
+            'id_comprobante' => (int)$idComprobante,
+            'id_cobro' => null,
+            'vinculo' => 'movimientos_comprobantes',
+            'reemplazo' => false,
+            'id_comprobante_anterior' => null,
+            'principal' => $principal,
+            'ya_existia' => true,
+        );
+    }
+
+    if ($tipoRelacion === 'FACTURA') {
+        $principalActual = get_movimiento_factura_principal($pdo, $idMovimiento);
+
+        if ($principalActual && (int)$principalActual['id_comprobante'] !== (int)$idComprobante) {
+            if (!$force) {
+                throw new Exception(
+                    'Ese movimiento ya tiene una FACTURA principal asociada (' .
+                    (int)$principalActual['id_comprobante'] .
+                    '). Usá force=true para reemplazar la principal.'
+                );
+            }
+
+            $down = $pdo->prepare("
+                UPDATE movimientos_comprobantes
+                SET principal = 0
+                WHERE id_movimiento = :idMov
+                  AND tipo_relacion = 'FACTURA'
+                  AND principal = 1
+            ");
+            $down->execute(array(':idMov' => $idMovimiento));
+        }
+    }
+
+    $ins = $pdo->prepare("
+        INSERT INTO movimientos_comprobantes
+            (id_movimiento, id_comprobante, tipo_relacion, principal)
+        VALUES
+            (:idMov, :idComp, :tipo, :principal)
+    ");
+    $ins->execute(array(
+        ':idMov' => $idMovimiento,
+        ':idComp' => $idComprobante,
+        ':tipo' => $tipoRelacion,
+        ':principal' => $principal,
+    ));
+
+    return array(
+        'modo' => 'movimiento_documental',
+        'tipo_documento' => $tipo,
+        'tipo_relacion' => $tipoRelacion,
         'id_movimiento' => (int)$idMovimiento,
         'id_comprobante' => (int)$idComprobante,
-        'vinculo' => null,
-        'reemplazo' => false,
-        'id_comprobante_anterior' => null,
         'id_cobro' => null,
+        'vinculo' => 'movimientos_comprobantes',
+        'reemplazo' => ($tipoRelacion === 'FACTURA' && !empty($principalActual)),
+        'id_comprobante_anterior' => (!empty($principalActual) ? (int)$principalActual['id_comprobante'] : null),
+        'principal' => $principal,
+        'ya_existia' => false,
     );
+}
 
-    $vinculado = false;
-
-    /* =========================
-      1) movimientos.id_comprobante
-    ========================= */
-    try {
-        $stPrev = $pdo->prepare("
-            SELECT id_comprobante
-            FROM movimientos
-            WHERE id_movimiento = :id
-            LIMIT 1
-        ");
-        $stPrev->execute(array(':id' => $idMovimiento));
-        $prev = (int)($stPrev->fetchColumn() ? $stPrev->fetchColumn() : 0);
-
-        if ($prev > 0 && !$force) {
-            throw new Exception('Ese movimiento ya tiene comprobante asociado. Usá force=true para reemplazar.');
-        }
-
-        $up = $pdo->prepare("
-            UPDATE movimientos
-            SET id_comprobante = :idComp
-            WHERE id_movimiento = :idMov
-            LIMIT 1
-        ");
-        $up->execute(array(
-            ':idComp' => $idComprobante,
-            ':idMov'  => $idMovimiento,
-        ));
-
-        if ((int)$up->rowCount() >= 0) {
-            $result['vinculo'] = 'movimientos.id_comprobante';
-            $result['reemplazo'] = ($prev > 0);
-            $result['id_comprobante_anterior'] = $prev > 0 ? $prev : null;
-            $vinculado = true;
-        }
-    } catch (Exception $e) {
-        // seguimos e intentamos con cobros
+function link_comprobante_to_cobro($pdo, $idMovimiento, $idComprobante, $tipo, $force) {
+    if ((int)$idMovimiento <= 0) {
+        throw new Exception('id_movimiento inválido.');
     }
 
-    /* =========================
-      2) cobros.id_comprobante
-    ========================= */
-    $cobro = cobro_by_movimiento($pdo, (int)$idMovimiento);
-    if ($cobro) {
-        $idCobro = isset($cobro['id_cobro']) ? (int)$cobro['id_cobro'] : 0;
-        $prevCobro = isset($cobro['id_comprobante']) ? (int)$cobro['id_comprobante'] : 0;
-
-        if ($idCobro > 0) {
-            if ($prevCobro > 0 && !$force) {
-                if (!$vinculado) {
-                    throw new Exception('Ese cobro ya tiene comprobante asociado. Usá force=true para reemplazar.');
-                }
-            } else {
-                try {
-                    $upCobro = $pdo->prepare("
-                        UPDATE cobros
-                        SET id_comprobante = :idComp
-                        WHERE id_cobro = :idCobro
-                        LIMIT 1
-                    ");
-                    $upCobro->execute(array(
-                        ':idComp'  => $idComprobante,
-                        ':idCobro' => $idCobro,
-                    ));
-
-                    try {
-                        $upComp = $pdo->prepare("
-                            UPDATE comprobantes_archivos
-                            SET id_cobro = :idCobro
-                            WHERE id_comprobante = :idComp
-                            LIMIT 1
-                        ");
-                        $upComp->execute(array(
-                            ':idCobro' => $idCobro,
-                            ':idComp'  => $idComprobante,
-                        ));
-                    } catch (Exception $e2) {
-                        // no rompemos el flujo
-                    }
-
-                    $result['id_cobro'] = $idCobro;
-
-                    if (!$result['vinculo']) {
-                        $result['vinculo'] = 'cobros.id_comprobante';
-                    } else {
-                        $result['vinculo'] .= ' + cobros.id_comprobante';
-                    }
-
-                    $result['reemplazo'] = $result['reemplazo'] || ($prevCobro > 0);
-
-                    if ($prevCobro > 0 && !$result['id_comprobante_anterior']) {
-                        $result['id_comprobante_anterior'] = $prevCobro;
-                    }
-
-                    $vinculado = true;
-                } catch (Exception $e3) {
-                    if (!$vinculado) {
-                        throw new Exception('No se pudo vincular también en cobros: ' . $e3->getMessage());
-                    }
-                }
-            }
-        }
+    if ((int)$idComprobante <= 0) {
+        throw new Exception('id_comprobante inválido.');
     }
 
-    if (!$vinculado) {
-        throw new Exception('No se pudo vincular el comprobante al movimiento.');
+    if (!movimiento_exists($pdo, (int)$idMovimiento)) {
+        throw new Exception('El movimiento no existe.');
     }
 
-    return $result;
+    $cobro = get_last_cobro_by_movimiento($pdo, (int)$idMovimiento);
+    if (!$cobro) {
+        throw new Exception('Ese movimiento todavía no tiene cobros para asociar un RECIBO.');
+    }
+
+    $idCobro = (int)$cobro['id_cobro'];
+    $prevComp = isset($cobro['id_comprobante']) ? (int)$cobro['id_comprobante'] : 0;
+
+    if ($prevComp > 0 && $prevComp !== (int)$idComprobante && !$force) {
+        throw new Exception(
+            'El cobro #' . $idCobro . ' ya tiene un recibo asociado (' . $prevComp . '). Usá force=true para reemplazar.'
+        );
+    }
+
+    $up = $pdo->prepare("
+        UPDATE cobros
+        SET id_comprobante = :idComp
+        WHERE id_cobro = :idCobro
+        LIMIT 1
+    ");
+    $up->execute(array(
+        ':idComp' => $idComprobante,
+        ':idCobro' => $idCobro,
+    ));
+
+    return array(
+        'modo' => 'cobro_documental',
+        'tipo_documento' => $tipo,
+        'tipo_relacion' => 'RECIBO',
+        'id_movimiento' => (int)$idMovimiento,
+        'id_comprobante' => (int)$idComprobante,
+        'id_cobro' => $idCobro,
+        'vinculo' => 'cobros.id_comprobante',
+        'reemplazo' => ($prevComp > 0 && $prevComp !== (int)$idComprobante),
+        'id_comprobante_anterior' => ($prevComp > 0 ? $prevComp : null),
+        'principal' => 0,
+        'ya_existia' => ($prevComp === (int)$idComprobante),
+    );
+}
+
+/* =========================================================
+   VINCULACIÓN GENERAL
+========================================================= */
+function vincular_comprobante_a_movimiento($pdo, $idMovimiento, $idComprobante, $force) {
+    if ((int)$idMovimiento <= 0) {
+        throw new Exception('id_movimiento inválido.');
+    }
+
+    if ((int)$idComprobante <= 0) {
+        throw new Exception('id_comprobante inválido.');
+    }
+
+    if (!comprobante_exists($pdo, (int)$idComprobante)) {
+        throw new Exception('El id_comprobante no existe.');
+    }
+
+    $tipo = get_comprobante_tipo($pdo, (int)$idComprobante);
+    if ($tipo === '') {
+        $tipo = 'OTRO';
+    }
+
+    if (tipo_es_documento_de_cobro($tipo)) {
+        return link_comprobante_to_cobro($pdo, $idMovimiento, $idComprobante, $tipo, $force);
+    }
+
+    return link_comprobante_to_movimiento_docs($pdo, $idMovimiento, $idComprobante, $tipo, $force);
 }
 
 function registrar_archivo_comprobante($pdo, $tenantId, $tipo, $file, $meta) {
@@ -610,6 +729,7 @@ if ($action === 'comprobantes_subir') {
             'archivo_path'   => $reg['archivo_path'],
             'sha256'         => $reg['sha256'],
             'filename'       => $reg['filename'],
+            'tipo'           => $reg['tipo'],
         ));
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
@@ -679,9 +799,12 @@ if ($action === 'comprobantes_vincular_movimiento') {
             'archivo_path'   => $reg['archivo_path'],
             'sha256'         => $reg['sha256'],
             'filename'       => $reg['filename'],
+            'tipo'           => $reg['tipo'],
             'vinculo'        => $vinc['vinculo'],
             'reemplazo'      => $vinc['reemplazo'],
             'id_cobro'       => $vinc['id_cobro'],
+            'tipo_relacion'  => $vinc['tipo_relacion'],
+            'principal'      => $vinc['principal'],
         ));
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
@@ -692,7 +815,7 @@ if ($action === 'comprobantes_vincular_movimiento') {
 /* =========================================================
    ASOCIAR 1x1 JSON
 ========================================================= */
-if ($action === 'comprobantes_asociar_movimiento') {
+if ($action === 'comprobantes_asociar_movimiento' || $action === 'comprobantes_vincular_movimiento_json') {
     if (!isset($_SERVER['REQUEST_METHOD']) || strtoupper((string)$_SERVER['REQUEST_METHOD']) !== 'POST') {
         comprobantes_fail_default('Método inválido. Usá POST.', 405);
     }
@@ -707,9 +830,7 @@ if ($action === 'comprobantes_asociar_movimiento') {
     if (!$idComp) comprobantes_fail_default('Falta id_comprobante.', 400);
     if (!$idMov)  comprobantes_fail_default('Falta id_movimiento.', 400);
 
-    $st = $pdo->prepare("SELECT 1 FROM comprobantes_archivos WHERE id_comprobante = :id LIMIT 1");
-    $st->execute(array(':id' => $idComp));
-    if (!(bool)$st->fetchColumn()) {
+    if (!comprobante_exists($pdo, $idComp)) {
         comprobantes_fail_default('El id_comprobante no existe.', 404);
     }
 
@@ -730,7 +851,11 @@ if ($action === 'comprobantes_asociar_movimiento') {
 /* =========================================================
    VINCULAR LOTE
 ========================================================= */
-if ($action === 'comprobantes_vincular_movimientos_lote' || $action === 'comprobantes_asociar_movimientos') {
+if (
+    $action === 'comprobantes_vincular_movimientos_lote' ||
+    $action === 'comprobantes_asociar_movimientos' ||
+    $action === 'comprobantes_vincular_movimientos'
+) {
     if (!isset($_SERVER['REQUEST_METHOD']) || strtoupper((string)$_SERVER['REQUEST_METHOD']) !== 'POST') {
         comprobantes_fail_default('Método inválido. Usá POST.', 405);
     }
@@ -758,9 +883,7 @@ if ($action === 'comprobantes_vincular_movimientos_lote' || $action === 'comprob
     if (!$idComp) comprobantes_fail_default('Falta id_comprobante.', 400);
     if (!$idsOk) comprobantes_fail_default('Faltan ids_movimiento.', 400);
 
-    $st = $pdo->prepare("SELECT 1 FROM comprobantes_archivos WHERE id_comprobante = :id LIMIT 1");
-    $st->execute(array(':id' => $idComp));
-    if (!(bool)$st->fetchColumn()) {
+    if (!comprobante_exists($pdo, $idComp)) {
         comprobantes_fail_default('El id_comprobante no existe.', 404);
     }
 

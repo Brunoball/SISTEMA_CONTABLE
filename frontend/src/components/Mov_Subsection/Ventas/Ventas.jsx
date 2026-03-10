@@ -229,6 +229,38 @@ function isVentaRow(row) {
 }
 
 /* =========================
+   Helpers comprobante
+========================= */
+function getFacturaIdComprobante(row) {
+  const cand =
+    row?.factura_id_comprobante ??
+    row?.id_comprobante ??
+    row?.comprobante_id ??
+    null;
+
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function getFacturaUrl(row) {
+  return String(
+    row?.factura_comprobante_url ??
+      row?.comprobante_url ??
+      row?.archivo_url ??
+      ""
+  ).trim();
+}
+
+function getFacturaMime(row) {
+  return String(
+    row?.factura_comprobante_tipo ??
+      row?.archivo_mime ??
+      row?.comprobante_mime ??
+      ""
+  ).trim();
+}
+
+/* =========================
    Normalizador
 ========================= */
 function normalizeVentaRow(r) {
@@ -238,6 +270,10 @@ function normalizeVentaRow(r) {
   const medioPagoNombre = r?.medio_pago_nombre ?? r?.medio_pago ?? r?.pago_medio_pago ?? "";
   const idMov = getMovimientoId(r);
 
+  const facturaId = getFacturaIdComprobante(r);
+  const facturaUrl = getFacturaUrl(r);
+  const facturaMime = getFacturaMime(r);
+
   return {
     ...r,
     id_movimiento: idMov ?? r?.id_movimiento ?? null,
@@ -245,6 +281,15 @@ function normalizeVentaRow(r) {
     cliente: String(cliente ?? "").trim() || "",
     pago_tipo_venta: String(tipoVentaTxt ?? "").trim() || "",
     medio_pago_nombre: String(medioPagoNombre ?? "").trim() || "",
+
+    // ✅ compatibilidad total
+    id_comprobante: facturaId,
+    comprobante_url: facturaUrl,
+    archivo_mime: facturaMime,
+
+    factura_id_comprobante: facturaId,
+    factura_comprobante_url: facturaUrl,
+    factura_comprobante_tipo: facturaMime,
   };
 }
 
@@ -637,8 +682,7 @@ export default function Ventas() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* =========================
      Debounce búsqueda
@@ -658,8 +702,7 @@ export default function Ventas() {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, dateRange]);
+  }, [q, dateRange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* =========================
      Cambio de rango
@@ -1037,14 +1080,14 @@ export default function Ventas() {
   ========================= */
   const handleVerComprobante = useCallback(
     (r) => {
-      const idComprobante = r?.id_comprobante;
+      const idComprobante = getFacturaIdComprobante(r);
       if (!idComprobante) return;
 
-      const urlDirecta = r?.comprobante_url ? String(r.comprobante_url).trim() : "";
+      const urlDirecta = getFacturaUrl(r);
 
       if (urlDirecta) {
         setComprobanteUrl(urlDirecta);
-        setComprobanteMime(r?.archivo_mime ?? "");
+        setComprobanteMime(getFacturaMime(r));
         setOpenVerComprobante(true);
         return;
       }
@@ -1055,7 +1098,7 @@ export default function Ventas() {
 
       const url = `${API}?${sp.toString()}`;
       setComprobanteUrl(url);
-      setComprobanteMime("");
+      setComprobanteMime(getFacturaMime(r));
       setOpenVerComprobante(true);
     },
     [API]
@@ -1172,7 +1215,6 @@ export default function Ventas() {
             </div>
 
             <div className="mov-headFilters">
-              {/* CALENDARIO */}
               <div className="cc-filter cc-filter--cal">
                 <div
                   className={`cc-floatingField cc-floatingField--calendar is-active ${
@@ -1211,7 +1253,6 @@ export default function Ventas() {
                 </div>
               </div>
 
-              {/* BÚSQUEDA */}
               <div className="cc-filter">
                 <div
                   className={`cc-floatingField cc-floatingField--search ${
@@ -1339,7 +1380,8 @@ export default function Ventas() {
               <>
                 {filteredRows.map((r) => {
                   const key = getRowKey(r);
-                  const tieneComprobante = !!(r?.id_comprobante && Number(r.id_comprobante) > 0);
+                  const facturaId = getFacturaIdComprobante(r);
+                  const tieneComprobante = !!facturaId;
 
                   return (
                     <div

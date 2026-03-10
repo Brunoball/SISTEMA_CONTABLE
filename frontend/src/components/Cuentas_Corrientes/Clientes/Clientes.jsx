@@ -1,5 +1,3 @@
-// src/components/Cuentas_Corrientes/Clientes/Clientes.jsx
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -99,10 +97,7 @@ function resolveFileUrl(rawUrl) {
 }
 
 function canPreviewComprobante(row) {
-  return (
-    Number(row?.credito || 0) > 0 &&
-    (safeText(row?.comprobante_url) !== "" || Number(row?.id_comprobante || 0) > 0)
-  );
+  return safeText(row?.comprobante_url) !== "" || Number(row?.id_comprobante || 0) > 0;
 }
 
 /* =========================
@@ -184,6 +179,7 @@ function getClienteId(c) {
     c?.id_persona ??
     c?.idPersona ??
     null;
+
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
@@ -233,6 +229,7 @@ export default function ClientesCC() {
   const [hasSearched, setHasSearched] = useState(false);
   const [queryUsed, setQueryUsed] = useState("");
   const [openSug, setOpenSug] = useState(false);
+
   const tableBodyRef = useRef(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
 
@@ -247,10 +244,12 @@ export default function ClientesCC() {
   });
 
   const [toast, setToast] = useState(null);
+
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => setToast({ tipo, mensaje, duracion }),
     []
   );
+
   const closeToast = useCallback(() => setToast(null), []);
 
   useEffect(() => {
@@ -417,18 +416,21 @@ export default function ClientesCC() {
         }
 
         const text = safeText(q);
+
         if (selected?.id) {
           loadHistorial(selected.id, selected.label);
           return;
         }
 
-        if (text.length >= 2) loadHistorial(null, text);
-        else
+        if (text.length >= 2) {
+          loadHistorial(null, text);
+        } else {
           showToast(
             "advertencia",
             "Escribí al menos 2 caracteres o seleccioná un cliente.",
             2600
           );
+        }
       }
 
       if (e.key === "Escape") {
@@ -450,6 +452,7 @@ export default function ClientesCC() {
   const exportToExcel = useCallback(() => {
     const dataToExport = getExportData();
     const ws = XLSX.utils.json_to_sheet(dataToExport);
+
     ws["!cols"] = [
       { wch: 14 },
       { wch: 28 },
@@ -458,6 +461,7 @@ export default function ClientesCC() {
       { wch: 16 },
       { wch: 16 },
     ];
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Cuenta Corriente Cliente");
     XLSX.writeFile(wb, `${exportBaseName}.xlsx`);
@@ -488,6 +492,7 @@ export default function ClientesCC() {
         "----------------------------------------",
       ].join("\n");
     });
+
     downloadBlob(lines.join("\n"), `${exportBaseName}.txt`, "text/plain;charset=utf-8;");
   }, [getExportData, exportBaseName]);
 
@@ -543,15 +548,26 @@ export default function ClientesCC() {
       const mime = safeText(row?.comprobante_mime);
 
       if (!accessUrl) {
-        showToast("advertencia", "Este cobro no tiene comprobante asociado.", 2600);
+        showToast("advertencia", "Este registro no tiene comprobante asociado.", 2600);
         return;
       }
+
+      const isCobro = Number(row?.credito || 0) > 0;
+      const isMovimiento = Number(row?.debito || 0) > 0;
 
       setPreviewComprobante({
         open: true,
         url: accessUrl,
         mime,
-        title: row?.comprobante ? `Comprobante · ${row.comprobante}` : "Comprobante",
+        title: isCobro
+          ? row?.comprobante
+            ? `Recibo · ${row.comprobante}`
+            : "Recibo"
+          : isMovimiento
+          ? row?.comprobante
+            ? `Factura / Deuda · ${row.comprobante}`
+            : "Factura / Deuda"
+          : "Comprobante",
       });
     },
     [API, showToast]
@@ -583,10 +599,8 @@ export default function ClientesCC() {
         }
       />
 
-      {/* ✅ HEAD UNIFICADO — igual que Movimientos */}
       <div className="mov-card__head">
         <div className="mov-card__headLeft">
-
           <div className="title-mov">
             <div className="mov-card__title">Cuentas Corrientes</div>
             <div className="mov-card__hint">
@@ -594,11 +608,27 @@ export default function ClientesCC() {
             </div>
           </div>
 
-          <div className="mov-headFilters">
+          <div className="cc-headFilters cc-headFilters--tabs">
+            <button type="button" className="cc-btnex cc-btnex--tab is-open">
+              Clientes
+            </button>
 
-            {/* CALENDARIO */}
+            <button
+              type="button"
+              className="cc-btnex cc-btnex--tab"
+              onClick={() => navigate("/panel/cuentas-corrientes/proveedores")}
+            >
+              Proveedores
+            </button>
+          </div>
+
+          <div className="mov-headFilters">
             <div className="cc-filter cc-filter--cal">
-              <div className={`cc-floatingField cc-floatingField--calendar is-active ${calOpen ? "is-open" : ""}`}>
+              <div
+                className={`cc-floatingField cc-floatingField--calendar is-active ${
+                  calOpen ? "is-open" : ""
+                }`}
+              >
                 <button
                   type="button"
                   className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
@@ -630,7 +660,6 @@ export default function ClientesCC() {
               </div>
             </div>
 
-            {/* BÚSQUEDA */}
             <div className="cc-filter cc-filter--search">
               <div
                 className={`cc-floatingField cc-floatingField--search ${
@@ -699,11 +728,9 @@ export default function ClientesCC() {
                 </div>
               </div>
             </div>
-
           </div>
         </div>
 
-        {/* EXPORTAR */}
         <BotonExportar
           disabled={loading || !hasSearched || rows.length === 0}
           loading={false}
@@ -737,7 +764,9 @@ export default function ClientesCC() {
 
         <div
           ref={tableBodyRef}
-          className={`cc-cliente-table__body ${!hasVerticalScroll ? "cc-cliente-table__body--stable" : ""}`}
+          className={`cc-cliente-table__body ${
+            !hasVerticalScroll ? "cc-cliente-table__body--stable" : ""
+          }`}
         >
           {loading ? (
             <div className="cc-cliente-table__loading">
@@ -794,10 +823,10 @@ export default function ClientesCC() {
                       disabled={!verHabilitado}
                       title={
                         verHabilitado
-                          ? "Ver comprobante"
-                          : Number(r.credito || 0) > 0
-                          ? "Este cobro no tiene comprobante"
-                          : "Solo disponible en registros de crédito"
+                          ? Number(r.credito || 0) > 0
+                            ? "Ver recibo / comprobante del cobro"
+                            : "Ver factura / comprobante de la deuda"
+                          : "Este registro no tiene comprobante asociado"
                       }
                       className={`cc-verBtn ${verHabilitado ? "" : "is-disabled"}`}
                     >

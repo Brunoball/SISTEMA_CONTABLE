@@ -42,7 +42,7 @@ function uid() {
 }
 
 /* =========================
-   ✅ IDs tolerantes
+   IDs tolerantes
 ========================= */
 function getDetalleId(d) {
   const cand = d?.id ?? d?.id_detalle ?? d?.idDetalle ?? d?.detalle_id ?? d?.iddetalle ?? null;
@@ -58,35 +58,6 @@ function getMedioPagoId(mp) {
   const cand = mp?.id ?? mp?.id_medio_pago ?? mp?.medio_pago_id ?? mp?.idMedioPago ?? null;
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-/* =========================
-   Período UI (MM-YYYY) <-> API (YYYY-MM)
-========================= */
-function isoToMMYYYY(iso) {
-  const s = String(iso ?? "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
-  const [y, m] = s.split("-");
-  return `${m}-${y}`;
-}
-function mmYYYYToYYYYMM(mmYYYY) {
-  const s = String(mmYYYY ?? "").trim();
-  if (/^\d{2}[-/]\d{4}$/.test(s)) {
-    const [mm, yyyy] = s.split(/[-/]/);
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{6}$/.test(s)) {
-    const mm = s.slice(0, 2);
-    const yyyy = s.slice(2);
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{4}-\d{2}$/.test(s)) return s;
-  return "";
-}
-function normalizePeriodoInput(raw) {
-  const digits = String(raw || "").replace(/\D/g, "").slice(0, 6);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}-${digits.slice(2)}`;
 }
 
 /* =========================
@@ -120,7 +91,7 @@ function normalizeLists(lists) {
 }
 
 /* =========================
-   ✅ Auth + headers (SaaS: X-Session)
+   Auth + headers (SaaS: X-Session)
 ========================= */
 function getAuthInfo() {
   const sessionKey =
@@ -348,7 +319,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   );
 
   const [fecha, setFecha] = useState(todayISO());
-  const [periodoUI, setPeriodoUI] = useState(isoToMMYYYY(todayISO()));
 
   const [filters, setFilters] = useState({
     forma: NULL_OPTION,
@@ -382,9 +352,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     if (!open) return;
 
     if (!wasOpen && open) {
-      const f = todayISO();
-      setFecha(f);
-      setPeriodoUI(isoToMMYYYY(f));
+      setFecha(todayISO());
 
       setFilters({
         forma: NULL_OPTION,
@@ -405,13 +373,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   }, [open]);
 
   const updateFilter = (k, v) => setFilters((p) => ({ ...p, [k]: v }));
-
-  const onFechaChange = (iso) => {
-    const v = String(iso || "").trim();
-    setFecha(v);
-    setPeriodoUI(isoToMMYYYY(v));
-  };
-  const onPeriodoChange = (raw) => setPeriodoUI(normalizePeriodoInput(raw));
 
   const addRow = () => {
     setRows((prev) => [...prev, { id: uid(), id_detalle: NULL_OPTION, detalleText: "", cantidad: 1, precio: 0, ivaPct: 0 }]);
@@ -585,11 +546,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       }
     }
 
-    const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
-    if (!/^\d{4}-\d{2}$/.test(periodoApi)) {
-      return { ok: false, msg: "Período inválido. Usá MM-YYYY (ej: 02-2026)." };
-    }
-
     const problems = [];
     rowsCalc.forEach((r, idx) => {
       const p = describeLineProblem(r, idx + 1);
@@ -611,8 +567,8 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       return { ok: false, msg: "Cargá al menos 1 fila válida (Detalle + Cantidad + Precio)." };
     }
 
-    return { ok: true, warn: problems.length > 0, periodoApi };
-  }, [filters, provInput, isContado, periodoUI, fecha, rowsCalc]);
+    return { ok: true, warn: problems.length > 0 };
+  }, [filters, provInput, isContado, rowsCalc]);
 
   const submit = useCallback(async () => {
     if (saving) return;
@@ -641,10 +597,8 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
     try {
       const { idUsuario } = getAuthInfo();
-      const periodoApi = v.periodoApi;
 
       const idTipoVenta = isCorriente ? 2 : 1;
-
       const accionFinal = isCorriente ? "guardar" : "pagar";
       const esPagadaFinal = isCorriente ? false : true;
 
@@ -661,7 +615,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
           const base = {
             idUsuario,
             fecha,
-            periodo: periodoApi,
 
             id_tipo_venta: idTipoVenta,
 
@@ -704,17 +657,9 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       const data = await apiPostJson(API_BATCH, payloads);
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar el batch de compras.");
 
-      // ✅ FIX CLAVE: siempre devolver periodoUI + periodoApi al padre (para recargar tabla)
-      const infoForParent = {
-        ...data,
-        periodoUI: String(periodoUI || "").trim(),
-        periodoApi: String(periodoApi || "").trim(),
-      };
-
       showToast("exito", `Listo: ${data?.creados ?? payloads.length} ítems guardados.`, 2800);
 
-      // ✅ si el padre es async, lo esperamos: evita que cierre antes de recargar
-      await Promise.resolve(onSaved?.(infoForParent));
+      await Promise.resolve(onSaved?.(data));
 
       onClose?.();
     } catch (e) {
@@ -735,7 +680,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     API_BATCH,
     onSaved,
     onClose,
-    periodoUI,
   ]);
 
   if (!open) return null;
@@ -934,20 +878,8 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
                 <div className="mi-cr-filters__dates">
                   <div className="fl-field">
-                    <input className="fl-input" type="date" value={fecha} onChange={(e) => onFechaChange(e.target.value)} disabled={saving} />
+                    <input className="fl-input" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} disabled={saving} />
                     <label className="fl-label">Fecha</label>
-                  </div>
-
-                  <div className="fl-field">
-                    <input
-                      className="fl-input"
-                      placeholder="MM-YYYY"
-                      inputMode="numeric"
-                      value={periodoUI}
-                      onChange={(e) => onPeriodoChange(e.target.value)}
-                      disabled={saving}
-                    />
-                    <label className="fl-label">Período</label>
                   </div>
                 </div>
               </div>
@@ -1045,7 +977,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                   </div>
                 )}
 
-                {/* ✅ CUENTA CORRIENTE */}
+                {/* CUENTA CORRIENTE */}
                 {isCorriente && (
                   <div className="mi-card mi-card--full">
                     <div className="mi-card__title">Cuenta Corriente</div>

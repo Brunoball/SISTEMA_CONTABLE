@@ -14,8 +14,8 @@ import ModalNuevaVenta from "./modales/ModalNuevaVenta.jsx";
 import ModalEditarVenta from "./modales/ModalEditarVenta.jsx";
 import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 
-// ✅ BOTÓN EXPORTAR GLOBAL
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
+import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -27,13 +27,12 @@ import {
   faTrashCan,
   faChevronDown,
   faArrowRightLong,
-    faTimes,
+  faTimes,
+  faEye,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
-
-// ✅ CONTEXTO GLOBAL DE FECHAS
 import { useDateRange } from "../../../context/DateRangeContext";
 
 /* =========================
@@ -56,10 +55,12 @@ function moneyARS(v) {
     return `$${n.toFixed(2)}`;
   }
 }
+
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "—";
 }
+
 function normalizeSearchText(v) {
   return String(v ?? "")
     .toLowerCase()
@@ -68,9 +69,11 @@ function normalizeSearchText(v) {
     .replace(/\s+/g, " ")
     .trim();
 }
+
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "—";
+
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
     const yyyy = m1[1];
@@ -78,6 +81,7 @@ function formatFechaDMY(v) {
     const dd = String(Number(m1[3])).padStart(2, "0");
     return `${dd}/${mm}/${yyyy}`;
   }
+
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) {
     const dd = String(Number(m2[1])).padStart(2, "0");
@@ -85,6 +89,7 @@ function formatFechaDMY(v) {
     const yyyy = m2[3];
     return `${dd}/${mm}/${yyyy}`;
   }
+
   return s;
 }
 
@@ -101,12 +106,15 @@ function startOfDay(d) {
 function parseRowFecha(v) {
   const s = String(v ?? "").trim();
   if (!s) return null;
+
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) return startOfDay(new Date(Number(m1[1]), Number(m1[2]) - 1, Number(m1[3])));
+
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) return startOfDay(new Date(Number(m2[3]), Number(m2[2]) - 1, Number(m2[1])));
+
   const d = new Date(s);
-  return isNaN(d.getTime()) ? null : startOfDay(d);
+  return Number.isNaN(d.getTime()) ? null : startOfDay(d);
 }
 
 function dateToAPI(d) {
@@ -136,6 +144,7 @@ function getAuthInfo() {
     localStorage.getItem("X-Session") ||
     ""
   ).trim();
+
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
@@ -143,6 +152,7 @@ function getAuthInfo() {
       u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
+
   return { token, sessionKey, idUsuario };
 }
 
@@ -161,17 +171,21 @@ function getMovimientoId(r) {
     r?.movimiento_id ??
     r?.id_movimiento_fk ??
     null;
+
   const n = Number(cand);
   if (Number.isFinite(n) && n > 0) return n;
   return null;
 }
+
 function getRowKey(r) {
   const id = getMovimientoId(r);
   if (id) return `id:${id}`;
+
   const f = String(r?.fecha ?? "").trim();
   const c = String(r?.cliente ?? r?.cliente_nombre ?? "").trim();
   const d = String(r?.detalle ?? r?.descripcion ?? r?.concepto ?? "").trim();
   const m = String(Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0);
+
   return `fx:${f}|${c}|${d}|${m}`;
 }
 
@@ -181,25 +195,32 @@ function getRowKey(r) {
 function hasCliente(r) {
   const idCli = Number(r?.id_cliente ?? r?.cliente_id ?? r?.idCliente ?? r?.id_cliente_fk ?? 0);
   if (Number.isFinite(idCli) && idCli > 0) return true;
+
   const cliTxt = String(
     r?.cliente ?? r?.cliente_nombre ?? r?.nombre_cliente ?? r?.razon_social_cliente ?? ""
   ).trim();
+
   return cliTxt.length > 0;
 }
+
 function hasTipoVentaText(r) {
   const tv = String(r?.pago_tipo_venta ?? r?.tipo_venta ?? "").trim();
   return tv.length > 0;
 }
+
 function hasTipoVentaId(r) {
   const id = Number(r?.id_tipo_venta ?? r?.tipo_venta_id ?? 0);
   return Number.isFinite(id) && id > 0;
 }
+
 function isSalida(r) {
   const tmTxt = normalizeSearchText(r?.tipo_movimiento ?? r?.pago_tipo_movimiento ?? "");
   if (tmTxt.includes("salida")) return true;
+
   const id = Number(r?.id_tipo_movimiento ?? r?.tipo_movimiento_id ?? 0);
   return Number.isFinite(id) && id > 0;
 }
+
 function isVentaRow(row) {
   if (!hasCliente(row)) return false;
   if (hasTipoVentaText(row)) return true;
@@ -216,6 +237,7 @@ function normalizeVentaRow(r) {
   const tipoVentaTxt = r?.pago_tipo_venta ?? r?.tipo_venta ?? "";
   const medioPagoNombre = r?.medio_pago_nombre ?? r?.medio_pago ?? r?.pago_medio_pago ?? "";
   const idMov = getMovimientoId(r);
+
   return {
     ...r,
     id_movimiento: idMov ?? r?.id_movimiento ?? null,
@@ -232,8 +254,10 @@ function normalizeVentaRow(r) {
 function rowMatchesQuery(row, query) {
   const qq = normalizeSearchText(query);
   if (!qq) return true;
+
   const montoNum = Number(row?.monto_total || row?.total || 0);
   const parts = [];
+
   if (row && typeof row === "object") {
     for (const k of Object.keys(row)) {
       const val = row[k];
@@ -241,8 +265,10 @@ function rowMatchesQuery(row, query) {
       parts.push(String(val ?? ""));
     }
   }
+
   parts.push(formatFechaDMY(row?.fecha));
   parts.push(String(montoNum), String(Math.trunc(montoNum)), moneyARS(montoNum));
+
   const hay = normalizeSearchText(parts.join(" | "));
   return hay.includes(qq);
 }
@@ -252,14 +278,18 @@ function rowMatchesQuery(row, query) {
 ========================= */
 function rowInDateRange(row, from, to) {
   if (!from && !to) return true;
+
   const fecha = parseRowFecha(row?.fecha);
   if (!fecha) return true;
+
   if (from && fecha < startOfDay(from)) return false;
+
   if (to) {
     const toEnd = startOfDay(to);
     toEnd.setHours(23, 59, 59, 999);
     if (fecha > toEnd) return false;
   }
+
   return true;
 }
 
@@ -271,6 +301,7 @@ function slugifySheetName(name) {
     .replace(/[\[\]\*\/\\\?\:]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
   return (s || "Ventas").slice(0, 31);
 }
 
@@ -335,7 +366,6 @@ export default function Ventas() {
   const [error, setError] = useState("");
 
   const [showCalendario, setShowCalendario] = useState(false);
-
   const [q, setQ] = useState("");
 
   const [hasMore, setHasMore] = useState(false);
@@ -345,6 +375,10 @@ export default function Ventas() {
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+
+  const [openVerComprobante, setOpenVerComprobante] = useState(false);
+  const [comprobanteUrl, setComprobanteUrl] = useState("");
+  const [comprobanteMime, setComprobanteMime] = useState("");
 
   const [toast, setToast] = useState(null);
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
@@ -389,6 +423,7 @@ export default function Ventas() {
   const parseJsonOrThrow = useCallback(async (res) => {
     const text = await res.text();
     if (!text) throw new Error("Respuesta vacía del servidor.");
+
     try {
       return JSON.parse(text);
     } catch {
@@ -449,18 +484,23 @@ export default function Ventas() {
         moreReqIdRef.current = myReqId;
         setLoadingMore(true);
       }
+
       setError("");
 
       try {
         if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
           if (rowsReqIdRef.current !== myReqId) return null;
+
           const cached = cacheRef.current.get(cacheKey);
           const cachedRows = Array.isArray(cached?.rows) ? cached.rows : [];
+
           rowsRef.current = cachedRows;
           setRows(cachedRows);
           setHasMore(!!cached?.hasMore);
           setNextOffset(cached?.nextOffset ?? null);
+
           if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
+
           return {
             hasMore: !!cached?.hasMore,
             nextOffset: cached?.nextOffset ?? null,
@@ -513,21 +553,26 @@ export default function Ventas() {
                 const k = getRowKey(x);
                 return k && !seen.has(k);
               });
+
               const merged = [...base, ...add];
               rowsRef.current = merged;
               setRows(merged);
+
               if (add.length === 0) {
                 newHasMore = false;
                 newNextOffset = null;
               }
+
               setHasMore(newHasMore);
               setNextOffset(newNextOffset);
+
               if (moreReqIdRef.current === myReqId) setLoadingMore(false);
             } else {
               rowsRef.current = page;
               setRows(page);
               setHasMore(newHasMore);
               setNextOffset(newNextOffset);
+
               if (offset === 0) {
                 cacheRef.current.set(cacheKey, {
                   rows: page,
@@ -535,6 +580,7 @@ export default function Ventas() {
                   nextOffset: newNextOffset,
                 });
               }
+
               if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
             }
 
@@ -551,15 +597,19 @@ export default function Ventas() {
       } catch (e) {
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+
         return await new Promise((resolve) => {
           setTimeout(() => {
             if (myReqId !== reqIdRef.current) return resolve(null);
+
             setError(e.message || "Error cargando ventas.");
+
             if (append) {
               if (moreReqIdRef.current === myReqId) setLoadingMore(false);
             } else {
               if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
             }
+
             resolve(null);
           }, remaining);
         });
@@ -573,13 +623,17 @@ export default function Ventas() {
   ========================= */
   useEffect(() => {
     let alive = true;
+
     (async () => {
       try {
         await ensureListsLoaded({ force: false, background: true });
       } catch {}
+
       if (!alive) return;
+
       await loadRows({ from: dateRange.from, to: dateRange.to, q: "", offset: 0, append: false });
     })();
+
     return () => {
       alive = false;
     };
@@ -594,10 +648,13 @@ export default function Ventas() {
       skipSearchRef.current = false;
       return;
     }
+
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
     searchTimerRef.current = setTimeout(() => {
       loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
     }, 250);
+
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
@@ -610,10 +667,13 @@ export default function Ventas() {
   const handleDateRangeChange = useCallback(
     async (newRange) => {
       if (!newRange.from && !newRange.to) return;
+
       setDateRange(newRange);
       cacheRef.current.clear();
       skipSearchRef.current = true;
+
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
       await loadRows({
         from: newRange.from,
         to: newRange.to,
@@ -699,6 +759,7 @@ export default function Ventas() {
   const gridCols = useMemo(() => {
     const fallback = `repeat(${columns.length}, minmax(0, 1fr))`;
     if (!Array.isArray(columns) || !columns.length) return fallback;
+
     return columns
       .map((c) => {
         const n = Number(c.fr);
@@ -710,34 +771,34 @@ export default function Ventas() {
   /* =========================
      Label calendario
   ========================= */
-const dateRangeLabel = useMemo(() => {
-  const { from, to } = dateRange;
+  const dateRangeLabel = useMemo(() => {
+    const { from, to } = dateRange;
 
-  if (!from && !to) return "Seleccionar fechas";
+    if (!from && !to) return "Seleccionar fechas";
 
-  if (from && to) {
-    if (
-      from.getFullYear() === to.getFullYear() &&
-      from.getMonth() === to.getMonth() &&
-      from.getDate() === to.getDate()
-    ) {
-      return formatDateUI(from);
+    if (from && to) {
+      if (
+        from.getFullYear() === to.getFullYear() &&
+        from.getMonth() === to.getMonth() &&
+        from.getDate() === to.getDate()
+      ) {
+        return formatDateUI(from);
+      }
+
+      return (
+        <>
+          <span>{formatDateUI(from)}</span>
+          <span className="mov-rangeArrow">
+            <FontAwesomeIcon icon={faArrowRightLong} />
+          </span>
+          <span>{formatDateUI(to)}</span>
+        </>
+      );
     }
 
-    return (
-      <>
-        <span>{formatDateUI(from)}</span>
-        <span className="mov-rangeArrow">
-          <FontAwesomeIcon icon={faArrowRightLong} />
-        </span>
-        <span>{formatDateUI(to)}</span>
-      </>
-    );
-  }
-
-  if (from) return `Desde ${formatDateUI(from)}`;
-  return `Hasta ${formatDateUI(to)}`;
-}, [dateRange]);
+    if (from) return `Desde ${formatDateUI(from)}`;
+    return `Hasta ${formatDateUI(to)}`;
+  }, [dateRange]);
 
   /* =========================
      Export base name
@@ -762,9 +823,11 @@ const dateRangeLabel = useMemo(() => {
 
     const headers = Object.keys(dataToExport[0] || {});
     const totalColIndex = headers.findIndex((h) => h === "TOTAL");
+
     if (totalColIndex >= 0 && ws["!ref"]) {
       const colLetter = XLSX.utils.encode_col(totalColIndex);
       const range = XLSX.utils.decode_range(ws["!ref"]);
+
       for (let r = range.s.r + 1; r <= range.e.r; r++) {
         const cell = ws[`${colLetter}${r + 1}`];
         if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
@@ -800,6 +863,7 @@ const dateRangeLabel = useMemo(() => {
         "----------------------------------------",
       ].join("\n");
     });
+
     const txtContent = lines.join("\n");
     downloadBlob(txtContent, `${exportBaseName}.txt`, "text/plain;charset=utf-8;");
   }, [getExportData, exportBaseName]);
@@ -864,30 +928,37 @@ const dateRangeLabel = useMemo(() => {
     setError("");
     const { idUsuario } = getAuthInfo();
     const action = isEdit ? "ventas_actualizar" : "ventas_crear";
+
     const data = await apiPostJson(`${API}?action=${action}`, {
       ...(payload || {}),
       idUsuario,
     });
+
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
     return data;
   };
 
   const confirmDelete = async () => {
     if (!selectedRow?.id_movimiento) return;
+
     const id = selectedRow.id_movimiento;
     setDeletingId(id);
     setError("");
     showToast("cargando", "Eliminando venta…", 12000);
+
     try {
       const { idUsuario } = getAuthInfo();
       const sp = new URLSearchParams();
       sp.set("action", "ventas_eliminar");
       sp.set("id_movimiento", String(id));
+
       const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
+
       setOpenDel(false);
       setSelectedRow(null);
       cacheRef.current.clear();
+
       await loadRows({
         from: dateRange.from,
         to: dateRange.to,
@@ -895,6 +966,7 @@ const dateRangeLabel = useMemo(() => {
         offset: 0,
         append: false,
       });
+
       await refreshPeriodos();
       showToast("exito", "Venta eliminada.", 2600);
     } catch (e) {
@@ -921,6 +993,7 @@ const dateRangeLabel = useMemo(() => {
     try {
       while (offset !== null && guard < 3000) {
         const beforeLen = rowsRef.current.length;
+
         const res = await loadRows({
           from: dateRange.from,
           to: dateRange.to,
@@ -928,13 +1001,17 @@ const dateRangeLabel = useMemo(() => {
           offset,
           append: true,
         });
+
         if (!res) break;
+
         guard += 1;
         offset = res.nextOffset;
+
         const afterLen = rowsRef.current.length;
         if (afterLen === beforeLen) break;
         if (!res.hasMore || offset === null) break;
       }
+
       setRows([...rowsRef.current]);
       showToast("exito", `Listo: se cargaron ${rowsRef.current.length} ventas.`, 2600);
     } catch (e) {
@@ -954,6 +1031,35 @@ const dateRangeLabel = useMemo(() => {
     loadRows,
     showToast,
   ]);
+
+  /* =========================
+     VER COMPROBANTE
+  ========================= */
+  const handleVerComprobante = useCallback(
+    (r) => {
+      const idComprobante = r?.id_comprobante;
+      if (!idComprobante) return;
+
+      const urlDirecta = r?.comprobante_url ? String(r.comprobante_url).trim() : "";
+
+      if (urlDirecta) {
+        setComprobanteUrl(urlDirecta);
+        setComprobanteMime(r?.archivo_mime ?? "");
+        setOpenVerComprobante(true);
+        return;
+      }
+
+      const sp = new URLSearchParams();
+      sp.set("action", "comprobantes_descargar");
+      sp.set("id_comprobante", String(idComprobante));
+
+      const url = `${API}?${sp.toString()}`;
+      setComprobanteUrl(url);
+      setComprobanteMime("");
+      setOpenVerComprobante(true);
+    },
+    [API]
+  );
 
   const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
@@ -992,12 +1098,15 @@ const dateRangeLabel = useMemo(() => {
               <div className="mov-skelActions">
                 <span className="mov-skelIcon" />
                 <span className="mov-skelIcon" />
+                <span className="mov-skelIcon" />
               </div>
             </div>
           );
         }
+
         const list = skelWidths[c.key] || ["60%"];
         const w = list[idx % list.length];
+
         return (
           <div
             key={c.key}
@@ -1044,6 +1153,7 @@ const dateRangeLabel = useMemo(() => {
           {errorListsCtx}
         </div>
       )}
+
       {error && (
         <div className="mov-alert" role="alert">
           {error}
@@ -1061,109 +1171,112 @@ const dateRangeLabel = useMemo(() => {
               </div>
             </div>
 
-<div className="mov-headFilters">
+            <div className="mov-headFilters">
+              {/* CALENDARIO */}
+              <div className="cc-filter cc-filter--cal">
+                <div
+                  className={`cc-floatingField cc-floatingField--calendar is-active ${
+                    showCalendario ? "is-open" : ""
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className={`cc-calTrigger ${showCalendario ? "is-open" : ""}`}
+                    onClick={() => setShowCalendario((v) => !v)}
+                    disabled={isAnyLoading || loadingListsCtx}
+                    title="Seleccionar rango de fechas"
+                  >
+                    {dateRangeLabel}
+                    <span className="cc-calTrigger__iconRight">
+                      <FontAwesomeIcon icon={faChevronDown} />
+                    </span>
+                  </button>
 
-  {/* CALENDARIO */}
-  <div className="cc-filter cc-filter--cal">
-    <div className={`cc-floatingField cc-floatingField--calendar is-active ${showCalendario ? "is-open" : ""}`}>
-      <button
-        type="button"
-        className={`cc-calTrigger ${showCalendario ? "is-open" : ""}`}
-        onClick={() => setShowCalendario((v) => !v)}
-        disabled={isAnyLoading || loadingListsCtx}
-        title="Seleccionar rango de fechas"
-      >
-        {dateRangeLabel}
-        <span className="cc-calTrigger__iconRight">
-          <FontAwesomeIcon icon={faChevronDown} />
-        </span>
-      </button>
+                  <span className="cc-floatingLabel cc-floatingLabel--active">
+                    <FontAwesomeIcon icon={faCalendarDays} /> Período
+                  </span>
 
-      <span className="cc-floatingLabel cc-floatingLabel--active">
-        <FontAwesomeIcon icon={faCalendarDays} /> Período
-      </span>
+                  {showCalendario && (
+                    <div className="cc-calDropdown">
+                      <Calendario
+                        value={dateRange}
+                        onChange={async (newRange) => {
+                          if (newRange.from && newRange.to) setShowCalendario(false);
+                          await handleDateRangeChange(newRange);
+                        }}
+                        onClose={() => setShowCalendario(false)}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
 
-      {showCalendario && (
-        <div className="cc-calDropdown">
-          <Calendario
-            value={dateRange}
-            onChange={async (newRange) => {
-              if (newRange.from && newRange.to) setShowCalendario(false);
-              await handleDateRangeChange(newRange);
-            }}
-            onClose={() => setShowCalendario(false)}
-          />
-        </div>
-      )}
-    </div>
-  </div>
+              {/* BÚSQUEDA */}
+              <div className="cc-filter">
+                <div
+                  className={`cc-floatingField cc-floatingField--search ${
+                    q.trim() ? "is-active" : ""
+                  }`}
+                >
+                  <div className="cc-searchInput">
+                    <div className="cc-searchInput__fieldWrap">
+                      <input
+                        className="cc-input cc-input--floating"
+                        id="vents-comppr-wit"
+                        value={q}
+                        onChange={(e) => setQ(e.target.value)}
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                            skipSearchRef.current = true;
+                            await loadRows({
+                              from: dateRange.from,
+                              to: dateRange.to,
+                              q: e.currentTarget.value,
+                              offset: 0,
+                              append: false,
+                            });
+                          }
+                        }}
+                        placeholder=" "
+                        disabled={loadingListsCtx || loadingAll}
+                      />
 
-  {/* BÚSQUEDA */}
-  <div className="cc-filter">
-    <div className={`cc-floatingField cc-floatingField--search ${q.trim() ? "is-active" : ""}`}>
-      <div className="cc-searchInput">
-        <div className="cc-searchInput__fieldWrap">
-          <input
-            className="cc-input cc-input--floating"
-                              id="vents-comppr-wit"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={async (e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                skipSearchRef.current = true;
-                await loadRows({
-                  from: dateRange.from,
-                  to: dateRange.to,
-                  q: e.currentTarget.value,
-                  offset: 0,
-                  append: false,
-                });
-              }
-            }}
-            placeholder=" "
-            disabled={loadingListsCtx || loadingAll}
-          />
+                      <span className="cc-floatingLabel">
+                        <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                      </span>
 
-          <span className="cc-floatingLabel">
-            <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-          </span>
-
-          {q.trim() !== "" && (
-            <button
-              type="button"
-              className="cc-clearSearch cc-clearSearch--inside"
-              title="Limpiar búsqueda"
-              onClick={async () => {
-                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                setQ("");
-                skipSearchRef.current = true;
-                await loadRows({
-                  from: dateRange.from,
-                  to: dateRange.to,
-                  q: "",
-                  offset: 0,
-                  append: false,
-                });
-              }}
-              disabled={loadingAll}
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-
-</div>
+                      {q.trim() !== "" && (
+                        <button
+                          type="button"
+                          className="cc-clearSearch cc-clearSearch--inside"
+                          title="Limpiar búsqueda"
+                          onClick={async () => {
+                            if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                            setQ("");
+                            skipSearchRef.current = true;
+                            await loadRows({
+                              from: dateRange.from,
+                              to: dateRange.to,
+                              q: "",
+                              offset: 0,
+                              append: false,
+                            });
+                          }}
+                          disabled={loadingAll}
+                        >
+                          <FontAwesomeIcon icon={faTimes} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div
-            className="mov-card__actions"
-            style={{ display: "flex", gap: 10, alignItems: "center" }}
-          >
+          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
               loading={loadingAll}
@@ -1226,6 +1339,8 @@ const dateRangeLabel = useMemo(() => {
               <>
                 {filteredRows.map((r) => {
                   const key = getRowKey(r);
+                  const tieneComprobante = !!(r?.id_comprobante && Number(r.id_comprobante) > 0);
+
                   return (
                     <div
                       key={key}
@@ -1238,13 +1353,32 @@ const dateRangeLabel = useMemo(() => {
                           return (
                             <div
                               key={c.key}
-                              className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(
-                                " "
-                              )}
+                              className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
                               role="cell"
                               data-label={c.label}
                             >
                               <div className="mov-actionsInline">
+                                <button
+                                  type="button"
+                                  className={[
+                                    "mov-iconBtn",
+                                    tieneComprobante
+                                      ? "mov-iconBtn--comprobante"
+                                      : "mov-iconBtn--disabled",
+                                  ].join(" ")}
+                                  title={tieneComprobante ? "Ver comprobante" : "Sin comprobante"}
+                                  disabled={!tieneComprobante || isAnyLoading}
+                                  onClick={() => {
+                                    if (tieneComprobante) handleVerComprobante(r);
+                                  }}
+                                  style={{
+                                    opacity: tieneComprobante ? 1 : 0.35,
+                                    cursor: tieneComprobante ? "pointer" : "not-allowed",
+                                  }}
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                </button>
+
                                 <button
                                   type="button"
                                   className="mov-iconBtn"
@@ -1257,6 +1391,7 @@ const dateRangeLabel = useMemo(() => {
                                 >
                                   <FontAwesomeIcon icon={faPenToSquare} />
                                 </button>
+
                                 <button
                                   type="button"
                                   className="mov-iconBtn mov-iconBtn--danger"
@@ -1275,6 +1410,7 @@ const dateRangeLabel = useMemo(() => {
                         }
 
                         const val = c.render ? c.render(r) : safeText(r[c.key]);
+
                         return (
                           <div
                             key={c.key}
@@ -1407,6 +1543,18 @@ const dateRangeLabel = useMemo(() => {
         }}
         onConfirm={confirmDelete}
         onToast={showToast}
+      />
+
+      <ModalVerComprobante
+        open={openVerComprobante}
+        url={comprobanteUrl}
+        mime={comprobanteMime}
+        title="Comprobante de Venta"
+        onClose={() => {
+          setOpenVerComprobante(false);
+          setComprobanteUrl("");
+          setComprobanteMime("");
+        }}
       />
     </div>
   );

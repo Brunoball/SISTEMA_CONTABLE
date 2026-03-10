@@ -119,7 +119,7 @@
 .cc-headTitle{
   display: flex;
   flex-direction: column;
-  gap: 10px;
+
 }
 
 .cc-card__title{
@@ -807,7 +807,7 @@
 }
 
 .cc-cliente-table__body{
-  height: calc(100vh - 345px);
+  height: calc(100vh - 325px);
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -827,7 +827,7 @@
 
 .cc-cliente-table__totals{
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr;
+  grid-template-columns: 0.8fr 2.2fr 1fr 1fr 1fr 0.7fr;
   background: #f8fafc;
   font-weight: 700;
 }

@@ -1,7 +1,6 @@
-// src/components/Movimientos/modales/ModalEliminarMovimientos.jsx
 import React, { useEffect, useRef, useCallback, useMemo } from "react";
 import { FaTrashAlt, FaTimes } from "react-icons/fa";
-import { createPortal } from "react-dom"; // ✅ NUEVO
+import { createPortal } from "react-dom";
 import "./ModalEliminarMovimientos.css";
 
 function moneyARS(v) {
@@ -24,20 +23,20 @@ function getMontoTotal(row) {
   if (!row || typeof row !== "object") return null;
 
   const candidates = [
-    row.monto_total, // ✅ principal en tu tabla
-    row.total,       // items / backend alternativo
-    row.total_item,  // items alternativo
-    row.subtotal,    // por si viene subtotal
-    row.monto,       // compat viejo
+    row.monto_total,
+    row.total,
+    row.total_item,
+    row.subtotal,
+    row.monto,
   ];
 
   for (const c of candidates) {
     if (c === null || c === undefined || c === "") continue;
     const n = Number(c);
     if (Number.isFinite(n)) return n;
-    // si viene como string raro pero no convertible, igual lo devolvemos como "texto"
     return c;
   }
+
   return null;
 }
 
@@ -48,6 +47,16 @@ export default function ModalEliminarMovimientos({
   onClose,
   onConfirm,
   onToast,
+
+  // ✅ textos configurables
+  title = "Eliminar movimiento",
+  message = "¿Seguro que querés eliminar este movimiento definitivamente?",
+  warning = "Esta acción no se puede deshacer.",
+  loadingMessage = "Eliminando movimiento…",
+  successMessage = "Movimiento eliminado.",
+  errorMessage = "No se pudo eliminar el movimiento.",
+  confirmLabel = "Eliminar",
+  cancelLabel = "Cancelar",
 }) {
   const cancelRef = useRef(null);
 
@@ -64,16 +73,16 @@ export default function ModalEliminarMovimientos({
   const handleConfirm = useCallback(async () => {
     if (loading) return;
 
-    showToast("cargando", "Eliminando movimiento…", 12000);
+    showToast("cargando", loadingMessage, 12000);
 
     try {
-      await onConfirm?.(); // el padre hace la API
-      showToast("exito", "Movimiento eliminado.", 2600);
-      // El cierre lo maneja el padre (como lo tenés ahora)
+      await onConfirm?.();
+      showToast("exito", successMessage, 2600);
+      // El cierre lo maneja el padre
     } catch (e) {
-      showToast("error", e?.message || "No se pudo eliminar el movimiento.", 4200);
+      showToast("error", e?.message || errorMessage, 4200);
     }
-  }, [loading, onConfirm, showToast]);
+  }, [loading, onConfirm, showToast, loadingMessage, successMessage, errorMessage]);
 
   useEffect(() => {
     if (!open) return;
@@ -82,9 +91,7 @@ export default function ModalEliminarMovimientos({
 
     const onKeyDown = (e) => {
       if (e.key === "Escape") cerrar();
-      if (e.key === "Enter") {
-        if (!loading) handleConfirm();
-      }
+      if (e.key === "Enter" && !loading) handleConfirm();
     };
 
     document.addEventListener("keydown", onKeyDown);
@@ -94,10 +101,8 @@ export default function ModalEliminarMovimientos({
   const view = useMemo(() => {
     const idMov = row?.id_movimiento ?? "—";
 
-    // ✅ tipo: priorizamos los campos reales
     const tipo = safeText(row?.tipo_movimiento ?? row?.tipo_venta ?? row?.tipo ?? "");
 
-    // ✅ concepto: en tu sistema es "detalle" muchas veces
     const concepto = safeText(
       row?.detalle ??
         row?.concepto ??
@@ -113,24 +118,24 @@ export default function ModalEliminarMovimientos({
         ? "—"
         : typeof montoRaw === "number"
         ? moneyARS(montoRaw)
-        : safeText(montoRaw); // si vino texto no convertible
+        : safeText(montoRaw);
 
     return { idMov, tipo, concepto, monto };
   }, [row]);
 
-if (!open) return null;
+  if (!open) return null;
 
-return createPortal(
-  <div
-    className="mvdel-overlay"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="modal-eliminar-mov-title"
-    onMouseDown={(e) => {
-      if (e.target === e.currentTarget) cerrar();
-    }}
-  >
-    <div className="mvdel-modal mvdel-modal--danger">
+  return createPortal(
+    <div
+      className="mvdel-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-eliminar-mov-title"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) cerrar();
+      }}
+    >
+      <div className="mvdel-modal mvdel-modal--danger">
         <button
           className="mvdel-close"
           type="button"
@@ -146,13 +151,13 @@ return createPortal(
         </div>
 
         <h3 id="modal-eliminar-mov-title" className="mvdel-title mvdel-title--danger">
-          Eliminar movimiento
+          {title}
         </h3>
 
         <p className="mvdel-body">
-          ¿Seguro que querés eliminar este movimiento definitivamente?
+          {message}
           <br />
-          Esta acción no se puede deshacer.
+          {warning}
         </p>
 
         <div className="mvdel-card">
@@ -185,7 +190,7 @@ return createPortal(
             onClick={cerrar}
             disabled={loading}
           >
-            Cancelar
+            {cancelLabel}
           </button>
 
           <button
@@ -194,10 +199,11 @@ return createPortal(
             onClick={handleConfirm}
             disabled={loading}
           >
-            {loading ? "Eliminando..." : "Eliminar"}
+            {loading ? "Eliminando..." : confirmLabel}
           </button>
         </div>
       </div>
-    </div>,  document.body
+    </div>,
+    document.body
   );
 }

@@ -12,9 +12,6 @@ import "../../Global/Calendario/calendario.css";
 
 import ModalEditarRecibo from "./modales/ModalEditarRecibo.jsx";
 import ModalPagarRecibos from "./modales/ModalPagarRecibos.jsx";
-import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
-
-import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 
 // ✅ BOTÓN EXPORTAR GLOBAL (igual que Ventas)
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
@@ -25,9 +22,7 @@ import {
   faMagnifyingGlass,
   faFileExcel,
   faPenToSquare,
-  faTrashCan,
   faMoneyBill1Wave,
-  faEye,
   faChevronDown,
   faArrowRightLong,
 } from "@fortawesome/free-solid-svg-icons";
@@ -150,7 +145,7 @@ function getAuthInfo() {
 }
 
 /* =========================
-   Recibos (PAGADO/PENDIENTE)
+   Recibos (PENDIENTE)
 ========================= */
 function isReciboPagado(row) {
   if (row?.pagado === true) return true;
@@ -173,7 +168,7 @@ function getRowKey(r) {
 }
 
 /* =========================
-   Export helpers (igual que Ventas)
+   Export helpers
 ========================= */
 function slugifySheetName(name) {
   const s = String(name || "Recibos")
@@ -188,7 +183,7 @@ function buildExportRows(rows) {
     FECHA: safeText(formatFechaDMY(r?.fecha)),
     DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
     CLIENTE: safeText(r?.cliente),
-    ESTADO: isReciboPagado(r) ? "PAGADO" : "PENDIENTE",
+    ESTADO: "PENDIENTE",
     MONTO: Number(r?.monto_total ?? r?.total ?? 0) || 0,
   }));
 }
@@ -248,7 +243,6 @@ export default function Recibos() {
   const [loadingRows, setLoadingRows] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadingAll, setLoadingAll] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
   const [q, setQ] = useState("");
@@ -257,7 +251,6 @@ export default function Recibos() {
   const [nextOffset, setNextOffset] = useState(null);
 
   const [openEdit, setOpenEdit] = useState(false);
-  const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
 
   // pagar
@@ -265,12 +258,6 @@ export default function Recibos() {
   const [pagarCliente, setPagarCliente] = useState(null);
   const [pagarDeudas, setPagarDeudas] = useState([]);
   const [loadingClienteDeudas, setLoadingClienteDeudas] = useState(false);
-
-  // ver comprobante
-  const [openVer, setOpenVer] = useState(false);
-  const [verUrl, setVerUrl] = useState("");
-  const [verMime, setVerMime] = useState("");
-  const [verTitle, setVerTitle] = useState("Comprobante");
 
   // toast
   const [toast, setToast] = useState(null);
@@ -339,43 +326,6 @@ export default function Recibos() {
     },
     [buildHeaders, parseJsonOrThrow]
   );
-
-  /* =========================
-     Ver comprobante
-  ========================= */
-  const openVerComprobante = useCallback(
-    async (row) => {
-      const idComp = Number(row?.id_comprobante || 0);
-      if (!idComp) {
-        showToast("error", "Este recibo no tiene comprobante asociado.", 2800);
-        return;
-      }
-      const { sessionKey } = getAuthInfo();
-      if (!sessionKey) {
-        showToast("error", "Sesión inválida (no hay X-Session).", 3200);
-        return;
-      }
-      const sp = new URLSearchParams();
-      sp.set("action", "comprobantes_descargar");
-      sp.set("id_comprobante", String(idComp));
-      sp.set("session_key", sessionKey);
-
-      setVerTitle(`Comprobante · ${safeText(row?.cliente)}`);
-      setVerMime("application/pdf");
-      setVerUrl(`${API}?${sp.toString()}`);
-      setOpenVer(true);
-    },
-    [API, showToast]
-  );
-
-  const closeVerComprobante = useCallback(() => {
-    setOpenVer(false);
-    setTimeout(() => {
-      setVerUrl("");
-      setVerMime("");
-      setVerTitle("Comprobante");
-    }, 100);
-  }, []);
 
   /* =========================
      Comprobante helpers
@@ -546,7 +496,9 @@ export default function Recibos() {
       if (!alive) return;
       await loadRows({ from: dateRange?.from, to: dateRange?.to, q: "", offset: 0, append: false });
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -590,7 +542,7 @@ export default function Recibos() {
   }, [q]);
 
   /* =========================
-     Handler cambio de rango (SET GLOBAL)
+     Handler cambio de rango
   ========================= */
   const handleDateRangeChange = useCallback(
     async (newRange) => {
@@ -614,22 +566,15 @@ export default function Recibos() {
      Filtrado client-side
   ========================= */
   const filteredRows = useMemo(() => {
-    return (Array.isArray(rows) ? rows : [])
-      .filter((r) => rowInDateRange(r, dateRange?.from, dateRange?.to));
+    return (Array.isArray(rows) ? rows : []).filter((r) => rowInDateRange(r, dateRange?.from, dateRange?.to));
   }, [rows, dateRange]);
 
   const stats = useMemo(() => {
-    let pagados = 0;
-    let pendientes = 0;
-    for (const r of filteredRows) {
-      if (isReciboPagado(r)) pagados++;
-      else pendientes++;
-    }
-    return { pagados, pendientes, total: filteredRows.length };
+    return { pagados: 0, pendientes: filteredRows.length, total: filteredRows.length };
   }, [filteredRows]);
 
   /* =========================
-     Label calendario (igual que Ventas)
+     Label calendario
   ========================= */
   const dateRangeLabel = useMemo(() => {
     const { from, to } = dateRange;
@@ -665,13 +610,13 @@ export default function Recibos() {
   ========================= */
   const exportBaseName = useMemo(() => {
     const { from, to } = dateRange;
-    if (from && to) return `recibos_${dateToAPI(from)}_${dateToAPI(to)}`;
-    if (from) return `recibos_desde_${dateToAPI(from)}`;
-    return "recibos_todos";
+    if (from && to) return `recibos_pendientes_${dateToAPI(from)}_${dateToAPI(to)}`;
+    if (from) return `recibos_pendientes_desde_${dateToAPI(from)}`;
+    return "recibos_pendientes";
   }, [dateRange]);
 
   /* =========================
-     Export helpers (igual que Ventas)
+     Export helpers
   ========================= */
   const getExportData = useCallback(() => {
     const dataToExport = buildExportRows(filteredRows);
@@ -695,7 +640,7 @@ export default function Recibos() {
       }
     }
 
-    XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Recibos_Vista"));
+    XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Recibos_Pendientes"));
     XLSX.writeFile(wb, `${exportBaseName}.xlsx`);
   }, [getExportData, exportBaseName]);
 
@@ -789,13 +734,13 @@ export default function Recibos() {
         key: "fecha",
         label: "FECHA",
         align: "center",
-        fr: 0.9,
+        fr: 1,
         render: (r) => safeText(formatFechaDMY(r.fecha)),
       },
       {
         key: "detalle",
         label: "DESCRIPCION",
-        fr: 2.4,
+        fr: 2.7,
         strong: true,
         align: "left",
         render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
@@ -803,32 +748,25 @@ export default function Recibos() {
       {
         key: "cliente",
         label: "CLIENTE",
-        fr: 1.7,
+        fr: 1.8,
         align: "center",
         render: (r) => safeText(r.cliente),
       },
       {
         key: "estado",
         label: "ESTADO",
-        fr: 0.9,
+        fr: 1,
         align: "center",
-        render: (r) => {
-          const pag = isReciboPagado(r);
-          return (
-            <span className={`mov-chip ${pag ? "mov-chip--ok" : "mov-chip--warn"}`}>
-              {pag ? "PAGADO" : "PENDIENTE"}
-            </span>
-          );
-        },
+        render: () => <span className="mov-chip mov-chip--warn">PENDIENTE</span>,
       },
       {
         key: "monto",
         label: "MONTO",
-        fr: 1.1,
+        fr: 1.2,
         align: "right",
         render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
       },
-      { key: "acciones", label: "ACCIONES", fr: 1.4, align: "center", render: () => null },
+      { key: "acciones", label: "ACCIONES", fr: 1, align: "center", render: () => null },
     ];
   }, []);
 
@@ -844,7 +782,7 @@ export default function Recibos() {
   }, [columns]);
 
   /* =========================
-     Listar recibos por cliente
+     Listar recibos pendientes por cliente
   ========================= */
   const fetchRecibosCliente = useCallback(
     async (rowCliente) => {
@@ -927,7 +865,9 @@ export default function Recibos() {
         cacheRef.current.clear();
         skipSearchRef.current = true;
         await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
-        try { await refreshLists(); } catch {}
+        try {
+          await refreshLists();
+        } catch {}
         showToast("exito", "Comprobante guardado y vinculado a todos los pagos ✅", 2600);
       } catch (e) {
         showToast("error", e?.message || "El comprobante se guardó, pero no pude refrescar la lista.", 4200);
@@ -960,7 +900,9 @@ export default function Recibos() {
 
         cacheRef.current.clear();
         await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
-        try { await refreshLists(); } catch {}
+        try {
+          await refreshLists();
+        } catch {}
 
         showToast("exito", data?.mensaje || "Pago confirmado.", 2400);
         return data;
@@ -973,35 +915,6 @@ export default function Recibos() {
   );
 
   /* =========================
-     Eliminar
-  ========================= */
-  const confirmDelete = async () => {
-    if (!selectedRow?.id_movimiento) return;
-    const id = selectedRow.id_movimiento;
-    setDeletingId(id);
-    setError("");
-    showToast("cargando", "Eliminando…", 12000);
-    try {
-      const { idUsuario } = getAuthInfo();
-      const sp = new URLSearchParams();
-      sp.set("action", "recibos_eliminar");
-      sp.set("id_movimiento", String(id));
-      await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
-      setOpenDel(false);
-      setSelectedRow(null);
-      cacheRef.current.clear();
-      await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
-      try { await refreshLists(); } catch {}
-      showToast("exito", "Registro eliminado.", 2400);
-    } catch (e) {
-      setError(e.message || "Error eliminando.");
-      showToast("error", e.message || "Error eliminando.", 4200);
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  /* =========================
      "Cargar todos"
   ========================= */
   const handleLoadAll = useCallback(async () => {
@@ -1009,7 +922,7 @@ export default function Recibos() {
     if (nextOffset === null) return;
 
     setLoadingAll(true);
-    showToast("cargando", "Cargando todos los recibos…", 12000);
+    showToast("cargando", "Cargando todos los recibos pendientes…", 12000);
 
     let offset = nextOffset;
     let guard = 0;
@@ -1032,15 +945,23 @@ export default function Recibos() {
         if (!res.hasMore || offset === null) break;
       }
       setRows([...rowsRef.current]);
-      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} recibos.`, 2600);
+      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} recibos pendientes.`, 2600);
     } catch (e) {
       showToast("error", e?.message || "Error cargando todos.", 4200);
     } finally {
       setLoadingAll(false);
     }
   }, [
-    hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll,
-    nextOffset, dateRange, q, loadRows, showToast,
+    hasMore,
+    loadingMore,
+    loadingRows,
+    loadingListsCtx,
+    loadingAll,
+    nextOffset,
+    dateRange,
+    q,
+    loadRows,
+    showToast,
   ]);
 
   const isAnyLoading = loadingRows || loadingMore || loadingAll;
@@ -1048,13 +969,16 @@ export default function Recibos() {
   /* =========================
      Skeleton
   ========================= */
-  const skelWidths = useMemo(() => ({
-    fecha: ["46%", "38%", "42%", "34%"],
-    detalle: ["72%", "58%", "66%", "48%"],
-    cliente: ["62%", "54%", "46%", "58%"],
-    estado: ["44%", "34%", "40%", "30%"],
-    monto: ["38%", "30%", "34%", "28%"],
-  }), []);
+  const skelWidths = useMemo(
+    () => ({
+      fecha: ["46%", "38%", "42%", "34%"],
+      detalle: ["72%", "58%", "66%", "48%"],
+      cliente: ["62%", "54%", "46%", "58%"],
+      estado: ["44%", "34%", "40%", "30%"],
+      monto: ["38%", "30%", "34%", "28%"],
+    }),
+    []
+  );
 
   const renderSkeletonRow = (idx) => (
     <div
@@ -1069,7 +993,6 @@ export default function Recibos() {
           return (
             <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
               <div className="mov-skelActions">
-                <span className="mov-skelIcon" />
                 <span className="mov-skelIcon" />
                 <span className="mov-skelIcon" />
               </div>
@@ -1109,34 +1032,31 @@ export default function Recibos() {
   ========================= */
   return (
     <div className="mov-page">
-      {toast && (
-        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
-      )}
+      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
 
       {errorListsCtx && (
-        <div className="mov-alert" role="alert">{errorListsCtx}</div>
+        <div className="mov-alert" role="alert">
+          {errorListsCtx}
+        </div>
       )}
       {error && (
-        <div className="mov-alert" role="alert">{error}</div>
+        <div className="mov-alert" role="alert">
+          {error}
+        </div>
       )}
 
       <section className="mov-card mov-card--table">
-        {/* ===== HEAD ===== */}
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
-            {/* Título + hint */}
             <div className="title-mov">
-              <div className="mov-card__title">Movs · Recibos</div>
+              <div className="mov-card__title">Movs · Recibos Pendientes</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b>
                 {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
               </div>
             </div>
 
-            {/* ===== FILTROS (igual que Ventas) ===== */}
             <div className="mov-headFilters">
-
-              {/* Calendario — estilo Ventas con floatingField */}
               <div className="mov-filter mov-filter--cal floatingField">
                 <button
                   type="button"
@@ -1171,12 +1091,7 @@ export default function Recibos() {
                 )}
               </div>
 
-              {/* Buscador — estilo Ventas con floatingField */}
-              <div
-                className={`mov-search floatingField floatingField--search ${
-                  q.trim() ? "is-active" : ""
-                }`}
-              >
+              <div className={`mov-search floatingField floatingField--search ${q.trim() ? "is-active" : ""}`}>
                 <div className="mov-searchInput">
                   <input
                     className="mov-input--floating"
@@ -1232,11 +1147,7 @@ export default function Recibos() {
             </div>
           </div>
 
-          {/* ===== ACCIONES: BotonExportar (igual que Ventas, sin botón Nueva) ===== */}
-          <div
-            className="mov-card__actions"
-            style={{ display: "flex", gap: 10, alignItems: "center" }}
-          >
+          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
               loading={loadingAll}
@@ -1248,17 +1159,13 @@ export default function Recibos() {
           </div>
         </div>
 
-        {/* ===== HEADER TABLA ===== */}
-        <div
-          className="mov-gridTable mov-gridTable--head"
-          style={{ gridTemplateColumns: gridCols }}
-          role="row"
-        >
+        <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
           {columns.map((c) => (
             <div
               key={c.key}
               className={[
-                "mov-gridCell", "mov-gridCell--head",
+                "mov-gridCell",
+                "mov-gridCell--head",
                 c.align === "right" ? "is-right" : "",
                 c.align === "center" ? "is-center" : "",
               ].join(" ")}
@@ -1269,7 +1176,6 @@ export default function Recibos() {
           ))}
         </div>
 
-        {/* ===== BODY ===== */}
         <div className="mov-tableWrap mov-table---Wrap" role="rowgroup">
           <div className={["mov-gridBody", "mov-gridBody--relative", loadingRows ? "mov-softLoading" : ""].join(" ")}>
             {loadingRows ? (
@@ -1280,16 +1186,9 @@ export default function Recibos() {
               <>
                 {filteredRows.map((r) => {
                   const key = getRowKey(r);
-                  const pagado = isReciboPagado(r);
-                  const hasComp = Number(r?.id_comprobante || 0) > 0;
 
                   return (
-                    <div
-                      key={key}
-                      className={`mov-gridTable mov-gridTable--row ${pagado ? "mov-row--paid" : ""}`}
-                      style={{ gridTemplateColumns: gridCols }}
-                      role="row"
-                    >
+                    <div key={key} className="mov-gridTable mov-gridTable--row" style={{ gridTemplateColumns: gridCols }} role="row">
                       {columns.map((c) => {
                         if (c.key === "acciones") {
                           return (
@@ -1302,20 +1201,10 @@ export default function Recibos() {
                               <div className="mov-actionsInline">
                                 <button
                                   type="button"
-                                  className={`mov-iconBtn ${!hasComp ? "mov-iconBtn--disabled" : ""}`}
-                                  title={hasComp ? "Ver comprobante" : "Sin comprobante"}
-                                  onClick={() => hasComp && openVerComprobante(r)}
-                                  disabled={!hasComp || isAnyLoading || loadingListsCtx}
-                                >
-                                  <FontAwesomeIcon icon={faEye} />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className={`mov-iconBtn ${pagado ? "mov-iconBtn--disabled" : ""}`}
-                                  title={pagado ? "Ya está pagado" : "Pagar"}
-                                  onClick={() => !pagado && openPagarModal(r)}
-                                  disabled={pagado || isAnyLoading || loadingListsCtx || loadingClienteDeudas}
+                                  className="mov-iconBtn"
+                                  title="Pagar"
+                                  onClick={() => openPagarModal(r)}
+                                  disabled={isAnyLoading || loadingListsCtx || loadingClienteDeudas}
                                 >
                                   <FontAwesomeIcon icon={faMoneyBill1Wave} />
                                 </button>
@@ -1324,20 +1213,13 @@ export default function Recibos() {
                                   type="button"
                                   className="mov-iconBtn"
                                   title="Editar"
-                                  onClick={() => { setSelectedRow(r); setOpenEdit(true); }}
+                                  onClick={() => {
+                                    setSelectedRow(r);
+                                    setOpenEdit(true);
+                                  }}
                                   disabled={isAnyLoading || loadingListsCtx}
                                 >
                                   <FontAwesomeIcon icon={faPenToSquare} />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="mov-iconBtn mov-iconBtn--danger"
-                                  title="Eliminar"
-                                  disabled={isAnyLoading || loadingListsCtx || deletingId === r.id_movimiento}
-                                  onClick={() => { setSelectedRow(r); setOpenDel(true); }}
-                                >
-                                  {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
                                 </button>
                               </div>
                             </div>
@@ -1353,7 +1235,9 @@ export default function Recibos() {
                               c.align === "right" ? "is-right" : "",
                               c.align === "center" ? "is-center" : "",
                               c.strong ? "is-strong" : "",
-                            ].filter(Boolean).join(" ")}
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
                             role="cell"
                             data-label={c.label}
                             title={typeof val === "string" ? val : undefined}
@@ -1367,9 +1251,7 @@ export default function Recibos() {
                 })}
 
                 {!isAnyLoading && filteredRows.length === 0 && (
-                  <div className="mov-emptyRow">
-                    No hay recibos para mostrar en el rango de fechas seleccionado.
-                  </div>
+                  <div className="mov-emptyRow">No hay recibos pendientes para mostrar en el rango de fechas seleccionado.</div>
                 )}
 
                 {!loadingRows && hasMore && filteredRows.length > 0 && (
@@ -1379,7 +1261,7 @@ export default function Recibos() {
                       className="mov-btn mov-btn--loadAll"
                       onClick={handleLoadAll}
                       disabled={loadingMore || loadingAll || loadingListsCtx}
-                      title="Cargar todos los recibos restantes"
+                      title="Cargar todos los recibos pendientes restantes"
                     >
                       {loadingAll ? "Cargando todas…" : "Cargar todos"}
                     </button>
@@ -1397,16 +1279,6 @@ export default function Recibos() {
         </div>
       </section>
 
-      {/* ===== MODAL VER COMPROBANTE ===== */}
-      <ModalVerComprobante
-        open={openVer}
-        url={verUrl}
-        mime={verMime}
-        title={verTitle}
-        onClose={closeVerComprobante}
-      />
-
-      {/* ===== PAGAR ===== */}
       <ModalPagarRecibos
         open={openPagar}
         onClose={() => {
@@ -1422,17 +1294,17 @@ export default function Recibos() {
         onReciboFinalizado={onReciboFinalizado}
       />
 
-      {/* ===== EDITAR ===== */}
       <ModalEditarRecibo
         open={openEdit}
         row={selectedRow}
         lists={lists}
         periodoDefault={
-          dateRange?.from
-            ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}`
-            : ""
+          dateRange?.from ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}` : ""
         }
-        onClose={() => { setOpenEdit(false); setSelectedRow(null); }}
+        onClose={() => {
+          setOpenEdit(false);
+          setSelectedRow(null);
+        }}
         onToast={showToast}
         onSave={async (payloadFinal) => {
           const { idUsuario } = getAuthInfo();
@@ -1442,19 +1314,11 @@ export default function Recibos() {
           });
           cacheRef.current.clear();
           await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
-          try { await refreshLists(); } catch {}
+          try {
+            await refreshLists();
+          } catch {}
           return data;
         }}
-      />
-
-      {/* ===== DELETE ===== */}
-      <ModalEliminarMovimientos
-        open={openDel}
-        row={selectedRow}
-        loading={deletingId === selectedRow?.id_movimiento}
-        onClose={() => { setOpenDel(false); setSelectedRow(null); }}
-        onConfirm={confirmDelete}
-        onToast={showToast}
       />
     </div>
   );

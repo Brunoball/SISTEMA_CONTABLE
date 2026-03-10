@@ -79,32 +79,11 @@ function getClienteId(c) {
 }
 
 /* =========================
-   Período UI (MM-YYYY) <-> API (YYYY-MM)
+   Período: solo YYYY-MM para API, derivado de fecha
 ========================= */
-function isoToMMYYYY(iso) {
-  const s = String(iso ?? "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
-  const [y, m] = s.split("-");
-  return `${m}-${y}`;
-}
-function mmYYYYToYYYYMM(mmYYYY) {
-  const s = String(mmYYYY ?? "").trim();
-  if (/^\d{2}[-/]\d{4}$/.test(s)) {
-    const [mm, yyyy] = s.split(/[-/]/);
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{6}$/.test(s)) {
-    const mm = s.slice(0, 2);
-    const yyyy = s.slice(2);
-    return `${yyyy}-${mm}`;
-  }
-  if (/^\d{4}-\d{2}$/.test(s)) return s;
-  return "";
-}
-function normalizePeriodoInput(raw) {
-  const digits = String(raw || "").replace(/\D/g, "").slice(0, 6);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+function fechaToYYYYMM(isoDate) {
+  const s = String(isoDate ?? "").trim().slice(0, 7); // "YYYY-MM"
+  return /^\d{4}-\d{2}$/.test(s) ? s : "";
 }
 
 /* =========================
@@ -450,6 +429,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const API_SAVE_CLIENTE_FISCAL = `${BASE_URL}/api.php?action=cliente_fiscal_upsert`;
   const API_PADRON_CUIT = `${BASE_URL}/api.php?action=padron_cuit&op=padron_cuit`;
   const API_CONFIG_FACTURACION = `${BASE_URL}/api.php?action=config_facturacion_get`;
+  const API_VINCULAR_COMPROBANTE = `${BASE_URL}/api.php?action=comprobantes_vincular_movimiento`;
+  const API_VINCULAR_COMPROBANTE_LOTE = `${BASE_URL}/api.php?action=comprobantes_vincular_movimientos_lote`;
 
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
@@ -512,7 +493,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   );
 
   const [fecha, setFecha] = useState(todayISO());
-  const [periodoUI, setPeriodoUI] = useState(isoToMMYYYY(todayISO()));
+  // ✅ Período se deriva automáticamente de la fecha (no hay campo UI)
 
   const [filters, setFilters] = useState({
     id_tipo_venta: NULL_OPTION,
@@ -568,7 +549,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     if (!wasOpen && open) {
       const f = todayISO();
       setFecha(f);
-      setPeriodoUI(isoToMMYYYY(f));
 
       setFilters({
         id_tipo_venta: NULL_OPTION,
@@ -623,11 +603,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const onFechaChange = (iso) => {
     const v = String(iso || "").trim();
     setFecha(v);
-    setPeriodoUI(isoToMMYYYY(v));
-  };
-
-  const onPeriodoChange = (raw) => {
-    setPeriodoUI(normalizePeriodoInput(raw));
+    // Período se deriva solo de la fecha, sin campo UI
   };
 
   const addRow = useCallback(() => {
@@ -876,15 +852,20 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const tipoVentaSelected = useMemo(() => {
     const id = Number(filters.id_tipo_venta);
     if (!Number.isFinite(id) || id <= 0) return null;
-    return tiposVentaList.find(
-      (x) => Number(x?.id ?? x?.id_tipo_venta ?? 0) === id
-    ) || null;
+    return (
+      tiposVentaList.find(
+        (x) => Number(x?.id ?? x?.id_tipo_venta ?? 0) === id
+      ) || null
+    );
   }, [filters.id_tipo_venta, tiposVentaList]);
 
   const isContado = useMemo(() => isContadoTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
   const isCorriente = useMemo(() => isCorrienteTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
 
-  const shouldNeedFiscalPanel = open && isContado && accionContado === "facturar" && !clienteFiscalDb;
+  // ✅ El panel fiscal se muestra si: hay tipo de venta seleccionado Y accion = "facturar" Y no tiene datos fiscales
+  const tipoVentaSeleccionado = tipoVentaSelected !== null;
+  const shouldNeedFiscalPanel =
+    open && tipoVentaSeleccionado && accionContado === "facturar" && !clienteFiscalDb;
 
   const fetchClienteFiscal = useCallback(
     async (idCliente) => {
@@ -895,8 +876,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       setFiscalError("");
       setClienteFiscalDb(null);
       setFiscalArcaData(null);
-      // OJO: NO limpiamos fiscalCuitInput acá porque si el usuario ya escribió el CUIT
-      // y vuelve a tocar "Facturar", necesitamos conservarlo.
 
       try {
         const data = await apiGetJson(`${API_GET_CLIENTE_FISCAL}&id_cliente=${id}`);
@@ -1007,8 +986,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       throw new Error("Seleccioná un cliente antes de facturar.");
     }
 
-    // Guardamos el CUIT actual ANTES de consultar DB,
-    // para que no se pierda aunque haya otro flujo de estado.
     const cuitIngresado = onlyDigits(fiscalCuitInput);
 
     if (clienteFiscalDb?.id_cliente === selectedClienteId && clienteFiscalDb?.cuit) {
@@ -1058,9 +1035,10 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       }
     }
 
-    const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
+    // ✅ Período se deriva de la fecha automáticamente
+    const periodoApi = fechaToYYYYMM(fecha);
     if (!/^\d{4}-\d{2}$/.test(periodoApi)) {
-      return { ok: false, msg: "Período inválido. Usá MM-YYYY (ej: 02-2026)." };
+      return { ok: false, msg: "La fecha es inválida, no se puede determinar el período." };
     }
 
     const problems = [];
@@ -1088,7 +1066,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }
 
     return { ok: true, warn: problems.length > 0, periodoApi };
-  }, [cliInput, selectedClienteId, filters, isContado, periodoUI, fecha, rowsCalc]);
+  }, [cliInput, selectedClienteId, filters, isContado, fecha, rowsCalc]);
 
   const buildResumenFacturaPayload = useCallback(
     (clienteFiscalResuelto, cfg) => {
@@ -1133,6 +1111,12 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           domicilio: safeStr(clienteFiscalResuelto?.domicilio),
           origen: safeStr(clienteFiscalResuelto?.origen || "arca_cuit"),
         },
+
+        id_cliente: selectedClienteId || null,
+        id_tipo_venta: Number(filters.id_tipo_venta || 0) || null,
+        id_medio_pago: isContado ? Number(filters.id_medio_pago || 0) || null : null,
+        id_clasificacion: null,
+
         fecha_cbte_iso: String(fecha || todayISO()).slice(0, 10),
         vto_pago_iso: plusDaysISOFrom(fecha || todayISO(), 10),
         cbte_tipo: codigoCbte,
@@ -1151,13 +1135,14 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         logo_url: safeStr(cfg?.logo_url),
       };
     },
-    [rowsCalc, selectedClienteNombre, fecha, resumen.total]
+    [rowsCalc, selectedClienteNombre, fecha, resumen.total, selectedClienteId, filters, isContado]
   );
 
   const guardarVentaBatch = useCallback(
     async ({ clienteFiscalResuelto = null, accionFinal = "guardar", esFacturadaFinal = false }) => {
       const { idUsuario } = getAuthInfo();
-      const periodoApi = mmYYYYToYYYYMM(periodoUI) || (fecha ? String(fecha).slice(0, 7) : "");
+      // ✅ Período derivado automáticamente de la fecha
+      const periodoApi = fechaToYYYYMM(fecha);
 
       const payloads = rowsCalc
         .filter((r) => {
@@ -1198,7 +1183,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
       return {
         ...data,
-        periodoUI,
         periodoApi,
         fecha,
         cliente_fiscal: clienteFiscalResuelto,
@@ -1208,7 +1192,94 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         es_facturada: esFacturadaFinal,
       };
     },
-    [API_BATCH, periodoUI, fecha, rowsCalc, selectedClienteId, selectedClienteNombre, filters, isContado]
+    [API_BATCH, fecha, rowsCalc, selectedClienteId, selectedClienteNombre, filters, isContado]
+  );
+
+  const subirComprobanteYVincularPrimerMovimiento = useCallback(
+    async ({ idMovimiento, blob, filename, facturaMeta }) => {
+      if (!idMovimiento || !blob) {
+        throw new Error("Faltan datos para subir el comprobante.");
+      }
+
+      const fd = new FormData();
+      fd.append("tipo", "FACTURA");
+      fd.append("id_movimiento", String(idMovimiento));
+      fd.append(
+        "pdf",
+        blob instanceof Blob ? blob : new Blob([blob], { type: "application/pdf" }),
+        filename || "factura.pdf"
+      );
+
+      const meta = {
+        tipo: "FACTURA",
+        estado: "emitida",
+        id_pago: facturaMeta?.id_pago ?? null,
+        id_sistema: facturaMeta?.id_sistema ?? null,
+        anio: Number(facturaMeta?.anio || 0),
+        id_mes: Number(facturaMeta?.id_mes || 0),
+        monto_ars: Number(facturaMeta?.imp_total ?? facturaMeta?.importe ?? resumen.total ?? 0),
+        doc_tipo: Number(facturaMeta?.doc_tipo || 80),
+        doc_nro: safeStr(facturaMeta?.doc_nro),
+        cbte_tipo: Number(facturaMeta?.cbte_tipo || 11),
+        pto_vta: Number(facturaMeta?.pto_vta || 2),
+        razon_social:
+          resumenFacturaData?.cliente_facturacion?.razon_social || null,
+        cond_iva:
+          resumenFacturaData?.cliente_facturacion?.cond_iva ||
+          resumenFacturaData?.cliente_facturacion?.condicion_iva ||
+          null,
+        domicilio: resumenFacturaData?.cliente_facturacion?.domicilio || null,
+        cae: facturaMeta?.cae ?? null,
+        cae_vto: facturaMeta?.cae_vto ?? null,
+        cbte_nro: facturaMeta?.cbte_nro ?? null,
+        fecha_cbte: facturaMeta?.fecha_cbte ?? null,
+        resultado: facturaMeta?.resultado ?? null,
+        qr_url: facturaMeta?.qr_url ?? null,
+        qr_base64: facturaMeta?.qr_base64 ?? null,
+        qr_payload: facturaMeta?.qr_payload ?? null,
+        items_facturacion: Array.isArray(resumenFacturaData?.items_facturacion)
+          ? resumenFacturaData.items_facturacion
+          : [],
+        total_ars: resumenFacturaData?.total_ars ?? null,
+        vto_pago: resumenFacturaData?.vto_pago_iso ?? null,
+        observaciones: resumenFacturaData?.observaciones ?? "",
+      };
+
+      fd.append("meta", JSON.stringify(meta));
+
+      const res = await fetch(API_VINCULAR_COMPROBANTE, {
+        method: "POST",
+        body: fd,
+        headers: buildAuthHeaders(false),
+      });
+
+      const j = await parseJsonOrThrow(res);
+      if (!j?.exito) {
+        throw new Error(j?.mensaje || "No se pudo subir el comprobante.");
+      }
+
+      return j;
+    },
+    [API_VINCULAR_COMPROBANTE, resumen.total, resumenFacturaData]
+  );
+
+  const vincularComprobanteAMovimientosLote = useCallback(
+    async (idsMovimiento, idComprobante) => {
+      if (!idComprobante || !Array.isArray(idsMovimiento) || !idsMovimiento.length) return;
+
+      const data = await apiPostJson(API_VINCULAR_COMPROBANTE_LOTE, {
+        id_comprobante: Number(idComprobante),
+        ids_movimiento: idsMovimiento.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0),
+        force: false,
+      });
+
+      if (!data?.exito) {
+        throw new Error(data?.mensaje || "No se pudo vincular el comprobante al lote.");
+      }
+
+      return data;
+    },
+    [API_VINCULAR_COMPROBANTE_LOTE]
   );
 
   const abrirResumenFactura = useCallback(async () => {
@@ -1254,11 +1325,47 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           resumenFacturaData?.cliente_facturacion || clienteFiscalDb || fiscalArcaData || {}
         );
 
+        // 1) guardar batch
         const infoToParent = await guardarVentaBatch({
           clienteFiscalResuelto,
           accionFinal: "facturar",
           esFacturadaFinal: true,
         });
+
+        const idsMovimiento =
+          infoToParent?.ids ??
+          infoToParent?.ids_movimiento ??
+          infoToParent?.ids_movimientos ??
+          (infoToParent?.id_movimiento ? [infoToParent.id_movimiento] : []);
+
+        const idsOk = (Array.isArray(idsMovimiento) ? idsMovimiento : [])
+          .map((x) => Number(x))
+          .filter((x) => Number.isFinite(x) && x > 0);
+
+        let idComprobante =
+          factEmitida?.id_comprobante ??
+          factEmitida?.idComprobante ??
+          null;
+
+        // 2) si el modal resumen no guardó el comprobante, lo subimos ahora
+        if (!idComprobante && factEmitida?.pdf_blob && idsOk.length > 0) {
+          const subida = await subirComprobanteYVincularPrimerMovimiento({
+            idMovimiento: idsOk[0],
+            blob: factEmitida.pdf_blob,
+            filename: factEmitida.pdf_filename || "factura.pdf",
+            facturaMeta: factEmitida,
+          });
+
+          idComprobante =
+            subida?.id_comprobante ??
+            subida?.comprobante?.id_comprobante ??
+            null;
+        }
+
+        // 3) vincular ese mismo comprobante a todo el lote
+        if (idComprobante && idsOk.length > 0) {
+          await vincularComprobanteAMovimientosLote(idsOk, idComprobante);
+        }
 
         showToast("exito", "Factura emitida y venta guardada correctamente.", 3000);
 
@@ -1268,6 +1375,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         onSaved?.({
           ...infoToParent,
           factura_emitida: factEmitida || null,
+          id_comprobante: idComprobante,
         });
       } catch (e) {
         showToast("error", e?.message || "La factura se emitió pero no se pudo guardar la venta.", 5200);
@@ -1275,7 +1383,16 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         setSaving(false);
       }
     },
-    [showToast, guardarVentaBatch, resumenFacturaData, clienteFiscalDb, fiscalArcaData, onSaved]
+    [
+      showToast,
+      guardarVentaBatch,
+      resumenFacturaData,
+      clienteFiscalDb,
+      fiscalArcaData,
+      onSaved,
+      subirComprobanteYVincularPrimerMovimiento,
+      vincularComprobanteAMovimientosLote,
+    ]
   );
 
   const submit = useCallback(async () => {
@@ -1298,7 +1415,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       return;
     }
 
-    if (isContado && accionContado === "facturar") {
+    // ✅ Facturar aplica si hay tipo de venta y accion = facturar
+    if (tipoVentaSeleccionado && accionContado === "facturar") {
       await abrirResumenFactura();
       return;
     }
@@ -1327,7 +1445,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     addUI.open,
     validate,
     showToast,
-    isContado,
+    tipoVentaSeleccionado,
     accionContado,
     guardarVentaBatch,
     onSaved,
@@ -1354,8 +1472,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         return;
       }
 
-      // Si NO hay fiscal en DB pero el usuario YA cargó CUIT,
-      // abrimos directamente el flujo completo para resolver y abrir resumen.
       if (cuitIngresado.length === 11) {
         await abrirResumenFactura();
         return;
@@ -1590,6 +1706,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                 <div className="mi-cr-filters__top">
                   <div className="mi-cr-filters__title">Datos de venta</div>
 
+                  {/* ✅ Solo campo de Fecha, sin Período */}
                   <div className="mi-cr-filters__dates">
                     <div className="fl-field">
                       <input
@@ -1600,18 +1717,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                         disabled={saving}
                       />
                       <label className="fl-label">Fecha</label>
-                    </div>
-
-                    <div className="fl-field">
-                      <input
-                        className="fl-input"
-                        placeholder="MM-YYYY"
-                        inputMode="numeric"
-                        value={periodoUI}
-                        onChange={(e) => onPeriodoChange(e.target.value)}
-                        disabled={saving}
-                      />
-                      <label className="fl-label">Período</label>
                     </div>
                   </div>
                 </div>
@@ -1677,129 +1782,131 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                     <label className="fl-label">Forma de venta</label>
                   </div>
 
+                  {/* ✅ Medio de pago solo para contado */}
                   {isContado && (
-                    <>
-                      <div className="fl-field">
-                        <select
-                          className="fl-input fl-select"
-                          value={String(filters.id_medio_pago)}
-                          onChange={(e) => updateFilter("id_medio_pago", e.target.value)}
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(filters.id_medio_pago)}
+                        onChange={(e) => updateFilter("id_medio_pago", e.target.value)}
+                        disabled={saving}
+                      >
+                        <option value={NULL_OPTION}>Medio de pago *</option>
+                        {mediosPagoList.map((x) => (
+                          <option key={x.id ?? x.id_medio_pago} value={String(x.id ?? x.id_medio_pago)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="fl-label">Medio de pago</label>
+                    </div>
+                  )}
+
+                  {/* ✅ Panel de Facturación: siempre visible cuando hay tipo de venta seleccionado */}
+                  {tipoVentaSeleccionado && (
+                    <div className="mi-card mi-card--full">
+                      <div className="mi-card__title">Facturación</div>
+
+                      <div className="mi-card__actionsRow">
+                        <button
+                          type="button"
+                          className={`mit-btn ${accionContado === "guardar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
+                          onClick={() => setAccionContado("guardar")}
                           disabled={saving}
                         >
-                          <option value={NULL_OPTION}>Medio de pago *</option>
-                          {mediosPagoList.map((x) => (
-                            <option key={x.id ?? x.id_medio_pago} value={String(x.id ?? x.id_medio_pago)}>
-                              {x.nombre}
-                            </option>
-                          ))}
-                        </select>
-                        <label className="fl-label">Medio de pago</label>
+                          Guardar
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`mit-btn ${accionContado === "facturar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
+                          onClick={onClickFacturar}
+                          disabled={saving}
+                        >
+                          {saving && accionContado === "facturar" ? "Procesando..." : "Facturar"}
+                        </button>
                       </div>
 
-                      <div className="mi-card mi-card--full">
-                        <div className="mi-card__title">Facturación (Contado)</div>
-
-                        <div className="mi-card__actionsRow">
-                          <button
-                            type="button"
-                            className={`mit-btn ${accionContado === "guardar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
-                            onClick={() => setAccionContado("guardar")}
-                            disabled={saving}
-                          >
-                            Guardar
-                          </button>
-
-                          <button
-                            type="button"
-                            className={`mit-btn ${accionContado === "facturar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
-                            onClick={onClickFacturar}
-                            disabled={saving}
-                          >
-                            {saving && accionContado === "facturar" ? "Procesando..." : "Facturar"}
-                          </button>
-                        </div>
-
-                        <div className="mi-card__hint">
-                          {accionContado === "guardar" ? (
-                            <>
-                              * <b>Guardar</b>: queda <b>pendiente</b>.
-                            </>
-                          ) : clienteFiscalDb ? (
-                            <>
-                              * Datos fiscales encontrados. Al presionar <b>Facturar</b> se abrirá el resumen.
-                            </>
-                          ) : (
-                            <>
-                              * Si el cliente no tiene datos fiscales guardados, ingresá el <b>CUIT</b> abajo y luego presioná <b>Facturar</b> nuevamente.
-                            </>
-                          )}
-                        </div>
-
-                        {shouldNeedFiscalPanel && (
-                          <div style={{ marginTop: 12 }}>
-                            {!selectedClienteId ? (
-                              <div className="mi-card__hint">
-                                Seleccioná primero un cliente del listado para poder facturar.
-                              </div>
-                            ) : fiscalLoading ? (
-                              <div className="mi-card__hint">Consultando datos fiscales guardados…</div>
-                            ) : !clienteFiscalDb ? (
-                              <>
-                                <div className="fl-field">
-                                  <input
-                                    className="fl-input"
-                                    placeholder=" "
-                                    value={fiscalCuitInput}
-                                    onChange={(e) => {
-                                      setFiscalCuitInput(onlyDigits(e.target.value));
-                                      setFiscalArcaData(null);
-                                      setFiscalError("");
-                                    }}
-                                    inputMode="numeric"
-                                    disabled={saving || fiscalLookupLoading}
-                                    maxLength={11}
-                                  />
-                                  <label className="fl-label">Ingresar CUIT *</label>
-                                </div>
-
-                                {fiscalArcaData && (
-                                  <div className="arca-alert arca-alert--info" style={{ marginTop: 10 }}>
-                                    <div className="arca-alert__title">
-                                      <strong>Datos encontrados</strong>
-                                    </div>
-
-                                    <div className="arca-resumen arca-resumen--2col">
-                                      <div className="arca-row">
-                                        <b>CUIT:</b>
-                                        <span>{fiscalArcaData.cuit || "—"}</span>
-                                      </div>
-                                      <div className="arca-row">
-                                        <b>IVA:</b>
-                                        <span>{fiscalArcaData.condicion_iva || "—"}</span>
-                                      </div>
-                                      <div className="arca-row arca-row--full">
-                                        <b>Razón social:</b>
-                                        <span>{fiscalArcaData.razon_social || "—"}</span>
-                                      </div>
-                                      <div className="arca-row arca-row--full">
-                                        <b>Domicilio:</b>
-                                        <span>{fiscalArcaData.domicilio || "—"}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </>
-                            ) : null}
-
-                            {fiscalError && (
-                              <div className="arca-alert arca-alert--error" style={{ marginTop: 10 }}>
-                                {fiscalError}
-                              </div>
-                            )}
-                          </div>
+                      <div className="mi-card__hint">
+                        {accionContado === "guardar" ? (
+                          <>
+                            * <b>Guardar</b>: queda <b>pendiente</b>.
+                          </>
+                        ) : clienteFiscalDb ? (
+                          <>
+                            * Datos fiscales encontrados. Al presionar <b>Facturar</b> se abrirá el resumen.
+                          </>
+                        ) : (
+                          <>
+                            * Si el cliente no tiene datos fiscales guardados, ingresá el <b>CUIT</b> abajo y luego presioná <b>Facturar</b> nuevamente.
+                          </>
                         )}
                       </div>
-                    </>
+
+                      {shouldNeedFiscalPanel && (
+                        <div style={{ marginTop: 12 }}>
+                          {!selectedClienteId ? (
+                            <div className="mi-card__hint">
+                              Seleccioná primero un cliente del listado para poder facturar.
+                            </div>
+                          ) : fiscalLoading ? (
+                            <div className="mi-card__hint">Consultando datos fiscales guardados…</div>
+                          ) : !clienteFiscalDb ? (
+                            <>
+                              <div className="fl-field">
+                                <input
+                                  className="fl-input"
+                                  placeholder=" "
+                                  value={fiscalCuitInput}
+                                  onChange={(e) => {
+                                    setFiscalCuitInput(onlyDigits(e.target.value));
+                                    setFiscalArcaData(null);
+                                    setFiscalError("");
+                                  }}
+                                  inputMode="numeric"
+                                  disabled={saving || fiscalLookupLoading}
+                                  maxLength={11}
+                                />
+                                <label className="fl-label">Ingresar CUIT *</label>
+                              </div>
+
+                              {fiscalArcaData && (
+                                <div className="arca-alert arca-alert--info" style={{ marginTop: 10 }}>
+                                  <div className="arca-alert__title">
+                                    <strong>Datos encontrados</strong>
+                                  </div>
+
+                                  <div className="arca-resumen arca-resumen--2col">
+                                    <div className="arca-row">
+                                      <b>CUIT:</b>
+                                      <span>{fiscalArcaData.cuit || "—"}</span>
+                                    </div>
+                                    <div className="arca-row">
+                                      <b>IVA:</b>
+                                      <span>{fiscalArcaData.condicion_iva || "—"}</span>
+                                    </div>
+                                    <div className="arca-row arca-row--full">
+                                      <b>Razón social:</b>
+                                      <span>{fiscalArcaData.razon_social || "—"}</span>
+                                    </div>
+                                    <div className="arca-row arca-row--full">
+                                      <b>Domicilio:</b>
+                                      <span>{fiscalArcaData.domicilio || "—"}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : null}
+
+                          {fiscalError && (
+                            <div className="arca-alert arca-alert--error" style={{ marginTop: 10 }}>
+                              {fiscalError}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   <div className="mi-cr-filters__actions">
@@ -1863,6 +1970,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           }}
           forceTestAmount={false}
           testAmount={null}
+          skipMovimientoAutocreacion={true}
         />
       )}
     </>

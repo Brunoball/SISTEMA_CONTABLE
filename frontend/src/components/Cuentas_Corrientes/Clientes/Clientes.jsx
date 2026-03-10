@@ -1,5 +1,3 @@
-// src/components/Cuentas_Corrientes/Clientes/Clientes.jsx
-
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -15,7 +13,7 @@ import {
   faEye,
   faBoxOpen,
   faChevronDown,
-    faArrowRightLong,
+  faArrowRightLong,
 } from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../../Global/Toast.jsx";
@@ -102,10 +100,7 @@ function resolveFileUrl(rawUrl) {
 }
 
 function canPreviewComprobante(row) {
-  return (
-    Number(row?.credito || 0) > 0 &&
-    (safeText(row?.comprobante_url) !== "" || Number(row?.id_comprobante || 0) > 0)
-  );
+  return safeText(row?.comprobante_url) !== "" || Number(row?.id_comprobante || 0) > 0;
 }
 
 /* =========================
@@ -259,24 +254,24 @@ export default function ClientesCC() {
     ensureListsLoaded?.({ force: false, background: true }).catch(() => {});
   }, [ensureListsLoaded]);
 
-const rangeLabel = useMemo(() => {
-  const from = dateRange?.from || null;
-  const to = dateRange?.to || null;
+  const rangeLabel = useMemo(() => {
+    const from = dateRange?.from || null;
+    const to = dateRange?.to || null;
 
-  if (!from) return "Seleccionar período";
+    if (!from) return "Seleccionar período";
 
-  if (!to || formatDateISO(from) === formatDateISO(to)) {
-    return formatDateLabel(from);
-  }
+    if (!to || formatDateISO(from) === formatDateISO(to)) {
+      return formatDateLabel(from);
+    }
 
-  return (
-    <>
-      {formatDateLabel(from)}
-      <FontAwesomeIcon icon={faArrowRightLong} style={{ margin: "0 6px" }} />
-      {formatDateLabel(to)}
-    </>
-  );
-}, [dateRange]);
+    return (
+      <>
+        {formatDateLabel(from)}
+        <FontAwesomeIcon icon={faArrowRightLong} style={{ margin: "0 6px" }} />
+        {formatDateLabel(to)}
+      </>
+    );
+  }, [dateRange]);
 
   const exportBaseName = useMemo(() => {
     const safeName = String(queryUsed || "cliente").replace(/[^\w.-]+/g, "_");
@@ -413,7 +408,7 @@ const rangeLabel = useMemo(() => {
   );
 
   /* =========================
-     Export functions (igual que Movimientos)
+     Export functions
   ========================= */
   const getExportData = useCallback(() => {
     const data = buildExportRows(rows);
@@ -517,15 +512,26 @@ const rangeLabel = useMemo(() => {
       const mime = safeText(row?.comprobante_mime);
 
       if (!accessUrl) {
-        showToast("advertencia", "Este cobro no tiene comprobante asociado.", 2600);
+        showToast("advertencia", "Este registro no tiene comprobante asociado.", 2600);
         return;
       }
+
+      const isCobro = Number(row?.credito || 0) > 0;
+      const isMovimiento = Number(row?.debito || 0) > 0;
 
       setPreviewComprobante({
         open: true,
         url: accessUrl,
         mime,
-        title: row?.comprobante ? `Comprobante · ${row.comprobante}` : "Comprobante",
+        title: isCobro
+          ? row?.comprobante
+            ? `Recibo · ${row.comprobante}`
+            : "Recibo"
+          : isMovimiento
+          ? row?.comprobante
+            ? `Factura / Deuda · ${row.comprobante}`
+            : "Factura / Deuda"
+          : "Comprobante",
       });
     },
     [API, showToast]
@@ -577,118 +583,115 @@ const rangeLabel = useMemo(() => {
             </div>
           </div>
 
-<div className="cc-headFilters">
-  <div className="cc-filter cc-filter--cal">
-    <div className={`cc-floatingField cc-floatingField--calendar is-active ${calOpen ? "is-open" : ""}`}>
-      <button
-        type="button"
-        className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
-        onClick={() => setCalOpen((v) => !v)}
-        disabled={loading}
-      >
+          <div className="cc-headFilters">
+            <div className="cc-filter cc-filter--cal">
+              <div
+                className={`cc-floatingField cc-floatingField--calendar is-active ${
+                  calOpen ? "is-open" : ""
+                }`}
+              >
+                <button
+                  type="button"
+                  className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
+                  onClick={() => setCalOpen((v) => !v)}
+                  disabled={loading}
+                >
+                  {rangeLabel}
 
-          {rangeLabel}
+                  <span className="cc-calTrigger__iconRight">
+                    <FontAwesomeIcon icon={faChevronDown} />
+                  </span>
+                </button>
 
+                <span className="cc-floatingLabel cc-floatingLabel--active">
+                  <FontAwesomeIcon icon={faCalendarDays} />
+                  Período
+                </span>
 
-
-
-        <span className="cc-calTrigger__iconRight">
-          <FontAwesomeIcon icon={faChevronDown} />
-        </span>
-      </button>
-
-      <span className="cc-floatingLabel cc-floatingLabel--active">
-  
-          <FontAwesomeIcon icon={faCalendarDays} />
-
-        Período
-      </span>
-
-      {calOpen && (
-        <div className="cc-calDropdown">
-          <Calendario
-            value={dateRange}
-            onChange={(range) => {
-              setDateRange(range);
-              if (range?.from && range?.to) setCalOpen(false);
-            }}
-            onClose={() => setCalOpen(false)}
-          />
-        </div>
-      )}
-    </div>
-  </div>
-
-  <div className="cc-filter cc-filter--search">
-    <div
-      className={`cc-floatingField cc-floatingField--search ${
-        openSug || safeText(q) !== "" ? "is-active" : ""
-      }`}
-    >
-      <div className="cc-searchInput">
-        <div className="cc-searchInput__fieldWrap">
-          <input
-            className="cc-input cc-input--floating"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={() => setOpenSug(true)}
-            onBlur={() => setTimeout(() => setOpenSug(false), 120)}
-            placeholder=" "
-            disabled={loading || loadingLists}
-            autoComplete="off"
-          />
-
-          <span className="cc-floatingLabel">
-            {loadingLists ? "Cargando clientes…" : "Buscar cliente"}
-          </span>
-
-          {safeText(q) !== "" && !loading && (
-            <button
-              type="button"
-              className="cc-clearSearch cc-clearSearch--inside"
-              title="Limpiar"
-              onClick={() => {
-                setQ("");
-                setSelected(null);
-                setOpenSug(false);
-                setRows([]);
-                setTotales({ debito: 0, credito: 0, saldo: 0 });
-                setHasSearched(false);
-                setQueryUsed("");
-              }}
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
-          )}
-
-          {openSug && suggestions.length > 0 && (
-            <div className="cc-suggestions">
-              <div className="cc-suggestions__scroll">
-                {suggestions.map((opt) => (
-                  <button
-                    key={`${opt.id ?? "temp"}-${opt.label}`}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleSelect(opt);
-                    }}
-                    className="cc-suggestions__item"
-                    title={opt.label}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                {calOpen && (
+                  <div className="cc-calDropdown">
+                    <Calendario
+                      value={dateRange}
+                      onChange={(range) => {
+                        setDateRange(range);
+                        if (range?.from && range?.to) setCalOpen(false);
+                      }}
+                      onClose={() => setCalOpen(false)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
-          {/* ✅ REEMPLAZA el botón cc-btnex cc-btn--excel por BotonExportar */}
+            <div className="cc-filter cc-filter--search">
+              <div
+                className={`cc-floatingField cc-floatingField--search ${
+                  openSug || safeText(q) !== "" ? "is-active" : ""
+                }`}
+              >
+                <div className="cc-searchInput">
+                  <div className="cc-searchInput__fieldWrap">
+                    <input
+                      className="cc-input cc-input--floating"
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onFocus={() => setOpenSug(true)}
+                      onBlur={() => setTimeout(() => setOpenSug(false), 120)}
+                      placeholder=" "
+                      disabled={loading || loadingLists}
+                      autoComplete="off"
+                    />
+
+                    <span className="cc-floatingLabel">
+                      {loadingLists ? "Cargando clientes…" : "Buscar cliente"}
+                    </span>
+
+                    {safeText(q) !== "" && !loading && (
+                      <button
+                        type="button"
+                        className="cc-clearSearch cc-clearSearch--inside"
+                        title="Limpiar"
+                        onClick={() => {
+                          setQ("");
+                          setSelected(null);
+                          setOpenSug(false);
+                          setRows([]);
+                          setTotales({ debito: 0, credito: 0, saldo: 0 });
+                          setHasSearched(false);
+                          setQueryUsed("");
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faTimes} />
+                      </button>
+                    )}
+
+                    {openSug && suggestions.length > 0 && (
+                      <div className="cc-suggestions">
+                        <div className="cc-suggestions__scroll">
+                          {suggestions.map((opt) => (
+                            <button
+                              key={`${opt.id ?? "temp"}-${opt.label}`}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelect(opt);
+                              }}
+                              className="cc-suggestions__item"
+                              title={opt.label}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <BotonExportar
             disabled={loading || !hasSearched || rows.length === 0}
             loading={false}
@@ -778,10 +781,10 @@ const rangeLabel = useMemo(() => {
                       disabled={!verHabilitado}
                       title={
                         verHabilitado
-                          ? "Ver comprobante"
-                          : Number(r.credito || 0) > 0
-                          ? "Este cobro no tiene comprobante"
-                          : "Solo disponible en registros de crédito"
+                          ? Number(r.credito || 0) > 0
+                            ? "Ver recibo / comprobante del cobro"
+                            : "Ver factura / comprobante de la deuda"
+                          : "Este registro no tiene comprobante asociado"
                       }
                       className={`cc-verBtn ${verHabilitado ? "" : "is-disabled"}`}
                     >

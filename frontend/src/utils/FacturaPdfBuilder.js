@@ -1,4 +1,9 @@
+// ✅ REEMPLAZAR COMPLETO
+// src/utils/FacturaPdfBuilder.js
+
 import jsPDF from "jspdf";
+import QRCode from "qrcode";
+import BASE_URL from "../config/config";
 
 const FIX = {
   emisor_nombre: "BALTO",
@@ -13,6 +18,8 @@ const FIX = {
   cond_iva_receptor_default: "Consumidor Final",
   cond_venta_default: "Contado / Transferencia Bancaria",
 };
+
+const API_RELATIVE = "api.php";
 
 function sanitizePdfText(input) {
   let t = input == null ? "" : String(input);
@@ -34,6 +41,14 @@ function s(v) {
   return v == null ? "" : String(v);
 }
 
+function safeJsonParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 function padLeft(v, len) {
   return s(v).padStart(len, "0");
 }
@@ -41,6 +56,14 @@ function padLeft(v, len) {
 function isYMD8(v) {
   const str = String(v || "");
   return str.length === 8 && /^\d{8}$/.test(str);
+}
+
+function isoToYmd(iso) {
+  const str = String(iso || "").trim();
+  if (!str) return "";
+  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "";
+  return `${m[1]}${m[2]}${m[3]}`;
 }
 
 function ymdToHuman(ymd) {
@@ -57,6 +80,18 @@ function ymdToHuman(ymd) {
   }
 
   return str;
+}
+
+function plusDaysIso(baseIso, days = 20) {
+  const base = String(baseIso || "").slice(0, 10);
+  const dt = /^\d{4}-\d{2}-\d{2}$/.test(base)
+    ? new Date(`${base}T00:00:00`)
+    : new Date();
+  dt.setDate(dt.getDate() + Number(days || 0));
+  const yyyy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function numEs(v, dec = 2) {
@@ -151,10 +186,28 @@ function wrapByWidth(doc, str, maxW) {
   return lines;
 }
 
+function normalizeList(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((it) => {
+      if (typeof it === "string") return it;
+      if (it && typeof it === "object") {
+        const code = it.Code || it.code || "";
+        const msg = it.Msg || it.msg || "";
+        return `${code ? `[${code}] ` : ""}${msg}`.trim();
+      }
+      return "";
+    })
+    .filter(Boolean);
+}
+
 function computeItems(fact, data, totalArs) {
   const total = safeNumber(
     totalArs,
-    safeNumber(fact?.importe ?? data?.monto ?? data?.importe ?? 0, 0)
+    safeNumber(
+      fact?.imp_total ?? fact?.importe ?? data?.monto ?? data?.importe ?? 0,
+      0
+    )
   );
 
   const fromModal = Array.isArray(data?.items_facturacion)
@@ -175,7 +228,7 @@ function computeItems(fact, data, totalArs) {
       const descBase = sanitizePdfText(s(descRaw).trim());
       if (!descBase) return null;
 
-      const ars = firstFinite(it?.ars, it?.ars_total, it?.subtotal_ars);
+      const ars = firstFinite(it?.ars, it?.ars_total, it?.subtotal_ars, it?.total);
       const fallbackArs = firstFinite(
         it?.subtotal,
         it?.precio_unitario,
@@ -189,12 +242,12 @@ function computeItems(fact, data, totalArs) {
       return {
         codigo: String(idx + 1),
         descripcion: descBase,
-        cantidad: 1,
-        unidad: "serv.",
-        precio: valueArs,
-        bonifPct: 0,
-        impBonif: 0,
-        subtotal: valueArs,
+        cantidad: safeNumber(it?.cantidad, 1),
+        unidad: sanitizePdfText(it?.unidad || "serv."),
+        precio: safeNumber(it?.precio_unitario ?? it?.precio, valueArs),
+        bonifPct: safeNumber(it?.bonif_pct, 0),
+        impBonif: safeNumber(it?.impBonif, 0),
+        subtotal: safeNumber(it?.subtotal ?? it?.total, valueArs),
       };
     })
     .filter(Boolean);
@@ -207,7 +260,6 @@ function computeItems(fact, data, totalArs) {
       const last = modalNorm[modalNorm.length - 1];
       const newSub = safeNumber(last.subtotal, 0) + diff;
       last.subtotal = newSub;
-      last.precio = newSub;
     }
 
     return modalNorm;
@@ -238,6 +290,9 @@ function getMeta(fact) {
   const fechaEmision = ymdToHuman(fact?.fecha_cbte || fact?.fecha_emision || "");
   const remito = cbteNro ? `${ptoVta}-${cbteNro}` : "";
 
+  const caeDigits = String(fact?.cae || "").replace(/\D/g, "");
+  const cae = caeDigits ? caeDigits.padStart(14, "0").slice(0, 14) : "";
+
   return {
     letra: FIX.letra,
     tipoTxt: FIX.tipoTxt,
@@ -246,21 +301,27 @@ function getMeta(fact) {
     ptoVta,
     cbteNro,
     fechaEmision,
-    cae: s(fact?.cae || ""),
+    cae,
     caeVto: ymdToHuman(fact?.cae_vto || fact?.fecha_vto_cae || ""),
-    qrUrl: s(fact?.qr_url || fact?.qr || ""),
+    qrUrl: s(fact?.qr_url || ""),
+    resultado: s(fact?.resultado || ""),
     remito,
   };
 }
 
-function getEmisor(data) {
+function getEmisor(data, fact) {
   return {
-    razon: data?.emisor_nombre || FIX.emisor_nombre,
-    domComercial: data?.emisor_domicilio || FIX.emisor_domicilio,
-    cuit: data?.cuit_emisor || FIX.cuit_emisor,
-    condIva: data?.cond_iva_emisor || FIX.cond_iva_emisor,
-    iibb: data?.cuit_emisor || FIX.cuit_emisor,
-    inicioAct: data?.inicio_actividades || FIX.inicio_actividades,
+    razon: data?.emisor_nombre || fact?.emisor_nombre || FIX.emisor_nombre,
+    domComercial:
+      data?.emisor_domicilio || fact?.emisor_domicilio || FIX.emisor_domicilio,
+    cuit: data?.cuit_emisor || fact?.cuit_emisor || FIX.cuit_emisor,
+    condIva: data?.cond_iva_emisor || fact?.cond_iva_emisor || FIX.cond_iva_emisor,
+    iibb: data?.ingresos_brutos_emisor || fact?.ingresos_brutos_emisor || "",
+    inicioAct:
+      data?.fecha_inicio_actividades_emisor ||
+      fact?.fecha_inicio_actividades_emisor ||
+      data?.inicio_actividades ||
+      FIX.inicio_actividades,
   };
 }
 
@@ -291,6 +352,7 @@ function getReceptor(fact, data) {
     condIva: sanitizePdfText(
       s(
         cf?.cond_iva ||
+          cf?.condicion_iva ||
           fact?.cond_iva_receptor ||
           data?.cond_iva_receptor ||
           FIX.cond_iva_receptor_default
@@ -316,12 +378,21 @@ function getPeriodo(fact, data) {
     return "";
   };
 
+  const fechaEmisionIso =
+    pick(
+      fact?.fecha_cbte,
+      fact?.fecha_emision,
+      data?.fecha_cbte_iso,
+      data?.fecha_cbte
+    ) || new Date().toISOString().slice(0, 10);
+
   const desdeRaw = pick(
     data?.periodo_desde,
     data?.periodo_desde_iso,
     fact?.periodo_desde,
     fact?.FchServDesde,
-    fact?.fch_serv_desde
+    fact?.fch_serv_desde,
+    fechaEmisionIso
   );
 
   const hastaRaw = pick(
@@ -329,7 +400,8 @@ function getPeriodo(fact, data) {
     data?.periodo_hasta_iso,
     fact?.periodo_hasta,
     fact?.FchServHasta,
-    fact?.fch_serv_hasta
+    fact?.fch_serv_hasta,
+    plusDaysIso(fechaEmisionIso, 20)
   );
 
   const vtoRaw = pick(
@@ -338,7 +410,8 @@ function getPeriodo(fact, data) {
     fact?.vto_pago,
     fact?.FchVtoPago,
     fact?.fch_vto_pago,
-    fact?.fecha_vto_pago
+    fact?.fecha_vto_pago,
+    plusDaysIso(fechaEmisionIso, 20)
   );
 
   return {
@@ -348,16 +421,206 @@ function getPeriodo(fact, data) {
   };
 }
 
+function buildFallbackQrUrlFromPayload(fact) {
+  const payload = fact?.qr_payload;
+  if (!payload || typeof payload !== "object") return "";
+
+  try {
+    const json = JSON.stringify(payload);
+    const b64 = btoa(unescape(encodeURIComponent(json)));
+    return `https://www.arca.gob.ar/fe/qr/?p=${encodeURIComponent(b64)}`;
+  } catch {
+    return "";
+  }
+}
+
+function getQrText(fact) {
+  const fromUrl = s(fact?.qr_url || "").trim();
+  if (fromUrl) return fromUrl;
+
+  const fallback = buildFallbackQrUrlFromPayload(fact);
+  if (fallback) return fallback;
+
+  return "";
+}
+
+async function buildQrDataUrl(fact) {
+  const qrText = getQrText(fact);
+  if (!qrText) return "";
+
+  try {
+    const dataUrl = await QRCode.toDataURL(qrText, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 512,
+    });
+    return dataUrl || "";
+  } catch {
+    return "";
+  }
+}
+
+/* =========================================================
+   LOGO DEL TENANT / NEGOCIO EMISOR
+   Misma lógica general que Principal.jsx
+========================================================= */
+
+function buildApiUrl(paramsObj) {
+  const baseRaw = String(BASE_URL || "").trim();
+  const base = baseRaw.replace(/\/+$/, "") + "/";
+  const url = new URL(API_RELATIVE, base);
+
+  const qs = new URLSearchParams();
+  Object.entries(paramsObj || {}).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    qs.set(k, String(v));
+  });
+
+  url.search = qs.toString();
+  return url.toString();
+}
+
+function isLocalApiBase() {
+  try {
+    const base = String(BASE_URL || "").toLowerCase().trim();
+    return base.includes("localhost") || base.includes("127.0.0.1");
+  } catch {
+    return false;
+  }
+}
+
+function getSessionKey() {
+  try {
+    return String(localStorage.getItem("session_key") || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : "");
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(blob);
+    } catch {
+      resolve("");
+    }
+  });
+}
+
+async function fetchTenantLogoDataUrl(data, fact) {
+  try {
+    const direct =
+      s(data?.emisor_logo_data_url) ||
+      s(fact?.emisor_logo_data_url) ||
+      s(data?.logo_data_url) ||
+      s(fact?.logo_data_url);
+
+    if (direct) return direct;
+
+    const explicitUrl =
+      s(data?.emisor_logo_url) ||
+      s(fact?.emisor_logo_url) ||
+      s(data?.logo_url) ||
+      s(fact?.logo_url);
+
+    if (explicitUrl && /^data:image\//i.test(explicitUrl)) {
+      return explicitUrl;
+    }
+
+    if (isLocalApiBase()) {
+      return "";
+    }
+
+    const sessionKey = getSessionKey();
+    if (!sessionKey) return "";
+
+    let usuarioLocal = {};
+    try {
+      usuarioLocal = safeJsonParse(localStorage.getItem("usuario")) || {};
+    } catch {
+      usuarioLocal = {};
+    }
+
+    const logoDb = String(
+      data?.tenant_logo_url_db ||
+        fact?.tenant_logo_url_db ||
+        usuarioLocal?.tenant_logo_url_db ||
+        ""
+    ).trim();
+
+    if (!logoDb) return "";
+
+    const logoUrl = buildApiUrl({ action: "tenant_logo_ver" });
+
+    const res = await fetch(logoUrl, {
+      method: "GET",
+      headers: {
+        "X-Session": sessionKey,
+      },
+      cache: "no-store",
+    });
+
+    if (!res.ok) return "";
+
+    const contentType = String(res.headers.get("content-type") || "").toLowerCase();
+    if (contentType.includes("application/json")) return "";
+
+    const blob = await res.blob();
+    if (!blob || !blob.size) return "";
+
+    const dataUrl = await blobToDataUrl(blob);
+    return dataUrl || "";
+  } catch {
+    return "";
+  }
+}
+
+function getImageFormatFromDataUrl(dataUrl) {
+  const t = String(dataUrl || "").toLowerCase();
+  if (t.startsWith("data:image/png")) return "PNG";
+  if (t.startsWith("data:image/webp")) return "WEBP";
+  if (t.startsWith("data:image/jpeg") || t.startsWith("data:image/jpg")) return "JPEG";
+  return "PNG";
+}
+
+function drawLogoOrFallback(doc, logoDataUrl, em, leftX, headerY, splitX) {
+  const logoBoxX = leftX;
+  const logoBoxY = headerY + 6;
+  const logoBoxW = 124;
+  const logoBoxH = 44;
+
+  const maxTextW = splitX - leftX - 18;
+
+  if (logoDataUrl) {
+    try {
+      const fmt = getImageFormatFromDataUrl(logoDataUrl);
+      doc.addImage(logoDataUrl, fmt, logoBoxX, logoBoxY, logoBoxW, logoBoxH);
+      return;
+    } catch {
+      // fallback al texto
+    }
+  }
+
+  set(doc, "helvetica", "bold", 22);
+  text(doc, clampToWidth(doc, em?.razon || "BALTO", maxTextW), leftX, logoBoxY + 28);
+}
+
 async function drawBottomAnchored(doc, ctx, layout) {
   const { fact, data, forceTestAmount, testAmount } = ctx;
   const { W, H, B, innerW } = layout;
 
   const meta = getMeta(fact);
-  const totalReal = safeNumber(fact?.importe ?? data?.monto ?? data?.importe ?? 0, 0);
+  const totalReal = safeNumber(
+    fact?.imp_total ?? fact?.importe ?? data?.monto ?? data?.importe ?? 0,
+    0
+  );
   const totalTest = safeNumber(testAmount, 1000);
   const total = toBool(forceTestAmount) ? totalTest : totalReal;
 
-  const footerH = 145;
+  const footerH = 118;
   const gap = 18;
   const totH = 78;
   const footY = H - B - footerH;
@@ -381,42 +644,55 @@ async function drawBottomAnchored(doc, ctx, layout) {
 
   const qrSize = 92;
   const qrX = B + 10;
-  const qrY = footY + 20;
+  const qrY = footY + 12;
 
-  // Sin dependencia qrcode: si no hay imagen QR, deja marco vacío
   rect(doc, qrX, qrY, qrSize, qrSize, 0.4);
+
+  const qrDataUrl = await buildQrDataUrl(fact);
+
+  if (qrDataUrl) {
+    try {
+      doc.addImage(qrDataUrl, "PNG", qrX + 4, qrY + 4, qrSize - 8, qrSize - 8);
+    } catch {
+      set(doc, "helvetica", "bold", 7);
+      text(doc, "QR", qrX + qrSize / 2, qrY + qrSize / 2, { align: "center" });
+    }
+  } else {
+    set(doc, "helvetica", "bold", 7);
+    text(doc, "QR", qrX + qrSize / 2, qrY + qrSize / 2, { align: "center" });
+  }
 
   const arcaX = qrX + qrSize + 22;
 
   set(doc, "helvetica", "bold", 20);
-  text(doc, "ARCA", arcaX, footY + 58);
+  text(doc, "ARCA", arcaX, footY + 50);
   set(doc, "helvetica", "normal", 6);
-  text(doc, "AGENCIA DE RECAUDACION", arcaX, footY + 66);
-  text(doc, "Y CONTROL ADUANANERO", arcaX, footY + 73);
+  text(doc, "AGENCIA DE RECAUDACION", arcaX, footY + 58);
+  text(doc, "Y CONTROL ADUANANERO", arcaX, footY + 65);
 
   set(doc, "helvetica", "bold", 10);
-  text(doc, "Comprobante Autorizado", arcaX, footY + 94);
+  text(doc, "Comprobante Autorizado", arcaX, footY + 86);
 
   set(doc, "helvetica", "italic", 6.7);
   text(
     doc,
     "Esta Agencia no se responsabiliza por los datos ingresados en el detalle de la operación",
     arcaX,
-    footY + 110
+    footY + 102
   );
 
   set(doc, "helvetica", "bold", 9);
-  text(doc, "Pag. 1/1", W / 2 - 40, footY + 58, { align: "center" });
+  text(doc, "Pag. 1/1", W / 2 - 40, footY + 50, { align: "center" });
 
   set(doc, "helvetica", "bold", 9);
-  text(doc, "CAE N°:", W / 2 + 10, footY + 70, { align: "left" });
+  text(doc, "CAE N°:", W / 2 + 10, footY + 62, { align: "left" });
   set(doc, "helvetica", "normal", 9);
-  text(doc, meta.cae, W / 2 + 55, footY + 70, { align: "left" });
+  text(doc, meta.cae, W / 2 + 55, footY + 62, { align: "left" });
 
   set(doc, "helvetica", "bold", 9);
-  text(doc, "Fecha de Vto. de CAE:", W / 2 + 10, footY + 82, { align: "left" });
+  text(doc, "Fecha de Vto. de CAE:", W / 2 + 10, footY + 74, { align: "left" });
   set(doc, "helvetica", "normal", 9);
-  text(doc, meta.caeVto, W / 2 + 135, footY + 82, { align: "left" });
+  text(doc, meta.caeVto, W / 2 + 135, footY + 74, { align: "left" });
 
   set(doc, "courier", "normal", 9);
   text(doc, meta.cae, W - B - 10, H - B - 6, { align: "right" });
@@ -425,7 +701,7 @@ async function drawBottomAnchored(doc, ctx, layout) {
 }
 
 async function drawPage(doc, pageName, ctx) {
-  const { fact, data, forceTestAmount, testAmount } = ctx;
+  const { fact, data, forceTestAmount, testAmount, logoDataUrl } = ctx;
 
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
@@ -440,7 +716,7 @@ async function drawPage(doc, pageName, ctx) {
   line(doc, B, B + bandH, W - B, B + bandH, 0.55);
 
   const meta = getMeta(fact);
-  const em = getEmisor(data);
+  const em = getEmisor(data, fact);
   const rc = getReceptor(fact, data);
   const per = getPeriodo(fact, data);
 
@@ -466,29 +742,34 @@ async function drawPage(doc, pageName, ctx) {
   text(doc, `COD. ${meta.cod}`, boxX + boxW / 2, boxY + 34, { align: "center" });
 
   const leftX = B + 12;
-  const logoY = headerY + 4;
-
-  // Sin logo por ahora
-  set(doc, "helvetica", "bold", 22);
-  text(doc, "BALTO", leftX, logoY + 25);
-
-  const lx = leftX;
   const ly = headerY + 72;
 
-  set(doc, "helvetica", "bold", 9);
-  text(doc, "Razón Social:", lx, ly);
-  set(doc, "helvetica", "normal", 9);
-  text(doc, clampToWidth(doc, em.razon, splitX - lx - 12), lx + 78, ly);
+  drawLogoOrFallback(doc, logoDataUrl, em, leftX, headerY, splitX);
 
   set(doc, "helvetica", "bold", 9);
-  text(doc, "Domicilio Comercial:", lx, ly + 24);
+  text(doc, "Razón Social:", leftX, ly);
   set(doc, "helvetica", "normal", 9);
-  text(doc, clampToWidth(doc, em.domComercial, splitX - lx - 12), lx + 118, ly + 24);
+  text(doc, clampToWidth(doc, em.razon, splitX - leftX - 12), leftX + 78, ly);
 
   set(doc, "helvetica", "bold", 9);
-  text(doc, "Condición frente al IVA:", lx, ly + 48);
+  text(doc, "Domicilio Comercial:", leftX, ly + 24);
   set(doc, "helvetica", "normal", 9);
-  text(doc, clampToWidth(doc, em.condIva, splitX - lx - 12), lx + 130, ly + 48);
+  text(
+    doc,
+    clampToWidth(doc, em.domComercial, splitX - leftX - 12),
+    leftX + 118,
+    ly + 24
+  );
+
+  set(doc, "helvetica", "bold", 9);
+  text(doc, "Condición frente al IVA:", leftX, ly + 48);
+  set(doc, "helvetica", "normal", 9);
+  text(
+    doc,
+    clampToWidth(doc, em.condIva, splitX - leftX - 12),
+    leftX + 130,
+    ly + 48
+  );
 
   const rx = splitX + 1;
   set(doc, "helvetica", "bold", 20);
@@ -573,7 +854,12 @@ async function drawPage(doc, pageName, ctx) {
   set(doc, "helvetica", "bold", 9);
   text(doc, "Domicilio:", recRx + 0, recY + 46);
   set(doc, "helvetica", "normal", 9);
-  text(doc, clampToWidth(doc, rc.dom, innerW - (recRx - B) - 12), recRx + 45, recY + 46);
+  text(
+    doc,
+    clampToWidth(doc, rc.dom, innerW - (recRx - B) - 12),
+    recRx + 45,
+    recY + 46
+  );
 
   set(doc, "helvetica", "bold", 9);
   text(doc, "Remito:", recRx + 0, recY + 62);
@@ -643,7 +929,10 @@ async function drawPage(doc, pageName, ctx) {
   text(doc, "Imp. Bonif.", x7 - padR, tblY + 15, { align: "right" });
   text(doc, "Subtotal", x8 - padR, tblY + 15, { align: "right" });
 
-  const totalReal = safeNumber(fact?.importe ?? data?.monto ?? data?.importe ?? 0, 0);
+  const totalReal = safeNumber(
+    fact?.imp_total ?? fact?.importe ?? data?.monto ?? data?.importe ?? 0,
+    0
+  );
   const totalTest = safeNumber(testAmount, 1000);
   const total = toBool(forceTestAmount) ? totalTest : totalReal;
 
@@ -688,11 +977,14 @@ export async function buildBaltoInvoicePdf({
 } = {}) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
 
+  const logoDataUrl = await fetchTenantLogoDataUrl(data, fact);
+
   await drawPage(doc, "ORIGINAL", {
     fact,
     data,
     forceTestAmount,
     testAmount,
+    logoDataUrl,
   });
 
   doc.addPage();
@@ -702,6 +994,7 @@ export async function buildBaltoInvoicePdf({
     data,
     forceTestAmount,
     testAmount,
+    logoDataUrl,
   });
 
   doc.addPage();
@@ -711,6 +1004,7 @@ export async function buildBaltoInvoicePdf({
     data,
     forceTestAmount,
     testAmount,
+    logoDataUrl,
   });
 
   return doc;
@@ -748,8 +1042,7 @@ export async function saveBaltoInvoicePdf({
   );
   const sys = safe(data?.labelSistema || data?.sistema || "SISTEMA");
 
-  const filename =
-    filenameIn || `FACTURA_${pv}-${nro}_${cli}_${sys}.pdf`;
+  const filename = filenameIn || `FACTURA_${pv}-${nro}_${cli}_${sys}.pdf`;
 
   if (download) {
     const url = URL.createObjectURL(blob);

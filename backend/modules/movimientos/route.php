@@ -57,6 +57,10 @@ if (!function_exists('route_movimientos')) {
       case 'comprobantes_descargar_token':
       case 'comprobantes_asociar_movimiento':
       case 'comprobantes_asociar_movimientos':
+
+      // ✅ NUEVAS ACCIONES que usa tu frontend
+      case 'comprobantes_vincular_movimiento':
+      case 'comprobantes_vincular_movimientos_lote':
         require __DIR__ . '/comprobantes.php';
         return true;
 
@@ -116,6 +120,17 @@ if (!function_exists('route_movimientos')) {
       case 'padron_cuit':
       case 'arca_padron_cuit':
         require __DIR__ . '/facturacion/padron.php';
+        return true;
+
+      /* =========================
+         ✅ WSFEv1 / FACTURACIÓN REAL
+         emitir comprobante electrónico y devolver
+         CAE + vencimiento + nro + QR
+      ========================= */
+      case 'wsfe_emitir':
+      case 'factura_emitir':
+      case 'arca_wsfe_emitir':
+        require __DIR__ . '/facturacion/wsfe_emitir.php';
         return true;
 
       default:

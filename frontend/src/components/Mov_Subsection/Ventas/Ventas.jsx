@@ -16,6 +16,9 @@ import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMov
 // ✅ BOTÓN EXPORTAR GLOBAL
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 
+// ✅ MODAL VER COMPROBANTE
+import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
+
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarDays,
@@ -26,6 +29,7 @@ import {
   faTrashCan,
   faChevronDown,
   faArrowRightLong,
+  faEye,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -343,6 +347,11 @@ export default function Ventas() {
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+
+  // ✅ ESTADO MODAL VER COMPROBANTE
+  const [openVerComprobante, setOpenVerComprobante] = useState(false);
+  const [comprobanteUrl, setComprobanteUrl] = useState("");
+  const [comprobanteMime, setComprobanteMime] = useState("");
 
   const [toast, setToast] = useState(null);
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
@@ -708,34 +717,34 @@ export default function Ventas() {
   /* =========================
      Label calendario
   ========================= */
-const dateRangeLabel = useMemo(() => {
-  const { from, to } = dateRange;
+  const dateRangeLabel = useMemo(() => {
+    const { from, to } = dateRange;
 
-  if (!from && !to) return "Seleccionar fechas";
+    if (!from && !to) return "Seleccionar fechas";
 
-  if (from && to) {
-    if (
-      from.getFullYear() === to.getFullYear() &&
-      from.getMonth() === to.getMonth() &&
-      from.getDate() === to.getDate()
-    ) {
-      return formatDateUI(from);
+    if (from && to) {
+      if (
+        from.getFullYear() === to.getFullYear() &&
+        from.getMonth() === to.getMonth() &&
+        from.getDate() === to.getDate()
+      ) {
+        return formatDateUI(from);
+      }
+
+      return (
+        <>
+          <span>{formatDateUI(from)}</span>
+          <span className="mov-rangeArrow">
+            <FontAwesomeIcon icon={faArrowRightLong} />
+          </span>
+          <span>{formatDateUI(to)}</span>
+        </>
+      );
     }
 
-    return (
-      <>
-        <span>{formatDateUI(from)}</span>
-        <span className="mov-rangeArrow">
-          <FontAwesomeIcon icon={faArrowRightLong} />
-        </span>
-        <span>{formatDateUI(to)}</span>
-      </>
-    );
-  }
-
-  if (from) return `Desde ${formatDateUI(from)}`;
-  return `Hasta ${formatDateUI(to)}`;
-}, [dateRange]);
+    if (from) return `Desde ${formatDateUI(from)}`;
+    return `Hasta ${formatDateUI(to)}`;
+  }, [dateRange]);
 
   /* =========================
      Export base name
@@ -953,6 +962,36 @@ const dateRangeLabel = useMemo(() => {
     showToast,
   ]);
 
+  /* =========================
+     ✅ VER COMPROBANTE
+  ========================= */
+  const handleVerComprobante = useCallback(
+    (r) => {
+      const idComprobante = r?.id_comprobante;
+      if (!idComprobante) return;
+
+      // Si la row ya trae comprobante_url, la usamos directamente
+      const urlDirecta = r?.comprobante_url ? String(r.comprobante_url).trim() : "";
+
+      if (urlDirecta) {
+        setComprobanteUrl(urlDirecta);
+        setComprobanteMime(r?.archivo_mime ?? "");
+        setOpenVerComprobante(true);
+        return;
+      }
+
+      // Sino construimos la URL de descarga autenticada
+      const sp = new URLSearchParams();
+      sp.set("action", "comprobantes_descargar");
+      sp.set("id_comprobante", String(idComprobante));
+      const url = `${API}?${sp.toString()}`;
+      setComprobanteUrl(url);
+      setComprobanteMime("");
+      setOpenVerComprobante(true);
+    },
+    [API]
+  );
+
   const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
   /* =========================
@@ -988,6 +1027,7 @@ const dateRangeLabel = useMemo(() => {
               data-label={c.label}
             >
               <div className="mov-skelActions">
+                <span className="mov-skelIcon" />
                 <span className="mov-skelIcon" />
                 <span className="mov-skelIcon" />
               </div>
@@ -1070,8 +1110,8 @@ const dateRangeLabel = useMemo(() => {
                 >
                   {dateRangeLabel}
                   <span className="mov-calTrigger__arrow">
-  <FontAwesomeIcon icon={faChevronDown} />
-</span>
+                    <FontAwesomeIcon icon={faChevronDown} />
+                  </span>
                 </button>
 
                 <span className="floatingLabel floatingLabel--active">
@@ -1220,6 +1260,10 @@ const dateRangeLabel = useMemo(() => {
               <>
                 {filteredRows.map((r) => {
                   const key = getRowKey(r);
+                  // ✅ Determinar si tiene comprobante
+                  const tieneComprobante =
+                    !!(r?.id_comprobante && Number(r.id_comprobante) > 0);
+
                   return (
                     <div
                       key={key}
@@ -1239,6 +1283,32 @@ const dateRangeLabel = useMemo(() => {
                               data-label={c.label}
                             >
                               <div className="mov-actionsInline">
+                                {/* ✅ BOTÓN OJO - Ver comprobante */}
+                                <button
+                                  type="button"
+                                  className={[
+                                    "mov-iconBtn",
+                                    tieneComprobante
+                                      ? "mov-iconBtn--comprobante"
+                                      : "mov-iconBtn--disabled",
+                                  ].join(" ")}
+                                  title={
+                                    tieneComprobante
+                                      ? "Ver comprobante"
+                                      : "Sin comprobante"
+                                  }
+                                  disabled={!tieneComprobante || isAnyLoading}
+                                  onClick={() => {
+                                    if (tieneComprobante) handleVerComprobante(r);
+                                  }}
+                                  style={{
+                                    opacity: tieneComprobante ? 1 : 0.35,
+                                    cursor: tieneComprobante ? "pointer" : "not-allowed",
+                                  }}
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                </button>
+
                                 <button
                                   type="button"
                                   className="mov-iconBtn"
@@ -1401,6 +1471,19 @@ const dateRangeLabel = useMemo(() => {
         }}
         onConfirm={confirmDelete}
         onToast={showToast}
+      />
+
+      {/* ✅ MODAL VER COMPROBANTE */}
+      <ModalVerComprobante
+        open={openVerComprobante}
+        url={comprobanteUrl}
+        mime={comprobanteMime}
+        title="Comprobante de Venta"
+        onClose={() => {
+          setOpenVerComprobante(false);
+          setComprobanteUrl("");
+          setComprobanteMime("");
+        }}
       />
     </div>
   );

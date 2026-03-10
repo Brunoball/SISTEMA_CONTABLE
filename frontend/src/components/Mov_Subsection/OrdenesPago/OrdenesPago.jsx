@@ -8,10 +8,6 @@ import "../../Global/Global_css/Global_Section.css";
 // ✅ MODALES
 import ModalPagarOrdenesPago from "./modales/ModalPagarOrdenesPago.jsx";
 import ModalEditarOrdenPago from "./modales/ModalEditarOrdenPago.jsx";
-import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
-
-// ✅ MODAL GLOBAL: ver comprobante
-import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 
 // ✅ Calendario
 import Calendario from "../../Global/Calendario/Calendario.jsx";
@@ -20,7 +16,7 @@ import "../../Global/Calendario/calendario.css";
 // ✅ Toast
 import Toast from "../../Global/Toast.jsx";
 
-// ✅ BOTÓN EXPORTAR GLOBAL (igual que Ventas)
+// ✅ BOTÓN EXPORTAR GLOBAL
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -29,9 +25,7 @@ import {
   faMagnifyingGlass,
   faFileExcel,
   faPenToSquare,
-  faTrashCan,
   faMoneyBill1Wave,
-  faEye,
   faChevronDown,
   faArrowRightLong,
 } from "@fortawesome/free-solid-svg-icons";
@@ -176,23 +170,6 @@ function isPagado(row) {
   return Number(row?.pagado ?? 0) === 1;
 }
 
-function getIdComprobanteFromRow(row) {
-  const cand =
-    row?.id_comprobante ?? row?.comprobante_id ?? row?.idComprobante ??
-    row?.id_comprobante_archivo ?? row?.idComprobanteArchivo ?? 0;
-  const n = Number(cand || 0);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
-function appendSessionKey(url, sessionKey) {
-  const u = String(url || "").trim();
-  const sk = String(sessionKey || "").trim();
-  if (!u || !sk) return u;
-  if (u.toLowerCase().includes("session_key=")) return u;
-  const sep = u.includes("?") ? "&" : "?";
-  return `${u}${sep}session_key=${encodeURIComponent(sk)}`;
-}
-
 /* =========================
    Full-text match
 ========================= */
@@ -215,7 +192,7 @@ function rowMatchesQuery(row, query) {
 }
 
 /* =========================
-   Export helpers (igual que Ventas)
+   Export helpers
 ========================= */
 function slugifySheetName(name) {
   const s = String(name || "OrdenesPago")
@@ -230,7 +207,7 @@ function buildExportRows(rows) {
     FECHA: safeText(formatFechaDMY(r?.fecha)),
     DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
     PROVEEDOR: safeText(r?.proveedor),
-    ESTADO: isPagado(r) ? "PAGADO" : "PENDIENTE",
+    ESTADO: "PENDIENTE",
     MONTO: Number(r?.monto_total ?? r?.total ?? 0) || 0,
   }));
 }
@@ -264,7 +241,6 @@ export default function OrdenesPago() {
     refreshLists,
   } = useListas();
 
-  // ✅ RANGO GLOBAL
   const { dateRange, setDateRange } = useDateRange();
   const [showCalendario, setShowCalendario] = useState(false);
 
@@ -277,7 +253,6 @@ export default function OrdenesPago() {
   const [loadingRows, setLoadingRows] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadingAll, setLoadingAll] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
   const [q, setQ] = useState("");
@@ -411,20 +386,26 @@ export default function OrdenesPago() {
 
         if (myReqId !== reqIdRef.current) return null;
 
-        const listKey = Array.isArray(data.movimientos) ? "movimientos" : Array.isArray(data.ordenes) ? "ordenes" : "movimientos";
+        const listKey = Array.isArray(data.movimientos)
+          ? "movimientos"
+          : Array.isArray(data.ordenes)
+          ? "ordenes"
+          : "movimientos";
+
         const rawArr = Array.isArray(data[listKey]) ? data[listKey] : [];
 
         const norm = rawArr.map((r) => ({
           ...r,
           pagado: Number(r?.pagado ?? 0) === 1 ? 1 : 0,
-          id_comprobante: getIdComprobanteFromRow(r) || 0,
         }));
 
         let newHasMore = data.has_more !== undefined ? !!data.has_more : norm.length > PAGE_SIZE;
         let newNextOffset =
           data.next_offset !== undefined && data.next_offset !== null
             ? Number(data.next_offset)
-            : newHasMore ? offset + PAGE_SIZE : null;
+            : newHasMore
+            ? offset + PAGE_SIZE
+            : null;
 
         const page = newHasMore ? norm.slice(0, PAGE_SIZE) : norm;
 
@@ -433,11 +414,17 @@ export default function OrdenesPago() {
         if (append) {
           const base = Array.isArray(rowsRef.current) ? rowsRef.current : [];
           const seen = new Set(base.map((x) => String(x?.id_movimiento ?? "")));
-          const add = page.filter((x) => { const k = String(x?.id_movimiento ?? ""); return k && !seen.has(k); });
+          const add = page.filter((x) => {
+            const k = String(x?.id_movimiento ?? "");
+            return k && !seen.has(k);
+          });
           const merged = [...base, ...add];
           rowsRef.current = merged;
           setRows(merged);
-          if (add.length === 0) { newHasMore = false; newNextOffset = null; }
+          if (add.length === 0) {
+            newHasMore = false;
+            newNextOffset = null;
+          }
           setHasMore(newHasMore);
           setNextOffset(newNextOffset);
           if (moreReqIdRef.current === myReqId) setLoadingMore(false);
@@ -454,8 +441,11 @@ export default function OrdenesPago() {
       } catch (e) {
         if (myReqId !== reqIdRef.current) return null;
         setError(e.message || "Error cargando órdenes de pago.");
-        if (append) { if (moreReqIdRef.current === myReqId) setLoadingMore(false); }
-        else { if (rowsReqIdRef.current === myReqId) setLoadingRows(false); }
+        if (append) {
+          if (moreReqIdRef.current === myReqId) setLoadingMore(false);
+        } else {
+          if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
+        }
         return null;
       }
     },
@@ -468,12 +458,16 @@ export default function OrdenesPago() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      try { await ensureListsLoaded({ force: false, background: true }); } catch {}
+      try {
+        await ensureListsLoaded({ force: false, background: true });
+      } catch {}
       if (!alive) return;
       await loadRows({ from: dateRange?.from, to: dateRange?.to, q: "", offset: 0, append: false });
       didInitRef.current = true;
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -493,17 +487,22 @@ export default function OrdenesPago() {
      Debounce búsqueda
   ========================= */
   useEffect(() => {
-    if (skipSearchRef.current) { skipSearchRef.current = false; return; }
+    if (skipSearchRef.current) {
+      skipSearchRef.current = false;
+      return;
+    }
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
       loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
     }, 250);
-    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
   /* =========================
-     Handler cambio de rango (SET GLOBAL)
+     Handler cambio de rango
   ========================= */
   const handleDateRangeChange = useCallback(
     async (newRange) => {
@@ -523,12 +522,13 @@ export default function OrdenesPago() {
   const filteredRows = useMemo(() => {
     return (Array.isArray(rows) ? rows : [])
       .filter((r) => isCompraCuentaCorriente(r))
+      .filter((r) => !isPagado(r))
       .filter((r) => rowInDateRange(r, dateRange?.from, dateRange?.to))
       .filter((r) => rowMatchesQuery(r, q));
   }, [rows, dateRange, q]);
 
   /* =========================
-     Label calendario (igual que Ventas)
+     Label calendario
   ========================= */
   const dateRangeLabel = useMemo(() => {
     const { from, to } = dateRange;
@@ -544,7 +544,9 @@ export default function OrdenesPago() {
       return (
         <>
           <span>{formatDateUI(from)}</span>
-          <span className="mov-rangeArrow"><FontAwesomeIcon icon={faArrowRightLong} /></span>
+          <span className="mov-rangeArrow">
+            <FontAwesomeIcon icon={faArrowRightLong} />
+          </span>
           <span>{formatDateUI(to)}</span>
         </>
       );
@@ -558,13 +560,13 @@ export default function OrdenesPago() {
   ========================= */
   const exportBaseName = useMemo(() => {
     const { from, to } = dateRange;
-    if (from && to) return `ordenes_pago_${dateToAPI(from)}_${dateToAPI(to)}`;
-    if (from) return `ordenes_pago_desde_${dateToAPI(from)}`;
-    return "ordenes_pago_todos";
+    if (from && to) return `ordenes_pago_pendientes_${dateToAPI(from)}_${dateToAPI(to)}`;
+    if (from) return `ordenes_pago_pendientes_desde_${dateToAPI(from)}`;
+    return "ordenes_pago_pendientes";
   }, [dateRange]);
 
   /* =========================
-     Export helpers (igual que Ventas)
+     Export helpers
   ========================= */
   const getExportData = useCallback(() => {
     const dataToExport = buildExportRows(filteredRows);
@@ -586,7 +588,7 @@ export default function OrdenesPago() {
         if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
       }
     }
-    XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("OrdenesPago_Vista"));
+    XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("OrdenesPago_Pendientes"));
     XLSX.writeFile(wb, `${exportBaseName}.xlsx`);
   }, [getExportData, exportBaseName]);
 
@@ -602,15 +604,17 @@ export default function OrdenesPago() {
 
   const exportToTXT = useCallback(() => {
     const dataToExport = getExportData();
-    const lines = dataToExport.map((row, index) => [
-      `REGISTRO ${index + 1}`,
-      `FECHA: ${row.FECHA ?? ""}`,
-      `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
-      `PROVEEDOR: ${row.PROVEEDOR ?? ""}`,
-      `ESTADO: ${row.ESTADO ?? ""}`,
-      `MONTO: ${row.MONTO ?? ""}`,
-      "----------------------------------------",
-    ].join("\n"));
+    const lines = dataToExport.map((row, index) =>
+      [
+        `REGISTRO ${index + 1}`,
+        `FECHA: ${row.FECHA ?? ""}`,
+        `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
+        `PROVEEDOR: ${row.PROVEEDOR ?? ""}`,
+        `ESTADO: ${row.ESTADO ?? ""}`,
+        `MONTO: ${row.MONTO ?? ""}`,
+        "----------------------------------------",
+      ].join("\n")
+    );
     downloadBlob(lines.join("\n"), `${exportBaseName}.txt`, "text/plain;charset=utf-8;");
   }, [getExportData, exportBaseName]);
 
@@ -621,9 +625,20 @@ export default function OrdenesPago() {
           showToast("error", 'Faltan registros sin cargar. Tocá "Cargar todos" primero.', 5200);
           return;
         }
-        if (type === "excel") { exportToExcel(); showToast("exito", "Excel exportado.", 2200); return; }
-        if (type === "csv")   { exportToCSV();   showToast("exito", "CSV exportado.",   2200); return; }
-        if (type === "txt")   { exportToTXT();   showToast("exito", "TXT exportado.",   2200); }
+        if (type === "excel") {
+          exportToExcel();
+          showToast("exito", "Excel exportado.", 2200);
+          return;
+        }
+        if (type === "csv") {
+          exportToCSV();
+          showToast("exito", "CSV exportado.", 2200);
+          return;
+        }
+        if (type === "txt") {
+          exportToTXT();
+          showToast("exito", "TXT exportado.", 2200);
+        }
       } catch (e) {
         showToast("error", e?.message || "Error exportando archivo.", 3500);
       }
@@ -631,11 +646,14 @@ export default function OrdenesPago() {
     [hasMore, exportToExcel, exportToCSV, exportToTXT, showToast]
   );
 
-  const exportOptions = useMemo(() => [
-    { key: "excel", label: "Exportar Excel (.xlsx)", icon: faFileExcel, onClick: () => handleExport("excel") },
-    { key: "csv",   label: "Exportar CSV (.csv)",               onClick: () => handleExport("csv")   },
-    { key: "txt",   label: "Exportar TXT (.txt)",               onClick: () => handleExport("txt")   },
-  ], [handleExport]);
+  const exportOptions = useMemo(
+    () => [
+      { key: "excel", label: "Exportar Excel (.xlsx)", icon: faFileExcel, onClick: () => handleExport("excel") },
+      { key: "csv", label: "Exportar CSV (.csv)", onClick: () => handleExport("csv") },
+      { key: "txt", label: "Exportar TXT (.txt)", onClick: () => handleExport("txt") },
+    ],
+    [handleExport]
+  );
 
   /* =========================
      "Cargar todos"
@@ -644,13 +662,19 @@ export default function OrdenesPago() {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
     if (nextOffset === null) return;
     setLoadingAll(true);
-    showToast("cargando", "Cargando todas las órdenes de pago…", 12000);
+    showToast("cargando", "Cargando todas las órdenes de pago pendientes…", 12000);
     let offset = nextOffset;
     let guard = 0;
     try {
       while (offset !== null && guard < 3000) {
         const beforeLen = rowsRef.current.length;
-        const res = await loadRows({ from: dateRange?.from, to: dateRange?.to, q: (q || "").trim(), offset, append: true });
+        const res = await loadRows({
+          from: dateRange?.from,
+          to: dateRange?.to,
+          q: (q || "").trim(),
+          offset,
+          append: true,
+        });
         if (!res) break;
         guard += 1;
         offset = res.nextOffset;
@@ -658,7 +682,7 @@ export default function OrdenesPago() {
         if (!res.hasMore || offset === null) break;
       }
       setRows([...rowsRef.current]);
-      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} órdenes.`, 2600);
+      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} órdenes pendientes.`, 2600);
     } catch (e) {
       showToast("error", e?.message || "Error cargando todas.", 4200);
     } finally {
@@ -667,62 +691,54 @@ export default function OrdenesPago() {
   }, [hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll, nextOffset, dateRange, q, loadRows, showToast]);
 
   /* =========================
-     Modal Ver Comprobante
-  ========================= */
-  const [openVer, setOpenVer] = useState(false);
-  const [verUrl, setVerUrl] = useState("");
-  const [verTitle, setVerTitle] = useState("Comprobante");
-
-  const closeVerModal = useCallback(() => {
-    setOpenVer(false);
-    setTimeout(() => { setVerUrl(""); setVerTitle("Comprobante"); }, 80);
-  }, []);
-
-  const openVerModal = useCallback((row) => {
-    const { sessionKey } = getAuthInfo();
-    const idComp = getIdComprobanteFromRow(row);
-    if (!idComp) return;
-    let u = `${API}?action=comprobantes_descargar&id_comprobante=${idComp}`;
-    u = appendSessionKey(u, sessionKey);
-    setVerTitle(`Comprobante · ${safeText(row?.proveedor)}`);
-    setVerUrl(u);
-    setOpenVer(true);
-  }, [API]);
-
-  /* =========================
-     Modales Pagar / Editar / Eliminar
+     Modales Pagar / Editar
   ========================= */
   const [openPagar, setOpenPagar] = useState(false);
   const [pagarProveedor, setPagarProveedor] = useState(null);
   const [pagarDeudas, setPagarDeudas] = useState([]);
 
   const closePagarModal = useCallback(() => {
-    setOpenPagar(false); setPagarProveedor(null); setPagarDeudas([]);
+    setOpenPagar(false);
+    setPagarProveedor(null);
+    setPagarDeudas([]);
   }, []);
 
-  const getDeudasProveedor = useCallback((rowProv) => {
-    const idProv = Number(rowProv?.id_proveedor || rowProv?.proveedor_id || 0);
-    const nombreProv = String(rowProv?.proveedor || "").trim();
-    return (rows || []).filter((r) => {
-      const rid = Number(r?.id_proveedor || r?.proveedor_id || 0);
-      const rnom = String(r?.proveedor || "").trim();
-      return ((idProv > 0 && rid === idProv) || (!idProv && nombreProv && rnom.toLowerCase() === nombreProv.toLowerCase())) && isCompraCuentaCorriente(r);
-    });
-  }, [rows]);
+  const getDeudasProveedor = useCallback(
+    (rowProv) => {
+      const idProv = Number(rowProv?.id_proveedor || rowProv?.proveedor_id || 0);
+      const nombreProv = String(rowProv?.proveedor || "").trim();
+      return (rows || []).filter((r) => {
+        const rid = Number(r?.id_proveedor || r?.proveedor_id || 0);
+        const rnom = String(r?.proveedor || "").trim();
+        return (
+          ((idProv > 0 && rid === idProv) || (!idProv && nombreProv && rnom.toLowerCase() === nombreProv.toLowerCase())) &&
+          isCompraCuentaCorriente(r) &&
+          !isPagado(r)
+        );
+      });
+    },
+    [rows]
+  );
 
-  const openPagarModal = useCallback((r) => {
-    setPagarProveedor(r); setPagarDeudas(getDeudasProveedor(r)); setOpenPagar(true);
-  }, [getDeudasProveedor]);
+  const openPagarModal = useCallback(
+    (r) => {
+      setPagarProveedor(r);
+      setPagarDeudas(getDeudasProveedor(r));
+      setOpenPagar(true);
+    },
+    [getDeudasProveedor]
+  );
 
   const [openEditar, setOpenEditar] = useState(false);
   const [editRow, setEditRow] = useState(null);
-  const closeEditarModal = useCallback(() => { setOpenEditar(false); setEditRow(null); }, []);
-  const openEditarModal = useCallback((r) => { setEditRow(r); setOpenEditar(true); }, []);
-
-  const [openDel, setOpenDel] = useState(false);
-  const [selectedRow, setSelectedRow] = useState(null);
-  const openDeleteModal = useCallback((r) => { setSelectedRow(r); setOpenDel(true); }, []);
-  const closeDeleteModal = useCallback(() => { setOpenDel(false); setSelectedRow(null); }, []);
+  const closeEditarModal = useCallback(() => {
+    setOpenEditar(false);
+    setEditRow(null);
+  }, []);
+  const openEditarModal = useCallback((r) => {
+    setEditRow(r);
+    setOpenEditar(true);
+  }, []);
 
   /* =========================
      Acciones backend
@@ -730,108 +746,135 @@ export default function OrdenesPago() {
   const refreshAfterMutation = useCallback(async () => {
     cacheRef.current.clear();
     await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
-    try { await refreshLists?.(); } catch {}
+    try {
+      await refreshLists?.();
+    } catch {}
   }, [dateRange, loadRows, q, refreshLists]);
 
-  const onConfirmPago = useCallback(async (payload) => {
-    try {
-      showToast("cargando", "Confirmando pago…", 12000);
-      const ids = payload?.ids_movimiento ?? payload?.ids_movimientos ?? payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ?? [];
-      const data = await apiPostJson(`${API}?action=ordenes_pago_confirmar_pago`, { ids_movimiento: ids, id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0) });
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
-      await refreshAfterMutation();
-      showToast("exito", data?.mensaje || "Pago confirmado.", 1800);
-      return true;
-    } catch (e) {
-      showToast("error", e?.message || "Error confirmando pago.", 4200);
-      throw e;
-    }
-  }, [API, apiPostJson, refreshAfterMutation, showToast]);
+  const onConfirmPago = useCallback(
+    async (payload) => {
+      try {
+        showToast("cargando", "Confirmando pago…", 12000);
+        const ids =
+          payload?.ids_movimiento ??
+          payload?.ids_movimientos ??
+          payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ??
+          [];
+        const data = await apiPostJson(`${API}?action=ordenes_pago_confirmar_pago`, {
+          ids_movimiento: ids,
+          id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
+        });
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
+        await refreshAfterMutation();
+        showToast("exito", data?.mensaje || "Pago confirmado.", 1800);
+        return true;
+      } catch (e) {
+        showToast("error", e?.message || "Error confirmando pago.", 4200);
+        throw e;
+      }
+    },
+    [API, apiPostJson, refreshAfterMutation, showToast]
+  );
 
-  const onSaveEditar = useCallback(async (payloadFinal) => {
-    try {
-      showToast("cargando", "Guardando cambios…", 12000);
-      const { idUsuario } = getAuthInfo();
-      const data = await apiPostJson(`${API}?action=ordenes_pago_actualizar`, { ...payloadFinal, idUsuario });
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la orden de pago.");
-      await refreshAfterMutation();
-      showToast("exito", data?.mensaje || "Orden de pago actualizada.", 2400);
-    } catch (e) {
-      showToast("error", e?.message || "Error guardando orden de pago.", 4200);
-      throw e;
-    }
-  }, [API, apiPostJson, refreshAfterMutation, showToast]);
-
-  const confirmDelete = useCallback(async () => {
-    if (!selectedRow?.id_movimiento) return;
-    const id = selectedRow.id_movimiento;
-    setDeletingId(id); setError("");
-    showToast("cargando", "Eliminando orden de pago…", 12000);
-    try {
-      const { idUsuario } = getAuthInfo();
-      const data = await apiPostJson(`${API}?action=ordenes_pago_eliminar`, { id_movimiento: Number(id), idUsuario });
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
-      closeDeleteModal();
-      await refreshAfterMutation();
-      showToast("exito", "Orden de pago eliminada.", 2600);
-    } catch (e) {
-      setError(e.message || "Error eliminando orden de pago.");
-      showToast("error", e.message || "Error eliminando orden de pago.", 4200);
-    } finally {
-      setDeletingId(null);
-    }
-  }, [API, apiPostJson, closeDeleteModal, refreshAfterMutation, selectedRow, showToast]);
+  const onSaveEditar = useCallback(
+    async (payloadFinal) => {
+      try {
+        showToast("cargando", "Guardando cambios…", 12000);
+        const { idUsuario } = getAuthInfo();
+        const data = await apiPostJson(`${API}?action=ordenes_pago_actualizar`, { ...payloadFinal, idUsuario });
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la orden de pago.");
+        await refreshAfterMutation();
+        showToast("exito", data?.mensaje || "Orden de pago actualizada.", 2400);
+      } catch (e) {
+        showToast("error", e?.message || "Error guardando orden de pago.", 4200);
+        throw e;
+      }
+    },
+    [API, apiPostJson, refreshAfterMutation, showToast]
+  );
 
   const handleAfterComprobanteSaved = useCallback(async () => {
-    try { await refreshAfterMutation(); } catch {}
+    try {
+      await refreshAfterMutation();
+    } catch {}
   }, [refreshAfterMutation]);
 
   /* =========================
      Columnas / grilla
   ========================= */
-  const columns = useMemo(() => [
-    { key: "fecha",     label: "FECHA",       align: "center", fr: 0.9, render: (r) => safeText(formatFechaDMY(r.fecha)) },
-    { key: "detalle",   label: "DESCRIPCIÓN", fr: 2.3, strong: true, align: "left", render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto) },
-    { key: "proveedor", label: "PROVEEDOR",   fr: 1.8, align: "center", render: (r) => safeText(r.proveedor) },
-    {
-      key: "estado", label: "ESTADO", align: "center", fr: 1.0,
-      render: (r) => {
-        const pag = isPagado(r);
-        return <span className={`mov-chip ${pag ? "mov-chip--ok" : "mov-chip--warn"}`}>{pag ? "PAGADO" : "PENDIENTE"}</span>;
+  const columns = useMemo(
+    () => [
+      { key: "fecha", label: "FECHA", align: "center", fr: 1, render: (r) => safeText(formatFechaDMY(r.fecha)) },
+      {
+        key: "detalle",
+        label: "DESCRIPCIÓN",
+        fr: 2.5,
+        strong: true,
+        align: "left",
+        render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
       },
-    },
-    { key: "monto", label: "MONTO", fr: 1.1, align: "right", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
-    { key: "acciones", label: "ACCIONES", fr: 1.4, align: "center", render: () => null },
-  ], []);
+      { key: "proveedor", label: "PROVEEDOR", fr: 1.9, align: "center", render: (r) => safeText(r.proveedor) },
+      {
+        key: "estado",
+        label: "ESTADO",
+        align: "center",
+        fr: 1,
+        render: () => <span className="mov-chip mov-chip--warn">PENDIENTE</span>,
+      },
+      { key: "monto", label: "MONTO", fr: 1.2, align: "right", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
+      { key: "acciones", label: "ACCIONES", fr: 1, align: "center", render: () => null },
+    ],
+    []
+  );
 
   const gridCols = useMemo(() => {
     const fallback = `repeat(${columns.length}, minmax(0, 1fr))`;
     if (!columns.length) return fallback;
-    return columns.map((c) => { const n = Number(c.fr); return Number.isFinite(n) && n > 0 ? `${n}fr` : "1fr"; }).join(" ");
+    return columns
+      .map((c) => {
+        const n = Number(c.fr);
+        return Number.isFinite(n) && n > 0 ? `${n}fr` : "1fr";
+      })
+      .join(" ");
   }, [columns]);
 
-  const skelWidths = useMemo(() => ({
-    fecha:     ["44%", "38%", "50%", "42%"],
-    detalle:   ["72%", "58%", "66%", "48%"],
-    proveedor: ["62%", "54%", "46%", "58%"],
-    estado:    ["52%", "44%", "58%", "50%"],
-    monto:     ["38%", "30%", "34%", "28%"],
-  }), []);
+  const skelWidths = useMemo(
+    () => ({
+      fecha: ["44%", "38%", "50%", "42%"],
+      detalle: ["72%", "58%", "66%", "48%"],
+      proveedor: ["62%", "54%", "46%", "58%"],
+      estado: ["52%", "44%", "58%", "50%"],
+      monto: ["38%", "30%", "34%", "28%"],
+    }),
+    []
+  );
 
   const renderSkeletonRow = (idx) => (
-    <div key={`skel-${idx}`} className="mov-gridTable mov-gridTable--row mov-row--skeleton" style={{ gridTemplateColumns: gridCols }} role="row" aria-hidden="true">
+    <div
+      key={`skel-${idx}`}
+      className="mov-gridTable mov-gridTable--row mov-row--skeleton"
+      style={{ gridTemplateColumns: gridCols }}
+      role="row"
+      aria-hidden="true"
+    >
       {columns.map((c) => {
-        if (c.key === "acciones") return (
-          <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
-            <div className="mov-skelActions">
-              <span className="mov-skelIcon" /><span className="mov-skelIcon" />
-              <span className="mov-skelIcon" /><span className="mov-skelIcon" />
+        if (c.key === "acciones")
+          return (
+            <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
+              <div className="mov-skelActions">
+                <span className="mov-skelIcon" />
+                <span className="mov-skelIcon" />
+              </div>
             </div>
-          </div>
-        );
+          );
         const w = (skelWidths[c.key] || ["60%"])[idx % (skelWidths[c.key]?.length || 1)];
         return (
-          <div key={c.key} className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")} role="cell" data-label={c.label}>
+          <div
+            key={c.key}
+            className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")}
+            role="cell"
+            data-label={c.label}
+          >
             <span className="mov-skeletonBar" style={{ width: w }} />
           </div>
         );
@@ -848,26 +891,29 @@ export default function OrdenesPago() {
   return (
     <div className="mov-page mov-page--ordenesPago">
       {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
-      {errorListsCtx && <div className="mov-alert" role="alert">{errorListsCtx}</div>}
-      {error && <div className="mov-alert" role="alert">{error}</div>}
+      {errorListsCtx && (
+        <div className="mov-alert" role="alert">
+          {errorListsCtx}
+        </div>
+      )}
+      {error && (
+        <div className="mov-alert" role="alert">
+          {error}
+        </div>
+      )}
 
       <section className="mov-card mov-card--table">
-        {/* ===== HEAD ===== */}
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
-            {/* Título + hint */}
             <div className="title-mov">
-              <div className="mov-card__title">Movs · Órdenes de Pago</div>
+              <div className="mov-card__title">Movs · Órdenes de Pago Pendientes</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> órdenes
                 {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
               </div>
             </div>
 
-            {/* ===== FILTROS (igual que Ventas) ===== */}
             <div className="mov-headFilters">
-
-              {/* Calendario — estilo Ventas con floatingField */}
               <div className="mov-filter mov-filter--cal floatingField">
                 <button
                   type="button"
@@ -900,7 +946,6 @@ export default function OrdenesPago() {
                 )}
               </div>
 
-              {/* Buscador — estilo Ventas con floatingField */}
               <div className={`mov-search floatingField floatingField--search ${q.trim() ? "is-active" : ""}`}>
                 <div className="mov-searchInput">
                   <input
@@ -928,19 +973,21 @@ export default function OrdenesPago() {
                       title="Limpiar búsqueda"
                       onClick={async () => {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                        setQ(""); skipSearchRef.current = true;
+                        setQ("");
+                        skipSearchRef.current = true;
                         await loadRows({ from: dateRange?.from, to: dateRange?.to, q: "", offset: 0, append: false });
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
                       disabled={loadingAll}
-                    >×</button>
+                    >
+                      ×
+                    </button>
                   )}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ===== ACCIONES: BotonExportar (igual que Ventas) ===== */}
           <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
@@ -953,12 +1000,16 @@ export default function OrdenesPago() {
           </div>
         </div>
 
-        {/* ===== HEADER TABLA ===== */}
         <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
           {columns.map((c) => (
             <div
               key={c.key}
-              className={["mov-gridCell", "mov-gridCell--head", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")}
+              className={[
+                "mov-gridCell",
+                "mov-gridCell--head",
+                c.align === "right" ? "is-right" : "",
+                c.align === "center" ? "is-center" : "",
+              ].join(" ")}
               role="columnheader"
             >
               {c.label}
@@ -966,7 +1017,6 @@ export default function OrdenesPago() {
           ))}
         </div>
 
-        {/* ===== BODY ===== */}
         <div className="mov-tableWrap" role="rowgroup">
           <div className={["mov-gridBody", "mov-gridBody--relative", showSkeleton ? "mov-softLoading" : ""].join(" ")}>
             {showSkeleton ? (
@@ -979,29 +1029,32 @@ export default function OrdenesPago() {
                   <div key={r.id_movimiento} className="mov-gridTable mov-gridTable--row" style={{ gridTemplateColumns: gridCols }} role="row">
                     {columns.map((c) => {
                       if (c.key === "acciones") {
-                        const pag = isPagado(r);
-                        const idComp = getIdComprobanteFromRow(r);
-                        const hasPdf = pag && idComp > 0;
                         return (
-                          <div key={c.key} data-label={c.label} className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")} role="cell">
+                          <div
+                            key={c.key}
+                            data-label={c.label}
+                            className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
+                            role="cell"
+                          >
                             <div className="mov-actionsInline">
-                              <button type="button" className={`mov-iconBtn ${!hasPdf ? "mov-iconBtn--disabled" : ""}`}
-                                title={hasPdf ? "Ver comprobante" : pag ? "Pagado, pero sin comprobante" : "Primero confirmá el pago"}
-                                onClick={() => hasPdf && openVerModal(r)} disabled={isAnyLoading || loadingListsCtx || !hasPdf}>
-                                <FontAwesomeIcon icon={faEye} />
-                              </button>
-                              <button type="button" className="mov-iconBtn" title={pag ? "Ya está pagada" : "Pagar"}
-                                onClick={() => openPagarModal(r)} disabled={isAnyLoading || loadingListsCtx || pag}>
+                              <button
+                                type="button"
+                                className="mov-iconBtn"
+                                title="Pagar"
+                                onClick={() => openPagarModal(r)}
+                                disabled={isAnyLoading || loadingListsCtx}
+                              >
                                 <FontAwesomeIcon icon={faMoneyBill1Wave} />
                               </button>
-                              <button type="button" className="mov-iconBtn" title="Editar"
-                                onClick={() => openEditarModal(r)} disabled={isAnyLoading || loadingListsCtx}>
+
+                              <button
+                                type="button"
+                                className="mov-iconBtn"
+                                title="Editar"
+                                onClick={() => openEditarModal(r)}
+                                disabled={isAnyLoading || loadingListsCtx}
+                              >
                                 <FontAwesomeIcon icon={faPenToSquare} />
-                              </button>
-                              <button type="button" className="mov-iconBtn mov-iconBtn--danger" title="Eliminar"
-                                disabled={isAnyLoading || loadingListsCtx || deletingId === r.id_movimiento}
-                                onClick={() => openDeleteModal(r)}>
-                                {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
                               </button>
                             </div>
                           </div>
@@ -1009,9 +1062,20 @@ export default function OrdenesPago() {
                       }
                       const val = c.render ? c.render(r) : safeText(r[c.key]);
                       return (
-                        <div key={c.key} data-label={c.label}
-                          className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : "", c.strong ? "is-strong" : ""].filter(Boolean).join(" ")}
-                          role="cell" title={typeof val === "string" ? val : undefined}>
+                        <div
+                          key={c.key}
+                          data-label={c.label}
+                          className={[
+                            "mov-gridCell",
+                            c.align === "right" ? "is-right" : "",
+                            c.align === "center" ? "is-center" : "",
+                            c.strong ? "is-strong" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          role="cell"
+                          title={typeof val === "string" ? val : undefined}
+                        >
                           <span className="mov-ellipsissss">{val}</span>
                         </div>
                       );
@@ -1020,13 +1084,18 @@ export default function OrdenesPago() {
                 ))}
 
                 {!isAnyLoading && filteredRows.length === 0 && (
-                  <div className="mov-emptyRow">No hay órdenes de pago para mostrar en el rango de fechas seleccionado.</div>
+                  <div className="mov-emptyRow">No hay órdenes de pago pendientes para mostrar en el rango de fechas seleccionado.</div>
                 )}
 
                 {!loadingRows && hasMore && filteredRows.length > 0 && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
-                    <button type="button" className="mov-btn mov-btn--loadAll" onClick={handleLoadAll}
-                      disabled={loadingMore || loadingAll || loadingListsCtx} title="Cargar todas las órdenes restantes">
+                    <button
+                      type="button"
+                      className="mov-btn mov-btn--loadAll"
+                      onClick={handleLoadAll}
+                      disabled={loadingMore || loadingAll || loadingListsCtx}
+                      title="Cargar todas las órdenes restantes"
+                    >
                       {loadingAll ? "Cargando todas…" : "Cargar todos"}
                     </button>
                   </div>
@@ -1043,26 +1112,29 @@ export default function OrdenesPago() {
         </div>
       </section>
 
-      {/* ===== MODALES ===== */}
-      <ModalVerComprobante open={openVer} url={verUrl} onClose={closeVerModal} title={verTitle} />
-
       <ModalPagarOrdenesPago
-        open={openPagar} onClose={closePagarModal}
-        proveedor={pagarProveedor} deudas={pagarDeudas}
-        onToast={showToast} onConfirm={onConfirmPago}
-        lists={lists} onAfterComprobanteSaved={handleAfterComprobanteSaved}
+        open={openPagar}
+        onClose={closePagarModal}
+        proveedor={pagarProveedor}
+        deudas={pagarDeudas}
+        onToast={showToast}
+        onConfirm={onConfirmPago}
+        lists={lists}
+        onAfterComprobanteSaved={handleAfterComprobanteSaved}
       />
 
       <ModalEditarOrdenPago
-        open={openEditar} row={editRow} lists={lists}
-        periodoDefault={dateRange?.from ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}` : ""}
-        onClose={closeEditarModal} onToast={showToast} onSave={onSaveEditar}
-      />
-
-      <ModalEliminarMovimientos
-        open={openDel} row={selectedRow}
-        loading={deletingId === selectedRow?.id_movimiento}
-        onClose={closeDeleteModal} onConfirm={confirmDelete} onToast={showToast}
+        open={openEditar}
+        row={editRow}
+        lists={lists}
+        periodoDefault={
+          dateRange?.from
+            ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}`
+            : ""
+        }
+        onClose={closeEditarModal}
+        onToast={showToast}
+        onSave={onSaveEditar}
       />
     </div>
   );

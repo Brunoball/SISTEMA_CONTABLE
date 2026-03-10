@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import BASE_URL from "../../../config/config";
 import "../cuentas_corrientes.css";
@@ -15,14 +14,15 @@ import {
   faChevronDown,
   faArrowRightLong,
   faMagnifyingGlass,
+  faTrashCan,
 } from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../../Global/Toast.jsx";
 import Calendario from "../../Global/Calendario/Calendario.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
+import ModalEliminarCobroCC from "../modales/ModalEliminarCobroCC.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 import { useListas } from "../../../context/ListasContext.jsx";
-
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 
 /* =========================
@@ -100,6 +100,12 @@ function canPreviewComprobante(row) {
   return safeText(row?.comprobante_url) !== "" || Number(row?.id_comprobante || 0) > 0;
 }
 
+// FIX: se eliminó la restricción de tipo_registro === "cobro"
+// Ahora solo requiere que exista un id_cobro válido
+function canDeleteCobro(row) {
+  return Number(row?.id_cobro || 0) > 0;
+}
+
 /* =========================
    Export helpers
 ========================= */
@@ -144,6 +150,13 @@ function buildHeadersGET() {
   return h;
 }
 
+function buildHeadersJSON() {
+  const sessionKey = (localStorage.getItem("session_key") || "").trim();
+  const h = { "Content-Type": "application/json" };
+  if (sessionKey) h["X-Session"] = sessionKey;
+  return h;
+}
+
 async function parseJsonOrThrow(res) {
   if (res.status === 401 || res.status === 403) {
     throw new Error(
@@ -162,6 +175,15 @@ async function parseJsonOrThrow(res) {
 
 async function apiGet(url) {
   const res = await fetch(url, { method: "GET", headers: buildHeadersGET() });
+  return await parseJsonOrThrow(res);
+}
+
+async function apiPost(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: buildHeadersJSON(),
+    body: JSON.stringify(body ?? {}),
+  });
   return await parseJsonOrThrow(res);
 }
 
@@ -198,11 +220,9 @@ function getProveedorLabel(p) {
   return parts[0] || "";
 }
 
-/* =========================================================
-   ✅ CAMBIO CLAVE
-   Ahora cuentas corrientes usa su propio endpoint:
-   action=cc_comprobante_descargar
-========================================================= */
+/* =========================
+   Comprobante
+========================= */
 function makeComprobanteAccessUrl(row, API) {
   const idComprobante = Number(row?.id_comprobante || 0);
   if (idComprobante > 0) {
@@ -215,7 +235,6 @@ function makeComprobanteAccessUrl(row, API) {
    Component
 ========================= */
 export default function ProveedoresCC() {
-  const navigate = useNavigate();
   const API = `${BASE_URL}/api.php`;
 
   const { lists: listasCtx, loadingLists, errorLists, ensureListsLoaded } = useListas();
@@ -239,6 +258,12 @@ export default function ProveedoresCC() {
     url: "",
     mime: "",
     title: "Comprobante",
+  });
+
+  const [deleteState, setDeleteState] = useState({
+    open: false,
+    loading: false,
+    row: null,
   });
 
   const [toast, setToast] = useState(null);
@@ -389,6 +414,18 @@ export default function ProveedoresCC() {
     setQ("");
     setOpenSug(false);
   }, [dateRange]);
+
+  const refreshCurrent = useCallback(async () => {
+    if (selected?.id) {
+      await loadHistorial(selected.id, selected.label);
+      return;
+    }
+
+    const txt = safeText(q) || safeText(queryUsed);
+    if (txt.length >= 2) {
+      await loadHistorial(null, txt);
+    }
+  }, [selected, q, queryUsed, loadHistorial]);
 
   const handleSelect = useCallback(
     (opt) => {
@@ -547,6 +584,53 @@ export default function ProveedoresCC() {
     [API, showToast]
   );
 
+  // FIX: se eliminó el guard canDeleteCobro(row) para que siempre abra el modal
+  // La validación real ya la hace el botón al renderizar (solo aparece si canDeleteCobro es true)
+  const askDeleteCobro = useCallback((row) => {
+    setDeleteState({
+      open: true,
+      loading: false,
+      row,
+    });
+  }, []);
+
+  const closeDeleteModal = useCallback(() => {
+    setDeleteState({
+      open: false,
+      loading: false,
+      row: null,
+    });
+  }, []);
+
+  const confirmDeleteCobro = useCallback(async () => {
+    const row = deleteState.row;
+    const idCobro = Number(row?.id_cobro || 0);
+
+    if (idCobro <= 0) {
+      showToast("error", "No se encontró un id_cobro válido.", 3000);
+      return;
+    }
+
+    try {
+      setDeleteState((prev) => ({ ...prev, loading: true }));
+
+      const data = await apiPost(`${API}?action=cc_eliminar_cobro`, {
+        id_cobro: idCobro,
+      });
+
+      if (!data || data.exito !== true) {
+        throw new Error(data?.mensaje || "No se pudo eliminar el cobro.");
+      }
+
+      closeDeleteModal();
+      showToast("exito", "Cobro eliminado correctamente.", 2400);
+      await refreshCurrent();
+    } catch (e) {
+      setDeleteState((prev) => ({ ...prev, loading: false }));
+      showToast("error", e?.message || "Error eliminando el cobro.", 3800);
+    }
+  }, [deleteState.row, API, closeDeleteModal, refreshCurrent, showToast]);
+
   return (
     <div className="contenedor-cards">
       {toast && (
@@ -571,6 +655,21 @@ export default function ProveedoresCC() {
             title: "Comprobante",
           })
         }
+      />
+
+      <ModalEliminarCobroCC
+        open={deleteState.open}
+        loading={deleteState.loading}
+        title="Eliminar registro de cobro"
+        subtitle={
+          deleteState.row
+            ? `Comprobante: ${safeText(deleteState.row.comprobante) || "-"} · Fecha: ${
+                formatDisplayDate(deleteState.row.fecha || deleteState.row.fecha_raw) || "-"
+              } · Importe: ${moneyARS(deleteState.row.credito || 0)}`
+            : ""
+        }
+        onClose={closeDeleteModal}
+        onConfirm={confirmDeleteCobro}
       />
 
       <div className="mov-card__head">
@@ -708,14 +807,14 @@ export default function ProveedoresCC() {
       <div className="cc-cliente-table">
         <div
           className="mov-gridTable mov-gridTable--head"
-          style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr .7fr" }}
+          style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr 1fr" }}
         >
           <div className="mov-gridCell mov-gridCell--head">Fecha</div>
           <div className="mov-gridCell mov-gridCell--head">Comprobante</div>
           <div className="mov-gridCell mov-gridCell--head is-right">Débito</div>
           <div className="mov-gridCell mov-gridCell--head is-right">Crédito</div>
           <div className="mov-gridCell mov-gridCell--head is-right">Saldo</div>
-          <div className="mov-gridCell mov-gridCell--head is-center">Ver</div>
+          <div className="mov-gridCell mov-gridCell--head is-center">Acciones</div>
         </div>
 
         <div
@@ -729,6 +828,7 @@ export default function ProveedoresCC() {
           ) : rows.length > 0 ? (
             rows.map((r, i) => {
               const verHabilitado = canPreviewComprobante(r);
+              const puedeEliminar = canDeleteCobro(r);
 
               return (
                 <div
@@ -757,7 +857,7 @@ export default function ProveedoresCC() {
                   </div>
 
                   <div
-                    className={`cc-cliente-table__cell cc-cliente-table__cell--center ${
+                    className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
                       Number(r.credito || 0) > 0
                         ? "cc-cliente-table__amount--active"
                         : "cc-cliente-table__amount--muted"
@@ -771,15 +871,33 @@ export default function ProveedoresCC() {
                   </div>
 
                   <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
-                    <button
-                      type="button"
-                      onClick={() => verHabilitado && openComprobante(r)}
-                      disabled={!verHabilitado}
-                      title={verHabilitado ? "Ver comprobante" : "Este registro no tiene comprobante"}
-                      className={`cc-verBtn ${verHabilitado ? "" : "is-disabled"}`}
-                    >
-                      <FontAwesomeIcon icon={faEye} />
-                    </button>
+                    <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                      <button
+                        type="button"
+                        onClick={() => verHabilitado && openComprobante(r)}
+                        disabled={!verHabilitado}
+                        title={verHabilitado ? "Ver comprobante" : "Este registro no tiene comprobante"}
+                        className={`cc-verBtn ${verHabilitado ? "" : "is-disabled"}`}
+                      >
+                        <FontAwesomeIcon icon={faEye} />
+                      </button>
+
+                      {puedeEliminar ? (
+                        <button
+                          type="button"
+                          onClick={() => askDeleteCobro(r)}
+                          title="Eliminar solo este registro de cobro"
+                          className="cc-verBtn"
+                          style={{
+                            background: "rgba(220, 53, 69, 0.12)",
+                            borderColor: "rgba(220, 53, 69, 0.35)",
+                            color: "#ff7b88",
+                          }}
+                        >
+                          <FontAwesomeIcon icon={faTrashCan} />
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               );

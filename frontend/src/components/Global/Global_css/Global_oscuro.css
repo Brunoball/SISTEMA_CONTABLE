@@ -1441,4 +1441,82 @@ html[data-theme="oscuro"] .suggestions__item{
 
 html[data-theme="oscuro"] .suggestions__item:hover{
   background: rgba(59, 130, 246, 0.16);
+}/* Dark mode — inputs floating en mov-page (Ventas, etc.) */
+html[data-theme="oscuro"] .mov-page .cc-floatingLabel {
+  background: #0f172a;
+  color: rgba(226, 232, 240, 0.68);
+}
+
+html[data-theme="oscuro"] .mov-page .cc-floatingField.is-active .cc-floatingLabel,
+html[data-theme="oscuro"] .mov-page .cc-floatingField:focus-within .cc-floatingLabel {
+  color: #60a5fa;
+}
+
+html[data-theme="oscuro"] .mov-page .cc-input--floating {
+  background: rgba(15, 23, 42, 0.88) !important;
+  color: rgba(226, 232, 240, 0.92) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+html[data-theme="oscuro"] .mov-page .cc-input--floating:focus {
+  background: rgba(15, 23, 42, 0.96) !important;
+  border-color: rgba(96, 165, 250, 0.72) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18) !important;
+}
+
+html[data-theme="oscuro"] .mov-page .cc-input--floating::placeholder {
+  color: rgba(226, 232, 240, 0.40) !important;
+}
+/* ─── Dark mode ─────────────────────────────── */
+html[data-theme="oscuro"] .mov-page--flujoCaja .fc-subhead {
+  background: rgba(15,23,42,.75) !important;
+  border-color: rgba(148,163,184,.12) !important;
+}
+html[data-theme="oscuro"] .mov-page--flujoCaja .fc-subhead__name {
+  color: rgba(226,232,240,.92) !important;
+}
+html[data-theme="oscuro"] .mov-page--flujoCaja .fc-subhead__meta {
+  color: rgba(226,232,240,.60) !important;
+}
+html[data-theme="oscuro"] .mov-page--flujoCaja .fc-footnote {
+  background: rgba(15,23,42,.65) !important;
+  border-color: rgba(148,163,184,.10) !important;
+  color: rgba(226,232,240,.48) !important;
+}
+html[data-theme="oscuro"] .fc-in  { color: #4ade80 !important; }
+html[data-theme="oscuro"] .fc-eg  { color: #f87171 !important; }
+html[data-theme="oscuro"] .fc-saldo--pos { color: #4ade80 !important; }
+html[data-theme="oscuro"] .fc-saldo--neg { color: #f87171 !important; }
+/* ─── Dark mode ─────────────────────────────────────────── */
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-row--resultado {
+  background: rgba(148,163,184,.10) !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-concept--resultado {
+  color: rgba(226,232,240,.96) !important;
+}
+html[data-theme="oscuro"] .af-importe--ingreso,
+html[data-theme="oscuro"] .af-importe--pos  { color: #4ade80 !important; }
+html[data-theme="oscuro"] .af-importe--egreso,
+html[data-theme="oscuro"] .af-importe--neg  { color: #f87171 !important; }
+
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-footTotals {
+  background: rgba(15,23,42,.70) !important;
+  border-color: rgba(148,163,184,.12) !important;
+}
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalCard {
+  background: rgba(15,23,42,.55) !important;
+  border-color: rgba(148,163,184,.16) !important;
+}
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalCard--pos { border-color: rgba(74,222,128,.20) !important; }
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalCard--neg { border-color: rgba(248,113,113,.20) !important; }
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalCard--ctrl{ border-color: rgba(251,191,36,.18) !important; }
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalLabel {
+  color: rgba(226,232,240,.65) !important;
+}
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalValue {
+  color: rgba(226,232,240,.92) !important;
+}
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalSub {
+  color: rgba(226,232,240,.45) !important;
 }

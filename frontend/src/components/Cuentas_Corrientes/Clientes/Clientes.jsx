@@ -15,7 +15,8 @@ import {
   faEye,
   faBoxOpen,
   faChevronDown,
-    faArrowRightLong,
+  faArrowRightLong,
+  faMagnifyingGlass,
 } from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../../Global/Toast.jsx";
@@ -24,7 +25,6 @@ import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComproban
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 
-// ✅ BOTÓN EXPORTAR GLOBAL (igual que en Movimientos)
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 
 /* =========================
@@ -85,7 +85,6 @@ function getBaseOrigin() {
 function resolveFileUrl(rawUrl) {
   const url = safeText(rawUrl);
   if (!url) return "";
-
   if (
     url.startsWith("http://") ||
     url.startsWith("https://") ||
@@ -94,10 +93,8 @@ function resolveFileUrl(rawUrl) {
   ) {
     return url;
   }
-
   const origin = getBaseOrigin();
   if (url.startsWith("/")) return `${origin}${url}`;
-
   return `${origin}/${url.replace(/^\.?\//, "")}`;
 }
 
@@ -216,7 +213,6 @@ function makeComprobanteAccessUrl(row, API) {
   if (idComprobante > 0) {
     return `${API}?action=comprobantes_descargar&id_comprobante=${idComprobante}`;
   }
-
   return resolveFileUrl(row?.comprobante_url);
 }
 
@@ -238,7 +234,7 @@ export default function ClientesCC() {
   const [queryUsed, setQueryUsed] = useState("");
   const [openSug, setOpenSug] = useState(false);
   const tableBodyRef = useRef(null);
-const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
+  const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
 
   const [rows, setRows] = useState([]);
   const [totales, setTotales] = useState({ debito: 0, credito: 0, saldo: 0 });
@@ -260,49 +256,53 @@ const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   useEffect(() => {
     ensureListsLoaded?.({ force: false, background: true }).catch(() => {});
   }, [ensureListsLoaded]);
-useEffect(() => {
-  const el = tableBodyRef.current;
-  if (!el) return;
 
-  const checkScroll = () => {
-    const hasScroll = el.scrollHeight > el.clientHeight + 1;
-    setHasVerticalScroll(hasScroll);
-  };
+  useEffect(() => {
+    const el = tableBodyRef.current;
+    if (!el) return;
 
-  checkScroll();
+    const checkScroll = () => {
+      const hasScroll = el.scrollHeight > el.clientHeight + 1;
+      setHasVerticalScroll(hasScroll);
+    };
 
-  const ro = new ResizeObserver(() => checkScroll());
-  ro.observe(el);
+    checkScroll();
 
-  const mo = new MutationObserver(() => checkScroll());
-  mo.observe(el, { childList: true, subtree: true });
+    const ro = new ResizeObserver(() => checkScroll());
+    ro.observe(el);
 
-  window.addEventListener("resize", checkScroll);
+    const mo = new MutationObserver(() => checkScroll());
+    mo.observe(el, { childList: true, subtree: true });
 
-  return () => {
-    ro.disconnect();
-    mo.disconnect();
-    window.removeEventListener("resize", checkScroll);
-  };
-}, [rows, loading]);
-const rangeLabel = useMemo(() => {
-  const from = dateRange?.from || null;
-  const to = dateRange?.to || null;
+    window.addEventListener("resize", checkScroll);
 
-  if (!from) return "Seleccionar período";
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+      window.removeEventListener("resize", checkScroll);
+    };
+  }, [rows, loading]);
 
-  if (!to || formatDateISO(from) === formatDateISO(to)) {
-    return formatDateLabel(from);
-  }
+  const rangeLabel = useMemo(() => {
+    const from = dateRange?.from || null;
+    const to = dateRange?.to || null;
 
-  return (
-    <>
-      {formatDateLabel(from)}
-      <FontAwesomeIcon icon={faArrowRightLong} style={{ margin: "0 6px" }} />
-      {formatDateLabel(to)}
-    </>
-  );
-}, [dateRange]);
+    if (!from) return "Seleccionar período";
+
+    if (!to || formatDateISO(from) === formatDateISO(to)) {
+      return formatDateLabel(from);
+    }
+
+    return (
+      <>
+        <span>{formatDateLabel(from)}</span>
+        <span className="cc-rangeArrow">
+          <FontAwesomeIcon icon={faArrowRightLong} />
+        </span>
+        <span>{formatDateLabel(to)}</span>
+      </>
+    );
+  }, [dateRange]);
 
   const exportBaseName = useMemo(() => {
     const safeName = String(queryUsed || "cliente").replace(/[^\w.-]+/g, "_");
@@ -439,7 +439,7 @@ const rangeLabel = useMemo(() => {
   );
 
   /* =========================
-     Export functions (igual que Movimientos)
+     Export functions
   ========================= */
   const getExportData = useCallback(() => {
     const data = buildExportRows(rows);
@@ -583,146 +583,141 @@ const rangeLabel = useMemo(() => {
         }
       />
 
-      <div className="cc-card__head cc-card__head--module">
-        <div className="cc-card__headLeft cc-card__headLeft--stack">
-          <div className="cc-headTitle">
-            <div className="cc-headTitle">
-  <div className="cc-card__title">Cuentas Corrientes</div>
+      {/* ✅ HEAD UNIFICADO — igual que Movimientos */}
+      <div className="mov-card__head">
+        <div className="mov-card__headLeft">
 
-  <div className="mov-card__hint">
-    Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
-  </div>
-</div>
-
+          <div className="title-mov">
+            <div className="mov-card__title">Cuentas Corrientes</div>
+            <div className="mov-card__hint">
+              Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
+            </div>
           </div>
 
-<div className="cc-headFilters">
-  <div className="cc-filter cc-filter--cal">
-    <div className={`cc-floatingField cc-floatingField--calendar is-active ${calOpen ? "is-open" : ""}`}>
-      <button
-        type="button"
-        className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
-        onClick={() => setCalOpen((v) => !v)}
-        disabled={loading}
-      >
+          <div className="mov-headFilters">
 
-          {rangeLabel}
+            {/* CALENDARIO */}
+            <div className="cc-filter cc-filter--cal">
+              <div className={`cc-floatingField cc-floatingField--calendar is-active ${calOpen ? "is-open" : ""}`}>
+                <button
+                  type="button"
+                  className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
+                  onClick={() => setCalOpen((v) => !v)}
+                  disabled={loading}
+                >
+                  {rangeLabel}
+                  <span className="cc-calTrigger__iconRight">
+                    <FontAwesomeIcon icon={faChevronDown} />
+                  </span>
+                </button>
 
+                <span className="cc-floatingLabel cc-floatingLabel--active">
+                  <FontAwesomeIcon icon={faCalendarDays} /> Período
+                </span>
 
-
-
-        <span className="cc-calTrigger__iconRight">
-          <FontAwesomeIcon icon={faChevronDown} />
-        </span>
-      </button>
-
-      <span className="cc-floatingLabel cc-floatingLabel--active">
-  
-          <FontAwesomeIcon icon={faCalendarDays} />
-
-        Período
-      </span>
-
-      {calOpen && (
-        <div className="cc-calDropdown">
-          <Calendario
-            value={dateRange}
-            onChange={(range) => {
-              setDateRange(range);
-              if (range?.from && range?.to) setCalOpen(false);
-            }}
-            onClose={() => setCalOpen(false)}
-          />
-        </div>
-      )}
-    </div>
-  </div>
-
-  <div className="cc-filter cc-filter--search">
-    <div
-      className={`cc-floatingField cc-floatingField--search ${
-        openSug || safeText(q) !== "" ? "is-active" : ""
-      }`}
-    >
-      <div className="cc-searchInput">
-        <div className="cc-searchInput__fieldWrap">
-          <input
-            className="cc-input cc-input--floating"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={() => setOpenSug(true)}
-            onBlur={() => setTimeout(() => setOpenSug(false), 120)}
-            placeholder=" "
-            disabled={loading || loadingLists}
-            autoComplete="off"
-          />
-
-          <span className="cc-floatingLabel">
-            {loadingLists ? "Cargando clientes…" : "Buscar cliente"}
-          </span>
-
-          {safeText(q) !== "" && !loading && (
-            <button
-              type="button"
-              className="cc-clearSearch cc-clearSearch--inside"
-              title="Limpiar"
-              onClick={() => {
-                setQ("");
-                setSelected(null);
-                setOpenSug(false);
-                setRows([]);
-                setTotales({ debito: 0, credito: 0, saldo: 0 });
-                setHasSearched(false);
-                setQueryUsed("");
-              }}
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
-          )}
-
-          {openSug && suggestions.length > 0 && (
-            <div className="cc-suggestions">
-              <div className="cc-suggestions__scroll">
-                {suggestions.map((opt) => (
-                  <button
-                    key={`${opt.id ?? "temp"}-${opt.label}`}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleSelect(opt);
-                    }}
-                    className="cc-suggestions__item"
-                    title={opt.label}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                {calOpen && (
+                  <div className="cc-calDropdown">
+                    <Calendario
+                      value={dateRange}
+                      onChange={(range) => {
+                        setDateRange(range);
+                        if (range?.from && range?.to) setCalOpen(false);
+                      }}
+                      onClose={() => setCalOpen(false)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
-          {/* ✅ REEMPLAZA el botón cc-btnex cc-btn--excel por BotonExportar */}
-          <BotonExportar
-            disabled={loading || !hasSearched || rows.length === 0}
-            loading={false}
-            label="Exportar"
-            title={
-              !hasSearched
-                ? "Seleccioná un cliente primero"
-                : rows.length
-                ? "Exportar archivo"
-                : "No hay datos para exportar"
-            }
-            opciones={exportOptions}
-            align="right"
-          />
+            {/* BÚSQUEDA */}
+            <div className="cc-filter cc-filter--search">
+              <div
+                className={`cc-floatingField cc-floatingField--search ${
+                  openSug || safeText(q) !== "" ? "is-active" : ""
+                }`}
+              >
+                <div className="cc-searchInput">
+                  <div className="cc-searchInput__fieldWrap">
+                    <input
+                      className="cc-input cc-input--floating"
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onFocus={() => setOpenSug(true)}
+                      onBlur={() => setTimeout(() => setOpenSug(false), 120)}
+                      placeholder=" "
+                      disabled={loading || loadingLists}
+                      autoComplete="off"
+                    />
+
+                    <span className="cc-floatingLabel">
+                      <FontAwesomeIcon icon={faMagnifyingGlass} />{" "}
+                      {loadingLists ? "Cargando clientes…" : "Buscar cliente"}
+                    </span>
+
+                    {safeText(q) !== "" && !loading && (
+                      <button
+                        type="button"
+                        className="cc-clearSearch cc-clearSearch--inside"
+                        title="Limpiar"
+                        onClick={() => {
+                          setQ("");
+                          setSelected(null);
+                          setOpenSug(false);
+                          setRows([]);
+                          setTotales({ debito: 0, credito: 0, saldo: 0 });
+                          setHasSearched(false);
+                          setQueryUsed("");
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faTimes} />
+                      </button>
+                    )}
+
+                    {openSug && suggestions.length > 0 && (
+                      <div className="cc-suggestions">
+                        <div className="cc-suggestions__scroll">
+                          {suggestions.map((opt) => (
+                            <button
+                              key={`${opt.id ?? "temp"}-${opt.label}`}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelect(opt);
+                              }}
+                              className="cc-suggestions__item"
+                              title={opt.label}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
         </div>
+
+        {/* EXPORTAR */}
+        <BotonExportar
+          disabled={loading || !hasSearched || rows.length === 0}
+          loading={false}
+          label="Exportar"
+          title={
+            !hasSearched
+              ? "Seleccioná un cliente primero"
+              : rows.length
+              ? "Exportar archivo"
+              : "No hay datos para exportar"
+          }
+          opciones={exportOptions}
+          align="right"
+        />
       </div>
 
       {errorLists && <div className="cc-footnote">{errorLists}</div>}
@@ -734,16 +729,16 @@ const rangeLabel = useMemo(() => {
         >
           <div className="mov-gridCell mov-gridCell--head">Fecha</div>
           <div className="mov-gridCell mov-gridCell--head">Comprobante</div>
-          <div className="mov-gridCell mov-gridCell--head is-center">Débito</div>
-          <div className="mov-gridCell mov-gridCell--head is-center">Crédito</div>
-          <div className="mov-gridCell mov-gridCell--head is-center">Saldo</div>
+          <div className="mov-gridCell mov-gridCell--head is-right">Débito</div>
+          <div className="mov-gridCell mov-gridCell--head is-right">Crédito</div>
+          <div className="mov-gridCell mov-gridCell--head is-right">Saldo</div>
           <div className="mov-gridCell mov-gridCell--head is-center">Ver</div>
         </div>
 
         <div
-  ref={tableBodyRef}
-  className={`cc-cliente-table__body ${!hasVerticalScroll ? "cc-cliente-table__body--stable" : ""}`}
->
+          ref={tableBodyRef}
+          className={`cc-cliente-table__body ${!hasVerticalScroll ? "cc-cliente-table__body--stable" : ""}`}
+        >
           {loading ? (
             <div className="cc-cliente-table__loading">
               Cargando cuenta corriente del cliente…
@@ -763,14 +758,13 @@ const rangeLabel = useMemo(() => {
 
                   <div className="cc-cliente-table__cell">
                     <div className="cc-cliente-table__title">{r.comprobante || "-"}</div>
-
                     {r.detalle && (
                       <div className="cc-cliente-table__detail">{r.detalle}</div>
                     )}
                   </div>
 
                   <div
-                    className={`cc-cliente-table__cell cc-cliente-table__cell--center ${
+                    className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
                       Number(r.debito || 0) > 0
                         ? "cc-cliente-table__amount--active"
                         : "cc-cliente-table__amount--muted"
@@ -780,7 +774,7 @@ const rangeLabel = useMemo(() => {
                   </div>
 
                   <div
-                    className={`cc-cliente-table__cell cc-cliente-table__cell--center ${
+                    className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
                       Number(r.credito || 0) > 0
                         ? "cc-cliente-table__amount--active"
                         : "cc-cliente-table__amount--muted"
@@ -789,7 +783,7 @@ const rangeLabel = useMemo(() => {
                     {Number(r.credito || 0) > 0 ? moneyARS(r.credito) : ""}
                   </div>
 
-                  <div className="cc-cliente-table__cell cc-cliente-table__cell--center cc-cliente-table__saldo">
+                  <div className="cc-cliente-table__cell cc-cliente-table__cell--right cc-cliente-table__saldo">
                     {moneyARS(r.saldo || 0)}
                   </div>
 
@@ -816,7 +810,6 @@ const rangeLabel = useMemo(() => {
           ) : (
             <div className="cc-cliente-table__empty cc-emptyState">
               <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
-
               <div className="cc-emptyText">
                 {hasSearched
                   ? `No se encontraron movimientos para "${queryUsed}".`
@@ -829,17 +822,14 @@ const rangeLabel = useMemo(() => {
         <div className="cc-cliente-table__footWrap">
           <div className="cc-cliente-table__totals">
             <div className="cc-cliente-table__cell">Totales</div>
-                        <div className="cc-cliente-table__cell"></div>
-
-            <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
+            <div className="cc-cliente-table__cell"></div>
+            <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
               {moneyARS(totales?.debito || 0)}
             </div>
-
-            <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
+            <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
               {moneyARS(totales?.credito || 0)}
             </div>
-
-            <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
+            <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
               {moneyARS(totales?.saldo || 0)}
             </div>
             <div className="cc-cliente-table__cell"></div>

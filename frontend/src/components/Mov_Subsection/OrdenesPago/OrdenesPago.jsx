@@ -800,7 +800,7 @@ export default function OrdenesPago() {
         return <span className={`mov-chip ${pag ? "mov-chip--ok" : "mov-chip--warn"}`}>{pag ? "PAGADO" : "PENDIENTE"}</span>;
       },
     },
-    { key: "monto", label: "MONTO", fr: 1.1, align: "center", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
+    { key: "monto", label: "MONTO", fr: 1.1, align: "right", render: (r) => moneyARS(r.monto_total ?? r.total ?? 0) },
     { key: "acciones", label: "ACCIONES", fr: 1.4, align: "center", render: () => null },
   ], []);
 
@@ -857,7 +857,7 @@ export default function OrdenesPago() {
           <div className="mov-card__headLeft">
             {/* Título + hint */}
             <div className="title-mov">
-              <div className="mov-card__title">Movimientos · Órdenes de Pago (Compras)</div>
+              <div className="mov-card__title">Movs · Órdenes de Pago</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> órdenes
                 {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}

@@ -29,6 +29,7 @@ import {
   faEye,
   faChevronDown,
   faArrowRightLong,
+    faTimes,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -829,7 +830,7 @@ export default function Compras() {
         key: "total",
         label: "TOTAL",
         fr: 1.1,
-        align: "center",
+        align: "right",
         render: (r) =>
           moneyARS(pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)),
       },
@@ -1069,7 +1070,7 @@ export default function Compras() {
           <div className="mov-card__headLeft">
             {/* Título + hint */}
             <div className="title-mov">
-              <div className="mov-card__title">Movimientos · Compras</div>
+              <div className="mov-card__title">Movs · Compras</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> compras
                 {loadingAll
@@ -1081,102 +1082,102 @@ export default function Compras() {
             </div>
 
             {/* ===== FILTROS (igual que Ventas) ===== */}
-            <div className="mov-headFilters">
+<div className="mov-headFilters">
 
-              {/* Calendario — estilo Ventas con floatingField */}
-              <div className="mov-filter mov-filter--cal floatingField">
-                <button
-                  type="button"
-                  className={`mov-calTrigger cc-calTrigger ${showCalendario ? "is-open" : ""}`}
-                  onClick={() => setShowCalendario((v) => !v)}
-                  disabled={isAnyLoading || loadingListsCtx}
-                  title="Seleccionar rango de fechas"
-                >
-                  {dateRangeLabel}
-                  <span className="mov-calTrigger__arrow">
-                    <FontAwesomeIcon icon={faChevronDown} />
-                  </span>
-                </button>
+  {/* CALENDARIO */}
+  <div className="cc-filter cc-filter--cal">
+    <div className={`cc-floatingField cc-floatingField--calendar is-active ${showCalendario ? "is-open" : ""}`}>
+      <button
+        type="button"
+        className={`cc-calTrigger ${showCalendario ? "is-open" : ""}`}
+        onClick={() => setShowCalendario((v) => !v)}
+        disabled={isAnyLoading || loadingListsCtx}
+        title="Seleccionar rango de fechas"
+      >
+        {dateRangeLabel}
+        <span className="cc-calTrigger__iconRight">
+          <FontAwesomeIcon icon={faChevronDown} />
+        </span>
+      </button>
 
-                <span className="floatingLabel floatingLabel--active">
-                  <FontAwesomeIcon icon={faCalendarDays} /> Período
-                </span>
+      <span className="cc-floatingLabel cc-floatingLabel--active">
+        <FontAwesomeIcon icon={faCalendarDays} /> Período
+      </span>
 
-                {showCalendario && (
-                  <div className="mov-calDropdown">
-                    <Calendario
-                      value={dateRange}
-                      onChange={async (newRange) => {
-                        if (newRange.from && newRange.to) {
-                          setShowCalendario(false);
-                        }
-                        await handleDateRangeChange(newRange);
-                      }}
-                      onClose={() => setShowCalendario(false)}
-                    />
-                  </div>
-                )}
-              </div>
+      {showCalendario && (
+        <div className="cc-calDropdown">
+          <Calendario
+            value={dateRange}
+            onChange={async (newRange) => {
+              if (newRange.from && newRange.to) setShowCalendario(false);
+              await handleDateRangeChange(newRange);
+            }}
+            onClose={() => setShowCalendario(false)}
+          />
+        </div>
+      )}
+    </div>
+  </div>
 
-              {/* Buscador — estilo Ventas con floatingField */}
-              <div
-                className={`mov-search floatingField floatingField--search ${
-                  q.trim() ? "is-active" : ""
-                }`}
-              >
-                <div className="mov-searchInput">
-                  <input
-                    className="mov-input--floating"
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    onKeyDown={async (e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                        skipSearchRef.current = true;
-                        await loadRows({
-                          dateRange,
-                          q: e.currentTarget.value,
-                          offset: 0,
-                          append: false,
-                          mode: "initial",
-                        });
-                      }
-                    }}
-                    placeholder=" "
-                    disabled={loadingListsCtx || loadingAll}
-                  />
+  {/* BÚSQUEDA */}
+  <div className="cc-filter ">
+    <div className={`cc-floatingField cc-floatingField--search ${q.trim() ? "is-active" : ""}`}>
+      <div className="cc-searchInput">
+        <div className="cc-searchInput__fieldWrap">
+          <input
+            className="cc-input cc-input--floating"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={async (e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                skipSearchRef.current = true;
+                await loadRows({
+                  dateRange,
+                  q: e.currentTarget.value,
+                  offset: 0,
+                  append: false,
+                  mode: "initial",
+                });
+              }
+            }}
+            placeholder=" "
+            disabled={loadingListsCtx || loadingAll}
+          />
 
-                  <span className="floatingLabel">
-                    <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                  </span>
+          <span className="cc-floatingLabel">
+            <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+          </span>
 
-                  {q.trim() !== "" && (
-                    <button
-                      type="button"
-                      className="mov-clearSearch clearSearch--inside"
-                      title="Limpiar búsqueda"
-                      onClick={async () => {
-                        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                        setQ("");
-                        skipSearchRef.current = true;
-                        await loadRows({
-                          dateRange,
-                          q: "",
-                          offset: 0,
-                          append: false,
-                          mode: "initial",
-                        });
-                        document.querySelector(".mov-searchInput input")?.focus();
-                      }}
-                      disabled={loadingAll}
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+          {q.trim() !== "" && (
+            <button
+              type="button"
+              className="cc-clearSearch cc-clearSearch--inside"
+              title="Limpiar búsqueda"
+              onClick={async () => {
+                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                setQ("");
+                skipSearchRef.current = true;
+                await loadRows({
+                  dateRange,
+                  q: "",
+                  offset: 0,
+                  append: false,
+                  mode: "initial",
+                });
+              }}
+              disabled={loadingAll}
+            >
+              <FontAwesomeIcon icon={faTimes} />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
           </div>
 
           {/* ===== ACCIONES: BotonExportar + Nueva Compra (igual que Ventas) ===== */}

@@ -108,7 +108,7 @@
   gap: 14px;
   width: 100%;
   min-width: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: flex-end;
 }
 
@@ -122,12 +122,6 @@
 
 }
 
-.cc-card__title{
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  font-size: 16px;
-  color: var(--b-midnight);
-}
 
 .cc-card__hint{
   margin-top: 5px;
@@ -202,13 +196,11 @@
   height: 40px;
   border-radius: 10px;
   border: 1.5px solid rgba(10, 37, 64, 0.14);
-  background: #fff;
   padding: 0 70px 0 14px;
   outline: none;
   font-weight: 500;
   font-size: 13px;
   color: rgba(10, 37, 64, 0.90);
-  min-width: 340px;
   transition: border-color var(--cc-transition), box-shadow var(--cc-transition);
 }
 
@@ -731,6 +723,7 @@
 .cc-calTrigger{
   display: inline-flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   height: 40px;
   padding: 0 14px;
@@ -789,7 +782,6 @@
    Tabla clientes
 ========================= */
 .cc-cliente-table{
-  margin-top: 12px;
   background: #fff;
   overflow: hidden;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
@@ -830,6 +822,8 @@
   grid-template-columns: 0.8fr 2.2fr 1fr 1fr 1fr 0.7fr;
   background: #f8fafc;
   font-weight: 700;
+  overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .cc-cliente-table__head{

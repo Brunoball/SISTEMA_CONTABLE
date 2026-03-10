@@ -33,6 +33,7 @@ import {
   faFileInvoiceDollar,
   faChevronDown,
   faArrowRightLong,
+  faTimes,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -591,7 +592,7 @@ const rangeLabel = useMemo(() => {
       {
         key: "total",
         label: "TOTAL",
-        align: "center",
+        align: "right",
         fr: 1.0,
         render: (r) =>
           moneyARS(
@@ -865,88 +866,92 @@ const rangeLabel = useMemo(() => {
                 {loadingAll ? " (cargando…)" : ""}
               </div>
             </div>
+<div className="mov-headFilters">
 
-            <div className="mov-headFilters">
-              <div className="cc-filter cc-filter--cal" style={{ position: "relative" }}>
-                <span className="floatingLabel floatingLabel--active">
-                  <FontAwesomeIcon icon={faCalendarDays} /> Período
-                </span>
-
-                <button
-                  type="button"
-                  className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
-                  onClick={() => setCalOpen((v) => !v)}
-                  disabled={isAnyLoading || loadingListsCtx}
-                >
-                  {rangeLabel}
-                          <span className="boton-exportar-trigger__right">
-                            <FontAwesomeIcon icon={faChevronDown} />
-                          </span>
-                </button>
-
-                {calOpen && (
-                  <div className="mov-calDropdown">
-                    <Calendario
-                      value={dateRange}
-                      onChange={handleRangeChange}
-                      onClose={() => setCalOpen(false)}
-                    />
-                  </div>
-                )}
-              </div>
-
-<div
-  className={`mov-search floatingField floatingField--search ${
-    q.trim() !== "" ? "is-active" : ""
-  }`}
->
-  <div className="mov-searchInput">
-    <input
-      className="mov-input mov-input--floating"
-      value={q}
-      onChange={(e) => setQ(e.target.value)}
-      onKeyDown={async (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-          skipSearchRef.current = true;
-          await loadRows({
-            dateRange,
-            q: e.currentTarget.value,
-            offset: 0,
-            append: false,
-          });
-        }
-      }}
-      placeholder=" "
-      disabled={loadingListsCtx || loadingAll}
-      autoComplete="off"
-    />
-
-    <span className="floatingLabel">
-      <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-    </span>
-
-    {q.trim() !== "" && (
+  {/* CALENDARIO — igual que Clientes */}
+  <div className="cc-filter cc-filter--cal">
+    <div className={`cc-floatingField cc-floatingField--calendar is-active ${calOpen ? "is-open" : ""}`}>
       <button
         type="button"
-        className="mov-clearSearch clearSearch clearSearch--inside"
-        title="Limpiar búsqueda"
-        onClick={async () => {
-          if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-          setQ("");
-          skipSearchRef.current = true;
-          await loadRows({ dateRange, q: "", offset: 0, append: false });
-          document.querySelector(".mov-searchInput input")?.focus();
-        }}
-        disabled={loadingAll}
+        className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
+        onClick={() => setCalOpen((v) => !v)}
+        disabled={isAnyLoading || loadingListsCtx}
       >
-        ×
+        {rangeLabel}
+        <span className="cc-calTrigger__iconRight">
+          <FontAwesomeIcon icon={faChevronDown} />
+        </span>
       </button>
-    )}
+
+      <span className="cc-floatingLabel cc-floatingLabel--active">
+        <FontAwesomeIcon icon={faCalendarDays} /> Período
+      </span>
+
+      {calOpen && (
+        <div className="cc-calDropdown">
+          <Calendario
+            value={dateRange}
+            onChange={handleRangeChange}
+            onClose={() => setCalOpen(false)}
+          />
+        </div>
+      )}
+    </div>
   </div>
+
+  {/* BÚSQUEDA — igual que Clientes */}
+  <div className="cc-filter cc-filter--search">
+    <div className={`cc-floatingField cc-floatingField--search ${q.trim() !== "" ? "is-active" : ""}`}>
+      <div className="cc-searchInput">
+        <div className="cc-searchInput__fieldWrap">
+          <input
+            className="cc-input cc-input--floating"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={async (e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                skipSearchRef.current = true;
+                await loadRows({
+                  dateRange,
+                  q: e.currentTarget.value,
+                  offset: 0,
+                  append: false,
+                });
+              }
+            }}
+            placeholder=" "
+            disabled={loadingListsCtx || loadingAll}
+            autoComplete="off"
+          />
+
+          <span className="cc-floatingLabel">
+            <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+          </span>
+
+          {q.trim() !== "" && (
+            <button
+              type="button"
+              className="cc-clearSearch cc-clearSearch--inside"
+              title="Limpiar búsqueda"
+              onClick={async () => {
+                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                setQ("");
+                skipSearchRef.current = true;
+                await loadRows({ dateRange, q: "", offset: 0, append: false });
+              }}
+              disabled={loadingAll}
+            >
+              <FontAwesomeIcon icon={faTimes} />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
-            </div>
           </div>
 
           <div

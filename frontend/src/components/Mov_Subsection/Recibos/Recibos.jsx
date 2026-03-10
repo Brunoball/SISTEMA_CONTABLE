@@ -825,7 +825,7 @@ export default function Recibos() {
         key: "monto",
         label: "MONTO",
         fr: 1.1,
-        align: "center",
+        align: "right",
         render: (r) => moneyARS(r.monto_total ?? r.total ?? 0),
       },
       { key: "acciones", label: "ACCIONES", fr: 1.4, align: "center", render: () => null },
@@ -1126,11 +1126,8 @@ export default function Recibos() {
           <div className="mov-card__headLeft">
             {/* Título + hint */}
             <div className="title-mov">
-              <div className="mov-card__title">Movimientos · Recibos</div>
+              <div className="mov-card__title">Movs · Recibos</div>
               <div className="mov-card__hint">
-                Total <b>{stats.total}</b> · Pendientes <b>{stats.pendientes}</b> · Pagados{" "}
-                <b>{stats.pagados}</b>
-                {" · "}
                 Mostrando <b>{filteredRows.length}</b>
                 {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
               </div>

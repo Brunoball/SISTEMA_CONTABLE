@@ -4,24 +4,34 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import BASE_URL from "../../config/config";
 import "./flujo_caja.css";
+import "../Global/Global_css/Global_oscuro.css";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCalendarDays, faFileExcel } from "@fortawesome/free-solid-svg-icons";
+import {
+  faCalendarDays,
+  faFileExcel,
+  faChevronDown,
+  faArrowRightLong,
+} from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../Global/Toast.jsx";
 import Calendario from "../Global/Calendario/Calendario.jsx";
+import "../../components/Global/Calendario/calendario.css";
+
+// ✅ BOTÓN EXPORTAR GLOBAL (igual que Ventas / OrdenesPago)
+import BotonExportar from "../Global/Boton_Exportar/BotonExportar.jsx";
 
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
-// ✅ ✅ CONTEXTO GLOBAL DE RANGO DE FECHAS
+// ✅ CONTEXTO GLOBAL DE RANGO DE FECHAS
 import { useDateRange } from "../../context/DateRangeContext.jsx";
 
 /* =========================
    Helpers
 ========================= */
 function moneyARS(v) {
-  if (v == null || v === "") return "-";
+  if (v == null || v === "") return "—";
   const n = Number(v || 0);
   try {
     return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
@@ -30,7 +40,7 @@ function moneyARS(v) {
   }
 }
 function moneyARSAbs(v) {
-  if (v == null || v === "") return "-";
+  if (v == null || v === "") return "—";
   const n = Math.abs(Number(v || 0));
   try {
     return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
@@ -39,12 +49,11 @@ function moneyARSAbs(v) {
   }
 }
 function fmtDateES(iso) {
-  if (!iso) return "-";
+  if (!iso) return "—";
   const [y, m, d] = String(iso).split("-");
   if (!y || !m || !d) return String(iso);
   return `${d}/${m}/${y}`;
 }
-
 function formatDateISO(d) {
   if (!d) return "";
   const yyyy = d.getFullYear();
@@ -52,12 +61,10 @@ function formatDateISO(d) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
-
-function formatDateLabel(d) {
-  if (!d) return "";
+function formatDateUI(d) {
+  if (!d) return "—";
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
-
 function normalizeRows(rawRows) {
   const rr = Array.isArray(rawRows) ? rawRows : [];
   return rr.map((r) => ({
@@ -68,7 +75,6 @@ function normalizeRows(rawRows) {
     saldo: r?.saldo == null ? null : Number(r.saldo || 0),
   }));
 }
-
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
@@ -79,10 +85,6 @@ async function parseJsonOrThrow(res) {
     throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
   }
 }
-
-/* =========================
-   Auth helpers (X-Session)
-========================= */
 function getSessionKey() {
   return (localStorage.getItem("session_key") || "").toString().trim();
 }
@@ -91,6 +93,22 @@ function authHeaders(extra = {}) {
   const h = { ...extra };
   if (sessionKey) h["X-Session"] = sessionKey;
   return h;
+}
+function escapeCSV(value) {
+  const s = String(value ?? "");
+  if (/[",;\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+function downloadBlob(content, fileName, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 /* =========================
@@ -101,9 +119,9 @@ const SKELETON_ROWS = 10;
 export default function Flujo_Caja() {
   const API = `${BASE_URL}/api.php`;
 
-  // ✅ ✅ RANGO GLOBAL (compartido entre secciones)
+  // ✅ RANGO GLOBAL
   const { dateRange, setDateRange } = useDateRange();
-  const [calOpen, setCalOpen] = useState(false);
+  const [showCalendario, setShowCalendario] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -115,61 +133,38 @@ export default function Flujo_Caja() {
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // Skeleton delay anti-parpadeo
+  // Skeleton anti-parpadeo
   const skelTimerRef = useRef(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
-
   const beginSkeleton = useCallback(() => {
     if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
     setShowSkeleton(false);
     skelTimerRef.current = setTimeout(() => setShowSkeleton(true), 120);
   }, []);
-
   const endSkeleton = useCallback(() => {
     if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
     setShowSkeleton(false);
   }, []);
-
   useEffect(() => {
-    return () => {
-      if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
-    };
+    return () => { if (skelTimerRef.current) clearTimeout(skelTimerRef.current); };
   }, []);
 
-  // check sesión
-  useEffect(() => {
-    const k = getSessionKey();
-    if (!k) showToast("advertencia", "Falta session_key. Iniciá sesión de nuevo.", 4200);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /* =========================================================
-     Resumen por rango de fechas (usa dateRange GLOBAL)
-  ========================================================= */
+  /* =========================
+     Fetch
+  ========================= */
   const fetchResumen = useCallback(async () => {
     if (!dateRange?.from) return;
-
     setLoading(true);
     setError("");
     beginSkeleton();
-
     try {
       const sp = new URLSearchParams();
       sp.set("action", "flujo_caja_resumen");
       sp.set("fecha_desde", formatDateISO(dateRange.from));
       sp.set("fecha_hasta", formatDateISO(dateRange.to || dateRange.from));
-
-      const res = await fetch(`${API}?${sp.toString()}`, {
-        method: "GET",
-        headers: authHeaders(),
-      });
-
+      const res = await fetch(`${API}?${sp.toString()}`, { method: "GET", headers: authHeaders() });
       const json = await parseJsonOrThrow(res);
-
-      if (!res.ok || !json?.exito) {
-        throw new Error(json?.mensaje || `Error desconocido en API (HTTP ${res.status})`);
-      }
-
+      if (!res.ok || !json?.exito) throw new Error(json?.mensaje || `Error desconocido (HTTP ${res.status})`);
       setData(json);
     } catch (e) {
       setData(null);
@@ -182,79 +177,139 @@ export default function Flujo_Caja() {
     }
   }, [API, dateRange, showToast, beginSkeleton, endSkeleton]);
 
-  // ✅ se actualiza cuando cambia el rango global
-  useEffect(() => {
-    fetchResumen();
-  }, [fetchResumen]);
+  useEffect(() => { fetchResumen(); }, [fetchResumen]);
 
   const bloque = data?.tiendas?.[0] || null;
   const rowsRaw = bloque?.rows || [];
   const rows = useMemo(() => normalizeRows(rowsRaw), [rowsRaw]);
-
   const showing = rows.length;
-  const softLoading = loading && showSkeleton;
 
   /* =========================
-     Label del rango para el botón
+     Label calendario (igual que OrdenesPago)
   ========================= */
-  const rangeLabel = useMemo(() => {
-    const from = dateRange?.from || null;
-    const to = dateRange?.to || null;
-    if (!from) return "Seleccionar período";
-    if (!to || formatDateISO(from) === formatDateISO(to)) return formatDateLabel(from);
-    return `${formatDateLabel(from)} → ${formatDateLabel(to)}`;
+  const dateRangeLabel = useMemo(() => {
+    const { from, to } = dateRange;
+    if (!from && !to) return "Seleccionar fechas";
+    if (from && to) {
+      if (
+        from.getFullYear() === to.getFullYear() &&
+        from.getMonth() === to.getMonth() &&
+        from.getDate() === to.getDate()
+      ) return formatDateUI(from);
+      return (
+        <>
+          <span>{formatDateUI(from)}</span>
+          <span className="mov-rangeArrow"><FontAwesomeIcon icon={faArrowRightLong} /></span>
+          <span>{formatDateUI(to)}</span>
+        </>
+      );
+    }
+    if (from) return `Desde ${formatDateUI(from)}`;
+    return `Hasta ${formatDateUI(to)}`;
   }, [dateRange]);
 
   /* =========================
-     Export Excel
+     Export base name
   ========================= */
-  const exportExcel = useCallback(() => {
-    try {
-      if (!rows.length) {
-        showToast("error", "No hay datos para exportar.", 2500);
-        return;
+  const exportBaseName = useMemo(() => {
+    const { from, to } = dateRange;
+    if (from && to) return `flujo_caja_${formatDateISO(from)}_${formatDateISO(to)}`;
+    if (from) return `flujo_caja_desde_${formatDateISO(from)}`;
+    return "flujo_caja";
+  }, [dateRange]);
+
+  /* =========================
+     Export helpers
+  ========================= */
+  const buildExportRows = useCallback(() => {
+    if (!rows.length) throw new Error("No hay datos para exportar.");
+    return rows.map((r) => ({
+      FECHA: fmtDateES(r.fecha),
+      INGRESOS: r.ingresos == null ? "" : Number(r.ingresos),
+      EGRESOS: r.egresos == null ? "" : Number(r.egresos),
+      OTROS: r.otros == null ? "" : Number(r.otros),
+      SALDO: r.saldo == null ? "" : Number(r.saldo),
+    }));
+  }, [rows]);
+
+  const exportToExcel = useCallback(() => {
+    const data = buildExportRows();
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws["!cols"] = [{ wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
+    // formato moneda para columnas numéricas
+    const numCols = ["INGRESOS", "EGRESOS", "OTROS", "SALDO"];
+    const headers = Object.keys(data[0] || {});
+    numCols.forEach((col) => {
+      const ci = headers.findIndex((h) => h === col);
+      if (ci < 0 || !ws["!ref"]) return;
+      const colLetter = XLSX.utils.encode_col(ci);
+      const range = XLSX.utils.decode_range(ws["!ref"]);
+      for (let r = range.s.r + 1; r <= range.e.r; r++) {
+        const cell = ws[`${colLetter}${r + 1}`];
+        if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
       }
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "FlujoCaja");
+    const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    saveAs(new Blob([wbout], { type: "application/octet-stream" }), `${exportBaseName}.xlsx`);
+  }, [buildExportRows, exportBaseName]);
 
-      showToast("cargando", "Generando Excel…", 9000);
+  const exportToCSV = useCallback(() => {
+    const data = buildExportRows();
+    const headers = Object.keys(data[0] || {});
+    const lines = [
+      headers.join(";"),
+      ...data.map((row) => headers.map((h) => escapeCSV(row[h])).join(";")),
+    ];
+    downloadBlob("\uFEFF" + lines.join("\n"), `${exportBaseName}.csv`, "text/csv;charset=utf-8;");
+  }, [buildExportRows, exportBaseName]);
 
-      const excelRows = rows.map((r) => ({
-        Fecha: fmtDateES(r.fecha),
-        Ingresos: r.ingresos == null ? "" : Number(r.ingresos),
-        Egresos: r.egresos == null ? "" : Number(r.egresos),
-        Otros: r.otros == null ? "" : Number(r.otros),
-        Saldo: r.saldo == null ? "" : Number(r.saldo),
-      }));
+  const exportToTXT = useCallback(() => {
+    const data = buildExportRows();
+    const lines = data.map((row, i) => [
+      `REGISTRO ${i + 1}`,
+      `FECHA: ${row.FECHA}`,
+      `INGRESOS: ${row.INGRESOS}`,
+      `EGRESOS: ${row.EGRESOS}`,
+      `OTROS: ${row.OTROS}`,
+      `SALDO: ${row.SALDO}`,
+      "----------------------------------------",
+    ].join("\n"));
+    downloadBlob(lines.join("\n"), `${exportBaseName}.txt`, "text/plain;charset=utf-8;");
+  }, [buildExportRows, exportBaseName]);
 
-      const ws = XLSX.utils.json_to_sheet(excelRows);
-      ws["!cols"] = [{ wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
-
-      const wb = XLSX.utils.book_new();
-      const from = dateRange?.from || null;
-      const to = dateRange?.to || null;
-      const rangeStamp = `${formatDateISO(from)}_${formatDateISO(to || from)}`;
-      XLSX.utils.book_append_sheet(wb, ws, `Flujo ${rangeStamp}`);
-
-      const fileName = `flujo_caja_${rangeStamp}.xlsx`;
-      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-      saveAs(new Blob([wbout], { type: "application/octet-stream" }), fileName);
-
-      showToast("exito", "Excel exportado.", 2200);
-    } catch (e) {
-      showToast("error", e?.message || "Error exportando Excel.", 3500);
-    }
-  }, [rows, dateRange, showToast]);
-
-  // Skeleton widths
-  const skelWidths = useMemo(
-    () => ({
-      fecha: ["34%", "42%", "38%", "46%"],
-      ingresos: ["48%", "40%", "52%", "36%"],
-      egresos: ["44%", "56%", "38%", "46%"],
-      otros: ["42%", "36%", "50%", "40%"],
-      saldo: ["52%", "46%", "38%", "56%"],
-    }),
-    []
+  const handleExport = useCallback(
+    async (type) => {
+      try {
+        if (type === "excel") { exportToExcel(); showToast("exito", "Excel exportado.", 2200); return; }
+        if (type === "csv")   { exportToCSV();   showToast("exito", "CSV exportado.",   2200); return; }
+        if (type === "txt")   { exportToTXT();   showToast("exito", "TXT exportado.",   2200); }
+      } catch (e) {
+        showToast("error", e?.message || "Error exportando archivo.", 3500);
+      }
+    },
+    [exportToExcel, exportToCSV, exportToTXT, showToast]
   );
+
+  const exportOptions = useMemo(() => [
+    { key: "excel", label: "Exportar Excel (.xlsx)", icon: faFileExcel, onClick: () => handleExport("excel") },
+    { key: "csv",   label: "Exportar CSV (.csv)",               onClick: () => handleExport("csv")   },
+    { key: "txt",   label: "Exportar TXT (.txt)",               onClick: () => handleExport("txt")   },
+  ], [handleExport]);
+
+  /* =========================
+     Skeleton row
+  ========================= */
+  const skelWidths = useMemo(() => ({
+    fecha:    ["34%", "42%", "38%", "46%"],
+    ingresos: ["48%", "40%", "52%", "36%"],
+    egresos:  ["44%", "56%", "38%", "46%"],
+    otros:    ["42%", "36%", "50%", "40%"],
+    saldo:    ["52%", "46%", "38%", "56%"],
+  }), []);
+
+  const gridCols = "0.9fr 1.2fr 1.2fr 1.2fr 1.2fr";
 
   const renderSkeletonRow = (idx) => {
     const w = (key) => {
@@ -262,116 +317,113 @@ export default function Flujo_Caja() {
       return list[idx % list.length];
     };
     return (
-      <div className="fc-grid fc-grid--row fc-grid--excel fc-row--skeleton" key={`skel-${idx}`}>
-        <div className="fc-cell fc-date">
-          <span className="fc-skeletonBar" style={{ width: w("fecha") }} />
-        </div>
-        <div className="fc-cell fc-num is-center fc-in">
-          <span className="fc-skeletonBar" style={{ width: w("ingresos") }} />
-        </div>
-        <div className="fc-cell fc-num is-center fc-eg">
-          <span className="fc-skeletonBar" style={{ width: w("egresos") }} />
-        </div>
-        <div className="fc-cell fc-num is-center">
-          <span className="fc-skeletonBar" style={{ width: w("otros") }} />
-        </div>
-        <div className="fc-cell fc-num is-center fc-saldo">
-          <span className="fc-skeletonBar" style={{ width: w("saldo") }} />
-        </div>
+      <div key={`skel-${idx}`} className="mov-gridTable mov-gridTable--row mov-row--skeleton" style={{ gridTemplateColumns: gridCols }} role="row" aria-hidden="true">
+        {["fecha","ingresos","egresos","otros","saldo"].map((key) => (
+          <div key={key} className="mov-gridCell is-center" role="cell">
+            <span className="mov-skeletonBar" style={{ width: w(key) }} />
+          </div>
+        ))}
       </div>
     );
   };
 
+  const isLoading = loading && showSkeleton;
+
+  /* =========================
+     RENDER
+  ========================= */
   return (
-    <div className="fc-page">
-      {toast && (
-        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
-      )}
+    <div className="mov-page mov-page--flujoCaja">
+      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
+      {error && <div className="mov-alert" role="alert">{error}</div>}
 
-      {error && (
-        <div className="fc-alert" role="alert">
-          {error}
-        </div>
-      )}
+      <section className="mov-card mov-card--table">
 
-      <section className="fc-card fc-card--table">
-        <div className="fc-card__head">
-          <div className="fc-card__headLeft">
-            <div className="fc-headTitle">
-              <div className="fc-card__title">Flujo de Caja</div>
-              <div className="fc-card__hint">
+        {/* ===== HEAD ===== */}
+        <div className="mov-card__head">
+          <div className="mov-card__headLeft">
+            <div className="title-mov">
+              <div className="mov-card__title">Flujo de Caja</div>
+              <div className="mov-card__hint">
                 Mostrando <b>{showing}</b> registros
+                {loading && !showSkeleton ? " (actualizando…)" : ""}
               </div>
             </div>
 
-            <div className="fc-headFilters">
-              {/* ✅ Calendario (usa rango GLOBAL) */}
-              <div className="fc-filter fc-filter--cal" style={{ position: "relative" }}>
-                <label>
-                  <FontAwesomeIcon icon={faCalendarDays} /> Período
-                </label>
+            {/* ===== FILTROS ===== */}
+            <div className="mov-headFilters">
 
+              {/* Calendario floating */}
+              <div className="mov-filter mov-filter--cal floatingField">
                 <button
                   type="button"
-                  className={`fc-calTrigger ${calOpen ? "is-open" : ""}`}
-                  onClick={() => setCalOpen((v) => !v)}
+                  className={`mov-calTrigger cc-calTrigger ${showCalendario ? "is-open" : ""}`}
+                  onClick={() => setShowCalendario((v) => !v)}
                   disabled={loading}
+                  title="Seleccionar rango de fechas"
                 >
-                  {rangeLabel}
-                  <span className="fc-calTrigger__arrow">{calOpen ? "▲" : "▼"}</span>
+                  {dateRangeLabel}
+                  <span className="cc-calTrigger__iconRight">
+                    <FontAwesomeIcon icon={faChevronDown} />
+                  </span>
                 </button>
 
-                {calOpen && (
-                  <div className="fc-calDropdown" style={{left:"-200px"}}>
+                <span className="floatingLabel floatingLabel--active">
+                  <FontAwesomeIcon icon={faCalendarDays} /> Período
+                </span>
+
+                {showCalendario && (
+                  <div className="mov-calDropdown" id="calDropdown-Fl_cj">
                     <Calendario
                       value={dateRange}
-                      onChange={(range) => {
-                        setDateRange(range); // ✅ guarda global
-                        if (range?.from && range?.to) setCalOpen(false);
+                      onChange={(newRange) => {
+                        setDateRange(newRange);
+                        if (newRange?.from && newRange?.to) setShowCalendario(false);
                       }}
-                      onClose={() => setCalOpen(false)}
+                      onClose={() => setShowCalendario(false)}
                     />
                   </div>
                 )}
               </div>
+
             </div>
           </div>
 
-          <div className="fc-card__actions">
-            <button
-              className="fc-btn"
-              onClick={exportExcel}
+          {/* ===== ACCIONES: BotonExportar ===== */}
+          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <BotonExportar
               disabled={loading || rows.length === 0}
-              title={rows.length ? "Exportar a Excel" : "No hay datos para exportar"}
-            >
-              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
-            </button>
+              loading={false}
+              label="Exportar"
+              title={rows.length ? "Exportar archivo" : "No hay datos para exportar"}
+              opciones={exportOptions}
+              align="right"
+            />
           </div>
         </div>
 
-        {/* Subhead */}
+        {/* ===== SUBHEAD (saldo base) ===== */}
         <div className="fc-subhead">
           <div className="fc-subhead__name">
             Caja diaria
-            <div className="fc-subhead__meta">
-              {rangeLabel} • Saldo base: <b>{moneyARS(bloque?.saldo_base ?? 0)}</b>
-            </div>
+            <span className="fc-subhead__meta">
+              &nbsp;•&nbsp;Saldo base: <b>{moneyARS(bloque?.saldo_base ?? 0)}</b>
+            </span>
           </div>
         </div>
 
-        {/* Tabla */}
-        <div className="fc-tableWrap">
-          <div className="fc-grid fc-grid--head fc-grid--excel">
-            <div className="fc-cell">FECHA</div>
-            <div className="fc-cell is-center">INGRESOS</div>
-            <div className="fc-cell is-center">EGRESOS</div>
-            <div className="fc-cell is-center">OTROS</div>
-            <div className="fc-cell is-center">SALDO</div>
-          </div>
+        {/* ===== HEADER TABLA ===== */}
+        <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
+          {["FECHA","INGRESOS","EGRESOS","OTROS","SALDO"].map((label) => (
+            <div key={label} className="mov-gridCell mov-gridCell--head is-center" role="columnheader">{label}</div>
+          ))}
+        </div>
 
-          <div className={["fc-gridBody", softLoading ? "fc-softLoading" : ""].join(" ")}>
-            {showSkeleton && loading ? (
-              <div className="fc-skeletonWrap" aria-busy="true">
+        {/* ===== BODY ===== */}
+        <div className="mov-tableWrap" role="rowgroup" id="Flujo_Cj-tableWrap">
+          <div className={["mov-gridBody mov-gridBody--relative", isLoading ? "mov-softLoading" : ""].join(" ")}>
+            {isLoading ? (
+              <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
               </div>
             ) : (
@@ -379,39 +431,51 @@ export default function Flujo_Caja() {
                 {rows.map((r) => {
                   const otros = r.otros == null ? null : Number(r.otros || 0);
                   const otrosIsNeg = otros != null && otros < 0;
+                  const saldoNeg = Number(r.saldo) < 0;
 
                   return (
-                    <div className="fc-grid fc-grid--row fc-grid--excel" key={r.fecha}>
-                      <div className="fc-cell fc-date">{fmtDateES(r.fecha)}</div>
-
-                      <div className="fc-cell fc-num is-center fc-in">{moneyARS(r.ingresos)}</div>
-
-                      <div className="fc-cell fc-num is-center fc-eg">{moneyARS(r.egresos)}</div>
-
-                      <div className={`fc-cell fc-num is-center ${otrosIsNeg ? "fc-eg" : "fc-in"}`}>
-                        {otros == null ? "-" : moneyARSAbs(otros)}
+                    <div key={r.fecha} className="mov-gridTable mov-gridTable--row" style={{ gridTemplateColumns: gridCols }} role="row">
+                      {/* FECHA */}
+                      <div className="mov-gridCell is-center" role="cell" data-label="FECHA">
+                        <span className="mov-ellipsissss">{fmtDateES(r.fecha)}</span>
                       </div>
-
-                      <div
-                        className={`fc-cell fc-num is-center fc-saldo ${
-                          Number(r.saldo) < 0 ? "is-negative" : "is-positive"
-                        }`}
-                      >
-                        {moneyARS(r.saldo)}
+                      {/* INGRESOS */}
+                      <div className="mov-gridCell is-center" role="cell" data-label="INGRESOS">
+                        <span className="fc-num fc-in">{moneyARS(r.ingresos)}</span>
+                      </div>
+                      {/* EGRESOS */}
+                      <div className="mov-gridCell is-center" role="cell" data-label="EGRESOS">
+                        <span className="fc-num fc-eg">{moneyARS(r.egresos)}</span>
+                      </div>
+                      {/* OTROS */}
+                      <div className="mov-gridCell is-center" role="cell" data-label="OTROS">
+                        <span className={`fc-num ${otrosIsNeg ? "fc-eg" : "fc-in"}`}>
+                          {otros == null ? "—" : moneyARSAbs(otros)}
+                        </span>
+                      </div>
+                      {/* SALDO */}
+                      <div className="mov-gridCell is-center" role="cell" data-label="SALDO">
+                        <span className={`fc-num fc-saldo ${saldoNeg ? "fc-saldo--neg" : "fc-saldo--pos"}`}>
+                          {moneyARS(r.saldo)}
+                        </span>
                       </div>
                     </div>
                   );
                 })}
 
-                {!rows.length && !loading && <div className="fc-emptyRow">No hay datos para mostrar.</div>}
+                {!rows.length && !loading && (
+                  <div className="mov-emptyRow">No hay datos para mostrar en el rango de fechas seleccionado.</div>
+                )}
               </>
             )}
           </div>
         </div>
 
+        {/* Nota al pie */}
         <div className="fc-footnote">
           * El saldo del día 01 arranca desde el "Saldo base" y se actualiza con (ingresos + otros − egresos) de cada día.
         </div>
+
       </section>
     </div>
   );

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
 import "../../Global/Global_css/Global_Section.css";
+import "../../Global/Global_css/Global_oscuro.css";
 
 import Toast from "../../Global/Toast.jsx";
 
@@ -26,6 +27,7 @@ import {
   faTrashCan,
   faChevronDown,
   faArrowRightLong,
+    faTimes,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -687,7 +689,7 @@ export default function Ventas() {
         key: "total",
         label: "TOTAL",
         fr: 1.1,
-        align: "center",
+        align: "right",
         render: (r) => moneyARS(r.monto_total ?? r.total ?? r.total_general ?? 0),
       },
       { key: "acciones", label: "ACCIONES", fr: 0.8, align: "center", render: () => null },
@@ -1052,106 +1054,110 @@ const dateRangeLabel = useMemo(() => {
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
             <div className="title-mov">
-              <div className="mov-card__title">Movimientos · Ventas</div>
+              <div className="mov-card__title">Movs · Ventas</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> ventas
                 {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
               </div>
             </div>
 
-            <div className="mov-headFilters">
-              <div className="mov-filter mov-filter--cal floatingField">
-                <button
-                  type="button"
-                  className={`mov-calTrigger  cc-calTrigger ${showCalendario ? "is-open" : ""}`}
-                  onClick={() => setShowCalendario((v) => !v)}
-                  disabled={isAnyLoading || loadingListsCtx}
-                  title="Seleccionar rango de fechas"
-                >
-                  {dateRangeLabel}
-                  <span className="mov-calTrigger__arrow">
-  <FontAwesomeIcon icon={faChevronDown} />
-</span>
-                </button>
+<div className="mov-headFilters">
 
-                <span className="floatingLabel floatingLabel--active">
-                  <FontAwesomeIcon icon={faCalendarDays} /> Período
-                </span>
+  {/* CALENDARIO */}
+  <div className="cc-filter cc-filter--cal">
+    <div className={`cc-floatingField cc-floatingField--calendar is-active ${showCalendario ? "is-open" : ""}`}>
+      <button
+        type="button"
+        className={`cc-calTrigger ${showCalendario ? "is-open" : ""}`}
+        onClick={() => setShowCalendario((v) => !v)}
+        disabled={isAnyLoading || loadingListsCtx}
+        title="Seleccionar rango de fechas"
+      >
+        {dateRangeLabel}
+        <span className="cc-calTrigger__iconRight">
+          <FontAwesomeIcon icon={faChevronDown} />
+        </span>
+      </button>
 
-                {showCalendario && (
-                  <div className="mov-calDropdown">
-                    <Calendario
-                      value={dateRange}
-                      onChange={async (newRange) => {
-                        if (newRange.from && newRange.to) {
-                          setShowCalendario(false);
-                        }
-                        await handleDateRangeChange(newRange);
-                      }}
-                      onClose={() => setShowCalendario(false)}
-                    />
-                  </div>
-                )}
-              </div>
+      <span className="cc-floatingLabel cc-floatingLabel--active">
+        <FontAwesomeIcon icon={faCalendarDays} /> Período
+      </span>
 
-              <div
-                className={`mov-search floatingField floatingField--search ${
-                  q.trim() ? "is-active" : ""
-                }`}
-              >
-                <div className="mov-searchInput">
-                  <input
-                    className="mov-input--floating"
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    onKeyDown={async (e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                        skipSearchRef.current = true;
-                        await loadRows({
-                          from: dateRange.from,
-                          to: dateRange.to,
-                          q: e.currentTarget.value,
-                          offset: 0,
-                          append: false,
-                        });
-                      }
-                    }}
-                    placeholder=" "
-                    disabled={loadingListsCtx || loadingAll}
-                  />
+      {showCalendario && (
+        <div className="cc-calDropdown">
+          <Calendario
+            value={dateRange}
+            onChange={async (newRange) => {
+              if (newRange.from && newRange.to) setShowCalendario(false);
+              await handleDateRangeChange(newRange);
+            }}
+            onClose={() => setShowCalendario(false)}
+          />
+        </div>
+      )}
+    </div>
+  </div>
 
-                  <span className="floatingLabel">
-                    <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                  </span>
+  {/* BÚSQUEDA */}
+  <div className="cc-filter">
+    <div className={`cc-floatingField cc-floatingField--search ${q.trim() ? "is-active" : ""}`}>
+      <div className="cc-searchInput">
+        <div className="cc-searchInput__fieldWrap">
+          <input
+            className="cc-input cc-input--floating"
+                              id="vents-comppr-wit"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={async (e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                skipSearchRef.current = true;
+                await loadRows({
+                  from: dateRange.from,
+                  to: dateRange.to,
+                  q: e.currentTarget.value,
+                  offset: 0,
+                  append: false,
+                });
+              }
+            }}
+            placeholder=" "
+            disabled={loadingListsCtx || loadingAll}
+          />
 
-                  {q.trim() !== "" && (
-                    <button
-                      type="button"
-                      className="mov-clearSearch clearSearch--inside"
-                      title="Limpiar búsqueda"
-                      onClick={async () => {
-                        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                        setQ("");
-                        skipSearchRef.current = true;
-                        await loadRows({
-                          from: dateRange.from,
-                          to: dateRange.to,
-                          q: "",
-                          offset: 0,
-                          append: false,
-                        });
-                        document.querySelector(".mov-searchInput input")?.focus();
-                      }}
-                      disabled={loadingAll}
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+          <span className="cc-floatingLabel">
+            <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+          </span>
+
+          {q.trim() !== "" && (
+            <button
+              type="button"
+              className="cc-clearSearch cc-clearSearch--inside"
+              title="Limpiar búsqueda"
+              onClick={async () => {
+                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                setQ("");
+                skipSearchRef.current = true;
+                await loadRows({
+                  from: dateRange.from,
+                  to: dateRange.to,
+                  q: "",
+                  offset: 0,
+                  append: false,
+                });
+              }}
+              disabled={loadingAll}
+            >
+              <FontAwesomeIcon icon={faTimes} />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
           </div>
 
           <div

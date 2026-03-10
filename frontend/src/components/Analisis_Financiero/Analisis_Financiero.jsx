@@ -4,22 +4,34 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import BASE_URL from "../../config/config";
 import "./analisis_financiero.css";
+import "../Global/Global_css/Global_oscuro.css";
+
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCalendarDays, faFileExcel } from "@fortawesome/free-solid-svg-icons";
+import {
+  faCalendarDays,
+  faFileExcel,
+  faMagnifyingGlass,
+  faChevronDown,
+  faArrowRightLong,
+} from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../Global/Toast.jsx";
 import Calendario from "../Global/Calendario/Calendario.jsx";
+import "../../components/Global/Calendario/calendario.css";
+
+// ✅ BOTÓN EXPORTAR GLOBAL (igual que OrdenesPago / Ventas)
+import BotonExportar from "../Global/Boton_Exportar/BotonExportar.jsx";
 
 import * as XLSX from "xlsx";
 
-// ✅ ✅ CONTEXTO GLOBAL DE RANGO DE FECHAS
+// ✅ CONTEXTO GLOBAL DE RANGO DE FECHAS
 import { useDateRange } from "../../context/DateRangeContext.jsx";
 
 /* =========================
    Helpers
 ========================= */
 function moneyARS(v) {
-  if (v == null || v === "") return "-";
+  if (v == null || v === "") return "—";
   const n = Number(v || 0);
   try {
     return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
@@ -27,16 +39,13 @@ function moneyARS(v) {
     return `$${n.toFixed(2)}`;
   }
 }
-
 function safeText(v) {
   return String(v ?? "").trim();
 }
-
 function toNumberOrZero(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
-
 function formatDateISO(d) {
   if (!d) return "";
   const yyyy = d.getFullYear();
@@ -44,10 +53,33 @@ function formatDateISO(d) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
-
-function formatDateLabel(d) {
-  if (!d) return "";
+function formatDateUI(d) {
+  if (!d) return "—";
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+function sanitizeFilePart(s) {
+  return String(s ?? "").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "_").slice(0, 80);
+}
+function numOrNull(v) {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+function escapeCSV(value) {
+  const s = String(value ?? "");
+  if (/[",;\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+function downloadBlob(content, fileName, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 function normalizeRows(raw) {
@@ -61,7 +93,6 @@ function normalizeRows(raw) {
       }))
       .filter((x) => x.concepto);
   }
-
   if (raw && typeof raw === "object") {
     const ventas = toNumberOrZero(raw?.ventas);
     const costoVar = toNumberOrZero(raw?.costo_variable ?? raw?.costoVariable);
@@ -69,7 +100,6 @@ function normalizeRows(raw) {
     const otrosEgresos = toNumberOrZero(raw?.otros_egresos ?? raw?.otrosEgresos);
     const gastosPers = toNumberOrZero(raw?.gastos_personales ?? raw?.gastosPersonales);
     const resultadoNeto = ventas - costoVar - costoFijo - otrosEgresos;
-
     const out = [
       { id: "ventas", concepto: "VENTAS", importe: ventas, tipo: "ingreso" },
       { id: "costo_variable", concepto: "COSTO VARIABLE", importe: costoVar, tipo: "egreso" },
@@ -77,19 +107,11 @@ function normalizeRows(raw) {
       { id: "otros_egresos", concepto: "OTROS EGRESOS", importe: otrosEgresos, tipo: "egreso" },
       { id: "resultado_neto", concepto: "RESULTADO NETO", importe: resultadoNeto, tipo: "resultado" },
     ];
-
     if (Number.isFinite(gastosPers) && gastosPers !== 0) {
-      out.push({
-        id: "gastos_personales",
-        concepto: "GASTOS PERSONALES",
-        importe: gastosPers,
-        tipo: "egreso",
-      });
+      out.push({ id: "gastos_personales", concepto: "GASTOS PERSONALES", importe: gastosPers, tipo: "egreso" });
     }
-
     return out;
   }
-
   return [];
 }
 
@@ -113,26 +135,21 @@ function findImporte(rows, keys) {
 
 function computeDerivedRows(rows) {
   const base = Array.isArray(rows) ? [...rows] : [];
-
   const ventas = findImporte(base, [{ id: "ventas" }, { includes: ["ventas", "ingresos", "venta"] }]);
   const costoVar = findImporte(base, [{ id: "costo_variable" }, { includes: ["costo variable", "variable"] }]);
   const costoFijo = findImporte(base, [{ id: "costo_fijo" }, { includes: ["costo fijo", "fijo"] }]);
   const otrosEgresos = findImporte(base, [{ id: "otros_egresos" }, { includes: ["otros egresos", "egresos"] }]);
   const resultadoNeto = ventas - costoVar - costoFijo - otrosEgresos;
-
   const idxRes = base.findIndex((r) => {
     const id = safeText(r.id).toLowerCase();
     const c = safeText(r.concepto).toLowerCase();
     return id === "resultado_neto" || c === "resultado neto" || (c.includes("resultado") && c.includes("neto"));
   });
-
   const rowResultado = { id: "resultado_neto", concepto: "RESULTADO NETO", importe: resultadoNeto, tipo: "resultado" };
   if (idxRes >= 0) base[idxRes] = { ...base[idxRes], ...rowResultado };
   else base.push(rowResultado);
-
   const idxVentas = base.findIndex((r) => safeText(r.id).toLowerCase() === "ventas");
   if (idxVentas >= 0) base[idxVentas] = { ...base[idxVentas], concepto: "VENTAS", tipo: "ingreso", importe: ventas };
-
   const markTipo = (id, tipo) => {
     const i = base.findIndex((r) => safeText(r.id).toLowerCase() === id);
     if (i >= 0) base[i] = { ...base[i], tipo };
@@ -140,22 +157,11 @@ function computeDerivedRows(rows) {
   markTipo("costo_variable", "egreso");
   markTipo("costo_fijo", "egreso");
   markTipo("otros_egresos", "egreso");
-
   return base;
 }
 
-function sanitizeFilePart(s) {
-  return String(s ?? "").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "_").slice(0, 80);
-}
-
-function numOrNull(v) {
-  if (v == null || v === "") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
 /* =========================
-   Auth helpers (X-Session)
+   Auth helpers
 ========================= */
 function getSessionKey() {
   return (localStorage.getItem("session_key") || "").toString().trim();
@@ -167,33 +173,26 @@ function authHeaders(extra = {}) {
   return h;
 }
 async function parseJsonOrThrow(res) {
-  if (res.status === 401) throw new Error("401 (Unauthorized): Sesión vencida o no autorizada. Volvé a iniciar sesión.");
+  if (res.status === 401) throw new Error("401 (Unauthorized): Sesión vencida. Volvé a iniciar sesión.");
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
-  try {
-    return JSON.parse(text);
-  } catch {
+  try { return JSON.parse(text); } catch {
     const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
     throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
   }
 }
 
-/* =========================
-   Skeleton config
-========================= */
-const SKELETON_TABLE_ROWS = 5;
-const SKELETON_BAR_H = 5;
-const SKELETON_ROW_PAD_Y = 5;
+const SKELETON_ROWS = 5;
+const gridCols = "2fr 1.2fr";
 
 export default function Analisis_Financiero() {
   const API = `${BASE_URL}/api.php`;
 
-  // ✅ ✅ RANGO GLOBAL (compartido entre secciones)
+  // ✅ RANGO GLOBAL
   const { dateRange, setDateRange } = useDateRange();
-  const [calOpen, setCalOpen] = useState(false);
+  const [showCalendario, setShowCalendario] = useState(false);
 
   const [q, setQ] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
@@ -203,64 +202,35 @@ export default function Analisis_Financiero() {
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => setToast({ tipo, mensaje, duracion }), []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // Skeleton delay anti-parpadeo
   const skelTimerRef = useRef(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
-
   const beginSkeleton = useCallback(() => {
     if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
     setShowSkeleton(false);
     skelTimerRef.current = setTimeout(() => setShowSkeleton(true), 120);
   }, []);
-
   const endSkeleton = useCallback(() => {
     if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
     setShowSkeleton(false);
   }, []);
-
-  useEffect(() => () => {
-    if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
-  }, []);
-
-  // check sesión
-  useEffect(() => {
-    const k = getSessionKey();
-    if (!k) showToast("advertencia", "Falta session_key. Iniciá sesión de nuevo.", 4200);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => () => { if (skelTimerRef.current) clearTimeout(skelTimerRef.current); }, []);
 
   /* =========================
-     Label del rango para el botón
+     Fetch
   ========================= */
-  const rangeLabel = useMemo(() => {
-    const from = dateRange?.from || null;
-    const to = dateRange?.to || null;
-    if (!from) return "Seleccionar período";
-    if (!to || formatDateISO(from) === formatDateISO(to)) return formatDateLabel(from);
-    return `${formatDateLabel(from)} → ${formatDateLabel(to)}`;
-  }, [dateRange]);
-
-  /* =========================================================
-     Cargar análisis cuando cambia el rango (GLOBAL)
-  ========================================================= */
   const fetchAnalisis = useCallback(async () => {
     if (!dateRange?.from) return;
-
     setLoading(true);
     setError("");
     beginSkeleton();
-
     try {
       const sp = new URLSearchParams();
       sp.set("action", "analisis_financiero_resumen");
       sp.set("fecha_desde", formatDateISO(dateRange.from));
       sp.set("fecha_hasta", formatDateISO(dateRange.to || dateRange.from));
-
       const res = await fetch(`${API}?${sp.toString()}`, { method: "GET", headers: authHeaders() });
       const json = await parseJsonOrThrow(res);
-
-      if (!res.ok || !json?.exito) throw new Error(json?.mensaje || `Error desconocido en API (HTTP ${res.status})`);
-
+      if (!res.ok || !json?.exito) throw new Error(json?.mensaje || `Error desconocido (HTTP ${res.status})`);
       setData(json);
     } catch (e) {
       setData(null);
@@ -274,22 +244,12 @@ export default function Analisis_Financiero() {
     }
   }, [API, dateRange, showToast, beginSkeleton, endSkeleton]);
 
-  useEffect(() => {
-    fetchAnalisis();
-  }, [fetchAnalisis]);
+  useEffect(() => { fetchAnalisis(); }, [fetchAnalisis]);
 
   /* =========================
-     Datos / normalización
+     Datos normalizados
   ========================= */
-  const rawRows =
-    data?.rows ??
-    data?.data?.rows ??
-    data?.valores ??
-    data?.data?.valores ??
-    data?.analisis ??
-    data?.data?.analisis ??
-    null;
-
+  const rawRows = data?.rows ?? data?.data?.rows ?? data?.valores ?? data?.data?.valores ?? data?.analisis ?? data?.data?.analisis ?? null;
   const normalized = useMemo(() => normalizeRows(rawRows), [rawRows]);
   const allRows = useMemo(() => computeDerivedRows(normalized), [normalized]);
 
@@ -299,319 +259,303 @@ export default function Analisis_Financiero() {
     return allRows.filter((r) => safeText(r.concepto).toLowerCase().includes(needle));
   }, [allRows, q]);
 
-  const showing = filteredRows.length;
-
   const ventas = allRows.find((r) => safeText(r.id).toLowerCase() === "ventas")?.importe ?? null;
   const resultadoNeto = allRows.find((r) => safeText(r.id).toLowerCase() === "resultado_neto")?.importe ?? null;
   const gastosPersonales = allRows.find((r) => safeText(r.id).toLowerCase() === "gastos_personales")?.importe ?? null;
-
   const resultadoIsNeg = Number(resultadoNeto) < 0;
-  const isBusy = loading;
-  const showSkel = showSkeleton && isBusy;
 
   /* =========================
-     Exportar a Excel
+     Label calendario
   ========================= */
-  const handleExportExcel = useCallback(() => {
-    try {
-      if (!data || filteredRows.length === 0) {
-        showToast("error", "No hay datos para exportar.", 2500);
-        return;
-      }
-
-      showToast("cargando", "Generando Excel…", 9000);
-
-      const tableData = filteredRows.map((r) => ({
-        CONCEPTO: safeText(r.concepto),
-        IMPORTE: numOrNull(r.importe),
-      }));
-
-      const resumenData = [
-        { CAMPO: "DESDE", VALOR: formatDateISO(dateRange.from) },
-        { CAMPO: "HASTA", VALOR: formatDateISO(dateRange.to || dateRange.from) },
-        { CAMPO: "VENTAS", VALOR: numOrNull(ventas) },
-        { CAMPO: "RESULTADO_NETO", VALOR: numOrNull(resultadoNeto) },
-        { CAMPO: "GASTOS_PERSONALES", VALOR: numOrNull(gastosPersonales) },
-      ];
-
-      const wb = XLSX.utils.book_new();
-
-      const wsTabla = XLSX.utils.json_to_sheet(tableData, { header: ["CONCEPTO", "IMPORTE"] });
-      wsTabla["!cols"] = [{ wch: 40 }, { wch: 18 }];
-
-      const wsResumen = XLSX.utils.json_to_sheet(resumenData, { header: ["CAMPO", "VALOR"] });
-      wsResumen["!cols"] = [{ wch: 22 }, { wch: 24 }];
-
-      XLSX.utils.book_append_sheet(wb, wsTabla, "Analisis");
-      XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
-
-      const rangeStamp = `${formatDateISO(dateRange.from)}_${formatDateISO(dateRange.to || dateRange.from)}`;
-      XLSX.writeFile(wb, `Analisis_Financiero_${sanitizeFilePart(rangeStamp)}.xlsx`);
-
-      showToast("exito", "Excel exportado.", 2200);
-    } catch (e) {
-      const msg = e?.message || "Error exportando a Excel";
-      setError(msg);
-      showToast("error", msg, 3500);
+  const dateRangeLabel = useMemo(() => {
+    const { from, to } = dateRange;
+    if (!from && !to) return "Seleccionar fechas";
+    if (from && to) {
+      if (from.getFullYear() === to.getFullYear() && from.getMonth() === to.getMonth() && from.getDate() === to.getDate())
+        return formatDateUI(from);
+      return (
+        <>
+          <span>{formatDateUI(from)}</span>
+          <span className="mov-rangeArrow"><FontAwesomeIcon icon={faArrowRightLong} /></span>
+          <span>{formatDateUI(to)}</span>
+        </>
+      );
     }
-  }, [filteredRows, data, dateRange, ventas, resultadoNeto, gastosPersonales, showToast]);
+    if (from) return `Desde ${formatDateUI(from)}`;
+    return `Hasta ${formatDateUI(to)}`;
+  }, [dateRange]);
 
   /* =========================
-     Skeleton renderers
+     Export
   ========================= */
-  const skelWidths = useMemo(
-    () => ({
-      concepto: ["42%", "58%", "50%", "64%", "46%", "55%"],
-      importe: ["22%", "28%", "20%", "30%", "24%", "26%"],
-    }),
-    []
-  );
+  const exportBaseName = useMemo(() => {
+    const { from, to } = dateRange;
+    const rangeStamp = `${formatDateISO(from)}_${formatDateISO(to || from)}`;
+    return `Analisis_Financiero_${sanitizeFilePart(rangeStamp)}`;
+  }, [dateRange]);
 
-  const renderSkeletonRow = (idx) => {
-    const pick = (key) => {
-      const list = skelWidths[key] || ["50%"];
-      return list[idx % list.length];
-    };
-    return (
-      <div className="af-grid af-grid--row af-grid--excel af-row--skeleton" key={`skel-${idx}`}>
-        <div className="af-cell af-concept" style={{ padding: `${SKELETON_ROW_PAD_Y}px 12px` }}>
-          <span className="af-skeletonBar" style={{ width: pick("concepto"), height: SKELETON_BAR_H }} />
-        </div>
-        <div className="af-cell af-num is-right" style={{ padding: `${SKELETON_ROW_PAD_Y}px 12px` }}>
-          <span className="af-skeletonBar" style={{ width: pick("importe"), height: SKELETON_BAR_H }} />
-        </div>
-      </div>
-    );
-  };
+  const buildExportRows = useCallback(() => {
+    if (!filteredRows.length) throw new Error("No hay datos para exportar.");
+    return filteredRows.map((r) => ({ CONCEPTO: safeText(r.concepto), IMPORTE: numOrNull(r.importe) }));
+  }, [filteredRows]);
 
-  const renderSubheadSkeleton = () => (
-    <div className="af-subhead af-softLoading" aria-busy="true">
-      <div style={{ width: "100%" }}>
-        <div className="af-skeletonBar" style={{ width: "28%", height: 12 }} />
-        <div style={{ height: 8 }} />
-        <div className="af-skeletonBar" style={{ width: "54%", height: 10 }} />
-      </div>
-      <div style={{ width: "100%", display: "flex", justifyContent: "flex-end" }}>
-        <div className="af-skeletonBar" style={{ width: "40%", height: 10 }} />
-      </div>
-    </div>
-  );
+  const exportToExcel = useCallback(() => {
+    const exportData = buildExportRows();
+    const wb = XLSX.utils.book_new();
+    const wsTabla = XLSX.utils.json_to_sheet(exportData, { header: ["CONCEPTO", "IMPORTE"] });
+    wsTabla["!cols"] = [{ wch: 40 }, { wch: 18 }];
+    // formato moneda columna IMPORTE
+    if (wsTabla["!ref"]) {
+      const range = XLSX.utils.decode_range(wsTabla["!ref"]);
+      for (let r = range.s.r + 1; r <= range.e.r; r++) {
+        const cell = wsTabla[`B${r + 1}`];
+        if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
+      }
+    }
+    const resumenData = [
+      { CAMPO: "DESDE", VALOR: formatDateISO(dateRange.from) },
+      { CAMPO: "HASTA", VALOR: formatDateISO(dateRange.to || dateRange.from) },
+      { CAMPO: "VENTAS", VALOR: numOrNull(ventas) },
+      { CAMPO: "RESULTADO_NETO", VALOR: numOrNull(resultadoNeto) },
+      { CAMPO: "GASTOS_PERSONALES", VALOR: numOrNull(gastosPersonales) },
+    ];
+    const wsResumen = XLSX.utils.json_to_sheet(resumenData, { header: ["CAMPO", "VALOR"] });
+    wsResumen["!cols"] = [{ wch: 22 }, { wch: 24 }];
+    XLSX.utils.book_append_sheet(wb, wsTabla, "Analisis");
+    XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
+    XLSX.writeFile(wb, `${exportBaseName}.xlsx`);
+  }, [buildExportRows, exportBaseName, dateRange, ventas, resultadoNeto, gastosPersonales]);
 
-  const renderTotalsSkeleton = () => (
-    <div className="af-footTotals af-softLoading" aria-busy="true">
-      <div className="af-totalCard">
-        <div className="af-skeletonBar" style={{ width: "36%", height: 4 }} />
-        <div style={{ height: 4 }} />
-        <div className="af-skeletonBar" style={{ width: "64%", height: 4 }} />
-        <div style={{ height: 4 }} />
-        <div className="af-skeletonBar" style={{ width: "58%", height: 4 }} />
-      </div>
-      <div className="af-totalCard">
-        <div className="af-skeletonBar" style={{ width: "40%", height: 4 }} />
-        <div style={{ height: 4 }} />
-        <div className="af-skeletonBar" style={{ width: "60%", height: 4 }} />
-        <div style={{ height: 4 }} />
-        <div className="af-skeletonBar" style={{ width: "52%", height: 4 }} />
-      </div>
-    </div>
-  );
+  const exportToCSV = useCallback(() => {
+    const exportData = buildExportRows();
+    const headers = ["CONCEPTO", "IMPORTE"];
+    const lines = [headers.join(";"), ...exportData.map((row) => headers.map((h) => escapeCSV(row[h])).join(";"))];
+    downloadBlob("\uFEFF" + lines.join("\n"), `${exportBaseName}.csv`, "text/csv;charset=utf-8;");
+  }, [buildExportRows, exportBaseName]);
+
+  const exportToTXT = useCallback(() => {
+    const exportData = buildExportRows();
+    const lines = exportData.map((row, i) => [
+      `REGISTRO ${i + 1}`,
+      `CONCEPTO: ${row.CONCEPTO}`,
+      `IMPORTE: ${row.IMPORTE ?? ""}`,
+      "----------------------------------------",
+    ].join("\n"));
+    downloadBlob(lines.join("\n"), `${exportBaseName}.txt`, "text/plain;charset=utf-8;");
+  }, [buildExportRows, exportBaseName]);
+
+  const handleExport = useCallback(async (type) => {
+    try {
+      if (type === "excel") { exportToExcel(); showToast("exito", "Excel exportado.", 2200); return; }
+      if (type === "csv")   { exportToCSV();   showToast("exito", "CSV exportado.",   2200); return; }
+      if (type === "txt")   { exportToTXT();   showToast("exito", "TXT exportado.",   2200); }
+    } catch (e) {
+      showToast("error", e?.message || "Error exportando archivo.", 3500);
+    }
+  }, [exportToExcel, exportToCSV, exportToTXT, showToast]);
+
+  const exportOptions = useMemo(() => [
+    { key: "excel", label: "Exportar Excel (.xlsx)", icon: faFileExcel, onClick: () => handleExport("excel") },
+    { key: "csv",   label: "Exportar CSV (.csv)",               onClick: () => handleExport("csv")   },
+    { key: "txt",   label: "Exportar TXT (.txt)",               onClick: () => handleExport("txt")   },
+  ], [handleExport]);
 
   /* =========================
-     Render
+     Skeleton
+  ========================= */
+  const skelWidths = useMemo(() => ({
+    concepto: ["42%", "58%", "50%", "64%", "46%"],
+    importe:  ["22%", "28%", "20%", "30%", "24%"],
+  }), []);
+
+  const renderSkeletonRow = (idx) => (
+    <div key={`skel-${idx}`} className="mov-gridTable mov-gridTable--row mov-row--skeleton" style={{ gridTemplateColumns: gridCols }} role="row" aria-hidden="true">
+      <div className="mov-gridCell" role="cell">
+        <span className="mov-skeletonBar" style={{ width: skelWidths.concepto[idx % skelWidths.concepto.length] }} />
+      </div>
+      <div className="mov-gridCell is-right" role="cell">
+        <span className="mov-skeletonBar" style={{ width: skelWidths.importe[idx % skelWidths.importe.length] }} />
+      </div>
+    </div>
+  );
+
+  const isLoading = loading && showSkeleton;
+
+  /* =========================
+     RENDER
   ========================= */
   return (
-    <div className="af-page">
+    <div className="mov-page mov-page--analisisFinanciero">
       {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
+      {error && <div className="mov-alert" role="alert">{error}</div>}
 
-      {error && (
-        <div className="af-alert" role="alert">
-          {error}
-        </div>
-      )}
+      <section className="mov-card mov-card--table">
 
-      <section className="af-card af-card--table">
-        <div className="af-card__head">
-          <div className="af-card__headLeft">
-            <div className="af-headTitle">
-              <div className="af-card__title">Análisis Financiero</div>
-              <div className="af-card__hint">
-                Mostrando <b>{showing}</b> registros
+        {/* ===== HEAD ===== */}
+        <div className="mov-card__head">
+          <div className="mov-card__headLeft">
+            <div className="title-mov">
+              <div className="mov-card__title">Análisis Financiero</div>
+              <div className="mov-card__hint">
+                Mostrando <b>{filteredRows.length}</b> registros
+                {loading && !showSkeleton ? " (actualizando…)" : ""}
               </div>
             </div>
 
-            <div className="af-headFilters">
-              {/* ✅ Calendario con rango GLOBAL */}
-              <div className="af-filter af-filter--cal" style={{ position: "relative" }}>
-                <label>
-                  <FontAwesomeIcon icon={faCalendarDays} /> Período
-                </label>
+            {/* ===== FILTROS ===== */}
+            <div className="mov-headFilters">
 
+              {/* Calendario floating */}
+              <div className="mov-filter mov-filter--cal floatingField">
                 <button
                   type="button"
-                  className={`af-calTrigger ${calOpen ? "is-open" : ""}`}
-                  onClick={() => setCalOpen((v) => !v)}
-                  disabled={isBusy}
+                  className={`mov-calTrigger cc-calTrigger ${showCalendario ? "is-open" : ""}`}
+                  onClick={() => setShowCalendario((v) => !v)}
+                  disabled={loading}
+                  title="Seleccionar rango de fechas"
                 >
-                  {rangeLabel}
-                  <span className="af-calTrigger__arrow">{calOpen ? "▲" : "▼"}</span>
+                  {dateRangeLabel}
+                  <span className="mov-calTrigger__arrow"><FontAwesomeIcon icon={faChevronDown} /></span>
                 </button>
-
-                {calOpen && (
-                  <div className="af-calDropdown">
+                <span className="floatingLabel floatingLabel--active">
+                  <FontAwesomeIcon icon={faCalendarDays} /> Período
+                </span>
+                {showCalendario && (
+                  <div className="mov-calDropdown">
                     <Calendario
                       value={dateRange}
-                      onChange={(range) => {
-                        setDateRange(range); // ✅ guarda global
-                        if (range?.from && range?.to) setCalOpen(false);
+                      onChange={(newRange) => {
+                        setDateRange(newRange);
+                        if (newRange?.from && newRange?.to) setShowCalendario(false);
                       }}
-                      onClose={() => setCalOpen(false)}
+                      onClose={() => setShowCalendario(false)}
                     />
                   </div>
                 )}
               </div>
 
-              {/* Buscar */}
-              <div className="af-filter af-filter--search">
-                <label>Buscar</label>
-                <div className="af-searchInput">
+              {/* Buscador floating */}
+              <div className={`mov-search floatingField floatingField--search ${q.trim() ? "is-active" : ""}`}>
+                <div className="mov-searchInput">
                   <input
+                    className="mov-input--floating"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
-                    placeholder="Ej: ventas, costo fijo, gastos..."
-                    disabled={isBusy}
+                    placeholder=" "
+                    disabled={loading}
                   />
-                  {q.trim() !== "" && !isBusy && (
-                    <button
-                      type="button"
-                      className="af-clearSearch"
-                      title="Limpiar búsqueda"
-                      onClick={() => {
-                        setQ("");
-                        document.querySelector(".af-searchInput input")?.focus();
-                      }}
-                    >
+                  <span className="floatingLabel">
+                    <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                  </span>
+                  {q.trim() !== "" && (
+                    <button type="button" className="mov-clearSearch clearSearch--inside" title="Limpiar"
+                      onClick={() => { setQ(""); document.querySelector(".mov-page--analisisFinanciero .mov-input--floating")?.focus(); }}>
                       ×
                     </button>
                   )}
                 </div>
               </div>
+
             </div>
           </div>
 
-          <div className="af-card__actions">
-            <button
-              type="button"
-              className="af-btn af-btn--excel"
-              onClick={handleExportExcel}
-              disabled={isBusy || !data || filteredRows.length === 0}
-              title={!data ? "Primero cargá datos" : "Exportar tabla a Excel"}
-            >
-              <FontAwesomeIcon icon={faFileExcel} /> Exportar Excel
-            </button>
+          {/* ===== ACCIONES: BotonExportar ===== */}
+          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <BotonExportar
+              disabled={loading || filteredRows.length === 0}
+              loading={false}
+              label="Exportar"
+              title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"}
+              opciones={exportOptions}
+              align="right"
+            />
           </div>
         </div>
 
-        {/* Tabla */}
-        <div className={["af-tableWrap", showSkel ? "af-softLoading" : ""].join(" ")}>
-          <div className="af-grid af-grid--head af-grid--excel">
-            <div className="af-cell">CONCEPTO</div>
-            <div className="af-cell is-right">IMPORTE</div>
-          </div>
+        {/* ===== HEADER TABLA ===== */}
+        <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">
+          <div className="mov-gridCell mov-gridCell--head" role="columnheader">CONCEPTO</div>
+          <div className="mov-gridCell mov-gridCell--head is-right" role="columnheader">IMPORTE</div>
+        </div>
 
-          <div className="af-gridBody">
-            {showSkel ? (
-              <div className="af-skeletonWrap" aria-busy="true">
-                {Array.from({ length: SKELETON_TABLE_ROWS }).map((_, i) => renderSkeletonRow(i))}
+        {/* ===== BODY ===== */}
+        <div className="mov-tableWrap mov-tableWrap--af" role="rowgroup">
+          <div className={["mov-gridBody mov-gridBody--relative", isLoading ? "mov-softLoading" : ""].join(" ")}>
+            {isLoading ? (
+              <div className="mov-skeletonWrap" aria-busy="true">
+                {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
               </div>
             ) : (
               <>
-                {!!data &&
-                  filteredRows.map((r) => {
-                    const conceptoLower = safeText(r.concepto).toLowerCase();
-                    const isResultado =
-                      conceptoLower === "resultado neto" ||
-                      r.tipo === "resultado" ||
-                      safeText(r.id).toLowerCase() === "resultado_neto";
-                    const isGastoPersonal =
-                      conceptoLower.includes("gastos personales") || safeText(r.id).toLowerCase() === "gastos_personales";
+                {!!data && filteredRows.map((r) => {
+                  const conceptoLower = safeText(r.concepto).toLowerCase();
+                  const isResultado = conceptoLower === "resultado neto" || r.tipo === "resultado" || safeText(r.id).toLowerCase() === "resultado_neto";
+                  const isEgreso = r.tipo === "egreso";
+                  const isIngreso = r.tipo === "ingreso";
+                  const importeNeg = Number(r.importe) < 0;
 
-                    return (
-                      <div
-                        className={`af-grid af-grid--row af-grid--excel ${isResultado ? "is-resultado" : ""} ${
-                          isGastoPersonal ? "is-gp" : ""
-                        }`}
-                        key={r.id}
-                      >
-                        <div className="af-cell af-concept">{r.concepto}</div>
-                        <div className={`af-cell af-num is-right ${Number(r.importe) < 0 ? "is-negative" : ""}`}>
-                          {moneyARS(r.importe)}
-                        </div>
+                  return (
+                    <div
+                      key={r.id}
+                      className={[
+                        "mov-gridTable mov-gridTable--row",
+                        isResultado ? "af-row--resultado" : "",
+                      ].filter(Boolean).join(" ")}
+                      style={{ gridTemplateColumns: gridCols }}
+                      role="row"
+                    >
+                      <div className="mov-gridCell" role="cell" data-label="CONCEPTO">
+                        <span className={["mov-ellipsissss af-concept", isResultado ? "af-concept--resultado" : ""].join(" ")}>
+                          {r.concepto}
+                        </span>
                       </div>
-                    );
-                  })}
+                      <div className="mov-gridCell is-right" role="cell" data-label="IMPORTE">
+                        <span className={[
+                          "af-importe",
+                          isResultado ? (importeNeg ? "af-importe--neg" : "af-importe--pos") : "",
+                          !isResultado && isEgreso ? "af-importe--egreso" : "",
+                          !isResultado && isIngreso ? "af-importe--ingreso" : "",
+                        ].filter(Boolean).join(" ")}>
+                          {moneyARS(r.importe)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
 
-                {hasFetched && !isBusy && !error && (
-                  <>
-                    {!data && <div className="af-emptyRow">No hay datos para mostrar.</div>}
-                    {!!data && filteredRows.length === 0 && <div className="af-emptyRow">No hay datos para mostrar.</div>}
-                  </>
+                {hasFetched && !loading && !error && (!data || filteredRows.length === 0) && (
+                  <div className="mov-emptyRow">No hay datos para mostrar en el rango seleccionado.</div>
                 )}
               </>
             )}
           </div>
         </div>
 
-        {/* Subhead + Totales */}
-        {showSkel ? (
-          <>
-            {renderSubheadSkeleton()}
-            {renderTotalsSkeleton()}
-          </>
-        ) : (
-          <>
-            {!loading && data && (
-              <>
-                <div className="af-subhead">
-                  <div className="af-subhead__name">
-                    Resumen
-                    <div className="af-subhead__meta">
-                      {rangeLabel}
-                      {ventas != null ? (
-                        <>
-                          {" "}
-                          • Ventas: <b>{moneyARS(ventas)}</b>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="af-miniHint">Tabla horizontal tipo Excel (Concepto / Importe). Resultado Neto se resalta.</div>
-                </div>
+        {/* ===== TOTALES (solo si hay data y no está cargando) ===== */}
+        {!loading && !isLoading && data && (
+          <div className="af-footTotals">
+            <div className={`af-totalCard ${resultadoIsNeg ? "af-totalCard--neg" : "af-totalCard--pos"}`}>
+              <div className="af-totalTop">
+                <div className="af-totalLabel">Resultado Neto</div>
+                <span className={`mov-chip ${resultadoIsNeg ? "mov-chip--warn" : "mov-chip--ok"}`}>
+                  {resultadoIsNeg ? "↓ Pérdida" : "↑ Ganancia"}
+                </span>
+              </div>
+              <div className="af-totalValue">{resultadoNeto == null ? "—" : moneyARS(resultadoNeto)}</div>
+              <div className="af-totalSub">Ventas − costo variable − costo fijo − otros egresos</div>
+            </div>
 
-                <div className="af-footTotals">
-                  <div className={`af-totalCard af-totalCard--primary ${resultadoIsNeg ? "is-negative" : "is-positive"}`}>
-                    <div className="af-totalTop">
-                      <div className="af-totalLabel">Resultado Neto</div>
-                      <div className="af-chip">{resultadoIsNeg ? "↓ Pérdida" : "↑ Ganancia"}</div>
-                    </div>
-                    <div className="af-totalValue">{resultadoNeto == null ? "-" : moneyARS(resultadoNeto)}</div>
-                    <div className="af-totalSub">
-                      Resultado del período (ventas - costo variable - costo fijo - otros egresos)
-                    </div>
-                  </div>
-
-                  <div className="af-totalCard af-totalCard--danger">
-                    <div className="af-totalTop">
-                      <div className="af-totalLabel">Gastos personales</div>
-                      <div className="af-chip is-danger">Control</div>
-                    </div>
-                    <div className="af-totalValue">{gastosPersonales == null ? "-" : moneyARS(gastosPersonales)}</div>
-                    <div className="af-totalSub">Se muestra aparte como en tu Excel</div>
-                  </div>
-                </div>
-              </>
-            )}
-          </>
+            <div className="af-totalCard af-totalCard--ctrl">
+              <div className="af-totalTop">
+                <div className="af-totalLabel">Gastos personales</div>
+                <span className="mov-chip mov-chip--warn">Control</span>
+              </div>
+              <div className="af-totalValue af-importe--egreso">{gastosPersonales == null ? "—" : moneyARS(gastosPersonales)}</div>
+              <div className="af-totalSub">Se muestra aparte</div>
+            </div>
+          </div>
         )}
+
       </section>
     </div>
   );

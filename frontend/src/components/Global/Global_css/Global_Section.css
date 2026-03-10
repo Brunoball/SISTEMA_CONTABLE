@@ -250,10 +250,7 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
-  border-bottom: 1px solid color-mix(in srgb, var(--mov-border) 70%, #fff);
-  background:
-    radial-gradient(900px 180px at 0% 0%, rgba(0,85,187,.06), transparent 55%),
-    linear-gradient(180deg, #fff, #fff);
+  
 }
 
 .mov-card__headLeft{
@@ -268,7 +265,7 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
   font-size: 15px;
   letter-spacing: -0.01em;
   font-weight: 620;
-  color: var(--balto-ink);
+
 }
 
 .mov-card__hint{
@@ -291,6 +288,7 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
 .mov-headFilters{
   display: flex;
   align-items: flex-end;
+  justify-content: flex-end;
   gap: 12px;
   min-width: 0;
 }
@@ -1188,6 +1186,7 @@ body.dark .mov-btn--loadAll:hover{
 
 .floatingField--search{
   width: 100%;
+  min-width: 320px;
 }
 
 .mov-searchInput{
@@ -1305,4 +1304,7 @@ body.dark .mov-btn--loadAll:hover{
   transition: all 150ms ease;
   min-width: 200px;
   font-family: inherit;
+}
+#vents-comppr-wit{
+max-width: 250px;
 }

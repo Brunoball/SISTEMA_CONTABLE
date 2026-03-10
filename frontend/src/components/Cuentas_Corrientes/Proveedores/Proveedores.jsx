@@ -16,6 +16,7 @@ import {
   faBoxOpen,
   faChevronDown,
   faArrowRightLong,
+  faMagnifyingGlass,
 } from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../../Global/Toast.jsx";
@@ -24,7 +25,6 @@ import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComproban
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 
-// ✅ BOTÓN EXPORTAR GLOBAL (igual que en Movimientos)
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 
 /* =========================
@@ -85,7 +85,6 @@ function getBaseOrigin() {
 function resolveFileUrl(rawUrl) {
   const url = safeText(rawUrl);
   if (!url) return "";
-
   if (
     url.startsWith("http://") ||
     url.startsWith("https://") ||
@@ -94,10 +93,8 @@ function resolveFileUrl(rawUrl) {
   ) {
     return url;
   }
-
   const origin = getBaseOrigin();
   if (url.startsWith("/")) return `${origin}${url}`;
-
   return `${origin}/${url.replace(/^\.?\//, "")}`;
 }
 
@@ -211,7 +208,6 @@ function makeComprobanteAccessUrl(row, API) {
   if (idComprobante > 0) {
     return `${API}?action=comprobantes_descargar&id_comprobante=${idComprobante}`;
   }
-
   return resolveFileUrl(row?.comprobante_url);
 }
 
@@ -255,51 +251,53 @@ export default function ProveedoresCC() {
   useEffect(() => {
     ensureListsLoaded?.({ force: false, background: true }).catch(() => {});
   }, [ensureListsLoaded]);
+
   useEffect(() => {
-  const el = tableBodyRef.current;
-  if (!el) return;
+    const el = tableBodyRef.current;
+    if (!el) return;
 
-  const checkScroll = () => {
-    const hasScroll = el.scrollHeight > el.clientHeight + 1;
-    setHasVerticalScroll(hasScroll);
-  };
+    const checkScroll = () => {
+      const hasScroll = el.scrollHeight > el.clientHeight + 1;
+      setHasVerticalScroll(hasScroll);
+    };
 
-  checkScroll();
+    checkScroll();
 
-  const ro = new ResizeObserver(() => checkScroll());
-  ro.observe(el);
+    const ro = new ResizeObserver(() => checkScroll());
+    ro.observe(el);
 
-  // por si cambian filas internas
-  const mo = new MutationObserver(() => checkScroll());
-  mo.observe(el, { childList: true, subtree: true });
+    const mo = new MutationObserver(() => checkScroll());
+    mo.observe(el, { childList: true, subtree: true });
 
-  window.addEventListener("resize", checkScroll);
+    window.addEventListener("resize", checkScroll);
 
-  return () => {
-    ro.disconnect();
-    mo.disconnect();
-    window.removeEventListener("resize", checkScroll);
-  };
-}, [rows, loading]);
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+      window.removeEventListener("resize", checkScroll);
+    };
+  }, [rows, loading]);
 
-const rangeLabel = useMemo(() => {
-  const from = dateRange?.from || null;
-  const to = dateRange?.to || null;
+  const rangeLabel = useMemo(() => {
+    const from = dateRange?.from || null;
+    const to = dateRange?.to || null;
 
-  if (!from) return "Seleccionar período";
+    if (!from) return "Seleccionar período";
 
-  if (!to || formatDateISO(from) === formatDateISO(to)) {
-    return formatDateLabel(from);
-  }
+    if (!to || formatDateISO(from) === formatDateISO(to)) {
+      return formatDateLabel(from);
+    }
 
-  return (
-    <>
-      {formatDateLabel(from)}
-      <FontAwesomeIcon icon={faArrowRightLong} style={{ margin: "0 6px" }} />
-      {formatDateLabel(to)}
-    </>
-  );
-}, [dateRange]);
+    return (
+      <>
+        <span>{formatDateLabel(from)}</span>
+        <span className="cc-rangeArrow">
+          <FontAwesomeIcon icon={faArrowRightLong} />
+        </span>
+        <span>{formatDateLabel(to)}</span>
+      </>
+    );
+  }, [dateRange]);
 
   const exportBaseName = useMemo(() => {
     const safeName = String(queryUsed || "proveedor").replace(/[^\w.-]+/g, "_");
@@ -395,8 +393,7 @@ const rangeLabel = useMemo(() => {
   const handleSelect = useCallback(
     (opt) => {
       if (!opt) return;
-      const sel = { id: opt.id, label: opt.label };
-      setSelected(sel);
+      setSelected({ id: opt.id, label: opt.label });
       setQ(opt.label);
       setOpenSug(false);
       loadHistorial(opt.id, opt.label);
@@ -435,7 +432,7 @@ const rangeLabel = useMemo(() => {
   );
 
   /* =========================
-     Export functions (igual que Movimientos)
+     Export functions
   ========================= */
   const getExportData = useCallback(() => {
     const data = buildExportRows(rows);
@@ -579,137 +576,141 @@ const rangeLabel = useMemo(() => {
         }
       />
 
-      <div className="cc-card__head cc-card__head--module">
-        <div className="cc-card__headLeft cc-card__headLeft--stack">
-          <div className="cc-headTitle">
-            <div className="cc-card__title">Cuentas Corrientes</div>
-  <div className="mov-card__hint">
-    Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
-  </div>
+      {/* ✅ HEAD UNIFICADO — igual que Movimientos */}
+      <div className="mov-card__head">
+        <div className="mov-card__headLeft">
 
+          <div className="title-mov">
+            <div className="mov-card__title">Cuentas Corrientes</div>
+            <div className="mov-card__hint">
+              Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
+            </div>
           </div>
 
-<div className="cc-headFilters">
-  <div className="cc-filter cc-filter--cal">
-    <div className={`cc-floatingField cc-floatingField--calendar is-active ${calOpen ? "is-open" : ""}`}>
-      <button
-        type="button"
-        className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
-        onClick={() => setCalOpen((v) => !v)}
-        disabled={loading}
-      >
-{rangeLabel}
+          <div className="mov-headFilters">
 
-        <span className="cc-calTrigger__iconRight">
-          <FontAwesomeIcon icon={faChevronDown} />
-        </span>
-      </button>
+            {/* CALENDARIO */}
+            <div className="cc-filter cc-filter--cal">
+              <div className={`cc-floatingField cc-floatingField--calendar is-active ${calOpen ? "is-open" : ""}`}>
+                <button
+                  type="button"
+                  className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
+                  onClick={() => setCalOpen((v) => !v)}
+                  disabled={loading}
+                >
+                  {rangeLabel}
+                  <span className="cc-calTrigger__iconRight">
+                    <FontAwesomeIcon icon={faChevronDown} />
+                  </span>
+                </button>
 
-      <span className="cc-floatingLabel cc-floatingLabel--active">
-        <FontAwesomeIcon icon={faCalendarDays} />
-        Período
-      </span>
+                <span className="cc-floatingLabel cc-floatingLabel--active">
+                  <FontAwesomeIcon icon={faCalendarDays} /> Período
+                </span>
 
-      {calOpen && (
-        <div className="cc-calDropdown">
-          <Calendario
-            value={dateRange}
-            onChange={(range) => {
-              setDateRange(range);
-              if (range?.from && range?.to) setCalOpen(false);
-            }}
-            onClose={() => setCalOpen(false)}
-          />
-        </div>
-      )}
-    </div>
-  </div>
-
-  <div className="cc-filter cc-filter--search">
-    <div
-      className={`cc-floatingField cc-floatingField--search ${
-        openSug || safeText(q) !== "" ? "is-active" : ""
-      }`}
-          >
-      <div className="cc-searchInput">
-        <div className="cc-searchInput__fieldWrap">
-          <input
-            className="cc-input cc-input--floating"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={() => setOpenSug(true)}
-            onBlur={() => setTimeout(() => setOpenSug(false), 120)}
-            placeholder=" "
-            disabled={loading || loadingLists}
-            autoComplete="off"
-          />
-
-          <span className="cc-floatingLabel">
-            {loadingLists ? "Cargando proveedores…" : "Buscar proveedor"}
-          </span>
-
-          {safeText(q) !== "" && !loading && (
-            <button
-              type="button"
-              className="cc-clearSearch cc-clearSearch--inside"
-              title="Limpiar"
-              onClick={() => {
-                setQ("");
-                setSelected(null);
-                setOpenSug(false);
-                setRows([]);
-                setTotales({ debito: 0, credito: 0, saldo: 0 });
-                setHasSearched(false);
-                setQueryUsed("");
-              }}
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
-          )}
-
-          {openSug && suggestions.length > 0 && (
-            <div className="cc-suggestions">
-              <div className="cc-suggestions__scroll">
-                {suggestions.map((opt) => (
-                  <button
-                    key={`${opt.id ?? "temp"}-${opt.label}`}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleSelect(opt);
-                    }}
-                    className="cc-suggestions__item"
-                    title={opt.label}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                {calOpen && (
+                  <div className="cc-calDropdown">
+                    <Calendario
+                      value={dateRange}
+                      onChange={(range) => {
+                        setDateRange(range);
+                        if (range?.from && range?.to) setCalOpen(false);
+                      }}
+                      onClose={() => setCalOpen(false)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
-          {/* ✅ REEMPLAZA el botón cc-btnex cc-btn--excel por BotonExportar */}
-          <BotonExportar
-            disabled={loading || !hasSearched || rows.length === 0}
-            loading={false}
-            label="Exportar"
-            title={
-              !hasSearched
-                ? "Seleccioná un proveedor primero"
-                : rows.length
-                ? "Exportar archivo"
-                : "No hay datos para exportar"
-            }
-            opciones={exportOptions}
-            align="right"
-          />
+            {/* BÚSQUEDA */}
+            <div className="cc-filter cc-filter--search">
+              <div
+                className={`cc-floatingField cc-floatingField--search ${
+                  openSug || safeText(q) !== "" ? "is-active" : ""
+                }`}
+              >
+                <div className="cc-searchInput">
+                  <div className="cc-searchInput__fieldWrap">
+                    <input
+                      className="cc-input cc-input--floating"
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onFocus={() => setOpenSug(true)}
+                      onBlur={() => setTimeout(() => setOpenSug(false), 120)}
+                      placeholder=" "
+                      disabled={loading || loadingLists}
+                      autoComplete="off"
+                    />
+
+                    <span className="cc-floatingLabel">
+                      <FontAwesomeIcon icon={faMagnifyingGlass} />{" "}
+                      {loadingLists ? "Cargando proveedores…" : "Buscar proveedor"}
+                    </span>
+
+                    {safeText(q) !== "" && !loading && (
+                      <button
+                        type="button"
+                        className="cc-clearSearch cc-clearSearch--inside"
+                        title="Limpiar"
+                        onClick={() => {
+                          setQ("");
+                          setSelected(null);
+                          setOpenSug(false);
+                          setRows([]);
+                          setTotales({ debito: 0, credito: 0, saldo: 0 });
+                          setHasSearched(false);
+                          setQueryUsed("");
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faTimes} />
+                      </button>
+                    )}
+
+                    {openSug && suggestions.length > 0 && (
+                      <div className="cc-suggestions">
+                        <div className="cc-suggestions__scroll">
+                          {suggestions.map((opt) => (
+                            <button
+                              key={`${opt.id ?? "temp"}-${opt.label}`}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelect(opt);
+                              }}
+                              className="cc-suggestions__item"
+                              title={opt.label}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
         </div>
+
+        {/* EXPORTAR */}
+        <BotonExportar
+          disabled={loading || !hasSearched || rows.length === 0}
+          loading={false}
+          label="Exportar"
+          title={
+            !hasSearched
+              ? "Seleccioná un proveedor primero"
+              : rows.length
+              ? "Exportar archivo"
+              : "No hay datos para exportar"
+          }
+          opciones={exportOptions}
+          align="right"
+        />
       </div>
 
       {errorLists && <div className="cc-footnote">{errorLists}</div>}
@@ -727,10 +728,10 @@ const rangeLabel = useMemo(() => {
           <div className="mov-gridCell mov-gridCell--head is-center">Ver</div>
         </div>
 
-<div
-  ref={tableBodyRef}
-  className={`cc-cliente-table__body ${!hasVerticalScroll ? "cc-cliente-table__body--stable" : ""}`}
->
+        <div
+          ref={tableBodyRef}
+          className={`cc-cliente-table__body ${!hasVerticalScroll ? "cc-cliente-table__body--stable" : ""}`}
+        >
           {loading ? (
             <div className="cc-cliente-table__loading">
               Cargando cuenta corriente del proveedor…
@@ -823,7 +824,6 @@ const rangeLabel = useMemo(() => {
             </div>
             <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
               {moneyARS(totales?.saldo || 0)}
-
             </div>
             <div className="cc-cliente-table__cell"></div>
           </div>

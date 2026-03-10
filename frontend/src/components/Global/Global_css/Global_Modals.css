@@ -676,11 +676,10 @@ background: var(--mi-primary);
   font-size: 12px;
   letter-spacing: .2px;
   color: rgba(15,23,42,.85);
-  overflow: auto;
-  scrollbar-gutter: both-edges stable;
+
 
   padding: 12px 0;
-  gap: 10px !important;
+  gap: 0 !important;
 }
 
 /* Scroll del cuerpo */
@@ -770,8 +769,8 @@ background: var(--mi-primary);
 /* Botón eliminar: más “icon button” */
 .mi-cr-row button[title="Eliminar fila"]{
   height: 25px !important;
-  width: 25px;  margin: 10px auto 0;
-  padding: 0;
+  width: 25px;  
+  padding: 0 !important;
   border-radius: 8px !important;
   border: 1px solid rgba(239,68,68,.30) !important;
   background: rgba(239,68,68,.08) !important;
@@ -779,6 +778,9 @@ background: var(--mi-primary);
   display: grid;
   place-items: center;
   transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+}
+#delete_cell{
+  padding: 0;
 }
 .mi-cr-row button[title="Eliminar fila"]:hover{
   transform: translateY(-1px);
@@ -2602,3 +2604,485 @@ input[type="number"]::-webkit-outer-spin-button {
   grid-column: 1/-1;
 
 }
+/* =========================================================
+   ModalNuevaVenta — Rediseño moderno / minimalista
+   Tabla tipo Excel + floating labels + header clean
+========================================================= */
+
+/* -- Tokens -------------------------------------------- */
+:root {
+  --nv-midnight:   #0A2540;
+  --nv-action:     #0055BB;
+  --nv-action-10:  rgba(0,85,187,.10);
+  --nv-action-18:  rgba(0,85,187,.18);
+
+  --nv-bg:         #ffffff;
+  --nv-surface:    #F7F9FC;
+  --nv-surface2:   #EEF2F8;
+
+  --nv-border:     rgba(15,23,42,.10);
+  --nv-border-md:  rgba(15,23,42,.16);
+
+  --nv-text:       #0A2540;
+  --nv-muted:      #5A6A7E;
+  --nv-placeholder:#8A99AC;
+
+  --nv-shadow-sm:  0 1px 4px rgba(15,23,42,.07);
+  --nv-shadow-md:  0 6px 22px rgba(15,23,42,.10);
+  --nv-shadow-lg:  0 28px 64px rgba(15,23,42,.18);
+
+  --nv-r-sm:  8px;
+  --nv-r-md:  12px;
+  --nv-r-lg:  18px;
+
+  /* tabla */
+  --nv-row-h:      42px;
+  --nv-head-bg:    #F0F4FA;
+  --nv-row-odd:    #FAFBFD;
+  --nv-row-hover:  #EEF3FC;
+  --nv-cell-pad:   0 10px;
+
+  /* totales */
+  --nv-sub-color:  #1D42AA;
+  --nv-iva-color:  #B45309;
+  --nv-tot-color:  #057A55;
+}
+
+/* -- Dark tokens --------------------------------------- */
+.mi-modal--dark {
+  --nv-bg:        rgba(6,18,28,.96);
+  --nv-surface:   rgba(10,25,40,.72);
+  --nv-surface2:  rgba(255,255,255,.04);
+  --nv-border:    rgba(255,255,255,.09);
+  --nv-border-md: rgba(255,255,255,.15);
+  --nv-text:      rgba(255,255,255,.92);
+  --nv-muted:     rgba(210,220,235,.70);
+  --nv-placeholder:rgba(255,255,255,.38);
+  --nv-head-bg:   rgba(255,255,255,.06);
+  --nv-row-odd:   rgba(255,255,255,.025);
+  --nv-row-hover: rgba(255,255,255,.06);
+  --nv-shadow-sm: 0 1px 4px rgba(0,0,0,.22);
+  --nv-shadow-md: 0 6px 22px rgba(0,0,0,.32);
+  --nv-shadow-lg: 0 28px 64px rgba(0,0,0,.55);
+}
+
+/* =========================================================
+   OVERLAY & CONTAINER
+========================================================= */
+.mi-modal__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8,16,30,.52);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+  animation: nv-fade .15s ease;
+}
+
+.mi-modal__container {
+  width: min(1100px, 96vw);
+  max-height: 94vh;
+  background: var(--nv-bg);
+  border-radius: var(--nv-r-lg);
+  box-shadow: var(--nv-shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--nv-border);
+  animation: nv-slide .2s cubic-bezier(.22,.68,0,1.1);
+  font-family: "DM Sans", "Instrument Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mi-modal__container--mov {
+  min-height: 88vh;
+  max-height: 94vh;
+}
+
+/* =========================================================
+   HEADER — clean pill chip style
+========================================================= */
+.mi-modal__header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  background: var(--nv-midnight);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  flex: 0 0 auto;
+}
+
+.mi-modal__head-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.12);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  font-size: 16px;
+}
+
+.mi-modal__head-left { flex: 1; min-width: 0; }
+
+.mi-modal__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -.01em;
+}
+
+.mi-modal__subtitle {
+  margin: 2px 0 0;
+  font-size: .80rem;
+  color: rgba(255,255,255,.62);
+  font-weight: 400;
+}
+
+.mi-modal__close {
+  appearance: none;
+  border: 0;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.10);
+  color: rgba(255,255,255,.85);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background .14s, transform .14s;
+  flex: 0 0 auto;
+}
+.mi-modal__close:hover {
+  background: rgba(255,255,255,.16);
+  transform: rotate(90deg);
+}
+.mi-modal__close:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+
+/* =========================================================
+   CONTENT LAYOUT
+========================================================= */
+.mi-modal__content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  background: var(--nv-surface);
+  overflow: hidden;
+}
+
+.mi-cr-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 310px;
+  gap: 12px;
+}
+
+/* =========================================================
+   TABLA EXCEL
+========================================================= */
+.mi-cr-table {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--nv-border-md);
+  border-radius: var(--nv-r-md);
+  overflow: hidden;
+  background: var(--nv-bg);
+  box-shadow: var(--nv-shadow-sm);
+}
+
+/* Columnas: Detalle | Cant | Precio | IVA% | IVA$ | Total | ✕ */
+.mi-cr-table__head,
+.mi-cr-row {
+  display: grid;
+  grid-template-columns: 2.4fr 72px 100px 80px 100px 108px 36px;
+  align-items: center;
+}
+
+/* -- HEADER -------------------------------------------- */
+.mi-cr-table__head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--nv-head-bg);
+  border-bottom: 2px solid var(--nv-border-md);
+  min-height: 38px;
+}
+
+.mi-cr-table__head > div {
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--nv-muted);
+  white-space: nowrap;
+}
+.mi-cr-table__head > div:not(:first-child) {
+  text-align: center;
+}
+
+/* Línea de acento en header */
+.mi-cr-table__head::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--nv-action) 0%, transparent 80%);
+  opacity: .35;
+}
+
+/* -- FILAS -------------------------------------------- */
+.mi-cr-table__rows {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.mi-cr-row {
+  min-height: var(--nv-row-h);
+  border-bottom: 1px solid var(--nv-border);
+  transition: background .10s;
+  position: relative;
+}
+.mi-cr-row:nth-child(even) { background: var(--nv-row-odd); }
+.mi-cr-row:hover { background: var(--nv-row-hover); }
+.mi-cr-row:last-child { border-bottom: none; }
+
+/* Células */
+.mi-cr-cell {
+  padding: var(--nv-cell-pad);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.mi-cr-cell--center { justify-content: center; }
+.mi-cr-cell--mono {
+  font-variant-numeric: tabular-nums;
+  font-size: .88rem;
+  font-weight: 500;
+  color: var(--nv-text);
+}
+.mi-cr-cell--soft { color: var(--nv-muted); }
+.mi-cr-cell--strong { color: var(--nv-sub-color); font-weight: 600; }
+.mi-cr-cell--total-val { color: var(--nv-tot-color); font-weight: 700; }
+
+/* Separadores verticales entre columnas (líneas guía de Excel) */
+.mi-cr-row > .mi-cr-cell:not(:first-child),
+.mi-cr-table__head > div:not(:first-child) {
+  border-left: 1px solid var(--nv-border);
+}
+
+/* -- INPUTS DENTRO DE FILA --------------------------- */
+.mi-cr-cell .nv-cell-input {
+  width: 100%;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0 8px;
+  font-size: .875rem;
+  font-weight: 400;
+  color: var(--nv-text);
+  background: transparent;
+  outline: none;
+  transition: border-color .14s, background .14s, box-shadow .14s;
+  font-family: inherit;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.mi-cr-cell .nv-cell-input:hover {
+  border-color: var(--nv-border-md);
+  background: var(--nv-bg);
+}
+
+.mi-cr-cell .nv-cell-input:focus {
+  border-color: var(--nv-action);
+  background: var(--nv-bg);
+  box-shadow: 0 0 0 3px var(--nv-action-10);
+}
+
+.mi-cr-cell .nv-cell-input--center { text-align: center; }
+.mi-cr-cell .nv-cell-input--select { cursor: pointer; padding-right: 4px; }
+
+/* Detalle input tiene posición relativa para el suggest */
+.mi-cr-cell--detalle {
+  position: relative;
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+  padding: 4px 8px;
+  gap: 2px;
+}
+
+.mi-cr-cell--detalle .nv-cell-input {
+  width: 100%;
+}
+
+/* -- DELETE BTN --------------------------------------- */
+.mi-cr-del {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--nv-muted);
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background .12s, color .12s, transform .12s;
+  margin: auto;
+}
+.mi-cr-del:hover {
+  background: rgba(239,68,68,.12);
+  color: rgba(185,28,28,.95);
+  transform: scale(1.1);
+}
+.mi-cr-del:disabled { opacity: .3; cursor: not-allowed; transform: none; }
+
+/* -- SUGGEST DROP ------------------------------------ */
+.mi-cr-suggest {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 90;
+  background: var(--nv-bg);
+  border: 1px solid var(--nv-border-md);
+  border-radius: var(--nv-r-sm);
+  box-shadow: 0 12px 36px rgba(15,23,42,.18);
+  list-style: none;
+  padding: 4px;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.mi-cr-suggest__item {
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: .85rem;
+  color: var(--nv-text);
+  transition: background .10s;
+  user-select: none;
+}
+.mi-cr-suggest__item:hover { background: var(--nv-action-10); }
+
+/* =========================================================
+   TABLE FOOTER (Agregar fila + Agregar detalle + Totales)
+========================================================= */
+.mi-cr-table__foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--nv-border-md);
+  background: var(--nv-head-bg);
+}
+
+.mi-cr-foot-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Botones del footer de tabla */
+.nv-foot-btn {
+  appearance: none;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nv-border-md);
+  background: var(--nv-bg);
+  color: var(--nv-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all .14s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.nv-foot-btn:hover {
+  border-color: var(--nv-action);
+  color: var(--nv-action);
+  background: var(--nv-action-10);
+  transform: translateY(-1px);
+  box-shadow: var(--nv-shadow-sm);
+}
+.nv-foot-btn:disabled { opacity: .38; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.nv-foot-btn__icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  background: var(--nv-action-10);
+  border: 1px solid rgba(0,85,187,.20);
+  color: var(--nv-action);
+  flex: 0 0 auto;
+}
+
+/* Separador entre botones */
+.nv-foot-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--nv-border-md);
+}
+
+/* -- TOTALES ----------------------------------------- */
+.mi-cr-totals {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mi-cr-totalLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nv-border-md);
+  background: var(--nv-bg);
+  box-shadow: var(--nv-shadow-sm);
+  font-variant-numeric: tabular-nums;
+  font-size: .82rem;
+  transition: transform .12s, box-shadow .12s;
+  position: relative;
+  overflow: hidden;
+}
+
+.mi-cr-totalLine::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  border-radius: 999px 0 0 999px;
+}
+

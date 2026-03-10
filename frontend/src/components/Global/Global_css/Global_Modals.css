@@ -176,7 +176,7 @@
   border: 1px solid var(--mi-border);
   background: #fff;
   border-radius: 12px;
-  padding: 14px 12px 10px;
+  padding:  12px 10px;
   font-size: .95rem;
   color: var(--mi-text);
   outline: none;
@@ -186,7 +186,6 @@
 }
 
 .fl-select{
-  padding-top: 18px;
   padding-bottom: 10px;
 }
 
@@ -214,10 +213,6 @@
   opacity: 1;
 }
 
-/* En selects, la label va “arriba” siempre */
-.fl-select + .fl-label{
-  transform: translateY(-10px) scale(.92);
-}
 
 .fl-input:disabled{
   background: #f8fafc;
@@ -396,12 +391,7 @@
   background: #fff;
 }
 
-/* En selects: que también cruce el borde (en vez de quedarse siempre arriba sin atravesar) */
-.fl-select + .fl-label{
-  top: 0px;
-  transform: translateY(-50%) scale(.92);
-  background: #fff;
-}
+
 
 /* Si el input está deshabilitado, mantenemos el corte del borde prolijo */
 .fl-input:disabled + .fl-label{
@@ -525,7 +515,9 @@ background: var(--mi-primary);
 .mi-cr-table__head{
   display: grid;
   grid-template-columns: 2.2fr .7fr .9fr .8fr .9fr .9fr .3fr;
-  gap: 8px;
+  overflow: hidden;
+  scrollbar-gutter: stable;
+  gap: 0;
   padding: 10px 10px;
   background: rgba(15, 23, 42, 0.04);
   border-bottom: 1px solid rgba(148,163,184,.35);
@@ -534,10 +526,19 @@ background: var(--mi-primary);
 }
 
 /* ✅ área scrolleable de filas: ocupa todo el alto que pueda */
+/* estado normal: reservamos espacio para scrollbar */
 .mi-cr-table__rows{
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  scrollbar-gutter: stable;
+}
+
+/* cuando tiene scroll real */
+.mi-cr-table__rows.has-scroll{
+  scrollbar-gutter: auto;
 }
 
 /* fila */
@@ -780,7 +781,7 @@ background: var(--mi-primary);
   transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
 }
 #delete_cell{
-  padding: 0;
+  padding: 0 !important;
 }
 .mi-cr-row button[title="Eliminar fila"]:hover{
   transform: translateY(-1px);
@@ -1748,7 +1749,7 @@ padding: 0 !important;
   border: 1px solid rgba(148,163,184,.55);
   background: #fff;
   border-radius: 12px;
-  padding: 16px 12px 10px;
+  padding:  12px 10px;
   font-size: .95rem;
   font-weight: 400;
   color: var(--mi-text);
@@ -1759,7 +1760,7 @@ padding: 0 !important;
 }
 
 .fl-select{
-  padding-top: 18px;
+ 
   padding-bottom: 10px;
   cursor: pointer;
 }
@@ -1794,12 +1795,6 @@ padding: 0 !important;
   background: #fff;
 }
 
-/* selects */
-.fl-select + .fl-label{
-  top: 0px;
-  transform: translateY(-50%) scale(.92);
-  background: #fff;
-}
 
 .fl-input:disabled{
   background: rgba(241,245,249,.7);
@@ -2084,84 +2079,7 @@ input[type="number"]::-webkit-outer-spin-button {
   margin: 0;
 }
 
-/* =========================
-   ✅ Modo oscuro (activás con .mi-modal--dark)
-========================= */
-.mi-modal--dark{
-  --mi-bg: rgba(6, 18, 28, 0.92);
-  --mi-bg-soft: rgba(6, 18, 28, 0.60);
-  --mi-text: rgba(255,255,255,.92);
-  --mi-muted: rgba(226,232,240,.72);
-  --mi-border: rgba(255,255,255,.10);
-}
 
-/* Container oscuro */
-.mi-modal--dark.mi-modal__container{
-  background: var(--mi-bg);
-  border: 1px solid rgba(255,255,255,.08);
-}
-
-/* Panel/aside oscuro */
-.mi-modal--dark .mi-em-panel,
-.mi-modal--dark .mi-em-aside{
-  background: rgba(10, 25, 40, 0.60);
-  border-color: rgba(255,255,255,.10);
-}
-
-.mi-modal--dark .mi-em-panelHead{
-  background: rgba(255,255,255,.06);
-  border-bottom-color: rgba(255,255,255,.10);
-  color: var(--mi-text);
-}
-
-/* Inputs oscuros */
-.mi-modal--dark .fl-input{
-  background: rgba(255,255,255,.06);
-  border-color: rgba(255,255,255,.12);
-  color: var(--mi-text);
-  box-shadow: none;
-}
-
-.mi-modal--dark .fl-input:focus{
-  border-color: rgba(0,85,187,.65);
-  box-shadow: 0 0 0 3px rgba(0,85,187,.18);
-}
-
-.mi-modal--dark .fl-label{
-  color: var(--mi-muted);
-}
-
-.mi-modal--dark .fl-input:focus + .fl-label,
-.mi-modal--dark .fl-input:not(:placeholder-shown) + .fl-label,
-.mi-modal--dark .fl-select + .fl-label{
-  background: rgba(6,18,28,.92);
-  color: rgba(180,210,255,.92);
-}
-
-/* Dropdown oscuro */
-.mi-modal--dark .mi-cr-suggest{
-  background: rgba(6,18,28,.98);
-  border-color: rgba(255,255,255,.12);
-  box-shadow: 0 18px 45px rgba(0,0,0,.50);
-}
-
-.mi-modal--dark .mi-cr-suggest__item:hover{
-  background: rgba(255,255,255,.08);
-}
-
-/* Botón ghost en oscuro */
-.mi-modal--dark .mit-btn--ghost{
-  border-color: rgba(255,255,255,.16);
-  color: rgba(255,255,255,.90);
-}
-.mi-modal--dark .mit-btn--ghost:hover{
-  background: rgba(255,255,255,.06);
-}
-
-/* Mini modal oscuro (opcional) */
-.mi-modal--dark + .mi-mini__overlay .mi-mini__modal{
-  background: rgba(6,18,28,.98);
-}
 /* =========================================================
    DARK MODE – Carga Rápida (ModalCargaRapidaMovimientos)
    Activación:
@@ -2248,7 +2166,7 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 .mi-modal__container.mi-modal--dark .fl-input:focus + .fl-label,
 .mi-modal__container.mi-modal--dark .fl-input:not(:placeholder-shown) + .fl-label,
-.mi-modal__container.mi-modal--dark .fl-select + .fl-label{
+.mi-modal__container.mi-modal--dark {
   background: rgba(6,18,28,.92) !important;
   color: rgba(180,210,255,.92) !important;
 }
@@ -2525,7 +2443,7 @@ input[type="number"]::-webkit-outer-spin-button {
 /* IMPORTANTE: cuando flota, el fondo debe ser oscuro (para cortar el borde) */
 .mi-mini__modal.mi-modal--dark .fl-input:focus + .fl-label,
 .mi-mini__modal.mi-modal--dark .fl-input:not(:placeholder-shown) + .fl-label,
-.mi-mini__modal.mi-modal--dark .fl-select + .fl-label{
+.mi-mini__modal.mi-modal--dark {
   background: rgba(6,18,28,.96) !important;
   color: rgba(180,210,255,.92) !important;
 }
@@ -2698,7 +2616,7 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .mi-modal__container--mov {
-  min-height: 88vh;
+  min-height: 94vh;
   max-height: 94vh;
 }
 
@@ -2744,27 +2662,6 @@ input[type="number"]::-webkit-outer-spin-button {
   font-weight: 400;
 }
 
-.mi-modal__close {
-  appearance: none;
-  border: 0;
-  background: rgba(255,255,255,.08);
-  border: 1px solid rgba(255,255,255,.10);
-  color: rgba(255,255,255,.85);
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background .14s, transform .14s;
-  flex: 0 0 auto;
-}
-.mi-modal__close:hover {
-  background: rgba(255,255,255,.16);
-  transform: rotate(90deg);
-}
-.mi-modal__close:disabled { opacity: .45; cursor: not-allowed; transform: none; }
 
 /* =========================================================
    CONTENT LAYOUT
@@ -2815,7 +2712,6 @@ input[type="number"]::-webkit-outer-spin-button {
   top: 0;
   z-index: 4;
   background: var(--nv-head-bg);
-  border-bottom: 2px solid var(--nv-border-md);
   min-height: 38px;
 }
 
@@ -2832,17 +2728,7 @@ input[type="number"]::-webkit-outer-spin-button {
   text-align: center;
 }
 
-/* Línea de acento en header */
-.mi-cr-table__head::after {
-  content: "";
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--nv-action) 0%, transparent 80%);
-  opacity: .35;
-}
+
 
 /* -- FILAS -------------------------------------------- */
 .mi-cr-table__rows {
@@ -3067,7 +2953,7 @@ input[type="number"]::-webkit-outer-spin-button {
   align-items: center;
   gap: 8px;
   padding: 5px 10px 5px 12px;
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid var(--nv-border-md);
   background: var(--nv-bg);
   box-shadow: var(--nv-shadow-sm);
@@ -3086,3 +2972,206 @@ input[type="number"]::-webkit-outer-spin-button {
   border-radius: 999px 0 0 999px;
 }
 
+.mi-modal__container{
+  animation: mi-modal-pop-min .16s ease-out;
+}
+
+.mi-mini__modal{
+  animation: mi-modal-pop-min .16s ease-out;
+}
+
+@keyframes mi-modal-pop-min{
+  from{
+    opacity: 0;
+    transform: translateY(6px) scale(.992);
+  }
+  to{
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}/* =========================================
+   Archivo adjunto — estructura nueva
+========================================= */
+
+.mi-uploadCard{
+  border: 1px solid rgba(148,163,184,.32);
+  border-radius: 14px;
+  background: #fff;
+
+}
+
+.mi-uploadCard__head{
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid rgba(148,163,184,.18);
+}
+
+.mi-uploadCard__title{
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mi-text);
+  line-height: 1.2;
+}
+
+.mi-uploadCard__sub{
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--mi-muted);
+  line-height: 1.3;
+}
+
+.mi-uploadCard__body{
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* barra superior de acciones */
+.mi-uploadBar{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mi-uploadBar__pick{
+  min-width: 0;
+}
+
+.mi-uploadBar__input{
+  display: none;
+}
+
+.mi-uploadBar__btn{
+  appearance: none;
+  border: 1px solid rgba(148,163,184,.32);
+  border-radius: 10px;
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: .16s ease;
+  white-space: nowrap;
+}
+
+.mi-uploadBar__pick .mi-uploadBar__btn{
+  width: 100%;
+}
+
+.mi-uploadBar__btn--primary{
+  background: #0A2540;
+  border-color: #0A2540;
+  color: #fff;
+}
+
+.mi-uploadBar__btn--primary:hover{
+  background: #0d2f55;
+  border-color: #0d2f55;
+}
+
+.mi-uploadBar__btn--ghost{
+  background: #fff;
+  color: var(--mi-text);
+}
+
+.mi-uploadBar__btn--ghost:hover:not(:disabled){
+  background: rgba(15,23,42,.04);
+}
+
+.mi-uploadBar__btn:disabled{
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* archivo seleccionado */
+.mi-uploadFile{
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(148,163,184,.22);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+
+.mi-uploadFile__icon{
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: rgba(0,85,187,.10);
+  color: var(--blue-action);
+  border: 1px solid rgba(0,85,187,.14);
+  font-size: 14px;
+}
+
+.mi-uploadFile__meta{
+  min-width: 0;
+  flex: 1;
+}
+
+.mi-uploadFile__name{
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mi-text);
+}
+
+.mi-uploadFile__size{
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--mi-muted);
+}
+
+.mi-uploadFile__empty{
+  font-size: 12px;
+  color: var(--mi-muted);
+}
+
+/* dark */
+.mi-modal--dark .mi-uploadCard{
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.10);
+}
+
+.mi-modal--dark .mi-uploadCard__head{
+  border-bottom-color: rgba(255,255,255,.08);
+}
+
+.mi-modal--dark .mi-uploadCard__title{
+  color: rgba(255,255,255,.92);
+}
+
+.mi-modal--dark .mi-uploadCard__sub{
+  color: rgba(226,232,240,.70);
+}
+
+.mi-modal--dark .mi-uploadBar__btn--ghost{
+  background: rgba(255,255,255,.05);
+  border-color: rgba(255,255,255,.12);
+  color: rgba(255,255,255,.88);
+}
+
+.mi-modal--dark .mi-uploadFile{
+  background: rgba(255,255,255,.05);
+  border-color: rgba(255,255,255,.10);
+}
+
+.mi-modal--dark .mi-uploadFile__name{
+  color: rgba(255,255,255,.92);
+}
+
+.mi-modal--dark .mi-uploadFile__size,
+.mi-modal--dark .mi-uploadFile__empty{
+  color: rgba(226,232,240,.70);
+}

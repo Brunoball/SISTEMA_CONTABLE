@@ -2,6 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import BASE_URL from "../../../../config/config";
 import ModalFacturaBaltoResumen from "../../Facturacion/ModalFacturaBaltoResumen.jsx";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faFileInvoiceDollar,
+  faBasketShopping,
+} from "@fortawesome/free-solid-svg-icons";
 
 const NULL_OPTION = "";
 
@@ -236,6 +241,8 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
   const [resumenFacturaData,setResumenFacturaData]=useState(null);
   const closeBtnRef=useRef(null);
   const prevOpenRef=useRef(false);
+  const rowsContainerRef = useRef(null);
+const [hasScroll, setHasScroll] = useState(false);
 
   /* Reset al abrir */
   useEffect(()=>{
@@ -252,6 +259,27 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
       setTimeout(()=>closeBtnRef.current?.focus(),0);
     }
   },[open]);
+useEffect(() => {
+  const el = rowsContainerRef.current;
+  if (!el) return;
+
+  const checkScroll = () => {
+    const scroll = el.scrollHeight > el.clientHeight + 1;
+    setHasScroll(scroll);
+  };
+
+  checkScroll();
+
+  const resizeObserver = new ResizeObserver(checkScroll);
+  resizeObserver.observe(el);
+
+  window.addEventListener("resize", checkScroll);
+
+  return () => {
+    resizeObserver.disconnect();
+    window.removeEventListener("resize", checkScroll);
+  };
+}, [open, rows]);
 
   const updateFilter=useCallback((k,v)=>setFilters(p=>({...p,[k]:v})),[]);
 
@@ -467,7 +495,6 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
       {/* ===================== OVERLAY ===================== */}
       <div
         className={["mi-modal__overlay",dark?"mi-modal__overlay--dark":""].join(" ").trim()}
-        onMouseDown={()=>(!saving?onClose?.():null)}
       >
         <div
           className={["mi-modal__container","mi-modal__container--mov",dark?"mi-modal--dark":""].join(" ").trim()}
@@ -477,10 +504,11 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
         >
           {/* =================== HEADER =================== */}
           <div className="mi-modal__header">
-            <div className="mi-modal__head-icon" aria-hidden="true">🧾</div>
+            <div className="mi-modal__head-icon" aria-hidden="true">
+  <FontAwesomeIcon icon={faFileInvoiceDollar} />
+</div>
             <div className="mi-modal__head-left">
               <h2 className="mi-modal__title">Nueva Venta</h2>
-              <p className="mi-modal__subtitle">Completá los ítems en la tabla y los datos de la venta a la derecha.</p>
             </div>
             <button
               ref={closeBtnRef}
@@ -511,8 +539,10 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
                 </div>
 
                 {/* Filas */}
-                <div className="mi-cr-table__rows">
-                  {rowsCalc.map(r=>{
+<div
+  ref={rowsContainerRef}
+  className={`mi-cr-table__rows ${hasScroll ? "has-scroll" : ""}`}
+>                  {rowsCalc.map(r=>{
                     const suggestions=suggestDetalles(r.detalleText);
                     const showSug=String(r.detalleText||"").trim().length>0&&Number(r.id_detalle||0)<=0&&suggestions.length>0;
                     return (
@@ -563,10 +593,14 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
                         {/* IVA % */}
                         <div className="mi-cr-cell mi-cr-cell--center">
                           <select className="nv-cell-input nv-cell-input--center nv-cell-input--select"
-                            value={String(r.ivaPct)}
-                            onChange={e=>updateRow(r.id,{ivaPct:Number(e.target.value)})}
-                            disabled={saving} style={{width:"100%"}}>
-                            {IVA_OPTIONS.map(x=><option key={x.value} value={x.value}>{x.label}</option>)}
+                                  value={String(r.ivaPct)}
+                                  onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
+                                  onKeyDown={(e) => {
+                                  const blockedKeys = ["ArrowUp", "ArrowDown"];if (blockedKeys.includes(e.key)) { e.preventDefault();}}}
+                                  disabled={saving}
+                                  style={{ width: "100%" }}>
+                                  {IVA_OPTIONS.map((x) => (
+                                <option key={x.value} value={x.value}>{x.label}</option>))}
                           </select>
                         </div>
 
@@ -581,7 +615,7 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
                         </div>
 
                         {/* Eliminar */}
-                        <div className="mi-cr-cell mi-cr-cell--center " id="">
+                        <div className="mi-cr-cell mi-cr-cell--center " id="delete_cell">
                           <button type="button" className="mi-cr-del" onClick={()=>removeRow(r.id)} disabled={saving} title="Eliminar fila">×</button>
                         </div>
                       </div>
@@ -637,7 +671,7 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
 
                   {/* Solo Fecha (período derivado automáticamente) */}
                   <div className="mi-cr-filters__dates">
-                    <div className="fl-field">
+                    <div className="fl-field fl-col-full">
                       <input className="fl-input" type="date" placeholder=" " value={fecha}
                         onChange={e=>setFecha(String(e.target.value||"").trim())} disabled={saving}/>
                       <label className="fl-label">Fecha</label>
@@ -676,7 +710,7 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
                   <div className="fl-field">
                     <select className="fl-input fl-select" value={String(filters.id_tipo_venta)}
                       onChange={e=>updateFilter("id_tipo_venta",e.target.value)} disabled={saving}>
-                      <option value={NULL_OPTION}> </option>
+                      <option value={NULL_OPTION}>Seleccionar...</option>
                       {tiposVentaList.map(x=><option key={x.id??x.id_tipo_venta} value={String(x.id??x.id_tipo_venta)}>{x.nombre}</option>)}
                     </select>
                     <label className="fl-label">Forma de venta *</label>
@@ -687,7 +721,7 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
                     <div className="fl-field">
                       <select className="fl-input fl-select" value={String(filters.id_medio_pago)}
                         onChange={e=>updateFilter("id_medio_pago",e.target.value)} disabled={saving}>
-                        <option value={NULL_OPTION}> </option>
+                        <option value={NULL_OPTION}>Seleccionar medio</option>
                         {mediosPagoList.map(x=><option key={x.id??x.id_medio_pago} value={String(x.id??x.id_medio_pago)}>{x.nombre}</option>)}
                       </select>
                       <label className="fl-label">Medio de pago *</label>

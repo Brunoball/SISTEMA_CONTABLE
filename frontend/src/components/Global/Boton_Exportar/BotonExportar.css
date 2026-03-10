@@ -64,7 +64,7 @@
 .boton-exportar-trigger__left {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 
 .boton-exportar-trigger__iconWrap {

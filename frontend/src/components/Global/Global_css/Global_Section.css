@@ -386,7 +386,7 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  gap: 10px;
+  gap: 5px;
 }
 
 .mov-btn:hover{

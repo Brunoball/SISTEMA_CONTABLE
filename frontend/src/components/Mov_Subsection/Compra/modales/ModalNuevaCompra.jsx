@@ -1,4 +1,3 @@
-// src/components/Compras/modales_compra/ModalNuevaCompra.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
@@ -91,7 +90,7 @@ function normalizeLists(lists) {
 }
 
 /* =========================
-   Auth + headers (SaaS: X-Session)
+   Auth + headers
 ========================= */
 function getAuthInfo() {
   const sessionKey =
@@ -138,6 +137,14 @@ function buildAuthHeaders() {
   return headers;
 }
 
+function buildAuthHeadersForForm() {
+  const { token, sessionKey } = getAuthInfo();
+  const headers = {};
+  if (sessionKey) headers["X-Session"] = sessionKey;
+  if (!sessionKey && token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
 async function apiPostJson(url, payload) {
   const headers = buildAuthHeaders();
   const res = await fetch(url, {
@@ -148,8 +155,18 @@ async function apiPostJson(url, payload) {
   return await parseJsonOrThrow(res);
 }
 
+async function apiPostForm(url, formData) {
+  const headers = buildAuthHeadersForForm();
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  return await parseJsonOrThrow(res);
+}
+
 /* =========================
-   Theme helper (body.dark OR data-theme="oscuro")
+   Theme helper
 ========================= */
 function isTemaOscuro() {
   const byAttr = document.documentElement.getAttribute("data-theme") === "oscuro";
@@ -158,7 +175,7 @@ function isTemaOscuro() {
 }
 
 /* =========================
-   Mini Modal: alta rápida (detalle / proveedor)
+   Mini Modal
 ========================= */
 function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
@@ -225,7 +242,7 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 }
 
 /* =========================
-   Validación filas (mensajes)
+   Validación filas
 ========================= */
 function describeLineProblem(r, idx1based) {
   const detId = Number(r.id_detalle);
@@ -271,6 +288,7 @@ function describeLineProblem(r, idx1based) {
 export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSaved }) {
   const API_BATCH = `${BASE_URL}/api.php?action=compras_crear_batch`;
   const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
+  const API_UPLOAD_LINK = `${BASE_URL}/api.php?action=comprobantes_vincular_movimientos_lote_upload`;
 
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
@@ -336,6 +354,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   ]);
 
   const [saving, setSaving] = useState(false);
+  const [archivoAdjunto, setArchivoAdjunto] = useState(null);
 
   const [addUI, setAddUI] = useState({
     open: false,
@@ -367,6 +386,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       setRows([{ id: uid(), id_detalle: NULL_OPTION, detalleText: "", cantidad: 1, precio: 0, ivaPct: 0 }]);
       setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
       setSaving(false);
+      setArchivoAdjunto(null);
 
       setTimeout(() => closeBtnRef.current?.focus(), 0);
     }
@@ -570,6 +590,21 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     return { ok: true, warn: problems.length > 0 };
   }, [filters, provInput, isContado, rowsCalc]);
 
+  const subirYVincularArchivo = useCallback(
+    async (idsMovimientos, archivo) => {
+      if (!archivo || !idsMovimientos?.length) return null;
+
+      const fd = new FormData();
+      fd.append("archivo", archivo);
+      fd.append("tipo", "FACTURA");
+      fd.append("force", "0");
+      fd.append("ids_movimiento", JSON.stringify(idsMovimientos));
+
+      return await apiPostForm(API_UPLOAD_LINK, fd);
+    },
+    [API_UPLOAD_LINK]
+  );
+
   const submit = useCallback(async () => {
     if (saving) return;
 
@@ -615,13 +650,10 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
           const base = {
             idUsuario,
             fecha,
-
             id_tipo_venta: idTipoVenta,
-
             id_proveedor: proveedorIdFinal,
             proveedor_nombre: String(provInput || "").trim() || null,
             proveedor_cuit: String(filters.proveedor_cuit || "").trim() || null,
-
             id_detalle: Number(r.id_detalle),
             cantidad: Math.round(Number(r.cantidad) * 100) / 100,
             precio: Math.round(Number(r.precio) * 100) / 100,
@@ -629,9 +661,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
             subtotal: Math.round(Number(r.subtotal) * 100) / 100,
             iva_monto: Math.round(Number(r.ivaMonto) * 100) / 100,
             total: Math.round(Number(r.total) * 100) / 100,
-
             monto_total: Math.round(Number(r.total) * 100) / 100,
-
             accion_compra: accionFinal,
             es_pagada: esPagadaFinal,
           };
@@ -657,10 +687,28 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       const data = await apiPostJson(API_BATCH, payloads);
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar el batch de compras.");
 
-      showToast("exito", `Listo: ${data?.creados ?? payloads.length} ítems guardados.`, 2800);
+      const idsCreados = Array.isArray(data?.ids) ? data.ids.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0) : [];
+      let warningArchivo = "";
+
+      if (archivoAdjunto && idsCreados.length > 0) {
+        try {
+          showToast("cargando", "Compra guardada. Subiendo archivo…", 12000);
+          const rFile = await subirYVincularArchivo(idsCreados, archivoAdjunto);
+          if (!rFile?.exito) {
+            warningArchivo = rFile?.mensaje || "No se pudo vincular el archivo.";
+          }
+        } catch (e) {
+          warningArchivo = e?.message || "No se pudo vincular el archivo.";
+        }
+      }
+
+      if (warningArchivo) {
+        showToast("advertencia", `Compra guardada, pero el archivo no se pudo vincular: ${warningArchivo}`, 7000);
+      } else {
+        showToast("exito", `Listo: ${data?.creados ?? payloads.length} ítems guardados.`, 2800);
+      }
 
       await Promise.resolve(onSaved?.(data));
-
       onClose?.();
     } catch (e) {
       showToast("error", e?.message || "Error guardando.", 4500);
@@ -680,6 +728,8 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     API_BATCH,
     onSaved,
     onClose,
+    archivoAdjunto,
+    subirYVincularArchivo,
   ]);
 
   if (!open) return null;
@@ -740,7 +790,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
                   return (
                     <div key={r.id} className="mi-cr-row mi-cr-row--car">
-                      {/* Detalle */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--desc mi-cr-rel">
                         <input
                           className="fl-input"
@@ -781,7 +830,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                         </button>
                       </div>
 
-                      {/* Cantidad */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--qty mi-cr-center">
                         <input
                           className="fl-input"
@@ -794,7 +842,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                         />
                       </div>
 
-                      {/* Precio */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--price mi-cr-center">
                         <input
                           className="fl-input"
@@ -807,7 +854,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                         />
                       </div>
 
-                      {/* IVA */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--iva mi-cr-center">
                         <select
                           className="fl-input fl-select fl-select-iva--car fl-select-iva--compra"
@@ -826,17 +872,14 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                         </select>
                       </div>
 
-                      {/* IVA monto */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--ivaMonto mi-cr-center">
                         <div className="mi-cr-money mi-cr-money--soft">{moneyARS(r.ivaMonto)}</div>
                       </div>
 
-                      {/* Total */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--total mi-cr-center">
                         <div className="mi-cr-money mi-cr-money--strong">{moneyARS(r.total)}</div>
                       </div>
 
-                      {/* Acción */}
                       <div className="mi-cr-cell mi-cr-col mi-cr-col--action">
                         <button type="button" onClick={() => removeRow(r.id)} disabled={saving} title="Eliminar fila" className="mi-cr-del">
                           ×
@@ -885,7 +928,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
               </div>
 
               <div className="mi-cr-filters__body">
-                {/* Proveedor */}
                 <div className="fl-field mi-cr-rel">
                   <input
                     className="fl-input"
@@ -924,7 +966,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                   </button>
                 </div>
 
-                {/* CUIT */}
                 <div className="fl-field">
                   <input
                     className="fl-input"
@@ -938,7 +979,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                   <label className="fl-label">CUIT Proveedor (opcional)</label>
                 </div>
 
-                {/* Tipo */}
                 <div className="fl-field">
                   <select
                     className="fl-input fl-select"
@@ -953,7 +993,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                   <label className="fl-label">Tipo de compra</label>
                 </div>
 
-                {/* Contado: Medio de pago */}
                 {isContado && (
                   <div className="fl-field">
                     <select
@@ -977,7 +1016,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                   </div>
                 )}
 
-                {/* CUENTA CORRIENTE */}
                 {isCorriente && (
                   <div className="mi-card mi-card--full">
                     <div className="mi-card__title">Cuenta Corriente</div>
@@ -986,6 +1024,36 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                     </div>
                   </div>
                 )}
+
+                {/* NUEVO: archivo adjunto */}
+                <div className="mi-card mi-card--full">
+                  <div className="mi-card__title">Archivo adjunto</div>
+
+                  <input
+                    type="file"
+                    className="fl-input"
+                    onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
+                    disabled={saving}
+                  />
+
+                  <div className="mi-card__hint" style={{ marginTop: 8 }}>
+                    {archivoAdjunto
+                      ? `Seleccionado: ${archivoAdjunto.name}`
+                      : "Podés adjuntar PDF, imagen u otro archivo para que quede vinculado a la compra."}
+                  </div>
+
+                  {archivoAdjunto && (
+                    <button
+                      type="button"
+                      className="mit-btn mit-btn--ghost"
+                      style={{ marginTop: 8 }}
+                      onClick={() => setArchivoAdjunto(null)}
+                      disabled={saving}
+                    >
+                      Quitar archivo
+                    </button>
+                  )}
+                </div>
 
                 <div className="mi-cr-filters__actions">
                   <button type="button" onClick={submit} disabled={saving} className="mit-btn mit-btn--solid mit-btn--block">

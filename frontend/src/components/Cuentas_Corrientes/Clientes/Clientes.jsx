@@ -204,10 +204,15 @@ function getClienteLabel(c) {
   return parts[0] || "";
 }
 
+/* =========================================================
+   ✅ CAMBIO CLAVE
+   Ahora cuentas corrientes usa su propio endpoint:
+   action=cc_comprobante_descargar
+========================================================= */
 function makeComprobanteAccessUrl(row, API) {
   const idComprobante = Number(row?.id_comprobante || 0);
   if (idComprobante > 0) {
-    return `${API}?action=comprobantes_descargar&id_comprobante=${idComprobante}`;
+    return `${API}?action=cc_comprobante_descargar&id_comprobante=${idComprobante}`;
   }
   return resolveFileUrl(row?.comprobante_url);
 }
@@ -440,9 +445,6 @@ export default function ClientesCC() {
     [openSug, suggestions, handleSelect, q, selected, loadHistorial, showToast]
   );
 
-  /* =========================
-     Export functions
-  ========================= */
   const getExportData = useCallback(() => {
     const data = buildExportRows(rows);
     if (!data.length) throw new Error("No hay datos para exportar.");
@@ -607,8 +609,6 @@ export default function ClientesCC() {
               Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
             </div>
           </div>
-
-          
 
           <div className="mov-headFilters">
             <div className="cc-filter cc-filter--cal">

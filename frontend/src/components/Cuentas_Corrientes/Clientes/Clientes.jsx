@@ -608,19 +608,7 @@ export default function ClientesCC() {
             </div>
           </div>
 
-          <div className="cc-headFilters cc-headFilters--tabs">
-            <button type="button" className="cc-btnex cc-btnex--tab is-open">
-              Clientes
-            </button>
-
-            <button
-              type="button"
-              className="cc-btnex cc-btnex--tab"
-              onClick={() => navigate("/panel/cuentas-corrientes/proveedores")}
-            >
-              Proveedores
-            </button>
-          </div>
+          
 
           <div className="mov-headFilters">
             <div className="cc-filter cc-filter--cal">

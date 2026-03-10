@@ -1649,7 +1649,6 @@ padding: 0 !important;
 ========================= */
 .mi-em-form{
   padding: 12px;
-  background: var(--mi-bg-soft);
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -1664,10 +1663,8 @@ padding: 0 !important;
 }
 
 .mi-em-panel{
-  border: 1px solid var(--mi-border);
   border-radius: 14px;
   overflow: hidden;
-  background: #fff;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -3090,6 +3087,9 @@ input[type="number"]::-webkit-outer-spin-button {
 
 /* archivo seleccionado */
 .mi-uploadFile{
+    white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -3122,6 +3122,7 @@ input[type="number"]::-webkit-outer-spin-button {
   min-width: 0;
   white-space: nowrap;
   text-overflow: ellipsis;
+  overflow: hidden;
   font-size: 13px;
   font-weight: 600;
   color: var(--mi-text);

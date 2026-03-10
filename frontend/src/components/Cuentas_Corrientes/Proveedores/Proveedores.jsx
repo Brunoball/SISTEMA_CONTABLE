@@ -1,5 +1,3 @@
-// src/components/Cuentas_Corrientes/Proveedores/Proveedores.jsx
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -99,10 +97,7 @@ function resolveFileUrl(rawUrl) {
 }
 
 function canPreviewComprobante(row) {
-  return (
-    Number(row?.credito || 0) > 0 &&
-    (safeText(row?.comprobante_url) !== "" || Number(row?.id_comprobante || 0) > 0)
-  );
+  return safeText(row?.comprobante_url) !== "" || Number(row?.id_comprobante || 0) > 0;
 }
 
 /* =========================
@@ -203,10 +198,15 @@ function getProveedorLabel(p) {
   return parts[0] || "";
 }
 
+/* =========================================================
+   ✅ CAMBIO CLAVE
+   Ahora cuentas corrientes usa su propio endpoint:
+   action=cc_comprobante_descargar
+========================================================= */
 function makeComprobanteAccessUrl(row, API) {
   const idComprobante = Number(row?.id_comprobante || 0);
   if (idComprobante > 0) {
-    return `${API}?action=comprobantes_descargar&id_comprobante=${idComprobante}`;
+    return `${API}?action=cc_comprobante_descargar&id_comprobante=${idComprobante}`;
   }
   return resolveFileUrl(row?.comprobante_url);
 }
@@ -431,9 +431,6 @@ export default function ProveedoresCC() {
     [openSug, suggestions, handleSelect, q, selected, loadHistorial, showToast]
   );
 
-  /* =========================
-     Export functions
-  ========================= */
   const getExportData = useCallback(() => {
     const data = buildExportRows(rows);
     if (!data.length) throw new Error("No hay datos para exportar.");
@@ -536,7 +533,7 @@ export default function ProveedoresCC() {
       const mime = safeText(row?.comprobante_mime);
 
       if (!accessUrl) {
-        showToast("advertencia", "Este cobro no tiene comprobante asociado.", 2600);
+        showToast("advertencia", "Este registro no tiene comprobante asociado.", 2600);
         return;
       }
 
@@ -576,10 +573,8 @@ export default function ProveedoresCC() {
         }
       />
 
-      {/* ✅ HEAD UNIFICADO — igual que Movimientos */}
       <div className="mov-card__head">
         <div className="mov-card__headLeft">
-
           <div className="title-mov">
             <div className="mov-card__title">Cuentas Corrientes</div>
             <div className="mov-card__hint">
@@ -588,8 +583,6 @@ export default function ProveedoresCC() {
           </div>
 
           <div className="mov-headFilters">
-
-            {/* CALENDARIO */}
             <div className="cc-filter cc-filter--cal">
               <div className={`cc-floatingField cc-floatingField--calendar is-active ${calOpen ? "is-open" : ""}`}>
                 <button
@@ -623,7 +616,6 @@ export default function ProveedoresCC() {
               </div>
             </div>
 
-            {/* BÚSQUEDA */}
             <div className="cc-filter cc-filter--search">
               <div
                 className={`cc-floatingField cc-floatingField--search ${
@@ -692,11 +684,9 @@ export default function ProveedoresCC() {
                 </div>
               </div>
             </div>
-
           </div>
         </div>
 
-        {/* EXPORTAR */}
         <BotonExportar
           disabled={loading || !hasSearched || rows.length === 0}
           loading={false}
@@ -785,13 +775,7 @@ export default function ProveedoresCC() {
                       type="button"
                       onClick={() => verHabilitado && openComprobante(r)}
                       disabled={!verHabilitado}
-                      title={
-                        verHabilitado
-                          ? "Ver comprobante"
-                          : Number(r.credito || 0) > 0
-                          ? "Este cobro no tiene comprobante"
-                          : "Solo disponible en registros de crédito"
-                      }
+                      title={verHabilitado ? "Ver comprobante" : "Este registro no tiene comprobante"}
                       className={`cc-verBtn ${verHabilitado ? "" : "is-disabled"}`}
                     >
                       <FontAwesomeIcon icon={faEye} />

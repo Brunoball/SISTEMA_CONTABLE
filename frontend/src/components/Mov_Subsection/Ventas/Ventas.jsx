@@ -1255,11 +1255,7 @@ export default function Ventas() {
               </div>
 
               <div className="cc-filter">
-                <div
-                  className={`cc-floatingField cc-floatingField--search ${
-                    q.trim() ? "is-active" : ""
-                  }`}
-                >
+<div className="cc-floatingField cc-floatingField--search is-active">
                   <div className="cc-searchInput">
                     <div className="cc-searchInput__fieldWrap">
                       <input
@@ -1281,7 +1277,7 @@ export default function Ventas() {
                             });
                           }
                         }}
-                        placeholder=" "
+                        placeholder="Buscar por descripción, cliente..."
                         disabled={loadingListsCtx || loadingAll}
                       />
 

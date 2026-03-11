@@ -435,13 +435,13 @@ export default function Analisis_Financiero() {
               </div>
 
               {/* Buscador floating */}
-              <div className={`mov-search floatingField floatingField--search ${q.trim() ? "is-active" : ""}`}>
+              <div className= "mov-search floatingField floatingField--search is-active ">
                 <div className="mov-searchInput">
                   <input
                     className="mov-input--floating"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
-                    placeholder=" "
+                    placeholder="Buscar por concepto... "
                     disabled={loading}
                   />
                   <span className="floatingLabel">

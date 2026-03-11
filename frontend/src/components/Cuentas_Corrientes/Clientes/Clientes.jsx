@@ -755,10 +755,7 @@ export default function ClientesCC() {
 
             <div className="cc-filter cc-filter--search">
               <div
-                className={`cc-floatingField cc-floatingField--search ${
-                  openSug || safeText(q) !== "" ? "is-active" : ""
-                }`}
-              >
+                className="cc-floatingField cc-floatingField--search is-active " >
                 <div className="cc-searchInput">
                   <div className="cc-searchInput__fieldWrap">
                     <input
@@ -768,14 +765,14 @@ export default function ClientesCC() {
                       onKeyDown={handleKeyDown}
                       onFocus={() => setOpenSug(true)}
                       onBlur={() => setTimeout(() => setOpenSug(false), 120)}
-                      placeholder=" "
+                      placeholder="Buscar por cliente... "
                       disabled={loading || loadingLists}
                       autoComplete="off"
                     />
 
                     <span className="cc-floatingLabel">
                       <FontAwesomeIcon icon={faMagnifyingGlass} />{" "}
-                      {loadingLists ? "Cargando clientes…" : "Buscar cliente"}
+                      Búsqueda
                     </span>
 
                     {safeText(q) !== "" && !loading && (

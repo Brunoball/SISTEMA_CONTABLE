@@ -947,7 +947,7 @@ export default function OrdenesPago() {
                 )}
               </div>
 
-              <div className={`mov-search floatingField floatingField--search ${q.trim() ? "is-active" : ""}`}>
+              <div className="mov-search floatingField floatingField--search is-active">
                 <div className="mov-searchInput">
                   <input
                     className="mov-input--floating"
@@ -961,7 +961,7 @@ export default function OrdenesPago() {
                         await loadRows({ from: dateRange?.from, to: dateRange?.to, q: e.currentTarget.value, offset: 0, append: false });
                       }
                     }}
-                    placeholder=" "
+                    placeholder="Buscar por descripción, proveedor... "
                     disabled={loadingListsCtx || loadingAll}
                   />
                   <span className="floatingLabel">

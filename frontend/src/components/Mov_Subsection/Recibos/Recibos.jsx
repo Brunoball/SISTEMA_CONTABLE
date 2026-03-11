@@ -1092,7 +1092,7 @@ export default function Recibos() {
                 )}
               </div>
 
-              <div className={`mov-search floatingField floatingField--search ${q.trim() ? "is-active" : ""}`}>
+              <div className="mov-search floatingField floatingField--search is-active">
                 <div className="mov-searchInput">
                   <input
                     className="mov-input--floating"
@@ -1112,7 +1112,7 @@ export default function Recibos() {
                         });
                       }
                     }}
-                    placeholder=" "
+                    placeholder="Buscar por descripción, cliente..."
                     disabled={loadingListsCtx || loadingAll}
                   />
 

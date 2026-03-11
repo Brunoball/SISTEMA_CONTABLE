@@ -779,7 +779,7 @@ useEffect(() => {
                             <div className="mi-card__hint">Consultando datos fiscales…</div>
                           ):!clienteFiscalDb?(
                             <>
-                              <div className="fl-field">
+                              <div className="fl-field Margen-top">
                                 <input className="fl-input" placeholder=" " value={fiscalCuitInput}
                                   onChange={e=>{setFiscalCuitInput(onlyDigits(e.target.value));setFiscalArcaData(null);setFiscalError("");}}
                                   inputMode="numeric" disabled={saving||fiscalLookupLoading} maxLength={11}/>

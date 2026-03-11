@@ -781,7 +781,9 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
     flex: 1 1 220px;
   }
 }
-
+.Margen-top{
+  margin-top: 12px;
+}
 /* Mobile: convertir tabla a cards */
 @media (max-width: 720px) {
   /* Ocultamos el header de tabla */
@@ -1306,6 +1308,7 @@ body.dark .mov-btn--loadAll:hover{
   font-family: inherit;
 }
 #vents-comppr-wit{
+min-width: 250px;
 max-width: 250px;
 }
 .mi-date-field{

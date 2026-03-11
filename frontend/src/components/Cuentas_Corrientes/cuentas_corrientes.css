@@ -196,7 +196,7 @@
   height: 44px;
   border-radius: 10px;
   border: 1.5px solid rgba(10, 37, 64, 0.14);
-  padding: 0 70px 0 14px;
+  padding: 0 0 0 14px;
   outline: none;
   font-weight: 500;
   font-size: 13px;
@@ -583,9 +583,7 @@
   align-items: center;
 }
 
-.cc-searchInput .cc-input{
-  padding-right: 70px;
-}
+
 
 .cc-searchInput__fieldWrap{
   position: relative;

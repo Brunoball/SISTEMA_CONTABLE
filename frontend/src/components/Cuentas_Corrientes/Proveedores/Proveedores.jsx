@@ -723,9 +723,7 @@ export default function ProveedoresCC() {
 
             <div className="cc-filter cc-filter--search">
               <div
-                className={`cc-floatingField cc-floatingField--search ${
-                  openSug || safeText(q) !== "" ? "is-active" : ""
-                }`}
+                className="cc-floatingField cc-floatingField--search is-active"
               >
                 <div className="cc-searchInput">
                   <div className="cc-searchInput__fieldWrap">
@@ -736,14 +734,14 @@ export default function ProveedoresCC() {
                       onKeyDown={handleKeyDown}
                       onFocus={() => setOpenSug(true)}
                       onBlur={() => setTimeout(() => setOpenSug(false), 120)}
-                      placeholder=" "
+                      placeholder="Buscar por proveedor... "
                       disabled={loading || loadingLists}
                       autoComplete="off"
                     />
 
                     <span className="cc-floatingLabel">
                       <FontAwesomeIcon icon={faMagnifyingGlass} />{" "}
-                      {loadingLists ? "Cargando proveedores…" : "Buscar proveedor"}
+                      Búsqueda
                     </span>
 
                     {safeText(q) !== "" && !loading && (

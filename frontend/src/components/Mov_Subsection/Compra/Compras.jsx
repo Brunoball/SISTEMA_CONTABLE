@@ -1122,11 +1122,12 @@ export default function Compras() {
 
   {/* BÚSQUEDA */}
   <div className="cc-filter ">
-    <div className={`cc-floatingField cc-floatingField--search ${q.trim() ? "is-active" : ""}`}>
+    <div className="cc-floatingField cc-floatingField--search is-active">
       <div className="cc-searchInput">
         <div className="cc-searchInput__fieldWrap">
           <input
             className="cc-input cc-input--floating"
+            id="vents-comppr-wit"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={async (e) => {
@@ -1143,7 +1144,7 @@ export default function Compras() {
                 });
               }
             }}
-            placeholder=" "
+            placeholder="Buscar por descripción, proveedor... "
             disabled={loadingListsCtx || loadingAll}
           />
 

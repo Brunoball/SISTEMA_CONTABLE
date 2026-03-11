@@ -902,7 +902,7 @@ const rangeLabel = useMemo(() => {
 
   {/* BÚSQUEDA — igual que Clientes */}
   <div className="cc-filter cc-filter--search">
-    <div className={`cc-floatingField cc-floatingField--search ${q.trim() !== "" ? "is-active" : ""}`}>
+    <div className="cc-floatingField cc-floatingField--search is-active">
       <div className="cc-searchInput">
         <div className="cc-searchInput__fieldWrap">
           <input
@@ -922,7 +922,7 @@ const rangeLabel = useMemo(() => {
                 });
               }
             }}
-            placeholder=" "
+            placeholder="Buscar por descripción, cliente, proveedor... "
             disabled={loadingListsCtx || loadingAll}
             autoComplete="off"
           />

@@ -13,7 +13,7 @@ import "../../Global/Calendario/calendario.css";
 import ModalNuevaCompra from "./modales/ModalNuevaCompra.jsx";
 import ModalEditarCompra from "./modales/ModalEditarCompra.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
-import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
+import ModalEliminarMovimientos from "../../Global/Modales/ModalEliminar.jsx";
 
 // ✅ BOTÓN EXPORTAR GLOBAL (igual que Ventas)
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";

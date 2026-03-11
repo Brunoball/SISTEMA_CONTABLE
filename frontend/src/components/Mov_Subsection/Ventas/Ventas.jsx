@@ -9,8 +9,10 @@ import "../../Global/Calendario/calendario.css";
 
 import ModalNuevaVenta from "./modales/ModalNuevaVenta.jsx";
 import ModalEditarVenta from "./modales/ModalEditarVenta.jsx";
-import ModalEliminarVenta from "./modales/ModalEliminarVenta.jsx";
 import ModalEmitirNotaCreditoVenta from "./modales/ModalEmitirNotaCreditoVenta.jsx";
+
+// ✅ USAMOS EL MODAL GLOBAL
+import ModalEliminar from "../../Global/Modales/ModalEliminar.jsx";
 
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
@@ -943,7 +945,6 @@ export default function Ventas() {
     const id = selectedRow.id_movimiento;
     setDeletingId(id);
     setError("");
-    showToast("cargando", "Eliminando venta…", 12000);
 
     try {
       const { idUsuario } = getAuthInfo();
@@ -958,10 +959,9 @@ export default function Ventas() {
       setSelectedRow(null);
       await reloadVista();
       await refreshPeriodos();
-      showToast("exito", "Venta eliminada.", 2600);
     } catch (e) {
       setError(e.message || "Error eliminando venta.");
-      showToast("error", e.message || "Error eliminando venta.", 4200);
+      throw e;
     } finally {
       setDeletingId(null);
     }
@@ -1044,6 +1044,142 @@ export default function Ventas() {
     },
     [API]
   );
+
+  // ✅ LÓGICA PARA EL MODAL GLOBAL
+  const requiereNC = useMemo(() => {
+    return (
+      Number(selectedRow?.factura_emitida_en_arca || 0) === 1 &&
+      Number(selectedRow?.factura_tiene_nota_credito || 0) !== 1
+    );
+  }, [selectedRow]);
+
+  const yaTieneNC = useMemo(() => {
+    return (
+      Number(selectedRow?.factura_emitida_en_arca || 0) === 1 &&
+      Number(selectedRow?.factura_tiene_nota_credito || 0) === 1
+    );
+  }, [selectedRow]);
+
+  const deleteModalExtraContent = useMemo(() => {
+    if (!selectedRow) return null;
+
+    if (requiereNC) {
+      return (
+        <div
+          style={{
+            background: "#fff7e6",
+            border: "1px solid #ffd591",
+            color: "#8a5a00",
+            borderRadius: 12,
+            padding: 12,
+            marginTop: 10,
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>
+            Esta venta tiene una factura emitida en ARCA
+          </div>
+          <div style={{ lineHeight: 1.5 }}>
+            Antes de eliminarla, primero tenés que emitir una nota de crédito.
+          </div>
+        </div>
+      );
+    }
+
+    if (yaTieneNC) {
+      return (
+        <div
+          style={{
+            background: "#f6ffed",
+            border: "1px solid #b7eb8f",
+            color: "#237804",
+            borderRadius: 12,
+            padding: 12,
+            marginTop: 10,
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>
+            La nota de crédito ya fue emitida
+          </div>
+          <div style={{ lineHeight: 1.5 }}>
+            Ahora ya podés eliminar la venta sin problema.
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  }, [selectedRow, requiereNC, yaTieneNC]);
+
+  const deleteModalConfig = useMemo(() => {
+    const details = [
+      {
+        label: "ID Movimiento",
+        value: `#${selectedRow?.id_movimiento ?? "—"}`,
+      },
+      {
+        label: "Cliente",
+        value: selectedRow?.cliente || "—",
+      },
+      {
+        label: "Concepto",
+        value:
+          selectedRow?.detalle ??
+          selectedRow?.descripcion ??
+          selectedRow?.concepto ??
+          "—",
+      },
+      {
+        label: "Monto",
+        value: moneyARS(
+          selectedRow?.monto_total ??
+            selectedRow?.total ??
+            selectedRow?.total_general ??
+            0
+        ),
+      },
+    ];
+
+    if (requiereNC) {
+      return {
+        title: "No se puede eliminar todavía",
+        message:
+          "Esta venta tiene una factura emitida en ARCA.",
+        warning:
+          "Primero debés generar la nota de crédito correspondiente.",
+        confirmLabel: "Eliminar",
+        confirmDisabled: true,
+        secondaryActionLabel: "Emitir nota de crédito",
+        confirmVariant: "danger",
+        details,
+      };
+    }
+
+    if (yaTieneNC) {
+      return {
+        title: "Eliminar venta",
+        message:
+          "Esta venta ya tiene su nota de crédito asociada.",
+        warning:
+          "Ahora sí podés eliminar el registro definitivamente.",
+        confirmLabel: "Eliminar",
+        confirmDisabled: false,
+        secondaryActionLabel: "",
+        confirmVariant: "danger",
+        details,
+      };
+    }
+
+    return {
+      title: "Eliminar venta",
+      message: "¿Seguro que querés eliminar esta venta definitivamente?",
+      warning: "Esta acción no se puede deshacer.",
+      confirmLabel: "Eliminar",
+      confirmDisabled: false,
+      secondaryActionLabel: "",
+      confirmVariant: "danger",
+      details,
+    };
+  }, [selectedRow, requiereNC, yaTieneNC]);
 
   const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
@@ -1500,7 +1636,7 @@ export default function Ventas() {
         }}
       />
 
-      <ModalEliminarVenta
+      <ModalEliminar
         open={openDel}
         row={selectedRow}
         loading={deletingId === selectedRow?.id_movimiento}
@@ -1508,13 +1644,30 @@ export default function Ventas() {
           setOpenDel(false);
           setSelectedRow(null);
         }}
-        onConfirm={confirmDelete}
-        onEmitNotaCredito={() => {
-          setOpenDel(false);
-          setOpenNC(true);
-        }}
+        onConfirm={requiereNC ? null : confirmDelete}
+        onToast={showToast}
+        title={deleteModalConfig.title}
+        message={deleteModalConfig.message}
+        warning={deleteModalConfig.warning}
+        loadingMessage="Eliminando venta…"
+        successMessage="Venta eliminada."
+        errorMessage="No se pudo eliminar la venta."
+        confirmLabel={deleteModalConfig.confirmLabel}
+        cancelLabel="Cancelar"
+        confirmDisabled={deleteModalConfig.confirmDisabled}
+        confirmVariant={deleteModalConfig.confirmVariant}
+        secondaryActionLabel={deleteModalConfig.secondaryActionLabel}
+        onSecondaryAction={
+          requiereNC
+            ? async () => {
+                setOpenDel(false);
+                setOpenNC(true);
+              }
+            : null
+        }
+        details={deleteModalConfig.details}
+        extraContent={deleteModalExtraContent}
       />
-
       <ModalEmitirNotaCreditoVenta
         open={openNC}
         row={selectedRow}

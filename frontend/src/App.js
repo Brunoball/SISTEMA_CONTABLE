@@ -17,8 +17,10 @@ import Movimientos from "./components/Movimientos/Movimientos";
 import Ventas from "./components/Mov_Subsection/Ventas/Ventas";
 import Compras from "./components/Mov_Subsection/Compra/Compras";
 import Recibos from "./components/Mov_Subsection/Recibos/Recibos";
-import Otrosingresos from "./components/Mov_Subsection/Otrosingresos/Otrosingresos";
-import Otrosegresos from "./components/Mov_Subsection/Otrosegresos/Otrosegresos";
+
+import Otrosingresos from "./components/Mov_Subsection/Otros_Ingresos/Otros_Ingresos";
+import Otrosegresos from "./components/Mov_Subsection/Otros_Egresos/Otros_Egresos";
+
 import OrdenesPago from "./components/Mov_Subsection//OrdenesPago/OrdenesPago";
 import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 

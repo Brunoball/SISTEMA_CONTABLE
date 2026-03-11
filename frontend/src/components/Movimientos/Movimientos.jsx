@@ -6,7 +6,7 @@ import "../Global/Global_css/Global_responsive.css";
 
 // MODALES
 import ModalEditarMovimiento from "./modales/ModalEditarMovimiento";
-import ModalEliminarMovimientos from "./modales/ModalEliminarMovimientos";
+import ModalEliminarMovimientos from "../Global/Modales/ModalEliminar.jsx";
 
 // ✅ FACTURACIÓN: AHORA VA EL MODAL PADRE, NO EL BUSCADOR SOLO
 import ModalFacturaBalto from "../Mov_Subsection/Facturacion/ModalFacturaBalto.jsx";

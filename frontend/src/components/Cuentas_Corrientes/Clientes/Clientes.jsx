@@ -20,7 +20,7 @@ import {
 import Toast from "../../Global/Toast.jsx";
 import Calendario from "../../Global/Calendario/Calendario.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
-import ModalEliminarCobroCC from "../modales/ModalEliminarCobroCC.jsx";
+import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
@@ -100,8 +100,6 @@ function canPreviewComprobante(row) {
   return safeText(row?.comprobante_url) !== "" || Number(row?.id_comprobante || 0) > 0;
 }
 
-// FIX: se eliminó la restricción de tipo_registro === "cobro"
-// Ahora solo requiere que exista un id_cobro válido
 function canDeleteCobro(row) {
   return Number(row?.id_cobro || 0) > 0;
 }
@@ -237,9 +235,6 @@ function makeComprobanteAccessUrl(row, API) {
   return resolveFileUrl(row?.comprobante_url);
 }
 
-/* =========================
-   Component
-========================= */
 export default function ClientesCC() {
   const API = `${BASE_URL}/api.php`;
 
@@ -612,9 +607,9 @@ export default function ClientesCC() {
     [API, showToast]
   );
 
-  // FIX: se eliminó el guard canDeleteCobro(row) para que siempre abra el modal
-  // La validación real ya la hace el botón al renderizar (solo aparece si canDeleteCobro es true)
   const askDeleteCobro = useCallback((row) => {
+    if (!canDeleteCobro(row)) return;
+
     setDeleteState({
       open: true,
       loading: false,
@@ -635,13 +630,12 @@ export default function ClientesCC() {
     const idCobro = Number(row?.id_cobro || 0);
 
     if (idCobro <= 0) {
-      showToast("error", "No se encontró un id_cobro válido.", 3000);
-      return;
+      throw new Error("No se encontró un id_cobro válido.");
     }
 
-    try {
-      setDeleteState((prev) => ({ ...prev, loading: true }));
+    setDeleteState((prev) => ({ ...prev, loading: true }));
 
+    try {
       const data = await apiPost(`${API}?action=cc_eliminar_cobro`, {
         id_cobro: idCobro,
       });
@@ -651,13 +645,12 @@ export default function ClientesCC() {
       }
 
       closeDeleteModal();
-      showToast("exito", "Cobro eliminado correctamente.", 2400);
       await refreshCurrent();
     } catch (e) {
       setDeleteState((prev) => ({ ...prev, loading: false }));
-      showToast("error", e?.message || "Error eliminando el cobro.", 3800);
+      throw e;
     }
-  }, [deleteState.row, API, closeDeleteModal, refreshCurrent, showToast]);
+  }, [deleteState.row, API, closeDeleteModal, refreshCurrent]);
 
   return (
     <div className="contenedor-cards">
@@ -685,19 +678,32 @@ export default function ClientesCC() {
         }
       />
 
-      <ModalEliminarCobroCC
+      <ModalEliminarMovimientos
         open={deleteState.open}
+        row={{
+          ...deleteState.row,
+          id_movimiento: deleteState.row?.id_cobro ?? null,
+          tipo_movimiento: "Cobro CC Cliente",
+          detalle:
+            deleteState.row
+              ? `Comprobante: ${safeText(deleteState.row.comprobante) || "-"} · Fecha: ${
+                  formatDisplayDate(deleteState.row.fecha || deleteState.row.fecha_raw) || "-"
+                }`
+              : "",
+          monto_total: Number(deleteState.row?.credito || 0),
+        }}
         loading={deleteState.loading}
-        title="Eliminar registro de cobro"
-        subtitle={
-          deleteState.row
-            ? `Comprobante: ${safeText(deleteState.row.comprobante) || "-"} · Fecha: ${
-                formatDisplayDate(deleteState.row.fecha || deleteState.row.fecha_raw) || "-"
-              } · Importe: ${moneyARS(deleteState.row.credito || 0)}`
-            : ""
-        }
         onClose={closeDeleteModal}
         onConfirm={confirmDeleteCobro}
+        onToast={showToast}
+        title="Eliminar registro de cobro"
+        message="¿Seguro que querés eliminar solo este cobro de la cuenta corriente?"
+        warning="No se eliminará la deuda ni el movimiento original. Solo el cobro seleccionado."
+        loadingMessage="Eliminando cobro…"
+        successMessage="Cobro eliminado correctamente."
+        errorMessage="No se pudo eliminar el cobro."
+        confirmLabel="Eliminar cobro"
+        cancelLabel="Cancelar"
       />
 
       <div className="mov-card__head">

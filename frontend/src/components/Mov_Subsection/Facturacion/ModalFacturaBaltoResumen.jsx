@@ -8,6 +8,11 @@ import {
   buildBaltoInvoicePdf,
 } from "../../../utils/FacturaPdfBuilder";
 
+import {
+  saveNotaCreditoPdf,
+  buildNotaCreditoPdf,
+} from "../../../utils/NotaCreditoPdfBuilder";
+
 const DOC_TIPOS = [
   { id: 80, label: "CUIT (80)" },
   { id: 96, label: "DNI (96)" },
@@ -61,8 +66,16 @@ function getAuthHeaders(extra = {}) {
     Accept: "application/json",
     ...extra,
   });
-  const sessionKey = String(localStorage.getItem("session_key") || "").trim();
+  const sessionKey = String(
+    localStorage.getItem("session_key") ||
+      localStorage.getItem("sessionKey") ||
+      ""
+  ).trim();
   if (sessionKey) headers.set("X-Session", sessionKey);
+
+  const token = String(localStorage.getItem("token") || "").trim();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
   return headers;
 }
 
@@ -108,6 +121,21 @@ function resolveMovimientoCreateAction(actionProp) {
   return a;
 }
 
+function getCbteLabel(cbteTipo) {
+  const n = Number(cbteTipo || 0);
+  const cod = String(n || 0).padStart(3, "0");
+
+  if (n === 3) return `Nota de Crédito A (${cod})`;
+  if (n === 8) return `Nota de Crédito B (${cod})`;
+  if (n === 13) return `Nota de Crédito C (${cod})`;
+
+  if (n === 1) return `Factura A (${cod})`;
+  if (n === 6) return `Factura B (${cod})`;
+  if (n === 11) return `Factura C (${cod})`;
+
+  return `Comprobante (${cod})`;
+}
+
 export default function ModalFacturaBaltoResumen({
   open,
   onClose,
@@ -125,6 +153,7 @@ export default function ModalFacturaBaltoResumen({
   forceTestAmount = false,
   testAmount = 1000,
   skipMovimientoAutocreacion = false,
+  pdfMode = "factura", // "factura" | "nota_credito"
 }) {
   const [loading, setLoading] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(false);
@@ -136,6 +165,10 @@ export default function ModalFacturaBaltoResumen({
   const firstRef = useRef(null);
 
   const movimientoIdRef = useRef(0);
+
+  const esNotaCredito = pdfMode === "nota_credito";
+  const esCbteNC = [3, 8, 13].includes(Number(cbteTipo || 0));
+  const usarModoNC = esNotaCredito || esCbteNC;
 
   const docLabel = useMemo(() => {
     const it = DOC_TIPOS.find((x) => x.id === Number(docTipo));
@@ -184,7 +217,7 @@ export default function ModalFacturaBaltoResumen({
       fechaISO: fechaCbteISO,
       vtoISO: vtoPagoISO,
       montoTxt: moneyARS(monto),
-      comprobante: `Factura C (${String(cbteTipo || 11).padStart(3, "0")})`,
+      comprobante: getCbteLabel(cbteTipo),
       receptorTxt: doc ? `${docLabel}: ${doc}` : "—",
       pvTxt: pv || "—",
       iva:
@@ -234,63 +267,98 @@ export default function ModalFacturaBaltoResumen({
       setPreviewUrl("");
 
       try {
-        const factMock = {
-          pto_vta: Number(ptoVta) || 2,
-          cbte_tipo: Number(cbteTipo) || 11,
-          cbte_nro: 1,
-          fecha_cbte: isoToYmd8(
-            fechaCbteISO || new Date().toISOString().slice(0, 10)
-          ),
-          imp_total: Number(monto) || 0,
-          importe: Number(monto) || 0,
-          cae: "00000000000000",
-          cae_vto: isoToYmd8(
-            vtoPagoISO || new Date().toISOString().slice(0, 10)
-          ),
-          resultado: "P",
-          qr_url: "",
-          qr_base64: "",
-          qr_payload: null,
-          emisor_nombre: emisorNombre || "BALTO",
-          emisor_domicilio: emisorDomicilio || "",
-          cuit_emisor: emisorCuit || "",
-          cond_iva_emisor: emisorCondIva || "",
-          ingresos_brutos_emisor: emisorIibb || "",
-          fecha_inicio_actividades_emisor: emisorFechaInicio || "",
-          receptor_nombre:
-            data?.cliente_facturacion?.razon_social || nombreCliente,
-          receptor_domicilio:
-            data?.cliente_facturacion?.domicilio ||
-            data?.cliente_domicilio ||
-            "",
-          cond_iva_receptor:
-            data?.cliente_facturacion?.cond_iva ||
-            data?.cliente_facturacion?.condicion_iva ||
-            "",
-          doc_tipo: Number(docTipo),
-          doc_nro: String(docNro || "").replace(/\D/g, ""),
-        };
-
-        const doc = await buildBaltoInvoicePdf({
-          fact: factMock,
-          data: {
+        if (usarModoNC) {
+          const built = await buildNotaCreditoPdf({
             ...data,
             labelCliente: nombreCliente,
             labelSistema: nombreSistema,
-            fecha_cbte: isoToYmd8(fechaCbteISO),
-            vto_pago: isoToYmd8(vtoPagoISO),
+            fecha_cbte_iso: fechaCbteISO || new Date().toISOString().slice(0, 10),
+            fecha_cbte: fechaCbteISO || new Date().toISOString().slice(0, 10),
+            vto_pago_iso: vtoPagoISO || new Date().toISOString().slice(0, 10),
             total_ars: monto,
             monto,
             importe: monto,
+            cbte_tipo: Number(cbteTipo) || 13,
+            pto_vta: Number(ptoVta) || 2,
+            cliente_facturacion: data?.cliente_facturacion || {},
             items_facturacion: items,
-          },
-          forceTestAmount,
-          testAmount,
-        });
+            emisor_nombre: emisorNombre || "BALTO",
+            emisor_domicilio: emisorDomicilio || "",
+            cuit_emisor: emisorCuit || "",
+            cond_iva_emisor: emisorCondIva || "",
+            ingresos_brutos_emisor: emisorIibb || "",
+            fecha_inicio_actividades_emisor: emisorFechaInicio || "",
+            observaciones: data?.observaciones || "",
+            factura_original: data?.factura_original || null,
+            cae: "",
+            cae_vto: "",
+            resultado: "P",
+            cbte_nro: 0,
+            qr_url: "",
+            qr_base64: "",
+            qr_payload: null,
+          });
 
-        const blob = doc.output("blob");
-        revokeUrl = URL.createObjectURL(blob);
-        setPreviewUrl(revokeUrl);
+          const blob = built?.blob instanceof Blob ? built.blob : null;
+          if (!blob) throw new Error("No se pudo generar preview de NC.");
+
+          revokeUrl = URL.createObjectURL(blob);
+          setPreviewUrl(revokeUrl);
+        } else {
+          const factMock = {
+            pto_vta: Number(ptoVta) || 2,
+            cbte_tipo: Number(cbteTipo) || 11,
+            cbte_nro: 1,
+            fecha_cbte: isoToYmd8(fechaCbteISO || new Date().toISOString().slice(0, 10)),
+            imp_total: Number(monto) || 0,
+            importe: Number(monto) || 0,
+            cae: "00000000000000",
+            cae_vto: isoToYmd8(vtoPagoISO || new Date().toISOString().slice(0, 10)),
+            resultado: "P",
+            qr_url: "",
+            qr_base64: "",
+            qr_payload: null,
+            emisor_nombre: emisorNombre || "BALTO",
+            emisor_domicilio: emisorDomicilio || "",
+            cuit_emisor: emisorCuit || "",
+            cond_iva_emisor: emisorCondIva || "",
+            ingresos_brutos_emisor: emisorIibb || "",
+            fecha_inicio_actividades_emisor: emisorFechaInicio || "",
+            receptor_nombre:
+              data?.cliente_facturacion?.razon_social || nombreCliente,
+            receptor_domicilio:
+              data?.cliente_facturacion?.domicilio ||
+              data?.cliente_domicilio ||
+              "",
+            cond_iva_receptor:
+              data?.cliente_facturacion?.cond_iva ||
+              data?.cliente_facturacion?.condicion_iva ||
+              "",
+            doc_tipo: Number(docTipo),
+            doc_nro: String(docNro || "").replace(/\D/g, ""),
+          };
+
+          const doc = await buildBaltoInvoicePdf({
+            fact: factMock,
+            data: {
+              ...data,
+              labelCliente: nombreCliente,
+              labelSistema: nombreSistema,
+              fecha_cbte: isoToYmd8(fechaCbteISO),
+              vto_pago: isoToYmd8(vtoPagoISO),
+              total_ars: monto,
+              monto,
+              importe: monto,
+              items_facturacion: items,
+            },
+            forceTestAmount,
+            testAmount,
+          });
+
+          const blob = doc.output("blob");
+          revokeUrl = URL.createObjectURL(blob);
+          setPreviewUrl(revokeUrl);
+        }
       } catch (e) {
         console.warn("Preview PDF:", e?.message || e);
         setPreviewUrl("");
@@ -325,6 +393,7 @@ export default function ModalFacturaBaltoResumen({
     emisorCondIva,
     emisorIibb,
     emisorFechaInicio,
+    usarModoNC,
   ]);
 
   const toText = useCallback((v) => {
@@ -540,23 +609,24 @@ export default function ModalFacturaBaltoResumen({
       estado,
       emitidoEnArca = false,
       idMovimiento,
+      tipo = "FACTURA",
     }) => {
       const idMovPrincipal = Number(idMovimiento || 0);
       if (idMovPrincipal <= 0) {
-        throw new Error("No hay id_movimiento válido para vincular la factura.");
+        throw new Error("No hay id_movimiento válido para vincular el comprobante.");
       }
 
       const fd = new FormData();
-      fd.append("tipo", "FACTURA");
+      fd.append("tipo", tipo);
       fd.append("id_movimiento", String(idMovPrincipal));
       fd.append(
         "pdf",
         blob instanceof Blob ? blob : new Blob([blob], { type: "application/pdf" }),
-        filename || "factura.pdf"
+        filename || (tipo === "NOTA_CREDITO" ? "nota_credito.pdf" : "factura.pdf")
       );
 
       const meta = {
-        tipo: "FACTURA",
+        tipo,
         estado: String(estado || "").trim() || "solo_pdf",
         emitido_en_arca: emitidoEnArca ? 1 : 0,
 
@@ -673,96 +743,169 @@ export default function ModalFacturaBaltoResumen({
 
       const importeFinal = forceTestAmount ? Number(testAmount) : Number(monto);
 
-      const factPdfOnly = {
-        modo: "pdf_only",
-        pto_vta: v.pvN,
-        cbte_tipo: Number(cbteTipo),
-        cbte_nro: 0,
-        fecha_cbte: isoToYmd8(fechaCbteISO),
-        imp_total: importeFinal,
-        importe: importeFinal,
-        cae: "",
-        cae_vto: "",
-        resultado: "",
-        qr_url: "",
-        qr_base64: "",
-        qr_payload: null,
-        anio: v.anio,
-        id_mes: v.id_mes,
-        doc_tipo: Number(docTipo),
-        doc_nro: v.docN,
-        emisor_nombre: emisorNombre || "BALTO",
-        emisor_domicilio: emisorDomicilio || "",
-        cuit_emisor: emisorCuit || "",
-        cond_iva_emisor: emisorCondIva || "",
-        ingresos_brutos_emisor: emisorIibb || "",
-        fecha_inicio_actividades_emisor: emisorFechaInicio || "",
-        receptor_nombre: data?.cliente_facturacion?.razon_social || nombreCliente,
-        receptor_domicilio:
-          data?.cliente_facturacion?.domicilio || data?.cliente_domicilio || "",
-        cond_iva_receptor:
-          data?.cliente_facturacion?.cond_iva ||
-          data?.cliente_facturacion?.condicion_iva ||
-          "",
-      };
-
-      const out = await saveBaltoInvoicePdf({
-        fact: factPdfOnly,
-        data: {
+      if (usarModoNC) {
+        const pdfData = {
           ...data,
           id_movimiento: idMovimiento,
+          total_ars: importeFinal,
           monto: importeFinal,
           importe: importeFinal,
-          total_ars: importeFinal,
-          fecha_cbte: isoToYmd8(fechaCbteISO),
-          vto_pago: isoToYmd8(vtoPagoISO),
-          labelCliente: nombreCliente,
-          labelSistema: nombreSistema,
+          cbte_tipo: Number(cbteTipo) || 13,
+          pto_vta: Number(ptoVta) || 2,
+          fecha_cbte_iso: fechaCbteISO,
+          fecha_cbte: fechaCbteISO,
+          vto_pago_iso: vtoPagoISO,
+          cliente_facturacion: data?.cliente_facturacion || {},
           items_facturacion: items,
-        },
-        forceTestAmount,
-        testAmount,
-        download: true,
-      });
+          observaciones: data?.observaciones || "",
+          emisor_nombre: emisorNombre || "BALTO",
+          emisor_domicilio: emisorDomicilio || "",
+          cuit_emisor: emisorCuit || "",
+          cond_iva_emisor: emisorCondIva || "",
+          ingresos_brutos_emisor: emisorIibb || "",
+          fecha_inicio_actividades_emisor: emisorFechaInicio || "",
+          factura_original: data?.factura_original || null,
+          cbte_nro: 0,
+          cae: "",
+          cae_vto: "",
+          resultado: "",
+          qr_url: "",
+          qr_base64: "",
+          qr_payload: null,
+        };
 
-      const blob =
-        out?.blob instanceof Blob ? out.blob : out instanceof Blob ? out : null;
-      const filename = out?.filename || "factura.pdf";
+        const out = await saveNotaCreditoPdf(pdfData, { autoDownload: true });
+        const blob = out?.pdfBlob instanceof Blob ? out.pdfBlob : null;
+        const filename = out?.pdfFilename || "nota_credito.pdf";
 
-      let idComprobante = null;
+        let idComprobante = null;
 
-      if (!skipMovimientoAutocreacion && blob && idMovimiento) {
-        const dbResp = await guardarFacturaEnDB({
-          blob,
-          filename,
-          fact: {
-            ...factPdfOnly,
-            anio: v.anio,
-            id_mes: v.id_mes,
+        if (!skipMovimientoAutocreacion && blob && idMovimiento) {
+          const dbResp = await guardarFacturaEnDB({
+            blob,
+            filename,
+            fact: {
+              ...pdfData,
+              anio: v.anio,
+              id_mes: v.id_mes,
+              importe: importeFinal,
+              fecha_cbte: fechaCbteISO,
+            },
+            estado: "solo_pdf",
+            emitidoEnArca: false,
+            idMovimiento,
+            tipo: "NOTA_CREDITO",
+          });
+
+          idComprobante =
+            dbResp?.id_comprobante ??
+            dbResp?.comprobante?.id_comprobante ??
+            null;
+        }
+
+        const factFinal = {
+          ...pdfData,
+          emitido_en_arca: 0,
+          id_movimiento: idMovimiento,
+          id_comprobante: idComprobante,
+          pdf_blob: blob || null,
+          pdf_filename: filename,
+        };
+
+        await finalizarUnaSolaVez(factFinal);
+      } else {
+        const factPdfOnly = {
+          modo: "pdf_only",
+          pto_vta: v.pvN,
+          cbte_tipo: Number(cbteTipo),
+          cbte_nro: 0,
+          fecha_cbte: isoToYmd8(fechaCbteISO),
+          imp_total: importeFinal,
+          importe: importeFinal,
+          cae: "",
+          cae_vto: "",
+          resultado: "",
+          qr_url: "",
+          qr_base64: "",
+          qr_payload: null,
+          anio: v.anio,
+          id_mes: v.id_mes,
+          doc_tipo: Number(docTipo),
+          doc_nro: v.docN,
+          emisor_nombre: emisorNombre || "BALTO",
+          emisor_domicilio: emisorDomicilio || "",
+          cuit_emisor: emisorCuit || "",
+          cond_iva_emisor: emisorCondIva || "",
+          ingresos_brutos_emisor: emisorIibb || "",
+          fecha_inicio_actividades_emisor: emisorFechaInicio || "",
+          receptor_nombre: data?.cliente_facturacion?.razon_social || nombreCliente,
+          receptor_domicilio:
+            data?.cliente_facturacion?.domicilio || data?.cliente_domicilio || "",
+          cond_iva_receptor:
+            data?.cliente_facturacion?.cond_iva ||
+            data?.cliente_facturacion?.condicion_iva ||
+            "",
+        };
+
+        const out = await saveBaltoInvoicePdf({
+          fact: factPdfOnly,
+          data: {
+            ...data,
+            id_movimiento: idMovimiento,
+            monto: importeFinal,
             importe: importeFinal,
-            fecha_cbte: factPdfOnly.fecha_cbte || isoToYmd8(fechaCbteISO),
+            total_ars: importeFinal,
+            fecha_cbte: isoToYmd8(fechaCbteISO),
+            vto_pago: isoToYmd8(vtoPagoISO),
+            labelCliente: nombreCliente,
+            labelSistema: nombreSistema,
+            items_facturacion: items,
           },
-          estado: "solo_pdf",
-          emitidoEnArca: false,
-          idMovimiento,
+          forceTestAmount,
+          testAmount,
+          download: true,
         });
 
-        idComprobante =
-          dbResp?.id_comprobante ??
-          dbResp?.comprobante?.id_comprobante ??
-          null;
+        const blob =
+          out?.blob instanceof Blob ? out.blob : out instanceof Blob ? out : null;
+        const filename = out?.filename || "factura.pdf";
+
+        let idComprobante = null;
+
+        if (!skipMovimientoAutocreacion && blob && idMovimiento) {
+          const dbResp = await guardarFacturaEnDB({
+            blob,
+            filename,
+            fact: {
+              ...factPdfOnly,
+              anio: v.anio,
+              id_mes: v.id_mes,
+              importe: importeFinal,
+              fecha_cbte: factPdfOnly.fecha_cbte || isoToYmd8(fechaCbteISO),
+            },
+            estado: "solo_pdf",
+            emitidoEnArca: false,
+            idMovimiento,
+            tipo: "FACTURA",
+          });
+
+          idComprobante =
+            dbResp?.id_comprobante ??
+            dbResp?.comprobante?.id_comprobante ??
+            null;
+        }
+
+        const factFinal = {
+          ...factPdfOnly,
+          emitido_en_arca: 0,
+          id_movimiento: idMovimiento,
+          id_comprobante: idComprobante,
+          pdf_blob: blob || null,
+          pdf_filename: filename,
+        };
+
+        await finalizarUnaSolaVez(factFinal);
       }
-
-      const factFinal = {
-        ...factPdfOnly,
-        emitido_en_arca: 0,
-        id_movimiento: idMovimiento,
-        id_comprobante: idComprobante,
-        pdf_blob: blob || null,
-        pdf_filename: filename,
-      };
-
-      await finalizarUnaSolaVez(factFinal);
 
       onClose?.();
       onCloseAll?.();
@@ -797,6 +940,8 @@ export default function ModalFacturaBaltoResumen({
     finalizarUnaSolaVez,
     onClose,
     onCloseAll,
+    usarModoNC,
+    ptoVta,
   ]);
 
   const emitir = useCallback(async () => {
@@ -818,6 +963,7 @@ export default function ModalFacturaBaltoResumen({
           id_movimiento: idMovimiento,
           id_pago: v.id_pago,
           id_sistema: v.id_sistema,
+
           cliente_facturacion: {
             doc_tipo: Number(docTipo),
             doc_nro: String(v.docN),
@@ -857,8 +1003,12 @@ export default function ModalFacturaBaltoResumen({
           vto_pago_iso: vtoPagoISO,
           fecha_cbte: isoToYmd8(fechaCbteISO),
           vto_pago: isoToYmd8(vtoPagoISO),
+
           items_facturacion: items,
           observaciones: data?.observaciones || "",
+          concepto: data?.concepto ?? 1,
+
+          cbtes_asoc: Array.isArray(data?.cbtes_asoc) ? data.cbtes_asoc : [],
 
           emisor_nombre: emisorNombre || null,
           emisor_domicilio: emisorDomicilio || null,
@@ -887,94 +1037,172 @@ export default function ModalFacturaBaltoResumen({
         throw new Error("ARCA no devolvió CAE.");
       }
 
-      const out = await saveBaltoInvoicePdf({
-        fact: {
-          ...fact,
-          anio: v.anio,
-          id_mes: v.id_mes,
-          importe: Number(fact?.imp_total || monto),
-          imp_total: Number(fact?.imp_total || monto),
-          fecha_cbte: fact?.fecha_cbte || isoToYmd8(fechaCbteISO),
-          cae_vto: fact?.cae_vto || isoToYmd8(vtoPagoISO),
-          emisor_nombre: emisorNombre || fact?.emisor_nombre,
-          emisor_domicilio: emisorDomicilio || fact?.emisor_domicilio,
-          cuit_emisor: emisorCuit || fact?.cuit_emisor,
-          cond_iva_emisor: emisorCondIva || fact?.cond_iva_emisor,
-          ingresos_brutos_emisor: emisorIibb || fact?.ingresos_brutos_emisor,
-          fecha_inicio_actividades_emisor:
-            emisorFechaInicio || fact?.fecha_inicio_actividades_emisor,
-          receptor_nombre:
-            data?.cliente_facturacion?.razon_social || fact?.receptor_nombre,
-          receptor_domicilio:
-            data?.cliente_facturacion?.domicilio || fact?.receptor_domicilio,
-          cond_iva_receptor:
-            data?.cliente_facturacion?.cond_iva ||
-            data?.cliente_facturacion?.condicion_iva ||
-            fact?.cond_iva_receptor,
-        },
-        data: {
+      if (usarModoNC) {
+        const pdfData = {
           ...data,
           id_movimiento: idMovimiento,
           labelCliente: nombreCliente,
           labelSistema: nombreSistema,
-          fecha_cbte: isoToYmd8(fact?.fecha_cbte || fechaCbteISO),
-          vto_pago: isoToYmd8(vtoPagoISO),
-          items_facturacion: items,
+          fecha_cbte_iso: fact?.fecha_cbte || fechaCbteISO,
+          fecha_cbte: fact?.fecha_cbte || fechaCbteISO,
+          vto_pago_iso: vtoPagoISO,
           total_ars: Number(fact?.imp_total || monto),
           monto: Number(fact?.imp_total || monto),
           importe: Number(fact?.imp_total || monto),
-        },
-        forceTestAmount,
-        testAmount,
-        download: true,
-      });
+          cbte_tipo: Number(fact?.cbte_tipo || cbteTipo || 13),
+          pto_vta: Number(fact?.pto_vta || ptoVta || 2),
+          cbte_nro: Number(fact?.cbte_nro || 0),
+          cae: fact?.cae || "",
+          cae_vto: fact?.cae_vto || "",
+          resultado: fact?.resultado || "",
+          qr_url: fact?.qr_url || "",
+          qr_base64: fact?.qr_base64 || "",
+          qr_payload: fact?.qr_payload || null,
+          cliente_facturacion: data?.cliente_facturacion || {},
+          items_facturacion: items,
+          observaciones: data?.observaciones || "",
+          emisor_nombre: emisorNombre || "BALTO",
+          emisor_domicilio: emisorDomicilio || "",
+          cuit_emisor: emisorCuit || "",
+          cond_iva_emisor: emisorCondIva || "",
+          ingresos_brutos_emisor: emisorIibb || "",
+          fecha_inicio_actividades_emisor: emisorFechaInicio || "",
+          factura_original: data?.factura_original || null,
+        };
 
-      const blob =
-        out?.blob instanceof Blob ? out.blob : out instanceof Blob ? out : null;
-      const filename = out?.filename || "factura.pdf";
-      if (!blob) throw new Error("No se pudo generar el PDF.");
+        const out = await saveNotaCreditoPdf(pdfData, { autoDownload: true });
+        const blob = out?.pdfBlob instanceof Blob ? out.pdfBlob : null;
+        const filename = out?.pdfFilename || "nota_credito.pdf";
+        if (!blob) throw new Error("No se pudo generar el PDF de la nota de crédito.");
 
-      let idComprobante = null;
+        let idComprobante = null;
 
-      if (!skipMovimientoAutocreacion && idMovimiento) {
-        const dbResp = await guardarFacturaEnDB({
-          blob,
-          filename,
+        if (!skipMovimientoAutocreacion && idMovimiento) {
+          const dbResp = await guardarFacturaEnDB({
+            blob,
+            filename,
+            fact: {
+              ...fact,
+              json_arca: fact?.raw_min || fact || null,
+              anio: v.anio,
+              id_mes: v.id_mes,
+              importe: Number(fact?.imp_total || monto),
+              fecha_cbte: fact?.fecha_cbte || isoToYmd8(fechaCbteISO),
+            },
+            estado: "emitida",
+            emitidoEnArca: true,
+            idMovimiento,
+            tipo: "NOTA_CREDITO",
+          });
+
+          idComprobante =
+            dbResp?.id_comprobante ??
+            dbResp?.comprobante?.id_comprobante ??
+            null;
+        }
+
+        const factFinal = {
+          ...fact,
+          emitido_en_arca: 1,
+          json_arca: fact?.raw_min || fact || null,
+          id_movimiento: idMovimiento,
+          id_comprobante: idComprobante,
+          pdf_blob: blob,
+          pdf_filename: filename,
+        };
+
+        await finalizarUnaSolaVez(factFinal);
+      } else {
+        const out = await saveBaltoInvoicePdf({
           fact: {
             ...fact,
-            json_arca: fact?.raw_min || fact || null,
             anio: v.anio,
             id_mes: v.id_mes,
             importe: Number(fact?.imp_total || monto),
+            imp_total: Number(fact?.imp_total || monto),
             fecha_cbte: fact?.fecha_cbte || isoToYmd8(fechaCbteISO),
+            cae_vto: fact?.cae_vto || isoToYmd8(vtoPagoISO),
+            emisor_nombre: emisorNombre || fact?.emisor_nombre,
+            emisor_domicilio: emisorDomicilio || fact?.emisor_domicilio,
+            cuit_emisor: emisorCuit || fact?.cuit_emisor,
+            cond_iva_emisor: emisorCondIva || fact?.cond_iva_emisor,
+            ingresos_brutos_emisor: emisorIibb || fact?.ingresos_brutos_emisor,
+            fecha_inicio_actividades_emisor:
+              emisorFechaInicio || fact?.fecha_inicio_actividades_emisor,
+            receptor_nombre:
+              data?.cliente_facturacion?.razon_social || fact?.receptor_nombre,
+            receptor_domicilio:
+              data?.cliente_facturacion?.domicilio || fact?.receptor_domicilio,
+            cond_iva_receptor:
+              data?.cliente_facturacion?.cond_iva ||
+              data?.cliente_facturacion?.condicion_iva ||
+              fact?.cond_iva_receptor,
           },
-          estado: "emitida",
-          emitidoEnArca: true,
-          idMovimiento,
+          data: {
+            ...data,
+            id_movimiento: idMovimiento,
+            labelCliente: nombreCliente,
+            labelSistema: nombreSistema,
+            fecha_cbte: isoToYmd8(fact?.fecha_cbte || fechaCbteISO),
+            vto_pago: isoToYmd8(vtoPagoISO),
+            items_facturacion: items,
+            total_ars: Number(fact?.imp_total || monto),
+            monto: Number(fact?.imp_total || monto),
+            importe: Number(fact?.imp_total || monto),
+          },
+          forceTestAmount,
+          testAmount,
+          download: true,
         });
 
-        idComprobante =
-          dbResp?.id_comprobante ??
-          dbResp?.comprobante?.id_comprobante ??
-          null;
+        const blob =
+          out?.blob instanceof Blob ? out.blob : out instanceof Blob ? out : null;
+        const filename = out?.filename || "factura.pdf";
+        if (!blob) throw new Error("No se pudo generar el PDF.");
+
+        let idComprobante = null;
+
+        if (!skipMovimientoAutocreacion && idMovimiento) {
+          const dbResp = await guardarFacturaEnDB({
+            blob,
+            filename,
+            fact: {
+              ...fact,
+              json_arca: fact?.raw_min || fact || null,
+              anio: v.anio,
+              id_mes: v.id_mes,
+              importe: Number(fact?.imp_total || monto),
+              fecha_cbte: fact?.fecha_cbte || isoToYmd8(fechaCbteISO),
+            },
+            estado: "emitida",
+            emitidoEnArca: true,
+            idMovimiento,
+            tipo: "FACTURA",
+          });
+
+          idComprobante =
+            dbResp?.id_comprobante ??
+            dbResp?.comprobante?.id_comprobante ??
+            null;
+        }
+
+        const factFinal = {
+          ...fact,
+          emitido_en_arca: 1,
+          json_arca: fact?.raw_min || fact || null,
+          id_movimiento: idMovimiento,
+          id_comprobante: idComprobante,
+          pdf_blob: blob,
+          pdf_filename: filename,
+        };
+
+        await finalizarUnaSolaVez(factFinal);
       }
-
-      const factFinal = {
-        ...fact,
-        emitido_en_arca: 1,
-        json_arca: fact?.raw_min || fact || null,
-        id_movimiento: idMovimiento,
-        id_comprobante: idComprobante,
-        pdf_blob: blob,
-        pdf_filename: filename,
-      };
-
-      await finalizarUnaSolaVez(factFinal);
 
       onClose?.();
       onCloseAll?.();
     } catch (e) {
-      setError(e?.message || "No se pudo emitir la factura.");
+      setError(e?.message || "No se pudo emitir el comprobante.");
     } finally {
       setLoading(false);
     }
@@ -1006,6 +1234,8 @@ export default function ModalFacturaBaltoResumen({
     finalizarUnaSolaVez,
     onClose,
     onCloseAll,
+    usarModoNC,
+    ptoVta,
   ]);
 
   if (!open) return null;
@@ -1029,7 +1259,9 @@ export default function ModalFacturaBaltoResumen({
       >
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
-            <h2 className="mi-modal__title">Resumen antes de emitir</h2>
+            <h2 className="mi-modal__title">
+              {usarModoNC ? "Resumen antes de emitir nota de crédito" : "Resumen antes de emitir"}
+            </h2>
             <p className="mi-modal__subtitle">
               Confirmá datos → Vista previa → Descargar PDF o Emitir + PDF
             </p>
@@ -1052,7 +1284,7 @@ export default function ModalFacturaBaltoResumen({
               className={`mfb-tab ${tabActiva === "resumen" ? "is-active" : ""}`}
               onClick={() => setTabActiva("resumen")}
             >
-              Resumen de facturación
+              {usarModoNC ? "Resumen de nota de crédito" : "Resumen de facturación"}
             </button>
 
             <button
@@ -1075,7 +1307,9 @@ export default function ModalFacturaBaltoResumen({
               <div className="mi-card">
                 <div className="arca-alert arca-alert--info">
                   <div className="arca-alert__title">
-                    <strong>Resumen de facturación</strong>
+                    <strong>
+                      {usarModoNC ? "Resumen de nota de crédito" : "Resumen de facturación"}
+                    </strong>
                   </div>
 
                   <div className="arca-resumen-grid">
@@ -1145,9 +1379,11 @@ export default function ModalFacturaBaltoResumen({
           )}
 
           {tabActiva === "preview" && (
-            <div className="mi-tabpanel ">
+            <div className="mi-tabpanel">
               <div className="mi-card">
-                <h3 className="mi-card__title">Vista previa del PDF</h3>
+                <h3 className="mi-card__title">
+                  {usarModoNC ? "Vista previa de nota de crédito" : "Vista previa del PDF"}
+                </h3>
 
                 {loadingPreview ? (
                   <div className="arca-alert arca-alert--info">
@@ -1155,7 +1391,7 @@ export default function ModalFacturaBaltoResumen({
                   </div>
                 ) : previewUrl ? (
                   <iframe
-                    title="Vista previa factura PDF"
+                    title={usarModoNC ? "Vista previa nota de crédito PDF" : "Vista previa factura PDF"}
                     src={previewUrl}
                     className="mfb-preview"
                   />
@@ -1194,7 +1430,7 @@ export default function ModalFacturaBaltoResumen({
               disabled={loading || loadingPdf || !confirm}
             >
               {loading ? (
-                "Emitiendo..."
+                usarModoNC ? "Emitiendo nota de crédito..." : "Emitiendo..."
               ) : (
                 <>
                   Emitir + PDF <FaCheck className="mfb-icon" />

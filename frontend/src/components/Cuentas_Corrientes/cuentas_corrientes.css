@@ -811,14 +811,14 @@
 .cc-cliente-table__head,
 .cc-cliente-table__row{
   display: grid;
-  grid-template-columns: .8fr 2.2fr 1fr 1fr 1fr .7fr;
+  grid-template-columns: 0.8fr 2.2fr 1fr 1fr 1fr 1fr;
   gap: 0;
   align-items: center;
 }
 
 .cc-cliente-table__totals{
   display: grid;
-  grid-template-columns: 0.8fr 2.2fr 1fr 1fr 1fr 0.7fr;
+  grid-template-columns: 0.8fr 2.2fr 1fr 1fr 1fr 1fr;
   background: #f8fafc;
   font-weight: 700;
   overflow: auto;

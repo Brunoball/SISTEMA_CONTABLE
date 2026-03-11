@@ -17,6 +17,8 @@ import Movimientos from "./components/Movimientos/Movimientos";
 import Ventas from "./components/Mov_Subsection/Ventas/Ventas";
 import Compras from "./components/Mov_Subsection/Compra/Compras";
 import Recibos from "./components/Mov_Subsection/Recibos/Recibos";
+import Otrosingresos from "./components/Mov_Subsection/Otrosingresos/Otrosingresos";
+import Otrosegresos from "./components/Mov_Subsection/Otrosegresos/Otrosegresos";
 import OrdenesPago from "./components/Mov_Subsection//OrdenesPago/OrdenesPago";
 import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 
@@ -120,12 +122,14 @@ export default function App() {
           <Route path="compras" element={<Compras />} />
           <Route path="recibos" element={<Recibos />} />
           <Route path="OrdenesPago" element={<OrdenesPago />} />
+          <Route path="Otrosingresos" element={<Otrosingresos />} />
+          <Route path="Otrosegresos" element={<Otrosegresos />} />
 
           <Route path="flujo-de-caja" element={<Flujo_Caja />} />
 
           {/* ✅ Cuentas Corrientes con sub-rutas */}
-<Route path="cuentas-corrientes/clientes" element={<ClientesCC />} />
-<Route path="cuentas-corrientes/proveedores" element={<ProveedoresCC />} />
+          <Route path="cuentas-corrientes/clientes" element={<ClientesCC />} />
+          <Route path="cuentas-corrientes/proveedores" element={<ProveedoresCC />} />
 
           <Route path="analisis-financiero" element={<AnalisisFinanciero />} />
         </Route>

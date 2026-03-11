@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
 import BASE_URL from "../../../../config/config";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faFileInvoiceDollar } from "@fortawesome/free-solid-svg-icons";
 
 const NULL_OPTION = "";
 const ADD_OPTION = "__ADD__";
@@ -44,11 +46,13 @@ function normalizeText(s) {
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 }
+
 function buildSingleCuentaCorrienteOption(arrRaw) {
   const arr = Array.isArray(arrRaw) ? arrRaw : [];
   if (!arr.length) return { list: [], pickedId: null };
 
-  const hit = arr.find((x) => normalizeText(x?.nombre).includes("cuenta corriente")) || arr[0];
+  const hit =
+    arr.find((x) => normalizeText(x?.nombre).includes("cuenta corriente")) || arr[0];
   const pickedId = getGenericId(hit);
   if (!pickedId) return { list: [], pickedId: null };
 
@@ -70,7 +74,13 @@ function getAuthInfo() {
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
@@ -78,7 +88,7 @@ function getAuthInfo() {
 }
 
 /* =========================
-   API helper
+   API helpers
 ========================= */
 async function parseJsonOrThrow(res) {
   const text = await res.text();
@@ -89,7 +99,9 @@ async function parseJsonOrThrow(res) {
     data = JSON.parse(text);
   } catch {
     const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-    throw new Error(`Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`);
+    throw new Error(
+      `Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`
+    );
   }
 
   if (!res.ok) {
@@ -99,18 +111,30 @@ async function parseJsonOrThrow(res) {
   return data;
 }
 
-async function apiPostJson(url, payload) {
+function buildHeaders(isJson = true) {
   const { token, sessionKey } = getAuthInfo();
-  const headers = { "Content-Type": "application/json" };
+  const headers = {};
+  if (isJson) headers["Content-Type"] = "application/json";
   if (sessionKey) headers["X-Session"] = sessionKey;
   else if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
 
+async function apiPostJson(url, payload) {
   const res = await fetch(url, {
     method: "POST",
-    headers,
+    headers: buildHeaders(true),
     body: JSON.stringify(payload ?? {}),
   });
+  return await parseJsonOrThrow(res);
+}
 
+async function apiPostForm(url, formData) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: buildHeaders(false),
+    body: formData,
+  });
   return await parseJsonOrThrow(res);
 }
 
@@ -134,7 +158,6 @@ function todayISO() {
 /* =========================
    Fecha / Periodo helpers
 ========================= */
-// UI: MM-YYYY
 function normalizePeriodoToMMYYYY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "";
@@ -168,7 +191,6 @@ function normalizePeriodoToMMYYYY(v) {
   return `${mm}-${yyyy}`;
 }
 
-// API: YYYY-MM
 function periodoMMYYYY_to_YYYYMM(mmYYYY) {
   const s = String(mmYYYY ?? "").trim();
   if (!s) return "";
@@ -288,7 +310,7 @@ function findIdByIncludes(arr, includesText) {
 }
 
 /* =========================
-   Build form desde row (compra)
+   Build form desde row
 ========================= */
 function buildFormFromRowCompra(row, periodoDefault, fixedLocal, cuentaCorrientePickedId) {
   const r = row || {};
@@ -299,7 +321,8 @@ function buildFormFromRowCompra(row, periodoDefault, fixedLocal, cuentaCorriente
   const perByFecha = periodoFromISODate(fecha || todayISO());
   const pickPeriodo = perRow || perDef || perByFecha || "";
 
-  const nOrNull = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? String(Number(v)) : NULL_OPTION);
+  const nOrNull = (v) =>
+    Number.isFinite(Number(v)) && Number(v) > 0 ? String(Number(v)) : NULL_OPTION;
   const sOrNull = (v) => (v == null || v === "" || v === 0 ? NULL_OPTION : String(v));
 
   const cantidad = r.cantidad != null ? safeNumber(r.cantidad) : 1;
@@ -347,14 +370,20 @@ function buildFormFromRowCompra(row, periodoDefault, fixedLocal, cuentaCorriente
 function nameById(arr, id) {
   const sid = String(id ?? "").trim();
   if (!sid || sid === NULL_OPTION || sid === ADD_OPTION) return "";
-  const found = (Array.isArray(arr) ? arr : []).find((x) => String(getGenericId(x) ?? x?.id) === sid);
+  const found = (Array.isArray(arr) ? arr : []).find(
+    (x) => String(getGenericId(x) ?? x?.id) === sid
+  );
   return String(found?.nombre ?? "").trim();
 }
 
 function getTipoVentaObj(tiposVentaArr, idTipoVenta) {
   const sid = String(idTipoVenta ?? "").trim();
   if (!sid || sid === NULL_OPTION) return null;
-  return (Array.isArray(tiposVentaArr) ? tiposVentaArr : []).find((x) => String(getGenericId(x) ?? x?.id) === sid) || null;
+  return (
+    (Array.isArray(tiposVentaArr) ? tiposVentaArr : []).find(
+      (x) => String(getGenericId(x) ?? x?.id) === sid
+    ) || null
+  );
 }
 
 function isTipoVentaContado(tipoVentaObj) {
@@ -372,7 +401,7 @@ function isTemaOscuro() {
 }
 
 /* =========================
-   Mini modal reutilizable
+   Mini modal
 ========================= */
 function AddCatalogMiniModal({
   open,
@@ -413,7 +442,13 @@ function AddCatalogMiniModal({
       >
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
-          <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving} aria-label="Cerrar">
+          <button
+            type="button"
+            className="mi-mini__close"
+            onClick={onCancel}
+            disabled={saving}
+            aria-label="Cerrar"
+          >
             ✕
           </button>
         </div>
@@ -433,11 +468,21 @@ function AddCatalogMiniModal({
           </div>
 
           <div className="mi-mini__actions">
-            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>
+            <button
+              type="button"
+              className="mit-btn mit-btn--ghost"
+              onClick={onCancel}
+              disabled={saving}
+            >
               Cancelar
             </button>
 
-            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
+            <button
+              type="button"
+              className="mit-btn mit-btn--solid"
+              onClick={onSave}
+              disabled={saving}
+            >
               {saving ? "Guardando..." : "Guardar"}
             </button>
           </div>
@@ -455,11 +500,13 @@ export default function ModalEditarCompra({
   periodoDefault,
   onClose,
   onSave,
+  onSaved,
   onToast,
   onCatalogCreated,
   dark: darkProp,
 }) {
   const API = `${BASE_URL}/api.php`;
+  const API_UPLOAD_LINK = `${BASE_URL}/api.php?action=comprobantes_vincular_movimientos_lote_upload`;
 
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
@@ -471,10 +518,14 @@ export default function ModalEditarCompra({
     const update = () => setDarkAuto(isTemaOscuro());
 
     const obsHtml = new MutationObserver(update);
-    obsHtml.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    obsHtml.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
 
     const obsBody = new MutationObserver(update);
-    if (document.body) obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    if (document.body)
+      obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
 
     update();
     return () => {
@@ -500,7 +551,10 @@ export default function ModalEditarCompra({
   useEffect(() => void (rowRef.current = row), [row]);
   useEffect(() => void (periodoDefaultRef.current = periodoDefault), [periodoDefault]);
 
-  const [localLists, setLocalLists] = useState(() => ({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) }));
+  const [localLists, setLocalLists] = useState(() => ({
+    ...SAFE_LISTS,
+    ...normalizeIncomingLists(lists),
+  }));
   useEffect(() => {
     setLocalLists({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) });
   }, [lists]);
@@ -511,7 +565,10 @@ export default function ModalEditarCompra({
     () => buildSingleCuentaCorrienteOption(safeLists.cuentasCorrientes),
     [safeLists.cuentasCorrientes]
   );
-  const cuentaCorrientePickedId = useMemo(() => ccNormalized.pickedId, [ccNormalized.pickedId]);
+  const cuentaCorrientePickedId = useMemo(
+    () => ccNormalized.pickedId,
+    [ccNormalized.pickedId]
+  );
 
   const [saving, setSaving] = useState(false);
 
@@ -521,12 +578,19 @@ export default function ModalEditarCompra({
   const [detalleInput, setDetalleInput] = useState("");
   const [detalleFocus, setDetalleFocus] = useState(false);
 
+  const [archivoAdjunto, setArchivoAdjunto] = useState(null);
+
   const closeBtnRef = useRef(null);
   const fechaRef = useRef(null);
   const proveedorInputRef = useRef(null);
   const detalleInputRef = useRef(null);
 
-  const [addUI, setAddUI] = useState({ open: false, catalogo: null, text: "", saving: false });
+  const [addUI, setAddUI] = useState({
+    open: false,
+    catalogo: null,
+    text: "",
+    saving: false,
+  });
 
   const closeAddMini = useCallback(() => {
     if (addUI.saving) return;
@@ -536,14 +600,24 @@ export default function ModalEditarCompra({
   const startAddProveedor = useCallback(() => {
     if (saving) return;
     setProveedorFocus(false);
-    setAddUI({ open: true, catalogo: "proveedores", text: proveedorInput.trim() || "", saving: false });
+    setAddUI({
+      open: true,
+      catalogo: "proveedores",
+      text: proveedorInput.trim() || "",
+      saving: false,
+    });
     setForm((p) => ({ ...p, id_proveedor: ADD_OPTION }));
   }, [saving, proveedorInput]);
 
   const startAddDetalle = useCallback(() => {
     if (saving) return;
     setDetalleFocus(false);
-    setAddUI({ open: true, catalogo: "detalles", text: detalleInput.trim() || "", saving: false });
+    setAddUI({
+      open: true,
+      catalogo: "detalles",
+      text: detalleInput.trim() || "",
+      saving: false,
+    });
     setForm((p) => ({ ...p, id_detalle: ADD_OPTION }));
   }, [saving, detalleInput]);
 
@@ -564,10 +638,18 @@ export default function ModalEditarCompra({
     }
 
     setAddUI((p) => ({ ...p, saving: true }));
-    showToast("cargando", `Creando ${catalogo === "proveedores" ? "proveedor" : "detalle"}…`, 12000);
+    showToast(
+      "cargando",
+      `Creando ${catalogo === "proveedores" ? "proveedor" : "detalle"}…`,
+      12000
+    );
 
     try {
-      const data = await apiPostJson(`${API}?action=catalogo_crear`, { catalogo, nombre, idUsuario });
+      const data = await apiPostJson(`${API}?action=catalogo_crear`, {
+        catalogo,
+        nombre,
+        idUsuario,
+      });
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear el ítem.");
 
       const item = data?.item || {};
@@ -604,7 +686,11 @@ export default function ModalEditarCompra({
       }
 
       setAddUI({ open: false, catalogo: null, text: "", saving: false });
-      showToast("exito", `${catalogo === "proveedores" ? "Proveedor" : "Detalle"} creado: "${newNombre}"`, 2600);
+      showToast(
+        "exito",
+        `${catalogo === "proveedores" ? "Proveedor" : "Detalle"} creado: "${newNombre}"`,
+        2600
+      );
     } catch (e) {
       setAddUI((p) => ({ ...p, saving: false }));
       showToast("error", e?.message || "Error creando el ítem.", 4200);
@@ -653,6 +739,7 @@ export default function ModalEditarCompra({
     if (!open || wasOpen) return;
 
     setSaving(false);
+    setArchivoAdjunto(null);
     setAddUI({ open: false, catalogo: null, text: "", saving: false });
 
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(listsRef.current) };
@@ -663,7 +750,12 @@ export default function ModalEditarCompra({
     };
 
     const ccPick = buildSingleCuentaCorrienteOption(merged.cuentasCorrientes).pickedId;
-    const built = buildFormFromRowCompra(rowRef.current, periodoDefaultRef.current, fixedLocal, ccPick);
+    const built = buildFormFromRowCompra(
+      rowRef.current,
+      periodoDefaultRef.current,
+      fixedLocal,
+      ccPick
+    );
 
     setForm(built);
     setProveedorInput(nameById(merged.proveedores, built.id_proveedor));
@@ -711,7 +803,9 @@ export default function ModalEditarCompra({
   }, []);
 
   const onPeriodoChange = useCallback((raw) => {
-    const digits = String(raw || "").replace(/\D/g, "").slice(0, 6);
+    const digits = String(raw || "")
+      .replace(/\D/g, "")
+      .slice(0, 6);
     let next = "";
     if (digits.length <= 2) next = digits;
     else next = `${digits.slice(0, 2)}-${digits.slice(2)}`;
@@ -734,9 +828,18 @@ export default function ModalEditarCompra({
     });
   }, []);
 
-  const onCantidadChange = useCallback((v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }), [recalcFromItem]);
-  const onPrecioChange = useCallback((v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }), [recalcFromItem]);
-  const onIvaPctChange = useCallback((v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }), [recalcFromItem]);
+  const onCantidadChange = useCallback(
+    (v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }),
+    [recalcFromItem]
+  );
+  const onPrecioChange = useCallback(
+    (v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }),
+    [recalcFromItem]
+  );
+  const onIvaPctChange = useCallback(
+    (v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }),
+    [recalcFromItem]
+  );
 
   const onMontoTotalManual = useCallback((v) => {
     const mt = v === "" ? "" : Number(v);
@@ -815,7 +918,9 @@ export default function ModalEditarCompra({
           next.id_cuenta_corriente &&
           next.id_cuenta_corriente !== NULL_OPTION &&
           next.id_cuenta_corriente !== ADD_OPTION;
-        if (!hasCC && cuentaCorrientePickedId) next.id_cuenta_corriente = String(cuentaCorrientePickedId);
+        if (!hasCC && cuentaCorrientePickedId) {
+          next.id_cuenta_corriente = String(cuentaCorrientePickedId);
+        }
       }
       return next;
     });
@@ -859,6 +964,19 @@ export default function ModalEditarCompra({
     };
   }, [form, esContado]);
 
+  const subirYVincularArchivo = useCallback(
+    async (idMovimiento, archivo) => {
+      if (!archivo || !idMovimiento) return null;
+      const fd = new FormData();
+      fd.append("archivo", archivo);
+      fd.append("tipo", "FACTURA");
+      fd.append("force", "0");
+      fd.append("ids_movimiento", JSON.stringify([Number(idMovimiento)]));
+      return await apiPostForm(API_UPLOAD_LINK, fd);
+    },
+    [API_UPLOAD_LINK]
+  );
+
   const submit = async (e) => {
     e.preventDefault();
 
@@ -872,7 +990,9 @@ export default function ModalEditarCompra({
 
     try {
       if (!form.id_movimiento) throw new Error("Falta id_movimiento (no puedo actualizar).");
-      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) throw new Error("Fecha inválida.");
+      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) {
+        throw new Error("Fecha inválida.");
+      }
 
       if (!form.id_tipo_venta || String(form.id_tipo_venta) === NULL_OPTION) {
         throw new Error("Tipo de compra es obligatorio.");
@@ -891,10 +1011,10 @@ export default function ModalEditarCompra({
       }
 
       if (!proveedorId || proveedorId === NULL_OPTION || proveedorId === ADD_OPTION) {
-        throw new Error("Seleccioná un proveedor (o crealo con “Agregar nuevo proveedor”).");
+        throw new Error('Seleccioná un proveedor (o crealo con "Agregar nuevo proveedor").');
       }
       if (!detalleId || detalleId === NULL_OPTION || detalleId === ADD_OPTION) {
-        throw new Error("Seleccioná un detalle (o crealo con “Agregar nuevo detalle”).");
+        throw new Error('Seleccioná un detalle (o crealo con "Agregar nuevo detalle").');
       }
 
       const perUI = normalizePeriodoToMMYYYY(form.periodo);
@@ -902,11 +1022,13 @@ export default function ModalEditarCompra({
       const finalPer = perUI || perAuto;
 
       let finalMedioPago = form.id_medio_pago;
+      let finalCuentaCorriente = form.id_cuenta_corriente;
 
       if (esContado) {
         if (!finalMedioPago || String(finalMedioPago) === NULL_OPTION) {
           throw new Error("En compras al contado el Medio de pago es obligatorio.");
         }
+        finalCuentaCorriente = NULL_OPTION;
       } else {
         finalMedioPago = NULL_OPTION;
         const hasCC =
@@ -914,14 +1036,23 @@ export default function ModalEditarCompra({
           form.id_cuenta_corriente !== NULL_OPTION &&
           form.id_cuenta_corriente !== ADD_OPTION;
 
-        let finalCC = form.id_cuenta_corriente;
-        if (!hasCC && cuentaCorrientePickedId) finalCC = String(cuentaCorrientePickedId);
-
-        if (!finalCC || finalCC === NULL_OPTION || finalCC === ADD_OPTION) {
-          throw new Error("No se pudo determinar la Cuenta Corriente (revisá la lista de cuentas corrientes).");
+        if (!hasCC && cuentaCorrientePickedId) {
+          finalCuentaCorriente = String(cuentaCorrientePickedId);
         }
 
-        if (finalCC !== form.id_cuenta_corriente) setForm((p) => ({ ...p, id_cuenta_corriente: finalCC }));
+        if (
+          !finalCuentaCorriente ||
+          finalCuentaCorriente === NULL_OPTION ||
+          finalCuentaCorriente === ADD_OPTION
+        ) {
+          throw new Error(
+            "No se pudo determinar la Cuenta Corriente (revisá la lista de cuentas corrientes)."
+          );
+        }
+
+        if (finalCuentaCorriente !== form.id_cuenta_corriente) {
+          setForm((p) => ({ ...p, id_cuenta_corriente: finalCuentaCorriente }));
+        }
       }
 
       const cantidad = Math.max(0, safeNumber(form.cantidad));
@@ -937,7 +1068,9 @@ export default function ModalEditarCompra({
         id_detalle: Number(detalleId),
 
         id_medio_pago: esContado ? Number(finalMedioPago) : null,
-        id_cuenta_corriente: !esContado ? Number(form.id_cuenta_corriente || cuentaCorrientePickedId || 0) : null,
+        id_cuenta_corriente: !esContado
+          ? Number(finalCuentaCorriente || cuentaCorrientePickedId || 0)
+          : null,
 
         cantidad: Math.round(cantidad * 1000) / 1000,
         precio: Math.round(precio * 100) / 100,
@@ -948,9 +1081,34 @@ export default function ModalEditarCompra({
         monto_total: Math.max(0, Math.round(t.total * 100) / 100),
       };
 
-      await onSave?.(payloadFinal);
+      const saveResult = await onSave?.(payloadFinal);
 
-      showToast("exito", "Compra actualizada.", 2400);
+      if (archivoAdjunto) {
+        showToast("cargando", "Compra actualizada. Subiendo archivo…", 12000);
+
+        const idMovimientoParaArchivo =
+          Number(
+            saveResult?.id_movimiento ??
+              saveResult?.id ??
+              saveResult?.movimiento_id ??
+              payloadFinal?.id_movimiento
+          ) || 0;
+
+        if (!idMovimientoParaArchivo) {
+          throw new Error(
+            "La compra se actualizó, pero no se pudo determinar el ID para vincular el archivo."
+          );
+        }
+
+        const rFile = await subirYVincularArchivo(idMovimientoParaArchivo, archivoAdjunto);
+        if (!rFile?.exito) {
+          throw new Error(
+            rFile?.mensaje || "La compra se actualizó, pero no se pudo vincular el archivo."
+          );
+        }
+      }
+
+      await Promise.resolve(onSaved?.(saveResult));
       onClose?.();
     } catch (err) {
       showToast("error", err?.message || "Error guardando compra.", 4200);
@@ -960,8 +1118,20 @@ export default function ModalEditarCompra({
 
   if (!open) return null;
 
-  const overlayClass = ["mi-modal__overlay", "mi-modal__overlay--mov", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim();
-  const containerClass = ["mi-modal__container", "mi-modal__container--mov", "mi-modal__container--venta", dark ? "mi-modal--dark" : ""]
+  const overlayClass = [
+    "mi-modal__overlay",
+    "mi-modal__overlay--mov",
+    dark ? "mi-modal__overlay--dark" : "",
+  ]
+    .join(" ")
+    .trim();
+
+  const containerClass = [
+    "mi-modal__container",
+    "mi-modal__container--mov",
+    "mi-modal__container--venta",
+    dark ? "mi-modal--dark" : "",
+  ]
     .join(" ")
     .trim();
 
@@ -974,7 +1144,13 @@ export default function ModalEditarCompra({
 
   return createPortal(
     <div className={overlayClass} onMouseDown={cerrar}>
-      <div className={containerClass} id="mi-modal__container" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className={containerClass}
+        id="mi-modal__container"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar compra</h2>
@@ -1004,7 +1180,9 @@ export default function ModalEditarCompra({
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_tipo_venta)}
-                      onChange={(e) => setForm((p) => ({ ...p, id_tipo_venta: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, id_tipo_venta: e.target.value }))
+                      }
                       disabled={saving || addUI.open}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar tipo de compra --</option>
@@ -1183,7 +1361,9 @@ export default function ModalEditarCompra({
                     <select
                       className="fl-input fl-select"
                       value={String(form.id_medio_pago)}
-                      onChange={(e) => setForm((p) => ({ ...p, id_medio_pago: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, id_medio_pago: e.target.value }))
+                      }
                       disabled={saving || addUI.open}
                     >
                       <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
@@ -1249,6 +1429,76 @@ export default function ModalEditarCompra({
                   </button>
                 </div>
 
+                <div className="mi-uploadCard">
+                  <div className="mi-uploadCard__head">
+                    <div>
+                      <div className="mi-uploadCard__title">Archivo adjunto</div>
+                      <div className="mi-uploadCard__sub">
+                        PDF, imagen u otro comprobante
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mi-uploadCard__body">
+                    <div className="mi-uploadBar">
+                      <label className="mi-uploadBar__pick">
+                        <input
+                          type="file"
+                          className="mi-uploadBar__input"
+                          onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
+                          disabled={saving || addUI.open}
+                        />
+                        <span className="mi-uploadBar__btn mi-uploadBar__btn--primary">
+                          {archivoAdjunto ? "Cambiar" : "Seleccionar"}
+                        </span>
+                      </label>
+
+                      <button
+                        type="button"
+                        className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                        onClick={() => setArchivoAdjunto(null)}
+                        disabled={saving || addUI.open || !archivoAdjunto}
+                      >
+                        Quitar
+                      </button>
+                    </div>
+
+                    <div
+                      className={`mi-uploadFile ${
+                        archivoAdjunto ? "is-filled" : "is-empty"
+                      }`}
+                    >
+                      {archivoAdjunto ? (
+                        <>
+                          <div className="mi-uploadFile__icon">
+                            <FontAwesomeIcon icon={faFileInvoiceDollar} />
+                          </div>
+
+                          <div className="mi-uploadFile__meta">
+                            <div
+                              className="mi-uploadFile__name"
+                              title={archivoAdjunto.name}
+                            >
+                              {archivoAdjunto.name}
+                            </div>
+                            <div className="mi-uploadFile__size">
+                              {Math.max(
+                                1,
+                                Math.round((archivoAdjunto.size || 0) / 1024)
+                              )}{" "}
+                              KB
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="mi-uploadFile__empty">
+                          No hay archivo seleccionado
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="mi-em-actions">
                   <button
                     type="submit"
@@ -1282,7 +1532,8 @@ export default function ModalEditarCompra({
           onCancel={() => {
             setForm((p) => ({
               ...p,
-              id_proveedor: addUI.catalogo === "proveedores" ? NULL_OPTION : p.id_proveedor,
+              id_proveedor:
+                addUI.catalogo === "proveedores" ? NULL_OPTION : p.id_proveedor,
               id_detalle: addUI.catalogo === "detalles" ? NULL_OPTION : p.id_detalle,
             }));
             closeAddMini();

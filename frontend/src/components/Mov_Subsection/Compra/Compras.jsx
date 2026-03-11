@@ -1,6 +1,3 @@
-// ✅ REEMPLAZAR COMPLETO
-// src/components/Mov_Subsection/Compra/Compras.jsx
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
 import "../../Global/Global_css/Global_Section.css";
@@ -29,8 +26,8 @@ import {
   faEye,
   faChevronDown,
   faArrowRightLong,
-    faTimes,
-    faBoxOpen,
+  faTimes,
+  faBoxOpen,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -168,7 +165,8 @@ function getAuthInfo() {
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand = u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    const cand =
+      u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
   return { token, sessionKey, idUsuario };
@@ -213,15 +211,21 @@ function slugifySheetName(name) {
 }
 
 /* =========================
-   Export helpers (igual que Ventas)
+   Export helpers
 ========================= */
 function buildExportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((r) => ({
     FECHA: safeText(formatFechaDMY(pick(r, ["fecha"], ""))),
-    DESCRIPCION: safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
-    PROVEEDOR: safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")),
+    DESCRIPCION: safeText(
+      pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")
+    ),
+    PROVEEDOR: safeText(
+      pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")
+    ),
     PAGO: safeText(getCompraPagoLabel(r)),
-    TOTAL: numOrZero(pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)),
+    TOTAL: numOrZero(
+      pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)
+    ),
   }));
 }
 
@@ -257,7 +261,6 @@ export default function Compras() {
     refreshLists,
   } = useListas();
 
-  // ✅ Fecha global (compartida con Movimientos/Ventas/Recibos/etc.)
   const { dateRange, setDateRange } = useDateRange();
 
   const [rows, setRows] = useState([]);
@@ -477,8 +480,9 @@ export default function Compras() {
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar compras.");
 
         if (myReqId !== reqIdRef.current) {
-          if (append) { if (mode !== "all") setLoadingMore(false); }
-          else setLoadingRows(false);
+          if (append) {
+            if (mode !== "all") setLoadingMore(false);
+          } else setLoadingRows(false);
           endSkeleton();
           return null;
         }
@@ -487,7 +491,9 @@ export default function Compras() {
 
         const backendHasMore = data.has_more !== undefined ? !!data.has_more : null;
         const backendNextOffset =
-          data.next_offset !== undefined && data.next_offset !== null ? Number(data.next_offset) : null;
+          data.next_offset !== undefined && data.next_offset !== null
+            ? Number(data.next_offset)
+            : null;
 
         const page = raw.slice(0, PAGE_SIZE);
         let newHasMore = false;
@@ -531,7 +537,11 @@ export default function Compras() {
           }
         } else {
           setRows(page);
-          cacheRef.current.set(cacheKey, { rows: page, hasMore: newHasMore, nextOffset: newNextOffset });
+          cacheRef.current.set(cacheKey, {
+            rows: page,
+            hasMore: newHasMore,
+            nextOffset: newNextOffset,
+          });
         }
 
         setHasMore(newHasMore);
@@ -545,11 +555,18 @@ export default function Compras() {
         }
 
         endSkeleton();
-        return { hasMore: newHasMore, nextOffset: newNextOffset, received: page.length, appended: appendedCount, pageIds };
+        return {
+          hasMore: newHasMore,
+          nextOffset: newNextOffset,
+          received: page.length,
+          appended: appendedCount,
+          pageIds,
+        };
       } catch (e) {
         if (myReqId !== reqIdRef.current) {
-          if (append) { if (mode !== "all") setLoadingMore(false); }
-          else setLoadingRows(false);
+          if (append) {
+            if (mode !== "all") setLoadingMore(false);
+          } else setLoadingRows(false);
           endSkeleton();
           return null;
         }
@@ -593,9 +610,10 @@ export default function Compras() {
       await loadRows({ dateRange, q: "", offset: 0, append: false, mode: "initial" });
     })();
 
-    return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      alive = false;
+    };
+  }, []); // eslint-disable-line
 
   /* =========================
      Debounce búsqueda
@@ -612,8 +630,7 @@ export default function Compras() {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, dateRange]);
+  }, [q, dateRange]); // eslint-disable-line
 
   /* =========================
      Handler cambio de rango
@@ -640,7 +657,7 @@ export default function Compras() {
   }, [rows, dateRange]);
 
   /* =========================
-     Label botón calendario (igual que Ventas)
+     Label botón calendario
   ========================= */
   const dateRangeLabel = useMemo(() => {
     const { from, to } = dateRange;
@@ -682,7 +699,7 @@ export default function Compras() {
   }, [dateRange]);
 
   /* =========================
-     Export helpers (igual que Ventas)
+     Export helpers
   ========================= */
   const getExportData = useCallback(() => {
     const dataToExport = buildExportRows(filteredRows);
@@ -853,15 +870,27 @@ export default function Compras() {
   /* =========================
      Acciones UI
   ========================= */
-  const openEditModal = (r) => { setSelectedRow(r); setOpenEdit(true); };
-  const openDeleteModal = (r) => { setSelectedRow(r); setOpenDel(true); };
+  const openEditModal = (r) => {
+    setSelectedRow(r);
+    setOpenEdit(true);
+  };
+
+  const openDeleteModal = (r) => {
+    setSelectedRow(r);
+    setOpenDel(true);
+  };
+
   const openComprobanteModal = (r) => {
     const url = getComprobanteUrl(r);
     if (!url) return;
     setCompUrl(url);
     setOpenVerComp(true);
   };
-  const closeComprobanteModal = () => { setOpenVerComp(false); setCompUrl(""); };
+
+  const closeComprobanteModal = () => {
+    setOpenVerComp(false);
+    setCompUrl("");
+  };
 
   /* =========================
      Refresh tras guardar
@@ -880,18 +909,11 @@ export default function Compras() {
   ========================= */
   const handleSaveEdit = useCallback(
     async (payloadFinal) => {
-      showToast("cargando", "Guardando cambios...", 12000);
-      try {
-        const data = await editarCompraEnBackend(payloadFinal);
-        if (!data?.exito) throw new Error(data?.mensaje || "No se pudo actualizar.");
-        await refreshAfterSave();
-        showToast("exito", "Compra actualizada.", 2400);
-      } catch (e) {
-        showToast("error", e?.message || "Error guardando compra.", 4200);
-        throw e;
-      }
+      const data = await editarCompraEnBackend(payloadFinal);
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo actualizar.");
+      return data;
     },
-    [editarCompraEnBackend, refreshAfterSave, showToast]
+    [editarCompraEnBackend]
   );
 
   /* =========================
@@ -929,8 +951,25 @@ export default function Compras() {
     if (!hasMore || loadingRows || loadingMore || loadingAll || loadingListsCtx) return;
     if (nextOffset === null) return;
     showToast("cargando", "Cargando mas...", 6000);
-    await loadRows({ dateRange, q: (q || "").trim(), offset: nextOffset, append: true, mode: "more" });
-  }, [hasMore, loadingRows, loadingMore, loadingAll, loadingListsCtx, nextOffset, dateRange, q, loadRows, showToast]);
+    await loadRows({
+      dateRange,
+      q: (q || "").trim(),
+      offset: nextOffset,
+      append: true,
+      mode: "more",
+    });
+  }, [
+    hasMore,
+    loadingRows,
+    loadingMore,
+    loadingAll,
+    loadingListsCtx,
+    nextOffset,
+    dateRange,
+    q,
+    loadRows,
+    showToast,
+  ]);
 
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingRows || loadingMore || loadingAll || loadingListsCtx) return;
@@ -959,21 +998,43 @@ export default function Compras() {
         });
         if (!res) break;
         (res.pageIds || []).forEach((id) => seen.add(String(id)));
-        if (res.hasMore && res.appended === 0) { stoppedNoProgress = true; break; }
-        if (res.nextOffset === offset) { stoppedNoProgress = true; break; }
+        if (res.hasMore && res.appended === 0) {
+          stoppedNoProgress = true;
+          break;
+        }
+        if (res.nextOffset === offset) {
+          stoppedNoProgress = true;
+          break;
+        }
         offset = res.nextOffset;
         guard += 1;
-        if (!res.hasMore || offset === null) { finishedOk = true; break; }
+        if (!res.hasMore || offset === null) {
+          finishedOk = true;
+          break;
+        }
       }
       if (finishedOk) showToast("exito", `Listo: se cargaron ${rows.length} compras.`, 2600);
-      else if (stoppedNoProgress) showToast("error", "Se detuvo: el backend no avanza el paginado.", 6500);
+      else if (stoppedNoProgress)
+        showToast("error", "Se detuvo: el backend no avanza el paginado.", 6500);
       else showToast("error", "No se pudo completar la carga total.", 4200);
     } catch (e) {
       showToast("error", e?.message || "Error cargando todas.", 4200);
     } finally {
       setLoadingAll(false);
     }
-  }, [hasMore, loadingRows, loadingMore, loadingAll, loadingListsCtx, nextOffset, dateRange, q, loadRows, showToast, rows]);
+  }, [
+    hasMore,
+    loadingRows,
+    loadingMore,
+    loadingAll,
+    loadingListsCtx,
+    nextOffset,
+    dateRange,
+    q,
+    loadRows,
+    showToast,
+    rows,
+  ]);
 
   /* =========================
      Skeleton
@@ -1036,7 +1097,8 @@ export default function Compras() {
 
   const softLoading = loadingRows && showSkeleton;
   const canShowEmpty = ready && !loadingRows && !loadingListsCtx && filteredRows.length === 0;
-  const showLoadMoreBtn = !loadingRows && hasMore && filteredRows.length > 0 && filteredRows.length < PAGE_SIZE;
+  const showLoadMoreBtn =
+    !loadingRows && hasMore && filteredRows.length > 0 && filteredRows.length < PAGE_SIZE;
   const showLoadAllBtn = !loadingRows && hasMore && filteredRows.length > 0;
   const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
@@ -1066,10 +1128,8 @@ export default function Compras() {
       )}
 
       <section className="mov-card mov-card--table">
-        {/* ===== HEAD ===== */}
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
-            {/* Título + hint */}
             <div className="title-mov">
               <div className="mov-card__title">Movs · Compras</div>
               <div className="mov-card__hint">
@@ -1082,107 +1142,105 @@ export default function Compras() {
               </div>
             </div>
 
-            {/* ===== FILTROS (igual que Ventas) ===== */}
-<div className="mov-headFilters">
+            <div className="mov-headFilters">
+              <div className="cc-filter cc-filter--cal">
+                <div
+                  className={`cc-floatingField cc-floatingField--calendar is-active ${
+                    showCalendario ? "is-open" : ""
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className={`cc-calTrigger ${showCalendario ? "is-open" : ""}`}
+                    onClick={() => setShowCalendario((v) => !v)}
+                    disabled={isAnyLoading || loadingListsCtx}
+                    title="Seleccionar rango de fechas"
+                  >
+                    {dateRangeLabel}
+                    <span className="cc-calTrigger__iconRight">
+                      <FontAwesomeIcon icon={faChevronDown} />
+                    </span>
+                  </button>
 
-  {/* CALENDARIO */}
-  <div className="cc-filter cc-filter--cal">
-    <div className={`cc-floatingField cc-floatingField--calendar is-active ${showCalendario ? "is-open" : ""}`}>
-      <button
-        type="button"
-        className={`cc-calTrigger ${showCalendario ? "is-open" : ""}`}
-        onClick={() => setShowCalendario((v) => !v)}
-        disabled={isAnyLoading || loadingListsCtx}
-        title="Seleccionar rango de fechas"
-      >
-        {dateRangeLabel}
-        <span className="cc-calTrigger__iconRight">
-          <FontAwesomeIcon icon={faChevronDown} />
-        </span>
-      </button>
+                  <span className="cc-floatingLabel cc-floatingLabel--active">
+                    <FontAwesomeIcon icon={faCalendarDays} /> Período
+                  </span>
 
-      <span className="cc-floatingLabel cc-floatingLabel--active">
-        <FontAwesomeIcon icon={faCalendarDays} /> Período
-      </span>
+                  {showCalendario && (
+                    <div className="cc-calDropdown">
+                      <Calendario
+                        value={dateRange}
+                        onChange={async (newRange) => {
+                          if (newRange.from && newRange.to) setShowCalendario(false);
+                          await handleDateRangeChange(newRange);
+                        }}
+                        onClose={() => setShowCalendario(false)}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
 
-      {showCalendario && (
-        <div className="cc-calDropdown">
-          <Calendario
-            value={dateRange}
-            onChange={async (newRange) => {
-              if (newRange.from && newRange.to) setShowCalendario(false);
-              await handleDateRangeChange(newRange);
-            }}
-            onClose={() => setShowCalendario(false)}
-          />
-        </div>
-      )}
-    </div>
-  </div>
+              <div className="cc-filter ">
+                <div className="cc-floatingField cc-floatingField--search is-active">
+                  <div className="cc-searchInput">
+                    <div className="cc-searchInput__fieldWrap">
+                      <input
+                        className="cc-input cc-input--floating"
+                        id="vents-comppr-wit"
+                        value={q}
+                        onChange={(e) => setQ(e.target.value)}
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                            skipSearchRef.current = true;
+                            await loadRows({
+                              dateRange,
+                              q: e.currentTarget.value,
+                              offset: 0,
+                              append: false,
+                              mode: "initial",
+                            });
+                          }
+                        }}
+                        placeholder="Buscar por descripción, proveedor... "
+                        disabled={loadingListsCtx || loadingAll}
+                      />
 
-  {/* BÚSQUEDA */}
-  <div className="cc-filter ">
-    <div className="cc-floatingField cc-floatingField--search is-active">
-      <div className="cc-searchInput">
-        <div className="cc-searchInput__fieldWrap">
-          <input
-            className="cc-input cc-input--floating"
-            id="vents-comppr-wit"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={async (e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                skipSearchRef.current = true;
-                await loadRows({
-                  dateRange,
-                  q: e.currentTarget.value,
-                  offset: 0,
-                  append: false,
-                  mode: "initial",
-                });
-              }
-            }}
-            placeholder="Buscar por descripción, proveedor... "
-            disabled={loadingListsCtx || loadingAll}
-          />
+                      <span className="cc-floatingLabel">
+                        <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                      </span>
 
-          <span className="cc-floatingLabel">
-            <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-          </span>
-
-          {q.trim() !== "" && (
-            <button
-              type="button"
-              className="cc-clearSearch cc-clearSearch--inside"
-              title="Limpiar búsqueda"
-              onClick={async () => {
-                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                setQ("");
-                skipSearchRef.current = true;
-                await loadRows({
-                  dateRange,
-                  q: "",
-                  offset: 0,
-                  append: false,
-                  mode: "initial",
-                });
-              }}
-              disabled={loadingAll}
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-
-</div>
+                      {q.trim() !== "" && (
+                        <button
+                          type="button"
+                          className="cc-clearSearch cc-clearSearch--inside"
+                          title="Limpiar búsqueda"
+                          onClick={async () => {
+                            if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                            setQ("");
+                            skipSearchRef.current = true;
+                            await loadRows({
+                              dateRange,
+                              q: "",
+                              offset: 0,
+                              append: false,
+                              mode: "initial",
+                            });
+                          }}
+                          disabled={loadingAll}
+                        >
+                          <FontAwesomeIcon icon={faTimes} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* ===== ACCIONES: BotonExportar + Nueva Compra (igual que Ventas) ===== */}
           <div
             className="mov-card__actions"
             style={{ display: "flex", gap: 10, alignItems: "center" }}
@@ -1212,7 +1270,6 @@ export default function Compras() {
           </div>
         </div>
 
-        {/* ===== HEADER TABLA ===== */}
         <div
           className="mov-gridTable mov-gridTable--head"
           style={{ gridTemplateColumns: gridCols }}
@@ -1234,7 +1291,6 @@ export default function Compras() {
           ))}
         </div>
 
-        {/* ===== BODY ===== */}
         <div className="mov-tableWrap mov-tableWrap--compras" role="rowgroup">
           <div
             className={[
@@ -1335,20 +1391,25 @@ export default function Compras() {
                   );
                 })}
 
-{canShowEmpty && (
-  <div className="cc-emptyState">
-    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
-    <div className="cc-emptyText">
-      {q.trim()
-        ? `No se encontraron compras para "${q.trim()}".`
-        : "No hay compras para mostrar en el rango de fechas seleccionado."}
-    </div>
-  </div>
-)}
+                {canShowEmpty && (
+                  <div className="cc-emptyState">
+                    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+                    <div className="cc-emptyText">
+                      {q.trim()
+                        ? `No se encontraron compras para "${q.trim()}".`
+                        : "No hay compras para mostrar en el rango de fechas seleccionado."}
+                    </div>
+                  </div>
+                )}
 
                 {!loadingRows && hasMore && filteredRows.length > 0 && (
                   <div
-                    style={{ display: "flex", justifyContent: "center", gap: 10, padding: "12px 0" }}
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      gap: 10,
+                      padding: "12px 0",
+                    }}
                   >
                     {showLoadMoreBtn && (
                       <button
@@ -1390,7 +1451,6 @@ export default function Compras() {
         </div>
       </section>
 
-      {/* ===== MODALES ===== */}
       <ModalNuevaCompra
         open={openNueva}
         lists={listasCtx || { periodos: [] }}
@@ -1417,6 +1477,10 @@ export default function Compras() {
         }}
         onToast={showToast}
         onSave={handleSaveEdit}
+        onSaved={async () => {
+          await refreshAfterSave();
+          showToast("exito", "Compra actualizada.", 2400);
+        }}
       />
 
       <ModalVerComprobante
@@ -1429,9 +1493,7 @@ export default function Compras() {
       <ModalEliminarMovimientos
         open={openDel}
         row={selectedRow}
-        loading={
-          deletingId !== null && String(deletingId) === String(getRowId(selectedRow))
-        }
+        loading={deletingId !== null && String(deletingId) === String(getRowId(selectedRow))}
         onClose={() => {
           setOpenDel(false);
           setSelectedRow(null);

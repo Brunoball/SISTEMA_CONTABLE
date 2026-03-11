@@ -481,7 +481,10 @@ background: var(--mi-primary);
   min-height: 95vh;
   max-height: 95vh; /* clave para que el overflow se maneje bien */
 }
-
+#mi-modal__container{
+  min-height: auto;
+  max-height: 80vh;
+}
 /* Contenido interno del modal */
 .mi-modal__content{
   padding: 18px;
@@ -1893,7 +1896,7 @@ padding: 0 !important;
 }
 
 .mi-em-actions{
-  margin-top: 6px;
+  margin-top: auto;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;

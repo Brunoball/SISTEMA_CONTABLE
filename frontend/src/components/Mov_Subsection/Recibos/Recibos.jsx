@@ -25,6 +25,7 @@ import {
   faMoneyBill1Wave,
   faChevronDown,
   faArrowRightLong,
+    faBoxOpen,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -1049,7 +1050,7 @@ export default function Recibos() {
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
             <div className="title-mov">
-              <div className="mov-card__title">Movs · Recibos Pendientes</div>
+              <div className="mov-card__title">Movs · Recibos</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b>
                 {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
@@ -1250,9 +1251,16 @@ export default function Recibos() {
                   );
                 })}
 
-                {!isAnyLoading && filteredRows.length === 0 && (
-                  <div className="mov-emptyRow">No hay recibos pendientes para mostrar en el rango de fechas seleccionado.</div>
-                )}
+{!isAnyLoading && filteredRows.length === 0 && (
+  <div className="cc-emptyState">
+    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+    <div className="cc-emptyText">
+      {q.trim()
+        ? `No se encontraron recibos para "${q.trim()}".`
+        : "No hay recibos pendientes para mostrar en el rango de fechas seleccionado."}
+    </div>
+  </div>
+)}
 
                 {!loadingRows && hasMore && filteredRows.length > 0 && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>

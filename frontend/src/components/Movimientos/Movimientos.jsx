@@ -34,6 +34,7 @@ import {
   faChevronDown,
   faArrowRightLong,
   faTimes,
+  faBoxOpen,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -1095,11 +1096,16 @@ const rangeLabel = useMemo(() => {
                   </div>
                 ))}
 
-                {!isAnyLoading && filteredRows.length === 0 && (
-                  <div className="mov-emptyRow">
-                    No hay movimientos para mostrar en este rango de fechas.
-                  </div>
-                )}
+{!isAnyLoading && filteredRows.length === 0 && (
+  <div className="cc-emptyState">
+    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+    <div className="cc-emptyText">
+      {q.trim()
+        ? `No se encontraron movimientos para "${q.trim()}".`
+        : "No hay movimientos para mostrar en este rango de fechas."}
+    </div>
+  </div>
+)}
 
                 {!loadingRows && filteredRows.length > 0 && hasMore && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>

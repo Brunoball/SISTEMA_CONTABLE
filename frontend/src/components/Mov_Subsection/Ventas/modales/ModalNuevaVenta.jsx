@@ -671,11 +671,32 @@ useEffect(() => {
 
                   {/* Solo Fecha (período derivado automáticamente) */}
                   <div className="mi-cr-filters__dates">
-                    <div className="fl-field fl-col-full">
-                      <input className="fl-input" type="date" placeholder=" " value={fecha}
-                        onChange={e=>setFecha(String(e.target.value||"").trim())} disabled={saving}/>
-                      <label className="fl-label">Fecha</label>
-                    </div>
+<div
+  className="fl-field fl-col-full mi-date-field"
+  onClick={() => {
+    if (saving) return;
+    const el = document.getElementById("nv-fecha-input");
+    if (!el) return;
+
+    if (typeof el.showPicker === "function") {
+      el.showPicker();
+    } else {
+      el.focus();
+      el.click();
+    }
+  }}
+>
+  <input
+    id="nv-fecha-input"
+    className="fl-input"
+    type="date"
+    placeholder=" "
+    value={fecha}
+    onChange={e => setFecha(String(e.target.value || "").trim())}
+    disabled={saving}
+  />
+  <label className="fl-label">Fecha</label>
+</div>
                   </div>
                 </div>
 
@@ -751,7 +772,7 @@ useEffect(() => {
                       </div>
 
                       {shouldNeedFiscalPanel&&(
-                        <div style={{padding:"0 12px 12px"}}>
+                        <div>
                           {!selectedClienteId?(
                             <div className="mi-card__hint">Seleccioná primero un cliente del listado.</div>
                           ):fiscalLoading?(

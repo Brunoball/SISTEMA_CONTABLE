@@ -313,7 +313,7 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
 .mov-filter select,
 .mov-search input{
   width: 100%;
-  height: 40px;
+  height: 44px;
   border-radius: 12px;
 
   background: color-mix(in srgb, var(--balto-bg) 62%, #fff);
@@ -374,7 +374,7 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
    BUTTONS
 ========================= */
 .mov-btn{
-  height: 40px;
+  height: 44px;
   border-radius: 12px;
   border: 1px solid var(--mov-border);
   background: #fff;
@@ -504,12 +504,12 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
   min-height: 0;
   overflow: auto;
   overflow-x: hidden;
-  max-height: calc(100vh - 250px);
-  min-height: calc(100vh - 250px);
+  max-height: calc(100vh - 240px);
+  min-height: calc(100vh - 240px);
 }
 .mov-tableWrap--mov{
-    max-height: calc(100vh - 250px)  !important;
-    min-height: calc(100vh - 250px)  !important
+    max-height: calc(100vh - 240px)  !important;
+    min-height: calc(100vh - 240px)  !important
 }
 /* header sticky */
 .mov-gridTable--head{
@@ -681,7 +681,7 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
 /* agregalo a src/components/Movimientos/movimientos.css */
 .mov-gridBody--relative{
   position: relative;
-  min-height: 220px;
+  height: calc(100vh - 250px);
 }
 /* =========================================================
    MOV — Scroll estable (aunque no haya scroll)
@@ -1307,4 +1307,11 @@ body.dark .mov-btn--loadAll:hover{
 }
 #vents-comppr-wit{
 max-width: 250px;
+}
+.mi-date-field{
+  cursor: pointer;
+}
+
+.mi-date-field .fl-input{
+  cursor: pointer;
 }

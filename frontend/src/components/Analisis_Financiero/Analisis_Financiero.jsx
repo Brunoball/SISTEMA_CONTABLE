@@ -480,7 +480,7 @@ export default function Analisis_Financiero() {
 
         {/* ===== BODY ===== */}
         <div className="mov-tableWrap mov-tableWrap--af" role="rowgroup">
-          <div className={["mov-gridBody mov-gridBody--relative", isLoading ? "mov-softLoading" : ""].join(" ")}>
+          <div className={["mov-gridBody ", isLoading ? "mov-softLoading" : ""].join(" ")}>
             {isLoading ? (
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}

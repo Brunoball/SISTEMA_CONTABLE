@@ -30,6 +30,7 @@ import {
   faChevronDown,
   faArrowRightLong,
     faTimes,
+    faBoxOpen,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -1333,11 +1334,16 @@ export default function Compras() {
                   );
                 })}
 
-                {canShowEmpty && (
-                  <div className="mov-emptyRow">
-                    No hay compras para mostrar en el rango de fechas seleccionado.
-                  </div>
-                )}
+{canShowEmpty && (
+  <div className="cc-emptyState">
+    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+    <div className="cc-emptyText">
+      {q.trim()
+        ? `No se encontraron compras para "${q.trim()}".`
+        : "No hay compras para mostrar en el rango de fechas seleccionado."}
+    </div>
+  </div>
+)}
 
                 {!loadingRows && hasMore && filteredRows.length > 0 && (
                   <div

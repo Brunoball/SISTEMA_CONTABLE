@@ -836,7 +836,6 @@ const Principal = () => {
                 style={{
                   width: "100%",
                   height: "100%",
-                  objectFit: "contain",
                   display: "block",
                   padding: "8px",
                   borderRadius: "50%",

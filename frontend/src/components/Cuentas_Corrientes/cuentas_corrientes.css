@@ -193,7 +193,7 @@
 
 .cc-input{
   width: 100%;
-  height: 40px;
+  height: 44px;
   border-radius: 10px;
   border: 1.5px solid rgba(10, 37, 64, 0.14);
   padding: 0 70px 0 14px;
@@ -463,7 +463,6 @@
   justify-content:center;
   height: 100%;
   gap:10px;
-  padding:30px 16px;
 }
 
 .cc-emptyIcon{
@@ -725,7 +724,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  height: 40px;
+  height: 44px;
   padding: 0 14px;
   background: #fff;
   border: 1.5px solid rgba(10, 37, 64, 0.14);

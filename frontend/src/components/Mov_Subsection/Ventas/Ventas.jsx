@@ -29,6 +29,7 @@ import {
   faArrowRightLong,
   faTimes,
   faEye,
+   faBoxOpen,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -1476,11 +1477,16 @@ export default function Ventas() {
                   );
                 })}
 
-                {!isAnyLoading && filteredRows.length === 0 && (
-                  <div className="mov-emptyRow">
-                    No hay ventas para mostrar en el rango de fechas seleccionado.
-                  </div>
-                )}
+{!isAnyLoading && filteredRows.length === 0 && (
+  <div className="cc-emptyState">
+    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+    <div className="cc-emptyText">
+      {q.trim()
+        ? `No se encontraron ventas para "${q.trim()}".`
+        : "No hay ventas para mostrar en el rango de fechas seleccionado."}
+    </div>
+  </div>
+)}
 
                 {!loadingRows && hasMore && filteredRows.length > 0 && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>

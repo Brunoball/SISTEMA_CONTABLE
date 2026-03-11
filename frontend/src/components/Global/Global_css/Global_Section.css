@@ -374,7 +374,7 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
    BUTTONS
 ========================= */
 .mov-btn{
-  height: 40px;
+  height: 44px;
   border-radius: 12px;
   border: 1px solid var(--mov-border);
   background: #fff;
@@ -681,7 +681,7 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
 /* agregalo a src/components/Movimientos/movimientos.css */
 .mov-gridBody--relative{
   position: relative;
-  min-height: 220px;
+  height: calc(100vh - 250px);
 }
 /* =========================================================
    MOV — Scroll estable (aunque no haya scroll)
@@ -1307,4 +1307,11 @@ body.dark .mov-btn--loadAll:hover{
 }
 #vents-comppr-wit{
 max-width: 250px;
+}
+.mi-date-field{
+  cursor: pointer;
+}
+
+.mi-date-field .fl-input{
+  cursor: pointer;
 }

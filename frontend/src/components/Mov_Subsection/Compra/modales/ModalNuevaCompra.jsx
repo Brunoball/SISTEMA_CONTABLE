@@ -203,8 +203,9 @@ export default function ModalNuevaCompra({open,lists,onClose,onToast,onSaved}) {
   const [saving,setSaving]=useState(false);
   const [archivoAdjunto,setArchivoAdjunto]=useState(null);
   const [addUI,setAddUI]=useState({open:false,kind:null,rowId:null,text:"",saving:false});
-  const closeBtnRef=useRef(null);
-  const prevOpenRef=useRef(false);
+const closeBtnRef = useRef(null);
+const prevOpenRef = useRef(false);
+const fechaInputRef = useRef(null);
 
   /* Reset al abrir */
   useEffect(()=>{
@@ -221,7 +222,29 @@ export default function ModalNuevaCompra({open,lists,onClose,onToast,onSaved}) {
   },[open]);
 
   const updateFilter=useCallback((k,v)=>setFilters(p=>({...p,[k]:v})),[]);
+const handleOpenDate = useCallback((e) => {
+  if (saving) return;
 
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  const input = fechaInputRef.current;
+  if (!input) return;
+
+  input.focus();
+
+  try {
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+    } else {
+      input.click();
+    }
+  } catch {
+    input.click();
+  }
+}, [saving]);
   /* Rows */
   const addRow    =useCallback(()=>setRows(p=>[...p,{id:uid(),id_detalle:NULL_OPTION,detalleText:"",cantidad:1,precio:0,ivaPct:0}]),[]);
   const removeRow =useCallback(id=>setRows(p=>{const n=p.filter(r=>r.id!==id);return n.length?n:p;}),[]);
@@ -520,13 +543,29 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
                 <div className="mi-cr-filters__top">
                   <div className="mi-cr-filters__title">Datos de compra</div>
 
-                  <div className="mi-cr-filters__dates">
-                    <div className="fl-field mi-card--full">
-                      <input className="fl-input" type="date" placeholder=" " value={fecha}
-                        onChange={e=>setFecha(String(e.target.value||"").trim())} disabled={saving}/>
-                      <label className="fl-label">Fecha</label>
-                    </div>
-                  </div>
+<div className="mi-cr-filters__dates">
+  <div
+    className="fl-field mi-card--full mi-date-field"
+    onClick={handleOpenDate}
+  >
+    <input
+      ref={fechaInputRef}
+      className="fl-input mi-date-field__input"
+      type="date"
+      placeholder=" "
+      value={fecha}
+      onChange={(e) => setFecha(String(e.target.value || "").trim())}
+      disabled={saving}
+
+    />
+    <label
+      className="fl-label mi-date-field__label"
+      onClick={handleOpenDate}
+    >
+      Fecha
+    </label>
+  </div>
+</div>
                 </div>
 
                 <div className="mi-cr-filters__body">

@@ -974,7 +974,7 @@ export default function ModalEditarCompra({
 
   return createPortal(
     <div className={overlayClass} onMouseDown={cerrar}>
-      <div className={containerClass} role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
+      <div className={containerClass} id="mi-modal__container" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar compra</h2>

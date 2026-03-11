@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import BASE_URL from "../../../../config/config.jsx";
 import ModalFacturaBaltoResumen from "../../Facturacion/ModalFacturaBaltoResumen.jsx";
+import { saveNotaCreditoPdf } from "../../../../utils/NotaCreditoPdfBuilder.js";
 
 function todayISO() {
   const d = new Date();
@@ -53,16 +54,28 @@ function buildHeadersPOSTForm() {
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
+
   let data = null;
   try {
     data = JSON.parse(text);
   } catch {
     throw new Error(text);
   }
+
   if (!data?.exito) {
     throw new Error(data?.mensaje || "Error en la operación.");
   }
+
   return data;
+}
+
+function extractFacturaPayload(factEmitida) {
+  if (!factEmitida) return null;
+
+  if (factEmitida.factura) return factEmitida.factura;
+  if (factEmitida.data?.factura) return factEmitida.data.factura;
+  if (factEmitida.data) return factEmitida.data;
+  return factEmitida;
 }
 
 export default function ModalEmitirNotaCreditoVenta({
@@ -127,24 +140,42 @@ export default function ModalEmitirNotaCreditoVenta({
     return {
       id_pago: null,
       id_sistema: null,
-      labelCliente: contexto?.cliente_nombre || "Cliente",
+      id_movimiento: contexto?.id_movimiento || null,
+
+      // IMPORTANTE: para fiscal, el nombre correcto es el de cliente_facturacion
+      labelCliente:
+        contexto?.cliente_facturacion?.razon_social ||
+        contexto?.cliente_nombre ||
+        "Cliente",
+
       labelSistema: `Nota de crédito de venta #${contexto?.id_movimiento || ""}`,
+
       cliente_facturacion: contexto?.cliente_facturacion || {},
       id_cliente: contexto?.id_cliente || null,
       id_tipo_venta: contexto?.id_tipo_venta || null,
       id_medio_pago: contexto?.id_medio_pago || null,
       id_clasificacion: null,
+
       fecha_cbte_iso: todayISO(),
       vto_pago_iso: todayISO(),
+
       cbte_tipo: Number(contexto?.nota_credito?.cbte_tipo || 13),
       pto_vta: Number(contexto?.nota_credito?.pto_vta || 2),
+
       items_facturacion: Array.isArray(contexto?.items_facturacion)
         ? contexto.items_facturacion
         : [],
+
       total_ars: Number(contexto?.total || 0),
       monto: Number(contexto?.total || 0),
       importe: Number(contexto?.total || 0),
+
       observaciones: motivo,
+      concepto: 1,
+
+      cbtes_asoc: Array.isArray(contexto?.cbtes_asoc) ? contexto.cbtes_asoc : [],
+      factura_original: contexto?.factura_original || null,
+
       emisor_nombre: safeStr(contexto?.config_facturacion?.razon_social),
       emisor_domicilio: safeStr(contexto?.config_facturacion?.domicilio_comercial),
       cuit_emisor: safeStr(contexto?.config_facturacion?.cuit),
@@ -167,22 +198,53 @@ export default function ModalEmitirNotaCreditoVenta({
       setError("");
 
       try {
-        showToast("cargando", "Registrando nota de crédito…", 12000);
+        const payload = extractFacturaPayload(factEmitida);
+        if (!payload) {
+          throw new Error("No se recibió la respuesta de emisión de ARCA.");
+        }
 
-        if (!factEmitida?.pdf_blob) {
+        if (!payload?.cae || String(payload?.resultado || "").toUpperCase() !== "A") {
           throw new Error(
-            "La nota de crédito se emitió pero no se recibió el PDF para guardarla."
+            "La nota de crédito no fue autorizada por ARCA. No se generó el PDF ni se registró."
           );
+        }
+
+        showToast("cargando", "Generando y registrando nota de crédito…", 12000);
+
+        const pdfData = {
+          ...resumenData,
+          cae: payload?.cae ?? null,
+          cae_vto: payload?.cae_vto ?? null,
+          cbte_nro: payload?.cbte_nro ?? null,
+          cbte_tipo: payload?.cbte_tipo ?? resumenData?.cbte_tipo ?? 13,
+          pto_vta: payload?.pto_vta ?? resumenData?.pto_vta ?? 2,
+          resultado: payload?.resultado ?? null,
+          fecha_cbte: payload?.fecha_cbte ?? todayISO(),
+          fecha_cbte_iso: payload?.fecha_cbte ?? todayISO(),
+          doc_tipo: payload?.doc_tipo ?? contexto?.cliente_facturacion?.doc_tipo ?? null,
+          doc_nro:
+            payload?.doc_nro ??
+            contexto?.cliente_facturacion?.doc_nro ??
+            contexto?.cliente_facturacion?.cuit ??
+            null,
+          qr_url: payload?.qr_url ?? null,
+          qr_base64: payload?.qr_base64 ?? null,
+          qr_payload: payload?.qr_payload ?? null,
+          observaciones: motivo,
+        };
+
+        const { pdfBlob, pdfFilename } = await saveNotaCreditoPdf(pdfData, {
+          autoDownload: true,
+        });
+
+        if (!pdfBlob) {
+          throw new Error("No se pudo generar el PDF de la nota de crédito.");
         }
 
         const fd = new FormData();
         fd.append("tipo", "NOTA_CREDITO");
         fd.append("id_movimiento", String(row.id_movimiento));
-        fd.append(
-          "pdf",
-          factEmitida.pdf_blob,
-          factEmitida?.pdf_filename || `nota_credito_${row.id_movimiento}.pdf`
-        );
+        fd.append("pdf", pdfBlob, pdfFilename || `nota_credito_${row.id_movimiento}.pdf`);
 
         fd.append(
           "meta",
@@ -190,33 +252,30 @@ export default function ModalEmitirNotaCreditoVenta({
             tipo: "NOTA_CREDITO",
             id_movimiento: row.id_movimiento,
             id_comprobante_origen: contexto.factura_original.id_comprobante,
-            cae: factEmitida?.cae ?? null,
-            cae_vto: factEmitida?.cae_vto ?? null,
-            cbte_nro: factEmitida?.cbte_nro ?? null,
-            cbte_tipo: factEmitida?.cbte_tipo ?? resumenData?.cbte_tipo ?? 13,
-            pto_vta: factEmitida?.pto_vta ?? resumenData?.pto_vta ?? 2,
-            resultado: factEmitida?.resultado ?? null,
-            doc_tipo:
-              factEmitida?.doc_tipo ?? contexto?.cliente_facturacion?.doc_tipo ?? null,
+            cae: payload?.cae ?? null,
+            cae_vto: payload?.cae_vto ?? null,
+            cbte_nro: payload?.cbte_nro ?? null,
+            cbte_tipo: payload?.cbte_tipo ?? resumenData?.cbte_tipo ?? 13,
+            pto_vta: payload?.pto_vta ?? resumenData?.pto_vta ?? 2,
+            resultado: payload?.resultado ?? null,
+            doc_tipo: payload?.doc_tipo ?? contexto?.cliente_facturacion?.doc_tipo ?? null,
             doc_nro:
-              factEmitida?.doc_nro ??
+              payload?.doc_nro ??
               contexto?.cliente_facturacion?.doc_nro ??
               contexto?.cliente_facturacion?.cuit ??
               null,
-            fecha_cbte: factEmitida?.fecha_cbte ?? todayISO(),
+            fecha_cbte: payload?.fecha_cbte ?? todayISO(),
             motivo,
+            cbtes_asoc: resumenData?.cbtes_asoc ?? [],
             factura_origen: contexto?.factura_original ?? null,
           })
         );
 
-        const resUpload = await fetch(
-          `${API}?action=comprobantes_vincular_movimiento`,
-          {
-            method: "POST",
-            headers: buildHeadersPOSTForm(),
-            body: fd,
-          }
-        );
+        const resUpload = await fetch(`${API}?action=comprobantes_vincular_movimiento`, {
+          method: "POST",
+          headers: buildHeadersPOSTForm(),
+          body: fd,
+        });
 
         const uploadData = await parseJsonOrThrow(resUpload);
         const idComprobanteNC = Number(uploadData?.id_comprobante || 0);
@@ -240,7 +299,7 @@ export default function ModalEmitirNotaCreditoVenta({
 
         await parseJsonOrThrow(resRel);
 
-        showToast("exito", "Nota de crédito emitida y vinculada correctamente.", 3200);
+        showToast("exito", "Nota de crédito emitida, descargada y vinculada correctamente.", 3600);
         setOpenResumen(false);
         onDone?.();
       } catch (e) {
@@ -378,7 +437,10 @@ export default function ModalEmitirNotaCreditoVenta({
                       CUIT: {contexto?.cliente_facturacion?.cuit || "—"}
                     </div>
                     <div style={{ marginTop: 4, fontSize: 14 }}>
-                      IVA: {contexto?.cliente_facturacion?.condicion_iva || "—"}
+                      IVA:{" "}
+                      {contexto?.cliente_facturacion?.condicion_iva ||
+                        contexto?.cliente_facturacion?.cond_iva ||
+                        "—"}
                     </div>
                   </div>
                 </div>
@@ -497,6 +559,7 @@ export default function ModalEmitirNotaCreditoVenta({
           forceTestAmount={false}
           testAmount={null}
           skipMovimientoAutocreacion={true}
+          pdfMode="nota_credito"
         />
       )}
     </>,

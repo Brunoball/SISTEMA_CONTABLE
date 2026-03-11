@@ -420,14 +420,158 @@ useEffect(() => {
     return{...data,periodoApi,fecha,cliente_fiscal:clienteFiscalResuelto,cliente_id:selectedClienteId||null,cliente_nombre:selectedClienteNombre,accion_venta:accionFinal,es_facturada:esFacturadaFinal};
   },[API_BATCH,fecha,rowsCalc,selectedClienteId,selectedClienteNombre,filters,isContado]);
 
-  const subirComprobanteYVincularPrimerMovimiento=useCallback(async({idMovimiento,blob,filename,facturaMeta})=>{
-    if(!idMovimiento||!blob)throw new Error("Faltan datos para subir el comprobante.");
-    const fd=new FormData();fd.append("tipo","FACTURA");fd.append("id_movimiento",String(idMovimiento));fd.append("pdf",blob instanceof Blob?blob:new Blob([blob],{type:"application/pdf"}),filename||"factura.pdf");
-    const meta={tipo:"FACTURA",estado:"emitida",id_pago:facturaMeta?.id_pago??null,id_sistema:facturaMeta?.id_sistema??null,anio:Number(facturaMeta?.anio||0),id_mes:Number(facturaMeta?.id_mes||0),monto_ars:Number(facturaMeta?.imp_total??facturaMeta?.importe??resumen.total??0),doc_tipo:Number(facturaMeta?.doc_tipo||80),doc_nro:safeStr(facturaMeta?.doc_nro),cbte_tipo:Number(facturaMeta?.cbte_tipo||11),pto_vta:Number(facturaMeta?.pto_vta||2),razon_social:resumenFacturaData?.cliente_facturacion?.razon_social||null,cond_iva:resumenFacturaData?.cliente_facturacion?.cond_iva||resumenFacturaData?.cliente_facturacion?.condicion_iva||null,domicilio:resumenFacturaData?.cliente_facturacion?.domicilio||null,cae:facturaMeta?.cae??null,cae_vto:facturaMeta?.cae_vto??null,cbte_nro:facturaMeta?.cbte_nro??null,fecha_cbte:facturaMeta?.fecha_cbte??null,resultado:facturaMeta?.resultado??null,qr_url:facturaMeta?.qr_url??null,qr_base64:facturaMeta?.qr_base64??null,qr_payload:facturaMeta?.qr_payload??null,items_facturacion:Array.isArray(resumenFacturaData?.items_facturacion)?resumenFacturaData.items_facturacion:[],total_ars:resumenFacturaData?.total_ars??null,vto_pago:resumenFacturaData?.vto_pago_iso??null,observaciones:resumenFacturaData?.observaciones??""};
-    fd.append("meta",JSON.stringify(meta));
-    const res=await fetch(API_VINCULAR_COMPROBANTE,{method:"POST",body:fd,headers:buildAuthHeaders(false)});
-    const j=await parseJsonOrThrow(res);if(!j?.exito)throw new Error(j?.mensaje||"No se pudo subir el comprobante.");return j;
-  },[API_VINCULAR_COMPROBANTE,resumen.total,resumenFacturaData]);
+  const subirComprobanteYVincularPrimerMovimiento = useCallback(async ({ idMovimiento, blob, filename, facturaMeta }) => {
+    if (!idMovimiento || !blob) {
+      throw new Error("Faltan datos para subir el comprobante.");
+    }
+
+    const fd = new FormData();
+    fd.append("tipo", "FACTURA");
+    fd.append("id_movimiento", String(idMovimiento));
+    fd.append(
+      "pdf",
+      blob instanceof Blob ? blob : new Blob([blob], { type: "application/pdf" }),
+      filename || "factura.pdf"
+    );
+
+    const meta = {
+      tipo: "FACTURA",
+      estado: "emitida",
+      emitido_en_arca: 1,
+
+      id_pago: facturaMeta?.id_pago ?? null,
+      id_sistema: facturaMeta?.id_sistema ?? null,
+      anio: Number(facturaMeta?.anio || 0),
+      id_mes: Number(facturaMeta?.id_mes || 0),
+
+      monto_ars: Number(
+        facturaMeta?.imp_total ??
+        facturaMeta?.importe ??
+        resumen.total ??
+        0
+      ),
+
+      doc_tipo: Number(
+        facturaMeta?.doc_tipo ??
+        resumenFacturaData?.cliente_facturacion?.doc_tipo ??
+        80
+      ),
+
+      doc_nro: safeStr(
+        facturaMeta?.doc_nro ??
+        resumenFacturaData?.cliente_facturacion?.doc_nro ??
+        resumenFacturaData?.cliente_facturacion?.cuit ??
+        ""
+      ),
+
+      cbte_tipo: Number(facturaMeta?.cbte_tipo || resumenFacturaData?.cbte_tipo || 11),
+      pto_vta: Number(facturaMeta?.pto_vta || resumenFacturaData?.pto_vta || 2),
+      cbte_nro: facturaMeta?.cbte_nro ?? null,
+
+      razon_social:
+        resumenFacturaData?.cliente_facturacion?.razon_social || null,
+      cond_iva:
+        resumenFacturaData?.cliente_facturacion?.cond_iva ||
+        resumenFacturaData?.cliente_facturacion?.condicion_iva ||
+        null,
+      domicilio:
+        resumenFacturaData?.cliente_facturacion?.domicilio || null,
+
+      cae: facturaMeta?.cae ?? null,
+      cae_vto: facturaMeta?.cae_vto ?? null,
+      fecha_cbte:
+        facturaMeta?.fecha_cbte ??
+        resumenFacturaData?.fecha_cbte_iso ??
+        null,
+      resultado: facturaMeta?.resultado ?? null,
+
+      qr_url: facturaMeta?.qr_url ?? null,
+      qr_base64: facturaMeta?.qr_base64 ?? null,
+      qr_payload: facturaMeta?.qr_payload ?? null,
+
+      // RESPUESTA CRUDA / COMPLETA DE ARCA
+      json_arca:
+        facturaMeta?.json_arca ??
+        facturaMeta?.raw_min ??
+        facturaMeta ??
+        null,
+
+      // SNAPSHOT COMPLETO DEL RESUMEN DE FACTURACIÓN
+      resumen_facturacion: {
+        id_pago: resumenFacturaData?.id_pago ?? null,
+        id_sistema: resumenFacturaData?.id_sistema ?? null,
+        labelCliente: resumenFacturaData?.labelCliente ?? null,
+        labelSistema: resumenFacturaData?.labelSistema ?? null,
+
+        cliente_facturacion: resumenFacturaData?.cliente_facturacion ?? null,
+
+        id_cliente: resumenFacturaData?.id_cliente ?? null,
+        id_tipo_venta: resumenFacturaData?.id_tipo_venta ?? null,
+        id_medio_pago: resumenFacturaData?.id_medio_pago ?? null,
+        id_clasificacion: resumenFacturaData?.id_clasificacion ?? null,
+
+        fecha_cbte_iso: resumenFacturaData?.fecha_cbte_iso ?? null,
+        vto_pago_iso: resumenFacturaData?.vto_pago_iso ?? null,
+
+        cbte_tipo: resumenFacturaData?.cbte_tipo ?? null,
+        pto_vta: resumenFacturaData?.pto_vta ?? null,
+
+        items_facturacion: Array.isArray(resumenFacturaData?.items_facturacion)
+          ? resumenFacturaData.items_facturacion
+          : [],
+
+        total_ars: Number(resumenFacturaData?.total_ars ?? resumen.total ?? 0),
+        monto: Number(resumenFacturaData?.monto ?? resumen.total ?? 0),
+        importe: Number(resumenFacturaData?.importe ?? resumen.total ?? 0),
+        observaciones: resumenFacturaData?.observaciones ?? "",
+
+        emisor_nombre: resumenFacturaData?.emisor_nombre ?? null,
+        emisor_domicilio: resumenFacturaData?.emisor_domicilio ?? null,
+        cuit_emisor: resumenFacturaData?.cuit_emisor ?? null,
+        cond_iva_emisor: resumenFacturaData?.cond_iva_emisor ?? null,
+        ingresos_brutos_emisor: resumenFacturaData?.ingresos_brutos_emisor ?? null,
+        fecha_inicio_actividades_emisor:
+          resumenFacturaData?.fecha_inicio_actividades_emisor ?? null,
+        logo_url: resumenFacturaData?.logo_url ?? null,
+      },
+
+      // CAMPOS PLANOS TAMBIÉN, por compatibilidad
+      items_facturacion: Array.isArray(resumenFacturaData?.items_facturacion)
+        ? resumenFacturaData.items_facturacion
+        : [],
+      total_ars: resumenFacturaData?.total_ars ?? null,
+      vto_pago: resumenFacturaData?.vto_pago_iso ?? null,
+      observaciones: resumenFacturaData?.observaciones ?? "",
+
+      // También guardamos datos del cliente/emisor por separado
+      cliente_facturacion: resumenFacturaData?.cliente_facturacion ?? null,
+      emisor: {
+        nombre: resumenFacturaData?.emisor_nombre ?? null,
+        domicilio: resumenFacturaData?.emisor_domicilio ?? null,
+        cuit: resumenFacturaData?.cuit_emisor ?? null,
+        condicion_iva: resumenFacturaData?.cond_iva_emisor ?? null,
+        ingresos_brutos: resumenFacturaData?.ingresos_brutos_emisor ?? null,
+        fecha_inicio_actividades:
+          resumenFacturaData?.fecha_inicio_actividades_emisor ?? null,
+        logo_url: resumenFacturaData?.logo_url ?? null,
+      },
+    };
+
+    fd.append("meta", JSON.stringify(meta));
+
+    const res = await fetch(API_VINCULAR_COMPROBANTE, {
+      method: "POST",
+      body: fd,
+      headers: buildAuthHeaders(false),
+    });
+
+    const j = await parseJsonOrThrow(res);
+    if (!j?.exito) {
+      throw new Error(j?.mensaje || "No se pudo subir el comprobante.");
+    }
+
+    return j;
+  }, [API_VINCULAR_COMPROBANTE, resumen.total, resumenFacturaData]);
 
   const vincularComprobanteAMovimientosLote=useCallback(async(idsMovimiento,idComprobante)=>{
     if(!idComprobante||!Array.isArray(idsMovimiento)||!idsMovimiento.length)return;
@@ -444,21 +588,92 @@ useEffect(() => {
     finally{setSaving(false);}
   },[validate,showToast,resolveFiscalForFacturacion,configFacturacion,fetchConfigFacturacion,buildResumenFacturaPayload]);
 
-  const finalizarFacturacionYGuardarVenta=useCallback(async factEmitida=>{
-    try{
-      setSaving(true);showToast("cargando","Guardando venta facturada…",12000);
-      const cf=normalizeClienteFiscalDb(resumenFacturaData?.cliente_facturacion||clienteFiscalDb||fiscalArcaData||{});
-      const info=await guardarVentaBatch({clienteFiscalResuelto:cf,accionFinal:"facturar",esFacturadaFinal:true});
-      const idsOk=(Array.isArray(info?.ids??info?.ids_movimiento??info?.ids_movimientos??[])?(info?.ids??info?.ids_movimiento??info?.ids_movimientos??[]):(info?.id_movimiento?[info.id_movimiento]:[])).map(x=>Number(x)).filter(x=>Number.isFinite(x)&&x>0);
-      let idComprobante=factEmitida?.id_comprobante??factEmitida?.idComprobante??null;
-      if(!idComprobante&&factEmitida?.pdf_blob&&idsOk.length>0){const s=await subirComprobanteYVincularPrimerMovimiento({idMovimiento:idsOk[0],blob:factEmitida.pdf_blob,filename:factEmitida.pdf_filename||"factura.pdf",facturaMeta:factEmitida});idComprobante=s?.id_comprobante??s?.comprobante?.id_comprobante??null;}
-      if(idComprobante&&idsOk.length>0)await vincularComprobanteAMovimientosLote(idsOk,idComprobante);
-      showToast("exito","Factura emitida y venta guardada correctamente.",3000);
-      setOpenResumenFactura(false);setResumenFacturaData(null);
-      onSaved?.({...info,factura_emitida:factEmitida||null,id_comprobante:idComprobante});
-    }catch(e){showToast("error",e?.message||"La factura se emitió pero no se pudo guardar la venta.",5200);}
-    finally{setSaving(false);}
-  },[showToast,guardarVentaBatch,resumenFacturaData,clienteFiscalDb,fiscalArcaData,onSaved,subirComprobanteYVincularPrimerMovimiento,vincularComprobanteAMovimientosLote]);
+  const finalizarFacturacionYGuardarVenta = useCallback(async (factEmitida) => {
+    try {
+      setSaving(true);
+      showToast("cargando", "Guardando venta facturada…", 12000);
+
+      const cf = normalizeClienteFiscalDb(
+        resumenFacturaData?.cliente_facturacion ||
+        clienteFiscalDb ||
+        fiscalArcaData ||
+        {}
+      );
+
+      const info = await guardarVentaBatch({
+        clienteFiscalResuelto: cf,
+        accionFinal: "facturar",
+        esFacturadaFinal: true,
+      });
+
+      const idsOk = (
+        Array.isArray(info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
+          ? (info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
+          : (info?.id_movimiento ? [info.id_movimiento] : [])
+      )
+        .map((x) => Number(x))
+        .filter((x) => Number.isFinite(x) && x > 0);
+
+      if (!idsOk.length) {
+        throw new Error("La venta se emitió pero no se devolvieron movimientos para vincular la factura.");
+      }
+
+      if (!factEmitida?.pdf_blob) {
+        throw new Error("La venta se emitió pero no se recibió el PDF para guardarlo.");
+      }
+
+      // SIEMPRE subimos el PDF y SIEMPRE usamos el id_comprobante REAL de comprobantes_archivos
+      const subida = await subirComprobanteYVincularPrimerMovimiento({
+        idMovimiento: idsOk[0],
+        blob: factEmitida.pdf_blob,
+        filename: factEmitida.pdf_filename || "factura.pdf",
+        facturaMeta: factEmitida,
+      });
+
+      const idComprobante = Number(
+        subida?.id_comprobante ??
+        subida?.comprobante?.id_comprobante ??
+        0
+      ) || null;
+
+      if (!idComprobante) {
+        throw new Error("El backend no devolvió un id_comprobante válido al subir la factura.");
+      }
+
+      // Vincular al resto de movimientos del batch, excepto el primero que ya quedó vinculado
+      const restoIds = idsOk.slice(1);
+      if (restoIds.length > 0) {
+        await vincularComprobanteAMovimientosLote(restoIds, idComprobante);
+      }
+
+      showToast("exito", "Factura emitida y venta guardada correctamente.", 3000);
+      setOpenResumenFactura(false);
+      setResumenFacturaData(null);
+
+      onSaved?.({
+        ...info,
+        factura_emitida: factEmitida || null,
+        id_comprobante: idComprobante,
+      });
+    } catch (e) {
+      showToast(
+        "error",
+        e?.message || "La factura se emitió pero no se pudo guardar la venta.",
+        5200
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [
+    showToast,
+    guardarVentaBatch,
+    resumenFacturaData,
+    clienteFiscalDb,
+    fiscalArcaData,
+    onSaved,
+    subirComprobanteYVincularPrimerMovimiento,
+    vincularComprobanteAMovimientosLote
+  ]);
 
   const submit=useCallback(async()=>{
     if(saving)return;

@@ -1,18 +1,16 @@
-// src/components/Movimientos/Ventas/Ventas.jsx
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
 import "../../Global/Global_css/Global_Section.css";
 import "../../Global/Global_css/Global_oscuro.css";
 
 import Toast from "../../Global/Toast.jsx";
-
 import Calendario from "../../Global/Calendario/Calendario.jsx";
 import "../../Global/Calendario/calendario.css";
 
 import ModalNuevaVenta from "./modales/ModalNuevaVenta.jsx";
 import ModalEditarVenta from "./modales/ModalEditarVenta.jsx";
-import ModalEliminarMovimientos from "../../Movimientos/modales/ModalEliminarMovimientos.jsx";
+import ModalEliminarVenta from "./modales/ModalEliminarVenta.jsx";
+import ModalEmitirNotaCreditoVenta from "./modales/ModalEmitirNotaCreditoVenta.jsx";
 
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
@@ -29,7 +27,7 @@ import {
   faArrowRightLong,
   faTimes,
   faEye,
-   faBoxOpen,
+  faBoxOpen,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -94,9 +92,6 @@ function formatFechaDMY(v) {
   return s;
 }
 
-/* =========================
-   Fecha helpers para rango
-========================= */
 function startOfDay(d) {
   if (!d) return null;
   const c = new Date(d);
@@ -134,9 +129,6 @@ function formatDateUI(d) {
   )}/${d.getFullYear()}`;
 }
 
-/* =========================
-   Auth helpers
-========================= */
 function getAuthInfo() {
   const token = (localStorage.getItem("token") || "").trim();
   const sessionKey = (
@@ -157,9 +149,6 @@ function getAuthInfo() {
   return { token, sessionKey, idUsuario };
 }
 
-/* =========================
-   ID robusto
-========================= */
 function getMovimientoId(r) {
   const cand =
     r?.id_movimiento ??
@@ -190,9 +179,6 @@ function getRowKey(r) {
   return `fx:${f}|${c}|${d}|${m}`;
 }
 
-/* =========================
-   FILTRO VENTAS
-========================= */
 function hasCliente(r) {
   const idCli = Number(r?.id_cliente ?? r?.cliente_id ?? r?.idCliente ?? r?.id_cliente_fk ?? 0);
   if (Number.isFinite(idCli) && idCli > 0) return true;
@@ -229,9 +215,6 @@ function isVentaRow(row) {
   return isSalida(row);
 }
 
-/* =========================
-   Helpers comprobante
-========================= */
 function getFacturaIdComprobante(row) {
   const cand =
     row?.factura_id_comprobante ??
@@ -261,9 +244,6 @@ function getFacturaMime(row) {
   ).trim();
 }
 
-/* =========================
-   Normalizador
-========================= */
 function normalizeVentaRow(r) {
   const cliente =
     r?.cliente ?? r?.cliente_nombre ?? r?.nombre_cliente ?? r?.razon_social_cliente ?? "";
@@ -283,7 +263,6 @@ function normalizeVentaRow(r) {
     pago_tipo_venta: String(tipoVentaTxt ?? "").trim() || "",
     medio_pago_nombre: String(medioPagoNombre ?? "").trim() || "",
 
-    // ✅ compatibilidad total
     id_comprobante: facturaId,
     comprobante_url: facturaUrl,
     archivo_mime: facturaMime,
@@ -291,12 +270,12 @@ function normalizeVentaRow(r) {
     factura_id_comprobante: facturaId,
     factura_comprobante_url: facturaUrl,
     factura_comprobante_tipo: facturaMime,
+
+    factura_emitida_en_arca: Number(r?.factura_emitida_en_arca || 0),
+    factura_tiene_nota_credito: Number(r?.factura_tiene_nota_credito || 0),
   };
 }
 
-/* =========================
-   Full-text match
-========================= */
 function rowMatchesQuery(row, query) {
   const qq = normalizeSearchText(query);
   if (!qq) return true;
@@ -319,9 +298,6 @@ function rowMatchesQuery(row, query) {
   return hay.includes(qq);
 }
 
-/* =========================
-   Filtro por rango de fechas
-========================= */
 function rowInDateRange(row, from, to) {
   if (!from && !to) return true;
 
@@ -339,9 +315,6 @@ function rowInDateRange(row, from, to) {
   return true;
 }
 
-/* =========================
-   Export helpers
-========================= */
 function slugifySheetName(name) {
   const s = String(name || "Ventas")
     .replace(/[\[\]\*\/\\\?\:]/g, " ")
@@ -420,6 +393,7 @@ export default function Ventas() {
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
+  const [openNC, setOpenNC] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
 
   const [openVerComprobante, setOpenVerComprobante] = useState(false);
@@ -447,9 +421,6 @@ export default function Ventas() {
     };
   }, []);
 
-  /* =========================
-     API helpers
-  ========================= */
   const buildHeadersGET = useCallback(() => {
     const { token, sessionKey } = getAuthInfo();
     const h = {};
@@ -504,9 +475,6 @@ export default function Ventas() {
     } catch {}
   }, [refreshLists]);
 
-  /* =========================
-     LOAD ROWS
-  ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
       const fromDate = opts.from !== undefined ? opts.from : dateRange.from;
@@ -664,9 +632,6 @@ export default function Ventas() {
     [API, apiGet, dateRange, q]
   );
 
-  /* =========================
-     INIT
-  ========================= */
   useEffect(() => {
     let alive = true;
 
@@ -685,9 +650,6 @@ export default function Ventas() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* =========================
-     Debounce búsqueda
-  ========================= */
   useEffect(() => {
     if (skipSearchRef.current) {
       skipSearchRef.current = false;
@@ -705,9 +667,6 @@ export default function Ventas() {
     };
   }, [q, dateRange]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* =========================
-     Cambio de rango
-  ========================= */
   const handleDateRangeChange = useCallback(
     async (newRange) => {
       if (!newRange.from && !newRange.to) return;
@@ -729,9 +688,6 @@ export default function Ventas() {
     [setDateRange, loadRows, q]
   );
 
-  /* =========================
-     Filtrado client-side
-  ========================= */
   const filteredRows = useMemo(() => {
     return (Array.isArray(rows) ? rows : [])
       .filter((r) => isVentaRow(r))
@@ -739,9 +695,6 @@ export default function Ventas() {
       .filter((r) => rowMatchesQuery(r, q));
   }, [rows, dateRange, q]);
 
-  /* =========================
-     Columnas
-  ========================= */
   const columns = useMemo(() => {
     return [
       {
@@ -812,9 +765,6 @@ export default function Ventas() {
       .join(" ");
   }, [columns]);
 
-  /* =========================
-     Label calendario
-  ========================= */
   const dateRangeLabel = useMemo(() => {
     const { from, to } = dateRange;
 
@@ -844,9 +794,6 @@ export default function Ventas() {
     return `Hasta ${formatDateUI(to)}`;
   }, [dateRange]);
 
-  /* =========================
-     Export base name
-  ========================= */
   const exportBaseName = useMemo(() => {
     const { from, to } = dateRange;
     if (from && to) return `ventas_${dateToAPI(from)}_${dateToAPI(to)}`;
@@ -965,9 +912,6 @@ export default function Ventas() {
     [handleExport]
   );
 
-  /* =========================
-     Guardar / eliminar
-  ========================= */
   const apiPostSave = async (payload, isEdit) => {
     setError("");
     const { idUsuario } = getAuthInfo();
@@ -981,6 +925,17 @@ export default function Ventas() {
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
     return data;
   };
+
+  const reloadVista = useCallback(async () => {
+    cacheRef.current.clear();
+    await loadRows({
+      from: dateRange.from,
+      to: dateRange.to,
+      q,
+      offset: 0,
+      append: false,
+    });
+  }, [dateRange.from, dateRange.to, loadRows, q]);
 
   const confirmDelete = async () => {
     if (!selectedRow?.id_movimiento) return;
@@ -1001,16 +956,7 @@ export default function Ventas() {
 
       setOpenDel(false);
       setSelectedRow(null);
-      cacheRef.current.clear();
-
-      await loadRows({
-        from: dateRange.from,
-        to: dateRange.to,
-        q,
-        offset: 0,
-        append: false,
-      });
-
+      await reloadVista();
       await refreshPeriodos();
       showToast("exito", "Venta eliminada.", 2600);
     } catch (e) {
@@ -1021,9 +967,6 @@ export default function Ventas() {
     }
   };
 
-  /* =========================
-     Cargar todos
-  ========================= */
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
     if (nextOffset === null) return;
@@ -1076,9 +1019,6 @@ export default function Ventas() {
     showToast,
   ]);
 
-  /* =========================
-     VER COMPROBANTE
-  ========================= */
   const handleVerComprobante = useCallback(
     (r) => {
       const idComprobante = getFacturaIdComprobante(r);
@@ -1107,9 +1047,6 @@ export default function Ventas() {
 
   const isAnyLoading = loadingRows || loadingMore || loadingAll;
 
-  /* =========================
-     Skeleton
-  ========================= */
   const skelWidths = useMemo(
     () => ({
       fecha: ["44%", "38%", "40%", "36%"],
@@ -1255,7 +1192,7 @@ export default function Ventas() {
               </div>
 
               <div className="cc-filter">
-<div className="cc-floatingField cc-floatingField--search is-active">
+                <div className="cc-floatingField cc-floatingField--search is-active">
                   <div className="cc-searchInput">
                     <div className="cc-searchInput__fieldWrap">
                       <input
@@ -1473,16 +1410,16 @@ export default function Ventas() {
                   );
                 })}
 
-{!isAnyLoading && filteredRows.length === 0 && (
-  <div className="cc-emptyState">
-    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
-    <div className="cc-emptyText">
-      {q.trim()
-        ? `No se encontraron ventas para "${q.trim()}".`
-        : "No hay ventas para mostrar en el rango de fechas seleccionado."}
-    </div>
-  </div>
-)}
+                {!isAnyLoading && filteredRows.length === 0 && (
+                  <div className="cc-emptyState">
+                    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+                    <div className="cc-emptyText">
+                      {q.trim()
+                        ? `No se encontraron ventas para "${q.trim()}".`
+                        : "No hay ventas para mostrar en el rango de fechas seleccionado."}
+                    </div>
+                  </div>
+                )}
 
                 {!loadingRows && hasMore && filteredRows.length > 0 && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
@@ -1525,14 +1462,7 @@ export default function Ventas() {
             setQ("");
             skipSearchRef.current = true;
             await refreshPeriodos();
-            cacheRef.current.clear();
-            await loadRows({
-              from: dateRange.from,
-              to: dateRange.to,
-              q: "",
-              offset: 0,
-              append: false,
-            });
+            await reloadVista();
             showToast("exito", "Venta guardada y tabla actualizada.", 2400);
           } catch (e) {
             showToast("error", e?.message || "Se guardó, pero falló la recarga.", 4200);
@@ -1558,14 +1488,7 @@ export default function Ventas() {
           try {
             showToast("cargando", "Guardando cambios…", 12000);
             await apiPostSave(payload, true);
-            cacheRef.current.clear();
-            await loadRows({
-              from: dateRange.from,
-              to: dateRange.to,
-              q,
-              offset: 0,
-              append: false,
-            });
+            await reloadVista();
             await refreshPeriodos();
             setOpenEdit(false);
             setSelectedRow(null);
@@ -1577,7 +1500,7 @@ export default function Ventas() {
         }}
       />
 
-      <ModalEliminarMovimientos
+      <ModalEliminarVenta
         open={openDel}
         row={selectedRow}
         loading={deletingId === selectedRow?.id_movimiento}
@@ -1586,7 +1509,30 @@ export default function Ventas() {
           setSelectedRow(null);
         }}
         onConfirm={confirmDelete}
+        onEmitNotaCredito={() => {
+          setOpenDel(false);
+          setOpenNC(true);
+        }}
+      />
+
+      <ModalEmitirNotaCreditoVenta
+        open={openNC}
+        row={selectedRow}
+        onClose={() => setOpenNC(false)}
         onToast={showToast}
+        onDone={async () => {
+          const currentId = selectedRow?.id_movimiento || null;
+          setOpenNC(false);
+          await reloadVista();
+
+          if (currentId) {
+            const updated = rowsRef.current.find((x) => getMovimientoId(x) === currentId) || null;
+            setSelectedRow(updated);
+            if (updated) setOpenDel(true);
+          }
+
+          showToast("exito", "Nota de crédito emitida. Ahora ya podés eliminar la venta.", 3600);
+        }}
       />
 
       <ModalVerComprobante

@@ -124,10 +124,6 @@ export default function ModalFacturaBaltoResumen({
   onDone,
   forceTestAmount = false,
   testAmount = 1000,
-
-  // ✅ NUEVO:
-  // cuando true, este modal NO intenta crear movimiento ni subir comprobante.
-  // solo genera/emite PDF y devuelve blob al padre.
   skipMovimientoAutocreacion = false,
 }) {
   const [loading, setLoading] = useState(false);
@@ -527,12 +523,24 @@ export default function ModalFacturaBaltoResumen({
 
     movimientoIdRef.current = newId;
     return newId;
-  }, [skipMovimientoAutocreacion, data?.id_movimiento, action, buildMovimientoPayload, apiBase, fetchJSON]);
+  }, [
+    skipMovimientoAutocreacion,
+    data?.id_movimiento,
+    action,
+    buildMovimientoPayload,
+    apiBase,
+    fetchJSON,
+  ]);
 
   const guardarFacturaEnDB = useCallback(
-    async ({ blob, filename, fact, estado, idMovimiento }) => {
-      if (estado !== "emitida") return { exito: true, skip: true };
-
+    async ({
+      blob,
+      filename,
+      fact,
+      estado,
+      emitidoEnArca = false,
+      idMovimiento,
+    }) => {
       const idMovPrincipal = Number(idMovimiento || 0);
       if (idMovPrincipal <= 0) {
         throw new Error("No hay id_movimiento válido para vincular la factura.");
@@ -549,35 +557,56 @@ export default function ModalFacturaBaltoResumen({
 
       const meta = {
         tipo: "FACTURA",
-        estado: "emitida",
+        estado: String(estado || "").trim() || "solo_pdf",
+        emitido_en_arca: emitidoEnArca ? 1 : 0,
+
         id_pago: idPago ?? null,
         id_sistema: idSistema ?? null,
-        anio: Number(fact?.anio || 0),
-        id_mes: Number(fact?.id_mes || 0),
-        monto_ars: Number(fact?.imp_total ?? fact?.importe ?? data?.monto ?? 0),
-        doc_tipo: Number(docTipo),
-        doc_nro: String(docNro || "").replace(/\D/g, ""),
-        cbte_tipo: Number(cbteTipo),
-        pto_vta: Number(ptoVta),
+
         razon_social: data?.cliente_facturacion?.razon_social || null,
         cond_iva:
           data?.cliente_facturacion?.cond_iva ||
           data?.cliente_facturacion?.condicion_iva ||
           null,
         domicilio: data?.cliente_facturacion?.domicilio || null,
-        cae: fact?.cae ?? null,
-        cae_vto: fact?.cae_vto ?? null,
-        cbte_nro: fact?.cbte_nro ?? null,
-        fecha_cbte: fact?.fecha_cbte ?? null,
-        resultado: fact?.resultado ?? null,
-        qr_url: fact?.qr_url ?? null,
-        qr_base64: fact?.qr_base64 ?? null,
-        qr_payload: fact?.qr_payload ?? null,
-        items_facturacion: Array.isArray(data?.items_facturacion) ? data.items_facturacion : [],
-        total_ars: data?.total_ars ?? null,
-        vto_pago: isoToYmd8(vtoPagoISO) || null,
+
+        items_facturacion: Array.isArray(data?.items_facturacion)
+          ? data.items_facturacion
+          : [],
+        total_ars: emitidoEnArca
+          ? Number(fact?.imp_total ?? fact?.importe ?? data?.total_ars ?? data?.monto ?? 0)
+          : Number(data?.total_ars ?? data?.monto ?? data?.importe ?? 0),
+        monto_ars: emitidoEnArca
+          ? Number(fact?.imp_total ?? fact?.importe ?? data?.monto ?? 0)
+          : Number(data?.monto ?? data?.total_ars ?? data?.importe ?? 0),
         observaciones: data?.observaciones ?? "",
+        vto_pago: isoToYmd8(vtoPagoISO) || null,
+
+        doc_tipo: Number(docTipo) || null,
+        doc_nro: String(docNro || "").replace(/\D/g, "") || null,
+        cbte_tipo: Number(cbteTipo) || null,
+        pto_vta: Number(ptoVta) || null,
+
+        anio: emitidoEnArca ? Number(fact?.anio || 0) : null,
+        id_mes: emitidoEnArca ? Number(fact?.id_mes || 0) : null,
+
+        cbte_nro: emitidoEnArca ? (fact?.cbte_nro ?? null) : null,
+        cae: emitidoEnArca ? (fact?.cae ?? null) : null,
+        cae_vto: emitidoEnArca ? (fact?.cae_vto ?? null) : null,
+        fecha_cbte: emitidoEnArca
+          ? (fact?.fecha_cbte ?? null)
+          : (isoToYmd8(fechaCbteISO) || null),
+        resultado: emitidoEnArca ? (fact?.resultado ?? null) : null,
+
+        qr_url: emitidoEnArca ? (fact?.qr_url ?? null) : null,
+        qr_base64: emitidoEnArca ? (fact?.qr_base64 ?? null) : null,
+        qr_payload: emitidoEnArca ? (fact?.qr_payload ?? null) : null,
+
+        json_arca: emitidoEnArca
+          ? (fact?.json_arca ?? fact?.raw_min ?? fact ?? null)
+          : null,
       };
+
       fd.append("meta", JSON.stringify(meta));
 
       const res = await fetch(`${apiBase}?action=comprobantes_vincular_movimiento`, {
@@ -603,7 +632,18 @@ export default function ModalFacturaBaltoResumen({
 
       return j || {};
     },
-    [apiBase, data, docTipo, docNro, cbteTipo, ptoVta, vtoPagoISO, idPago, idSistema]
+    [
+      apiBase,
+      data,
+      docTipo,
+      docNro,
+      cbteTipo,
+      ptoVta,
+      vtoPagoISO,
+      fechaCbteISO,
+      idPago,
+      idSistema,
+    ]
   );
 
   const finalizarUnaSolaVez = useCallback(
@@ -642,8 +682,8 @@ export default function ModalFacturaBaltoResumen({
         imp_total: importeFinal,
         importe: importeFinal,
         cae: "",
-        cae_vto: isoToYmd8(vtoPagoISO),
-        resultado: "P",
+        cae_vto: "",
+        resultado: "",
         qr_url: "",
         qr_base64: "",
         qr_payload: null,
@@ -702,7 +742,8 @@ export default function ModalFacturaBaltoResumen({
             importe: importeFinal,
             fecha_cbte: factPdfOnly.fecha_cbte || isoToYmd8(fechaCbteISO),
           },
-          estado: "emitida",
+          estado: "solo_pdf",
+          emitidoEnArca: false,
           idMovimiento,
         });
 
@@ -714,6 +755,7 @@ export default function ModalFacturaBaltoResumen({
 
       const factFinal = {
         ...factPdfOnly,
+        emitido_en_arca: 0,
         id_movimiento: idMovimiento,
         id_comprobante: idComprobante,
         pdf_blob: blob || null,
@@ -900,24 +942,27 @@ export default function ModalFacturaBaltoResumen({
           filename,
           fact: {
             ...fact,
+            json_arca: fact?.raw_min || fact || null,
             anio: v.anio,
             id_mes: v.id_mes,
             importe: Number(fact?.imp_total || monto),
             fecha_cbte: fact?.fecha_cbte || isoToYmd8(fechaCbteISO),
           },
           estado: "emitida",
+          emitidoEnArca: true,
           idMovimiento,
         });
 
         idComprobante =
           dbResp?.id_comprobante ??
           dbResp?.comprobante?.id_comprobante ??
-          fact?.id_comprobante ??
           null;
       }
 
       const factFinal = {
         ...fact,
+        emitido_en_arca: 1,
+        json_arca: fact?.raw_min || fact || null,
         id_movimiento: idMovimiento,
         id_comprobante: idComprobante,
         pdf_blob: blob,

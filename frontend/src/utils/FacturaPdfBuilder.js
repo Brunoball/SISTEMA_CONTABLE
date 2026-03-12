@@ -712,7 +712,13 @@ async function drawPage(doc, pageName, ctx) {
 
   const bandH = 28;
   set(doc, "helvetica", "bold", 14);
-  text(doc, pageName.toUpperCase(), B + innerW / 2, B + 19, { align: "center" });
+
+  // ✅ centrado horizontal + centrado visual vertical dentro de la banda
+  const bandCenterY = B + bandH / 2;
+  text(doc, pageName.toUpperCase(), B + innerW / 2, bandCenterY + 5, {
+    align: "center",
+  });
+
   line(doc, B, B + bandH, W - B, B + bandH, 0.55);
 
   const meta = getMeta(fact);
@@ -747,18 +753,18 @@ async function drawPage(doc, pageName, ctx) {
   drawLogoOrFallback(doc, logoDataUrl, em, leftX, headerY, splitX);
 
   set(doc, "helvetica", "bold", 9);
-  text(doc, "Razón Social:", leftX, ly+28);
+  text(doc, "Razón Social:", leftX, ly + 18);
   set(doc, "helvetica", "normal", 9);
-  text(doc, clampToWidth(doc, em.razon, splitX - leftX - 12), leftX + 78, ly + 28);
+  text(doc, clampToWidth(doc, em.razon, splitX - leftX - 12), leftX + 78, ly + 18);
 
   set(doc, "helvetica", "bold", 9);
-  text(doc, "Domicilio Comercial:", leftX, ly + 44);
+  text(doc, "Domicilio Comercial:", leftX, ly + 38);
   set(doc, "helvetica", "normal", 9);
   text(
     doc,
     clampToWidth(doc, em.domComercial, splitX - leftX - 12),
     leftX + 118,
-    ly + 44
+    ly + 38
   );
 
   set(doc, "helvetica", "bold", 9);
@@ -877,8 +883,6 @@ async function drawPage(doc, pageName, ctx) {
   const tblBottomLimit = bottom.totY - 18;
   const tblH = Math.max(170, tblBottomLimit - tblY);
 
-
-
   const headerRowH = 22;
   fillRect(doc, B, tblY, innerW, headerRowH, 0.84);
   rect(doc, B, tblY, innerW, headerRowH, 0.55);
@@ -910,7 +914,6 @@ async function drawPage(doc, pageName, ctx) {
 
   const padL = 8;
   const padR = 8;
-
 
   set(doc, "helvetica", "bold", 8.6);
   text(doc, "Código", x0 + padL, tblY + 15);

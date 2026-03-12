@@ -63,6 +63,7 @@ export default function ModalPerfil({
     const onKeyDown = (e) => {
       if (e.key === "Escape") onClose?.();
     };
+
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
@@ -103,12 +104,7 @@ export default function ModalPerfil({
   const showLogo = Boolean(logoSrc) && !logoError;
 
   return (
-    <div
-      className="mi-modal__overlay"
-      onClick={(e) =>
-        e.target.classList.contains("mi-modal__overlay") && cerrar()
-      }
-    >
+    <div className="mi-modal__overlay">
       <div
         className="mi-modal__container mi-modal__container--perfil"
         role="dialog"
@@ -162,9 +158,9 @@ export default function ModalPerfil({
                     src={logoSrc}
                     alt={`Logo de ${view.tenantNombre}`}
                     style={{
-                      maxWidth: "88%",
-                      maxHeight: "88%",
-                      objectFit: "contain",
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
                       display: "block",
                     }}
                     onError={() => setLogoError(true)}

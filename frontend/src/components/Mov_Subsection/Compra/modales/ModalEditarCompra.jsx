@@ -1191,10 +1191,10 @@ export default function ModalEditarCompra({
       }
 
       if (!proveedorId || proveedorId === NULL_OPTION || proveedorId === ADD_OPTION) {
-        throw new Error("Seleccioná un proveedor (o crealo con “Agregar nuevo proveedor”).");
+        throw new Error("Seleccioná un proveedor (o crealo con Agregar nuevo proveedor");
       }
       if (!detalleId || detalleId === NULL_OPTION || detalleId === ADD_OPTION) {
-        throw new Error("Seleccioná un detalle (o crealo con “Agregar nuevo detalle”).");
+        throw new Error("Seleccioná un detalle (o crealo con Agregar nuevo detalle");
       }
 
       let finalMedioPago = form.id_medio_pago;
@@ -1494,6 +1494,9 @@ export default function ModalEditarCompra({
                 </div>
               </section>
 
+              {/* ============================================================
+                  ASIDE — con scroll igual que ventas
+              ============================================================ */}
               <aside className="mi-em-aside">
                 <div className="mi-em-asideTitle">Relaciones, pago y archivo</div>
 
@@ -1538,7 +1541,7 @@ export default function ModalEditarCompra({
                       <label className="fl-label">Medio de pago</label>
                     </div>
                   ) : (
-                    <div className="fl-field">
+                    <div className="fl-field" style={{ opacity: 0.6 }}>
                       <input className="fl-input" value="No aplica" disabled />
                       <label className="fl-label">Medio de pago</label>
                     </div>
@@ -1726,6 +1729,7 @@ export default function ModalEditarCompra({
                     </div>
                   </div>
 
+                  {/* ✅ CAMBIO: botones Guardar + Cancelar en grid 2 cols, igual que ventas */}
                   <div className="mi-em-actions">
                     <button
                       type="submit"
@@ -1733,6 +1737,15 @@ export default function ModalEditarCompra({
                       className="mit-btn mit-btn--solid mit-btn--block"
                     >
                       {saving ? "Guardando..." : "Guardar"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={cerrar}
+                      disabled={saving || addUI.open || openVerComp}
+                      className="mit-btn mit-btn--ghost mit-btn--block"
+                    >
+                      Cancelar
                     </button>
                   </div>
                 </div>

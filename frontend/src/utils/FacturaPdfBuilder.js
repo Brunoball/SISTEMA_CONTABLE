@@ -587,10 +587,10 @@ function getImageFormatFromDataUrl(dataUrl) {
 }
 
 function drawLogoOrFallback(doc, logoDataUrl, em, leftX, headerY, splitX) {
-  const logoBoxX = leftX;
-  const logoBoxY = headerY + 6;
-  const logoBoxW = 124;
-  const logoBoxH = 44;
+  const logoBoxX = leftX + 10;
+  const logoBoxY = headerY + 10;
+  const logoBoxW = 204;
+  const logoBoxH = 60;
 
   const maxTextW = splitX - leftX - 18;
 
@@ -712,7 +712,7 @@ async function drawPage(doc, pageName, ctx) {
 
   const bandH = 28;
   set(doc, "helvetica", "bold", 14);
-  text(doc, pageName.toUpperCase(), W / 2, B + 19, { align: "center" });
+  text(doc, pageName.toUpperCase(), B + innerW / 2, B + 19, { align: "center" });
   line(doc, B, B + bandH, W - B, B + bandH, 0.55);
 
   const meta = getMeta(fact);
@@ -747,28 +747,28 @@ async function drawPage(doc, pageName, ctx) {
   drawLogoOrFallback(doc, logoDataUrl, em, leftX, headerY, splitX);
 
   set(doc, "helvetica", "bold", 9);
-  text(doc, "Razón Social:", leftX, ly);
+  text(doc, "Razón Social:", leftX, ly+28);
   set(doc, "helvetica", "normal", 9);
-  text(doc, clampToWidth(doc, em.razon, splitX - leftX - 12), leftX + 78, ly);
+  text(doc, clampToWidth(doc, em.razon, splitX - leftX - 12), leftX + 78, ly + 28);
 
   set(doc, "helvetica", "bold", 9);
-  text(doc, "Domicilio Comercial:", leftX, ly + 24);
+  text(doc, "Domicilio Comercial:", leftX, ly + 44);
   set(doc, "helvetica", "normal", 9);
   text(
     doc,
     clampToWidth(doc, em.domComercial, splitX - leftX - 12),
     leftX + 118,
-    ly + 24
+    ly + 44
   );
 
   set(doc, "helvetica", "bold", 9);
-  text(doc, "Condición frente al IVA:", leftX, ly + 48);
+  text(doc, "Condición frente al IVA:", leftX, ly + 58);
   set(doc, "helvetica", "normal", 9);
   text(
     doc,
     clampToWidth(doc, em.condIva, splitX - leftX - 12),
     leftX + 130,
-    ly + 48
+    ly + 58
   );
 
   const rx = splitX + 1;
@@ -780,28 +780,28 @@ async function drawPage(doc, pageName, ctx) {
   text(doc, "Comp. Nro:", rx + 168, headerY + 65);
 
   set(doc, "helvetica", "bold", 9);
-  text(doc, meta.ptoVta, rx + 140, headerY + 65, { align: "left" });
-  text(doc, meta.cbteNro, rx + 230, headerY + 65, { align: "left" });
+  text(doc, meta.ptoVta, rx + 110, headerY + 65, { align: "left" });
+  text(doc, meta.cbteNro, rx + 220, headerY + 65, { align: "left" });
 
   set(doc, "helvetica", "bold", 9);
   text(doc, "Fecha de Emisión:", rx + 40, headerY + 80);
   set(doc, "helvetica", "normal", 9);
-  text(doc, meta.fechaEmision, rx + 185, headerY + 80);
+  text(doc, meta.fechaEmision, rx + 135, headerY + 80);
 
   set(doc, "helvetica", "bold", 9);
   text(doc, "CUIT:", rx + 40, headerY + 102);
   set(doc, "helvetica", "normal", 9);
-  text(doc, em.cuit, rx + 185, headerY + 102);
+  text(doc, em.cuit, rx + 75, headerY + 102);
 
   set(doc, "helvetica", "bold", 9);
   text(doc, "Ingresos Brutos:", rx + 40, headerY + 115);
   set(doc, "helvetica", "normal", 9);
-  text(doc, em.iibb, rx + 185, headerY + 115);
+  text(doc, em.iibb, rx + 125, headerY + 115);
 
   set(doc, "helvetica", "bold", 9);
   text(doc, "Fecha de Inicio de Actividades:", rx + 40, headerY + 128);
   set(doc, "helvetica", "normal", 9);
-  text(doc, s(em.inicioAct), W - B - 18, headerY + 128, { align: "right" });
+  text(doc, s(em.inicioAct), W - B - 48, headerY + 128, { align: "right" });
 
   const periodY = headerY + headerH;
   const periodH = 30;
@@ -877,7 +877,7 @@ async function drawPage(doc, pageName, ctx) {
   const tblBottomLimit = bottom.totY - 18;
   const tblH = Math.max(170, tblBottomLimit - tblY);
 
-  rect(doc, B, tblY, innerW, tblH, 0.55);
+
 
   const headerRowH = 22;
   fillRect(doc, B, tblY, innerW, headerRowH, 0.84);
@@ -911,13 +911,6 @@ async function drawPage(doc, pageName, ctx) {
   const padL = 8;
   const padR = 8;
 
-  line(doc, x1, tblY, x1, tblY + tblH, 0.45);
-  line(doc, x2, tblY, x2, tblY + tblH, 0.45);
-  line(doc, x3, tblY, x3, tblY + tblH, 0.45);
-  line(doc, x4, tblY, x4, tblY + tblH, 0.45);
-  line(doc, x5, tblY, x5, tblY + tblH, 0.45);
-  line(doc, x6, tblY, x6, tblY + tblH, 0.45);
-  line(doc, x7, tblY, x7, tblY + tblH, 0.45);
 
   set(doc, "helvetica", "bold", 8.6);
   text(doc, "Código", x0 + padL, tblY + 15);

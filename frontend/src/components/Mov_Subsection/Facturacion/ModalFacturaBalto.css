@@ -43,7 +43,7 @@
 
 .mfb-preview{
   width: 100%;
-  height: 70vh;
+  height: 50vh;
   border: 1px solid rgba(148,163,184,.35);
   border-radius: 12px;
   background: #ffffff;
@@ -270,14 +270,9 @@
 
 /* pdf preview */
 
-.mfb-preview{
-  width: 100%;
-  height: 72vh;
-  border: 1px solid rgba(148,163,184,.35);
-  border-radius: 12px;
-  background: #ffffff;
+.mi-tanel{
+  padding: 10px;
 }
-
 /* icon spacing */
 
 .mfb-icon{

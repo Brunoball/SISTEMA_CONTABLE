@@ -634,7 +634,7 @@ background: var(--mi-primary);
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding:0 12px 12px 12px;
+  padding:6px 12px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;

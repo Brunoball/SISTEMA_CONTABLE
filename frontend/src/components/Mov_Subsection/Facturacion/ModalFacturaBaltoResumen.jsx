@@ -1304,7 +1304,7 @@ export default function ModalFacturaBaltoResumen({
 
           {tabActiva === "resumen" && (
             <div className="mi-tabpanel padding-tabpanel">
-              <div className="mi-card">
+              <div className="mi-card" >
                 <div className="arca-alert arca-alert--info">
                   <div className="arca-alert__title">
                     <strong>
@@ -1379,11 +1379,9 @@ export default function ModalFacturaBaltoResumen({
           )}
 
           {tabActiva === "preview" && (
-            <div className="mi-tabpanel">
-              <div className="mi-card">
-                <h3 className="mi-card__title">
-                  {usarModoNC ? "Vista previa de nota de crédito" : "Vista previa del PDF"}
-                </h3>
+            <div className="mi-tanel">
+              <div className="mi-card" style={{padding:"0"}}>
+
 
                 {loadingPreview ? (
                   <div className="arca-alert arca-alert--info">

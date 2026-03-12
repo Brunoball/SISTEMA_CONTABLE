@@ -336,7 +336,6 @@ export default function ModalEmitirNotaCreditoVenta({
           "mi-modal__overlay",
           dark ? "mi-modal__overlay--dark" : "",
         ].join(" ").trim()}
-        onMouseDown={onClose}
       >
         <div
           className={[

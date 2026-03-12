@@ -143,20 +143,21 @@ export default function ModalPagarRecibos({
   cliente,
   deudas = [],
   onFactura,
-  // ✅ callback cuando se FINALIZA el recibo (se guarda comprobante)
   onReciboFinalizado,
 }) {
   const dialogRef = useRef(null);
   const firstFocusRef = useRef(null);
 
-  // ✅ NUEVO: detectar scroll real en tbody para activar gutter stable SOLO cuando aparece scroll
   const tbodyRef = useRef(null);
   const [tbodyHasScroll, setTbodyHasScroll] = useState(false);
 
   const [dark, setDark] = useState(isTemaOscuro());
   useEffect(() => {
     const obs = new MutationObserver(() => setDark(isTemaOscuro()));
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
     return () => obs.disconnect();
   }, []);
 
@@ -225,17 +226,23 @@ export default function ModalPagarRecibos({
     setTimeout(() => firstFocusRef.current?.focus(), 50);
   }, [open, fetchMediosPago, deudas]);
 
+  // ✅ IMPORTANTE:
+  // este ESC solo funciona cuando está visible el modal de pago.
+  // si está abierto el recibo, el de pago NO se renderiza, así evitamos el "doble modal".
   useEffect(() => {
-    if (!open) return;
+    if (!open || openRecibo) return;
+
     const onKey = (e) => {
       if (e.key === "Escape") {
-        if (openRecibo) setOpenRecibo(false);
-        else onClose?.();
+        e.preventDefault();
+        e.stopPropagation();
+        if (!loading) onClose?.();
       }
     };
+
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose, openRecibo]);
+  }, [open, openRecibo, onClose, loading]);
 
   const deudasOrdenadas = useMemo(() => {
     const arr = Array.isArray(rows) ? [...rows] : [];
@@ -260,17 +267,14 @@ export default function ModalPagarRecibos({
 
   const cantSeleccionadas = useMemo(() => selectedIds.size, [selectedIds]);
 
-  // ✅ NUEVO: recompute scroll real del tbody
   const recomputeTbodyScroll = useCallback(() => {
     const el = tbodyRef.current;
     if (!el) return;
-    // +1 para evitar falsos positivos por subpíxeles
     setTbodyHasScroll(el.scrollHeight > el.clientHeight + 1);
   }, []);
 
-  // ✅ NUEVO: observar cambios de tamaño/contenido para activar/desactivar gutter stable
   useEffect(() => {
-    if (!open) return;
+    if (!open || openRecibo) return;
 
     const t = setTimeout(recomputeTbodyScroll, 0);
 
@@ -291,8 +295,7 @@ export default function ModalPagarRecibos({
       mo.disconnect();
       window.removeEventListener("resize", recomputeTbodyScroll);
     };
-    // deudasOrdenadas.length para recalcular cuando cambia el listado
-  }, [open, recomputeTbodyScroll, deudasOrdenadas.length]);
+  }, [open, openRecibo, recomputeTbodyScroll, deudasOrdenadas.length]);
 
   const toggleOne = (id, row) => {
     if (!id) return;
@@ -411,7 +414,10 @@ export default function ModalPagarRecibos({
       let resp = null;
       if (onConfirm) {
         resp = await onConfirm({
-          cliente: { id_cliente: cliente?.id_cliente ?? null, nombre: cliente?.cliente ?? "" },
+          cliente: {
+            id_cliente: cliente?.id_cliente ?? null,
+            nombre: cliente?.cliente ?? "",
+          },
           seleccion,
           totalSeleccionado,
           nota: nota.trim(),
@@ -423,35 +429,43 @@ export default function ModalPagarRecibos({
         resp = await confirmPagoDefault({ ids_movimiento: ids, id_medio_pago: mp.id });
       }
 
-      // ✅ Guardamos TODOS los ids pagados para que el PDF se vincule a todos
       setIdsMovimientosPagados(ids);
 
       const firstCobro = Number(resp?.ids_cobro?.[0] || resp?.id_cobro || 0) || null;
       setUltimoCobroId(firstCobro);
 
-      // UX: marcar pagado local
       setRows((prev) =>
         (Array.isArray(prev) ? prev : []).map((r) => {
           const id = Number(r?.id_movimiento || 0);
           if (!id || !ids.includes(id)) return r;
-          return { ...r, cobrado_total: Number(r?.monto_total ?? r?.total ?? 0) || 0, pagado: true };
+          return {
+            ...r,
+            cobrado_total: Number(r?.monto_total ?? r?.total ?? 0) || 0,
+            pagado: true,
+          };
         })
       );
 
       onAfterPaid?.(ids, mp);
 
-      const clienteInfo = { id_cliente: cliente?.id_cliente ?? null, nombre: cliente?.cliente ?? "" };
+      const clienteInfo = {
+        id_cliente: cliente?.id_cliente ?? null,
+        nombre: cliente?.cliente ?? "",
+      };
       const built = buildReciboFromSeleccion({ clienteInfo, mp, seleccion });
+
       setReciboHtml(built.html);
       setReciboTitle(built.title);
+
+      // ✅ PRIMERO abrimos el recibo
+      // ✅ y dejamos de renderizar el modal de pago
       setOpenRecibo(true);
 
       setSelectedIds(new Set());
       setPagaTodo(false);
 
-      onToast?.("exito", "Pago confirmado. Generá el recibo antes de finalizar.", 2600);
+      onToast?.("exito", "Pago confirmado. Revisá el recibo y finalizá.", 2600);
 
-      // ✅ recalcular scroll luego de marcar pagado / cambiar filas
       setTimeout(recomputeTbodyScroll, 0);
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo registrar el pago.", 4200);
@@ -530,223 +544,234 @@ export default function ModalPagarRecibos({
 
   return createPortal(
     <>
-      <div
-        className={overlayClass}
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={() => (!openRecibo ? onClose?.() : null)}
-      >
-        <div className={modalClass} ref={dialogRef} onMouseDown={(e) => e.stopPropagation()}>
-          <div className="mi-modal__header mpr-header">
-            <div className="mpr-headLeft">
-              <div className="mi-modal__title mpr-title">
-                <FontAwesomeIcon icon={faMoneyBill1Wave} />
-                <span>Pagar</span>
-                <span className="mpr-dot">·</span>
-                <span className="mpr-clientName">{safeText(cliente?.cliente)}</span>
+      {/* ✅ SOLO renderiza el modal de pago si NO está abierto el recibo */}
+      {!openRecibo && (
+        <div className={overlayClass} role="dialog" aria-modal="true">
+          <div className={modalClass} ref={dialogRef} onMouseDown={(e) => e.stopPropagation()}>
+            <div className="mi-modal__header mpr-header">
+              <div className="mpr-headLeft">
+                <div className="mi-modal__title mpr-title">
+                  <FontAwesomeIcon icon={faMoneyBill1Wave} />
+                  <span>Pagar</span>
+                  <span className="mpr-dot">·</span>
+                  <span className="mpr-clientName">{safeText(cliente?.cliente)}</span>
 
-                {cliente?.id_cliente ? (
-                  <span className="mpr-clientIdPill" title={`ID Cliente: ${cliente.id_cliente}`}>
-                    ID {String(cliente.id_cliente)}
-                  </span>
-                ) : null}
+                  {cliente?.id_cliente ? (
+                    <span className="mpr-clientIdPill" title={`ID Cliente: ${cliente.id_cliente}`}>
+                      ID {String(cliente.id_cliente)}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="mi-modal__subtitle mpr-subtitle">
+                  Se muestran pendientes y pagadas (las pagadas quedan bloqueadas)
+                </div>
               </div>
 
-              <div className="mi-modal__subtitle mpr-subtitle">
-                Se muestran pendientes y pagadas (las pagadas quedan bloqueadas)
-              </div>
+              <button
+                ref={firstFocusRef}
+                type="button"
+                className="mi-modal__close"
+                onClick={onClose}
+                title="Cerrar"
+                disabled={loading}
+              >
+                <FontAwesomeIcon icon={faXmark} />
+              </button>
             </div>
 
-            <button
-              ref={firstFocusRef}
-              type="button"
-              className="mi-modal__close"
-              onClick={() => (openRecibo ? setOpenRecibo(false) : onClose?.())}
-              title={openRecibo ? "Cerrar recibo" : "Cerrar"}
-              disabled={loading}
-            >
-              <FontAwesomeIcon icon={faXmark} />
-            </button>
-          </div>
+            <div className="mi-modal__body mpr-body">
+              <div className="mpr-content">
+                <div className="mpr-card">
+                  <div className="mpr-formRow">
+                    <div className="mpr-field">
+                      <label>Medio de pago</label>
 
-          <div className="mi-modal__body mpr-body">
-            <div className="mpr-content">
-              <div className="mpr-card">
-                <div className="mpr-formRow">
-                  <div className="mpr-field">
-                    <label>Medio de pago</label>
-
-                    <div className="mpr-selectWrap">
-                      <select
-                        value={idMedioPago}
-                        onChange={(e) => setIdMedioPago(e.target.value)}
-                        disabled={loading || loadingMedios}
-                        className="mpr-select"
-                      >
-                        <option value="">
-                          {loadingMedios
-                            ? "Cargando medios de pago…"
-                            : "Seleccioná un medio de pago…"}
-                        </option>
-
-                        {!loadingMedios && mediosPago.length === 0 && (
-                          <option value="" disabled>
-                            (Sin medios de pago)
-                          </option>
-                        )}
-
-                        {mediosPago.map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                      </select>
-
-                      {loadingMedios && (
-                        <span className="mpr-selectSpinner" title="Cargando…">
-                          <FontAwesomeIcon icon={faCircleNotch} spin />
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mpr-field">
-                    <label>Total seleccionado</label>
-                    <div className="mpr-totalPill">{moneyARS(totalSeleccionado)}</div>
-                  </div>
-
-                  <div className="mpr-field mpr-field--actions">
-                    <label className="mpr-labelGhost">Acciones</label>
-                    <button
-                      type="button"
-                      className="mov-btn mov-btn--ghost mpr-btnWide mpr-btnInCard"
-                      onClick={toggleAll}
-                      disabled={!deudasOrdenadas.length || loading}
-                      title="Seleccionar / deseleccionar todas (solo pendientes)"
-                    >
-                      <FontAwesomeIcon icon={faListCheck} />
-                      {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mpr-tableWrap">
-                <div className="mpr-tableTitle">
-                  <span>Registros del cliente</span>
-                  <div className="mpr-actionsRight">
-                    <div className="mpr-miniStat">
-                      <span>Total</span>
-                      <b>{deudasOrdenadas.length}</b>
-                    </div>
-                    <div className="mpr-miniStat">
-                      <span>Seleccionadas</span>
-                      <b>{cantSeleccionadas}</b>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ✅ NUEVO: clase condicional cuando el tbody tiene scroll real */}
-                <div className={`mpr-table ${tbodyHasScroll ? "mpr-table--hasScroll" : ""}`}>
-                  <div className="mpr-thead" role="row">
-                    <div className="mpr-th mpr-th--center">Sel</div>
-                    <div className="mpr-th">Fecha</div>
-                    <div className="mpr-th">Descripción</div>
-                    <div className="mpr-th mpr-th--center">Estado</div>
-                    <div className="mpr-th mpr-th--right">Monto</div>
-                  </div>
-
-                  {/* ✅ NUEVO: ref para medir si hay scroll */}
-                  <div ref={tbodyRef} className="mpr-tbody">
-                    {!deudasOrdenadas.length && (
-                      <div className="mpr-empty">No hay registros para este cliente.</div>
-                    )}
-
-                    {deudasOrdenadas.map((r, idx) => {
-                      const id = Number(r?.id_movimiento || 0);
-                      const pagado = isPagadoRow(r);
-                      const checked = selectedIds.has(id);
-                      const monto = Number(r?.monto_total ?? r?.total ?? 0) || 0;
-
-                      return (
-                        <div
-                          key={id || `${r?.fecha}-${idx}`}
-                          className={`mpr-row ${checked ? "is-checked" : ""} ${
-                            pagado ? "is-paid" : ""
-                          }`}
-                          role="row"
-                          onClick={() => id && toggleOne(id, r)}
-                          title={pagado ? "Este registro ya está PAGADO" : undefined}
+                      <div className="mpr-selectWrap">
+                        <select
+                          value={idMedioPago}
+                          onChange={(e) => setIdMedioPago(e.target.value)}
+                          disabled={loading || loadingMedios}
+                          className="mpr-select"
                         >
-                          <div className="mpr-td mpr-td--center" onClick={(e) => e.stopPropagation()}>
-                            <label className={`mpr-checkWrap ${!id || loading || pagado ? "is-disabled" : ""}`}>
-                              <input
-                                className="mpr-checkInput"
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleOne(id, r)}
-                                disabled={!id || loading || pagado}
-                              />
-                              <span className="mpr-checkBox" aria-hidden="true" />
-                            </label>
+                          <option value="">
+                            {loadingMedios
+                              ? "Cargando medios de pago…"
+                              : "Seleccioná un medio de pago…"}
+                          </option>
+
+                          {!loadingMedios && mediosPago.length === 0 && (
+                            <option value="" disabled>
+                              (Sin medios de pago)
+                            </option>
+                          )}
+
+                          {mediosPago.map((x) => (
+                            <option key={x.id} value={String(x.id)}>
+                              {x.nombre}
+                            </option>
+                          ))}
+                        </select>
+
+                        {loadingMedios && (
+                          <span className="mpr-selectSpinner" title="Cargando…">
+                            <FontAwesomeIcon icon={faCircleNotch} spin />
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mpr-field">
+                      <label>Total seleccionado</label>
+                      <div className="mpr-totalPill">{moneyARS(totalSeleccionado)}</div>
+                    </div>
+
+                    <div className="mpr-field mpr-field--actions">
+                      <label className="mpr-labelGhost">Acciones</label>
+                      <button
+                        type="button"
+                        className="mov-btn mov-btn--ghost mpr-btnWide mpr-btnInCard"
+                        onClick={toggleAll}
+                        disabled={!deudasOrdenadas.length || loading}
+                        title="Seleccionar / deseleccionar todas (solo pendientes)"
+                      >
+                        <FontAwesomeIcon icon={faListCheck} />
+                        {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mpr-tableWrap">
+                  <div className="mpr-tableTitle">
+                    <span>Registros del cliente</span>
+                    <div className="mpr-actionsRight">
+                      <div className="mpr-miniStat">
+                        <span>Total</span>
+                        <b>{deudasOrdenadas.length}</b>
+                      </div>
+                      <div className="mpr-miniStat">
+                        <span>Seleccionadas</span>
+                        <b>{cantSeleccionadas}</b>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`mpr-table ${tbodyHasScroll ? "mpr-table--hasScroll" : ""}`}>
+                    <div className="mpr-thead" role="row">
+                      <div className="mpr-th mpr-th--center">Sel</div>
+                      <div className="mpr-th">Fecha</div>
+                      <div className="mpr-th">Descripción</div>
+                      <div className="mpr-th mpr-th--center">Estado</div>
+                      <div className="mpr-th mpr-th--right">Monto</div>
+                    </div>
+
+                    <div ref={tbodyRef} className="mpr-tbody">
+                      {!deudasOrdenadas.length && (
+                        <div className="mpr-empty">No hay registros para este cliente.</div>
+                      )}
+
+                      {deudasOrdenadas.map((r, idx) => {
+                        const id = Number(r?.id_movimiento || 0);
+                        const pagado = isPagadoRow(r);
+                        const checked = selectedIds.has(id);
+                        const monto = Number(r?.monto_total ?? r?.total ?? 0) || 0;
+
+                        return (
+                          <div
+                            key={id || `${r?.fecha}-${idx}`}
+                            className={`mpr-row ${checked ? "is-checked" : ""} ${
+                              pagado ? "is-paid" : ""
+                            }`}
+                            role="row"
+                            onClick={() => id && toggleOne(id, r)}
+                            title={pagado ? "Este registro ya está PAGADO" : undefined}
+                          >
+                            <div
+                              className="mpr-td mpr-td--center"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <label
+                                className={`mpr-checkWrap ${
+                                  !id || loading || pagado ? "is-disabled" : ""
+                                }`}
+                              >
+                                <input
+                                  className="mpr-checkInput"
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleOne(id, r)}
+                                  disabled={!id || loading || pagado}
+                                />
+                                <span className="mpr-checkBox" aria-hidden="true" />
+                              </label>
+                            </div>
+
+                            <div className="mpr-td">{safeText(formatFechaDMY(r?.fecha))}</div>
+
+                            <div
+                              className="mpr-td mpr-td--desc"
+                              title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
+                            >
+                              {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
+                            </div>
+
+                            <div className="mpr-td mpr-td--center">
+                              <EstadoChip estado={pagado ? "PAGADO" : "PENDIENTE"} />
+                            </div>
+
+                            <div className="mpr-td mpr-td--right">{moneyARS(monto)}</div>
                           </div>
-
-                          <div className="mpr-td">{safeText(formatFechaDMY(r?.fecha))}</div>
-
-                          <div className="mpr-td mpr-td--desc" title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}>
-                            {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
-                          </div>
-
-                          <div className="mpr-td mpr-td--center">
-                            <EstadoChip estado={pagado ? "PAGADO" : "PENDIENTE"} />
-                          </div>
-
-                          <div className="mpr-td mpr-td--right">{moneyARS(monto)}</div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="mi-modal__footer mpr-footer">
-            <button type="button" className="mpr-btn mpr-btn--ghost" onClick={onClose} disabled={loading || openRecibo}>
-              Cancelar
-            </button>
+            <div className="mi-modal__footer mpr-footer">
+              <button
+                type="button"
+                className="mpr-btn mpr-btn--ghost"
+                onClick={onClose}
+                disabled={loading}
+              >
+                Cancelar
+              </button>
 
-            <button
-              type="button"
-              className="mpr-btn mpr-btn--ghost"
-              onClick={handleFactura}
-              disabled={loading || selectedIds.size === 0 || !idMedioPago || !onFactura}
-              title={
-                !onFactura
-                  ? "Acción no conectada"
-                  : selectedIds.size === 0
-                  ? "Seleccioná al menos una deuda pendiente"
-                  : !idMedioPago
-                  ? "Seleccioná un medio de pago"
-                  : "Hacer factura"
-              }
-            >
-              <FontAwesomeIcon icon={faMoneyBill1Wave} />
-              Hacer factura
-            </button>
+              <button
+                type="button"
+                className="mpr-btn mpr-btn--ghost"
+                onClick={handleFactura}
+                disabled={loading || selectedIds.size === 0 || !idMedioPago || !onFactura}
+                title={
+                  !onFactura
+                    ? "Acción no conectada"
+                    : selectedIds.size === 0
+                    ? "Seleccioná al menos una deuda pendiente"
+                    : !idMedioPago
+                    ? "Seleccioná un medio de pago"
+                    : "Hacer factura"
+                }
+              >
+                <FontAwesomeIcon icon={faMoneyBill1Wave} />
+                Hacer factura
+              </button>
 
-            <button
-              type="button"
-              className="mpr-btn mpr-btn--primary"
-              onClick={handleConfirm}
-              disabled={loading || selectedIds.size === 0 || !idMedioPago}
-            >
-              <FontAwesomeIcon icon={faCheck} />
-              {loading ? "Procesando…" : "Confirmar pago"}
-            </button>
+              <button
+                type="button"
+                className="mpr-btn mpr-btn--primary"
+                onClick={handleConfirm}
+                disabled={loading || selectedIds.size === 0 || !idMedioPago}
+              >
+                <FontAwesomeIcon icon={faCheck} />
+                {loading ? "Procesando…" : "Confirmar pago"}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ✅ Modal del recibo generado */}
       <ModalReciboGenerado
@@ -754,14 +779,17 @@ export default function ModalPagarRecibos({
         html={reciboHtml}
         title={reciboTitle}
         onToast={onToast}
-        onClose={() => setOpenRecibo(false)}
-        // ✅ pasamos TODOS los movimientos pagados
+        onClose={() => {
+          // ✅ si por alguna razón querés cerrar desde el hijo, cerramos todo
+          setOpenRecibo(false);
+          onClose?.();
+        }}
         idsMovimientos={idsMovimientosPagados}
         idCobro={ultimoCobroId}
         onFinalizar={(saved) => {
           onReciboFinalizado?.(saved, { idsMovimiento: idsMovimientosPagados });
 
-          // cerrar modales
+          // ✅ cerrar todo de una, sin mostrar el modal anterior
           setOpenRecibo(false);
           onClose?.();
         }}

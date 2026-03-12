@@ -184,9 +184,6 @@ export default function ModalEliminarMovimientos({
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-eliminar-mov-title"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) cerrar();
-      }}
     >
       <div className="mvdel-modal mvdel-modal--danger">
         <button

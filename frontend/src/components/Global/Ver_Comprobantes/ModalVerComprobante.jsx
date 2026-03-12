@@ -68,12 +68,18 @@ export default function ModalVerComprobante({
     };
   }, [open]);
 
-  // ESC
+  // cerrar SOLO con ESC
   useEffect(() => {
     if (!open) return;
+
     const onKeyDown = (e) => {
-      if (e.key === "Escape") onClose?.();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose?.();
+      }
     };
+
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
@@ -163,10 +169,24 @@ export default function ModalVerComprobante({
   const modalClass = "mi-modal__container mi-modal__container--mov mpr-modal";
 
   return createPortal(
-    <div className={overlayClass} role="dialog" aria-modal="true" onMouseDown={onClose}>
+    <div
+      className={overlayClass}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onMouseDown={(e) => {
+        // 🚫 NO cerrar al tocar afuera
+        e.stopPropagation();
+      }}
+      onClick={(e) => {
+        // 🚫 NO cerrar al hacer click en overlay
+        e.stopPropagation();
+      }}
+    >
       <div
         className={modalClass}
         onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
         style={{ maxWidth: 1100 }}
       >
         <div className="mi-modal__header mpr-header">
@@ -249,10 +269,6 @@ export default function ModalVerComprobante({
             >
               <FontAwesomeIcon icon={faUpRightFromSquare} style={{ marginRight: 8 }} />
               Abrir
-            </button>
-
-            <button type="button" className="mpr-btn mpr-btn--primary" onClick={onClose}>
-              Cerrar
             </button>
           </div>
         </div>

@@ -179,8 +179,14 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e) => {
-      if (e.key === "Escape") onCancel?.();
-      if (e.key === "Enter") onSave?.();
+      if (e.key === "Escape") {
+        e.stopPropagation(); // ✅ Evitar que cierre el modal padre
+        onCancel?.();
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        onSave?.();
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -281,6 +287,28 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
 
   // Mini-modals
   const [addUI, setAddUI] = useState({ open: false, catalogo: "detalles", text: "", saving: false });
+
+  /* =========================
+     ESC key handler
+  ========================= */
+  useEffect(() => {
+    if (!open) return;
+
+    const handleEscKey = (e) => {
+      if (e.key === "Escape") {
+        // Si el mini-modal está abierto, que lo maneje él
+        if (addUI.open) return;
+        
+        // Si no, cerrar el modal principal
+        if (!saving) {
+          onClose?.();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleEscKey);
+    return () => document.removeEventListener("keydown", handleEscKey);
+  }, [open, addUI.open, saving, onClose]);
 
   /* =========================
      Init form + refresh lists
@@ -516,7 +544,7 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
   return createPortal(
     <div
       className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`}
-      onMouseDown={() => !saving && onClose?.()}
+      // ✅ Eliminado onMouseDown - el modal solo se cierra con X o ESC
     >
       <div
         className={["mi-modal__container", "mi-modal__container--mov", darkOn ? "mi-modal--dark" : ""].join(" ")}

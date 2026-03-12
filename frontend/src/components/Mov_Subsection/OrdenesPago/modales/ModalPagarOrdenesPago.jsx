@@ -17,7 +17,6 @@ import {
   faCircleNotch,
 } from "@fortawesome/free-solid-svg-icons";
 
-// ✅ Modal generado + template
 import ModalOrdenPagoGenerada from "./ModalOrdenPagoGenerada";
 import { buildOrdenPagoHTML } from "../../../../utils/ordenPagoTemplate";
 
@@ -137,9 +136,6 @@ export default function ModalPagarOrdenesPago({
   proveedor,
   deudas = [],
   lists = null,
-
-  // ✅✅✅ NUEVO: callback que viene desde OrdenesPago.jsx
-  // Se dispara cuando el comprobante se guardó/asoció (Finalizar)
   onAfterComprobanteSaved,
 }) {
   const dialogRef = useRef(null);
@@ -160,14 +156,12 @@ export default function ModalPagarOrdenesPago({
   const [pagaTodo, setPagaTodo] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // ✅ rows local para poder “marcar pagado” sin recargar
   const [rows, setRows] = useState(() => []);
 
   const [mediosPago, setMediosPago] = useState([]);
   const [loadingMedios, setLoadingMedios] = useState(false);
   const [idMedioPago, setIdMedioPago] = useState("");
 
-  // ✅ Modal generado
   const [openGenerado, setOpenGenerado] = useState(false);
   const [generadoHTML, setGeneradoHTML] = useState("");
   const [generadoIdsMov, setGeneradoIdsMov] = useState([]);
@@ -202,24 +196,17 @@ export default function ModalPagarOrdenesPago({
     }
   }, [hydrateFromListsIfAny, onToast]);
 
-  // ✅ CERRAR TODO cuando se cierra el modal generado
-  // (MOVER ARRIBA: no puede estar después del early return)
   const handleCloseGenerado = useCallback(() => {
     setOpenGenerado(false);
-    onClose?.(); // ✅ cierra también el modal de pago
+    onClose?.();
   }, [onClose]);
 
-  // ✅✅✅ CLAVE: se ejecuta cuando el modal generado confirma “Finalizar”
-  // -> le avisa a la pantalla padre que recargue el listado (activar ojo)
   const handleComprobanteSaved = useCallback(async () => {
     try {
       await onAfterComprobanteSaved?.();
-    } catch {
-      // no romper UX si falla la recarga
-    }
+    } catch {}
   }, [onAfterComprobanteSaved]);
 
-  // ✅ IMPORTANTE: inicializar SOLO cuando open pasa a true (no por renders)
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
     prevOpenRef.current = open;
@@ -236,7 +223,6 @@ export default function ModalPagarOrdenesPago({
     setIdMedioPago("");
     fetchMediosPago();
 
-    // reset modal generado
     setOpenGenerado(false);
     setGeneradoHTML("");
     setGeneradoIdsMov([]);
@@ -244,14 +230,21 @@ export default function ModalPagarOrdenesPago({
     setTimeout(() => firstFocusRef.current?.focus(), 50);
   }, [open, fetchMediosPago, deudas]);
 
+  // ✅ este ESC solo actúa cuando está visible el modal de pago
   useEffect(() => {
-    if (!open) return;
+    if (!open || openGenerado) return;
+
     const onKey = (e) => {
-      if (e.key === "Escape") onClose?.();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!loading) onClose?.();
+      }
     };
+
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, openGenerado, onClose, loading]);
 
   const deudasOrdenadas = useMemo(() => {
     const arr = Array.isArray(rows) ? [...rows] : [];
@@ -379,9 +372,6 @@ export default function ModalPagarOrdenesPago({
         })
       );
 
-      setSelectedIds(new Set());
-      setPagaTodo(false);
-
       const html = buildOrdenPagoHTML({
         proveedorNombre: proveedor?.proveedor ?? "",
         proveedorId: proveedor?.id_proveedor ?? "",
@@ -393,9 +383,14 @@ export default function ModalPagarOrdenesPago({
 
       setGeneradoHTML(html);
       setGeneradoIdsMov(ids);
+
+      // ✅ abrimos generado y dejamos de renderizar el modal de pago
       setOpenGenerado(true);
 
-      onToast?.("exito", "Pago confirmado ✅", 2000);
+      setSelectedIds(new Set());
+      setPagaTodo(false);
+
+      onToast?.("exito", "Pago confirmado", 2000);
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo registrar el pago.", 4200);
     } finally {
@@ -403,7 +398,6 @@ export default function ModalPagarOrdenesPago({
     }
   };
 
-  // ✅ EARLY RETURN (después de declarar TODOS los hooks)
   if (!open) return null;
 
   const modalClass = [
@@ -425,203 +419,207 @@ export default function ModalPagarOrdenesPago({
 
   return createPortal(
     <>
-      <div className={overlayClass} role="dialog" aria-modal="true" onMouseDown={onClose}>
-        <div className={modalClass} ref={dialogRef} onMouseDown={(e) => e.stopPropagation()}>
-          {/* Header */}
-          <div className="mi-modal__header mpr-header">
-            <div className="mpr-headLeft">
-              <div className="mi-modal__title mpr-title">
-                <FontAwesomeIcon icon={faMoneyBill1Wave} />
-                <span>Pagar</span>
-                <span className="mpr-dot">·</span>
-                <span className="mpr-clientName">{safeText(proveedor?.proveedor)}</span>
+      {/* ✅ SOLO renderiza el modal de pago si NO está abierto el generado */}
+      {!openGenerado && (
+        <div className={overlayClass} role="dialog" aria-modal="true">
+          <div className={modalClass} ref={dialogRef} onMouseDown={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="mi-modal__header mpr-header">
+              <div className="mpr-headLeft">
+                <div className="mi-modal__title mpr-title">
+                  <FontAwesomeIcon icon={faMoneyBill1Wave} />
+                  <span>Pagar</span>
+                  <span className="mpr-dot">·</span>
+                  <span className="mpr-clientName">{safeText(proveedor?.proveedor)}</span>
 
-                {proveedor?.id_proveedor ? (
-                  <span className="mpr-clientIdPill" title={`ID Proveedor: ${proveedor.id_proveedor}`}>
-                    ID {String(proveedor.id_proveedor)}
-                  </span>
-                ) : null}
+                  {proveedor?.id_proveedor ? (
+                    <span className="mpr-clientIdPill" title={`ID Proveedor: ${proveedor.id_proveedor}`}>
+                      ID {String(proveedor.id_proveedor)}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="mi-modal__subtitle mpr-subtitle">
+                  Se muestran pendientes y pagadas (las pagadas quedan bloqueadas)
+                </div>
               </div>
 
-              <div className="mi-modal__subtitle mpr-subtitle">
-                Se muestran pendientes y pagadas (las pagadas quedan bloqueadas)
-              </div>
+              <button
+                ref={firstFocusRef}
+                type="button"
+                className="mi-modal__close"
+                onClick={onClose}
+                title="Cerrar"
+                disabled={loading}
+              >
+                <FontAwesomeIcon icon={faXmark} />
+              </button>
             </div>
 
-            <button
-              ref={firstFocusRef}
-              type="button"
-              className="mi-modal__close"
-              onClick={onClose}
-              title="Cerrar"
-              disabled={loading}
-            >
-              <FontAwesomeIcon icon={faXmark} />
-            </button>
-          </div>
+            {/* Body */}
+            <div className="mi-modal__body mpr-body">
+              <div className="mpr-content">
+                <div className="mpr-card">
+                  <div className="mpr-formRow">
+                    <div className="mpr-field">
+                      <label>Medio de pago</label>
 
-          {/* Body */}
-          <div className="mi-modal__body mpr-body">
-            <div className="mpr-content">
-              <div className="mpr-card">
-                <div className="mpr-formRow">
-                  <div className="mpr-field">
-                    <label>Medio de pago</label>
-
-                    <div className="mpr-selectWrap">
-                      <select
-                        value={idMedioPago}
-                        onChange={(e) => setIdMedioPago(e.target.value)}
-                        disabled={loading || loadingMedios}
-                        className="mpr-select"
-                      >
-                        <option value="">
-                          {loadingMedios ? "Cargando medios de pago…" : "Seleccioná un medio de pago…"}
-                        </option>
-
-                        {!loadingMedios && mediosPago.length === 0 && (
-                          <option value="" disabled>
-                            (Sin medios de pago)
-                          </option>
-                        )}
-
-                        {mediosPago.map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                      </select>
-
-                      {loadingMedios && (
-                        <span className="mpr-selectSpinner" title="Cargando…">
-                          <FontAwesomeIcon icon={faCircleNotch} spin />
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mpr-field">
-                    <label>Total seleccionado</label>
-                    <div className="mpr-totalPill">{moneyARS(totalSeleccionado)}</div>
-                  </div>
-
-                  <div className="mpr-field mpr-field--actions">
-                    <label className="mpr-labelGhost">Acciones</label>
-                    <button
-                      type="button"
-                      className="mov-btn mov-btn--ghost mpr-btnWide mpr-btnInCard"
-                      onClick={toggleAll}
-                      disabled={!deudasOrdenadas.length || loading}
-                      title="Seleccionar / deseleccionar todas (solo pendientes)"
-                    >
-                      <FontAwesomeIcon icon={faListCheck} />
-                      {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mpr-tableWrap">
-                <div className="mpr-tableTitle">
-                  <span>Deudas del proveedor</span>
-                  <div className="mpr-actionsRight">
-                    <div className="mpr-miniStat">
-                      <span>Total</span>
-                      <b>{deudasOrdenadas.length}</b>
-                    </div>
-                    <div className="mpr-miniStat">
-                      <span>Seleccionadas</span>
-                      <b>{cantSeleccionadas}</b>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mpr-table">
-                  <div className="mpr-thead" role="row">
-                    <div className="mpr-th mpr-th--center">Sel</div>
-                    <div className="mpr-th">Fecha</div>
-                    <div className="mpr-th">Descripción</div>
-                    <div className="mpr-th mpr-th--center">Estado</div>
-                    <div className="mpr-th mpr-th--right">Monto</div>
-                  </div>
-
-                  <div className="mpr-tbody">
-                    {!deudasOrdenadas.length && <div className="mpr-empty">No hay deudas para este proveedor.</div>}
-
-                    {deudasOrdenadas.map((r, idx) => {
-                      const id = Number(r?.id_movimiento || 0);
-                      const pagado = isPagadoRow(r);
-                      const checked = selectedIds.has(id);
-                      const monto = Number(r?.monto_total ?? r?.total ?? 0) || 0;
-
-                      return (
-                        <div
-                          key={id || `${r?.fecha}-${idx}`}
-                          className={`mpr-row ${checked ? "is-checked" : ""} ${pagado ? "is-paid" : ""}`}
-                          role="row"
-                          onClick={() => id && toggleOne(id, r)}
-                          title={pagado ? "Este registro ya está PAGADO" : undefined}
+                      <div className="mpr-selectWrap">
+                        <select
+                          value={idMedioPago}
+                          onChange={(e) => setIdMedioPago(e.target.value)}
+                          disabled={loading || loadingMedios}
+                          className="mpr-select"
                         >
-                          <div className="mpr-td mpr-td--center" onClick={(e) => e.stopPropagation()}>
-                            <label className={`mpr-checkWrap ${!id || loading || pagado ? "is-disabled" : ""}`}>
-                              <input
-                                className="mpr-checkInput"
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleOne(id, r)}
-                                disabled={!id || loading || pagado}
-                              />
-                              <span className="mpr-checkBox" aria-hidden="true" />
-                            </label>
+                          <option value="">
+                            {loadingMedios ? "Cargando medios de pago…" : "Seleccioná un medio de pago…"}
+                          </option>
+
+                          {!loadingMedios && mediosPago.length === 0 && (
+                            <option value="" disabled>
+                              (Sin medios de pago)
+                            </option>
+                          )}
+
+                          {mediosPago.map((x) => (
+                            <option key={x.id} value={String(x.id)}>
+                              {x.nombre}
+                            </option>
+                          ))}
+                        </select>
+
+                        {loadingMedios && (
+                          <span className="mpr-selectSpinner" title="Cargando…">
+                            <FontAwesomeIcon icon={faCircleNotch} spin />
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mpr-field">
+                      <label>Total seleccionado</label>
+                      <div className="mpr-totalPill">{moneyARS(totalSeleccionado)}</div>
+                    </div>
+
+                    <div className="mpr-field mpr-field--actions">
+                      <label className="mpr-labelGhost">Acciones</label>
+                      <button
+                        type="button"
+                        className="mov-btn mov-btn--ghost mpr-btnWide mpr-btnInCard"
+                        onClick={toggleAll}
+                        disabled={!deudasOrdenadas.length || loading}
+                        title="Seleccionar / deseleccionar todas (solo pendientes)"
+                      >
+                        <FontAwesomeIcon icon={faListCheck} />
+                        {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mpr-tableWrap">
+                  <div className="mpr-tableTitle">
+                    <span>Deudas del proveedor</span>
+                    <div className="mpr-actionsRight">
+                      <div className="mpr-miniStat">
+                        <span>Total</span>
+                        <b>{deudasOrdenadas.length}</b>
+                      </div>
+                      <div className="mpr-miniStat">
+                        <span>Seleccionadas</span>
+                        <b>{cantSeleccionadas}</b>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mpr-table">
+                    <div className="mpr-thead" role="row">
+                      <div className="mpr-th mpr-th--center">Sel</div>
+                      <div className="mpr-th">Fecha</div>
+                      <div className="mpr-th">Descripción</div>
+                      <div className="mpr-th mpr-th--center">Estado</div>
+                      <div className="mpr-th mpr-th--right">Monto</div>
+                    </div>
+
+                    <div className="mpr-tbody">
+                      {!deudasOrdenadas.length && (
+                        <div className="mpr-empty">No hay deudas para este proveedor.</div>
+                      )}
+
+                      {deudasOrdenadas.map((r, idx) => {
+                        const id = Number(r?.id_movimiento || 0);
+                        const pagado = isPagadoRow(r);
+                        const checked = selectedIds.has(id);
+                        const monto = Number(r?.monto_total ?? r?.total ?? 0) || 0;
+
+                        return (
+                          <div
+                            key={id || `${r?.fecha}-${idx}`}
+                            className={`mpr-row ${checked ? "is-checked" : ""} ${pagado ? "is-paid" : ""}`}
+                            role="row"
+                            onClick={() => id && toggleOne(id, r)}
+                            title={pagado ? "Este registro ya está PAGADO" : undefined}
+                          >
+                            <div className="mpr-td mpr-td--center" onClick={(e) => e.stopPropagation()}>
+                              <label className={`mpr-checkWrap ${!id || loading || pagado ? "is-disabled" : ""}`}>
+                                <input
+                                  className="mpr-checkInput"
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleOne(id, r)}
+                                  disabled={!id || loading || pagado}
+                                />
+                                <span className="mpr-checkBox" aria-hidden="true" />
+                              </label>
+                            </div>
+
+                            <div className="mpr-td">{safeText(formatFechaDMY(r?.fecha))}</div>
+
+                            <div className="mpr-td mpr-td--desc" title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}>
+                              {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
+                            </div>
+
+                            <div className="mpr-td mpr-td--center">
+                              <EstadoChip estado={pagado ? "PAGADO" : "PENDIENTE"} />
+                            </div>
+
+                            <div className="mpr-td mpr-td--right">{moneyARS(monto)}</div>
                           </div>
-
-                          <div className="mpr-td">{safeText(formatFechaDMY(r?.fecha))}</div>
-
-                          <div className="mpr-td mpr-td--desc" title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}>
-                            {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
-                          </div>
-
-                          <div className="mpr-td mpr-td--center">
-                            <EstadoChip estado={pagado ? "PAGADO" : "PENDIENTE"} />
-                          </div>
-
-                          <div className="mpr-td mpr-td--right">{moneyARS(monto)}</div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Footer */}
-          <div className="mi-modal__footer mpr-footer">
-            <button type="button" className="mpr-btn mpr-btn--ghost" onClick={onClose} disabled={loading}>
-              Cancelar
-            </button>
+            {/* Footer */}
+            <div className="mi-modal__footer mpr-footer">
+              <button type="button" className="mpr-btn mpr-btn--ghost" onClick={onClose} disabled={loading}>
+                Cancelar
+              </button>
 
-            <button
-              type="button"
-              className="mpr-btn mpr-btn--primary"
-              onClick={handleConfirm}
-              disabled={loading || selectedIds.size === 0 || !idMedioPago}
-              title={
-                selectedIds.size === 0
-                  ? "Seleccioná al menos una deuda pendiente"
-                  : !idMedioPago
-                  ? "Seleccioná un medio de pago"
-                  : "Confirmar pago"
-              }
-            >
-              <FontAwesomeIcon icon={faCheck} />
-              {loading ? "Procesando…" : "Confirmar pago"}
-            </button>
+              <button
+                type="button"
+                className="mpr-btn mpr-btn--primary"
+                onClick={handleConfirm}
+                disabled={loading || selectedIds.size === 0 || !idMedioPago}
+                title={
+                  selectedIds.size === 0
+                    ? "Seleccioná al menos una deuda pendiente"
+                    : !idMedioPago
+                    ? "Seleccioná un medio de pago"
+                    : "Confirmar pago"
+                }
+              >
+                <FontAwesomeIcon icon={faCheck} />
+                {loading ? "Procesando…" : "Confirmar pago"}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* ✅ MODAL “COMPROBANTE GENERADO” */}
       <ModalOrdenPagoGenerada
         open={openGenerado}
         onClose={handleCloseGenerado}
@@ -629,8 +627,6 @@ export default function ModalPagarOrdenesPago({
         html={generadoHTML}
         idsMovimiento={generadoIdsMov}
         titulo="Comprobante · Orden de Pago"
-
-        // ✅✅✅ CLAVE: cuando el generado guarda/asocia -> avisamos a la pantalla padre
         onSaved={handleComprobanteSaved}
       />
     </>,

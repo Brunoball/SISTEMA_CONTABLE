@@ -351,7 +351,7 @@ function AddCatalogMiniModal({ open, title, label = "Nombre", value, saving, onC
   if (!open) return null;
 
   return createPortal(
-    <div className="mi-mini__overlay" onMouseDown={onCancel}>
+    <div className="mi-mini__overlay" onMouseDown={(e) => e.stopPropagation()}>
       <div className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()} onMouseDown={(e) => e.stopPropagation()}>
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
@@ -860,7 +860,7 @@ export default function ModalEditarVenta({
   const miniTitle = addUI.catalogo === "clientes" ? "Nuevo cliente" : addUI.catalogo === "detalles" ? "Nuevo detalle" : "Nuevo";
 
   return createPortal(
-    <div className={overlayClass} onMouseDown={cerrar}>
+    <div className={overlayClass} onMouseDown={(e) => e.stopPropagation()}>
       <div className={containerClass} id="mi-modal__container"  role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">

@@ -8,7 +8,13 @@ import "../../Recibos/modales/ModalPagarRecibos.css";
 import BASE_URL from "../../../../config/config";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faXmark, faPrint, faFilePdf, faCheck, faCircleNotch } from "@fortawesome/free-solid-svg-icons";
+import {
+  faXmark,
+  faPrint,
+  faFilePdf,
+  faCheck,
+  faCircleNotch,
+} from "@fortawesome/free-solid-svg-icons";
 
 import html2pdf from "html2pdf.js/dist/html2pdf.min";
 
@@ -78,7 +84,16 @@ function normalizeText(s) {
 }
 
 function getSessionKey() {
-  const keys = ["session_key", "SESSION_KEY", "balto_session_key", "BALTO_SESSION_KEY", "x_session", "X_SESSION", "X-Session", "x-session"];
+  const keys = [
+    "session_key",
+    "SESSION_KEY",
+    "balto_session_key",
+    "BALTO_SESSION_KEY",
+    "x_session",
+    "X_SESSION",
+    "X-Session",
+    "x-session",
+  ];
   for (const k of keys) {
     const v = localStorage.getItem(k);
     if (v && String(v).trim() !== "") return String(v).trim();
@@ -128,23 +143,13 @@ function extractIdComprobante(data) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-// ✅ px por mm a 96dpi
 const mmToPx = (mm) => Math.round((mm * 96) / 25.4);
 
-/* =========================
-   ✅ CSS EXTRA (sin parpadeo)
-   - oculta subtítulo
-   - baja font-weight título y total
-   - chip al lado del título (cuando lo reubicamos)
-========================= */
 const EXTRA_RECIBO_CSS = `
-/* Título más fino */
 .paper .rc-title{
   font-weight: 600 !important;
   letter-spacing: .2px !important;
 }
-
-/* Chip al lado del título */
 .paper .rc-headRow{
   display:flex !important;
   align-items:center !important;
@@ -163,14 +168,10 @@ const EXTRA_RECIBO_CSS = `
   font-size: 12px !important;
   white-space: nowrap !important;
 }
-
-/* Ocultar "Sistema Contable · Comprobante interno" (si quedó) */
 .paper .recibo-subtitle,
 .paper .rc-subtitle{
   display:none !important;
 }
-
-/* Total más fino */
 .paper .totalBox .v,
 .paper .totalBox .amount,
 .paper .rc-totalValue,
@@ -179,10 +180,6 @@ const EXTRA_RECIBO_CSS = `
 }
 `;
 
-/* =========================
-   ✅ PREPROCESAR HTML (ANTES DE RENDER)
-   Evita el salto visual: acá movemos el chip en el string.
-========================= */
 function transformReciboBodyHtml(bodyHtml) {
   const s = String(bodyHtml || "").trim();
   if (!s) return s;
@@ -191,23 +188,22 @@ function transformReciboBodyHtml(bodyHtml) {
     const doc = new DOMParser().parseFromString(`<body>${s}</body>`, "text/html");
     const root = doc.body;
 
-    // 1) borrar el texto exacto del subtítulo si existe en el HTML
-    //    ("Sistema Contable · Comprobante interno")
     const allEls = Array.from(root.querySelectorAll("*"));
     for (const el of allEls) {
       const t = normalizeText(el.textContent);
-      if (t === "sistema contable · comprobante interno" || t === "sistema contable · comprobante interno.") {
+      if (
+        t === "sistema contable · comprobante interno" ||
+        t === "sistema contable · comprobante interno."
+      ) {
         el.remove();
         break;
       }
     }
 
-    // 2) encontrar título "RECIBO DE COBRO"
     let titleEl = null;
     for (const el of allEls) {
       const t = normalizeText(el.textContent);
       if (t === "recibo de cobro" || t.includes("recibo de cobro")) {
-        // elegimos el primero que sea “corto” (evita agarrar un contenedor grande)
         if (String(el.textContent || "").trim().length <= 40) {
           titleEl = el;
           break;
@@ -215,13 +211,11 @@ function transformReciboBodyHtml(bodyHtml) {
       }
     }
 
-    // 3) encontrar chip “Medio: …” o “Medio de pago: …”
     let chipEl = null;
     const allEls2 = Array.from(root.querySelectorAll("*"));
     for (const el of allEls2) {
       const t = normalizeText(el.textContent);
       if (t.startsWith("medio:") || t.startsWith("medio de pago:")) {
-        // evitamos agarrar un contenedor gigante
         if (String(el.textContent || "").trim().length <= 60) {
           chipEl = el;
           break;
@@ -229,16 +223,16 @@ function transformReciboBodyHtml(bodyHtml) {
       }
     }
 
-    // 4) reubicar: chip al lado del título (sin animación / sin efecto)
     if (titleEl) {
       titleEl.classList.add("rc-title");
 
-      // si el chip existe, lo metemos al lado
       if (chipEl) {
         chipEl.classList.add("rc-chip");
 
-        // si ya están juntos, no hacemos nada
-        const alreadyRow = titleEl.parentElement && titleEl.parentElement.classList.contains("rc-headRow");
+        const alreadyRow =
+          titleEl.parentElement &&
+          titleEl.parentElement.classList.contains("rc-headRow");
+
         if (!alreadyRow) {
           const row = doc.createElement("div");
           row.className = "rc-headRow";
@@ -277,13 +271,11 @@ export default function ModalReciboGenerado({
 
   const savedRef = useRef(null);
   const savingRef = useRef(false);
+  const closingAndSavingRef = useRef(false);
 
   const fullHtml = useMemo(() => ensureFullHtmlDocument(html, title), [html, title]);
-
-  // ✅ parse styles + body
   const extracted = useMemo(() => extractBodyWithStyles(fullHtml), [fullHtml]);
 
-  // ✅ transform BEFORE render (sin parpadeo)
   const previewMarkup = useMemo(() => {
     const transformedBody = transformReciboBodyHtml(extracted.body || "");
     const mergedStyles = `${extracted.styles || ""}\n${EXTRA_RECIBO_CSS}`.trim();
@@ -293,7 +285,9 @@ export default function ModalReciboGenerado({
 
   const idsMovs = useMemo(() => {
     const arr = Array.isArray(idsMovimientos) ? idsMovimientos : [idsMovimientos];
-    return arr.map((x) => Number(x || 0)).filter((x) => Number.isFinite(x) && x > 0);
+    return arr
+      .map((x) => Number(x || 0))
+      .filter((x) => Number.isFinite(x) && x > 0);
   }, [idsMovimientos]);
 
   useEffect(() => {
@@ -302,23 +296,6 @@ export default function ModalReciboGenerado({
     return () => clearTimeout(t);
   }, [open]);
 
-  // ESC = finalizar (guarda)
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        requestCloseAndSave();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  /* =========================
-     ✅ buildWrapperForPdf desde PREVIEW INLINE
-  ========================= */
   const buildWrapperForPdf = useCallback(async () => {
     if (!previewRef.current) throw new Error("No hay vista previa para exportar.");
 
@@ -330,8 +307,8 @@ export default function ModalReciboGenerado({
     const src = previewRef.current;
     const clone = src.cloneNode(true);
 
-    const A4_W = 794; // 96dpi aprox
-    const pad = mmToPx(10); // 10mm
+    const A4_W = 794;
+    const pad = mmToPx(10);
 
     const wrapper = document.createElement("div");
     wrapper.style.width = `${A4_W}px`;
@@ -384,7 +361,7 @@ export default function ModalReciboGenerado({
       const contentH = Math.ceil(wrapper.scrollHeight || 0);
 
       const opt = {
-        margin: 0, // wrapper ya tiene padding 10mm
+        margin: 0,
         filename,
         image: { type: "jpeg", quality: 0.98 },
         html2canvas: {
@@ -416,7 +393,9 @@ export default function ModalReciboGenerado({
       if (!sessionKey) throw new Error("Sesión inválida (no hay X-Session).");
 
       const safeName = sanitizeFileName(title);
-      const file = new File([pdfBlob], `${safeName}.pdf`, { type: "application/pdf" });
+      const file = new File([pdfBlob], `${safeName}.pdf`, {
+        type: "application/pdf",
+      });
 
       const fd = new FormData();
       fd.append("action", "comprobantes_subir");
@@ -433,7 +412,15 @@ export default function ModalReciboGenerado({
 
       const url = getApiPhpUrl();
 
-      const res = await fetchWithTimeout(url, { method: "POST", headers: { "X-Session": sessionKey }, body: fd }, 60000);
+      const res = await fetchWithTimeout(
+        url,
+        {
+          method: "POST",
+          headers: { "X-Session": sessionKey },
+          body: fd,
+        },
+        60000
+      );
 
       const { ok, data, text } = await parseJsonFromResponse(res);
 
@@ -446,7 +433,9 @@ export default function ModalReciboGenerado({
       }
 
       const idComp = extractIdComprobante(data);
-      if (!idComp) throw new Error("El backend guardó el PDF pero no devolvió id_comprobante.");
+      if (!idComp) {
+        throw new Error("El backend guardó el PDF pero no devolvió id_comprobante.");
+      }
 
       return { ...data, id_comprobante: idComp };
     },
@@ -459,15 +448,28 @@ export default function ModalReciboGenerado({
 
     const url = getApiPhpUrl();
 
-    const ACTIONS_BATCH = ["comprobantes_asociar_movimientos", "comprobantes_vincular_movimientos", "comprobantes_asignar_movimientos", "comprobantes_set_movimientos"];
-    const ACTIONS_ONE = ["comprobantes_asociar_movimiento", "comprobantes_vincular_movimiento", "comprobantes_asignar_movimiento", "comprobantes_set_movimiento"];
+    const ACTIONS_BATCH = [
+      "comprobantes_asociar_movimientos",
+      "comprobantes_vincular_movimientos",
+      "comprobantes_asignar_movimientos",
+      "comprobantes_set_movimientos",
+    ];
+    const ACTIONS_ONE = [
+      "comprobantes_asociar_movimiento",
+      "comprobantes_vincular_movimiento",
+      "comprobantes_asignar_movimiento",
+      "comprobantes_set_movimiento",
+    ];
 
     const postJson = async (action, payload) => {
       const res = await fetchWithTimeout(
         `${url}?action=${encodeURIComponent(action)}`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-Session": sessionKey },
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session": sessionKey,
+          },
           body: JSON.stringify(payload || {}),
         },
         60000
@@ -475,34 +477,52 @@ export default function ModalReciboGenerado({
 
       const { ok, data, text } = await parseJsonFromResponse(res);
       if (!res.ok || !ok || !data?.exito) {
-        const msg = data?.mensaje || `HTTP ${res.status}` + (text ? ` ${text.slice(0, 200)}` : "");
+        const msg =
+          data?.mensaje ||
+          `HTTP ${res.status}` + (text ? ` ${text.slice(0, 200)}` : "");
         throw new Error(msg);
       }
       return data;
     };
 
-    // 1) batch
     for (const action of ACTIONS_BATCH) {
       try {
-        return await postJson(action, { id_comprobante: Number(idComprobante), ids_movimiento: ids });
+        return await postJson(action, {
+          id_comprobante: Number(idComprobante),
+          ids_movimiento: ids,
+        });
       } catch (e) {
         const msg = String(e?.message || "").toLowerCase();
-        if (msg.includes("acción no válida") || msg.includes("accion no valida") || msg.includes("action no valida")) continue;
+        if (
+          msg.includes("acción no válida") ||
+          msg.includes("accion no valida") ||
+          msg.includes("action no valida")
+        ) {
+          continue;
+        }
         throw e;
       }
     }
 
-    // 2) 1x1
     for (const id of ids) {
       let okOne = false;
       for (const action of ACTIONS_ONE) {
         try {
-          await postJson(action, { id_comprobante: Number(idComprobante), id_movimiento: Number(id) });
+          await postJson(action, {
+            id_comprobante: Number(idComprobante),
+            id_movimiento: Number(id),
+          });
           okOne = true;
           break;
         } catch (e) {
           const msg = String(e?.message || "").toLowerCase();
-          if (msg.includes("acción no válida") || msg.includes("accion no valida") || msg.includes("action no valida")) continue;
+          if (
+            msg.includes("acción no válida") ||
+            msg.includes("accion no valida") ||
+            msg.includes("action no valida")
+          ) {
+            continue;
+          }
           throw e;
         }
       }
@@ -529,7 +549,9 @@ export default function ModalReciboGenerado({
       if (savedRef.current) return savedRef.current;
     }
 
-    if (!idsMovs.length) throw new Error("Faltan idsMovimientos válidos para vincular el recibo.");
+    if (!idsMovs.length) {
+      throw new Error("Faltan idsMovimientos válidos para vincular el recibo.");
+    }
 
     savingRef.current = true;
     try {
@@ -562,31 +584,69 @@ export default function ModalReciboGenerado({
 
       await asociarComprobanteAMovimientos(idComp, idsMovs);
 
-      const finalSaved = { ...saved, id_comprobante: idComp, ids_movimiento: idsMovs };
-      savedRef.current = finalSaved;
+      const finalSaved = {
+        ...saved,
+        id_comprobante: idComp,
+        ids_movimiento: idsMovs,
+      };
 
+      savedRef.current = finalSaved;
       onToast?.("exito", "Recibo guardado y vinculado ✅", 2600);
+
       return finalSaved;
     } finally {
       savingRef.current = false;
     }
-  }, [idsMovs, buildWrapperForPdf, uploadPdfToServer, asociarComprobanteAMovimientos, onToast]);
+  }, [
+    idsMovs,
+    buildWrapperForPdf,
+    uploadPdfToServer,
+    asociarComprobanteAMovimientos,
+    onToast,
+  ]);
 
-  const requestCloseAndSave = useCallback(async () => {
-    if (busy) return;
+  // ✅ ÚNICA lógica real: ESC / X / FINALIZAR hacen EXACTAMENTE lo mismo
+  const finalizeAndCloseAll = useCallback(async () => {
+    if (busy || closingAndSavingRef.current) return;
+
     try {
+      closingAndSavingRef.current = true;
       setBusy(true);
+
       const saved = await ensureSaved();
+
+      // ✅ el padre ya se encarga de cerrar todo de una
       onFinalizar?.(saved);
-      onClose?.();
     } catch (e) {
-      onToast?.("error", e?.message || "No se pudo guardar el recibo.", 4500);
+      onToast?.("error", e?.message || "No se pudo finalizar el recibo.", 4500);
     } finally {
+      closingAndSavingRef.current = false;
       setBusy(false);
     }
-  }, [busy, ensureSaved, onFinalizar, onClose, onToast]);
+  }, [busy, ensureSaved, onFinalizar, onToast]);
 
-  const handleFinalizar = useCallback(() => requestCloseAndSave(), [requestCloseAndSave]);
+  const handleCloseOnly = useCallback(async () => {
+    await finalizeAndCloseAll();
+  }, [finalizeAndCloseAll]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        void finalizeAndCloseAll();
+      }
+    };
+
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [open, finalizeAndCloseAll]);
+
+  const handleFinalizar = useCallback(async () => {
+    await finalizeAndCloseAll();
+  }, [finalizeAndCloseAll]);
 
   if (!open) return null;
 
@@ -594,30 +654,39 @@ export default function ModalReciboGenerado({
   const modalClass = "mi-modal__container mi-modal__container--mov mpr-modal";
 
   return createPortal(
-    <div className={overlayClass} role="dialog" aria-modal="true" onMouseDown={handleFinalizar}>
-      <div className={modalClass} style={{ width: "min(980px, 96vw)", maxWidth: "980px" }} onMouseDown={(e) => e.stopPropagation()}>
-        {/* HEADER (igual Orden de Pago) */}
+    <div
+      className={overlayClass}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title || "Recibo"}
+    >
+      <div
+        className={modalClass}
+        style={{ width: "min(980px, 96vw)", maxWidth: "980px" }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="mi-modal__header mpr-header">
           <div className="mpr-headLeft">
             <div className="mi-modal__title mpr-title">
               <span>{title}</span>
             </div>
-            <div className="mi-modal__subtitle mpr-subtitle">Vista previa · Acciones abajo · Finalizar (guarda automático)</div>
+            <div className="mi-modal__subtitle mpr-subtitle">
+              Vista previa · X / ESC / Finalizar guardan y cierran todo igual
+            </div>
           </div>
 
           <button
             ref={firstFocusRef}
             type="button"
             className="mi-modal__close"
-            onClick={handleFinalizar}
-            title="Cerrar (guarda)"
+            onClick={handleCloseOnly}
+            title="Guardar y cerrar"
             disabled={busy}
           >
             <FontAwesomeIcon icon={busy ? faCircleNotch : faXmark} spin={busy} />
           </button>
         </div>
 
-        {/* BODY */}
         <div className="mi-modal__body mpr-body">
           <div className="mpr-content">
             <div className="mpr-card mpr-viewCard">
@@ -626,7 +695,9 @@ export default function ModalReciboGenerado({
                   ref={previewRef}
                   style={{ background: "#fff", padding: 12, borderRadius: 10 }}
                   dangerouslySetInnerHTML={{
-                    __html: previewMarkup || "<div style='padding:12px'>Sin vista previa</div>",
+                    __html:
+                      previewMarkup ||
+                      "<div style='padding:12px'>Sin vista previa</div>",
                   }}
                 />
               </div>
@@ -634,22 +705,38 @@ export default function ModalReciboGenerado({
           </div>
         </div>
 
-        {/* FOOTER */}
         <div className="mi-modal__footer mpr-footer">
-          <button type="button" className="mpr-btn mpr-btn--ghost" onClick={handlePrint} disabled={busy}>
-            <FontAwesomeIcon icon={busy ? faCircleNotch : faPrint} spin={busy} /> Imprimir
+          <button
+            type="button"
+            className="mpr-btn mpr-btn--ghost"
+            onClick={handlePrint}
+            disabled={busy}
+          >
+            <FontAwesomeIcon icon={busy ? faCircleNotch : faPrint} spin={busy} />{" "}
+            Imprimir
           </button>
 
-          <button type="button" className="mpr-btn mpr-btn--ghost" onClick={handleExportPdf} disabled={busy}>
-            <FontAwesomeIcon icon={busy ? faCircleNotch : faFilePdf} spin={busy} /> Exportar PDF
+          <button
+            type="button"
+            className="mpr-btn mpr-btn--ghost"
+            onClick={handleExportPdf}
+            disabled={busy}
+          >
+            <FontAwesomeIcon icon={busy ? faCircleNotch : faFilePdf} spin={busy} />{" "}
+            Exportar PDF
           </button>
 
-          <button type="button" className="mpr-btn mpr-btn--primary" onClick={handleFinalizar} disabled={busy}>
-            <FontAwesomeIcon icon={busy ? faCircleNotch : faCheck} spin={busy} /> Finalizar
+          <button
+            type="button"
+            className="mpr-btn mpr-btn--primary"
+            onClick={handleFinalizar}
+            disabled={busy}
+          >
+            <FontAwesomeIcon icon={busy ? faCircleNotch : faCheck} spin={busy} />{" "}
+            Finalizar
           </button>
         </div>
 
-        {/* host invisible para export */}
         <div
           ref={exportHostRef}
           style={{

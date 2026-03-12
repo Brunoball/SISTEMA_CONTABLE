@@ -93,13 +93,11 @@ function extractBodyWithStyles(fullHtml) {
 }
 
 /* =========================
-  ✅ HTML -> PDF desde un nodo REAL (html2canvas + jsPDF)
-  - Captura SOLO el "papel" (mpr-paper) para que no afecte el modo oscuro
+  ✅ HTML -> PDF desde un nodo REAL
 ========================= */
 async function nodeToPdfBlob(containerNode, filename = "comprobante.pdf") {
   if (!containerNode) throw new Error("No se encontró el nodo para exportar a PDF.");
 
-  // ✅ Capturar SOLO el comprobante (papel) si existe
   const target =
     containerNode.querySelector(".mpr-paper") ||
     containerNode.querySelector(".wrap") ||
@@ -108,7 +106,7 @@ async function nodeToPdfBlob(containerNode, filename = "comprobante.pdf") {
 
   const canvas = await html2canvas(target, {
     scale: 2,
-    backgroundColor: "#fff", // ✅ siempre blanco
+    backgroundColor: "#fff",
     useCORS: true,
     scrollX: 0,
     scrollY: 0,
@@ -150,7 +148,6 @@ export default function ModalOrdenPagoGenerada({
   html,
   idsMovimiento = [],
   titulo = "Comprobante · Orden de Pago",
-  // Firma sugerida: onSaved({ id_comprobante, ids_movimiento })
   onSaved,
 }) {
   const firstRef = useRef(null);
@@ -159,7 +156,9 @@ export default function ModalOrdenPagoGenerada({
   const [saving, setSaving] = useState(false);
   const [idComprobante, setIdComprobante] = useState(null);
 
-  // ✅ vista previa renderizable (styles + body)
+  const savingRef = useRef(false);
+  const closeFlowRef = useRef(false);
+
   const preview = useMemo(() => extractBodyWithStyles(html), [html]);
   const previewMarkup = useMemo(() => {
     const styles = preview.styles ? `<style>${preview.styles}</style>` : "";
@@ -170,6 +169,8 @@ export default function ModalOrdenPagoGenerada({
     if (!open) return;
     setSaving(false);
     setIdComprobante(null);
+    savingRef.current = false;
+    closeFlowRef.current = false;
     const t = setTimeout(() => firstRef.current?.focus(), 50);
     return () => clearTimeout(t);
   }, [open]);
@@ -210,7 +211,7 @@ export default function ModalOrdenPagoGenerada({
       a.remove();
       URL.revokeObjectURL(url);
 
-      onToast?.("exito", "PDF exportado ✅", 2200);
+      onToast?.("exito", "PDF exportado", 2200);
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo exportar el PDF.", 4500);
     } finally {
@@ -227,87 +228,112 @@ export default function ModalOrdenPagoGenerada({
     window.open(url, "_blank", "noopener,noreferrer");
   }, [idComprobante, onToast]);
 
-  // ✅ Guardado interno (se usa automáticamente al cerrar)
   const saveToServerIfNeeded = useCallback(async () => {
-    if (idComprobante) return idComprobante; // ya está
+    if (idComprobante) return idComprobante;
+
+    if (savingRef.current) {
+      while (savingRef.current) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 80));
+      }
+      if (idComprobante) return idComprobante;
+    }
+
     if (!html) throw new Error("No hay HTML para generar el PDF.");
     if (idsOk.length === 0) throw new Error("No hay movimientos para asociar.");
     if (!previewRef.current) throw new Error("No hay vista previa para exportar.");
 
+    savingRef.current = true;
     setSaving(true);
 
-    // ✅ 1) Generar PDF desde el nodo (captura papel blanco)
-    const { file } = await nodeToPdfBlob(previewRef.current, "orden_pago.pdf");
-
-    // ✅ 2) Subir
-    const fd = new FormData();
-    fd.append("tipo", "ORDEN_PAGO");
-    fd.append("id_movimiento", String(idsOk[0]));
-    fd.append("archivo", file);
-
-    const upUrl = `${BASE_URL}/api.php?action=comprobantes_subir`;
-    const upData = await fetchJsonOrThrow(upUrl, {
-      method: "POST",
-      headers: buildAuthHeaders(),
-      body: fd,
-    });
-
-    const newIdComp = Number(upData?.id_comprobante || 0);
-    if (!newIdComp) throw new Error("No se recibió id_comprobante al subir.");
-
-    // ✅ 3) Asociar batch
-    const assocUrl = `${BASE_URL}/api.php?action=comprobantes_asociar_movimientos`;
-    await fetchJsonOrThrow(assocUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...buildAuthHeaders() },
-      body: JSON.stringify({
-        id_comprobante: newIdComp,
-        ids_movimiento: idsOk,
-        force: true,
-      }),
-    });
-
-    setIdComprobante(newIdComp);
-
-    // ✅ avisar al padre
     try {
-      onSaved?.({ id_comprobante: newIdComp, ids_movimiento: idsOk });
-    } catch {}
+      const { file } = await nodeToPdfBlob(previewRef.current, "orden_pago.pdf");
 
-    onToast?.("exito", "Comprobante guardado y asociado ✅", 2400);
+      const fd = new FormData();
+      fd.append("tipo", "ORDEN_PAGO");
+      fd.append("id_movimiento", String(idsOk[0]));
+      fd.append("archivo", file);
 
-    return newIdComp;
+      const upUrl = `${BASE_URL}/api.php?action=comprobantes_subir`;
+      const upData = await fetchJsonOrThrow(upUrl, {
+        method: "POST",
+        headers: buildAuthHeaders(),
+        body: fd,
+      });
+
+      const newIdComp = Number(upData?.id_comprobante || 0);
+      if (!newIdComp) throw new Error("No se recibió id_comprobante al subir.");
+
+      const assocUrl = `${BASE_URL}/api.php?action=comprobantes_asociar_movimientos`;
+      await fetchJsonOrThrow(assocUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...buildAuthHeaders() },
+        body: JSON.stringify({
+          id_comprobante: newIdComp,
+          ids_movimiento: idsOk,
+          force: true,
+        }),
+      });
+
+      setIdComprobante(newIdComp);
+
+      try {
+        onSaved?.({ id_comprobante: newIdComp, ids_movimiento: idsOk });
+      } catch {}
+
+      onToast?.("exito", "Comprobante guardado y asociado", 2400);
+
+      return newIdComp;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }, [html, idsOk, idComprobante, onToast, onSaved]);
 
-  // ✅ Cerrar = guardar primero (si falla, NO cierra)
-  const requestClose = useCallback(async () => {
-    if (saving) return;
+  // ✅ X / ESC / Finalizar hacen EXACTAMENTE lo mismo
+  const finalizeAndCloseAll = useCallback(async () => {
+    if (saving || closeFlowRef.current) return;
+
     try {
+      closeFlowRef.current = true;
+      setSaving(true);
+
       await saveToServerIfNeeded();
+
       onClose?.();
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo guardar el comprobante.", 4500);
     } finally {
+      closeFlowRef.current = false;
       setSaving(false);
     }
   }, [saving, saveToServerIfNeeded, onClose, onToast]);
 
-  // ✅ ESC también guarda y cierra
+  const requestClose = useCallback(async () => {
+    await finalizeAndCloseAll();
+  }, [finalizeAndCloseAll]);
+
   useEffect(() => {
     if (!open) return;
+
     const onKey = (e) => {
-      if (e.key === "Escape") requestClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        void finalizeAndCloseAll();
+      }
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, requestClose]);
+
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [open, finalizeAndCloseAll]);
 
   if (!open) return null;
 
-  // ✅ Dark del modal según tu theme global (sin props)
-  const isDark = typeof document !== "undefined"
-    ? document.documentElement.getAttribute("data-theme") === "oscuro"
-    : false;
+  const isDark =
+    typeof document !== "undefined"
+      ? document.documentElement.getAttribute("data-theme") === "oscuro"
+      : false;
 
   const overlayClass =
     "mi-modal__overlay mi-modal__overlay--mov" + (isDark ? " mi-modal__overlay--dark" : "");
@@ -320,7 +346,7 @@ export default function ModalOrdenPagoGenerada({
   const canView = !!idComprobante && !saving;
 
   return createPortal(
-    <div className={overlayClass} role="dialog" aria-modal="true" onMouseDown={requestClose}>
+    <div className={overlayClass} role="dialog" aria-modal="true">
       <div className={modalClass} onMouseDown={(e) => e.stopPropagation()}>
         {/* HEADER */}
         <div className="mi-modal__header mpr-header">
@@ -334,7 +360,7 @@ export default function ModalOrdenPagoGenerada({
               ) : null}
             </div>
             <div className="mi-modal__subtitle mpr-subtitle">
-              Vista previa · Acciones abajo · Finalizar (guarda automático)
+              Vista previa · X / ESC / Finalizar guardan y cierran todo igual
             </div>
           </div>
 
@@ -343,7 +369,7 @@ export default function ModalOrdenPagoGenerada({
             type="button"
             className="mi-modal__close"
             onClick={requestClose}
-            title="Cerrar (guarda automático)"
+            title="Guardar y cerrar"
             disabled={saving}
           >
             <FontAwesomeIcon icon={saving ? faCircleNotch : faXmark} spin={saving} />
@@ -367,7 +393,6 @@ export default function ModalOrdenPagoGenerada({
               </div>
 
               <div className="mpr-previewScroll">
-                {/* ✅ "PAPEL": SIEMPRE CLARO, NO afectado por dark */}
                 <div className="mpr-paper" ref={previewRef}>
                   <div
                     className="mpr-paper__inner"
@@ -381,7 +406,7 @@ export default function ModalOrdenPagoGenerada({
           </div>
         </div>
 
-        {/* FOOTER (✅ botones abajo) */}
+        {/* FOOTER */}
         <div className="mi-modal__footer mpr-footer">
           <button
             type="button"
@@ -405,18 +430,17 @@ export default function ModalOrdenPagoGenerada({
             Exportar PDF
           </button>
 
-          {/* Si querés recuperar "Ver PDF" después, descomentá:
-          <button
-            type="button"
-            className="mpr-btn mpr-btn--ghost"
-            onClick={handleView}
-            disabled={!canView}
-            title="Ver PDF guardado"
-          >
-            <FontAwesomeIcon icon={faEye} />
-            Ver
-          </button>
-          */}
+          {false && (
+            <button
+              type="button"
+              className="mpr-btn mpr-btn--ghost"
+              onClick={handleView}
+              disabled={!canView}
+              title="Ver PDF guardado"
+            >
+              Ver
+            </button>
+          )}
 
           <button
             type="button"

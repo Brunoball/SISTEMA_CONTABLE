@@ -869,7 +869,7 @@ export default function Recibos() {
         try {
           await refreshLists();
         } catch {}
-        showToast("exito", "Comprobante guardado y vinculado a todos los pagos ✅", 2600);
+        showToast("exito", "Comprobante guardado y vinculado a todos los pagos", 3000);
       } catch (e) {
         showToast("error", e?.message || "El comprobante se guardó, pero no pude refrescar la lista.", 4200);
       }

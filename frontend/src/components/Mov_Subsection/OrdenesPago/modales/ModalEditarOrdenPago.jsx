@@ -1,4 +1,6 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/components/Movimientos/modales/ModalEditarOrdenPago.jsx
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
@@ -206,7 +208,10 @@ function AddCatalogMiniModal({
   if (!open) return null;
 
   return createPortal(
-    <div className={`mi-mini__overlay ${dark ? "mi-mini__overlay--dark" : ""}`} onMouseDown={onCancel}>
+    <div
+      className={`mi-mini__overlay ${dark ? "mi-mini__overlay--dark" : ""}`}
+      // ✅ ya no cierra por click afuera
+    >
       <div
         className={`mi-mini__modal ${dark ? "mi-mini__modal--dark" : ""}`}
         onMouseDown={(e) => e.stopPropagation()}
@@ -274,7 +279,6 @@ export default function ModalEditarOrdenPago({
 
   const [saving, setSaving] = useState(false);
 
-  // ✅ localLists con refresh al abrir
   const [localLists, setLocalLists] = useState(() => normalizeLists(lists));
   useEffect(() => setLocalLists(normalizeLists(lists)), [lists]);
 
@@ -287,20 +291,16 @@ export default function ModalEditarOrdenPago({
     }));
   }, [API_LISTS]);
 
-  // ✅ Autocomplete detalles
   const [detalleFocus, setDetalleFocus] = useState(false);
   const [detalleArmed, setDetalleArmed] = useState(false);
   const detalleInputRef = useRef(null);
 
-  // ✅ Autocomplete proveedores
   const [provFocus, setProvFocus] = useState(false);
   const [provArmed, setProvArmed] = useState(false);
   const provInputRef = useRef(null);
 
-  // Mini modal único (detalles/proveedores)
   const [addUI, setAddUI] = useState({ open: false, catalogo: "detalles", text: "", saving: false });
 
-  // ✅ guardamos “defaults” del registro para permitir campos vacíos
   const defaultsRef = useRef({
     fecha: "",
     periodoMMYYYY: "",
@@ -311,7 +311,6 @@ export default function ModalEditarOrdenPago({
     detalleTxt: "",
   });
 
-  // Form
   const [form, setForm] = useState(() => ({
     id_movimiento: null,
     fecha: "",
@@ -379,11 +378,28 @@ export default function ModalEditarOrdenPago({
       proveedorInput: defaultsRef.current.proveedorTxt,
       id_detalle: defaultsRef.current.id_detalle,
       detalleInput: defaultsRef.current.detalleTxt,
-      // ✅ string para permitir vacío sin romper
       monto_total: defaultsRef.current.monto ? String(defaultsRef.current.monto) : "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, row, periodoDefault]); // no agregues localLists
+  }, [open, row, periodoDefault]);
+
+  /* =========================
+     ESC: cerrar solo modal principal
+  ========================= */
+  useEffect(() => {
+    if (!open || saving || addUI.open) return;
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose?.();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [open, saving, addUI.open, onClose]);
 
   /* =========================
      Autocomplete detalles
@@ -500,7 +516,7 @@ export default function ModalEditarOrdenPago({
   };
 
   /* =========================
-     Submit (NO obligatorio todo)
+     Submit
   ========================= */
   const submit = async (e) => {
     e.preventDefault();
@@ -514,34 +530,27 @@ export default function ModalEditarOrdenPago({
     showToast("cargando", "Guardando cambios…", 12000);
 
     try {
-      // ✅ Fecha: si está vacía, usar la original
       const fechaFinal = String(form.fecha || defaultsRef.current.fecha || "").trim();
       if (!fechaFinal || !/^\d{4}-\d{2}-\d{2}$/.test(fechaFinal)) {
         throw new Error("Fecha inválida.");
       }
 
-      // ✅ Período: si está vacío, derivar desde fecha
       const perUI =
         periodoToMMYYYY(form.periodo) ||
         defaultsRef.current.periodoMMYYYY ||
         periodoFromISODate(fechaFinal) ||
         "";
 
-      const perAPI = perUI ? periodoToYYYYMM(perUI) : ""; // si querés permitir “sin período”
-      // si tu backend exige período, forzalo:
-      // const perAPI = periodoToYYYYMM(perUI || periodoFromISODate(fechaFinal));
+      const perAPI = perUI ? periodoToYYYYMM(perUI) : "";
 
-      // ✅ Proveedor: opcional
       const provTxt = String(form.proveedorInput || "").trim();
       const idProv =
         form.id_proveedor && form.id_proveedor !== NULL_OPTION ? Number(form.id_proveedor) : null;
 
-      // ✅ Detalle: opcional
       const detTxt = String(form.detalleInput || "").trim();
       const idDet =
         form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null;
 
-      // ✅ Monto: opcional (si vacío, mantener original)
       const montoIngresado = String(form.monto_total ?? "").trim();
       const montoFinal =
         montoIngresado === ""
@@ -550,17 +559,12 @@ export default function ModalEditarOrdenPago({
 
       const payloadFinal = {
         id_movimiento: form.id_movimiento,
-
         fecha: fechaFinal,
-        periodo: perAPI, // YYYY-MM (o "" si decidís permitirlo)
-
-        // ids opcionales (null)
+        periodo: perAPI,
         id_proveedor: Number.isFinite(idProv) && idProv > 0 ? idProv : null,
-        proveedor: provTxt, // puede ser ""
-
+        proveedor: provTxt,
         id_detalle: Number.isFinite(idDet) && idDet > 0 ? idDet : null,
-        detalle: detTxt, // puede ser ""
-
+        detalle: detTxt,
         monto_total: montoFinal,
       };
 
@@ -579,7 +583,7 @@ export default function ModalEditarOrdenPago({
   return createPortal(
     <div
       className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`}
-      onMouseDown={() => !saving && onClose?.()}
+      // ✅ ya NO cierra al hacer click afuera
     >
       <div
         className={["mi-modal__container", "mi-modal__container--mov", darkOn ? "mi-modal--dark" : ""].join(" ")}
@@ -611,7 +615,6 @@ export default function ModalEditarOrdenPago({
                   setForm((p) => ({
                     ...p,
                     fecha: v,
-                    // si el usuario cambia fecha y el período está vacío, autocompletar
                     periodo: p.periodo || periodoFromISODate(v) || p.periodo,
                   }));
                 }}
@@ -632,7 +635,7 @@ export default function ModalEditarOrdenPago({
             </div>
           </div>
 
-          {/* ✅ Proveedor (autocomplete + agregar) */}
+          {/* ✅ Proveedor */}
           <div className="fl-field mi-field--mt12 mi-field--rel">
             <input
               ref={provInputRef}
@@ -669,7 +672,7 @@ export default function ModalEditarOrdenPago({
             </button>
           </div>
 
-          {/* ✅ Detalle (autocomplete + agregar) */}
+          {/* ✅ Detalle */}
           <div className="fl-field mi-field--mt12 mi-field--rel">
             <input
               ref={detalleInputRef}
@@ -706,7 +709,7 @@ export default function ModalEditarOrdenPago({
             </button>
           </div>
 
-          {/* Monto (opcional) */}
+          {/* Monto */}
           <div className="fl-field mi-field--mt12">
             <input
               className="fl-input"

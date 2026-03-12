@@ -379,7 +379,7 @@ export default function ModalReciboGenerado({
       };
 
       await html2pdf().set(opt).from(wrapper).save();
-      onToast?.("exito", "PDF exportado ✅", 2400);
+      onToast?.("exito", "PDF exportado", 2400);
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo exportar el PDF.", 4200);
     } finally {
@@ -591,7 +591,7 @@ export default function ModalReciboGenerado({
       };
 
       savedRef.current = finalSaved;
-      onToast?.("exito", "Recibo guardado y vinculado ✅", 2600);
+      onToast?.("exito", "Recibo guardado y vinculado", 2600);
 
       return finalSaved;
     } finally {

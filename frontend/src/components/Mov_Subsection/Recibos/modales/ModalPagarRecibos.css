@@ -230,8 +230,8 @@
 .mpr-th--right{ text-align:right; }
 
 .mpr-tbody{
-  max-height: calc(100vh - 358px);
-    min-height: calc(100vh - 358px);
+  max-height: calc(100vh - 390px);
+    min-height: calc(100vh - 390px);
   overflow:auto;
   scrollbar-gutter: auto;
 }
@@ -575,7 +575,6 @@
 .mpr-tbody{
   min-height: 0;
   overflow: auto;
-  max-height: none; /* ✅ el alto lo da el layout, no calc(100vh-...) */
 }
 
 /* footer fijo abajo */

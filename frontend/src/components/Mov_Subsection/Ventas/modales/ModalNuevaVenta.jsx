@@ -5,8 +5,8 @@ import ModalFacturaBaltoResumen from "../../Facturacion/ModalFacturaBaltoResumen
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faFileInvoiceDollar,
-  faBasketShopping,
 } from "@fortawesome/free-solid-svg-icons";
+import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
 
 const NULL_OPTION = "";
 
@@ -51,17 +51,10 @@ function formatMoneyInputARS(v) {
 
 function parseMoneyInputARS(v) {
   if (v == null) return 0;
-
   let s = String(v).trim();
-
   if (!s) return 0;
-
-  // saca símbolo $, espacios y cualquier cosa rara
   s = s.replace(/\$/g, "").replace(/\s+/g, "");
-
-  // en es-AR: 1.234,56  => 1234.56
   s = s.replace(/\./g, "").replace(",", ".");
-
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
@@ -129,7 +122,6 @@ function getAuthInfo() {
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
-
   try {
     const data = JSON.parse(text);
     if (!res.ok) {
@@ -187,7 +179,6 @@ function resolveClienteByInput(clientes,inputValue) {
 }
 
 function isContadoTipoVenta(tv) { return String(tv?.nombre??"").toLowerCase().includes("contado")||String(tv?.nombre??"").toLowerCase().includes("efectivo"); }
-function isCorrienteTipoVenta(tv) { return String(tv?.nombre??"").toLowerCase().includes("corriente"); }
 
 function describeLineProblem(r,idx1based) {
   const detId=Number(r.id_detalle); const detTxt=String(r.detalleText||"").trim();
@@ -275,7 +266,6 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
   const [filters,setFilters]=useState({id_tipo_venta:NULL_OPTION,id_medio_pago:NULL_OPTION,id_cliente:NULL_OPTION,id_cuenta_corriente:NULL_OPTION});
   const [accionContado,setAccionContado]=useState("guardar");
   const [cliInput,setCliInput]=useState("");
-  const [cliFocus,setCliFocus]=useState(false);
   const [rows,setRows]=useState(() => [buildEmptyRow()]);
   const [saving,setSaving]=useState(false);
   const [addUI,setAddUI]=useState({open:false,kind:null,rowId:null,text:"",saving:false});
@@ -291,7 +281,7 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
   const closeBtnRef=useRef(null);
   const prevOpenRef=useRef(false);
   const rowsContainerRef = useRef(null);
-const [hasScroll, setHasScroll] = useState(false);
+  const [hasScroll, setHasScroll] = useState(false);
 
   /* Reset al abrir */
   useEffect(()=>{
@@ -299,7 +289,7 @@ const [hasScroll, setHasScroll] = useState(false);
     if(!wasOpen&&open){
       setFecha(todayISO());
       setFilters({id_tipo_venta:NULL_OPTION,id_medio_pago:NULL_OPTION,id_cliente:NULL_OPTION,id_cuenta_corriente:NULL_OPTION});
-      setAccionContado("guardar"); setCliInput(""); setCliFocus(false);
+      setAccionContado("guardar"); setCliInput("");
       setRows([buildEmptyRow()]);
       setAddUI({open:false,kind:null,rowId:null,text:"",saving:false});
       setSaving(false); setFiscalLoading(false); setFiscalError(""); setClienteFiscalDb(null);
@@ -308,45 +298,36 @@ const [hasScroll, setHasScroll] = useState(false);
       setTimeout(()=>closeBtnRef.current?.focus(),0);
     }
   },[open]);
-useEffect(() => {
-  const el = rowsContainerRef.current;
-  if (!el) return;
 
-  const checkScroll = () => {
-    const scroll = el.scrollHeight > el.clientHeight + 1;
-    setHasScroll(scroll);
-  };
-
-  checkScroll();
-
-  const resizeObserver = new ResizeObserver(checkScroll);
-  resizeObserver.observe(el);
-
-  window.addEventListener("resize", checkScroll);
-
-  return () => {
-    resizeObserver.disconnect();
-    window.removeEventListener("resize", checkScroll);
-  };
-}, [open, rows]);
+  useEffect(() => {
+    const el = rowsContainerRef.current;
+    if (!el) return;
+    const checkScroll = () => {
+      const scroll = el.scrollHeight > el.clientHeight + 1;
+      setHasScroll(scroll);
+    };
+    checkScroll();
+    const resizeObserver = new ResizeObserver(checkScroll);
+    resizeObserver.observe(el);
+    window.addEventListener("resize", checkScroll);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", checkScroll);
+    };
+  }, [open, rows]);
 
   const updateFilter=useCallback((k,v)=>setFilters(p=>({...p,[k]:v})),[]);
 
   /* Rows */
   const addRow = useCallback(() => {
-  setRows((p) => [...p, buildEmptyRow()]);
-}, []);
+    setRows((p) => [...p, buildEmptyRow()]);
+  }, []);
   const removeRow =useCallback(id=>setRows(p=>{const n=p.filter(r=>r.id!==id);return n.length?n:p;}),[]);
   const updateRow =useCallback((id,patch)=>setRows(p=>p.map(r=>r.id===id?{...r,...patch}:r)),[]);
 
-  const suggestDetalles=useCallback(txt=>{
-    const q=String(txt||"").trim().toLowerCase(); if(!q)return [];
-    return detallesList.filter(d=>String(d?.nombre??"").toLowerCase().includes(q)).slice(0,18);
-  },[detallesList]);
-
   /* Mini modal handlers */
   const startAddDetalleForRow=useCallback(rowId=>{ if(saving)return; setAddUI({open:true,kind:"detalles",rowId,text:"",saving:false}); },[saving]);
-  const startAddCliente      =useCallback(()=>{ if(saving)return; setCliFocus(false); setAddUI({open:true,kind:"clientes",rowId:null,text:cliInput||"",saving:false}); },[saving,cliInput]);
+  const startAddCliente      =useCallback(()=>{ if(saving)return; setAddUI({open:true,kind:"clientes",rowId:null,text:cliInput||"",saving:false}); },[saving,cliInput]);
   const closeAddMini         =useCallback(()=>{ if(addUI.saving)return; setAddUI({open:false,kind:null,rowId:null,text:"",saving:false}); },[addUI.saving]);
 
   const guardarNuevoCatalogo=useCallback(async()=>{
@@ -376,11 +357,6 @@ useEffect(() => {
   },[API_CATALOGO,addUI,showToast,updateRow,updateFilter]);
 
   /* Cliente */
-  const filteredClientes=useMemo(()=>{
-    const q=cliInput.trim().toLowerCase(); if(!cliFocus||q.length<1)return [];
-    return clientesList.filter(c=>String(c?.nombre??"").toLowerCase().includes(q)).slice(0,25);
-  },[clientesList,cliInput,cliFocus]);
-
   const clienteResolvedFromInput=useMemo(()=>resolveClienteByInput(clientesList,cliInput),[clientesList,cliInput]);
   const selectedClienteId=useMemo(()=>{const d=Number(filters.id_cliente); if(Number.isFinite(d)&&d>0)return d; return getClienteId(clienteResolvedFromInput)??0;},[filters.id_cliente,clienteResolvedFromInput]);
   const selectedClienteNombre=useMemo(()=>clienteResolvedFromInput?.nombre?String(clienteResolvedFromInput.nombre).trim():String(cliInput||"").trim(),[clienteResolvedFromInput,cliInput]);
@@ -391,8 +367,23 @@ useEffect(() => {
     if((!Number.isFinite(direct)||direct<=0)&&fallbackId)setFilters(prev=>String(prev.id_cliente)===String(fallbackId)?prev:{...prev,id_cliente:String(fallbackId)});
   },[open,filters.id_cliente,clienteResolvedFromInput]);
 
-  const handleClienteInputChange=useCallback(e=>{setCliInput(e.target.value);setFilters(p=>({...p,id_cliente:NULL_OPTION}));setClienteFiscalDb(null);setFiscalArcaData(null);setFiscalCuitInput("");setFiscalError("");},[]);
-  const handleSelectCliente=useCallback(cli=>{setCliInput(String(cli?.nombre??"").trim());setFilters(p=>({...p,id_cliente:getClienteId(cli)!=null?String(getClienteId(cli)):NULL_OPTION}));setCliFocus(false);setClienteFiscalDb(null);setFiscalArcaData(null);setFiscalCuitInput("");setFiscalError("");},[]);
+  const handleClienteInputChange=useCallback(val=>{
+    setCliInput(val);
+    setFilters(p=>({...p,id_cliente:NULL_OPTION}));
+    setClienteFiscalDb(null);
+    setFiscalArcaData(null);
+    setFiscalCuitInput("");
+    setFiscalError("");
+  },[]);
+
+  const handleSelectCliente=useCallback(cli=>{
+    setCliInput(String(cli?.nombre??"").trim());
+    setFilters(p=>({...p,id_cliente:getClienteId(cli)!=null?String(getClienteId(cli)):NULL_OPTION}));
+    setClienteFiscalDb(null);
+    setFiscalArcaData(null);
+    setFiscalCuitInput("");
+    setFiscalError("");
+  },[]);
 
   /* Cálculos */
   const rowsCalc=useMemo(()=>rows.map(r=>{const cantidad=Math.max(0,safeNumber(r.cantidad)),precio=Math.max(0,safeNumber(r.precio)),ivaPct=Math.max(0,safeNumber(r.ivaPct));const subtotal=cantidad*precio,ivaMonto=subtotal*(ivaPct/100),total=subtotal+ivaMonto;return{...r,subtotal,ivaMonto,total};}),[rows]);
@@ -489,112 +480,58 @@ useEffect(() => {
       tipo: "FACTURA",
       estado: "emitida",
       emitido_en_arca: 1,
-
       id_pago: facturaMeta?.id_pago ?? null,
       id_sistema: facturaMeta?.id_sistema ?? null,
       anio: Number(facturaMeta?.anio || 0),
       id_mes: Number(facturaMeta?.id_mes || 0),
-
-      monto_ars: Number(
-        facturaMeta?.imp_total ??
-        facturaMeta?.importe ??
-        resumen.total ??
-        0
-      ),
-
-      doc_tipo: Number(
-        facturaMeta?.doc_tipo ??
-        resumenFacturaData?.cliente_facturacion?.doc_tipo ??
-        80
-      ),
-
-      doc_nro: safeStr(
-        facturaMeta?.doc_nro ??
-        resumenFacturaData?.cliente_facturacion?.doc_nro ??
-        resumenFacturaData?.cliente_facturacion?.cuit ??
-        ""
-      ),
-
+      monto_ars: Number(facturaMeta?.imp_total ?? facturaMeta?.importe ?? resumen.total ?? 0),
+      doc_tipo: Number(facturaMeta?.doc_tipo ?? resumenFacturaData?.cliente_facturacion?.doc_tipo ?? 80),
+      doc_nro: safeStr(facturaMeta?.doc_nro ?? resumenFacturaData?.cliente_facturacion?.doc_nro ?? resumenFacturaData?.cliente_facturacion?.cuit ?? ""),
       cbte_tipo: Number(facturaMeta?.cbte_tipo || resumenFacturaData?.cbte_tipo || 11),
       pto_vta: Number(facturaMeta?.pto_vta || resumenFacturaData?.pto_vta || 2),
       cbte_nro: facturaMeta?.cbte_nro ?? null,
-
-      razon_social:
-        resumenFacturaData?.cliente_facturacion?.razon_social || null,
-      cond_iva:
-        resumenFacturaData?.cliente_facturacion?.cond_iva ||
-        resumenFacturaData?.cliente_facturacion?.condicion_iva ||
-        null,
-      domicilio:
-        resumenFacturaData?.cliente_facturacion?.domicilio || null,
-
+      razon_social: resumenFacturaData?.cliente_facturacion?.razon_social || null,
+      cond_iva: resumenFacturaData?.cliente_facturacion?.cond_iva || resumenFacturaData?.cliente_facturacion?.condicion_iva || null,
+      domicilio: resumenFacturaData?.cliente_facturacion?.domicilio || null,
       cae: facturaMeta?.cae ?? null,
       cae_vto: facturaMeta?.cae_vto ?? null,
-      fecha_cbte:
-        facturaMeta?.fecha_cbte ??
-        resumenFacturaData?.fecha_cbte_iso ??
-        null,
+      fecha_cbte: facturaMeta?.fecha_cbte ?? resumenFacturaData?.fecha_cbte_iso ?? null,
       resultado: facturaMeta?.resultado ?? null,
-
       qr_url: facturaMeta?.qr_url ?? null,
       qr_base64: facturaMeta?.qr_base64 ?? null,
       qr_payload: facturaMeta?.qr_payload ?? null,
-
-      // RESPUESTA CRUDA / COMPLETA DE ARCA
-      json_arca:
-        facturaMeta?.json_arca ??
-        facturaMeta?.raw_min ??
-        facturaMeta ??
-        null,
-
-      // SNAPSHOT COMPLETO DEL RESUMEN DE FACTURACIÓN
+      json_arca: facturaMeta?.json_arca ?? facturaMeta?.raw_min ?? facturaMeta ?? null,
       resumen_facturacion: {
         id_pago: resumenFacturaData?.id_pago ?? null,
         id_sistema: resumenFacturaData?.id_sistema ?? null,
         labelCliente: resumenFacturaData?.labelCliente ?? null,
         labelSistema: resumenFacturaData?.labelSistema ?? null,
-
         cliente_facturacion: resumenFacturaData?.cliente_facturacion ?? null,
-
         id_cliente: resumenFacturaData?.id_cliente ?? null,
         id_tipo_venta: resumenFacturaData?.id_tipo_venta ?? null,
         id_medio_pago: resumenFacturaData?.id_medio_pago ?? null,
         id_clasificacion: resumenFacturaData?.id_clasificacion ?? null,
-
         fecha_cbte_iso: resumenFacturaData?.fecha_cbte_iso ?? null,
         vto_pago_iso: resumenFacturaData?.vto_pago_iso ?? null,
-
         cbte_tipo: resumenFacturaData?.cbte_tipo ?? null,
         pto_vta: resumenFacturaData?.pto_vta ?? null,
-
-        items_facturacion: Array.isArray(resumenFacturaData?.items_facturacion)
-          ? resumenFacturaData.items_facturacion
-          : [],
-
+        items_facturacion: Array.isArray(resumenFacturaData?.items_facturacion) ? resumenFacturaData.items_facturacion : [],
         total_ars: Number(resumenFacturaData?.total_ars ?? resumen.total ?? 0),
         monto: Number(resumenFacturaData?.monto ?? resumen.total ?? 0),
         importe: Number(resumenFacturaData?.importe ?? resumen.total ?? 0),
         observaciones: resumenFacturaData?.observaciones ?? "",
-
         emisor_nombre: resumenFacturaData?.emisor_nombre ?? null,
         emisor_domicilio: resumenFacturaData?.emisor_domicilio ?? null,
         cuit_emisor: resumenFacturaData?.cuit_emisor ?? null,
         cond_iva_emisor: resumenFacturaData?.cond_iva_emisor ?? null,
         ingresos_brutos_emisor: resumenFacturaData?.ingresos_brutos_emisor ?? null,
-        fecha_inicio_actividades_emisor:
-          resumenFacturaData?.fecha_inicio_actividades_emisor ?? null,
+        fecha_inicio_actividades_emisor: resumenFacturaData?.fecha_inicio_actividades_emisor ?? null,
         logo_url: resumenFacturaData?.logo_url ?? null,
       },
-
-      // CAMPOS PLANOS TAMBIÉN, por compatibilidad
-      items_facturacion: Array.isArray(resumenFacturaData?.items_facturacion)
-        ? resumenFacturaData.items_facturacion
-        : [],
+      items_facturacion: Array.isArray(resumenFacturaData?.items_facturacion) ? resumenFacturaData.items_facturacion : [],
       total_ars: resumenFacturaData?.total_ars ?? null,
       vto_pago: resumenFacturaData?.vto_pago_iso ?? null,
       observaciones: resumenFacturaData?.observaciones ?? "",
-
-      // También guardamos datos del cliente/emisor por separado
       cliente_facturacion: resumenFacturaData?.cliente_facturacion ?? null,
       emisor: {
         nombre: resumenFacturaData?.emisor_nombre ?? null,
@@ -602,8 +539,7 @@ useEffect(() => {
         cuit: resumenFacturaData?.cuit_emisor ?? null,
         condicion_iva: resumenFacturaData?.cond_iva_emisor ?? null,
         ingresos_brutos: resumenFacturaData?.ingresos_brutos_emisor ?? null,
-        fecha_inicio_actividades:
-          resumenFacturaData?.fecha_inicio_actividades_emisor ?? null,
+        fecha_inicio_actividades: resumenFacturaData?.fecha_inicio_actividades_emisor ?? null,
         logo_url: resumenFacturaData?.logo_url ?? null,
       },
     };
@@ -645,10 +581,7 @@ useEffect(() => {
       showToast("cargando", "Guardando venta facturada…", 12000);
 
       const cf = normalizeClienteFiscalDb(
-        resumenFacturaData?.cliente_facturacion ||
-        clienteFiscalDb ||
-        fiscalArcaData ||
-        {}
+        resumenFacturaData?.cliente_facturacion || clienteFiscalDb || fiscalArcaData || {}
       );
 
       const info = await guardarVentaBatch({
@@ -673,7 +606,6 @@ useEffect(() => {
         throw new Error("La venta se emitió pero no se recibió el PDF para guardarlo.");
       }
 
-      // SIEMPRE subimos el PDF y SIEMPRE usamos el id_comprobante REAL de comprobantes_archivos
       const subida = await subirComprobanteYVincularPrimerMovimiento({
         idMovimiento: idsOk[0],
         blob: factEmitida.pdf_blob,
@@ -682,16 +614,13 @@ useEffect(() => {
       });
 
       const idComprobante = Number(
-        subida?.id_comprobante ??
-        subida?.comprobante?.id_comprobante ??
-        0
+        subida?.id_comprobante ?? subida?.comprobante?.id_comprobante ?? 0
       ) || null;
 
       if (!idComprobante) {
         throw new Error("El backend no devolvió un id_comprobante válido al subir la factura.");
       }
 
-      // Vincular al resto de movimientos del batch, excepto el primero que ya quedó vinculado
       const restoIds = idsOk.slice(1);
       if (restoIds.length > 0) {
         await vincularComprobanteAMovimientosLote(restoIds, idComprobante);
@@ -723,7 +652,7 @@ useEffect(() => {
     fiscalArcaData,
     onSaved,
     subirComprobanteYVincularPrimerMovimiento,
-    vincularComprobanteAMovimientosLote
+    vincularComprobanteAMovimientosLote,
   ]);
 
   const submit=useCallback(async()=>{
@@ -771,8 +700,8 @@ useEffect(() => {
           {/* =================== HEADER =================== */}
           <div className="mi-modal__header">
             <div className="mi-modal__head-icon" aria-hidden="true">
-  <FontAwesomeIcon icon={faFileInvoiceDollar} />
-</div>
+              <FontAwesomeIcon icon={faFileInvoiceDollar} />
+            </div>
             <div className="mi-modal__head-left">
               <h2 className="mi-modal__title">Nueva Venta</h2>
             </div>
@@ -797,7 +726,7 @@ useEffect(() => {
                 <div className="mi-cr-table__head">
                   <div style={{paddingLeft:10}}>Detalle</div>
                   <div>Cant.</div>
-                  <div>Precio</div>
+                  <div className="right">Precio</div>
                   <div>IVA %</div>
                   <div className="right">IVA $</div>
                   <div className="right">Total</div>
@@ -805,124 +734,135 @@ useEffect(() => {
                 </div>
 
                 {/* Filas */}
-<div
-  ref={rowsContainerRef}
-  className={`mi-cr-table__rows ${hasScroll ? "has-scroll" : ""}`}
->                  {rowsCalc.map(r=>{
-                    const suggestions=suggestDetalles(r.detalleText);
-                    const showSug=String(r.detalleText||"").trim().length>0&&Number(r.id_detalle||0)<=0&&suggestions.length>0;
-                    return (
-                      <div key={r.id} className="mi-cr-row">
+                <div
+                  ref={rowsContainerRef}
+                  className={`mi-cr-table__rows ${hasScroll ? "has-scroll" : ""}`}
+                >
+                  {rowsCalc.map(r => (
+                    <div key={r.id} className="mi-cr-row">
 
-                        {/* Detalle */}
-                        <div className="mi-cr-cell mi-cr-cell--detalle">
-                          <input
-                            className="nv-cell-input"
-                            placeholder="Escribí o buscá un detalle…"
-                            value={r.detalleText}
-                            onChange={e=>updateRow(r.id,{detalleText:e.target.value,id_detalle:NULL_OPTION})}
-                            disabled={saving||addUI.open}
-                            autoComplete="off"
-                            style={{width:"100%"}}
-                          />
-                          {showSug&&(
-                            <ul className="mi-cr-suggest">
-                              {suggestions.map(d=>{
-                                const did=getDetalleId(d);
-                                return (
-                                  <li key={did??d?.nombre??uid()} className="mi-cr-suggest__item"
-                                    onMouseDown={e=>{e.preventDefault();updateRow(r.id,{id_detalle:String(did||""),detalleText:String(d?.nombre||"")});}}>
-                                    {d.nombre}
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
-                        </div>
-
-                        {/* Cantidad */}
-                        <div className="mi-cr-cell mi-cr-cell--center">
-                          <input className="nv-cell-input nv-cell-input--center" type="number" min="0" step="1"
-                            value={r.cantidad}
-                            onChange={e=>updateRow(r.id,{cantidad:e.target.value===""?"":Number(e.target.value)})}
-                            disabled={saving} style={{width:"100%"}}/>
-                        </div>
-
-                        {/* Precio */}
-<div className="mi-cr-cell mi-cr-cell--center">
-  <input
-    className="nv-cell-input nv-cell-input--center "
-    type="text"
-    inputMode="decimal"
-    value={r.precioFocused ? (r.precioDraft ?? "") : formatMoneyInputARS(r.precio)}
-    onFocus={(e) => {
-      updateRow(r.id, {
-        precioFocused: true,
-        precioDraft: formatEditableMoney(r.precio),
-      });
-      setTimeout(() => e.target.select(), 0);
-    }}
-    onChange={(e) => {
-      const raw = e.target.value;
-
-      // permite solo números, coma y punto
-      const cleaned = raw.replace(/[^\d,.\-]/g, "");
-
-      updateRow(r.id, {
-        precioDraft: cleaned,
-        precio: parseMoneyInputARS(cleaned),
-      });
-    }}
-    onBlur={() => {
-      const parsed = parseMoneyInputARS(r.precioDraft);
-      updateRow(r.id, {
-        precio: parsed,
-        precioDraft: "",
-        precioFocused: false,
-      });
-    }}
-    placeholder="$ 0,00"
-    disabled={saving}
-    style={{ width: "100%", padding:"0" }}
-  />
-</div>
-                        {/* IVA % */}
-                        <div className="mi-cr-cell mi-cr-cell--center">
-                          <select className="nv-cell-input nv-cell-input--center nv-cell-input--select"
-                                  value={String(r.ivaPct)}
-                                  onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
-                                  onKeyDown={(e) => {
-                                  const blockedKeys = ["ArrowUp", "ArrowDown"];if (blockedKeys.includes(e.key)) { e.preventDefault();}}}
-                                  disabled={saving}
-                                  style={{ width: "100%" }}>
-                                  {IVA_OPTIONS.map((x) => (
-                                <option key={x.value} value={x.value}>{x.label}</option>))}
-                          </select>
-                        </div>
-
-                        {/* IVA $ */}
-                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
-                          {moneyARS(r.ivaMonto)}
-                        </div>
-
-                        {/* Total */}
-                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
-                          {moneyARS(r.total)}
-                        </div>
-
-                        {/* Eliminar */}
-                        <div className="mi-cr-cell mi-cr-cell--center " id="delete_cell">
-                          <button type="button" className="mi-cr-del" onClick={()=>removeRow(r.id)} disabled={saving} title="Eliminar fila">×</button>
-                        </div>
+                      {/* ── Detalle con GlobalAutocomplete ── */}
+                      <div className="mi-cr-cell mi-cr-cell--detalle">
+                        <GlobalAutocomplete
+                          value={r.detalleText}
+                          onChange={(val) =>
+                            updateRow(r.id, { detalleText: val, id_detalle: NULL_OPTION })
+                          }
+                          onSelect={(d) => {
+                            const did = getDetalleId(d);
+                            updateRow(r.id, {
+                              id_detalle: String(did || ""),
+                              detalleText: String(d?.nombre || ""),
+                            });
+                          }}
+                          options={detallesList}
+                          getOptionLabel={(d) => String(d?.nombre ?? "")}
+                          getOptionValue={(d) => String(getDetalleId(d) ?? d?.nombre ?? "")}
+                          placeholder="Escribí o buscá un detalle…"
+                          disabled={saving || addUI.open}
+                          showAllOnFocus={false}
+                          maxItems={18}
+                          inputClassName="nv-cell-input"
+                        />
                       </div>
-                    );
-                  })}
+
+                      {/* ── Cantidad ── */}
+                      <div className="mi-cr-cell mi-cr-cell--center">
+                        <input
+                          className="nv-cell-input nv-cell-input--center"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={r.cantidad}
+                          onChange={e =>
+                            updateRow(r.id, { cantidad: e.target.value === "" ? "" : Number(e.target.value) })
+                          }
+                          disabled={saving}
+                          style={{ width: "100%" }}
+                        />
+                      </div>
+
+                      {/* ── Precio ── */}
+                      <div className="mi-cr-cell mi-cr-cell--center">
+                        <input
+                          className="nv-cell-input nv-cell-input--right"
+                          type="text"
+                          inputMode="decimal"
+                          value={r.precioFocused ? (r.precioDraft ?? "") : formatMoneyInputARS(r.precio)}
+                          onFocus={(e) => {
+                            updateRow(r.id, {
+                              precioFocused: true,
+                              precioDraft: formatEditableMoney(r.precio),
+                            });
+                            setTimeout(() => e.target.select(), 0);
+                          }}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const cleaned = raw.replace(/[^\d,.\-]/g, "");
+                            updateRow(r.id, {
+                              precioDraft: cleaned,
+                              precio: parseMoneyInputARS(cleaned),
+                            });
+                          }}
+                          onBlur={() => {
+                            const parsed = parseMoneyInputARS(r.precioDraft);
+                            updateRow(r.id, {
+                              precio: parsed,
+                              precioDraft: "",
+                              precioFocused: false,
+                            });
+                          }}
+                          placeholder="$ 0,00"
+                          disabled={saving}
+                          style={{ width: "100%", padding: "0" }}
+                        />
+                      </div>
+
+                      {/* ── IVA % ── */}
+                      <div className="mi-cr-cell mi-cr-cell--center">
+                        <select
+                          className="nv-cell-input nv-cell-input--center nv-cell-input--select"
+                          value={String(r.ivaPct)}
+                          onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
+                          onKeyDown={(e) => {
+                            if (["ArrowUp", "ArrowDown"].includes(e.key)) e.preventDefault();
+                          }}
+                          disabled={saving}
+                          style={{ width: "100%" }}
+                        >
+                          {IVA_OPTIONS.map((x) => (
+                            <option key={x.value} value={x.value}>{x.label}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* ── IVA $ ── */}
+                      <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
+                        {moneyARS(r.ivaMonto)}
+                      </div>
+
+                      {/* ── Total ── */}
+                      <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
+                        {moneyARS(r.total)}
+                      </div>
+
+                      {/* ── Eliminar ── */}
+                      <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
+                        <button
+                          type="button"
+                          className="mi-cr-del"
+                          onClick={() => removeRow(r.id)}
+                          disabled={saving}
+                          title="Eliminar fila"
+                        >×</button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 {/* FOOTER: acciones + totales */}
                 <div className="mi-cr-table__foot">
                   <div className="mi-cr-foot-actions">
-                    {/* Agregar fila */}
                     <button type="button" className="nv-foot-btn" onClick={addRow} disabled={saving}>
                       <span className="nv-foot-btn__icon">+</span>
                       Agregar fila
@@ -930,13 +870,15 @@ useEffect(() => {
 
                     <div className="nv-foot-sep"/>
 
-                    {/* Agregar nuevo detalle */}
-                    <button type="button" className="nv-foot-btn" disabled={saving||addUI.saving}
-                      onClick={()=>{
-                        // Abre el mini modal para el último row o crea uno nuevo
-                        const lastRow=rows[rows.length-1];
+                    <button
+                      type="button"
+                      className="nv-foot-btn"
+                      disabled={saving || addUI.saving}
+                      onClick={() => {
+                        const lastRow = rows[rows.length - 1];
                         startAddDetalleForRow(lastRow?.id);
-                      }}>
+                      }}
+                    >
                       <span className="nv-foot-btn__icon">✦</span>
                       Nuevo detalle
                     </button>
@@ -965,148 +907,207 @@ useEffect(() => {
                 <div className="mi-cr-filters__top">
                   <div className="mi-cr-filters__title">Datos de venta</div>
 
-                  {/* Solo Fecha (período derivado automáticamente) */}
+                  {/* Fecha */}
                   <div className="mi-cr-filters__dates">
-<div
-  className="fl-field fl-col-full mi-date-field"
-  onClick={() => {
-    if (saving) return;
-    const el = document.getElementById("nv-fecha-input");
-    if (!el) return;
-
-    if (typeof el.showPicker === "function") {
-      el.showPicker();
-    } else {
-      el.focus();
-      el.click();
-    }
-  }}
->
-  <input
-    id="nv-fecha-input"
-    className="fl-input"
-    type="date"
-    placeholder=" "
-    value={fecha}
-    onChange={e => setFecha(String(e.target.value || "").trim())}
-    disabled={saving}
-  />
-  <label className="fl-label">Fecha</label>
-</div>
+                    <div
+                      className="fl-field fl-col-full mi-date-field"
+                      onClick={() => {
+                        if (saving) return;
+                        const el = document.getElementById("nv-fecha-input");
+                        if (!el) return;
+                        if (typeof el.showPicker === "function") {
+                          el.showPicker();
+                        } else {
+                          el.focus();
+                          el.click();
+                        }
+                      }}
+                    >
+                      <input
+                        id="nv-fecha-input"
+                        className="fl-input"
+                        type="date"
+                        placeholder=" "
+                        value={fecha}
+                        onChange={e => setFecha(String(e.target.value || "").trim())}
+                        disabled={saving}
+                      />
+                      <label className="fl-label">Fecha</label>
+                    </div>
                   </div>
                 </div>
 
                 <div className="mi-cr-filters__body">
 
-                  {/* Cliente */}
+                  {/* ── Cliente con GlobalAutocomplete ── */}
                   <div className="fl-field mi-cr-rel">
-                    <input className="fl-input" placeholder=" " value={cliInput}
+                    <GlobalAutocomplete
+                      value={cliInput}
                       onChange={handleClienteInputChange}
-                      onFocus={()=>setCliFocus(true)}
-                      onBlur={()=>setTimeout(()=>setCliFocus(false),120)}
-                      disabled={saving||addUI.open} autoComplete="off"/>
-                    <label className="fl-label">Cliente *</label>
+                      onSelect={handleSelectCliente}
+                      options={clientesList}
+                      getOptionLabel={(c) => String(c?.nombre ?? "").trim()}
+                      getOptionValue={(c) => String(getClienteId(c) ?? c?.nombre ?? "")}
+                      label="Cliente *"
+                      placeholder=" "
+                      disabled={saving || addUI.open}
+                      showAllOnFocus={true}
+                      maxItems={25}
+                      inputClassName="fl-input"
+                    />
 
-                    {cliFocus&&filteredClientes.length>0&&(
-                      <ul className="mi-cr-suggest">
-                        {filteredClientes.map(c=>{
-                          const cid=getClienteId(c);
-                          return <li key={cid??c?.nombre??uid()} className="mi-cr-suggest__item"
-                            onMouseDown={e=>{e.preventDefault();handleSelectCliente(c);}}>{c.nombre}</li>;
-                        })}
-                      </ul>
-                    )}
-
-                    <button type="button" className="mi-cr-link" onClick={startAddCliente} disabled={saving||addUI.saving}
-                      style={{fontSize:"11px",color:"#0f766e",background:"none",border:"none",padding:"4px 0 0",cursor:"pointer",fontWeight:500}}>
+                    <button
+                      type="button"
+                      className="mi-cr-link"
+                      onClick={startAddCliente}
+                      disabled={saving || addUI.saving}
+                      style={{
+                        fontSize: "11px",
+                        color: "#0f766e",
+                        background: "none",
+                        border: "none",
+                        padding: "4px 0 0",
+                        cursor: "pointer",
+                        fontWeight: 500,
+                      }}
+                    >
                       + Agregar nuevo cliente
                     </button>
                   </div>
 
-                  {/* Forma de venta */}
+                  {/* ── Forma de venta (select original) ── */}
                   <div className="fl-field">
-                    <select className="fl-input fl-select" value={String(filters.id_tipo_venta)}
-                      onChange={e=>updateFilter("id_tipo_venta",e.target.value)} disabled={saving}>
+                    <select
+                      className="fl-input fl-select"
+                      value={String(filters.id_tipo_venta)}
+                      onChange={e => updateFilter("id_tipo_venta", e.target.value)}
+                      disabled={saving}
+                    >
                       <option value={NULL_OPTION}>Seleccionar...</option>
-                      {tiposVentaList.map(x=><option key={x.id??x.id_tipo_venta} value={String(x.id??x.id_tipo_venta)}>{x.nombre}</option>)}
+                      {tiposVentaList.map(x => (
+                        <option key={x.id ?? x.id_tipo_venta} value={String(x.id ?? x.id_tipo_venta)}>
+                          {x.nombre}
+                        </option>
+                      ))}
                     </select>
                     <label className="fl-label">Forma de venta *</label>
                   </div>
 
-                  {/* Medio de pago (solo contado) */}
-                  {isContado&&(
+                  {/* ── Medio de pago (select original) ── */}
+                  {isContado && (
                     <div className="fl-field">
-                      <select className="fl-input fl-select" value={String(filters.id_medio_pago)}
-                        onChange={e=>updateFilter("id_medio_pago",e.target.value)} disabled={saving}>
+                      <select
+                        className="fl-input fl-select"
+                        value={String(filters.id_medio_pago)}
+                        onChange={e => updateFilter("id_medio_pago", e.target.value)}
+                        disabled={saving}
+                      >
                         <option value={NULL_OPTION}>Seleccionar medio</option>
-                        {mediosPagoList.map(x=><option key={x.id??x.id_medio_pago} value={String(x.id??x.id_medio_pago)}>{x.nombre}</option>)}
+                        {mediosPagoList.map(x => (
+                          <option key={x.id ?? x.id_medio_pago} value={String(x.id ?? x.id_medio_pago)}>
+                            {x.nombre}
+                          </option>
+                        ))}
                       </select>
                       <label className="fl-label">Medio de pago *</label>
                     </div>
                   )}
 
-                  {/* Panel facturación */}
-                  {tipoVentaSeleccionado&&(
+                  {/* ── Panel facturación ── */}
+                  {tipoVentaSeleccionado && (
                     <div className="mi-card mi-card--full">
                       <div className="mi-card__title">Facturación</div>
 
                       <div className="mi-card__actionsRow">
-                        <button type="button" disabled={saving}
-                          className={`mit-btn ${accionContado==="guardar"?"mit-btn--solid":"mit-btn--ghost"}`}
-                          onClick={()=>setAccionContado("guardar")}>Guardar</button>
-                        <button type="button" disabled={saving}
-                          className={`mit-btn ${accionContado==="facturar"?"mit-btn--solid":"mit-btn--ghost"}`}
-                          onClick={onClickFacturar}>
-                          {saving&&accionContado==="facturar"?"Procesando...":"Facturar"}
+                        <button
+                          type="button"
+                          disabled={saving}
+                          className={`mit-btn ${accionContado === "guardar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
+                          onClick={() => setAccionContado("guardar")}
+                        >Guardar</button>
+                        <button
+                          type="button"
+                          disabled={saving}
+                          className={`mit-btn ${accionContado === "facturar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
+                          onClick={onClickFacturar}
+                        >
+                          {saving && accionContado === "facturar" ? "Procesando..." : "Facturar"}
                         </button>
                       </div>
 
                       <div className="mi-card__hint">
-                        {accionContado==="guardar"?<>* <b>Guardar</b>: queda <b>pendiente</b>.</>
-                          :clienteFiscalDb?<>* Datos fiscales encontrados. Presioná <b>Facturar</b> para continuar.</>
-                          :<>* Si el cliente no tiene datos fiscales, ingresá el <b>CUIT</b> abajo.</>}
+                        {accionContado === "guardar"
+                          ? <><b>Guardar</b>: queda <b>pendiente</b>.</>
+                          : clienteFiscalDb
+                            ? <>* Datos fiscales encontrados. Presioná <b>Facturar</b> para continuar.</>
+                            : <>* Si el cliente no tiene datos fiscales, ingresá el <b>CUIT</b> abajo.</>
+                        }
                       </div>
 
-                      {shouldNeedFiscalPanel&&(
+                      {shouldNeedFiscalPanel && (
                         <div>
-                          {!selectedClienteId?(
+                          {!selectedClienteId ? (
                             <div className="mi-card__hint">Seleccioná primero un cliente del listado.</div>
-                          ):fiscalLoading?(
+                          ) : fiscalLoading ? (
                             <div className="mi-card__hint">Consultando datos fiscales…</div>
-                          ):!clienteFiscalDb?(
+                          ) : !clienteFiscalDb ? (
                             <>
                               <div className="fl-field Margen-top">
-                                <input className="fl-input" placeholder=" " value={fiscalCuitInput}
-                                  onChange={e=>{setFiscalCuitInput(onlyDigits(e.target.value));setFiscalArcaData(null);setFiscalError("");}}
-                                  inputMode="numeric" disabled={saving||fiscalLookupLoading} maxLength={11}/>
+                                <input
+                                  className="fl-input"
+                                  placeholder=" "
+                                  value={fiscalCuitInput}
+                                  onChange={e => {
+                                    setFiscalCuitInput(onlyDigits(e.target.value));
+                                    setFiscalArcaData(null);
+                                    setFiscalError("");
+                                  }}
+                                  inputMode="numeric"
+                                  disabled={saving || fiscalLookupLoading}
+                                  maxLength={11}
+                                />
                                 <label className="fl-label">CUIT *</label>
                               </div>
 
-                              {fiscalArcaData&&(
-                                <div className="arca-alert arca-alert--info" style={{marginTop:8}}>
+                              {fiscalArcaData && (
+                                <div className="arca-alert arca-alert--info" style={{ marginTop: 8 }}>
                                   <div className="arca-alert__title">Datos encontrados</div>
                                   <div className="arca-resumen">
-                                    <div className="arca-row"><b>CUIT:</b><span>{fiscalArcaData.cuit||"—"}</span></div>
-                                    <div className="arca-row"><b>IVA:</b><span>{fiscalArcaData.condicion_iva||"—"}</span></div>
-                                    <div className="arca-row arca-row--full"><b>Razón social:</b><span>{fiscalArcaData.razon_social||"—"}</span></div>
-                                    <div className="arca-row arca-row--full"><b>Domicilio:</b><span>{fiscalArcaData.domicilio||"—"}</span></div>
+                                    <div className="arca-row"><b>CUIT:</b><span>{fiscalArcaData.cuit || "—"}</span></div>
+                                    <div className="arca-row"><b>IVA:</b><span>{fiscalArcaData.condicion_iva || "—"}</span></div>
+                                    <div className="arca-row arca-row--full"><b>Razón social:</b><span>{fiscalArcaData.razon_social || "—"}</span></div>
+                                    <div className="arca-row arca-row--full"><b>Domicilio:</b><span>{fiscalArcaData.domicilio || "—"}</span></div>
                                   </div>
                                 </div>
                               )}
                             </>
-                          ):null}
-                          {fiscalError&&<div className="arca-alert arca-alert--error" style={{marginTop:8}}>{fiscalError}</div>}
+                          ) : null}
+                          {fiscalError && (
+                            <div className="arca-alert arca-alert--error" style={{ marginTop: 8 }}>
+                              {fiscalError}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* CTA final */}
+                  {/* ── CTA final ── */}
                   <div className="mi-cr-filters__actions">
-                    <button type="button" onClick={submit} disabled={saving} className="mit-btn mit-btn--solid mit-btn--block">
+                    <button
+                      type="button"
+                      onClick={submit}
+                      disabled={saving}
+                      className="mit-btn mit-btn--solid mit-btn--block"
+                    >
                       {btnLabel}
                     </button>
-                    <button type="button" onClick={()=>(!saving?onClose?.():null)} disabled={saving} className="mit-btn mit-btn--ghost mit-btn--block">
+                    <button
+                      type="button"
+                      onClick={() => (!saving ? onClose?.() : null)}
+                      disabled={saving}
+                      className="mit-btn mit-btn--ghost mit-btn--block"
+                    >
                       Cancelar
                     </button>
                   </div>
@@ -1119,10 +1120,10 @@ useEffect(() => {
           {/* Mini Modal dentro del container */}
           <AddCatalogMiniModal
             open={addUI.open}
-            title={addUI.kind==="clientes"?"Nuevo cliente":"Nuevo detalle"}
+            title={addUI.kind === "clientes" ? "Nuevo cliente" : "Nuevo detalle"}
             value={addUI.text}
             saving={addUI.saving}
-            onChange={txt=>setAddUI(p=>({...p,text:txt}))}
+            onChange={txt => setAddUI(p => ({ ...p, text: txt }))}
             onCancel={closeAddMini}
             onSave={guardarNuevoCatalogo}
             dark={dark}
@@ -1131,21 +1132,21 @@ useEffect(() => {
       </div>
 
       {/* Modal Resumen Factura */}
-      {openResumenFactura&&resumenFacturaData&&(
+      {openResumenFactura && resumenFacturaData && (
         <ModalFacturaBaltoResumen
           open={openResumenFactura}
-          onClose={()=>setOpenResumenFactura(false)}
-          onBack={()=>setOpenResumenFactura(false)}
-          onCloseAll={()=>setOpenResumenFactura(false)}
+          onClose={() => setOpenResumenFactura(false)}
+          onBack={() => setOpenResumenFactura(false)}
+          onCloseAll={() => setOpenResumenFactura(false)}
           apiBase={`${BASE_URL}/api.php`}
           action="movimientos"
           data={resumenFacturaData}
-          docTipo={Number(resumenFacturaData?.cliente_facturacion?.doc_tipo||80)}
-          docNro={safeStr(resumenFacturaData?.cliente_facturacion?.doc_nro||resumenFacturaData?.cliente_facturacion?.cuit)}
-          cbteTipo={Number(resumenFacturaData?.cbte_tipo||11)}
-          ptoVta={String(resumenFacturaData?.pto_vta||2)}
-          onFacturada={async fact=>await finalizarFacturacionYGuardarVenta(fact)}
-          onDone={async fact=>await finalizarFacturacionYGuardarVenta(fact)}
+          docTipo={Number(resumenFacturaData?.cliente_facturacion?.doc_tipo || 80)}
+          docNro={safeStr(resumenFacturaData?.cliente_facturacion?.doc_nro || resumenFacturaData?.cliente_facturacion?.cuit)}
+          cbteTipo={Number(resumenFacturaData?.cbte_tipo || 11)}
+          ptoVta={String(resumenFacturaData?.pto_vta || 2)}
+          onFacturada={async fact => await finalizarFacturacionYGuardarVenta(fact)}
+          onDone={async fact => await finalizarFacturacionYGuardarVenta(fact)}
           forceTestAmount={false}
           testAmount={null}
           skipMovimientoAutocreacion={true}

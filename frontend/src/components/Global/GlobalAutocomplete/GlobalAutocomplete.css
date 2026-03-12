@@ -1,17 +1,10 @@
 .ga-wrap{
   position: relative;
-  min-width: 0;
+  width: 100%;
 }
 
 .ga-input{
   width: 100%;
-}
-
-.ga-label{
-  position: absolute;
-  left: 12px;
-  top: 14px;
-  pointer-events: none;
 }
 
 .ga-list{
@@ -48,6 +41,11 @@
 .ga-item.is-active{
   background: var(--nv-action-10, rgba(0,85,187,.10));
   outline: 1px solid var(--nv-action-18, rgba(0,85,187,.18));
+}
+
+.ga-item.is-empty{
+  cursor: default;
+  opacity: .7;
 }
 
 .mi-modal--dark .ga-list{

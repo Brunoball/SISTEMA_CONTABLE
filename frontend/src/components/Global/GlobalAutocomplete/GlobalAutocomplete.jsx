@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import "./GlobalAutocomplete.css"
+import "./GlobalAutocomplete.css";
+
 function normalizeText(v) {
   return String(v ?? "")
     .toLowerCase()
@@ -9,12 +10,12 @@ function normalizeText(v) {
 }
 
 export default function GlobalAutocomplete({
-  value,
+  value = "",
   onChange,
   onSelect,
   options = [],
-  getOptionLabel = (x) => x?.nombre ?? "",
-  getOptionValue = (x) => x?.id ?? "",
+  getOptionLabel = (opt) => String(opt?.nombre ?? ""),
+  getOptionValue = (opt) => String(opt?.id ?? getOptionLabel(opt)),
   placeholder = " ",
   label = "",
   disabled = false,
@@ -24,59 +25,106 @@ export default function GlobalAutocomplete({
   inputClassName = "",
   listClassName = "",
   itemClassName = "",
+  labelClassName = "fl-label",
+  emptyMessage = "Sin resultados",
+  name,
+  id,
 }) {
-  const wrapperRef = useRef(null);
-  const inputRef = useRef(null);
+  const wrapRef = useRef(null);
+  const blurTimerRef = useRef(null);
 
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const filteredOptions = useMemo(() => {
-    const q = normalizeText(value);
+  const normalizedValue = normalizeText(value);
 
-    if (!q) {
-      return showAllOnFocus ? options.slice(0, maxItems) : [];
+  const filteredOptions = useMemo(() => {
+    const arr = Array.isArray(options) ? options : [];
+
+    if (!normalizedValue) {
+      return showAllOnFocus ? arr.slice(0, maxItems) : [];
     }
 
-    return options
-      .filter((opt) => normalizeText(getOptionLabel(opt)).includes(q))
+    return arr
+      .filter((opt) =>
+        normalizeText(getOptionLabel(opt)).includes(normalizedValue)
+      )
       .slice(0, maxItems);
-  }, [value, options, getOptionLabel, maxItems, showAllOnFocus]);
+  }, [options, normalizedValue, getOptionLabel, showAllOnFocus, maxItems]);
+
+  const safeActiveIndex =
+    activeIndex >= filteredOptions.length ? 0 : activeIndex;
 
   useEffect(() => {
     setActiveIndex(0);
   }, [value]);
 
   useEffect(() => {
-    function handleClickOutside(e) {
-      if (!wrapperRef.current?.contains(e.target)) {
+    function handlePointerDownOutside(e) {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target)) {
         setOpen(false);
         setActiveIndex(0);
       }
     }
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", handlePointerDownOutside);
+    document.addEventListener("touchstart", handlePointerDownOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDownOutside);
+      document.removeEventListener("touchstart", handlePointerDownOutside);
+    };
   }, []);
 
-  const showList = open && filteredOptions.length > 0;
-  const safeIndex =
-    activeIndex >= filteredOptions.length ? 0 : activeIndex;
+  useEffect(() => {
+    return () => {
+      if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    };
+  }, []);
+
+  const closeList = () => {
+    setOpen(false);
+    setActiveIndex(0);
+  };
+
+  const openList = () => {
+    if (disabled) return;
+    if (showAllOnFocus || normalizedValue) {
+      setOpen(true);
+    }
+  };
+
+  const handleFocus = () => {
+    openList();
+  };
+
+  const handleBlur = () => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+
+    blurTimerRef.current = setTimeout(() => {
+      closeList();
+    }, 120);
+  };
+
+  const selectOption = (opt) => {
+    onSelect?.(opt);
+    closeList();
+  };
 
   const handleKeyDown = (e) => {
-    if (!showList && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    if (disabled) return;
+
+    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !open) {
       if (filteredOptions.length > 0) {
         e.preventDefault();
         setOpen(true);
       }
-      return;
     }
 
-    if (!filteredOptions.length) return;
-
     if (e.key === "ArrowDown") {
+      if (!filteredOptions.length) return;
       e.preventDefault();
-      setOpen(true);
       setActiveIndex((prev) =>
         prev >= filteredOptions.length - 1 ? 0 : prev + 1
       );
@@ -84,8 +132,8 @@ export default function GlobalAutocomplete({
     }
 
     if (e.key === "ArrowUp") {
+      if (!filteredOptions.length) return;
       e.preventDefault();
-      setOpen(true);
       setActiveIndex((prev) =>
         prev <= 0 ? filteredOptions.length - 1 : prev - 1
       );
@@ -93,70 +141,91 @@ export default function GlobalAutocomplete({
     }
 
     if (e.key === "Enter") {
-      if (!open) return;
+      if (!open || !filteredOptions.length) return;
       e.preventDefault();
-      const picked = filteredOptions[safeIndex];
-      if (!picked) return;
-
-      onSelect?.(picked);
-      setOpen(false);
-      setActiveIndex(0);
+      selectOption(filteredOptions[safeActiveIndex]);
       return;
     }
 
     if (e.key === "Escape") {
       e.preventDefault();
-      setOpen(false);
-      setActiveIndex(0);
+      closeList();
     }
   };
 
   return (
     <div
-      ref={wrapperRef}
-      className={`ga-wrap ${className}`.trim()}
+      ref={wrapRef}
+      className={["ga-wrap", className].filter(Boolean).join(" ")}
     >
       <input
-        ref={inputRef}
-        className={`ga-input ${inputClassName}`.trim()}
+        id={id}
+        name={name}
+        className={["ga-input", inputClassName].filter(Boolean).join(" ")}
+        type="text"
         value={value}
+        placeholder={placeholder || " "}
+        autoComplete="off"
+        disabled={disabled}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
         onChange={(e) => {
           onChange?.(e.target.value);
           setOpen(true);
           setActiveIndex(0);
         }}
-        onFocus={() => {
-          if (showAllOnFocus || String(value || "").trim() !== "") {
-            setOpen(true);
-          }
-        }}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        autoComplete="off"
-        disabled={disabled}
       />
 
-      {label ? <label className="ga-label">{label}</label> : null}
+      {label ? (
+        <label
+          htmlFor={id}
+          className={labelClassName}
+        >
+          {label}
+        </label>
+      ) : null}
 
-      {showList && (
-        <ul className={`ga-list ${listClassName}`.trim()}>
-          {filteredOptions.map((opt, idx) => {
-            const active = idx === safeIndex;
-            return (
-              <li
-                key={`${getOptionValue(opt)}-${idx}`}
-                className={`ga-item ${active ? "is-active" : ""} ${itemClassName}`.trim()}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onSelect?.(opt);
-                  setOpen(false);
-                  setActiveIndex(0);
-                }}
-              >
-                {getOptionLabel(opt)}
-              </li>
-            );
-          })}
+      {open && (
+        <ul className={["ga-list", listClassName].filter(Boolean).join(" ")}>
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((opt, idx) => {
+              const active = idx === safeActiveIndex;
+              const optionLabel = getOptionLabel(opt);
+              const optionValue = getOptionValue(opt);
+
+              return (
+                <li
+                  key={`${optionValue}-${idx}`}
+                  className={[
+                    "ga-item",
+                    active ? "is-active" : "",
+                    itemClassName,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    selectOption(opt);
+                  }}
+                >
+                  {optionLabel}
+                </li>
+              );
+            })
+          ) : (
+            <li
+              className={[
+                "ga-item",
+                "is-empty",
+                itemClassName,
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              {emptyMessage}
+            </li>
+          )}
         </ul>
       )}
     </div>

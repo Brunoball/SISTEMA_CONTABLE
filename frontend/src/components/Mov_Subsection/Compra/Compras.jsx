@@ -12,7 +12,6 @@ import ModalEditarCompra from "./modales/ModalEditarCompra.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import ModalEliminarMovimientos from "../../Global/Modales/ModalEliminar.jsx";
 
-// ✅ BOTÓN EXPORTAR GLOBAL (igual que Ventas)
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -32,8 +31,6 @@ import {
 
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
-
-// ✅ FECHA GLOBAL (Contexto)
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 
 /* =========================
@@ -266,7 +263,6 @@ export default function Compras() {
   const [rows, setRows] = useState([]);
   const [loadingRows, setLoadingRows] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [loadingAll, setLoadingAll] = useState(false);
   const [error, setError] = useState("");
 
   const [showCalendario, setShowCalendario] = useState(false);
@@ -304,6 +300,7 @@ export default function Compras() {
     setShowSkeleton(false);
     skelTimerRef.current = setTimeout(() => setShowSkeleton(true), 120);
   }, []);
+
   const endSkeleton = useCallback(() => {
     if (skelTimerRef.current) clearTimeout(skelTimerRef.current);
     setShowSkeleton(false);
@@ -414,8 +411,6 @@ export default function Compras() {
       const qLocal = typeof opts.q === "string" ? opts.q : q;
       const append = !!opts.append;
       const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
-      const mode = String(opts.mode || (append ? "more" : "initial"));
-      const seenIdsExternal = opts.seenIds instanceof Set ? opts.seenIds : null;
 
       const fromAPI = dateToAPI(fromDate);
       const toAPI = dateToAPI(toDate);
@@ -430,7 +425,6 @@ export default function Compras() {
         setNextOffset(null);
         setLoadingRows(false);
         setLoadingMore(false);
-        setLoadingAll(false);
         setError("");
         setReady(true);
         endSkeleton();
@@ -443,8 +437,9 @@ export default function Compras() {
         beginSkeleton();
         setLoadingRows(true);
       } else {
-        if (mode !== "all") setLoadingMore(true);
+        setLoadingMore(true);
       }
+
       setError("");
 
       try {
@@ -480,9 +475,8 @@ export default function Compras() {
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar compras.");
 
         if (myReqId !== reqIdRef.current) {
-          if (append) {
-            if (mode !== "all") setLoadingMore(false);
-          } else setLoadingRows(false);
+          if (append) setLoadingMore(false);
+          else setLoadingRows(false);
           endSkeleton();
           return null;
         }
@@ -496,6 +490,7 @@ export default function Compras() {
             : null;
 
         const page = raw.slice(0, PAGE_SIZE);
+
         let newHasMore = false;
         let newNextOffset = null;
 
@@ -514,27 +509,17 @@ export default function Compras() {
         let appendedCount = 0;
 
         if (append) {
-          if (seenIdsExternal) {
+          setRows((prev) => {
+            const prevArr = Array.isArray(prev) ? prev : [];
+            const seen = new Set(prevArr.map((x) => String(getRowId(x))));
             const add = page.filter((x) => {
               const id = getRowId(x);
               if (id === null || id === undefined) return true;
-              return !seenIdsExternal.has(String(id));
+              return !seen.has(String(id));
             });
             appendedCount = add.length;
-            setRows((prev) => [...(Array.isArray(prev) ? prev : []), ...add]);
-          } else {
-            setRows((prev) => {
-              const prevArr = Array.isArray(prev) ? prev : [];
-              const seen = new Set(prevArr.map((x) => String(getRowId(x))));
-              const add = page.filter((x) => {
-                const id = getRowId(x);
-                if (id === null || id === undefined) return true;
-                return !seen.has(String(id));
-              });
-              appendedCount = add.length;
-              return [...prevArr, ...add];
-            });
-          }
+            return [...prevArr, ...add];
+          });
         } else {
           setRows(page);
           cacheRef.current.set(cacheKey, {
@@ -548,7 +533,7 @@ export default function Compras() {
         setNextOffset(newNextOffset);
 
         if (append) {
-          if (mode !== "all") setLoadingMore(false);
+          setLoadingMore(false);
         } else {
           setLoadingRows(false);
           setReady(true);
@@ -564,15 +549,14 @@ export default function Compras() {
         };
       } catch (e) {
         if (myReqId !== reqIdRef.current) {
-          if (append) {
-            if (mode !== "all") setLoadingMore(false);
-          } else setLoadingRows(false);
+          if (append) setLoadingMore(false);
+          else setLoadingRows(false);
           endSkeleton();
           return null;
         }
         setError(e?.message || "Error cargando compras.");
         if (append) {
-          if (mode !== "all") setLoadingMore(false);
+          setLoadingMore(false);
         } else {
           setLoadingRows(false);
           setReady(true);
@@ -603,11 +587,11 @@ export default function Compras() {
           to: new Date(now.getFullYear(), now.getMonth() + 1, 0),
         };
         setDateRange(init);
-        await loadRows({ dateRange: init, q: "", offset: 0, append: false, mode: "initial" });
+        await loadRows({ dateRange: init, q: "", offset: 0, append: false });
         return;
       }
 
-      await loadRows({ dateRange, q: "", offset: 0, append: false, mode: "initial" });
+      await loadRows({ dateRange, q: "", offset: 0, append: false });
     })();
 
     return () => {
@@ -625,7 +609,7 @@ export default function Compras() {
     }
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
-      loadRows({ dateRange, q, offset: 0, append: false, mode: "initial" });
+      loadRows({ dateRange, q, offset: 0, append: false });
     }, 250);
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -642,7 +626,7 @@ export default function Compras() {
       cacheRef.current.clear();
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-      await loadRows({ dateRange: newRange, q, offset: 0, append: false, mode: "initial" });
+      await loadRows({ dateRange: newRange, q, offset: 0, append: false });
     },
     [setDateRange, loadRows, q]
   );
@@ -759,7 +743,11 @@ export default function Compras() {
     async (type) => {
       try {
         if (hasMore) {
-          showToast("error", 'Faltan registros sin cargar. Tocá "Cargar todos" primero.', 5200);
+          showToast(
+            "error",
+            'Todavía hay más registros sin cargar. Tocá "Cargar 100 más" hasta completar todo.',
+            5200
+          );
           return;
         }
 
@@ -900,7 +888,7 @@ export default function Compras() {
     setOpenEdit(false);
     setSelectedRow(null);
     cacheRef.current.clear();
-    await loadRows({ dateRange, q: "", offset: 0, append: false, mode: "initial" });
+    await loadRows({ dateRange, q: "", offset: 0, append: false });
     await refreshPeriodos();
   }, [dateRange, loadRows, refreshPeriodos]);
 
@@ -934,7 +922,7 @@ export default function Compras() {
       setOpenDel(false);
       setSelectedRow(null);
       cacheRef.current.clear();
-      await loadRows({ dateRange, q, offset: 0, append: false, mode: "initial" });
+      await loadRows({ dateRange, q, offset: 0, append: false });
       await refreshPeriodos();
       showToast("exito", "Compra eliminada.", 2600);
     } catch (e) {
@@ -945,95 +933,41 @@ export default function Compras() {
   };
 
   /* =========================
-     Cargar más / todos
+     Cargar más de 100 en 100
   ========================= */
   const handleLoadMore = useCallback(async () => {
-    if (!hasMore || loadingRows || loadingMore || loadingAll || loadingListsCtx) return;
-    if (nextOffset === null) return;
-    showToast("cargando", "Cargando mas...", 6000);
-    await loadRows({
-      dateRange,
-      q: (q || "").trim(),
-      offset: nextOffset,
-      append: true,
-      mode: "more",
-    });
-  }, [
-    hasMore,
-    loadingRows,
-    loadingMore,
-    loadingAll,
-    loadingListsCtx,
-    nextOffset,
-    dateRange,
-    q,
-    loadRows,
-    showToast,
-  ]);
-
-  const handleLoadAll = useCallback(async () => {
-    if (!hasMore || loadingRows || loadingMore || loadingAll || loadingListsCtx) return;
+    if (!hasMore || loadingRows || loadingMore || loadingListsCtx) return;
     if (nextOffset === null) return;
 
-    setLoadingAll(true);
-    showToast("cargando", "Cargando todas las compras…", 12000);
-
-    let offset = nextOffset;
-    let guard = 0;
-    const seen = new Set(
-      (Array.isArray(rows) ? rows : []).map((x) => getRowId(x)).filter(Boolean).map(String)
-    );
-    let finishedOk = false;
-    let stoppedNoProgress = false;
+    showToast("cargando", "Cargando registros...", 12000);
 
     try {
-      while (offset !== null && guard < 3000) {
-        const res = await loadRows({
-          dateRange,
-          q: (q || "").trim(),
-          offset,
-          append: true,
-          mode: "all",
-          seenIds: seen,
-        });
-        if (!res) break;
-        (res.pageIds || []).forEach((id) => seen.add(String(id)));
-        if (res.hasMore && res.appended === 0) {
-          stoppedNoProgress = true;
-          break;
-        }
-        if (res.nextOffset === offset) {
-          stoppedNoProgress = true;
-          break;
-        }
-        offset = res.nextOffset;
-        guard += 1;
-        if (!res.hasMore || offset === null) {
-          finishedOk = true;
-          break;
-        }
+      const res = await loadRows({
+        dateRange,
+        q: (q || "").trim(),
+        offset: nextOffset,
+        append: true,
+      });
+
+      if (!res) {
+        showToast("error", "No se pudieron cargar más registros.", 4200);
+        return;
       }
-      if (finishedOk) showToast("exito", `Listo: se cargaron ${rows.length} compras.`, 2600);
-      else if (stoppedNoProgress)
-        showToast("error", "Se detuvo: el backend no avanza el paginado.", 6500);
-      else showToast("error", "No se pudo completar la carga total.", 4200);
+
+      showToast("exito", `${res.received || PAGE_SIZE} registros más cargados.`, 2400);
     } catch (e) {
-      showToast("error", e?.message || "Error cargando todas.", 4200);
-    } finally {
-      setLoadingAll(false);
+      showToast("error", e?.message || "Error cargando más registros.", 4200);
     }
   }, [
     hasMore,
     loadingRows,
     loadingMore,
-    loadingAll,
     loadingListsCtx,
     nextOffset,
     dateRange,
     q,
     loadRows,
     showToast,
-    rows,
   ]);
 
   /* =========================
@@ -1097,10 +1031,7 @@ export default function Compras() {
 
   const softLoading = loadingRows && showSkeleton;
   const canShowEmpty = ready && !loadingRows && !loadingListsCtx && filteredRows.length === 0;
-  const showLoadMoreBtn =
-    !loadingRows && hasMore && filteredRows.length > 0 && filteredRows.length < PAGE_SIZE;
-  const showLoadAllBtn = !loadingRows && hasMore && filteredRows.length > 0;
-  const isAnyLoading = loadingRows || loadingMore || loadingAll;
+  const isAnyLoading = loadingRows || loadingMore;
 
   /* =========================
      RENDER
@@ -1134,11 +1065,7 @@ export default function Compras() {
               <div className="mov-card__title">Movs · Compras</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> compras
-                {loadingAll
-                  ? " (cargando…)"
-                  : hasMore && filteredRows.length > 0
-                  ? " (hay más)"
-                  : ""}
+                {hasMore && filteredRows.length > 0 ? " (hay más por cargar)" : ""}
               </div>
             </div>
 
@@ -1181,7 +1108,7 @@ export default function Compras() {
                 </div>
               </div>
 
-              <div className="cc-filter ">
+              <div className="cc-filter">
                 <div className="cc-floatingField cc-floatingField--search is-active">
                   <div className="cc-searchInput">
                     <div className="cc-searchInput__fieldWrap">
@@ -1200,12 +1127,11 @@ export default function Compras() {
                               q: e.currentTarget.value,
                               offset: 0,
                               append: false,
-                              mode: "initial",
                             });
                           }
                         }}
-                        placeholder="Buscar por descripción, proveedor... "
-                        disabled={loadingListsCtx || loadingAll}
+                        placeholder="Buscar por descripción, proveedor..."
+                        disabled={loadingListsCtx || loadingMore}
                       />
 
                       <span className="cc-floatingLabel">
@@ -1226,10 +1152,9 @@ export default function Compras() {
                               q: "",
                               offset: 0,
                               append: false,
-                              mode: "initial",
                             });
                           }}
-                          disabled={loadingAll}
+                          disabled={loadingMore}
                         >
                           <FontAwesomeIcon icon={faTimes} />
                         </button>
@@ -1247,7 +1172,7 @@ export default function Compras() {
           >
             <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
-              loading={loadingAll}
+              loading={false}
               label="Exportar"
               title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"}
               opciones={exportOptions}
@@ -1407,36 +1332,22 @@ export default function Compras() {
                     style={{
                       display: "flex",
                       justifyContent: "center",
-                      gap: 10,
                       padding: "12px 0",
                     }}
                   >
-                    {showLoadMoreBtn && (
-                      <button
-                        type="button"
-                        className="mov-btn mov-btn--ghost"
-                        onClick={handleLoadMore}
-                        disabled={loadingMore || loadingRows || loadingAll || loadingListsCtx}
-                        title="Cargar 100 registros más"
-                      >
-                        {loadingMore ? "Cargando..." : "Cargar más"}
-                      </button>
-                    )}
-                    {showLoadAllBtn && (
-                      <button
-                        type="button"
-                        className="mov-btn mov-btn--loadAll"
-                        onClick={handleLoadAll}
-                        disabled={loadingMore || loadingRows || loadingAll || loadingListsCtx}
-                        title="Cargar todas las compras restantes"
-                      >
-                        {loadingAll ? "Cargando todas…" : "Cargar todos"}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="mov-btn mov-btn--loadAll"
+                      onClick={handleLoadMore}
+                      disabled={loadingMore || loadingRows || loadingListsCtx}
+                      title="Cargar 100 registros más"
+                    >
+                      {loadingMore ? "Cargando..." : "Cargar 100 más"}
+                    </button>
                   </div>
                 )}
 
-                {(loadingMore || loadingAll) && (
+                {loadingMore && (
                   <div
                     className="mov-skeletonMore"
                     aria-busy="true"

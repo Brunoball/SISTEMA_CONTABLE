@@ -1,6 +1,3 @@
-// ✅ REEMPLAZAR COMPLETO
-// src/components/Mov_Subsection/Recibos/Recibos.jsx
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
 import "../../Global/Global_css/Global_Section.css";
@@ -13,7 +10,6 @@ import "../../Global/Calendario/calendario.css";
 import ModalEditarRecibo from "./modales/ModalEditarRecibo.jsx";
 import ModalPagarRecibos from "./modales/ModalPagarRecibos.jsx";
 
-// ✅ BOTÓN EXPORTAR GLOBAL (igual que Ventas)
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -25,13 +21,11 @@ import {
   faMoneyBill1Wave,
   faChevronDown,
   faArrowRightLong,
-    faBoxOpen,
+  faBoxOpen,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
-
-// ✅ FECHA GLOBAL (context)
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 
 /* =========================
@@ -54,13 +48,16 @@ function moneyARS(v) {
     return `$${Number(n).toFixed(2)}`;
   }
 }
+
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "—";
 }
+
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "—";
+
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
     const yyyy = m1[1];
@@ -68,6 +65,7 @@ function formatFechaDMY(v) {
     const dd = String(Number(m1[3])).padStart(2, "0");
     return `${dd}/${mm}/${yyyy}`;
   }
+
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) {
     const dd = String(Number(m2[1])).padStart(2, "0");
@@ -75,6 +73,7 @@ function formatFechaDMY(v) {
     const yyyy = m2[3];
     return `${dd}/${mm}/${yyyy}`;
   }
+
   return s;
 }
 
@@ -91,10 +90,13 @@ function startOfDay(d) {
 function parseRowFecha(v) {
   const s = String(v ?? "").trim();
   if (!s) return null;
+
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) return startOfDay(new Date(Number(m1[1]), Number(m1[2]) - 1, Number(m1[3])));
+
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) return startOfDay(new Date(Number(m2[3]), Number(m2[2]) - 1, Number(m2[1])));
+
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : startOfDay(d);
 }
@@ -131,6 +133,7 @@ function rowInDateRange(row, from, to) {
 function getAuthInfo() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
   let idUsuario = 0;
+
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand =
@@ -142,6 +145,7 @@ function getAuthInfo() {
       0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
+
   return { sessionKey, idUsuario };
 }
 
@@ -228,7 +232,6 @@ export default function Recibos() {
     refreshLists,
   } = useListas();
 
-  // ✅ FECHA GLOBAL
   const { dateRange, setDateRange } = useDateRange();
   const [showCalendario, setShowCalendario] = useState(false);
 
@@ -243,7 +246,6 @@ export default function Recibos() {
 
   const [loadingRows, setLoadingRows] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [loadingAll, setLoadingAll] = useState(false);
   const [error, setError] = useState("");
 
   const [q, setQ] = useState("");
@@ -254,13 +256,11 @@ export default function Recibos() {
   const [openEdit, setOpenEdit] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
 
-  // pagar
   const [openPagar, setOpenPagar] = useState(false);
   const [pagarCliente, setPagarCliente] = useState(null);
   const [pagarDeudas, setPagarDeudas] = useState([]);
   const [loadingClienteDeudas, setLoadingClienteDeudas] = useState(false);
 
-  // toast
   const [toast, setToast] = useState(null);
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
     setToast({ tipo, mensaje, duracion });
@@ -334,10 +334,13 @@ export default function Recibos() {
   const applyComprobanteToRows = useCallback((idsMovimiento, idComprobante) => {
     const idComp = Number(idComprobante || 0);
     if (!idComp) return;
+
     const ids = Array.isArray(idsMovimiento)
       ? idsMovimiento.map((x) => Number(x || 0)).filter(Boolean)
       : [Number(idsMovimiento || 0)].filter(Boolean);
+
     if (!ids.length) return;
+
     setRows((prev) =>
       (Array.isArray(prev) ? prev : []).map((r) => {
         const idMov = Number(r?.id_movimiento || 0);
@@ -373,18 +376,22 @@ export default function Recibos() {
         moreReqIdRef.current = myReqId;
         setLoadingMore(true);
       }
+
       setError("");
 
       try {
         if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
           if (rowsReqIdRef.current !== myReqId) return null;
+
           const cached = cacheRef.current.get(cacheKey);
           const cachedRows = Array.isArray(cached?.rows) ? cached.rows : [];
           rowsRef.current = cachedRows;
           setRows(cachedRows);
           setHasMore(!!cached?.hasMore);
           setNextOffset(cached?.nextOffset ?? null);
+
           if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
+
           return {
             hasMore: !!cached?.hasMore,
             nextOffset: cached?.nextOffset ?? null,
@@ -407,7 +414,9 @@ export default function Recibos() {
 
         const rawArr = Array.isArray(data.movimientos) ? data.movimientos : [];
 
-        let newHasMore = data.has_more !== undefined ? !!data.has_more : rawArr.length > PAGE_SIZE;
+        let newHasMore =
+          data.has_more !== undefined ? !!data.has_more : rawArr.length > PAGE_SIZE;
+
         let newNextOffset =
           data.next_offset !== undefined && data.next_offset !== null
             ? Number(data.next_offset)
@@ -430,21 +439,26 @@ export default function Recibos() {
                 const k = getRowKey(x);
                 return k && !seen.has(k);
               });
+
               const merged = [...base, ...add];
               rowsRef.current = merged;
               setRows(merged);
+
               if (add.length === 0) {
                 newHasMore = false;
                 newNextOffset = null;
               }
+
               setHasMore(newHasMore);
               setNextOffset(newNextOffset);
+
               if (moreReqIdRef.current === myReqId) setLoadingMore(false);
             } else {
               rowsRef.current = page;
               setRows(page);
               setHasMore(newHasMore);
               setNextOffset(newNextOffset);
+
               if (offset === 0) {
                 cacheRef.current.set(cacheKey, {
                   rows: page,
@@ -452,6 +466,7 @@ export default function Recibos() {
                   nextOffset: newNextOffset,
                 });
               }
+
               if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
             }
 
@@ -468,15 +483,19 @@ export default function Recibos() {
       } catch (e) {
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+
         return await new Promise((resolve) => {
           setTimeout(() => {
             if (myReqId !== reqIdRef.current) return resolve(null);
+
             setError(e.message || "Error cargando recibos.");
+
             if (append) {
               if (moreReqIdRef.current === myReqId) setLoadingMore(false);
             } else {
               if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
             }
+
             resolve(null);
           }, remaining);
         });
@@ -510,10 +529,12 @@ export default function Recibos() {
   useEffect(() => {
     const k = `${dateToAPI(dateRange?.from)}|${dateToAPI(dateRange?.to)}`;
     if (!k || k === "||") return;
+
     if (prevRangeKeyRef.current === "") {
       prevRangeKeyRef.current = k;
       return;
     }
+
     if (prevRangeKeyRef.current !== k) {
       prevRangeKeyRef.current = k;
       cacheRef.current.clear();
@@ -532,10 +553,13 @@ export default function Recibos() {
       skipSearchRef.current = false;
       return;
     }
+
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
     searchTimerRef.current = setTimeout(() => {
       loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
     }, 250);
+
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
@@ -567,7 +591,9 @@ export default function Recibos() {
      Filtrado client-side
   ========================= */
   const filteredRows = useMemo(() => {
-    return (Array.isArray(rows) ? rows : []).filter((r) => rowInDateRange(r, dateRange?.from, dateRange?.to));
+    return (Array.isArray(rows) ? rows : []).filter((r) =>
+      rowInDateRange(r, dateRange?.from, dateRange?.to)
+    );
   }, [rows, dateRange]);
 
   const stats = useMemo(() => {
@@ -632,6 +658,7 @@ export default function Recibos() {
 
     const headers = Object.keys(dataToExport[0] || {});
     const montoColIndex = headers.findIndex((h) => h === "MONTO");
+
     if (montoColIndex >= 0 && ws["!ref"]) {
       const colLetter = XLSX.utils.encode_col(montoColIndex);
       const range = XLSX.utils.decode_range(ws["!ref"]);
@@ -677,7 +704,11 @@ export default function Recibos() {
     async (type) => {
       try {
         if (hasMore) {
-          showToast("error", 'Faltan registros sin cargar. Tocá "Cargar todos" primero.', 5200);
+          showToast(
+            "error",
+            'Todavía hay más registros sin cargar. Tocá "Cargar 100 más" hasta completar todo.',
+            5200
+          );
           return;
         }
 
@@ -774,6 +805,7 @@ export default function Recibos() {
   const gridCols = useMemo(() => {
     const fallback = `repeat(${columns.length}, minmax(0, 1fr))`;
     if (!Array.isArray(columns) || !columns.length) return fallback;
+
     return columns
       .map((c) => {
         const n = Number(c.fr);
@@ -916,48 +948,37 @@ export default function Recibos() {
   );
 
   /* =========================
-     "Cargar todos"
+     Cargar más de 100 en 100
   ========================= */
-  const handleLoadAll = useCallback(async () => {
-    if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
+  const handleLoadMore = useCallback(async () => {
+    if (!hasMore || loadingMore || loadingRows || loadingListsCtx) return;
     if (nextOffset === null) return;
 
-    setLoadingAll(true);
-    showToast("cargando", "Cargando todos los recibos pendientes…", 12000);
-
-    let offset = nextOffset;
-    let guard = 0;
+    showToast("cargando", "Cargando registros...", 12000);
 
     try {
-      while (offset !== null && guard < 3000) {
-        const beforeLen = rowsRef.current.length;
-        const res = await loadRows({
-          from: dateRange?.from,
-          to: dateRange?.to,
-          q: (q || "").trim(),
-          offset,
-          append: true,
-        });
-        if (!res) break;
-        guard += 1;
-        offset = res.nextOffset;
-        const afterLen = rowsRef.current.length;
-        if (afterLen === beforeLen) break;
-        if (!res.hasMore || offset === null) break;
+      const res = await loadRows({
+        from: dateRange?.from,
+        to: dateRange?.to,
+        q: (q || "").trim(),
+        offset: nextOffset,
+        append: true,
+      });
+
+      if (!res) {
+        showToast("error", "No se pudieron cargar más registros.", 4200);
+        return;
       }
-      setRows([...rowsRef.current]);
-      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} recibos pendientes.`, 2600);
+
+      showToast("exito", `${res.received || PAGE_SIZE} registros más cargados.`, 2400);
     } catch (e) {
-      showToast("error", e?.message || "Error cargando todos.", 4200);
-    } finally {
-      setLoadingAll(false);
+      showToast("error", e?.message || "Error cargando más registros.", 4200);
     }
   }, [
     hasMore,
     loadingMore,
     loadingRows,
     loadingListsCtx,
-    loadingAll,
     nextOffset,
     dateRange,
     q,
@@ -965,7 +986,7 @@ export default function Recibos() {
     showToast,
   ]);
 
-  const isAnyLoading = loadingRows || loadingMore || loadingAll;
+  const isAnyLoading = loadingRows || loadingMore;
 
   /* =========================
      Skeleton
@@ -1000,12 +1021,18 @@ export default function Recibos() {
             </div>
           );
         }
+
         const list = skelWidths[c.key] || ["60%"];
         const w = list[idx % list.length];
+
         return (
           <div
             key={c.key}
-            className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")}
+            className={[
+              "mov-gridCell",
+              c.align === "right" ? "is-right" : "",
+              c.align === "center" ? "is-center" : "",
+            ].join(" ")}
             role="cell"
             data-label={c.label}
           >
@@ -1040,6 +1067,7 @@ export default function Recibos() {
           {errorListsCtx}
         </div>
       )}
+
       {error && (
         <div className="mov-alert" role="alert">
           {error}
@@ -1053,7 +1081,7 @@ export default function Recibos() {
               <div className="mov-card__title">Movs · Recibos</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b>
-                {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
+                {hasMore && filteredRows.length > 0 ? " (hay más por cargar)" : ""}
               </div>
             </div>
 
@@ -1113,7 +1141,7 @@ export default function Recibos() {
                       }
                     }}
                     placeholder="Buscar por descripción, cliente..."
-                    disabled={loadingListsCtx || loadingAll}
+                    disabled={loadingListsCtx || loadingMore}
                   />
 
                   <span className="floatingLabel">
@@ -1138,7 +1166,7 @@ export default function Recibos() {
                         });
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
-                      disabled={loadingAll}
+                      disabled={loadingMore}
                     >
                       ×
                     </button>
@@ -1151,7 +1179,7 @@ export default function Recibos() {
           <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
-              loading={loadingAll}
+              loading={false}
               label="Exportar"
               title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"}
               opciones={exportOptions}
@@ -1251,32 +1279,32 @@ export default function Recibos() {
                   );
                 })}
 
-{!isAnyLoading && filteredRows.length === 0 && (
-  <div className="cc-emptyState">
-    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
-    <div className="cc-emptyText">
-      {q.trim()
-        ? `No se encontraron recibos para "${q.trim()}".`
-        : "No hay recibos pendientes para mostrar en el rango de fechas seleccionado."}
-    </div>
-  </div>
-)}
+                {!isAnyLoading && filteredRows.length === 0 && (
+                  <div className="cc-emptyState">
+                    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+                    <div className="cc-emptyText">
+                      {q.trim()
+                        ? `No se encontraron recibos para "${q.trim()}".`
+                        : "No hay recibos pendientes para mostrar en el rango de fechas seleccionado."}
+                    </div>
+                  </div>
+                )}
 
                 {!loadingRows && hasMore && filteredRows.length > 0 && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
                       type="button"
                       className="mov-btn mov-btn--loadAll"
-                      onClick={handleLoadAll}
-                      disabled={loadingMore || loadingAll || loadingListsCtx}
-                      title="Cargar todos los recibos pendientes restantes"
+                      onClick={handleLoadMore}
+                      disabled={loadingMore || loadingListsCtx}
+                      title="Cargar 100 registros más"
                     >
-                      {loadingAll ? "Cargando todas…" : "Cargar todos"}
+                      {loadingMore ? "Cargando..." : "Cargar 100 más"}
                     </button>
                   </div>
                 )}
 
-                {(loadingMore || loadingAll) && (
+                {loadingMore && (
                   <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">
                     {Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}
                   </div>

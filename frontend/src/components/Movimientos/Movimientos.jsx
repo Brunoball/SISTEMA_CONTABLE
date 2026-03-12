@@ -1,4 +1,3 @@
-// src/components/Movimientos/Movimientos.jsx
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import BASE_URL from "../../config/config";
 import "../Global/Global_css/Global_Section.css";
@@ -8,7 +7,7 @@ import "../Global/Global_css/Global_responsive.css";
 import ModalEditarMovimiento from "./modales/ModalEditarMovimiento";
 import ModalEliminarMovimientos from "../Global/Modales/ModalEliminar.jsx";
 
-// ✅ FACTURACIÓN: AHORA VA EL MODAL PADRE, NO EL BUSCADOR SOLO
+// ✅ FACTURACIÓN
 import ModalFacturaBalto from "../Mov_Subsection/Facturacion/ModalFacturaBalto.jsx";
 
 // Toast global
@@ -79,14 +78,17 @@ function moneyARS(v) {
     return `$${n.toFixed(2)}`;
   }
 }
+
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "-";
 }
+
 function numOrZero(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
+
 function pick(obj, keys, fallback = "") {
   for (const k of keys) {
     const v = obj?.[k];
@@ -94,9 +96,11 @@ function pick(obj, keys, fallback = "") {
   }
   return fallback;
 }
+
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "-";
+
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
     return `${String(Number(m1[3])).padStart(2, "0")}/${String(Number(m1[2])).padStart(
@@ -104,6 +108,7 @@ function formatFechaDMY(v) {
       "0"
     )}/${m1[1]}`;
   }
+
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) {
     return `${String(Number(m2[1])).padStart(2, "0")}/${String(Number(m2[2])).padStart(
@@ -111,6 +116,7 @@ function formatFechaDMY(v) {
       "0"
     )}/${m2[3]}`;
   }
+
   return s;
 }
 
@@ -147,18 +153,23 @@ function periodoToMMYYYY(input) {
 function periodoToYYYYMM(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
+
   if (/^\d{1,2}-\d{4}$/.test(s)) {
     const [mmRaw, yyyy] = s.split("-");
     return `${yyyy}-${String(Number(mmRaw)).padStart(2, "0")}`;
   }
+
   if (/^\d{4}-\d{1,2}$/.test(s)) {
     const [yyyy, mmRaw] = s.split("-");
     return `${yyyy}-${String(Number(mmRaw)).padStart(2, "0")}`;
   }
+
   return s;
 }
 
-/* Auth */
+/* =========================
+   Auth
+========================= */
 function getAuthInfo() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
   let idUsuario = 0;
@@ -179,7 +190,9 @@ function getAuthInfo() {
   return { sessionKey, idUsuario };
 }
 
-/* Excel / export */
+/* =========================
+   Export helpers
+========================= */
 function slugifySheetName(name) {
   const s = String(name || "Movimientos")
     .replace(/[\[\]\*\/\\\?\:]/g, " ")
@@ -247,12 +260,10 @@ export default function Movimientos() {
   const [rows, setRows] = useState([]);
   const [loadingRows, setLoadingRows] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [loadingAll, setLoadingAll] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
   const [calOpen, setCalOpen] = useState(false);
-
   const [q, setQ] = useState("");
 
   const [hasMore, setHasMore] = useState(false);
@@ -262,7 +273,6 @@ export default function Movimientos() {
   const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
 
-  // ✅ FACTURACIÓN
   const [openFacturar, setOpenFacturar] = useState(false);
   const [factData, setFactData] = useState(null);
 
@@ -279,7 +289,6 @@ export default function Movimientos() {
   const moreReqIdRef = useRef(0);
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
-  const loadAllTokenRef = useRef(0);
 
   const [showSkeleton, setShowSkeleton] = useState(false);
 
@@ -290,25 +299,25 @@ export default function Movimientos() {
     []
   );
 
-const rangeLabel = useMemo(() => {
-  const { from, to } = dateRange;
+  const rangeLabel = useMemo(() => {
+    const { from, to } = dateRange;
 
-  if (!from) return "Seleccionar período";
+    if (!from) return "Seleccionar período";
 
-  if (!to || formatDateISO(from) === formatDateISO(to)) {
-    return formatDateLabel(from);
-  }
+    if (!to || formatDateISO(from) === formatDateISO(to)) {
+      return formatDateLabel(from);
+    }
 
-  return (
-    <>
-      <span>{formatDateLabel(from)}</span>
-      <span className="cc-rangeArrow">
-        <FontAwesomeIcon icon={faArrowRightLong} />
-      </span>
-      <span>{formatDateLabel(to)}</span>
-    </>
-  );
-}, [dateRange]);
+    return (
+      <>
+        <span>{formatDateLabel(from)}</span>
+        <span className="cc-rangeArrow">
+          <FontAwesomeIcon icon={faArrowRightLong} />
+        </span>
+        <span>{formatDateLabel(to)}</span>
+      </>
+    );
+  }, [dateRange]);
 
   const exportBaseName = useMemo(() => {
     const from = formatDateISO(dateRange?.from);
@@ -374,7 +383,6 @@ const rangeLabel = useMemo(() => {
         setNextOffset(null);
         setLoadingRows(false);
         setLoadingMore(false);
-        setLoadingAll(false);
         setShowSkeleton(false);
         setError("");
         return { hasMore: false, nextOffset: null, received: 0 };
@@ -493,10 +501,13 @@ const rangeLabel = useMemo(() => {
       } catch (e) {
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+
         return await new Promise((resolve) => {
           setTimeout(() => {
             if (myReqId !== reqIdRef.current) return resolve(null);
+
             setError(e?.message || "Error cargando movimientos.");
+
             if (append) {
               if (moreReqIdRef.current === myReqId) setLoadingMore(false);
             } else {
@@ -505,6 +516,7 @@ const rangeLabel = useMemo(() => {
                 setShowSkeleton(false);
               }
             }
+
             resolve(null);
           }, remaining);
         });
@@ -520,6 +532,7 @@ const rangeLabel = useMemo(() => {
       if (!alive) return;
       await loadRows({ dateRange, q: "", offset: 0, append: false });
     })();
+
     return () => {
       alive = false;
     };
@@ -530,10 +543,13 @@ const rangeLabel = useMemo(() => {
       skipSearchRef.current = false;
       return;
     }
+
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
     searchTimerRef.current = setTimeout(() => {
       loadRows({ dateRange, q, offset: 0, append: false });
     }, 250);
+
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
@@ -544,19 +560,48 @@ const rangeLabel = useMemo(() => {
   }, []);
 
   const handleRangeChange = useCallback(
-    (range) => {
+    async (range) => {
       setDateRange(range);
       setQ("");
       skipSearchRef.current = true;
-      loadAllTokenRef.current += 1;
       invalidateCache();
+
       if (range.from && range.to) {
         setCalOpen(false);
-        loadRows({ dateRange: range, q: "", offset: 0, append: false });
+        await loadRows({ dateRange: range, q: "", offset: 0, append: false });
       }
     },
     [setDateRange, loadRows, invalidateCache]
   );
+
+  const handleLoadMore = useCallback(async () => {
+    if (!hasMore || loadingMore || loadingRows || loadingListsCtx) return;
+    if (nextOffset === null) return;
+
+    showToast("cargando", "Cargando registros...", 12000);
+
+    try {
+      const res = await loadRows({
+        dateRange,
+        q: (q || "").trim(),
+        offset: nextOffset,
+        append: true,
+      });
+
+      if (!res) {
+        showToast("error", "No se pudieron cargar más registros.", 4200);
+        return;
+      }
+
+      showToast(
+        "exito",
+        `${res.received || PAGE_SIZE} registros más cargados.`,
+        2400
+      );
+    } catch (e) {
+      showToast("error", e?.message || "Error cargando más registros.", 4200);
+    }
+  }, [hasMore, loadingMore, loadingRows, loadingListsCtx, nextOffset, loadRows, dateRange, q, showToast]);
 
   const filteredRows = useMemo(() => (Array.isArray(rows) ? rows : []), [rows]);
 
@@ -640,6 +685,7 @@ const rangeLabel = useMemo(() => {
 
   const exportToTXT = useCallback(() => {
     const dataToExport = getExportData();
+
     const lines = dataToExport.map((row, index) => {
       return [
         `REGISTRO ${index + 1}`,
@@ -660,7 +706,11 @@ const rangeLabel = useMemo(() => {
     async (type) => {
       try {
         if (hasMore) {
-          showToast("error", 'Faltan registros sin cargar. Tocá "Cargar todos" primero.', 5200);
+          showToast(
+            "error",
+            'Todavía hay más registros sin cargar. Tocá "Cargar 100 más" hasta completar todo.',
+            5200
+          );
           return;
         }
 
@@ -695,44 +745,6 @@ const rangeLabel = useMemo(() => {
     const data = await apiPostJson(`${API}?action=${action}`, { ...payloadNorm, idUsuario });
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
   };
-
-  const handleLoadAll = useCallback(async () => {
-    if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
-    if (nextOffset === null) return;
-    setLoadingAll(true);
-    showToast("cargando", "Cargando todos los movimientos…", 12000);
-    const myToken = (loadAllTokenRef.current += 1);
-    let offset = nextOffset;
-    let guard = 0;
-    try {
-      while (offset !== null && guard < 3000) {
-        if (myToken !== loadAllTokenRef.current) break;
-        const res = await loadRows({ dateRange, q: (q || "").trim(), offset, append: true });
-        if (!res) break;
-        offset = res.nextOffset;
-        guard += 1;
-        if (!res.hasMore || offset === null) break;
-      }
-      if (myToken === loadAllTokenRef.current) {
-        showToast("exito", "Listo: ya se cargaron todos.", 2600);
-      }
-    } catch (e) {
-      showToast("error", e?.message || "Error cargando todos.", 4200);
-    } finally {
-      if (myToken === loadAllTokenRef.current) setLoadingAll(false);
-    }
-  }, [
-    hasMore,
-    loadingMore,
-    loadingRows,
-    loadingListsCtx,
-    loadingAll,
-    nextOffset,
-    dateRange,
-    q,
-    loadRows,
-    showToast,
-  ]);
 
   const softLoading = loadingRows && showSkeleton;
 
@@ -809,7 +821,7 @@ const rangeLabel = useMemo(() => {
     };
   }, [listasCtx]);
 
-  const isAnyLoading = loadingRows || loadingMore || loadingAll;
+  const isAnyLoading = loadingRows || loadingMore;
 
   const exportOptions = useMemo(
     () => [
@@ -863,107 +875,107 @@ const rangeLabel = useMemo(() => {
               <div className="mov-card__title">Movimientos</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> registros
-                {hasMore ? " (hay más)" : ""}
-                {loadingAll ? " (cargando…)" : ""}
+                {hasMore ? " (hay más por cargar)" : ""}
               </div>
             </div>
-<div className="mov-headFilters">
 
-  {/* CALENDARIO — igual que Clientes */}
-  <div className="cc-filter cc-filter--cal">
-    <div className={`cc-floatingField cc-floatingField--calendar is-active ${calOpen ? "is-open" : ""}`}>
-      <button
-        type="button"
-        className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
-        onClick={() => setCalOpen((v) => !v)}
-        disabled={isAnyLoading || loadingListsCtx}
-      >
-        {rangeLabel}
-        <span className="cc-calTrigger__iconRight">
-          <FontAwesomeIcon icon={faChevronDown} />
-        </span>
-      </button>
+            <div className="mov-headFilters">
+              <div className="cc-filter cc-filter--cal">
+                <div
+                  className={`cc-floatingField cc-floatingField--calendar is-active ${
+                    calOpen ? "is-open" : ""
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
+                    onClick={() => setCalOpen((v) => !v)}
+                    disabled={isAnyLoading || loadingListsCtx}
+                  >
+                    {rangeLabel}
+                    <span className="cc-calTrigger__iconRight">
+                      <FontAwesomeIcon icon={faChevronDown} />
+                    </span>
+                  </button>
 
-      <span className="cc-floatingLabel cc-floatingLabel--active">
-        <FontAwesomeIcon icon={faCalendarDays} /> Período
-      </span>
+                  <span className="cc-floatingLabel cc-floatingLabel--active">
+                    <FontAwesomeIcon icon={faCalendarDays} /> Período
+                  </span>
 
-      {calOpen && (
-        <div className="cc-calDropdown">
-          <Calendario
-            value={dateRange}
-            onChange={handleRangeChange}
-            onClose={() => setCalOpen(false)}
-          />
-        </div>
-      )}
-    </div>
-  </div>
+                  {calOpen && (
+                    <div className="cc-calDropdown">
+                      <Calendario
+                        value={dateRange}
+                        onChange={handleRangeChange}
+                        onClose={() => setCalOpen(false)}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
 
-  {/* BÚSQUEDA — igual que Clientes */}
-  <div className="cc-filter cc-filter--search">
-    <div className="cc-floatingField cc-floatingField--search is-active">
-      <div className="cc-searchInput">
-        <div className="cc-searchInput__fieldWrap">
-          <input
-            className="cc-input cc-input--floating"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={async (e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                skipSearchRef.current = true;
-                await loadRows({
-                  dateRange,
-                  q: e.currentTarget.value,
-                  offset: 0,
-                  append: false,
-                });
-              }
-            }}
-            placeholder="Buscar por descripción, cliente, proveedor... "
-            disabled={loadingListsCtx || loadingAll}
-            autoComplete="off"
-          />
+              <div className="cc-filter cc-filter--search">
+                <div className="cc-floatingField cc-floatingField--search is-active">
+                  <div className="cc-searchInput">
+                    <div className="cc-searchInput__fieldWrap">
+                      <input
+                        className="cc-input cc-input--floating"
+                        value={q}
+                        onChange={(e) => setQ(e.target.value)}
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                            skipSearchRef.current = true;
+                            invalidateCache();
+                            await loadRows({
+                              dateRange,
+                              q: e.currentTarget.value,
+                              offset: 0,
+                              append: false,
+                            });
+                          }
+                        }}
+                        placeholder="Buscar por descripción, cliente, proveedor..."
+                        disabled={loadingListsCtx || loadingMore}
+                        autoComplete="off"
+                      />
 
-          <span className="cc-floatingLabel">
-            <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-          </span>
+                      <span className="cc-floatingLabel">
+                        <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                      </span>
 
-          {q.trim() !== "" && (
-            <button
-              type="button"
-              className="cc-clearSearch cc-clearSearch--inside"
-              title="Limpiar búsqueda"
-              onClick={async () => {
-                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                setQ("");
-                skipSearchRef.current = true;
-                await loadRows({ dateRange, q: "", offset: 0, append: false });
-              }}
-              disabled={loadingAll}
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-
-</div>
+                      {q.trim() !== "" && (
+                        <button
+                          type="button"
+                          className="cc-clearSearch cc-clearSearch--inside"
+                          title="Limpiar búsqueda"
+                          onClick={async () => {
+                            if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                            setQ("");
+                            skipSearchRef.current = true;
+                            invalidateCache();
+                            await loadRows({ dateRange, q: "", offset: 0, append: false });
+                          }}
+                          disabled={loadingMore}
+                        >
+                          <FontAwesomeIcon icon={faTimes} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div
             className="mov-card__actions"
             style={{ display: "flex", gap: 10, alignItems: "center" }}
           >
-
-
             <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
-              loading={loadingAll}
+              loading={false}
               label="Exportar"
               title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"}
               opciones={exportOptions}
@@ -1032,7 +1044,7 @@ const rangeLabel = useMemo(() => {
                                   setSelectedRow(r);
                                   setOpenEdit(true);
                                 }}
-                                disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                                disabled={loadingRows || loadingMore || loadingListsCtx}
                               >
                                 <FontAwesomeIcon icon={faPenToSquare} />
                               </button>
@@ -1046,7 +1058,7 @@ const rangeLabel = useMemo(() => {
                                   setFactData(r);
                                   setOpenFacturar(true);
                                 }}
-                                disabled={loadingRows || loadingMore || loadingAll || loadingListsCtx}
+                                disabled={loadingRows || loadingMore || loadingListsCtx}
                               >
                                 <FontAwesomeIcon icon={faFileInvoiceDollar} />
                               </button>
@@ -1058,7 +1070,6 @@ const rangeLabel = useMemo(() => {
                                 disabled={
                                   loadingRows ||
                                   loadingMore ||
-                                  loadingAll ||
                                   loadingListsCtx ||
                                   deletingId === r.id_movimiento
                                 }
@@ -1075,6 +1086,7 @@ const rangeLabel = useMemo(() => {
                       }
 
                       const val = c.render ? c.render(r) : safeText(r[c.key]);
+
                       return (
                         <div
                           key={c.key}
@@ -1096,32 +1108,32 @@ const rangeLabel = useMemo(() => {
                   </div>
                 ))}
 
-{!isAnyLoading && filteredRows.length === 0 && (
-  <div className="cc-emptyState">
-    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
-    <div className="cc-emptyText">
-      {q.trim()
-        ? `No se encontraron movimientos para "${q.trim()}".`
-        : "No hay movimientos para mostrar en este rango de fechas."}
-    </div>
-  </div>
-)}
+                {!isAnyLoading && filteredRows.length === 0 && (
+                  <div className="cc-emptyState">
+                    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+                    <div className="cc-emptyText">
+                      {q.trim()
+                        ? `No se encontraron movimientos para "${q.trim()}".`
+                        : "No hay movimientos para mostrar en este rango de fechas."}
+                    </div>
+                  </div>
+                )}
 
                 {!loadingRows && filteredRows.length > 0 && hasMore && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
                       type="button"
                       className="mov-btn mov-btn--loadAll"
-                      onClick={handleLoadAll}
-                      disabled={loadingMore || loadingAll || loadingListsCtx}
-                      title="Cargar todos los movimientos restantes"
+                      onClick={handleLoadMore}
+                      disabled={loadingMore || loadingListsCtx}
+                      title="Cargar 100 registros más"
                     >
-                      {loadingAll ? "Cargando todos…" : "Cargar todos"}
+                      {loadingMore ? "Cargando..." : "Cargar 100 más"}
                     </button>
                   </div>
                 )}
 
-                {(loadingMore || loadingAll) && (
+                {loadingMore && (
                   <div
                     className="mov-skeletonMore"
                     aria-busy="true"
@@ -1136,7 +1148,6 @@ const rangeLabel = useMemo(() => {
         </div>
       </section>
 
-      {/* ✅ AHORA ABRÍS EL MODAL PADRE */}
       <ModalFacturaBalto
         open={openFacturar}
         onClose={() => {
@@ -1204,15 +1215,18 @@ const rangeLabel = useMemo(() => {
         }}
         onConfirm={async () => {
           if (!selectedRow?.id_movimiento) return;
+
           const id = selectedRow.id_movimiento;
           setDeletingId(id);
           setError("");
           showToast("cargando", "Eliminando movimiento…", 12000);
+
           try {
             const { idUsuario, sessionKey } = getAuthInfo();
             const sp = new URLSearchParams();
             sp.set("action", "movimientos_eliminar");
             sp.set("id_movimiento", String(id));
+
             const res = await fetch(`${API}?${sp.toString()}`, {
               method: "POST",
               headers: {
@@ -1221,11 +1235,21 @@ const rangeLabel = useMemo(() => {
               },
               body: JSON.stringify({ idUsuario }),
             });
-            const data = JSON.parse((await res.text()) || "{}");
+
+            const text = await res.text();
+            let data = {};
+            try {
+              data = JSON.parse(text || "{}");
+            } catch {
+              throw new Error(
+                `Respuesta inválida al eliminar. HTTP ${res.status}\n${text?.slice(0, 500) || ""}`
+              );
+            }
+
             if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
+
             setOpenDel(false);
             setSelectedRow(null);
-            loadAllTokenRef.current += 1;
             invalidateCache();
             await loadRows({ dateRange, q, offset: 0, append: false });
             showToast("exito", "Movimiento eliminado.", 2600);

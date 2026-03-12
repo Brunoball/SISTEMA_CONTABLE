@@ -1,22 +1,17 @@
-// ✅ REEMPLAZAR COMPLETO
 // src/components/Mov_Subsection/OrdenesPago/OrdenesPago.jsx
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
 import "../../Global/Global_css/Global_Section.css";
 
-// ✅ MODALES
 import ModalPagarOrdenesPago from "./modales/ModalPagarOrdenesPago.jsx";
 import ModalEditarOrdenPago from "./modales/ModalEditarOrdenPago.jsx";
 
-// ✅ Calendario
 import Calendario from "../../Global/Calendario/Calendario.jsx";
 import "../../Global/Calendario/calendario.css";
 
-// ✅ Toast
 import Toast from "../../Global/Toast.jsx";
 
-// ✅ BOTÓN EXPORTAR GLOBAL
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -28,13 +23,11 @@ import {
   faMoneyBill1Wave,
   faChevronDown,
   faArrowRightLong,
-    faBoxOpen,
+  faBoxOpen,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
-
-// ✅ CONTEXTO GLOBAL DE RANGO DE FECHAS
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 
 /* =========================
@@ -253,7 +246,6 @@ export default function OrdenesPago() {
 
   const [loadingRows, setLoadingRows] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [loadingAll, setLoadingAll] = useState(false);
   const [error, setError] = useState("");
 
   const [q, setQ] = useState("");
@@ -622,10 +614,6 @@ export default function OrdenesPago() {
   const handleExport = useCallback(
     async (type) => {
       try {
-        if (hasMore) {
-          showToast("error", 'Faltan registros sin cargar. Tocá "Cargar todos" primero.', 5200);
-          return;
-        }
         if (type === "excel") {
           exportToExcel();
           showToast("exito", "Excel exportado.", 2200);
@@ -644,7 +632,7 @@ export default function OrdenesPago() {
         showToast("error", e?.message || "Error exportando archivo.", 3500);
       }
     },
-    [hasMore, exportToExcel, exportToCSV, exportToTXT, showToast]
+    [exportToExcel, exportToCSV, exportToTXT, showToast]
   );
 
   const exportOptions = useMemo(
@@ -657,39 +645,23 @@ export default function OrdenesPago() {
   );
 
   /* =========================
-     "Cargar todos"
+     Cargar 100 más (una sola página, sin loop)
   ========================= */
-  const handleLoadAll = useCallback(async () => {
-    if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
+  const handleLoadMore = useCallback(async () => {
+    if (!hasMore || loadingMore || loadingRows || loadingListsCtx) return;
     if (nextOffset === null) return;
-    setLoadingAll(true);
-    showToast("cargando", "Cargando todas las órdenes de pago pendientes…", 12000);
-    let offset = nextOffset;
-    let guard = 0;
     try {
-      while (offset !== null && guard < 3000) {
-        const beforeLen = rowsRef.current.length;
-        const res = await loadRows({
-          from: dateRange?.from,
-          to: dateRange?.to,
-          q: (q || "").trim(),
-          offset,
-          append: true,
-        });
-        if (!res) break;
-        guard += 1;
-        offset = res.nextOffset;
-        if (rowsRef.current.length === beforeLen) break;
-        if (!res.hasMore || offset === null) break;
-      }
-      setRows([...rowsRef.current]);
-      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} órdenes pendientes.`, 2600);
+      await loadRows({
+        from: dateRange?.from,
+        to: dateRange?.to,
+        q: (q || "").trim(),
+        offset: nextOffset,
+        append: true,
+      });
     } catch (e) {
-      showToast("error", e?.message || "Error cargando todas.", 4200);
-    } finally {
-      setLoadingAll(false);
+      showToast("error", e?.message || "Error cargando más órdenes.", 4200);
     }
-  }, [hasMore, loadingMore, loadingRows, loadingListsCtx, loadingAll, nextOffset, dateRange, q, loadRows, showToast]);
+  }, [hasMore, loadingMore, loadingRows, loadingListsCtx, nextOffset, dateRange, q, loadRows, showToast]);
 
   /* =========================
      Modales Pagar / Editar
@@ -883,7 +855,7 @@ export default function OrdenesPago() {
     </div>
   );
 
-  const isAnyLoading = loadingRows || loadingMore || loadingAll;
+  const isAnyLoading = loadingRows || loadingMore;
   const lists = listasCtx || { periodos: [] };
 
   /* =========================
@@ -910,7 +882,7 @@ export default function OrdenesPago() {
               <div className="mov-card__title">Movs · Órdenes de Pago</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> órdenes
-                {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
+                {hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
               </div>
             </div>
 
@@ -961,8 +933,8 @@ export default function OrdenesPago() {
                         await loadRows({ from: dateRange?.from, to: dateRange?.to, q: e.currentTarget.value, offset: 0, append: false });
                       }
                     }}
-                    placeholder="Buscar por descripción, proveedor... "
-                    disabled={loadingListsCtx || loadingAll}
+                    placeholder="Buscar por descripción, proveedor..."
+                    disabled={loadingListsCtx}
                   />
                   <span className="floatingLabel">
                     <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
@@ -979,7 +951,6 @@ export default function OrdenesPago() {
                         await loadRows({ from: dateRange?.from, to: dateRange?.to, q: "", offset: 0, append: false });
                         document.querySelector(".mov-searchInput input")?.focus();
                       }}
-                      disabled={loadingAll}
                     >
                       ×
                     </button>
@@ -992,7 +963,7 @@ export default function OrdenesPago() {
           <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
-              loading={loadingAll}
+              loading={false}
               label="Exportar"
               title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"}
               opciones={exportOptions}
@@ -1084,32 +1055,34 @@ export default function OrdenesPago() {
                   </div>
                 ))}
 
-{!isAnyLoading && filteredRows.length === 0 && (
-  <div className="cc-emptyState">
-    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
-    <div className="cc-emptyText">
-      {q.trim()
-        ? `No se encontraron órdenes de pago para "${q.trim()}".`
-        : "No hay órdenes de pago pendientes para mostrar en el rango de fechas seleccionado."}
-    </div>
-  </div>
-)}
+                {!isAnyLoading && filteredRows.length === 0 && (
+                  <div className="cc-emptyState">
+                    <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+                    <div className="cc-emptyText">
+                      {q.trim()
+                        ? `No se encontraron órdenes de pago para "${q.trim()}".`
+                        : "No hay órdenes de pago pendientes para mostrar en el rango de fechas seleccionado."}
+                    </div>
+                  </div>
+                )}
 
+                {/* ── Botón cargar 100 más ── */}
                 {!loadingRows && hasMore && filteredRows.length > 0 && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
                       type="button"
                       className="mov-btn mov-btn--loadAll"
-                      onClick={handleLoadAll}
-                      disabled={loadingMore || loadingAll || loadingListsCtx}
-                      title="Cargar todas las órdenes restantes"
+                      onClick={handleLoadMore}
+                      disabled={loadingMore || loadingListsCtx}
+                      title="Cargar los próximos 100 registros"
                     >
-                      {loadingAll ? "Cargando todas…" : "Cargar todos"}
+                      {loadingMore ? "Cargando…" : "Cargar 100 más"}
                     </button>
                   </div>
                 )}
 
-                {(loadingMore || loadingAll) && (
+                {/* ── Skeleton de carga incremental ── */}
+                {loadingMore && (
                   <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">
                     {Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}
                   </div>

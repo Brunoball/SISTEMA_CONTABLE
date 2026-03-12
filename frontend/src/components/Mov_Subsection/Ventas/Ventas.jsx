@@ -8,10 +8,8 @@ import Calendario from "../../Global/Calendario/Calendario.jsx";
 import "../../Global/Calendario/calendario.css";
 
 import ModalNuevaVenta from "./modales/ModalNuevaVenta.jsx";
-import ModalEditarVenta from "./modales/ModalEditarVenta.jsx";
 import ModalEmitirNotaCreditoVenta from "./modales/ModalEmitirNotaCreditoVenta.jsx";
 
-// ✅ USAMOS EL MODAL GLOBAL
 import ModalEliminar from "../../Global/Modales/ModalEliminar.jsx";
 
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
@@ -23,7 +21,6 @@ import {
   faMagnifyingGlass,
   faPlus,
   faFileExcel,
-  faPenToSquare,
   faTrashCan,
   faChevronDown,
   faArrowRightLong,
@@ -382,7 +379,6 @@ export default function Ventas() {
 
   const [loadingRows, setLoadingRows] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [loadingAll, setLoadingAll] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
@@ -393,7 +389,6 @@ export default function Ventas() {
   const [nextOffset, setNextOffset] = useState(null);
 
   const [openAdd, setOpenAdd] = useState(false);
-  const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [openNC, setOpenNC] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -864,11 +859,6 @@ export default function Ventas() {
   const handleExport = useCallback(
     async (type) => {
       try {
-        if (hasMore) {
-          showToast("error", 'Faltan registros sin cargar. Tocá "Cargar todos" primero.', 5200);
-          return;
-        }
-
         if (type === "excel") {
           exportToExcel();
           showToast("exito", "Excel exportado.", 2200);
@@ -889,7 +879,7 @@ export default function Ventas() {
         showToast("error", e?.message || "Error exportando archivo.", 3500);
       }
     },
-    [hasMore, exportToExcel, exportToCSV, exportToTXT, showToast]
+    [exportToExcel, exportToCSV, exportToTXT, showToast]
   );
 
   const exportOptions = useMemo(
@@ -913,20 +903,6 @@ export default function Ventas() {
     ],
     [handleExport]
   );
-
-  const apiPostSave = async (payload, isEdit) => {
-    setError("");
-    const { idUsuario } = getAuthInfo();
-    const action = isEdit ? "ventas_actualizar" : "ventas_crear";
-
-    const data = await apiPostJson(`${API}?action=${action}`, {
-      ...(payload || {}),
-      idUsuario,
-    });
-
-    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
-    return data;
-  };
 
   const reloadVista = useCallback(async () => {
     cacheRef.current.clear();
@@ -967,51 +943,26 @@ export default function Ventas() {
     }
   };
 
-  const handleLoadAll = useCallback(async () => {
-    if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
+  const handleLoadMore = useCallback(async () => {
+    if (!hasMore || loadingMore || loadingRows || loadingListsCtx) return;
     if (nextOffset === null) return;
 
-    setLoadingAll(true);
-    showToast("cargando", "Cargando todas las ventas…", 12000);
-
-    let offset = nextOffset;
-    let guard = 0;
-
     try {
-      while (offset !== null && guard < 3000) {
-        const beforeLen = rowsRef.current.length;
-
-        const res = await loadRows({
-          from: dateRange.from,
-          to: dateRange.to,
-          q: (q || "").trim(),
-          offset,
-          append: true,
-        });
-
-        if (!res) break;
-
-        guard += 1;
-        offset = res.nextOffset;
-
-        const afterLen = rowsRef.current.length;
-        if (afterLen === beforeLen) break;
-        if (!res.hasMore || offset === null) break;
-      }
-
-      setRows([...rowsRef.current]);
-      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} ventas.`, 2600);
+      await loadRows({
+        from: dateRange.from,
+        to: dateRange.to,
+        q: (q || "").trim(),
+        offset: nextOffset,
+        append: true,
+      });
     } catch (e) {
-      showToast("error", e?.message || "Error cargando todas.", 4200);
-    } finally {
-      setLoadingAll(false);
+      showToast("error", e?.message || "Error cargando más ventas.", 4200);
     }
   }, [
     hasMore,
     loadingMore,
     loadingRows,
     loadingListsCtx,
-    loadingAll,
     nextOffset,
     dateRange,
     q,
@@ -1045,7 +996,6 @@ export default function Ventas() {
     [API]
   );
 
-  // ✅ LÓGICA PARA EL MODAL GLOBAL
   const requiereNC = useMemo(() => {
     return (
       Number(selectedRow?.factura_emitida_en_arca || 0) === 1 &&
@@ -1133,10 +1083,8 @@ export default function Ventas() {
     if (requiereNC) {
       return {
         title: "No se puede eliminar todavía",
-        message:
-          "Esta venta tiene una factura emitida en ARCA.",
-        warning:
-          "Primero debés generar la nota de crédito correspondiente.",
+        message: "Esta venta tiene una factura emitida en ARCA.",
+        warning: "Primero debés generar la nota de crédito correspondiente.",
         confirmLabel: "Eliminar",
         confirmDisabled: true,
         secondaryActionLabel: "Emitir nota de crédito",
@@ -1148,10 +1096,8 @@ export default function Ventas() {
     if (yaTieneNC) {
       return {
         title: "Eliminar venta",
-        message:
-          "Esta venta ya tiene su nota de crédito asociada.",
-        warning:
-          "Ahora sí podés eliminar el registro definitivamente.",
+        message: "Esta venta ya tiene su nota de crédito asociada.",
+        warning: "Ahora sí podés eliminar el registro definitivamente.",
         confirmLabel: "Eliminar",
         confirmDisabled: false,
         secondaryActionLabel: "",
@@ -1172,7 +1118,7 @@ export default function Ventas() {
     };
   }, [selectedRow, requiereNC, yaTieneNC]);
 
-  const isAnyLoading = loadingRows || loadingMore || loadingAll;
+  const isAnyLoading = loadingRows || loadingMore;
 
   const skelWidths = useMemo(
     () => ({
@@ -1204,7 +1150,6 @@ export default function Ventas() {
               data-label={c.label}
             >
               <div className="mov-skelActions">
-                <span className="mov-skelIcon" />
                 <span className="mov-skelIcon" />
                 <span className="mov-skelIcon" />
               </div>
@@ -1275,7 +1220,7 @@ export default function Ventas() {
               <div className="mov-card__title">Movs · Ventas</div>
               <div className="mov-card__hint">
                 Mostrando <b>{filteredRows.length}</b> ventas
-                {loadingAll ? " (cargando…)" : hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
+                {hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
               </div>
             </div>
 
@@ -1342,7 +1287,7 @@ export default function Ventas() {
                           }
                         }}
                         placeholder="Buscar por descripción, cliente..."
-                        disabled={loadingListsCtx || loadingAll}
+                        disabled={loadingListsCtx}
                       />
 
                       <span className="cc-floatingLabel">
@@ -1366,7 +1311,6 @@ export default function Ventas() {
                               append: false,
                             });
                           }}
-                          disabled={loadingAll}
                         >
                           <FontAwesomeIcon icon={faTimes} />
                         </button>
@@ -1381,7 +1325,7 @@ export default function Ventas() {
           <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
-              loading={loadingAll}
+              loading={false}
               label="Exportar"
               title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"}
               opciones={exportOptions}
@@ -1484,19 +1428,6 @@ export default function Ventas() {
 
                                 <button
                                   type="button"
-                                  className="mov-iconBtn"
-                                  title="Editar"
-                                  onClick={() => {
-                                    setSelectedRow(r);
-                                    setOpenEdit(true);
-                                  }}
-                                  disabled={isAnyLoading || loadingListsCtx}
-                                >
-                                  <FontAwesomeIcon icon={faPenToSquare} />
-                                </button>
-
-                                <button
-                                  type="button"
                                   className="mov-iconBtn mov-iconBtn--danger"
                                   title="Eliminar"
                                   disabled={isAnyLoading || loadingListsCtx || deletingId === r.id_movimiento}
@@ -1553,16 +1484,16 @@ export default function Ventas() {
                     <button
                       type="button"
                       className="mov-btn mov-btn--loadAll"
-                      onClick={handleLoadAll}
-                      disabled={loadingMore || loadingAll || loadingListsCtx}
-                      title="Cargar todas las ventas restantes"
+                      onClick={handleLoadMore}
+                      disabled={loadingMore || loadingListsCtx}
+                      title="Cargar los próximos 100 registros"
                     >
-                      {loadingAll ? "Cargando todas…" : "Cargar todos"}
+                      {loadingMore ? "Cargando…" : "Cargar 100 más"}
                     </button>
                   </div>
                 )}
 
-                {(loadingMore || loadingAll) && (
+                {loadingMore && (
                   <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">
                     {Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}
                   </div>
@@ -1593,36 +1524,6 @@ export default function Ventas() {
             showToast("exito", "Venta guardada y tabla actualizada.", 2400);
           } catch (e) {
             showToast("error", e?.message || "Se guardó, pero falló la recarga.", 4200);
-          }
-        }}
-      />
-
-      <ModalEditarVenta
-        open={openEdit}
-        lists={lists}
-        row={selectedRow}
-        periodoDefault={
-          dateRange.from
-            ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}`
-            : ""
-        }
-        onClose={() => {
-          setOpenEdit(false);
-          setSelectedRow(null);
-        }}
-        onToast={showToast}
-        onSave={async (payload) => {
-          try {
-            showToast("cargando", "Guardando cambios…", 12000);
-            await apiPostSave(payload, true);
-            await reloadVista();
-            await refreshPeriodos();
-            setOpenEdit(false);
-            setSelectedRow(null);
-            showToast("exito", "Venta actualizada.", 2600);
-          } catch (e) {
-            showToast("error", e?.message || "Error actualizando venta.", 4200);
-            throw e;
           }
         }}
       />
@@ -1659,6 +1560,7 @@ export default function Ventas() {
         details={deleteModalConfig.details}
         extraContent={deleteModalExtraContent}
       />
+
       <ModalEmitirNotaCreditoVenta
         open={openNC}
         row={selectedRow}

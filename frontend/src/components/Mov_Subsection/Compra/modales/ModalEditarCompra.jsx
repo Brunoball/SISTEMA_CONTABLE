@@ -3,7 +3,14 @@ import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
 import BASE_URL from "../../../../config/config";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faFileInvoiceDollar } from "@fortawesome/free-solid-svg-icons";
+import {
+  faFileInvoiceDollar,
+  faUpload,
+  faTrashCan,
+  faEye,
+  faXmark,
+} from "@fortawesome/free-solid-svg-icons";
+import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 
 const NULL_OPTION = "";
 const ADD_OPTION = "__ADD__";
@@ -30,6 +37,7 @@ function getGenericId(x) {
     x?.id_detalle ??
     x?.id_tipo_venta ??
     x?.id_tipo_movimiento ??
+    x?.id_comprobante ??
     null;
 
   const n = Number(cand);
@@ -74,13 +82,7 @@ function getAuthInfo() {
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand =
-      u?.idUsuarioMaster ??
-      u?.idUsuario ??
-      u?.id_usuario ??
-      u?.id ??
-      u?.user_id ??
-      0;
+    const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
@@ -111,30 +113,33 @@ async function parseJsonOrThrow(res) {
   return data;
 }
 
-function buildHeaders(isJson = true) {
+async function apiPostJson(url, payload) {
   const { token, sessionKey } = getAuthInfo();
-  const headers = {};
-  if (isJson) headers["Content-Type"] = "application/json";
+  const headers = { "Content-Type": "application/json" };
   if (sessionKey) headers["X-Session"] = sessionKey;
   else if (token) headers.Authorization = `Bearer ${token}`;
-  return headers;
-}
 
-async function apiPostJson(url, payload) {
   const res = await fetch(url, {
     method: "POST",
-    headers: buildHeaders(true),
+    headers,
     body: JSON.stringify(payload ?? {}),
   });
+
   return await parseJsonOrThrow(res);
 }
 
 async function apiPostForm(url, formData) {
+  const { token, sessionKey } = getAuthInfo();
+  const headers = {};
+  if (sessionKey) headers["X-Session"] = sessionKey;
+  else if (token) headers.Authorization = `Bearer ${token}`;
+
   const res = await fetch(url, {
     method: "POST",
-    headers: buildHeaders(false),
+    headers,
     body: formData,
   });
+
   return await parseJsonOrThrow(res);
 }
 
@@ -145,68 +150,6 @@ function safeNumber(v) {
   if (v === "" || v == null) return 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
-}
-
-function todayISO() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-/* =========================
-   Fecha / Periodo helpers
-========================= */
-function normalizePeriodoToMMYYYY(v) {
-  const s = String(v ?? "").trim();
-  if (!s) return "";
-
-  let m = "";
-  let y = "";
-
-  if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    y = parts[0];
-    m = parts[1];
-  } else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
-    const parts = s.split(/[-/]/);
-    m = parts[0];
-    y = parts[1];
-  } else if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      y = s.slice(0, 4);
-      m = s.slice(4);
-    } else {
-      m = s.slice(0, 2);
-      y = s.slice(2);
-    }
-  } else {
-    return s;
-  }
-
-  const mm = String(Number(m)).padStart(2, "0");
-  const yyyy = String(y);
-  return `${mm}-${yyyy}`;
-}
-
-function periodoMMYYYY_to_YYYYMM(mmYYYY) {
-  const s = String(mmYYYY ?? "").trim();
-  if (!s) return "";
-  if (/^\d{4}-\d{2}$/.test(s)) return s;
-  if (/^\d{2}-\d{4}$/.test(s)) {
-    const [mm, yyyy] = s.split("-");
-    return `${yyyy}-${mm}`;
-  }
-  return s;
-}
-
-function periodoFromISODate(iso) {
-  const s = String(iso ?? "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
-  const [y, m] = s.split("-");
-  return `${m}-${y}`;
 }
 
 /* =========================
@@ -227,7 +170,6 @@ function calcItemTotals(cantidad, precio, ivaPct) {
    Safe lists + normalización
 ========================= */
 const SAFE_LISTS = {
-  periodos: [],
   tiposVenta: [],
   cuentasCorrientes: [],
   tiposMovimiento: [],
@@ -280,7 +222,6 @@ function normalizeIncomingLists(lists) {
       : [];
 
   return {
-    periodos: Array.isArray(src.periodos) ? src.periodos : [],
     tiposVenta: Array.isArray(tiposVenta) ? tiposVenta : [],
     cuentasCorrientes: Array.isArray(cuentas) ? cuentas : [],
     tiposMovimiento: Array.isArray(tiposMov) ? tiposMov : [],
@@ -291,7 +232,7 @@ function normalizeIncomingLists(lists) {
 }
 
 /* =========================
-   Util: normalizar texto / buscar ID
+   Util
 ========================= */
 function normText(s) {
   return String(s ?? "")
@@ -309,64 +250,21 @@ function findIdByIncludes(arr, includesText) {
   return id ? String(id) : NULL_OPTION;
 }
 
-/* =========================
-   Build form desde row
-========================= */
-function buildFormFromRowCompra(row, periodoDefault, fixedLocal, cuentaCorrientePickedId) {
-  const r = row || {};
+function findIdByExactOrIncludesName(arr, text) {
+  const target = normText(text);
+  if (!target) return null;
+  const list = Array.isArray(arr) ? arr : [];
 
-  const fecha = String(r.fecha || "").slice(0, 10) || "";
-  const perRow = normalizePeriodoToMMYYYY(r.periodo || "");
-  const perDef = normalizePeriodoToMMYYYY(periodoDefault || "");
-  const perByFecha = periodoFromISODate(fecha || todayISO());
-  const pickPeriodo = perRow || perDef || perByFecha || "";
+  const exact = list.find((x) => normText(x?.nombre) === target);
+  if (exact) return getGenericId(exact);
 
-  const nOrNull = (v) =>
-    Number.isFinite(Number(v)) && Number(v) > 0 ? String(Number(v)) : NULL_OPTION;
-  const sOrNull = (v) => (v == null || v === "" || v === 0 ? NULL_OPTION : String(v));
-
-  const cantidad = r.cantidad != null ? safeNumber(r.cantidad) : 1;
-  const precio = r.precio != null ? safeNumber(r.precio) : safeNumber(r.monto_total);
-  const iva_pct = r.iva_pct != null ? safeNumber(r.iva_pct) : 0;
-
-  const totals = calcItemTotals(cantidad, precio, iva_pct);
-
-  const subtotal = r.subtotal != null ? safeNumber(r.subtotal) : totals.subtotal;
-  const iva_monto = r.iva_monto != null ? safeNumber(r.iva_monto) : totals.iva_monto;
-  const total = r.total != null ? safeNumber(r.total) : totals.total;
-  const monto_total = r.monto_total != null ? safeNumber(r.monto_total) : total;
-
-  const idEntrada = fixedLocal?.idEntrada ?? NULL_OPTION;
-  const rowCC = sOrNull(r.id_cuenta_corriente);
-  const ccFallback = cuentaCorrientePickedId ? String(cuentaCorrientePickedId) : NULL_OPTION;
-
-  return {
-    id_movimiento: safeNumber(r.id_movimiento ?? r.id ?? r.id_compra) || null,
-    fecha,
-    periodo: pickPeriodo,
-
-    id_tipo_venta: nOrNull(r.id_tipo_venta),
-    id_tipo_movimiento: idEntrada !== NULL_OPTION ? idEntrada : nOrNull(r.id_tipo_movimiento),
-
-    id_proveedor: sOrNull(r.id_proveedor),
-    id_detalle: sOrNull(r.id_detalle),
-
-    id_medio_pago: nOrNull(r.id_medio_pago),
-    id_cuenta_corriente: rowCC !== NULL_OPTION ? rowCC : ccFallback,
-
-    monto_total: Math.max(0, Math.round(monto_total * 100) / 100),
-    cantidad: Math.max(0, Math.round(cantidad * 1000) / 1000),
-    precio: Math.max(0, Math.round(precio * 100) / 100),
-    iva_pct: Math.max(0, Math.round(iva_pct * 100) / 100),
-    subtotal: Math.max(0, Math.round(subtotal * 100) / 100),
-    iva_monto: Math.max(0, Math.round(iva_monto * 100) / 100),
-    total: Math.max(0, Math.round(total * 100) / 100),
-  };
+  const partial = list.find((x) => {
+    const n = normText(x?.nombre);
+    return n.includes(target) || target.includes(n);
+  });
+  return partial ? getGenericId(partial) : null;
 }
 
-/* =========================
-   UI helpers
-========================= */
 function nameById(arr, id) {
   const sid = String(id ?? "").trim();
   if (!sid || sid === NULL_OPTION || sid === ADD_OPTION) return "";
@@ -391,17 +289,138 @@ function isTipoVentaContado(tipoVentaObj) {
   return n.includes("contado") || n.includes("efectivo") || n.includes("cash");
 }
 
-/* =========================
-   Theme helper
-========================= */
 function isTemaOscuro() {
   const byAttr = document.documentElement.getAttribute("data-theme") === "oscuro";
   const byBody = document.body?.classList?.contains("dark");
   return Boolean(byAttr || byBody);
 }
 
+function getComprobanteUrl(row) {
+  const candidates = [
+    row?.factura_url,
+    row?.factura,
+    row?.comprobante_url,
+    row?.comprobante,
+    row?.archivo_url,
+    row?.url_factura,
+    row?.path_factura,
+    row?.factura_path,
+  ];
+
+  const raw = candidates.find((x) => typeof x === "string" && x.trim() !== "");
+  if (!raw) return "";
+
+  const s = raw.trim();
+  if (/^https?:\/\//i.test(s)) return s;
+
+  const base = String(BASE_URL || "").replace(/\/$/, "");
+  const rel = s.replace(/^\//, "");
+  return `${base}/${rel}`;
+}
+
+function guessExtensionFromValue(value) {
+  const s = String(value || "").trim().toLowerCase();
+  if (!s) return "";
+
+  const clean = s.split("?")[0].split("#")[0];
+
+  if (clean.endsWith(".pdf")) return ".pdf";
+  if (clean.endsWith(".jpg")) return ".jpg";
+  if (clean.endsWith(".jpeg")) return ".jpeg";
+  if (clean.endsWith(".png")) return ".png";
+  if (clean.endsWith(".webp")) return ".webp";
+
+  return "";
+}
+
+function sanitizeDisplayName(name) {
+  const raw = String(name || "").trim();
+  if (!raw) return "";
+
+  const onlyName = raw.split("/").pop()?.split("\\").pop()?.split("?")[0]?.trim() || "";
+  if (!onlyName) return "";
+
+  const lowered = onlyName.toLowerCase();
+  if (
+    lowered.includes("api.php") ||
+    lowered.includes("action=") ||
+    lowered.includes("comprobante") && lowered.includes("=")
+  ) {
+    return "";
+  }
+
+  return onlyName;
+}
+
+function getFriendlyComprobanteName(row, url) {
+  const candidates = [
+    row?.archivo_nombre,
+    row?.nombre_archivo,
+    row?.factura_nombre,
+    row?.comprobante_nombre,
+    row?.archivo,
+  ];
+
+  for (const c of candidates) {
+    const clean = sanitizeDisplayName(c);
+    if (clean) return clean;
+  }
+
+  const ext =
+    guessExtensionFromValue(url) ||
+    guessExtensionFromValue(row?.archivo_nombre) ||
+    guessExtensionFromValue(row?.nombre_archivo) ||
+    guessExtensionFromValue(row?.factura_nombre) ||
+    ".pdf";
+
+  return `Comprobante actual${ext}`;
+}
+
 /* =========================
-   Mini modal
+   Build form desde row
+========================= */
+function buildFormFromRowCompra(row, fixedLocal, cuentaCorrientePickedId) {
+  const r = row || {};
+  const nOrNull = (v) =>
+    Number.isFinite(Number(v)) && Number(v) > 0 ? String(Number(v)) : NULL_OPTION;
+  const sOrNull = (v) => (v == null || v === "" || v === 0 ? NULL_OPTION : String(v));
+
+  const cantidad = r.cantidad != null ? safeNumber(r.cantidad) : 1;
+  const precio = r.precio != null ? safeNumber(r.precio) : safeNumber(r.monto_total);
+  const iva_pct = r.iva_pct != null ? safeNumber(r.iva_pct) : 0;
+
+  const totals = calcItemTotals(cantidad, precio, iva_pct);
+
+  const subtotal = r.subtotal != null ? safeNumber(r.subtotal) : totals.subtotal;
+  const iva_monto = r.iva_monto != null ? safeNumber(r.iva_monto) : totals.iva_monto;
+  const total = r.total != null ? safeNumber(r.total) : totals.total;
+  const monto_total = r.monto_total != null ? safeNumber(r.monto_total) : total;
+
+  const idEntrada = fixedLocal?.idEntrada ?? NULL_OPTION;
+  const rowCC = sOrNull(r.id_cuenta_corriente);
+  const ccFallback = cuentaCorrientePickedId ? String(cuentaCorrientePickedId) : NULL_OPTION;
+
+  return {
+    id_movimiento: safeNumber(r.id_movimiento ?? r.id ?? r.id_compra) || null,
+    fecha: String(r.fecha || "").slice(0, 10) || "",
+    id_tipo_venta: nOrNull(r.id_tipo_venta),
+    id_tipo_movimiento: idEntrada !== NULL_OPTION ? idEntrada : nOrNull(r.id_tipo_movimiento),
+    id_proveedor: sOrNull(r.id_proveedor),
+    id_detalle: sOrNull(r.id_detalle),
+    id_medio_pago: nOrNull(r.id_medio_pago),
+    id_cuenta_corriente: rowCC !== NULL_OPTION ? rowCC : ccFallback,
+    monto_total: Math.max(0, Math.round(monto_total * 100) / 100),
+    cantidad: Math.max(0, Math.round(cantidad * 1000) / 1000),
+    precio: Math.max(0, Math.round(precio * 100) / 100),
+    iva_pct: Math.max(0, Math.round(iva_pct * 100) / 100),
+    subtotal: Math.max(0, Math.round(subtotal * 100) / 100),
+    iva_monto: Math.max(0, Math.round(iva_monto * 100) / 100),
+    total: Math.max(0, Math.round(total * 100) / 100),
+  };
+}
+
+/* =========================
+   Mini modal reutilizable
 ========================= */
 function AddCatalogMiniModal({
   open,
@@ -497,7 +516,6 @@ export default function ModalEditarCompra({
   open,
   lists,
   row,
-  periodoDefault,
   onClose,
   onSave,
   onSaved,
@@ -505,8 +523,9 @@ export default function ModalEditarCompra({
   onCatalogCreated,
   dark: darkProp,
 }) {
-  const API = `${BASE_URL}/api.php`;
-  const API_UPLOAD_LINK = `${BASE_URL}/api.php?action=comprobantes_vincular_movimientos_lote_upload`;
+  const ENDPOINT_BASE = `${BASE_URL}/api.php`;
+  const ENDPOINT_UPLOAD_LINK = `${BASE_URL}/api.php?action=comprobantes_vincular_movimientos_lote_upload`;
+  const ENDPOINT_DELETE_COMP = `${BASE_URL}/api.php?action=compras_eliminar_comprobante`;
 
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
@@ -524,8 +543,12 @@ export default function ModalEditarCompra({
     });
 
     const obsBody = new MutationObserver(update);
-    if (document.body)
-      obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    if (document.body) {
+      obsBody.observe(document.body, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+    }
 
     update();
     return () => {
@@ -533,6 +556,7 @@ export default function ModalEditarCompra({
       obsBody.disconnect();
     };
   }, []);
+
   const dark = typeof darkProp === "boolean" ? darkProp : darkAuto;
 
   useEffect(() => {
@@ -546,10 +570,8 @@ export default function ModalEditarCompra({
 
   const listsRef = useRef(lists);
   const rowRef = useRef(row);
-  const periodoDefaultRef = useRef(periodoDefault);
   useEffect(() => void (listsRef.current = lists), [lists]);
   useEffect(() => void (rowRef.current = row), [row]);
-  useEffect(() => void (periodoDefaultRef.current = periodoDefault), [periodoDefault]);
 
   const [localLists, setLocalLists] = useState(() => ({
     ...SAFE_LISTS,
@@ -578,12 +600,20 @@ export default function ModalEditarCompra({
   const [detalleInput, setDetalleInput] = useState("");
   const [detalleFocus, setDetalleFocus] = useState(false);
 
-  const [archivoAdjunto, setArchivoAdjunto] = useState(null);
+  const [archivoNuevo, setArchivoNuevo] = useState(null);
+  const [archivoActualUrl, setArchivoActualUrl] = useState("");
+  const [archivoActualNombre, setArchivoActualNombre] = useState("");
+  const [archivoActualId, setArchivoActualId] = useState(null);
+  const [quitarArchivoActual, setQuitarArchivoActual] = useState(false);
+
+  const [openVerComp, setOpenVerComp] = useState(false);
+  const [compUrl, setCompUrl] = useState("");
 
   const closeBtnRef = useRef(null);
   const fechaRef = useRef(null);
   const proveedorInputRef = useRef(null);
   const detalleInputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const [addUI, setAddUI] = useState({
     open: false,
@@ -633,7 +663,11 @@ export default function ModalEditarCompra({
 
     const { sessionKey, idUsuario } = getAuthInfo();
     if (!sessionKey) {
-      showToast("error", "No hay sesión activa (Falta X-Session). Iniciá sesión de nuevo.", 5200);
+      showToast(
+        "error",
+        "No hay sesión activa (Falta X-Session). Iniciá sesión de nuevo.",
+        5200
+      );
       return;
     }
 
@@ -645,7 +679,7 @@ export default function ModalEditarCompra({
     );
 
     try {
-      const data = await apiPostJson(`${API}?action=catalogo_crear`, {
+      const data = await apiPostJson(`${ENDPOINT_BASE}?action=catalogo_crear`, {
         catalogo,
         nombre,
         idUsuario,
@@ -670,7 +704,10 @@ export default function ModalEditarCompra({
       });
 
       try {
-        onCatalogCreated?.({ catalogo, item: { id: Number(newId), nombre: newNombre } });
+        onCatalogCreated?.({
+          catalogo,
+          item: { id: Number(newId), nombre: newNombre },
+        });
       } catch {}
 
       if (catalogo === "proveedores") {
@@ -695,7 +732,7 @@ export default function ModalEditarCompra({
       setAddUI((p) => ({ ...p, saving: false }));
       showToast("error", e?.message || "Error creando el ítem.", 4200);
     }
-  }, [API, addUI.catalogo, addUI.text, showToast, onCatalogCreated]);
+  }, [ENDPOINT_BASE, addUI.catalogo, addUI.text, showToast, onCatalogCreated]);
 
   const resolveIdByExactName = useCallback(
     (kind) => {
@@ -729,7 +766,7 @@ export default function ModalEditarCompra({
     };
 
     const ccPick = buildSingleCuentaCorrienteOption(merged.cuentasCorrientes).pickedId;
-    return buildFormFromRowCompra(row, periodoDefault, fixedLocal, ccPick);
+    return buildFormFromRowCompra(row, fixedLocal, ccPick);
   });
 
   const prevOpenRef = useRef(false);
@@ -739,8 +776,9 @@ export default function ModalEditarCompra({
     if (!open || wasOpen) return;
 
     setSaving(false);
-    setArchivoAdjunto(null);
     setAddUI({ open: false, catalogo: null, text: "", saving: false });
+    setOpenVerComp(false);
+    setCompUrl("");
 
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(listsRef.current) };
     setLocalLists(merged);
@@ -750,12 +788,7 @@ export default function ModalEditarCompra({
     };
 
     const ccPick = buildSingleCuentaCorrienteOption(merged.cuentasCorrientes).pickedId;
-    const built = buildFormFromRowCompra(
-      rowRef.current,
-      periodoDefaultRef.current,
-      fixedLocal,
-      ccPick
-    );
+    const built = buildFormFromRowCompra(rowRef.current, fixedLocal, ccPick);
 
     setForm(built);
     setProveedorInput(nameById(merged.proveedores, built.id_proveedor));
@@ -763,24 +796,116 @@ export default function ModalEditarCompra({
     setDetalleInput(nameById(merged.detalles, built.id_detalle));
     setDetalleFocus(false);
 
+    const url = getComprobanteUrl(rowRef.current);
+    setArchivoActualUrl(url || "");
+    setArchivoActualNombre(getFriendlyComprobanteName(rowRef.current, url));
+    setArchivoActualId(
+      Number.isFinite(Number(rowRef.current?.id_comprobante_principal))
+        ? Number(rowRef.current?.id_comprobante_principal)
+        : null
+    );
+    setArchivoNuevo(null);
+    setQuitarArchivoActual(false);
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
     setTimeout(() => closeBtnRef.current?.focus(), 0);
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
+    const currentRow = rowRef.current || {};
+    const medios = Array.isArray(safeLists.mediosPago) ? safeLists.mediosPago : [];
+    const proveedores = Array.isArray(safeLists.proveedores) ? safeLists.proveedores : [];
+    const detalles = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
+
+    setForm((prev) => {
+      let next = { ...prev };
+      let changed = false;
+
+      if ((!next.id_proveedor || next.id_proveedor === NULL_OPTION) && currentRow?.id_proveedor) {
+        next.id_proveedor = String(Number(currentRow.id_proveedor));
+        changed = true;
+      } else if (
+        (!next.id_proveedor || next.id_proveedor === NULL_OPTION) &&
+        currentRow?.proveedor
+      ) {
+        const idProv = findIdByExactOrIncludesName(proveedores, currentRow.proveedor);
+        if (idProv) {
+          next.id_proveedor = String(idProv);
+          changed = true;
+        }
+      }
+
+      if ((!next.id_detalle || next.id_detalle === NULL_OPTION) && currentRow?.id_detalle) {
+        next.id_detalle = String(Number(currentRow.id_detalle));
+        changed = true;
+      } else if (
+        (!next.id_detalle || next.id_detalle === NULL_OPTION) &&
+        currentRow?.detalle
+      ) {
+        const idDet = findIdByExactOrIncludesName(detalles, currentRow.detalle);
+        if (idDet) {
+          next.id_detalle = String(idDet);
+          changed = true;
+        }
+      }
+
+      if (
+        (!next.id_medio_pago || next.id_medio_pago === NULL_OPTION) &&
+        currentRow?.id_medio_pago
+      ) {
+        next.id_medio_pago = String(Number(currentRow.id_medio_pago));
+        changed = true;
+      } else if (
+        (!next.id_medio_pago || next.id_medio_pago === NULL_OPTION) &&
+        currentRow?.medio_pago_nombre
+      ) {
+        const idMp = findIdByExactOrIncludesName(medios, currentRow.medio_pago_nombre);
+        if (idMp) {
+          next.id_medio_pago = String(idMp);
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+
+    if ((!proveedorInput || !proveedorInput.trim()) && currentRow?.proveedor) {
+      setProveedorInput(String(currentRow.proveedor).trim());
+    }
+
+    if ((!detalleInput || !detalleInput.trim()) && currentRow?.detalle) {
+      setDetalleInput(String(currentRow.detalle).trim());
+    }
+  }, [
+    open,
+    safeLists.mediosPago,
+    safeLists.proveedores,
+    safeLists.detalles,
+    proveedorInput,
+    detalleInput,
+  ]);
+
+  useEffect(() => {
+    if (!open) return;
     const onKeyDown = (e) => {
       if (e.key !== "Escape") return;
+      if (openVerComp) {
+        setOpenVerComp(false);
+        return;
+      }
       if (saving || addUI.open) return;
       onClose?.();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, saving, addUI.open, onClose]);
+  }, [open, saving, addUI.open, onClose, openVerComp]);
 
   const cerrar = useCallback(() => {
-    if (saving || addUI.open) return;
+    if (saving || addUI.open || openVerComp) return;
     onClose?.();
-  }, [saving, addUI.open, onClose]);
+  }, [saving, addUI.open, openVerComp, onClose]);
 
   const openDatePicker = useCallback(() => {
     const el = fechaRef.current;
@@ -796,21 +921,7 @@ export default function ModalEditarCompra({
 
   const onFechaChange = useCallback((iso) => {
     const v = String(iso || "").trim();
-    setForm((p) => {
-      const perAuto = periodoFromISODate(v);
-      return { ...p, fecha: v, periodo: perAuto || p.periodo };
-    });
-  }, []);
-
-  const onPeriodoChange = useCallback((raw) => {
-    const digits = String(raw || "")
-      .replace(/\D/g, "")
-      .slice(0, 6);
-    let next = "";
-    if (digits.length <= 2) next = digits;
-    else next = `${digits.slice(0, 2)}-${digits.slice(2)}`;
-    if (digits.length === 6) next = normalizePeriodoToMMYYYY(next);
-    setForm((p) => ({ ...p, periodo: next }));
+    setForm((p) => ({ ...p, fecha: v }));
   }, []);
 
   const recalcFromItem = useCallback((nextPartial) => {
@@ -862,14 +973,18 @@ export default function ModalEditarCompra({
     const all = Array.isArray(safeLists.proveedores) ? safeLists.proveedores : [];
     const q = proveedorInput.trim().toLowerCase();
     if (!proveedorFocus || q.length < 1) return [];
-    return all.filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
+    return all
+      .filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q))
+      .slice(0, 25);
   }, [safeLists.proveedores, proveedorInput, proveedorFocus]);
 
   const filteredDetalles = useMemo(() => {
     const all = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
     const q = detalleInput.trim().toLowerCase();
     if (!detalleFocus || q.length < 1) return [];
-    return all.filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
+    return all
+      .filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q))
+      .slice(0, 25);
   }, [safeLists.detalles, detalleInput, detalleFocus]);
 
   const handleProveedorInputChange = useCallback((e) => {
@@ -942,18 +1057,13 @@ export default function ModalEditarCompra({
     return {
       id_movimiento: form.id_movimiento,
       fecha: form.fecha,
-      periodo: periodoMMYYYY_to_YYYYMM(normalizePeriodoToMMYYYY(form.periodo)),
-
       id_tipo_venta: toNullableId(form.id_tipo_venta),
       id_tipo_movimiento: toNullableId(form.id_tipo_movimiento),
-
       id_proveedor: toNullableId(form.id_proveedor),
       id_cliente: null,
       id_detalle: toNullableId(form.id_detalle),
-
       id_medio_pago: esContado ? toNullableId(form.id_medio_pago) : null,
       id_cuenta_corriente: !esContado ? toNullableId(form.id_cuenta_corriente) : null,
-
       cantidad: Math.round(cantidad * 1000) / 1000,
       precio: Math.round(precio * 100) / 100,
       iva_pct: Math.round(iva_pct * 100) / 100,
@@ -964,24 +1074,94 @@ export default function ModalEditarCompra({
     };
   }, [form, esContado]);
 
-  const subirYVincularArchivo = useCallback(
+  const eliminarComprobanteActual = useCallback(async () => {
+    if (!form.id_movimiento) {
+      throw new Error("Falta id_movimiento para eliminar el comprobante.");
+    }
+
+    const body = {
+      action: "compras_eliminar_comprobante",
+      id_movimiento: Number(form.id_movimiento),
+      ...(archivoActualId ? { id_comprobante: Number(archivoActualId) } : {}),
+    };
+
+    const data = await apiPostJson(ENDPOINT_DELETE_COMP, body);
+    if (!data?.exito) {
+      throw new Error(data?.mensaje || "No se pudo eliminar el comprobante actual.");
+    }
+
+    setArchivoActualUrl("");
+    setArchivoActualNombre("");
+    setArchivoActualId(null);
+    setQuitarArchivoActual(false);
+    setOpenVerComp(false);
+    setCompUrl("");
+
+    return data;
+  }, [ENDPOINT_DELETE_COMP, form.id_movimiento, archivoActualId]);
+
+  const subirNuevoComprobante = useCallback(
     async (idMovimiento, archivo) => {
-      if (!archivo || !idMovimiento) return null;
+      if (!idMovimiento || !archivo) return null;
+
       const fd = new FormData();
       fd.append("archivo", archivo);
       fd.append("tipo", "FACTURA");
       fd.append("force", "0");
       fd.append("ids_movimiento", JSON.stringify([Number(idMovimiento)]));
-      return await apiPostForm(API_UPLOAD_LINK, fd);
+
+      const data = await apiPostForm(ENDPOINT_UPLOAD_LINK, fd);
+      if (!data?.exito) {
+        throw new Error(data?.mensaje || "No se pudo subir y vincular el nuevo archivo.");
+      }
+
+      setArchivoNuevo(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return data;
     },
-    [API_UPLOAD_LINK]
+    [ENDPOINT_UPLOAD_LINK]
   );
+
+  const handleOpenVerComprobante = useCallback(() => {
+    const targetUrl = String(archivoActualUrl || "").trim();
+    if (!targetUrl) {
+      showToast("advertencia", "No hay comprobante para visualizar.", 2600);
+      return;
+    }
+
+    setCompUrl(targetUrl);
+    setOpenVerComp(true);
+  }, [archivoActualUrl, showToast]);
+
+  const handleCloseVerComprobante = useCallback(() => {
+    setOpenVerComp(false);
+    setCompUrl("");
+  }, []);
+
+  const handleReplaceFileClick = useCallback(() => {
+    if (saving || addUI.open || openVerComp) return;
+    fileInputRef.current?.click();
+  }, [saving, addUI.open, openVerComp]);
+
+  const handleFileSelected = useCallback((e) => {
+    const file = e.target.files?.[0] || null;
+    setArchivoNuevo(file);
+    if (file) {
+      setQuitarArchivoActual(false);
+      setOpenVerComp(false);
+      setCompUrl("");
+    }
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
 
     if (addUI.open) {
-      showToast("advertencia", "Terminá de crear el registro (o cancelá) antes de guardar.", 3200);
+      showToast(
+        "advertencia",
+        "Terminá de crear el registro (o cancelá) antes de guardar.",
+        3200
+      );
       return;
     }
 
@@ -1011,24 +1191,18 @@ export default function ModalEditarCompra({
       }
 
       if (!proveedorId || proveedorId === NULL_OPTION || proveedorId === ADD_OPTION) {
-        throw new Error('Seleccioná un proveedor (o crealo con "Agregar nuevo proveedor").');
+        throw new Error("Seleccioná un proveedor (o crealo con “Agregar nuevo proveedor”).");
       }
       if (!detalleId || detalleId === NULL_OPTION || detalleId === ADD_OPTION) {
-        throw new Error('Seleccioná un detalle (o crealo con "Agregar nuevo detalle").');
+        throw new Error("Seleccioná un detalle (o crealo con “Agregar nuevo detalle”).");
       }
 
-      const perUI = normalizePeriodoToMMYYYY(form.periodo);
-      const perAuto = periodoFromISODate(form.fecha);
-      const finalPer = perUI || perAuto;
-
       let finalMedioPago = form.id_medio_pago;
-      let finalCuentaCorriente = form.id_cuenta_corriente;
 
       if (esContado) {
         if (!finalMedioPago || String(finalMedioPago) === NULL_OPTION) {
           throw new Error("En compras al contado el Medio de pago es obligatorio.");
         }
-        finalCuentaCorriente = NULL_OPTION;
       } else {
         finalMedioPago = NULL_OPTION;
         const hasCC =
@@ -1036,22 +1210,19 @@ export default function ModalEditarCompra({
           form.id_cuenta_corriente !== NULL_OPTION &&
           form.id_cuenta_corriente !== ADD_OPTION;
 
+        let finalCC = form.id_cuenta_corriente;
         if (!hasCC && cuentaCorrientePickedId) {
-          finalCuentaCorriente = String(cuentaCorrientePickedId);
+          finalCC = String(cuentaCorrientePickedId);
         }
 
-        if (
-          !finalCuentaCorriente ||
-          finalCuentaCorriente === NULL_OPTION ||
-          finalCuentaCorriente === ADD_OPTION
-        ) {
+        if (!finalCC || finalCC === NULL_OPTION || finalCC === ADD_OPTION) {
           throw new Error(
             "No se pudo determinar la Cuenta Corriente (revisá la lista de cuentas corrientes)."
           );
         }
 
-        if (finalCuentaCorriente !== form.id_cuenta_corriente) {
-          setForm((p) => ({ ...p, id_cuenta_corriente: finalCuentaCorriente }));
+        if (finalCC !== form.id_cuenta_corriente) {
+          setForm((p) => ({ ...p, id_cuenta_corriente: finalCC }));
         }
       }
 
@@ -1062,16 +1233,13 @@ export default function ModalEditarCompra({
 
       const payloadFinal = {
         ...payload,
-        periodo: periodoMMYYYY_to_YYYYMM(finalPer || ""),
         id_proveedor: Number(proveedorId),
         id_cliente: null,
         id_detalle: Number(detalleId),
-
         id_medio_pago: esContado ? Number(finalMedioPago) : null,
         id_cuenta_corriente: !esContado
-          ? Number(finalCuentaCorriente || cuentaCorrientePickedId || 0)
+          ? Number(form.id_cuenta_corriente || cuentaCorrientePickedId || 0)
           : null,
-
         cantidad: Math.round(cantidad * 1000) / 1000,
         precio: Math.round(precio * 100) / 100,
         iva_pct: Math.round(iva_pct * 100) / 100,
@@ -1081,34 +1249,31 @@ export default function ModalEditarCompra({
         monto_total: Math.max(0, Math.round(t.total * 100) / 100),
       };
 
-      const saveResult = await onSave?.(payloadFinal);
+      await onSave?.(payloadFinal);
 
-      if (archivoAdjunto) {
-        showToast("cargando", "Compra actualizada. Subiendo archivo…", 12000);
+      const habiaArchivo = Boolean(archivoActualUrl || archivoActualId);
+      const quiereQuitar = Boolean(quitarArchivoActual);
+      const quiereSubirNuevo = Boolean(archivoNuevo);
 
-        const idMovimientoParaArchivo =
-          Number(
-            saveResult?.id_movimiento ??
-              saveResult?.id ??
-              saveResult?.movimiento_id ??
-              payloadFinal?.id_movimiento
-          ) || 0;
-
-        if (!idMovimientoParaArchivo) {
-          throw new Error(
-            "La compra se actualizó, pero no se pudo determinar el ID para vincular el archivo."
-          );
-        }
-
-        const rFile = await subirYVincularArchivo(idMovimientoParaArchivo, archivoAdjunto);
-        if (!rFile?.exito) {
-          throw new Error(
-            rFile?.mensaje || "La compra se actualizó, pero no se pudo vincular el archivo."
-          );
-        }
+      if (habiaArchivo && (quiereQuitar || quiereSubirNuevo)) {
+        showToast(
+          "cargando",
+          quiereSubirNuevo ? "Reemplazando archivo…" : "Quitando archivo…",
+          12000
+        );
+        await eliminarComprobanteActual();
       }
 
-      await Promise.resolve(onSaved?.(saveResult));
+      if (quiereSubirNuevo) {
+        showToast("cargando", "Subiendo archivo…", 12000);
+        await subirNuevoComprobante(form.id_movimiento, archivoNuevo);
+      }
+
+      if (typeof onSaved === "function") {
+        await Promise.resolve(onSaved());
+      }
+
+      showToast("exito", "Compra actualizada.", 2400);
       onClose?.();
     } catch (err) {
       showToast("error", err?.message || "Error guardando compra.", 4200);
@@ -1142,90 +1307,271 @@ export default function ModalEditarCompra({
       ? "Nuevo detalle"
       : "Nuevo";
 
+  const mostrarArchivoActual = Boolean((archivoActualUrl || archivoActualId) && !quitarArchivoActual);
+
   return createPortal(
-    <div className={overlayClass} onMouseDown={cerrar}>
-      <div
-        className={containerClass}
-        id="mi-modal__container"
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="mi-modal__header">
-          <div className="mi-modal__head-left">
-            <h2 className="mi-modal__title">Editar compra</h2>
-            <p className="mi-modal__subtitle">Actualizá los campos y guardá.</p>
+    <>
+      <div className={overlayClass}>
+        <div
+          className={containerClass}
+          id="mi-modal__container"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="mi-modal__header">
+            <div className="mi-modal__head-left">
+              <h2 className="mi-modal__title">Editar compra</h2>
+              <p className="mi-modal__subtitle">
+                Actualizá los campos, el comprobante y guardá.
+              </p>
+            </div>
+
+            <button
+              ref={closeBtnRef}
+              className="mi-modal__close"
+              onClick={cerrar}
+              aria-label="Cerrar"
+              disabled={saving || addUI.open || openVerComp}
+              type="button"
+            >
+              ✕
+            </button>
           </div>
 
-          <button
-            ref={closeBtnRef}
-            className="mi-modal__close"
-            onClick={cerrar}
-            aria-label="Cerrar"
-            disabled={saving || addUI.open}
-            type="button"
-          >
-            ✕
-          </button>
-        </div>
+          <form onSubmit={submit} className="mi-em-form">
+            <div className="mi-em-grid">
+              <section className="mi-em-panel">
+                <div className="mi-em-panelHead">Datos de la compra</div>
 
-        <form onSubmit={submit} className="mi-em-form">
-          <div className="mi-em-grid">
-            <section className="mi-em-panel">
-              <div className="mi-em-panelHead">Datos de la compra</div>
+                <div className="mi-em-panelBody">
+                  <div className="mi-row2">
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(form.id_tipo_venta)}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, id_tipo_venta: e.target.value }))
+                        }
+                        disabled={saving || addUI.open || openVerComp}
+                      >
+                        <option value={NULL_OPTION}>-- Seleccionar tipo de compra --</option>
+                        {(safeLists.tiposVenta || []).map((x) => {
+                          const xid = getGenericId(x) ?? Number(x?.id);
+                          return (
+                            <option key={xid ?? x?.nombre} value={String(xid ?? "")}>
+                              {x.nombre}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <label className="fl-label">Tipo de compra</label>
+                    </div>
 
-              <div className="mi-em-panelBody">
-                <div className="mi-row2">
-                  <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_tipo_venta)}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, id_tipo_venta: e.target.value }))
-                      }
-                      disabled={saving || addUI.open}
-                    >
-                      <option value={NULL_OPTION}>-- Seleccionar tipo de compra --</option>
-                      {(safeLists.tiposVenta || []).map((x) => {
-                        const xid = getGenericId(x) ?? Number(x?.id);
-                        return (
-                          <option key={xid ?? x?.nombre} value={String(xid ?? "")}>
-                            {x.nombre}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <label className="fl-label">Tipo de compra</label>
+                    <div className="fl-field mi-autocomplete">
+                      <input
+                        ref={detalleInputRef}
+                        className="fl-input"
+                        placeholder=" "
+                        value={detalleInput}
+                        onChange={handleDetalleInputChange}
+                        onFocus={() => setDetalleFocus(true)}
+                        onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
+                        disabled={saving || addUI.open || openVerComp}
+                        autoComplete="off"
+                      />
+                      <label className="fl-label">Detalle</label>
+
+                      {detalleFocus && filteredDetalles.length > 0 && (
+                        <ul className="mi-cr-suggest">
+                          {filteredDetalles.map((d) => {
+                            const did = getGenericId(d);
+                            return (
+                              <li
+                                key={did ?? d?.nombre}
+                                className="mi-cr-suggest__item"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  handleSelectDetalle(d);
+                                }}
+                              >
+                                <span className="mi-suggestText">{d.nombre}</span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={startAddDetalle}
+                        disabled={saving || addUI.saving || openVerComp}
+                        className="mi-link"
+                      >
+                        + Agregar nuevo detalle
+                      </button>
+                    </div>
                   </div>
+
+                  <div className="mi-em-item fl-col-full">
+                    <div className="mi-em-itemTitle">Ítem de la compra (editable)</div>
+
+                    <div className="mi-em-itemGrid3">
+                      <div className="fl-field">
+                        <input
+                          className="fl-input"
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          placeholder=" "
+                          value={form.cantidad}
+                          onChange={(e) => onCantidadChange(e.target.value)}
+                          disabled={saving || addUI.open || openVerComp}
+                        />
+                        <label className="fl-label">Cantidad</label>
+                      </div>
+
+                      <div className="fl-field">
+                        <input
+                          className="fl-input"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder=" "
+                          value={form.precio}
+                          onChange={(e) => onPrecioChange(e.target.value)}
+                          disabled={saving || addUI.open || openVerComp}
+                        />
+                        <label className="fl-label">Precio unitario</label>
+                      </div>
+
+                      <div className="fl-field">
+                        <select
+                          className="fl-input fl-select"
+                          value={String(form.iva_pct)}
+                          onChange={(e) => onIvaPctChange(e.target.value)}
+                          disabled={saving || addUI.open || openVerComp}
+                        >
+                          {IVA_OPTIONS.map((x) => (
+                            <option key={x.value} value={x.value}>
+                              {x.label}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="fl-label">IVA %</label>
+                      </div>
+                    </div>
+
+                    <div className="mi-em-itemTotalsGrid3">
+                      <div className="fl-field">
+                        <input className="fl-input" value={form.subtotal} disabled />
+                        <label className="fl-label">Subtotal</label>
+                      </div>
+                      <div className="fl-field">
+                        <input className="fl-input" value={form.iva_monto} disabled />
+                        <label className="fl-label">IVA $</label>
+                      </div>
+                      <div className="fl-field">
+                        <input className="fl-input" value={form.total} disabled />
+                        <label className="fl-label">Total</label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="fl-field fl-col-full">
+                    <input
+                      className="fl-input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder=" "
+                      value={form.monto_total}
+                      onChange={(e) => onMontoTotalManual(e.target.value)}
+                      disabled={saving || addUI.open || openVerComp}
+                    />
+                    <label className="fl-label">Monto total (ajusta el precio)</label>
+                  </div>
+                </div>
+              </section>
+
+              <aside className="mi-em-aside">
+                <div className="mi-em-asideTitle">Relaciones, pago y archivo</div>
+
+                <div className="mi-em-dates">
+                  <div className="fl-field">
+                    <input
+                      ref={fechaRef}
+                      className="fl-input"
+                      type="date"
+                      value={form.fecha}
+                      onChange={(e) => onFechaChange(e.target.value)}
+                      disabled={saving || addUI.open || openVerComp}
+                      onClick={openDatePicker}
+                      onFocus={openDatePicker}
+                    />
+                    <label className="fl-label">Fecha</label>
+                  </div>
+                </div>
+
+                <div className="mi-em-asideBody">
+                  {esContado ? (
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(form.id_medio_pago)}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, id_medio_pago: e.target.value }))
+                        }
+                        disabled={saving || addUI.open || openVerComp}
+                      >
+                        <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
+                        {(safeLists.mediosPago || []).map((x) => {
+                          const xid =
+                            getGenericId(x) ?? Number(x?.id ?? x?.id_medio_pago);
+                          return (
+                            <option key={xid ?? x?.nombre} value={String(xid ?? "")}>
+                              {x.nombre}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <label className="fl-label">Medio de pago</label>
+                    </div>
+                  ) : (
+                    <div className="fl-field">
+                      <input className="fl-input" value="No aplica" disabled />
+                      <label className="fl-label">Medio de pago</label>
+                    </div>
+                  )}
 
                   <div className="fl-field mi-autocomplete">
                     <input
-                      ref={detalleInputRef}
+                      ref={proveedorInputRef}
                       className="fl-input"
                       placeholder=" "
-                      value={detalleInput}
-                      onChange={handleDetalleInputChange}
-                      onFocus={() => setDetalleFocus(true)}
-                      onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
-                      disabled={saving || addUI.open}
+                      value={proveedorInput}
+                      onChange={handleProveedorInputChange}
+                      onFocus={() => setProveedorFocus(true)}
+                      onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
+                      disabled={saving || addUI.open || openVerComp}
                       autoComplete="off"
                     />
-                    <label className="fl-label">Detalle</label>
+                    <label className="fl-label">Proveedor</label>
 
-                    {detalleFocus && filteredDetalles.length > 0 && (
+                    {proveedorFocus && filteredProveedores.length > 0 && (
                       <ul className="mi-cr-suggest">
-                        {filteredDetalles.map((d) => {
-                          const did = getGenericId(d);
+                        {filteredProveedores.map((p) => {
+                          const pid = getGenericId(p);
                           return (
                             <li
-                              key={did ?? d?.nombre}
+                              key={pid ?? p?.nombre}
                               className="mi-cr-suggest__item"
                               onMouseDown={(e) => {
                                 e.preventDefault();
-                                handleSelectDetalle(d);
+                                handleSelectProveedor(p);
                               }}
                             >
-                              <span className="mi-suggestText">{d.nombre}</span>
+                              <span className="mi-suggestText">{p.nombre}</span>
                             </li>
                           );
                         })}
@@ -1234,242 +1580,27 @@ export default function ModalEditarCompra({
 
                     <button
                       type="button"
-                      onClick={startAddDetalle}
-                      disabled={saving || addUI.saving}
+                      onClick={startAddProveedor}
+                      disabled={saving || addUI.saving || openVerComp}
                       className="mi-link"
                     >
-                      + Agregar nuevo detalle
+                      + Agregar nuevo proveedor
                     </button>
                   </div>
-                </div>
 
-                <div className="mi-em-item fl-col-full">
-                  <div className="mi-em-itemTitle">Ítem de la compra (editable)</div>
-
-                  <div className="mi-em-itemGrid3">
-                    <div className="fl-field">
-                      <input
-                        className="fl-input"
-                        type="number"
-                        min="0"
-                        step="0.001"
-                        placeholder=" "
-                        value={form.cantidad}
-                        onChange={(e) => onCantidadChange(e.target.value)}
-                        disabled={saving || addUI.open}
-                      />
-                      <label className="fl-label">Cantidad</label>
-                    </div>
-
-                    <div className="fl-field">
-                      <input
-                        className="fl-input"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder=" "
-                        value={form.precio}
-                        onChange={(e) => onPrecioChange(e.target.value)}
-                        disabled={saving || addUI.open}
-                      />
-                      <label className="fl-label">Precio unitario</label>
-                    </div>
-
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(form.iva_pct)}
-                        onChange={(e) => onIvaPctChange(e.target.value)}
-                        disabled={saving || addUI.open}
-                      >
-                        {IVA_OPTIONS.map((x) => (
-                          <option key={x.value} value={x.value}>
-                            {x.label}
-                          </option>
-                        ))}
-                      </select>
-                      <label className="fl-label">IVA %</label>
-                    </div>
-                  </div>
-
-                  <div className="mi-em-itemTotalsGrid3">
-                    <div className="fl-field">
-                      <input className="fl-input" value={form.subtotal} disabled />
-                      <label className="fl-label">Subtotal</label>
-                    </div>
-                    <div className="fl-field">
-                      <input className="fl-input" value={form.iva_monto} disabled />
-                      <label className="fl-label">IVA $</label>
-                    </div>
-                    <div className="fl-field">
-                      <input className="fl-input" value={form.total} disabled />
-                      <label className="fl-label">Total</label>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="fl-field fl-col-full">
-                  <input
-                    className="fl-input"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder=" "
-                    value={form.monto_total}
-                    onChange={(e) => onMontoTotalManual(e.target.value)}
-                    disabled={saving || addUI.open}
-                  />
-                  <label className="fl-label">Monto total (ajusta el precio)</label>
-                </div>
-              </div>
-            </section>
-
-            <aside className="mi-em-aside">
-              <div className="mi-em-asideTitle">Relaciones y pago</div>
-
-              <div className="mi-em-dates">
-                <div className="fl-field">
-                  <input
-                    ref={fechaRef}
-                    className="fl-input"
-                    type="date"
-                    value={form.fecha}
-                    onChange={(e) => onFechaChange(e.target.value)}
-                    disabled={saving || addUI.open}
-                    onClick={openDatePicker}
-                    onFocus={openDatePicker}
-                  />
-                  <label className="fl-label">Fecha</label>
-                </div>
-
-                <div className="fl-field">
-                  <input
-                    className="fl-input"
-                    placeholder="MM-YYYY"
-                    inputMode="numeric"
-                    value={form.periodo}
-                    onChange={(e) => onPeriodoChange(e.target.value)}
-                    disabled={saving || addUI.open}
-                  />
-                  <label className="fl-label">Período</label>
-                </div>
-              </div>
-
-              <div className="mi-em-asideBody">
-                {esContado ? (
-                  <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_medio_pago)}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, id_medio_pago: e.target.value }))
-                      }
-                      disabled={saving || addUI.open}
-                    >
-                      <option value={NULL_OPTION}>-- Seleccionar medio de pago --</option>
-                      {(safeLists.mediosPago || []).map((x) => {
-                        const xid = getGenericId(x) ?? Number(x?.id ?? x?.id_medio_pago);
-                        return (
-                          <option key={xid ?? x?.nombre} value={String(xid ?? "")}>
-                            {x.nombre}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <label className="fl-label">Medio de pago</label>
-                  </div>
-                ) : (
-                  <div className="fl-field">
-                    <input className="fl-input" value="No aplica" disabled />
-                    <label className="fl-label">Medio de pago</label>
-                  </div>
-                )}
-
-                <div className="fl-field mi-autocomplete">
-                  <input
-                    ref={proveedorInputRef}
-                    className="fl-input"
-                    placeholder=" "
-                    value={proveedorInput}
-                    onChange={handleProveedorInputChange}
-                    onFocus={() => setProveedorFocus(true)}
-                    onBlur={() => setTimeout(() => setProveedorFocus(false), 120)}
-                    disabled={saving || addUI.open}
-                    autoComplete="off"
-                  />
-                  <label className="fl-label">Proveedor</label>
-
-                  {proveedorFocus && filteredProveedores.length > 0 && (
-                    <ul className="mi-cr-suggest">
-                      {filteredProveedores.map((p) => {
-                        const pid = getGenericId(p);
-                        return (
-                          <li
-                            key={pid ?? p?.nombre}
-                            className="mi-cr-suggest__item"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleSelectProveedor(p);
-                            }}
-                          >
-                            <span className="mi-suggestText">{p.nombre}</span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={startAddProveedor}
-                    disabled={saving || addUI.saving}
-                    className="mi-link"
-                  >
-                    + Agregar nuevo proveedor
-                  </button>
-                </div>
-
-                <div className="mi-uploadCard">
-                  <div className="mi-uploadCard__head">
-                    <div>
-                      <div className="mi-uploadCard__title">Archivo adjunto</div>
-                      <div className="mi-uploadCard__sub">
-                        PDF, imagen u otro comprobante
+                  <div className="mi-uploadCard">
+                    <div className="mi-uploadCard__head">
+                      <div>
+                        <div className="mi-uploadCard__title">Comprobante</div>
+                        <div className="mi-uploadCard__sub">
+                          Ver, quitar o reemplazar archivo actual
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="mi-uploadCard__body">
-                    <div className="mi-uploadBar">
-                      <label className="mi-uploadBar__pick">
-                        <input
-                          type="file"
-                          className="mi-uploadBar__input"
-                          onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
-                          disabled={saving || addUI.open}
-                        />
-                        <span className="mi-uploadBar__btn mi-uploadBar__btn--primary">
-                          {archivoAdjunto ? "Cambiar" : "Seleccionar"}
-                        </span>
-                      </label>
-
-                      <button
-                        type="button"
-                        className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                        onClick={() => setArchivoAdjunto(null)}
-                        disabled={saving || addUI.open || !archivoAdjunto}
-                      >
-                        Quitar
-                      </button>
-                    </div>
-
-                    <div
-                      className={`mi-uploadFile ${
-                        archivoAdjunto ? "is-filled" : "is-empty"
-                      }`}
-                    >
-                      {archivoAdjunto ? (
-                        <>
+                    <div className="mi-uploadCard__body">
+                      {mostrarArchivoActual ? (
+                        <div className="mi-uploadFile is-filled">
                           <div className="mi-uploadFile__icon">
                             <FontAwesomeIcon icon={faFileInvoiceDollar} />
                           </div>
@@ -1477,72 +1608,167 @@ export default function ModalEditarCompra({
                           <div className="mi-uploadFile__meta">
                             <div
                               className="mi-uploadFile__name"
-                              title={archivoAdjunto.name}
+                              title={archivoActualNombre || "Comprobante actual"}
                             >
-                              {archivoAdjunto.name}
+                              {archivoActualNombre || "Comprobante actual"}
                             </div>
-                            <div className="mi-uploadFile__size">
-                              {Math.max(
-                                1,
-                                Math.round((archivoAdjunto.size || 0) / 1024)
-                              )}{" "}
-                              KB
-                            </div>
+                            <div className="mi-uploadFile__size">Archivo ya vinculado</div>
                           </div>
-                        </>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              marginLeft: "auto",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            {archivoActualUrl ? (
+                              <button
+                                type="button"
+                                className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                onClick={handleOpenVerComprobante}
+                                disabled={saving || addUI.open}
+                                title="Ver comprobante actual"
+                              >
+                                <FontAwesomeIcon icon={faEye} /> Ver
+                              </button>
+                            ) : null}
+
+                            <button
+                              type="button"
+                              className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                              onClick={() => {
+                                setQuitarArchivoActual(true);
+                                setArchivoNuevo(null);
+                                if (fileInputRef.current) fileInputRef.current.value = "";
+                                setOpenVerComp(false);
+                                setCompUrl("");
+                              }}
+                              disabled={saving || addUI.open || openVerComp}
+                              title="Quitar comprobante actual"
+                            >
+                              <FontAwesomeIcon icon={faTrashCan} /> Quitar
+                            </button>
+                          </div>
+                        </div>
                       ) : (
-                        <div className="mi-uploadFile__empty">
-                          No hay archivo seleccionado
+                        <div className={`mi-uploadFile ${archivoNuevo ? "is-filled" : "is-empty"}`}>
+                          {archivoNuevo ? (
+                            <>
+                              <div className="mi-uploadFile__icon">
+                                <FontAwesomeIcon icon={faFileInvoiceDollar} />
+                              </div>
+
+                              <div className="mi-uploadFile__meta">
+                                <div className="mi-uploadFile__name" title={archivoNuevo.name}>
+                                  {archivoNuevo.name}
+                                </div>
+                                <div className="mi-uploadFile__size">
+                                  {Math.max(1, Math.round((archivoNuevo.size || 0) / 1024))} KB
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                onClick={() => {
+                                  setArchivoNuevo(null);
+                                  if (fileInputRef.current) fileInputRef.current.value = "";
+                                }}
+                                disabled={saving || addUI.open || openVerComp}
+                                style={{ marginLeft: "auto" }}
+                              >
+                                <FontAwesomeIcon icon={faXmark} /> Quitar selección
+                              </button>
+                            </>
+                          ) : (
+                            <div className="mi-uploadFile__empty">
+                              {quitarArchivoActual
+                                ? "El comprobante actual será eliminado al guardar"
+                                : "No hay comprobante cargado"}
+                            </div>
+                          )}
                         </div>
                       )}
+
+                      <div className="mi-uploadBar" style={{ marginTop: 10 }}>
+                        {quitarArchivoActual && !archivoNuevo ? (
+                          <button
+                            type="button"
+                            className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                            onClick={() => setQuitarArchivoActual(false)}
+                            disabled={saving || addUI.open || openVerComp}
+                          >
+                            Cancelar quitar
+                          </button>
+                        ) : null}
+
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          className="mi-uploadBar__input"
+                          onChange={handleFileSelected}
+                          disabled={saving || addUI.open || openVerComp}
+                          style={{ display: "none" }}
+                        />
+
+                        <button
+                          type="button"
+                          className="mi-uploadBar__btn mi-uploadBar__btn--primary"
+                          onClick={handleReplaceFileClick}
+                          disabled={saving || addUI.open || openVerComp}
+                        >
+                          <FontAwesomeIcon icon={faUpload} />{" "}
+                          {mostrarArchivoActual ? "Reemplazar archivo" : "Seleccionar archivo"}
+                        </button>
+                      </div>
                     </div>
                   </div>
+
+                  <div className="mi-em-actions">
+                    <button
+                      type="submit"
+                      disabled={saving || addUI.open || openVerComp}
+                      className="mit-btn mit-btn--solid mit-btn--block"
+                    >
+                      {saving ? "Guardando..." : "Guardar"}
+                    </button>
+                  </div>
                 </div>
+              </aside>
+            </div>
+          </form>
 
-                <div className="mi-em-actions">
-                  <button
-                    type="submit"
-                    disabled={saving || addUI.open}
-                    className="mit-btn mit-btn--solid mit-btn--block"
-                  >
-                    {saving ? "Guardando..." : "Guardar"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={cerrar}
-                    disabled={saving || addUI.open}
-                    className="mit-btn mit-btn--ghost mit-btn--block"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            </aside>
-          </div>
-        </form>
-
-        <AddCatalogMiniModal
-          open={addUI.open}
-          title={miniTitle}
-          label="Nombre"
-          value={addUI.text}
-          saving={addUI.saving}
-          onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
-          onCancel={() => {
-            setForm((p) => ({
-              ...p,
-              id_proveedor:
-                addUI.catalogo === "proveedores" ? NULL_OPTION : p.id_proveedor,
-              id_detalle: addUI.catalogo === "detalles" ? NULL_OPTION : p.id_detalle,
-            }));
-            closeAddMini();
-          }}
-          onSave={guardarNuevoCatalogo}
-          dark={dark}
-        />
+          <AddCatalogMiniModal
+            open={addUI.open}
+            title={miniTitle}
+            label="Nombre"
+            value={addUI.text}
+            saving={addUI.saving}
+            onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
+            onCancel={() => {
+              setForm((p) => ({
+                ...p,
+                id_proveedor:
+                  addUI.catalogo === "proveedores" ? NULL_OPTION : p.id_proveedor,
+                id_detalle: addUI.catalogo === "detalles" ? NULL_OPTION : p.id_detalle,
+              }));
+              closeAddMini();
+            }}
+            onSave={guardarNuevoCatalogo}
+            dark={dark}
+          />
+        </div>
       </div>
-    </div>,
+
+      <ModalVerComprobante
+        open={openVerComp}
+        url={compUrl}
+        onClose={handleCloseVerComprobante}
+        title="Comprobante de compra"
+      />
+    </>,
     document.body
   );
 }

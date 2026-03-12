@@ -16,9 +16,6 @@ const IVA_OPTIONS = [
   { label: "21 %",   value: 21   },
 ];
 
-/* =========================================================
-   Helpers
-========================================================= */
 function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -31,9 +28,6 @@ function moneyARS(v) {
 }
 function uid() { return crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
 
-/* =========================================================
-   IDs tolerantes
-========================================================= */
 function getDetalleId(d) {
   const cand=d?.id??d?.id_detalle??d?.idDetalle??d?.detalle_id??d?.iddetalle??null;
   const n=Number(cand);
@@ -50,9 +44,6 @@ function getMedioPagoId(mp) {
   return Number.isFinite(n)&&n>0?n:null;
 }
 
-/* =========================================================
-   Lists normalize
-========================================================= */
 const SAFE_LISTS = { proveedores:[], detalles:[], medios_pago:[] };
 
 function normalizeLists(lists) {
@@ -67,9 +58,6 @@ function normalizeLists(lists) {
   };
 }
 
-/* =========================================================
-   Auth + headers
-========================================================= */
 function getAuthInfo() {
   const sessionKey=localStorage.getItem("session_key")||localStorage.getItem("sessionKey")||localStorage.getItem("x_session")||localStorage.getItem("X-Session")||"";
   const token=localStorage.getItem("token")||"";
@@ -110,16 +98,10 @@ async function apiPostForm(url,formData) {
   return await parseJsonOrThrow(res);
 }
 
-/* =========================================================
-   Theme helper
-========================================================= */
 function isTemaOscuro() {
   return document.documentElement.getAttribute("data-theme")==="oscuro"||document.body?.classList?.contains("dark");
 }
 
-/* =========================================================
-   Validación filas
-========================================================= */
 function describeLineProblem(r,idx1based) {
   const detId=Number(r.id_detalle); const detTxt=String(r.detalleText||"").trim();
   const qtyBlank=isBlank(r.cantidad); const priceBlank=isBlank(r.precio);
@@ -130,13 +112,11 @@ function describeLineProblem(r,idx1based) {
   if(!(Number.isFinite(detId)&&detId>0))issues.push(detTxt?`el detalle "${detTxt}" no está seleccionado del listado`:"falta el detalle");
   if(qtyBlank)issues.push("falta la cantidad"); else if(!(Number.isFinite(qty)&&qty>0))issues.push("la cantidad debe ser > 0");
   if(priceBlank)issues.push("falta el precio"); else if(!(Number.isFinite(price)&&price>0))issues.push("el precio debe ser > 0");
-if (!(Number.isFinite(total) && total > 0)) issues.push("el total queda en 0 (revisá cantidad/precio)");  if(!issues.length)return null;
+  if(!(Number.isFinite(total)&&total>0))issues.push("el total queda en 0 (revisá cantidad/precio)");
+  if(!issues.length)return null;
   return `Fila ${idx1based}: ${issues.join(", ")}.`;
 }
 
-/* =========================================================
-   Mini Modal
-========================================================= */
 function AddCatalogMiniModal({open,title,value,saving,onChange,onCancel,onSave,dark=false}) {
   const inputRef=useRef(null);
   useEffect(()=>{ if(!open)return; const t=setTimeout(()=>inputRef.current?.focus(),0); return()=>clearTimeout(t); },[open]);
@@ -165,9 +145,6 @@ function AddCatalogMiniModal({open,title,value,saving,onChange,onCancel,onSave,d
   );
 }
 
-/* =========================================================
-   MODAL PRINCIPAL
-========================================================= */
 export default function ModalNuevaCompra({open,lists,onClose,onToast,onSaved}) {
   const API_BATCH        = `${BASE_URL}/api.php?action=compras_crear_batch`;
   const API_CATALOGO     = `${BASE_URL}/api.php?action=catalogo_crear`;
@@ -175,7 +152,6 @@ export default function ModalNuevaCompra({open,lists,onClose,onToast,onSaved}) {
 
   const showToast=useCallback((tipo,mensaje,dur=2800)=>onToast?.(tipo,mensaje,dur),[onToast]);
 
-  /* Dark mode */
   const [dark,setDark]=useState(isTemaOscuro);
   useEffect(()=>{
     const update=()=>setDark(isTemaOscuro());
@@ -187,32 +163,29 @@ export default function ModalNuevaCompra({open,lists,onClose,onToast,onSaved}) {
   useEffect(()=>{ if(!open)return; const p=document.body.style.overflow; document.body.style.overflow="hidden"; return()=>{document.body.style.overflow=p;}; },[open]);
   useEffect(()=>{ if(!open)return; const h=e=>e.key==="Escape"&&onClose?.(); document.addEventListener("keydown",h); return()=>document.removeEventListener("keydown",h); },[open,onClose]);
 
-  /* Listas */
   const [localLists,setLocalLists]=useState(()=>({...SAFE_LISTS,...normalizeLists(lists)}));
   useEffect(()=>setLocalLists({...SAFE_LISTS,...normalizeLists(lists)}),[lists]);
   const mediosPagoList=useMemo(()=>Array.isArray(localLists.medios_pago)?localLists.medios_pago:[],[localLists.medios_pago]);
   const detallesList  =useMemo(()=>Array.isArray(localLists.detalles)?localLists.detalles:[],[localLists.detalles]);
   const proveedoresList=useMemo(()=>Array.isArray(localLists.proveedores)?localLists.proveedores:[],[localLists.proveedores]);
 
-  /* Estado principal */
   const [fecha,setFecha]=useState(todayISO);
-  const [filters,setFilters]=useState({forma:NULL_OPTION,id_medio_pago:NULL_OPTION,id_proveedor:NULL_OPTION,proveedor_cuit:""});
+  const [filters,setFilters]=useState({forma:NULL_OPTION,id_medio_pago:NULL_OPTION,id_proveedor:NULL_OPTION});
   const [provInput,setProvInput]=useState("");
   const [provFocus,setProvFocus]=useState(false);
   const [rows,setRows]=useState(()=>[{id:uid(),id_detalle:NULL_OPTION,detalleText:"",cantidad:1,precio:0,ivaPct:0}]);
   const [saving,setSaving]=useState(false);
   const [archivoAdjunto,setArchivoAdjunto]=useState(null);
   const [addUI,setAddUI]=useState({open:false,kind:null,rowId:null,text:"",saving:false});
-const closeBtnRef = useRef(null);
-const prevOpenRef = useRef(false);
-const fechaInputRef = useRef(null);
+  const closeBtnRef = useRef(null);
+  const prevOpenRef = useRef(false);
+  const fechaInputRef = useRef(null);
 
-  /* Reset al abrir */
   useEffect(()=>{
     const wasOpen=prevOpenRef.current; prevOpenRef.current=open; if(!open)return;
     if(!wasOpen&&open){
       setFecha(todayISO());
-      setFilters({forma:NULL_OPTION,id_medio_pago:NULL_OPTION,id_proveedor:NULL_OPTION,proveedor_cuit:""});
+      setFilters({forma:NULL_OPTION,id_medio_pago:NULL_OPTION,id_proveedor:NULL_OPTION});
       setProvInput(""); setProvFocus(false);
       setRows([{id:uid(),id_detalle:NULL_OPTION,detalleText:"",cantidad:1,precio:0,ivaPct:0}]);
       setAddUI({open:false,kind:null,rowId:null,text:"",saving:false});
@@ -222,30 +195,18 @@ const fechaInputRef = useRef(null);
   },[open]);
 
   const updateFilter=useCallback((k,v)=>setFilters(p=>({...p,[k]:v})),[]);
-const handleOpenDate = useCallback((e) => {
-  if (saving) return;
 
-  if (e) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
+  const handleOpenDate = useCallback((e) => {
+    if (saving) return;
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    const input = fechaInputRef.current;
+    if (!input) return;
+    input.focus();
+    try {
+      if (typeof input.showPicker === "function") { input.showPicker(); } else { input.click(); }
+    } catch { input.click(); }
+  }, [saving]);
 
-  const input = fechaInputRef.current;
-  if (!input) return;
-
-  input.focus();
-
-  try {
-    if (typeof input.showPicker === "function") {
-      input.showPicker();
-    } else {
-      input.click();
-    }
-  } catch {
-    input.click();
-  }
-}, [saving]);
-  /* Rows */
   const addRow    =useCallback(()=>setRows(p=>[...p,{id:uid(),id_detalle:NULL_OPTION,detalleText:"",cantidad:1,precio:0,ivaPct:0}]),[]);
   const removeRow =useCallback(id=>setRows(p=>{const n=p.filter(r=>r.id!==id);return n.length?n:p;}),[]);
   const updateRow =useCallback((id,patch)=>setRows(p=>p.map(r=>r.id===id?{...r,...patch}:r)),[]);
@@ -255,7 +216,6 @@ const handleOpenDate = useCallback((e) => {
     return detallesList.filter(d=>String(d?.nombre??"").toLowerCase().includes(q)).slice(0,18);
   },[detallesList]);
 
-  /* Mini modal handlers */
   const startAddDetalleForRow=useCallback(rowId=>{ if(saving)return; setAddUI({open:true,kind:"detalles",rowId,text:"",saving:false}); },[saving]);
   const startAddProveedor    =useCallback(()=>{ if(saving)return; setProvFocus(false); setAddUI({open:true,kind:"proveedores",rowId:null,text:provInput||"",saving:false}); },[saving,provInput]);
   const closeAddMini         =useCallback(()=>{ if(addUI.saving)return; setAddUI({open:false,kind:null,rowId:null,text:"",saving:false}); },[addUI.saving]);
@@ -267,7 +227,7 @@ const handleOpenDate = useCallback((e) => {
     setAddUI(p=>({...p,saving:true}));
     showToast("cargando",`Creando ${kind==="detalles"?"detalle":"proveedor"}…`,12000);
     try {
-      const {idUsuario}=getAuthInfo();
+      const{idUsuario}=getAuthInfo();
       const data=await apiPostJson(API_CATALOGO,{catalogo:kind,nombre,idUsuario});
       if(!data?.exito)throw new Error(data?.mensaje||"No se pudo crear.");
       const item=data?.item||{};
@@ -286,7 +246,6 @@ const handleOpenDate = useCallback((e) => {
     } catch(e){setAddUI(p=>({...p,saving:false}));showToast("error",e?.message||"Error creando.",4200);}
   },[API_CATALOGO,addUI,showToast,updateRow,updateFilter]);
 
-  /* Proveedor autocomplete */
   const filteredProveedores=useMemo(()=>{
     const q=provInput.trim().toLowerCase(); if(!provFocus||q.length<1)return [];
     return proveedoresList.filter(p=>String(p?.nombre??"").toLowerCase().includes(q)).slice(0,25);
@@ -295,30 +254,30 @@ const handleOpenDate = useCallback((e) => {
   const handleProveedorInputChange=useCallback(e=>{setProvInput(e.target.value);setFilters(p=>({...p,id_proveedor:NULL_OPTION}));},[]);
   const handleSelectProveedor=useCallback(prov=>{setProvInput(String(prov?.nombre??"").trim());setFilters(p=>({...p,id_proveedor:getProveedorId(prov)!=null?String(getProveedorId(prov)):NULL_OPTION}));setProvFocus(false);},[]);
 
-  /* Cálculos */
   const rowsCalc=useMemo(()=>rows.map(r=>{const cantidad=Math.max(0,safeNumber(r.cantidad)),precio=Math.max(0,safeNumber(r.precio)),ivaPct=Math.max(0,safeNumber(r.ivaPct));const subtotal=cantidad*precio,ivaMonto=subtotal*(ivaPct/100),total=subtotal+ivaMonto;return{...r,subtotal,ivaMonto,total};}),[rows]);
   const resumen=useMemo(()=>({subtotal:rowsCalc.reduce((a,r)=>a+(r.subtotal||0),0),iva:rowsCalc.reduce((a,r)=>a+(r.ivaMonto||0),0),total:rowsCalc.reduce((a,r)=>a+(r.total||0),0)}),[rowsCalc]);
 
   const isContado =useMemo(()=>String(filters.forma)==="CONTADO",[filters.forma]);
   const isCorriente=useMemo(()=>String(filters.forma)==="CUENTA_CORRIENTE",[filters.forma]);
-useEffect(() => {
-  if (!open) return;
 
-  setFilters((prev) => {
-    const forma = String(prev.forma || "");
-    if (forma === "CUENTA_CORRIENTE" && prev.id_medio_pago !== NULL_OPTION) {
-      return { ...prev, id_medio_pago: NULL_OPTION };
-    }
-    return prev;
-  });
-}, [open, isCorriente]);
-  /* Validación */
+  useEffect(() => {
+    if (!open) return;
+    setFilters((prev) => {
+      const forma = String(prev.forma || "");
+      if (forma === "CUENTA_CORRIENTE" && prev.id_medio_pago !== NULL_OPTION) {
+        return { ...prev, id_medio_pago: NULL_OPTION };
+      }
+      return prev;
+    });
+  }, [open, isCorriente]);
+
   const validate=useCallback(()=>{
     const provId=Number(filters.id_proveedor); const provTxt=String(provInput||"").trim();
     if(!((Number.isFinite(provId)&&provId>0)||provTxt.length>0))return{ok:false,msg:"Falta seleccionar un Proveedor (obligatorio)."};
-if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
-  return { ok: false, msg: "Falta seleccionar el Tipo de compra (Contado / Cuenta Corriente)." };
-}    if(isContado){const mp=Number(filters.id_medio_pago);if(!Number.isFinite(mp)||mp<=0)return{ok:false,msg:"Compra Contado: falta seleccionar el Medio de pago."};}
+    if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
+      return { ok: false, msg: "Falta seleccionar el Tipo de compra (Contado / Cuenta Corriente)." };
+    }
+    if(isContado){const mp=Number(filters.id_medio_pago);if(!Number.isFinite(mp)||mp<=0)return{ok:false,msg:"Compra Contado: falta seleccionar el Medio de pago."};}
     const problems=[]; rowsCalc.forEach((r,i)=>{const p=describeLineProblem(r,i+1);if(p)problems.push(p);});
     const usable=rowsCalc.filter(r=>Number.isFinite(Number(r.id_detalle))&&Number(r.id_detalle)>0&&Number(r.total||0)>0);
     if(!usable.length){if(problems.length){const msg=problems.slice(0,2).join(" ");const extra=problems.length>2?` (y ${problems.length-2} más)`:"";return{ok:false,msg:`No hay filas válidas. ${msg}${extra}`};}return{ok:false,msg:"Cargá al menos 1 fila válida (Detalle + Cantidad + Precio)."};}
@@ -346,7 +305,7 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
       const esPagadaFinal=!isCorriente;
       const proveedorIdFinal=Number(filters.id_proveedor)>0?Number(filters.id_proveedor):null;
       const medioPagoIdFinal=isContado&&Number(filters.id_medio_pago)>0?Number(filters.id_medio_pago):null;
-      const payloads=rowsCalc.filter(r=>Number.isFinite(Number(r.id_detalle))&&Number(r.id_detalle)>0&&Number(r.total||0)>0).map(r=>({idUsuario,fecha,id_tipo_venta:idTipoVenta,id_proveedor:proveedorIdFinal,proveedor_nombre:String(provInput||"").trim()||null,proveedor_cuit:String(filters.proveedor_cuit||"").trim()||null,id_detalle:Number(r.id_detalle),cantidad:Math.round(Number(r.cantidad)*100)/100,precio:Math.round(Number(r.precio)*100)/100,iva_pct:Math.round(Number(r.ivaPct)*100)/100,subtotal:Math.round(Number(r.subtotal)*100)/100,iva_monto:Math.round(Number(r.ivaMonto)*100)/100,total:Math.round(Number(r.total)*100)/100,monto_total:Math.round(Number(r.total)*100)/100,accion_compra:accionFinal,es_pagada:esPagadaFinal,...(isContado?{id_medio_pago:medioPagoIdFinal,medio_pago_id:medioPagoIdFinal,idMedioPago:medioPagoIdFinal}:{})}));
+      const payloads=rowsCalc.filter(r=>Number.isFinite(Number(r.id_detalle))&&Number(r.id_detalle)>0&&Number(r.total||0)>0).map(r=>({idUsuario,fecha,id_tipo_venta:idTipoVenta,id_proveedor:proveedorIdFinal,proveedor_nombre:String(provInput||"").trim()||null,id_detalle:Number(r.id_detalle),cantidad:Math.round(Number(r.cantidad)*100)/100,precio:Math.round(Number(r.precio)*100)/100,iva_pct:Math.round(Number(r.ivaPct)*100)/100,subtotal:Math.round(Number(r.subtotal)*100)/100,iva_monto:Math.round(Number(r.ivaMonto)*100)/100,total:Math.round(Number(r.total)*100)/100,monto_total:Math.round(Number(r.total)*100)/100,accion_compra:accionFinal,es_pagada:esPagadaFinal,...(isContado?{id_medio_pago:medioPagoIdFinal,medio_pago_id:medioPagoIdFinal,idMedioPago:medioPagoIdFinal}:{})}));
       if(!payloads.length){showToast("advertencia","No hay filas válidas para guardar.",4200);setSaving(false);return;}
       const data=await apiPostJson(API_BATCH,payloads);
       if(!data?.exito)throw new Error(data?.mensaje||"No se pudo guardar el batch de compras.");
@@ -367,21 +326,19 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
 
   return createPortal(
     <>
-      {/* ===================== OVERLAY ===================== */}
-      <div
-        className={["mi-modal__overlay",dark?"mi-modal__overlay--dark":""].join(" ").trim()}
-      >
+      <div className={["mi-modal__overlay",dark?"mi-modal__overlay--dark":""].join(" ").trim()}>
         <div
           className={["mi-modal__container","mi-modal__container--mov",dark?"mi-modal--dark":""].join(" ").trim()}
           role="dialog"
           aria-modal="true"
           onMouseDown={e=>e.stopPropagation()}
         >
-          {/* =================== HEADER =================== */}
+          {/* HEADER */}
           <div className="mi-modal__header">
-<div className="mi-modal__head-icon" aria-hidden="true">
-  <FontAwesomeIcon icon={faBasketShopping} />
-</div>            <div className="mi-modal__head-left">
+            <div className="mi-modal__head-icon" aria-hidden="true">
+              <FontAwesomeIcon icon={faBasketShopping} />
+            </div>
+            <div className="mi-modal__head-left">
               <h2 className="mi-modal__title">Nueva Compra</h2>
             </div>
             <button
@@ -394,14 +351,12 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
             >✕</button>
           </div>
 
-          {/* =================== CONTENT =================== */}
+          {/* CONTENT */}
           <div className="mi-modal__content">
             <div className="mi-cr-grid">
 
-              {/* ============= TABLA EXCEL ============= */}
+              {/* TABLA */}
               <section className="mi-cr-table">
-
-                {/* Header de tabla */}
                 <div className="mi-cr-table__head">
                   <div style={{paddingLeft:10}}>Detalle</div>
                   <div>Cant.</div>
@@ -412,15 +367,12 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
                   <div/>
                 </div>
 
-                {/* Filas */}
                 <div className="mi-cr-table__rows">
                   {rowsCalc.map(r=>{
                     const suggestions=suggestDetalles(r.detalleText);
                     const showSug=String(r.detalleText||"").trim().length>0&&Number(r.id_detalle||0)<=0&&suggestions.length>0;
                     return (
                       <div key={r.id} className="mi-cr-row">
-
-                        {/* Detalle */}
                         <div className="mi-cr-cell mi-cr-cell--detalle">
                           <input
                             className="nv-cell-input"
@@ -446,7 +398,6 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
                           )}
                         </div>
 
-                        {/* Cantidad */}
                         <div className="mi-cr-cell mi-cr-cell--center">
                           <input className="nv-cell-input nv-cell-input--center" type="number" min="0" step="1"
                             value={r.cantidad}
@@ -454,7 +405,6 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
                             disabled={saving} style={{width:"100%"}}/>
                         </div>
 
-                        {/* Precio */}
                         <div className="mi-cr-cell mi-cr-cell--center">
                           <input className="nv-cell-input nv-cell-input--center" type="number" min="0" step="0.01"
                             value={r.precio}
@@ -462,40 +412,30 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
                             disabled={saving} style={{width:"100%"}}/>
                         </div>
 
-                        {/* IVA % */}
                         <div className="mi-cr-cell mi-cr-cell--center">
-<select
-  className="nv-cell-input nv-cell-input--center nv-cell-input--select"
-  value={String(r.ivaPct)}
-  onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
-  onKeyDown={(e) => {
-    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-      e.preventDefault();
-    }
-  }}
-  disabled={saving}
-  style={{ width: "100%" }}
->
-  {IVA_OPTIONS.map((x) => (
-    <option key={x.value} value={x.value}>
-      {x.label}
-    </option>
-  ))}
-</select>
+                          <select
+                            className="nv-cell-input nv-cell-input--center nv-cell-input--select"
+                            value={String(r.ivaPct)}
+                            onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
+                            onKeyDown={(e) => { if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault(); }}
+                            disabled={saving}
+                            style={{ width: "100%" }}
+                          >
+                            {IVA_OPTIONS.map((x) => (
+                              <option key={x.value} value={x.value}>{x.label}</option>
+                            ))}
+                          </select>
                         </div>
 
-                        {/* IVA $ */}
                         <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--mono mi-cr-cell--soft">
                           {moneyARS(r.ivaMonto)}
                         </div>
 
-                        {/* Total */}
                         <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--mono mi-cr-cell--total-val">
                           {moneyARS(r.total)}
                         </div>
 
-                        {/* Eliminar */}
-                        <div className="mi-cr-cell mi-cr-cell--center " id="delete_cell" >
+                        <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
                           <button type="button" className="mi-cr-del" onClick={()=>removeRow(r.id)} disabled={saving} title="Eliminar fila">×</button>
                         </div>
                       </div>
@@ -503,16 +443,13 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
                   })}
                 </div>
 
-                {/* FOOTER: acciones + totales */}
                 <div className="mi-cr-table__foot">
                   <div className="mi-cr-foot-actions">
                     <button type="button" className="nv-foot-btn" onClick={addRow} disabled={saving}>
                       <span className="nv-foot-btn__icon">+</span>
                       Agregar fila
                     </button>
-
                     <div className="nv-foot-sep"/>
-
                     <button type="button" className="nv-foot-btn" disabled={saving||addUI.saving}
                       onClick={()=>{ const lastRow=rows[rows.length-1]; startAddDetalleForRow(lastRow?.id); }}>
                       <span className="nv-foot-btn__icon">✦</span>
@@ -520,52 +457,38 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
                     </button>
                   </div>
 
-                  {/* Totales */}
                   <div className="mi-cr-totals">
                     <div className="mi-cr-totalLine mi-cr-totalLine--sub">
-                      <span>Subtotal</span>
-                      <b>{moneyARS(resumen.subtotal)}</b>
+                      <span>Subtotal</span><b>{moneyARS(resumen.subtotal)}</b>
                     </div>
                     <div className="mi-cr-totalLine mi-cr-totalLine--iva">
-                      <span>IVA</span>
-                      <b>{moneyARS(resumen.iva)}</b>
+                      <span>IVA</span><b>{moneyARS(resumen.iva)}</b>
                     </div>
                     <div className="mi-cr-totalLine mi-cr-totalLine--total">
-                      <span>Total</span>
-                      <b>{moneyARS(resumen.total)}</b>
+                      <span>Total</span><b>{moneyARS(resumen.total)}</b>
                     </div>
                   </div>
                 </div>
               </section>
 
-              {/* ============= ASIDE: DATOS DE COMPRA ============= */}
+              {/* ASIDE */}
               <aside className="mi-cr-filters">
                 <div className="mi-cr-filters__top">
                   <div className="mi-cr-filters__title">Datos de compra</div>
-
-<div className="mi-cr-filters__dates">
-  <div
-    className="fl-field mi-card--full mi-date-field"
-    onClick={handleOpenDate}
-  >
-    <input
-      ref={fechaInputRef}
-      className="fl-input mi-date-field__input"
-      type="date"
-      placeholder=" "
-      value={fecha}
-      onChange={(e) => setFecha(String(e.target.value || "").trim())}
-      disabled={saving}
-
-    />
-    <label
-      className="fl-label mi-date-field__label"
-      onClick={handleOpenDate}
-    >
-      Fecha
-    </label>
-  </div>
-</div>
+                  <div className="mi-cr-filters__dates">
+                    <div className="fl-field mi-card--full mi-date-field" onClick={handleOpenDate}>
+                      <input
+                        ref={fechaInputRef}
+                        className="fl-input mi-date-field__input"
+                        type="date"
+                        placeholder=" "
+                        value={fecha}
+                        onChange={(e) => setFecha(String(e.target.value || "").trim())}
+                        disabled={saving}
+                      />
+                      <label className="fl-label mi-date-field__label" onClick={handleOpenDate}>Fecha</label>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="mi-cr-filters__body">
@@ -578,7 +501,6 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
                       onBlur={()=>setTimeout(()=>setProvFocus(false),120)}
                       disabled={saving||addUI.open} autoComplete="off"/>
                     <label className="fl-label">Proveedor *</label>
-
                     {provFocus&&filteredProveedores.length>0&&(
                       <ul className="mi-cr-suggest">
                         {filteredProveedores.map(p=>{
@@ -588,23 +510,14 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
                         })}
                       </ul>
                     )}
-
                     <button type="button" className="mi-cr-link" onClick={startAddProveedor} disabled={saving||addUI.saving}
                       style={{fontSize:"11px",color:"#0f766e",background:"none",border:"none",padding:"4px 0 0",cursor:"pointer",fontWeight:500}}>
                       + Agregar nuevo proveedor
                     </button>
                   </div>
 
-                  {/* CUIT Proveedor */}
-                  <div className="fl-field">
-                    <input className="fl-input" placeholder=" " value={filters.proveedor_cuit}
-                      onChange={e=>updateFilter("proveedor_cuit",e.target.value)}
-                      disabled={saving} inputMode="numeric" autoComplete="off"/>
-                    <label className="fl-label">CUIT Proveedor (opcional)</label>
-                  </div>
-
                   {/* Tipo de compra */}
-                  <div className="fl-field" >
+                  <div className="fl-field">
                     <select className="fl-input fl-select" value={String(filters.forma)}
                       onChange={e=>updateFilter("forma",e.target.value)} disabled={saving}>
                       <option value={NULL_OPTION}>Seleccionar...</option>
@@ -637,68 +550,58 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
                   )}
 
                   {/* Archivo adjunto */}
-{/* Archivo adjunto */}
-{/* Archivo adjunto */}
-<div className="mi-uploadCard">
-  <div className="mi-uploadCard__head">
-    <div>
-      <div className="mi-uploadCard__title">Archivo adjunto</div>
-      <div className="mi-uploadCard__sub">
-        PDF, imagen u otro comprobante
-      </div>
-    </div>
-  </div>
+                  <div className="mi-uploadCard">
+                    <div className="mi-uploadCard__head">
+                      <div>
+                        <div className="mi-uploadCard__title">Archivo adjunto</div>
+                        <div className="mi-uploadCard__sub">PDF, imagen u otro comprobante</div>
+                      </div>
+                    </div>
+                    <div className="mi-uploadCard__body">
+                      <div className="mi-uploadBar">
+                        <label className="mi-uploadBar__pick">
+                          <input
+                            type="file"
+                            className="mi-uploadBar__input"
+                            onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
+                            disabled={saving}
+                          />
+                          <span className="mi-uploadBar__btn mi-uploadBar__btn--primary">
+                            {archivoAdjunto ? "Cambiar" : "Seleccionar"}
+                          </span>
+                        </label>
+                        <button
+                          type="button"
+                          className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                          onClick={() => setArchivoAdjunto(null)}
+                          disabled={saving || !archivoAdjunto}
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                      <div className={`mi-uploadFile ${archivoAdjunto ? "is-filled" : "is-empty"}`}>
+                        {archivoAdjunto ? (
+                          <>
+                            <div className="mi-uploadFile__icon">
+                              <FontAwesomeIcon icon={faFileInvoiceDollar} />
+                            </div>
+                            <div className="mi-uploadFile__meta">
+                              <div className="mi-uploadFile__name" title={archivoAdjunto.name}>
+                                {archivoAdjunto.name}
+                              </div>
+                              <div className="mi-uploadFile__size">
+                                {Math.max(1, Math.round((archivoAdjunto.size || 0) / 1024))} KB
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="mi-uploadFile__empty">No hay archivo seleccionado</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
-  <div className="mi-uploadCard__body">
-    <div className="mi-uploadBar">
-      <label className="mi-uploadBar__pick">
-        <input
-          type="file"
-          className="mi-uploadBar__input"
-          onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
-          disabled={saving}
-        />
-        <span className="mi-uploadBar__btn mi-uploadBar__btn--primary">
-          {archivoAdjunto ? "Cambiar" : "Seleccionar"}
-        </span>
-      </label>
-
-      <button
-        type="button"
-        className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-        onClick={() => setArchivoAdjunto(null)}
-        disabled={saving || !archivoAdjunto}
-      >
-        Quitar
-      </button>
-    </div>
-
-    <div className={`mi-uploadFile ${archivoAdjunto ? "is-filled" : "is-empty"}`}>
-      {archivoAdjunto ? (
-        <>
-          <div className="mi-uploadFile__icon">
-            <FontAwesomeIcon icon={faFileInvoiceDollar} />
-          </div>
-
-          <div className="mi-uploadFile__meta">
-            <div className="mi-uploadFile__name" title={archivoAdjunto.name}>
-              {archivoAdjunto.name}
-            </div>
-            <div className="mi-uploadFile__size">
-              {Math.max(1, Math.round((archivoAdjunto.size || 0) / 1024))} KB
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="mi-uploadFile__empty">
-          No hay archivo seleccionado
-        </div>
-      )}
-    </div>
-  </div>
-</div>
-
-                  {/* CTA final */}
+                  {/* CTA */}
                   <div className="mi-cr-filters__actions">
                     <button type="button" onClick={submit} disabled={saving} className="mit-btn mit-btn--solid mit-btn--block">
                       {saving?"Guardando...":"Guardar compra"}
@@ -713,7 +616,6 @@ if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
             </div>
           </div>
 
-          {/* Mini Modal */}
           <AddCatalogMiniModal
             open={addUI.open}
             title={addUI.kind==="proveedores"?"Nuevo proveedor":"Nuevo detalle"}

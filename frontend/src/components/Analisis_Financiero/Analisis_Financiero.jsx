@@ -1,6 +1,3 @@
-// ✅ REEMPLAZAR COMPLETO
-// src/components/Analisis_Financiero/Analisis_Financiero.jsx
-
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import BASE_URL from "../../config/config";
 import "./analisis_financiero.css";
@@ -10,7 +7,6 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarDays,
   faFileExcel,
-  faMagnifyingGlass,
   faChevronDown,
   faArrowRightLong,
 } from "@fortawesome/free-solid-svg-icons";
@@ -19,12 +15,10 @@ import Toast from "../Global/Toast.jsx";
 import Calendario from "../Global/Calendario/Calendario.jsx";
 import "../../components/Global/Calendario/calendario.css";
 
-// ✅ BOTÓN EXPORTAR GLOBAL (igual que OrdenesPago / Ventas)
 import BotonExportar from "../Global/Boton_Exportar/BotonExportar.jsx";
 
 import * as XLSX from "xlsx";
 
-// ✅ CONTEXTO GLOBAL DE RANGO DE FECHAS
 import { useDateRange } from "../../context/DateRangeContext.jsx";
 
 /* =========================
@@ -98,19 +92,14 @@ function normalizeRows(raw) {
     const costoVar = toNumberOrZero(raw?.costo_variable ?? raw?.costoVariable);
     const costoFijo = toNumberOrZero(raw?.costo_fijo ?? raw?.costoFijo);
     const otrosEgresos = toNumberOrZero(raw?.otros_egresos ?? raw?.otrosEgresos);
-    const gastosPers = toNumberOrZero(raw?.gastos_personales ?? raw?.gastosPersonales);
     const resultadoNeto = ventas - costoVar - costoFijo - otrosEgresos;
-    const out = [
+    return [
       { id: "ventas", concepto: "VENTAS", importe: ventas, tipo: "ingreso" },
       { id: "costo_variable", concepto: "COSTO VARIABLE", importe: costoVar, tipo: "egreso" },
       { id: "costo_fijo", concepto: "COSTO FIJO", importe: costoFijo, tipo: "egreso" },
       { id: "otros_egresos", concepto: "OTROS EGRESOS", importe: otrosEgresos, tipo: "egreso" },
       { id: "resultado_neto", concepto: "RESULTADO NETO", importe: resultadoNeto, tipo: "resultado" },
     ];
-    if (Number.isFinite(gastosPers) && gastosPers !== 0) {
-      out.push({ id: "gastos_personales", concepto: "GASTOS PERSONALES", importe: gastosPers, tipo: "egreso" });
-    }
-    return out;
   }
   return [];
 }
@@ -140,24 +129,30 @@ function computeDerivedRows(rows) {
   const costoFijo = findImporte(base, [{ id: "costo_fijo" }, { includes: ["costo fijo", "fijo"] }]);
   const otrosEgresos = findImporte(base, [{ id: "otros_egresos" }, { includes: ["otros egresos", "egresos"] }]);
   const resultadoNeto = ventas - costoVar - costoFijo - otrosEgresos;
-  const idxRes = base.findIndex((r) => {
+
+  // Filtrar gastos_personales
+  const filtered = base.filter((r) => safeText(r.id).toLowerCase() !== "gastos_personales");
+
+  const idxRes = filtered.findIndex((r) => {
     const id = safeText(r.id).toLowerCase();
     const c = safeText(r.concepto).toLowerCase();
     return id === "resultado_neto" || c === "resultado neto" || (c.includes("resultado") && c.includes("neto"));
   });
   const rowResultado = { id: "resultado_neto", concepto: "RESULTADO NETO", importe: resultadoNeto, tipo: "resultado" };
-  if (idxRes >= 0) base[idxRes] = { ...base[idxRes], ...rowResultado };
-  else base.push(rowResultado);
-  const idxVentas = base.findIndex((r) => safeText(r.id).toLowerCase() === "ventas");
-  if (idxVentas >= 0) base[idxVentas] = { ...base[idxVentas], concepto: "VENTAS", tipo: "ingreso", importe: ventas };
+  if (idxRes >= 0) filtered[idxRes] = { ...filtered[idxRes], ...rowResultado };
+  else filtered.push(rowResultado);
+
+  const idxVentas = filtered.findIndex((r) => safeText(r.id).toLowerCase() === "ventas");
+  if (idxVentas >= 0) filtered[idxVentas] = { ...filtered[idxVentas], concepto: "VENTAS", tipo: "ingreso", importe: ventas };
+
   const markTipo = (id, tipo) => {
-    const i = base.findIndex((r) => safeText(r.id).toLowerCase() === id);
-    if (i >= 0) base[i] = { ...base[i], tipo };
+    const i = filtered.findIndex((r) => safeText(r.id).toLowerCase() === id);
+    if (i >= 0) filtered[i] = { ...filtered[i], tipo };
   };
   markTipo("costo_variable", "egreso");
   markTipo("costo_fijo", "egreso");
   markTipo("otros_egresos", "egreso");
-  return base;
+  return filtered;
 }
 
 /* =========================
@@ -188,11 +183,9 @@ const gridCols = "2fr 1.2fr";
 export default function Analisis_Financiero() {
   const API = `${BASE_URL}/api.php`;
 
-  // ✅ RANGO GLOBAL
   const { dateRange, setDateRange } = useDateRange();
   const [showCalendario, setShowCalendario] = useState(false);
 
-  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
@@ -253,15 +246,8 @@ export default function Analisis_Financiero() {
   const normalized = useMemo(() => normalizeRows(rawRows), [rawRows]);
   const allRows = useMemo(() => computeDerivedRows(normalized), [normalized]);
 
-  const filteredRows = useMemo(() => {
-    const needle = safeText(q).toLowerCase();
-    if (!needle) return allRows;
-    return allRows.filter((r) => safeText(r.concepto).toLowerCase().includes(needle));
-  }, [allRows, q]);
-
   const ventas = allRows.find((r) => safeText(r.id).toLowerCase() === "ventas")?.importe ?? null;
   const resultadoNeto = allRows.find((r) => safeText(r.id).toLowerCase() === "resultado_neto")?.importe ?? null;
-  const gastosPersonales = allRows.find((r) => safeText(r.id).toLowerCase() === "gastos_personales")?.importe ?? null;
   const resultadoIsNeg = Number(resultadoNeto) < 0;
 
   /* =========================
@@ -295,16 +281,15 @@ export default function Analisis_Financiero() {
   }, [dateRange]);
 
   const buildExportRows = useCallback(() => {
-    if (!filteredRows.length) throw new Error("No hay datos para exportar.");
-    return filteredRows.map((r) => ({ CONCEPTO: safeText(r.concepto), IMPORTE: numOrNull(r.importe) }));
-  }, [filteredRows]);
+    if (!allRows.length) throw new Error("No hay datos para exportar.");
+    return allRows.map((r) => ({ CONCEPTO: safeText(r.concepto), IMPORTE: numOrNull(r.importe) }));
+  }, [allRows]);
 
   const exportToExcel = useCallback(() => {
     const exportData = buildExportRows();
     const wb = XLSX.utils.book_new();
     const wsTabla = XLSX.utils.json_to_sheet(exportData, { header: ["CONCEPTO", "IMPORTE"] });
     wsTabla["!cols"] = [{ wch: 40 }, { wch: 18 }];
-    // formato moneda columna IMPORTE
     if (wsTabla["!ref"]) {
       const range = XLSX.utils.decode_range(wsTabla["!ref"]);
       for (let r = range.s.r + 1; r <= range.e.r; r++) {
@@ -317,14 +302,13 @@ export default function Analisis_Financiero() {
       { CAMPO: "HASTA", VALOR: formatDateISO(dateRange.to || dateRange.from) },
       { CAMPO: "VENTAS", VALOR: numOrNull(ventas) },
       { CAMPO: "RESULTADO_NETO", VALOR: numOrNull(resultadoNeto) },
-      { CAMPO: "GASTOS_PERSONALES", VALOR: numOrNull(gastosPersonales) },
     ];
     const wsResumen = XLSX.utils.json_to_sheet(resumenData, { header: ["CAMPO", "VALOR"] });
     wsResumen["!cols"] = [{ wch: 22 }, { wch: 24 }];
     XLSX.utils.book_append_sheet(wb, wsTabla, "Analisis");
     XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
     XLSX.writeFile(wb, `${exportBaseName}.xlsx`);
-  }, [buildExportRows, exportBaseName, dateRange, ventas, resultadoNeto, gastosPersonales]);
+  }, [buildExportRows, exportBaseName, dateRange, ventas, resultadoNeto]);
 
   const exportToCSV = useCallback(() => {
     const exportData = buildExportRows();
@@ -397,7 +381,7 @@ export default function Analisis_Financiero() {
             <div className="title-mov">
               <div className="mov-card__title">Análisis Financiero</div>
               <div className="mov-card__hint">
-                Mostrando <b>{filteredRows.length}</b> registros
+                Mostrando <b>{allRows.length}</b> registros
                 {loading && !showSkeleton ? " (actualizando…)" : ""}
               </div>
             </div>
@@ -434,38 +418,16 @@ export default function Analisis_Financiero() {
                 )}
               </div>
 
-              {/* Buscador floating */}
-              <div className= "mov-search floatingField floatingField--search is-active ">
-                <div className="mov-searchInput">
-                  <input
-                    className="mov-input--floating"
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    placeholder="Buscar por concepto... "
-                    disabled={loading}
-                  />
-                  <span className="floatingLabel">
-                    <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                  </span>
-                  {q.trim() !== "" && (
-                    <button type="button" className="mov-clearSearch clearSearch--inside" title="Limpiar"
-                      onClick={() => { setQ(""); document.querySelector(".mov-page--analisisFinanciero .mov-input--floating")?.focus(); }}>
-                      ×
-                    </button>
-                  )}
-                </div>
-              </div>
-
             </div>
           </div>
 
           {/* ===== ACCIONES: BotonExportar ===== */}
           <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <BotonExportar
-              disabled={loading || filteredRows.length === 0}
+              disabled={loading || allRows.length === 0}
               loading={false}
               label="Exportar"
-              title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"}
+              title={allRows.length ? "Exportar archivo" : "No hay datos para exportar"}
               opciones={exportOptions}
               align="right"
             />
@@ -487,7 +449,7 @@ export default function Analisis_Financiero() {
               </div>
             ) : (
               <>
-                {!!data && filteredRows.map((r) => {
+                {!!data && allRows.map((r) => {
                   const conceptoLower = safeText(r.concepto).toLowerCase();
                   const isResultado = conceptoLower === "resultado neto" || r.tipo === "resultado" || safeText(r.id).toLowerCase() === "resultado_neto";
                   const isEgreso = r.tipo === "egreso";
@@ -523,7 +485,7 @@ export default function Analisis_Financiero() {
                   );
                 })}
 
-                {hasFetched && !loading && !error && (!data || filteredRows.length === 0) && (
+                {hasFetched && !loading && !error && (!data || allRows.length === 0) && (
                   <div className="mov-emptyRow">No hay datos para mostrar en el rango seleccionado.</div>
                 )}
               </>
@@ -531,7 +493,7 @@ export default function Analisis_Financiero() {
           </div>
         </div>
 
-        {/* ===== TOTALES (solo si hay data y no está cargando) ===== */}
+        {/* ===== TOTALES ===== */}
         {!loading && !isLoading && data && (
           <div className="af-footTotals">
             <div className={`af-totalCard ${resultadoIsNeg ? "af-totalCard--neg" : "af-totalCard--pos"}`}>
@@ -543,15 +505,6 @@ export default function Analisis_Financiero() {
               </div>
               <div className="af-totalValue">{resultadoNeto == null ? "—" : moneyARS(resultadoNeto)}</div>
               <div className="af-totalSub">Ventas − costo variable − costo fijo − otros egresos</div>
-            </div>
-
-            <div className="af-totalCard af-totalCard--ctrl">
-              <div className="af-totalTop">
-                <div className="af-totalLabel">Gastos personales</div>
-                <span className="mov-chip mov-chip--warn">Control</span>
-              </div>
-              <div className="af-totalValue af-importe--egreso">{gastosPersonales == null ? "—" : moneyARS(gastosPersonales)}</div>
-              <div className="af-totalSub">Se muestra aparte</div>
             </div>
           </div>
         )}

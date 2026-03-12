@@ -1,79 +1,240 @@
-:root{
-  /* ✅ Paleta oficial del cliente */
-  --blue-midnight: #0A2540; /* azul medianoche */
-  --blue-action:   #0055BB; /* azul de acción */
+/* =========================================================
+   CSS DEPURADO
+   - Se eliminaron duplicados viejos
+   - Se dejaron las últimas reglas que estaban pisando
+   - Se corrigieron selectores conflictivos
+   - Se corrigió margin-Top -> margin-top
+========================================================= */
 
-  /* Neutrales (mantengo tu esquema, solo ajusto coherencia) */
+/* =========================================================
+   TOKENS BASE
+========================================================= */
+:root{
+  --blue-midnight: #0A2540;
+  --blue-action:   #0055BB;
+
   --mi-bg: #ffffff;
   --mi-bg-soft: #F6F8FB;
-  --mi-border: #D9E2EF;
+  --mi-border: rgba(148,163,184,.45);
 
-  --mi-text: #0A2540;     /* texto principal = medianoche */
-  --mi-muted: #516173;    /* texto secundario */
+  --mi-text: #0A2540;
+  --mi-muted: #516173;
 
-  /* ✅ Variables que ya usa tu CSS */
-  --mi-primary: #0A2540;      /* header / principales */
-  --mi-primary-600: #0055BB;  /* focus / acento */
+  --mi-primary: var(--blue-midnight);
+  --mi-primary-600: var(--blue-action);
 
   --mi-shadow: 0 28px 64px -24px rgba(0,0,0,.28);
 
   --mi-radius-md: 12px;
   --mi-radius-lg: 18px;
+
+  /* Modal nueva venta / tabla */
+  --nv-midnight:   #0A2540;
+  --nv-action:     #0055BB;
+  --nv-action-10:  rgba(0,85,187,.10);
+  --nv-action-18:  rgba(0,85,187,.18);
+
+  --nv-bg:         #ffffff;
+  --nv-surface:    #F7F9FC;
+  --nv-surface2:   #EEF2F8;
+
+  --nv-border:     rgba(15,23,42,.10);
+  --nv-border-md:  rgba(15,23,42,.16);
+
+  --nv-text:       #0A2540;
+  --nv-muted:      #5A6A7E;
+  --nv-placeholder:#8A99AC;
+
+  --nv-shadow-sm:  0 1px 4px rgba(15,23,42,.07);
+  --nv-shadow-md:  0 6px 22px rgba(15,23,42,.10);
+  --nv-shadow-lg:  0 28px 64px rgba(15,23,42,.18);
+
+  --nv-r-sm:  8px;
+  --nv-r-md:  12px;
+  --nv-r-lg:  18px;
+
+  --nv-row-h:      42px;
+  --nv-head-bg:    #F0F4FA;
+  --nv-row-odd:    #FAFBFD;
+  --nv-row-hover:  #EEF3FC;
+  --nv-cell-pad:   0 10px;
+
+  --nv-sub-color:  #1D42AA;
+  --nv-iva-color:  #B45309;
+  --nv-tot-color:  #057A55;
 }
 
+/* =========================================================
+   DARK TOKENS
+========================================================= */
+.mi-modal--dark{
+  --md-bg: #071a2c;
+  --md-panel: #0a2540;
+  --md-panel2: #06121c;
+  --md-border: rgba(148,163,184,.22);
+  --md-text: rgba(255,255,255,.92);
+  --md-muted: rgba(255,255,255,.70);
+  --md-focus: rgba(0,85,187,.22);
 
-/* =========================
-   Modal base
-========================= */
+  --nv-bg:        rgba(6,18,28,.96);
+  --nv-surface:   rgba(10,25,40,.72);
+  --nv-surface2:  rgba(255,255,255,.04);
+  --nv-border:    rgba(255,255,255,.09);
+  --nv-border-md: rgba(255,255,255,.15);
+  --nv-text:      rgba(255,255,255,.92);
+  --nv-muted:     rgba(210,220,235,.70);
+  --nv-placeholder: rgba(255,255,255,.38);
+  --nv-head-bg:   rgba(255,255,255,.06);
+  --nv-row-odd:   rgba(255,255,255,.025);
+  --nv-row-hover: rgba(255,255,255,.06);
+  --nv-shadow-sm: 0 1px 4px rgba(0,0,0,.22);
+  --nv-shadow-md: 0 6px 22px rgba(0,0,0,.32);
+  --nv-shadow-lg: 0 28px 64px rgba(0,0,0,.55);
+
+  --cr-bg: rgba(6,18,28,.92);
+  --cr-panel: rgba(10,25,40,.62);
+  --cr-panel2: rgba(6,18,28,.72);
+  --cr-border: rgba(255,255,255,.10);
+  --cr-text: rgba(255,255,255,.92);
+  --cr-muted: rgba(226,232,240,.72);
+  --cr-soft: rgba(255,255,255,.06);
+  --cr-hover: rgba(255,255,255,.08);
+}
+
+/* =========================================================
+   BASE / RESET UTIL
+========================================================= */
+.mi-modal__container,
+.mi-mini__modal{
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.mi-grid > *,
+.mi-card,
+.fl-grid,
+.fl-field{
+  min-width: 0;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button{
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.right{
+  text-align: right !important;
+}
+
+/* =========================================================
+   OVERLAY & CONTAINER
+========================================================= */
 .mi-modal__overlay{
+  width: 100vw;
+  height: 100vh;
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.55);
-  backdrop-filter: blur(2px);
+  background: rgba(8,16,30,.52);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  animation: mi-fade 0.15s ease-out;
   padding: 16px;
+  animation: nv-fade .15s ease;
+}
+
+.mi-modal__overlay.mi-modal__overlay--dark{
+  background: rgba(0,0,0,.62);
+  backdrop-filter: blur(3px);
 }
 
 .mi-modal__container{
-  width: min(1060px, 92vw);
-  max-height: 90vh;
-  background: var(--mi-bg);
-  border-radius: var(--mi-radius-lg);
-  box-shadow: var(--mi-shadow);
+  width: min(1100px, 96vw);
+  max-height: 94vh;
+  background: var(--nv-bg);
+  border-radius: var(--nv-r-lg);
+  box-shadow: var(--nv-shadow-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: mi-slide 0.22s ease-out;
-  border: 1px solid rgba(0,0,0,0.04);
+  border: 1px solid var(--nv-border);
+  animation: mi-modal-pop-min .16s ease-out;
+  font-family: "DM Sans", "Instrument Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Header */
+.mi-modal__container--mov{
+  min-height: 94vh;
+  max-height: 94vh;
+  min-width: 100%;
+}
+
+#mi-modal__container{
+  min-height: auto;
+}
+
+#mov--modaleditarrecibo,
+#mov--modaleditarordenpago{
+  min-width: 700px !important;
+  min-height: 60vh !important;
+}
+
+.mi-modal__container.mi-modal--dark{
+  background: var(--cr-bg);
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
 .mi-modal__header{
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 18px 22px;
-  background: var(--mi-primary);
+  gap: 14px;
+  padding: 14px 20px;
+  background: var(--nv-midnight);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  flex: 0 0 auto;
   color: #fff;
 }
-.mi-modal__head-left{ flex: 1; }
+
+.mi-modal__header--car{
+  padding: 12px 22px;
+}
+
+.mi-modal__head-icon{
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.12);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  font-size: 16px;
+}
+
+.mi-modal__head-left{
+  flex: 1;
+  min-width: 0;
+}
 
 .mi-modal__title{
   margin: 0;
-  font-size: 1.35rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-size: 1.05rem;
+  font-weight: 600 !important;
+  color: #fff;
+  letter-spacing: -.01em;
 }
 
 .mi-modal__subtitle{
-  margin: 4px 0 0;
-  font-size: .9rem;
-  opacity: .95;
-  font-weight: 500;
+  margin: 2px 0 0;
+  font-size: .80rem;
+  color: rgba(255,255,255,.62);
+  font-weight: 400 !important;
 }
 
 .mi-modal__close{
@@ -83,29 +244,59 @@
   color: #fff;
   width: 40px;
   height: 40px;
-  padding: 0 !important;
   border-radius: 999px;
   display: grid;
   place-items: center;
   cursor: pointer;
   transition: transform .15s ease, background .15s ease;
 }
+
 .mi-modal__close:hover{
   background: rgba(255,255,255,.12);
   transform: rotate(90deg);
 }
+
 .mi-modal__close:disabled{
   opacity: .6;
   cursor: not-allowed;
 }
 
-/* Body scroll + footer pegado abajo */
+.mi-modal__container.mi-modal--dark .mi-modal__header{
+  background: linear-gradient(180deg, #0a2540, #071a2c);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.mi-modal__container.mi-modal--dark .mi-modal__close{
+  color: rgba(255,255,255,.92);
+}
+
+.mi-modal__container.mi-modal--dark .mi-modal__close:hover{
+  background: rgba(255,255,255,.10);
+}
+
+/* =========================================================
+   BODY / CONTENT
+========================================================= */
 .mit-modal__body{
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+.mi-modal__content{
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  background: var(--nv-surface);
+  overflow: hidden;
+}
+
+.mi-modal__content--car{
+  padding: 12px 18px;
 }
 
 .mi-tabpanel{
@@ -115,9 +306,32 @@
   padding: 22px;
 }
 
-/* =========================
-   Error
-========================= */
+.mi-modal__formPad{
+  padding: 14px;
+}
+
+.mi-field--mt12{ margin-top: 12px; }
+.mi-field--rel{ position: relative; }
+.mi-actions--mt14{ margin-top: 14px; }
+
+.content-btn-modalrecibo{
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn--modalrecibo{
+  max-width: 100px;
+}
+
+.ordenpagobuttos{
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* =========================================================
+   ERROR
+========================================================= */
 .mov-mi-error{
   background: rgba(211, 47, 47, 0.08);
   border: 1px solid rgba(211, 47, 47, 0.25);
@@ -128,9 +342,9 @@
   font-weight: 700;
 }
 
-/* =========================
-   Grid / cards
-========================= */
+/* =========================================================
+   GRID / CARD
+========================================================= */
 .mi-grid{
   display: grid;
   grid-template-columns: repeat(12, 1fr);
@@ -145,83 +359,202 @@
   box-shadow: 0 2px 10px rgba(15,23,42,.03);
   min-width: 0;
 }
-.mi-card--full{ grid-column: 1 / -1; }
 
-.mi-card__title{
-
-  font-size: 1rem;
-  letter-spacing: -0.01em;
-
+.mi-card--full{
+  grid-column: 1 / -1;
 }
 
-/* =========================
-   Floating labels
-========================= */
+.mi-card__title{
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.mi-card__actionsRow{
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.mi-card__actionsRow .mit-btn{
+  flex: 1;
+  height: 42px;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: all .18s ease;
+}
+
+.mi-card__actionsRow .mit-btn--ghost{
+  background: #f1f5f9;
+  border: 1px solid rgba(148,163,184,.45);
+  color: var(--mi-text);
+}
+
+.mi-card__actionsRow .mit-btn--ghost:hover{
+  background: #e2e8f0;
+}
+
+.mi-card__actionsRow .mit-btn--solid{
+  background: var(--blue-midnight);
+  border: 1px solid var(--blue-midnight);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(10,37,64,.25);
+}
+
+.mi-card__actionsRow .mit-btn--solid:hover{
+  background: #0d2f55;
+}
+
+.mi-card__hint{
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #475569;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.mi-card__hint b{
+  font-weight: 600;
+}
+
+/* =========================================================
+   FORMS / FLOATING LABELS
+========================================================= */
 .fl-grid{
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
   min-width: 0;
 }
-.fl-col-full{ grid-column: 1 / -1; }
+
+.fl-col-full{
+  grid-column: 1 / -1;
+}
+
+.fl-col-full--detalle{
+  grid-column: 1 / -1;
+}
 
 .fl-field{
   position: relative;
   min-width: 0;
 }
 
-.fl-input{
+.fl-input,
+.fl-select,
+.fl-input[type="date"]{
   width: 100%;
-  border: 1px solid var(--mi-border);
+  border: 1px solid rgba(148,163,184,.55);
   background: #fff;
   border-radius: 12px;
-  padding:  12px 10px;
-  font-size: .95rem;
-  color: var(--mi-text);
+  padding: 16px 12px 10px;
+  font-size: .95rem !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  color: var(--mi-text) !important;
   outline: none;
-  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  transition: border-color .18s ease, box-shadow .18s ease;
   box-shadow: 0 1px 3px rgba(0,0,0,.04);
   box-sizing: border-box;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif !important;
 }
 
 .fl-select{
   padding-bottom: 10px;
+  cursor: pointer;
 }
 
 .fl-label{
   position: absolute;
   left: 12px;
-  top: 12px;
-  font-size: .82rem;
+  top: 14px;
+  font-size: .86rem;
   color: var(--mi-muted);
   pointer-events: none;
   transform-origin: left top;
-  transition: transform .16s ease, opacity .16s ease, color .16s ease;
+  transition: transform .16s ease, color .16s ease, opacity .16s ease, top .16s ease;
   opacity: .9;
+  z-index: 2;
+  padding: 0 6px;
+  background: transparent;
+  font-weight: 400 !important;
 }
 
-.fl-input:focus{
+.fl-input:focus,
+.fl-select:focus{
   border-color: var(--mi-primary-600);
-  box-shadow: 0 0 0 3px rgba(46,92,191,.14);
+  box-shadow: 0 0 0 3px rgba(0,85,187,.14);
 }
 
 .fl-input:focus + .fl-label,
 .fl-input:not(:placeholder-shown) + .fl-label{
-  transform: translateY(-10px) scale(.92);
+  top: 0;
+  transform: translateY(-50%) scale(.92);
   color: var(--mi-primary-600);
   opacity: 1;
+  background: #fff;
 }
 
-
 .fl-input:disabled{
-  background: #f8fafc;
+  background: rgba(241,245,249,.7);
   opacity: .85;
   cursor: not-allowed;
 }
 
-/* =========================
-   Switch (mit-switch)
-========================= */
+.fl-input:disabled + .fl-label{
+  background: #f8fafc;
+  opacity: .85;
+}
+
+.fl-input::placeholder{
+  color: var(--nv-placeholder);
+}
+
+.fl-input[type="date"]::-webkit-datetime-edit,
+.fl-input[type="date"]::-webkit-datetime-edit-text,
+.fl-input[type="date"]::-webkit-datetime-edit-month-field,
+.fl-input[type="date"]::-webkit-datetime-edit-day-field,
+.fl-input[type="date"]::-webkit-datetime-edit-year-field{
+  font-family: inherit !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  color: inherit !important;
+}
+
+.fl-input[type="date"]::-webkit-calendar-picker-indicator{
+  opacity: .85;
+  cursor: pointer;
+}
+
+.fl-input[type="date"]::-webkit-calendar-picker-indicator:hover{
+  opacity: 1;
+}
+
+/* =========================================================
+   ROWS UTIL
+========================================================= */
+.mi-row3{
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+  min-width: 0;
+}
+
+.mi-row2{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  min-width: 0;
+}
+
+.mi-row3 > .fl-field,
+.mi-row2 > .fl-field{
+  min-width: 0;
+}
+
+/* =========================================================
+   SWITCH
+========================================================= */
 .mit-switch{
   display: inline-flex;
   align-items: center;
@@ -230,11 +563,13 @@
   font-weight: 800;
   color: var(--mi-text);
 }
+
 .mit-switch input{
   position: absolute;
   opacity: 0;
   pointer-events: none;
 }
+
 .mit-switch__track{
   width: 44px;
   height: 26px;
@@ -246,6 +581,7 @@
   transition: .2s;
   flex: 0 0 auto;
 }
+
 .mit-switch__track::after{
   content: "";
   position: absolute;
@@ -259,18 +595,23 @@
   box-shadow: 0 4px 10px rgba(0,0,0,.18);
   transition: .2s;
 }
+
 .mit-switch input:checked + .mit-switch__track{
   background: var(--mi-primary);
   border-color: rgba(255,255,255,.2);
 }
+
 .mit-switch input:checked + .mit-switch__track::after{
   left: 21px;
 }
-.mit-switch__text{ font-size: .95rem; }
 
-/* =========================
-   Footer acciones
-========================= */
+.mit-switch__text{
+  font-size: .95rem;
+}
+
+/* =========================================================
+   BUTTONS / ACTIONS
+========================================================= */
 .mit-actions{
   margin-top: auto;
   display: flex;
@@ -298,16 +639,17 @@
   border: 1px solid transparent;
   border-radius: 12px;
   padding: 10px 14px;
-  font-weight: 900;
+  font-weight: 600 !important;
   cursor: pointer;
   transition: transform .16s ease, box-shadow .16s ease, filter .16s ease, background .16s ease;
 }
 
 .mit-btn--ghost{
-  background: #fff;
+  background: transparent;
   color: var(--mi-text);
-  border-color: var(--mi-border);
+  border-color: rgba(148,163,184,.55);
 }
+
 .mit-btn--ghost:hover{
   background: rgba(0,0,0,.03);
   transform: translateY(-1px);
@@ -319,10 +661,11 @@
   color: #fff;
   border-color: var(--mi-primary);
 }
+
 .mit-btn--solid:hover{
   filter: brightness(.97);
   transform: translateY(-1px);
-  box-shadow: 0 12px 22px rgba(29,66,138,.22);
+  box-shadow: 0 12px 22px rgba(0,0,0,.20);
 }
 
 .mit-btn:disabled{
@@ -332,265 +675,22 @@
   box-shadow: none;
 }
 
-/* =========================
-   Responsive
-========================= */
-
-
-/* Animaciones */
-@keyframes mi-fade{ from{opacity:0} to{opacity:1} }
-@keyframes mi-slide{
-  from{ opacity:0; transform: translateY(18px); }
-  to{ opacity:1; transform: translateY(0); }
+.mit-btn--block{
+  width: 100%;
+  height: 44px;
 }
 
-/* Fix overflow general */
-.mi-grid > * { min-width: 0; }
-.mi-card { min-width: 0; }
-.fl-grid { min-width: 0; overflow: auto; padding: 10px 0;}
-.fl-field { min-width: 0; }
-/* =========================
-   Floating label "outlined" (cruza el borde)
-   - La label flota atravesando el borde superior
-   - Con fondo para cortar el borde
-========================= */
-
-/* Ajuste leve de padding para que la label tenga lugar arriba */
-.fl-input{
-  padding: 16px 12px 10px; /* un poquito más arriba */
-}
-
-/* Label en estado normal (dentro del input) */
-.fl-label{
-  position: absolute;
-  left: 12px;
-  top: 14px;                 /* un toque más abajo que antes */
-  font-size: .86rem;
-  color: var(--mi-muted);
-  pointer-events: none;
-  transform-origin: left top;
-  transition: transform .16s ease, color .16s ease, opacity .16s ease, top .16s ease;
-  opacity: .9;
-
-  /* clave para que luego "corte" el borde cuando flota */
-  z-index: 2;
-  padding: 0 6px;            /* crea el huequito que corta el borde */
-  background: transparent;   /* normal: sin fondo */
-}
-
-/* Cuando flota: se sube y cruza el borde superior */
-.fl-input:focus + .fl-label,
-.fl-input:not(:placeholder-shown) + .fl-label{
-  top: 0px;                                   /* la llevamos al borde */
-  transform: translateY(-50%) scale(.92);     /* cruza el borde */
-  color: var(--mi-primary-600);
-  opacity: 1;
-
-  /* este fondo es lo que "atraviesa" el borde sin que se vea la línea detrás */
-  background: #fff;
-}
-
-
-
-/* Si el input está deshabilitado, mantenemos el corte del borde prolijo */
-.fl-input:disabled + .fl-label{
-  background: #f8fafc;
-  opacity: .85;
-}
-/* =========================
-   Mini modal (Agregar cliente/proveedor/detalle)
-========================= */
-.mi-mini__overlay{
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.35);
-  backdrop-filter: blur(1px);
-  display: grid;
-  place-items: center;
-  z-index: 10050; /* arriba del modal principal */
-  padding: 16px;
-}
-
-.mi-mini__modal{
-  width: min(520px, 92vw);
-  background: #fff;
-  border-radius: 16px;
-  border: 1px solid rgba(0,0,0,.06);
-  box-shadow: 0 28px 64px -24px rgba(0,0,0,.35);
-  overflow: hidden;
-  animation: mi-slide 0.18s ease-out;
-}
-
-.mi-mini__head{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-background: var(--mi-primary);
-
-  border-bottom: 1px solid var(--mi-border);
-}
-
-.mi-mini__title{
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 900;
-  color: #ffffff;
-  letter-spacing: -0.01em;
-}
-
-.mi-mini__close{
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: #ffffff;
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition: background .15s ease, transform .15s ease;
-}
-.mi-mini__close:hover{ background: rgba(186, 186, 186, 0.06); transform: rotate(90deg); }
-.mi-mini__close:disabled{ opacity: .6; cursor: not-allowed; transform: none; }
-
-.mi-mini__body{
-  padding: 16px;
-  background: #fff;
-}
-
-.mi-mini__actions{
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 14px;
-}
-.mi-modal__container--mov{
-  min-width: 100%;
-  min-height: 95vh;
-}
-/* =========================
-   Carga rápida: layout full height
-========================= */
-
-/* OJO: tu modal ya es flex-column; esto hace que el contenido “crezca” */
-.mi-modal__container--mov{
-  min-width: 100%;
-  min-height: 95vh;
-  max-height: 95vh; /* clave para que el overflow se maneje bien */
-}
-#mi-modal__container{
-  min-height: auto;
-  max-height: 80vh;
-}
-/* Contenido interno del modal */
-.mi-modal__content{
-  padding: 18px;
-  flex: 1;           /* ocupa el alto disponible del modal */
-  min-height: 0;     /* IMPORTANTÍSIMO para permitir scroll interno */
-  display: flex;
-  flex-direction: column;
-}
-
-/* Grid principal */
-.mi-cr-grid{
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 14px;
-}
-
-/* Panel tabla */
-.mi-cr-table{
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid rgba(148,163,184,.45);
-  border-radius: 14px;
-  overflow: hidden;
-  background: #fff;
-}
-
-/* Header tabla */
-.mi-cr-table__head{
-  display: grid;
-  grid-template-columns: 2.2fr .7fr .9fr .8fr .9fr .9fr .3fr;
-  overflow: hidden;
-  scrollbar-gutter: stable;
-  gap: 0;
-  padding: 10px 10px;
-  background: rgba(15, 23, 42, 0.04);
-  border-bottom: 1px solid rgba(148,163,184,.35);
-  font-weight: 800;
-  font-size: 12px;
-}
-
-/* ✅ área scrolleable de filas: ocupa todo el alto que pueda */
-/* estado normal: reservamos espacio para scrollbar */
-.mi-cr-table__rows{
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-
-  scrollbar-gutter: stable;
-}
-
-/* cuando tiene scroll real */
-.mi-cr-table__rows.has-scroll{
-  scrollbar-gutter: auto;
-}
-
-/* fila */
-.mi-cr-row{
-  display: grid;
-  grid-template-columns: 2.2fr .7fr .9fr .8fr .9fr .9fr .3fr;
-  gap: 8px;
-  padding: 10px 10px;
-  border-bottom: 1px solid rgba(148,163,184,.22);
-  align-items: center;
-  position: relative;
-}
-
-/* footer tabla (totales + botón) */
-.mi-cr-table__foot{
-  flex: 0 0 auto;
-  padding: 12px 12px;
+.mi-em-actions{
+  margin-top: auto;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  align-items: center;
-  border-top: 1px solid rgba(148,163,184,.22);
-  background: #fff;
 }
 
-.mi-cr-addrow{
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(15,23,42,.14);
-  background: rgba(15,23,42,.04);
-  cursor: pointer;
-  font-weight: 900;
-}
-
-.mi-cr-totals{
-  display: flex;
-  gap: 6px;
-  justify-content: end;
-  width: 100%;
-}
-.mi-cr-totalLine{
-  display: flex;
-  gap: 12px;
-}
-.mi-cr-totalLine span{ opacity: .7; }
-.mi-cr-totalLine--big{ font-size: 16px; }
-
-/* Link “agregar” estilo consistente */
-.mi-cr-link{
+.mi-link{
+  margin-top: 8px;
   font-size: 12px;
+  font-weight: 500;
   text-align: left;
   padding: 0;
   background: none;
@@ -599,329 +699,482 @@ background: var(--mi-primary);
   cursor: pointer;
 }
 
-/* Panel filtros a la derecha: también full-height con scroll en body */
-.mi-cr-filters{
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid rgba(148,163,184,.45);
-  border-radius: 14px;
-  background: #fff;
-  overflow: hidden;
-}
-
-/* Top fijo (título + fecha/periodo) */
-.mi-cr-filters__top{
-  padding: 12px;
-
-  background: #fff;
-}
-
-.mi-cr-filters__title{
-  font-weight: 900;
-  margin-bottom: 10px;
-}
-
-/* ✅ Fecha/Periodo al lado arriba del panel */
-.mi-cr-filters__dates{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-/* Body scrolleable del panel */
-.mi-cr-filters__body{
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding:6px 12px 12px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* acciones pegadas abajo */
-.mi-cr-filters__actions{
-  margin-top: auto;
-  display: flex;
-  gap: 10px;
-}
-
-
-.mi-modal__header--car{
-  padding: 12px 22px;
-
-}
-.mi-modal__content--car{
- padding: 12px 18px;
-}/* =========================
-   Carga rápida: Tabla más prolija / moderna
-   (pegalo AL FINAL del CSS para que sobreescriba)
-========================= */
-
-.mi-cr-table{
-  border: 1px solid rgba(148,163,184,.40);
-  border-radius: 16px;
-  overflow: hidden;
-  background: #fff;
-  box-shadow: 0 10px 26px rgba(15,23,42,.06);
-}
-
-/* Header sticky + mejor look */
-.mi-cr-table__head{
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: linear-gradient(180deg, rgba(15,23,42,.06), rgba(15,23,42,.035));
-  border-bottom: 1px solid rgba(148,163,184,.30);
-  font-weight: 900;
-  font-size: 12px;
-  letter-spacing: .2px;
-  color: rgba(15,23,42,.85);
-
-
-  padding: 12px 0;
-  gap: 0 !important;
-}
-
-/* Scroll del cuerpo */
-.mi-cr-table__rows{
-  
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-
-}
-
-
-.mi-cr-table__rows::-webkit-scrollbar-track{
-  background: rgba(2,6,23,.04);
-}
-.mi-cr-table__rows::-webkit-scrollbar-thumb{
-  background: rgba(148,163,184,.65);
-  border-radius: 999px;
-  border: 2px solid rgba(2,6,23,.06);
-}
-.mi-cr-table__rows::-webkit-scrollbar-thumb:hover{
-  background: rgba(100,116,139,.75);
-}
-
-/* Fila: más aire + hover + zebra */
-.mi-cr-row{
-  gap: 0;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(148,163,184,.18);
-  align-items: center;
-  transition: background .14s ease, transform .12s ease;
-}
-
-.mi-cr-row:nth-child(odd){
-  background: rgba(241,245,249,.45);
-}
-.mi-cr-row:hover{
-  background: rgba(226,232,240,.55);
-}
-
-/* Inputs dentro de la tabla: compactos y consistentes */
-.mi-cr-row .fl-input{
-  height: 38px;
-  padding: 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(148,163,184,.55);
-  box-shadow: 0 1px 2px rgba(15,23,42,.05);
-}
-.mi-cr-row .fl-input:focus{
-  border-color: var(--mi-primary-600);
-  box-shadow: 0 0 0 3px rgba(46,92,191,.14);
-}
-
-/* Select (IVA) un toque más prolijo */
-.mi-cr-row .fl-select{
-  padding-top: 10px;
-  padding-bottom: 10px;
-  cursor: pointer;
-}
-
-/* Cols numéricas: mejor look (IVA y Total) */
-.mi-cr-row > div[style*="font-weight: 700"],
-.mi-cr-row > div[style*="font-weight: 800"]{
-  font-variant-numeric: tabular-nums;
-  color: rgba(15,23,42,.88);
-}
-
-/* Link “Agregar nuevo detalle” más botón-link */
-.mi-cr-link{
-  font-size: 12px;
-  font-weight: 800;
-  color: #0f766e;
-  text-decoration: none;
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  opacity: .95;
-  transition: transform .12s ease, opacity .12s ease;
-}
-.mi-cr-link:hover{
-  opacity: 1;
-  transform: translateY(-1px);
+.mi-link:hover{
   text-decoration: underline;
 }
 
-/* Botón eliminar: más “icon button” */
-.mi-cr-row button[title="Eliminar fila"]{
-  height: 25px !important;
-  width: 25px;  
-  padding: 0 !important;
-  border-radius: 8px !important;
-  border: 1px solid rgba(239,68,68,.30) !important;
-  background: rgba(239,68,68,.08) !important;
-  color: rgba(185,28,28,.95);
-  display: grid;
-  place-items: center;
-  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
-}
-#delete_cell{
-  padding: 0 !important;
-}
-.mi-cr-row button[title="Eliminar fila"]:hover{
-  transform: translateY(-1px);
-  background: rgba(239,68,68,.12) !important;
-  box-shadow: 0 10px 18px rgba(239,68,68,.18);
+/* =========================================================
+   EDITAR MOVIMIENTO / FORM LAYOUT
+========================================================= */
+.mi-em-form{
+  padding: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* Footer: separación y totales más claros */
-.mi-cr-table__foot{
-  border-top: 1px solid rgba(148,163,184,.20);
-  background: linear-gradient(180deg, #fff, rgba(241,245,249,.55));
-  padding: 12px 12px;
+.mi-em-grid{
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+}
+
+.mi-em-panel{
+  border: 1px solid var(--mi-border);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mi-em-panelHead{
+  padding: 12px;
+  background: rgba(15, 23, 42, 0.04);
+  border-bottom: 1px solid rgba(148,163,184,.35);
+  font-weight: 600;
+  color: var(--mi-text);
+}
+
+.mi-em-panelBody{
+  padding: 12px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.mi-em-aside{
+  border: 1px solid var(--mi-border);
+  border-radius: 14px;
+  padding: 12px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.mi-em-asideTitle{
+  font-weight: 600;
+  color: var(--mi-text);
+  margin-bottom: 10px;
+}
+
+.mi-em-dates{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.mi-em-asideBody{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 0 0;
+}
+.mi-em-asideBodyheght{max-height: 40vh;}
+.mi-em-item{
+  margin-bottom: 6px;
+}
+
+.mi-em-itemTitle{
+  font-size: 13px;
+  color: var(--mi-muted);
+  padding-top: 10px;
+  border-top: 1px dashed rgba(148,163,184,.55);
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.mi-em-itemGrid3{
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
 }
 
-.mi-cr-addrow{
-  height: 42px;
-  border-radius: 12px;
-  border: 1px solid rgba(148,163,184,.55);
-  background: rgba(15,23,42,.04);
-  cursor: pointer;
-  font-weight: 900;
-  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+.mi-em-itemTotalsGrid3{
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
 }
-.mi-cr-addrow:hover{
+
+/* =========================================================
+   CARGA RÁPIDA / TABLA
+========================================================= */
+.mi-cr-grid{
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 310px;
+  gap: 12px;
+}
+
+.mi-cr-table{
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--nv-border-md);
+  border-radius: var(--nv-r-md);
+  overflow: hidden;
+  background: var(--nv-bg);
+  box-shadow: var(--nv-shadow-sm);
+}
+
+.mi-cr-table__head,
+.mi-cr-row{
+  display: grid;
+  grid-template-columns: 2.4fr 72px 1fr 80px 1fr 1fr 36px;
+  align-items: center;
+}
+
+.mi-cr-cell--right{
+  justify-content: flex-end;
+}
+
+.mi-cr-table__head{
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--nv-head-bg);
+  min-height: 38px;
+}
+
+.mi-cr-table__head > div{
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--nv-muted);
+  white-space: nowrap;
+}
+
+.mi-cr-table__head > div:not(:first-child){
+  text-align: center;
+}
+
+.mi-cr-table__rows{
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.mi-cr-row{
+  min-height: var(--nv-row-h);
+  border-bottom: 1px solid var(--nv-border);
+  transition: background .10s;
+  position: relative;
+}
+
+.mi-cr-row:nth-child(even){
+  background: var(--nv-row-odd);
+}
+
+.mi-cr-row:hover{
+  background: var(--nv-row-hover);
+}
+
+.mi-cr-row:last-child{
+  border-bottom: none;
+}
+
+.mi-cr-cell{
+  padding: 0 5px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.mi-cr-cell--center{
+  justify-content: center;
+}
+
+.mi-cr-cell--mono{
+  font-variant-numeric: tabular-nums;
+  font-size: .88rem;
+  font-weight: 500;
+  color: var(--nv-text);
+}
+
+.mi-cr-cell--soft{
+  color: var(--nv-muted);
+}
+
+.mi-cr-cell--strong{
+  color: var(--nv-sub-color);
+  font-weight: 600;
+}
+
+.mi-cr-cell--total-val{
+  color: var(--nv-tot-color);
+  font-weight: 700;
+}
+
+.mi-cr-row > .mi-cr-cell:not(:first-child),
+.mi-cr-table__head > div:not(:first-child){
+  border-left: 1px solid var(--nv-border);
+}
+
+.mi-cr-cell .nv-cell-input{
+  width: 100%;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0 8px;
+  font-size: .875rem;
+  font-weight: 400;
+  color: var(--nv-text);
+  background: transparent;
+  outline: none;
+  transition: border-color .14s, background .14s, box-shadow .14s;
+  font-family: inherit;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.mi-cr-cell .nv-cell-input:hover{
+  border-color: var(--nv-border-md);
+  background: var(--nv-bg);
+}
+
+.mi-cr-cell .nv-cell-input:focus{
+  border-color: var(--nv-action);
+  background: var(--nv-bg);
+  box-shadow: 0 0 0 3px var(--nv-action-10);
+}
+
+.mi-cr-cell .nv-cell-input--center{
+  text-align: center;
+}
+
+.mi-cr-cell .nv-cell-input--select{
+  cursor: pointer;
+  padding-right: 0;
+}
+
+.mi-cr-cell--detalle{
+  position: relative;
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+  padding: 4px 8px;
+  gap: 2px;
+}
+
+.mi-cr-cell--detalle .nv-cell-input{
+  width: 100%;
+}
+
+.mi-cr-del{
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--nv-muted);
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background .12s, color .12s, transform .12s;
+  margin: auto;
+}
+
+.mi-cr-del:hover{
+  background: rgba(239,68,68,.12);
+  color: rgba(185,28,28,.95);
+  transform: scale(1.1);
+}
+
+.mi-cr-del:disabled{
+  opacity: .3;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.mi-cr-table__foot{
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--nv-border-md);
+  background: var(--nv-head-bg);
+}
+
+.mi-cr-foot-actions{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nv-foot-btn{
+  appearance: none;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nv-border-md);
+  background: var(--nv-bg);
+  color: var(--nv-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all .14s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.nv-foot-btn:hover{
+  border-color: var(--nv-action);
+  color: var(--nv-action);
+  background: var(--nv-action-10);
   transform: translateY(-1px);
-  background: rgba(15,23,42,.06);
-  box-shadow: 0 10px 18px rgba(15,23,42,.10);
+  box-shadow: var(--nv-shadow-sm);
+}
+
+.nv-foot-btn:disabled{
+  opacity: .38;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.nv-foot-btn__icon{
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  background: var(--nv-action-10);
+  border: 1px solid rgba(0,85,187,.20);
+  color: var(--nv-action);
+  flex: 0 0 auto;
+}
+
+.nv-foot-sep{
+  width: 1px;
+  height: 16px;
+  background: var(--nv-border-md);
 }
 
 .mi-cr-totals{
-  justify-items: end;
+  display: flex;
+  align-items: center;
   gap: 6px;
 }
+
 .mi-cr-totalLine{
-  font-variant-numeric: tabular-nums;
-}
-.mi-cr-totalLine span{
-  opacity: .70;
-}
-.mi-cr-totalLine--big{
-  font-size: 16px;
-}
-.mi-cr-totalLine--big b{
-  color: rgba(15,23,42,.92);
-}
-
-/* Responsive: más compacto en móviles */
-
-.fl-select-iva--car{
-      width: 80px;
-      padding: 10px 0 10px 10px !important;
-      text-align: center;
-}
-.mi-cr-row--car{
-  align-items: flex-start;
-}
-/* =========================
-   ✅ Carga rápida: Totales + botón agregar fila (mejorado)
-   (PEGAR AL FINAL del CSS)
-========================= */
-
-/* contenedor de totales */
-
-
-/* cada línea: pill */
-.mi-cr-totalLine{
-  width: fit-content;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-
-  padding: 8px 10px;
-  border-radius: 7px;
-  border: 1px solid rgba(148,163,184,.35);
-  background: rgba(241,245,249,.75);
-  box-shadow: 0 8px 16px rgba(15,23,42,.06);
-
-  font-variant-numeric: tabular-nums;
-  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
-}
-
-.mi-cr-totalLine:hover{
-  transform: translateY(-1px);
-  background: rgba(226,232,240,.70);
-  box-shadow: 0 12px 22px rgba(15,23,42,.10);
-}
-
-.mi-cr-totalLine span{
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: .2px;
-  opacity: .78;
-  text-transform: uppercase;
-}
-
-.mi-cr-totalLine b{
-  font-size: 13px;
-  font-weight: 1000;
-  color: rgba(15,23,42,.92);
-}
-
-
-/* =========================
-   ✅ Botón "Agregar fila" más chico y prolijo
-========================= */
-.mi-cr-addrow{
-  width: fit-content;          /* ya no se estira */
-  justify-self: start;         /* pegadito a la izquierda */
-  height: 34px;                /* más chico */
-  padding: 0 12px;             /* menos largo */
-  border-radius: 999px;        /* pill */
-  border: 1px solid rgba(148,163,184,.55);
-  background: rgba(15,23,42,.035);
-  color: rgba(15,23,42,.88);
-  font-weight: 1000;
-  font-size: 12px;
-  letter-spacing: .2px;
-
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding: 5px 10px 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--nv-border-md);
+  background: var(--nv-bg);
+  box-shadow: var(--nv-shadow-sm);
+  font-variant-numeric: tabular-nums;
+  font-size: .82rem;
+  transition: transform .12s, box-shadow .12s;
+  position: relative;
+  overflow: hidden;
+}
 
+.mi-cr-totalLine::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 999px 0 0 999px;
+}
+
+.mi-cr-totalLine span{
+  font-weight: 600 !important;
+}
+
+.mi-cr-totalLine b{
+  font-weight: 700 !important;
+}
+
+.mi-cr-totalLine--sub{
+  border-color: rgba(29,66,138,.28) !important;
+}
+
+.mi-cr-totalLine--sub::before{
+  background: rgba(29,66,138,.85);
+}
+
+.mi-cr-totalLine--sub b{
+  color: rgba(29,66,138,.98) !important;
+}
+
+.mi-cr-totalLine--iva{
+  border-color: rgba(245,158,11,.35) !important;
+}
+
+.mi-cr-totalLine--iva::before{
+  background: rgba(245,158,11,.90);
+}
+
+.mi-cr-totalLine--iva b{
+  color: rgba(180,83,9,.98) !important;
+}
+
+.mi-cr-totalLine--total{
+  border-color: rgba(16,185,129,.40) !important;
+  box-shadow: 0 10px 22px rgba(16,185,129,.14) !important;
+}
+
+.mi-cr-totalLine--total::before{
+  background: rgba(16,185,129,.90);
+}
+
+.mi-cr-totalLine--total b{
+  color: rgba(5,122,85,.98) !important;
+}
+
+.mi-cr-totalLine--sub:hover,
+.mi-cr-totalLine--iva:hover,
+.mi-cr-totalLine--total:hover{
+  transform: translateY(-2px);
+}
+
+.mi-cr-addrow{
+  width: fit-content;
+  justify-self: start;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(148,163,184,.55);
+  background: rgba(15,23,42,.035);
+  color: rgba(15,23,42,.88);
+  font-weight: 600 !important;
+  font-size: 12px;
+  letter-spacing: .2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
   transition: transform .12s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease;
 }
 
-.mi-cr-addrow:hover{
-  transform: translateY(-1px);
-  background: rgba(29,66,138,.08);
-  border-color: rgba(29,66,138,.28);
-  box-shadow: 0 12px 22px rgba(29,66,138,.12);
-}
-
-.mi-cr-addrow:active{
-  transform: translateY(0px);
-  box-shadow: 0 6px 14px rgba(29,66,138,.10);
-}
-
-/* Si querés que el "+" se vea más “badge” */
 .mi-cr-addrow::before{
   content: "+";
   width: 18px;
@@ -935,207 +1188,287 @@ background: var(--mi-primary);
   color: var(--mi-primary);
 }
 
-/* Por si el grid del footer te lo estaba estirando */
-.mi-cr-table__foot{
-  grid-template-columns: auto 1fr; /* boton auto + totales ocupan el resto */
-  align-items: center;
+.mi-cr-addrow:hover{
+  transform: translateY(-1px);
+  background: rgba(29,66,138,.08);
+  border-color: rgba(29,66,138,.28);
+  box-shadow: 0 12px 22px rgba(29,66,138,.12);
 }
+
+.mi-cr-addrow:active{
+  transform: translateY(0);
+  box-shadow: 0 6px 14px rgba(29,66,138,.10);
+}
+
 .mi-cr-col{
   padding: 0 10px;
 }
+
 .mi-cr-col--qty{
   text-align: center;
-}input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
 }
-/* =========================
-   ✅ Chips de totales: colores distintos
-   (PEGAR AL FINAL)
-========================= */
 
-/* Base (si ya la tenés, esto solo refuerza) */
-.mi-cr-totalLine{
-  position: relative;
+.mi-cr-col--ivaMonto,
+.Total--IVA{
+  margin: 10px 0 0 0;
+}
+
+.mi-cr-col--compraS{
+  padding-top: 10px;
+}
+
+.mi-cr-row--car{
+  align-items: flex-start;
+}
+
+.fl-select-iva--car{
+  width: 80px;
+  padding: 10px 0 10px 10px !important;
+  text-align: center;
+}
+
+.fl-select-iva--compra{
+  padding: 0 !important;
+}
+
+.mi-cr-link{
+  font-size: 12px;
+  font-weight: 500 !important;
+  text-align: left;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #0f766e;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  opacity: .95;
+  transition: transform .12s ease, opacity .12s ease;
+}
+
+.mi-cr-link:hover{
+  opacity: 1;
+  transform: translateY(-1px);
+  text-decoration: underline;
+}
+
+.mi-cr-money{
+  color: var(--nv-text);
+}
+
+.mi-cr-money--soft{
+  color: var(--nv-muted);
+}
+
+.mov-iconBtn.is-disabled{
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+#delete_cell{
+  padding: 0 !important;
+}
+
+/* =========================================================
+   FILTROS LATERALES
+========================================================= */
+.mi-cr-filters{
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(148,163,184,.45);
+  border-radius: 14px;
+  background: #fff;
   overflow: hidden;
 }
 
-/* Subtotal: azul institucional suave */
-.mi-cr-totalLine--sub{
-  border-color: rgba(29,66,138,.28) !important;
-}
-.mi-cr-totalLine--sub b{ color: rgba(29,66,138,.98) !important; }
-
-/* IVA: ámbar/naranja suave */
-.mi-cr-totalLine--iva{
-  border-color: rgba(245,158,11,.35) !important;
-}
-.mi-cr-totalLine--iva b{ color: rgba(180,83,9,.98) !important; }
-
-/* TOTAL: verde (resalta más) */
-.mi-cr-totalLine--total{
-  border-color: rgba(16,185,129,.40) !important;
-  box-shadow: 0 10px 22px rgba(16,185,129,.14) !important;
-}
-.mi-cr-totalLine--total b{ color: rgba(5,122,85,.98) !important; }
-
-/* Detallito “accent bar” a la izquierda */
-.mi-cr-totalLine--sub::before,
-.mi-cr-totalLine--iva::before,
-.mi-cr-totalLine--total::before{
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 6px;
-  border-radius: 14px 0 0 14px;
-  opacity: .95;
+.mi-cr-filters__top{
+  padding: 12px;
+  background: #fff;
 }
 
-.mi-cr-totalLine--sub::before{ background: rgba(29,66,138,.85); }
-.mi-cr-totalLine--iva::before{ background: rgba(245,158,11,.90); }
-.mi-cr-totalLine--total::before{ background: rgba(16,185,129,.90); }
-
-/* Hover con “lift” un poquito más notorio */
-.mi-cr-totalLine--sub:hover,
-.mi-cr-totalLine--iva:hover,
-.mi-cr-totalLine--total:hover{
-  transform: translateY(-2px);
+.mi-cr-filters__title{
+  font-weight: 600 !important;
+  margin-bottom: 10px;
 }
-/* =========================
-   ✅ Carga rápida: dropdown sugerencias (igual a Cliente en Editar)
-   Usa: .mi-cr-suggest y .mi-cr-suggest__item
-   (PEGAR AL FINAL)
-========================= */
+
+.mi-cr-filters__dates{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mi-cr-filters__body{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mi-cr-filters__actions{
+  margin-top: auto;
+  display: flex;
+  gap: 10px;
+}
+
+/* =========================================================
+   AUTOCOMPLETE / SUGGEST
+========================================================= */
+.mi-autocomplete{
+  position: relative;
+}
 
 .mi-cr-suggest{
   position: absolute;
-  top: 100%;
+  top: calc(100% + 4px);
   left: 0;
   right: 0;
-  margin-top: 4px;
-
-  max-height: 230px;
-  overflow-y: auto;
-
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.5);
-  background: #fff;
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.28);
-
-  padding: 4px;
+  z-index: 90;
+  background: var(--nv-bg);
+  border: 1px solid var(--nv-border-md);
+  border-radius: var(--nv-r-sm);
+  box-shadow: 0 12px 36px rgba(15,23,42,.18);
   list-style: none;
-
-  z-index: 80; /* igual que Cliente */
+  padding: 4px;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .mi-cr-suggest__item{
-  padding: 6px 10px;
-  border-radius: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 13px;
-
-  display: flex;
-  align-items: center;
-
-  transition: background .12s ease, transform .12s ease;
+  font-size: .85rem;
+  color: var(--nv-text);
+  transition: background .10s;
   user-select: none;
 }
 
 .mi-cr-suggest__item:hover{
-  background: rgba(226,232,240,.55);
-  transform: translateY(-1px);
+  background: var(--nv-action-10);
 }
 
-/* opcional: “active” si navegás con teclado (si después lo implementás) */
-.mi-cr-suggest__item:active{
-  transform: translateY(0);
+.mi-suggestText{
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
 
 .mi-cr-suggest::-webkit-scrollbar-track{
   background: rgba(2,6,23,.04);
   border-radius: 999px;
 }
+
 .mi-cr-suggest::-webkit-scrollbar-thumb{
   background: rgba(148,163,184,.65);
   border-radius: 999px;
   border: 2px solid rgba(2,6,23,.06);
 }
+
 .mi-cr-suggest::-webkit-scrollbar-thumb:hover{
   background: rgba(100,116,139,.75);
 }
-/* =========================
-   ✅ Tipografía + pesos (más finos)
-   (solo letra/peso, sin tocar layout)
-========================= */
 
-.mi-modal__container,
+/* =========================================================
+   ADD INLINE
+========================================================= */
+.mi-addInline{
+  margin-top: 10px;
+}
+
+.mi-addInline__actions{
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* =========================================================
+   MINI MODAL
+========================================================= */
+.mi-mini__overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(1px);
+  display: grid;
+  place-items: center;
+  z-index: 10050;
+  padding: 16px;
+}
+
 .mi-mini__modal{
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  width: min(520px, 92vw);
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,.06);
+  box-shadow: 0 28px 64px -24px rgba(0,0,0,.35);
+  overflow: hidden;
+  animation: mi-modal-pop-min .16s ease-out;
 }
 
-/* títulos */
-.mi-modal__title{ font-weight: 600 !important; }
-.mi-modal__subtitle{ font-weight: 400 !important; }
-
-/* labels / texto */
-.fl-label{ font-weight: 400 !important; }
-.mi-cr-filters__title{ font-weight: 600 !important; }
-
-/* botones */
-.mit-btn{ font-weight: 600 !important; }
-.mi-cr-addrow{ font-weight: 600 !important; }
-.mi-cr-link{ font-weight: 500 !important; }
-
-/* chips totales: mantener “resaltado” pero sin ultra bold */
-.mi-cr-totalLine span{ font-weight: 600 !important; }
-.mi-cr-totalLine b{ font-weight: 700 !important; }
-
-
-/* =========================
-   ✅ Unificar tipografía en inputs (incluye type="date")
-========================= */
-.fl-input,
-.fl-select,
-.fl-input[type="date"]{
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif !important;
-  font-size: .95rem !important;
-  font-weight: 400 !important;
-  letter-spacing: 0 !important;
-  color: var(--mi-text) !important;
+.mi-mini__head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--mi-primary);
 }
 
-/* En algunos navegadores, el calendario/picker usa subpartes */
-.fl-input[type="date"]::-webkit-datetime-edit,
-.fl-input[type="date"]::-webkit-datetime-edit-text,
-.fl-input[type="date"]::-webkit-datetime-edit-month-field,
-.fl-input[type="date"]::-webkit-datetime-edit-day-field,
-.fl-input[type="date"]::-webkit-datetime-edit-year-field{
-  font-family: inherit !important;
-  font-size: inherit !important;
-  font-weight: inherit !important;
-  color: inherit !important;
+.mi-mini__title{
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.01em;
 }
 
-/* El ícono del calendario (Chrome/Edge/Safari) */
-.fl-input[type="date"]::-webkit-calendar-picker-indicator{
-  opacity: .85;
+.mi-mini__close{
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
   cursor: pointer;
+  transition: background .15s ease, transform .15s ease;
 }
 
-/* Si querés que se vea menos “nativo”, podés bajar el contraste del indicador */
-.fl-input[type="date"]::-webkit-calendar-picker-indicator:hover{
-  opacity: 1;
+.mi-mini__close:hover{
+  background: rgba(255,255,255,.10);
+  transform: rotate(90deg);
 }
-/* =========================
-   Adjuntar factura (UI custom)
-========================= */
 
+.mi-mini__close:disabled{
+  opacity: .6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.mi-mini__body{
+  padding: 16px;
+  background: #fff;
+}
+
+.mi-mini__actions{
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+/* =========================================================
+   FILE / UPLOAD
+========================================================= */
 .mi-file{
   border: 1px dashed rgba(148,163,184,.75);
   border-radius: 14px;
@@ -1166,7 +1499,6 @@ input[type="number"]::-webkit-outer-spin-button {
   margin-top: 2px;
 }
 
-/* ✅ input real oculto */
 .mi-file__input{
   display: none;
 }
@@ -1209,7 +1541,6 @@ input[type="number"]::-webkit-outer-spin-button {
   box-shadow: 0 12px 22px rgba(29,66,138,.22);
 }
 
-/* Dropzone */
 .mi-drop{
   margin-top: 10px;
   border: 1px solid rgba(148,163,184,.55);
@@ -1260,7 +1591,6 @@ input[type="number"]::-webkit-outer-spin-button {
   font-weight: 400;
 }
 
-/* Preview */
 .mi-filemeta{
   margin-top: 10px;
   display: flex;
@@ -1310,1692 +1640,14 @@ input[type="number"]::-webkit-outer-spin-button {
   background: rgba(239,68,68,.12);
   box-shadow: 0 10px 18px rgba(239,68,68,.18);
 }
-.fl-select-iva--compra{
-padding: 0 !important;
-}
-.mi-cr-col--compraS{
-  padding-top: 10px;
-}
-.mov-iconBtn.is-disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-/* =========================
-   ✅ Filas custom (3 cols y 2 cols)
-========================= */
-
-.mi-row3{
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 14px;
-  min-width: 0;
-}
-
-.mi-row2{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  min-width: 0;
-}
-
-.mi-row3 > .fl-field,
-.mi-row2 > .fl-field{
-  min-width: 0;
-}
-
-/* Responsive: apila prolijo */
-
-/* =========================
-   Filas custom reutilizables
-========================= */
-.mi-row3{
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 14px;
-  min-width: 0;
-}
-
-.mi-row2{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  min-width: 0;
-}
-
-.mi-row3 > .fl-field,
-.mi-row2 > .fl-field{
-  min-width: 0;
-}
-
-@media (max-width: 900px){
-  .mi-row3,
-  .mi-row2{
-    grid-template-columns: 1fr;
-  }
-}
-#mov--modaleditarrecibo,#mov--modaleditarordenpago{
-  min-width: 700px !important;
-  min-height: 60vh !important;
-}
-.btn--modalrecibo{
-  max-width: 100px;
-}
-.content-btn-modalrecibo{
-  display: flex;
-  justify-content: flex-end;
-
-}
-.mi-modal--dark .mi-cr-panel .fl-input,
-.mi-modal--dark .mi-cr-panel .fl-select{
-  background: rgba(255,255,255,0.06) !important;
-  border-color: rgba(255,255,255,0.14) !important;
-  color: rgba(255,255,255,0.92) !important;
-}
-/* =========================================================
-   DARK MODE – Panel principal (centro)
-========================================================= */
-
-.mi-modal--dark .mi-cr-panel,
-.mi-modal--dark .mi-cr-left,
-.mi-modal--dark .mi-cr-body,
-.mi-modal--dark .mi-cr-content{
-  background: rgba(6, 18, 28, 0.85) !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.04),
-    0 20px 45px rgba(0,0,0,0.45);
-  color: rgba(255,255,255,0.92);
-}
-
-/* Si hay algo con background blanco directo */
-.mi-modal--dark [style*="background: #fff"]{
-  background: rgba(6, 18, 28, 0.85) !important;
-}
-/* =========================================================
-   MODO OSCURO – solo para este modal
-   Activación: .mi-modal--dark en el container
-========================================================= */
-
-.mi-modal--dark{
-  /* tokens del tema oscuro (basado en tu identidad) */
-  --md-bg: #071a2c;         /* fondo modal */
-  --md-panel: #0a2540;      /* panel/caja */
-  --md-panel2: #06121c;     /* panel más profundo */
-  --md-border: rgba(148,163,184,.22);
-  --md-text: rgba(255,255,255,.92);
-  --md-muted: rgba(255,255,255,.70);
-  --md-focus: rgba(0,85,187,.22); /* action glow */
-}
-
-/* Overlay un poco más oscuro */
-.mi-modal--dark ~ .mi-modal__overlay,
-.mi-modal__overlay:has(.mi-modal--dark){
-  background: rgba(0,0,0,.62);
-  backdrop-filter: blur(3px);
-}
-
-/* Container */
-.mi-modal__container.mi-modal--dark{
-  background: var(--md-bg);
-  border: 1px solid rgba(255,255,255,.06);
-}
-
-/* Header */
-.mi-modal__container.mi-modal--dark .mi-modal__header{
-  background: linear-gradient(180deg, #0a2540, #071a2c);
-  color: var(--md-text);
-  border-bottom: 1px solid rgba(255,255,255,.08);
-}
-.mi-modal__container.mi-modal--dark .mi-modal__title{
-  font-weight: 600 !important;
-}
-.mi-modal__container.mi-modal--dark .mi-modal__subtitle{
-  color: var(--md-muted);
-  font-weight: 400 !important;
-}
-
-/* Botón cerrar */
-.mi-modal__container.mi-modal--dark .mi-modal__close{
-  color: rgba(255,255,255,.92);
-}
-.mi-modal__container.mi-modal--dark .mi-modal__close:hover{
-  background: rgba(255,255,255,.10);
-}
-
-/* Cards / paneles (tus cajas blancas) */
-.mi-modal__container.mi-modal--dark [style*="background: #fff"],
-.mi-modal__container.mi-modal--dark aside{
-  background: rgba(6,18,28,.78) !important;
-  border: 1px solid var(--md-border) !important;
-  color: var(--md-text);
-}
-
-/* “título” de secciones (ej: Datos del movimiento) */
-.mi-modal__container.mi-modal--dark [style*="background: rgba(15, 23, 42, 0.04)"]{
-  background: rgba(255,255,255,.06) !important;
-  border-bottom: 1px solid rgba(255,255,255,.08) !important;
-  color: var(--md-text) !important;
-  font-weight: 600 !important;
-}
-
-/* Inputs / selects */
-.mi-modal__container.mi-modal--dark .fl-input,
-.mi-modal__container.mi-modal--dark .fl-select{
-  background: rgba(255,255,255,.06) !important;
-  border: 1px solid rgba(255,255,255,.14) !important;
-  color: var(--md-text) !important;
-  box-shadow: none !important;
-}
-
-.mi-modal__container.mi-modal--dark .fl-input:focus,
-.mi-modal__container.mi-modal--dark .fl-select:focus{
-  border-color: rgba(0,85,187,.55) !important;
-  box-shadow: 0 0 0 3px var(--md-focus) !important;
-}
-
-.mi-modal__container.mi-modal--dark .fl-label{
-  color: var(--md-muted) !important;
-  font-weight: 400 !important;
-}
-
-/* Placeholders */
-.mi-modal__container.mi-modal--dark .fl-input::placeholder{
-  color: rgba(255,255,255,.45);
-}
-
-/* Autocomplete dropdown (cliente/proveedor/detalle) */
-.mi-modal__container.mi-modal--dark .mi-cr-suggest,
-.mi-modal__container.mi-modal--dark ul[style*="boxShadow: 0 18px 45px"]{
-  background: #071a2c !important;
-  border: 1px solid rgba(255,255,255,.14) !important;
-  box-shadow: 0 22px 55px rgba(0,0,0,.45) !important;
-}
-
-.mi-modal__container.mi-modal--dark .mi-cr-suggest__item,
-.mi-modal__container.mi-modal--dark .mi-autocomplete-item{
-  color: rgba(255,255,255,.88) !important;
-}
-
-.mi-modal__container.mi-modal--dark .mi-cr-suggest__item:hover,
-.mi-modal__container.mi-modal--dark .mi-autocomplete-item:hover{
-  background: rgba(255,255,255,.08) !important;
-}
-
-/* Botones */
-.mi-modal__container.mi-modal--dark .mit-btn--ghost{
-  background: rgba(255,255,255,.06) !important;
-  border-color: rgba(255,255,255,.14) !important;
-  color: rgba(255,255,255,.86) !important;
-}
-.mi-modal__container.mi-modal--dark .mit-btn--ghost:hover{
-  background: rgba(255,255,255,.10) !important;
-}
-
-.mi-modal__container.mi-modal--dark .mit-btn--solid{
-  background: #0055BB !important;
-  border-color: rgba(0,85,187,.85) !important;
-  color: rgba(255,255,255,.96) !important;
-}
-.mi-modal__container.mi-modal--dark .mit-btn--solid:hover{
-  filter: brightness(1.03);
-}
-/* src/components/Movimientos/modales/ModalEditarMovimiento.css */
-
-/* =========================
-   Tokens (paleta oficial)
-========================= */
-:root{
-  --blue-midnight: #0A2540;
-  --blue-action:   #0055BB;
-
-  --mi-bg: #ffffff;
-  --mi-bg-soft: #F6F8FB;
-  --mi-border: rgba(148,163,184,.45);
-
-  --mi-text: #0A2540;
-  --mi-muted: #516173;
-
-  --mi-primary: var(--blue-midnight);
-  --mi-primary-600: var(--blue-action);
-
-  --mi-shadow: 0 28px 64px -24px rgba(0,0,0,.28);
-
-  --mi-radius-md: 12px;
-  --mi-radius-lg: 18px;
-}
-
-/* =========================
-   Modal base
-========================= */
-.mi-modal__overlay{
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.55);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  animation: mi-fade 0.15s ease-out;
-  padding: 16px;
-}
-
-.mi-modal__container{
-  width: min(1180px, 96vw);
-  max-height: 92vh;
-  background: var(--mi-bg);
-  border-radius: var(--mi-radius-lg);
-  box-shadow: var(--mi-shadow);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,.06);
-  animation: mi-slide 0.22s ease-out;
-}
-
-.mi-modal__container--mov{
-  min-height: 90vh;
-}
-
-/* Header */
-.mi-modal__header{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  background: var(--mi-primary);
-  color: #fff;
-}
-
-.mi-modal__title{
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600; /* ✅ más fino */
-  letter-spacing: -0.01em;
-}
-
-.mi-modal__subtitle{
-  margin: 4px 0 0;
-  font-size: .92rem;
-  opacity: .92;
-  font-weight: 400;
-}
-
-.mi-modal__close{
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: #fff;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition: transform .15s ease, background .15s ease;
-}
-.mi-modal__close:hover{
-  background: rgba(255,255,255,.12);
-  transform: rotate(90deg);
-}
-.mi-modal__close:disabled{
-  opacity: .6;
-  cursor: not-allowed;
-}
-
-/* =========================
-   Layout modal (sin inline)
-========================= */
-.mi-em-form{
-  padding: 12px;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.mi-em-grid{
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 14px;
-  height: 100%;
-  min-height: 0;
-}
-
-.mi-em-panel{
-  border: 1px solid var(--mi-border);
-  border-radius: 14px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.mi-em-panelHead{
-  padding: 12px;
-  background: rgba(15, 23, 42, 0.04);
-  border-bottom: 1px solid rgba(148,163,184,.35);
-  font-weight: 600;
-  color: var(--mi-text);
-}
-
-.mi-em-panelBody{
-  padding: 12px;
-  overflow: auto;
-  min-height: 0;
-}
-
-/* Aside */
-.mi-em-aside{
-  border: 1px solid var(--mi-border);
-  border-radius: 14px;
-  padding: 12px;
-  background: #fff;
-  display: flex;
-  flex-direction: column;
-  max-height: 60vh;
-}
-
-.mi-em-asideTitle{
-  font-weight: 600;
-  color: var(--mi-text);
-  margin-bottom: 10px;
-}
-
-.mi-em-dates{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.mi-em-asideBody{
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 10px 0;
-}
-
-/* =========================
-   Floating labels
-========================= */
-.mi-modal__container,
-.mi-mini__modal{
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.fl-grid{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  min-width: 0;
-}
-.fl-col-full{ grid-column: 1 / -1; }
-
-.fl-field{
-  position: relative;
-  min-width: 0;
-}
-
-.fl-input{
-  width: 100%;
-  border: 1px solid rgba(148,163,184,.55);
-  background: #fff;
-  border-radius: 12px;
-  padding:  12px 10px;
-  font-size: .95rem;
-  font-weight: 400;
-  color: var(--mi-text);
-  outline: none;
-  transition: border-color .18s ease, box-shadow .18s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,.04);
-  box-sizing: border-box;
-}
-
-.fl-select{
- 
-  padding-bottom: 10px;
-  cursor: pointer;
-}
-
-.fl-label{
-  position: absolute;
-  left: 12px;
-  top: 14px;
-  font-size: .86rem;
-  color: var(--mi-muted);
-  pointer-events: none;
-  transform-origin: left top;
-  transition: transform .16s ease, color .16s ease, opacity .16s ease, top .16s ease;
-  opacity: .9;
-  z-index: 2;
-  padding: 0 6px;
-  background: transparent;
-  font-weight: 400;
-}
-
-.fl-input:focus{
-  border-color: var(--mi-primary-600);
-  box-shadow: 0 0 0 3px rgba(0,85,187,.14);
-}
-
-.fl-input:focus + .fl-label,
-.fl-input:not(:placeholder-shown) + .fl-label{
-  top: 0px;
-  transform: translateY(-50%) scale(.92);
-  color: var(--mi-primary-600);
-  opacity: 1;
-  background: #fff;
-}
-
-
-.fl-input:disabled{
-  background: rgba(241,245,249,.7);
-  opacity: .85;
-  cursor: not-allowed;
-}
-
-/* =========================
-   Rows (3 y 2 columnas)
-========================= */
-.mi-row3{
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 14px;
-  min-width: 0;
-}
-.mi-row2{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  min-width: 0;
-}
-.mi-row3 > .fl-field,
-.mi-row2 > .fl-field{
-  min-width: 0;
-}
-
-/* =========================
-   Item section
-========================= */
-.mi-em-item{
-  margin-bottom: 6px;
-}
-.mi-em-itemTitle{
-  font-size: 13px;
-  color: var(--mi-muted);
-  padding-top: 10px;
-  border-top: 1px dashed rgba(148,163,184,.55);
-  margin-bottom: 12px;
-  font-weight: 500;
-}
-.mi-em-itemGrid3{
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 12px;
-}
-.mi-em-itemTotalsGrid3{
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 12px;
-}
-
-/* =========================
-   Botones
-========================= */
-.mit-btn{
-  appearance: none;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform .16s ease, box-shadow .16s ease, filter .16s ease, background .16s ease;
-}
-
-.mit-btn--ghost{
-  background: transparent;
-  color: var(--mi-text);
-  border-color: rgba(148,163,184,.55);
-}
-.mit-btn--ghost:hover{
-  background: rgba(0,0,0,.03);
-  transform: translateY(-1px);
-  box-shadow: 0 10px 18px rgba(0,0,0,.08);
-}
-
-.mit-btn--solid{
-  background: var(--mi-primary);
-  color: #fff;
-  border-color: var(--mi-primary);
-}
-.mit-btn--solid:hover{
-  filter: brightness(.97);
-  transform: translateY(-1px);
-  box-shadow: 0 12px 22px rgba(0,0,0,.20);
-}
-
-.mit-btn:disabled{
-  opacity: .6;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-.mit-btn--block{
-  width: 100%;
-  height: 44px;
-}
-
-.mi-em-actions{
-  margin-top: auto;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-/* =========================
-   Links (agregar nuevo)
-========================= */
-.mi-link{
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  text-align: left;
-  padding: 0;
-  background: none;
-  border: none;
-  color: #0f766e;
-  cursor: pointer;
-}
-.mi-link:hover{
-  text-decoration: underline;
-}
-
-/* =========================
-   Autocomplete dropdown
-========================= */
-.mi-autocomplete{ position: relative; }
-
-.mi-cr-suggest{
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 4px;
-
-  max-height: 230px;
-  overflow-y: auto;
-
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.5);
-  background: #fff;
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.28);
-
-  padding: 4px;
-  list-style: none;
-  z-index: 80;
-}
-
-.mi-cr-suggest__item{
-  padding: 6px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  transition: background .12s ease, transform .12s ease;
-  user-select: none;
-}
-
-.mi-cr-suggest__item:hover{
-  background: rgba(226,232,240,.55);
-  transform: translateY(-1px);
-}
-
-.mi-suggestText{
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mi-cr-suggest::-webkit-scrollbar-track{
-  background: rgba(2,6,23,.04);
-  border-radius: 999px;
-}
-.mi-cr-suggest::-webkit-scrollbar-thumb{
-  background: rgba(148,163,184,.65);
-  border-radius: 999px;
-  border: 2px solid rgba(2,6,23,.06);
-}
-.mi-cr-suggest::-webkit-scrollbar-thumb:hover{
-  background: rgba(100,116,139,.75);
-}
-
-/* =========================
-   Inline add
-========================= */
-.mi-addInline{
-  margin-top: 10px;
-}
-.mi-addInline__actions{
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-/* =========================
-   Mini modal
-========================= */
-.mi-mini__overlay{
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.35);
-  backdrop-filter: blur(1px);
-  display: grid;
-  place-items: center;
-  z-index: 10050;
-  padding: 16px;
-}
-
-.mi-mini__modal{
-  width: min(520px, 92vw);
-  background: #fff;
-  border-radius: 16px;
-  border: 1px solid rgba(0,0,0,.06);
-  box-shadow: 0 28px 64px -24px rgba(0,0,0,.35);
-  overflow: hidden;
-  animation: mi-slide 0.18s ease-out;
-}
-
-.mi-mini__head{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: var(--mi-primary);
-}
-
-.mi-mini__title{
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #fff;
-  letter-spacing: -0.01em;
-}
-
-.mi-mini__close{
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: #fff;
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition: background .15s ease, transform .15s ease;
-}
-.mi-mini__close:hover{ background: rgba(255,255,255,.10); transform: rotate(90deg); }
-.mi-mini__close:disabled{ opacity: .6; cursor: not-allowed; transform: none; }
-
-.mi-mini__body{
-  padding: 16px;
-  background: #fff;
-}
-.mi-mini__actions{
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-/* =========================
-   Responsive
-========================= */
-
-
-/* Animaciones */
-@keyframes mi-fade{ from{opacity:0} to{opacity:1} }
-@keyframes mi-slide{
-  from{ opacity:0; transform: translateY(18px); }
-  to{ opacity:1; transform: translateY(0); }
-}
-
-/* Quitar spinners en number (Chrome/Edge) */
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
 
 /* =========================================================
-   DARK MODE – Carga Rápida (ModalCargaRapidaMovimientos)
-   Activación:
-   - container: .mi-modal__container ... .mi-modal--dark
-   - overlay:   .mi-modal__overlay--dark (lo agregamos en JSX)
+   NUEVO BLOQUE UPLOAD CARD
 ========================================================= */
-
-/* Overlay dark (sin :has) */
-.mi-modal__overlay.mi-modal__overlay--dark{
-  background: rgba(0,0,0,.62);
-  backdrop-filter: blur(3px);
-}
-
-/* Tokens dark (si ya los tenés, esto solo asegura coherencia) */
-.mi-modal__container.mi-modal--dark{
-  --cr-bg: rgba(6,18,28,.92);
-  --cr-panel: rgba(10,25,40,.62);
-  --cr-panel2: rgba(6,18,28,.72);
-  --cr-border: rgba(255,255,255,.10);
-  --cr-text: rgba(255,255,255,.92);
-  --cr-muted: rgba(226,232,240,.72);
-  --cr-soft: rgba(255,255,255,.06);
-  --cr-hover: rgba(255,255,255,.08);
-}
-
-/* Container */
-.mi-modal__container.mi-modal--dark{
-  background: var(--cr-bg);
-  border: 1px solid rgba(255,255,255,.08);
-}
-
-/* Header */
-.mi-modal__container.mi-modal--dark .mi-modal__header{
-  background: linear-gradient(180deg, #0a2540, #071a2c);
-  border-bottom: 1px solid rgba(255,255,255,.08);
-}
-
-/* Panel tabla + panel filtros */
-.mi-modal__container.mi-modal--dark .mi-cr-table,
-.mi-modal__container.mi-modal--dark .mi-cr-filters{
-  background: var(--cr-panel2);
-  border-color: var(--cr-border);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.03),
-    0 18px 45px rgba(0,0,0,.40);
-  color: var(--cr-text);
-}
-
-/* Header tabla */
-.mi-modal__container.mi-modal--dark .mi-cr-table__head{
-  background: rgba(255,255,255,.06);
-  border-bottom-color: rgba(255,255,255,.10);
-  color: rgba(255,255,255,.85);
-}
-
-/* Filas (zebra/hover) */
-.mi-modal__container.mi-modal--dark .mi-cr-row{
-  border-bottom-color: rgba(255,255,255,.08);
-}
-.mi-modal__container.mi-modal--dark .mi-cr-row:nth-child(odd){
-  background: rgba(255,255,255,.03);
-}
-.mi-modal__container.mi-modal--dark .mi-cr-row:hover{
-  background: rgba(255,255,255,.06);
-}
-
-/* Inputs dentro de la tabla y filtros */
-.mi-modal__container.mi-modal--dark .fl-input,
-.mi-modal__container.mi-modal--dark .fl-select{
-  background: rgba(255,255,255,.06) !important;
-  border-color: rgba(255,255,255,.14) !important;
-  color: rgba(255,255,255,.92) !important;
-  box-shadow: none !important;
-}
-.mi-modal__container.mi-modal--dark .fl-input:focus,
-.mi-modal__container.mi-modal--dark .fl-select:focus{
-  border-color: rgba(0,85,187,.65) !important;
-  box-shadow: 0 0 0 3px rgba(0,85,187,.18) !important;
-}
-
-/* Labels flotantes con “corte” oscuro */
-.mi-modal__container.mi-modal--dark .fl-label{
-  color: rgba(226,232,240,.72) !important;
-}
-.mi-modal__container.mi-modal--dark .fl-input:focus + .fl-label,
-.mi-modal__container.mi-modal--dark .fl-input:not(:placeholder-shown) + .fl-label,
-.mi-modal__container.mi-modal--dark {
-  background: rgba(6,18,28,.92) !important;
-  color: rgba(180,210,255,.92) !important;
-}
-
-/* Money (IVA/Total) */
-.mi-modal__container.mi-modal--dark .mi-cr-money{
-  color: rgba(255,255,255,.92);
-}
-.mi-modal__container.mi-modal--dark .mi-cr-money--soft{
-  color: rgba(226,232,240,.80);
-}
-
-/* Footer tabla */
-.mi-modal__container.mi-modal--dark .mi-cr-table__foot{
-  background: rgba(255,255,255,.04);
-  border-top-color: rgba(255,255,255,.10);
-}
-
-/* Botón agregar fila */
-.mi-modal__container.mi-modal--dark .mi-cr-addrow{
-  background: rgba(255,255,255,.06);
-  border-color: rgba(255,255,255,.14);
-  color: rgba(255,255,255,.88);
-}
-.mi-modal__container.mi-modal--dark .mi-cr-addrow::before{
-  background: rgba(0,85,187,.18);
-  border-color: rgba(0,85,187,.25);
-  color: rgba(255,255,255,.92);
-}
-
-/* Totales (chips) */
-.mi-modal__container.mi-modal--dark .mi-cr-totalLine{
-  background: rgba(255,255,255,.06);
-  border-color: rgba(255,255,255,.12);
-  box-shadow: 0 10px 22px rgba(0,0,0,.35);
-}
-.mi-modal__container.mi-modal--dark .mi-cr-totalLine span{
-  color: rgba(226,232,240,.75);
-}
-.mi-modal__container.mi-modal--dark .mi-cr-totalLine b{
-  color: rgba(255,255,255,.92);
-}
-
-/* Colores por tipo (sub/iva/total) adaptados a oscuro */
-.mi-modal__container.mi-modal--dark .mi-cr-totalLine--sub{
-  border-color: rgba(0,85,187,.35) !important;
-}
-.mi-modal__container.mi-modal--dark .mi-cr-totalLine--iva{
-  border-color: rgba(245,158,11,.35) !important;
-}
-.mi-modal__container.mi-modal--dark .mi-cr-totalLine--total{
-  border-color: rgba(16,185,129,.35) !important;
-  box-shadow: 0 12px 26px rgba(16,185,129,.10) !important;
-}
-
-/* Link “Agregar nuevo …” */
-.mi-modal__container.mi-modal--dark .mi-cr-link{
-  color: rgba(140,220,210,.95);
-}
-.mi-modal__container.mi-modal--dark .mi-cr-link:hover{
-  color: rgba(170,240,232,.98);
-}
-
-/* Botón eliminar fila */
-.mi-modal__container.mi-modal--dark .mi-cr-del{
-  border-color: rgba(239,68,68,.35) !important;
-  background: rgba(239,68,68,.10) !important;
-  color: rgba(255,220,220,.95) !important;
-}
-
-/* Dropdown sugerencias (detalle/cliente/proveedor) */
-.mi-modal__container.mi-modal--dark .mi-cr-suggest{
-  background: rgba(6,18,28,.98) !important;
-  border-color: rgba(255,255,255,.14) !important;
-  box-shadow: 0 22px 55px rgba(0,0,0,.45) !important;
-}
-.mi-modal__container.mi-modal--dark .mi-cr-suggest__item{
-  color: rgba(255,255,255,.88) !important;
-}
-.mi-modal__container.mi-modal--dark .mi-cr-suggest__item:hover{
-  background: rgba(255,255,255,.08) !important;
-}
-
-/* Panel filtros top */
-.mi-modal__container.mi-modal--dark .mi-cr-filters__top{
-  background: rgba(255,255,255,.04);
-  border-bottom-color: rgba(255,255,255,.10);
-}
-.mi-modal__container.mi-modal--dark .mi-cr-filters__title{
-  color: rgba(255,255,255,.90);
-}
-/* Padding estándar para forms (Recibo/OrdenPago) */
-.mi-modal__formPad{
-  padding: 14px;
-}
-
-/* util */
-.mi-field--mt12{ margin-top: 12px; }
-.mi-field--rel{ position: relative; }
-.mi-actions--mt14{ margin-top: 14px; }
-.ordenpagobuttos{
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-}/* =========================================================
-   ✅ PANEL CONTADO / CUENTA CORRIENTE – estilo original
-========================================================= */
-
-/* Card del panel */
-.mi-cr-filters .mi-card{
-  background: #ffffff;
-  border: 1px solid rgba(148,163,184,.45);
-  border-radius: 16px;
-  padding:0 12px 12px 12px;
-  box-shadow: 0 6px 18px rgba(15,23,42,.08);
-}
-
-/* Título */
-.mi-cr-filters .mi-card__title{
-  padding: 6px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--mi-text);
-}
-
-/* Contenedor de botones */
-.mi-card__actionsRow{
-  display: flex;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-/* Botones toggle */
-.mi-card__actionsRow .mit-btn{
-  flex: 1;
-  height: 42px;
-  border-radius: 12px;
-  font-weight: 600;
-  transition: all .18s ease;
-}
-
-/* Botón inactivo */
-.mi-card__actionsRow .mit-btn--ghost{
-  background: #f1f5f9;
-  border: 1px solid rgba(148,163,184,.45);
-  color: var(--mi-text);
-}
-
-.mi-card__actionsRow .mit-btn--ghost:hover{
-  background: #e2e8f0;
-}
-
-/* Botón activo (Facturar o Guardar seleccionado) */
-.mi-card__actionsRow .mit-btn--solid{
-  background: var(--blue-midnight);
-  border: 1px solid var(--blue-midnight);
-  color: #ffffff;
-  box-shadow: 0 8px 18px rgba(10,37,64,.25);
-}
-
-.mi-card__actionsRow .mit-btn--solid:hover{
-  background: #0d2f55;
-}
-
-/* Hint */
-.mi-card__hint{
-  font-size: 12.5px;
-  line-height: 1.4;
-  color: #475569;
-  background: transparent;
-  border: none;
-  padding: 0;
-}
-
-.mi-card__hint b{
-  font-weight: 600;
-}
-.mi-modal--dark .mi-cr-filters .mi-card{
-  background: rgba(10,25,40,.65);
-  border: 1px solid rgba(255,255,255,.12);
-  box-shadow: 0 14px 30px rgba(0,0,0,.35);
-}
-
-.mi-modal--dark .mi-card__title{
-  color: rgba(255,255,255,.92);
-  border-bottom-color: rgba(255,255,255,.12);
-}
-
-.mi-modal--dark .mi-card__actionsRow .mit-btn--ghost{
-  background: rgba(255,255,255,.06);
-  border-color: rgba(255,255,255,.14);
-  color: rgba(255,255,255,.85);
-}
-
-.mi-modal--dark .mi-card__actionsRow .mit-btn--solid{
-  background: var(--blue-action);
-  border-color: var(--blue-action);
-}
-
-.mi-modal--dark .mi-card__hint{
-  color: rgba(226,232,240,.75);
-}
-/* =========================================================
-   ✅ DARK MODE – Mini modal (AddCatalogMiniModal)
-   Activación: .mi-mini__modal.mi-modal--dark  (ya lo agregás en JSX)
-========================================================= */
-
-/* Overlay del mini modal en oscuro (un toque más profundo) */
-.mi-mini__overlay:has(.mi-mini__modal.mi-modal--dark){
-  background: rgba(0,0,0,.68);
-  backdrop-filter: blur(3px);
-}
-
-/* Si querés evitar :has por compatibilidad, dejá esto también */
-
-/* Caja */
-.mi-mini__modal.mi-modal--dark{
-  background: rgba(6,18,28,.96) !important;
-  border: 1px solid rgba(255,255,255,.10) !important;
-  box-shadow: 0 28px 64px -24px rgba(0,0,0,.55) !important;
-  color: rgba(255,255,255,.92);
-}
-
-/* Header */
-.mi-mini__modal.mi-modal--dark .mi-mini__head{
-  background: linear-gradient(180deg, #0a2540, #071a2c) !important;
-  border-bottom: 1px solid rgba(255,255,255,.10) !important;
-}
-
-.mi-mini__modal.mi-modal--dark .mi-mini__title{
-  color: rgba(255,255,255,.92) !important;
-}
-
-/* Botón cerrar */
-.mi-mini__modal.mi-modal--dark .mi-mini__close{
-  color: rgba(255,255,255,.92) !important;
-}
-.mi-mini__modal.mi-modal--dark .mi-mini__close:hover{
-  background: rgba(255,255,255,.10) !important;
-}
-
-/* Body */
-.mi-mini__modal.mi-modal--dark .mi-mini__body{
-  background: rgba(6,18,28,.96) !important;
-}
-
-/* Inputs / selects */
-.mi-mini__modal.mi-modal--dark .fl-input,
-.mi-mini__modal.mi-modal--dark .fl-select{
-  background: rgba(255,255,255,.06) !important;
-  border-color: rgba(255,255,255,.14) !important;
-  color: rgba(255,255,255,.92) !important;
-  box-shadow: none !important;
-}
-
-.mi-mini__modal.mi-modal--dark .fl-input:focus,
-.mi-mini__modal.mi-modal--dark .fl-select:focus{
-  border-color: rgba(0,85,187,.65) !important;
-  box-shadow: 0 0 0 3px rgba(0,85,187,.18) !important;
-}
-
-/* Placeholder */
-.mi-mini__modal.mi-modal--dark .fl-input::placeholder{
-  color: rgba(255,255,255,.45) !important;
-}
-
-/* Floating label con “corte” en oscuro */
-.mi-mini__modal.mi-modal--dark .fl-label{
-  color: rgba(226,232,240,.72) !important;
-}
-
-/* IMPORTANTE: cuando flota, el fondo debe ser oscuro (para cortar el borde) */
-.mi-mini__modal.mi-modal--dark .fl-input:focus + .fl-label,
-.mi-mini__modal.mi-modal--dark .fl-input:not(:placeholder-shown) + .fl-label,
-.mi-mini__modal.mi-modal--dark {
-  background: rgba(6,18,28,.96) !important;
-  color: rgba(180,210,255,.92) !important;
-}
-
-/* Botones */
-.mi-mini__modal.mi-modal--dark .mit-btn--ghost{
-  background: rgba(255,255,255,.06) !important;
-  border-color: rgba(255,255,255,.14) !important;
-  color: rgba(255,255,255,.86) !important;
-}
-.mi-mini__modal.mi-modal--dark .mit-btn--ghost:hover{
-  background: rgba(255,255,255,.10) !important;
-}
-
-.mi-mini__modal.mi-modal--dark .mit-btn--solid{
-  background: #0055BB !important;
-  border-color: rgba(0,85,187,.85) !important;
-  color: rgba(255,255,255,.96) !important;
-}
-.mi-mini__modal.mi-modal--dark .mit-btn--solid:hover{
-  filter: brightness(1.03);
-}
-
-/* Separación / bordecitos suaves */
-.mi-mini__modal.mi-modal--dark .mi-mini__actions{
-  border-top: 1px solid rgba(255,255,255,.08);
-  padding-top: 12px;
-}
-.mi-cr-col--ivaMonto,.Total--IVA{
-  margin: 10px 0 0 0;
-}
-.mi-cr-row .fl-select{
-  padding: 0 !important;
-}
-/* =========================================================
-   ✅ FIX SELECTS en DARK:
-   el desplegable (<option>) queda blanco por default,
-   y como el select tiene texto blanco, no se ve.
-   Pegarlo AL FINAL del CSS.
-========================================================= */
-
-.mi-modal__container.mi-modal--dark select.fl-select,
-.mi-modal__container.mi-modal--dark select.fl-input{
-  background: rgba(255,255,255,.06) !important;
-  color: rgba(255,255,255,.92) !important;
-  border-color: rgba(255,255,255,.14) !important;
-}
-
-/* Dropdown (options) */
-.mi-modal__container.mi-modal--dark select.fl-select option,
-.mi-modal__container.mi-modal--dark select.fl-input option{
-  background: #071a2c !important;            /* fondo oscuro real */
-  color: rgba(255,255,255,.92) !important;  /* texto visible */
-}
-
-/* Optgroup si usás */
-.mi-modal__container.mi-modal--dark select.fl-select optgroup,
-.mi-modal__container.mi-modal--dark select.fl-input optgroup{
-  background: #071a2c !important;
-  color: rgba(255,255,255,.85) !important;
-}
-
-/* Hover/selected (algunos navegadores lo respetan) */
-.mi-modal__container.mi-modal--dark select.fl-select option:checked,
-.mi-modal__container.mi-modal--dark select.fl-input option:checked{
-  background: #0a2540 !important;
-  color: rgba(255,255,255,.95) !important;
-}
-
-/* 5) Dark mode: asegurar que el sticky del panel no quede raro */
-.mi-modal__container.mi-modal--dark .mi-cr-filters__actions{
-  background: rgba(6,18,28,.92);
-}
-
-.fl-col-full--detalle{
-  grid-column: 1/-1;
-
-}
-/* =========================================================
-   ModalNuevaVenta — Rediseño moderno / minimalista
-   Tabla tipo Excel + floating labels + header clean
-========================================================= */
-
-/* -- Tokens -------------------------------------------- */
-:root {
-  --nv-midnight:   #0A2540;
-  --nv-action:     #0055BB;
-  --nv-action-10:  rgba(0,85,187,.10);
-  --nv-action-18:  rgba(0,85,187,.18);
-
-  --nv-bg:         #ffffff;
-  --nv-surface:    #F7F9FC;
-  --nv-surface2:   #EEF2F8;
-
-  --nv-border:     rgba(15,23,42,.10);
-  --nv-border-md:  rgba(15,23,42,.16);
-
-  --nv-text:       #0A2540;
-  --nv-muted:      #5A6A7E;
-  --nv-placeholder:#8A99AC;
-
-  --nv-shadow-sm:  0 1px 4px rgba(15,23,42,.07);
-  --nv-shadow-md:  0 6px 22px rgba(15,23,42,.10);
-  --nv-shadow-lg:  0 28px 64px rgba(15,23,42,.18);
-
-  --nv-r-sm:  8px;
-  --nv-r-md:  12px;
-  --nv-r-lg:  18px;
-
-  /* tabla */
-  --nv-row-h:      42px;
-  --nv-head-bg:    #F0F4FA;
-  --nv-row-odd:    #FAFBFD;
-  --nv-row-hover:  #EEF3FC;
-  --nv-cell-pad:   0 10px;
-
-  /* totales */
-  --nv-sub-color:  #1D42AA;
-  --nv-iva-color:  #B45309;
-  --nv-tot-color:  #057A55;
-}
-
-/* -- Dark tokens --------------------------------------- */
-.mi-modal--dark {
-  --nv-bg:        rgba(6,18,28,.96);
-  --nv-surface:   rgba(10,25,40,.72);
-  --nv-surface2:  rgba(255,255,255,.04);
-  --nv-border:    rgba(255,255,255,.09);
-  --nv-border-md: rgba(255,255,255,.15);
-  --nv-text:      rgba(255,255,255,.92);
-  --nv-muted:     rgba(210,220,235,.70);
-  --nv-placeholder:rgba(255,255,255,.38);
-  --nv-head-bg:   rgba(255,255,255,.06);
-  --nv-row-odd:   rgba(255,255,255,.025);
-  --nv-row-hover: rgba(255,255,255,.06);
-  --nv-shadow-sm: 0 1px 4px rgba(0,0,0,.22);
-  --nv-shadow-md: 0 6px 22px rgba(0,0,0,.32);
-  --nv-shadow-lg: 0 28px 64px rgba(0,0,0,.55);
-}
-
-/* =========================================================
-   OVERLAY & CONTAINER
-========================================================= */
-.mi-modal__overlay {
-    width: 100vw;
-  height: 100vh;
-  position: fixed;
-  inset: 0;
-  background: rgba(8,16,30,.52);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: 16px;
-  animation: nv-fade .15s ease;
-}
-
-.mi-modal__container {
-  width: min(1100px, 96vw);
-  max-height: 94vh;
-  background: var(--nv-bg);
-  border-radius: var(--nv-r-lg);
-  box-shadow: var(--nv-shadow-lg);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--nv-border);
-  animation: nv-slide .2s cubic-bezier(.22,.68,0,1.1);
-  font-family: "DM Sans", "Instrument Sans", system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-
-.mi-modal__container--mov {
-  min-height: 94vh;
-  max-height: 94vh;
-}
-
-/* =========================================================
-   HEADER — clean pill chip style
-========================================================= */
-.mi-modal__header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 20px;
-  background: var(--nv-midnight);
-  border-bottom: 1px solid rgba(255,255,255,.06);
-  flex: 0 0 auto;
-}
-
-.mi-modal__head-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: rgba(255,255,255,.10);
-  border: 1px solid rgba(255,255,255,.12);
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  font-size: 16px;
-}
-
-.mi-modal__head-left { flex: 1; min-width: 0; }
-
-.mi-modal__title {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: #fff;
-  letter-spacing: -.01em;
-}
-
-.mi-modal__subtitle {
-  margin: 2px 0 0;
-  font-size: .80rem;
-  color: rgba(255,255,255,.62);
-  font-weight: 400;
-}
-
-
-/* =========================================================
-   CONTENT LAYOUT
-========================================================= */
-.mi-modal__content {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 14px;
-  background: var(--nv-surface);
-  overflow: hidden;
-}
-
-.mi-cr-grid {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr 310px;
-  gap: 12px;
-}
-
-/* =========================================================
-   TABLA EXCEL
-========================================================= */
-.mi-cr-table {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border: 1px solid var(--nv-border-md);
-  border-radius: var(--nv-r-md);
-  overflow: hidden;
-  background: var(--nv-bg);
-  box-shadow: var(--nv-shadow-sm);
-}
-
-/* Columnas: Detalle | Cant | Precio | IVA% | IVA$ | Total | ✕ */
-.mi-cr-table__head,
-.mi-cr-row {
-  display: grid;
-  grid-template-columns: 2.4fr 72px 100px 80px 1fr 1fr 36px;
-  align-items: center;
-}
-
-/* -- HEADER -------------------------------------------- */
-.mi-cr-table__head {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  background: var(--nv-head-bg);
-  min-height: 38px;
-}
-
-.mi-cr-table__head > div {
-  padding: 0 10px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--nv-muted);
-  white-space: nowrap;
-}
-.mi-cr-table__head > div:not(:first-child) {
-  text-align: center;
-}
-
-
-
-/* -- FILAS -------------------------------------------- */
-.mi-cr-table__rows {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.mi-cr-row {
-  min-height: var(--nv-row-h);
-  border-bottom: 1px solid var(--nv-border);
-  transition: background .10s;
-  position: relative;
-}
-.mi-cr-row:nth-child(even) { background: var(--nv-row-odd); }
-.mi-cr-row:hover { background: var(--nv-row-hover); }
-.mi-cr-row:last-child { border-bottom: none; }
-
-/* Células */
-.mi-cr-cell {
-  padding: 0 5px;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-
-.mi-cr-cell--center { justify-content: center; }
-.mi-cr-cell--mono {
-  font-variant-numeric: tabular-nums;
-  font-size: .88rem;
-  font-weight: 500;
-  color: var(--nv-text);
-}
-.mi-cr-cell--soft { color: var(--nv-muted); }
-.mi-cr-cell--strong { color: var(--nv-sub-color); font-weight: 600; }
-.mi-cr-cell--total-val { color: var(--nv-tot-color); font-weight: 700; }
-
-/* Separadores verticales entre columnas (líneas guía de Excel) */
-.mi-cr-row > .mi-cr-cell:not(:first-child),
-.mi-cr-table__head > div:not(:first-child) {
-  border-left: 1px solid var(--nv-border);
-}
-
-/* -- INPUTS DENTRO DE FILA --------------------------- */
-.mi-cr-cell .nv-cell-input {
-  width: 100%;
-  height: 30px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 0 8px;
-  font-size: .875rem;
-  font-weight: 400;
-  color: var(--nv-text);
-  background: transparent;
-  outline: none;
-  transition: border-color .14s, background .14s, box-shadow .14s;
-  font-family: inherit;
-  text-align: left;
-  box-sizing: border-box;
-}
-
-.mi-cr-cell .nv-cell-input:hover {
-  border-color: var(--nv-border-md);
-  background: var(--nv-bg);
-}
-
-.mi-cr-cell .nv-cell-input:focus {
-  border-color: var(--nv-action);
-  background: var(--nv-bg);
-  box-shadow: 0 0 0 3px var(--nv-action-10);
-}
-
-.mi-cr-cell .nv-cell-input--center { text-align: center; }
-.mi-cr-cell .nv-cell-input--select { cursor: pointer; padding-right: 0; }
-
-/* Detalle input tiene posición relativa para el suggest */
-.mi-cr-cell--detalle {
-  position: relative;
-  align-items: flex-start;
-  flex-direction: column;
-  justify-content: center;
-  padding: 4px 8px;
-  gap: 2px;
-}
-
-.mi-cr-cell--detalle .nv-cell-input {
-  width: 100%;
-}
-
-/* -- DELETE BTN --------------------------------------- */
-.mi-cr-del {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--nv-muted);
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background .12s, color .12s, transform .12s;
-  margin: auto;
-}
-.mi-cr-del:hover {
-  background: rgba(239,68,68,.12);
-  color: rgba(185,28,28,.95);
-  transform: scale(1.1);
-}
-.mi-cr-del:disabled { opacity: .3; cursor: not-allowed; transform: none; }
-
-/* -- SUGGEST DROP ------------------------------------ */
-.mi-cr-suggest {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 90;
-  background: var(--nv-bg);
-  border: 1px solid var(--nv-border-md);
-  border-radius: var(--nv-r-sm);
-  box-shadow: 0 12px 36px rgba(15,23,42,.18);
-  list-style: none;
-  padding: 4px;
-  margin: 0;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.mi-cr-suggest__item {
-  padding: 7px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: .85rem;
-  color: var(--nv-text);
-  transition: background .10s;
-  user-select: none;
-}
-.mi-cr-suggest__item:hover { background: var(--nv-action-10); }
-
-/* =========================================================
-   TABLE FOOTER (Agregar fila + Agregar detalle + Totales)
-========================================================= */
-.mi-cr-table__foot {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border-top: 1px solid var(--nv-border-md);
-  background: var(--nv-head-bg);
-}
-
-.mi-cr-foot-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Botones del footer de tabla */
-.nv-foot-btn {
-  appearance: none;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid var(--nv-border-md);
-  background: var(--nv-bg);
-  color: var(--nv-text);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: all .14s;
-  font-family: inherit;
-  white-space: nowrap;
-}
-.nv-foot-btn:hover {
-  border-color: var(--nv-action);
-  color: var(--nv-action);
-  background: var(--nv-action-10);
-  transform: translateY(-1px);
-  box-shadow: var(--nv-shadow-sm);
-}
-.nv-foot-btn:disabled { opacity: .38; cursor: not-allowed; transform: none; box-shadow: none; }
-
-.nv-foot-btn__icon {
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 800;
-  background: var(--nv-action-10);
-  border: 1px solid rgba(0,85,187,.20);
-  color: var(--nv-action);
-  flex: 0 0 auto;
-}
-
-/* Separador entre botones */
-.nv-foot-sep {
-  width: 1px;
-  height: 16px;
-  background: var(--nv-border-md);
-}
-
-/* -- TOTALES ----------------------------------------- */
-.mi-cr-totals {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.mi-cr-totalLine {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 10px 5px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--nv-border-md);
-  background: var(--nv-bg);
-  box-shadow: var(--nv-shadow-sm);
-  font-variant-numeric: tabular-nums;
-  font-size: .82rem;
-  transition: transform .12s, box-shadow .12s;
-  position: relative;
-  overflow: hidden;
-}
-
-.mi-cr-totalLine::before {
-  content: "";
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 4px;
-  border-radius: 999px 0 0 999px;
-}
-
-.mi-modal__container{
-  animation: mi-modal-pop-min .16s ease-out;
-}
-
-.mi-mini__modal{
-  animation: mi-modal-pop-min .16s ease-out;
-}
-
-@keyframes mi-modal-pop-min{
-  from{
-    opacity: 0;
-    transform: translateY(6px) scale(.992);
-  }
-  to{
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}/* =========================================
-   Archivo adjunto — estructura nueva
-========================================= */
-
 .mi-uploadCard{
   border: 1px solid rgba(148,163,184,.32);
   border-radius: 14px;
   background: #fff;
-
 }
 
 .mi-uploadCard__head{
@@ -3025,7 +1677,6 @@ input[type="number"]::-webkit-outer-spin-button {
   min-width: 0;
 }
 
-/* barra superior de acciones */
 .mi-uploadBar{
   display: grid;
   grid-template-columns: 1fr auto;
@@ -3086,9 +1737,8 @@ input[type="number"]::-webkit-outer-spin-button {
   cursor: not-allowed;
 }
 
-/* archivo seleccionado */
 .mi-uploadFile{
-    white-space: nowrap;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
@@ -3140,7 +1790,698 @@ input[type="number"]::-webkit-outer-spin-button {
   color: var(--mi-muted);
 }
 
-/* dark */
+/* =========================================================
+   BLOQUES EXTRA
+========================================================= */
+.extraContent-ventas{
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  color: #8a5a00;
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 10px;
+}
+
+/* =========================================================
+   MODAL NOTA DE CRÉDITO
+========================================================= */
+.modal-nc-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9998;
+  padding: 16px;
+}
+
+.modal-nc-container{
+  width: 100%;
+  min-width: 1000px;
+  min-height: auto !important;
+  max-height: 94vh !important;
+  background: #ffffff;
+  border-radius: 18px !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  overflow: auto;
+}
+
+.modal-nc-header{
+  padding: 18px 20px;
+  border-bottom: 1px solid #ececec;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-nc-title{
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #0A2540;
+}
+
+.modal-nc-close{
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  color: #0A2540;
+}
+
+.modal-nc-body{
+  padding: 14px 16px !important;
+  overflow: auto !important;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: linear-gradient(180deg, rgba(246,248,251,.95), rgba(255,255,255,1));
+}
+
+.modal-nc-loading{
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px !important;
+  border: 1px solid rgba(148,163,184,.25);
+  border-radius: 12px !important;
+  background: rgba(241,245,249,.7);
+  color: var(--mi-muted, #516173);
+  font-size: 12.5px !important;
+  font-weight: 500;
+}
+
+.modal-nc-loading__dot{
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--blue-action, #0055BB);
+  box-shadow: 0 0 0 6px rgba(0,85,187,.12);
+  flex: 0 0 auto;
+}
+
+.modal-nc-error{
+  background: rgba(211, 47, 47, 0.08);
+  border: 1px solid rgba(211, 47, 47, 0.22);
+  color: #7f1d1d;
+  border-radius: 12px !important;
+  padding: 10px 12px !important;
+  font-size: 12.5px !important;
+  font-weight: 500;
+}
+
+.modal-nc-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px !important;
+  align-items: stretch;
+}
+
+.modal-nc-card{
+  position: relative;
+  min-height: unset !important;
+  border: 1px solid rgba(148,163,184,.28);
+  border-radius: 14px !important;
+  padding: 10px 12px !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  box-shadow: 0 10px 28px rgba(15,23,42,.06), inset 0 1px 0 rgba(255,255,255,.8);
+  display: flex;
+  flex-direction: column;
+  gap: 0 !important;
+  overflow: hidden;
+}
+
+.modal-nc-card::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--blue-midnight, #0A2540), var(--blue-action, #0055BB));
+  opacity: .95;
+}
+
+.modal-nc-card > b{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 2px 0 !important;
+  padding: 0 0 8px 0 !important;
+  border-bottom: 1px solid rgba(148,163,184,.18);
+  font-size: 12.5px !important;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: var(--mi-text, #0A2540);
+}
+
+.modal-nc-card__row{
+  min-height: 28px !important;
+  display: grid;
+  grid-template-columns: 96px 1fr !important;
+  align-items: center;
+  gap: 8px !important;
+  padding: 4px 0 !important;
+  border-bottom: 1px dashed rgba(148,163,184,.16);
+}
+
+.modal-nc-card__row:last-child{
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.modal-nc-card__row span{
+  font-size: 11px !important;
+  font-weight: 600;
+  color: #6b7a8c;
+  line-height: 1.2;
+}
+
+.modal-nc-card__row strong{
+  font-size: 12px !important;
+  font-weight: 600;
+  color: var(--mi-text, #0A2540);
+  line-height: 1.3;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modal-nc-card__row--full{
+  grid-template-columns: 1fr;
+  gap: 2px !important;
+}
+
+.modal-nc-card__row--full span{
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #7a8898;
+}
+
+.modal-nc-card__row--full strong{
+  text-align: left;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: initial;
+  font-size: 12.5px !important;
+  line-height: 1.25 !important;
+}
+
+.modal-nc-card__cae{
+  color: var(--blue-action, #0055BB) !important;
+  font-weight: 700 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.modal-nc-summary{
+  position: relative;
+  border: 1px solid rgba(148,163,184,.24);
+  border-radius: 14px !important;
+  padding: 10px 12px !important;
+  background: linear-gradient(180deg, rgba(240,244,250,.95), rgba(255,255,255,.95));
+  box-shadow: 0 10px 26px rgba(15,23,42,.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px !important;
+}
+
+.modal-nc-summary::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 16px 0 0 16px;
+  background: linear-gradient(180deg, var(--blue-midnight, #0A2540), var(--blue-action, #0055BB));
+}
+
+.modal-nc-summary__title,
+.modal-nc-summary-title{
+  padding-left: 4px;
+  font-size: 12.5px !important;
+  font-weight: 700;
+  color: var(--mi-text, #0A2540);
+  letter-spacing: .01em;
+}
+
+.modal-nc-summary__rows{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 8px !important;
+}
+
+.modal-nc-cds{
+  gap: 0;
+  min-height: 0;
+}
+
+.modal-nc-summary__row{
+  min-height: 52px !important;
+  border: 1px solid rgba(148,163,184,.18);
+  border-radius: 12px;
+  background: rgba(255,255,255,.75);
+  padding: 8px 10px !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+}
+
+.modal-nc-summary__row span{
+  font-size: 10px !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #6f7e90;
+}
+
+.modal-nc-summary__row b{
+  font-size: 12.5px !important;
+  font-weight: 700;
+  color: var(--mi-text, #0A2540);
+  line-height: 1.2;
+}
+
+.modal-nc-summary__row--total{
+  background: linear-gradient(180deg, rgba(16,185,129,.10), rgba(16,185,129,.06));
+  border-color: rgba(16,185,129,.24);
+}
+
+.modal-nc-summary__row--total span{
+  color: rgba(5,122,85,.82);
+}
+
+.modal-nc-summary__row--total b{
+  color: rgba(5,122,85,.98);
+  font-size: 14px !important;
+}
+
+.modal-nc-summary-row{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13.5px;
+  color: var(--mi-muted, #516173);
+}
+
+.modal-nc-summary-row b{
+  font-weight: 600;
+  color: var(--mi-text, #0A2540);
+}
+
+.modal-nc-summary-row--total{
+  padding-top: 8px;
+  border-top: 1px solid var(--mi-border, rgba(148,163,184,.30));
+  font-size: 15px;
+  color: var(--mi-text, #0A2540);
+}
+
+.modal-nc-summary-row--total b{
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(5, 122, 85, 0.98);
+}
+
+.modal-nc-label{
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.modal-nc-textarea{
+  width: 100%;
+  border: 1px solid #d9d9d9;
+  border-radius: 10px;
+  font-family: inherit;
+  resize: none;
+  min-height: 62px !important;
+  max-height: 62px !important;
+  padding: 16px 12px 12px !important;
+  line-height: 1.35 !important;
+  font-size: 13px !important;
+}
+
+.modal-nc-container .mit-actions{
+  padding: 10px 14px !important;
+  gap: 10px;
+}
+
+.modal-nc-container .mit-btn{
+  padding: 9px 12px !important;
+  min-height: 38px !important;
+  font-size: 13px !important;
+}
+
+/* =========================================================
+   DARK MODE GENERAL
+========================================================= */
+.mi-modal--dark .mi-cr-panel,
+.mi-modal--dark .mi-cr-left,
+.mi-modal--dark .mi-cr-body,
+.mi-modal--dark .mi-cr-content{
+  background: rgba(6, 18, 28, 0.85) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 20px 45px rgba(0,0,0,0.45);
+  color: rgba(255,255,255,0.92);
+}
+
+.mi-modal__container.mi-modal--dark [style*="background: #fff"],
+.mi-modal__container.mi-modal--dark aside{
+  background: rgba(6,18,28,.78) !important;
+  border: 1px solid var(--md-border) !important;
+  color: var(--md-text);
+}
+
+.mi-modal__container.mi-modal--dark [style*="background: rgba(15, 23, 42, 0.04)"]{
+  background: rgba(255,255,255,.06) !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+  color: var(--md-text) !important;
+  font-weight: 600 !important;
+}
+
+.mi-modal__container.mi-modal--dark .fl-input,
+.mi-modal__container.mi-modal--dark .fl-select{
+  background: rgba(255,255,255,.06) !important;
+  border: 1px solid rgba(255,255,255,.14) !important;
+  color: var(--md-text) !important;
+  box-shadow: none !important;
+}
+
+.mi-modal__container.mi-modal--dark .fl-input:focus,
+.mi-modal__container.mi-modal--dark .fl-select:focus{
+  border-color: rgba(0,85,187,.65) !important;
+  box-shadow: 0 0 0 3px rgba(0,85,187,.18) !important;
+}
+
+.mi-modal__container.mi-modal--dark .fl-label{
+  color: var(--md-muted) !important;
+  font-weight: 400 !important;
+}
+
+.mi-modal__container.mi-modal--dark .fl-input:focus + .fl-label,
+.mi-modal__container.mi-modal--dark .fl-input:not(:placeholder-shown) + .fl-label{
+  background: rgba(6,18,28,.92) !important;
+  color: rgba(180,210,255,.92) !important;
+}
+
+.mi-modal__container.mi-modal--dark .fl-input::placeholder{
+  color: rgba(255,255,255,.45);
+}
+
+.mi-modal__container.mi-modal--dark select.fl-select,
+.mi-modal__container.mi-modal--dark select.fl-input{
+  background: rgba(255,255,255,.06) !important;
+  color: rgba(255,255,255,.92) !important;
+  border-color: rgba(255,255,255,.14) !important;
+}
+
+.mi-modal__container.mi-modal--dark select.fl-select option,
+.mi-modal__container.mi-modal--dark select.fl-input option{
+  background: #071a2c !important;
+  color: rgba(255,255,255,.92) !important;
+}
+
+.mi-modal__container.mi-modal--dark select.fl-select optgroup,
+.mi-modal__container.mi-modal--dark select.fl-input optgroup{
+  background: #071a2c !important;
+  color: rgba(255,255,255,.85) !important;
+}
+
+.mi-modal__container.mi-modal--dark select.fl-select option:checked,
+.mi-modal__container.mi-modal--dark select.fl-input option:checked{
+  background: #0a2540 !important;
+  color: rgba(255,255,255,.95) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mit-btn--ghost{
+  background: rgba(255,255,255,.06) !important;
+  border-color: rgba(255,255,255,.14) !important;
+  color: rgba(255,255,255,.86) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mit-btn--ghost:hover{
+  background: rgba(255,255,255,.10) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mit-btn--solid{
+  background: #0055BB !important;
+  border-color: rgba(0,85,187,.85) !important;
+  color: rgba(255,255,255,.96) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mit-btn--solid:hover{
+  filter: brightness(1.03);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-table,
+.mi-modal__container.mi-modal--dark .mi-cr-filters{
+  background: var(--cr-panel2);
+  border-color: var(--cr-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.03),
+    0 18px 45px rgba(0,0,0,.40);
+  color: var(--cr-text);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-table__head{
+  background: rgba(255,255,255,.06);
+  border-bottom-color: rgba(255,255,255,.10);
+  color: rgba(255,255,255,.85);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-row{
+  border-bottom-color: rgba(255,255,255,.08);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-row:nth-child(odd){
+  background: rgba(255,255,255,.03);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-row:hover{
+  background: rgba(255,255,255,.06);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-table__foot{
+  background: rgba(255,255,255,.04);
+  border-top-color: rgba(255,255,255,.10);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-addrow{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.14);
+  color: rgba(255,255,255,.88);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-addrow::before{
+  background: rgba(0,85,187,.18);
+  border-color: rgba(0,85,187,.25);
+  color: rgba(255,255,255,.92);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-totalLine{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.12);
+  box-shadow: 0 10px 22px rgba(0,0,0,.35);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-totalLine span{
+  color: rgba(226,232,240,.75);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-totalLine b{
+  color: rgba(255,255,255,.92);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-totalLine--sub{
+  border-color: rgba(0,85,187,.35) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-totalLine--iva{
+  border-color: rgba(245,158,11,.35) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-totalLine--total{
+  border-color: rgba(16,185,129,.35) !important;
+  box-shadow: 0 12px 26px rgba(16,185,129,.10) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-link{
+  color: rgba(140,220,210,.95);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-link:hover{
+  color: rgba(170,240,232,.98);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-del{
+  border-color: rgba(239,68,68,.35) !important;
+  background: rgba(239,68,68,.10) !important;
+  color: rgba(255,220,220,.95) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-suggest{
+  background: rgba(6,18,28,.98) !important;
+  border-color: rgba(255,255,255,.14) !important;
+  box-shadow: 0 22px 55px rgba(0,0,0,.45) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-suggest__item{
+  color: rgba(255,255,255,.88) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-suggest__item:hover{
+  background: rgba(255,255,255,.08) !important;
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-filters__top{
+  background: rgba(255,255,255,.04);
+  border-bottom-color: rgba(255,255,255,.10);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-filters__title{
+  color: rgba(255,255,255,.90);
+}
+
+.mi-modal__container.mi-modal--dark .mi-cr-filters__actions{
+  background: rgba(6,18,28,.92);
+}
+
+.mi-modal--dark .mi-cr-panel .fl-input,
+.mi-modal--dark .mi-cr-panel .fl-select{
+  background: rgba(255,255,255,0.06) !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  color: rgba(255,255,255,0.92) !important;
+}
+
+.mi-modal--dark .mi-cr-filters .mi-card{
+  background: rgba(10,25,40,.65);
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 14px 30px rgba(0,0,0,.35);
+}
+
+.mi-modal--dark .mi-card__title{
+  color: rgba(255,255,255,.92);
+  border-bottom-color: rgba(255,255,255,.12);
+}
+
+.mi-modal--dark .mi-card__actionsRow .mit-btn--ghost{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.14);
+  color: rgba(255,255,255,.85);
+}
+
+.mi-modal--dark .mi-card__actionsRow .mit-btn--solid{
+  background: var(--blue-action);
+  border-color: var(--blue-action);
+}
+
+.mi-modal--dark .mi-card__hint{
+  color: rgba(226,232,240,.75);
+}
+
+/* =========================================================
+   DARK MINI MODAL
+========================================================= */
+.mi-mini__overlay:has(.mi-mini__modal.mi-modal--dark){
+  background: rgba(0,0,0,.68);
+  backdrop-filter: blur(3px);
+}
+
+.mi-mini__modal.mi-modal--dark{
+  background: rgba(6,18,28,.96) !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+  box-shadow: 0 28px 64px -24px rgba(0,0,0,.55) !important;
+  color: rgba(255,255,255,.92);
+}
+
+.mi-mini__modal.mi-modal--dark .mi-mini__head{
+  background: linear-gradient(180deg, #0a2540, #071a2c) !important;
+  border-bottom: 1px solid rgba(255,255,255,.10) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .mi-mini__title{
+  color: rgba(255,255,255,.92) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .mi-mini__close{
+  color: rgba(255,255,255,.92) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .mi-mini__close:hover{
+  background: rgba(255,255,255,.10) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .mi-mini__body{
+  background: rgba(6,18,28,.96) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .fl-input,
+.mi-mini__modal.mi-modal--dark .fl-select{
+  background: rgba(255,255,255,.06) !important;
+  border-color: rgba(255,255,255,.14) !important;
+  color: rgba(255,255,255,.92) !important;
+  box-shadow: none !important;
+}
+
+.mi-mini__modal.mi-modal--dark .fl-input:focus,
+.mi-mini__modal.mi-modal--dark .fl-select:focus{
+  border-color: rgba(0,85,187,.65) !important;
+  box-shadow: 0 0 0 3px rgba(0,85,187,.18) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .fl-input::placeholder{
+  color: rgba(255,255,255,.45) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .fl-label{
+  color: rgba(226,232,240,.72) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .fl-input:focus + .fl-label,
+.mi-mini__modal.mi-modal--dark .fl-input:not(:placeholder-shown) + .fl-label{
+  background: rgba(6,18,28,.96) !important;
+  color: rgba(180,210,255,.92) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .mit-btn--ghost{
+  background: rgba(255,255,255,.06) !important;
+  border-color: rgba(255,255,255,.14) !important;
+  color: rgba(255,255,255,.86) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .mit-btn--ghost:hover{
+  background: rgba(255,255,255,.10) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .mit-btn--solid{
+  background: #0055BB !important;
+  border-color: rgba(0,85,187,.85) !important;
+  color: rgba(255,255,255,.96) !important;
+}
+
+.mi-mini__modal.mi-modal--dark .mit-btn--solid:hover{
+  filter: brightness(1.03);
+}
+
+.mi-mini__modal.mi-modal--dark .mi-mini__actions{
+  border-top: 1px solid rgba(255,255,255,.08);
+  padding-top: 12px;
+}
+
+/* =========================================================
+   DARK UPLOAD
+========================================================= */
 .mi-modal--dark .mi-uploadCard{
   background: rgba(255,255,255,.04);
   border-color: rgba(255,255,255,.10);
@@ -3176,598 +2517,32 @@ input[type="number"]::-webkit-outer-spin-button {
 .mi-modal--dark .mi-uploadFile__size,
 .mi-modal--dark .mi-uploadFile__empty{
   color: rgba(226,232,240,.70);
-}.mi-em-aside{
-  border: 1px solid var(--mi-border);
-  border-radius: 14px;
-  padding: 12px;
-  background: #fff;
-
-  display: flex;
-  flex-direction: column;
-
-  height: 100%;      /* ⬅️ importante */
-  overflow: hidden;  /* ⬅️ evita que crezca */
-}.extraContent-ventas{
-            background: #fff7e6;
-            border: 1px solid #ffd591;
-            color: #8a5a00;
-            border-radius: 12px;
-            padding: 12px;
-            margin-Top: 10px;
-}/* =========================
-   Overlay
-========================= */
-
-.modal-nc-overlay{
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9998;
-  padding: 16px;
 }
 
-
-/* =========================
-   Contenedor
-========================= */
-
-.modal-nc-container{
-  width: 100%;
-
-  background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.25);
-  overflow: hidden;
-}
-
-
-/* =========================
-   Header
-========================= */
-
-.modal-nc-header{
-  padding: 18px 20px;
-  border-bottom: 1px solid #ececec;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-nc-title{
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: #0A2540;
-}
-
-.modal-nc-close{
-  border: none;
-  background: transparent;
-  font-size: 22px;
-  cursor: pointer;
-  color: #0A2540;
-}
-
-
-/* =========================
-   Body
-========================= */
-
-.modal-nc-body{
-  padding: 20px;
-}
-
-.modal-nc-grid{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.modal-nc-card{
-  border: 1px solid #ececec;
-  border-radius: 12px;
-  padding: 12px;
-  font-size: 14px;
-}
-
-.modal-nc-card b{
-  display: block;
-  margin-bottom: 6px;
-}
-
-
-/* =========================
-   Nota crédito card
-========================= */
-
-.modal-nc-summary{
-  border: 1px solid #ececec;
-  border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 16px;
-}
-
-.modal-nc-summary-title{
-  font-weight: 700;
-  margin-bottom: 8px;
-}
-
-
-/* =========================
-   Textarea motivo
-========================= */
-
-.modal-nc-label{
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 600;
-}
-
-.modal-nc-textarea{
-  width: 100%;
-  border: 1px solid #d9d9d9;
-  border-radius: 10px;
-  padding: 12px;
-  resize: vertical;
-  font-family: inherit;
-}
-
-/* =========================================================
-   Modal Emitir Nota de Crédito — contenido interno
-========================================================= */
-
-
-/* Body: padding estándar */
-.modal-nc-body {
-  padding: 16px;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* Loading */
-.modal-nc-loading {
-  font-size: 14px;
-  color: var(--mi-muted);
-  padding: 8px 0;
-}
-
-/* Error */
-.modal-nc-error {
-  background: rgba(211, 47, 47, 0.08);
-  border: 1px solid rgba(211, 47, 47, 0.25);
-  color: #7f1d1d;
-  border-radius: 12px;
-  padding: 12px 14px;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-/* Grid 2 columnas (cards) */
-.modal-nc-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-/* Cards info */
-.modal-nc-card {
-  border: 1px solid var(--mi-border, rgba(148,163,184,.45));
-  border-radius: 12px;
-  padding: 12px 14px;
-  background: var(--nv-bg, #fff);
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: 13.5px;
-  color: var(--mi-text, #0A2540);
-}
-
-.modal-nc-card b {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--mi-text, #0A2540);
-  margin-bottom: 4px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--mi-border, rgba(148,163,184,.30));
-}
-
-/* Summary (nota a emitir) */
-.modal-nc-summary {
-  border: 1px solid var(--mi-border, rgba(148,163,184,.45));
-  border-radius: 12px;
-  padding: 12px 14px;
-  background: var(--nv-surface, #F7F9FC);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.modal-nc-summary-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--mi-text, #0A2540);
-  margin-bottom: 2px;
-}
-
-.modal-nc-summary-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 13.5px;
-  color: var(--mi-muted, #516173);
-}
-
-.modal-nc-summary-row b {
-  font-weight: 600;
-  color: var(--mi-text, #0A2540);
-}
-
-.modal-nc-summary-row--total {
-  padding-top: 8px;
-  border-top: 1px solid var(--mi-border, rgba(148,163,184,.30));
-  font-size: 15px;
-  color: var(--mi-text, #0A2540);
-}
-
-.modal-nc-summary-row--total b {
-  font-size: 16px;
-  font-weight: 700;
-  color: rgba(5, 122, 85, 0.98);
-}
-
-/* Textarea para motivo — extiende fl-input */
-.modal-nc-textarea {
-  resize: vertical;
-  min-height: 72px;
-  padding-top: 18px !important;
-  line-height: 1.5;
-}
-
-/* =========================================================
-   Dark mode
-========================================================= */
-.mi-modal--dark .modal-nc-card {
-  background: rgba(255,255,255,.04);
-  border-color: rgba(255,255,255,.10);
-  color: rgba(255,255,255,.88);
-}
-
-.mi-modal--dark .modal-nc-card b {
-  color: rgba(255,255,255,.92);
-  border-bottom-color: rgba(255,255,255,.10);
-}
-
-.mi-modal--dark .modal-nc-summary {
-  background: rgba(255,255,255,.04);
+.mi-modal--dark .mi-filemeta{
+  background: rgba(255,255,255,.05);
   border-color: rgba(255,255,255,.10);
 }
 
-.mi-modal--dark .modal-nc-summary-title {
+.mi-modal--dark .mi-filemeta__name{
   color: rgba(255,255,255,.92);
 }
 
-.mi-modal--dark .modal-nc-summary-row {
-  color: rgba(210,220,235,.70);
+.mi-modal--dark .mi-filemeta__info{
+  color: rgba(226,232,240,.70);
 }
 
-.mi-modal--dark .modal-nc-summary-row b {
-  color: rgba(255,255,255,.88);
+.mi-modal--dark .mi-cr-filters .mi-card{
+  background: rgba(10,25,40,.65);
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 14px 30px rgba(0,0,0,.35);
 }
 
-.mi-modal--dark .modal-nc-summary-row--total b {
-  color: rgba(72, 210, 160, 0.95);
-}
-
-.mi-modal--dark .modal-nc-error {
-  background: rgba(239,68,68,.10);
-  border-color: rgba(239,68,68,.28);
-  color: rgba(255,200,200,.92);
-}
-
-/* Responsive */
-@media (max-width: 600px) {
-  .modal-nc-grid {
-    grid-template-columns: 1fr;
-  }
-}/* =========================================================
-   Modal Emitir Nota de Crédito — versión mejorada
-   Objetivo:
-   - más ancho
-   - más limpio visualmente
-   - tarjetas más lindas
-   - todo visible en una sola vista
+/* =========================================================
+   DARK NOTA DE CRÉDITO
 ========================================================= */
-
-/* contenedor principal del modal */
-.modal-nc-container{
-  min-width:  1000px ;
-  min-height: auto !important;
-  max-height: 94vh !important;
-  border-radius: 18px !important;
-  overflow: auto;
-}
-
-/* body más compacto para que entre todo sin scroll */
-.modal-nc-body{
-  padding: 14px 16px !important;
-  overflow: auto !important;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  background:
-    linear-gradient(180deg, rgba(246,248,251,.95), rgba(255,255,255,1));
-}
-
-/* estado loading */
-.modal-nc-loading{
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid rgba(148,163,184,.25);
-  border-radius: 12px;
-  background: rgba(241,245,249,.7);
-  color: var(--mi-muted, #516173);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.modal-nc-loading__dot{
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: var(--blue-action, #0055BB);
-  box-shadow: 0 0 0 6px rgba(0,85,187,.12);
-  flex: 0 0 auto;
-}
-
-/* error */
-.modal-nc-error{
-  background: rgba(211, 47, 47, 0.08);
-  border: 1px solid rgba(211, 47, 47, 0.22);
-  color: #7f1d1d;
-  border-radius: 14px;
-  padding: 12px 14px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-/* grid de cards */
-.modal-nc-grid{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  align-items: stretch;
-}
-
-/* cards de información */
-.modal-nc-card{
-  position: relative;
-  border: 1px solid rgba(148,163,184,.28);
-  border-radius: 16px;
-  padding: 14px;
-  background:
-    linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
-  box-shadow:
-    0 10px 28px rgba(15,23,42,.06),
-    inset 0 1px 0 rgba(255,255,255,.8);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 210px; /* hace que las tarjetas se vean más largas */
-  overflow: hidden;
-}
-
-/* detalle decorativo arriba */
-.modal-nc-card::before{
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(
-    90deg,
-    var(--blue-midnight, #0A2540),
-    var(--blue-action, #0055BB)
-  );
-  opacity: .95;
-}
-
-/* título de tarjeta */
-.modal-nc-card > b{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 0 2px 0;
-  padding: 0 0 10px 0;
-  border-bottom: 1px solid rgba(148,163,184,.18);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: .01em;
-  color: var(--mi-text, #0A2540);
-}
-
-/* filas internas */
-.modal-nc-card__row{
-  min-height: 34px;
-  display: grid;
-  grid-template-columns: 110px 1fr;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 0;
-  border-bottom: 1px dashed rgba(148,163,184,.16);
-}
-
-.modal-nc-card__row:last-child{
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.modal-nc-card__row span{
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7a8c;
-  line-height: 1.2;
-}
-
-.modal-nc-card__row strong{
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--mi-text, #0A2540);
-  line-height: 1.3;
-  text-align: right;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* filas full */
-.modal-nc-card__row--full{
-  grid-template-columns: 1fr;
-  gap: 4px;
-}
-
-.modal-nc-card__row--full span{
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  color: #7a8898;
-}
-
-.modal-nc-card__row--full strong{
-  text-align: left;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: initial;
-  font-size: 14px;
-}
-
-/* CAE resaltado */
-.modal-nc-card__cae{
-  color: var(--blue-action, #0055BB) !important;
-  font-weight: 700 !important;
-  font-variant-numeric: tabular-nums;
-}
-
-/* resumen de la NC */
-.modal-nc-summary{
-  position: relative;
-  border: 1px solid rgba(148,163,184,.24);
-  border-radius: 16px;
-  padding: 14px 16px;
-  background:
-    linear-gradient(180deg, rgba(240,244,250,.95), rgba(255,255,255,.95));
-  box-shadow: 0 10px 26px rgba(15,23,42,.05);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.modal-nc-summary::before{
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  border-radius: 16px 0 0 16px;
-  background: linear-gradient(
-    180deg,
-    var(--blue-midnight, #0A2540),
-    var(--blue-action, #0055BB)
-  );
-}
-
-.modal-nc-summary__title{
-  padding-left: 4px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--mi-text, #0A2540);
-  letter-spacing: .01em;
-}
-
-.modal-nc-summary__rows{
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-.modal-nc-cds{gap: 0; min-height: 0;}
-.modal-nc-summary__row{
-  min-height: 64px;
-  border: 1px solid rgba(148,163,184,.18);
-  border-radius: 12px;
-  background: rgba(255,255,255,.75);
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
-}
-
-.modal-nc-summary__row span{
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  color: #6f7e90;
-}
-
-.modal-nc-summary__row b{
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--mi-text, #0A2540);
-  line-height: 1.2;
-}
-
-.modal-nc-summary__row--total{
-  background: linear-gradient(180deg, rgba(16,185,129,.10), rgba(16,185,129,.06));
-  border-color: rgba(16,185,129,.24);
-}
-
-.modal-nc-summary__row--total span{
-  color: rgba(5,122,85,.82);
-}
-
-.modal-nc-summary__row--total b{
-  color: rgba(5,122,85,.98);
-  font-size: 16px;
-}
-
-/* textarea motivo */
-.modal-nc-textarea{
-  resize: none;
-  min-height: 78px;
-  max-height: 78px;
-  padding-top: 18px !important;
-  line-height: 1.45;
-}
-
-/* footer más compacto */
-.modal-nc-container .mit-actions{
-  padding: 12px 16px !important;
-  gap: 10px;
-}
-
-/* =========================
-   DARK MODE
-========================= */
 .mi-modal--dark .modal-nc-body{
-  background:
-    linear-gradient(180deg, rgba(8,20,32,.96), rgba(6,18,28,.98));
+  background: linear-gradient(180deg, rgba(8,20,32,.96), rgba(6,18,28,.98)) !important;
 }
 
 .mi-modal--dark .modal-nc-loading{
@@ -3777,12 +2552,9 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .mi-modal--dark .modal-nc-card{
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.035));
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.035));
   border-color: rgba(255,255,255,.10);
-  box-shadow:
-    0 14px 32px rgba(0,0,0,.28),
-    inset 0 1px 0 rgba(255,255,255,.03);
+  box-shadow: 0 14px 32px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.03);
 }
 
 .mi-modal--dark .modal-nc-card > b{
@@ -3803,13 +2575,13 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .mi-modal--dark .modal-nc-summary{
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.035));
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.035));
   border-color: rgba(255,255,255,.10);
   box-shadow: 0 14px 30px rgba(0,0,0,.28);
 }
 
-.mi-modal--dark .modal-nc-summary__title{
+.mi-modal--dark .modal-nc-summary__title,
+.mi-modal--dark .modal-nc-summary-title{
   color: rgba(255,255,255,.92);
 }
 
@@ -3835,184 +2607,102 @@ input[type="number"]::-webkit-outer-spin-button {
   color: rgba(90,230,180,.96);
 }
 
+.mi-modal--dark .modal-nc-summary-row{
+  color: rgba(210,220,235,.70);
+}
+
+.mi-modal--dark .modal-nc-summary-row b{
+  color: rgba(255,255,255,.88);
+}
+
+.mi-modal--dark .modal-nc-summary-row--total b{
+  color: rgba(72,210,160,.95);
+}
+
 .mi-modal--dark .modal-nc-error{
   background: rgba(239,68,68,.12);
   border-color: rgba(239,68,68,.24);
   color: rgba(255,210,210,.92);
 }
 
-/* =========================
-   Responsive
-========================= */
-@media (max-width: 780px){
-  .modal-nc-container{
-    width: min(96vw, 96vw) !important;
-    max-width: 96vw !important;
-    max-height: 90vh !important;
-  }
-
-  .modal-nc-body{
-    overflow-y: auto !important;
-  }
-
-  .modal-nc-grid{
-    grid-template-columns: 1fr;
-  }
-
-  .modal-nc-card{
-    min-height: auto;
-  }
-
-  .modal-nc-summary__rows{
-    grid-template-columns: 1fr;
-  }
-
-  .modal-nc-card__row{
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
-
-  .modal-nc-card__row strong{
-    text-align: left;
-  }
+.mi-modal--dark .modal-nc-card b{
+  color: rgba(255,255,255,.92);
+  border-bottom-color: rgba(255,255,255,.10);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
+.mi-modal--dark .modal-nc-summary{
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.10);
+}
 
 /* =========================================================
-   FIX Modal Emitir Nota de Crédito
-   - más compacto
-   - entra completo sin scroll
-   - baja alturas internas
+   ANIMACIONES
 ========================================================= */
-
-
-
-/* cards superiores más compactas */
-.modal-nc-grid{
-  grid-template-columns: 1fr 1fr;
-  gap: 10px !important;
+@keyframes mi-fade{
+  from{ opacity: 0; }
+  to{ opacity: 1; }
 }
 
-.modal-nc-card{
-  min-height: unset !important;
-  padding: 10px 12px !important;
-  border-radius: 14px !important;
-  gap: 0 !important;
+@keyframes mi-slide{
+  from{
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to{
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.modal-nc-card > b{
-  padding-bottom: 8px !important;
-  margin-bottom: 2px !important;
-  font-size: 12.5px !important;
+@keyframes nv-fade{
+  from{ opacity: 0; }
+  to{ opacity: 1; }
 }
 
-.modal-nc-card__row{
-  min-height: 28px !important;
-  grid-template-columns: 96px 1fr !important;
-  gap: 8px !important;
-  padding: 4px 0 !important;
+@keyframes nv-slide{
+  from{
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to{
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.modal-nc-card__row span{
-  font-size: 11px !important;
+@keyframes mi-modal-pop-min{
+  from{
+    opacity: 0;
+    transform: translateY(6px) scale(.992);
+  }
+  to{
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-.modal-nc-card__row strong{
-  font-size: 12px !important;
-}
-
-.modal-nc-card__row--full{
-  gap: 2px !important;
-}
-
-.modal-nc-card__row--full strong{
-  font-size: 12.5px !important;
-  line-height: 1.25 !important;
-}
-
-/* resumen también más chico */
-.modal-nc-summary{
-  padding: 10px 12px !important;
-  gap: 8px !important;
-  border-radius: 14px !important;
-}
-
-.modal-nc-summary__title{
-  font-size: 12.5px !important;
-}
-
-.modal-nc-summary__rows{
-  grid-template-columns: repeat(3, 1fr) !important;
-  gap: 8px !important;
-}
-
-.modal-nc-summary__row{
-  min-height: 52px !important;
-  padding: 8px 10px !important;
-  gap: 3px !important;
-}
-
-.modal-nc-summary__row span{
-  font-size: 10px !important;
-}
-
-.modal-nc-summary__row b{
-  font-size: 12.5px !important;
-}
-
-.modal-nc-summary__row--total b{
-  font-size: 14px !important;
-}
-
-/* textarea más baja */
-.modal-nc-textarea{
-  min-height: 62px !important;
-  max-height: 62px !important;
-  padding-top: 16px !important;
-  line-height: 1.35 !important;
-  font-size: 13px !important;
-}
-
-/* footer más chico */
-.modal-nc-container .mit-actions{
-  padding: 10px 14px !important;
-}
-
-.modal-nc-container .mit-btn{
-  padding: 9px 12px !important;
-  min-height: 38px !important;
-  font-size: 13px !important;
-}
-
-/* loading / error más compactos */
-.modal-nc-loading,
-.modal-nc-error{
-  padding: 10px 12px !important;
-  font-size: 12.5px !important;
-  border-radius: 12px !important;
-}
-
-/* dark mantiene proporción */
-.mi-modal--dark .modal-nc-body{
-  background: linear-gradient(180deg, rgba(8,20,32,.96), rgba(6,18,28,.98)) !important;
-}
-
-/* responsive */
+/* =========================================================
+   RESPONSIVE
+========================================================= */
 @media (max-width: 900px){
+  .mi-row3,
+  .mi-row2{
+    grid-template-columns: 1fr;
+  }
+
+  .mi-em-grid,
+  .mi-cr-grid{
+    grid-template-columns: 1fr;
+  }
+
+  .mi-modal__container--mov{
+    min-height: auto;
+    max-height: 94vh;
+  }
+
   .modal-nc-container{
     width: min(96vw, 96vw) !important;
+    min-width: unset !important;
     max-width: 96vw !important;
     max-height: 90vh !important;
   }
@@ -4036,5 +2726,18 @@ input[type="number"]::-webkit-outer-spin-button {
 
   .modal-nc-card__row strong{
     text-align: left !important;
+  }
+}
+
+@media (max-width: 780px){
+  .mi-cr-table__head,
+  .mi-cr-row{
+    grid-template-columns: 2fr 64px 1fr 72px 1fr 1fr 36px;
+  }
+}
+
+@media (max-width: 600px){
+  .modal-nc-grid{
+    grid-template-columns: 1fr;
   }
 }

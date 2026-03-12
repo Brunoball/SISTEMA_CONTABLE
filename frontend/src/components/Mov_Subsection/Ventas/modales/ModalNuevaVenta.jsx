@@ -35,6 +35,55 @@ function moneyARS(v) {
   try { return Number(v||0).toLocaleString("es-AR",{style:"currency",currency:"ARS"}); }
   catch { return `$${Number(v||0).toFixed(2)}`; }
 }
+function formatMoneyInputARS(v) {
+  const n = safeNumber(v);
+  try {
+    return n.toLocaleString("es-AR", {
+      style: "currency",
+      currency: "ARS",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  } catch {
+    return `$ ${n.toFixed(2)}`;
+  }
+}
+
+function parseMoneyInputARS(v) {
+  if (v == null) return 0;
+
+  let s = String(v).trim();
+
+  if (!s) return 0;
+
+  // saca símbolo $, espacios y cualquier cosa rara
+  s = s.replace(/\$/g, "").replace(/\s+/g, "");
+
+  // en es-AR: 1.234,56  => 1234.56
+  s = s.replace(/\./g, "").replace(",", ".");
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatEditableMoney(v) {
+  const n = safeNumber(v);
+  if (n === 0) return "";
+  return String(n).replace(".", ",");
+}
+
+function buildEmptyRow() {
+  return {
+    id: uid(),
+    id_detalle: NULL_OPTION,
+    detalleText: "",
+    cantidad: 1,
+    precio: 0,
+    precioDraft: "",
+    precioFocused: false,
+    ivaPct: 0,
+  };
+}
 function uid() { return crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
 function onlyDigits(v) { return String(v??"").replace(/\D/g,""); }
 function safeStr(v) { return String(v??"").trim(); }
@@ -227,7 +276,7 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
   const [accionContado,setAccionContado]=useState("guardar");
   const [cliInput,setCliInput]=useState("");
   const [cliFocus,setCliFocus]=useState(false);
-  const [rows,setRows]=useState(()=>[{id:uid(),id_detalle:NULL_OPTION,detalleText:"",cantidad:1,precio:0,ivaPct:0}]);
+  const [rows,setRows]=useState(() => [buildEmptyRow()]);
   const [saving,setSaving]=useState(false);
   const [addUI,setAddUI]=useState({open:false,kind:null,rowId:null,text:"",saving:false});
   const [fiscalLoading,setFiscalLoading]=useState(false);
@@ -251,7 +300,7 @@ const [hasScroll, setHasScroll] = useState(false);
       setFecha(todayISO());
       setFilters({id_tipo_venta:NULL_OPTION,id_medio_pago:NULL_OPTION,id_cliente:NULL_OPTION,id_cuenta_corriente:NULL_OPTION});
       setAccionContado("guardar"); setCliInput(""); setCliFocus(false);
-      setRows([{id:uid(),id_detalle:NULL_OPTION,detalleText:"",cantidad:1,precio:0,ivaPct:0}]);
+      setRows([buildEmptyRow()]);
       setAddUI({open:false,kind:null,rowId:null,text:"",saving:false});
       setSaving(false); setFiscalLoading(false); setFiscalError(""); setClienteFiscalDb(null);
       setFiscalCuitInput(""); setFiscalLookupLoading(false); setFiscalArcaData(null);
@@ -284,7 +333,9 @@ useEffect(() => {
   const updateFilter=useCallback((k,v)=>setFilters(p=>({...p,[k]:v})),[]);
 
   /* Rows */
-  const addRow    =useCallback(()=>setRows(p=>[...p,{id:uid(),id_detalle:NULL_OPTION,detalleText:"",cantidad:1,precio:0,ivaPct:0}]),[]);
+  const addRow = useCallback(() => {
+  setRows((p) => [...p, buildEmptyRow()]);
+}, []);
   const removeRow =useCallback(id=>setRows(p=>{const n=p.filter(r=>r.id!==id);return n.length?n:p;}),[]);
   const updateRow =useCallback((id,patch)=>setRows(p=>p.map(r=>r.id===id?{...r,...patch}:r)),[]);
 
@@ -748,8 +799,8 @@ useEffect(() => {
                   <div>Cant.</div>
                   <div>Precio</div>
                   <div>IVA %</div>
-                  <div>IVA $</div>
-                  <div>Total</div>
+                  <div className="right">IVA $</div>
+                  <div className="right">Total</div>
                   <div/>
                 </div>
 
@@ -798,13 +849,43 @@ useEffect(() => {
                         </div>
 
                         {/* Precio */}
-                        <div className="mi-cr-cell mi-cr-cell--center">
-                          <input className="nv-cell-input nv-cell-input--center" type="number" min="0" step="0.01"
-                            value={r.precio}
-                            onChange={e=>updateRow(r.id,{precio:e.target.value===""?"":Number(e.target.value)})}
-                            disabled={saving} style={{width:"100%"}}/>
-                        </div>
+<div className="mi-cr-cell mi-cr-cell--center">
+  <input
+    className="nv-cell-input nv-cell-input--center "
+    type="text"
+    inputMode="decimal"
+    value={r.precioFocused ? (r.precioDraft ?? "") : formatMoneyInputARS(r.precio)}
+    onFocus={(e) => {
+      updateRow(r.id, {
+        precioFocused: true,
+        precioDraft: formatEditableMoney(r.precio),
+      });
+      setTimeout(() => e.target.select(), 0);
+    }}
+    onChange={(e) => {
+      const raw = e.target.value;
 
+      // permite solo números, coma y punto
+      const cleaned = raw.replace(/[^\d,.\-]/g, "");
+
+      updateRow(r.id, {
+        precioDraft: cleaned,
+        precio: parseMoneyInputARS(cleaned),
+      });
+    }}
+    onBlur={() => {
+      const parsed = parseMoneyInputARS(r.precioDraft);
+      updateRow(r.id, {
+        precio: parsed,
+        precioDraft: "",
+        precioFocused: false,
+      });
+    }}
+    placeholder="$ 0,00"
+    disabled={saving}
+    style={{ width: "100%", padding:"0" }}
+  />
+</div>
                         {/* IVA % */}
                         <div className="mi-cr-cell mi-cr-cell--center">
                           <select className="nv-cell-input nv-cell-input--center nv-cell-input--select"
@@ -820,12 +901,12 @@ useEffect(() => {
                         </div>
 
                         {/* IVA $ */}
-                        <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--mono mi-cr-cell--soft">
+                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
                           {moneyARS(r.ivaMonto)}
                         </div>
 
                         {/* Total */}
-                        <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--mono mi-cr-cell--total-val">
+                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
                           {moneyARS(r.total)}
                         </div>
 

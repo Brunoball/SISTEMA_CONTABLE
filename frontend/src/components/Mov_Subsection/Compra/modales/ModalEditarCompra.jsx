@@ -1501,10 +1501,10 @@ export default function ModalEditarCompra({
                 <div className="mi-em-asideTitle">Relaciones, pago y archivo</div>
 
                 <div className="mi-em-dates">
-                  <div className="fl-field">
+                  <div className="fl-field fl-col-full">
                     <input
                       ref={fechaRef}
-                      className="fl-input"
+                      className="fl-input "
                       type="date"
                       value={form.fecha}
                       onChange={(e) => onFechaChange(e.target.value)}
@@ -1516,7 +1516,7 @@ export default function ModalEditarCompra({
                   </div>
                 </div>
 
-                <div className="mi-em-asideBody">
+                <div className="mi-em-asideBody  mi-em-asideBodyheght">
                   {esContado ? (
                     <div className="fl-field">
                       <select

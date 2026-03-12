@@ -1065,16 +1065,7 @@ export default function Ventas() {
 
     if (requiereNC) {
       return (
-        <div
-          style={{
-            background: "#fff7e6",
-            border: "1px solid #ffd591",
-            color: "#8a5a00",
-            borderRadius: 12,
-            padding: 12,
-            marginTop: 10,
-          }}
-        >
+        <div className="extraContent-ventas">
           <div style={{ fontWeight: 700, marginBottom: 6 }}>
             Esta venta tiene una factura emitida en ARCA
           </div>

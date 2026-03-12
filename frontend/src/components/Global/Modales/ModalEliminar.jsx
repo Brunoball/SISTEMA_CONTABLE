@@ -241,7 +241,7 @@ export default function ModalEliminarMovimientos({
           {secondaryActionLabel && typeof onSecondaryAction === "function" ? (
             <button
               type="button"
-              className="mvdel-btn mvdel-btn--solid-primary"
+              className="mvdel-btn mvdel-btn--solid-danger"
               onClick={handleSecondaryAction}
               disabled={loading || secondaryActionDisabled}
             >

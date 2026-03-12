@@ -1615,7 +1615,6 @@ export default function ModalEditarCompra({
                             >
                               {archivoActualNombre || "Comprobante actual"}
                             </div>
-                            <div className="mi-uploadFile__size">Archivo ya vinculado</div>
                           </div>
 
                           <div

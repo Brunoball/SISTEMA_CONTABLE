@@ -1520,3 +1520,10 @@ html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalValue {
 html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalSub {
   color: rgba(226,232,240,.45) !important;
 }
+
+/* modo oscuro */
+html[data-theme="oscuro"] .extraContent-ventas{
+    background: #3a2a0069;
+    border: 1px solid #8a6a1f;
+    color: #ffd666;
+}

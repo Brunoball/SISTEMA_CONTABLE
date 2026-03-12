@@ -23,7 +23,6 @@ function getAuthInfo() {
     localStorage.getItem("X-Session") ||
     ""
   ).trim();
-
   return { token, sessionKey };
 }
 
@@ -71,11 +70,17 @@ async function parseJsonOrThrow(res) {
 
 function extractFacturaPayload(factEmitida) {
   if (!factEmitida) return null;
-
   if (factEmitida.factura) return factEmitida.factura;
   if (factEmitida.data?.factura) return factEmitida.data.factura;
   if (factEmitida.data) return factEmitida.data;
   return factEmitida;
+}
+
+function isTemaOscuro() {
+  return (
+    document.documentElement.getAttribute("data-theme") === "oscuro" ||
+    document.body?.classList?.contains("dark")
+  );
 }
 
 export default function ModalEmitirNotaCreditoVenta({
@@ -92,30 +97,51 @@ export default function ModalEmitirNotaCreditoVenta({
   const [motivo, setMotivo] = useState("Anulación de venta");
   const [contexto, setContexto] = useState(null);
   const [openResumen, setOpenResumen] = useState(false);
+  const [dark, setDark] = useState(isTemaOscuro);
+
+  /* Dark mode observer */
+  useEffect(() => {
+    const update = () => setDark(isTemaOscuro());
+    const o1 = new MutationObserver(update);
+    o1.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    const o2 = new MutationObserver(update);
+    if (document.body) o2.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    return () => { o1.disconnect(); o2.disconnect(); };
+  }, []);
+
+  /* Bloquear scroll del body */
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  /* Cerrar con Escape */
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => e.key === "Escape" && !loading && onClose?.();
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [open, loading, onClose]);
 
   const showToast = useCallback(
-    (tipo, mensaje, duracion = 2800) => {
-      onToast?.(tipo, mensaje, duracion);
-    },
+    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
     [onToast]
   );
 
   const cargarContexto = useCallback(async () => {
     if (!row?.id_movimiento) return;
-
     setLoading(true);
     setError("");
-
     try {
       const sp = new URLSearchParams();
       sp.set("action", "ventas_nota_credito_contexto");
       sp.set("id_movimiento", String(row.id_movimiento));
-
       const res = await fetch(`${API}?${sp.toString()}`, {
         method: "GET",
         headers: buildHeadersGET(),
       });
-
       const data = await parseJsonOrThrow(res);
       setContexto(data.contexto || null);
     } catch (e) {
@@ -130,52 +156,41 @@ export default function ModalEmitirNotaCreditoVenta({
       setContexto(null);
       setError("");
       setOpenResumen(false);
+      setMotivo("Anulación de venta");
       cargarContexto();
     }
   }, [open, cargarContexto]);
 
   const resumenData = useMemo(() => {
     if (!contexto) return null;
-
     return {
       id_pago: null,
       id_sistema: null,
       id_movimiento: contexto?.id_movimiento || null,
-
-      // IMPORTANTE: para fiscal, el nombre correcto es el de cliente_facturacion
       labelCliente:
         contexto?.cliente_facturacion?.razon_social ||
         contexto?.cliente_nombre ||
         "Cliente",
-
       labelSistema: `Nota de crédito de venta #${contexto?.id_movimiento || ""}`,
-
       cliente_facturacion: contexto?.cliente_facturacion || {},
       id_cliente: contexto?.id_cliente || null,
       id_tipo_venta: contexto?.id_tipo_venta || null,
       id_medio_pago: contexto?.id_medio_pago || null,
       id_clasificacion: null,
-
       fecha_cbte_iso: todayISO(),
       vto_pago_iso: todayISO(),
-
       cbte_tipo: Number(contexto?.nota_credito?.cbte_tipo || 13),
       pto_vta: Number(contexto?.nota_credito?.pto_vta || 2),
-
       items_facturacion: Array.isArray(contexto?.items_facturacion)
         ? contexto.items_facturacion
         : [],
-
       total_ars: Number(contexto?.total || 0),
       monto: Number(contexto?.total || 0),
       importe: Number(contexto?.total || 0),
-
       observaciones: motivo,
       concepto: 1,
-
       cbtes_asoc: Array.isArray(contexto?.cbtes_asoc) ? contexto.cbtes_asoc : [],
       factura_original: contexto?.factura_original || null,
-
       emisor_nombre: safeStr(contexto?.config_facturacion?.razon_social),
       emisor_domicilio: safeStr(contexto?.config_facturacion?.domicilio_comercial),
       cuit_emisor: safeStr(contexto?.config_facturacion?.cuit),
@@ -245,7 +260,6 @@ export default function ModalEmitirNotaCreditoVenta({
         fd.append("tipo", "NOTA_CREDITO");
         fd.append("id_movimiento", String(row.id_movimiento));
         fd.append("pdf", pdfBlob, pdfFilename || `nota_credito_${row.id_movimiento}.pdf`);
-
         fd.append(
           "meta",
           JSON.stringify({
@@ -316,228 +330,181 @@ export default function ModalEmitirNotaCreditoVenta({
 
   return createPortal(
     <>
+      {/* OVERLAY */}
       <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,.45)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 9998,
-          padding: 16,
-        }}
+        className={[
+          "mi-modal__overlay",
+          dark ? "mi-modal__overlay--dark" : "",
+        ].join(" ").trim()}
         onMouseDown={onClose}
       >
         <div
+          className={[
+            "mi-modal__container",
+            "modal-nc-container",
+            dark ? "mi-modal--dark" : "",
+          ].join(" ").trim()}
+          role="dialog"
+          aria-modal="true"
           onMouseDown={(e) => e.stopPropagation()}
-          style={{
-            width: "100%",
-            maxWidth: 700,
-            background: "#fff",
-            borderRadius: 16,
-            boxShadow: "0 20px 60px rgba(0,0,0,.25)",
-            overflow: "hidden",
-          }}
         >
-          <div
-            style={{
-              padding: "18px 20px",
-              borderBottom: "1px solid #ececec",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <h3 style={{ margin: 0, fontSize: 20 }}>Emitir nota de crédito</h3>
+          {/* HEADER */}
+          <div className="mi-modal__header">
+            <div className="mi-modal__head-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="9" y1="13" x2="15" y2="13"/>
+                <line x1="9" y1="17" x2="12" y2="17"/>
+              </svg>
+            </div>
+            <div className="mi-modal__head-left">
+              <h2 className="mi-modal__title">Emitir nota de crédito</h2>
+              {row?.id_movimiento && (
+                <p className="mi-modal__subtitle">Movimiento #{row.id_movimiento}</p>
+              )}
+            </div>
             <button
               type="button"
+              className="mi-modal__close"
               onClick={onClose}
               disabled={loading}
-              style={{
-                border: "none",
-                background: "transparent",
-                fontSize: 22,
-                cursor: "pointer",
-              }}
-            >
-              ×
-            </button>
+              aria-label="Cerrar"
+            >✕</button>
           </div>
 
-          <div style={{ padding: 20 }}>
-            {loading && !contexto ? <p>Cargando contexto…</p> : null}
+          {/* BODY */}
+          <div className="mi-modal__content modal-nc-body">
 
-            {error ? (
-              <div
-                style={{
-                  marginBottom: 12,
-                  background: "#fff1f0",
-                  border: "1px solid #ffa39e",
-                  color: "#a8071a",
-                  borderRadius: 10,
-                  padding: 12,
-                }}
-              >
-                {error}
+            {loading && !contexto && (
+              <div className="modal-nc-loading">
+                <span className="modal-nc-loading__dot" />
+                Cargando contexto…
               </div>
-            ) : null}
+            )}
 
-            {contexto ? (
+            {error && (
+              <div className="modal-nc-error">{error}</div>
+            )}
+
+            {contexto && (
               <>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 12,
-                    marginBottom: 16,
-                  }}
-                >
-                  <div
-                    style={{
-                      border: "1px solid #ececec",
-                      borderRadius: 12,
-                      padding: 12,
-                    }}
-                  >
+                {/* Cards superiores */}
+                <div className="modal-nc-grid">
+                  <div className="modal-nc-card modal-nc-cds">
                     <b>Factura original</b>
-                    <div style={{ marginTop: 8, fontSize: 14 }}>
-                      Comprobante: #{contexto?.factura_original?.id_comprobante || "—"}
+                    <div className="modal-nc-card__row">
+                      <span>Comprobante</span>
+                      <strong>#{contexto?.factura_original?.id_comprobante || "—"}</strong>
                     </div>
-                    <div style={{ marginTop: 4, fontSize: 14 }}>
-                      Tipo: {contexto?.factura_original?.cbte_tipo || "—"}
+                    <div className="modal-nc-card__row">
+                      <span>Tipo</span>
+                      <strong>{contexto?.factura_original?.cbte_tipo || "—"}</strong>
                     </div>
-                    <div style={{ marginTop: 4, fontSize: 14 }}>
-                      Punto de venta: {contexto?.factura_original?.pto_vta || "—"}
+                    <div className="modal-nc-card__row">
+                      <span>Punto de venta</span>
+                      <strong>{contexto?.factura_original?.pto_vta || "—"}</strong>
                     </div>
-                    <div style={{ marginTop: 4, fontSize: 14 }}>
-                      Número: {contexto?.factura_original?.cbte_nro || "—"}
+                    <div className="modal-nc-card__row">
+                      <span>Número</span>
+                      <strong>{contexto?.factura_original?.cbte_nro || "—"}</strong>
                     </div>
-                    <div style={{ marginTop: 4, fontSize: 14 }}>
-                      CAE: {contexto?.factura_original?.cae || "—"}
+                    <div className="modal-nc-card__row">
+                      <span>CAE</span>
+                      <strong className="modal-nc-card__cae">
+                        {contexto?.factura_original?.cae || "—"}
+                      </strong>
                     </div>
                   </div>
 
-                  <div
-                    style={{
-                      border: "1px solid #ececec",
-                      borderRadius: 12,
-                      padding: 12,
-                    }}
-                  >
+                  <div className="modal-nc-card modal-nc-cds">
                     <b>Cliente fiscal</b>
-                    <div style={{ marginTop: 8, fontSize: 14 }}>
-                      {contexto?.cliente_facturacion?.razon_social || "—"}
+                    <div className="modal-nc-card__row modal-nc-card__row--full">
+                      <span>Razón social</span>
+                      <strong>{contexto?.cliente_facturacion?.razon_social || "—"}</strong>
                     </div>
-                    <div style={{ marginTop: 4, fontSize: 14 }}>
-                      Doc: {contexto?.cliente_facturacion?.doc_tipo || "—"} /{" "}
-                      {contexto?.cliente_facturacion?.doc_nro || "—"}
+                    <div className="modal-nc-card__row">
+                      <span>Doc.</span>
+                      <strong>
+                        {contexto?.cliente_facturacion?.doc_tipo || "—"} /{" "}
+                        {contexto?.cliente_facturacion?.doc_nro || "—"}
+                      </strong>
                     </div>
-                    <div style={{ marginTop: 4, fontSize: 14 }}>
-                      CUIT: {contexto?.cliente_facturacion?.cuit || "—"}
+                    <div className="modal-nc-card__row">
+                      <span>CUIT</span>
+                      <strong>{contexto?.cliente_facturacion?.cuit || "—"}</strong>
                     </div>
-                    <div style={{ marginTop: 4, fontSize: 14 }}>
-                      IVA:{" "}
-                      {contexto?.cliente_facturacion?.condicion_iva ||
-                        contexto?.cliente_facturacion?.cond_iva ||
-                        "—"}
+                    <div className="modal-nc-card__row">
+                      <span>IVA</span>
+                      <strong>
+                        {contexto?.cliente_facturacion?.condicion_iva ||
+                          contexto?.cliente_facturacion?.cond_iva ||
+                          "—"}
+                      </strong>
                     </div>
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    border: "1px solid #ececec",
-                    borderRadius: 12,
-                    padding: 12,
-                    marginBottom: 16,
-                  }}
-                >
-                  <div style={{ fontWeight: 700, marginBottom: 8 }}>
-                    Nota de crédito a emitir
-                  </div>
-                  <div style={{ fontSize: 14, marginBottom: 6 }}>
-                    Tipo NC: {contexto?.nota_credito?.cbte_tipo || "—"}
-                  </div>
-                  <div style={{ fontSize: 14, marginBottom: 6 }}>
-                    Punto de venta: {contexto?.nota_credito?.pto_vta || "—"}
-                  </div>
-                  <div style={{ fontSize: 14, marginBottom: 6 }}>
-                    Total: ${Number(contexto?.total || 0).toLocaleString("es-AR")}
+                {/* Resumen NC */}
+                <div className="modal-nc-summary">
+                  <div className="modal-nc-summary__title">Nota de crédito a emitir</div>
+                  <div className="modal-nc-summary__rows">
+                    <div className="modal-nc-summary__row">
+                      <span>Tipo NC</span>
+                      <b>{contexto?.nota_credito?.cbte_tipo || "—"}</b>
+                    </div>
+                    <div className="modal-nc-summary__row">
+                      <span>Punto de venta</span>
+                      <b>{contexto?.nota_credito?.pto_vta || "—"}</b>
+                    </div>
+                    <div className="modal-nc-summary__row modal-nc-summary__row--total">
+                      <span>Total</span>
+                      <b>${Number(contexto?.total || 0).toLocaleString("es-AR")}</b>
+                    </div>
                   </div>
                 </div>
 
-                <div style={{ marginBottom: 16 }}>
-                  <label
-                    htmlFor="motivo-nc-venta"
-                    style={{ display: "block", marginBottom: 8, fontWeight: 600 }}
-                  >
-                    Motivo
-                  </label>
+                {/* Motivo */}
+                <div className="fl-field">
                   <textarea
                     id="motivo-nc-venta"
+                    className="fl-input modal-nc-textarea"
+                    placeholder=" "
                     value={motivo}
                     onChange={(e) => setMotivo(e.target.value)}
-                    rows={4}
-                    style={{
-                      width: "100%",
-                      border: "1px solid #d9d9d9",
-                      borderRadius: 10,
-                      padding: 12,
-                      resize: "vertical",
-                    }}
+                    rows={3}
                     disabled={loading}
                   />
+                  <label className="fl-label" htmlFor="motivo-nc-venta">Motivo</label>
                 </div>
               </>
-            ) : null}
+            )}
           </div>
 
-          <div
-            style={{
-              padding: 20,
-              borderTop: "1px solid #ececec",
-              display: "flex",
-              gap: 10,
-              justifyContent: "flex-end",
-              flexWrap: "wrap",
-            }}
-          >
+          {/* FOOTER */}
+          <div className="mit-actions">
             <button
               type="button"
+              className="mit-btn mit-btn--ghost"
               onClick={onClose}
               disabled={loading}
-              style={{
-                border: "1px solid #d9d9d9",
-                background: "#fff",
-                padding: "10px 16px",
-                borderRadius: 10,
-                cursor: "pointer",
-              }}
             >
               Cancelar
             </button>
-
             <button
               type="button"
+              className="mit-btn mit-btn--solid"
               onClick={() => setOpenResumen(true)}
               disabled={loading || !contexto}
-              style={{
-                border: "none",
-                background: "#1677ff",
-                color: "#fff",
-                padding: "10px 16px",
-                borderRadius: 10,
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
             >
-              Continuar emisión
+              {loading ? "Procesando…" : "Continuar emisión"}
             </button>
           </div>
         </div>
       </div>
 
+      {/* Modal resumen factura */}
       {openResumen && resumenData && (
         <ModalFacturaBaltoResumen
           open={openResumen}

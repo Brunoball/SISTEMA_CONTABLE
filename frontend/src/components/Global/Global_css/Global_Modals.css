@@ -1693,7 +1693,7 @@ padding: 0 !important;
   background: #fff;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  max-height: 60vh;
 }
 
 .mi-em-asideTitle{
@@ -2584,6 +2584,8 @@ input[type="number"]::-webkit-outer-spin-button {
    OVERLAY & CONTAINER
 ========================================================= */
 .mi-modal__overlay {
+    width: 100vw;
+  height: 100vh;
   position: fixed;
   inset: 0;
   background: rgba(8,16,30,.52);
@@ -3174,4 +3176,865 @@ input[type="number"]::-webkit-outer-spin-button {
 .mi-modal--dark .mi-uploadFile__size,
 .mi-modal--dark .mi-uploadFile__empty{
   color: rgba(226,232,240,.70);
+}.mi-em-aside{
+  border: 1px solid var(--mi-border);
+  border-radius: 14px;
+  padding: 12px;
+  background: #fff;
+
+  display: flex;
+  flex-direction: column;
+
+  height: 100%;      /* ⬅️ importante */
+  overflow: hidden;  /* ⬅️ evita que crezca */
+}.extraContent-ventas{
+            background: #fff7e6;
+            border: 1px solid #ffd591;
+            color: #8a5a00;
+            border-radius: 12px;
+            padding: 12px;
+            margin-Top: 10px;
+}/* =========================
+   Overlay
+========================= */
+
+.modal-nc-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9998;
+  padding: 16px;
+}
+
+
+/* =========================
+   Contenedor
+========================= */
+
+.modal-nc-container{
+  width: 100%;
+
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  overflow: hidden;
+}
+
+
+/* =========================
+   Header
+========================= */
+
+.modal-nc-header{
+  padding: 18px 20px;
+  border-bottom: 1px solid #ececec;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-nc-title{
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #0A2540;
+}
+
+.modal-nc-close{
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  color: #0A2540;
+}
+
+
+/* =========================
+   Body
+========================= */
+
+.modal-nc-body{
+  padding: 20px;
+}
+
+.modal-nc-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.modal-nc-card{
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 14px;
+}
+
+.modal-nc-card b{
+  display: block;
+  margin-bottom: 6px;
+}
+
+
+/* =========================
+   Nota crédito card
+========================= */
+
+.modal-nc-summary{
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.modal-nc-summary-title{
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+
+/* =========================
+   Textarea motivo
+========================= */
+
+.modal-nc-label{
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.modal-nc-textarea{
+  width: 100%;
+  border: 1px solid #d9d9d9;
+  border-radius: 10px;
+  padding: 12px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+/* =========================================================
+   Modal Emitir Nota de Crédito — contenido interno
+========================================================= */
+
+
+/* Body: padding estándar */
+.modal-nc-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Loading */
+.modal-nc-loading {
+  font-size: 14px;
+  color: var(--mi-muted);
+  padding: 8px 0;
+}
+
+/* Error */
+.modal-nc-error {
+  background: rgba(211, 47, 47, 0.08);
+  border: 1px solid rgba(211, 47, 47, 0.25);
+  color: #7f1d1d;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Grid 2 columnas (cards) */
+.modal-nc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* Cards info */
+.modal-nc-card {
+  border: 1px solid var(--mi-border, rgba(148,163,184,.45));
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--nv-bg, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13.5px;
+  color: var(--mi-text, #0A2540);
+}
+
+.modal-nc-card b {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mi-text, #0A2540);
+  margin-bottom: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--mi-border, rgba(148,163,184,.30));
+}
+
+/* Summary (nota a emitir) */
+.modal-nc-summary {
+  border: 1px solid var(--mi-border, rgba(148,163,184,.45));
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--nv-surface, #F7F9FC);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-nc-summary-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mi-text, #0A2540);
+  margin-bottom: 2px;
+}
+
+.modal-nc-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13.5px;
+  color: var(--mi-muted, #516173);
+}
+
+.modal-nc-summary-row b {
+  font-weight: 600;
+  color: var(--mi-text, #0A2540);
+}
+
+.modal-nc-summary-row--total {
+  padding-top: 8px;
+  border-top: 1px solid var(--mi-border, rgba(148,163,184,.30));
+  font-size: 15px;
+  color: var(--mi-text, #0A2540);
+}
+
+.modal-nc-summary-row--total b {
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(5, 122, 85, 0.98);
+}
+
+/* Textarea para motivo — extiende fl-input */
+.modal-nc-textarea {
+  resize: vertical;
+  min-height: 72px;
+  padding-top: 18px !important;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   Dark mode
+========================================================= */
+.mi-modal--dark .modal-nc-card {
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.10);
+  color: rgba(255,255,255,.88);
+}
+
+.mi-modal--dark .modal-nc-card b {
+  color: rgba(255,255,255,.92);
+  border-bottom-color: rgba(255,255,255,.10);
+}
+
+.mi-modal--dark .modal-nc-summary {
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.10);
+}
+
+.mi-modal--dark .modal-nc-summary-title {
+  color: rgba(255,255,255,.92);
+}
+
+.mi-modal--dark .modal-nc-summary-row {
+  color: rgba(210,220,235,.70);
+}
+
+.mi-modal--dark .modal-nc-summary-row b {
+  color: rgba(255,255,255,.88);
+}
+
+.mi-modal--dark .modal-nc-summary-row--total b {
+  color: rgba(72, 210, 160, 0.95);
+}
+
+.mi-modal--dark .modal-nc-error {
+  background: rgba(239,68,68,.10);
+  border-color: rgba(239,68,68,.28);
+  color: rgba(255,200,200,.92);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .modal-nc-grid {
+    grid-template-columns: 1fr;
+  }
+}/* =========================================================
+   Modal Emitir Nota de Crédito — versión mejorada
+   Objetivo:
+   - más ancho
+   - más limpio visualmente
+   - tarjetas más lindas
+   - todo visible en una sola vista
+========================================================= */
+
+/* contenedor principal del modal */
+.modal-nc-container{
+  min-width:  1000px ;
+  min-height: auto !important;
+  max-height: 94vh !important;
+  border-radius: 18px !important;
+  overflow: auto;
+}
+
+/* body más compacto para que entre todo sin scroll */
+.modal-nc-body{
+  padding: 14px 16px !important;
+  overflow: auto !important;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background:
+    linear-gradient(180deg, rgba(246,248,251,.95), rgba(255,255,255,1));
+}
+
+/* estado loading */
+.modal-nc-loading{
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148,163,184,.25);
+  border-radius: 12px;
+  background: rgba(241,245,249,.7);
+  color: var(--mi-muted, #516173);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.modal-nc-loading__dot{
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--blue-action, #0055BB);
+  box-shadow: 0 0 0 6px rgba(0,85,187,.12);
+  flex: 0 0 auto;
+}
+
+/* error */
+.modal-nc-error{
+  background: rgba(211, 47, 47, 0.08);
+  border: 1px solid rgba(211, 47, 47, 0.22);
+  color: #7f1d1d;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* grid de cards */
+.modal-nc-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+/* cards de información */
+.modal-nc-card{
+  position: relative;
+  border: 1px solid rgba(148,163,184,.28);
+  border-radius: 16px;
+  padding: 14px;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  box-shadow:
+    0 10px 28px rgba(15,23,42,.06),
+    inset 0 1px 0 rgba(255,255,255,.8);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 210px; /* hace que las tarjetas se vean más largas */
+  overflow: hidden;
+}
+
+/* detalle decorativo arriba */
+.modal-nc-card::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--blue-midnight, #0A2540),
+    var(--blue-action, #0055BB)
+  );
+  opacity: .95;
+}
+
+/* título de tarjeta */
+.modal-nc-card > b{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 2px 0;
+  padding: 0 0 10px 0;
+  border-bottom: 1px solid rgba(148,163,184,.18);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: var(--mi-text, #0A2540);
+}
+
+/* filas internas */
+.modal-nc-card__row{
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(148,163,184,.16);
+}
+
+.modal-nc-card__row:last-child{
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.modal-nc-card__row span{
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7a8c;
+  line-height: 1.2;
+}
+
+.modal-nc-card__row strong{
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mi-text, #0A2540);
+  line-height: 1.3;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* filas full */
+.modal-nc-card__row--full{
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.modal-nc-card__row--full span{
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #7a8898;
+}
+
+.modal-nc-card__row--full strong{
+  text-align: left;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: initial;
+  font-size: 14px;
+}
+
+/* CAE resaltado */
+.modal-nc-card__cae{
+  color: var(--blue-action, #0055BB) !important;
+  font-weight: 700 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* resumen de la NC */
+.modal-nc-summary{
+  position: relative;
+  border: 1px solid rgba(148,163,184,.24);
+  border-radius: 16px;
+  padding: 14px 16px;
+  background:
+    linear-gradient(180deg, rgba(240,244,250,.95), rgba(255,255,255,.95));
+  box-shadow: 0 10px 26px rgba(15,23,42,.05);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-nc-summary::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 16px 0 0 16px;
+  background: linear-gradient(
+    180deg,
+    var(--blue-midnight, #0A2540),
+    var(--blue-action, #0055BB)
+  );
+}
+
+.modal-nc-summary__title{
+  padding-left: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mi-text, #0A2540);
+  letter-spacing: .01em;
+}
+
+.modal-nc-summary__rows{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.modal-nc-cds{gap: 0; min-height: 0;}
+.modal-nc-summary__row{
+  min-height: 64px;
+  border: 1px solid rgba(148,163,184,.18);
+  border-radius: 12px;
+  background: rgba(255,255,255,.75);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+}
+
+.modal-nc-summary__row span{
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #6f7e90;
+}
+
+.modal-nc-summary__row b{
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mi-text, #0A2540);
+  line-height: 1.2;
+}
+
+.modal-nc-summary__row--total{
+  background: linear-gradient(180deg, rgba(16,185,129,.10), rgba(16,185,129,.06));
+  border-color: rgba(16,185,129,.24);
+}
+
+.modal-nc-summary__row--total span{
+  color: rgba(5,122,85,.82);
+}
+
+.modal-nc-summary__row--total b{
+  color: rgba(5,122,85,.98);
+  font-size: 16px;
+}
+
+/* textarea motivo */
+.modal-nc-textarea{
+  resize: none;
+  min-height: 78px;
+  max-height: 78px;
+  padding-top: 18px !important;
+  line-height: 1.45;
+}
+
+/* footer más compacto */
+.modal-nc-container .mit-actions{
+  padding: 12px 16px !important;
+  gap: 10px;
+}
+
+/* =========================
+   DARK MODE
+========================= */
+.mi-modal--dark .modal-nc-body{
+  background:
+    linear-gradient(180deg, rgba(8,20,32,.96), rgba(6,18,28,.98));
+}
+
+.mi-modal--dark .modal-nc-loading{
+  background: rgba(255,255,255,.05);
+  border-color: rgba(255,255,255,.10);
+  color: rgba(226,232,240,.78);
+}
+
+.mi-modal--dark .modal-nc-card{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.035));
+  border-color: rgba(255,255,255,.10);
+  box-shadow:
+    0 14px 32px rgba(0,0,0,.28),
+    inset 0 1px 0 rgba(255,255,255,.03);
+}
+
+.mi-modal--dark .modal-nc-card > b{
+  color: rgba(255,255,255,.92);
+  border-bottom-color: rgba(255,255,255,.08);
+}
+
+.mi-modal--dark .modal-nc-card__row{
+  border-bottom-color: rgba(255,255,255,.08);
+}
+
+.mi-modal--dark .modal-nc-card__row span{
+  color: rgba(210,220,235,.70);
+}
+
+.mi-modal--dark .modal-nc-card__row strong{
+  color: rgba(255,255,255,.92);
+}
+
+.mi-modal--dark .modal-nc-summary{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.035));
+  border-color: rgba(255,255,255,.10);
+  box-shadow: 0 14px 30px rgba(0,0,0,.28);
+}
+
+.mi-modal--dark .modal-nc-summary__title{
+  color: rgba(255,255,255,.92);
+}
+
+.mi-modal--dark .modal-nc-summary__row{
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.08);
+}
+
+.mi-modal--dark .modal-nc-summary__row span{
+  color: rgba(210,220,235,.72);
+}
+
+.mi-modal--dark .modal-nc-summary__row b{
+  color: rgba(255,255,255,.90);
+}
+
+.mi-modal--dark .modal-nc-summary__row--total{
+  background: linear-gradient(180deg, rgba(16,185,129,.12), rgba(16,185,129,.07));
+  border-color: rgba(16,185,129,.22);
+}
+
+.mi-modal--dark .modal-nc-summary__row--total b{
+  color: rgba(90,230,180,.96);
+}
+
+.mi-modal--dark .modal-nc-error{
+  background: rgba(239,68,68,.12);
+  border-color: rgba(239,68,68,.24);
+  color: rgba(255,210,210,.92);
+}
+
+/* =========================
+   Responsive
+========================= */
+@media (max-width: 780px){
+  .modal-nc-container{
+    width: min(96vw, 96vw) !important;
+    max-width: 96vw !important;
+    max-height: 90vh !important;
+  }
+
+  .modal-nc-body{
+    overflow-y: auto !important;
+  }
+
+  .modal-nc-grid{
+    grid-template-columns: 1fr;
+  }
+
+  .modal-nc-card{
+    min-height: auto;
+  }
+
+  .modal-nc-summary__rows{
+    grid-template-columns: 1fr;
+  }
+
+  .modal-nc-card__row{
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .modal-nc-card__row strong{
+    text-align: left;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* =========================================================
+   FIX Modal Emitir Nota de Crédito
+   - más compacto
+   - entra completo sin scroll
+   - baja alturas internas
+========================================================= */
+
+
+
+/* cards superiores más compactas */
+.modal-nc-grid{
+  grid-template-columns: 1fr 1fr;
+  gap: 10px !important;
+}
+
+.modal-nc-card{
+  min-height: unset !important;
+  padding: 10px 12px !important;
+  border-radius: 14px !important;
+  gap: 0 !important;
+}
+
+.modal-nc-card > b{
+  padding-bottom: 8px !important;
+  margin-bottom: 2px !important;
+  font-size: 12.5px !important;
+}
+
+.modal-nc-card__row{
+  min-height: 28px !important;
+  grid-template-columns: 96px 1fr !important;
+  gap: 8px !important;
+  padding: 4px 0 !important;
+}
+
+.modal-nc-card__row span{
+  font-size: 11px !important;
+}
+
+.modal-nc-card__row strong{
+  font-size: 12px !important;
+}
+
+.modal-nc-card__row--full{
+  gap: 2px !important;
+}
+
+.modal-nc-card__row--full strong{
+  font-size: 12.5px !important;
+  line-height: 1.25 !important;
+}
+
+/* resumen también más chico */
+.modal-nc-summary{
+  padding: 10px 12px !important;
+  gap: 8px !important;
+  border-radius: 14px !important;
+}
+
+.modal-nc-summary__title{
+  font-size: 12.5px !important;
+}
+
+.modal-nc-summary__rows{
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 8px !important;
+}
+
+.modal-nc-summary__row{
+  min-height: 52px !important;
+  padding: 8px 10px !important;
+  gap: 3px !important;
+}
+
+.modal-nc-summary__row span{
+  font-size: 10px !important;
+}
+
+.modal-nc-summary__row b{
+  font-size: 12.5px !important;
+}
+
+.modal-nc-summary__row--total b{
+  font-size: 14px !important;
+}
+
+/* textarea más baja */
+.modal-nc-textarea{
+  min-height: 62px !important;
+  max-height: 62px !important;
+  padding-top: 16px !important;
+  line-height: 1.35 !important;
+  font-size: 13px !important;
+}
+
+/* footer más chico */
+.modal-nc-container .mit-actions{
+  padding: 10px 14px !important;
+}
+
+.modal-nc-container .mit-btn{
+  padding: 9px 12px !important;
+  min-height: 38px !important;
+  font-size: 13px !important;
+}
+
+/* loading / error más compactos */
+.modal-nc-loading,
+.modal-nc-error{
+  padding: 10px 12px !important;
+  font-size: 12.5px !important;
+  border-radius: 12px !important;
+}
+
+/* dark mantiene proporción */
+.mi-modal--dark .modal-nc-body{
+  background: linear-gradient(180deg, rgba(8,20,32,.96), rgba(6,18,28,.98)) !important;
+}
+
+/* responsive */
+@media (max-width: 900px){
+  .modal-nc-container{
+    width: min(96vw, 96vw) !important;
+    max-width: 96vw !important;
+    max-height: 90vh !important;
+  }
+
+  .modal-nc-body{
+    overflow-y: auto !important;
+  }
+
+  .modal-nc-grid{
+    grid-template-columns: 1fr !important;
+  }
+
+  .modal-nc-summary__rows{
+    grid-template-columns: 1fr !important;
+  }
+
+  .modal-nc-card__row{
+    grid-template-columns: 1fr !important;
+    gap: 3px !important;
+  }
+
+  .modal-nc-card__row strong{
+    text-align: left !important;
+  }
 }

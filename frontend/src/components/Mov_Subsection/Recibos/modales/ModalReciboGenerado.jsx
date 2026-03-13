@@ -115,16 +115,6 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 60000) {
   }
 }
 
-async function parseJsonFromResponse(res) {
-  const text = await res.text();
-  if (!text) return { ok: false, data: null, text: "" };
-  try {
-    return { ok: true, data: JSON.parse(text), text };
-  } catch {
-    return { ok: false, data: null, text };
-  }
-}
-
 function extractIdComprobante(data) {
   const cand =
     data?.id_comprobante ??
@@ -279,7 +269,10 @@ const LS_KEY = "balto_recibo_pending_v2";
 
 function buildPendingKey({ idsMovs, idCobro, title }) {
   return JSON.stringify({
-    ids: (Array.isArray(idsMovs) ? idsMovs : []).map(Number).filter(Boolean).sort((a, b) => a - b),
+    ids: (Array.isArray(idsMovs) ? idsMovs : [])
+      .map(Number)
+      .filter(Boolean)
+      .sort((a, b) => a - b),
     idCobro: Number(idCobro || 0),
     title: String(title || ""),
   });
@@ -539,19 +532,19 @@ export default function ModalReciboGenerado({
       });
 
       const fd = new FormData();
-      fd.append("action", "comprobantes_subir");
-      fd.append("tipo", "RECIBO");
       fd.append("titulo", String(title || "Recibo"));
 
       if (idsMovs[0]) fd.append("id_movimiento", String(idsMovs[0]));
       idsMovs.forEach((id) => fd.append("ids_movimiento[]", String(id)));
 
       const cob = Number(idCobro);
-      if (Number.isFinite(cob) && cob > 0) fd.append("id_cobro", String(cob));
+      if (Number.isFinite(cob) && cob > 0) {
+        fd.append("id_cobro", String(cob));
+      }
 
       fd.append("archivo", file);
 
-      const url = getApiPhpUrl();
+      const url = `${getApiPhpUrl()}?action=recibos_comprobantes_subir`;
 
       const res = await fetchWithTimeout(
         url,
@@ -563,14 +556,26 @@ export default function ModalReciboGenerado({
         PDF_SAVE_TIMEOUT
       );
 
-      const { ok, data, text } = await parseJsonFromResponse(res);
+      const text = await res.text();
 
-      if (!res.ok || !ok || !data?.exito) {
-        const msg =
+      if (!text) {
+        throw new Error(`Respuesta vacía del servidor (HTTP ${res.status}).`);
+      }
+
+      let data = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(
+          `Respuesta inválida al subir comprobante (HTTP ${res.status}). ${text.slice(0, 300)}`
+        );
+      }
+
+      if (!res.ok || !data?.exito) {
+        throw new Error(
           data?.mensaje ||
-          `No se pudo guardar el comprobante (HTTP ${res.status}).` +
-            (text ? ` Respuesta: ${text.slice(0, 250)}` : "");
-        throw new Error(msg);
+            `No se pudo guardar el comprobante (HTTP ${res.status}). ${text.slice(0, 300)}`
+        );
       }
 
       const idComp = extractIdComprobante(data);
@@ -578,7 +583,10 @@ export default function ModalReciboGenerado({
         throw new Error("El backend guardó el PDF pero no devolvió id_comprobante.");
       }
 
-      return { ...data, id_comprobante: idComp };
+      return {
+        ...data,
+        id_comprobante: idComp,
+      };
     },
     [title, idsMovs, idCobro]
   );
@@ -587,96 +595,55 @@ export default function ModalReciboGenerado({
     const sessionKey = getSessionKey();
     if (!sessionKey) throw new Error("Sesión inválida (no hay X-Session).");
 
+    const idsOk = (Array.isArray(ids) ? ids : [])
+      .map((x) => Number(x || 0))
+      .filter(Boolean);
+
+    if (!idsOk.length) {
+      return { exito: true };
+    }
+
     const url = getApiPhpUrl();
 
-    const ACTIONS_BATCH = [
-      "comprobantes_asociar_movimientos",
-      "comprobantes_vincular_movimientos",
-      "comprobantes_asignar_movimientos",
-      "comprobantes_set_movimientos",
-    ];
-    const ACTIONS_ONE = [
-      "comprobantes_asociar_movimiento",
-      "comprobantes_vincular_movimiento",
-      "comprobantes_asignar_movimiento",
-      "comprobantes_set_movimiento",
-    ];
-
-    const postJson = async (action, payload) => {
-      const res = await fetchWithTimeout(
-        `${url}?action=${encodeURIComponent(action)}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Session": sessionKey,
-          },
-          body: JSON.stringify(payload || {}),
+    const res = await fetchWithTimeout(
+      `${url}?action=recibos_comprobantes_asociar_movimientos`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session": sessionKey,
         },
-        PDF_SAVE_TIMEOUT
-      );
-
-      const { ok, data, text } = await parseJsonFromResponse(res);
-      if (!res.ok || !ok || !data?.exito) {
-        const msg =
-          data?.mensaje ||
-          `HTTP ${res.status}` + (text ? ` ${text.slice(0, 200)}` : "");
-        throw new Error(msg);
-      }
-      return data;
-    };
-
-    for (const action of ACTIONS_BATCH) {
-      try {
-        return await postJson(action, {
+        body: JSON.stringify({
           id_comprobante: Number(idComprobante),
-          ids_movimiento: ids,
-        });
-      } catch (e) {
-        const msg = String(e?.message || "").toLowerCase();
-        if (
-          msg.includes("acción no válida") ||
-          msg.includes("accion no valida") ||
-          msg.includes("action no valida")
-        ) {
-          continue;
-        }
-        throw e;
-      }
+          ids_movimiento: idsOk,
+        }),
+      },
+      PDF_SAVE_TIMEOUT
+    );
+
+    const text = await res.text();
+
+    if (!text) {
+      throw new Error(`Respuesta vacía al asociar comprobante (HTTP ${res.status}).`);
     }
 
-    for (const id of ids) {
-      let okOne = false;
-      for (const action of ACTIONS_ONE) {
-        try {
-          await postJson(action, {
-            id_comprobante: Number(idComprobante),
-            id_movimiento: Number(id),
-          });
-          okOne = true;
-          break;
-        } catch (e) {
-          const msg = String(e?.message || "").toLowerCase();
-          if (
-            msg.includes("acción no válida") ||
-            msg.includes("accion no valida") ||
-            msg.includes("action no valida")
-          ) {
-            continue;
-          }
-          throw e;
-        }
-      }
-      if (!okOne) {
-        throw new Error(
-          `Tu backend no tiene action para asociar comprobante a movimientos.\n` +
-            `Probé batch: ${ACTIONS_BATCH.join(", ")}\n` +
-            `Probé 1x1: ${ACTIONS_ONE.join(", ")}`
-        );
-      }
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(
+        `Respuesta inválida al asociar comprobante (HTTP ${res.status}). ${text.slice(0, 300)}`
+      );
     }
 
-    return { exito: true };
+    if (!res.ok || !data?.exito) {
+      throw new Error(
+        data?.mensaje ||
+          `No se pudo asociar el comprobante (HTTP ${res.status}). ${text.slice(0, 300)}`
+      );
+    }
+
+    return data;
   }, []);
 
   const ensureSaved = useCallback(async () => {
@@ -697,7 +664,18 @@ export default function ModalReciboGenerado({
         const saved = await retryAsync(async () => {
           const up = await uploadPdfToServer(pdfBlob);
           const idComp = extractIdComprobante(up);
-          await asociarComprobanteAMovimientos(idComp, idsMovs);
+
+          const idsDevueltos = Array.isArray(up?.ids_movimiento)
+            ? up.ids_movimiento.map((x) => Number(x || 0)).filter(Boolean)
+            : [];
+
+          const yaAsocioTodo =
+            idsDevueltos.length > 0 &&
+            idsMovs.every((id) => idsDevueltos.includes(Number(id)));
+
+          if (!yaAsocioTodo) {
+            await asociarComprobanteAMovimientos(idComp, idsMovs);
+          }
 
           const finalSaved = {
             ...up,

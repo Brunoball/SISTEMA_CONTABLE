@@ -179,7 +179,66 @@ function getCompraPagoLabel(r) {
   return mp ? mp : "CONTADO";
 }
 
+function extractIdComprobanteFromUrlLike(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+
+  const m1 = s.match(/[?&]id_comprobante=(\d+)/i);
+  if (m1) {
+    const n = Number(m1[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  const m2 = s.match(/[?&]id=(\d+)/i);
+  if (m2) {
+    const n = Number(m2[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  return null;
+}
+
+function getComprobanteId(r) {
+  const directCandidates = [
+    r?.id_comprobante,
+    r?.comprobante_id,
+    r?.factura_id_comprobante,
+    r?.idFacturaComprobante,
+  ];
+
+  for (const cand of directCandidates) {
+    const n = Number(cand);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+
+  const urlCandidates = [
+    r?.factura_url,
+    r?.factura,
+    r?.comprobante_url,
+    r?.comprobante,
+    r?.archivo_url,
+    r?.url_factura,
+    r?.path_factura,
+    r?.factura_path,
+  ];
+
+  for (const u of urlCandidates) {
+    const n = extractIdComprobanteFromUrlLike(u);
+    if (n) return n;
+  }
+
+  return null;
+}
+
 function getComprobanteUrl(r) {
+  const idComp = getComprobanteId(r);
+  if (idComp) {
+    const sp = new URLSearchParams();
+    sp.set("action", "compras_comprobantes_descargar");
+    sp.set("id_comprobante", String(idComp));
+    return `${BASE_URL}/api.php?${sp.toString()}`;
+  }
+
   const candidates = [
     r?.factura_url,
     r?.factura,
@@ -190,10 +249,13 @@ function getComprobanteUrl(r) {
     r?.path_factura,
     r?.factura_path,
   ];
+
   const raw = candidates.find((x) => typeof x === "string" && x.trim() !== "");
   if (!raw) return "";
+
   const s = raw.trim();
   if (/^https?:\/\//i.test(s)) return s;
+
   const base = String(BASE_URL || "").replace(/\/$/, "");
   const rel = s.replace(/^\//, "");
   return `${base}/${rel}`;

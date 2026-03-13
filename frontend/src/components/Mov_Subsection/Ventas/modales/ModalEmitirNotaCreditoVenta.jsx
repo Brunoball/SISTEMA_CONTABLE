@@ -285,7 +285,7 @@ export default function ModalEmitirNotaCreditoVenta({
           })
         );
 
-        const resUpload = await fetch(`${API}?action=comprobantes_vincular_movimiento`, {
+        const resUpload = await fetch(`${API}?action=ventas_comprobantes_vincular_movimiento`, {
           method: "POST",
           headers: buildHeadersPOSTForm(),
           body: fd,

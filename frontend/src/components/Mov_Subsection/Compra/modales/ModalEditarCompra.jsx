@@ -44,6 +44,11 @@ function getGenericId(x) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+function isPositiveId(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0;
+}
+
 /* =========================
    Cuenta Corriente: unificar
 ========================= */
@@ -65,6 +70,80 @@ function buildSingleCuentaCorrienteOption(arrRaw) {
   if (!pickedId) return { list: [], pickedId: null };
 
   return { list: [{ id: pickedId, nombre: "Cuenta Corriente" }], pickedId };
+}
+
+function resolveCuentaCorrienteIdFlexible({
+  formValue,
+  row,
+  cuentas,
+  pickedId,
+}) {
+  const directCandidates = [
+    formValue,
+    row?.id_cuenta_corriente,
+    row?.idCuentaCorriente,
+    pickedId,
+  ];
+
+  for (const cand of directCandidates) {
+    if (isPositiveId(cand)) return Number(cand);
+  }
+
+  const cuentasArr = Array.isArray(cuentas) ? cuentas : [];
+
+  if (cuentasArr.length === 1) {
+    const onlyId = getGenericId(cuentasArr[0]);
+    if (onlyId) return onlyId;
+  }
+
+  const hasCCText = [
+    row?.cuenta_corriente,
+    row?.tipo_venta,
+    row?.tipo_venta_nombre,
+    row?.tipoVenta,
+    row?.nombre_tipo_venta,
+  ].some((txt) => normalizeText(txt).includes("cuenta corriente"));
+
+  if (hasCCText) {
+    const byName = cuentasArr.find((x) =>
+      normalizeText(x?.nombre).includes("cuenta corriente")
+    );
+    const byNameId = getGenericId(byName);
+    if (byNameId) return byNameId;
+  }
+
+  return null;
+}
+
+function rowLooksCuentaCorriente(row, tiposVentaArr = []) {
+  if (!row) return false;
+
+  if (isPositiveId(row?.id_cuenta_corriente) || isPositiveId(row?.idCuentaCorriente)) {
+    return true;
+  }
+
+  const textHit = [
+    row?.cuenta_corriente,
+    row?.tipo_venta,
+    row?.tipo_venta_nombre,
+    row?.tipoVenta,
+    row?.nombre_tipo_venta,
+  ].some((txt) => normalizeText(txt).includes("cuenta corriente"));
+
+  if (textHit) return true;
+
+  const tipoId = Number(row?.id_tipo_venta ?? row?.idTipoVenta);
+  if (Number.isFinite(tipoId) && tipoId > 0) {
+    const tipoObj = (Array.isArray(tiposVentaArr) ? tiposVentaArr : []).find(
+      (x) => String(getGenericId(x) ?? x?.id) === String(tipoId)
+    );
+    if (tipoObj) {
+      const nombre = normalizeText(tipoObj?.nombre);
+      if (nombre && !nombre.includes("contado")) return true;
+    }
+  }
+
+  return false;
 }
 
 /* =========================
@@ -295,7 +374,70 @@ function isTemaOscuro() {
   return Boolean(byAttr || byBody);
 }
 
+/* =========================
+   Helpers comprobante
+========================= */
+function extractIdComprobanteFromUrlLike(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+
+  const m1 = s.match(/[?&]id_comprobante=(\d+)/i);
+  if (m1) {
+    const n = Number(m1[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  const m2 = s.match(/[?&]id=(\d+)/i);
+  if (m2) {
+    const n = Number(m2[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  return null;
+}
+
+function getComprobanteIdFromRow(row) {
+  const directCandidates = [
+    row?.id_comprobante_principal,
+    row?.id_comprobante,
+    row?.comprobante_id,
+    row?.factura_id_comprobante,
+    row?.idFacturaComprobante,
+  ];
+
+  for (const cand of directCandidates) {
+    const n = Number(cand);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+
+  const urlCandidates = [
+    row?.factura_url,
+    row?.factura,
+    row?.comprobante_url,
+    row?.comprobante,
+    row?.archivo_url,
+    row?.url_factura,
+    row?.path_factura,
+    row?.factura_path,
+  ];
+
+  for (const u of urlCandidates) {
+    const n = extractIdComprobanteFromUrlLike(u);
+    if (n) return n;
+  }
+
+  return null;
+}
+
 function getComprobanteUrl(row) {
+  const idComp = getComprobanteIdFromRow(row);
+  if (idComp) {
+    const sp = new URLSearchParams();
+    sp.set("action", "compras_comprobantes_descargar");
+    sp.set("id_comprobante", String(idComp));
+    return `${BASE_URL}/api.php?${sp.toString()}`;
+  }
+
   const candidates = [
     row?.factura_url,
     row?.factura,
@@ -344,7 +486,7 @@ function sanitizeDisplayName(name) {
   if (
     lowered.includes("api.php") ||
     lowered.includes("action=") ||
-    lowered.includes("comprobante") && lowered.includes("=")
+    (lowered.includes("comprobante") && lowered.includes("="))
   ) {
     return "";
   }
@@ -524,7 +666,7 @@ export default function ModalEditarCompra({
   dark: darkProp,
 }) {
   const ENDPOINT_BASE = `${BASE_URL}/api.php`;
-  const ENDPOINT_UPLOAD_LINK = `${BASE_URL}/api.php?action=comprobantes_vincular_movimientos_lote_upload`;
+  const ENDPOINT_UPLOAD_LINK = `${BASE_URL}/api.php?action=compras_comprobantes_vincular_movimientos_lote_upload`;
   const ENDPOINT_DELETE_COMP = `${BASE_URL}/api.php?action=compras_eliminar_comprobante`;
 
   const showToast = useCallback(
@@ -799,11 +941,7 @@ export default function ModalEditarCompra({
     const url = getComprobanteUrl(rowRef.current);
     setArchivoActualUrl(url || "");
     setArchivoActualNombre(getFriendlyComprobanteName(rowRef.current, url));
-    setArchivoActualId(
-      Number.isFinite(Number(rowRef.current?.id_comprobante_principal))
-        ? Number(rowRef.current?.id_comprobante_principal)
-        : null
-    );
+    setArchivoActualId(getComprobanteIdFromRow(rowRef.current));
     setArchivoNuevo(null);
     setQuitarArchivoActual(false);
 
@@ -866,6 +1004,14 @@ export default function ModalEditarCompra({
           next.id_medio_pago = String(idMp);
           changed = true;
         }
+      }
+
+      if (
+        (!next.id_cuenta_corriente || next.id_cuenta_corriente === NULL_OPTION) &&
+        currentRow?.id_cuenta_corriente
+      ) {
+        next.id_cuenta_corriente = String(Number(currentRow.id_cuenta_corriente));
+        changed = true;
       }
 
       return changed ? next : prev;
@@ -1191,13 +1337,17 @@ export default function ModalEditarCompra({
       }
 
       if (!proveedorId || proveedorId === NULL_OPTION || proveedorId === ADD_OPTION) {
-        throw new Error("Seleccioná un proveedor (o crealo con Agregar nuevo proveedor");
+        throw new Error("Seleccioná un proveedor o crealo con Agregar nuevo proveedor.");
       }
       if (!detalleId || detalleId === NULL_OPTION || detalleId === ADD_OPTION) {
-        throw new Error("Seleccioná un detalle (o crealo con Agregar nuevo detalle");
+        throw new Error("Seleccioná un detalle o crealo con Agregar nuevo detalle.");
       }
 
       let finalMedioPago = form.id_medio_pago;
+      let finalCuentaCorrienteId = null;
+
+      const originalEraCC = rowLooksCuentaCorriente(rowRef.current, safeLists.tiposVenta);
+      const editQuedaEnCC = !esContado;
 
       if (esContado) {
         if (!finalMedioPago || String(finalMedioPago) === NULL_OPTION) {
@@ -1205,24 +1355,24 @@ export default function ModalEditarCompra({
         }
       } else {
         finalMedioPago = NULL_OPTION;
-        const hasCC =
-          form.id_cuenta_corriente &&
-          form.id_cuenta_corriente !== NULL_OPTION &&
-          form.id_cuenta_corriente !== ADD_OPTION;
 
-        let finalCC = form.id_cuenta_corriente;
-        if (!hasCC && cuentaCorrientePickedId) {
-          finalCC = String(cuentaCorrientePickedId);
-        }
+        finalCuentaCorrienteId = resolveCuentaCorrienteIdFlexible({
+          formValue: form.id_cuenta_corriente,
+          row: rowRef.current,
+          cuentas: safeLists.cuentasCorrientes,
+          pickedId: cuentaCorrientePickedId,
+        });
 
-        if (!finalCC || finalCC === NULL_OPTION || finalCC === ADD_OPTION) {
+        const estaCambiandoAHCC = !originalEraCC && editQuedaEnCC;
+
+        if (!finalCuentaCorrienteId && estaCambiandoAHCC) {
           throw new Error(
-            "No se pudo determinar la Cuenta Corriente (revisá la lista de cuentas corrientes)."
+            "No se pudo determinar la Cuenta Corriente. Revisá la lista de cuentas corrientes."
           );
         }
 
-        if (finalCC !== form.id_cuenta_corriente) {
-          setForm((p) => ({ ...p, id_cuenta_corriente: finalCC }));
+        if (finalCuentaCorrienteId && String(finalCuentaCorrienteId) !== String(form.id_cuenta_corriente)) {
+          setForm((p) => ({ ...p, id_cuenta_corriente: String(finalCuentaCorrienteId) }));
         }
       }
 
@@ -1237,9 +1387,6 @@ export default function ModalEditarCompra({
         id_cliente: null,
         id_detalle: Number(detalleId),
         id_medio_pago: esContado ? Number(finalMedioPago) : null,
-        id_cuenta_corriente: !esContado
-          ? Number(form.id_cuenta_corriente || cuentaCorrientePickedId || 0)
-          : null,
         cantidad: Math.round(cantidad * 1000) / 1000,
         precio: Math.round(precio * 100) / 100,
         iva_pct: Math.round(iva_pct * 100) / 100,
@@ -1248,6 +1395,14 @@ export default function ModalEditarCompra({
         total: t.total,
         monto_total: Math.max(0, Math.round(t.total * 100) / 100),
       };
+
+      if (esContado) {
+        payloadFinal.id_cuenta_corriente = null;
+      } else if (finalCuentaCorrienteId) {
+        payloadFinal.id_cuenta_corriente = Number(finalCuentaCorrienteId);
+      } else {
+        delete payloadFinal.id_cuenta_corriente;
+      }
 
       await onSave?.(payloadFinal);
 
@@ -1494,9 +1649,6 @@ export default function ModalEditarCompra({
                 </div>
               </section>
 
-              {/* ============================================================
-                  ASIDE — con scroll igual que ventas
-              ============================================================ */}
               <aside className="mi-em-aside">
                 <div className="mi-em-asideTitle">Relaciones, pago y archivo</div>
 
@@ -1728,7 +1880,6 @@ export default function ModalEditarCompra({
                     </div>
                   </div>
 
-                  {/* ✅ CAMBIO: botones Guardar + Cancelar en grid 2 cols, igual que ventas */}
                   <div className="mi-em-actions">
                     <button
                       type="submit"

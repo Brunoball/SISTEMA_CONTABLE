@@ -985,7 +985,7 @@ export default function Ventas() {
       }
 
       const sp = new URLSearchParams();
-      sp.set("action", "comprobantes_descargar");
+      sp.set("action", "ventas_comprobantes_descargar");
       sp.set("id_comprobante", String(idComprobante));
 
       const url = `${API}?${sp.toString()}`;

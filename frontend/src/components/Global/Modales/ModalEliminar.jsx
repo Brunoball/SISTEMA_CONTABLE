@@ -39,7 +39,7 @@ function getMontoTotal(row) {
   return null;
 }
 
-export default function ModalEliminarMovimientos({
+export default function ModalEliminar({
   open,
   row,
   loading = false,
@@ -51,6 +51,7 @@ export default function ModalEliminarMovimientos({
   message = "¿Seguro que querés eliminar este movimiento definitivamente?",
   warning = "Esta acción no se puede deshacer.",
   loadingMessage = "Eliminando movimiento…",
+  successMessage = "Movimiento eliminado correctamente.",
   errorMessage = "No se pudo eliminar el movimiento.",
   confirmLabel = "Eliminar",
   cancelLabel = "Cancelar",
@@ -84,8 +85,9 @@ export default function ModalEliminarMovimientos({
 
     try {
       await onConfirm();
-      // ✅ NO mostrar toast de éxito acá
-      // El éxito lo maneja el componente padre (por ejemplo Compras.jsx)
+
+      // ✅ Reemplaza el toast de carga por el de éxito
+      showToast("exito", successMessage, 2800);
     } catch (e) {
       showToast("error", e?.message || errorMessage, 4200);
       throw e;
@@ -96,6 +98,7 @@ export default function ModalEliminarMovimientos({
     onConfirm,
     showToast,
     loadingMessage,
+    successMessage,
     errorMessage,
   ]);
 

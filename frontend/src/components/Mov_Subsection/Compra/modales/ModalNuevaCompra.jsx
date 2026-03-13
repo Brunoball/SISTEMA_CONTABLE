@@ -7,6 +7,7 @@ import {
   faFileInvoiceDollar,
   faBasketShopping,
 } from "@fortawesome/free-solid-svg-icons";
+import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
 
 const NULL_OPTION = "";
 
@@ -408,7 +409,6 @@ export default function ModalNuevaCompra({
     id_proveedor: NULL_OPTION,
   });
   const [provInput, setProvInput] = useState("");
-  const [provFocus, setProvFocus] = useState(false);
   const [rows, setRows] = useState(() => [buildEmptyRow()]);
   const [saving, setSaving] = useState(false);
   const [archivoAdjunto, setArchivoAdjunto] = useState(null);
@@ -435,7 +435,6 @@ export default function ModalNuevaCompra({
         id_proveedor: NULL_OPTION,
       });
       setProvInput("");
-      setProvFocus(false);
       setRows([buildEmptyRow()]);
       setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
       setSaving(false);
@@ -477,17 +476,22 @@ export default function ModalNuevaCompra({
     setRows((p) => p.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }, []);
 
-  const suggestDetalles = useCallback(
-    (txt) => {
-      const q = String(txt || "").trim().toLowerCase();
-      if (!q) return [];
-      return detallesList
-        .filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q))
-        .slice(0, 18);
-    },
-    [detallesList]
-  );
+  /* ── Handlers Proveedor con GlobalAutocomplete ── */
+  const handleProveedorInputChange = useCallback((val) => {
+    setProvInput(val);
+    setFilters((p) => ({ ...p, id_proveedor: NULL_OPTION }));
+  }, []);
 
+  const handleSelectProveedor = useCallback((prov) => {
+    setProvInput(String(prov?.nombre ?? "").trim());
+    setFilters((p) => ({
+      ...p,
+      id_proveedor:
+        getProveedorId(prov) != null ? String(getProveedorId(prov)) : NULL_OPTION,
+    }));
+  }, []);
+
+  /* ── Mini modal handlers ── */
   const startAddDetalleForRow = useCallback(
     (rowId) => {
       if (saving) return;
@@ -497,7 +501,6 @@ export default function ModalNuevaCompra({
   );
   const startAddProveedor = useCallback(() => {
     if (saving) return;
-    setProvFocus(false);
     setAddUI({
       open: true,
       kind: "proveedores",
@@ -563,29 +566,6 @@ export default function ModalNuevaCompra({
       showToast("error", e?.message || "Error creando.", 4200);
     }
   }, [API_CATALOGO, addUI, showToast, updateRow, updateFilter]);
-
-  const filteredProveedores = useMemo(() => {
-    const q = provInput.trim().toLowerCase();
-    if (!provFocus || q.length < 1) return [];
-    return proveedoresList
-      .filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q))
-      .slice(0, 25);
-  }, [proveedoresList, provInput, provFocus]);
-
-  const handleProveedorInputChange = useCallback((e) => {
-    setProvInput(e.target.value);
-    setFilters((p) => ({ ...p, id_proveedor: NULL_OPTION }));
-  }, []);
-
-  const handleSelectProveedor = useCallback((prov) => {
-    setProvInput(String(prov?.nombre ?? "").trim());
-    setFilters((p) => ({
-      ...p,
-      id_proveedor:
-        getProveedorId(prov) != null ? String(getProveedorId(prov)) : NULL_OPTION,
-    }));
-    setProvFocus(false);
-  }, []);
 
   const rowsCalc = useMemo(
     () =>
@@ -847,7 +827,7 @@ export default function ModalNuevaCompra({
                 <div className="mi-cr-table__head">
                   <div style={{ paddingLeft: 10 }}>Detalle</div>
                   <div>Cant.</div>
-                  <div>Precio</div>
+                  <div className="right">Precio</div>
                   <div>IVA %</div>
                   <div className="right">IVA $</div>
                   <div className="right">Total</div>
@@ -855,151 +835,133 @@ export default function ModalNuevaCompra({
                 </div>
 
                 <div className="mi-cr-table__rows">
-                  {rowsCalc.map((r) => {
-                    const suggestions = suggestDetalles(r.detalleText);
-                    const showSug =
-                      String(r.detalleText || "").trim().length > 0 &&
-                      Number(r.id_detalle || 0) <= 0 &&
-                      suggestions.length > 0;
+                  {rowsCalc.map((r) => (
+                    <div key={r.id} className="mi-cr-row">
 
-                    return (
-                      <div key={r.id} className="mi-cr-row">
-                        <div className="mi-cr-cell mi-cr-cell--detalle">
-                          <input
-                            className="nv-cell-input"
-                            placeholder="Escribí o buscá un detalle…"
-                            value={r.detalleText}
-                            onChange={(e) =>
-                              updateRow(r.id, {
-                                detalleText: e.target.value,
-                                id_detalle: NULL_OPTION,
-                              })
-                            }
-                            disabled={saving || addUI.open}
-                            autoComplete="off"
-                            style={{ width: "100%" }}
-                          />
-                          {showSug && (
-                            <ul className="mi-cr-suggest">
-                              {suggestions.map((d) => {
-                                const did = getDetalleId(d);
-                                return (
-                                  <li
-                                    key={did ?? d?.nombre ?? uid()}
-                                    className="mi-cr-suggest__item"
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      updateRow(r.id, {
-                                        id_detalle: String(did || ""),
-                                        detalleText: String(d?.nombre || ""),
-                                      });
-                                    }}
-                                  >
-                                    {d.nombre}
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
-                        </div>
-
-                        <div className="mi-cr-cell mi-cr-cell--center">
-                          <input
-                            className="nv-cell-input nv-cell-input--center"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={r.cantidad}
-                            onChange={(e) =>
-                              updateRow(r.id, {
-                                cantidad: e.target.value === "" ? "" : Number(e.target.value),
-                              })
-                            }
-                            disabled={saving}
-                            style={{ width: "100%" }}
-                          />
-                        </div>
-
-                        <div className="mi-cr-cell mi-cr-cell--center">
-                          <input
-                            className="nv-cell-input nv-cell-input--center"
-                            type="text"
-                            inputMode="decimal"
-                            value={
-                              r.precioFocused
-                                ? r.precioDraft ?? ""
-                                : formatMoneyInputARS(r.precio)
-                            }
-                            onFocus={(e) => {
-                              updateRow(r.id, {
-                                precioFocused: true,
-                                precioDraft: formatEditableMoney(r.precio),
-                              });
-                              setTimeout(() => e.target.select(), 0);
-                            }}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              const cleaned = raw.replace(/[^\d,.\-]/g, "");
-                              updateRow(r.id, {
-                                precioDraft: cleaned,
-                                precio: parseMoneyInputARS(cleaned),
-                              });
-                            }}
-                            onBlur={() => {
-                              const parsed = parseMoneyInputARS(r.precioDraft);
-                              updateRow(r.id, {
-                                precio: parsed,
-                                precioDraft: "",
-                                precioFocused: false,
-                              });
-                            }}
-                            placeholder="$ 0,00"
-                            disabled={saving}
-                            style={{ width: "100%" }}
-                          />
-                        </div>
-
-                        <div className="mi-cr-cell mi-cr-cell--center">
-                          <select
-                            className="nv-cell-input nv-cell-input--center nv-cell-input--select"
-                            value={String(r.ivaPct)}
-                            onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
-                            onKeyDown={(e) => {
-                              if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
-                            }}
-                            disabled={saving}
-                            style={{ width: "100%" }}
-                          >
-                            {IVA_OPTIONS.map((x) => (
-                              <option key={x.value} value={x.value}>
-                                {x.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
-                          {moneyARS(r.ivaMonto)}
-                        </div>
-
-                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
-                          {moneyARS(r.total)}
-                        </div>
-
-                        <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
-                          <button
-                            type="button"
-                            className="mi-cr-del"
-                            onClick={() => removeRow(r.id)}
-                            disabled={saving}
-                            title="Eliminar fila"
-                          >
-                            ×
-                          </button>
-                        </div>
+                      {/* ── Detalle con GlobalAutocomplete ── */}
+                      <div className="mi-cr-cell mi-cr-cell--detalle">
+                        <GlobalAutocomplete
+                          value={r.detalleText}
+                          onChange={(val) =>
+                            updateRow(r.id, {
+                              detalleText: val,
+                              id_detalle: NULL_OPTION,
+                            })
+                          }
+                          onSelect={(d) => {
+                            const did = getDetalleId(d);
+                            updateRow(r.id, {
+                              id_detalle: String(did || ""),
+                              detalleText: String(d?.nombre || ""),
+                            });
+                          }}
+                          options={detallesList}
+                          getOptionLabel={(d) => String(d?.nombre ?? "")}
+                          getOptionValue={(d) => String(getDetalleId(d) ?? d?.nombre ?? "")}
+                          placeholder="Escribí o buscá un detalle…"
+                          disabled={saving || addUI.open}
+                          showAllOnFocus={false}
+                          maxItems={18}
+                          inputClassName="nv-cell-input"
+                        />
                       </div>
-                    );
-                  })}
+
+                      <div className="mi-cr-cell mi-cr-cell--center">
+                        <input
+                          className="nv-cell-input nv-cell-input--center"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={r.cantidad}
+                          onChange={(e) =>
+                            updateRow(r.id, {
+                              cantidad: e.target.value === "" ? "" : Number(e.target.value),
+                            })
+                          }
+                          disabled={saving}
+                          style={{ width: "100%" }}
+                        />
+                      </div>
+
+                      <div className="mi-cr-cell mi-cr-cell--center">
+                        <input
+                          className="nv-cell-input nv-cell-input--right"
+                          type="text"
+                          inputMode="decimal"
+                          value={
+                            r.precioFocused
+                              ? r.precioDraft ?? ""
+                              : formatMoneyInputARS(r.precio)
+                          }
+                          onFocus={(e) => {
+                            updateRow(r.id, {
+                              precioFocused: true,
+                              precioDraft: formatEditableMoney(r.precio),
+                            });
+                            setTimeout(() => e.target.select(), 0);
+                          }}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const cleaned = raw.replace(/[^\d,.\-]/g, "");
+                            updateRow(r.id, {
+                              precioDraft: cleaned,
+                              precio: parseMoneyInputARS(cleaned),
+                            });
+                          }}
+                          onBlur={() => {
+                            const parsed = parseMoneyInputARS(r.precioDraft);
+                            updateRow(r.id, {
+                              precio: parsed,
+                              precioDraft: "",
+                              precioFocused: false,
+                            });
+                          }}
+                          placeholder="$ 0,00"
+                          disabled={saving}
+                          style={{ width: "100%" }}
+                        />
+                      </div>
+
+                      <div className="mi-cr-cell mi-cr-cell--center">
+                        <select
+                          className="nv-cell-input nv-cell-input--center nv-cell-input--select"
+                          value={String(r.ivaPct)}
+                          onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
+                          onKeyDown={(e) => {
+                            if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+                          }}
+                          disabled={saving}
+                          style={{ width: "100%" }}
+                        >
+                          {IVA_OPTIONS.map((x) => (
+                            <option key={x.value} value={x.value}>
+                              {x.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
+                        {moneyARS(r.ivaMonto)}
+                      </div>
+
+                      <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
+                        {moneyARS(r.total)}
+                      </div>
+
+                      <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
+                        <button
+                          type="button"
+                          className="mi-cr-del"
+                          onClick={() => removeRow(r.id)}
+                          disabled={saving}
+                          title="Eliminar fila"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="mi-cr-table__foot">
@@ -1070,37 +1032,23 @@ export default function ModalNuevaCompra({
                 </div>
 
                 <div className="mi-cr-filters__body">
+
+                  {/* ── Proveedor con GlobalAutocomplete ── */}
                   <div className="fl-field mi-cr-rel">
-                    <input
-                      className="fl-input"
-                      placeholder=" "
+                    <GlobalAutocomplete
                       value={provInput}
                       onChange={handleProveedorInputChange}
-                      onFocus={() => setProvFocus(true)}
-                      onBlur={() => setTimeout(() => setProvFocus(false), 120)}
+                      onSelect={handleSelectProveedor}
+                      options={proveedoresList}
+                      getOptionLabel={(p) => String(p?.nombre ?? "").trim()}
+                      getOptionValue={(p) => String(getProveedorId(p) ?? p?.nombre ?? "")}
+                      label="Proveedor *"
+                      placeholder=" "
                       disabled={saving || addUI.open}
-                      autoComplete="off"
+                      showAllOnFocus={true}
+                      maxItems={25}
+                      inputClassName="fl-input"
                     />
-                    <label className="fl-label">Proveedor *</label>
-                    {provFocus && filteredProveedores.length > 0 && (
-                      <ul className="mi-cr-suggest">
-                        {filteredProveedores.map((p) => {
-                          const pid = getProveedorId(p);
-                          return (
-                            <li
-                              key={pid ?? p?.nombre ?? uid()}
-                              className="mi-cr-suggest__item"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                handleSelectProveedor(p);
-                              }}
-                            >
-                              {p.nombre}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
                     <button
                       type="button"
                       className="mi-cr-link"

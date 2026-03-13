@@ -652,7 +652,7 @@ export default function ModalPagarRecibos({
                       <div className="mpr-th mpr-th--right">Monto</div>
                     </div>
 
-                    <div ref={tbodyRef} className="mpr-tbody">
+                    <div ref={tbodyRef} className="mpr-tbody mpr-tbodyvw">
                       {!deudasOrdenadas.length && (
                         <div className="mpr-empty">No hay registros para este cliente.</div>
                       )}

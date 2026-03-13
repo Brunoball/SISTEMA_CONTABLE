@@ -2735,7 +2735,7 @@ input[type="number"]::-webkit-outer-spin-button{
     grid-template-columns: 2fr 64px 1fr 72px 1fr 1fr 36px;
   }
 }
-
+.nv-cell-input--right{text-align: right !important;}
 @media (max-width: 600px){
   .modal-nc-grid{
     grid-template-columns: 1fr;

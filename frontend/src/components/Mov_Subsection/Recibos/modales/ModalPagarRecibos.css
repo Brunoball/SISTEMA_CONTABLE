@@ -961,10 +961,7 @@
   border-color: rgba(148,163,184,.35);
   color: rgba(15,23,42,.86);
 }
-.mpr-btn--ghost:hover:not(:disabled){
-  background: rgba(77, 77, 77, 0.85);
-  border-color: rgba(148,163,184,.55);
-}
+
 
 .mpr-btn--primary{
   background: var(--mi-primary-600);

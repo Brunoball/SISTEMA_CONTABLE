@@ -778,9 +778,9 @@ input[type="number"]::-webkit-outer-spin-button{
   gap: 12px;
   padding: 10px 0 0;
 }
-.mi-em-asideBodyheght{max-height: 40vh;}
+.mi-em-asideBodyheght{max-height: 56vh;}
 .mi-em-item{
-  margin-bottom: 6px;
+  margin-bottom: 12px;
 }
 
 .mi-em-itemTitle{
@@ -1057,14 +1057,14 @@ input[type="number"]::-webkit-outer-spin-button{
   width: 16px;
   height: 16px;
   border-radius: 999px;
-  display: grid;
-  place-items: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   font-size: 12px;
   font-weight: 800;
   background: var(--nv-action-10);
   border: 1px solid rgba(0,85,187,.20);
   color: var(--nv-action);
-  flex: 0 0 auto;
 }
 
 .nv-foot-sep{

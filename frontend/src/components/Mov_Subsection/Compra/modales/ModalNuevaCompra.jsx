@@ -663,6 +663,7 @@ export default function ModalNuevaCompra({
     [API_UPLOAD_LINK]
   );
 
+  // ── FIX: un solo toast "Compra agregada correctamente." ──
   const submit = useCallback(async () => {
     if (saving) return;
     const { sessionKey } = getAuthInfo();
@@ -682,7 +683,6 @@ export default function ModalNuevaCompra({
     setSaving(true);
     if (v.warn)
       showToast("advertencia", "Hay filas incompletas: se guardarán solo las válidas.", 3600);
-    else showToast("cargando", "Guardando compra…", 12000);
     try {
       const { idUsuario } = getAuthInfo();
       const idTipoVenta = isCorriente ? 2 : 1;
@@ -745,7 +745,6 @@ export default function ModalNuevaCompra({
       let warningArchivo = "";
       if (archivoAdjunto && idsCreados.length > 0) {
         try {
-          showToast("cargando", "Compra guardada. Subiendo archivo…", 12000);
           const rFile = await subirYVincularArchivo(idsCreados, archivoAdjunto);
           if (!rFile?.exito) {
             warningArchivo = rFile?.mensaje || "No se pudo vincular el archivo.";
@@ -762,7 +761,8 @@ export default function ModalNuevaCompra({
           7000
         );
       } else {
-        showToast("exito", `Listo: ${data?.creados ?? payloads.length} ítems guardados.`, 2800);
+        // ── único toast de éxito ──
+        showToast("exito", "Compra agregada correctamente.", 3000);
       }
 
       await Promise.resolve(onSaved?.(data));

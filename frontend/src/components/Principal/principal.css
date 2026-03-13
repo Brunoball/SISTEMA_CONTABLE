@@ -37,57 +37,17 @@
 }
 
 /* =========================
-   MODO OSCURO (redefine variables)
-   Se activa con: html[data-theme="oscuro"]
+   MODO OSCURO
 ========================= */
 html[data-theme="oscuro"]{
-  /* base */
-  --balto-bg: #0B1220;          /* fondo app */
-  --balto-text: rgba(226,232,240,.82);
+  --balto-bg: #0B1220;
   --balto-white: #0F172A;
+  --balto-text: rgba(226,232,240,.82);
 
-  /* marca */
-  --balto-midnight:#0A2540;     /* podés dejarlo, combina bien */
-  --balto-action:#4EA1FF;       /* azul más visible en dark */
-  --balto-action-hover:#2E8BFF;
-
-  /* bordes/sombras/hover */
-  --balto-border: rgba(148,163,184,0.14);
-  --balto-muted: rgba(226,232,240,.62);
-  --balto-focus: rgba(78,161,255,.22);
-  --balto-hover: rgba(78,161,255,.10);
-
-  --shadow-sm: 0 1px 3px rgba(0,0,0,.30);
-  --shadow-md: 0 10px 22px rgba(0,0,0,.38);
-  --shadow-lg: 0 18px 40px rgba(0,0,0,.50);
-}
-
-
-
-
-
-
-
-
-
-
-
-/* =========================
-   MODO OSCURO (PRO + CLEAN)
-   Se activa con: html[data-theme="oscuro"]
-   ========================= */
-html[data-theme="oscuro"]{
-  /* Base */
-  --balto-bg: #0B1220;                 /* fondo app */
-  --balto-white: #0F172A;              /* superficies */
-  --balto-text: rgba(226,232,240,.82); /* texto secundario */
-
-  /* Marca (azul más sobrio) */
   --balto-midnight:#0A2540;
-  --balto-action:#3B82F6;              /* más limpio y menos “neón” */
+  --balto-action:#3B82F6;
   --balto-action-hover:#2563EB;
 
-  /* Bordes / muted / foco */
   --balto-border: rgba(148,163,184,0.14);
   --balto-muted: rgba(226,232,240,.62);
   --balto-focus: rgba(59,130,246,.22);
@@ -98,13 +58,11 @@ html[data-theme="oscuro"]{
   --shadow-lg: 0 22px 46px rgba(0,0,0,.55);
 }
 
-/* Base texto/fondo */
 html[data-theme="oscuro"] body{
   background: var(--balto-bg);
   color: rgba(226,232,240,.90) !important;
 }
 
-/* Fondo general shell (menos “azulazo”) */
 html[data-theme="oscuro"] .pp-shell{
   background:
     radial-gradient(900px 360px at 50% 6%, rgba(59,130,246, 0.08), transparent 56%),
@@ -112,15 +70,11 @@ html[data-theme="oscuro"] .pp-shell{
     var(--balto-bg);
 }
 
-/* =========================
-   SIDEBAR
-========================= */
 html[data-theme="oscuro"] .pp-sidebar{
   background: rgba(15, 23, 42, .78);
   border-right: 1px solid rgba(148,163,184,0.14);
 }
 
-/* Brand del sidebar */
 html[data-theme="oscuro"] .pp-brand__title{
   color: rgba(226,232,240,.92);
 }
@@ -128,33 +82,23 @@ html[data-theme="oscuro"] .pp-brand__subtitle{
   color: rgba(226,232,240,.62);
 }
 
-/* =========================
-   CONTENT CARD
-========================= */
 html[data-theme="oscuro"] .pp-content__inner{
   background: rgba(15, 23, 42, .62);
   border: 1px solid rgba(148,163,184,0.14);
 }
 
-/* =========================
-   NAV ITEMS (SOBRIO)
-========================= */
 html[data-theme="oscuro"] .pp-nav__item{
   color: rgba(226,232,240,.90);
 }
-
 html[data-theme="oscuro"] .pp-nav__label{
   color: rgba(226,232,240,.82);
 }
-
-/* Icon “badge” más oscuro y pro */
 html[data-theme="oscuro"] .pp-nav__icon{
   background: rgba(2, 6, 23, 0.42);
   border: 1px solid rgba(148,163,184,0.14);
   color: rgba(226,232,240,.90);
 }
 
-/* Hover suave (no celeste intenso) */
 @media (hover:hover) and (pointer:fine){
   html[data-theme="oscuro"] .pp-nav__item:hover{
     background: rgba(2, 6, 23, 0.28);
@@ -167,7 +111,6 @@ html[data-theme="oscuro"] .pp-nav__icon{
   }
 }
 
-/* ✅ ACTIVO: nada de blanco + nada de “azulazo” */
 html[data-theme="oscuro"] .pp-nav__item.is-active{
   background: linear-gradient(135deg, rgba(59,130,246,0.14), rgba(2,6,23,0.35));
   border-color: rgba(59,130,246,0.26);
@@ -176,17 +119,12 @@ html[data-theme="oscuro"] .pp-nav__item.is-active{
 html[data-theme="oscuro"] .pp-nav__item.is-active .pp-nav__label{
   color: rgba(226,232,240,.92);
 }
-
-/* Icon activo: gradiente más oscuro (pro) */
 html[data-theme="oscuro"] .pp-nav__item.is-active .pp-nav__icon{
   background: linear-gradient(135deg, rgba(30, 58, 138, .85), rgba(59,130,246,.55));
   border-color: rgba(59,130,246,0.22);
   color:#fff;
 }
 
-/* =========================
-   SUBMENU
-========================= */
 html[data-theme="oscuro"] .pp-navSub__item{
   background: rgba(2, 6, 23, 0.32);
   border: 1px solid rgba(148,163,184,0.14);
@@ -208,9 +146,6 @@ html[data-theme="oscuro"] .pp-navSub__dot{
   background: rgba(59,130,246,0.55);
 }
 
-/* =========================
-   LOGOUT
-========================= */
 html[data-theme="oscuro"] .pp-sidebar__bottom{
   border-top: 1px solid rgba(148,163,184,0.14);
 }
@@ -230,9 +165,6 @@ html[data-theme="oscuro"] .pp-logout__icon{
   }
 }
 
-/* =========================
-   MODAL
-========================= */
 html[data-theme="oscuro"] .pp-modal-overlay{
   background: rgba(2, 6, 23, .62);
 }
@@ -256,26 +188,6 @@ html[data-theme="oscuro"] .pp-btn--ghost:hover{
   border-color: rgba(59,130,246,0.22);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /* =========================
    BASE
 ========================= */
@@ -291,6 +203,7 @@ button{ font-family: inherit; }
 
 /* =========================
    LAYOUT
+   ✅ sigue empujando contenido
 ========================= */
 .pp-shell{
   min-height:100vh;
@@ -300,6 +213,8 @@ button{ font-family: inherit; }
     radial-gradient(1100px 420px at 50% 8%, rgba(0, 85, 187, 0.08), transparent 55%),
     radial-gradient(900px 340px at 50% 92%, rgba(10, 37, 64, 0.06), transparent 55%),
     var(--balto-bg);
+
+  contain: layout style paint;
 }
 
 /* =========================
@@ -329,7 +244,6 @@ button{ font-family: inherit; }
   min-width: 0;
 }
 
-/* ✅ burger (solo mobile) */
 .pp-burger{
   display:none;
   width: 42px;
@@ -494,10 +408,11 @@ button{ font-family: inherit; }
 }
 
 /* =========================
-   SIDEBAR (desktop default)
+   SIDEBAR
+   ✅ sigue expandiendo width y empujando
 ========================= */
 .pp-sidebar{
-  position:sticky;
+  position: sticky;
   top: var(--mov-topbar-h);
   height: calc(100vh - var(--mov-topbar-h));
   width: var(--pp-side-collapsed);
@@ -507,16 +422,26 @@ button{ font-family: inherit; }
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(10px);
 
-  transition: width .22s cubic-bezier(.4,0,.2,1);
+  transition:
+    width 180ms cubic-bezier(.2,.8,.2,1),
+    box-shadow 180ms ease,
+    background 180ms ease;
+
   display:flex;
   flex-direction:column;
   padding: 14px 10px;
   overflow:hidden;
   z-index: 10;
-}
-.pp-sidebar:hover{ width: var(--pp-side-expanded); }
 
-/* ✅ drawer header (solo mobile) */
+  will-change: width;
+  contain: layout paint style;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+.pp-sidebar:hover{
+  width: var(--pp-side-expanded);
+}
+
 .pp-drawerHeader{
   display:none;
   align-items:center;
@@ -576,7 +501,6 @@ button{ font-family: inherit; }
   box-shadow: var(--shadow-sm);
 }
 
-/* brand button (desktop) */
 .pp-brand{
   display:flex;
   align-items:center;
@@ -609,11 +533,15 @@ button{ font-family: inherit; }
 .pp-brand__text{
   min-width: 0;
   opacity: 0;
-  transform: translateX(-6px);
-  transition: var(--t);
+  transform: translate3d(-6px,0,0);
+  transition: opacity 140ms ease, transform 140ms ease;
   white-space: nowrap;
+  will-change: opacity, transform;
 }
-.pp-sidebar:hover .pp-brand__text{ opacity: 1; transform: translateX(0); }
+.pp-sidebar:hover .pp-brand__text{
+  opacity: 1;
+  transform: translate3d(0,0,0);
+}
 .pp-brand__title{
   font-weight: 600;
   color: var(--balto-midnight);
@@ -634,6 +562,7 @@ button{ font-family: inherit; }
   padding: 6px 4px;
   overflow:auto;
   overflow-x: hidden;
+  min-height: 0;
 }
 .pp-nav::-webkit-scrollbar{ width: 8px; }
 .pp-nav::-webkit-scrollbar-thumb{
@@ -660,7 +589,7 @@ button{ font-family: inherit; }
   align-items:center;
   gap: 12px;
   cursor:pointer;
-  transition: var(--t);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
   text-align:left;
 }
 .pp-nav__icon{
@@ -673,17 +602,21 @@ button{ font-family: inherit; }
   background: rgba(0, 85, 187, 0.08);
   color: var(--balto-action);
   flex: 0 0 auto;
+  transform: translateZ(0);
 }
 .pp-nav__label{
   opacity: 0;
-  transform: translateX(-6px);
-  transition: var(--t);
+  transform: translate3d(-6px,0,0);
+  transition: opacity 140ms ease, transform 140ms ease;
   white-space: nowrap;
   font-weight: 500;
   font-size: 14px;
   color: rgba(10, 37, 64, 0.92);
 }
-.pp-sidebar:hover .pp-nav__label{ opacity: 1; transform: translateX(0); }
+.pp-sidebar:hover .pp-nav__label{
+  opacity: 1;
+  transform: translate3d(0,0,0);
+}
 
 @media (hover:hover) and (pointer:fine){
   .pp-nav__item:hover{
@@ -702,7 +635,7 @@ button{ font-family: inherit; }
 }
 
 /* =========================
-   SUBMENU (una sola versión)
+   SUBMENU
 ========================= */
 .pp-navSub{
   display:flex;
@@ -712,24 +645,25 @@ button{ font-family: inherit; }
 
   max-height: 0;
   opacity: 0;
-  transform: translateY(-4px);
+  transform: translate3d(0,-4px,0);
   overflow: hidden;
   pointer-events: none;
 
   transition:
-    max-height 360ms ease,
-    opacity 220ms ease,
-    transform 220ms ease;
+    max-height 240ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+
+  will-change: max-height, opacity, transform;
 }
 
 .pp-navGroup.has-sub.is-open .pp-navSub{
   max-height: var(--sub-open-h);
   opacity: 1;
-  transform: translateY(0);
+  transform: translate3d(0,0,0);
   pointer-events: auto;
 }
 
-/* items submenú */
 .pp-navSub__item{
   border: 1px solid rgba(10, 37, 64, 0.10);
   background: rgba(255,255,255,0.78);
@@ -743,7 +677,7 @@ button{ font-family: inherit; }
   cursor:pointer;
   text-align:left;
 
-  transition: background 220ms ease, border-color 220ms ease, transform 220ms ease;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 .pp-navSub__dot{
   width: 8px;
@@ -810,13 +744,16 @@ button{ font-family: inherit; }
 }
 .pp-logout__label{
   opacity: 0;
-  transform: translateX(-6px);
-  transition: var(--t);
+  transform: translate3d(-6px,0,0);
+  transition: opacity 140ms ease, transform 140ms ease;
   white-space: nowrap;
   font-weight: 600;
   font-size: 14px;
 }
-.pp-sidebar:hover .pp-logout__label{ opacity: 1; transform: translateX(0); }
+.pp-sidebar:hover .pp-logout__label{
+  opacity: 1;
+  transform: translate3d(0,0,0);
+}
 
 @media (hover:hover) and (pointer:fine){
   .pp-logout:hover{
@@ -828,6 +765,8 @@ button{ font-family: inherit; }
 
 /* =========================
    CONTENT
+   ✅ sigue siendo empujado por la sidebar
+   pero aislado para reducir costo de repaint/reflow
 ========================= */
 .pp-content{
   flex:1;
@@ -835,9 +774,13 @@ button{ font-family: inherit; }
   padding: 14px;
   display:flex;
   justify-content:center;
+
+  contain: layout paint style;
+  overflow: hidden;
 }
 .pp-content__inner{
   width: 100%;
+  min-width: 0;
   display:flex;
   flex-direction:column;
   gap: 14px;
@@ -849,6 +792,9 @@ button{ font-family: inherit; }
   backdrop-filter: blur(10px);
 
   padding: 14px;
+
+  contain: layout paint style;
+  overflow: hidden;
 }
 
 /* =========================
@@ -948,13 +894,13 @@ button{ font-family: inherit; }
   .mov-topbar__section{ max-width: 45vw; }
 }
 
-/* ✅ MOBILE/TABLET: sidebar pasa a drawer */
+/* mobile/tablet */
 @media (max-width: 720px){
   .ini_page{padding: 0;}
   .pp-burger{ display:grid; }
 
   .pp-shell{
-    display:block; /* sidebar ya no ocupa layout */
+    display:block;
     padding-top: var(--mov-topbar-h);
   }
 
@@ -971,26 +917,23 @@ button{ font-family: inherit; }
     overflow: hidden;
   }
   .pp-sidebar:hover{
-    width: var(--drawer-w); /* evitar “hover expand” en mobile */
+    width: var(--drawer-w);
   }
   .pp-sidebar.is-drawerOpen{
     transform: translateX(0);
   }
 
-  /* mostrar header del drawer, ocultar brand desktop */
   .pp-drawerHeader{ display:flex; }
   .pp-brand{ display:none; }
 
-  /* labels SIEMPRE visibles en drawer */
   .pp-nav__label,
   .pp-logout__label{
     opacity: 1 !important;
     transform: none !important;
   }
 
-  /* content full width */
   .pp-content{ padding: 12px; }
-  .pp-content__inner{ padding: 8px;  }
+  .pp-content__inner{ padding: 8px; }
 }
 
 @media (max-width: 560px){
@@ -998,9 +941,8 @@ button{ font-family: inherit; }
   .mov-topbar__section{ display:none; }
 }
 
-
 /* =========================
-   BOTÓN TEMA (TOPBAR)
+   BOTÓN TEMA
 ========================= */
 .pp-themeBtn{
   width: 42px;
@@ -1032,7 +974,6 @@ button{ font-family: inherit; }
   user-select: none;
 }
 
-/* como ahora pp-nav__item es button */
 .pp-nav__item{
   appearance: none;
   -webkit-appearance: none;

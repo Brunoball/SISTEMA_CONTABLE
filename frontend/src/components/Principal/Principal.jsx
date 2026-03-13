@@ -1,7 +1,14 @@
 // ✅ REEMPLAZAR COMPLETO
 // src/components/Principal/Principal.jsx
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+  memo,
+} from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import LogoBalto from "../../imagenes/Logo_Blanco_Principal.png";
@@ -186,7 +193,12 @@ async function prefetchGlobalListas(onUnauthorized) {
 /* =========================
    Modal cierre sesión
 ========================= */
-const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
+const ConfirmLogoutModal = memo(function ConfirmLogoutModal({
+  open,
+  onClose,
+  onConfirm,
+  loading = false,
+}) {
   const cancelBtnRef = useRef(null);
 
   useEffect(() => {
@@ -236,7 +248,7 @@ const ConfirmLogoutModal = ({ open, onClose, onConfirm, loading = false }) => {
       </div>
     </div>
   );
-};
+});
 
 /* =========================
    Helpers
@@ -301,6 +313,13 @@ function hardClientLogoutCleanup() {
     localStorage.removeItem("usuario");
   } catch {}
 }
+
+/* =========================
+   Outlet memoizado
+========================= */
+const StableOutlet = memo(function StableOutlet() {
+  return <Outlet />;
+});
 
 /* =========================
    COMPONENTE
@@ -906,11 +925,6 @@ const Principal = () => {
 
             const isOpen = (isMov && openMovSub) || (isCC && openCCSub);
 
-            const openSub = () => {
-              if (isMov) setOpenMovSub(true);
-              if (isCC) setOpenCCSub(true);
-            };
-
             const toggleSub = () => {
               if (isMov) {
                 setOpenMovSub((prev) => !prev);
@@ -973,13 +987,11 @@ const Principal = () => {
                   type="button"
                   className={`pp-nav__item ${isActive ? "is-active" : ""}`}
                   onClick={() => {
-                    /* ✅ CUENTAS CORRIENTES: SOLO ABRE/CIERRA, NO NAVEGA */
                     if (isCC && hasSub) {
                       toggleSub();
                       return;
                     }
 
-                    /* ✅ MOVIMIENTOS: mantiene comportamiento anterior */
                     if (hasSub && isNoHover() && isMov) {
                       if (!openMovSub) {
                         setOpenMovSub(true);
@@ -1068,7 +1080,7 @@ const Principal = () => {
 
       <main className="pp-content">
         <div className="pp-content__inner">
-          <Outlet />
+          <StableOutlet />
         </div>
       </main>
 

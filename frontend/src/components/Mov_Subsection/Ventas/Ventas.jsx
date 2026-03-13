@@ -1521,7 +1521,6 @@ export default function Ventas() {
             skipSearchRef.current = true;
             await refreshPeriodos();
             await reloadVista();
-            showToast("exito", "Venta guardada y tabla actualizada.", 2400);
           } catch (e) {
             showToast("error", e?.message || "Se guardó, pero falló la recarga.", 4200);
           }

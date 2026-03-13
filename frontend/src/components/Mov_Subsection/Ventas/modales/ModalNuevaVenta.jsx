@@ -575,10 +575,10 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
     finally{setSaving(false);}
   },[validate,showToast,resolveFiscalForFacturacion,configFacturacion,fetchConfigFacturacion,buildResumenFacturaPayload]);
 
+  // ── FIX: un solo toast "Venta agregada correctamente." al finalizar facturación ──
   const finalizarFacturacionYGuardarVenta = useCallback(async (factEmitida) => {
     try {
       setSaving(true);
-      showToast("cargando", "Guardando venta facturada…", 12000);
 
       const cf = normalizeClienteFiscalDb(
         resumenFacturaData?.cliente_facturacion || clienteFiscalDb || fiscalArcaData || {}
@@ -626,9 +626,11 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
         await vincularComprobanteAMovimientosLote(restoIds, idComprobante);
       }
 
-      showToast("exito", "Factura emitida y venta guardada correctamente.", 3000);
       setOpenResumenFactura(false);
       setResumenFacturaData(null);
+
+      // Toast único final
+      showToast("exito", "Venta agregada correctamente.", 3000);
 
       onSaved?.({
         ...info,
@@ -655,6 +657,7 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
     vincularComprobanteAMovimientosLote,
   ]);
 
+  // ── FIX: un solo toast "Venta agregada correctamente." al guardar sin facturar ──
   const submit=useCallback(async()=>{
     if(saving)return;
     const{sessionKey}=getAuthInfo();if(!sessionKey){showToast("error","No hay sesión activa (Falta X-Session).",5200);return;}
@@ -663,8 +666,11 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
     if(tipoVentaSeleccionado&&accionContado==="facturar"){await abrirResumenFactura();return;}
     setSaving(true);
     if(v.warn)showToast("advertencia","Hay filas incompletas: se guardarán solo las válidas.",3600);
-    else showToast("cargando","Guardando venta…",12000);
-    try{const info=await guardarVentaBatch({clienteFiscalResuelto:null,accionFinal:"guardar",esFacturadaFinal:false});showToast("exito",`Listo: ${info?.creados??1} ítems guardados.`,2800);onSaved?.(info);}
+    try{
+      const info=await guardarVentaBatch({clienteFiscalResuelto:null,accionFinal:"guardar",esFacturadaFinal:false});
+      showToast("exito","Venta agregada correctamente.",3000);
+      onSaved?.(info);
+    }
     catch(e){showToast("error",e?.message||"Error guardando.",4500);}
     finally{setSaving(false);}
   },[saving,addUI.open,validate,showToast,tipoVentaSeleccionado,accionContado,guardarVentaBatch,onSaved,abrirResumenFactura]);

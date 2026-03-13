@@ -1362,6 +1362,7 @@ export default function Compras() {
         </div>
       </section>
 
+      {/* ── FIX: onSaved ya no dispara toast, lo maneja el modal ── */}
       <ModalNuevaCompra
         open={openNueva}
         lists={listasCtx || { periodos: [] }}
@@ -1369,7 +1370,6 @@ export default function Compras() {
         onToast={showToast}
         onSaved={async () => {
           await refreshAfterSave();
-          showToast("exito", "Compra creada.", 2200);
         }}
       />
 
@@ -1390,7 +1390,7 @@ export default function Compras() {
         onSave={handleSaveEdit}
         onSaved={async () => {
           await refreshAfterSave();
-          showToast("exito", "Compra actualizada.", 2400);
+          showToast("exito", "Compra actualizada correctamente.", 2400);
         }}
       />
 

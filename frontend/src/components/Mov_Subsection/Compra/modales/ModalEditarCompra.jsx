@@ -1273,7 +1273,7 @@ export default function ModalEditarCompra({
         await Promise.resolve(onSaved());
       }
 
-      showToast("exito", "Compra actualizada.", 2400);
+      showToast("exito", "Compra actualizada correctamente.", 2400);
       onClose?.();
     } catch (err) {
       showToast("error", err?.message || "Error guardando compra.", 4200);

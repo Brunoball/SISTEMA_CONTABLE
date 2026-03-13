@@ -51,19 +51,17 @@ export default function ModalEliminarMovimientos({
   message = "¿Seguro que querés eliminar este movimiento definitivamente?",
   warning = "Esta acción no se puede deshacer.",
   loadingMessage = "Eliminando movimiento…",
-  successMessage = "Movimiento eliminado.",
   errorMessage = "No se pudo eliminar el movimiento.",
   confirmLabel = "Eliminar",
   cancelLabel = "Cancelar",
 
-  // ✅ NUEVAS PROPS OPCIONALES
   secondaryActionLabel = "",
   onSecondaryAction = null,
   secondaryActionDisabled = false,
   confirmDisabled = false,
   confirmVariant = "danger", // "danger" | "primary"
-  details = null, // array opcional [{ label, value }]
-  extraContent = null, // nodo React opcional
+  details = null,
+  extraContent = null,
   hideDefaultCard = false,
 }) {
   const cancelRef = useRef(null);
@@ -80,16 +78,17 @@ export default function ModalEliminarMovimientos({
 
   const handleConfirm = useCallback(async () => {
     if (loading || confirmDisabled) return;
-
     if (!onConfirm) return;
 
     showToast("cargando", loadingMessage, 12000);
 
     try {
       await onConfirm();
-      showToast("exito", successMessage, 2600);
+      // ✅ NO mostrar toast de éxito acá
+      // El éxito lo maneja el componente padre (por ejemplo Compras.jsx)
     } catch (e) {
       showToast("error", e?.message || errorMessage, 4200);
+      throw e;
     }
   }, [
     loading,
@@ -97,7 +96,6 @@ export default function ModalEliminarMovimientos({
     onConfirm,
     showToast,
     loadingMessage,
-    successMessage,
     errorMessage,
   ]);
 
@@ -109,7 +107,7 @@ export default function ModalEliminarMovimientos({
   useEffect(() => {
     if (!open) return;
 
-    setTimeout(() => cancelRef.current?.focus(), 0);
+    const timer = setTimeout(() => cancelRef.current?.focus(), 0);
 
     const onKeyDown = (e) => {
       if (e.key === "Escape") cerrar();
@@ -120,7 +118,11 @@ export default function ModalEliminarMovimientos({
     };
 
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [open, cerrar, loading, confirmDisabled, onConfirm, handleConfirm]);
 
   const view = useMemo(() => {

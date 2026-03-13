@@ -924,7 +924,7 @@ export default function Compras() {
       cacheRef.current.clear();
       await loadRows({ dateRange, q, offset: 0, append: false });
       await refreshPeriodos();
-      showToast("exito", "Compra eliminada.", 2600);
+      showToast("exito", "Compra eliminada correctamente.", 2600);
     } catch (e) {
       showToast("error", e?.message || "Error eliminando compra.", 4200);
     } finally {

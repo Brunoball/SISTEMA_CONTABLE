@@ -1252,7 +1252,7 @@ export default function Movimientos() {
             setSelectedRow(null);
             invalidateCache();
             await loadRows({ dateRange, q, offset: 0, append: false });
-            showToast("exito", "Movimiento eliminado.", 2600);
+            showToast("exito", "Movimiento eliminado correctamente.", 2600);
           } catch (e) {
             setError(e?.message || "Error eliminando movimiento.");
             showToast("error", e?.message || "Error eliminando movimiento.", 4200);

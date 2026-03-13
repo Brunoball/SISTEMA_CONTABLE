@@ -77,30 +77,6 @@ function formatFechaDMY(v) {
   return s;
 }
 
-/* =========================
-   Fecha helpers para rango
-========================= */
-function startOfDay(d) {
-  if (!d) return null;
-  const c = new Date(d);
-  c.setHours(0, 0, 0, 0);
-  return c;
-}
-
-function parseRowFecha(v) {
-  const s = String(v ?? "").trim();
-  if (!s) return null;
-
-  const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (m1) return startOfDay(new Date(Number(m1[1]), Number(m1[2]) - 1, Number(m1[3])));
-
-  const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m2) return startOfDay(new Date(Number(m2[3]), Number(m2[2]) - 1, Number(m2[1])));
-
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? null : startOfDay(d);
-}
-
 function dateToAPI(d) {
   if (!d) return "";
   const yyyy = d.getFullYear();
@@ -112,19 +88,6 @@ function dateToAPI(d) {
 function formatDateUI(d) {
   if (!d) return "—";
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-}
-
-function rowInDateRange(row, from, to) {
-  if (!from && !to) return true;
-  const fecha = parseRowFecha(row?.fecha);
-  if (!fecha) return true;
-  if (from && fecha < startOfDay(from)) return false;
-  if (to) {
-    const toEnd = startOfDay(to);
-    toEnd.setHours(23, 59, 59, 999);
-    if (fecha > toEnd) return false;
-  }
-  return true;
 }
 
 /* =========================
@@ -147,16 +110,6 @@ function getAuthInfo() {
   } catch {}
 
   return { sessionKey, idUsuario };
-}
-
-/* =========================
-   Recibos (PENDIENTE)
-========================= */
-function isReciboPagado(row) {
-  if (row?.pagado === true) return true;
-  const cob = Number(row?.cobrado_total ?? 0);
-  if (Number.isFinite(cob) && cob > 0.00001) return true;
-  return false;
 }
 
 /* =========================
@@ -235,11 +188,10 @@ export default function Recibos() {
   const { dateRange, setDateRange } = useDateRange();
   const [showCalendario, setShowCalendario] = useState(false);
 
-  /* =========================
-     STATE
-  ========================= */
   const [rows, setRows] = useState([]);
   const rowsRef = useRef([]);
+  const searchInputRef = useRef(null);
+
   useEffect(() => {
     rowsRef.current = Array.isArray(rows) ? rows : [];
   }, [rows]);
@@ -262,10 +214,46 @@ export default function Recibos() {
   const [loadingClienteDeudas, setLoadingClienteDeudas] = useState(false);
 
   const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+  const toastRafRef = useRef(null);
+
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
-    setToast({ tipo, mensaje, duracion });
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+
+    if (toastRafRef.current) {
+      cancelAnimationFrame(toastRafRef.current);
+      toastRafRef.current = null;
+    }
+
+    const nextId = Date.now() + Math.random();
+
+    setToast(null);
+
+    toastRafRef.current = window.requestAnimationFrame(() => {
+      const nextToast = { id: nextId, tipo, mensaje, duracion };
+      setToast(nextToast);
+
+      toastTimerRef.current = window.setTimeout(() => {
+        setToast((curr) => (curr?.id === nextId ? null : curr));
+        toastTimerRef.current = null;
+      }, duracion);
+    });
   }, []);
-  const closeToast = useCallback(() => setToast(null), []);
+
+  const closeToast = useCallback(() => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    if (toastRafRef.current) {
+      cancelAnimationFrame(toastRafRef.current);
+      toastRafRef.current = null;
+    }
+    setToast(null);
+  }, []);
 
   const cacheRef = useRef(new Map());
   const reqIdRef = useRef(0);
@@ -277,6 +265,13 @@ export default function Recibos() {
   useEffect(() => {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      if (toastRafRef.current) cancelAnimationFrame(toastRafRef.current);
     };
   }, []);
 
@@ -519,8 +514,7 @@ export default function Recibos() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ensureListsLoaded, loadRows, dateRange?.from, dateRange?.to]);
 
   /* =========================
      Refresco cuando cambia rango global
@@ -542,8 +536,7 @@ export default function Recibos() {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
       loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange?.from, dateRange?.to]);
+  }, [dateRange?.from, dateRange?.to, loadRows, q]);
 
   /* =========================
      Debounce búsqueda
@@ -563,8 +556,7 @@ export default function Recibos() {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
+  }, [q, loadRows, dateRange?.from, dateRange?.to]);
 
   /* =========================
      Handler cambio de rango
@@ -576,6 +568,7 @@ export default function Recibos() {
       cacheRef.current.clear();
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
       await loadRows({
         from: newRange.from,
         to: newRange.to,
@@ -588,21 +581,16 @@ export default function Recibos() {
   );
 
   /* =========================
-     Filtrado client-side
+     Filtrado final
   ========================= */
   const filteredRows = useMemo(() => {
-    return (Array.isArray(rows) ? rows : []).filter((r) =>
-      rowInDateRange(r, dateRange?.from, dateRange?.to)
-    );
-  }, [rows, dateRange]);
+    return Array.isArray(rows) ? rows : [];
+  }, [rows]);
 
   const stats = useMemo(() => {
     return { pagados: 0, pendientes: filteredRows.length, total: filteredRows.length };
   }, [filteredRows]);
 
-  /* =========================
-     Label calendario
-  ========================= */
   const dateRangeLabel = useMemo(() => {
     const { from, to } = dateRange;
 
@@ -632,9 +620,6 @@ export default function Recibos() {
     return `Hasta ${formatDateUI(to)}`;
   }, [dateRange]);
 
-  /* =========================
-     Export base name
-  ========================= */
   const exportBaseName = useMemo(() => {
     const { from, to } = dateRange;
     if (from && to) return `recibos_pendientes_${dateToAPI(from)}_${dateToAPI(to)}`;
@@ -642,9 +627,6 @@ export default function Recibos() {
     return "recibos_pendientes";
   }, [dateRange]);
 
-  /* =========================
-     Export helpers
-  ========================= */
   const getExportData = useCallback(() => {
     const dataToExport = buildExportRows(filteredRows);
     if (!dataToExport.length) throw new Error("No hay datos para exportar.");
@@ -757,9 +739,6 @@ export default function Recibos() {
     [handleExport]
   );
 
-  /* =========================
-     Columnas
-  ========================= */
   const columns = useMemo(() => {
     return [
       {
@@ -814,9 +793,6 @@ export default function Recibos() {
       .join(" ");
   }, [columns]);
 
-  /* =========================
-     Listar recibos pendientes por cliente
-  ========================= */
   const fetchRecibosCliente = useCallback(
     async (rowCliente) => {
       const idCli = Number(rowCliente?.id_cliente || 0);
@@ -869,7 +845,7 @@ export default function Recibos() {
   );
 
   /* =========================
-     Callback: recibo finalizado
+     Finalización real
   ========================= */
   const onReciboFinalizado = useCallback(
     async (saved, fallback = {}) => {
@@ -897,59 +873,63 @@ export default function Recibos() {
       try {
         cacheRef.current.clear();
         skipSearchRef.current = true;
-        await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
-        try {
-          await refreshLists();
-        } catch {}
-        showToast("exito", "Comprobante guardado y vinculado a todos los pagos", 3000);
+
+        const tasks = [
+          loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false }),
+          typeof refreshLists === "function" ? refreshLists() : Promise.resolve(),
+        ];
+
+        const [rowsRes, listsRes] = await Promise.allSettled(tasks);
+
+        const rowsFailed = rowsRes.status === "rejected" || rowsRes.value === null;
+        const listsFailed = listsRes.status === "rejected";
+
+        if (rowsFailed || listsFailed) {
+          showToast(
+            "error",
+            "El recibo se guardó, pero no pude refrescar toda la pantalla automáticamente.",
+            4200
+          );
+          return;
+        }
+
+        showToast("exito", "Recibo guardado correctamente.", 3000);
       } catch (e) {
-        showToast("error", e?.message || "El comprobante se guardó, pero no pude refrescar la lista.", 4200);
+        showToast("error", e?.message || "El recibo se guardó, pero no pude refrescar la lista.", 4200);
       }
     },
     [applyComprobanteToRows, dateRange, q, loadRows, refreshLists, showToast]
   );
 
   /* =========================
-     Confirmar pago
+     Confirmar pago:
+     sin toast de carga
   ========================= */
   const onConfirmPago = useCallback(
     async (payload) => {
-      try {
-        showToast("cargando", "Confirmando pago…", 12000);
+      const ids =
+        payload?.ids_movimiento ??
+        payload?.ids_movimientos ??
+        payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ??
+        [];
 
-        const ids =
-          payload?.ids_movimiento ??
-          payload?.ids_movimientos ??
-          payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ??
-          [];
+      const { idUsuario } = getAuthInfo();
 
-        const { idUsuario } = getAuthInfo();
+      const data = await apiPostJson(`${API}?action=recibos_confirmar_pago`, {
+        ids_movimiento: ids,
+        id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
+        idUsuario,
+      });
 
-        const data = await apiPostJson(`${API}?action=recibos_confirmar_pago`, {
-          ids_movimiento: ids,
-          id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
-          idUsuario,
-        });
-
-        cacheRef.current.clear();
-        await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
-        try {
-          await refreshLists();
-        } catch {}
-
-        showToast("exito", data?.mensaje || "Pago confirmado.", 2400);
-        return data;
-      } catch (e) {
-        showToast("error", e?.message || "Error confirmando pago.", 4200);
-        throw e;
+      if (!data?.exito) {
+        throw new Error(data?.mensaje || "Error confirmando pago.");
       }
+
+      return data;
     },
-    [API, apiPostJson, dateRange, q, loadRows, refreshLists, showToast]
+    [API, apiPostJson]
   );
 
-  /* =========================
-     Cargar más de 100 en 100
-  ========================= */
   const handleLoadMore = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx) return;
     if (nextOffset === null) return;
@@ -988,9 +968,6 @@ export default function Recibos() {
 
   const isAnyLoading = loadingRows || loadingMore;
 
-  /* =========================
-     Skeleton
-  ========================= */
   const skelWidths = useMemo(
     () => ({
       fecha: ["46%", "38%", "42%", "34%"],
@@ -1055,12 +1032,17 @@ export default function Recibos() {
     tipos_movimiento: [],
   };
 
-  /* =========================
-     RENDER
-  ========================= */
   return (
     <div className="mov-page">
-      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
+      {toast && (
+        <Toast
+          key={toast.id}
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
+      )}
 
       {errorListsCtx && (
         <div className="mov-alert" role="alert">
@@ -1089,7 +1071,7 @@ export default function Recibos() {
               <div className="mov-filter mov-filter--cal floatingField">
                 <button
                   type="button"
-                  className={`mov-calTrigger  cc-calTrigger ${showCalendario ? "is-open" : ""}`}
+                  className={`mov-calTrigger cc-calTrigger ${showCalendario ? "is-open" : ""}`}
                   onClick={() => setShowCalendario((v) => !v)}
                   disabled={isAnyLoading || loadingListsCtx}
                   title="Seleccionar rango de fechas"
@@ -1109,9 +1091,7 @@ export default function Recibos() {
                     <Calendario
                       value={dateRange}
                       onChange={async (newRange) => {
-                        if (newRange.from && newRange.to) {
-                          setShowCalendario(false);
-                        }
+                        if (newRange.from && newRange.to) setShowCalendario(false);
                         await handleDateRangeChange(newRange);
                       }}
                       onClose={() => setShowCalendario(false)}
@@ -1123,6 +1103,7 @@ export default function Recibos() {
               <div className="mov-search floatingField floatingField--search is-active">
                 <div className="mov-searchInput">
                   <input
+                    ref={searchInputRef}
                     className="mov-input--floating"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
@@ -1164,7 +1145,7 @@ export default function Recibos() {
                           offset: 0,
                           append: false,
                         });
-                        document.querySelector(".mov-searchInput input")?.focus();
+                        searchInputRef.current?.focus();
                       }}
                       disabled={loadingMore}
                     >
@@ -1348,11 +1329,13 @@ export default function Recibos() {
             ...payloadFinal,
             idUsuario,
           });
+
           cacheRef.current.clear();
-          await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
-          try {
-            await refreshLists();
-          } catch {}
+          await Promise.allSettled([
+            loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false }),
+            refreshLists(),
+          ]);
+
           return data;
         }}
       />

@@ -1,5 +1,3 @@
-// src/components/Mov_Subsection/OrdenesPago/OrdenesPago.jsx
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../../config/config.jsx";
 import "../../Global/Global_css/Global_Section.css";
@@ -138,13 +136,20 @@ function getAuthInfo() {
     localStorage.getItem("X-Session") ||
     ""
   ).trim();
+
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand =
-      u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+      u?.idUsuarioMaster ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
+
   return { token, sessionKey, idUsuario };
 }
 
@@ -170,7 +175,9 @@ function isPagado(row) {
 function rowMatchesQuery(row, query) {
   const qq = normalizeSearchText(query);
   if (!qq) return true;
+
   const montoNum = Number(row?.monto_total || row?.total || 0);
+
   const parts = [];
   if (row && typeof row === "object") {
     for (const k of Object.keys(row)) {
@@ -179,8 +186,10 @@ function rowMatchesQuery(row, query) {
       parts.push(String(val ?? ""));
     }
   }
+
   parts.push(formatFechaDMY(row?.fecha));
   parts.push(String(montoNum), String(Math.trunc(montoNum)), moneyARS(montoNum));
+
   const hay = normalizeSearchText(parts.join(" | "));
   return hay.includes(qq);
 }
@@ -240,6 +249,8 @@ export default function OrdenesPago() {
 
   const [rows, setRows] = useState([]);
   const rowsRef = useRef([]);
+  const searchInputRef = useRef(null);
+
   useEffect(() => {
     rowsRef.current = Array.isArray(rows) ? rows : [];
   }, [rows]);
@@ -254,10 +265,46 @@ export default function OrdenesPago() {
   const [nextOffset, setNextOffset] = useState(null);
 
   const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+  const toastRafRef = useRef(null);
+
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
-    setToast({ tipo, mensaje, duracion });
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+
+    if (toastRafRef.current) {
+      cancelAnimationFrame(toastRafRef.current);
+      toastRafRef.current = null;
+    }
+
+    const nextId = Date.now() + Math.random();
+
+    setToast(null);
+
+    toastRafRef.current = window.requestAnimationFrame(() => {
+      const nextToast = { id: nextId, tipo, mensaje, duracion };
+      setToast(nextToast);
+
+      toastTimerRef.current = window.setTimeout(() => {
+        setToast((curr) => (curr?.id === nextId ? null : curr));
+        toastTimerRef.current = null;
+      }, duracion);
+    });
   }, []);
-  const closeToast = useCallback(() => setToast(null), []);
+
+  const closeToast = useCallback(() => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    if (toastRafRef.current) {
+      cancelAnimationFrame(toastRafRef.current);
+      toastRafRef.current = null;
+    }
+    setToast(null);
+  }, []);
 
   const cacheRef = useRef(new Map());
   const reqIdRef = useRef(0);
@@ -272,6 +319,13 @@ export default function OrdenesPago() {
   useEffect(() => {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      if (toastRafRef.current) cancelAnimationFrame(toastRafRef.current);
     };
   }, []);
 
@@ -356,14 +410,22 @@ export default function OrdenesPago() {
       try {
         if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
           if (rowsReqIdRef.current !== myReqId) return null;
+
           const cached = cacheRef.current.get(cacheKey);
           const cachedRows = Array.isArray(cached?.rows) ? cached.rows : [];
+
           rowsRef.current = cachedRows;
           setRows(cachedRows);
           setHasMore(!!cached?.hasMore);
           setNextOffset(cached?.nextOffset ?? null);
+
           if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
-          return { hasMore: !!cached?.hasMore, nextOffset: cached?.nextOffset ?? null, received: cachedRows.length };
+
+          return {
+            hasMore: !!cached?.hasMore,
+            nextOffset: cached?.nextOffset ?? null,
+            received: cachedRows.length,
+          };
         }
 
         const sp = new URLSearchParams();
@@ -411,34 +473,53 @@ export default function OrdenesPago() {
             const k = String(x?.id_movimiento ?? "");
             return k && !seen.has(k);
           });
+
           const merged = [...base, ...add];
           rowsRef.current = merged;
           setRows(merged);
+
           if (add.length === 0) {
             newHasMore = false;
             newNextOffset = null;
           }
+
           setHasMore(newHasMore);
           setNextOffset(newNextOffset);
+
           if (moreReqIdRef.current === myReqId) setLoadingMore(false);
         } else {
           rowsRef.current = page;
           setRows(page);
           setHasMore(newHasMore);
           setNextOffset(newNextOffset);
-          if (offset === 0) cacheRef.current.set(cacheKey, { rows: page, hasMore: newHasMore, nextOffset: newNextOffset });
+
+          if (offset === 0) {
+            cacheRef.current.set(cacheKey, {
+              rows: page,
+              hasMore: newHasMore,
+              nextOffset: newNextOffset,
+            });
+          }
+
           if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
         }
 
-        return { hasMore: newHasMore, nextOffset: newNextOffset, received: page.length };
+        return {
+          hasMore: newHasMore,
+          nextOffset: newNextOffset,
+          received: page.length,
+        };
       } catch (e) {
         if (myReqId !== reqIdRef.current) return null;
+
         setError(e.message || "Error cargando órdenes de pago.");
+
         if (append) {
           if (moreReqIdRef.current === myReqId) setLoadingMore(false);
         } else {
           if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
         }
+
         return null;
       }
     },
@@ -458,6 +539,7 @@ export default function OrdenesPago() {
       await loadRows({ from: dateRange?.from, to: dateRange?.to, q: "", offset: 0, append: false });
       didInitRef.current = true;
     })();
+
     return () => {
       alive = false;
     };
@@ -469,9 +551,11 @@ export default function OrdenesPago() {
   ========================= */
   useEffect(() => {
     if (!didInitRef.current) return;
+
     cacheRef.current.clear();
     skipSearchRef.current = true;
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
     loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange?.from?.getTime?.(), dateRange?.to?.getTime?.()]);
@@ -484,10 +568,13 @@ export default function OrdenesPago() {
       skipSearchRef.current = false;
       return;
     }
+
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
     searchTimerRef.current = setTimeout(() => {
       loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
     }, 250);
+
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
@@ -500,11 +587,19 @@ export default function OrdenesPago() {
   const handleDateRangeChange = useCallback(
     async (newRange) => {
       if (!newRange?.from && !newRange?.to) return;
+
       setDateRange(newRange);
       cacheRef.current.clear();
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-      await loadRows({ from: newRange.from, to: newRange.to, q, offset: 0, append: false });
+
+      await loadRows({
+        from: newRange.from,
+        to: newRange.to,
+        q,
+        offset: 0,
+        append: false,
+      });
     },
     [loadRows, q, setDateRange]
   );
@@ -525,7 +620,9 @@ export default function OrdenesPago() {
   ========================= */
   const dateRangeLabel = useMemo(() => {
     const { from, to } = dateRange;
+
     if (!from && !to) return "Seleccionar fechas";
+
     if (from && to) {
       if (
         from.getFullYear() === to.getFullYear() &&
@@ -534,6 +631,7 @@ export default function OrdenesPago() {
       ) {
         return formatDateUI(from);
       }
+
       return (
         <>
           <span>{formatDateUI(from)}</span>
@@ -544,6 +642,7 @@ export default function OrdenesPago() {
         </>
       );
     }
+
     if (from) return `Desde ${formatDateUI(from)}`;
     return `Hasta ${formatDateUI(to)}`;
   }, [dateRange]);
@@ -571,8 +670,10 @@ export default function OrdenesPago() {
     const dataToExport = getExportData();
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(dataToExport);
+
     const headers = Object.keys(dataToExport[0] || {});
     const montoColIndex = headers.findIndex((h) => h === "MONTO");
+
     if (montoColIndex >= 0 && ws["!ref"]) {
       const colLetter = XLSX.utils.encode_col(montoColIndex);
       const range = XLSX.utils.decode_range(ws["!ref"]);
@@ -581,6 +682,7 @@ export default function OrdenesPago() {
         if (cell && typeof cell.v === "number") cell.z = '"$"#,##0.00';
       }
     }
+
     XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("OrdenesPago_Pendientes"));
     XLSX.writeFile(wb, `${exportBaseName}.xlsx`);
   }, [getExportData, exportBaseName]);
@@ -614,16 +716,27 @@ export default function OrdenesPago() {
   const handleExport = useCallback(
     async (type) => {
       try {
+        if (hasMore) {
+          showToast(
+            "error",
+            'Todavía hay más registros sin cargar. Tocá "Cargar 100 más" hasta completar todo.',
+            5200
+          );
+          return;
+        }
+
         if (type === "excel") {
           exportToExcel();
           showToast("exito", "Excel exportado.", 2200);
           return;
         }
+
         if (type === "csv") {
           exportToCSV();
           showToast("exito", "CSV exportado.", 2200);
           return;
         }
+
         if (type === "txt") {
           exportToTXT();
           showToast("exito", "TXT exportado.", 2200);
@@ -632,7 +745,7 @@ export default function OrdenesPago() {
         showToast("error", e?.message || "Error exportando archivo.", 3500);
       }
     },
-    [exportToExcel, exportToCSV, exportToTXT, showToast]
+    [hasMore, exportToExcel, exportToCSV, exportToTXT, showToast]
   );
 
   const exportOptions = useMemo(
@@ -645,19 +758,29 @@ export default function OrdenesPago() {
   );
 
   /* =========================
-     Cargar 100 más (una sola página, sin loop)
+     Cargar 100 más
   ========================= */
   const handleLoadMore = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx) return;
     if (nextOffset === null) return;
+
+    showToast("cargando", "Cargando registros...", 12000);
+
     try {
-      await loadRows({
+      const res = await loadRows({
         from: dateRange?.from,
         to: dateRange?.to,
         q: (q || "").trim(),
         offset: nextOffset,
         append: true,
       });
+
+      if (!res) {
+        showToast("error", "No se pudieron cargar más órdenes de pago.", 4200);
+        return;
+      }
+
+      showToast("exito", `${res.received || PAGE_SIZE} registros más cargados.`, 2400);
     } catch (e) {
       showToast("error", e?.message || "Error cargando más órdenes.", 4200);
     }
@@ -680,11 +803,14 @@ export default function OrdenesPago() {
     (rowProv) => {
       const idProv = Number(rowProv?.id_proveedor || rowProv?.proveedor_id || 0);
       const nombreProv = String(rowProv?.proveedor || "").trim();
+
       return (rows || []).filter((r) => {
         const rid = Number(r?.id_proveedor || r?.proveedor_id || 0);
         const rnom = String(r?.proveedor || "").trim();
+
         return (
-          ((idProv > 0 && rid === idProv) || (!idProv && nombreProv && rnom.toLowerCase() === nombreProv.toLowerCase())) &&
+          ((idProv > 0 && rid === idProv) ||
+            (!idProv && nombreProv && rnom.toLowerCase() === nombreProv.toLowerCase())) &&
           isCompraCuentaCorriente(r) &&
           !isPagado(r)
         );
@@ -704,10 +830,12 @@ export default function OrdenesPago() {
 
   const [openEditar, setOpenEditar] = useState(false);
   const [editRow, setEditRow] = useState(null);
+
   const closeEditarModal = useCallback(() => {
     setOpenEditar(false);
     setEditRow(null);
   }, []);
+
   const openEditarModal = useCallback((r) => {
     setEditRow(r);
     setOpenEditar(true);
@@ -718,46 +846,102 @@ export default function OrdenesPago() {
   ========================= */
   const refreshAfterMutation = useCallback(async () => {
     cacheRef.current.clear();
-    await loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false });
+
+    await loadRows({
+      from: dateRange?.from,
+      to: dateRange?.to,
+      q,
+      offset: 0,
+      append: false,
+    });
+
     try {
       await refreshLists?.();
     } catch {}
   }, [dateRange, loadRows, q, refreshLists]);
 
-  const onConfirmPago = useCallback(
-    async (payload) => {
+  /* =========================
+     Al finalizar/cerrar orden
+  ========================= */
+  const onOrdenPagoFinalizado = useCallback(
+    async () => {
       try {
-        showToast("cargando", "Confirmando pago…", 12000);
-        const ids =
-          payload?.ids_movimiento ??
-          payload?.ids_movimientos ??
-          payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ??
-          [];
-        const data = await apiPostJson(`${API}?action=ordenes_pago_confirmar_pago`, {
-          ids_movimiento: ids,
-          id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
-        });
-        if (!data?.exito) throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
-        await refreshAfterMutation();
-        showToast("exito", data?.mensaje || "Pago confirmado.", 1800);
-        return true;
+        cacheRef.current.clear();
+        skipSearchRef.current = true;
+
+        const tasks = [
+          loadRows({ from: dateRange?.from, to: dateRange?.to, q, offset: 0, append: false }),
+          typeof refreshLists === "function" ? refreshLists() : Promise.resolve(),
+        ];
+
+        const [rowsRes, listsRes] = await Promise.allSettled(tasks);
+
+        const rowsFailed = rowsRes.status === "rejected" || rowsRes.value === null;
+        const listsFailed = listsRes.status === "rejected";
+
+        if (rowsFailed || listsFailed) {
+          showToast(
+            "error",
+            "La orden se guardó, pero no pude refrescar toda la pantalla automáticamente.",
+            4200
+          );
+          return;
+        }
+
+        showToast("exito", "Orden de pago guardada correctamente.", 3000);
       } catch (e) {
-        showToast("error", e?.message || "Error confirmando pago.", 4200);
-        throw e;
+        showToast("error", e?.message || "La orden se guardó, pero no pude refrescar la lista.", 4200);
       }
     },
-    [API, apiPostJson, refreshAfterMutation, showToast]
+    [dateRange, q, loadRows, refreshLists, showToast]
+  );
+
+  /* =========================
+     Confirmar pago:
+     sin toast de carga
+  ========================= */
+  const onConfirmPago = useCallback(
+    async (payload) => {
+      const ids =
+        payload?.ids_movimiento ??
+        payload?.ids_movimientos ??
+        payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ??
+        [];
+
+      const { idUsuario } = getAuthInfo();
+
+      const data = await apiPostJson(`${API}?action=ordenes_pago_confirmar_pago`, {
+        ids_movimiento: ids,
+        id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
+        idUsuario,
+      });
+
+      if (!data?.exito) {
+        throw new Error(data?.mensaje || "No se pudo confirmar el pago.");
+      }
+
+      return data;
+    },
+    [API, apiPostJson]
   );
 
   const onSaveEditar = useCallback(
     async (payloadFinal) => {
       try {
         showToast("cargando", "Guardando cambios…", 12000);
+
         const { idUsuario } = getAuthInfo();
-        const data = await apiPostJson(`${API}?action=ordenes_pago_actualizar`, { ...payloadFinal, idUsuario });
+        const data = await apiPostJson(`${API}?action=ordenes_pago_actualizar`, {
+          ...payloadFinal,
+          idUsuario,
+        });
+
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la orden de pago.");
+
         await refreshAfterMutation();
         showToast("exito", data?.mensaje || "Orden de pago actualizada.", 2400);
+
+        return data;
       } catch (e) {
         showToast("error", e?.message || "Error guardando orden de pago.", 4200);
         throw e;
@@ -765,12 +949,6 @@ export default function OrdenesPago() {
     },
     [API, apiPostJson, refreshAfterMutation, showToast]
   );
-
-  const handleAfterComprobanteSaved = useCallback(async () => {
-    try {
-      await refreshAfterMutation();
-    } catch {}
-  }, [refreshAfterMutation]);
 
   /* =========================
      Columnas / grilla
@@ -803,6 +981,7 @@ export default function OrdenesPago() {
   const gridCols = useMemo(() => {
     const fallback = `repeat(${columns.length}, minmax(0, 1fr))`;
     if (!columns.length) return fallback;
+
     return columns
       .map((c) => {
         const n = Number(c.fr);
@@ -831,7 +1010,7 @@ export default function OrdenesPago() {
       aria-hidden="true"
     >
       {columns.map((c) => {
-        if (c.key === "acciones")
+        if (c.key === "acciones") {
           return (
             <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
               <div className="mov-skelActions">
@@ -840,11 +1019,18 @@ export default function OrdenesPago() {
               </div>
             </div>
           );
+        }
+
         const w = (skelWidths[c.key] || ["60%"])[idx % (skelWidths[c.key]?.length || 1)];
+
         return (
           <div
             key={c.key}
-            className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")}
+            className={[
+              "mov-gridCell",
+              c.align === "right" ? "is-right" : "",
+              c.align === "center" ? "is-center" : "",
+            ].join(" ")}
             role="cell"
             data-label={c.label}
           >
@@ -856,19 +1042,36 @@ export default function OrdenesPago() {
   );
 
   const isAnyLoading = loadingRows || loadingMore;
-  const lists = listasCtx || { periodos: [] };
+  const lists = listasCtx || {
+    periodos: [],
+    clientes: [],
+    medios_pago: [],
+    tipos_venta: [],
+    clasificaciones: [],
+    cuentas_corrientes: [],
+    detalles: [],
+    proveedores: [],
+    tipos_movimiento: [],
+  };
 
-  /* =========================
-     RENDER
-  ========================= */
   return (
     <div className="mov-page mov-page--ordenesPago">
-      {toast && <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />}
+      {toast && (
+        <Toast
+          key={toast.id}
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
+      )}
+
       {errorListsCtx && (
         <div className="mov-alert" role="alert">
           {errorListsCtx}
         </div>
       )}
+
       {error && (
         <div className="mov-alert" role="alert">
           {error}
@@ -881,8 +1084,8 @@ export default function OrdenesPago() {
             <div className="title-mov">
               <div className="mov-card__title">Movs · Órdenes de Pago</div>
               <div className="mov-card__hint">
-                Mostrando <b>{filteredRows.length}</b> órdenes
-                {hasMore && filteredRows.length > 0 ? " (hay más)" : ""}
+                Mostrando <b>{filteredRows.length}</b>
+                {hasMore && filteredRows.length > 0 ? " (hay más por cargar)" : ""}
               </div>
             </div>
 
@@ -922,6 +1125,7 @@ export default function OrdenesPago() {
               <div className="mov-search floatingField floatingField--search is-active">
                 <div className="mov-searchInput">
                   <input
+                    ref={searchInputRef}
                     className="mov-input--floating"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
@@ -930,15 +1134,23 @@ export default function OrdenesPago() {
                         e.preventDefault();
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         skipSearchRef.current = true;
-                        await loadRows({ from: dateRange?.from, to: dateRange?.to, q: e.currentTarget.value, offset: 0, append: false });
+                        await loadRows({
+                          from: dateRange?.from,
+                          to: dateRange?.to,
+                          q: e.currentTarget.value,
+                          offset: 0,
+                          append: false,
+                        });
                       }
                     }}
                     placeholder="Buscar por descripción, proveedor..."
-                    disabled={loadingListsCtx}
+                    disabled={loadingListsCtx || loadingMore}
                   />
+
                   <span className="floatingLabel">
                     <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
                   </span>
+
                   {q.trim() !== "" && (
                     <button
                       type="button"
@@ -948,9 +1160,16 @@ export default function OrdenesPago() {
                         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                         setQ("");
                         skipSearchRef.current = true;
-                        await loadRows({ from: dateRange?.from, to: dateRange?.to, q: "", offset: 0, append: false });
-                        document.querySelector(".mov-searchInput input")?.focus();
+                        await loadRows({
+                          from: dateRange?.from,
+                          to: dateRange?.to,
+                          q: "",
+                          offset: 0,
+                          append: false,
+                        });
+                        searchInputRef.current?.focus();
                       }}
+                      disabled={loadingMore}
                     >
                       ×
                     </button>
@@ -1032,7 +1251,9 @@ export default function OrdenesPago() {
                           </div>
                         );
                       }
+
                       const val = c.render ? c.render(r) : safeText(r[c.key]);
+
                       return (
                         <div
                           key={c.key}
@@ -1066,7 +1287,6 @@ export default function OrdenesPago() {
                   </div>
                 )}
 
-                {/* ── Botón cargar 100 más ── */}
                 {!loadingRows && hasMore && filteredRows.length > 0 && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
@@ -1081,7 +1301,6 @@ export default function OrdenesPago() {
                   </div>
                 )}
 
-                {/* ── Skeleton de carga incremental ── */}
                 {loadingMore && (
                   <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">
                     {Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}
@@ -1101,7 +1320,7 @@ export default function OrdenesPago() {
         onToast={showToast}
         onConfirm={onConfirmPago}
         lists={lists}
-        onAfterComprobanteSaved={handleAfterComprobanteSaved}
+        onOrdenPagoFinalizado={onOrdenPagoFinalizado}
       />
 
       <ModalEditarOrdenPago

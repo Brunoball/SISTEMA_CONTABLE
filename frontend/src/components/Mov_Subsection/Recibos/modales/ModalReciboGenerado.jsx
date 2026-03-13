@@ -1,6 +1,3 @@
-// ✅ REEMPLAZAR COMPLETO
-// src/components/Movimientos/modales/ModalReciboGenerado.jsx
-
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
@@ -14,6 +11,7 @@ import {
   faFilePdf,
   faCheck,
   faCircleNotch,
+  faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 
 import html2pdf from "html2pdf.js/dist/html2pdf.min";
@@ -143,6 +141,27 @@ function extractIdComprobante(data) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function retryAsync(fn, attempts = 4, baseDelay = 450) {
+  let lastErr = null;
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn(i + 1);
+    } catch (e) {
+      lastErr = e;
+      if (i >= attempts - 1) break;
+      const wait = baseDelay * Math.pow(2, i);
+      await sleep(wait);
+    }
+  }
+
+  throw lastErr || new Error("Falló la operación luego de varios reintentos.");
+}
+
 const mmToPx = (mm) => Math.round((mm * 96) / 25.4);
 
 const EXTRA_RECIBO_CSS = `
@@ -253,6 +272,49 @@ function transformReciboBodyHtml(bodyHtml) {
   }
 }
 
+/* =========================
+   Persistencia ligera local
+========================= */
+const LS_KEY = "balto_recibo_pending_v2";
+
+function buildPendingKey({ idsMovs, idCobro, title }) {
+  return JSON.stringify({
+    ids: (Array.isArray(idsMovs) ? idsMovs : []).map(Number).filter(Boolean).sort((a, b) => a - b),
+    idCobro: Number(idCobro || 0),
+    title: String(title || ""),
+  });
+}
+
+function savePendingSnapshot(snapshot) {
+  try {
+    localStorage.setItem(
+      LS_KEY,
+      JSON.stringify({
+        ...snapshot,
+        ts: Date.now(),
+      })
+    );
+  } catch {}
+}
+
+function clearPendingSnapshot(expectedKey) {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.pendingKey || parsed.pendingKey === expectedKey) {
+      localStorage.removeItem(LS_KEY);
+    }
+  } catch {}
+}
+
+/* =========================
+   PDF perf config
+========================= */
+const PDF_SCALE_SAVE = 1.25;
+const PDF_SCALE_EXPORT = 1.8;
+const PDF_SAVE_TIMEOUT = 60000;
+
 export default function ModalReciboGenerado({
   open,
   onClose,
@@ -268,10 +330,16 @@ export default function ModalReciboGenerado({
   const exportHostRef = useRef(null);
 
   const [busy, setBusy] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const savedRef = useRef(null);
   const savingRef = useRef(false);
   const closingAndSavingRef = useRef(false);
+  const savePromiseRef = useRef(null);
+  const pdfBlobRef = useRef(null);
+  const warmupStartedRef = useRef(false);
+  const warmupTimerRef = useRef(null);
 
   const fullHtml = useMemo(() => ensureFullHtmlDocument(html, title), [html, title]);
   const extracted = useMemo(() => extractBodyWithStyles(fullHtml), [fullHtml]);
@@ -290,11 +358,61 @@ export default function ModalReciboGenerado({
       .filter((x) => Number.isFinite(x) && x > 0);
   }, [idsMovimientos]);
 
+  const pendingKey = useMemo(
+    () => buildPendingKey({ idsMovs, idCobro, title }),
+    [idsMovs, idCobro, title]
+  );
+
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => firstFocusRef.current?.focus(), 50);
     return () => clearTimeout(t);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    savePendingSnapshot({
+      pendingKey,
+      title,
+      html,
+      idsMovimientos: idsMovs,
+      idCobro: Number(idCobro || 0),
+      status: "pending",
+    });
+  }, [open, pendingKey, title, html, idsMovs, idCobro]);
+
+  useEffect(() => {
+    if (!open) {
+      if (warmupTimerRef.current) clearTimeout(warmupTimerRef.current);
+      warmupTimerRef.current = null;
+      warmupStartedRef.current = false;
+      pdfBlobRef.current = null;
+      savePromiseRef.current = null;
+      savedRef.current = null;
+      savingRef.current = false;
+      closingAndSavingRef.current = false;
+      setAutoSaving(false);
+      setBusy(false);
+      setSaveError("");
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onBeforeUnload = (e) => {
+      if (savingRef.current || autoSaving || busy) {
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
+      return undefined;
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [open, autoSaving, busy]);
 
   const buildWrapperForPdf = useCallback(async () => {
     if (!previewRef.current) throw new Error("No hay vista previa para exportar.");
@@ -332,6 +450,41 @@ export default function ModalReciboGenerado({
     return wrapper;
   }, []);
 
+  const generatePdfBlob = useCallback(
+    async (quality = "save") => {
+      if (pdfBlobRef.current) return pdfBlobRef.current;
+
+      const wrapper = await buildWrapperForPdf();
+      const contentH = Math.ceil(wrapper.scrollHeight || 0);
+
+      const scale = quality === "export" ? PDF_SCALE_EXPORT : PDF_SCALE_SAVE;
+
+      const opt = {
+        margin: 0,
+        image: { type: "jpeg", quality: quality === "export" ? 0.96 : 0.9 },
+        html2canvas: {
+          scale,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: 794,
+          windowHeight: contentH > 0 ? contentH : undefined,
+        },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+      };
+
+      const worker = html2pdf().set(opt).from(wrapper).toPdf();
+      const blob = await worker.output("blob");
+      if (!blob) throw new Error("No se pudo generar el PDF.");
+      pdfBlobRef.current = blob;
+      return blob;
+    },
+    [buildWrapperForPdf]
+  );
+
   const handlePrint = useCallback(() => {
     try {
       if (!fullHtml) throw new Error("No hay HTML para imprimir.");
@@ -355,37 +508,25 @@ export default function ModalReciboGenerado({
     try {
       setBusy(true);
 
-      const wrapper = await buildWrapperForPdf();
+      const blob = await generatePdfBlob("export");
       const filename = `${sanitizeFileName(title)}.pdf`;
 
-      const contentH = Math.ceil(wrapper.scrollHeight || 0);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
 
-      const opt = {
-        margin: 0,
-        filename,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#ffffff",
-          logging: false,
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: 794,
-          windowHeight: contentH > 0 ? contentH : undefined,
-        },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
-      };
-
-      await html2pdf().set(opt).from(wrapper).save();
       onToast?.("exito", "PDF exportado", 2400);
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo exportar el PDF.", 4200);
     } finally {
       setBusy(false);
     }
-  }, [title, onToast, buildWrapperForPdf]);
+  }, [generatePdfBlob, title, onToast]);
 
   const uploadPdfToServer = useCallback(
     async (pdfBlob) => {
@@ -419,7 +560,7 @@ export default function ModalReciboGenerado({
           headers: { "X-Session": sessionKey },
           body: fd,
         },
-        60000
+        PDF_SAVE_TIMEOUT
       );
 
       const { ok, data, text } = await parseJsonFromResponse(res);
@@ -472,7 +613,7 @@ export default function ModalReciboGenerado({
           },
           body: JSON.stringify(payload || {}),
         },
-        60000
+        PDF_SAVE_TIMEOUT
       );
 
       const { ok, data, text } = await parseJsonFromResponse(res);
@@ -540,72 +681,104 @@ export default function ModalReciboGenerado({
 
   const ensureSaved = useCallback(async () => {
     if (savedRef.current) return savedRef.current;
-
-    if (savingRef.current) {
-      while (savingRef.current) {
-        // eslint-disable-next-line no-await-in-loop
-        await new Promise((r) => setTimeout(r, 80));
-      }
-      if (savedRef.current) return savedRef.current;
-    }
+    if (savePromiseRef.current) return await savePromiseRef.current;
 
     if (!idsMovs.length) {
       throw new Error("Faltan idsMovimientos válidos para vincular el recibo.");
     }
 
-    savingRef.current = true;
-    try {
-      const wrapper = await buildWrapperForPdf();
-      const contentH = Math.ceil(wrapper.scrollHeight || 0);
+    setSaveError("");
 
-      const opt = {
-        margin: 0,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#ffffff",
-          logging: false,
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: 794,
-          windowHeight: contentH > 0 ? contentH : undefined,
-        },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
-      };
+    const task = (async () => {
+      savingRef.current = true;
+      try {
+        const pdfBlob = await retryAsync(() => generatePdfBlob("save"), 3, 250);
 
-      const worker = html2pdf().set(opt).from(wrapper).toPdf();
-      const pdfBlob = await worker.output("blob");
-      if (!pdfBlob) throw new Error("No se pudo generar el PDF (blob).");
+        const saved = await retryAsync(async () => {
+          const up = await uploadPdfToServer(pdfBlob);
+          const idComp = extractIdComprobante(up);
+          await asociarComprobanteAMovimientos(idComp, idsMovs);
 
-      const saved = await uploadPdfToServer(pdfBlob);
-      const idComp = extractIdComprobante(saved);
+          const finalSaved = {
+            ...up,
+            id_comprobante: idComp,
+            ids_movimiento: idsMovs,
+          };
 
-      await asociarComprobanteAMovimientos(idComp, idsMovs);
+          return finalSaved;
+        }, 4, 500);
 
-      const finalSaved = {
-        ...saved,
-        id_comprobante: idComp,
-        ids_movimiento: idsMovs,
-      };
+        savedRef.current = saved;
 
-      savedRef.current = finalSaved;
-      onToast?.("exito", "Recibo guardado y vinculado", 2600);
+        clearPendingSnapshot(pendingKey);
+        return saved;
+      } catch (e) {
+        const msg = e?.message || "No se pudo guardar el comprobante.";
+        setSaveError(msg);
 
-      return finalSaved;
-    } finally {
-      savingRef.current = false;
-    }
+        savePendingSnapshot({
+          pendingKey,
+          title,
+          html,
+          idsMovimientos: idsMovs,
+          idCobro: Number(idCobro || 0),
+          status: "error",
+          error: msg,
+        });
+
+        throw e;
+      } finally {
+        savingRef.current = false;
+      }
+    })();
+
+    savePromiseRef.current = task;
+    return await task;
   }, [
     idsMovs,
-    buildWrapperForPdf,
+    generatePdfBlob,
     uploadPdfToServer,
     asociarComprobanteAMovimientos,
-    onToast,
+    pendingKey,
+    title,
+    html,
+    idCobro,
   ]);
 
-  // ✅ ÚNICA lógica real: ESC / X / FINALIZAR hacen EXACTAMENTE lo mismo
+  const startWarmupSave = useCallback(() => {
+    if (!open) return;
+    if (warmupStartedRef.current) return;
+    if (!idsMovs.length) return;
+
+    warmupStartedRef.current = true;
+    setAutoSaving(true);
+
+    const runner = async () => {
+      try {
+        await ensureSaved();
+      } catch {
+        // se informa sólo si el usuario finaliza o cierra
+      } finally {
+        setAutoSaving(false);
+      }
+    };
+
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(() => {
+        void runner();
+      }, { timeout: 350 });
+    } else {
+      warmupTimerRef.current = setTimeout(() => {
+        void runner();
+      }, 120);
+    }
+  }, [open, idsMovs.length, ensureSaved]);
+
+  useEffect(() => {
+    if (!open) return;
+    startWarmupSave();
+  }, [open, startWarmupSave]);
+
   const finalizeAndCloseAll = useCallback(async () => {
     if (busy || closingAndSavingRef.current) return;
 
@@ -614,11 +787,13 @@ export default function ModalReciboGenerado({
       setBusy(true);
 
       const saved = await ensureSaved();
-
-      // ✅ el padre ya se encarga de cerrar todo de una
       onFinalizar?.(saved);
     } catch (e) {
-      onToast?.("error", e?.message || "No se pudo finalizar el recibo.", 4500);
+      onToast?.(
+        "error",
+        e?.message || "No se pudo finalizar el recibo. Reintentá.",
+        5000
+      );
     } finally {
       closingAndSavingRef.current = false;
       setBusy(false);
@@ -672,6 +847,7 @@ export default function ModalReciboGenerado({
             </div>
             <div className="mi-modal__subtitle mpr-subtitle">
               Vista previa · X / ESC / Finalizar guardan y cierran todo igual
+              {autoSaving ? " · guardando en segundo plano…" : ""}
             </div>
           </div>
 
@@ -689,6 +865,30 @@ export default function ModalReciboGenerado({
 
         <div className="mi-modal__body mpr-body">
           <div className="mpr-content">
+            {saveError ? (
+              <div
+                style={{
+                  marginBottom: 12,
+                  padding: 12,
+                  borderRadius: 10,
+                  border: "1px solid rgba(245, 158, 11, .35)",
+                  background: "rgba(245, 158, 11, .08)",
+                  color: "var(--text-color, #111)",
+                }}
+              >
+                <div style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 700 }}>
+                  <FontAwesomeIcon icon={faTriangleExclamation} />
+                  <span>No se pudo guardar automáticamente todavía</span>
+                </div>
+                <div style={{ marginTop: 6, fontSize: 14, opacity: 0.9 }}>
+                  {saveError}
+                </div>
+                <div style={{ marginTop: 6, fontSize: 13, opacity: 0.8 }}>
+                  Podés tocar <b>Finalizar</b> otra vez y reintentará automáticamente.
+                </div>
+              </div>
+            ) : null}
+
             <div className="mpr-card mpr-viewCard">
               <div className="mpr-previewScroll">
                 <div
@@ -733,7 +933,7 @@ export default function ModalReciboGenerado({
             disabled={busy}
           >
             <FontAwesomeIcon icon={busy ? faCircleNotch : faCheck} spin={busy} />{" "}
-            Finalizar
+            {busy ? "Guardando…" : "Finalizar"}
           </button>
         </div>
 

@@ -1,6 +1,3 @@
-// ✅ REEMPLAZAR COMPLETO
-// src/components/Movimientos/modales/ModalPagarRecibos.jsx
-
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
@@ -16,7 +13,6 @@ import {
   faCircleNotch,
 } from "@fortawesome/free-solid-svg-icons";
 
-// ✅ Modal recibo
 import ModalReciboGenerado from "./ModalReciboGenerado";
 import { buildReciboHTML } from "../../../../utils/reciboTemplate";
 
@@ -55,16 +51,10 @@ function todayDMY() {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-/* =========================
-   Dark mode helper
-========================= */
 function isTemaOscuro() {
   return document.documentElement.getAttribute("data-theme") === "oscuro";
 }
 
-/* =========================
-   Auth helpers (X-Session)
-========================= */
 function getSessionKey() {
   return (localStorage.getItem("session_key") || "").trim();
 }
@@ -75,9 +65,6 @@ function buildAuthHeaders() {
   return headers;
 }
 
-/* =========================
-   Medios de pago normalizer
-========================= */
 function normalizeMediosPago(raw) {
   const root = raw && typeof raw === "object" ? raw : {};
   const src = root.listas && typeof root.listas === "object" ? root.listas : root;
@@ -96,9 +83,6 @@ function normalizeMediosPago(raw) {
     .filter((x) => x.id > 0 && x.nombre);
 }
 
-/* =========================
-   Estado (pagado/pendiente)
-========================= */
 function isPagadoRow(row) {
   if (row?.pagado === true) return true;
   const cob = Number(row?.cobrado_total ?? 0);
@@ -115,9 +99,6 @@ function EstadoChip({ estado }) {
   );
 }
 
-/* =========================
-   fetch JSON helper
-========================= */
 async function fetchJsonOrThrow(url, opts = {}) {
   const res = await fetch(url, opts);
   const text = await res.text();
@@ -144,6 +125,7 @@ export default function ModalPagarRecibos({
   deudas = [],
   onFactura,
   onReciboFinalizado,
+  lists,
 }) {
   const dialogRef = useRef(null);
   const firstFocusRef = useRef(null);
@@ -169,20 +151,22 @@ export default function ModalPagarRecibos({
 
   const [rows, setRows] = useState(() => []);
 
+  const mediosPagoFromContext = useMemo(() => {
+    return normalizeMediosPago(lists || {});
+  }, [lists]);
+
   const [mediosPago, setMediosPago] = useState([]);
   const [loadingMedios, setLoadingMedios] = useState(false);
   const [idMedioPago, setIdMedioPago] = useState("");
 
-  // ✅ modal de recibo
   const [openRecibo, setOpenRecibo] = useState(false);
   const [reciboHtml, setReciboHtml] = useState("");
   const [reciboTitle, setReciboTitle] = useState("Recibo");
 
-  // ✅ guardamos TODOS los ids_movimiento pagados
   const [idsMovimientosPagados, setIdsMovimientosPagados] = useState([]);
   const [ultimoCobroId, setUltimoCobroId] = useState(null);
 
-  const fetchMediosPago = useCallback(async () => {
+  const fetchMediosPagoFallback = useCallback(async () => {
     try {
       setLoadingMedios(true);
 
@@ -213,22 +197,24 @@ export default function ModalPagarRecibos({
 
     setRows(Array.isArray(deudas) ? [...deudas] : []);
 
-    setMediosPago([]);
-    setIdMedioPago("");
-    fetchMediosPago();
-
     setOpenRecibo(false);
     setReciboHtml("");
     setReciboTitle("Recibo");
     setIdsMovimientosPagados([]);
     setUltimoCobroId(null);
 
-    setTimeout(() => firstFocusRef.current?.focus(), 50);
-  }, [open, fetchMediosPago, deudas]);
+    if (mediosPagoFromContext.length > 0) {
+      setMediosPago(mediosPagoFromContext);
+      setLoadingMedios(false);
+    } else {
+      setMediosPago([]);
+      fetchMediosPagoFallback();
+    }
 
-  // ✅ IMPORTANTE:
-  // este ESC solo funciona cuando está visible el modal de pago.
-  // si está abierto el recibo, el de pago NO se renderiza, así evitamos el "doble modal".
+    setIdMedioPago("");
+    setTimeout(() => firstFocusRef.current?.focus(), 50);
+  }, [open, deudas, mediosPagoFromContext, fetchMediosPagoFallback]);
+
   useEffect(() => {
     if (!open || openRecibo) return;
 
@@ -277,7 +263,6 @@ export default function ModalPagarRecibos({
     if (!open || openRecibo) return;
 
     const t = setTimeout(recomputeTbodyScroll, 0);
-
     const el = tbodyRef.current;
     if (!el) return () => clearTimeout(t);
 
@@ -298,9 +283,7 @@ export default function ModalPagarRecibos({
   }, [open, openRecibo, recomputeTbodyScroll, deudasOrdenadas.length]);
 
   const toggleOne = (id, row) => {
-    if (!id) return;
-    if (loading) return;
-    if (isPagadoRow(row)) return;
+    if (!id || loading || isPagadoRow(row)) return;
 
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -429,9 +412,14 @@ export default function ModalPagarRecibos({
         resp = await confirmPagoDefault({ ids_movimiento: ids, id_medio_pago: mp.id });
       }
 
+      const idsCobroResp = Array.isArray(resp?.ids_cobro)
+        ? resp.ids_cobro.map((x) => Number(x || 0)).filter(Boolean)
+        : [];
+
       setIdsMovimientosPagados(ids);
 
-      const firstCobro = Number(resp?.ids_cobro?.[0] || resp?.id_cobro || 0) || null;
+      const firstCobro =
+        Number(idsCobroResp?.[0] || resp?.id_cobro || 0) || null;
       setUltimoCobroId(firstCobro);
 
       setRows((prev) =>
@@ -442,6 +430,8 @@ export default function ModalPagarRecibos({
             ...r,
             cobrado_total: Number(r?.monto_total ?? r?.total ?? 0) || 0,
             pagado: true,
+            id_medio_pago: mp.id,
+            medio_pago_nombre: mp.nombre,
           };
         })
       );
@@ -456,15 +446,12 @@ export default function ModalPagarRecibos({
 
       setReciboHtml(built.html);
       setReciboTitle(built.title);
-
-      // ✅ PRIMERO abrimos el recibo
-      // ✅ y dejamos de renderizar el modal de pago
       setOpenRecibo(true);
 
       setSelectedIds(new Set());
       setPagaTodo(false);
 
-      onToast?.("exito", "Pago confirmado. Revisá el recibo y finalizá.", 2600);
+      onToast?.("exito", "Pago realizado correctamente.", 3000);
 
       setTimeout(recomputeTbodyScroll, 0);
     } catch (e) {
@@ -544,7 +531,6 @@ export default function ModalPagarRecibos({
 
   return createPortal(
     <>
-      {/* ✅ SOLO renderiza el modal de pago si NO está abierto el recibo */}
       {!openRecibo && (
         <div className={overlayClass} role="dialog" aria-modal="true">
           <div className={modalClass} ref={dialogRef} onMouseDown={(e) => e.stopPropagation()}>
@@ -680,22 +666,13 @@ export default function ModalPagarRecibos({
                         return (
                           <div
                             key={id || `${r?.fecha}-${idx}`}
-                            className={`mpr-row ${checked ? "is-checked" : ""} ${
-                              pagado ? "is-paid" : ""
-                            }`}
+                            className={`mpr-row ${checked ? "is-checked" : ""} ${pagado ? "is-paid" : ""}`}
                             role="row"
                             onClick={() => id && toggleOne(id, r)}
                             title={pagado ? "Este registro ya está PAGADO" : undefined}
                           >
-                            <div
-                              className="mpr-td mpr-td--center"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <label
-                                className={`mpr-checkWrap ${
-                                  !id || loading || pagado ? "is-disabled" : ""
-                                }`}
-                              >
+                            <div className="mpr-td mpr-td--center" onClick={(e) => e.stopPropagation()}>
+                              <label className={`mpr-checkWrap ${!id || loading || pagado ? "is-disabled" : ""}`}>
                                 <input
                                   className="mpr-checkInput"
                                   type="checkbox"
@@ -773,23 +750,22 @@ export default function ModalPagarRecibos({
         </div>
       )}
 
-      {/* ✅ Modal del recibo generado */}
       <ModalReciboGenerado
         open={openRecibo}
         html={reciboHtml}
         title={reciboTitle}
         onToast={onToast}
         onClose={() => {
-          // ✅ si por alguna razón querés cerrar desde el hijo, cerramos todo
           setOpenRecibo(false);
           onClose?.();
         }}
         idsMovimientos={idsMovimientosPagados}
         idCobro={ultimoCobroId}
         onFinalizar={(saved) => {
-          onReciboFinalizado?.(saved, { idsMovimiento: idsMovimientosPagados });
-
-          // ✅ cerrar todo de una, sin mostrar el modal anterior
+          onReciboFinalizado?.(saved, {
+            idsMovimiento: idsMovimientosPagados,
+            idCobro: ultimoCobroId,
+          });
           setOpenRecibo(false);
           onClose?.();
         }}

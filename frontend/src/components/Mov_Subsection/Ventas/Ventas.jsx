@@ -1542,7 +1542,7 @@ export default function Ventas() {
         message={deleteModalConfig.message}
         warning={deleteModalConfig.warning}
         loadingMessage="Eliminando venta…"
-        successMessage="Venta eliminada."
+        successMessage="Venta eliminada correctamente."
         errorMessage="No se pudo eliminar la venta."
         confirmLabel={deleteModalConfig.confirmLabel}
         cancelLabel="Cancelar"

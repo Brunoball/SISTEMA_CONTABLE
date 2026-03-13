@@ -1,80 +1,65 @@
-// ✅ REEMPLAZAR COMPLETO
-// src/components/OrdenesPago/modales/ModalOrdenPagoGenerada.jsx
-
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
 import "../../Recibos/modales/ModalPagarRecibos.css";
 import BASE_URL from "../../../../config/config";
 
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faXmark,
   faPrint,
-  faCircleNotch,
-  faCheck,
   faFilePdf,
+  faCheck,
+  faCircleNotch,
+  faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 
+import html2pdf from "html2pdf.js/dist/html2pdf.min";
+
 /* =========================
-  Helpers
+   Helpers
 ========================= */
-function safeText(v) {
-  const s = String(v ?? "").trim();
-  return s ? s : "-";
+function sanitizeFileName(name) {
+  return String(name || "Orden de Pago")
+    .replace(/[\\/:*?"<>|]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function getSessionKey() {
-  return (localStorage.getItem("session_key") || "").trim();
-}
+function ensureFullHtmlDocument(html, title) {
+  const s = String(html || "").trim();
+  const hasHtmlTag = /<html[\s>]/i.test(s);
+  const hasBodyTag = /<body[\s>]/i.test(s);
 
-function buildAuthHeaders() {
-  const session = getSessionKey();
-  const headers = {};
-  if (session) headers["X-Session"] = session;
-  return headers;
-}
+  const printCss = `
+    <style>
+      @page { size: A4; margin: 10mm; }
+      html, body { background: #fff; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    </style>
+  `;
 
-function resolveSiteBase() {
-  const raw = String(BASE_URL || "").replace(/\/+$/, "");
-  return raw
-    .replace(/\/api\.php$/i, "")
-    .replace(/\/api\/routes$/i, "")
-    .replace(/\/api\/routes\/api\.php$/i, "");
-}
-
-function nicePdfUrl(idComprobante) {
-  const sessionKey = getSessionKey();
-  const sp = new URLSearchParams();
-  if (sessionKey) sp.set("session_key", sessionKey);
-  const qs = sp.toString();
-  return qs
-    ? `${resolveSiteBase()}/c/${Number(idComprobante)}.pdf?${qs}`
-    : `${resolveSiteBase()}/c/${Number(idComprobante)}.pdf`;
-}
-
-async function fetchJsonOrThrow(url, opts = {}) {
-  const res = await fetch(url, opts);
-  const text = await res.text();
-  if (!text) throw new Error("Respuesta vacía del servidor.");
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    const preview = text.length > 700 ? text.slice(0, 700) + "..." : text;
-    throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status}\n${preview}`);
+  if (hasHtmlTag && hasBodyTag) {
+    if (/<head[\s>]/i.test(s) && /<\/head>/i.test(s)) {
+      return s.replace(/<\/head>/i, `${printCss}</head>`);
+    }
+    return s;
   }
-  if (!res.ok) throw new Error(data?.mensaje || `HTTP ${res.status}`);
-  if (data?.exito === false) throw new Error(data?.mensaje || "Operación fallida.");
-  return data;
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${String(title || "Orden de Pago")}</title>
+  ${printCss}
+</head>
+<body>
+  ${s}
+</body>
+</html>`;
 }
 
-/* =========================
-  ✅ EXTRAER <style> + <body> del HTML
-========================= */
 function extractBodyWithStyles(fullHtml) {
   const s = String(fullHtml || "").trim();
   if (!s) return { styles: "", body: "" };
@@ -92,224 +77,617 @@ function extractBodyWithStyles(fullHtml) {
   }
 }
 
-/* =========================
-  ✅ HTML -> PDF desde un nodo REAL
-========================= */
-async function nodeToPdfBlob(containerNode, filename = "comprobante.pdf") {
-  if (!containerNode) throw new Error("No se encontró el nodo para exportar a PDF.");
-
-  const target =
-    containerNode.querySelector(".mpr-paper") ||
-    containerNode.querySelector(".wrap") ||
-    containerNode.querySelector(".page") ||
-    containerNode;
-
-  const canvas = await html2canvas(target, {
-    scale: 2,
-    backgroundColor: "#fff",
-    useCORS: true,
-    scrollX: 0,
-    scrollY: 0,
-    windowWidth: target.scrollWidth || target.offsetWidth,
-    windowHeight: target.scrollHeight || target.offsetHeight,
-  });
-
-  const imgData = canvas.toDataURL("image/png");
-
-  const pdf = new jsPDF("p", "pt", "a4");
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-
-  const margin = 18;
-  const maxW = pageW - margin * 2;
-  const maxH = pageH - margin * 2;
-
-  const imgW = canvas.width;
-  const imgH = canvas.height;
-  const ratio = Math.min(maxW / imgW, maxH / imgH);
-
-  const renderW = imgW * ratio;
-  const renderH = imgH * ratio;
-
-  const x = (pageW - renderW) / 2;
-  const y = margin;
-
-  pdf.addImage(imgData, "PNG", x, y, renderW, renderH, undefined, "FAST");
-
-  const blob = pdf.output("blob");
-  const file = new File([blob], filename, { type: "application/pdf" });
-  return { blob, file };
+function getSessionKey() {
+  const keys = [
+    "session_key",
+    "SESSION_KEY",
+    "balto_session_key",
+    "BALTO_SESSION_KEY",
+    "x_session",
+    "X_SESSION",
+    "X-Session",
+    "x-session",
+  ];
+  for (const k of keys) {
+    const v = localStorage.getItem(k);
+    if (v && String(v).trim() !== "") return String(v).trim();
+  }
+  return "";
 }
+
+function getApiPhpUrl() {
+  const base = String(BASE_URL || "").replace(/\/+$/, "");
+  if (/\/api\.php$/i.test(base)) return base;
+  return `${base}/api.php`;
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 60000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+async function parseJsonFromResponse(res) {
+  const text = await res.text();
+  if (!text) return { ok: false, data: null, text: "" };
+  try {
+    return { ok: true, data: JSON.parse(text), text };
+  } catch {
+    return { ok: false, data: null, text };
+  }
+}
+
+function extractIdComprobante(data) {
+  const cand =
+    data?.id_comprobante ??
+    data?.idComprobante ??
+    data?.comprobante_id ??
+    data?.data?.id_comprobante ??
+    data?.data?.idComprobante ??
+    data?.data?.comprobante_id ??
+    data?.data?.id ??
+    data?.id ??
+    0;
+
+  const n = Number(cand || 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function retryAsync(fn, attempts = 4, baseDelay = 450) {
+  let lastErr = null;
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn(i + 1);
+    } catch (e) {
+      lastErr = e;
+      if (i >= attempts - 1) break;
+      const wait = baseDelay * Math.pow(2, i);
+      await sleep(wait);
+    }
+  }
+
+  throw lastErr || new Error("Falló la operación luego de varios reintentos.");
+}
+
+const mmToPx = (mm) => Math.round((mm * 96) / 25.4);
+
+/* =========================
+   Persistencia ligera local
+========================= */
+const LS_KEY = "balto_orden_pago_pending_v1";
+
+function buildPendingKey({ idsMovs, idCobro, title }) {
+  return JSON.stringify({
+    ids: (Array.isArray(idsMovs) ? idsMovs : []).map(Number).filter(Boolean).sort((a, b) => a - b),
+    idCobro: Number(idCobro || 0),
+    title: String(title || ""),
+  });
+}
+
+function savePendingSnapshot(snapshot) {
+  try {
+    localStorage.setItem(
+      LS_KEY,
+      JSON.stringify({
+        ...snapshot,
+        ts: Date.now(),
+      })
+    );
+  } catch {}
+}
+
+function clearPendingSnapshot(expectedKey) {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.pendingKey || parsed.pendingKey === expectedKey) {
+      localStorage.removeItem(LS_KEY);
+    }
+  } catch {}
+}
+
+/* =========================
+   PDF perf config
+========================= */
+const PDF_SCALE_SAVE = 1.25;
+const PDF_SCALE_EXPORT = 1.8;
+const PDF_SAVE_TIMEOUT = 60000;
 
 export default function ModalOrdenPagoGenerada({
   open,
   onClose,
-  onToast,
+  onFinalizar,
   html,
-  idsMovimiento = [],
-  titulo = "Comprobante · Orden de Pago",
-  onSaved,
+  title = "Orden de Pago",
+  onToast,
+  idsMovimientos = [],
+  idCobro = null,
 }) {
-  const firstRef = useRef(null);
+  const firstFocusRef = useRef(null);
   const previewRef = useRef(null);
+  const exportHostRef = useRef(null);
 
-  const [saving, setSaving] = useState(false);
-  const [idComprobante, setIdComprobante] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
+  const savedRef = useRef(null);
   const savingRef = useRef(false);
-  const closeFlowRef = useRef(false);
+  const closingAndSavingRef = useRef(false);
+  const savePromiseRef = useRef(null);
+  const pdfBlobRef = useRef(null);
+  const warmupStartedRef = useRef(false);
+  const warmupTimerRef = useRef(null);
 
-  const preview = useMemo(() => extractBodyWithStyles(html), [html]);
+  const fullHtml = useMemo(() => ensureFullHtmlDocument(html, title), [html, title]);
+  const extracted = useMemo(() => extractBodyWithStyles(fullHtml), [fullHtml]);
+
   const previewMarkup = useMemo(() => {
-    const styles = preview.styles ? `<style>${preview.styles}</style>` : "";
-    return `${styles}${preview.body || ""}`;
-  }, [preview.styles, preview.body]);
+    const stylesTag = extracted.styles ? `<style>${extracted.styles}</style>` : "";
+    return `${stylesTag}${extracted.body || ""}`;
+  }, [extracted.styles, extracted.body]);
+
+  const idsMovs = useMemo(() => {
+    const arr = Array.isArray(idsMovimientos) ? idsMovimientos : [idsMovimientos];
+    return arr
+      .map((x) => Number(x || 0))
+      .filter((x) => Number.isFinite(x) && x > 0);
+  }, [idsMovimientos]);
+
+  const pendingKey = useMemo(
+    () => buildPendingKey({ idsMovs, idCobro, title }),
+    [idsMovs, idCobro, title]
+  );
 
   useEffect(() => {
     if (!open) return;
-    setSaving(false);
-    setIdComprobante(null);
-    savingRef.current = false;
-    closeFlowRef.current = false;
-    const t = setTimeout(() => firstRef.current?.focus(), 50);
+    const t = setTimeout(() => firstFocusRef.current?.focus(), 50);
     return () => clearTimeout(t);
   }, [open]);
 
-  const idsOk = useMemo(() => {
-    const arr = Array.isArray(idsMovimiento) ? idsMovimiento : [];
-    const clean = arr.map((x) => Number(x || 0)).filter((n) => n > 0);
-    return Array.from(new Set(clean));
-  }, [idsMovimiento]);
+  useEffect(() => {
+    if (!open) return;
+
+    savePendingSnapshot({
+      pendingKey,
+      title,
+      html,
+      idsMovimientos: idsMovs,
+      idCobro: Number(idCobro || 0),
+      status: "pending",
+    });
+  }, [open, pendingKey, title, html, idsMovs, idCobro]);
+
+  useEffect(() => {
+    if (!open) {
+      if (warmupTimerRef.current) clearTimeout(warmupTimerRef.current);
+      warmupTimerRef.current = null;
+      warmupStartedRef.current = false;
+      pdfBlobRef.current = null;
+      savePromiseRef.current = null;
+      savedRef.current = null;
+      savingRef.current = false;
+      closingAndSavingRef.current = false;
+      setAutoSaving(false);
+      setBusy(false);
+      setSaveError("");
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onBeforeUnload = (e) => {
+      if (savingRef.current || autoSaving || busy) {
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
+      return undefined;
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [open, autoSaving, busy]);
+
+  const buildWrapperForPdf = useCallback(async () => {
+    if (!previewRef.current) throw new Error("No hay vista previa para exportar.");
+
+    const host = exportHostRef.current;
+    if (!host) throw new Error("No se pudo preparar el área de exportación.");
+
+    host.innerHTML = "";
+
+    const src = previewRef.current;
+    const clone = src.cloneNode(true);
+
+    const A4_W = 794;
+    const pad = mmToPx(10);
+
+    const wrapper = document.createElement("div");
+    wrapper.style.width = `${A4_W}px`;
+    wrapper.style.background = "#ffffff";
+    wrapper.style.margin = "0";
+    wrapper.style.padding = `${pad}px`;
+    wrapper.style.boxSizing = "border-box";
+    wrapper.style.display = "block";
+    wrapper.style.height = "auto";
+    wrapper.style.overflow = "hidden";
+
+    clone.style.marginLeft = "auto";
+    clone.style.marginRight = "auto";
+    clone.style.width = "100%";
+    clone.style.maxWidth = `${A4_W - pad * 2}px`;
+
+    wrapper.appendChild(clone);
+    host.appendChild(wrapper);
+
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return wrapper;
+  }, []);
+
+  const generatePdfBlob = useCallback(
+    async (quality = "save") => {
+      if (pdfBlobRef.current) return pdfBlobRef.current;
+
+      const wrapper = await buildWrapperForPdf();
+      const contentH = Math.ceil(wrapper.scrollHeight || 0);
+
+      const scale = quality === "export" ? PDF_SCALE_EXPORT : PDF_SCALE_SAVE;
+
+      const opt = {
+        margin: 0,
+        image: { type: "jpeg", quality: quality === "export" ? 0.96 : 0.9 },
+        html2canvas: {
+          scale,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: 794,
+          windowHeight: contentH > 0 ? contentH : undefined,
+        },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+      };
+
+      const worker = html2pdf().set(opt).from(wrapper).toPdf();
+      const blob = await worker.output("blob");
+      if (!blob) throw new Error("No se pudo generar el PDF.");
+      pdfBlobRef.current = blob;
+      return blob;
+    },
+    [buildWrapperForPdf]
+  );
 
   const handlePrint = useCallback(() => {
-    if (!html) return;
-    const w = window.open("", "_blank");
-    if (!w) {
-      onToast?.("error", "El navegador bloqueó el popup de impresión.", 3500);
-      return;
-    }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    w.print();
-  }, [html, onToast]);
-
-  const handleExportPdfLocal = useCallback(async () => {
     try {
-      if (!previewRef.current) throw new Error("No hay vista previa para exportar.");
-      setSaving(true);
+      if (!fullHtml) throw new Error("No hay HTML para imprimir.");
 
-      const { blob } = await nodeToPdfBlob(previewRef.current, "orden_pago.pdf");
+      const w = window.open("", "_blank");
+      if (!w) throw new Error("El navegador bloqueó el popup de impresión.");
+
+      w.document.open();
+      w.document.write(fullHtml);
+      w.document.close();
+      w.focus();
+      w.print();
+
+      onToast?.("exito", "Panel de impresión abierto.", 2200);
+    } catch (e) {
+      onToast?.("error", e?.message || "No se pudo imprimir.", 4200);
+    }
+  }, [fullHtml, onToast]);
+
+  const handleExportPdf = useCallback(async () => {
+    try {
+      setBusy(true);
+
+      const blob = await generatePdfBlob("export");
+      const filename = `${sanitizeFileName(title)}.pdf`;
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "orden_pago.pdf";
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
 
-      onToast?.("exito", "PDF exportado", 2200);
+      onToast?.("exito", "PDF exportado", 2400);
     } catch (e) {
-      onToast?.("error", e?.message || "No se pudo exportar el PDF.", 4500);
+      onToast?.("error", e?.message || "No se pudo exportar el PDF.", 4200);
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
-  }, [onToast]);
+  }, [generatePdfBlob, title, onToast]);
 
-  const handleView = useCallback(() => {
-    if (!idComprobante) {
-      onToast?.("error", "Todavía no se guardó el comprobante.", 2200);
-      return;
-    }
-    const url = nicePdfUrl(idComprobante);
-    window.open(url, "_blank", "noopener,noreferrer");
-  }, [idComprobante, onToast]);
+  const uploadPdfToServer = useCallback(
+    async (pdfBlob) => {
+      const sessionKey = getSessionKey();
+      if (!sessionKey) throw new Error("Sesión inválida (no hay X-Session).");
 
-  const saveToServerIfNeeded = useCallback(async () => {
-    if (idComprobante) return idComprobante;
-
-    if (savingRef.current) {
-      while (savingRef.current) {
-        // eslint-disable-next-line no-await-in-loop
-        await new Promise((r) => setTimeout(r, 80));
-      }
-      if (idComprobante) return idComprobante;
-    }
-
-    if (!html) throw new Error("No hay HTML para generar el PDF.");
-    if (idsOk.length === 0) throw new Error("No hay movimientos para asociar.");
-    if (!previewRef.current) throw new Error("No hay vista previa para exportar.");
-
-    savingRef.current = true;
-    setSaving(true);
-
-    try {
-      const { file } = await nodeToPdfBlob(previewRef.current, "orden_pago.pdf");
+      const safeName = sanitizeFileName(title);
+      const file = new File([pdfBlob], `${safeName}.pdf`, {
+        type: "application/pdf",
+      });
 
       const fd = new FormData();
+      fd.append("action", "comprobantes_subir");
       fd.append("tipo", "ORDEN_PAGO");
-      fd.append("id_movimiento", String(idsOk[0]));
+      fd.append("titulo", String(title || "Orden de Pago"));
+
+      if (idsMovs[0]) fd.append("id_movimiento", String(idsMovs[0]));
+      idsMovs.forEach((id) => fd.append("ids_movimiento[]", String(id)));
+
+      const cob = Number(idCobro);
+      if (Number.isFinite(cob) && cob > 0) fd.append("id_cobro", String(cob));
+
       fd.append("archivo", file);
 
-      const upUrl = `${BASE_URL}/api.php?action=comprobantes_subir`;
-      const upData = await fetchJsonOrThrow(upUrl, {
-        method: "POST",
-        headers: buildAuthHeaders(),
-        body: fd,
-      });
+      const url = getApiPhpUrl();
 
-      const newIdComp = Number(upData?.id_comprobante || 0);
-      if (!newIdComp) throw new Error("No se recibió id_comprobante al subir.");
+      const res = await fetchWithTimeout(
+        url,
+        {
+          method: "POST",
+          headers: { "X-Session": sessionKey },
+          body: fd,
+        },
+        PDF_SAVE_TIMEOUT
+      );
 
-      const assocUrl = `${BASE_URL}/api.php?action=comprobantes_asociar_movimientos`;
-      await fetchJsonOrThrow(assocUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...buildAuthHeaders() },
-        body: JSON.stringify({
-          id_comprobante: newIdComp,
-          ids_movimiento: idsOk,
-          force: true,
-        }),
-      });
+      const { ok, data, text } = await parseJsonFromResponse(res);
 
-      setIdComprobante(newIdComp);
+      if (!res.ok || !ok || !data?.exito) {
+        const msg =
+          data?.mensaje ||
+          `No se pudo guardar el comprobante (HTTP ${res.status}).` +
+            (text ? ` Respuesta: ${text.slice(0, 250)}` : "");
+        throw new Error(msg);
+      }
 
+      const idComp = extractIdComprobante(data);
+      if (!idComp) {
+        throw new Error("El backend guardó el PDF pero no devolvió id_comprobante.");
+      }
+
+      return { ...data, id_comprobante: idComp };
+    },
+    [title, idsMovs, idCobro]
+  );
+
+  const asociarComprobanteAMovimientos = useCallback(async (idComprobante, ids) => {
+    const sessionKey = getSessionKey();
+    if (!sessionKey) throw new Error("Sesión inválida (no hay X-Session).");
+
+    const url = getApiPhpUrl();
+
+    const ACTIONS_BATCH = [
+      "comprobantes_asociar_movimientos",
+      "comprobantes_vincular_movimientos",
+      "comprobantes_asignar_movimientos",
+      "comprobantes_set_movimientos",
+    ];
+    const ACTIONS_ONE = [
+      "comprobantes_asociar_movimiento",
+      "comprobantes_vincular_movimiento",
+      "comprobantes_asignar_movimiento",
+      "comprobantes_set_movimiento",
+    ];
+
+    const postJson = async (action, payload) => {
+      const res = await fetchWithTimeout(
+        `${url}?action=${encodeURIComponent(action)}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session": sessionKey,
+          },
+          body: JSON.stringify(payload || {}),
+        },
+        PDF_SAVE_TIMEOUT
+      );
+
+      const { ok, data, text } = await parseJsonFromResponse(res);
+      if (!res.ok || !ok || !data?.exito) {
+        const msg =
+          data?.mensaje ||
+          `HTTP ${res.status}` + (text ? ` ${text.slice(0, 200)}` : "");
+        throw new Error(msg);
+      }
+      return data;
+    };
+
+    for (const action of ACTIONS_BATCH) {
       try {
-        onSaved?.({ id_comprobante: newIdComp, ids_movimiento: idsOk });
-      } catch {}
-
-      onToast?.("exito", "Comprobante guardado y asociado", 2400);
-
-      return newIdComp;
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
+        return await postJson(action, {
+          id_comprobante: Number(idComprobante),
+          ids_movimiento: ids,
+        });
+      } catch (e) {
+        const msg = String(e?.message || "").toLowerCase();
+        if (
+          msg.includes("acción no válida") ||
+          msg.includes("accion no valida") ||
+          msg.includes("action no valida")
+        ) {
+          continue;
+        }
+        throw e;
+      }
     }
-  }, [html, idsOk, idComprobante, onToast, onSaved]);
 
-  // ✅ X / ESC / Finalizar hacen EXACTAMENTE lo mismo
+    for (const id of ids) {
+      let okOne = false;
+      for (const action of ACTIONS_ONE) {
+        try {
+          await postJson(action, {
+            id_comprobante: Number(idComprobante),
+            id_movimiento: Number(id),
+          });
+          okOne = true;
+          break;
+        } catch (e) {
+          const msg = String(e?.message || "").toLowerCase();
+          if (
+            msg.includes("acción no válida") ||
+            msg.includes("accion no valida") ||
+            msg.includes("action no valida")
+          ) {
+            continue;
+          }
+          throw e;
+        }
+      }
+      if (!okOne) {
+        throw new Error(
+          `Tu backend no tiene action para asociar comprobante a movimientos.\n` +
+            `Probé batch: ${ACTIONS_BATCH.join(", ")}\n` +
+            `Probé 1x1: ${ACTIONS_ONE.join(", ")}`
+        );
+      }
+    }
+
+    return { exito: true };
+  }, []);
+
+  const ensureSaved = useCallback(async () => {
+    if (savedRef.current) return savedRef.current;
+    if (savePromiseRef.current) return await savePromiseRef.current;
+
+    if (!idsMovs.length) {
+      throw new Error("Faltan idsMovimientos válidos para vincular la orden de pago.");
+    }
+
+    setSaveError("");
+
+    const task = (async () => {
+      savingRef.current = true;
+      try {
+        const pdfBlob = await retryAsync(() => generatePdfBlob("save"), 3, 250);
+
+        const saved = await retryAsync(async () => {
+          const up = await uploadPdfToServer(pdfBlob);
+          const idComp = extractIdComprobante(up);
+
+          await asociarComprobanteAMovimientos(idComp, idsMovs);
+
+          const finalSaved = {
+            ...up,
+            id_comprobante: idComp,
+            ids_movimiento: idsMovs,
+          };
+
+          return finalSaved;
+        }, 4, 500);
+
+        savedRef.current = saved;
+
+        clearPendingSnapshot(pendingKey);
+        return saved;
+      } catch (e) {
+        const msg = e?.message || "No se pudo guardar el comprobante.";
+        setSaveError(msg);
+
+        savePendingSnapshot({
+          pendingKey,
+          title,
+          html,
+          idsMovimientos: idsMovs,
+          idCobro: Number(idCobro || 0),
+          status: "error",
+          error: msg,
+        });
+
+        throw e;
+      } finally {
+        savingRef.current = false;
+      }
+    })();
+
+    savePromiseRef.current = task;
+    return await task;
+  }, [
+    idsMovs,
+    generatePdfBlob,
+    uploadPdfToServer,
+    asociarComprobanteAMovimientos,
+    pendingKey,
+    title,
+    html,
+    idCobro,
+  ]);
+
+  const startWarmupSave = useCallback(() => {
+    if (!open) return;
+    if (warmupStartedRef.current) return;
+    if (!idsMovs.length) return;
+
+    warmupStartedRef.current = true;
+    setAutoSaving(true);
+
+    const runner = async () => {
+      try {
+        await ensureSaved();
+      } catch {
+        // se informa sólo si el usuario finaliza o cierra
+      } finally {
+        setAutoSaving(false);
+      }
+    };
+
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(() => {
+        void runner();
+      }, { timeout: 350 });
+    } else {
+      warmupTimerRef.current = setTimeout(() => {
+        void runner();
+      }, 120);
+    }
+  }, [open, idsMovs.length, ensureSaved]);
+
+  useEffect(() => {
+    if (!open) return;
+    startWarmupSave();
+  }, [open, startWarmupSave]);
+
   const finalizeAndCloseAll = useCallback(async () => {
-    if (saving || closeFlowRef.current) return;
+    if (busy || closingAndSavingRef.current) return;
 
     try {
-      closeFlowRef.current = true;
-      setSaving(true);
+      closingAndSavingRef.current = true;
+      setBusy(true);
 
-      await saveToServerIfNeeded();
-
-      onClose?.();
+      const saved = await ensureSaved();
+      onFinalizar?.(saved);
     } catch (e) {
-      onToast?.("error", e?.message || "No se pudo guardar el comprobante.", 4500);
+      onToast?.(
+        "error",
+        e?.message || "No se pudo finalizar la orden de pago. Reintentá.",
+        5000
+      );
     } finally {
-      closeFlowRef.current = false;
-      setSaving(false);
+      closingAndSavingRef.current = false;
+      setBusy(false);
     }
-  }, [saving, saveToServerIfNeeded, onClose, onToast]);
+  }, [busy, ensureSaved, onFinalizar, onToast]);
 
-  const requestClose = useCallback(async () => {
+  const handleCloseOnly = useCallback(async () => {
     await finalizeAndCloseAll();
   }, [finalizeAndCloseAll]);
 
@@ -328,131 +706,137 @@ export default function ModalOrdenPagoGenerada({
     return () => document.removeEventListener("keydown", onKey, true);
   }, [open, finalizeAndCloseAll]);
 
+  const handleFinalizar = useCallback(async () => {
+    await finalizeAndCloseAll();
+  }, [finalizeAndCloseAll]);
+
   if (!open) return null;
 
-  const isDark =
-    typeof document !== "undefined"
-      ? document.documentElement.getAttribute("data-theme") === "oscuro"
-      : false;
-
-  const overlayClass =
-    "mi-modal__overlay mi-modal__overlay--mov" + (isDark ? " mi-modal__overlay--dark" : "");
-
+  const overlayClass = "mi-modal__overlay mi-modal__overlay--mov";
   const modalClass = "mi-modal__container mi-modal__container--mov mpr-modal";
 
-  const canPrint = !!html && !saving;
-  const canExport = !!previewMarkup && !saving;
-  const canFinalize = !saving;
-  const canView = !!idComprobante && !saving;
-
   return createPortal(
-    <div className={overlayClass} role="dialog" aria-modal="true">
-      <div className={modalClass} onMouseDown={(e) => e.stopPropagation()}>
-        {/* HEADER */}
+    <div
+      className={overlayClass}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title || "Orden de Pago"}
+    >
+      <div
+        className={modalClass}
+        style={{ width: "min(980px, 96vw)", maxWidth: "980px" }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="mi-modal__header mpr-header">
           <div className="mpr-headLeft">
             <div className="mi-modal__title mpr-title">
-              <span>{safeText(titulo)}</span>
-              {idComprobante ? (
-                <span className="mpr-clientIdPill" title="ID comprobante">
-                  #{idComprobante}
-                </span>
-              ) : null}
+              <span>{title}</span>
             </div>
             <div className="mi-modal__subtitle mpr-subtitle">
               Vista previa · X / ESC / Finalizar guardan y cierran todo igual
+              {autoSaving ? " · guardando en segundo plano…" : ""}
             </div>
           </div>
 
           <button
-            ref={firstRef}
+            ref={firstFocusRef}
             type="button"
             className="mi-modal__close"
-            onClick={requestClose}
+            onClick={handleCloseOnly}
             title="Guardar y cerrar"
-            disabled={saving}
+            disabled={busy}
           >
-            <FontAwesomeIcon icon={saving ? faCircleNotch : faXmark} spin={saving} />
+            <FontAwesomeIcon icon={busy ? faCircleNotch : faXmark} spin={busy} />
           </button>
         </div>
 
-        {/* BODY */}
         <div className="mi-modal__body mpr-body">
           <div className="mpr-content">
-            <div className="mpr-card mpr-viewCard">
-              <div style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "center" }}>
-                <div style={{ fontSize: 12, color: "#777" }}>
-                  Movimientos asociados: <b>{idsOk.length}</b>
+            {saveError ? (
+              <div
+                style={{
+                  marginBottom: 12,
+                  padding: 12,
+                  borderRadius: 10,
+                  border: "1px solid rgba(245, 158, 11, .35)",
+                  background: "rgba(245, 158, 11, .08)",
+                  color: "var(--text-color, #111)",
+                }}
+              >
+                <div style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 700 }}>
+                  <FontAwesomeIcon icon={faTriangleExclamation} />
+                  <span>No se pudo guardar automáticamente todavía</span>
                 </div>
-                <div style={{ flex: 1 }} />
-                {idComprobante ? (
-                  <div style={{ fontSize: 12, color: "#777" }}>
-                    ID: <b>#{idComprobante}</b>
-                  </div>
-                ) : null}
+                <div style={{ marginTop: 6, fontSize: 14, opacity: 0.9 }}>
+                  {saveError}
+                </div>
+                <div style={{ marginTop: 6, fontSize: 13, opacity: 0.8 }}>
+                  Podés tocar <b>Finalizar</b> otra vez y reintentará automáticamente.
+                </div>
               </div>
+            ) : null}
 
+            <div className="mpr-card mpr-viewCard">
               <div className="mpr-previewScroll">
-                <div className="mpr-paper" ref={previewRef}>
-                  <div
-                    className="mpr-paper__inner"
-                    dangerouslySetInnerHTML={{
-                      __html: previewMarkup || "<div style='padding:12px'>Sin vista previa</div>",
-                    }}
-                  />
-                </div>
+                <div
+                  ref={previewRef}
+                  style={{ background: "#fff", padding: 12, borderRadius: 10 }}
+                  dangerouslySetInnerHTML={{
+                    __html:
+                      previewMarkup ||
+                      "<div style='padding:12px'>Sin vista previa</div>",
+                  }}
+                />
               </div>
             </div>
           </div>
         </div>
 
-        {/* FOOTER */}
         <div className="mi-modal__footer mpr-footer">
           <button
             type="button"
             className="mpr-btn mpr-btn--ghost"
             onClick={handlePrint}
-            disabled={!canPrint}
-            title="Imprimir"
+            disabled={busy}
           >
-            <FontAwesomeIcon icon={faPrint} />
+            <FontAwesomeIcon icon={busy ? faCircleNotch : faPrint} spin={busy} />{" "}
             Imprimir
           </button>
 
           <button
             type="button"
             className="mpr-btn mpr-btn--ghost"
-            onClick={handleExportPdfLocal}
-            disabled={!canExport}
-            title="Exportar PDF (sin guardar en servidor)"
+            onClick={handleExportPdf}
+            disabled={busy}
           >
-            <FontAwesomeIcon icon={saving ? faCircleNotch : faFilePdf} spin={saving} />
+            <FontAwesomeIcon icon={busy ? faCircleNotch : faFilePdf} spin={busy} />{" "}
             Exportar PDF
           </button>
-
-          {false && (
-            <button
-              type="button"
-              className="mpr-btn mpr-btn--ghost"
-              onClick={handleView}
-              disabled={!canView}
-              title="Ver PDF guardado"
-            >
-              Ver
-            </button>
-          )}
 
           <button
             type="button"
             className="mpr-btn mpr-btn--primary"
-            onClick={requestClose}
-            disabled={!canFinalize}
-            title="Finalizar (guarda automático)"
+            onClick={handleFinalizar}
+            disabled={busy}
           >
-            <FontAwesomeIcon icon={saving ? faCircleNotch : faCheck} spin={saving} />
-            {saving ? "Guardando…" : "Finalizar"}
+            <FontAwesomeIcon icon={busy ? faCircleNotch : faCheck} spin={busy} />{" "}
+            {busy ? "Guardando…" : "Finalizar"}
           </button>
         </div>
+
+        <div
+          ref={exportHostRef}
+          style={{
+            position: "fixed",
+            left: "0",
+            top: "0",
+            width: "794px",
+            opacity: 0,
+            pointerEvents: "none",
+            zIndex: -1,
+            background: "#fff",
+          }}
+        />
       </div>
     </div>,
     document.body

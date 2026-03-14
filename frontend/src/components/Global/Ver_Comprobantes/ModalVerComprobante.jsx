@@ -16,8 +16,10 @@ function safeText(v) {
 
 function buildHeadersGET() {
   const sessionKey = safeText(localStorage.getItem("session_key"));
+  const token = safeText(localStorage.getItem("token"));
   const h = {};
   if (sessionKey) h["X-Session"] = sessionKey;
+  if (token) h.Authorization = `Bearer ${token}`;
   return h;
 }
 
@@ -29,7 +31,9 @@ function guessKindFromUrlOrMime(url, mime = "") {
   if (m.startsWith("image/")) return "img";
 
   if (u.includes("action=comprobantes_descargar")) return "pdf";
-  if (u.includes("comprobantes_descargar")) return "pdf";
+  if (u.includes("ventas_comprobantes_descargar")) return "pdf";
+  if (u.includes("compras_comprobantes_descargar")) return "pdf";
+  if (u.includes("cc_comprobante_descargar")) return "pdf";
   if (u.includes(".pdf") || u.startsWith("data:application/pdf")) return "pdf";
 
   if (
@@ -37,12 +41,109 @@ function guessKindFromUrlOrMime(url, mime = "") {
     u.includes(".jpg") ||
     u.includes(".jpeg") ||
     u.includes(".webp") ||
+    u.includes(".gif") ||
     u.startsWith("data:image/")
   ) {
     return "img";
   }
 
   return "other";
+}
+
+function extFromMimeOrKind(mime = "", kind = "other") {
+  const m = safeText(mime).toLowerCase();
+
+  if (m.includes("pdf")) return "pdf";
+  if (m.includes("png")) return "png";
+  if (m.includes("jpeg") || m.includes("jpg")) return "jpg";
+  if (m.includes("webp")) return "webp";
+  if (m.includes("gif")) return "gif";
+
+  if (kind === "pdf") return "pdf";
+  if (kind === "img") return "jpg";
+
+  return "bin";
+}
+
+function fileNameFromUrl(url = "") {
+  const raw = safeText(url);
+  if (!raw) return "";
+
+  try {
+    const u = new URL(raw, window.location.origin);
+
+    const queryCandidates = [
+      u.searchParams.get("filename"),
+      u.searchParams.get("file_name"),
+      u.searchParams.get("archivo_nombre"),
+      u.searchParams.get("archivo"),
+      u.searchParams.get("name"),
+    ]
+      .map(safeText)
+      .filter(Boolean);
+
+    if (queryCandidates.length > 0) {
+      return decodeURIComponent(queryCandidates[0]);
+    }
+
+    const pathname = safeText(u.pathname);
+    const lastSegment = pathname.split("/").filter(Boolean).pop() || "";
+
+    if (lastSegment && !/^api\.php$/i.test(lastSegment)) {
+      return decodeURIComponent(lastSegment);
+    }
+  } catch {
+    const clean = raw.split("?")[0].split("#")[0];
+    const lastSegment = clean.split("/").filter(Boolean).pop() || "";
+
+    if (lastSegment && !/^api\.php$/i.test(lastSegment)) {
+      return decodeURIComponent(lastSegment);
+    }
+  }
+
+  return "";
+}
+
+function prettyBaseFromTitle(title = "") {
+  const t = safeText(title)
+    .replace(/^comprobante\s*de\s*/i, "")
+    .replace(/^comprobante\s*/i, "")
+    .replace(/[^\wáéíóúÁÉÍÓÚñÑ.-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return t ? t.toLowerCase() : "comprobante";
+}
+
+function buildDisplayFileName({ headerFileName = "", url = "", mime = "", kind = "other", title = "" }) {
+  const byHeader = safeText(headerFileName);
+  if (byHeader) return byHeader;
+
+  const byUrl = fileNameFromUrl(url);
+  if (byUrl) return byUrl;
+
+  const ext = extFromMimeOrKind(mime, kind);
+  return `${prettyBaseFromTitle(title)}.${ext}`;
+}
+
+function parseContentDispositionFileName(contentDisposition = "") {
+  const cd = safeText(contentDisposition);
+  if (!cd) return "";
+
+  const utf8Match = cd.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].replace(/["']/g, ""));
+    } catch {
+      return utf8Match[1].replace(/["']/g, "");
+    }
+  }
+
+  const plainMatch = cd.match(/filename\s*=\s*"([^"]+)"/i) || cd.match(/filename\s*=\s*([^;]+)/i);
+  if (plainMatch?.[1]) {
+    return plainMatch[1].replace(/["']/g, "").trim();
+  }
+
+  return "";
 }
 
 export default function ModalVerComprobante({
@@ -57,6 +158,7 @@ export default function ModalVerComprobante({
   const [errorMsg, setErrorMsg] = useState("");
   const [blobUrl, setBlobUrl] = useState("");
   const [resolvedMime, setResolvedMime] = useState("");
+  const [resolvedFileName, setResolvedFileName] = useState("");
 
   // lock scroll
   useEffect(() => {
@@ -97,6 +199,7 @@ export default function ModalVerComprobante({
       setLoading(false);
       setErrorMsg("");
       setResolvedMime("");
+      setResolvedFileName("");
       setBlobUrl((prev) => {
         if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
         return "";
@@ -111,6 +214,7 @@ export default function ModalVerComprobante({
       setLoading(true);
       setErrorMsg("");
       setResolvedMime("");
+      setResolvedFileName("");
 
       setBlobUrl((prev) => {
         if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
@@ -132,6 +236,10 @@ export default function ModalVerComprobante({
         }
 
         const contentType = safeText(res.headers.get("Content-Type")) || safeText(mime);
+        const headerFileName = parseContentDispositionFileName(
+          res.headers.get("Content-Disposition") || ""
+        );
+
         const blob = await res.blob();
         localBlobUrl = URL.createObjectURL(blob);
 
@@ -141,6 +249,7 @@ export default function ModalVerComprobante({
         }
 
         setResolvedMime(contentType);
+        setResolvedFileName(headerFileName);
         setBlobUrl(localBlobUrl);
       } catch (e) {
         if (cancelled) return;
@@ -159,9 +268,20 @@ export default function ModalVerComprobante({
   }, [open, url, mime]);
 
   const previewUrl = blobUrl || url || "";
+
   const kind = useMemo(() => {
     return guessKindFromUrlOrMime(previewUrl, resolvedMime || mime);
   }, [previewUrl, resolvedMime, mime]);
+
+  const displayFileName = useMemo(() => {
+    return buildDisplayFileName({
+      headerFileName: resolvedFileName,
+      url,
+      mime: resolvedMime || mime,
+      kind,
+      title,
+    });
+  }, [resolvedFileName, url, resolvedMime, mime, kind, title]);
 
   if (!open) return null;
 
@@ -175,11 +295,9 @@ export default function ModalVerComprobante({
       aria-modal="true"
       aria-label={title}
       onMouseDown={(e) => {
-        // 🚫 NO cerrar al tocar afuera
         e.stopPropagation();
       }}
       onClick={(e) => {
-        // 🚫 NO cerrar al hacer click en overlay
         e.stopPropagation();
       }}
     >
@@ -195,7 +313,7 @@ export default function ModalVerComprobante({
               <span>{title}</span>
             </div>
             <div className="mi-modal__subtitle mpr-subtitle">
-              {url ? "Vista previa del comprobante" : "—"}
+              {url ? displayFileName : "—"}
             </div>
           </div>
 
@@ -218,7 +336,7 @@ export default function ModalVerComprobante({
 
               {!!url && loading && (
                 <div className="mov-emptyRow" style={{ padding: 18 }}>
-                  Cargando comprobante…
+                  Cargando {displayFileName}…
                 </div>
               )}
 
@@ -231,7 +349,7 @@ export default function ModalVerComprobante({
               {!!previewUrl && !loading && !errorMsg && kind === "pdf" && (
                 <div className="mpr-previewScroll" aria-label="Vista previa PDF">
                   <iframe
-                    title="Comprobante PDF"
+                    title={displayFileName || "Comprobante PDF"}
                     src={previewUrl}
                     className="mpr-pdfFrame"
                   />
@@ -241,7 +359,11 @@ export default function ModalVerComprobante({
               {!!previewUrl && !loading && !errorMsg && kind === "img" && (
                 <div className="mpr-previewScroll" aria-label="Vista previa imagen">
                   <div className="mpr-imgWrap">
-                    <img src={previewUrl} alt="Comprobante" className="mpr-img" />
+                    <img
+                      src={previewUrl}
+                      alt={displayFileName || "Comprobante"}
+                      className="mpr-img"
+                    />
                   </div>
                 </div>
               )}
@@ -265,7 +387,7 @@ export default function ModalVerComprobante({
                 if (target) window.open(target, "_blank", "noopener,noreferrer");
               }}
               disabled={!blobUrl && !url}
-              title="Abrir en nueva pestaña"
+              title={`Abrir ${displayFileName} en nueva pestaña`}
             >
               <FontAwesomeIcon icon={faUpRightFromSquare} style={{ marginRight: 8 }} />
               Abrir

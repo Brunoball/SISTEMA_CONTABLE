@@ -1,4 +1,3 @@
-// src/components/inicio/Inicio.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import BASE_URL from "../../config/config";

@@ -449,12 +449,7 @@
   }
 
   /* wrapper: evitamos scroll raro y damos altura usable */
-  .mov-page--compras .mov-tableWrap--compras {
-    overflow: auto;
-    padding: 10px;
-    min-height: 46vh !important;
-    max-height: 46vh !important;
-  }
+
 
   /* cada fila pasa a "card" */
   .mov-page--compras .mov-gridTable--row {

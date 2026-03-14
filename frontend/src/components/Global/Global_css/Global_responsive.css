@@ -652,21 +652,115 @@
 
 
 }
+
+
+
+
+
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 900px){
+  .mi-row3,
+  .mi-row2{
+    grid-template-columns: 1fr;
+  }
+
+  .mi-em-grid,
+  .mi-cr-grid{
+    grid-template-columns: 1fr;
+  }
+
+  .mi-modal__container--mov{
+    min-height: auto;
+    max-height: 94vh;
+  }
+
+  .modal-nc-container{
+    width: min(96vw, 96vw) !important;
+    min-width: unset !important;
+    max-width: 96vw !important;
+    max-height: 90vh !important;
+  }
+
+  .modal-nc-body{
+    overflow-y: auto !important;
+  }
+
+  .modal-nc-grid{
+    grid-template-columns: 1fr !important;
+  }
+
+  .modal-nc-summary__rows{
+    grid-template-columns: 1fr !important;
+  }
+
+  .modal-nc-card__row{
+    grid-template-columns: 1fr !important;
+    gap: 3px !important;
+  }
+
+  .modal-nc-card__row strong{
+    text-align: left !important;
+  }
+}
+
+@media (max-width: 780px){
+  .mi-cr-table__head,
+  .mi-cr-row{
+    grid-template-columns: 2fr 64px 1fr 72px 1fr 1fr 36px;
+  }
+}
+.nv-cell-input--right{text-align: right !important;}
+@media (max-width: 600px){
+  .modal-nc-grid{
+    grid-template-columns: 1fr;
+  }
+}
+
+
+
+
+
+
+
+
+
+
 /* =========================================================
    ✅ Movimientos — Header actions en MOBILE:
    2 arriba (Facturar / Exportar) + 1 abajo (Movimiento)
    Solo <= 720px — NO afecta desktop
 ========================================================= */
 @media (max-width: 720px){
-  /* el contenedor de botones */
   .mov-card__actions{
-    display: grid !important;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    align-items: stretch;
-    justify-content: stretch !important;
-    flex-wrap: initial !important; /* anula el nowrap que pusiste */
+    width: 100%;
+    justify-content: space-between;
   }
+  .boton-exportar-wrap{
+    margin-left: auto;
+  }
+    .mov-page--compras .mov-tableWrap--compras {
+    overflow: auto;
+    padding: 10px;
+
+  }
+  #vents-comppr-wit{
+    max-width: 100%;
+  }
+  .is-right{
+    text-align: left !important ;
+  }
+  .title-mov{
+    flex-direction: row;
+    justify-content: space-between;
+  }
+  .fc-footnote{
+    display: none;
+  }
+  /* el contenedor de botones */
+
 
   /* cada botón ocupa ancho completo de su celda */
   .mov-card__actions .mov-btn{
@@ -677,5 +771,477 @@
   /* ✅ 3er botón (Nuevo Movimiento) baja y ocupa 2 columnas */
   .mov-card__actions .mov-btn:nth-child(3){
     grid-column: 1 / -1;
+  }
+}
+/* Mobile: convertir tabla a cards */
+@media (max-width: 720px) {
+    .mov-card__actions{
+  flex-wrap: nowrap;
+}
+  /* Ocultamos el header de tabla */
+  .mov-gridTable--head {
+    display: none;
+  }
+
+  /* Evitar que el wrapper fuerce scroll horizontal */
+  .mov-tableWrap {
+   overflow: auto;
+        min-height: 53vh !important;
+        max-height: 53vh !important;
+  }
+
+  /* Cada fila como card */
+.mov-gridTable--row {
+    display: block !important; /* ⚠️ cambia grid por block */
+    padding: 6px;
+    width: 83vw;
+    margin: 10px;
+    border: 1px solid var(--mi-border, rgba(255,255,255,0.08));
+    border-radius: 16px;
+    background: var(--mi-bg, #0e1a2b);
+}
+
+
+  /* Celdas en formato "label + value" */
+  .mov-gridTable--row .mov-gridCell {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 10px;
+    align-items: start;
+    padding: 0;
+    border: 0;
+    min-height: auto;
+  }
+
+  /* Label via data-label */
+  .mov-gridTable--row .mov-gridCell::before {
+    content: attr(data-label);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--mi-muted, #6b7280);
+    line-height: 1.2;
+    padding-top: 2px;
+  }
+
+  /* El texto del valor */
+  .mov-ellipsissss {
+    display: block;
+    overflow: visible;
+    text-overflow: initial;
+    white-space: normal;
+    line-height: 1.25;
+  }
+
+  /* TOTAL centrado no hace falta en mobile */
+  .mov-gridTable--row .mov-gridCell.is-center {
+    justify-items: start;
+    text-align: left;
+  }
+
+  /* Acciones abajo (full width) */
+  .mov-gridCell--actions {
+    grid-template-columns: 120px 1fr;
+  }
+
+  .mov-actionsInline {
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  /* Botones superiores */
+  .mov-card__actions .mov-btn {
+    flex: 1 1 100%;
+  }
+}
+
+/* Mobile muy chico */
+@media (max-width: 420px) {
+  .mov-gridTable--row .mov-gridCell {
+    grid-template-columns: 1fr 1fr;
+    padding: 2px 0;
+  }
+
+  .mov-card__title {
+    font-size: 18px;
+  }
+}
+/* =========================================================
+   RESPONSIVE | Modal Nueva Compra
+   - Agregar al FINAL del CSS
+   - No modifica la vista desktop
+========================================================= */
+
+@media (max-width: 1200px){
+  .mi-modal__container--mov{
+    min-width: auto;
+    width: min(1100px, 98vw);
+  }
+
+  .mi-cr-grid{
+    grid-template-columns: 1fr 290px;
+  }
+
+  .mi-cr-table__head,
+  .mi-cr-row{
+    grid-template-columns: minmax(260px, 2.2fr) 72px 120px 84px 120px 120px 36px;
+  }
+}
+
+@media (max-width: 1024px){
+  .mi-modal__overlay{
+    padding: 10px;
+  }
+
+  .mi-modal__container{
+    width: 100%;
+    max-width: 100%;
+    min-width: 0 !important;
+    min-height: 92vh;
+    max-height: 92vh;
+    border-radius: 16px;
+  }
+
+  .mi-modal__container--mov{
+    min-width: 0 !important;
+    width: 100%;
+  }
+
+  .mi-modal__content{
+    padding: 10px;
+  }
+
+  .mi-cr-grid{
+    grid-template-columns: 1fr;
+    gap: 10px;
+    overflow: hidden;
+  }
+
+  .mi-cr-table{
+    order: 1;
+    min-width: 0;
+  }
+
+  .mi-cr-filters{
+    order: 2;
+    min-width: 0;
+  }
+
+  .mi-cr-filters__body{
+    overflow: visible;
+  }
+
+  .mi-cr-table__rows{
+    overflow-x: auto;
+    overflow-y: auto;
+  }
+
+  .mi-cr-table__head,
+  .mi-cr-row{
+    min-width: 860px;
+    grid-template-columns: 280px 72px 120px 84px 120px 120px 36px;
+  }
+
+  .mi-cr-table__foot{
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .mi-cr-foot-actions{
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .mi-cr-totals{
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .mi-cr-totalLine{
+    flex: 1 1 160px;
+    min-width: 150px;
+    justify-content: space-between;
+  }
+
+  .mi-cr-filters__actions{
+    flex-direction: column;
+  }
+
+  .mi-cr-filters__dates{
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px){
+  .mi-modal__overlay{
+    padding: 0;
+  }
+
+  .mi-modal__container{
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    min-height: 100vh;
+    border-radius: 0;
+  }
+
+  .mi-modal__container--mov{
+    min-height: 100vh;
+    max-height: 100vh;
+  }
+
+  .mi-modal__header{
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .mi-modal__head-icon{
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  .mi-modal__title{
+    font-size: .98rem;
+  }
+
+  .mi-modal__close{
+    width: 36px;
+    height: 36px;
+  }
+
+  .mi-modal__content{
+    padding: 8px;
+  }
+
+  .mi-cr-grid{
+    gap: 8px;
+  }
+
+  .mi-cr-table,
+  .mi-cr-filters{
+    border-radius: 12px;
+  }
+
+  .mi-cr-table__head > div{
+    font-size: 10px;
+    padding: 0 8px;
+  }
+
+  .mi-cr-cell{
+    padding: 0 4px;
+  }
+
+  .mi-cr-cell--detalle{
+    padding: 4px 6px;
+  }
+
+  .mi-cr-cell .nv-cell-input{
+    font-size: 13px;
+    height: 32px;
+    padding: 0 7px;
+  }
+
+  .mi-cr-table__head,
+  .mi-cr-row{
+    min-width: 820px;
+    grid-template-columns: 260px 66px 112px 78px 112px 112px 34px;
+  }
+
+  .mi-cr-table__foot{
+    padding: 10px;
+  }
+
+  .mi-cr-foot-actions{
+    gap: 6px;
+  }
+
+  .nv-foot-btn{
+    flex: 1 1 calc(50% - 3px);
+    justify-content: center;
+  }
+
+  .nv-foot-sep{
+    display: none;
+  }
+
+  .mi-cr-totals{
+    gap: 8px;
+  }
+
+  .mi-cr-totalLine{
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mi-cr-filters__top{
+    padding: 10px;
+  }
+
+  .mi-cr-filters__body{
+    padding: 6px 10px 10px;
+    gap: 8px;
+  }
+
+  .mi-uploadBar{
+    grid-template-columns: 1fr;
+  }
+
+  .mi-uploadBar__btn{
+    width: 100%;
+  }
+
+  .mi-uploadFile{
+    padding: 10px;
+  }
+
+  .mi-uploadFile__name{
+    font-size: 12.5px;
+  }
+
+  .fl-input,
+  .fl-select,
+  .fl-input[type="date"]{
+    font-size: 14px !important;
+    padding: 15px 11px 10px;
+  }
+
+  .fl-label{
+    font-size: .8rem;
+  }
+
+  .mi-cr-link{
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 560px){
+  .mi-modal__header{
+    padding: 10px 12px;
+  }
+
+  .mi-modal__title{
+    font-size: .94rem;
+  }
+
+  .mi-modal__content{
+    padding: 6px;
+  }
+
+  .mi-cr-grid{
+    gap: 6px;
+  }
+
+  .mi-cr-table,
+  .mi-cr-filters{
+    border-radius: 10px;
+  }
+
+  .mi-cr-filters__top{
+    padding: 9px;
+  }
+
+  .mi-cr-filters__body{
+    padding: 6px 9px 9px;
+  }
+
+  .mi-cr-table__head,
+  .mi-cr-row{
+    min-width: 760px;
+    grid-template-columns: 240px 62px 100px 74px 100px 100px 32px;
+  }
+
+  .mi-cr-cell .nv-cell-input{
+    height: 30px;
+    font-size: 12.5px;
+  }
+
+  .mi-cr-del{
+    width: 22px;
+    height: 22px;
+    font-size: 13px;
+  }
+
+  .nv-foot-btn{
+    flex: 1 1 100%;
+    height: 32px;
+    font-size: 11.5px;
+  }
+
+  .nv-foot-btn__icon{
+    width: 14px;
+    height: 14px;
+    font-size: 10px;
+  }
+
+  .mi-cr-totalLine{
+    padding: 7px 10px 7px 12px;
+    font-size: .78rem;
+  }
+
+  .mi-uploadCard__head,
+  .mi-uploadCard__body{
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .mi-uploadFile__icon{
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+
+  .mi-cr-filters__actions{
+    gap: 8px;
+  }
+
+  .mit-btn--block{
+    height: 42px;
+  }
+}
+
+@media (max-width: 420px){
+  .mi-modal__head-icon{
+    display: none;
+  }
+
+  .mi-modal__header{
+    gap: 8px;
+  }
+
+  .mi-modal__title{
+    font-size: .9rem;
+  }
+
+  .mi-cr-table__head,
+  .mi-cr-row{
+    min-width: 720px;
+    grid-template-columns: 220px 58px 96px 70px 96px 96px 30px;
+  }
+
+  .mi-cr-table__head > div{
+    font-size: 9.5px;
+    letter-spacing: .04em;
+  }
+
+  .fl-input,
+  .fl-select,
+  .fl-input[type="date"]{
+    font-size: 13px !important;
+  }
+
+  .mi-uploadFile{
+    gap: 8px;
+  }
+
+  .mi-uploadFile__name{
+    font-size: 12px;
+  }
+
+  .mi-uploadFile__size,
+  .mi-uploadFile__empty{
+    font-size: 11px;
   }
 }

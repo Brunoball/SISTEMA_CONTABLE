@@ -236,8 +236,8 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
   const API_SAVE_CLIENTE_FISCAL        = `${BASE_URL}/api.php?action=cliente_fiscal_upsert`;
   const API_PADRON_CUIT                = `${BASE_URL}/api.php?action=padron_cuit&op=padron_cuit`;
   const API_CONFIG_FACTURACION         = `${BASE_URL}/api.php?action=config_facturacion_get`;
-  const API_VINCULAR_COMPROBANTE       = `${BASE_URL}/api.php?action=comprobantes_vincular_movimiento`;
-  const API_VINCULAR_COMPROBANTE_LOTE  = `${BASE_URL}/api.php?action=comprobantes_vincular_movimientos_lote`;
+  const API_VINCULAR_COMPROBANTE       = `${BASE_URL}/api.php?action=ventas_comprobantes_vincular_movimiento`;
+  const API_VINCULAR_COMPROBANTE_LOTE  = `${BASE_URL}/api.php?action=ventas_comprobantes_vincular_movimientos_lote`;
 
   const showToast=useCallback((tipo,mensaje,dur=2800)=>onToast?.(tipo,mensaje,dur),[onToast]);
 

@@ -7,6 +7,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 /* Páginas públicas */
 import Inicio from "./components/Login/Inicio";
 import Registro from "./components/Login/Registro";
+import ResetPasswordPage from "./components/Login/ResetPasswordPage";
 
 /* Layout del panel */
 import Principal from "./components/Principal/Principal";
@@ -21,7 +22,7 @@ import Recibos from "./components/Mov_Subsection/Recibos/Recibos";
 import Otrosingresos from "./components/Mov_Subsection/Otros_Ingresos/Otros_Ingresos";
 import Otrosegresos from "./components/Mov_Subsection/Otros_Egresos/Otros_Egresos";
 
-import OrdenesPago from "./components/Mov_Subsection//OrdenesPago/OrdenesPago";
+import OrdenesPago from "./components/Mov_Subsection/OrdenesPago/OrdenesPago";
 import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 
 /* ✅ IMPORT ROBUSTO (default o named) */
@@ -101,6 +102,7 @@ export default function App() {
         {/* Público */}
         <Route path="/" element={<Inicio />} />
         <Route path="/registro" element={<Registro />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         {/* Panel (protegido) */}
         <Route

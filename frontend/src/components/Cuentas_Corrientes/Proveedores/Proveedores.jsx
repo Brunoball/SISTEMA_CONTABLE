@@ -96,6 +96,67 @@ function resolveFileUrl(rawUrl) {
   return `${origin}/${url.replace(/^\.?\//, "")}`;
 }
 
+function withSessionKey(url) {
+  const base = safeText(url);
+  if (!base) return "";
+
+  try {
+    const sessionKey = (localStorage.getItem("session_key") || "").trim();
+    const token = (localStorage.getItem("token") || "").trim();
+    const u = new URL(base, window.location.origin);
+
+    if (sessionKey && !u.searchParams.has("session_key")) {
+      u.searchParams.set("session_key", sessionKey);
+    }
+
+    if (token && !u.searchParams.has("token")) {
+      u.searchParams.set("token", token);
+    }
+
+    return u.toString();
+  } catch {
+    return base;
+  }
+}
+
+function ensureResourceHint(url, rel = "prefetch", as = "document") {
+  const href = safeText(url);
+  if (!href) return;
+
+  const key = `hint:${rel}:${as}:${href}`;
+  const selectorKey =
+    typeof CSS !== "undefined" && CSS.escape ? CSS.escape(key) : key.replace(/"/g, '\\"');
+
+  if (document.head.querySelector(`link[data-key="${selectorKey}"]`)) return;
+
+  const link = document.createElement("link");
+  link.rel = rel;
+  if (as) link.as = as;
+  link.href = href;
+  link.setAttribute("data-key", key);
+  document.head.appendChild(link);
+}
+
+function prewarmComprobanteUrl(url, mime = "") {
+  const finalUrl = withSessionKey(url);
+  if (!finalUrl) return;
+
+  const mm = safeText(mime).toLowerCase();
+  const ll = finalUrl.toLowerCase();
+  const isPdf =
+    mm.includes("pdf") ||
+    ll.includes(".pdf") ||
+    ll.includes("cc_comprobante_descargar");
+
+  if (isPdf) {
+    ensureResourceHint(finalUrl, "preload", "document");
+    ensureResourceHint(finalUrl, "prefetch", "document");
+  } else {
+    ensureResourceHint(finalUrl, "preload", "image");
+    ensureResourceHint(finalUrl, "prefetch", "image");
+  }
+}
+
 function canPreviewComprobante(row) {
   return safeText(row?.comprobante_url) !== "" || Number(row?.id_comprobante || 0) > 0;
 }
@@ -143,15 +204,19 @@ function buildExportRows(rows) {
 ========================= */
 function buildHeadersGET() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
+  const token = (localStorage.getItem("token") || "").trim();
   const h = {};
   if (sessionKey) h["X-Session"] = sessionKey;
+  if (token) h.Authorization = `Bearer ${token}`;
   return h;
 }
 
 function buildHeadersJSON() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
+  const token = (localStorage.getItem("token") || "").trim();
   const h = { "Content-Type": "application/json" };
   if (sessionKey) h["X-Session"] = sessionKey;
+  if (token) h.Authorization = `Bearer ${token}`;
   return h;
 }
 
@@ -245,6 +310,8 @@ export default function ProveedoresCC() {
 
   const tableBodyRef = useRef(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
+  const comprobanteUrlCacheRef = useRef(new Map());
+
   const [rows, setRows] = useState([]);
   const [totales, setTotales] = useState({ debito: 0, credito: 0, saldo: 0 });
 
@@ -559,15 +626,45 @@ export default function ProveedoresCC() {
     [handleExport]
   );
 
+  const buildFastComprobanteUrl = useCallback(
+    (row) => {
+      const idComp = Number(row?.id_comprobante || 0);
+      const rawBase = makeComprobanteAccessUrl(row, API);
+      const cacheKey = idComp > 0 ? `id:${idComp}` : `raw:${rawBase}`;
+
+      if (comprobanteUrlCacheRef.current.has(cacheKey)) {
+        return comprobanteUrlCacheRef.current.get(cacheKey) || "";
+      }
+
+      const finalUrl = withSessionKey(rawBase);
+      if (finalUrl) {
+        comprobanteUrlCacheRef.current.set(cacheKey, finalUrl);
+      }
+      return finalUrl;
+    },
+    [API]
+  );
+
+  const handlePrewarmComprobante = useCallback(
+    (row) => {
+      const fastUrl = buildFastComprobanteUrl(row);
+      if (!fastUrl) return;
+      prewarmComprobanteUrl(fastUrl, safeText(row?.comprobante_mime));
+    },
+    [buildFastComprobanteUrl]
+  );
+
   const openComprobante = useCallback(
     (row) => {
-      const accessUrl = makeComprobanteAccessUrl(row, API);
+      const accessUrl = buildFastComprobanteUrl(row);
       const mime = safeText(row?.comprobante_mime);
 
       if (!accessUrl) {
         showToast("advertencia", "Este registro no tiene comprobante asociado.", 2600);
         return;
       }
+
+      prewarmComprobanteUrl(accessUrl, mime);
 
       setPreviewComprobante({
         open: true,
@@ -576,7 +673,7 @@ export default function ProveedoresCC() {
         title: row?.comprobante ? `Comprobante · ${row.comprobante}` : "Comprobante",
       });
     },
-    [API, showToast]
+    [buildFastComprobanteUrl, showToast]
   );
 
   const askDeleteCobro = useCallback((row) => {
@@ -689,7 +786,11 @@ export default function ProveedoresCC() {
 
           <div className="mov-headFilters">
             <div className="cc-filter cc-filter--cal">
-              <div className={`cc-floatingField cc-floatingField--calendar is-active ${calOpen ? "is-open" : ""}`}>
+              <div
+                className={`cc-floatingField cc-floatingField--calendar is-active ${
+                  calOpen ? "is-open" : ""
+                }`}
+              >
                 <button
                   type="button"
                   className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
@@ -722,9 +823,7 @@ export default function ProveedoresCC() {
             </div>
 
             <div className="cc-filter cc-filter--search">
-              <div
-                className="cc-floatingField cc-floatingField--search is-active"
-              >
+              <div className="cc-floatingField cc-floatingField--search is-active">
                 <div className="cc-searchInput">
                   <div className="cc-searchInput__fieldWrap">
                     <input
@@ -740,8 +839,7 @@ export default function ProveedoresCC() {
                     />
 
                     <span className="cc-floatingLabel">
-                      <FontAwesomeIcon icon={faMagnifyingGlass} />{" "}
-                      Búsqueda
+                      <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
                     </span>
 
                     {safeText(q) !== "" && !loading && (
@@ -823,7 +921,9 @@ export default function ProveedoresCC() {
 
         <div
           ref={tableBodyRef}
-          className={`cc-cliente-table__body ${!hasVerticalScroll ? "cc-cliente-table__body--stable" : ""}`}
+          className={`cc-cliente-table__body ${
+            !hasVerticalScroll ? "cc-cliente-table__body--stable" : ""
+          }`}
         >
           {loading ? (
             <div className="cc-cliente-table__loading">
@@ -878,6 +978,9 @@ export default function ProveedoresCC() {
                     <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
                       <button
                         type="button"
+                        onMouseEnter={() => verHabilitado && handlePrewarmComprobante(r)}
+                        onPointerEnter={() => verHabilitado && handlePrewarmComprobante(r)}
+                        onFocus={() => verHabilitado && handlePrewarmComprobante(r)}
                         onClick={() => verHabilitado && openComprobante(r)}
                         disabled={!verHabilitado}
                         title={verHabilitado ? "Ver comprobante" : "Este registro no tiene comprobante"}

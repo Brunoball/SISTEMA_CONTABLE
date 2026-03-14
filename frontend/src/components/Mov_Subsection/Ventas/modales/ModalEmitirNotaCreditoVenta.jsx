@@ -99,25 +99,37 @@ export default function ModalEmitirNotaCreditoVenta({
   const [openResumen, setOpenResumen] = useState(false);
   const [dark, setDark] = useState(isTemaOscuro);
 
-  /* Dark mode observer */
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
     const o1 = new MutationObserver(update);
-    o1.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    o1.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+
     const o2 = new MutationObserver(update);
-    if (document.body) o2.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-    return () => { o1.disconnect(); o2.disconnect(); };
+    if (document.body) {
+      o2.observe(document.body, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+    }
+
+    return () => {
+      o1.disconnect();
+      o2.disconnect();
+    };
   }, []);
 
-  /* Bloquear scroll del body */
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, [open]);
 
-  /* Cerrar con Escape */
   useEffect(() => {
     if (!open) return;
     const h = (e) => e.key === "Escape" && !loading && onClose?.();
@@ -132,16 +144,20 @@ export default function ModalEmitirNotaCreditoVenta({
 
   const cargarContexto = useCallback(async () => {
     if (!row?.id_movimiento) return;
+
     setLoading(true);
     setError("");
+
     try {
       const sp = new URLSearchParams();
       sp.set("action", "ventas_nota_credito_contexto");
       sp.set("id_movimiento", String(row.id_movimiento));
+
       const res = await fetch(`${API}?${sp.toString()}`, {
         method: "GET",
         headers: buildHeadersGET(),
       });
+
       const data = await parseJsonOrThrow(res);
       setContexto(data.contexto || null);
     } catch (e) {
@@ -163,6 +179,7 @@ export default function ModalEmitirNotaCreditoVenta({
 
   const resumenData = useMemo(() => {
     if (!contexto) return null;
+
     return {
       id_pago: null,
       id_sistema: null,
@@ -224,42 +241,54 @@ export default function ModalEmitirNotaCreditoVenta({
           );
         }
 
-        showToast("cargando", "Generando y registrando nota de crédito…", 12000);
+        showToast("cargando", "Registrando nota de crédito…", 12000);
 
-        const pdfData = {
-          ...resumenData,
-          cae: payload?.cae ?? null,
-          cae_vto: payload?.cae_vto ?? null,
-          cbte_nro: payload?.cbte_nro ?? null,
-          cbte_tipo: payload?.cbte_tipo ?? resumenData?.cbte_tipo ?? 13,
-          pto_vta: payload?.pto_vta ?? resumenData?.pto_vta ?? 2,
-          resultado: payload?.resultado ?? null,
-          fecha_cbte: payload?.fecha_cbte ?? todayISO(),
-          fecha_cbte_iso: payload?.fecha_cbte ?? todayISO(),
-          doc_tipo: payload?.doc_tipo ?? contexto?.cliente_facturacion?.doc_tipo ?? null,
-          doc_nro:
-            payload?.doc_nro ??
-            contexto?.cliente_facturacion?.doc_nro ??
-            contexto?.cliente_facturacion?.cuit ??
-            null,
-          qr_url: payload?.qr_url ?? null,
-          qr_base64: payload?.qr_base64 ?? null,
-          qr_payload: payload?.qr_payload ?? null,
-          observaciones: motivo,
-        };
+        let pdfBlob =
+          factEmitida?.pdf_blob instanceof Blob ? factEmitida.pdf_blob : null;
 
-        const { pdfBlob, pdfFilename } = await saveNotaCreditoPdf(pdfData, {
-          autoDownload: true,
-        });
+        let pdfFilename =
+          safeStr(factEmitida?.pdf_filename) ||
+          `nota_credito_${row.id_movimiento}.pdf`;
 
         if (!pdfBlob) {
-          throw new Error("No se pudo generar el PDF de la nota de crédito.");
+          const pdfData = {
+            ...resumenData,
+            cae: payload?.cae ?? null,
+            cae_vto: payload?.cae_vto ?? null,
+            cbte_nro: payload?.cbte_nro ?? null,
+            cbte_tipo: payload?.cbte_tipo ?? resumenData?.cbte_tipo ?? 13,
+            pto_vta: payload?.pto_vta ?? resumenData?.pto_vta ?? 2,
+            resultado: payload?.resultado ?? null,
+            fecha_cbte: payload?.fecha_cbte ?? todayISO(),
+            fecha_cbte_iso: payload?.fecha_cbte ?? todayISO(),
+            doc_tipo: payload?.doc_tipo ?? contexto?.cliente_facturacion?.doc_tipo ?? null,
+            doc_nro:
+              payload?.doc_nro ??
+              contexto?.cliente_facturacion?.doc_nro ??
+              contexto?.cliente_facturacion?.cuit ??
+              null,
+            qr_url: payload?.qr_url ?? null,
+            qr_base64: payload?.qr_base64 ?? null,
+            qr_payload: payload?.qr_payload ?? null,
+            observaciones: motivo,
+          };
+
+          const out = await saveNotaCreditoPdf(pdfData, {
+            autoDownload: false,
+          });
+
+          pdfBlob = out?.pdfBlob instanceof Blob ? out.pdfBlob : null;
+          pdfFilename = out?.pdfFilename || pdfFilename;
+        }
+
+        if (!pdfBlob) {
+          throw new Error("No se pudo obtener el PDF de la nota de crédito.");
         }
 
         const fd = new FormData();
         fd.append("tipo", "NOTA_CREDITO");
         fd.append("id_movimiento", String(row.id_movimiento));
-        fd.append("pdf", pdfBlob, pdfFilename || `nota_credito_${row.id_movimiento}.pdf`);
+        fd.append("pdf", pdfBlob, pdfFilename);
         fd.append(
           "meta",
           JSON.stringify({
@@ -285,11 +314,14 @@ export default function ModalEmitirNotaCreditoVenta({
           })
         );
 
-        const resUpload = await fetch(`${API}?action=comprobantes_vincular_movimiento`, {
-          method: "POST",
-          headers: buildHeadersPOSTForm(),
-          body: fd,
-        });
+        const resUpload = await fetch(
+          `${API}?action=ventas_comprobantes_vincular_movimiento`,
+          {
+            method: "POST",
+            headers: buildHeadersPOSTForm(),
+            body: fd,
+          }
+        );
 
         const uploadData = await parseJsonOrThrow(resUpload);
         const idComprobanteNC = Number(uploadData?.id_comprobante || 0);
@@ -313,12 +345,21 @@ export default function ModalEmitirNotaCreditoVenta({
 
         await parseJsonOrThrow(resRel);
 
-        showToast("exito", "Nota de crédito emitida, descargada y vinculada correctamente.", 3600);
+        showToast(
+          "exito",
+          "Nota de crédito emitida, descargada y vinculada correctamente.",
+          3600
+        );
+
         setOpenResumen(false);
         onDone?.();
       } catch (e) {
         setError(e.message || "Error registrando la nota de crédito.");
-        showToast("error", e.message || "Error registrando la nota de crédito.", 4200);
+        showToast(
+          "error",
+          e.message || "Error registrando la nota de crédito.",
+          4200
+        );
       } finally {
         setLoading(false);
       }
@@ -330,52 +371,64 @@ export default function ModalEmitirNotaCreditoVenta({
 
   return createPortal(
     <>
-      {/* OVERLAY */}
       <div
         className={[
           "mi-modal__overlay",
           dark ? "mi-modal__overlay--dark" : "",
-        ].join(" ").trim()}
+        ]
+          .join(" ")
+          .trim()}
       >
         <div
           className={[
             "mi-modal__container",
             "modal-nc-container",
             dark ? "mi-modal--dark" : "",
-          ].join(" ").trim()}
+          ]
+            .join(" ")
+            .trim()}
           role="dialog"
           aria-modal="true"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {/* HEADER */}
           <div className="mi-modal__header">
             <div className="mi-modal__head-icon" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="9" y1="13" x2="15" y2="13"/>
-                <line x1="9" y1="17" x2="12" y2="17"/>
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="9" y1="13" x2="15" y2="13" />
+                <line x1="9" y1="17" x2="12" y2="17" />
               </svg>
             </div>
+
             <div className="mi-modal__head-left">
               <h2 className="mi-modal__title">Emitir nota de crédito</h2>
               {row?.id_movimiento && (
                 <p className="mi-modal__subtitle">Movimiento #{row.id_movimiento}</p>
               )}
             </div>
+
             <button
               type="button"
               className="mi-modal__close"
               onClick={onClose}
               disabled={loading}
               aria-label="Cerrar"
-            >✕</button>
+            >
+              ✕
+            </button>
           </div>
 
-          {/* BODY */}
           <div className="mi-modal__content modal-nc-body">
-
             {loading && !contexto && (
               <div className="modal-nc-loading">
                 <span className="modal-nc-loading__dot" />
@@ -383,32 +436,34 @@ export default function ModalEmitirNotaCreditoVenta({
               </div>
             )}
 
-            {error && (
-              <div className="modal-nc-error">{error}</div>
-            )}
+            {error && <div className="modal-nc-error">{error}</div>}
 
             {contexto && (
               <>
-                {/* Cards superiores */}
                 <div className="modal-nc-grid">
                   <div className="modal-nc-card modal-nc-cds">
                     <b>Factura original</b>
+
                     <div className="modal-nc-card__row">
                       <span>Comprobante</span>
                       <strong>#{contexto?.factura_original?.id_comprobante || "—"}</strong>
                     </div>
+
                     <div className="modal-nc-card__row">
                       <span>Tipo</span>
                       <strong>{contexto?.factura_original?.cbte_tipo || "—"}</strong>
                     </div>
+
                     <div className="modal-nc-card__row">
                       <span>Punto de venta</span>
                       <strong>{contexto?.factura_original?.pto_vta || "—"}</strong>
                     </div>
+
                     <div className="modal-nc-card__row">
                       <span>Número</span>
                       <strong>{contexto?.factura_original?.cbte_nro || "—"}</strong>
                     </div>
+
                     <div className="modal-nc-card__row">
                       <span>CAE</span>
                       <strong className="modal-nc-card__cae">
@@ -419,10 +474,12 @@ export default function ModalEmitirNotaCreditoVenta({
 
                   <div className="modal-nc-card modal-nc-cds">
                     <b>Cliente fiscal</b>
+
                     <div className="modal-nc-card__row modal-nc-card__row--full">
                       <span>Razón social</span>
                       <strong>{contexto?.cliente_facturacion?.razon_social || "—"}</strong>
                     </div>
+
                     <div className="modal-nc-card__row">
                       <span>Doc.</span>
                       <strong>
@@ -430,10 +487,12 @@ export default function ModalEmitirNotaCreditoVenta({
                         {contexto?.cliente_facturacion?.doc_nro || "—"}
                       </strong>
                     </div>
+
                     <div className="modal-nc-card__row">
                       <span>CUIT</span>
                       <strong>{contexto?.cliente_facturacion?.cuit || "—"}</strong>
                     </div>
+
                     <div className="modal-nc-card__row">
                       <span>IVA</span>
                       <strong>
@@ -445,18 +504,20 @@ export default function ModalEmitirNotaCreditoVenta({
                   </div>
                 </div>
 
-                {/* Resumen NC */}
                 <div className="modal-nc-summary">
                   <div className="modal-nc-summary__title">Nota de crédito a emitir</div>
+
                   <div className="modal-nc-summary__rows">
                     <div className="modal-nc-summary__row">
                       <span>Tipo NC</span>
                       <b>{contexto?.nota_credito?.cbte_tipo || "—"}</b>
                     </div>
+
                     <div className="modal-nc-summary__row">
                       <span>Punto de venta</span>
                       <b>{contexto?.nota_credito?.pto_vta || "—"}</b>
                     </div>
+
                     <div className="modal-nc-summary__row modal-nc-summary__row--total">
                       <span>Total</span>
                       <b>${Number(contexto?.total || 0).toLocaleString("es-AR")}</b>
@@ -464,7 +525,6 @@ export default function ModalEmitirNotaCreditoVenta({
                   </div>
                 </div>
 
-                {/* Motivo */}
                 <div className="fl-field">
                   <textarea
                     id="motivo-nc-venta"
@@ -475,13 +535,14 @@ export default function ModalEmitirNotaCreditoVenta({
                     rows={3}
                     disabled={loading}
                   />
-                  <label className="fl-label" htmlFor="motivo-nc-venta">Motivo</label>
+                  <label className="fl-label" htmlFor="motivo-nc-venta">
+                    Motivo
+                  </label>
                 </div>
               </>
             )}
           </div>
 
-          {/* FOOTER */}
           <div className="mit-actions">
             <button
               type="button"
@@ -491,6 +552,7 @@ export default function ModalEmitirNotaCreditoVenta({
             >
               Cancelar
             </button>
+
             <button
               type="button"
               className="mit-btn mit-btn--solid"
@@ -503,7 +565,6 @@ export default function ModalEmitirNotaCreditoVenta({
         </div>
       </div>
 
-      {/* Modal resumen factura */}
       {openResumen && resumenData && (
         <ModalFacturaBaltoResumen
           open={openResumen}
@@ -520,7 +581,6 @@ export default function ModalEmitirNotaCreditoVenta({
           )}
           cbteTipo={Number(resumenData?.cbte_tipo || 13)}
           ptoVta={String(resumenData?.pto_vta || 2)}
-          onFacturada={async (fact) => await handleEmitida(fact)}
           onDone={async (fact) => await handleEmitida(fact)}
           forceTestAmount={false}
           testAmount={null}

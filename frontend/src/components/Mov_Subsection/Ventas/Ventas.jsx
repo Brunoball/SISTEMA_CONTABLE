@@ -148,6 +148,59 @@ function getAuthInfo() {
   return { token, sessionKey, idUsuario };
 }
 
+function withSessionKey(url) {
+  const base = String(url ?? "").trim();
+  if (!base) return "";
+
+  try {
+    const { sessionKey, token } = getAuthInfo();
+    const u = new URL(base, window.location.origin);
+
+    if (sessionKey && !u.searchParams.has("session_key")) {
+      u.searchParams.set("session_key", sessionKey);
+    }
+
+    if (token && !u.searchParams.has("token")) {
+      u.searchParams.set("token", token);
+    }
+
+    return u.toString();
+  } catch {
+    return base;
+  }
+}
+
+function ensureResourceHint(url, rel = "prefetch", as = "document") {
+  const href = String(url ?? "").trim();
+  if (!href) return;
+
+  const key = `hint:${rel}:${as}:${href}`;
+  if (document.head.querySelector(`link[data-key="${CSS.escape(key)}"]`)) return;
+
+  const link = document.createElement("link");
+  link.rel = rel;
+  if (as) link.as = as;
+  link.href = href;
+  link.setAttribute("data-key", key);
+  document.head.appendChild(link);
+}
+
+function prewarmComprobanteUrl(url, mime = "") {
+  const finalUrl = withSessionKey(url);
+  if (!finalUrl) return;
+
+  const mm = String(mime ?? "").toLowerCase();
+  const isPdf = mm.includes("pdf") || finalUrl.toLowerCase().includes(".pdf");
+
+  if (isPdf) {
+    ensureResourceHint(finalUrl, "preload", "document");
+    ensureResourceHint(finalUrl, "prefetch", "document");
+  } else {
+    ensureResourceHint(finalUrl, "preload", "image");
+    ensureResourceHint(finalUrl, "prefetch", "image");
+  }
+}
+
 function getMovimientoId(r) {
   const cand =
     r?.id_movimiento ??
@@ -396,6 +449,8 @@ export default function Ventas() {
   const [openVerComprobante, setOpenVerComprobante] = useState(false);
   const [comprobanteUrl, setComprobanteUrl] = useState("");
   const [comprobanteMime, setComprobanteMime] = useState("");
+
+  const comprobanteUrlCacheRef = useRef(new Map());
 
   const [toast, setToast] = useState(null);
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
@@ -970,30 +1025,54 @@ export default function Ventas() {
     showToast,
   ]);
 
-  const handleVerComprobante = useCallback(
+  const buildComprobanteFastUrl = useCallback(
     (r) => {
       const idComprobante = getFacturaIdComprobante(r);
-      if (!idComprobante) return;
+      if (!idComprobante) return "";
 
-      const urlDirecta = getFacturaUrl(r);
-
-      if (urlDirecta) {
-        setComprobanteUrl(urlDirecta);
-        setComprobanteMime(getFacturaMime(r));
-        setOpenVerComprobante(true);
-        return;
+      const cacheKey = String(idComprobante);
+      if (comprobanteUrlCacheRef.current.has(cacheKey)) {
+        return comprobanteUrlCacheRef.current.get(cacheKey) || "";
       }
 
-      const sp = new URLSearchParams();
-      sp.set("action", "comprobantes_descargar");
-      sp.set("id_comprobante", String(idComprobante));
+      const urlDirecta = getFacturaUrl(r);
+      let finalUrl = "";
 
-      const url = `${API}?${sp.toString()}`;
-      setComprobanteUrl(url);
+      if (urlDirecta) {
+        finalUrl = withSessionKey(urlDirecta);
+      } else {
+        const sp = new URLSearchParams();
+        sp.set("action", "ventas_comprobantes_descargar");
+        sp.set("id_comprobante", String(idComprobante));
+        finalUrl = withSessionKey(`${API}?${sp.toString()}`);
+      }
+
+      comprobanteUrlCacheRef.current.set(cacheKey, finalUrl);
+      return finalUrl;
+    },
+    [API]
+  );
+
+  const handlePrewarmComprobante = useCallback(
+    (r) => {
+      const fastUrl = buildComprobanteFastUrl(r);
+      if (!fastUrl) return;
+      prewarmComprobanteUrl(fastUrl, getFacturaMime(r));
+    },
+    [buildComprobanteFastUrl]
+  );
+
+  const handleVerComprobante = useCallback(
+    (r) => {
+      const fastUrl = buildComprobanteFastUrl(r);
+      if (!fastUrl) return;
+
+      prewarmComprobanteUrl(fastUrl, getFacturaMime(r));
+      setComprobanteUrl(fastUrl);
       setComprobanteMime(getFacturaMime(r));
       setOpenVerComprobante(true);
     },
-    [API]
+    [buildComprobanteFastUrl]
   );
 
   const requiereNC = useMemo(() => {
@@ -1415,6 +1494,15 @@ export default function Ventas() {
                                   ].join(" ")}
                                   title={tieneComprobante ? "Ver comprobante" : "Sin comprobante"}
                                   disabled={!tieneComprobante || isAnyLoading}
+                                  onMouseEnter={() => {
+                                    if (tieneComprobante) handlePrewarmComprobante(r);
+                                  }}
+                                  onPointerEnter={() => {
+                                    if (tieneComprobante) handlePrewarmComprobante(r);
+                                  }}
+                                  onFocus={() => {
+                                    if (tieneComprobante) handlePrewarmComprobante(r);
+                                  }}
                                   onClick={() => {
                                     if (tieneComprobante) handleVerComprobante(r);
                                   }}

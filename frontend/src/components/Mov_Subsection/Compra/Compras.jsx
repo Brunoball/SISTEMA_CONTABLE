@@ -51,14 +51,17 @@ function moneyARS(v) {
     return `$${Number(n).toFixed(2)}`;
   }
 }
+
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "—";
 }
+
 function numOrZero(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
+
 function pick(obj, keys, fallback = "") {
   for (const k of keys) {
     const v = obj?.[k];
@@ -66,6 +69,7 @@ function pick(obj, keys, fallback = "") {
   }
   return fallback;
 }
+
 function getRowId(r) {
   return (
     r?.id_compra ??
@@ -77,9 +81,11 @@ function getRowId(r) {
     null
   );
 }
+
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "—";
+
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
     const yyyy = m1[1];
@@ -87,6 +93,7 @@ function formatFechaDMY(v) {
     const dd = String(Number(m1[3])).padStart(2, "0");
     return `${dd}/${mm}/${yyyy}`;
   }
+
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) {
     const dd = String(Number(m2[1])).padStart(2, "0");
@@ -94,6 +101,7 @@ function formatFechaDMY(v) {
     const yyyy = m2[3];
     return `${dd}/${mm}/${yyyy}`;
   }
+
   return s;
 }
 
@@ -110,10 +118,13 @@ function startOfDay(d) {
 function parseRowFecha(v) {
   const s = String(v ?? "").trim();
   if (!s) return null;
+
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) return startOfDay(new Date(Number(m1[1]), Number(m1[2]) - 1, Number(m1[3])));
+
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) return startOfDay(new Date(Number(m2[3]), Number(m2[2]) - 1, Number(m2[1])));
+
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : startOfDay(d);
 }
@@ -159,6 +170,7 @@ function getAuthInfo() {
     localStorage.getItem("x_session") ||
     ""
   ).trim();
+
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
@@ -166,7 +178,64 @@ function getAuthInfo() {
       u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
+
   return { token, sessionKey, idUsuario };
+}
+
+function withSessionKey(url) {
+  const base = String(url ?? "").trim();
+  if (!base) return "";
+
+  try {
+    const { sessionKey, token } = getAuthInfo();
+    const u = new URL(base, window.location.origin);
+
+    if (sessionKey && !u.searchParams.has("session_key")) {
+      u.searchParams.set("session_key", sessionKey);
+    }
+
+    if (token && !u.searchParams.has("token")) {
+      u.searchParams.set("token", token);
+    }
+
+    return u.toString();
+  } catch {
+    return base;
+  }
+}
+
+function ensureResourceHint(url, rel = "prefetch", as = "document") {
+  const href = String(url ?? "").trim();
+  if (!href) return;
+
+  const key = `hint:${rel}:${as}:${href}`;
+  const selectorKey = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(key) : key.replace(/"/g, '\\"');
+
+  if (document.head.querySelector(`link[data-key="${selectorKey}"]`)) return;
+
+  const link = document.createElement("link");
+  link.rel = rel;
+  if (as) link.as = as;
+  link.href = href;
+  link.setAttribute("data-key", key);
+  document.head.appendChild(link);
+}
+
+function prewarmComprobanteUrl(url, mime = "") {
+  const finalUrl = withSessionKey(url);
+  if (!finalUrl) return;
+
+  const mm = String(mime ?? "").toLowerCase();
+  const ll = finalUrl.toLowerCase();
+  const isPdf = mm.includes("pdf") || ll.includes(".pdf") || ll.includes("compras_comprobantes_descargar");
+
+  if (isPdf) {
+    ensureResourceHint(finalUrl, "preload", "document");
+    ensureResourceHint(finalUrl, "prefetch", "document");
+  } else {
+    ensureResourceHint(finalUrl, "preload", "image");
+    ensureResourceHint(finalUrl, "prefetch", "image");
+  }
 }
 
 /* =========================
@@ -179,7 +248,76 @@ function getCompraPagoLabel(r) {
   return mp ? mp : "CONTADO";
 }
 
+function extractIdComprobanteFromUrlLike(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+
+  const m1 = s.match(/[?&]id_comprobante=(\d+)/i);
+  if (m1) {
+    const n = Number(m1[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  const m2 = s.match(/[?&]id=(\d+)/i);
+  if (m2) {
+    const n = Number(m2[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  return null;
+}
+
+function getComprobanteId(r) {
+  const directCandidates = [
+    r?.id_comprobante,
+    r?.comprobante_id,
+    r?.factura_id_comprobante,
+    r?.idFacturaComprobante,
+  ];
+
+  for (const cand of directCandidates) {
+    const n = Number(cand);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+
+  const urlCandidates = [
+    r?.factura_url,
+    r?.factura,
+    r?.comprobante_url,
+    r?.comprobante,
+    r?.archivo_url,
+    r?.url_factura,
+    r?.path_factura,
+    r?.factura_path,
+  ];
+
+  for (const u of urlCandidates) {
+    const n = extractIdComprobanteFromUrlLike(u);
+    if (n) return n;
+  }
+
+  return null;
+}
+
+function getComprobanteMime(r) {
+  return String(
+    r?.factura_comprobante_tipo ??
+      r?.archivo_mime ??
+      r?.comprobante_mime ??
+      r?.mime ??
+      ""
+  ).trim();
+}
+
 function getComprobanteUrl(r) {
+  const idComp = getComprobanteId(r);
+  if (idComp) {
+    const sp = new URLSearchParams();
+    sp.set("action", "compras_comprobantes_descargar");
+    sp.set("id_comprobante", String(idComp));
+    return `${BASE_URL}/api.php?${sp.toString()}`;
+  }
+
   const candidates = [
     r?.factura_url,
     r?.factura,
@@ -190,10 +328,13 @@ function getComprobanteUrl(r) {
     r?.path_factura,
     r?.factura_path,
   ];
+
   const raw = candidates.find((x) => typeof x === "string" && x.trim() !== "");
   if (!raw) return "";
+
   const s = raw.trim();
   if (/^https?:\/\//i.test(s)) return s;
+
   const base = String(BASE_URL || "").replace(/\/$/, "");
   const rel = s.replace(/^\//, "");
   return `${base}/${rel}`;
@@ -276,6 +417,7 @@ export default function Compras() {
   const [openDel, setOpenDel] = useState(false);
   const [openVerComp, setOpenVerComp] = useState(false);
   const [compUrl, setCompUrl] = useState("");
+  const [compMime, setCompMime] = useState("");
 
   const [selectedRow, setSelectedRow] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -290,6 +432,7 @@ export default function Compras() {
   const reqIdRef = useRef(0);
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
+  const comprobanteUrlCacheRef = useRef(new Map());
 
   const skelTimerRef = useRef(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
@@ -868,16 +1011,50 @@ export default function Compras() {
     setOpenDel(true);
   };
 
-  const openComprobanteModal = (r) => {
-    const url = getComprobanteUrl(r);
-    if (!url) return;
-    setCompUrl(url);
-    setOpenVerComp(true);
-  };
+  const buildComprobanteFastUrl = useCallback((r) => {
+    const idComp = getComprobanteId(r);
+    const cacheKey = idComp ? `id:${idComp}` : `raw:${getComprobanteUrl(r)}`;
+
+    if (comprobanteUrlCacheRef.current.has(cacheKey)) {
+      return comprobanteUrlCacheRef.current.get(cacheKey) || "";
+    }
+
+    const baseUrl = getComprobanteUrl(r);
+    const finalUrl = withSessionKey(baseUrl);
+
+    if (finalUrl) {
+      comprobanteUrlCacheRef.current.set(cacheKey, finalUrl);
+    }
+
+    return finalUrl;
+  }, []);
+
+  const handlePrewarmComprobante = useCallback(
+    (r) => {
+      const fastUrl = buildComprobanteFastUrl(r);
+      if (!fastUrl) return;
+      prewarmComprobanteUrl(fastUrl, getComprobanteMime(r));
+    },
+    [buildComprobanteFastUrl]
+  );
+
+  const openComprobanteModal = useCallback(
+    (r) => {
+      const fastUrl = buildComprobanteFastUrl(r);
+      if (!fastUrl) return;
+
+      prewarmComprobanteUrl(fastUrl, getComprobanteMime(r));
+      setCompUrl(fastUrl);
+      setCompMime(getComprobanteMime(r));
+      setOpenVerComp(true);
+    },
+    [buildComprobanteFastUrl]
+  );
 
   const closeComprobanteModal = () => {
     setOpenVerComp(false);
     setCompUrl("");
+    setCompMime("");
   };
 
   /* =========================
@@ -1232,7 +1409,8 @@ export default function Compras() {
               <>
                 {filteredRows.map((r) => {
                   const rowId = getRowId(r) ?? `row-${Math.random()}`;
-                  const comp = getComprobanteUrl(r);
+                  const comp = buildComprobanteFastUrl(r);
+                  const compMimeRow = getComprobanteMime(r);
                   const canSee = !!comp;
                   const isDeleting =
                     deletingId !== null && String(deletingId) === String(rowId);
@@ -1262,6 +1440,9 @@ export default function Compras() {
                                   type="button"
                                   className={`mov-iconBtn ${!canSee ? "is-disabled" : ""}`}
                                   title={canSee ? "Ver comprobante" : "Sin comprobante"}
+                                  onMouseEnter={() => canSee && handlePrewarmComprobante(r)}
+                                  onPointerEnter={() => canSee && handlePrewarmComprobante(r)}
+                                  onFocus={() => canSee && handlePrewarmComprobante(r)}
                                   onClick={() => canSee && openComprobanteModal(r)}
                                   disabled={!canSee || isAnyLoading || loadingListsCtx}
                                 >
@@ -1362,7 +1543,6 @@ export default function Compras() {
         </div>
       </section>
 
-      {/* ── FIX: onSaved ya no dispara toast, lo maneja el modal ── */}
       <ModalNuevaCompra
         open={openNueva}
         lists={listasCtx || { periodos: [] }}
@@ -1397,6 +1577,7 @@ export default function Compras() {
       <ModalVerComprobante
         open={openVerComp}
         url={compUrl}
+        mime={compMime}
         onClose={closeComprobanteModal}
         title="Comprobante de compra"
       />

@@ -167,7 +167,10 @@ const LS_KEY = "balto_orden_pago_pending_v1";
 
 function buildPendingKey({ idsMovs, idCobro, title }) {
   return JSON.stringify({
-    ids: (Array.isArray(idsMovs) ? idsMovs : []).map(Number).filter(Boolean).sort((a, b) => a - b),
+    ids: (Array.isArray(idsMovs) ? idsMovs : [])
+      .map(Number)
+      .filter(Boolean)
+      .sort((a, b) => a - b),
     idCobro: Number(idCobro || 0),
     title: String(title || ""),
   });
@@ -414,10 +417,14 @@ export default function ModalOrdenPagoGenerada({
     }
   }, [generatePdfBlob, title, onToast]);
 
-  const uploadPdfToServer = useCallback(
+  const uploadAndLinkPdfToServer = useCallback(
     async (pdfBlob) => {
       const sessionKey = getSessionKey();
       if (!sessionKey) throw new Error("Sesión inválida (no hay X-Session).");
+
+      if (!idsMovs.length) {
+        throw new Error("Faltan idsMovimientos válidos para guardar la orden de pago.");
+      }
 
       const safeName = sanitizeFileName(title);
       const file = new File([pdfBlob], `${safeName}.pdf`, {
@@ -425,16 +432,10 @@ export default function ModalOrdenPagoGenerada({
       });
 
       const fd = new FormData();
-      fd.append("action", "comprobantes_subir");
-      fd.append("tipo", "ORDEN_PAGO");
+      fd.append("action", "ordenes_pago_comprobante_subir_y_vincular");
       fd.append("titulo", String(title || "Orden de Pago"));
-
-      if (idsMovs[0]) fd.append("id_movimiento", String(idsMovs[0]));
+      fd.append("force", "0");
       idsMovs.forEach((id) => fd.append("ids_movimiento[]", String(id)));
-
-      const cob = Number(idCobro);
-      if (Number.isFinite(cob) && cob > 0) fd.append("id_cobro", String(cob));
-
       fd.append("archivo", file);
 
       const url = getApiPhpUrl();
@@ -454,116 +455,36 @@ export default function ModalOrdenPagoGenerada({
       if (!res.ok || !ok || !data?.exito) {
         const msg =
           data?.mensaje ||
-          `No se pudo guardar el comprobante (HTTP ${res.status}).` +
+          `No se pudo guardar la orden de pago (HTTP ${res.status}).` +
             (text ? ` Respuesta: ${text.slice(0, 250)}` : "");
         throw new Error(msg);
       }
 
+      const errores = Array.isArray(data?.errores)
+        ? data.errores
+        : Array.isArray(data?.result?.errores)
+        ? data.result.errores
+        : [];
+
+      if (errores.length > 0) {
+        const detalle = errores
+          .map((x) =>
+            `mov ${x?.id_movimiento ?? "?"}: ${x?.mensaje ?? "error de asociación"}`
+          )
+          .join(" | ");
+
+        throw new Error(`Se guardó el archivo, pero hubo errores de asociación. ${detalle}`);
+      }
+
       const idComp = extractIdComprobante(data);
       if (!idComp) {
-        throw new Error("El backend guardó el PDF pero no devolvió id_comprobante.");
+        throw new Error("El backend guardó la orden de pago pero no devolvió id_comprobante.");
       }
 
       return { ...data, id_comprobante: idComp };
     },
-    [title, idsMovs, idCobro]
+    [idsMovs, title]
   );
-
-  const asociarComprobanteAMovimientos = useCallback(async (idComprobante, ids) => {
-    const sessionKey = getSessionKey();
-    if (!sessionKey) throw new Error("Sesión inválida (no hay X-Session).");
-
-    const url = getApiPhpUrl();
-
-    const ACTIONS_BATCH = [
-      "comprobantes_asociar_movimientos",
-      "comprobantes_vincular_movimientos",
-      "comprobantes_asignar_movimientos",
-      "comprobantes_set_movimientos",
-    ];
-    const ACTIONS_ONE = [
-      "comprobantes_asociar_movimiento",
-      "comprobantes_vincular_movimiento",
-      "comprobantes_asignar_movimiento",
-      "comprobantes_set_movimiento",
-    ];
-
-    const postJson = async (action, payload) => {
-      const res = await fetchWithTimeout(
-        `${url}?action=${encodeURIComponent(action)}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Session": sessionKey,
-          },
-          body: JSON.stringify(payload || {}),
-        },
-        PDF_SAVE_TIMEOUT
-      );
-
-      const { ok, data, text } = await parseJsonFromResponse(res);
-      if (!res.ok || !ok || !data?.exito) {
-        const msg =
-          data?.mensaje ||
-          `HTTP ${res.status}` + (text ? ` ${text.slice(0, 200)}` : "");
-        throw new Error(msg);
-      }
-      return data;
-    };
-
-    for (const action of ACTIONS_BATCH) {
-      try {
-        return await postJson(action, {
-          id_comprobante: Number(idComprobante),
-          ids_movimiento: ids,
-        });
-      } catch (e) {
-        const msg = String(e?.message || "").toLowerCase();
-        if (
-          msg.includes("acción no válida") ||
-          msg.includes("accion no valida") ||
-          msg.includes("action no valida")
-        ) {
-          continue;
-        }
-        throw e;
-      }
-    }
-
-    for (const id of ids) {
-      let okOne = false;
-      for (const action of ACTIONS_ONE) {
-        try {
-          await postJson(action, {
-            id_comprobante: Number(idComprobante),
-            id_movimiento: Number(id),
-          });
-          okOne = true;
-          break;
-        } catch (e) {
-          const msg = String(e?.message || "").toLowerCase();
-          if (
-            msg.includes("acción no válida") ||
-            msg.includes("accion no valida") ||
-            msg.includes("action no valida")
-          ) {
-            continue;
-          }
-          throw e;
-        }
-      }
-      if (!okOne) {
-        throw new Error(
-          `Tu backend no tiene action para asociar comprobante a movimientos.\n` +
-            `Probé batch: ${ACTIONS_BATCH.join(", ")}\n` +
-            `Probé 1x1: ${ACTIONS_ONE.join(", ")}`
-        );
-      }
-    }
-
-    return { exito: true };
-  }, []);
 
   const ensureSaved = useCallback(async () => {
     if (savedRef.current) return savedRef.current;
@@ -581,14 +502,11 @@ export default function ModalOrdenPagoGenerada({
         const pdfBlob = await retryAsync(() => generatePdfBlob("save"), 3, 250);
 
         const saved = await retryAsync(async () => {
-          const up = await uploadPdfToServer(pdfBlob);
-          const idComp = extractIdComprobante(up);
-
-          await asociarComprobanteAMovimientos(idComp, idsMovs);
+          const up = await uploadAndLinkPdfToServer(pdfBlob);
 
           const finalSaved = {
             ...up,
-            id_comprobante: idComp,
+            id_comprobante: Number(up?.id_comprobante || 0),
             ids_movimiento: idsMovs,
           };
 
@@ -624,8 +542,7 @@ export default function ModalOrdenPagoGenerada({
   }, [
     idsMovs,
     generatePdfBlob,
-    uploadPdfToServer,
-    asociarComprobanteAMovimientos,
+    uploadAndLinkPdfToServer,
     pendingKey,
     title,
     html,

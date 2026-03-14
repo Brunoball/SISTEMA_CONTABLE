@@ -341,7 +341,7 @@ export default function ModalNuevaCompra({
 }) {
   const API_BATCH = `${BASE_URL}/api.php?action=compras_crear_batch`;
   const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
-  const API_UPLOAD_LINK = `${BASE_URL}/api.php?action=comprobantes_vincular_movimientos_lote_upload`;
+  const API_UPLOAD_LINK = `${BASE_URL}/api.php?action=compras_comprobantes_vincular_movimientos_lote_upload`;
 
   const showToast = useCallback(
     (tipo, mensaje, dur = 2800) => onToast?.(tipo, mensaje, dur),

@@ -1,6 +1,3 @@
-// ✅ REEMPLAZAR COMPLETO
-// src/components/Principal/Principal.jsx
-
 import React, {
   useEffect,
   useMemo,

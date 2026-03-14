@@ -1,31 +1,23 @@
 // src/components/inicio/Inicio.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import BASE_URL from "../../config/config";
 import "./inicio.css";
 
 import logoBalto from "../../imagenes/Logo_Balto_Azul.png";
 import Toast from "../Global/Toast";
+import ModalRecuperarContra from "./modales/ModalRecuperarContra";
 
 const STORAGE_KEYS = {
   rememberFlag: "rememberLogin",
   user: "remember_nombre",
-  pass: "remember_contrasena", // base64
+  pass: "remember_contrasena",
 };
 
-/* =========================
-   Normalizadores
-========================= */
 function normalizeRol(value) {
   if (value == null) return "vista";
   const v = String(value).trim().toLowerCase();
-  if (
-    v === "1" ||
-    v === "admin" ||
-    v === "administrator" ||
-    v === "administrador" ||
-    v === "superadmin"
-  ) {
+  if (["1", "admin", "administrator", "administrador", "superadmin"].includes(v)) {
     return "admin";
   }
   return "vista";
@@ -39,16 +31,8 @@ function normalizePlanNivel(value) {
   return 3;
 }
 
-/* =========================
-   Helpers de red (fix ERR_CONNECTION_REFUSED)
-========================= */
-
-// Detecta errores típicos de fetch cuando NO hay servidor escuchando
 function isConnectionError(err) {
   const msg = String(err?.message || err || "").toLowerCase();
-  // Chrome/Edge: "Failed to fetch"
-  // Otros: "NetworkError when attempting to fetch resource."
-  // Node/undici: "ECONNREFUSED"
   return (
     msg.includes("failed to fetch") ||
     msg.includes("networkerror") ||
@@ -62,7 +46,10 @@ function isConnectionError(err) {
 function withTimeout(ms) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);
-  return { controller, clear: () => clearTimeout(id) };
+  return {
+    controller,
+    clear: () => clearTimeout(id),
+  };
 }
 
 function safeJsonParse(text) {
@@ -81,17 +68,18 @@ const Inicio = () => {
   const [remember, setRemember] = useState(false);
 
   const [toast, setToast] = useState(null);
-  const mostrarToast = (tipo, mensaje, duracion = 3000) =>
-    setToast({ tipo, mensaje, duracion });
+  const [showRecuperar, setShowRecuperar] = useState(false);
 
   const navigate = useNavigate();
 
-  // ✅ endpoints: primero el BASE_URL (no tocamos config), y fallback a 127.0.0.1
+  const mostrarToast = (tipo, mensaje, duracion = 3000) => {
+    setToast({ tipo, mensaje, duracion });
+  };
+
   const LOGIN_ENDPOINTS = useMemo(() => {
     const primary = `${BASE_URL}/api.php?action=inicio`;
     const fallback = `http://127.0.0.1:3001/routes/api.php?action=inicio`;
 
-    // Evitar duplicados si BASE_URL ya es 127.0.0.1
     const unique = [];
     for (const u of [primary, fallback]) {
       if (!unique.includes(u)) unique.push(u);
@@ -100,7 +88,7 @@ const Inicio = () => {
   }, []);
 
   /* =========================
-     Load remember me
+     Remember me
   ========================= */
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.rememberFlag) === "1";
@@ -108,6 +96,7 @@ const Inicio = () => {
 
     const savedUser = localStorage.getItem(STORAGE_KEYS.user) || "";
     const savedPassB64 = localStorage.getItem(STORAGE_KEYS.pass) || "";
+
     let savedPass = "";
     try {
       savedPass = savedPassB64 ? atob(savedPassB64) : "";
@@ -133,16 +122,18 @@ const Inicio = () => {
   };
 
   useEffect(() => {
-    if (remember) persistRemember(nombre, contrasena, true);
+    if (remember) {
+      persistRemember(nombre, contrasena, true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nombre, contrasena, remember]);
 
   /* =========================
-     Request login (con fallback)
+     Login
   ========================= */
   const postLogin = async (url, payload) => {
-    // timeout corto para no quedar “colgado” si el puerto no responde bien
     const { controller, clear } = withTimeout(8000);
+
     try {
       const res = await fetch(url, {
         method: "POST",
@@ -151,11 +142,15 @@ const Inicio = () => {
         signal: controller.signal,
       });
 
-      // Leemos texto primero para poder parsear incluso si el backend manda algo no-JSON
       const text = await res.text();
       const data = safeJsonParse(text);
 
-      return { ok: res.ok, status: res.status, data, rawText: text };
+      return {
+        ok: res.ok,
+        status: res.status,
+        data,
+        rawText: text,
+      };
     } finally {
       clear();
     }
@@ -182,38 +177,36 @@ const Inicio = () => {
         const url = LOGIN_ENDPOINTS[i];
 
         try {
-          const r = await postLogin(url, { nombre: user, contrasena: pass });
+          const r = await postLogin(url, {
+            nombre: user,
+            contrasena: pass,
+          });
 
-          // ✅ 401/403: credenciales / inactivo (no reintentar en fallback)
           if (r.status === 401 || r.status === 403) {
-            const msg = r.data?.mensaje || "Usuario o contraseña incorrectos";
-            mostrarToast("error", msg);
-            setCargando(false);
+            mostrarToast("error", r.data?.mensaje || "Usuario o contraseña incorrectos");
             return;
           }
 
-          // ✅ no OK: error genérico del backend
           if (!r.ok) {
-            const msg =
+            mostrarToast(
+              "error",
               r.data?.mensaje ||
-              "No se pudo iniciar sesión. Intente nuevamente.";
-            mostrarToast("error", msg);
-            setCargando(false);
+                `No se pudo iniciar sesión. Error HTTP ${r.status}.`
+            );
             return;
           }
 
-          // ✅ OK: validar payload
           const data = r.data;
+
           if (!data || !data.exito) {
             mostrarToast("error", data?.mensaje || "Usuario o contraseña incorrectos");
-            setCargando(false);
             return;
           }
 
           const sessionKey = String(data.session_key || "").trim();
+
           if (!sessionKey) {
-            mostrarToast("error", "Login OK pero falta session_key. Revisá inicio.php.");
-            setCargando(false);
+            mostrarToast("error", "Login correcto pero falta session_key. Revisá inicio.php.");
             return;
           }
 
@@ -241,25 +234,21 @@ const Inicio = () => {
           navigate("/panel");
           return;
         } catch (err) {
-          // Si es error de conexión, probamos fallback (siguiente endpoint)
           if (isConnectionError(err) && i < LOGIN_ENDPOINTS.length - 1) {
             lastError = err;
             continue;
           }
 
-          // Abort por timeout también cae acá
-          const msg =
+          mostrarToast(
+            "error",
             err?.name === "AbortError"
               ? "Tiempo de espera agotado conectando al servidor."
-              : "No se pudo iniciar sesión. Verificá que el backend esté corriendo en http://127.0.0.1:3001.";
-
-          mostrarToast("error", msg);
-          setCargando(false);
+              : "No se pudo iniciar sesión. Verificá que el backend esté corriendo en http://127.0.0.1:3001."
+          );
           return;
         }
       }
 
-      // Si terminó el loop sin return (raro), error final
       if (lastError) {
         mostrarToast(
           "error",
@@ -286,7 +275,12 @@ const Inicio = () => {
 
         <h1 className="ini_title">INICIAR SESIÓN</h1>
 
-        <form className="ini_form" onSubmit={manejarEnvio} autoComplete="on" noValidate>
+        <form
+          className="ini_form"
+          onSubmit={manejarEnvio}
+          autoComplete="on"
+          noValidate
+        >
           <div className="ini_field ini_fieldUser">
             <input
               type="text"
@@ -338,26 +332,44 @@ const Inicio = () => {
             <input
               type="checkbox"
               checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setRemember(checked);
+                if (!checked) {
+                  persistRemember("", "", false);
+                }
+              }}
             />
             <span>Recordar cuenta</span>
           </label>
 
-          <button className="ini_btn" type="submit" disabled={cargando} aria-busy={cargando}>
+          <button
+            className="ini_btn"
+            type="submit"
+            disabled={cargando}
+            aria-busy={cargando}
+          >
             {cargando ? "INICIANDO..." : "ACCEDER"}
           </button>
 
           <div className="ini_links">
-            <Link to="/recuperar" className="ini_link">
+            <button
+              type="button"
+              className="ini_link"
+              onClick={() => setShowRecuperar(true)}
+            >
               ¿Olvidaste tu contraseña?
-            </Link>
-
-            <Link to="/registro" className="ini_link">
-              Crear una cuenta
-            </Link>
+            </button>
           </div>
         </form>
       </div>
+
+      {showRecuperar && (
+        <ModalRecuperarContra
+          onClose={() => setShowRecuperar(false)}
+          usuarioPrefill={nombre}
+        />
+      )}
 
       {toast && (
         <Toast

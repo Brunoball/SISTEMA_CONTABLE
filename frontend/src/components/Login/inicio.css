@@ -385,3 +385,36 @@ body {
     gap: 8px;
   }
 }
+.ini_link {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--balto-action);
+  cursor: pointer;
+  text-decoration: none;
+  text-align: left;
+  line-height: 1.2;
+  display: inline;
+  width: auto;
+  align-self: flex-start;
+  box-shadow: none;
+}
+
+.ini_link:hover {
+  color: var(--balto-action-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ini_link:focus-visible {
+  outline: none;
+  color: var(--balto-action-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

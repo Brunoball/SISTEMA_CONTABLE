@@ -42,7 +42,7 @@
   border-radius: 16px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
   width: 100%;
-  max-width: 420px;
+  max-width: 450px;
   overflow: hidden;
   animation: modalSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -388,4 +388,22 @@
   color: #64748b;
   font-size: 14px;
   margin: 0;
+}.modal-recuperar-icon-wrap svg,
+.modal-recuperar-close svg,
+.modal-recuperar-sent-icon svg,
+.modal-recuperar-btn-primary svg {
+  display: inline-block;
+}
+
+.modal-recuperar-icon-wrap {
+  font-size: 20px;
+}
+
+.modal-recuperar-close {
+  font-size: 18px;
+}
+
+.modal-recuperar-sent-icon {
+  font-size: 32px;
+  color: #2563eb;
 }

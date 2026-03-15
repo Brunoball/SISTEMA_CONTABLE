@@ -1,4 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faLock,
+  faXmark,
+  faPaperPlane,
+} from "@fortawesome/free-solid-svg-icons";
 import BASE_URL from "../../../config/config";
 import "./ModalRecuperar.css";
 
@@ -107,10 +113,7 @@ const ModalRecuperarContra = ({ onClose, usuarioPrefill = "" }) => {
       <div className="modal-recuperar-card">
         <div className="modal-recuperar-header">
           <div className="modal-recuperar-icon-wrap">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
+            <FontAwesomeIcon icon={faLock} />
           </div>
 
           <div className="modal-recuperar-title-group">
@@ -123,9 +126,7 @@ const ModalRecuperarContra = ({ onClose, usuarioPrefill = "" }) => {
           </div>
 
           <button onClick={onClose} className="modal-recuperar-close" aria-label="Cerrar">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
+            <FontAwesomeIcon icon={faXmark} />
           </button>
         </div>
 
@@ -173,10 +174,7 @@ const ModalRecuperarContra = ({ onClose, usuarioPrefill = "" }) => {
                     <span className="modal-recuperar-spinner" />
                   ) : (
                     <>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M22 2 11 13" />
-                        <path d="m22 2-7 20-4-9-9-4 20-7z" />
-                      </svg>
+                      <FontAwesomeIcon icon={faPaperPlane} />
                       Enviar instrucciones
                     </>
                   )}
@@ -186,10 +184,7 @@ const ModalRecuperarContra = ({ onClose, usuarioPrefill = "" }) => {
           ) : (
             <div className="modal-recuperar-sent-state">
               <div className="modal-recuperar-sent-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 2 11 13" />
-                  <path d="m22 2-7 20-4-9-9-4 20-7z" />
-                </svg>
+                <FontAwesomeIcon icon={faPaperPlane} />
               </div>
 
               <p className="modal-recuperar-sent-title">¡Listo! Revisá tu correo</p>

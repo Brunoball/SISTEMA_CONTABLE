@@ -47,10 +47,9 @@ function formatDateISO(d) {
 
 function formatDateLabel(d) {
   if (!d) return "";
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(
-    2,
-    "0"
-  )}/${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(
+    d.getMonth() + 1
+  ).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
 function safeText(v) {
@@ -125,7 +124,9 @@ function ensureResourceHint(url, rel = "prefetch", as = "document") {
 
   const key = `hint:${rel}:${as}:${href}`;
   const selectorKey =
-    typeof CSS !== "undefined" && CSS.escape ? CSS.escape(key) : key.replace(/"/g, '\\"');
+    typeof CSS !== "undefined" && CSS.escape
+      ? CSS.escape(key)
+      : key.replace(/"/g, '\\"');
 
   if (document.head.querySelector(`link[data-key="${selectorKey}"]`)) return;
 
@@ -780,12 +781,11 @@ export default function ClientesCC() {
           ...deleteState.row,
           id_movimiento: deleteState.row?.id_cobro ?? null,
           tipo_movimiento: "Cobro CC Cliente",
-          detalle:
-            deleteState.row
-              ? `Comprobante: ${safeText(deleteState.row.comprobante) || "-"} · Fecha: ${
-                  formatDisplayDate(deleteState.row.fecha || deleteState.row.fecha_raw) || "-"
-                }`
-              : "",
+          detalle: deleteState.row
+            ? `Comprobante: ${safeText(deleteState.row.comprobante) || "-"} · Fecha: ${
+                formatDisplayDate(deleteState.row.fecha || deleteState.row.fecha_raw) || "-"
+              }`
+            : "",
           monto_total: Number(deleteState.row?.credito || 0),
         }}
         loading={deleteState.loading}
@@ -850,7 +850,7 @@ export default function ClientesCC() {
             </div>
 
             <div className="cc-filter cc-filter--search">
-              <div className="cc-floatingField cc-floatingField--search is-active ">
+              <div className="cc-floatingField cc-floatingField--search is-active">
                 <div className="cc-searchInput">
                   <div className="cc-searchInput__fieldWrap">
                     <input
@@ -935,7 +935,7 @@ export default function ClientesCC() {
 
       <div className="cc-cliente-table">
         <div
-          className="mov-gridTable mov-gridTable--head"
+          className="mov-gridTable mov-gridTable--head cc-cliente-table__desktopHead"
           style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr 1fr" }}
         >
           <div className="mov-gridCell mov-gridCell--head">Fecha</div>
@@ -960,49 +960,135 @@ export default function ClientesCC() {
             rows.map((r, i) => {
               const verHabilitado = canPreviewComprobante(r);
               const puedeEliminar = canDeleteCobro(r);
+              const isCobro = Number(r.credito || 0) > 0;
 
               return (
-                <div
-                  key={r.id || `${i}`}
-                  className={`cc-cliente-table__row ${i % 2 !== 0 ? "is-alt" : ""}`}
-                >
-                  <div className="cc-cliente-table__cell cc-cliente-table__cell--date">
-                    {formatDisplayDate(r.fecha || r.fecha_raw)}
-                  </div>
-
-                  <div className="cc-cliente-table__cell">
-                    <div className="cc-cliente-table__title">{r.comprobante || "-"}</div>
-                    {r.detalle && (
-                      <div className="cc-cliente-table__detail">{r.detalle}</div>
-                    )}
-                  </div>
-
+                <React.Fragment key={r.id || `${i}`}>
+                  {/* DESKTOP */}
                   <div
-                    className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
-                      Number(r.debito || 0) > 0
-                        ? "cc-cliente-table__amount--active"
-                        : "cc-cliente-table__amount--muted"
+                    className={`cc-cliente-table__row cc-cliente-table__row--desktop ${
+                      i % 2 !== 0 ? "is-alt" : ""
                     }`}
                   >
-                    {Number(r.debito || 0) > 0 ? moneyARS(r.debito) : ""}
+                    <div className="cc-cliente-table__cell cc-cliente-table__cell--date">
+                      {formatDisplayDate(r.fecha || r.fecha_raw)}
+                    </div>
+
+                    <div className="cc-cliente-table__cell">
+                      <div className="cc-cliente-table__title">{r.comprobante || "-"}</div>
+                      {r.detalle ? (
+                        <div className="cc-cliente-table__detail">{r.detalle}</div>
+                      ) : null}
+                    </div>
+
+                    <div
+                      className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
+                        Number(r.debito || 0) > 0
+                          ? "cc-cliente-table__amount--active"
+                          : "cc-cliente-table__amount--muted"
+                      }`}
+                    >
+                      {Number(r.debito || 0) > 0 ? moneyARS(r.debito) : ""}
+                    </div>
+
+                    <div
+                      className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
+                        Number(r.credito || 0) > 0
+                          ? "cc-cliente-table__amount--active"
+                          : "cc-cliente-table__amount--muted"
+                      }`}
+                    >
+                      {Number(r.credito || 0) > 0 ? moneyARS(r.credito) : ""}
+                    </div>
+
+                    <div className="cc-cliente-table__cell cc-cliente-table__cell--right cc-cliente-table__saldo">
+                      {moneyARS(r.saldo || 0)}
+                    </div>
+
+                    <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
+                      <div className="cc-actionsInline">
+                        <button
+                          type="button"
+                          onMouseEnter={() => verHabilitado && handlePrewarmComprobante(r)}
+                          onPointerEnter={() => verHabilitado && handlePrewarmComprobante(r)}
+                          onFocus={() => verHabilitado && handlePrewarmComprobante(r)}
+                          onClick={() => verHabilitado && openComprobante(r)}
+                          disabled={!verHabilitado}
+                          title={
+                            verHabilitado
+                              ? isCobro
+                                ? "Ver recibo / comprobante del cobro"
+                                : "Ver factura / comprobante de la deuda"
+                              : "Este registro no tiene comprobante asociado"
+                          }
+                          className={`cc-verBtn ${verHabilitado ? "" : "is-disabled"}`}
+                        >
+                          <FontAwesomeIcon icon={faEye} />
+                        </button>
+
+                        {puedeEliminar ? (
+                          <button
+                            type="button"
+                            onClick={() => askDeleteCobro(r)}
+                            title="Eliminar solo este registro de cobro"
+                            className="cc-verBtn cc-verBtn--danger"
+                          >
+                            <FontAwesomeIcon icon={faTrashCan} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
 
-                  <div
-                    className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
-                      Number(r.credito || 0) > 0
-                        ? "cc-cliente-table__amount--active"
-                        : "cc-cliente-table__amount--muted"
-                    }`}
-                  >
-                    {Number(r.credito || 0) > 0 ? moneyARS(r.credito) : ""}
-                  </div>
+                  {/* MOBILE / TABLET */}
+                  <article className="cc-mobileCard">
+                    <div className="cc-mobileCard__top">
+                      <div className="cc-mobileCard__main">
+                        <div className="cc-mobileCard__title">{r.comprobante || "-"}</div>
+                        {r.detalle ? (
+                          <div className="cc-mobileCard__detail">{r.detalle}</div>
+                        ) : null}
+                      </div>
 
-                  <div className="cc-cliente-table__cell cc-cliente-table__cell--right cc-cliente-table__saldo">
-                    {moneyARS(r.saldo || 0)}
-                  </div>
+                      <div className="cc-mobileCard__date">
+                        {formatDisplayDate(r.fecha || r.fecha_raw)}
+                      </div>
+                    </div>
 
-                  <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
-                    <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                    <div className="cc-mobileCard__amounts">
+                      <div className="cc-mobileCard__amountBox">
+                        <span className="cc-mobileCard__label">Débito</span>
+                        <span
+                          className={`cc-mobileCard__value ${
+                            Number(r.debito || 0) > 0
+                              ? "cc-mobileCard__value--active"
+                              : "cc-mobileCard__value--muted"
+                          }`}
+                        >
+                          {Number(r.debito || 0) > 0 ? moneyARS(r.debito) : "—"}
+                        </span>
+                      </div>
+
+                      <div className="cc-mobileCard__amountBox">
+                        <span className="cc-mobileCard__label">Crédito</span>
+                        <span
+                          className={`cc-mobileCard__value ${
+                            Number(r.credito || 0) > 0
+                              ? "cc-mobileCard__value--active"
+                              : "cc-mobileCard__value--muted"
+                          }`}
+                        >
+                          {Number(r.credito || 0) > 0 ? moneyARS(r.credito) : "—"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="cc-mobileCard__saldoRow">
+                      <span className="cc-mobileCard__label">Saldo</span>
+                      <span className="cc-mobileCard__saldo">{moneyARS(r.saldo || 0)}</span>
+                    </div>
+
+                    <div className="cc-mobileCard__actions">
                       <button
                         type="button"
                         onMouseEnter={() => verHabilitado && handlePrewarmComprobante(r)}
@@ -1012,14 +1098,17 @@ export default function ClientesCC() {
                         disabled={!verHabilitado}
                         title={
                           verHabilitado
-                            ? Number(r.credito || 0) > 0
+                            ? isCobro
                               ? "Ver recibo / comprobante del cobro"
                               : "Ver factura / comprobante de la deuda"
                             : "Este registro no tiene comprobante asociado"
                         }
-                        className={`cc-verBtn ${verHabilitado ? "" : "is-disabled"}`}
+                        className={`cc-mobileCard__actionBtn ${
+                          verHabilitado ? "" : "is-disabled"
+                        }`}
                       >
                         <FontAwesomeIcon icon={faEye} />
+                        <span>{isCobro ? "Ver recibo" : "Ver comprobante"}</span>
                       </button>
 
                       {puedeEliminar ? (
@@ -1027,19 +1116,15 @@ export default function ClientesCC() {
                           type="button"
                           onClick={() => askDeleteCobro(r)}
                           title="Eliminar solo este registro de cobro"
-                          className="cc-verBtn"
-                          style={{
-                            background: "rgba(220, 53, 69, 0.12)",
-                            borderColor: "rgba(220, 53, 69, 0.35)",
-                            color: "#ff7b88",
-                          }}
+                          className="cc-mobileCard__actionBtn cc-mobileCard__actionBtn--danger"
                         >
                           <FontAwesomeIcon icon={faTrashCan} />
+                          <span>Eliminar cobro</span>
                         </button>
                       ) : null}
                     </div>
-                  </div>
-                </div>
+                  </article>
+                </React.Fragment>
               );
             })
           ) : (

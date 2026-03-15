@@ -578,7 +578,7 @@ export default function ModalPagarRecibos({
                           value={idMedioPago}
                           onChange={(e) => setIdMedioPago(e.target.value)}
                           disabled={loading || loadingMedios}
-                          className="mpr-select"
+                          className="mpr-select fl-input fl-select"
                         >
                           <option value="">
                             {loadingMedios

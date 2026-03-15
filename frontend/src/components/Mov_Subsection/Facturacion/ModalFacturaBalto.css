@@ -417,9 +417,7 @@
 }
 
 @media (max-width: 640px){
-  .mfb-tabs{
-    flex-direction: column;
-  }
+
 
   .mfb-tab{
     width: 100%;

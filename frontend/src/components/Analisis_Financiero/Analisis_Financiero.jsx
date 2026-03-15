@@ -441,7 +441,7 @@ export default function Analisis_Financiero() {
         </div>
 
         {/* ===== BODY ===== */}
-        <div className="mov-tableWrap mov-tableWrap--af" role="rowgroup">
+        <div className="mov-tableWrap mov-tableWrap--af" id="mov-tableWrap--afs" role="rowgroup">
           <div className={["mov-gridBody ", isLoading ? "mov-softLoading" : ""].join(" ")}>
             {isLoading ? (
               <div className="mov-skeletonWrap" aria-busy="true">

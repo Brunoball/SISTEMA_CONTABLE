@@ -327,8 +327,12 @@ const Principal = () => {
 
   const [usuario, setUsuario] = useState(null);
   const [tema, setTema] = useState("claro");
-  const [tenantLogoSrc, setTenantLogoSrc] = useState("");
-  const [tenantLogoLoaded, setTenantLogoLoaded] = useState(false);
+
+  const [tenantLogoIconoSrc, setTenantLogoIconoSrc] = useState("");
+  const [tenantLogoIconoLoaded, setTenantLogoIconoLoaded] = useState(false);
+
+  const [tenantLogoPrincipalSrc, setTenantLogoPrincipalSrc] = useState("");
+  const [tenantLogoPrincipalLoaded, setTenantLogoPrincipalLoaded] = useState(false);
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showPerfilModal, setShowPerfilModal] = useState(false);
@@ -346,7 +350,9 @@ const Principal = () => {
   const [closingUI, setClosingUI] = useState(false);
 
   const idleTimerRef = useRef(null);
-  const tenantLogoObjectUrlRef = useRef("");
+
+  const tenantLogoIconoObjectUrlRef = useRef("");
+  const tenantLogoPrincipalObjectUrlRef = useRef("");
 
   const closeSoon = (ms = 220) => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
@@ -382,88 +388,132 @@ const Principal = () => {
     openCCTimerRef.current = null;
   };
 
-  const revokeTenantLogoObjectUrl = useCallback(() => {
+  const revokeTenantLogoIconoObjectUrl = useCallback(() => {
     try {
-      if (tenantLogoObjectUrlRef.current) {
-        URL.revokeObjectURL(tenantLogoObjectUrlRef.current);
-        tenantLogoObjectUrlRef.current = "";
+      if (tenantLogoIconoObjectUrlRef.current) {
+        URL.revokeObjectURL(tenantLogoIconoObjectUrlRef.current);
+        tenantLogoIconoObjectUrlRef.current = "";
       }
     } catch {}
   }, []);
 
-  const buildTenantLogoUrl = useCallback(() => {
-    return buildApiUrl({ action: "tenant_logo_ver" });
+  const revokeTenantLogoPrincipalObjectUrl = useCallback(() => {
+    try {
+      if (tenantLogoPrincipalObjectUrlRef.current) {
+        URL.revokeObjectURL(tenantLogoPrincipalObjectUrlRef.current);
+        tenantLogoPrincipalObjectUrlRef.current = "";
+      }
+    } catch {}
   }, []);
 
-  const loadTenantLogo = useCallback(async () => {
-    try {
-      revokeTenantLogoObjectUrl();
-      setTenantLogoSrc("");
-      setTenantLogoLoaded(false);
+  const buildTenantLogoUrl = useCallback((tipo = "principal") => {
+    return buildApiUrl({ action: "tenant_logo_ver", tipo });
+  }, []);
 
-      const sessionKey = getSessionKey();
-      if (!sessionKey) return;
+  const loadSingleLogo = useCallback(
+    async ({ tipo, logoDb, setSrc, setLoaded, objectUrlRef, revokeFn }) => {
+      try {
+        revokeFn();
+        setSrc("");
+        setLoaded(false);
 
-      if (isLocalApiBase()) {
-        return;
+        const sessionKey = getSessionKey();
+        if (!sessionKey) return;
+
+        if (isLocalApiBase()) {
+          return;
+        }
+
+        if (!String(logoDb || "").trim()) {
+          return;
+        }
+
+        const logoUrl = buildTenantLogoUrl(tipo);
+
+        const res = await fetch(logoUrl, {
+          method: "GET",
+          headers: {
+            "X-Session": sessionKey,
+          },
+          cache: "no-store",
+        });
+
+        if (res.status === 401 || res.status === 403) {
+          try {
+            window.dispatchEvent(
+              new CustomEvent("auth:unauthorized", {
+                detail: { status: res.status },
+              })
+            );
+          } catch {}
+          return;
+        }
+
+        if (res.status === 404 || res.status === 500) {
+          return;
+        }
+
+        if (!res.ok) {
+          return;
+        }
+
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          return;
+        }
+
+        const blob = await res.blob();
+        if (!blob || !blob.size) return;
+
+        const objectUrl = URL.createObjectURL(blob);
+        objectUrlRef.current = objectUrl;
+
+        setSrc(objectUrl);
+        setLoaded(true);
+      } catch {
+        setSrc("");
+        setLoaded(false);
       }
+    },
+    [buildTenantLogoUrl]
+  );
 
-      const usuarioLocal = safeJsonParse(localStorage.getItem("usuario")) || {};
-      const logoDb = String(
-        usuarioLocal?.tenant_logo_url_db ||
-          usuario?.tenant_logo_url_db ||
-          ""
-      ).trim();
+  const loadTenantLogos = useCallback(async () => {
+    const usuarioLocal = safeJsonParse(localStorage.getItem("usuario")) || {};
+    const u = usuario || usuarioLocal || {};
 
-      if (!logoDb) {
-        return;
-      }
+    const logoPrincipalDb = String(
+      u?.tenant_logo_url_db || ""
+    ).trim();
 
-      const logoUrl = buildTenantLogoUrl();
+    const logoIconoDb = String(
+      u?.tenant_logo_icono_url_db || ""
+    ).trim();
 
-      const res = await fetch(logoUrl, {
-        method: "GET",
-        headers: {
-          "X-Session": sessionKey,
-        },
-        cache: "no-store",
-      });
-
-      if (res.status === 401 || res.status === 403) {
-        try {
-          window.dispatchEvent(
-            new CustomEvent("auth:unauthorized", { detail: { status: res.status } })
-          );
-        } catch {}
-        return;
-      }
-
-      if (res.status === 404 || res.status === 500) {
-        return;
-      }
-
-      if (!res.ok) {
-        return;
-      }
-
-      const contentType = res.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        return;
-      }
-
-      const blob = await res.blob();
-      if (!blob || !blob.size) return;
-
-      const objectUrl = URL.createObjectURL(blob);
-      tenantLogoObjectUrlRef.current = objectUrl;
-
-      setTenantLogoSrc(objectUrl);
-      setTenantLogoLoaded(true);
-    } catch {
-      setTenantLogoSrc("");
-      setTenantLogoLoaded(false);
-    }
-  }, [buildTenantLogoUrl, revokeTenantLogoObjectUrl, usuario]);
+    await Promise.all([
+      loadSingleLogo({
+        tipo: "icono",
+        logoDb: logoIconoDb,
+        setSrc: setTenantLogoIconoSrc,
+        setLoaded: setTenantLogoIconoLoaded,
+        objectUrlRef: tenantLogoIconoObjectUrlRef,
+        revokeFn: revokeTenantLogoIconoObjectUrl,
+      }),
+      loadSingleLogo({
+        tipo: "principal",
+        logoDb: logoPrincipalDb,
+        setSrc: setTenantLogoPrincipalSrc,
+        setLoaded: setTenantLogoPrincipalLoaded,
+        objectUrlRef: tenantLogoPrincipalObjectUrlRef,
+        revokeFn: revokeTenantLogoPrincipalObjectUrl,
+      }),
+    ]);
+  }, [
+    usuario,
+    loadSingleLogo,
+    revokeTenantLogoIconoObjectUrl,
+    revokeTenantLogoPrincipalObjectUrl,
+  ]);
 
   const doLogout = useCallback(
     async ({ silent = false } = {}) => {
@@ -493,9 +543,14 @@ const Principal = () => {
       } catch (e) {
         console.warn("Error llamando logout:", e);
       } finally {
-        revokeTenantLogoObjectUrl();
-        setTenantLogoSrc("");
-        setTenantLogoLoaded(false);
+        revokeTenantLogoIconoObjectUrl();
+        revokeTenantLogoPrincipalObjectUrl();
+
+        setTenantLogoIconoSrc("");
+        setTenantLogoIconoLoaded(false);
+        setTenantLogoPrincipalSrc("");
+        setTenantLogoPrincipalLoaded(false);
+
         hardClientLogoutCleanup();
         setShowLogoutModal(false);
         setDrawerOpen(false);
@@ -507,7 +562,11 @@ const Principal = () => {
         closingRef.current = false;
       }
     },
-    [navigate, revokeTenantLogoObjectUrl]
+    [
+      navigate,
+      revokeTenantLogoIconoObjectUrl,
+      revokeTenantLogoPrincipalObjectUrl,
+    ]
   );
 
   useEffect(() => {
@@ -558,8 +617,8 @@ const Principal = () => {
   }, [doLogout, navigate]);
 
   useEffect(() => {
-    loadTenantLogo();
-  }, [usuario, loadTenantLogo]);
+    loadTenantLogos();
+  }, [usuario, loadTenantLogos]);
 
   useEffect(() => {
     return () => {
@@ -568,9 +627,11 @@ const Principal = () => {
       if (closeCCTimerRef.current) clearTimeout(closeCCTimerRef.current);
       if (openCCTimerRef.current) clearTimeout(openCCTimerRef.current);
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      revokeTenantLogoObjectUrl();
+
+      revokeTenantLogoIconoObjectUrl();
+      revokeTenantLogoPrincipalObjectUrl();
     };
-  }, [revokeTenantLogoObjectUrl]);
+  }, [revokeTenantLogoIconoObjectUrl, revokeTenantLogoPrincipalObjectUrl]);
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -846,15 +907,15 @@ const Principal = () => {
               justifyContent: "center",
             }}
           >
-            {tenantLogoLoaded && tenantLogoSrc ? (
+            {tenantLogoIconoLoaded && tenantLogoIconoSrc ? (
               <img
-                src={tenantLogoSrc}
-                alt="Logo de la empresa"
+                src={tenantLogoIconoSrc}
+                alt="Logo icono de la empresa"
                 style={{
                   width: "100%",
                   height: "100%",
                   display: "block",
-                  padding: "8px",
+                  objectFit: "cover",
                   borderRadius: "50%",
                 }}
               />
@@ -1085,7 +1146,7 @@ const Principal = () => {
         open={showPerfilModal}
         onClose={() => setShowPerfilModal(false)}
         usuario={usuario}
-        logoSrc={tenantLogoLoaded && tenantLogoSrc ? tenantLogoSrc : ""}
+        logoSrc={tenantLogoPrincipalLoaded && tenantLogoPrincipalSrc ? tenantLogoPrincipalSrc : ""}
         onLogoutRequest={() => {
           setShowPerfilModal(false);
           setShowLogoutModal(true);

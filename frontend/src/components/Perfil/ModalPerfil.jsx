@@ -1,6 +1,3 @@
-// ✅ REEMPLAZAR COMPLETO
-// src/components/Perfil/ModalPerfil.jsx
-
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark } from "@fortawesome/free-solid-svg-icons";
@@ -156,12 +153,13 @@ export default function ModalPerfil({
                 {showLogo ? (
                   <img
                     src={logoSrc}
-                    alt={`Logo de ${view.tenantNombre}`}
+                    alt={`Logo principal de ${view.tenantNombre}`}
                     style={{
                       width: "100%",
                       height: "100%",
-                      objectFit: "cover",
+                      objectFit: "contain",
                       display: "block",
+                      padding: "10px",
                     }}
                     onError={() => setLogoError(true)}
                   />

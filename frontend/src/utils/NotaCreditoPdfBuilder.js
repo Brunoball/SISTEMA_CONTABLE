@@ -133,12 +133,6 @@ async function buildQrImageDataUrl(qrUrl) {
   }
 }
 
-function drawWrappedText(doc, text, x, y, maxWidth, lineHeight = 5, opts = {}) {
-  const lines = doc.splitTextToSize(String(text || ""), maxWidth);
-  doc.text(lines, x, y, opts);
-  return y + lines.length * lineHeight;
-}
-
 function triggerBlobDownload(blob, fileName) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -164,7 +158,7 @@ export async function buildNotaCreditoPdf(data = {}) {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
 
-  const margin = 12;
+  const margin = 8;
   const contentW = pageW - margin * 2;
 
   const primary = [152, 27, 62];
@@ -189,10 +183,7 @@ export async function buildNotaCreditoPdf(data = {}) {
     docTipo: safeStr(cliente?.doc_tipo, "—"),
     docNro: safeStr(cliente?.doc_nro ?? cliente?.cuit, "—"),
     cuit: safeStr(cliente?.cuit ?? cliente?.doc_nro, "—"),
-    iva: safeStr(
-      cliente?.condicion_iva ?? cliente?.cond_iva,
-      "—"
-    ),
+    iva: safeStr(cliente?.condicion_iva ?? cliente?.cond_iva, "—"),
     domicilio: safeStr(cliente?.domicilio, "—"),
   };
 
@@ -202,197 +193,220 @@ export async function buildNotaCreditoPdf(data = {}) {
     data?.total_ars ?? data?.monto ?? 0
   );
 
-  const total = Number(data?.total_ars ?? data?.monto ?? data?.importe ?? 0) || 0;
-  const subtotal = items.reduce((acc, it) => acc + (Number(it.subtotal) || 0), 0);
-  const ivaTotal = items.reduce((acc, it) => acc + (Number(it.iva_monto) || 0), 0);
+  const total =
+    Number(data?.total_ars ?? data?.monto ?? data?.importe ?? 0) || 0;
+  const subtotal = items.reduce(
+    (acc, it) => acc + (Number(it.subtotal) || 0),
+    0
+  );
+  const ivaTotal = items.reduce(
+    (acc, it) => acc + (Number(it.iva_monto) || 0),
+    0
+  );
 
   const fileName = buildFileName(data);
   const tipoLabel = cbteTipoLabel(data?.cbte_tipo);
 
   const qrUrl = String(data?.qr_url || "").trim();
   const qrImageDataUrl = await buildQrImageDataUrl(qrUrl);
+  const logoDataUrl = await loadImageAsDataUrl(emisor.logoUrl);
+
+  let y = 0;
 
   /* =========================
-     Header
+     HEADER COMPACTO
   ========================= */
   doc.setFillColor(...primary);
-  doc.rect(0, 0, pageW, 28, "F");
+  doc.rect(0, 0, pageW, 18, "F");
 
   doc.setFillColor(...accent);
-  doc.roundedRect(margin, 10, contentW, 32, 3, 3, "F");
+  doc.roundedRect(margin, 6, contentW, 20, 2, 2, "F");
 
-  const logoDataUrl = await loadImageAsDataUrl(emisor.logoUrl);
   if (logoDataUrl) {
     try {
-      doc.addImage(logoDataUrl, "PNG", margin + 4, 13, 18, 18);
+      doc.addImage(logoDataUrl, "PNG", margin + 2, 8, 12, 12);
     } catch {}
   }
 
   doc.setTextColor(...primary);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("NOTA DE CRÉDITO ELECTRÓNICA", margin + 26, 20);
+  doc.setFontSize(13);
+  doc.text("NOTA DE CRÉDITO ELECTRÓNICA", margin + 18, 13);
 
-  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
   doc.setTextColor(...muted);
-  doc.text(tipoLabel, margin + 26, 27);
+  doc.text(tipoLabel, margin + 18, 18);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
+  doc.setFontSize(18);
   doc.setTextColor(...primary);
-  doc.text("NC", pageW - 26, 20, { align: "center" });
+  doc.text("NC", pageW - 20, 12, { align: "center" });
 
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   doc.setTextColor(...dark);
-  doc.text(`Pto. Vta: ${safeStr(data?.pto_vta, "—")}`, pageW - 26, 27, {
+  doc.text(`Pto. Vta: ${safeStr(data?.pto_vta, "—")}`, pageW - 20, 17, {
     align: "center",
   });
-  doc.text(`Comp. N°: ${safeStr(data?.cbte_nro, "—")}`, pageW - 26, 32, {
+  doc.text(`N°: ${safeStr(data?.cbte_nro, "—")}`, pageW - 20, 21, {
     align: "center",
   });
 
-  let y = 50;
+  y = 30;
 
   /* =========================
-     Box emisor / comprobante
+     EMISOR + DATOS FISCALES
   ========================= */
+  const boxH1 = 26;
   doc.setDrawColor(...border);
   doc.setFillColor(255, 255, 255);
-  doc.roundedRect(margin, y, 118, 34, 2, 2, "FD");
-  doc.roundedRect(margin + 122, y, contentW - 122, 34, 2, 2, "FD");
+  doc.roundedRect(margin, y, 116, boxH1, 2, 2, "FD");
+  doc.roundedRect(margin + 118, y, contentW - 118, boxH1, 2, 2, "FD");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(8.5);
   doc.setTextColor(...primary);
-  doc.text("DATOS DEL EMISOR", margin + 4, y + 6);
+  doc.text("EMISOR", margin + 3, y + 5);
 
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...dark);
-  doc.setFontSize(9);
-  doc.text(emisor.nombre, margin + 4, y + 12);
-  doc.text(`CUIT: ${emisor.cuit}`, margin + 4, y + 17);
-  doc.text(`IVA: ${emisor.iva}`, margin + 4, y + 22);
-  doc.text(`Ingresos Brutos: ${emisor.iibb}`, margin + 4, y + 27);
-  doc.text(`Inicio de actividades: ${emisor.inicioAct}`, margin + 4, y + 32);
+  doc.setFontSize(7.5);
+  doc.text(emisor.nombre, margin + 3, y + 9);
+  doc.text(`CUIT: ${emisor.cuit}`, margin + 3, y + 13);
+  doc.text(`IVA: ${emisor.iva}`, margin + 3, y + 17);
+  doc.text(`IIBB: ${emisor.iibb}`, margin + 3, y + 21);
+  doc.text(`Inicio act.: ${emisor.inicioAct}`, margin + 3, y + 25);
 
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...primary);
-  doc.text("DATOS FISCALES", margin + 126, y + 6);
+  doc.text("DATOS FISCALES", margin + 121, y + 5);
 
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...dark);
-  doc.text(`Fecha: ${formatDate(data?.fecha_cbte_iso ?? data?.fecha_cbte)}`, margin + 126, y + 12);
-  doc.text(`CAE: ${safeStr(data?.cae, "—")}`, margin + 126, y + 17);
-  doc.text(`Vto. CAE: ${formatDate(data?.cae_vto)}`, margin + 126, y + 22);
-  doc.text(`Resultado: ${safeStr(data?.resultado, "—")}`, margin + 126, y + 27);
-  doc.text(`Moneda: PES`, margin + 126, y + 32);
+  doc.text(
+    `Fecha: ${formatDate(data?.fecha_cbte_iso ?? data?.fecha_cbte)}`,
+    margin + 121,
+    y + 9
+  );
+  doc.text(`CAE: ${safeStr(data?.cae, "—")}`, margin + 121, y + 13);
+  doc.text(`Vto. CAE: ${formatDate(data?.cae_vto)}`, margin + 121, y + 17);
+  doc.text(
+    `Resultado: ${safeStr(data?.resultado, "—")}`,
+    margin + 121,
+    y + 21
+  );
+  doc.text("Moneda: PES", margin + 121, y + 25);
 
-  y += 42;
+  y += boxH1 + 4;
 
   /* =========================
-     Receptor
+     RECEPTOR
   ========================= */
+  const receptorH = 22;
   doc.setFillColor(...accent);
-  doc.roundedRect(margin, y, contentW, 30, 2, 2, "FD");
+  doc.roundedRect(margin, y, contentW, receptorH, 2, 2, "FD");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(8.5);
   doc.setTextColor(...primary);
-  doc.text("RECEPTOR", margin + 4, y + 6);
+  doc.text("RECEPTOR", margin + 3, y + 5);
 
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...dark);
-  doc.setFontSize(9);
-  doc.text(`Razón social: ${receptor.razonSocial}`, margin + 4, y + 12);
-  doc.text(`Doc: ${receptor.docTipo} / ${receptor.docNro}`, margin + 4, y + 17);
-  doc.text(`CUIT: ${receptor.cuit}`, margin + 4, y + 22);
-  doc.text(`IVA: ${receptor.iva}`, margin + 90, y + 12);
-  doc.text(`Domicilio: ${receptor.domicilio}`, margin + 90, y + 17);
-
-  y += 38;
-
-  /* =========================
-     Comprobante asociado
-  ========================= */
-  doc.setDrawColor(...border);
-  doc.roundedRect(margin, y, contentW, 24, 2, 2, "D");
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...primary);
-  doc.text("COMPROBANTE ORIGINAL ASOCIADO", margin + 4, y + 6);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(...dark);
-  doc.text(`Tipo: ${safeStr(original?.cbte_tipo, "—")}`, margin + 4, y + 13);
-  doc.text(`Pto. Vta: ${safeStr(original?.pto_vta, "—")}`, margin + 45, y + 13);
-  doc.text(`Número: ${safeStr(original?.cbte_nro, "—")}`, margin + 80, y + 13);
-  doc.text(`CAE: ${safeStr(original?.cae, "—")}`, margin + 125, y + 13);
-  doc.text(`Fecha: ${formatDate(original?.fecha_cbte)}`, margin + 4, y + 19);
-
-  y += 32;
-
-  /* =========================
-     Motivo
-  ========================= */
-  doc.setFillColor(250, 250, 250);
-  doc.roundedRect(margin, y, contentW, 18, 2, 2, "FD");
-
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...primary);
-  doc.setFontSize(10);
-  doc.text("MOTIVO DE EMISIÓN", margin + 4, y + 6);
-
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...dark);
-  doc.setFontSize(9);
-  drawWrappedText(
-    doc,
-    safeStr(data?.observaciones, "Anulación del comprobante original"),
-    margin + 4,
-    y + 12,
-    contentW - 8,
-    4.5
+  doc.setFontSize(7.5);
+  doc.text(`Razón social: ${receptor.razonSocial}`, margin + 3, y + 9);
+  doc.text(`Doc: ${receptor.docTipo} / ${receptor.docNro}`, margin + 3, y + 13);
+  doc.text(`CUIT: ${receptor.cuit}`, margin + 3, y + 17);
+  doc.text(`IVA: ${receptor.iva}`, margin + 95, y + 9);
+  doc.text(
+    `Domicilio: ${safeStr(receptor.domicilio).slice(0, 48)}`,
+    margin + 95,
+    y + 13
   );
 
-  y += 26;
+  y += receptorH + 4;
 
   /* =========================
-     Tabla items
+     COMPROBANTE ORIGINAL
+  ========================= */
+  const asocH = 16;
+  doc.setDrawColor(...border);
+  doc.roundedRect(margin, y, contentW, asocH, 2, 2, "D");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...primary);
+  doc.text("COMPROBANTE ORIGINAL", margin + 3, y + 5);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...dark);
+  doc.text(`Tipo: ${safeStr(original?.cbte_tipo, "—")}`, margin + 3, y + 10);
+  doc.text(`Pto. Vta: ${safeStr(original?.pto_vta, "—")}`, margin + 35, y + 10);
+  doc.text(`Número: ${safeStr(original?.cbte_nro, "—")}`, margin + 62, y + 10);
+  doc.text(`CAE: ${safeStr(original?.cae, "—")}`, margin + 110, y + 10);
+  doc.text(`Fecha: ${formatDate(original?.fecha_cbte)}`, margin + 3, y + 14);
+
+  y += asocH + 4;
+
+  /* =========================
+     MOTIVO
+  ========================= */
+  const motivoTxt = safeStr(
+    data?.observaciones,
+    "Anulación del comprobante original"
+  );
+  const motivoLines = doc.splitTextToSize(motivoTxt, contentW - 8).slice(0, 2);
+  const motivoH = 14;
+
+  doc.setFillColor(250, 250, 250);
+  doc.roundedRect(margin, y, contentW, motivoH, 2, 2, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...primary);
+  doc.setFontSize(8.5);
+  doc.text("MOTIVO", margin + 3, y + 5);
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...dark);
+  doc.setFontSize(7.5);
+  doc.text(motivoLines, margin + 3, y + 9);
+
+  y += motivoH + 4;
+
+  /* =========================
+     TABLA ITEMS COMPACTA
   ========================= */
   const cols = {
     codigo: margin,
-    descripcion: margin + 16,
-    cantidad: margin + 108,
-    precio: margin + 126,
-    total: margin + 160,
+    descripcion: margin + 14,
+    cantidad: margin + 112,
+    precio: margin + 129,
+    total: margin + 162,
   };
 
   doc.setFillColor(...primary);
-  doc.rect(margin, y, contentW, 8, "F");
+  doc.rect(margin, y, contentW, 6, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
+  doc.setFontSize(7.5);
   doc.setTextColor(255, 255, 255);
-  doc.text("CÓD.", cols.codigo + 2, y + 5.5);
-  doc.text("DESCRIPCIÓN", cols.descripcion + 2, y + 5.5);
-  doc.text("CANT.", cols.cantidad + 2, y + 5.5);
-  doc.text("P. UNIT.", cols.precio + 2, y + 5.5);
-  doc.text("TOTAL", cols.total + 2, y + 5.5);
+  doc.text("CÓD.", cols.codigo + 2, y + 4.2);
+  doc.text("DESCRIPCIÓN", cols.descripcion + 2, y + 4.2);
+  doc.text("CANT.", cols.cantidad + 2, y + 4.2);
+  doc.text("P. UNIT.", cols.precio + 2, y + 4.2);
+  doc.text("TOTAL", cols.total + 2, y + 4.2);
 
-  y += 8;
+  y += 6;
 
   doc.setTextColor(...dark);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  doc.setFontSize(7.3);
 
-  items.forEach((it, idx) => {
-    const rowH = 10;
-    if (y + rowH > pageH - 60) {
-      doc.addPage();
-      y = 20;
-    }
+  const visibleItems = items.slice(0, 6);
+
+  visibleItems.forEach((it, idx) => {
+    const rowH = 7;
 
     if (idx % 2 === 0) {
       doc.setFillColor(250, 250, 250);
@@ -402,114 +416,120 @@ export async function buildNotaCreditoPdf(data = {}) {
     doc.setDrawColor(...border);
     doc.rect(margin, y, contentW, rowH, "D");
 
-    doc.text(safeStr(it.codigo, ""), cols.codigo + 2, y + 6);
-    doc.text(
-      doc.splitTextToSize(safeStr(it.descripcion, ""), 88),
-      cols.descripcion + 2,
-      y + 4.5
-    );
-    doc.text(String(it.cantidad), cols.cantidad + 2, y + 6);
-    doc.text(formatMoney(it.precio), cols.precio + 2, y + 6);
-    doc.text(formatMoney(it.total), cols.total + 2, y + 6);
+    const desc = safeStr(it.descripcion, "").slice(0, 70);
+
+    doc.text(safeStr(it.codigo, ""), cols.codigo + 2, y + 4.5);
+    doc.text(desc, cols.descripcion + 2, y + 4.5);
+    doc.text(String(it.cantidad), cols.cantidad + 2, y + 4.5);
+    doc.text(formatMoney(it.precio), cols.precio + 2, y + 4.5);
+    doc.text(formatMoney(it.total), cols.total + 2, y + 4.5);
 
     y += rowH;
   });
 
-  y += 6;
+  y += 4;
 
   /* =========================
-     Totales
+     TOTALES
   ========================= */
-  const totalBoxW = 70;
+  const totalBoxW = 66;
+  const totalBoxH = 19;
   const totalBoxX = pageW - margin - totalBoxW;
 
   doc.setDrawColor(...border);
-  doc.roundedRect(totalBoxX, y, totalBoxW, 24, 2, 2, "D");
+  doc.roundedRect(totalBoxX, y, totalBoxW, totalBoxH, 2, 2, "D");
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   doc.setTextColor(...dark);
-  doc.text("Subtotal:", totalBoxX + 4, y + 7);
-  doc.text(formatMoney(subtotal), totalBoxX + totalBoxW - 4, y + 7, { align: "right" });
+  doc.text("Subtotal:", totalBoxX + 3, y + 5.5);
+  doc.text(formatMoney(subtotal), totalBoxX + totalBoxW - 3, y + 5.5, {
+    align: "right",
+  });
 
-  doc.text("IVA:", totalBoxX + 4, y + 13);
-  doc.text(formatMoney(ivaTotal), totalBoxX + totalBoxW - 4, y + 13, { align: "right" });
+  doc.text("IVA:", totalBoxX + 3, y + 10.5);
+  doc.text(formatMoney(ivaTotal), totalBoxX + totalBoxW - 3, y + 10.5, {
+    align: "right",
+  });
 
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...primary);
-  doc.text("TOTAL NC:", totalBoxX + 4, y + 20);
-  doc.text(formatMoney(total), totalBoxX + totalBoxW - 4, y + 20, { align: "right" });
+  doc.text("TOTAL NC:", totalBoxX + 3, y + 15.8);
+  doc.text(formatMoney(total), totalBoxX + totalBoxW - 3, y + 15.8, {
+    align: "right",
+  });
 
-  y += 34;
+  y += totalBoxH + 4;
 
   /* =========================
-     Bloque QR real
+     BLOQUE QR COMPACTO
   ========================= */
-  const qrBlockH = 42;
-
-  if (y + qrBlockH > pageH - 28) {
-    doc.addPage();
-    y = 20;
-  }
+  const qrBlockH = 28;
 
   doc.setDrawColor(...border);
   doc.setFillColor(255, 255, 255);
   doc.roundedRect(margin, y, contentW, qrBlockH, 2, 2, "FD");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(8.5);
   doc.setTextColor(...primary);
-  doc.text("VALIDACIÓN QR ARCA", margin + 4, y + 6);
+  doc.text("VALIDACIÓN QR ARCA", margin + 3, y + 5);
 
   if (qrImageDataUrl) {
     try {
-      doc.addImage(qrImageDataUrl, "PNG", margin + 4, y + 9, 28, 28);
+      doc.addImage(qrImageDataUrl, "PNG", margin + 3, y + 7, 18, 18);
     } catch {}
   } else {
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
+    doc.setFontSize(7.3);
     doc.setTextColor(...muted);
-    doc.text("No se pudo generar la imagen QR.", margin + 4, y + 18);
+    doc.text("No se pudo generar QR.", margin + 1, y + 14);
   }
 
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...dark);
-  doc.setFontSize(8.5);
-  doc.text("Escaneá este código para validar el comprobante en ARCA.", margin + 38, y + 14);
-
-  doc.setFont("helvetica", "bold");
-  doc.text(`CAE: ${safeStr(data?.cae, "—")}`, margin + 38, y + 21);
-  doc.text(`Comprobante: ${safeStr(data?.pto_vta, "—")}-${safeStr(data?.cbte_nro, "—")}`, margin + 38, y + 27);
-  doc.text(`Fecha: ${formatDate(data?.fecha_cbte_iso ?? data?.fecha_cbte)}`, margin + 38, y + 33);
-
-  y += qrBlockH + 6;
+  doc.setFontSize(7.3);
+  doc.text(
+    "Escaneá este código para validar el comprobante en ARCA.",
+    margin + 35,
+    y + 10
+  );
+  doc.text(`CAE: ${safeStr(data?.cae, "—")}`, margin + 35, y + 14);
+  doc.text(
+    `Comp.: ${safeStr(data?.pto_vta, "—")}-${safeStr(data?.cbte_nro, "—")}`,
+    margin + 35,
+    y + 18
+  );
+  doc.text(
+    `Fecha: ${formatDate(data?.fecha_cbte_iso ?? data?.fecha_cbte)}`,
+    margin + 35,
+    y + 22
+  );
 
   /* =========================
-     Footer
+     FOOTER
   ========================= */
-  if (y > pageH - 28) {
-    doc.addPage();
-    y = 20;
-  }
-
   doc.setDrawColor(...border);
-  doc.line(margin, pageH - 22, pageW - margin, pageH - 22);
+  doc.line(margin, pageH - 14, pageW - margin, pageH - 14);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
+  doc.setFontSize(7.8);
   doc.setTextColor(...primary);
-  doc.text("Comprobante emitido electrónicamente por ARCA", margin, pageH - 16);
+  doc.text(
+    "Comprobante emitido electrónicamente por ARCA",
+    margin,
+    pageH - 9
+  );
 
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...muted);
-  doc.setFontSize(8);
+  doc.setFontSize(7);
   doc.text(
-    `CAE: ${safeStr(data?.cae, "—")}  |  Vto: ${formatDate(data?.cae_vto)}  |  Resultado: ${safeStr(
-      data?.resultado,
-      "—"
-    )}`,
+    `CAE: ${safeStr(data?.cae, "—")} | Vto: ${formatDate(
+      data?.cae_vto
+    )} | Resultado: ${safeStr(data?.resultado, "—")}`,
     margin,
-    pageH - 11
+    pageH - 5
   );
 
   const blob = doc.output("blob");

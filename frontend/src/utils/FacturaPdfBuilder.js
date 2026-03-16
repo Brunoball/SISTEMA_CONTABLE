@@ -710,15 +710,15 @@ async function drawPage(doc, pageName, ctx) {
 
   rect(doc, B, B, innerW, H - 2 * B, 0.75);
 
-  const bandH = 28;
-  set(doc, "helvetica", "bold", 14);
+const bandH = 28;
+set(doc, "helvetica", "bold", 14);
 
-  // ✅ centrado horizontal + centrado visual vertical dentro de la banda
-  const bandCenterY = B + bandH / 2;
-  text(doc, pageName.toUpperCase(), B + innerW / 2, bandCenterY + 5, {
-    align: "center",
-  });
-
+// ✅ centrado horizontal y vertical real dentro de la banda
+const bandCenterX = B + innerW / 2;
+const bandCenterY = B + bandH / 2;
+text(doc, pageName.toUpperCase(), bandCenterX + 10, bandCenterY + 5, {
+  align: "center",
+});
   line(doc, B, B + bandH, W - B, B + bandH, 0.55);
 
   const meta = getMeta(fact);

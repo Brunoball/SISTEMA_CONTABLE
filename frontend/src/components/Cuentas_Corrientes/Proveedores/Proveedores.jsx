@@ -1126,10 +1126,7 @@ export default function ProveedoresCC() {
         </div>
       </div>
 
-      <div className="cc-footnote">
-        * Débito = movimiento cargado al proveedor • Crédito = cobro registrado • Saldo =
-        acumulado.
-      </div>
+
     </div>
   );
 }

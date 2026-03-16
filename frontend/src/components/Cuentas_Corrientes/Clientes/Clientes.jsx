@@ -1157,9 +1157,7 @@ export default function ClientesCC() {
         </div>
       </div>
 
-      <div className="cc-footnote">
-        * Débito = movimiento facturado • Crédito = cobro registrado • Saldo = acumulado.
-      </div>
+
     </div>
   );
 }

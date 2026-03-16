@@ -796,7 +796,7 @@
 }
 
 .cc-cliente-table__body{
-  height: calc(100vh - 325px);
+  height: calc(100vh - 278px);
   overflow-y: auto;
   overflow-x: hidden;
 }

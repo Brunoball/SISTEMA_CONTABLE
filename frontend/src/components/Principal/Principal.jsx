@@ -901,7 +901,7 @@ const Principal = () => {
             title="Perfil"
             style={{
               overflow: "hidden",
-              padding: 0,
+              padding: 8,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

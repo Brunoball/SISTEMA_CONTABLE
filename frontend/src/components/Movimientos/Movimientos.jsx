@@ -3,13 +3,6 @@ import BASE_URL from "../../config/config";
 import "../Global/Global_css/Global_Section.css";
 import "../Global/Global_css/Global_responsive.css";
 
-// MODALES
-import ModalEditarMovimiento from "./modales/ModalEditarMovimiento";
-import ModalEliminarMovimientos from "../Global/Modales/ModalEliminar.jsx";
-
-// ✅ FACTURACIÓN
-import ModalFacturaBalto from "../Mov_Subsection/Facturacion/ModalFacturaBalto.jsx";
-
 // Toast global
 import Toast from "../Global/Toast.jsx";
 
@@ -24,12 +17,9 @@ import { useDateRange } from "../../context/DateRangeContext";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faPenToSquare,
-  faTrashCan,
   faMagnifyingGlass,
   faCalendarDays,
   faFileExcel,
-  faFileInvoiceDollar,
   faChevronDown,
   faArrowRightLong,
   faTimes,
@@ -120,53 +110,6 @@ function formatFechaDMY(v) {
   return s;
 }
 
-function periodoToMMYYYY(input) {
-  const s = String(input ?? "").trim();
-  if (!s) return "";
-  let m = "";
-  let y = "";
-
-  if (/^\d{4}[-/]\d{1,2}$/.test(s)) {
-    const p = s.split(/[-/]/);
-    y = p[0];
-    m = p[1];
-  } else if (/^\d{1,2}[-/]\d{4}$/.test(s)) {
-    const p = s.split(/[-/]/);
-    m = p[0];
-    y = p[1];
-  } else if (/^\d{6}$/.test(s)) {
-    const a = Number(s.slice(0, 4));
-    if (a >= 1900 && a <= 2100) {
-      y = s.slice(0, 4);
-      m = s.slice(4);
-    } else {
-      m = s.slice(0, 2);
-      y = s.slice(2);
-    }
-  } else {
-    return s;
-  }
-
-  return `${String(Number(m)).padStart(2, "0")}-${y}`;
-}
-
-function periodoToYYYYMM(input) {
-  const s = String(input ?? "").trim();
-  if (!s) return "";
-
-  if (/^\d{1,2}-\d{4}$/.test(s)) {
-    const [mmRaw, yyyy] = s.split("-");
-    return `${yyyy}-${String(Number(mmRaw)).padStart(2, "0")}`;
-  }
-
-  if (/^\d{4}-\d{1,2}$/.test(s)) {
-    const [yyyy, mmRaw] = s.split("-");
-    return `${yyyy}-${String(Number(mmRaw)).padStart(2, "0")}`;
-  }
-
-  return s;
-}
-
 /* =========================
    Auth
 ========================= */
@@ -216,11 +159,12 @@ function buildExportRows(rows) {
       DESCRIPCION: safeText(
         pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")
       ),
-      "TIPO PAGO": safeText(
+      OPERACION: safeText(pick(r, ["operacion"], "")),
+      "CLIENTE/PROVEEDOR": tercero,
+      "MEDIO DE PAGO": safeText(
         pick(r, ["medio_pago_nombre", "medio_pago", "tipo_pago", "forma_pago"], "")
       ),
-      "CLIENTE/PROVEEDOR": tercero,
-      TOTAL: numOrZero(total),
+      MONTO: numOrZero(total),
     };
   });
 }
@@ -249,7 +193,6 @@ export default function Movimientos() {
   const API = `${BASE_URL}/api.php`;
 
   const {
-    lists: listasCtx,
     loadingLists: loadingListsCtx,
     errorLists: errorListsCtx,
     ensureListsLoaded,
@@ -260,7 +203,6 @@ export default function Movimientos() {
   const [rows, setRows] = useState([]);
   const [loadingRows, setLoadingRows] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
   const [calOpen, setCalOpen] = useState(false);
@@ -268,13 +210,6 @@ export default function Movimientos() {
 
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(null);
-
-  const [openEdit, setOpenEdit] = useState(false);
-  const [openDel, setOpenDel] = useState(false);
-  const [selectedRow, setSelectedRow] = useState(null);
-
-  const [openFacturar, setOpenFacturar] = useState(false);
-  const [factData, setFactData] = useState(null);
 
   const [toast, setToast] = useState(null);
   const showToast = useCallback(
@@ -332,13 +267,6 @@ export default function Movimientos() {
     return h;
   }, []);
 
-  const buildHeaders = useCallback(() => {
-    const { sessionKey } = getAuthInfo();
-    const h = { "Content-Type": "application/json" };
-    if (sessionKey) h["X-Session"] = sessionKey;
-    return h;
-  }, []);
-
   const parseJsonOrThrow = useCallback(async (res) => {
     const text = await res.text();
     if (!text) throw new Error("Respuesta vacía del servidor.");
@@ -356,18 +284,6 @@ export default function Movimientos() {
       return await parseJsonOrThrow(res);
     },
     [buildHeadersGET, parseJsonOrThrow]
-  );
-
-  const apiPostJson = useCallback(
-    async (url, payload) => {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: buildHeaders(),
-        body: JSON.stringify(payload ?? {}),
-      });
-      return await parseJsonOrThrow(res);
-    },
-    [buildHeaders, parseJsonOrThrow]
   );
 
   const loadRows = useCallback(
@@ -443,7 +359,6 @@ export default function Movimientos() {
         if (myReqId !== reqIdRef.current) return null;
 
         const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
-        const movsNorm = movs.map((r) => ({ ...r, periodo: periodoToMMYYYY(r?.periodo) }));
 
         const newHasMore = !!data.has_more;
         const newNextOffset =
@@ -462,10 +377,10 @@ export default function Movimientos() {
               setRows((prev) => {
                 const base = Array.isArray(prev) ? prev : [];
                 const seen = new Set(base.map((x) => String(x?.id_movimiento)));
-                return [...base, ...movsNorm.filter((x) => !seen.has(String(x?.id_movimiento)))];
+                return [...base, ...movs.filter((x) => !seen.has(String(x?.id_movimiento)))];
               });
             } else {
-              setRows(movsNorm);
+              setRows(movs);
             }
 
             setHasMore(newHasMore);
@@ -473,7 +388,7 @@ export default function Movimientos() {
 
             if (!append && offset === 0) {
               cacheRef.current.set(cacheKey, {
-                rows: movsNorm,
+                rows: movs,
                 hasMore: newHasMore,
                 nextOffset: newNextOffset,
               });
@@ -491,7 +406,7 @@ export default function Movimientos() {
             resolve({
               hasMore: newHasMore,
               nextOffset: newNextOffset,
-              received: movsNorm.length,
+              received: movs.length,
             });
           };
 
@@ -593,11 +508,7 @@ export default function Movimientos() {
         return;
       }
 
-      showToast(
-        "exito",
-        `${res.received || PAGE_SIZE} registros más cargados.`,
-        2400
-      );
+      showToast("exito", `${res.received || PAGE_SIZE} registros más cargados.`, 2400);
     } catch (e) {
       showToast("error", e?.message || "Error cargando más registros.", 4200);
     }
@@ -608,6 +519,13 @@ export default function Movimientos() {
   const columns = useMemo(
     () => [
       {
+        key: "fecha",
+        label: "FECHA",
+        align: "left",
+        fr: 1.1,
+        render: (r) => safeText(formatFechaDMY(pick(r, ["fecha", "created_at"], ""))),
+      },
+      {
         key: "descripcion",
         label: "DESCRIPCIÓN",
         align: "left",
@@ -616,18 +534,17 @@ export default function Movimientos() {
           safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
       },
       {
-        key: "tipo_pago",
-        label: "TIPO PAGO",
+        key: "operacion",
+        label: "OPERACIÓN",
         align: "center",
-        fr: 1.1,
-        render: (r) =>
-          safeText(pick(r, ["medio_pago_nombre", "medio_pago", "tipo_pago", "forma_pago"], "")),
+        fr: 1.3,
+        render: (r) => safeText(pick(r, ["operacion"], "")),
       },
       {
         key: "tercero",
         label: "CLIENTE/PROVEEDOR",
         align: "left",
-        fr: 1.6,
+        fr: 1.8,
         render: (r) => {
           const c = safeText(pick(r, ["cliente", "nombre_cliente", "razon_social_cliente"], ""));
           return c !== "-"
@@ -636,8 +553,16 @@ export default function Movimientos() {
         },
       },
       {
-        key: "total",
-        label: "TOTAL",
+        key: "medio_pago",
+        label: "MEDIO DE PAGO",
+        align: "center",
+        fr: 1.3,
+        render: (r) =>
+          safeText(pick(r, ["medio_pago_nombre", "medio_pago", "tipo_pago", "forma_pago"], "")),
+      },
+      {
+        key: "monto",
+        label: "MONTO",
         align: "right",
         fr: 1.0,
         render: (r) =>
@@ -649,7 +574,6 @@ export default function Movimientos() {
             )
           ),
       },
-      { key: "acciones", label: "ACCIONES", align: "center", fr: 0.8, render: () => null },
     ],
     []
   );
@@ -691,9 +615,10 @@ export default function Movimientos() {
         `REGISTRO ${index + 1}`,
         `FECHA: ${row.FECHA ?? ""}`,
         `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
-        `TIPO PAGO: ${row["TIPO PAGO"] ?? ""}`,
+        `OPERACION: ${row.OPERACION ?? ""}`,
         `CLIENTE/PROVEEDOR: ${row["CLIENTE/PROVEEDOR"] ?? ""}`,
-        `TOTAL: ${row.TOTAL ?? ""}`,
+        `MEDIO DE PAGO: ${row["MEDIO DE PAGO"] ?? ""}`,
+        `MONTO: ${row.MONTO ?? ""}`,
         "----------------------------------------",
       ].join("\n");
     });
@@ -737,23 +662,16 @@ export default function Movimientos() {
     [hasMore, exportToExcel, exportToCSV, exportToTXT, showToast]
   );
 
-  const saveMovimiento = async (payload, isEdit) => {
-    setError("");
-    const { idUsuario } = getAuthInfo();
-    const action = isEdit ? "movimientos_actualizar" : "movimientos_crear";
-    const payloadNorm = { ...(payload || {}), periodo: periodoToYYYYMM(payload?.periodo) };
-    const data = await apiPostJson(`${API}?action=${action}`, { ...payloadNorm, idUsuario });
-    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
-  };
-
   const softLoading = loadingRows && showSkeleton;
 
   const skelWidths = useMemo(
     () => ({
+      fecha: ["55%", "48%", "52%", "46%"],
       descripcion: ["72%", "58%", "66%", "48%"],
-      tipo_pago: ["44%", "34%", "40%", "30%"],
+      operacion: ["44%", "34%", "40%", "30%"],
       tercero: ["62%", "54%", "46%", "58%"],
-      total: ["38%", "30%", "34%", "28%"],
+      medio_pago: ["48%", "38%", "44%", "36%"],
+      monto: ["38%", "30%", "34%", "28%"],
     }),
     []
   );
@@ -767,22 +685,6 @@ export default function Movimientos() {
       aria-hidden="true"
     >
       {columns.map((c) => {
-        if (c.key === "acciones") {
-          return (
-            <div
-              key={c.key}
-              className="mov-gridCell mov-gridCell--actions is-center"
-              role="cell"
-              data-label={c.label}
-            >
-              <div className="mov-skelActions">
-                <span className="mov-skelIcon" />
-                <span className="mov-skelIcon" />
-              </div>
-            </div>
-          );
-        }
-
         const list = skelWidths[c.key] || ["60%"];
         const w = list[idx % list.length];
 
@@ -803,23 +705,6 @@ export default function Movimientos() {
       })}
     </div>
   );
-
-  const listsSafe = useMemo(() => {
-    const src = listasCtx || {};
-    const safe = (k) => (Array.isArray(src[k]) ? src[k] : []);
-    return {
-      periodos: safe("periodos"),
-      clasificaciones: safe("clasificaciones"),
-      clientes: safe("clientes"),
-      cuentas_corrientes: safe("cuentas_corrientes"),
-      detalles: safe("detalles"),
-      medios_pago: safe("medios_pago"),
-      proveedores: safe("proveedores"),
-      tipos_movimiento: safe("tipos_movimiento"),
-      tipos_venta: safe("tipos_venta"),
-      tipos_operacion: safe("tipos_operacion"),
-    };
-  }, [listasCtx]);
 
   const isAnyLoading = loadingRows || loadingMore;
 
@@ -936,7 +821,7 @@ export default function Movimientos() {
                             });
                           }
                         }}
-                        placeholder="Buscar por descripción, cliente, proveedor..."
+                        placeholder="Buscar por descripción, operación, cliente, proveedor..."
                         disabled={loadingListsCtx || loadingMore}
                         autoComplete="off"
                       />
@@ -1026,65 +911,6 @@ export default function Movimientos() {
                     role="row"
                   >
                     {columns.map((c) => {
-                      if (c.key === "acciones") {
-                        return (
-                          <div
-                            key={c.key}
-                            className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")}
-                            role="cell"
-                            data-label={c.label}
-                          >
-                            <div className="mov-actionsInline">
-                              <button
-                                type="button"
-                                className="mov-iconBtn"
-                                title="Editar"
-                                onClick={async () => {
-                                  await ensureListsLoaded({ force: false, background: true }).catch(() => {});
-                                  setSelectedRow(r);
-                                  setOpenEdit(true);
-                                }}
-                                disabled={loadingRows || loadingMore || loadingListsCtx}
-                              >
-                                <FontAwesomeIcon icon={faPenToSquare} />
-                              </button>
-
-                              <button
-                                type="button"
-                                className="mov-iconBtn"
-                                title="Facturar este movimiento"
-                                onClick={async () => {
-                                  await ensureListsLoaded({ force: false, background: true }).catch(() => {});
-                                  setFactData(r);
-                                  setOpenFacturar(true);
-                                }}
-                                disabled={loadingRows || loadingMore || loadingListsCtx}
-                              >
-                                <FontAwesomeIcon icon={faFileInvoiceDollar} />
-                              </button>
-
-                              <button
-                                type="button"
-                                className="mov-iconBtn mov-iconBtn--danger"
-                                title="Eliminar"
-                                disabled={
-                                  loadingRows ||
-                                  loadingMore ||
-                                  loadingListsCtx ||
-                                  deletingId === r.id_movimiento
-                                }
-                                onClick={() => {
-                                  setSelectedRow(r);
-                                  setOpenDel(true);
-                                }}
-                              >
-                                {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      }
-
                       const val = c.render ? c.render(r) : safeText(r[c.key]);
 
                       return (
@@ -1147,121 +973,6 @@ export default function Movimientos() {
           </div>
         </div>
       </section>
-
-      <ModalFacturaBalto
-        open={openFacturar}
-        onClose={() => {
-          setOpenFacturar(false);
-          setFactData(null);
-        }}
-        apiBase={API}
-        action="movimientos"
-        data={
-          factData || {
-            id_pago: null,
-            id_sistema: null,
-            labelCliente: "",
-            labelSistema: "",
-            cliente: "",
-            sistema: "",
-            anio: new Date().getFullYear(),
-            mes: "",
-            id_mes: new Date().getMonth() + 1,
-            fecha_pago: new Date().toISOString().slice(0, 10),
-          }
-        }
-        onFacturada={() => {
-          showToast("exito", "Factura emitida correctamente.", 3200);
-        }}
-        onDone={async () => {
-          invalidateCache();
-          await loadRows({ dateRange, q, offset: 0, append: false });
-        }}
-      />
-
-      <ModalEditarMovimiento
-        open={openEdit}
-        lists={listsSafe}
-        row={selectedRow}
-        periodoDefault=""
-        onClose={() => {
-          setOpenEdit(false);
-          setSelectedRow(null);
-        }}
-        onToast={showToast}
-        onSave={async (payload) => {
-          try {
-            showToast("cargando", "Guardando cambios…", 12000);
-            await saveMovimiento(payload, true);
-            invalidateCache();
-            await loadRows({ dateRange, q, offset: 0, append: false });
-            setOpenEdit(false);
-            setSelectedRow(null);
-            showToast("exito", "Movimiento actualizado.", 2600);
-          } catch (e) {
-            showToast("error", e?.message || "Error actualizando movimiento.", 4200);
-            throw e;
-          }
-        }}
-      />
-
-      <ModalEliminarMovimientos
-        open={openDel}
-        row={selectedRow}
-        loading={deletingId === selectedRow?.id_movimiento}
-        onClose={() => {
-          setOpenDel(false);
-          setSelectedRow(null);
-        }}
-        onConfirm={async () => {
-          if (!selectedRow?.id_movimiento) return;
-
-          const id = selectedRow.id_movimiento;
-          setDeletingId(id);
-          setError("");
-          showToast("cargando", "Eliminando movimiento…", 12000);
-
-          try {
-            const { idUsuario, sessionKey } = getAuthInfo();
-            const sp = new URLSearchParams();
-            sp.set("action", "movimientos_eliminar");
-            sp.set("id_movimiento", String(id));
-
-            const res = await fetch(`${API}?${sp.toString()}`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                ...(sessionKey ? { "X-Session": sessionKey } : {}),
-              },
-              body: JSON.stringify({ idUsuario }),
-            });
-
-            const text = await res.text();
-            let data = {};
-            try {
-              data = JSON.parse(text || "{}");
-            } catch {
-              throw new Error(
-                `Respuesta inválida al eliminar. HTTP ${res.status}\n${text?.slice(0, 500) || ""}`
-              );
-            }
-
-            if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
-
-            setOpenDel(false);
-            setSelectedRow(null);
-            invalidateCache();
-            await loadRows({ dateRange, q, offset: 0, append: false });
-            showToast("exito", "Movimiento eliminado correctamente.", 2600);
-          } catch (e) {
-            setError(e?.message || "Error eliminando movimiento.");
-            showToast("error", e?.message || "Error eliminando movimiento.", 4200);
-          } finally {
-            setDeletingId(null);
-          }
-        }}
-        onToast={showToast}
-      />
     </div>
   );
 }

@@ -1,6 +1,3 @@
-// ✅ REEMPLAZAR COMPLETO
-// src/components/Global/Ver_Comprobantes/ModalVerComprobante.jsx
-
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "../Global_css/Global_Modals.css";
@@ -34,6 +31,7 @@ function guessKindFromUrlOrMime(url, mime = "") {
   if (u.includes("ventas_comprobantes_descargar")) return "pdf";
   if (u.includes("compras_comprobantes_descargar")) return "pdf";
   if (u.includes("cc_comprobante_descargar")) return "pdf";
+  if (u.includes("otros_ingresos_comprobantes_descargar")) return "pdf";
   if (u.includes(".pdf") || u.startsWith("data:application/pdf")) return "pdf";
 
   if (
@@ -50,81 +48,6 @@ function guessKindFromUrlOrMime(url, mime = "") {
   return "other";
 }
 
-function extFromMimeOrKind(mime = "", kind = "other") {
-  const m = safeText(mime).toLowerCase();
-
-  if (m.includes("pdf")) return "pdf";
-  if (m.includes("png")) return "png";
-  if (m.includes("jpeg") || m.includes("jpg")) return "jpg";
-  if (m.includes("webp")) return "webp";
-  if (m.includes("gif")) return "gif";
-
-  if (kind === "pdf") return "pdf";
-  if (kind === "img") return "jpg";
-
-  return "bin";
-}
-
-function fileNameFromUrl(url = "") {
-  const raw = safeText(url);
-  if (!raw) return "";
-
-  try {
-    const u = new URL(raw, window.location.origin);
-
-    const queryCandidates = [
-      u.searchParams.get("filename"),
-      u.searchParams.get("file_name"),
-      u.searchParams.get("archivo_nombre"),
-      u.searchParams.get("archivo"),
-      u.searchParams.get("name"),
-    ]
-      .map(safeText)
-      .filter(Boolean);
-
-    if (queryCandidates.length > 0) {
-      return decodeURIComponent(queryCandidates[0]);
-    }
-
-    const pathname = safeText(u.pathname);
-    const lastSegment = pathname.split("/").filter(Boolean).pop() || "";
-
-    if (lastSegment && !/^api\.php$/i.test(lastSegment)) {
-      return decodeURIComponent(lastSegment);
-    }
-  } catch {
-    const clean = raw.split("?")[0].split("#")[0];
-    const lastSegment = clean.split("/").filter(Boolean).pop() || "";
-
-    if (lastSegment && !/^api\.php$/i.test(lastSegment)) {
-      return decodeURIComponent(lastSegment);
-    }
-  }
-
-  return "";
-}
-
-function prettyBaseFromTitle(title = "") {
-  const t = safeText(title)
-    .replace(/^comprobante\s*de\s*/i, "")
-    .replace(/^comprobante\s*/i, "")
-    .replace(/[^\wáéíóúÁÉÍÓÚñÑ.-]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-
-  return t ? t.toLowerCase() : "comprobante";
-}
-
-function buildDisplayFileName({ headerFileName = "", url = "", mime = "", kind = "other", title = "" }) {
-  const byHeader = safeText(headerFileName);
-  if (byHeader) return byHeader;
-
-  const byUrl = fileNameFromUrl(url);
-  if (byUrl) return byUrl;
-
-  const ext = extFromMimeOrKind(mime, kind);
-  return `${prettyBaseFromTitle(title)}.${ext}`;
-}
-
 function parseContentDispositionFileName(contentDisposition = "") {
   const cd = safeText(contentDisposition);
   if (!cd) return "";
@@ -138,12 +61,67 @@ function parseContentDispositionFileName(contentDisposition = "") {
     }
   }
 
-  const plainMatch = cd.match(/filename\s*=\s*"([^"]+)"/i) || cd.match(/filename\s*=\s*([^;]+)/i);
+  const plainMatch =
+    cd.match(/filename\s*=\s*"([^"]+)"/i) || cd.match(/filename\s*=\s*([^;]+)/i);
+
   if (plainMatch?.[1]) {
     return plainMatch[1].replace(/["']/g, "").trim();
   }
 
   return "";
+}
+
+function extFromMimeOrKind(mime = "", kind = "other") {
+  const m = safeText(mime).toLowerCase();
+
+  if (m.includes("pdf")) return "pdf";
+  if (m.includes("png")) return "png";
+  if (m.includes("jpeg") || m.includes("jpg")) return "jpg";
+  if (m.includes("webp")) return "webp";
+  if (m.includes("gif")) return "gif";
+
+  if (kind === "pdf") return "pdf";
+  if (kind === "img") return "pdf";
+
+  return "pdf";
+}
+
+function normalizeBaseName(title = "") {
+  const t = safeText(title)
+    .toLowerCase()
+    .replace(/^comprobante\s+de\s+/i, "")
+    .replace(/^comprobante\s+/i, "")
+    .replace(/[^\wáéíóúñü]+/gi, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return t || "archivo";
+}
+
+function buildSimpleDisplayName({ headerFileName = "", mime = "", kind = "other", title = "" }) {
+  const cleanHeader = safeText(headerFileName);
+
+  if (cleanHeader) {
+    const nameWithoutExt = cleanHeader.replace(/\.[a-z0-9]+$/i, "").trim();
+    const ext = extFromMimeOrKind(mime, kind);
+    return `${nameWithoutExt}.${ext}`;
+  }
+
+  const base = normalizeBaseName(title || "comprobante");
+  const ext = extFromMimeOrKind(mime, kind);
+  return `${base}.${ext}`;
+}
+
+function resolveFixedModalTitle(title = "") {
+  const t = safeText(title).toLowerCase();
+
+  if (t.includes("venta")) return "Comprobante de Venta";
+  if (t.includes("ingreso")) return "Comprobante de Ingreso";
+  if (t.includes("egreso")) return "Comprobante de Egreso";
+  if (t.includes("compra")) return "Comprobante de Compra";
+  if (t.includes("cobro")) return "Comprobante de Cobro";
+  if (t.includes("pago")) return "Comprobante de Pago";
+
+  return "Comprobante";
 }
 
 export default function ModalVerComprobante({
@@ -160,7 +138,6 @@ export default function ModalVerComprobante({
   const [resolvedMime, setResolvedMime] = useState("");
   const [resolvedFileName, setResolvedFileName] = useState("");
 
-  // lock scroll
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
@@ -170,7 +147,6 @@ export default function ModalVerComprobante({
     };
   }, [open]);
 
-  // cerrar SOLO con ESC
   useEffect(() => {
     if (!open) return;
 
@@ -186,14 +162,12 @@ export default function ModalVerComprobante({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  // focus close
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => closeBtnRef.current?.focus(), 0);
     return () => clearTimeout(t);
   }, [open]);
 
-  // fetch protegido con X-Session
   useEffect(() => {
     if (!open || !url) {
       setLoading(false);
@@ -273,15 +247,18 @@ export default function ModalVerComprobante({
     return guessKindFromUrlOrMime(previewUrl, resolvedMime || mime);
   }, [previewUrl, resolvedMime, mime]);
 
+  const modalTitle = useMemo(() => {
+    return resolveFixedModalTitle(title);
+  }, [title]);
+
   const displayFileName = useMemo(() => {
-    return buildDisplayFileName({
+    return buildSimpleDisplayName({
       headerFileName: resolvedFileName,
-      url,
       mime: resolvedMime || mime,
       kind,
-      title,
+      title: modalTitle,
     });
-  }, [resolvedFileName, url, resolvedMime, mime, kind, title]);
+  }, [resolvedFileName, resolvedMime, mime, kind, modalTitle]);
 
   if (!open) return null;
 
@@ -293,7 +270,7 @@ export default function ModalVerComprobante({
       className={overlayClass}
       role="dialog"
       aria-modal="true"
-      aria-label={title}
+      aria-label={modalTitle}
       onMouseDown={(e) => {
         e.stopPropagation();
       }}
@@ -310,7 +287,7 @@ export default function ModalVerComprobante({
         <div className="mi-modal__header mpr-header">
           <div className="mpr-headLeft">
             <div className="mi-modal__title mpr-title">
-              <span>{title}</span>
+              <span>{modalTitle}</span>
             </div>
             <div className="mi-modal__subtitle mpr-subtitle">
               {url ? displayFileName : "—"}

@@ -9,6 +9,9 @@ import "../../Global/Calendario/calendario.css";
 
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
+import ModalNuevoEgreso from "./modales/ModalNuevoEgreso.jsx";
+import ModalEditarEgreso from "./modales/ModalEditarEgreso.jsx";
+import ModalEliminar from "../../Global/Modales/ModalEliminar.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -29,18 +32,12 @@ import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 
-/* =========================
-   PERF
-========================= */
 const MIN_LOADING_MS = 0;
 const FORCE_SHOW_LOADER_DEV = false;
 const PAGE_SIZE = 100;
 const PROBE_LIMIT = PAGE_SIZE + 1;
 const SKELETON_ROWS = 10;
 
-/* =========================
-   Helpers
-========================= */
 function moneyARS(v) {
   const n = Number(v || 0);
   try {
@@ -130,6 +127,7 @@ function getAuthInfo() {
     localStorage.getItem("session_key") ||
     localStorage.getItem("sessionKey") ||
     localStorage.getItem("X-Session") ||
+    localStorage.getItem("x_session") ||
     ""
   ).trim();
 
@@ -174,43 +172,10 @@ function getRowKey(r) {
   return `fx:${f}|${d}|${cat}|${m}`;
 }
 
-function getComprobanteIdComprobante(row) {
-  const cand = row?.comprobante_id_archivo ?? row?.id_comprobante ?? row?.comprobante_id ?? null;
-  const n = Number(cand);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-function getComprobanteUrl(row) {
-  return String(row?.comprobante_url ?? row?.archivo_url ?? "").trim();
-}
-
-function getComprobanteMime(row) {
-  return String(row?.comprobante_tipo ?? row?.archivo_mime ?? row?.comprobante_mime ?? "").trim();
-}
-
-function isOtroEgresoRow(row) {
-  const tmTxt = normalizeSearchText(row?.tipo_movimiento ?? row?.pago_tipo_movimiento ?? "");
-  if (!tmTxt.includes("salida") && !tmTxt.includes("egreso")) return false;
-
-  const idProv = Number(row?.id_proveedor ?? row?.proveedor_id ?? row?.idProveedor ?? 0);
-  if (Number.isFinite(idProv) && idProv > 0) return false;
-
-  const provTxt = String(
-    row?.proveedor ?? row?.proveedor_nombre ?? row?.nombre_proveedor ?? ""
-  ).trim();
-  if (provTxt.length > 0) return false;
-
-  return true;
-}
-
 function normalizeOtroEgresoRow(r) {
   const categoria = r?.categoria ?? r?.categoria_nombre ?? r?.nombre_categoria ?? "";
   const medioPagoNombre = r?.medio_pago_nombre ?? r?.medio_pago ?? r?.pago_medio_pago ?? "";
   const idMov = getMovimientoId(r);
-
-  const comprobanteId = getComprobanteIdComprobante(r);
-  const comprobanteUrl = getComprobanteUrl(r);
-  const comprobanteMime = getComprobanteMime(r);
 
   return {
     ...r,
@@ -218,9 +183,12 @@ function normalizeOtroEgresoRow(r) {
     fecha: r?.fecha,
     categoria: String(categoria ?? "").trim() || "",
     medio_pago_nombre: String(medioPagoNombre ?? "").trim() || "",
-    id_comprobante: comprobanteId,
-    comprobante_url: comprobanteUrl,
-    archivo_mime: comprobanteMime,
+    id_comprobante: Number(r?.id_comprobante ?? 0) || 0,
+    comprobante_url: String(r?.comprobante_url ?? "").trim(),
+    archivo_mime: String(r?.archivo_mime ?? "").trim(),
+    comprobante_tipo: String(r?.comprobante_tipo ?? "").trim(),
+    tiene_comprobante:
+      Number(r?.id_comprobante ?? 0) > 0 || String(r?.comprobante_url ?? "").trim() !== "",
   };
 }
 
@@ -228,7 +196,7 @@ function rowMatchesQuery(row, query) {
   const qq = normalizeSearchText(query);
   if (!qq) return true;
 
-  const montoNum = Number(row?.monto_total || row?.total || 0);
+  const montoNum = Number(row?.monto_total || row?.total || row?.total_general || 0);
   const parts = [];
 
   if (row && typeof row === "object") {
@@ -273,15 +241,13 @@ function slugifySheetName(name) {
 }
 
 function buildExportRows(rows) {
-  return (Array.isArray(rows) ? rows : []).map((r) => {
-    return {
-      FECHA: safeText(formatFechaDMY(r?.fecha)),
-      DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
-      CATEGORIA: safeText(r?.categoria),
-      MEDIO_DE_PAGO: safeText(r?.medio_pago_nombre),
-      TOTAL: Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0,
-    };
-  });
+  return (Array.isArray(rows) ? rows : []).map((r) => ({
+    FECHA: safeText(formatFechaDMY(r?.fecha)),
+    DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
+    CATEGORIA: safeText(r?.categoria),
+    MEDIO_DE_PAGO: safeText(r?.medio_pago_nombre),
+    TOTAL: Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0,
+  }));
 }
 
 function escapeCSV(value) {
@@ -300,6 +266,12 @@ function downloadBlob(content, fileName, mimeType) {
   a.click();
   a.remove();
   window.URL.revokeObjectURL(url);
+}
+
+function buildComprobanteDownloadUrl(apiBase, row) {
+  const idMovimiento = Number(row?.id_movimiento ?? 0);
+  if (!idMovimiento) return "";
+  return `${apiBase}?action=otros_egresos_comprobantes_descargar&id_movimiento=${idMovimiento}`;
 }
 
 export default function OtrosEgresos() {
@@ -324,6 +296,7 @@ export default function OtrosEgresos() {
   const [loadingRows, setLoadingRows] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadingAll, setLoadingAll] = useState(false);
+  const [loadingEditDataId, setLoadingEditDataId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
 
@@ -335,12 +308,17 @@ export default function OtrosEgresos() {
 
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
-  const [openDel, setOpenDel] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
 
-  const [openVerComprobante, setOpenVerComprobante] = useState(false);
-  const [comprobanteUrl, setComprobanteUrl] = useState("");
-  const [comprobanteMime, setComprobanteMime] = useState("");
+  const [openDelete, setOpenDelete] = useState(false);
+  const [rowToDelete, setRowToDelete] = useState(null);
+
+  const [openViewComprobante, setOpenViewComprobante] = useState(false);
+  const [comprobanteView, setComprobanteView] = useState({
+    url: "",
+    mime: "",
+    title: "Comprobante",
+  });
 
   const [toast, setToast] = useState(null);
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
@@ -574,7 +552,6 @@ export default function OtrosEgresos() {
             if (myReqId !== reqIdRef.current) return resolve(null);
 
             setError(msg);
-            showToast("error", msg, 4200);
 
             if (append) {
               if (moreReqIdRef.current === myReqId) setLoadingMore(false);
@@ -587,7 +564,7 @@ export default function OtrosEgresos() {
         });
       }
     },
-    [API, apiGet, dateRange, q, showToast]
+    [API, apiGet, dateRange, q]
   );
 
   useEffect(() => {
@@ -600,7 +577,13 @@ export default function OtrosEgresos() {
 
       if (!alive) return;
 
-      await loadRows({ from: dateRange.from, to: dateRange.to, q: "", offset: 0, append: false });
+      await loadRows({
+        from: dateRange.from,
+        to: dateRange.to,
+        q: "",
+        offset: 0,
+        append: false,
+      });
     })();
 
     return () => {
@@ -648,7 +631,6 @@ export default function OtrosEgresos() {
 
   const filteredRows = useMemo(() => {
     return (Array.isArray(rows) ? rows : [])
-      .filter((r) => isOtroEgresoRow(r))
       .filter((r) => rowInDateRange(r, dateRange.from, dateRange.to))
       .filter((r) => rowMatchesQuery(r, q));
   }, [rows, dateRange, q]);
@@ -665,7 +647,7 @@ export default function OtrosEgresos() {
       {
         key: "detalle",
         label: "DESCRIPCIÓN",
-        fr: 2.4,
+        fr: 2.5,
         strong: true,
         align: "left",
         render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
@@ -673,7 +655,7 @@ export default function OtrosEgresos() {
       {
         key: "categoria",
         label: "CATEGORÍA",
-        fr: 1.6,
+        fr: 1.5,
         align: "center",
         render: (r) => safeText(r.categoria),
       },
@@ -691,7 +673,7 @@ export default function OtrosEgresos() {
         align: "right",
         render: (r) => moneyARS(r.monto_total ?? r.total ?? r.total_general ?? 0),
       },
-      { key: "acciones", label: "ACCIONES", fr: 0.8, align: "center", render: () => null },
+      { key: "acciones", label: "ACCIONES", fr: 0.9, align: "center", render: () => null },
     ];
   }, []);
 
@@ -853,26 +835,28 @@ export default function OtrosEgresos() {
     [handleExport]
   );
 
-  const apiPostSave = async (payload, isEdit) => {
-    setError("");
-    const { idUsuario } = getAuthInfo();
-    const action = isEdit ? "otros_egresos_actualizar" : "otros_egresos_crear";
+  const apiPostSave = useCallback(
+    async (payload, isEdit) => {
+      setError("");
+      const { idUsuario } = getAuthInfo();
+      const action = isEdit ? "otros_egresos_actualizar" : "otros_egresos_crear";
 
-    try {
-      const data = await apiPostJson(`${API}?action=${action}`, {
-        ...(payload || {}),
-        idUsuario,
-      });
+      try {
+        const data = await apiPostJson(`${API}?action=${action}`, {
+          ...(payload || {}),
+          idUsuario,
+        });
 
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
-      return data;
-    } catch (e) {
-      const msg = e?.message || "No se pudo guardar.";
-      setError(msg);
-      showToast("error", msg, 4200);
-      throw e;
-    }
-  };
+        if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
+        return data;
+      } catch (e) {
+        const msg = e?.message || "No se pudo guardar.";
+        setError(msg);
+        throw e;
+      }
+    },
+    [API, apiPostJson]
+  );
 
   const reloadVista = useCallback(async () => {
     try {
@@ -891,13 +875,20 @@ export default function OtrosEgresos() {
     }
   }, [dateRange.from, dateRange.to, loadRows, q, showToast]);
 
-  const confirmDelete = async () => {
-    if (!selectedRow?.id_movimiento) return;
+  const handleOpenDeleteModal = useCallback((row) => {
+    if (!row?.id_movimiento) return;
+    setRowToDelete(row);
+    setOpenDelete(true);
+  }, []);
 
-    const id = selectedRow.id_movimiento;
+  const handleConfirmDelete = useCallback(async () => {
+    if (!rowToDelete?.id_movimiento) {
+      throw new Error("No se encontró el movimiento a eliminar.");
+    }
+
+    const id = rowToDelete.id_movimiento;
     setDeletingId(id);
     setError("");
-    showToast("cargando", "Eliminando egreso…", 12000);
 
     try {
       const { idUsuario } = getAuthInfo();
@@ -908,18 +899,30 @@ export default function OtrosEgresos() {
       const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
 
-      setOpenDel(false);
-      setSelectedRow(null);
+      if (selectedRow?.id_movimiento === id) {
+        setSelectedRow(null);
+      }
+
+      setOpenDelete(false);
+      setRowToDelete(null);
+
       await reloadVista();
       await refreshPeriodos();
-      showToast("exito", "Egreso eliminado.", 2600);
+      return data;
     } catch (e) {
-      setError(e.message || "Error eliminando egreso.");
-      showToast("error", e.message || "Error eliminando egreso.", 4200);
+      const msg = e?.message || "Error eliminando egreso.";
+      setError(msg);
+      throw e;
     } finally {
       setDeletingId(null);
     }
-  };
+  }, [API, apiPostJson, reloadVista, refreshPeriodos, rowToDelete, selectedRow]);
+
+  const handleCloseDeleteModal = useCallback(() => {
+    if (deletingId) return;
+    setOpenDelete(false);
+    setRowToDelete(null);
+  }, [deletingId]);
 
   const handleLoadAll = useCallback(async () => {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx || loadingAll) return;
@@ -973,33 +976,79 @@ export default function OtrosEgresos() {
     showToast,
   ]);
 
-  const handleVerComprobante = useCallback(
-    (r) => {
-      const idComprobante = getComprobanteIdComprobante(r);
-      if (!idComprobante) return;
+  const handleOpenEdit = useCallback(
+    async (row) => {
+      const id = Number(row?.id_movimiento ?? 0);
+      if (!id) return;
 
-      const urlDirecta = getComprobanteUrl(r);
+      setLoadingEditDataId(id);
+      setError("");
 
-      if (urlDirecta) {
-        setComprobanteUrl(urlDirecta);
-        setComprobanteMime(getComprobanteMime(r));
-        setOpenVerComprobante(true);
+      try {
+        const sp = new URLSearchParams();
+        sp.set("action", "otros_egresos_obtener");
+        sp.set("id_movimiento", String(id));
+
+        const data = await apiGet(`${API}?${sp.toString()}`);
+        if (!data?.exito) {
+          throw new Error(data?.mensaje || "No se pudo obtener el egreso para editar.");
+        }
+
+        const egreso = data?.egreso ?? data?.otro_egreso ?? data?.movimiento ?? null;
+        if (!egreso) {
+          throw new Error("No se encontró la información del egreso.");
+        }
+
+        setSelectedRow(egreso);
+        setOpenEdit(true);
+      } catch (e) {
+        showToast("error", e?.message || "No se pudo abrir el editor.", 4200);
+      } finally {
+        setLoadingEditDataId(null);
+      }
+    },
+    [API, apiGet, showToast]
+  );
+
+  const handleOpenComprobante = useCallback(
+    (row) => {
+      const tieneComprobante =
+        Number(row?.id_comprobante ?? 0) > 0 || String(row?.comprobante_url ?? "").trim() !== "";
+
+      if (!tieneComprobante) return;
+
+      const url = buildComprobanteDownloadUrl(API, row);
+      if (!url) {
+        showToast("error", "No se pudo construir la URL del comprobante.", 3500);
         return;
       }
 
-      const sp = new URLSearchParams();
-      sp.set("action", "comprobantes_descargar");
-      sp.set("id_comprobante", String(idComprobante));
+      const detalle = String(row?.detalle ?? row?.descripcion ?? row?.concepto ?? "").trim();
+      const fecha = formatFechaDMY(row?.fecha);
 
-      const url = `${API}?${sp.toString()}`;
-      setComprobanteUrl(url);
-      setComprobanteMime(getComprobanteMime(r));
-      setOpenVerComprobante(true);
+      setComprobanteView({
+        url,
+        mime: String(row?.archivo_mime ?? "").trim() || "application/octet-stream",
+        title: detalle
+          ? `Comprobante de egreso - ${detalle} - ${fecha}`
+          : `Comprobante de egreso - ${fecha}`,
+      });
+
+      setOpenViewComprobante(true);
     },
-    [API]
+    [API, showToast]
   );
 
-  const isAnyLoading = loadingRows || loadingMore || loadingAll;
+  const closeComprobanteModal = useCallback(() => {
+    setOpenViewComprobante(false);
+    setComprobanteView({
+      url: "",
+      mime: "",
+      title: "Comprobante",
+    });
+  }, []);
+
+  const isAnyLoading = loadingRows || loadingMore || loadingAll || !!loadingEditDataId;
 
   const skelWidths = useMemo(
     () => ({
@@ -1139,7 +1188,7 @@ export default function OtrosEgresos() {
                     <div className="cc-searchInput__fieldWrap">
                       <input
                         className="cc-input cc-input--floating"
-                        id="vents-comppr-wit"
+                        id="otros-egresos-search"
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
                         onKeyDown={async (e) => {
@@ -1156,7 +1205,7 @@ export default function OtrosEgresos() {
                             });
                           }
                         }}
-                        placeholder="Buscar por descripción, categoría..."
+                        placeholder="Buscar por descripción o medio de pago..."
                         disabled={loadingListsCtx || loadingAll}
                       />
 
@@ -1193,7 +1242,10 @@ export default function OtrosEgresos() {
             </div>
           </div>
 
-          <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div
+            className="mov-card__actions"
+            style={{ display: "flex", gap: 10, alignItems: "center" }}
+          >
             <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
               loading={loadingAll}
@@ -1207,9 +1259,7 @@ export default function OtrosEgresos() {
               type="button"
               className="mov-btn mov-btn--primary"
               onClick={() => {
-                if (loadingListsCtx) {
-                  showToast?.("cargando", "Cargando listas… podés ir completando igual.", 2400);
-                }
+                setSelectedRow(null);
                 setOpenAdd(true);
               }}
               title="Crear nuevo egreso"
@@ -1256,8 +1306,9 @@ export default function OtrosEgresos() {
               <>
                 {filteredRows.map((r) => {
                   const key = getRowKey(r);
-                  const comprobanteId = getComprobanteIdComprobante(r);
-                  const tieneComprobante = !!comprobanteId;
+                  const isLoadingThisEdit = loadingEditDataId === r.id_movimiento;
+                  const tieneComprobante =
+                    Number(r?.id_comprobante ?? 0) > 0 || String(r?.comprobante_url ?? "").trim() !== "";
 
                   return (
                     <div
@@ -1278,21 +1329,14 @@ export default function OtrosEgresos() {
                               <div className="mov-actionsInline">
                                 <button
                                   type="button"
-                                  className={[
-                                    "mov-iconBtn",
+                                  className={`mov-iconBtn ${tieneComprobante ? "" : "is-disabled"}`}
+                                  title={
                                     tieneComprobante
-                                      ? "mov-iconBtn--comprobante"
-                                      : "mov-iconBtn--disabled",
-                                  ].join(" ")}
-                                  title={tieneComprobante ? "Ver comprobante" : "Sin comprobante"}
-                                  disabled={!tieneComprobante || isAnyLoading}
-                                  onClick={() => {
-                                    if (tieneComprobante) handleVerComprobante(r);
-                                  }}
-                                  style={{
-                                    opacity: tieneComprobante ? 1 : 0.35,
-                                    cursor: tieneComprobante ? "pointer" : "not-allowed",
-                                  }}
+                                      ? "Ver comprobante"
+                                      : "Este egreso no tiene comprobante"
+                                  }
+                                  onClick={() => handleOpenComprobante(r)}
+                                  disabled={!tieneComprobante || isAnyLoading || loadingListsCtx}
                                 >
                                   <FontAwesomeIcon icon={faEye} />
                                 </button>
@@ -1301,13 +1345,10 @@ export default function OtrosEgresos() {
                                   type="button"
                                   className="mov-iconBtn"
                                   title="Editar"
-                                  onClick={() => {
-                                    setSelectedRow(r);
-                                    setOpenEdit(true);
-                                  }}
-                                  disabled={isAnyLoading || loadingListsCtx}
+                                  onClick={() => handleOpenEdit(r)}
+                                  disabled={isAnyLoading || loadingListsCtx || isLoadingThisEdit}
                                 >
-                                  <FontAwesomeIcon icon={faPenToSquare} />
+                                  {isLoadingThisEdit ? "..." : <FontAwesomeIcon icon={faPenToSquare} />}
                                 </button>
 
                                 <button
@@ -1315,10 +1356,7 @@ export default function OtrosEgresos() {
                                   className="mov-iconBtn mov-iconBtn--danger"
                                   title="Eliminar"
                                   disabled={isAnyLoading || loadingListsCtx || deletingId === r.id_movimiento}
-                                  onClick={() => {
-                                    setSelectedRow(r);
-                                    setOpenDel(true);
-                                  }}
+                                  onClick={() => handleOpenDeleteModal(r)}
                                 >
                                   {deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}
                                 </button>
@@ -1392,18 +1430,100 @@ export default function OtrosEgresos() {
         </div>
       </section>
 
-      {openVerComprobante && (
-        <ModalVerComprobante
-          open={openVerComprobante}
-          onClose={() => {
-            setOpenVerComprobante(false);
-            setComprobanteUrl("");
-            setComprobanteMime("");
-          }}
-          url={comprobanteUrl}
-          mimeType={comprobanteMime}
-        />
-      )}
+      <ModalNuevoEgreso
+        open={openAdd}
+        mode="create"
+        initialData={null}
+        lists={lists}
+        onClose={() => {
+          setOpenAdd(false);
+          setSelectedRow(null);
+        }}
+        onToast={showToast}
+        onSubmit={apiPostSave}
+        onSaved={async () => {
+          setOpenAdd(false);
+          setSelectedRow(null);
+          await reloadVista();
+          await refreshPeriodos();
+          showToast("exito", "Egreso guardado correctamente.", 2600);
+        }}
+      />
+
+      <ModalEditarEgreso
+        open={openEdit}
+        initialData={selectedRow}
+        lists={lists}
+        onClose={() => {
+          setOpenEdit(false);
+          setSelectedRow(null);
+        }}
+        onToast={showToast}
+        onSubmit={apiPostSave}
+        onSaved={async () => {
+          setOpenEdit(false);
+          setSelectedRow(null);
+          await reloadVista();
+          await refreshPeriodos();
+          showToast("exito", "Egreso actualizado correctamente.", 2600);
+        }}
+      />
+
+      <ModalEliminar
+        open={openDelete}
+        row={rowToDelete}
+        onClose={handleCloseDeleteModal}
+        onConfirm={handleConfirmDelete}
+        onToast={showToast}
+        title="Eliminar egreso"
+        message="¿Seguro que querés eliminar este egreso definitivamente?"
+        warning="Esta acción no se puede deshacer."
+        loading={!!deletingId}
+        loadingMessage="Eliminando egreso…"
+        successMessage="Egreso eliminado."
+        errorMessage="No se pudo eliminar el egreso."
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        details={[
+          {
+            label: "ID Movimiento",
+            value: rowToDelete?.id_movimiento ? `#${rowToDelete.id_movimiento}` : "—",
+          },
+          {
+            label: "Tipo",
+            value:
+              rowToDelete?.tipo_movimiento ||
+              rowToDelete?.tipo ||
+              rowToDelete?.categoria ||
+              "EGRESO",
+          },
+          {
+            label: "Concepto",
+            value:
+              rowToDelete?.detalle ||
+              rowToDelete?.descripcion ||
+              rowToDelete?.concepto ||
+              "—",
+          },
+          {
+            label: "Monto",
+            value: moneyARS(
+              rowToDelete?.monto_total ??
+                rowToDelete?.total ??
+                rowToDelete?.total_general ??
+                0
+            ),
+          },
+        ]}
+      />
+
+      <ModalVerComprobante
+        open={openViewComprobante}
+        url={comprobanteView.url}
+        mime={comprobanteView.mime}
+        title={comprobanteView.title}
+        onClose={closeComprobanteModal}
+      />
     </div>
   );
 }

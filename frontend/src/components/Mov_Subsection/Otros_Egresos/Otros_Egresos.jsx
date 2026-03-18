@@ -1188,7 +1188,7 @@ export default function OtrosEgresos() {
                     <div className="cc-searchInput__fieldWrap">
                       <input
                         className="cc-input cc-input--floating"
-                        id="otros-egresos-search"
+                        id="vents-comppr-wit"
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
                         onKeyDown={async (e) => {
@@ -1218,6 +1218,7 @@ export default function OtrosEgresos() {
                           type="button"
                           className="cc-clearSearch cc-clearSearch--inside"
                           title="Limpiar búsqueda"
+                          
                           onClick={async () => {
                             if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                             setQ("");

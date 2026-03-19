@@ -1205,7 +1205,7 @@ export default function OtrosEgresos() {
                             });
                           }
                         }}
-                        placeholder="Buscar por descripción o medio de pago..."
+                        placeholder="Buscar por descripción, medio de pago..."
                         disabled={loadingListsCtx || loadingAll}
                       />
 

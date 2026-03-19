@@ -224,7 +224,6 @@ const S = {
   clasificacionTitle: {
     fontSize: 14,
     fontWeight: 600,
-    color: "var(--mi-text, #0A2540)",
     lineHeight: 1.2,
   },
   clasificacionSub: {

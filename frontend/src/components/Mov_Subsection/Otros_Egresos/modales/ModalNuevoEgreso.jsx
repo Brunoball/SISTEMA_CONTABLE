@@ -231,6 +231,82 @@ function resolveClasificacionesConfig(clasificacionesList) {
   };
 }
 
+/* ─── Estilos para la caja de clasificación (igual que ModalEditarEgreso) ─── */
+const S = {
+  clasificacionBox: {
+    border: "1px solid rgba(148,163,184,.32)",
+    borderRadius: 14,
+    padding: "12px 14px 10px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 0,
+  },
+  clasificacionHead: {
+    paddingBottom: 10,
+    marginBottom: 10,
+    borderBottom: "1px solid rgba(148,163,184,.18)",
+  },
+  clasificacionTitle: {
+    fontSize: 14,
+    fontWeight: 600,
+    lineHeight: 1.2,
+  },
+  clasificacionSub: {
+    marginTop: 3,
+    fontSize: 12,
+    color: "var(--mi-muted, #516173)",
+    lineHeight: 1.3,
+  },
+  toggleRow: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    paddingTop: 4,
+  },
+  toggleOption: (checked, disabled) => ({
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: checked
+      ? "1.5px solid rgba(0,85,187,.40)"
+      : "1.5px solid rgba(148,163,184,.28)",
+    cursor: disabled ? "not-allowed" : "pointer",
+    transition: "all .16s ease",
+    userSelect: "none",
+    opacity: disabled ? 0.6 : 1,
+  }),
+  toggleDot: (checked) => ({
+    width: 18,
+    height: 18,
+    borderRadius: "50%",
+    border: checked ? "5px solid #0055BB" : "2px solid rgba(148,163,184,.7)",
+    background: checked ? "#fff" : "transparent",
+    flexShrink: 0,
+    transition: "all .16s ease",
+    boxShadow: checked ? "0 0 0 3px rgba(0,85,187,.14)" : "none",
+  }),
+  toggleLabel: (checked) => ({
+    fontSize: 13,
+    fontWeight: checked ? 600 : 500,
+    color: checked ? "#0A2540" : "var(--mi-muted, #516173)",
+    transition: "all .16s ease",
+  }),
+  toggleBadge: {
+    marginLeft: "auto",
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: ".04em",
+    textTransform: "uppercase",
+    padding: "2px 7px",
+    borderRadius: 999,
+    background: "rgba(0,85,187,.10)",
+    color: "#0055BB",
+    border: "1px solid rgba(0,85,187,.18)",
+  },
+};
+
 function buildEmptyRow() {
   return {
     id: uid(),
@@ -410,12 +486,6 @@ export default function ModalNuevoEgreso({
 
   const isNoCostoFijoChecked =
     String(filters.id_clasificacion) === String(clasificacionConfig.idNoCostoFijo);
-
-  const clasificacionNombreUI = isCostoFijoChecked
-    ? "COSTO FIJO"
-    : isNoCostoFijoChecked
-    ? "NO ES COSTO FIJO"
-    : "";
 
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
@@ -597,7 +667,11 @@ export default function ModalNuevoEgreso({
       id_medio_pago: Number(filters.id_medio_pago),
       medio_pago_nombre: optionLabel(selectedMedioPago),
       id_clasificacion: Number(filters.id_clasificacion),
-      clasificacion_nombre: clasificacionNombreUI,
+      clasificacion_nombre: isCostoFijoChecked
+        ? clasificacionConfig.labelCostoFijo.toUpperCase()
+        : isNoCostoFijoChecked
+        ? clasificacionConfig.labelNoCostoFijo.toUpperCase()
+        : "",
       detalle: detalleFinal,
       descripcion: detalleFinal,
       concepto: detalleFinal,
@@ -622,7 +696,7 @@ export default function ModalNuevoEgreso({
         total: safeNumber(x.total),
       })),
     };
-  }, [rowsCalc, initialData, fecha, filters, selectedMedioPago, clasificacionNombreUI]);
+  }, [rowsCalc, initialData, fecha, filters, selectedMedioPago, clasificacionConfig, isCostoFijoChecked, isNoCostoFijoChecked]);
 
   const subirArchivo = useCallback(
     async (idMovimiento, archivo) => {
@@ -707,25 +781,6 @@ export default function ModalNuevoEgreso({
   if (!open) return null;
 
   const btnLabel = saving ? "Procesando..." : mode === "edit" ? "Guardar cambios" : "Guardar egreso";
-
-  const checkCardStyle = (active) => ({
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "12px 14px",
-    borderRadius: 12,
-    border: active ? "2px solid #22c55e" : "1px solid rgba(120,120,120,.35)",
-    background: active
-      ? dark
-        ? "rgba(34,197,94,.14)"
-        : "rgba(34,197,94,.10)"
-      : dark
-      ? "rgba(255,255,255,.03)"
-      : "#fff",
-    cursor: saving ? "not-allowed" : "pointer",
-    transition: "all .2s ease",
-    userSelect: "none",
-  });
 
   return createPortal(
     <div className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim()}>
@@ -951,47 +1006,81 @@ export default function ModalNuevoEgreso({
               </div>
 
               <div className="mi-cr-filters__body">
-                <div style={{ display: "grid", gap: 8 }}>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      opacity: 0.9,
-                      marginBottom: 2,
-                    }}
-                  >
-                    Clasificación *
+
+                {/* ── Clasificación — mismo estilo que ModalEditarEgreso ── */}
+                <div style={S.clasificacionBox}>
+                  <div style={S.clasificacionHead}>
+                    <div style={S.clasificacionTitle}>Clasificación *</div>
+                    <div style={S.clasificacionSub}>
+                      Indicá si este egreso es un costo fijo
+                    </div>
                   </div>
 
-                  <label style={checkCardStyle(isCostoFijoChecked)}>
-                    <input
-                      type="checkbox"
-                      checked={isCostoFijoChecked}
-                      onChange={() =>
+                  <div style={S.toggleRow}>
+                    {/* Opción: Costo fijo */}
+                    <div
+                      style={S.toggleOption(isCostoFijoChecked, saving)}
+                      onClick={() => {
+                        if (saving) return;
                         setFilters((p) => ({
                           ...p,
                           id_clasificacion: clasificacionConfig.idCostoFijo,
-                        }))
-                      }
-                      disabled={saving}
-                    />
-                    <span style={{ fontWeight: 600 }}>{clasificacionConfig.labelCostoFijo}</span>
-                  </label>
+                        }));
+                      }}
+                      role="radio"
+                      aria-checked={isCostoFijoChecked}
+                      tabIndex={saving ? -1 : 0}
+                      onKeyDown={(e) => {
+                        if (e.key === " " || e.key === "Enter") {
+                          if (!saving)
+                            setFilters((p) => ({
+                              ...p,
+                              id_clasificacion: clasificacionConfig.idCostoFijo,
+                            }));
+                        }
+                      }}
+                    >
+                      <span style={S.toggleDot(isCostoFijoChecked)} />
+                      <span style={S.toggleLabel(isCostoFijoChecked)}>
+                        {clasificacionConfig.labelCostoFijo}
+                      </span>
+                      {isCostoFijoChecked && (
+                        <span style={S.toggleBadge}>activo</span>
+                      )}
+                    </div>
 
-                  <label style={checkCardStyle(isNoCostoFijoChecked)}>
-                    <input
-                      type="checkbox"
-                      checked={isNoCostoFijoChecked}
-                      onChange={() =>
+                    {/* Opción: No es costo fijo */}
+                    <div
+                      style={S.toggleOption(isNoCostoFijoChecked, saving)}
+                      onClick={() => {
+                        if (saving) return;
                         setFilters((p) => ({
                           ...p,
                           id_clasificacion: clasificacionConfig.idNoCostoFijo,
-                        }))
-                      }
-                      disabled={saving}
-                    />
-                    <span style={{ fontWeight: 600 }}>{clasificacionConfig.labelNoCostoFijo}</span>
-                  </label>
+                        }));
+                      }}
+                      role="radio"
+                      aria-checked={isNoCostoFijoChecked}
+                      tabIndex={saving ? -1 : 0}
+                      onKeyDown={(e) => {
+                        if (e.key === " " || e.key === "Enter") {
+                          if (!saving)
+                            setFilters((p) => ({
+                              ...p,
+                              id_clasificacion: clasificacionConfig.idNoCostoFijo,
+                            }));
+                        }
+                      }}
+                    >
+                      <span style={S.toggleDot(isNoCostoFijoChecked)} />
+                      <span style={S.toggleLabel(isNoCostoFijoChecked)}>
+                        {clasificacionConfig.labelNoCostoFijo}
+                      </span>
+                      {isNoCostoFijoChecked && (
+                        <span style={S.toggleBadge}>activo</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="fl-field">

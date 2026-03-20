@@ -22,6 +22,7 @@ import {
   faSun,
   faBars,
   faXmark,
+  faGear,
 } from "@fortawesome/free-solid-svg-icons";
 
 import "./principal.css";
@@ -56,6 +57,46 @@ function isLocalApiBase() {
   }
 }
 
+function safeJsonParse(s) {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
+function looksLikeUnauthorizedPayload(text, contentType = "") {
+  const raw = String(text || "").trim();
+  if (!raw) return false;
+
+  let msg = raw;
+
+  if (String(contentType || "").toLowerCase().includes("application/json")) {
+    const data = safeJsonParse(raw);
+    if (data && typeof data === "object") {
+      msg = [data.mensaje, data.error, data.detalle, raw]
+        .filter(Boolean)
+        .join(" | ");
+    }
+  }
+
+  const s = String(msg).toLowerCase();
+
+  return (
+    s.includes("sesión expirada") ||
+    s.includes("sesion expirada") ||
+    s.includes("sesión no autorizada") ||
+    s.includes("sesion no autorizada") ||
+    s.includes("session_key inválida") ||
+    s.includes("session_key invalida") ||
+    s.includes("falta x-session") ||
+    s.includes("error en api: sesión expirada") ||
+    s.includes("error en api: sesion expirada") ||
+    s.includes("sesión inválida") ||
+    s.includes("sesion invalida")
+  );
+}
+
 async function apiFetch(paramsObj, options = {}) {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
 
@@ -79,7 +120,32 @@ async function apiFetch(paramsObj, options = {}) {
         new CustomEvent("auth:unauthorized", { detail: { status: res.status } })
       );
     } catch {}
+    return res;
   }
+
+  try {
+    const clone = res.clone();
+    const text = await clone.text();
+    const ct = clone.headers.get("content-type") || "";
+
+    if (looksLikeUnauthorizedPayload(text, ct)) {
+      try {
+        window.dispatchEvent(
+          new CustomEvent("auth:unauthorized", {
+            detail: { status: 401, reason: "payload-session-expired" },
+          })
+        );
+      } catch {}
+
+      return new Response(
+        JSON.stringify({ exito: false, mensaje: "Sesión expirada." }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+        }
+      );
+    }
+  } catch {}
 
   return res;
 }
@@ -100,6 +166,9 @@ const ROUTE_PREFETCH = {
     import("../Cuentas_Corrientes/Proveedores/Proveedores"),
   "/panel/analisis-financiero": () =>
     import("../Analisis_Financiero/Analisis_Financiero"),
+  "/panel/configuracion": () => import("../Configuracion/Configuracion"),
+  "/panel/configuracion/tiendanube": () =>
+    import("../Configuracion/ConfigTiendaNube"),
 };
 
 function prefetchRoute(ruta) {
@@ -136,13 +205,6 @@ function getLastActivityTs() {
 const LISTAS_CACHE_KEY = "balto_listas_cache_v1";
 const LISTAS_TTL_MS = 30 * 60 * 1000;
 
-function safeJsonParse(s) {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return null;
-  }
-}
 function getCachedListas() {
   const raw = sessionStorage.getItem(LISTAS_CACHE_KEY);
   const parsed = safeJsonParse(raw);
@@ -288,6 +350,7 @@ function pickIcon(label) {
   if (s.includes("flujo")) return faWallet;
   if (s.includes("cuentas")) return faUsers;
   if (s.includes("analisis")) return faChartLine;
+  if (s.includes("config")) return faGear;
   return faChartLine;
 }
 function normalizeTema(value) {
@@ -459,6 +522,16 @@ const Principal = () => {
 
         const contentType = res.headers.get("content-type") || "";
         if (contentType.includes("application/json")) {
+          const txt = await res.clone().text().catch(() => "");
+          if (looksLikeUnauthorizedPayload(txt, contentType)) {
+            try {
+              window.dispatchEvent(
+                new CustomEvent("auth:unauthorized", {
+                  detail: { status: 401, reason: "payload-session-expired" },
+                })
+              );
+            } catch {}
+          }
           return;
         }
 
@@ -482,13 +555,8 @@ const Principal = () => {
     const usuarioLocal = safeJsonParse(localStorage.getItem("usuario")) || {};
     const u = usuario || usuarioLocal || {};
 
-    const logoPrincipalDb = String(
-      u?.tenant_logo_url_db || ""
-    ).trim();
-
-    const logoIconoDb = String(
-      u?.tenant_logo_icono_url_db || ""
-    ).trim();
+    const logoPrincipalDb = String(u?.tenant_logo_url_db || "").trim();
+    const logoIconoDb = String(u?.tenant_logo_icono_url_db || "").trim();
 
     await Promise.all([
       loadSingleLogo({
@@ -535,7 +603,7 @@ const Principal = () => {
             { action: "logout" },
             { method: "POST", body: JSON.stringify({}) }
           );
-          if (!r.ok) {
+          if (!r.ok && r.status !== 401 && r.status !== 403) {
             const txt = await r.text().catch(() => "");
             console.warn("Logout backend falló:", r.status, txt);
           }
@@ -556,10 +624,19 @@ const Principal = () => {
         setDrawerOpen(false);
         setOpenMovSub(false);
         setOpenCCSub(false);
-        navigate("/", { replace: true });
 
-        if (!silent) setClosingUI(false);
+        if (!silent) {
+          setClosingUI(false);
+        }
+
         closingRef.current = false;
+
+        if (silent) {
+          window.location.replace("/");
+          return;
+        }
+
+        navigate("/", { replace: true });
       }
     },
     [
@@ -574,6 +651,57 @@ const Principal = () => {
     window.addEventListener("auth:unauthorized", onUnauthorized);
     return () => window.removeEventListener("auth:unauthorized", onUnauthorized);
   }, [doLogout]);
+
+  useEffect(() => {
+    const originalFetch = window.fetch.bind(window);
+
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+
+      try {
+        if (response.status === 401 || response.status === 403) {
+          try {
+            window.dispatchEvent(
+              new CustomEvent("auth:unauthorized", {
+                detail: { status: response.status, reason: "http-status" },
+              })
+            );
+          } catch {}
+          return response;
+        }
+
+        const clone = response.clone();
+        const ct = clone.headers.get("content-type") || "";
+
+        if (ct.includes("application/json") || ct.includes("text/plain")) {
+          const txt = await clone.text();
+          if (looksLikeUnauthorizedPayload(txt, ct)) {
+            try {
+              window.dispatchEvent(
+                new CustomEvent("auth:unauthorized", {
+                  detail: { status: 401, reason: "body-message" },
+                })
+              );
+            } catch {}
+
+            return new Response(
+              JSON.stringify({ exito: false, mensaje: "Sesión expirada." }),
+              {
+                status: 401,
+                headers: { "Content-Type": "application/json; charset=utf-8" },
+              }
+            );
+          }
+        }
+      } catch {}
+
+      return response;
+    };
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
 
   useEffect(() => {
     const sk = getSessionKey();
@@ -606,10 +734,9 @@ const Principal = () => {
     try {
       const onUnauthorized = () => doLogout({ silent: true });
       if (typeof window.requestIdleCallback === "function") {
-        window.requestIdleCallback(
-          () => prefetchGlobalListas(onUnauthorized),
-          { timeout: 1200 }
-        );
+        window.requestIdleCallback(() => prefetchGlobalListas(onUnauthorized), {
+          timeout: 1200,
+        });
       } else {
         setTimeout(() => prefetchGlobalListas(onUnauthorized), 200);
       }
@@ -702,6 +829,7 @@ const Principal = () => {
   }, [doLogout]);
 
   const planNivel = normalizePlanNivel(usuario?.plan_nivel ?? 1);
+  const rolUsuario = normalizeRol(usuario?.rol);
 
   const navItems = useMemo(() => {
     const base = [
@@ -742,6 +870,7 @@ const Principal = () => {
   const activeKey = useMemo(() => {
     if (location.pathname.startsWith("/panel/movimientos")) return "movimientos";
     if (location.pathname.startsWith("/panel/cuentas-corrientes")) return "cuentas-corrientes";
+    if (location.pathname.startsWith("/panel/configuracion")) return "configuracion";
     const found = navItems.find((x) => location.pathname.startsWith(x.ruta));
     return found?.key || "";
   }, [location.pathname, navItems]);
@@ -750,6 +879,8 @@ const Principal = () => {
     if (location.pathname.startsWith("/panel/movimientos")) return "Movimientos";
     if (location.pathname.startsWith("/panel/cuentas-corrientes/clientes")) return "Cuentas Corrientes";
     if (location.pathname.startsWith("/panel/cuentas-corrientes/proveedores")) return "Cuentas Corrientes";
+    if (location.pathname.startsWith("/panel/configuracion/tiendanube")) return "Configuración";
+    if (location.pathname.startsWith("/panel/configuracion")) return "Configuración";
     const found = navItems.find((x) => location.pathname.startsWith(x.ruta));
     return found?.label || "Dashboard";
   }, [location.pathname, navItems]);
@@ -1121,6 +1252,23 @@ const Principal = () => {
         </nav>
 
         <div className="pp-sidebar__bottom">
+          {rolUsuario === "admin" && (
+            <button
+              className={`pp-logout ${
+                location.pathname.startsWith("/panel/configuracion") ? "is-active" : ""
+              }`}
+              onClick={() => {
+                handleNavigate("/panel/configuracion");
+              }}
+              style={{ marginBottom: 10 }}
+            >
+              <span className="pp-logout__icon">
+                <FontAwesomeIcon icon={faGear} />
+              </span>
+              <span className="pp-logout__label">Configuración</span>
+            </button>
+          )}
+
           <button
             className="pp-logout"
             onClick={() => {

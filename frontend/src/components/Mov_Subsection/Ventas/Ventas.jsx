@@ -41,6 +41,7 @@ const FORCE_SHOW_LOADER_DEV = false;
 const PAGE_SIZE = 100;
 const PROBE_LIMIT = PAGE_SIZE + 1;
 const SKELETON_ROWS = 10;
+const LIVE_POLL_MS = 5000;
 
 /* =========================
    Helpers
@@ -465,11 +466,17 @@ export default function Ventas() {
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
+  const liveTimerRef = useRef(null);
+  const liveBusyRef = useRef(false);
+  const liveTokenRef = useRef(null);
+  const liveToastCooldownRef = useRef(0);
+
   const showSkeleton = loadingRows;
 
   useEffect(() => {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      if (liveTimerRef.current) clearTimeout(liveTimerRef.current);
     };
   }, []);
 
@@ -526,6 +533,29 @@ export default function Ventas() {
       await refreshLists();
     } catch {}
   }, [refreshLists]);
+
+  const fetchLiveToken = useCallback(
+    async (fromParam, toParam, qParam) => {
+      const fromDate = fromParam !== undefined ? fromParam : dateRange.from;
+      const toDate = toParam !== undefined ? toParam : dateRange.to;
+      const qLocal = typeof qParam === "string" ? qParam : q;
+
+      const fromAPI = dateToAPI(fromDate);
+      const toAPI = dateToAPI(toDate);
+
+      const sp = new URLSearchParams();
+      sp.set("action", "ventas_live_token");
+      if (fromAPI) sp.set("fecha_desde", fromAPI);
+      if (toAPI) sp.set("fecha_hasta", toAPI);
+      if ((qLocal || "").trim()) sp.set("q", (qLocal || "").trim());
+      sp.set("limit", String(PAGE_SIZE));
+
+      const data = await apiGet(`${API}?${sp.toString()}`);
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo obtener el token en vivo.");
+      return String(data.live_token || "");
+    },
+    [API, apiGet, dateRange.from, dateRange.to, q]
+  );
 
   const loadRows = useCallback(
     async (opts = {}) => {
@@ -695,12 +725,21 @@ export default function Ventas() {
       if (!alive) return;
 
       await loadRows({ from: dateRange.from, to: dateRange.to, q: "", offset: 0, append: false });
+
+      try {
+        const token = await fetchLiveToken(dateRange.from, dateRange.to, "");
+        if (alive) liveTokenRef.current = token;
+      } catch {}
     })();
 
     return () => {
       alive = false;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    liveTokenRef.current = null;
+  }, [dateRange.from, dateRange.to, q]);
 
   useEffect(() => {
     if (skipSearchRef.current) {
@@ -710,8 +749,12 @@ export default function Ventas() {
 
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
-    searchTimerRef.current = setTimeout(() => {
-      loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
+    searchTimerRef.current = setTimeout(async () => {
+      await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
+      try {
+        const token = await fetchLiveToken(dateRange.from, dateRange.to, q);
+        liveTokenRef.current = token;
+      } catch {}
     }, 250);
 
     return () => {
@@ -726,6 +769,7 @@ export default function Ventas() {
       setDateRange(newRange);
       cacheRef.current.clear();
       skipSearchRef.current = true;
+      liveTokenRef.current = null;
 
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
@@ -736,9 +780,106 @@ export default function Ventas() {
         offset: 0,
         append: false,
       });
+
+      try {
+        const token = await fetchLiveToken(newRange.from, newRange.to, q);
+        liveTokenRef.current = token;
+      } catch {}
     },
-    [setDateRange, loadRows, q]
+    [setDateRange, loadRows, q, fetchLiveToken]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const tick = async () => {
+      if (cancelled) return;
+
+      if (
+        document.hidden ||
+        liveBusyRef.current ||
+        loadingRows ||
+        loadingMore ||
+        loadingListsCtx ||
+        showCalendario ||
+        openAdd ||
+        openDel ||
+        openNC ||
+        openVerComprobante
+      ) {
+        liveTimerRef.current = setTimeout(tick, LIVE_POLL_MS);
+        return;
+      }
+
+      liveBusyRef.current = true;
+
+      try {
+        const token = await fetchLiveToken(dateRange.from, dateRange.to, q);
+
+        if (!token) {
+          liveBusyRef.current = false;
+          liveTimerRef.current = setTimeout(tick, LIVE_POLL_MS);
+          return;
+        }
+
+        if (liveTokenRef.current === null) {
+          liveTokenRef.current = token;
+        } else if (liveTokenRef.current !== token) {
+          liveTokenRef.current = token;
+          cacheRef.current.clear();
+
+          const prevLen = rowsRef.current.length;
+          const prevHasMore = hasMore;
+
+          await loadRows({
+            from: dateRange.from,
+            to: dateRange.to,
+            q,
+            offset: 0,
+            append: false,
+          });
+
+          const now = Date.now();
+          if (now - liveToastCooldownRef.current > 4000) {
+            const mensaje =
+              prevHasMore || prevLen >= PAGE_SIZE
+                ? "Ventas actualizadas en vivo. La vista se recargó desde el inicio."
+                : "Ventas actualizadas en vivo.";
+            showToast("exito", mensaje, 2200);
+            liveToastCooldownRef.current = now;
+          }
+        }
+      } catch {
+        // silencioso
+      } finally {
+        liveBusyRef.current = false;
+        if (!cancelled) liveTimerRef.current = setTimeout(tick, LIVE_POLL_MS);
+      }
+    };
+
+    liveTimerRef.current = setTimeout(tick, LIVE_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      if (liveTimerRef.current) clearTimeout(liveTimerRef.current);
+    };
+  }, [
+    dateRange.from,
+    dateRange.to,
+    q,
+    loadingRows,
+    loadingMore,
+    loadingListsCtx,
+    showCalendario,
+    openAdd,
+    openDel,
+    openNC,
+    openVerComprobante,
+    hasMore,
+    fetchLiveToken,
+    loadRows,
+    showToast,
+  ]);
 
   const filteredRows = useMemo(() => {
     return (Array.isArray(rows) ? rows : [])
@@ -914,6 +1055,15 @@ export default function Ventas() {
   const handleExport = useCallback(
     async (type) => {
       try {
+        if (hasMore) {
+          showToast(
+            "error",
+            'Todavía hay más registros sin cargar. Tocá "Cargar 100 más" hasta completar todo.',
+            5200
+          );
+          return;
+        }
+
         if (type === "excel") {
           exportToExcel();
           showToast("exito", "Excel exportado.", 2200);
@@ -934,7 +1084,7 @@ export default function Ventas() {
         showToast("error", e?.message || "Error exportando archivo.", 3500);
       }
     },
-    [exportToExcel, exportToCSV, exportToTXT, showToast]
+    [hasMore, exportToExcel, exportToCSV, exportToTXT, showToast]
   );
 
   const exportOptions = useMemo(
@@ -968,7 +1118,12 @@ export default function Ventas() {
       offset: 0,
       append: false,
     });
-  }, [dateRange.from, dateRange.to, loadRows, q]);
+
+    try {
+      const token = await fetchLiveToken(dateRange.from, dateRange.to, q);
+      liveTokenRef.current = token;
+    } catch {}
+  }, [dateRange.from, dateRange.to, loadRows, q, fetchLiveToken]);
 
   const confirmDelete = async () => {
     if (!selectedRow?.id_movimiento) return;
@@ -1010,6 +1165,11 @@ export default function Ventas() {
         offset: nextOffset,
         append: true,
       });
+
+      try {
+        const token = await fetchLiveToken(dateRange.from, dateRange.to, q);
+        liveTokenRef.current = token;
+      } catch {}
     } catch (e) {
       showToast("error", e?.message || "Error cargando más ventas.", 4200);
     }
@@ -1023,6 +1183,7 @@ export default function Ventas() {
     q,
     loadRows,
     showToast,
+    fetchLiveToken,
   ]);
 
   const buildComprobanteFastUrl = useCallback(
@@ -1356,6 +1517,7 @@ export default function Ventas() {
                             e.preventDefault();
                             if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                             skipSearchRef.current = true;
+                            liveTokenRef.current = null;
                             await loadRows({
                               from: dateRange.from,
                               to: dateRange.to,
@@ -1363,6 +1525,14 @@ export default function Ventas() {
                               offset: 0,
                               append: false,
                             });
+                            try {
+                              const token = await fetchLiveToken(
+                                dateRange.from,
+                                dateRange.to,
+                                e.currentTarget.value
+                              );
+                              liveTokenRef.current = token;
+                            } catch {}
                           }
                         }}
                         placeholder="Buscar por descripción, cliente..."
@@ -1382,6 +1552,7 @@ export default function Ventas() {
                             if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                             setQ("");
                             skipSearchRef.current = true;
+                            liveTokenRef.current = null;
                             await loadRows({
                               from: dateRange.from,
                               to: dateRange.to,
@@ -1389,6 +1560,10 @@ export default function Ventas() {
                               offset: 0,
                               append: false,
                             });
+                            try {
+                              const token = await fetchLiveToken(dateRange.from, dateRange.to, "");
+                              liveTokenRef.current = token;
+                            } catch {}
                           }}
                         >
                           <FontAwesomeIcon icon={faTimes} />
@@ -1607,6 +1782,7 @@ export default function Ventas() {
             setOpenAdd(false);
             setQ("");
             skipSearchRef.current = true;
+            liveTokenRef.current = null;
             await refreshPeriodos();
             await reloadVista();
           } catch (e) {

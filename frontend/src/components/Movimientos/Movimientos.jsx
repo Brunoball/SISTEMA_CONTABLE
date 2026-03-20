@@ -37,6 +37,7 @@ const MIN_LOADING_MS = 0;
 const FORCE_SHOW_LOADER_DEV = false;
 const PAGE_SIZE = 100;
 const SKELETON_ROWS = 10;
+const LIVE_POLL_MS = 5000;
 
 /* =========================
    Date helpers
@@ -225,11 +226,17 @@ export default function Movimientos() {
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
 
+  const liveTimerRef = useRef(null);
+  const liveBusyRef = useRef(false);
+  const liveTokenRef = useRef(null);
+  const liveToastCooldownRef = useRef(0);
+
   const [showSkeleton, setShowSkeleton] = useState(false);
 
   useEffect(
     () => () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      if (liveTimerRef.current) clearTimeout(liveTimerRef.current);
     },
     []
   );
@@ -284,6 +291,29 @@ export default function Movimientos() {
       return await parseJsonOrThrow(res);
     },
     [buildHeadersGET, parseJsonOrThrow]
+  );
+
+  const fetchLiveToken = useCallback(
+    async (rangeParam, qParam) => {
+      const range = rangeParam ?? dateRange;
+      const qLocal = typeof qParam === "string" ? qParam : q;
+
+      if (!range?.from) return null;
+
+      const desde = formatDateISO(range.from);
+      const hasta = formatDateISO(range.to || range.from);
+      const sp = new URLSearchParams();
+      sp.set("action", "movimientos_live_token");
+      sp.set("fecha_desde", desde);
+      sp.set("fecha_hasta", hasta);
+      sp.set("limit", String(PAGE_SIZE));
+      if ((qLocal || "").trim()) sp.set("q", (qLocal || "").trim());
+
+      const data = await apiGet(`${API}?${sp.toString()}`);
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo obtener el token en vivo.");
+      return String(data.live_token || "");
+    },
+    [API, apiGet, dateRange, q]
   );
 
   const loadRows = useCallback(
@@ -446,12 +476,20 @@ export default function Movimientos() {
       await ensureListsLoaded({ force: false, background: true }).catch(() => null);
       if (!alive) return;
       await loadRows({ dateRange, q: "", offset: 0, append: false });
+      try {
+        const token = await fetchLiveToken(dateRange, "");
+        if (alive) liveTokenRef.current = token;
+      } catch {}
     })();
 
     return () => {
       alive = false;
     };
-  }, [ensureListsLoaded, loadRows, dateRange]);
+  }, [ensureListsLoaded, loadRows, dateRange, fetchLiveToken]);
+
+  useEffect(() => {
+    liveTokenRef.current = null;
+  }, [dateRange, q]);
 
   useEffect(() => {
     if (skipSearchRef.current) {
@@ -461,32 +499,36 @@ export default function Movimientos() {
 
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
-    searchTimerRef.current = setTimeout(() => {
-      loadRows({ dateRange, q, offset: 0, append: false });
+    searchTimerRef.current = setTimeout(async () => {
+      await loadRows({ dateRange, q, offset: 0, append: false });
+      try {
+        const token = await fetchLiveToken(dateRange, q);
+        liveTokenRef.current = token;
+      } catch {}
     }, 250);
 
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [q, dateRange, loadRows]);
+  }, [q, dateRange, loadRows, fetchLiveToken]);
 
   const invalidateCache = useCallback(() => {
     cacheRef.current.clear();
   }, []);
 
   const handleRangeChange = useCallback(
-    async (range) => {
+    (range) => {
       setDateRange(range);
       setQ("");
       skipSearchRef.current = true;
       invalidateCache();
+      liveTokenRef.current = null;
 
       if (range.from && range.to) {
         setCalOpen(false);
-        await loadRows({ dateRange: range, q: "", offset: 0, append: false });
       }
     },
-    [setDateRange, loadRows, invalidateCache]
+    [setDateRange, invalidateCache]
   );
 
   const handleLoadMore = useCallback(async () => {
@@ -508,11 +550,118 @@ export default function Movimientos() {
         return;
       }
 
+      try {
+        const token = await fetchLiveToken(dateRange, q);
+        liveTokenRef.current = token;
+      } catch {}
+
       showToast("exito", `${res.received || PAGE_SIZE} registros más cargados.`, 2400);
     } catch (e) {
       showToast("error", e?.message || "Error cargando más registros.", 4200);
     }
-  }, [hasMore, loadingMore, loadingRows, loadingListsCtx, nextOffset, loadRows, dateRange, q, showToast]);
+  }, [
+    hasMore,
+    loadingMore,
+    loadingRows,
+    loadingListsCtx,
+    nextOffset,
+    loadRows,
+    dateRange,
+    q,
+    showToast,
+    fetchLiveToken,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const tick = async () => {
+      if (cancelled) return;
+
+      if (!dateRange?.from) {
+        liveTimerRef.current = setTimeout(tick, LIVE_POLL_MS);
+        return;
+      }
+
+      if (
+        document.hidden ||
+        liveBusyRef.current ||
+        loadingRows ||
+        loadingMore ||
+        loadingListsCtx ||
+        calOpen
+      ) {
+        liveTimerRef.current = setTimeout(tick, LIVE_POLL_MS);
+        return;
+      }
+
+      liveBusyRef.current = true;
+
+      try {
+        const token = await fetchLiveToken(dateRange, q);
+
+        if (!token) {
+          liveBusyRef.current = false;
+          liveTimerRef.current = setTimeout(tick, LIVE_POLL_MS);
+          return;
+        }
+
+        if (liveTokenRef.current === null) {
+          liveTokenRef.current = token;
+        } else if (liveTokenRef.current !== token) {
+          liveTokenRef.current = token;
+          invalidateCache();
+
+          const prevLen = rows.length;
+          const prevHasMore = hasMore;
+
+          await loadRows({
+            dateRange,
+            q,
+            offset: 0,
+            append: false,
+          });
+
+          const now = Date.now();
+          if (now - liveToastCooldownRef.current > 4000) {
+            const mensaje =
+              prevHasMore || prevLen >= PAGE_SIZE
+                ? "Movimientos actualizados en vivo. La vista se recargó desde el inicio."
+                : "Movimientos actualizados en vivo.";
+            showToast("exito", mensaje, 2200);
+            liveToastCooldownRef.current = now;
+          }
+        }
+      } catch {
+        // silencioso para no molestar al usuario
+      } finally {
+        liveBusyRef.current = false;
+        if (!cancelled) {
+          liveTimerRef.current = setTimeout(tick, LIVE_POLL_MS);
+        }
+      }
+    };
+
+    liveTimerRef.current = setTimeout(tick, LIVE_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      if (liveTimerRef.current) clearTimeout(liveTimerRef.current);
+    };
+  }, [
+    dateRange,
+    q,
+    loadingRows,
+    loadingMore,
+    loadingListsCtx,
+    calOpen,
+    hasMore,
+    rows.length,
+    fetchLiveToken,
+    loadRows,
+    invalidateCache,
+    showToast,
+  ]);
 
   const filteredRows = useMemo(() => (Array.isArray(rows) ? rows : []), [rows]);
 
@@ -813,12 +962,17 @@ export default function Movimientos() {
                             if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                             skipSearchRef.current = true;
                             invalidateCache();
+                            liveTokenRef.current = null;
                             await loadRows({
                               dateRange,
                               q: e.currentTarget.value,
                               offset: 0,
                               append: false,
                             });
+                            try {
+                              const token = await fetchLiveToken(dateRange, e.currentTarget.value);
+                              liveTokenRef.current = token;
+                            } catch {}
                           }
                         }}
                         placeholder="Buscar por descripción, operación, cliente, proveedor..."
@@ -840,7 +994,12 @@ export default function Movimientos() {
                             setQ("");
                             skipSearchRef.current = true;
                             invalidateCache();
+                            liveTokenRef.current = null;
                             await loadRows({ dateRange, q: "", offset: 0, append: false });
+                            try {
+                              const token = await fetchLiveToken(dateRange, "");
+                              liveTokenRef.current = token;
+                            } catch {}
                           }}
                           disabled={loadingMore}
                         >

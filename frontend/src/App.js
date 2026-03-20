@@ -1,6 +1,3 @@
-// ✅ REEMPLAZAR COMPLETO
-// src/App.js
-
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
@@ -18,12 +15,14 @@ import Movimientos from "./components/Movimientos/Movimientos";
 import Ventas from "./components/Mov_Subsection/Ventas/Ventas";
 import Compras from "./components/Mov_Subsection/Compra/Compras";
 import Recibos from "./components/Mov_Subsection/Recibos/Recibos";
-
 import Otrosingresos from "./components/Mov_Subsection/Otros_Ingresos/Otros_Ingresos";
 import Otrosegresos from "./components/Mov_Subsection/Otros_Egresos/Otros_Egresos";
-
 import OrdenesPago from "./components/Mov_Subsection/OrdenesPago/OrdenesPago";
 import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
+
+/* Configuración */
+import Configuracion from "./components/Configuracion/Configuracion";
+import ConfigTiendaNube from "./components/Configuracion/ConfigTiendaNube";
 
 /* ✅ IMPORT ROBUSTO (default o named) */
 import * as AnalisisFinancieroModule from "./components/Analisis_Financiero/Analisis_Financiero";
@@ -131,11 +130,14 @@ export default function App() {
 
           <Route path="flujo-de-caja" element={<Flujo_Caja />} />
 
-          {/* ✅ Cuentas Corrientes con sub-rutas */}
           <Route path="cuentas-corrientes/clientes" element={<ClientesCC />} />
           <Route path="cuentas-corrientes/proveedores" element={<ProveedoresCC />} />
 
           <Route path="analisis-financiero" element={<AnalisisFinanciero />} />
+
+          {/* ✅ CONFIGURACIÓN */}
+          <Route path="configuracion" element={<Configuracion />} />
+          <Route path="configuracion/tiendanube" element={<ConfigTiendaNube />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

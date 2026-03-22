@@ -31,6 +31,12 @@ import * as AnalisisFinancieroModule from "./components/Analisis_Financiero/Anal
 import ClientesCC from "./components/Cuentas_Corrientes/Clientes/Clientes";
 import ProveedoresCC from "./components/Cuentas_Corrientes/Proveedores/Proveedores";
 
+/* ✅ STOCK */
+import Categorias from "./components/Stock/Categorias/Categorias";
+import Inventario from "./components/Stock/Inventario/Inventario";
+import Lista_Productos from "./components/Stock/Lista_Productos/Lista_Productos";
+import Tabla_Precios from "./components/Stock/Tabla_Precios/Tabla_Precios";
+
 /* Providers globales */
 import { ListasProvider } from "./context/ListasContext";
 import { DateRangeProvider } from "./context/DateRangeContext";
@@ -132,6 +138,12 @@ export default function App() {
 
           <Route path="cuentas-corrientes/clientes" element={<ClientesCC />} />
           <Route path="cuentas-corrientes/proveedores" element={<ProveedoresCC />} />
+
+          {/* ✅ STOCK */}
+          <Route path="stock/categorias" element={<Categorias />} />
+          <Route path="stock/inventario" element={<Inventario />} />
+          <Route path="stock/lista-productos" element={<Lista_Productos />} />
+          <Route path="stock/tabla-precios" element={<Tabla_Precios />} />
 
           <Route path="analisis-financiero" element={<AnalisisFinanciero />} />
 

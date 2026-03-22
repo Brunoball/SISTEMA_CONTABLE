@@ -22,7 +22,6 @@ import Calendario from "../../Global/Calendario/Calendario.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import ModalEliminarMovimientos from "../../Global/Modales/ModalEliminar.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
-import { useListas } from "../../../context/ListasContext.jsx";
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 
 /* =========================
@@ -159,7 +158,10 @@ function prewarmComprobanteUrl(url, mime = "") {
 }
 
 function canPreviewComprobante(row) {
-  return safeText(row?.comprobante_url) !== "" || Number(row?.id_comprobante || 0) > 0;
+  return (
+    safeText(row?.comprobante_url) !== "" ||
+    Number(row?.id_comprobante || 0) > 0
+  );
 }
 
 function canDeleteCobro(row) {
@@ -227,8 +229,10 @@ async function parseJsonOrThrow(res) {
       `${res.status} (Unauthorized): Sesión vencida o no autorizada. Volvé a iniciar sesión.`
     );
   }
+
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
+
   try {
     return JSON.parse(text);
   } catch {
@@ -252,39 +256,6 @@ async function apiPost(url, body) {
 }
 
 /* =========================
-   Proveedor helpers
-========================= */
-function getProveedorId(p) {
-  const cand =
-    p?.id ??
-    p?.id_proveedor ??
-    p?.idProveedor ??
-    p?.proveedor_id ??
-    p?.id_persona ??
-    p?.idPersona ??
-    null;
-  const n = Number(cand);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-function getProveedorLabel(p) {
-  const parts = [
-    p?.razon_social,
-    p?.razonSocial,
-    p?.nombre,
-    p?.proveedor,
-    p?.proveedor_nombre,
-    p?.label,
-    p?.descripcion,
-    p?.texto,
-  ]
-    .map(safeText)
-    .filter(Boolean);
-
-  return parts[0] || "";
-}
-
-/* =========================
    Comprobante
 ========================= */
 function makeComprobanteAccessUrl(row, API) {
@@ -297,24 +268,24 @@ function makeComprobanteAccessUrl(row, API) {
 
 export default function ProveedoresCC() {
   const API = `${BASE_URL}/api.php`;
-
-  const { lists: listasCtx, loadingLists, errorLists, ensureListsLoaded } = useListas();
   const { dateRange, setDateRange } = useDateRange();
 
   const [calOpen, setCalOpen] = useState(false);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
-  const [selected, setSelected] = useState(null);
+
+  const [summaryRows, setSummaryRows] = useState([]);
+  const [selectedProveedor, setSelectedProveedor] = useState(null);
+
+  const [rows, setRows] = useState([]);
+  const [totales, setTotales] = useState({ debito: 0, credito: 0, saldo: 0 });
+
   const [hasSearched, setHasSearched] = useState(false);
   const [queryUsed, setQueryUsed] = useState("");
-  const [openSug, setOpenSug] = useState(false);
 
   const tableBodyRef = useRef(null);
   const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const comprobanteUrlCacheRef = useRef(new Map());
-
-  const [rows, setRows] = useState([]);
-  const [totales, setTotales] = useState({ debito: 0, credito: 0, saldo: 0 });
 
   const [previewComprobante, setPreviewComprobante] = useState({
     open: false,
@@ -330,15 +301,13 @@ export default function ProveedoresCC() {
   });
 
   const [toast, setToast] = useState(null);
+
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => setToast({ tipo, mensaje, duracion }),
     []
   );
-  const closeToast = useCallback(() => setToast(null), []);
 
-  useEffect(() => {
-    ensureListsLoaded?.({ force: false, background: true }).catch(() => {});
-  }, [ensureListsLoaded]);
+  const closeToast = useCallback(() => setToast(null), []);
 
   useEffect(() => {
     const el = tableBodyRef.current;
@@ -364,7 +333,7 @@ export default function ProveedoresCC() {
       mo.disconnect();
       window.removeEventListener("resize", checkScroll);
     };
-  }, [rows, loading]);
+  }, [rows, summaryRows, loading]);
 
   const rangeLabel = useMemo(() => {
     const from = dateRange?.from || null;
@@ -394,58 +363,54 @@ export default function ProveedoresCC() {
     return `cc_proveedor_${safeName}_${from}_${to}`;
   }, [queryUsed, dateRange]);
 
-  const proveedoresList = useMemo(() => {
-    const arr = Array.isArray(listasCtx?.proveedores) ? listasCtx.proveedores : [];
-    return arr
-      .map((p) => {
-        const id = getProveedorId(p);
-        const label = getProveedorLabel(p);
-        return { id, label, raw: p };
-      })
-      .filter((x) => safeText(x.label).length > 0);
-  }, [listasCtx?.proveedores]);
-
-  const suggestions = useMemo(() => {
+  const filteredSummaryRows = useMemo(() => {
     const needle = normLower(q);
-    if (!openSug || needle.length < 1) return [];
-    return proveedoresList.filter((p) => normLower(p.label).includes(needle)).slice(0, 25);
-  }, [proveedoresList, q, openSug]);
+    const base = Array.isArray(summaryRows) ? summaryRows : [];
+    if (!needle) return base;
+    return base.filter((r) => normLower(r.nombre).includes(needle));
+  }, [summaryRows, q]);
+
+  const loadSummary = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await apiGet(`${API}?action=cc_saldos_proveedores`);
+
+      if (!data || data.exito !== true) {
+        throw new Error(data?.mensaje || "No se pudo cargar el listado de proveedores.");
+      }
+
+      const rowsApi = Array.isArray(data.rows) ? data.rows : [];
+      setSummaryRows(rowsApi);
+    } catch (e) {
+      setSummaryRows([]);
+      showToast("error", e?.message || "Error cargando proveedores.", 3500);
+    } finally {
+      setLoading(false);
+    }
+  }, [API, showToast]);
 
   useEffect(() => {
-    const text = safeText(q);
-    setSelected((prev) => {
-      if (!prev) return prev;
-      if (normLower(prev.label) === normLower(text)) return prev;
-      return null;
-    });
-  }, [q]);
+    loadSummary();
+  }, [loadSummary]);
 
   const loadHistorial = useCallback(
-    async (proveedorId, proveedorLabel) => {
+    async (proveedor) => {
+      if (!proveedor?.id_proveedor) return;
+
       if (!dateRange?.from) {
         showToast("advertencia", "Seleccioná un período.", 2600);
         return;
       }
 
-      const txt = safeText(proveedorLabel);
-      const idOk = Number.isFinite(Number(proveedorId)) && Number(proveedorId) > 0;
-
-      if (!idOk && txt.length < 2) {
-        showToast("advertencia", "Escribí al menos 2 caracteres o seleccioná un proveedor.", 2600);
-        return;
-      }
-
       setLoading(true);
       setHasSearched(true);
-      setQueryUsed(txt || (idOk ? `Proveedor #${proveedorId}` : ""));
+      setSelectedProveedor(proveedor);
+      setQueryUsed(proveedor.nombre || "");
 
       try {
         const sp = new URLSearchParams();
         sp.set("action", "cc_historial_proveedor");
-
-        if (idOk) sp.set("proveedor_id", String(proveedorId));
-        else sp.set("q", txt);
-
+        sp.set("id_proveedor", String(proveedor.id_proveedor));
         sp.set("fecha_desde", formatDateISO(dateRange.from));
         sp.set("fecha_hasta", formatDateISO(dateRange.to || dateRange.from));
 
@@ -469,68 +434,18 @@ export default function ProveedoresCC() {
   );
 
   useEffect(() => {
+    if (selectedProveedor?.id_proveedor && dateRange?.from) {
+      loadHistorial(selectedProveedor);
+    }
+  }, [dateRange, selectedProveedor, loadHistorial]);
+
+  const volverAlListado = useCallback(() => {
+    setSelectedProveedor(null);
     setRows([]);
     setTotales({ debito: 0, credito: 0, saldo: 0 });
     setHasSearched(false);
     setQueryUsed("");
-    setSelected(null);
-    setQ("");
-    setOpenSug(false);
-  }, [dateRange]);
-
-  const refreshCurrent = useCallback(async () => {
-    if (selected?.id) {
-      await loadHistorial(selected.id, selected.label);
-      return;
-    }
-
-    const txt = safeText(q) || safeText(queryUsed);
-    if (txt.length >= 2) {
-      await loadHistorial(null, txt);
-    }
-  }, [selected, q, queryUsed, loadHistorial]);
-
-  const handleSelect = useCallback(
-    (opt) => {
-      if (!opt) return;
-      setSelected({ id: opt.id, label: opt.label });
-      setQ(opt.label);
-      setOpenSug(false);
-      loadHistorial(opt.id, opt.label);
-    },
-    [loadHistorial]
-  );
-
-  const handleKeyDown = useCallback(
-    (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-
-        if (openSug && suggestions.length > 0) {
-          handleSelect(suggestions[0]);
-          return;
-        }
-
-        const text = safeText(q);
-        if (selected?.id) {
-          loadHistorial(selected.id, selected.label);
-          return;
-        }
-
-        if (text.length >= 2) loadHistorial(null, text);
-        else {
-          showToast(
-            "advertencia",
-            "Escribí al menos 2 caracteres o seleccioná un proveedor.",
-            2600
-          );
-        }
-      }
-
-      if (e.key === "Escape") setOpenSug(false);
-    },
-    [openSug, suggestions, handleSelect, q, selected, loadHistorial, showToast]
-  );
+  }, []);
 
   const getExportData = useCallback(() => {
     const data = buildExportRows(rows);
@@ -666,13 +581,24 @@ export default function ProveedoresCC() {
         return;
       }
 
+      const isCobro = Number(row?.credito || 0) > 0;
+      const isMovimiento = Number(row?.debito || 0) > 0;
+
       prewarmComprobanteUrl(accessUrl, mime);
 
       setPreviewComprobante({
         open: true,
         url: accessUrl,
         mime,
-        title: row?.comprobante ? `Comprobante · ${row.comprobante}` : "Comprobante",
+        title: isCobro
+          ? row?.comprobante
+            ? `Recibo · ${row.comprobante}`
+            : "Recibo"
+          : isMovimiento
+          ? row?.comprobante
+            ? `Factura / Deuda · ${row.comprobante}`
+            : "Factura / Deuda"
+          : "Comprobante",
       });
     },
     [buildFastComprobanteUrl, showToast]
@@ -695,6 +621,14 @@ export default function ProveedoresCC() {
       row: null,
     });
   }, []);
+
+  const refreshCurrent = useCallback(async () => {
+    if (selectedProveedor?.id_proveedor) {
+      await loadHistorial(selectedProveedor);
+    } else {
+      await loadSummary();
+    }
+  }, [selectedProveedor, loadHistorial, loadSummary]);
 
   const confirmDeleteCobro = useCallback(async () => {
     const row = deleteState.row;
@@ -722,6 +656,8 @@ export default function ProveedoresCC() {
       throw e;
     }
   }, [deleteState.row, API, closeDeleteModal, refreshCurrent]);
+
+  const isDetailMode = !!selectedProveedor;
 
   return (
     <div className="contenedor-cards">
@@ -779,49 +715,64 @@ export default function ProveedoresCC() {
       <div className="mov-card__head">
         <div className="mov-card__headLeft">
           <div className="title-mov">
-            <div className="mov-card__title">Cuentas Corrientes</div>
+            <div className="mov-card__title">
+              {isDetailMode
+                ? `Cuenta corriente · ${selectedProveedor.nombre}`
+                : "Cuentas Corrientes"}
+            </div>
             <div className="mov-card__hint">
-              Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
+              {isDetailMode ? (
+                <>
+                  Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
+                </>
+              ) : (
+                <>
+                  Mostrando <b>{filteredSummaryRows.length}</b> proveedor
+                  {filteredSummaryRows.length === 1 ? "" : "es"}
+                </>
+              )}
             </div>
           </div>
 
           <div className="mov-headFilters">
-            <div className="cc-filter cc-filter--cal">
-              <div
-                className={`cc-floatingField cc-floatingField--calendar is-active ${
-                  calOpen ? "is-open" : ""
-                }`}
-              >
-                <button
-                  type="button"
-                  className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
-                  onClick={() => setCalOpen((v) => !v)}
-                  disabled={loading}
+            {isDetailMode ? (
+              <div className="cc-filter cc-filter--cal">
+                <div
+                  className={`cc-floatingField cc-floatingField--calendar is-active ${
+                    calOpen ? "is-open" : ""
+                  }`}
                 >
-                  {rangeLabel}
-                  <span className="cc-calTrigger__iconRight">
-                    <FontAwesomeIcon icon={faChevronDown} />
+                  <button
+                    type="button"
+                    className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
+                    onClick={() => setCalOpen((v) => !v)}
+                    disabled={loading}
+                  >
+                    {rangeLabel}
+                    <span className="cc-calTrigger__iconRight">
+                      <FontAwesomeIcon icon={faChevronDown} />
+                    </span>
+                  </button>
+
+                  <span className="cc-floatingLabel cc-floatingLabel--active">
+                    <FontAwesomeIcon icon={faCalendarDays} /> Período
                   </span>
-                </button>
 
-                <span className="cc-floatingLabel cc-floatingLabel--active">
-                  <FontAwesomeIcon icon={faCalendarDays} /> Período
-                </span>
-
-                {calOpen && (
-                  <div className="cc-calDropdown">
-                    <Calendario
-                      value={dateRange}
-                      onChange={(range) => {
-                        setDateRange(range);
-                        if (range?.from && range?.to) setCalOpen(false);
-                      }}
-                      onClose={() => setCalOpen(false)}
-                    />
-                  </div>
-                )}
+                  {calOpen && (
+                    <div className="cc-calDropdown">
+                      <Calendario
+                        value={dateRange}
+                        onChange={(range) => {
+                          setDateRange(range);
+                          if (range?.from && range?.to) setCalOpen(false);
+                        }}
+                        onClose={() => setCalOpen(false)}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : null}
 
             <div className="cc-filter cc-filter--search">
               <div className="cc-floatingField cc-floatingField--search is-active">
@@ -831,11 +782,8 @@ export default function ProveedoresCC() {
                       className="cc-input cc-input--floating"
                       value={q}
                       onChange={(e) => setQ(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      onFocus={() => setOpenSug(true)}
-                      onBlur={() => setTimeout(() => setOpenSug(false), 120)}
-                      placeholder="Buscar por proveedor... "
-                      disabled={loading || loadingLists}
+                      placeholder="Buscar por proveedor..."
+                      disabled={loading}
                       autoComplete="off"
                     />
 
@@ -848,138 +796,257 @@ export default function ProveedoresCC() {
                         type="button"
                         className="cc-clearSearch cc-clearSearch--inside"
                         title="Limpiar"
-                        onClick={() => {
-                          setQ("");
-                          setSelected(null);
-                          setOpenSug(false);
-                          setRows([]);
-                          setTotales({ debito: 0, credito: 0, saldo: 0 });
-                          setHasSearched(false);
-                          setQueryUsed("");
-                        }}
+                        onClick={() => setQ("")}
                       >
                         <FontAwesomeIcon icon={faTimes} />
                       </button>
-                    )}
-
-                    {openSug && suggestions.length > 0 && (
-                      <div className="cc-suggestions">
-                        <div className="cc-suggestions__scroll">
-                          {suggestions.map((opt) => (
-                            <button
-                              key={`${opt.id ?? "temp"}-${opt.label}`}
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                handleSelect(opt);
-                              }}
-                              className="cc-suggestions__item"
-                              title={opt.label}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
                     )}
                   </div>
                 </div>
               </div>
             </div>
+
+            {isDetailMode ? (
+              <button type="button" className="btn-volver" onClick={volverAlListado}>
+                Volver al listado
+              </button>
+            ) : null}
           </div>
         </div>
 
         <BotonExportar
-          disabled={loading || !hasSearched || rows.length === 0}
+          disabled={loading || !isDetailMode || rows.length === 0}
           loading={false}
           label="Exportar"
           title={
-            !hasSearched
-              ? "Seleccioná un proveedor primero"
-              : rows.length
+            isDetailMode
               ? "Exportar archivo"
-              : "No hay datos para exportar"
+              : "Entrá al detalle de un proveedor primero"
           }
           opciones={exportOptions}
           align="right"
         />
       </div>
 
-      {errorLists && <div className="cc-footnote">{errorLists}</div>}
+      {!isDetailMode ? (
+        <div className="cc-cliente-table">
+          <div
+            className="mov-gridTable mov-gridTable--head cc-cliente-table__desktopHead"
+            style={{ gridTemplateColumns: "2fr 1fr" }}
+          >
+            <div className="mov-gridCell mov-gridCell--head">Proveedor</div>
+            <div className="mov-gridCell mov-gridCell--head is-right">Saldo actual</div>
+          </div>
 
-      <div className="cc-cliente-table">
-        <div
-          className="mov-gridTable mov-gridTable--head cc-cliente-table__desktopHead"
-          style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr 1fr" }}
-        >
-          <div className="mov-gridCell mov-gridCell--head">Fecha</div>
-          <div className="mov-gridCell mov-gridCell--head">Comprobante</div>
-          <div className="mov-gridCell mov-gridCell--head is-right">Débito</div>
-          <div className="mov-gridCell mov-gridCell--head is-right">Crédito</div>
-          <div className="mov-gridCell mov-gridCell--head is-right">Saldo</div>
-          <div className="mov-gridCell mov-gridCell--head is-center">Acciones</div>
-        </div>
-
-        <div
-          ref={tableBodyRef}
-          className={`cc-cliente-table__body ${
-            !hasVerticalScroll ? "cc-cliente-table__body--stable" : ""
-          }`}
-        >
-          {loading ? (
-            <div className="cc-cliente-table__loading">
-              Cargando cuenta corriente del proveedor…
-            </div>
-          ) : rows.length > 0 ? (
-            rows.map((r, i) => {
-              const verHabilitado = canPreviewComprobante(r);
-              const puedeEliminar = canDeleteCobro(r);
-
-              return (
-                <React.Fragment key={r.id || `${i}`}>
-                  {/* DESKTOP */}
-                  <div
+          <div
+            ref={tableBodyRef}
+            className={`cc-cliente-table__body ${
+              !hasVerticalScroll ? "cc-cliente-table__body--stable" : ""
+            }`}
+          >
+            {loading ? (
+              <div className="cc-cliente-table__loading">Cargando proveedores…</div>
+            ) : filteredSummaryRows.length > 0 ? (
+              filteredSummaryRows.map((r, i) => (
+                <React.Fragment key={r.id_proveedor}>
+                  <button
+                    type="button"
                     className={`cc-cliente-table__row cc-cliente-table__row--desktop ${
                       i % 2 !== 0 ? "is-alt" : ""
                     }`}
+                    style={{ gridTemplateColumns: "2fr 1fr", width: "100%", cursor: "pointer" }}
+                    onClick={() => loadHistorial(r)}
                   >
-                    <div className="cc-cliente-table__cell cc-cliente-table__cell--date">
-                      {formatDisplayDate(r.fecha || r.fecha_raw)}
-                    </div>
-
                     <div className="cc-cliente-table__cell">
-                      <div className="cc-cliente-table__title">{r.comprobante || "-"}</div>
-                      {r.detalle ? (
-                        <div className="cc-cliente-table__detail">{r.detalle}</div>
-                      ) : null}
-                    </div>
-
-                    <div
-                      className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
-                        Number(r.debito || 0) > 0
-                          ? "cc-cliente-table__amount--active"
-                          : "cc-cliente-table__amount--muted"
-                      }`}
-                    >
-                      {Number(r.debito || 0) > 0 ? moneyARS(r.debito || 0) : ""}
-                    </div>
-
-                    <div
-                      className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
-                        Number(r.credito || 0) > 0
-                          ? "cc-cliente-table__amount--active"
-                          : "cc-cliente-table__amount--muted"
-                      }`}
-                    >
-                      {Number(r.credito || 0) > 0 ? moneyARS(r.credito || 0) : ""}
+                      <div className="cc-cliente-table__title">{r.nombre || "-"}</div>
                     </div>
 
                     <div className="cc-cliente-table__cell cc-cliente-table__cell--right cc-cliente-table__saldo">
                       {moneyARS(r.saldo || 0)}
                     </div>
+                  </button>
 
-                    <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
-                      <div className="cc-actionsInline">
+                  <article
+                    className="cc-mobileCard"
+                    onClick={() => loadHistorial(r)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <div className="cc-mobileCard__top">
+                      <div className="cc-mobileCard__main">
+                        <div className="cc-mobileCard__title">{r.nombre || "-"}</div>
+                      </div>
+                    </div>
+
+                    <div className="cc-mobileCard__saldoRow">
+                      <span className="cc-mobileCard__label">Saldo actual</span>
+                      <span className="cc-mobileCard__saldo">{moneyARS(r.saldo || 0)}</span>
+                    </div>
+                  </article>
+                </React.Fragment>
+              ))
+            ) : (
+              <div className="cc-cliente-table__empty cc-emptyState">
+                <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+                <div className="cc-emptyText">No se encontraron proveedores.</div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="cc-cliente-table">
+          <div
+            className="mov-gridTable mov-gridTable--head cc-cliente-table__desktopHead"
+            style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr 1fr" }}
+          >
+            <div className="mov-gridCell mov-gridCell--head">Fecha</div>
+            <div className="mov-gridCell mov-gridCell--head">Comprobante</div>
+            <div className="mov-gridCell mov-gridCell--head is-right">Débito</div>
+            <div className="mov-gridCell mov-gridCell--head is-right">Crédito</div>
+            <div className="mov-gridCell mov-gridCell--head is-right">Saldo</div>
+            <div className="mov-gridCell mov-gridCell--head is-center">Acciones</div>
+          </div>
+
+          <div
+            ref={tableBodyRef}
+            className={`cc-cliente-table__body ${
+              !hasVerticalScroll ? "cc-cliente-table__body--stable" : ""
+            }`}
+          >
+            {loading ? (
+              <div className="cc-cliente-table__loading">
+                Cargando cuenta corriente del proveedor…
+              </div>
+            ) : rows.length > 0 ? (
+              rows.map((r, i) => {
+                const verHabilitado = canPreviewComprobante(r);
+                const puedeEliminar = canDeleteCobro(r);
+                const isCobro = Number(r.credito || 0) > 0;
+
+                return (
+                  <React.Fragment key={r.id || `${i}`}>
+                    <div
+                      className={`cc-cliente-table__row cc-cliente-table__row--desktop ${
+                        i % 2 !== 0 ? "is-alt" : ""
+                      }`}
+                    >
+                      <div className="cc-cliente-table__cell cc-cliente-table__cell--date">
+                        {formatDisplayDate(r.fecha || r.fecha_raw)}
+                      </div>
+
+                      <div className="cc-cliente-table__cell">
+                        <div className="cc-cliente-table__title">{r.comprobante || "-"}</div>
+                        {r.detalle ? (
+                          <div className="cc-cliente-table__detail">{r.detalle}</div>
+                        ) : null}
+                      </div>
+
+                      <div
+                        className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
+                          Number(r.debito || 0) > 0
+                            ? "cc-cliente-table__amount--active"
+                            : "cc-cliente-table__amount--muted"
+                        }`}
+                      >
+                        {Number(r.debito || 0) > 0 ? moneyARS(r.debito || 0) : ""}
+                      </div>
+
+                      <div
+                        className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
+                          Number(r.credito || 0) > 0
+                            ? "cc-cliente-table__amount--active"
+                            : "cc-cliente-table__amount--muted"
+                        }`}
+                      >
+                        {Number(r.credito || 0) > 0 ? moneyARS(r.credito || 0) : ""}
+                      </div>
+
+                      <div className="cc-cliente-table__cell cc-cliente-table__cell--right cc-cliente-table__saldo">
+                        {moneyARS(r.saldo || 0)}
+                      </div>
+
+                      <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
+                        <div className="cc-actionsInline">
+                          <button
+                            type="button"
+                            onMouseEnter={() => verHabilitado && handlePrewarmComprobante(r)}
+                            onPointerEnter={() => verHabilitado && handlePrewarmComprobante(r)}
+                            onFocus={() => verHabilitado && handlePrewarmComprobante(r)}
+                            onClick={() => verHabilitado && openComprobante(r)}
+                            disabled={!verHabilitado}
+                            title={
+                              verHabilitado
+                                ? isCobro
+                                  ? "Ver recibo / comprobante del cobro"
+                                  : "Ver factura / comprobante de la deuda"
+                                : "Este registro no tiene comprobante asociado"
+                            }
+                            className={`cc-verBtn ${verHabilitado ? "" : "is-disabled"}`}
+                          >
+                            <FontAwesomeIcon icon={faEye} />
+                          </button>
+
+                          {puedeEliminar ? (
+                            <button
+                              type="button"
+                              onClick={() => askDeleteCobro(r)}
+                              title="Eliminar solo este registro de cobro"
+                              className="cc-verBtn cc-verBtn--danger"
+                            >
+                              <FontAwesomeIcon icon={faTrashCan} />
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <article className="cc-mobileCard">
+                      <div className="cc-mobileCard__top">
+                        <div className="cc-mobileCard__main">
+                          <div className="cc-mobileCard__title">{r.comprobante || "-"}</div>
+                          {r.detalle ? (
+                            <div className="cc-mobileCard__detail">{r.detalle}</div>
+                          ) : null}
+                        </div>
+
+                        <div className="cc-mobileCard__date">
+                          {formatDisplayDate(r.fecha || r.fecha_raw)}
+                        </div>
+                      </div>
+
+                      <div className="cc-mobileCard__amounts">
+                        <div className="cc-mobileCard__amountBox">
+                          <span className="cc-mobileCard__label">Débito</span>
+                          <span
+                            className={`cc-mobileCard__value ${
+                              Number(r.debito || 0) > 0
+                                ? "cc-mobileCard__value--active"
+                                : "cc-mobileCard__value--muted"
+                            }`}
+                          >
+                            {Number(r.debito || 0) > 0 ? moneyARS(r.debito || 0) : "—"}
+                          </span>
+                        </div>
+
+                        <div className="cc-mobileCard__amountBox">
+                          <span className="cc-mobileCard__label">Crédito</span>
+                          <span
+                            className={`cc-mobileCard__value ${
+                              Number(r.credito || 0) > 0
+                                ? "cc-mobileCard__value--active"
+                                : "cc-mobileCard__value--muted"
+                            }`}
+                          >
+                            {Number(r.credito || 0) > 0 ? moneyARS(r.credito || 0) : "—"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="cc-mobileCard__saldoRow">
+                        <span className="cc-mobileCard__label">Saldo</span>
+                        <span className="cc-mobileCard__saldo">{moneyARS(r.saldo || 0)}</span>
+                      </div>
+
+                      <div className="cc-mobileCard__actions">
                         <button
                           type="button"
                           onMouseEnter={() => verHabilitado && handlePrewarmComprobante(r)}
@@ -989,12 +1056,17 @@ export default function ProveedoresCC() {
                           disabled={!verHabilitado}
                           title={
                             verHabilitado
-                              ? "Ver comprobante"
-                              : "Este registro no tiene comprobante"
+                              ? isCobro
+                                ? "Ver recibo / comprobante del cobro"
+                                : "Ver factura / comprobante de la deuda"
+                              : "Este registro no tiene comprobante asociado"
                           }
-                          className={`cc-verBtn ${verHabilitado ? "" : "is-disabled"}`}
+                          className={`cc-mobileCard__actionBtn ${
+                            verHabilitado ? "" : "is-disabled"
+                          }`}
                         >
                           <FontAwesomeIcon icon={faEye} />
+                          <span>{isCobro ? "Ver recibo" : "Ver comprobante"}</span>
                         </button>
 
                         {puedeEliminar ? (
@@ -1002,131 +1074,47 @@ export default function ProveedoresCC() {
                             type="button"
                             onClick={() => askDeleteCobro(r)}
                             title="Eliminar solo este registro de cobro"
-                            className="cc-verBtn cc-verBtn--danger"
+                            className="cc-mobileCard__actionBtn cc-mobileCard__actionBtn--danger"
                           >
                             <FontAwesomeIcon icon={faTrashCan} />
+                            <span>Eliminar cobro</span>
                           </button>
                         ) : null}
                       </div>
-                    </div>
-                  </div>
-
-                  {/* MOBILE / TABLET */}
-                  <article className="cc-mobileCard">
-                    <div className="cc-mobileCard__top">
-                      <div className="cc-mobileCard__main">
-                        <div className="cc-mobileCard__title">{r.comprobante || "-"}</div>
-                        {r.detalle ? (
-                          <div className="cc-mobileCard__detail">{r.detalle}</div>
-                        ) : null}
-                      </div>
-
-                      <div className="cc-mobileCard__date">
-                        {formatDisplayDate(r.fecha || r.fecha_raw)}
-                      </div>
-                    </div>
-
-                    <div className="cc-mobileCard__amounts">
-                      <div className="cc-mobileCard__amountBox">
-                        <span className="cc-mobileCard__label">Débito</span>
-                        <span
-                          className={`cc-mobileCard__value ${
-                            Number(r.debito || 0) > 0
-                              ? "cc-mobileCard__value--active"
-                              : "cc-mobileCard__value--muted"
-                          }`}
-                        >
-                          {Number(r.debito || 0) > 0 ? moneyARS(r.debito || 0) : "—"}
-                        </span>
-                      </div>
-
-                      <div className="cc-mobileCard__amountBox">
-                        <span className="cc-mobileCard__label">Crédito</span>
-                        <span
-                          className={`cc-mobileCard__value ${
-                            Number(r.credito || 0) > 0
-                              ? "cc-mobileCard__value--active"
-                              : "cc-mobileCard__value--muted"
-                          }`}
-                        >
-                          {Number(r.credito || 0) > 0 ? moneyARS(r.credito || 0) : "—"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="cc-mobileCard__saldoRow">
-                      <span className="cc-mobileCard__label">Saldo</span>
-                      <span className="cc-mobileCard__saldo">{moneyARS(r.saldo || 0)}</span>
-                    </div>
-
-                    <div className="cc-mobileCard__actions">
-                      <button
-                        type="button"
-                        onMouseEnter={() => verHabilitado && handlePrewarmComprobante(r)}
-                        onPointerEnter={() => verHabilitado && handlePrewarmComprobante(r)}
-                        onFocus={() => verHabilitado && handlePrewarmComprobante(r)}
-                        onClick={() => verHabilitado && openComprobante(r)}
-                        disabled={!verHabilitado}
-                        title={
-                          verHabilitado
-                            ? "Ver comprobante"
-                            : "Este registro no tiene comprobante"
-                        }
-                        className={`cc-mobileCard__actionBtn ${
-                          verHabilitado ? "" : "is-disabled"
-                        }`}
-                      >
-                        <FontAwesomeIcon icon={faEye} />
-                        <span>Ver comprobante</span>
-                      </button>
-
-                      {puedeEliminar ? (
-                        <button
-                          type="button"
-                          onClick={() => askDeleteCobro(r)}
-                          title="Eliminar solo este registro de cobro"
-                          className="cc-mobileCard__actionBtn cc-mobileCard__actionBtn--danger"
-                        >
-                          <FontAwesomeIcon icon={faTrashCan} />
-                          <span>Eliminar cobro</span>
-                        </button>
-                      ) : null}
-                    </div>
-                  </article>
-                </React.Fragment>
-              );
-            })
-          ) : (
-            <div className="cc-cliente-table__empty cc-emptyState">
-              <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
-              <div className="cc-emptyText">
-                {hasSearched
-                  ? `No se encontraron movimientos para "${queryUsed}".`
-                  : "Sin movimientos para mostrar."}
+                    </article>
+                  </React.Fragment>
+                );
+              })
+            ) : (
+              <div className="cc-cliente-table__empty cc-emptyState">
+                <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+                <div className="cc-emptyText">
+                  {hasSearched
+                    ? `No se encontraron movimientos para "${queryUsed}".`
+                    : "Sin movimientos para mostrar."}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        <div className="cc-cliente-table__footWrap">
-          <div className="cc-cliente-table__totals">
-            <div className="cc-cliente-table__cell">Totales</div>
-            <div className="cc-cliente-table__cell"></div>
-            <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
-              {moneyARS(totales?.debito || 0)}
+          <div className="cc-cliente-table__footWrap">
+            <div className="cc-cliente-table__totals">
+              <div className="cc-cliente-table__cell">Totales</div>
+              <div className="cc-cliente-table__cell"></div>
+              <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
+                {moneyARS(totales?.debito || 0)}
+              </div>
+              <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
+                {moneyARS(totales?.credito || 0)}
+              </div>
+              <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
+                {moneyARS(totales?.saldo || 0)}
+              </div>
+              <div className="cc-cliente-table__cell"></div>
             </div>
-            <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
-              {moneyARS(totales?.credito || 0)}
-            </div>
-            <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
-              {moneyARS(totales?.saldo || 0)}
-            </div>
-            <div className="cc-cliente-table__cell"></div>
           </div>
         </div>
-      </div>
-
-
+      )}
     </div>
   );
 }

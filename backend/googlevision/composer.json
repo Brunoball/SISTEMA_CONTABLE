@@ -1,0 +1,6 @@
+{
+    "require": {
+        "google/cloud-vision": "^2.2",
+        "smalot/pdfparser": "^2.12"
+    }
+}

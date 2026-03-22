@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import ModalAgregarProducto from "./modales/ModalAgregarProducto";
+import ModalEditarProducto from "./modales/ModalEditarProducto";
+import ModalEliminar from "../../Global/Modales/ModalEliminar";
+import Toast from "../../Global/Toast";
 import BASE_URL from "../../../config/config";
 import "./Lista_Productos.css";
 
@@ -56,7 +59,6 @@ async function apiGet(url) {
   return await parseJsonOrThrow(res);
 }
 
-// DESPUÉS — saca el action del body y lo pone en la URL
 async function apiPost(url, body) {
   const { action, ...rest } = body ?? {};
   const finalUrl = action ? `${url}?action=${encodeURIComponent(action)}` : url;
@@ -66,6 +68,7 @@ async function apiPost(url, body) {
     headers: buildHeadersJSON(),
     body: JSON.stringify(rest),
   });
+
   return await parseJsonOrThrow(res);
 }
 
@@ -76,13 +79,38 @@ const Lista_Productos = () => {
   const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
   const [busqueda, setBusqueda] = useState("");
-  const [modalAbierto, setModalAbierto] = useState(false);
   const [paginaActual, setPaginaActual] = useState(1);
   const [totalProductos, setTotalProductos] = useState(0);
   const [orden, setOrden] = useState({ campo: "nombre", dir: "ASC" });
 
+  const [modalAbierto, setModalAbierto] = useState(false);
+  const [modalEditarAbierto, setModalEditarAbierto] = useState(false);
+  const [productoEditarId, setProductoEditarId] = useState(null);
+
+  const [modalEliminarAbierto, setModalEliminarAbierto] = useState(false);
+  const [productoEliminar, setProductoEliminar] = useState(null);
+  const [eliminando, setEliminando] = useState(false);
+
+  const [toast, setToast] = useState(null);
+
+  const [imagenesMap, setImagenesMap] = useState({});
+
   const productosPorPagina = 20;
+
+  const mostrarToast = useCallback((tipo, mensaje, duracion = 2500) => {
+    setToast({
+      tipo,
+      mensaje,
+      duracion,
+      id: Date.now() + Math.random(),
+    });
+  }, []);
+
+  const cerrarToast = useCallback(() => {
+    setToast(null);
+  }, []);
 
   const fetchProductos = useCallback(async () => {
     setLoading(true);
@@ -120,6 +148,65 @@ const Lista_Productos = () => {
     fetchProductos();
   }, [fetchProductos]);
 
+  /* =========================
+     Cargar blobs de imágenes protegidas
+  ========================= */
+  useEffect(() => {
+    let cancelado = false;
+    const objectUrls = [];
+
+    async function cargarImagenes() {
+      const productosConImagen = productos.filter(
+        (p) => Number(p.imagen_archivo_id || 0) > 0
+      );
+
+      if (productosConImagen.length === 0) {
+        setImagenesMap({});
+        return;
+      }
+
+      const nuevoMap = {};
+
+      await Promise.all(
+        productosConImagen.map(async (prod) => {
+          try {
+            const params = new URLSearchParams({
+              action: "stock_producto_imagen_ver",
+              id_archivo: String(prod.imagen_archivo_id),
+            });
+
+            const res = await fetch(`${API_URL}?${params.toString()}`, {
+              method: "GET",
+              headers: buildHeadersGET(),
+            });
+
+            if (!res.ok) return;
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            objectUrls.push(url);
+            nuevoMap[prod.id] = url;
+          } catch {
+            // silencioso
+          }
+        })
+      );
+
+      if (!cancelado) {
+        setImagenesMap(nuevoMap);
+      } else {
+        objectUrls.forEach((u) => URL.revokeObjectURL(u));
+      }
+    }
+
+    cargarImagenes();
+
+    return () => {
+      cancelado = true;
+      objectUrls.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [productos]);
+
   const handleBusqueda = (e) => {
     setBusqueda(e.target.value);
     setPaginaActual(1);
@@ -134,27 +221,64 @@ const Lista_Productos = () => {
     setPaginaActual(1);
   };
 
-  const handleEliminar = async (id) => {
+  const handleAbrirEditar = (id) => {
     if (!id || Number(id) <= 0) {
-      alert("ID de producto inválido.");
+      mostrarToast("error", "ID de producto inválido.");
       return;
     }
 
-    if (!window.confirm("¿Seguro que querés eliminar este producto?")) return;
+    setProductoEditarId(Number(id));
+    setModalEditarAbierto(true);
+  };
+
+  const handleCerrarEditar = () => {
+    setModalEditarAbierto(false);
+    setProductoEditarId(null);
+  };
+
+  const handleAbrirEliminar = (producto) => {
+    if (!producto?.id || Number(producto.id) <= 0) {
+      mostrarToast("error", "ID de producto inválido.");
+      return;
+    }
+
+    setProductoEliminar(producto);
+    setModalEliminarAbierto(true);
+  };
+
+  const handleCerrarEliminar = () => {
+    if (eliminando) return;
+    setModalEliminarAbierto(false);
+    setProductoEliminar(null);
+  };
+
+  const handleConfirmarEliminar = async () => {
+    if (!productoEliminar?.id || Number(productoEliminar.id) <= 0) {
+      throw new Error("ID de producto inválido.");
+    }
+
+    setEliminando(true);
 
     try {
       const data = await apiPost(API_URL, {
         action: "stock_productos_eliminar",
-        id: Number(id),
+        id: Number(productoEliminar.id),
       });
 
       if (data.exito === false) {
-        throw new Error(data.mensaje || "Error al eliminar");
+        throw new Error(data.mensaje || "Error al eliminar el producto");
       }
 
-      await fetchProductos();
-    } catch (err) {
-      alert("Error al eliminar: " + (err.message || "Error inesperado"));
+      if (productos.length === 1 && paginaActual > 1) {
+        setPaginaActual((prev) => Math.max(1, prev - 1));
+      } else {
+        await fetchProductos();
+      }
+
+      setModalEliminarAbierto(false);
+      setProductoEliminar(null);
+    } finally {
+      setEliminando(false);
     }
   };
 
@@ -181,203 +305,295 @@ const Lista_Productos = () => {
     }, []);
 
   return (
-    <div className="stock-page">
-      <div className="stock-header">
-        <h1 className="stock-title">Productos</h1>
+    <>
+      <div className="stock-page">
+        <div className="stock-header">
+          <h1 className="stock-title">Productos</h1>
 
-        <div className="stock-header-actions">
-          <button
-            onClick={() => setModalAbierto(true)}
-            className="stock-btn-primary"
-            type="button"
-          >
-            <span className="stock-btn-primary-icon">+</span>
-            Agregar producto
-          </button>
-        </div>
-      </div>
-
-      <div className="stock-toolbar">
-        <div className="stock-search-wrap">
-          <span className="stock-search-icon">🔍</span>
-          <input
-            type="text"
-            placeholder="Buscar por nombre o SKU..."
-            value={busqueda}
-            onChange={handleBusqueda}
-            className="stock-search-input"
-          />
+          <div className="stock-header-actions">
+            <button
+              onClick={() => setModalAbierto(true)}
+              className="stock-btn-primary"
+              type="button"
+            >
+              <span className="stock-btn-primary-icon">+</span>
+              Agregar producto
+            </button>
+          </div>
         </div>
 
-        <span className="stock-total">{totalProductos} productos</span>
-      </div>
+        <div className="stock-toolbar">
+          <div className="stock-search-wrap">
+            <span className="stock-search-icon">🔍</span>
+            <input
+              type="text"
+              placeholder="Buscar por nombre o SKU..."
+              value={busqueda}
+              onChange={handleBusqueda}
+              className="stock-search-input"
+            />
+          </div>
 
-      <div className="stock-card">
-        {loading ? (
-          <div className="stock-empty">Cargando productos...</div>
-        ) : error ? (
-          <div className="stock-empty stock-empty-error">{error}</div>
-        ) : productos.length === 0 ? (
-          <div className="stock-empty">No se encontraron productos.</div>
-        ) : (
-          <div className="stock-table-responsive">
-            <table className="stock-table">
-              <thead>
-                <tr>
-                  <th className="stock-th" onClick={() => handleOrden("nombre")}>
-                    Producto <OrdenIcon campo="nombre" />
-                  </th>
-                  <th className="stock-th" onClick={() => handleOrden("sku")}>
-                    SKU <OrdenIcon campo="sku" />
-                  </th>
-                  <th className="stock-th" onClick={() => handleOrden("stock")}>
-                    Stock <OrdenIcon campo="stock" />
-                  </th>
-                  <th className="stock-th" onClick={() => handleOrden("precio")}>
-                    Precio <OrdenIcon campo="precio" />
-                  </th>
-                  <th className="stock-th" onClick={() => handleOrden("precio_promo")}>
-                    Precio Promo <OrdenIcon campo="precio_promo" />
-                  </th>
-                  <th className="stock-th stock-th-no-pointer">Acciones</th>
-                </tr>
-              </thead>
+          <span className="stock-total">{totalProductos} productos</span>
+        </div>
 
-              <tbody>
-                {productos.map((prod, i) => (
-                  <tr
-                    key={prod.id}
-                    className={i % 2 === 0 ? "stock-row" : "stock-row stock-row-alt"}
-                  >
-                    <td className="stock-td">
-                      <div className="stock-product-cell">
-                        <div className="stock-product-thumb">
-                          {prod.imagen ? (
-                            <img
-                              src={prod.imagen}
-                              alt={prod.nombre}
-                              className="stock-product-img"
-                            />
-                          ) : (
-                            <span className="stock-product-noimg">📷</span>
-                          )}
+        <div className="stock-card">
+          {loading ? (
+            <div className="stock-empty">Cargando productos...</div>
+          ) : error ? (
+            <div className="stock-empty stock-empty-error">{error}</div>
+          ) : productos.length === 0 ? (
+            <div className="stock-empty">No se encontraron productos.</div>
+          ) : (
+            <div className="stock-table-responsive">
+              <table className="stock-table">
+                <thead>
+                  <tr>
+                    <th className="stock-th" onClick={() => handleOrden("nombre")}>
+                      Producto <OrdenIcon campo="nombre" />
+                    </th>
+                    <th className="stock-th" onClick={() => handleOrden("sku")}>
+                      SKU <OrdenIcon campo="sku" />
+                    </th>
+                    <th className="stock-th" onClick={() => handleOrden("stock")}>
+                      Stock <OrdenIcon campo="stock" />
+                    </th>
+                    <th className="stock-th" onClick={() => handleOrden("precio")}>
+                      Precio <OrdenIcon campo="precio" />
+                    </th>
+                    <th className="stock-th" onClick={() => handleOrden("precio_promo")}>
+                      Precio Promo <OrdenIcon campo="precio_promo" />
+                    </th>
+                    <th className="stock-th stock-th-no-pointer">Acciones</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {productos.map((prod, i) => (
+                    <tr
+                      key={prod.id}
+                      className={i % 2 === 0 ? "stock-row" : "stock-row stock-row-alt"}
+                    >
+                      <td className="stock-td">
+                        <div className="stock-product-cell">
+                          <div className="stock-product-thumb">
+                            {imagenesMap[prod.id] ? (
+                              <img
+                                src={imagenesMap[prod.id]}
+                                alt={prod.nombre}
+                                className="stock-product-img"
+                              />
+                            ) : (
+                              <span className="stock-product-noimg">📷</span>
+                            )}
+                          </div>
+
+                          <span className="stock-product-name">{prod.nombre}</span>
                         </div>
+                      </td>
 
-                        <span className="stock-product-name">{prod.nombre}</span>
-                      </div>
-                    </td>
+                      <td className="stock-td stock-sku">{prod.sku || "-"}</td>
 
-                    <td className="stock-td stock-sku">{prod.sku || "-"}</td>
-
-                    <td className="stock-td">
-                      <span
-                        className={
-                          prod.stock === null ||
+                      <td className="stock-td">
+                        <span
+                          className={
+                            prod.stock === null ||
+                            prod.stock === undefined ||
+                            Number(prod.stock) === 0
+                              ? "stock-badge stock-badge-danger"
+                              : "stock-badge stock-badge-success"
+                          }
+                        >
+                          {prod.stock === null ||
                           prod.stock === undefined ||
                           Number(prod.stock) === 0
-                            ? "stock-badge stock-badge-danger"
-                            : "stock-badge stock-badge-success"
-                        }
-                      >
-                        {prod.stock === null ||
-                        prod.stock === undefined ||
-                        Number(prod.stock) === 0
-                          ? "Sin stock"
-                          : prod.stock}
-                      </span>
-                    </td>
+                            ? "Sin stock"
+                            : prod.stock}
+                        </span>
+                      </td>
 
-                    <td className="stock-td">
-                      {prod.precio !== null && prod.precio !== undefined && prod.precio !== ""
-                        ? `$${Number(prod.precio).toLocaleString("es-AR")}`
-                        : "-"}
-                    </td>
+                      <td className="stock-td">
+                        {prod.precio !== null &&
+                        prod.precio !== undefined &&
+                        prod.precio !== ""
+                          ? `$${Number(prod.precio).toLocaleString("es-AR")}`
+                          : "-"}
+                      </td>
 
-                    <td className="stock-td">
-                      {prod.precio_promo !== null &&
-                      prod.precio_promo !== undefined &&
-                      prod.precio_promo !== ""
-                        ? `$${Number(prod.precio_promo).toLocaleString("es-AR")}`
-                        : "-"}
-                    </td>
+                      <td className="stock-td">
+                        {prod.precio_promo !== null &&
+                        prod.precio_promo !== undefined &&
+                        prod.precio_promo !== ""
+                          ? `$${Number(prod.precio_promo).toLocaleString("es-AR")}`
+                          : "-"}
+                      </td>
 
-                    <td className="stock-td stock-actions-cell">
-                      <div className="stock-actions">
-                        <button
-                          title="Editar"
-                          type="button"
-                          className="stock-action-btn stock-action-edit"
-                        >
-                          ✏️
-                        </button>
+                      <td className="stock-td stock-actions-cell">
+                        <div className="stock-actions">
+                          <button
+                            title="Editar"
+                            type="button"
+                            onClick={() => handleAbrirEditar(prod.id)}
+                            className="stock-action-btn stock-action-edit"
+                          >
+                            ✏️
+                          </button>
 
-                        <button
-                          title="Eliminar"
-                          type="button"
-                          onClick={() => handleEliminar(prod.id)}
-                          className="stock-action-btn stock-action-delete"
-                        >
-                          🗑
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          <button
+                            title="Eliminar"
+                            type="button"
+                            onClick={() => handleAbrirEliminar(prod)}
+                            className="stock-action-btn stock-action-delete"
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {totalPaginas > 1 && (
+          <div className="stock-pagination">
+            <button
+              onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
+              disabled={paginaActual === 1}
+              className="stock-page-btn"
+              type="button"
+            >
+              ← Anterior
+            </button>
+
+            {paginasVisibles.map((p, i) =>
+              p === "..." ? (
+                <span key={`dots-${i}`} className="stock-page-dots">
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => setPaginaActual(p)}
+                  className={`stock-page-btn ${p === paginaActual ? "active" : ""}`}
+                  type="button"
+                >
+                  {p}
+                </button>
+              )
+            )}
+
+            <button
+              onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
+              disabled={paginaActual === totalPaginas}
+              className="stock-page-btn"
+              type="button"
+            >
+              Siguiente →
+            </button>
           </div>
         )}
       </div>
 
-      {totalPaginas > 1 && (
-        <div className="stock-pagination">
-          <button
-            onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
-            disabled={paginaActual === 1}
-            className="stock-page-btn"
-            type="button"
-          >
-            ← Anterior
-          </button>
-
-          {paginasVisibles.map((p, i) =>
-            p === "..." ? (
-              <span key={`dots-${i}`} className="stock-page-dots">
-                ...
-              </span>
-            ) : (
-              <button
-                key={p}
-                onClick={() => setPaginaActual(p)}
-                className={`stock-page-btn ${p === paginaActual ? "active" : ""}`}
-                type="button"
-              >
-                {p}
-              </button>
-            )
-          )}
-
-          <button
-            onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
-            disabled={paginaActual === totalPaginas}
-            className="stock-page-btn"
-            type="button"
-          >
-            Siguiente →
-          </button>
-        </div>
-      )}
-
       {modalAbierto && (
         <ModalAgregarProducto
           onClose={() => setModalAbierto(false)}
-          onGuardado={() => {
+          onGuardado={async () => {
             setModalAbierto(false);
-            fetchProductos();
+            await fetchProductos();
+            mostrarToast("exito", "Producto agregado correctamente.");
           }}
         />
       )}
-    </div>
+
+      {modalEditarAbierto && productoEditarId && (
+        <ModalEditarProducto
+          productoId={productoEditarId}
+          onClose={handleCerrarEditar}
+          onGuardado={async () => {
+            handleCerrarEditar();
+            await fetchProductos();
+            mostrarToast("exito", "Producto editado correctamente.");
+          }}
+        />
+      )}
+
+      <ModalEliminar
+        open={modalEliminarAbierto}
+        row={
+          productoEliminar
+            ? {
+                id: productoEliminar.id,
+                nombre: productoEliminar.nombre,
+                sku: productoEliminar.sku,
+                stock: productoEliminar.stock,
+                precio: productoEliminar.precio,
+              }
+            : null
+        }
+        loading={eliminando}
+        onClose={handleCerrarEliminar}
+        onConfirm={handleConfirmarEliminar}
+        onToast={mostrarToast}
+        title="Eliminar producto"
+        message="¿Seguro que querés eliminar este producto definitivamente?"
+        warning="Esta acción no se puede deshacer."
+        loadingMessage="Eliminando producto..."
+        successMessage="Producto eliminado correctamente."
+        errorMessage="No se pudo eliminar el producto."
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        confirmVariant="danger"
+        details={
+          productoEliminar
+            ? [
+                {
+                  label: "ID Producto",
+                  value: `#${productoEliminar.id}`,
+                },
+                {
+                  label: "Nombre",
+                  value: productoEliminar.nombre || "—",
+                },
+                {
+                  label: "SKU",
+                  value: productoEliminar.sku || "—",
+                },
+                {
+                  label: "Stock",
+                  value:
+                    productoEliminar.stock === null ||
+                    productoEliminar.stock === undefined ||
+                    productoEliminar.stock === ""
+                      ? "—"
+                      : String(productoEliminar.stock),
+                },
+                {
+                  label: "Precio",
+                  value:
+                    productoEliminar.precio !== null &&
+                    productoEliminar.precio !== undefined &&
+                    productoEliminar.precio !== ""
+                      ? `$${Number(productoEliminar.precio).toLocaleString("es-AR")}`
+                      : "—",
+                },
+              ]
+            : []
+        }
+      />
+
+      {toast && (
+        <Toast
+          key={toast.id}
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={cerrarToast}
+        />
+      )}
+    </>
   );
 };
 

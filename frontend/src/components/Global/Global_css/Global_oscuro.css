@@ -1522,3 +1522,170 @@ html[data-theme="oscuro"] .extraContent-ventas{
     border: 1px solid #8a6a1f;
     color: #ffd666;
 }
+/* =========================
+   DARK MODE
+========================= */
+
+html[data-theme="oscuro"] .cfg-page {
+  color: #c7d2de;
+}
+
+/* HEADER */
+html[data-theme="oscuro"] .cfg-title {
+  color: #e6edf5;
+}
+
+html[data-theme="oscuro"] .cfg-subtitle {
+  color: #9fb0c2;
+}
+
+/* ALERT */
+html[data-theme="oscuro"] .cfg-alert--error {
+  background: #2a1f1f;
+  color: #ffb4b4;
+  border-color: #5a2c2c;
+}
+
+/* CARD */
+html[data-theme="oscuro"] .cfg-card {
+  background: #0f1722;
+  border-color: #1f2a37;
+}
+
+html[data-theme="oscuro"] .cfg-card:hover {
+  background: #131c28;
+  border-color: #2b3a4c;
+}
+
+/* ICON / LOGO */
+html[data-theme="oscuro"] .cfg-cardLogoBox {
+  background: #131c28;
+  border-color: #1f2a37;
+}
+
+/* TITULO */
+html[data-theme="oscuro"] .cfg-cardHeader h2 {
+  color: #e6edf5;
+}
+
+/* DESCRIPCION */
+html[data-theme="oscuro"] .cfg-cardDescription {
+  color: #9fb0c2;
+}
+
+/* ARROW */
+html[data-theme="oscuro"] .cfg-cardArrow {
+  color: #7f91a6;
+}
+
+/* FOOTER */
+html[data-theme="oscuro"] .cfg-cardFooter {
+  border-top: 1px solid #1f2a37;
+}
+
+/* META */
+html[data-theme="oscuro"] .cfg-cardMetaLabel {
+  color: #6f8196;
+}
+
+html[data-theme="oscuro"] .cfg-cardMetaValue {
+  color: #c7d2de;
+}
+
+/* STATUS */
+html[data-theme="oscuro"] .cfg-status--success {
+  background: rgba(35, 117, 69, 0.15);
+  color: #6ee7a5;
+  border-color: rgba(35, 117, 69, 0.3);
+}
+
+html[data-theme="oscuro"] .cfg-status--warning {
+  background: rgba(157, 106, 8, 0.15);
+  color: #facc15;
+  border-color: rgba(157, 106, 8, 0.3);
+}
+
+html[data-theme="oscuro"] .cfg-status--pending {
+  background: #1a2330;
+  color: #9fb0c2;
+  border-color: #2a3747;
+}
+/* ── DARK MODE ── */
+html[data-theme="oscuro"] .tn-page { color: #c7d2de; }
+
+html[data-theme="oscuro"] .tn-hero,
+html[data-theme="oscuro"] .tn-metaCard {
+  background: #0f1a24;
+  border-color: #223243;
+}
+
+html[data-theme="oscuro"] .tn-hero__icon,
+html[data-theme="oscuro"] .tn-hero__progress,
+html[data-theme="oscuro"] .tn-metaCard__icon,
+html[data-theme="oscuro"] .tn-actionRow,
+html[data-theme="oscuro"] .tn-statusRow {
+  background: #13212d;
+  border-color: #223243;
+}
+
+html[data-theme="oscuro"] .tn-title,
+html[data-theme="oscuro"] .tn-metaCard__head h2,
+html[data-theme="oscuro"] .tn-metaItem__value,
+html[data-theme="oscuro"] .tn-actionRow__title,
+html[data-theme="oscuro"] .tn-statusRow__title,
+html[data-theme="oscuro"] .tn-backBtn { color: #eef4fb; }
+
+html[data-theme="oscuro"] .tn-subtitle,
+html[data-theme="oscuro"] .tn-metaCard__head p,
+html[data-theme="oscuro"] .tn-metaItem__label,
+html[data-theme="oscuro"] .tn-actionRow__desc,
+html[data-theme="oscuro"] .tn-statusRow__desc,
+html[data-theme="oscuro"] .tn-hero__progressLabel,
+html[data-theme="oscuro"] .tn-hero__eyebrow { color: #95a8bb; }
+
+html[data-theme="oscuro"] .tn-backBtn {
+  background: #13212d;
+  border-color: #223243;
+}
+
+html[data-theme="oscuro"] .tn-backBtn:hover {
+  background: #172634;
+  border-color: #2b3f53;
+}
+
+html[data-theme="oscuro"] .tn-metaItem { border-top-color: #223243; }
+
+html[data-theme="oscuro"] .tn-statusRow.ok   { background: rgba(35,117,69,.10); border-color: rgba(35,117,69,.35); }
+html[data-theme="oscuro"] .tn-statusRow.warn { background: rgba(157,106,8,.10); border-color: rgba(157,106,8,.35); }
+html[data-theme="oscuro"] .tn-badge--ok {
+  background: rgba(35, 117, 69, 0.15);
+  color: #7be0a6;
+  border-color: rgba(35, 117, 69, 0.35);
+}
+
+html[data-theme="oscuro"] .tn-badge--off {
+  background: rgba(120, 140, 160, 0.12);
+  color: #aab8c6;
+  border-color: rgba(120, 140, 160, 0.25);
+}
+
+html[data-theme="oscuro"] .tn-badge--warn {
+  background: rgba(157, 106, 8, 0.15);
+  color: #ffcc66;
+  border-color: rgba(157, 106, 8, 0.35);
+}
+html[data-theme="oscuro"] .tn-statusRow.ok .tn-statusRow__icon {
+  background: rgba(35, 117, 69, 0.15);
+  color: #7be0a6;
+  border-color: rgba(35, 117, 69, 0.35);
+}
+
+html[data-theme="oscuro"] .tn-statusRow.warn .tn-statusRow__icon {
+  background: rgba(157, 106, 8, 0.15);
+  color: #ffcc66;
+  border-color: rgba(157, 106, 8, 0.35);
+}
+html[data-theme="oscuro"] .tn-actionRow:hover:not(:disabled) {
+  background: #172634;
+  border-color: #2b3f53;
+}

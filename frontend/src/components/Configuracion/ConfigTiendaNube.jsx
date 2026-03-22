@@ -8,6 +8,11 @@ import {
   faLink,
   faCheckCircle,
   faTriangleExclamation,
+  faCircleInfo,
+  faIdBadge,
+  faBolt,
+  faShieldHalved,
+  faChevronRight,
 } from "@fortawesome/free-solid-svg-icons";
 import BASE_URL from "../../config/config";
 import "./configTiendanube.css";
@@ -104,6 +109,15 @@ const WebhookBadge = ({ configured }) => {
     </span>
   );
 };
+
+function ItemDato({ label, value, full = false }) {
+  return (
+    <div className={`tn-metaItem ${full ? "tn-metaItem--full" : ""}`}>
+      <span className="tn-metaItem__label">{label}</span>
+      <span className="tn-metaItem__value">{value || "-"}</span>
+    </div>
+  );
+}
 
 export default function ConfigTiendaNube() {
   const navigate = useNavigate();
@@ -278,27 +292,38 @@ export default function ConfigTiendaNube() {
     return Math.round((hechos / total) * 100);
   }, [conexion.connected, conexion.webhooks_configured]);
 
+  if (loading) {
+    return (
+      <section className="tn-page">
+        <div className="tn-hero">
+          <div className="tn-hero__icon">
+            <FontAwesomeIcon icon={faStore} />
+          </div>
+
+          <div className="tn-hero__content">
+            <div className="tn-hero__eyebrow">Integración externa</div>
+            <h1 className="tn-title">Configuración de Tienda Nube</h1>
+            <p className="tn-subtitle">Cargando configuración...</p>
+          </div>
+
+          <div className="tn-hero__side">
+            <button
+              type="button"
+              className="mov-btn mov-btn--primary"
+              onClick={() => navigate("/panel/configuracion")}
+            >
+              <FontAwesomeIcon icon={faArrowLeft} />
+              <span>Volver</span>
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="tn-page">
-      <div className="tn-topbar">
-        <button
-          type="button"
-          className="tn-backBtn"
-          onClick={() => navigate("/panel/configuracion")}
-        >
-          <FontAwesomeIcon icon={faArrowLeft} />
-          <span>Volver a configuración</span>
-        </button>
-
-        <button
-          type="button"
-          className="tn-btn tn-btn--ghost"
-          onClick={cargarEstado}
-          disabled={loading}
-        >
-          {loading ? "Actualizando..." : "Actualizar estado"}
-        </button>
-      </div>
+      <div className="tn-topbar" />
 
       <div className="tn-hero">
         <div className="tn-hero__icon">
@@ -314,9 +339,20 @@ export default function ConfigTiendaNube() {
           </p>
         </div>
 
-        <div className="tn-hero__progress">
-          <div className="tn-hero__progressLabel">Progreso</div>
-          <div className="tn-hero__progressValue">{progreso}%</div>
+        <div className="tn-hero__side">
+          <div className="tn-hero__progress">
+            <div className="tn-hero__progressLabel">Progreso</div>
+            <div className="tn-hero__progressValue">{progreso}%</div>
+          </div>
+
+          <button
+            type="button"
+            className="mov-btn mov-btn--primary"
+            onClick={() => navigate("/panel/configuracion")}
+          >
+            <FontAwesomeIcon icon={faArrowLeft} />
+            <span>Volver </span>
+          </button>
         </div>
       </div>
 
@@ -330,189 +366,171 @@ export default function ConfigTiendaNube() {
       {error && <div className="tn-alert tn-alert--error">{error}</div>}
       {okMsg && <div className="tn-alert tn-alert--success">{okMsg}</div>}
 
-      <div className="tn-steps">
-        <div className={`tn-step ${conexion.connected ? "is-done" : "is-pending"}`}>
-          <div className="tn-step__icon">
-            <FontAwesomeIcon icon={conexion.connected ? faCheckCircle : faLink} />
-          </div>
-          <div className="tn-step__body">
-            <div className="tn-step__title">1. Conexión OAuth</div>
-            <div className="tn-step__text">
-              {conexion.connected
-                ? "La tienda ya está vinculada correctamente con Balto."
-                : "Todavía no se autorizó la app desde Tienda Nube."}
+      <div className="tn-metaGrid">
+        <div className="tn-metaCard">
+          <div className="tn-metaCard__top">
+            <div className="tn-metaCard__icon">
+              <FontAwesomeIcon icon={faCircleInfo} />
+            </div>
+
+            <div className="tn-metaCard__head">
+              <h2>Estado general</h2>
+              <p>Consultá el estado actual de la integración y su progreso.</p>
             </div>
           </div>
-        </div>
 
-        <div
-          className={`tn-step ${
-            conexion.webhooks_configured ? "is-done" : "is-pending"
-          }`}
-        >
-          <div className="tn-step__icon">
-            <FontAwesomeIcon
-              icon={conexion.webhooks_configured ? faCheckCircle : faPlug}
+          <div className="tn-metaCard__body">
+            <ItemDato label="Tenant" value={tenantId || "-"} />
+            <ItemDato
+              label="Estado de conexión"
+              value={<EstadoBadge connected={conexion.connected} />}
+            />
+            <ItemDato
+              label="Webhooks"
+              value={<WebhookBadge configured={conexion.webhooks_configured} />}
+            />
+            <ItemDato
+              label="Última actualización"
+              value={formatearFecha(conexion.updated_at)}
             />
           </div>
-          <div className="tn-step__body">
-            <div className="tn-step__title">2. Webhooks</div>
-            <div className="tn-step__text">
-              {conexion.webhooks_configured
-                ? "Los eventos necesarios ya quedaron registrados."
-                : "Todavía falta registrar los webhooks para automatizar la integración."}
-            </div>
-          </div>
         </div>
-      </div>
 
-      <div className="tn-grid">
-        <div className="tn-card">
-          <div className="tn-card__head">
-            <h2>Estado general</h2>
+        <div className="tn-metaCard">
+          <div className="tn-metaCard__top">
+            <div className="tn-metaCard__icon">
+              <FontAwesomeIcon icon={faIdBadge} />
+            </div>
+
+            <div className="tn-metaCard__head">
+              <h2>Datos de la conexión</h2>
+              <p>Visualizá los identificadores técnicos y datos de la app.</p>
+            </div>
           </div>
 
-          <div className="tn-fields">
-            <div className="tn-field">
-              <span className="tn-label">Tenant</span>
-              <span className="tn-value">{tenantId || "-"}</span>
-            </div>
-
-            <div className="tn-field">
-              <span className="tn-label">Estado de conexión</span>
-              <span className="tn-value">
-                <EstadoBadge connected={conexion.connected} />
-              </span>
-            </div>
-
-            <div className="tn-field">
-              <span className="tn-label">Webhooks</span>
-              <span className="tn-value">
-                <WebhookBadge configured={conexion.webhooks_configured} />
-              </span>
-            </div>
-
-            <div className="tn-field">
-              <span className="tn-label">Última actualización</span>
-              <span className="tn-value">{formatearFecha(conexion.updated_at)}</span>
-            </div>
+          <div className="tn-metaCard__body">
+            <ItemDato label="Store ID" value={conexion.store_id} />
+            <ItemDato label="User ID" value={conexion.user_id} />
+            <ItemDato label="App ID" value={conexion.app_id} />
+            <ItemDato label="Nombre de la app" value={conexion.app_name} />
+            <ItemDato label="Scopes" value={conexion.scope || "-"} full />
           </div>
         </div>
 
-        <div className="tn-card">
-          <div className="tn-card__head">
-            <h2>Datos de la conexión</h2>
-          </div>
-
-          <div className="tn-fields">
-            <div className="tn-field">
-              <span className="tn-label">Store ID</span>
-              <span className="tn-value">{conexion.store_id || "-"}</span>
+        <div className="tn-metaCard">
+          <div className="tn-metaCard__top">
+            <div className="tn-metaCard__icon">
+              <FontAwesomeIcon icon={faBolt} />
             </div>
 
-            <div className="tn-field">
-              <span className="tn-label">User ID</span>
-              <span className="tn-value">{conexion.user_id || "-"}</span>
-            </div>
-
-            <div className="tn-field">
-              <span className="tn-label">App ID</span>
-              <span className="tn-value">{conexion.app_id || "-"}</span>
-            </div>
-
-            <div className="tn-field">
-              <span className="tn-label">Nombre de la app</span>
-              <span className="tn-value">{conexion.app_name || "-"}</span>
-            </div>
-
-            <div className="tn-field tn-field--full">
-              <span className="tn-label">Scopes</span>
-              <span className="tn-value tn-value--pre">{conexion.scope || "-"}</span>
+            <div className="tn-metaCard__head">
+              <h2>Acciones</h2>
+              <p>Ejecutá las acciones principales para dejar la integración lista.</p>
             </div>
           </div>
-        </div>
 
-        <div className="tn-card tn-card--full">
-          <div className="tn-card__head">
-            <h2>Acciones</h2>
-          </div>
-
-          <div className="tn-actions">
+          <div className="tn-metaCard__body tn-metaCard__body--stack">
             <button
               type="button"
-              className="tn-btn tn-btn--primary"
+              className="tn-actionRow"
               onClick={handleConectar}
               disabled={!tenantId || loadingConnect}
             >
-              {loadingConnect ? "Redirigiendo..." : "Conectar con Tienda Nube"}
+              <div className="tn-actionRow__text">
+                <span className="tn-actionRow__title">
+                  {loadingConnect ? "Redirigiendo..." : "Conectar con Tienda Nube"}
+                </span>
+                <span className="tn-actionRow__desc">
+                  Inicia el flujo OAuth y autoriza la app.
+                </span>
+              </div>
+              <FontAwesomeIcon icon={faChevronRight} />
             </button>
 
             <button
               type="button"
-              className="tn-btn tn-btn--secondary"
+              className="tn-actionRow"
               onClick={handleConfigurarWebhooks}
               disabled={!tenantId || !conexion.connected || loadingWebhook}
             >
-              {loadingWebhook ? "Configurando..." : "Configurar webhooks"}
+              <div className="tn-actionRow__text">
+                <span className="tn-actionRow__title">
+                  {loadingWebhook ? "Configurando..." : "Configurar webhooks"}
+                </span>
+                <span className="tn-actionRow__desc">
+                  Registra los eventos para automatizar la integración.
+                </span>
+              </div>
+              <FontAwesomeIcon icon={faChevronRight} />
             </button>
-          </div>
-
-          <div className="tn-help">
-            <p>
-              <b>Conectar con Tienda Nube:</b> inicia el flujo OAuth y redirige a
-              Tienda Nube para autorizar la app.
-            </p>
-            <p>
-              <b>Configurar webhooks:</b> registra los eventos necesarios para que
-              Balto reciba cambios de pedidos, productos o clientes.
-            </p>
           </div>
         </div>
 
-        <div className="tn-card tn-card--full">
-          <div className="tn-card__head">
-            <h2>Checklist visual</h2>
+        <div className="tn-metaCard">
+          <div className="tn-metaCard__top">
+            <div className="tn-metaCard__icon">
+              <FontAwesomeIcon icon={faShieldHalved} />
+            </div>
+
+            <div className="tn-metaCard__head">
+              <h2>Checklist visual</h2>
+              <p>Verificá rápidamente qué parte ya quedó lista y qué falta.</p>
+            </div>
           </div>
 
-          <div className="tn-checklist">
-            <div className={`tn-checkItem ${conexion.connected ? "ok" : "warn"}`}>
-              <div className="tn-checkItem__icon">
-                <FontAwesomeIcon
-                  icon={conexion.connected ? faCheckCircle : faTriangleExclamation}
-                />
-              </div>
-              <div>
-                <div className="tn-checkItem__title">App autorizada</div>
-                <div className="tn-checkItem__text">
-                  {conexion.connected
-                    ? "La tienda autorizó correctamente el acceso."
-                    : "Falta completar la autorización desde Tienda Nube."}
+          <div className="tn-metaCard__body tn-metaCard__body--stack">
+            <div className={`tn-statusRow ${conexion.connected ? "ok" : "warn"}`}>
+              <div className="tn-statusRow__left">
+                <div className="tn-statusRow__icon">
+                  <FontAwesomeIcon
+                    icon={conexion.connected ? faCheckCircle : faTriangleExclamation}
+                  />
+                </div>
+                <div>
+                  <div className="tn-statusRow__title">App autorizada</div>
+                  <div className="tn-statusRow__desc">
+                    {conexion.connected
+                      ? "La tienda autorizó correctamente el acceso."
+                      : "Falta completar la autorización desde Tienda Nube."}
+                  </div>
                 </div>
               </div>
+              <span className={`tn-badge ${conexion.connected ? "tn-badge--ok" : "tn-badge--warn"}`}>
+                {conexion.connected ? "Lista" : "Pendiente"}
+              </span>
             </div>
 
             <div
-              className={`tn-checkItem ${
+              className={`tn-statusRow ${
                 conexion.webhooks_configured ? "ok" : "warn"
               }`}
             >
-              <div className="tn-checkItem__icon">
-                <FontAwesomeIcon
-                  icon={
-                    conexion.webhooks_configured
-                      ? faCheckCircle
-                      : faTriangleExclamation
-                  }
-                />
-              </div>
-              <div>
-                <div className="tn-checkItem__title">Webhooks registrados</div>
-                <div className="tn-checkItem__text">
-                  {conexion.webhooks_configured
-                    ? "Los eventos ya quedaron configurados."
-                    : "Falta registrar los webhooks necesarios para automatizar."}
+              <div className="tn-statusRow__left">
+                <div className="tn-statusRow__icon">
+                  <FontAwesomeIcon
+                    icon={
+                      conexion.webhooks_configured
+                        ? faCheckCircle
+                        : faTriangleExclamation
+                    }
+                  />
+                </div>
+                <div>
+                  <div className="tn-statusRow__title">Webhooks registrados</div>
+                  <div className="tn-statusRow__desc">
+                    {conexion.webhooks_configured
+                      ? "Los eventos ya quedaron configurados."
+                      : "Falta registrar los webhooks necesarios para automatizar."}
+                  </div>
                 </div>
               </div>
+              <span
+                className={`tn-badge ${
+                  conexion.webhooks_configured ? "tn-badge--ok" : "tn-badge--warn"
+                }`}
+              >
+                {conexion.webhooks_configured ? "Listos" : "Pendientes"}
+              </span>
             </div>
           </div>
         </div>

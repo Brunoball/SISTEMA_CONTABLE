@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import BASE_URL from "../../../../config/config";
-import "../Inventario.css";
+import "./modalinventario.css";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 
@@ -16,11 +16,19 @@ function buildHeadersGET() {
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
+
+  let data;
   try {
-    return JSON.parse(text);
+    data = JSON.parse(text);
   } catch {
     throw new Error("La API devolvió una respuesta inválida.");
   }
+
+  if (!res.ok || data?.exito === false) {
+    throw new Error(data?.mensaje || `Error HTTP ${res.status}`);
+  }
+
+  return data;
 }
 
 const ModalHistorialInventario = ({ producto, onClose }) => {
@@ -50,46 +58,62 @@ const ModalHistorialInventario = ({ producto, onClose }) => {
 
         if (!mounted) return;
 
-        if (data.exito === false) {
-          throw new Error(data.mensaje || "No se pudo cargar el historial.");
-        }
-
         setHistorial(Array.isArray(data.historial) ? data.historial : []);
       } catch (err) {
-        if (mounted) setError(err.message || "Error al cargar el historial.");
+        if (mounted) {
+          setError(err.message || "Error al cargar el historial.");
+        }
       } finally {
         if (mounted) setLoading(false);
       }
     }
 
-    cargar();
+    if (producto?.id) {
+      cargar();
+    }
 
     return () => {
       mounted = false;
     };
-  }, [producto.id]);
+  }, [producto]);
 
   return (
-    <div className="stock-modal-backdrop">
-      <div className="stock-modal stock-modal-lg">
+    <div className="stock-modal-backdrop" onClick={onClose}>
+      <div
+        className="stock-modal stock-modal-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="stock-modal-header">
-          <h3>Historial de inventario</h3>
-          <button type="button" onClick={onClose} className="stock-modal-close">
+          <div className="stock-modal-titleWrap">
+            <h3 className="stock-modal-title">Historial de inventario</h3>
+            <p className="stock-modal-subtitle">
+              Movimientos registrados del producto seleccionado
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="stock-modal-close"
+            aria-label="Cerrar modal"
+          >
             ×
           </button>
         </div>
 
         <div className="stock-modal-body">
-          <div style={{ marginBottom: 14 }}>
-            <strong>Producto:</strong> {producto.nombre}
+          <div className="stock-info-box" style={{ marginBottom: 16 }}>
+            <div><strong>Producto:</strong> {producto?.nombre || "—"}</div>
+            <div><strong>ID:</strong> {producto?.id || "—"}</div>
+            <div><strong>SKU:</strong> {producto?.sku || "—"}</div>
           </div>
 
           {loading ? (
-            <div>Cargando historial...</div>
+            <div className="stock-loading-box">Cargando historial...</div>
           ) : error ? (
             <div className="stock-error-text">{error}</div>
           ) : historial.length === 0 ? (
-            <div>No hay movimientos registrados.</div>
+            <div className="stock-empty-box">No hay movimientos registrados.</div>
           ) : (
             <div className="stock-table-wrapper">
               <table className="stock-table">
@@ -103,12 +127,12 @@ const ModalHistorialInventario = ({ producto, onClose }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {historial.map((item) => (
-                    <tr key={item.id}>
+                  {historial.map((item, idx) => (
+                    <tr key={item.id || idx}>
                       <td className="stock-td">{item.created_at || "—"}</td>
                       <td className="stock-td">{item.campo || "—"}</td>
-                      <td className="stock-td">{item.valor_anterior || "—"}</td>
-                      <td className="stock-td">{item.valor_nuevo || "—"}</td>
+                      <td className="stock-td">{item.valor_anterior ?? "—"}</td>
+                      <td className="stock-td">{item.valor_nuevo ?? "—"}</td>
                       <td className="stock-td">{item.usuario || "—"}</td>
                     </tr>
                   ))}
@@ -119,7 +143,11 @@ const ModalHistorialInventario = ({ producto, onClose }) => {
         </div>
 
         <div className="stock-modal-footer">
-          <button type="button" onClick={onClose} className="stock-btn-secondary">
+          <button
+            type="button"
+            onClick={onClose}
+            className="stock-btn-secondary"
+          >
             Cerrar
           </button>
         </div>

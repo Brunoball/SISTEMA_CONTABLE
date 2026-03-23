@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import BASE_URL from "../../../config/config";
 import ModalCargaMasivaInventario from "./modales/ModalCargaMasivaInventario";
 import ModalHistorialInventario from "./modales/ModalHistorialInventario";
@@ -19,7 +20,6 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
-
 const SKELETON_ROWS = 10;
 
 function buildHeadersGET() {
@@ -44,8 +44,10 @@ async function parseJsonOrThrow(res) {
   if (res.status === 401 || res.status === 403) {
     throw new Error("Sesión vencida o no autorizada. Volvé a iniciar sesión.");
   }
+
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
+
   try {
     return JSON.parse(text);
   } catch {
@@ -54,36 +56,43 @@ async function parseJsonOrThrow(res) {
 }
 
 async function apiGet(url) {
-  const res = await fetch(url, { method: "GET", headers: buildHeadersGET() });
+  const res = await fetch(url, {
+    method: "GET",
+    headers: buildHeadersGET(),
+  });
   return parseJsonOrThrow(res);
 }
 
 async function apiPost(url, body) {
   const { action, ...rest } = body ?? {};
   const finalUrl = action ? `${url}?action=${encodeURIComponent(action)}` : url;
+
   const res = await fetch(finalUrl, {
     method: "POST",
     headers: buildHeadersJSON(),
     body: JSON.stringify(rest),
   });
+
   return parseJsonOrThrow(res);
 }
 
-/* ── Skeleton helpers ── */
+/* ──────────────────────────────────────────────
+   SKELETON
+────────────────────────────────────────────── */
 const skelWidths = {
-  nombre:  ["72%", "58%", "66%", "48%"],
-  sku:     ["44%", "34%", "40%", "30%"],
-  precio:  ["38%", "30%", "34%", "28%"],
-  stock:   ["52%", "44%", "48%", "36%"],
+  nombre: ["72%", "58%", "66%", "48%"],
+  sku: ["44%", "34%", "40%", "30%"],
+  precio: ["38%", "30%", "34%", "28%"],
+  stock: ["52%", "44%", "48%", "36%"],
   historial: ["44%", "38%", "40%", "36%"],
 };
 
 const columns = [
-  { key: "nombre",    label: "PRODUCTO",   fr: 2.4, align: "left",   strong: true },
-  { key: "stock",     label: "STOCK",      fr: 1.4, align: "center" },
-  { key: "sku",       label: "SKU",        fr: 1.0, align: "center" },
-  { key: "precio",    label: "PRECIO",     fr: 1.0, align: "right"  },
-  { key: "historial", label: "HISTORIAL",  fr: 0.7, align: "center" },
+  { key: "nombre", label: "PRODUCTO", fr: 2.4, align: "left", strong: true },
+  { key: "stock", label: "STOCK", fr: 1.4, align: "center" },
+  { key: "sku", label: "SKU", fr: 1.0, align: "center" },
+  { key: "precio", label: "PRECIO", fr: 1.0, align: "right" },
+  { key: "historial", label: "HISTORIAL", fr: 0.7, align: "center" },
 ];
 
 const gridCols = columns.map((c) => `${c.fr}fr`).join(" ");
@@ -99,13 +108,18 @@ function SkeletonRow({ idx }) {
       {columns.map((c) => {
         if (c.key === "historial") {
           return (
-            <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell">
+            <div
+              key={c.key}
+              className="mov-gridCell mov-gridCell--actions is-center"
+              role="cell"
+            >
               <div className="mov-skelActions">
                 <span className="mov-skelIcon" />
               </div>
             </div>
           );
         }
+
         if (c.key === "stock") {
           return (
             <div key={c.key} className="mov-gridCell is-center" role="cell">
@@ -116,8 +130,10 @@ function SkeletonRow({ idx }) {
             </div>
           );
         }
+
         const list = skelWidths[c.key] || ["60%"];
         const w = list[idx % list.length];
+
         return (
           <div
             key={c.key}
@@ -133,6 +149,42 @@ function SkeletonRow({ idx }) {
         );
       })}
     </div>
+  );
+}
+
+/* ──────────────────────────────────────────────
+   PORTAL MODAL WRAPPER
+────────────────────────────────────────────── */
+function ModalPortal({ children, onClose }) {
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 999999,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "1200px",
+          maxHeight: "90vh",
+          overflow: "auto",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -158,12 +210,18 @@ const Inventario = () => {
   const porPagina = 50;
 
   const mostrarToast = useCallback((tipo, mensaje, duracion = 2600) => {
-    setToast({ id: Date.now() + Math.random(), tipo, mensaje, duracion });
+    setToast({
+      id: Date.now() + Math.random(),
+      tipo,
+      mensaje,
+      duracion,
+    });
   }, []);
 
   const fetchProductos = useCallback(async () => {
     setLoading(true);
     setError("");
+
     try {
       const params = new URLSearchParams({
         action: "stock_inventario_listar",
@@ -173,8 +231,12 @@ const Inventario = () => {
         orden_campo: orden.campo,
         orden_dir: orden.dir,
       });
+
       const data = await apiGet(`${API_URL}?${params.toString()}`);
-      if (data.exito === false) throw new Error(data.mensaje || "No se pudo cargar el inventario.");
+
+      if (data.exito === false) {
+        throw new Error(data.mensaje || "No se pudo cargar el inventario.");
+      }
 
       const lista = Array.isArray(data.productos) ? data.productos : [];
       setProductos(lista);
@@ -182,7 +244,9 @@ const Inventario = () => {
 
       const nuevosDrafts = {};
       lista.forEach((p) => {
-        nuevosDrafts[p.id] = String(p.stock === null || p.stock === undefined ? 0 : p.stock);
+        nuevosDrafts[p.id] = String(
+          p.stock === null || p.stock === undefined ? 0 : p.stock
+        );
       });
       setStockDrafts(nuevosDrafts);
     } catch (err) {
@@ -194,16 +258,26 @@ const Inventario = () => {
     }
   }, [busqueda, paginaActual, orden]);
 
-  useEffect(() => { fetchProductos(); }, [fetchProductos]);
+  useEffect(() => {
+    fetchProductos();
+  }, [fetchProductos]);
 
   useEffect(() => {
     let cancelado = false;
     const objectUrls = [];
 
     async function cargarImagenes() {
-      const conImagen = productos.filter((p) => Number(p.imagen_archivo_id || 0) > 0);
-      if (conImagen.length === 0) { setImagenesMap({}); return; }
+      const conImagen = productos.filter(
+        (p) => Number(p.imagen_archivo_id || 0) > 0
+      );
+
+      if (conImagen.length === 0) {
+        setImagenesMap({});
+        return;
+      }
+
       const nuevoMap = {};
+
       await Promise.all(
         conImagen.map(async (prod) => {
           try {
@@ -211,30 +285,43 @@ const Inventario = () => {
               action: "stock_producto_imagen_ver",
               id_archivo: String(prod.imagen_archivo_id),
             });
+
             const res = await fetch(`${API_URL}?${params.toString()}`, {
               method: "GET",
               headers: buildHeadersGET(),
             });
+
             if (!res.ok) return;
+
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
             objectUrls.push(url);
             nuevoMap[prod.id] = url;
-          } catch { /* silencioso */ }
+          } catch {
+            // silencioso
+          }
         })
       );
-      if (!cancelado) setImagenesMap(nuevoMap);
-      else objectUrls.forEach((u) => URL.revokeObjectURL(u));
+
+      if (!cancelado) {
+        setImagenesMap(nuevoMap);
+      } else {
+        objectUrls.forEach((u) => URL.revokeObjectURL(u));
+      }
     }
 
     cargarImagenes();
+
     return () => {
       cancelado = true;
       objectUrls.forEach((u) => URL.revokeObjectURL(u));
     };
   }, [productos]);
 
-  const totalPaginas = useMemo(() => Math.max(1, Math.ceil(total / porPagina)), [total]);
+  const totalPaginas = useMemo(
+    () => Math.max(1, Math.ceil(total / porPagina)),
+    [total]
+  );
 
   const handleOrden = (campo) => {
     setOrden((prev) =>
@@ -248,19 +335,29 @@ const Inventario = () => {
   const handleGuardarStock = async (producto) => {
     const valor = stockDrafts[producto.id] ?? "0";
     const stock = Number(valor);
+
     if (!Number.isFinite(stock) || stock < 0) {
       mostrarToast("error", "Ingresá un stock válido.");
       return;
     }
+
     try {
       setGuardandoId(producto.id);
+
       const data = await apiPost(API_URL, {
         action: "stock_inventario_actualizar_stock",
         id: producto.id,
         stock,
       });
-      if (data.exito === false) throw new Error(data.mensaje || "No se pudo actualizar el stock.");
-      setProductos((prev) => prev.map((p) => (p.id === producto.id ? { ...p, stock } : p)));
+
+      if (data.exito === false) {
+        throw new Error(data.mensaje || "No se pudo actualizar el stock.");
+      }
+
+      setProductos((prev) =>
+        prev.map((p) => (p.id === producto.id ? { ...p, stock } : p))
+      );
+
       mostrarToast("exito", `Stock actualizado para "${producto.nombre}".`);
     } catch (err) {
       mostrarToast("error", err.message || "Error al actualizar el stock.");
@@ -269,10 +366,15 @@ const Inventario = () => {
     }
   };
 
-  /* ── Sort arrow ── */
   const OrdenIcon = ({ campo }) => {
-    if (orden.campo !== campo) return <span className="inv-sortIcon inv-sortIcon--off">↕</span>;
-    return <span className="inv-sortIcon inv-sortIcon--on">{orden.dir === "ASC" ? "↑" : "↓"}</span>;
+    if (orden.campo !== campo) {
+      return <span className="inv-sortIcon inv-sortIcon--off">↕</span>;
+    }
+    return (
+      <span className="inv-sortIcon inv-sortIcon--on">
+        {orden.dir === "ASC" ? "↑" : "↓"}
+      </span>
+    );
   };
 
   const showSkeleton = loading;
@@ -291,11 +393,12 @@ const Inventario = () => {
         )}
 
         {error && (
-          <div className="mov-alert" role="alert">{error}</div>
+          <div className="mov-alert" role="alert">
+            {error}
+          </div>
         )}
 
         <section className="mov-card mov-card--table">
-          {/* ── HEAD ── */}
           <div className="mov-card__head">
             <div className="mov-card__headLeft">
               <div className="title-mov">
@@ -323,12 +426,16 @@ const Inventario = () => {
                         <span className="cc-floatingLabel">
                           <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
                         </span>
+
                         {busqueda.trim() !== "" && (
                           <button
                             type="button"
                             className="cc-clearSearch cc-clearSearch--inside"
                             title="Limpiar búsqueda"
-                            onClick={() => { setBusqueda(""); setPaginaActual(1); }}
+                            onClick={() => {
+                              setBusqueda("");
+                              setPaginaActual(1);
+                            }}
                           >
                             <FontAwesomeIcon icon={faTimes} />
                           </button>
@@ -340,7 +447,10 @@ const Inventario = () => {
               </div>
             </div>
 
-            <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div
+              className="mov-card__actions"
+              style={{ display: "flex", gap: 10, alignItems: "center" }}
+            >
               <button
                 type="button"
                 className="mov-btn mov-btn--primary"
@@ -352,7 +462,6 @@ const Inventario = () => {
             </div>
           </div>
 
-          {/* ── HEADER TABLA ── */}
           <div
             className="mov-gridTable mov-gridTable--head"
             style={{ gridTemplateColumns: gridCols }}
@@ -369,8 +478,14 @@ const Inventario = () => {
                   c.align === "center" ? "is-center" : "",
                 ].join(" ")}
                 role="columnheader"
-                onClick={c.key !== "historial" ? () => handleOrden(c.key) : undefined}
-                style={c.key !== "historial" ? { cursor: "pointer", userSelect: "none" } : {}}
+                onClick={
+                  c.key !== "historial" ? () => handleOrden(c.key) : undefined
+                }
+                style={
+                  c.key !== "historial"
+                    ? { cursor: "pointer", userSelect: "none" }
+                    : {}
+                }
               >
                 {c.label}
                 {c.key !== "historial" && <OrdenIcon campo={c.key} />}
@@ -378,10 +493,14 @@ const Inventario = () => {
             ))}
           </div>
 
-          {/* ── BODY ── */}
           <div className="mov-tableWrap" role="rowgroup">
-            <div className={["mov-gridBody", "mov-gridBody--relative", showSkeleton ? "mov-softLoading" : ""].join(" ")}>
-
+            <div
+              className={[
+                "mov-gridBody",
+                "mov-gridBody--relative",
+                showSkeleton ? "mov-softLoading" : "",
+              ].join(" ")}
+            >
               {showSkeleton ? (
                 <div className="mov-skeletonWrap" aria-busy="true">
                   {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
@@ -392,7 +511,10 @@ const Inventario = () => {
                 <>
                   {productos.length === 0 && (
                     <div className="cc-emptyState">
-                      <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+                      <FontAwesomeIcon
+                        icon={faBoxOpen}
+                        className="cc-emptyIcon"
+                      />
                       <div className="cc-emptyText">
                         {busqueda.trim()
                           ? `No se encontraron productos para "${busqueda.trim()}".`
@@ -402,7 +524,8 @@ const Inventario = () => {
                   )}
 
                   {productos.map((prod) => {
-                    const draft = stockDrafts[prod.id] ?? String(Number(prod.stock || 0));
+                    const draft =
+                      stockDrafts[prod.id] ?? String(Number(prod.stock || 0));
                     const sinStock = Number(draft || 0) <= 0;
                     const guardando = guardandoId === prod.id;
 
@@ -413,7 +536,6 @@ const Inventario = () => {
                         style={{ gridTemplateColumns: gridCols }}
                         role="row"
                       >
-                        {/* PRODUCTO */}
                         <div
                           className="mov-gridCell is-strong"
                           role="cell"
@@ -433,8 +555,11 @@ const Inventario = () => {
                                 </span>
                               )}
                             </div>
+
                             <div className="inv-productInfo">
-                              <span className="inv-productName mov-ellipsissss">{prod.nombre}</span>
+                              <span className="inv-productName mov-ellipsissss">
+                                {prod.nombre}
+                              </span>
                               <span className="inv-productDesc mov-ellipsissss">
                                 {prod.descripcion || "Sin descripción"}
                               </span>
@@ -442,7 +567,6 @@ const Inventario = () => {
                           </div>
                         </div>
 
-                        {/* STOCK */}
                         <div
                           className="mov-gridCell is-center"
                           role="cell"
@@ -455,9 +579,15 @@ const Inventario = () => {
                               step="1"
                               value={draft}
                               onChange={(e) =>
-                                setStockDrafts((prev) => ({ ...prev, [prod.id]: e.target.value }))
+                                setStockDrafts((prev) => ({
+                                  ...prev,
+                                  [prod.id]: e.target.value,
+                                }))
                               }
-                              className={["inv-stockInput", sinStock ? "inv-stockInput--danger" : ""].join(" ")}
+                              className={[
+                                "inv-stockInput",
+                                sinStock ? "inv-stockInput--danger" : "",
+                              ].join(" ")}
                             />
                             <button
                               type="button"
@@ -466,28 +596,39 @@ const Inventario = () => {
                               disabled={guardando}
                               onClick={() => handleGuardarStock(prod)}
                             >
-                              {guardando
-                                ? <span className="inv-savingDot">…</span>
-                                : <FontAwesomeIcon icon={faFloppyDisk} />}
+                              {guardando ? (
+                                <span className="inv-savingDot">…</span>
+                              ) : (
+                                <FontAwesomeIcon icon={faFloppyDisk} />
+                              )}
                             </button>
                           </div>
                         </div>
 
-                        {/* SKU */}
-                        <div className="mov-gridCell is-center" role="cell" data-label="SKU">
-                          <span className="mov-ellipsissss">{prod.sku || "—"}</span>
+                        <div
+                          className="mov-gridCell is-center"
+                          role="cell"
+                          data-label="SKU"
+                        >
+                          <span className="mov-ellipsissss">
+                            {prod.sku || "—"}
+                          </span>
                         </div>
 
-                        {/* PRECIO */}
-                        <div className="mov-gridCell is-right" role="cell" data-label="PRECIO">
+                        <div
+                          className="mov-gridCell is-right"
+                          role="cell"
+                          data-label="PRECIO"
+                        >
                           <span className="mov-ellipsissss">
-                            {prod.precio !== null && prod.precio !== undefined && prod.precio !== ""
+                            {prod.precio !== null &&
+                            prod.precio !== undefined &&
+                            prod.precio !== ""
                               ? `$${Number(prod.precio).toLocaleString("es-AR")}`
                               : "—"}
                           </span>
                         </div>
 
-                        {/* HISTORIAL */}
                         <div
                           className="mov-gridCell mov-gridCell--actions is-center"
                           role="cell"
@@ -513,7 +654,6 @@ const Inventario = () => {
           </div>
         </section>
 
-        {/* ── PAGINACIÓN ── */}
         {totalPaginas > 1 && (
           <div className="inv-pagination">
             <button
@@ -524,14 +664,18 @@ const Inventario = () => {
             >
               <FontAwesomeIcon icon={faArrowLeft} /> Anterior
             </button>
+
             <span className="inv-pageInfo">
               Página <b>{paginaActual}</b> de <b>{totalPaginas}</b>
             </span>
+
             <button
               type="button"
               className="mov-btn"
               disabled={paginaActual === totalPaginas}
-              onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
+              onClick={() =>
+                setPaginaActual((p) => Math.min(totalPaginas, p + 1))
+              }
             >
               Siguiente <FontAwesomeIcon icon={faArrowRight} />
             </button>
@@ -540,22 +684,29 @@ const Inventario = () => {
       </div>
 
       {modalCargaOpen && (
-        <ModalCargaMasivaInventario
-          onClose={() => setModalCargaOpen(false)}
-          onImportado={async (mensaje) => {
-            setModalCargaOpen(false);
-            await fetchProductos();
-            mostrarToast("exito", mensaje || "Inventario importado correctamente.");
-          }}
-          onToast={mostrarToast}
-        />
+        <ModalPortal onClose={() => setModalCargaOpen(false)}>
+          <ModalCargaMasivaInventario
+            onClose={() => setModalCargaOpen(false)}
+            onImportado={async (mensaje) => {
+              setModalCargaOpen(false);
+              await fetchProductos();
+              mostrarToast(
+                "exito",
+                mensaje || "Inventario importado correctamente."
+              );
+            }}
+            onToast={mostrarToast}
+          />
+        </ModalPortal>
       )}
 
       {historialProducto && (
-        <ModalHistorialInventario
-          producto={historialProducto}
-          onClose={() => setHistorialProducto(null)}
-        />
+        <ModalPortal onClose={() => setHistorialProducto(null)}>
+          <ModalHistorialInventario
+            producto={historialProducto}
+            onClose={() => setHistorialProducto(null)}
+          />
+        </ModalPortal>
       )}
     </>
   );

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import BASE_URL from "../../../../config/config";
 import ModalFacturaBaltoResumen from "../../Facturacion/ModalFacturaBaltoResumen.jsx";
+import ModalNuevoCheque from "./ModalNuevoCheque.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faFileInvoiceDollar,
@@ -180,6 +181,26 @@ function resolveClienteByInput(clientes,inputValue) {
 
 function isContadoTipoVenta(tv) { return String(tv?.nombre??"").toLowerCase().includes("contado")||String(tv?.nombre??"").toLowerCase().includes("efectivo"); }
 
+/** Detecta si el medio de pago seleccionado es cheque o echeq */
+function isMedioPagoCheque(mediosPagoList, idMedioPago) {
+  const id = Number(idMedioPago);
+  if (!Number.isFinite(id) || id <= 0) return false;
+  const medio = mediosPagoList.find(x => Number(x?.id ?? x?.id_medio_pago ?? 0) === id);
+  if (!medio) return false;
+  const nombre = normalizeText(medio?.nombre ?? "");
+  return nombre.includes("cheque") || nombre.includes("echeq");
+}
+
+/** Detecta si el medio de pago es echeq específicamente */
+function isMedioPagoEcheq(mediosPagoList, idMedioPago) {
+  const id = Number(idMedioPago);
+  if (!Number.isFinite(id) || id <= 0) return false;
+  const medio = mediosPagoList.find(x => Number(x?.id ?? x?.id_medio_pago ?? 0) === id);
+  if (!medio) return false;
+  const nombre = normalizeText(medio?.nombre ?? "");
+  return nombre.includes("echeq");
+}
+
 function describeLineProblem(r,idx1based) {
   const detId=Number(r.id_detalle); const detTxt=String(r.detalleText||"").trim();
   const qtyBlank=isBlank(r.cantidad); const priceBlank=isBlank(r.precio);
@@ -238,6 +259,7 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
   const API_CONFIG_FACTURACION         = `${BASE_URL}/api.php?action=config_facturacion_get`;
   const API_VINCULAR_COMPROBANTE       = `${BASE_URL}/api.php?action=ventas_comprobantes_vincular_movimiento`;
   const API_VINCULAR_COMPROBANTE_LOTE  = `${BASE_URL}/api.php?action=ventas_comprobantes_vincular_movimientos_lote`;
+  const API_CHEQUES_GUARDAR            = `${BASE_URL}/api.php?action=ventas_cheques_guardar`;
 
   const showToast=useCallback((tipo,mensaje,dur=2800)=>onToast?.(tipo,mensaje,dur),[onToast]);
 
@@ -283,6 +305,11 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
   const rowsContainerRef = useRef(null);
   const [hasScroll, setHasScroll] = useState(false);
 
+  /* ── Estado cheque ── */
+  const [openChequeModal, setOpenChequeModal] = useState(false);
+  const [savingCheque, setSavingCheque] = useState(false);
+  const [chequeGuardado, setChequeGuardado] = useState(null); // datos del cheque guardado
+
   /* Reset al abrir */
   useEffect(()=>{
     const wasOpen=prevOpenRef.current; prevOpenRef.current=open; if(!open)return;
@@ -295,9 +322,15 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
       setSaving(false); setFiscalLoading(false); setFiscalError(""); setClienteFiscalDb(null);
       setFiscalCuitInput(""); setFiscalLookupLoading(false); setFiscalArcaData(null);
       setConfigFacturacion(null); setOpenResumenFactura(false); setResumenFacturaData(null);
+      setOpenChequeModal(false); setSavingCheque(false); setChequeGuardado(null);
       setTimeout(()=>closeBtnRef.current?.focus(),0);
     }
   },[open]);
+
+  /* Limpiar cheque guardado si cambia el medio de pago */
+  useEffect(() => {
+    setChequeGuardado(null);
+  }, [filters.id_medio_pago]);
 
   useEffect(() => {
     const el = rowsContainerRef.current;
@@ -385,6 +418,65 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
     setFiscalError("");
   },[]);
 
+  /* ── Detección de medio de pago cheque ── */
+  const esMedioPagoCheque = useMemo(
+    () => isMedioPagoCheque(mediosPagoList, filters.id_medio_pago),
+    [mediosPagoList, filters.id_medio_pago]
+  );
+  const tipoChequeDetectado = useMemo(
+    () => isMedioPagoEcheq(mediosPagoList, filters.id_medio_pago) ? "echeq" : "cheque",
+    [mediosPagoList, filters.id_medio_pago]
+  );
+
+  /* ── Guardar cheque en el backend (se llama después de guardar la venta) ── */
+  const guardarChequeEnBackend = useCallback(async (idMovimiento, datosCheque) => {
+    if (!datosCheque) return null;
+
+    const fd = new FormData();
+    fd.append("id_movimiento", String(idMovimiento));
+    fd.append("tipo", datosCheque.tipo_cheque || "cheque");
+    fd.append("fecha_emision", datosCheque.fecha_emision || todayISO());
+    fd.append("emisor", datosCheque.emisor || "");
+    fd.append("numero_cheque", datosCheque.numero_cheque || "");
+    fd.append("importe", String(datosCheque.importe || 0));
+    fd.append("fecha_pago", datosCheque.fecha_pago || todayISO());
+    fd.append("observaciones", datosCheque.observaciones || "");
+
+    if (datosCheque.archivo instanceof File) {
+      fd.append("archivo", datosCheque.archivo, datosCheque.archivo_nombre || datosCheque.archivo.name || "adjunto");
+    }
+
+    const { token, sessionKey } = getAuthInfo();
+    const headers = {};
+    if (sessionKey) headers["X-Session"] = sessionKey;
+    else if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(API_CHEQUES_GUARDAR, {
+      method: "POST",
+      headers,
+      body: fd,
+    });
+
+    return await parseJsonOrThrow(res);
+  }, [API_CHEQUES_GUARDAR]);
+
+  /* ── Handler: guardar datos del cheque desde el modal ── */
+  const handleSaveCheque = useCallback(async (datosCheque) => {
+    if (savingCheque) return;
+
+    // Validación básica
+    if (!datosCheque.emisor) { showToast("advertencia", "El emisor es obligatorio.", 3000); return; }
+    if (!datosCheque.numero_cheque) { showToast("advertencia", "El número de cheque es obligatorio.", 3000); return; }
+    if (!datosCheque.importe || datosCheque.importe <= 0) { showToast("advertencia", "El importe debe ser mayor a 0.", 3000); return; }
+    if (!datosCheque.fecha_pago) { showToast("advertencia", "La fecha de pago es obligatoria.", 3000); return; }
+
+    // Guardamos los datos del cheque en estado para usarlos al guardar la venta
+    // El cheque se persistirá en el backend DESPUÉS de crear la venta (necesitamos el id_movimiento)
+    setChequeGuardado(datosCheque);
+    setOpenChequeModal(false);
+    showToast("exito", `Cheque ${datosCheque.numero_cheque} cargado. Se guardará al confirmar la venta.`, 3200);
+  }, [savingCheque, showToast]);
+
   /* Cálculos */
   const rowsCalc=useMemo(()=>rows.map(r=>{const cantidad=Math.max(0,safeNumber(r.cantidad)),precio=Math.max(0,safeNumber(r.precio)),ivaPct=Math.max(0,safeNumber(r.ivaPct));const subtotal=cantidad*precio,ivaMonto=subtotal*(ivaPct/100),total=subtotal+ivaMonto;return{...r,subtotal,ivaMonto,total};}),[rows]);
   const resumen=useMemo(()=>({subtotal:rowsCalc.reduce((a,r)=>a+(r.subtotal||0),0),iva:rowsCalc.reduce((a,r)=>a+(r.ivaMonto||0),0),total:rowsCalc.reduce((a,r)=>a+(r.total||0),0)}),[rowsCalc]);
@@ -438,13 +530,16 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
     const cliTxt=String(cliInput||"").trim();
     if(!(selectedClienteId>0||cliTxt.length>0))return{ok:false,msg:"Falta seleccionar un Cliente (obligatorio)."};
     const tv=Number(filters.id_tipo_venta);if(!Number.isFinite(tv)||tv<=0)return{ok:false,msg:"Falta seleccionar la Forma de venta."};
-    if(isContado){const mp=Number(filters.id_medio_pago);if(!Number.isFinite(mp)||mp<=0)return{ok:false,msg:"Venta Contado: falta seleccionar el Medio de pago."};}
+    if(isContado){const mp=Number(filters.id_medio_pago);if(!Number.isFinite(mp)||mp<=0)return{ok:false,msg:"Venta Contado: falta seleccionar el Medio de pago."};
+      // Si el medio de pago es cheque, validar que el cheque esté cargado
+      if(esMedioPagoCheque&&!chequeGuardado)return{ok:false,msg:"El medio de pago es Cheque: cargá el cheque antes de guardar."};
+    }
     const periodoApi=fechaToYYYYMM(fecha);if(!/^\d{4}-\d{2}$/.test(periodoApi))return{ok:false,msg:"La fecha es inválida."};
     const problems=[]; rowsCalc.forEach((r,i)=>{const p=describeLineProblem(r,i+1);if(p)problems.push(p);});
     const usable=rowsCalc.filter(r=>Number.isFinite(Number(r.id_detalle))&&Number(r.id_detalle)>0&&Number(r.total||0)>0);
     if(!usable.length){if(problems.length){const msg=problems.slice(0,2).join(" ");const extra=problems.length>2?` (y ${problems.length-2} más)`:"";return{ok:false,msg:`No hay filas válidas. ${msg}${extra}`};}return{ok:false,msg:"Cargá al menos 1 fila válida (Detalle + Cantidad + Precio)."};}
     return{ok:true,warn:problems.length>0,periodoApi};
-  },[cliInput,selectedClienteId,filters,isContado,fecha,rowsCalc]);
+  },[cliInput,selectedClienteId,filters,isContado,fecha,rowsCalc,esMedioPagoCheque,chequeGuardado]);
 
   const buildResumenFacturaPayload=useCallback((clienteFiscalResuelto,cfg)=>{
     const items=rowsCalc.filter(r=>Number.isFinite(Number(r.id_detalle))&&Number(r.id_detalle)>0&&Number(r.total||0)>0).map((r,i)=>({id:r.id,codigo:String(i+1),descripcion:safeStr(r.detalleText),cantidad:Number(r.cantidad||0),unidad:"u",precio_unitario:Number(r.precio||0),precio:Number(r.precio||0),bonif_pct:0,impBonif:0,subtotal:Number(r.subtotal||0),ars:Number(r.total||0),iva_pct:Number(r.ivaPct||0),iva_monto:Number(r.ivaMonto||0),total:Number(r.total||0)}));
@@ -575,7 +670,6 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
     finally{setSaving(false);}
   },[validate,showToast,resolveFiscalForFacturacion,configFacturacion,fetchConfigFacturacion,buildResumenFacturaPayload]);
 
-  // ── FIX: un solo toast "Venta agregada correctamente." al finalizar facturación ──
   const finalizarFacturacionYGuardarVenta = useCallback(async (factEmitida) => {
     try {
       setSaving(true);
@@ -626,10 +720,18 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
         await vincularComprobanteAMovimientosLote(restoIds, idComprobante);
       }
 
+      // Guardar cheque si aplica
+      if (esMedioPagoCheque && chequeGuardado && idsOk[0]) {
+        try {
+          await guardarChequeEnBackend(idsOk[0], chequeGuardado);
+        } catch (eCheque) {
+          showToast("advertencia", `Venta facturada, pero no se pudo guardar el cheque: ${eCheque?.message}`, 5000);
+        }
+      }
+
       setOpenResumenFactura(false);
       setResumenFacturaData(null);
 
-      // Toast único final
       showToast("exito", "Venta agregada correctamente.", 3000);
 
       onSaved?.({
@@ -655,9 +757,11 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
     onSaved,
     subirComprobanteYVincularPrimerMovimiento,
     vincularComprobanteAMovimientosLote,
+    esMedioPagoCheque,
+    chequeGuardado,
+    guardarChequeEnBackend,
   ]);
 
-  // ── FIX: un solo toast "Venta agregada correctamente." al guardar sin facturar ──
   const submit=useCallback(async()=>{
     if(saving)return;
     const{sessionKey}=getAuthInfo();if(!sessionKey){showToast("error","No hay sesión activa (Falta X-Session).",5200);return;}
@@ -668,12 +772,30 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
     if(v.warn)showToast("advertencia","Hay filas incompletas: se guardarán solo las válidas.",3600);
     try{
       const info=await guardarVentaBatch({clienteFiscalResuelto:null,accionFinal:"guardar",esFacturadaFinal:false});
+
+      // ── Guardar cheque si aplica ──
+      if (esMedioPagoCheque && chequeGuardado) {
+        const idsOk = (
+          Array.isArray(info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
+            ? (info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
+            : (info?.id_movimiento ? [info.id_movimiento] : [])
+        ).map(x => Number(x)).filter(x => Number.isFinite(x) && x > 0);
+
+        if (idsOk.length > 0) {
+          try {
+            await guardarChequeEnBackend(idsOk[0], chequeGuardado);
+          } catch (eCheque) {
+            showToast("advertencia", `Venta guardada, pero no se pudo guardar el cheque: ${eCheque?.message}`, 5000);
+          }
+        }
+      }
+
       showToast("exito","Venta agregada correctamente.",3000);
       onSaved?.(info);
     }
     catch(e){showToast("error",e?.message||"Error guardando.",4500);}
     finally{setSaving(false);}
-  },[saving,addUI.open,validate,showToast,tipoVentaSeleccionado,accionContado,guardarVentaBatch,onSaved,abrirResumenFactura]);
+  },[saving,addUI.open,validate,showToast,tipoVentaSeleccionado,accionContado,guardarVentaBatch,onSaved,abrirResumenFactura,esMedioPagoCheque,chequeGuardado,guardarChequeEnBackend]);
 
   const onClickFacturar=useCallback(async()=>{
     setAccionContado("facturar");setFiscalError("");
@@ -1019,6 +1141,60 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
                     </div>
                   )}
 
+                  {/* ── Botón y estado cheque ── */}
+                  {isContado && esMedioPagoCheque && (
+                    <div className="mi-card mi-card--full" style={{ marginTop: 4 }}>
+                      <div className="mi-card__title">
+                        {tipoChequeDetectado === "echeq" ? "Echeq" : "Cheque"}
+                      </div>
+
+                      {chequeGuardado ? (
+                        /* Cheque cargado: mostrar resumen + botón editar */
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          <div
+                            style={{
+                              background: "rgba(16,185,129,.08)",
+                              border: "1px solid rgba(16,185,129,.25)",
+                              borderRadius: 8,
+                              padding: "8px 10px",
+                              fontSize: 12,
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            <div style={{ fontWeight: 700, color: "#059669", marginBottom: 2 }}>✓ Cheque cargado</div>
+                            <div><b>N°:</b> {chequeGuardado.numero_cheque}</div>
+                            <div><b>Emisor:</b> {chequeGuardado.emisor}</div>
+                            <div><b>Importe:</b> {moneyARS(chequeGuardado.importe)}</div>
+                            <div><b>Fecha pago:</b> {chequeGuardado.fecha_pago}</div>
+                            {chequeGuardado.archivo_nombre && (
+                              <div><b>Archivo:</b> {chequeGuardado.archivo_nombre}</div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="mit-btn mit-btn--ghost"
+                            style={{ width: "100%", fontSize: 12 }}
+                            onClick={() => setOpenChequeModal(true)}
+                            disabled={saving}
+                          >
+                            Editar cheque
+                          </button>
+                        </div>
+                      ) : (
+                        /* Sin cheque: botón cargar */
+                        <button
+                          type="button"
+                          className="mit-btn mit-btn--solid"
+                          style={{ width: "100%", marginTop: 4 }}
+                          onClick={() => setOpenChequeModal(true)}
+                          disabled={saving}
+                        >
+                          Cargar {tipoChequeDetectado === "echeq" ? "echeq" : "cheque"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {/* ── Panel facturación ── */}
                   {tipoVentaSeleccionado && (
                     <div className="mi-card mi-card--full">
@@ -1136,6 +1312,31 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
           />
         </div>
       </div>
+
+      {/* ── Modal de cheque ── */}
+      {openChequeModal && (
+        <ModalNuevoCheque
+          open={openChequeModal}
+          onClose={() => setOpenChequeModal(false)}
+          onSave={handleSaveCheque}
+          initialData={chequeGuardado
+            ? {
+                fecha_emision: chequeGuardado.fecha_emision,
+                emisor: chequeGuardado.emisor,
+                numero_cheque: chequeGuardado.numero_cheque,
+                importe: chequeGuardado.importe,
+                fecha_pago: chequeGuardado.fecha_pago,
+                observaciones: chequeGuardado.observaciones,
+                archivo: chequeGuardado.archivo,
+                archivo_nombre: chequeGuardado.archivo_nombre,
+              }
+            : undefined
+          }
+          tipoCheque={tipoChequeDetectado}
+          dark={dark}
+          saving={savingCheque}
+        />
+      )}
 
       {/* Modal Resumen Factura */}
       {openResumenFactura && resumenFacturaData && (

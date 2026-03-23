@@ -37,6 +37,12 @@ import Inventario from "./components/Stock/Inventario/Inventario";
 import Lista_Productos from "./components/Stock/Lista_Productos/Lista_Productos";
 import Tabla_Precios from "./components/Stock/Tabla_Precios/Tabla_Precios";
 
+/* ✅ CHEQUES */
+import Cheques_Cartera from "./components/Cheques/Cheques_Cartera/Cheques_Cartera";
+import Flujo_Cheques from "./components/Cheques/Flujo_Cheques/Flujo_Cheques";
+import Echeqs_Cartera from "./components/Cheques/Echeqs_Cartera/Echeqs_Cartera";
+import Flujo_Echeqs from "./components/Cheques/Flujo_Echeqs/Flujo_Echeqs";
+
 /* Providers globales */
 import { ListasProvider } from "./context/ListasContext";
 import { DateRangeProvider } from "./context/DateRangeContext";
@@ -144,6 +150,12 @@ export default function App() {
           <Route path="stock/inventario" element={<Inventario />} />
           <Route path="stock/lista-productos" element={<Lista_Productos />} />
           <Route path="stock/tabla-precios" element={<Tabla_Precios />} />
+
+          {/* ✅ CHEQUES */}
+          <Route path="cheques/cartera" element={<Cheques_Cartera />} />
+          <Route path="cheques/flujo" element={<Flujo_Cheques />} />
+          <Route path="cheques/echeqs-cartera" element={<Echeqs_Cartera />} />
+          <Route path="cheques/flujo-echeqs" element={<Flujo_Echeqs />} />
 
           <Route path="analisis-financiero" element={<AnalisisFinanciero />} />
 

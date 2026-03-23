@@ -378,4 +378,42 @@
   .cfg-cardMetaValue {
     max-width: 100%;
   }
+}.cfg-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0 12px;
+  border-radius: 999px;
+
+  letter-spacing: 0;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  line-height: 1;
+  gap: 6px;
+}
+
+.cfg-status::before {
+  content: "✓";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.cfg-status--success {
+  background: #e9f8ef;
+  color: #2c7a58;
+  border-color: #bfe7cf;
+}
+
+.cfg-status--success::before {
+  background: #d7f1e3;
+  color: #2c7a58;
+  outline: 1px solid #2c7a58;
 }

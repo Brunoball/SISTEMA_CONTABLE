@@ -1,14 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
-import {
-  faChevronRight,
-} from "@fortawesome/free-solid-svg-icons";
 import BASE_URL from "../../config/config";
 import logoTiendaNube from "../../imagenes/logo_tienda_nube.png";
 import "./configuracion.css";
 import "../Global/Global_css/Global_oscuro.css";
+
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronRight } from "@fortawesome/free-solid-svg-icons";
 
 const API_RELATIVE = "api.php";
 
@@ -64,16 +63,6 @@ async function apiFetch(paramsObj = {}, options = {}) {
     headers,
   });
 
-  if (res.status === 401 || res.status === 403) {
-    try {
-      window.dispatchEvent(
-        new CustomEvent("auth:unauthorized", {
-          detail: { status: res.status },
-        })
-      );
-    } catch {}
-  }
-
   return res;
 }
 
@@ -107,44 +96,23 @@ export default function Configuracion() {
     usuario?.tenant?.idTenant ||
     "";
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [tiendanube, setTiendanube] = useState({
     connected: false,
     webhooks_configured: false,
     store_id: "",
-    updated_at: "",
   });
 
   const cargarResumen = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    if (!tenantId) {
-      setError("No se detectó el idTenant en la sesión.");
-      setLoading(false);
-      return;
-    }
+    if (!tenantId) return;
 
     try {
-      const res = await apiFetch(
-        {
-          action: "tiendanube_status",
-          idTenant: tenantId,
-        },
-        { method: "GET" }
-      );
+      const res = await apiFetch({
+        action: "tiendanube_status",
+        idTenant: tenantId,
+      });
 
       const txt = await res.text();
       const data = safeJsonParse(txt);
-
-      if (!res.ok || !data?.exito) {
-        throw new Error(
-          data?.mensaje ||
-            data?.error ||
-            "No se pudo cargar el estado de configuración."
-        );
-      }
 
       const c = data?.conexion || {};
 
@@ -152,13 +120,8 @@ export default function Configuracion() {
         connected: Boolean(c.connected),
         webhooks_configured: Boolean(c.webhooks_configured),
         store_id: c.store_id || "",
-        updated_at: c.updated_at || "",
       });
-    } catch (e) {
-      setError(e?.message || "Error al cargar la configuración.");
-    } finally {
-      setLoading(false);
-    }
+    } catch {}
   }, [tenantId]);
 
   useEffect(() => {
@@ -166,19 +129,18 @@ export default function Configuracion() {
   }, [cargarResumen]);
 
   const card = useMemo(() => {
-    const estadoTiendaNube = tiendanube.connected
+    const estado = tiendanube.connected
       ? tiendanube.webhooks_configured
-        ? { text: "Completado", type: "success" }
+        ? { text: "Finalizada", type: "success" }
         : { text: "Parcial", type: "warning" }
       : { text: "Pendiente", type: "pending" };
 
     return {
-      id: "tiendanube",
       title: "Tienda Nube",
       description:
         "Conectá tu tienda y configurá la sincronización con una interfaz simple.",
       route: "/panel/configuracion/tiendanube",
-      status: estadoTiendaNube,
+      status: estado,
       metaTop: tiendanube.connected ? "Conexión activa" : "Sin conexión",
       metaBottom: tiendanube.store_id
         ? `Store ID: ${tiendanube.store_id}`
@@ -188,19 +150,6 @@ export default function Configuracion() {
 
   return (
     <section className="cfg-page">
-      <div className="cfg-top">
-        <div>
-          <h1 className="cfg-title">Centro de configuración</h1>
-          <p className="cfg-subtitle">
-            Administrá conexiones, integraciones y parámetros generales.
-          </p>
-        </div>
-
-
-      </div>
-
-      {error && <div className="cfg-alert cfg-alert--error">{error}</div>}
-
       <div className="cfg-cards">
         <div className="cfg-cardWrap">
           <button
@@ -212,18 +161,21 @@ export default function Configuracion() {
               <CardVisual />
 
               <div className="cfg-cardBody">
+                {/* HEADER */}
                 <div className="cfg-cardHeader">
                   <h2>{card.title}</h2>
 
-                  <span className="cfg-cardArrow">
-                    <FontAwesomeIcon icon={faChevronRight} />
-                  </span>
+                  {/* CHIP ARRIBA DERECHA */}
+                  <StatusPill type={card.status.type}>
+                    Finalizada
+                  </StatusPill>
                 </div>
 
                 <p className="cfg-cardDescription">{card.description}</p>
               </div>
             </div>
 
+            {/* FOOTER */}
             <div className="cfg-cardFooter">
               <div className="cfg-cardFooterLeft">
                 <div className="cfg-cardMetaLine">
@@ -239,10 +191,11 @@ export default function Configuracion() {
                 </div>
               </div>
 
+              {/* 👉 FLECHA ABAJO DERECHA */}
               <div className="cfg-cardFooterRight">
-                <StatusPill type={card.status.type}>
-                  {card.status.text}
-                </StatusPill>
+                <span className="cfg-cardArrow">
+                  <FontAwesomeIcon icon={faChevronRight} />
+                </span>
               </div>
             </div>
           </button>

@@ -371,14 +371,14 @@ html[data-theme="oscuro"] .cc-input:focus {
 }
 
 html[data-theme="oscuro"] .cc-floatingLabel {
-  background: transparent !important;
+
   color: rgba(226, 232, 240, 0.60) !important;
 }
 
 html[data-theme="oscuro"] .cc-floatingField.is-active .cc-floatingLabel,
 html[data-theme="oscuro"] .cc-floatingField:focus-within .cc-floatingLabel {
   color: rgba(78, 161, 255, 0.92) !important;
-  background: transparent !important;
+
 }
 
 html[data-theme="oscuro"] .cc-clearSearch--inside {

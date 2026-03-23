@@ -1062,47 +1062,67 @@ const Principal = () => {
           </div>
         </div>
 
-        <div className="mov-topbar__right">
-          <div className="mov-topbar__section">{activeLabel}</div>
+<div className="mov-topbar__right">
+  <div className="mov-topbar__section">{activeLabel}</div>
 
-          <button
-            className="pp-themeBtn"
-            onClick={toggleTema}
-            title={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-            aria-label={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-          >
-            <FontAwesomeIcon icon={tema === "oscuro" ? faSun : faMoon} />
-          </button>
+  <button
+    className="pp-themeBtn"
+    onClick={toggleTema}
+    title={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+    aria-label={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+  >
+    <FontAwesomeIcon icon={tema === "oscuro" ? faSun : faMoon} />
+  </button>
 
-          <button
-            className="mov-topbar__usericon"
-            onClick={() => setShowPerfilModal(true)}
-            title="Perfil"
-            style={{
-              overflow: "hidden",
-              padding: 8,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {tenantLogoIconoLoaded && tenantLogoIconoSrc ? (
-              <img
-                src={tenantLogoIconoSrc}
-                alt="Logo icono de la empresa"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  display: "block",
-                  objectFit: "cover",
-                  borderRadius: "50%",
-                }}
-              />
-            ) : (
-              <FontAwesomeIcon icon={faUserCircle} />
-            )}
-          </button>
-        </div>
+  {rolUsuario === "admin" && (
+    <button
+      className="pp-themeBtn"
+      onClick={() => handleNavigate("/panel/configuracion")}
+      title="Configuración"
+      aria-label="Ir a Configuración"
+    >
+      <FontAwesomeIcon icon={faGear} />
+    </button>
+  )}
+
+  <button
+    className="mov-topbar__usericon"
+    onClick={() => setShowPerfilModal(true)}
+    title="Perfil"
+    style={{
+      overflow: "hidden",
+      padding: 8,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    {tenantLogoIconoLoaded && tenantLogoIconoSrc ? (
+      <img
+        src={tenantLogoIconoSrc}
+        alt="Logo icono de la empresa"
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "block",
+          objectFit: "cover",
+          borderRadius: "50%",
+        }}
+      />
+    ) : (
+      <FontAwesomeIcon icon={faUserCircle} />
+    )}
+  </button>
+
+  <button
+    className="pp-topbarLogout"
+    onClick={() => setShowLogoutModal(true)}
+    title="Cerrar sesión"
+    aria-label="Cerrar sesión"
+  >
+    <FontAwesomeIcon icon={faSignOutAlt} />
+  </button>
+</div>
       </header>
 
       <div

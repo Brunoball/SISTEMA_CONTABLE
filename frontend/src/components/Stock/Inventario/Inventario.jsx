@@ -76,6 +76,18 @@ async function apiPost(url, body) {
   return parseJsonOrThrow(res);
 }
 
+function formatMoney(value) {
+  if (value === null || value === undefined || value === "") return "—";
+
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+
+  return `$${n.toLocaleString("es-AR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 /* ──────────────────────────────────────────────
    SKELETON
 ────────────────────────────────────────────── */
@@ -621,11 +633,7 @@ const Inventario = () => {
                           data-label="PRECIO"
                         >
                           <span className="mov-ellipsissss">
-                            {prod.precio !== null &&
-                            prod.precio !== undefined &&
-                            prod.precio !== ""
-                              ? `$${Number(prod.precio).toLocaleString("es-AR")}`
-                              : "—"}
+                            {formatMoney(prod.precio)}
                           </span>
                         </div>
 

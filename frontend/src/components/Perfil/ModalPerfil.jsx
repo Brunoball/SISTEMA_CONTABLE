@@ -217,39 +217,16 @@ export default function ModalPerfil({
           </div>
         </div>
 
-        <div className="mit-actions">
-          {/* Configuración — solo visible para admins, alineado a la izquierda */}
-          {isAdmin && (
-            <button
-              type="button"
-              className="mit-btn mit-btn--config"
-              onClick={() => onConfigRequest?.()}
-              title="Ir a Configuración"
-            >
-              <FontAwesomeIcon icon={faGear} style={{ marginRight: 7 }} />
-              Configuración
-            </button>
-          )}
-
-          <div className="mit-help" />
-
-          <button
-            type="button"
-            className="mit-btn mit-btn--danger"
-            onClick={() => onLogoutRequest?.()}
-            title="Cerrar sesión"
-          >
-            Cerrar sesión
-          </button>
-
-          <button
-            type="button"
-            className="mit-btn mit-btn--ghost"
-            onClick={cerrar}
-          >
-            Cerrar
-          </button>
-        </div>
+<div className="mit-actions">
+  <div className="mit-help" />
+  <button
+    type="button"
+    className="mit-btn mit-btn--ghost"
+    onClick={cerrar}
+  >
+    Cerrar
+  </button>
+</div>
       </div>
     </div>
   );

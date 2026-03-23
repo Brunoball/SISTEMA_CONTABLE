@@ -107,8 +107,20 @@ const COLUMNS = [
   { key: "sku", label: "SKU", fr: 1.0, align: "center", sortable: true },
   { key: "stock", label: "STOCK", fr: 0.8, align: "center", sortable: true },
   { key: "precio", label: "PRECIO", fr: 1.0, align: "right", sortable: true },
-  { key: "precio_promo", label: "PRECIO PROMO", fr: 1.0, align: "right", sortable: true },
-  { key: "acciones", label: "ACCIONES", fr: 0.7, align: "center", sortable: false },
+  {
+    key: "precio_promo",
+    label: "PRECIO PROMO",
+    fr: 1.0,
+    align: "right",
+    sortable: true,
+  },
+  {
+    key: "acciones",
+    label: "ACCIONES",
+    fr: 0.7,
+    align: "center",
+    sortable: false,
+  },
 ];
 
 const GRID_COLS = COLUMNS.map((c) => `${c.fr}fr`).join(" ");
@@ -638,7 +650,9 @@ const Lista_Productos = () => {
                 <button
                   key={p}
                   type="button"
-                  className={`mov-btn ${p === paginaActual ? "mov-btn--primary" : "mov-btn--ghost"}`}
+                  className={`mov-btn ${
+                    p === paginaActual ? "mov-btn--primary" : "mov-btn--ghost"
+                  }`}
                   onClick={() => setPaginaActual(p)}
                   style={{ minWidth: 40, padding: "0 10px" }}
                 >

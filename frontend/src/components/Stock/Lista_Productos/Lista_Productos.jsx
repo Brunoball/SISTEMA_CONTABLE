@@ -4,6 +4,18 @@ import ModalEditarProducto from "./modales/ModalEditarProducto";
 import ModalEliminar from "../../Global/Modales/ModalEliminar";
 import Toast from "../../Global/Toast";
 import BASE_URL from "../../../config/config";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faPlus,
+  faMagnifyingGlass,
+  faTimes,
+  faPenToSquare,
+  faTrashCan,
+  faBoxOpen,
+  faChevronUp,
+  faChevronDown,
+  faSort,
+} from "@fortawesome/free-solid-svg-icons";
 import "./Lista_Productos.css";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
@@ -73,6 +85,29 @@ async function apiPost(url, body) {
 }
 
 /* =========================
+   Columnas
+========================= */
+const COLUMNS = [
+  { key: "nombre",       label: "PRODUCTO",      fr: 2.4, align: "left",   sortable: true  },
+  { key: "sku",          label: "SKU",            fr: 1.0, align: "center", sortable: true  },
+  { key: "stock",        label: "STOCK",          fr: 0.8, align: "center", sortable: true  },
+  { key: "precio",       label: "PRECIO",         fr: 1.0, align: "right",  sortable: true  },
+  { key: "precio_promo", label: "PRECIO PROMO",   fr: 1.0, align: "right",  sortable: true  },
+  { key: "acciones",     label: "ACCIONES",       fr: 0.7, align: "center", sortable: false },
+];
+
+const GRID_COLS = COLUMNS.map((c) => `${c.fr}fr`).join(" ");
+
+const SKELETON_ROWS = 10;
+const SKEL_WIDTHS = {
+  nombre:       ["68%","52%","60%","48%"],
+  sku:          ["44%","36%","40%","32%"],
+  stock:        ["38%","30%","34%","28%"],
+  precio:       ["50%","42%","46%","38%"],
+  precio_promo: ["46%","38%","42%","34%"],
+};
+
+/* =========================
    Componente principal
 ========================= */
 const Lista_Productos = () => {
@@ -94,23 +129,15 @@ const Lista_Productos = () => {
   const [eliminando, setEliminando] = useState(false);
 
   const [toast, setToast] = useState(null);
-
   const [imagenesMap, setImagenesMap] = useState({});
 
   const productosPorPagina = 20;
 
   const mostrarToast = useCallback((tipo, mensaje, duracion = 2500) => {
-    setToast({
-      tipo,
-      mensaje,
-      duracion,
-      id: Date.now() + Math.random(),
-    });
+    setToast({ tipo, mensaje, duracion, id: Date.now() + Math.random() });
   }, []);
 
-  const cerrarToast = useCallback(() => {
-    setToast(null);
-  }, []);
+  const cerrarToast = useCallback(() => setToast(null), []);
 
   const fetchProductos = useCallback(async () => {
     setLoading(true);
@@ -144,13 +171,9 @@ const Lista_Productos = () => {
     }
   }, [busqueda, paginaActual, orden]);
 
-  useEffect(() => {
-    fetchProductos();
-  }, [fetchProductos]);
+  useEffect(() => { fetchProductos(); }, [fetchProductos]);
 
-  /* =========================
-     Cargar blobs de imágenes protegidas
-  ========================= */
+  /* Imágenes protegidas */
   useEffect(() => {
     let cancelado = false;
     const objectUrls = [];
@@ -159,14 +182,9 @@ const Lista_Productos = () => {
       const productosConImagen = productos.filter(
         (p) => Number(p.imagen_archivo_id || 0) > 0
       );
-
-      if (productosConImagen.length === 0) {
-        setImagenesMap({});
-        return;
-      }
+      if (productosConImagen.length === 0) { setImagenesMap({}); return; }
 
       const nuevoMap = {};
-
       await Promise.all(
         productosConImagen.map(async (prod) => {
           try {
@@ -174,43 +192,30 @@ const Lista_Productos = () => {
               action: "stock_producto_imagen_ver",
               id_archivo: String(prod.imagen_archivo_id),
             });
-
             const res = await fetch(`${API_URL}?${params.toString()}`, {
               method: "GET",
               headers: buildHeadersGET(),
             });
-
             if (!res.ok) return;
-
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
             objectUrls.push(url);
             nuevoMap[prod.id] = url;
-          } catch {
-            // silencioso
-          }
+          } catch {}
         })
       );
-
-      if (!cancelado) {
-        setImagenesMap(nuevoMap);
-      } else {
-        objectUrls.forEach((u) => URL.revokeObjectURL(u));
-      }
+      if (!cancelado) setImagenesMap(nuevoMap);
+      else objectUrls.forEach((u) => URL.revokeObjectURL(u));
     }
 
     cargarImagenes();
-
     return () => {
       cancelado = true;
       objectUrls.forEach((u) => URL.revokeObjectURL(u));
     };
   }, [productos]);
 
-  const handleBusqueda = (e) => {
-    setBusqueda(e.target.value);
-    setPaginaActual(1);
-  };
+  const handleBusqueda = (e) => { setBusqueda(e.target.value); setPaginaActual(1); };
 
   const handleOrden = (campo) => {
     setOrden((prev) =>
@@ -222,26 +227,15 @@ const Lista_Productos = () => {
   };
 
   const handleAbrirEditar = (id) => {
-    if (!id || Number(id) <= 0) {
-      mostrarToast("error", "ID de producto inválido.");
-      return;
-    }
-
+    if (!id || Number(id) <= 0) { mostrarToast("error", "ID de producto inválido."); return; }
     setProductoEditarId(Number(id));
     setModalEditarAbierto(true);
   };
 
-  const handleCerrarEditar = () => {
-    setModalEditarAbierto(false);
-    setProductoEditarId(null);
-  };
+  const handleCerrarEditar = () => { setModalEditarAbierto(false); setProductoEditarId(null); };
 
   const handleAbrirEliminar = (producto) => {
-    if (!producto?.id || Number(producto.id) <= 0) {
-      mostrarToast("error", "ID de producto inválido.");
-      return;
-    }
-
+    if (!producto?.id || Number(producto.id) <= 0) { mostrarToast("error", "ID de producto inválido."); return; }
     setProductoEliminar(producto);
     setModalEliminarAbierto(true);
   };
@@ -253,28 +247,20 @@ const Lista_Productos = () => {
   };
 
   const handleConfirmarEliminar = async () => {
-    if (!productoEliminar?.id || Number(productoEliminar.id) <= 0) {
-      throw new Error("ID de producto inválido.");
-    }
-
+    if (!productoEliminar?.id || Number(productoEliminar.id) <= 0) throw new Error("ID de producto inválido.");
     setEliminando(true);
-
     try {
       const data = await apiPost(API_URL, {
         action: "stock_productos_eliminar",
         id: Number(productoEliminar.id),
       });
-
-      if (data.exito === false) {
-        throw new Error(data.mensaje || "Error al eliminar el producto");
-      }
+      if (data.exito === false) throw new Error(data.mensaje || "Error al eliminar el producto");
 
       if (productos.length === 1 && paginaActual > 1) {
         setPaginaActual((prev) => Math.max(1, prev - 1));
       } else {
         await fetchProductos();
       }
-
       setModalEliminarAbierto(false);
       setProductoEliminar(null);
     } finally {
@@ -284,18 +270,6 @@ const Lista_Productos = () => {
 
   const totalPaginas = Math.ceil(totalProductos / productosPorPagina);
 
-  const OrdenIcon = ({ campo }) => {
-    if (orden.campo !== campo) {
-      return <span className="stock-orden-icon stock-orden-inactivo">↕</span>;
-    }
-
-    return (
-      <span className="stock-orden-icon stock-orden-activo">
-        {orden.dir === "ASC" ? "↑" : "↓"}
-      </span>
-    );
-  };
-
   const paginasVisibles = Array.from({ length: totalPaginas }, (_, i) => i + 1)
     .filter((p) => p === 1 || p === totalPaginas || Math.abs(p - paginaActual) <= 2)
     .reduce((acc, p, i, arr) => {
@@ -304,181 +278,260 @@ const Lista_Productos = () => {
       return acc;
     }, []);
 
+  /* Icono de orden */
+  const OrdenIcon = ({ campo }) => {
+    if (orden.campo !== campo) return <FontAwesomeIcon icon={faSort} className="prod-sortIcon prod-sortIcon--inactive" />;
+    return <FontAwesomeIcon icon={orden.dir === "ASC" ? faChevronUp : faChevronDown} className="prod-sortIcon prod-sortIcon--active" />;
+  };
+
+  /* Skeleton row */
+  const renderSkeletonRow = (idx) => (
+    <div
+      key={`skel-${idx}`}
+      className="mov-gridTable mov-gridTable--row mov-row--skeleton"
+      style={{ gridTemplateColumns: GRID_COLS }}
+      role="row"
+      aria-hidden="true"
+    >
+      {COLUMNS.map((c) => {
+        if (c.key === "acciones") {
+          return (
+            <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell">
+              <div className="mov-skelActions">
+                <span className="mov-skelIcon" />
+                <span className="mov-skelIcon" />
+              </div>
+            </div>
+          );
+        }
+        const list = SKEL_WIDTHS[c.key] || ["60%"];
+        const w = list[idx % list.length];
+        return (
+          <div
+            key={c.key}
+            className={[
+              "mov-gridCell",
+              c.align === "right" ? "is-right" : "",
+              c.align === "center" ? "is-center" : "",
+            ].join(" ")}
+            role="cell"
+          >
+            <span className="mov-skeletonBar" style={{ width: w }} />
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <>
-      <div className="stock-page">
-        <div className="stock-header">
-          <h1 className="stock-title">Productos</h1>
+      <div className="mov-page">
+        {error && <div className="mov-alert" role="alert">{error}</div>}
 
-          <div className="stock-header-actions">
-            <button
-              onClick={() => setModalAbierto(true)}
-              className="stock-btn-primary"
-              type="button"
-            >
-              <span className="stock-btn-primary-icon">+</span>
-              Agregar producto
-            </button>
-          </div>
-        </div>
+        <section className="mov-card mov-card--table">
+          {/* ── HEAD ── */}
+          <div className="mov-card__head">
+            <div className="mov-card__headLeft">
+              <div className="title-mov">
+                <div className="mov-card__title">Stock · Productos</div>
+                <div className="mov-card__hint">
+                  Mostrando <b>{totalProductos}</b> productos
+                </div>
+              </div>
 
-        <div className="stock-toolbar">
-          <div className="stock-search-wrap">
-            <span className="stock-search-icon">🔍</span>
-            <input
-              type="text"
-              placeholder="Buscar por nombre o SKU..."
-              value={busqueda}
-              onChange={handleBusqueda}
-              className="stock-search-input"
-            />
-          </div>
-
-          <span className="stock-total">{totalProductos} productos</span>
-        </div>
-
-        <div className="stock-card">
-          {loading ? (
-            <div className="stock-empty">Cargando productos...</div>
-          ) : error ? (
-            <div className="stock-empty stock-empty-error">{error}</div>
-          ) : productos.length === 0 ? (
-            <div className="stock-empty">No se encontraron productos.</div>
-          ) : (
-            <div className="stock-table-responsive">
-              <table className="stock-table">
-                <thead>
-                  <tr>
-                    <th className="stock-th" onClick={() => handleOrden("nombre")}>
-                      Producto <OrdenIcon campo="nombre" />
-                    </th>
-                    <th className="stock-th" onClick={() => handleOrden("sku")}>
-                      SKU <OrdenIcon campo="sku" />
-                    </th>
-                    <th className="stock-th" onClick={() => handleOrden("stock")}>
-                      Stock <OrdenIcon campo="stock" />
-                    </th>
-                    <th className="stock-th" onClick={() => handleOrden("precio")}>
-                      Precio <OrdenIcon campo="precio" />
-                    </th>
-                    <th className="stock-th" onClick={() => handleOrden("precio_promo")}>
-                      Precio Promo <OrdenIcon campo="precio_promo" />
-                    </th>
-                    <th className="stock-th stock-th-no-pointer">Acciones</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {productos.map((prod, i) => (
-                    <tr
-                      key={prod.id}
-                      className={i % 2 === 0 ? "stock-row" : "stock-row stock-row-alt"}
-                    >
-                      <td className="stock-td">
-                        <div className="stock-product-cell">
-                          <div className="stock-product-thumb">
-                            {imagenesMap[prod.id] ? (
-                              <img
-                                src={imagenesMap[prod.id]}
-                                alt={prod.nombre}
-                                className="stock-product-img"
-                              />
-                            ) : (
-                              <span className="stock-product-noimg">📷</span>
-                            )}
-                          </div>
-
-                          <span className="stock-product-name">{prod.nombre}</span>
-                        </div>
-                      </td>
-
-                      <td className="stock-td stock-sku">{prod.sku || "-"}</td>
-
-                      <td className="stock-td">
-                        <span
-                          className={
-                            prod.stock === null ||
-                            prod.stock === undefined ||
-                            Number(prod.stock) === 0
-                              ? "stock-badge stock-badge-danger"
-                              : "stock-badge stock-badge-success"
-                          }
-                        >
-                          {prod.stock === null ||
-                          prod.stock === undefined ||
-                          Number(prod.stock) === 0
-                            ? "Sin stock"
-                            : prod.stock}
+              <div className="mov-headFilters">
+                <div className="cc-filter">
+                  <div className="cc-floatingField cc-floatingField--search is-active">
+                    <div className="cc-searchInput">
+                      <div className="cc-searchInput__fieldWrap">
+                        <input
+                          className="cc-input cc-input--floating"
+                          value={busqueda}
+                          onChange={handleBusqueda}
+                          placeholder="Buscar por nombre o SKU..."
+                          disabled={loading}
+                        />
+                        <span className="cc-floatingLabel">
+                          <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
                         </span>
-                      </td>
-
-                      <td className="stock-td">
-                        {prod.precio !== null &&
-                        prod.precio !== undefined &&
-                        prod.precio !== ""
-                          ? `$${Number(prod.precio).toLocaleString("es-AR")}`
-                          : "-"}
-                      </td>
-
-                      <td className="stock-td">
-                        {prod.precio_promo !== null &&
-                        prod.precio_promo !== undefined &&
-                        prod.precio_promo !== ""
-                          ? `$${Number(prod.precio_promo).toLocaleString("es-AR")}`
-                          : "-"}
-                      </td>
-
-                      <td className="stock-td stock-actions-cell">
-                        <div className="stock-actions">
+                        {busqueda.trim() !== "" && (
                           <button
-                            title="Editar"
                             type="button"
-                            onClick={() => handleAbrirEditar(prod.id)}
-                            className="stock-action-btn stock-action-edit"
+                            className="cc-clearSearch cc-clearSearch--inside"
+                            title="Limpiar búsqueda"
+                            onClick={() => { setBusqueda(""); setPaginaActual(1); }}
                           >
-                            ✏️
+                            <FontAwesomeIcon icon={faTimes} />
                           </button>
-
-                          <button
-                            title="Eliminar"
-                            type="button"
-                            onClick={() => handleAbrirEliminar(prod)}
-                            className="stock-action-btn stock-action-delete"
-                          >
-                            🗑
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
-        </div>
 
+            <div className="mov-card__actions">
+              <button
+                type="button"
+                className="mov-btn mov-btn--primary"
+                onClick={() => setModalAbierto(true)}
+              >
+                <FontAwesomeIcon icon={faPlus} /> Agregar producto
+              </button>
+            </div>
+          </div>
+
+          {/* ── HEADER TABLA ── */}
+          <div
+            className="mov-gridTable mov-gridTable--head"
+            style={{ gridTemplateColumns: GRID_COLS }}
+            role="row"
+          >
+            {COLUMNS.map((c) => (
+              <div
+                key={c.key}
+                className={[
+                  "mov-gridCell",
+                  "mov-gridCell--head",
+                  c.align === "right"  ? "is-right"  : "",
+                  c.align === "center" ? "is-center" : "",
+                  c.sortable ? "prod-th--sortable" : "",
+                ].join(" ")}
+                role="columnheader"
+                onClick={c.sortable ? () => handleOrden(c.key) : undefined}
+              >
+                {c.label}
+                {c.sortable && <OrdenIcon campo={c.key} />}
+              </div>
+            ))}
+          </div>
+
+          {/* ── BODY ── */}
+          <div className="mov-tableWrap" role="rowgroup">
+            <div className={["mov-gridBody", "mov-gridBody--relative", loading ? "mov-softLoading" : ""].join(" ")}>
+              {loading ? (
+                <div className="mov-skeletonWrap" aria-busy="true">
+                  {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
+                </div>
+              ) : (
+                <>
+                  {productos.length === 0 ? (
+                    <div className="cc-emptyState">
+                      <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+                      <div className="cc-emptyText">
+                        {busqueda.trim()
+                          ? `No se encontraron productos para "${busqueda.trim()}".`
+                          : "No hay productos para mostrar."}
+                      </div>
+                    </div>
+                  ) : (
+                    productos.map((prod) => (
+                      <div
+                        key={prod.id}
+                        className="mov-gridTable mov-gridTable--row"
+                        style={{ gridTemplateColumns: GRID_COLS }}
+                        role="row"
+                      >
+                        {/* PRODUCTO */}
+                        <div className="mov-gridCell is-strong" role="cell" data-label="PRODUCTO">
+                          <div className="prod-productCell">
+                            <div className="prod-thumb">
+                              {imagenesMap[prod.id]
+                                ? <img src={imagenesMap[prod.id]} alt={prod.nombre} className="prod-thumb__img" />
+                                : <span className="prod-thumb__placeholder"><FontAwesomeIcon icon={faBoxOpen} /></span>
+                              }
+                            </div>
+                            <span className="mov-ellipsissss">{prod.nombre}</span>
+                          </div>
+                        </div>
+
+                        {/* SKU */}
+                        <div className="mov-gridCell is-center" role="cell" data-label="SKU">
+                          <span className="mov-ellipsissss prod-sku">{prod.sku || "—"}</span>
+                        </div>
+
+                        {/* STOCK */}
+                        <div className="mov-gridCell is-center" role="cell" data-label="STOCK">
+                          <span className={
+                            !prod.stock || Number(prod.stock) === 0
+                              ? "mov-chip mov-chip--warn"
+                              : "mov-chip mov-chip--ok"
+                          }>
+                            {!prod.stock || Number(prod.stock) === 0 ? "Sin stock" : prod.stock}
+                          </span>
+                        </div>
+
+                        {/* PRECIO */}
+                        <div className="mov-gridCell is-right" role="cell" data-label="PRECIO">
+                          <span className="mov-ellipsissss">
+                            {prod.precio !== null && prod.precio !== undefined && prod.precio !== ""
+                              ? `$${Number(prod.precio).toLocaleString("es-AR")}`
+                              : "—"}
+                          </span>
+                        </div>
+
+                        {/* PRECIO PROMO */}
+                        <div className="mov-gridCell is-right" role="cell" data-label="PRECIO PROMO">
+                          <span className="mov-ellipsissss prod-promo">
+                            {prod.precio_promo !== null && prod.precio_promo !== undefined && prod.precio_promo !== ""
+                              ? `$${Number(prod.precio_promo).toLocaleString("es-AR")}`
+                              : "—"}
+                          </span>
+                        </div>
+
+                        {/* ACCIONES */}
+                        <div className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label="ACCIONES">
+                          <div className="mov-actionsInline">
+                            <button
+                              type="button"
+                              title="Editar"
+                              className="mov-iconBtn"
+                              onClick={() => handleAbrirEditar(prod.id)}
+                            >
+                              <FontAwesomeIcon icon={faPenToSquare} />
+                            </button>
+                            <button
+                              type="button"
+                              title="Eliminar"
+                              className="mov-iconBtn mov-iconBtn--danger"
+                              onClick={() => handleAbrirEliminar(prod)}
+                            >
+                              <FontAwesomeIcon icon={faTrashCan} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* ── PAGINACIÓN ── */}
         {totalPaginas > 1 && (
-          <div className="stock-pagination">
+          <div className="prod-pagination">
             <button
+              type="button"
+              className="mov-btn mov-btn--ghost"
               onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
               disabled={paginaActual === 1}
-              className="stock-page-btn"
-              type="button"
             >
               ← Anterior
             </button>
 
             {paginasVisibles.map((p, i) =>
               p === "..." ? (
-                <span key={`dots-${i}`} className="stock-page-dots">
-                  ...
-                </span>
+                <span key={`dots-${i}`} className="prod-page-dots">…</span>
               ) : (
                 <button
                   key={p}
-                  onClick={() => setPaginaActual(p)}
-                  className={`stock-page-btn ${p === paginaActual ? "active" : ""}`}
                   type="button"
+                  className={`mov-btn ${p === paginaActual ? "mov-btn--primary" : "mov-btn--ghost"}`}
+                  onClick={() => setPaginaActual(p)}
+                  style={{ minWidth: 40, padding: "0 10px" }}
                 >
                   {p}
                 </button>
@@ -486,10 +539,10 @@ const Lista_Productos = () => {
             )}
 
             <button
+              type="button"
+              className="mov-btn mov-btn--ghost"
               onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
               disabled={paginaActual === totalPaginas}
-              className="stock-page-btn"
-              type="button"
             >
               Siguiente →
             </button>
@@ -497,6 +550,7 @@ const Lista_Productos = () => {
         )}
       </div>
 
+      {/* ── MODALES ── */}
       {modalAbierto && (
         <ModalAgregarProducto
           onClose={() => setModalAbierto(false)}
@@ -549,33 +603,20 @@ const Lista_Productos = () => {
         details={
           productoEliminar
             ? [
-                {
-                  label: "ID Producto",
-                  value: `#${productoEliminar.id}`,
-                },
-                {
-                  label: "Nombre",
-                  value: productoEliminar.nombre || "—",
-                },
-                {
-                  label: "SKU",
-                  value: productoEliminar.sku || "—",
-                },
+                { label: "ID Producto", value: `#${productoEliminar.id}` },
+                { label: "Nombre",      value: productoEliminar.nombre || "—" },
+                { label: "SKU",         value: productoEliminar.sku || "—" },
                 {
                   label: "Stock",
                   value:
-                    productoEliminar.stock === null ||
-                    productoEliminar.stock === undefined ||
-                    productoEliminar.stock === ""
+                    productoEliminar.stock === null || productoEliminar.stock === undefined || productoEliminar.stock === ""
                       ? "—"
                       : String(productoEliminar.stock),
                 },
                 {
                   label: "Precio",
                   value:
-                    productoEliminar.precio !== null &&
-                    productoEliminar.precio !== undefined &&
-                    productoEliminar.precio !== ""
+                    productoEliminar.precio !== null && productoEliminar.precio !== undefined && productoEliminar.precio !== ""
                       ? `$${Number(productoEliminar.precio).toLocaleString("es-AR")}`
                       : "—",
                 },

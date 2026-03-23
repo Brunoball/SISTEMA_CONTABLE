@@ -97,20 +97,16 @@ function resolveFileUrl(rawUrl) {
 function withSessionKey(url) {
   const base = safeText(url);
   if (!base) return "";
-
   try {
     const sessionKey = (localStorage.getItem("session_key") || "").trim();
     const token = (localStorage.getItem("token") || "").trim();
     const u = new URL(base, window.location.origin);
-
     if (sessionKey && !u.searchParams.has("session_key")) {
       u.searchParams.set("session_key", sessionKey);
     }
-
     if (token && !u.searchParams.has("token")) {
       u.searchParams.set("token", token);
     }
-
     return u.toString();
   } catch {
     return base;
@@ -120,15 +116,12 @@ function withSessionKey(url) {
 function ensureResourceHint(url, rel = "prefetch", as = "document") {
   const href = safeText(url);
   if (!href) return;
-
   const key = `hint:${rel}:${as}:${href}`;
   const selectorKey =
     typeof CSS !== "undefined" && CSS.escape
       ? CSS.escape(key)
       : key.replace(/"/g, '\\"');
-
   if (document.head.querySelector(`link[data-key="${selectorKey}"]`)) return;
-
   const link = document.createElement("link");
   link.rel = rel;
   if (as) link.as = as;
@@ -140,14 +133,12 @@ function ensureResourceHint(url, rel = "prefetch", as = "document") {
 function prewarmComprobanteUrl(url, mime = "") {
   const finalUrl = withSessionKey(url);
   if (!finalUrl) return;
-
   const mm = safeText(mime).toLowerCase();
   const ll = finalUrl.toLowerCase();
   const isPdf =
     mm.includes("pdf") ||
     ll.includes(".pdf") ||
     ll.includes("cc_comprobante_descargar");
-
   if (isPdf) {
     ensureResourceHint(finalUrl, "preload", "document");
     ensureResourceHint(finalUrl, "prefetch", "document");
@@ -229,10 +220,8 @@ async function parseJsonOrThrow(res) {
       `${res.status} (Unauthorized): Sesión vencida o no autorizada. Volvé a iniciar sesión.`
     );
   }
-
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
-
   try {
     return JSON.parse(text);
   } catch {
@@ -283,8 +272,6 @@ export default function ProveedoresCC() {
   const [hasSearched, setHasSearched] = useState(false);
   const [queryUsed, setQueryUsed] = useState("");
 
-  const tableBodyRef = useRef(null);
-  const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const comprobanteUrlCacheRef = useRef(new Map());
 
   const [previewComprobante, setPreviewComprobante] = useState({
@@ -309,42 +296,11 @@ export default function ProveedoresCC() {
 
   const closeToast = useCallback(() => setToast(null), []);
 
-  useEffect(() => {
-    const el = tableBodyRef.current;
-    if (!el) return;
-
-    const checkScroll = () => {
-      const hasScroll = el.scrollHeight > el.clientHeight + 1;
-      setHasVerticalScroll(hasScroll);
-    };
-
-    checkScroll();
-
-    const ro = new ResizeObserver(() => checkScroll());
-    ro.observe(el);
-
-    const mo = new MutationObserver(() => checkScroll());
-    mo.observe(el, { childList: true, subtree: true });
-
-    window.addEventListener("resize", checkScroll);
-
-    return () => {
-      ro.disconnect();
-      mo.disconnect();
-      window.removeEventListener("resize", checkScroll);
-    };
-  }, [rows, summaryRows, loading]);
-
   const rangeLabel = useMemo(() => {
     const from = dateRange?.from || null;
     const to = dateRange?.to || null;
-
     if (!from) return "Seleccionar período";
-
-    if (!to || formatDateISO(from) === formatDateISO(to)) {
-      return formatDateLabel(from);
-    }
-
+    if (!to || formatDateISO(from) === formatDateISO(to)) return formatDateLabel(from);
     return (
       <>
         <span>{formatDateLabel(from)}</span>
@@ -374,11 +330,9 @@ export default function ProveedoresCC() {
     setLoading(true);
     try {
       const data = await apiGet(`${API}?action=cc_saldos_proveedores`);
-
       if (!data || data.exito !== true) {
         throw new Error(data?.mensaje || "No se pudo cargar el listado de proveedores.");
       }
-
       const rowsApi = Array.isArray(data.rows) ? data.rows : [];
       setSummaryRows(rowsApi);
     } catch (e) {
@@ -396,30 +350,24 @@ export default function ProveedoresCC() {
   const loadHistorial = useCallback(
     async (proveedor) => {
       if (!proveedor?.id_proveedor) return;
-
       if (!dateRange?.from) {
         showToast("advertencia", "Seleccioná un período.", 2600);
         return;
       }
-
       setLoading(true);
       setHasSearched(true);
       setSelectedProveedor(proveedor);
       setQueryUsed(proveedor.nombre || "");
-
       try {
         const sp = new URLSearchParams();
         sp.set("action", "cc_historial_proveedor");
         sp.set("id_proveedor", String(proveedor.id_proveedor));
         sp.set("fecha_desde", formatDateISO(dateRange.from));
         sp.set("fecha_hasta", formatDateISO(dateRange.to || dateRange.from));
-
         const data = await apiGet(`${API}?${sp.toString()}`);
-
         if (!data || data.exito !== true) {
           throw new Error(data?.mensaje || "Error al cargar historial del proveedor.");
         }
-
         setRows(Array.isArray(data.rows) ? data.rows : []);
         setTotales(data.totales || { debito: 0, credito: 0, saldo: 0 });
       } catch (e) {
@@ -500,20 +448,9 @@ export default function ProveedoresCC() {
   const handleExport = useCallback(
     async (type) => {
       try {
-        if (type === "excel") {
-          exportToExcel();
-          showToast("exito", "Excel exportado.", 2200);
-          return;
-        }
-        if (type === "csv") {
-          exportToCSV();
-          showToast("exito", "CSV exportado.", 2200);
-          return;
-        }
-        if (type === "txt") {
-          exportToTXT();
-          showToast("exito", "TXT exportado.", 2200);
-        }
+        if (type === "excel") { exportToExcel(); showToast("exito", "Excel exportado.", 2200); return; }
+        if (type === "csv")   { exportToCSV();   showToast("exito", "CSV exportado.",   2200); return; }
+        if (type === "txt")   { exportToTXT();   showToast("exito", "TXT exportado.",   2200); }
       } catch (e) {
         showToast("error", e?.message || "Error exportando archivo.", 3500);
       }
@@ -523,22 +460,9 @@ export default function ProveedoresCC() {
 
   const exportOptions = useMemo(
     () => [
-      {
-        key: "excel",
-        label: "Exportar Excel (.xlsx)",
-        icon: faFileExcel,
-        onClick: () => handleExport("excel"),
-      },
-      {
-        key: "csv",
-        label: "Exportar CSV (.csv)",
-        onClick: () => handleExport("csv"),
-      },
-      {
-        key: "txt",
-        label: "Exportar TXT (.txt)",
-        onClick: () => handleExport("txt"),
-      },
+      { key: "excel", label: "Exportar Excel (.xlsx)", icon: faFileExcel, onClick: () => handleExport("excel") },
+      { key: "csv",   label: "Exportar CSV (.csv)",                        onClick: () => handleExport("csv")   },
+      { key: "txt",   label: "Exportar TXT (.txt)",                        onClick: () => handleExport("txt")   },
     ],
     [handleExport]
   );
@@ -548,15 +472,11 @@ export default function ProveedoresCC() {
       const idComp = Number(row?.id_comprobante || 0);
       const rawBase = makeComprobanteAccessUrl(row, API);
       const cacheKey = idComp > 0 ? `id:${idComp}` : `raw:${rawBase}`;
-
       if (comprobanteUrlCacheRef.current.has(cacheKey)) {
         return comprobanteUrlCacheRef.current.get(cacheKey) || "";
       }
-
       const finalUrl = withSessionKey(rawBase);
-      if (finalUrl) {
-        comprobanteUrlCacheRef.current.set(cacheKey, finalUrl);
-      }
+      if (finalUrl) comprobanteUrlCacheRef.current.set(cacheKey, finalUrl);
       return finalUrl;
     },
     [API]
@@ -575,29 +495,21 @@ export default function ProveedoresCC() {
     (row) => {
       const accessUrl = buildFastComprobanteUrl(row);
       const mime = safeText(row?.comprobante_mime);
-
       if (!accessUrl) {
         showToast("advertencia", "Este registro no tiene comprobante asociado.", 2600);
         return;
       }
-
       const isCobro = Number(row?.credito || 0) > 0;
       const isMovimiento = Number(row?.debito || 0) > 0;
-
       prewarmComprobanteUrl(accessUrl, mime);
-
       setPreviewComprobante({
         open: true,
         url: accessUrl,
         mime,
         title: isCobro
-          ? row?.comprobante
-            ? `Recibo · ${row.comprobante}`
-            : "Recibo"
+          ? row?.comprobante ? `Recibo · ${row.comprobante}` : "Recibo"
           : isMovimiento
-          ? row?.comprobante
-            ? `Factura / Deuda · ${row.comprobante}`
-            : "Factura / Deuda"
+          ? row?.comprobante ? `Factura / Deuda · ${row.comprobante}` : "Factura / Deuda"
           : "Comprobante",
       });
     },
@@ -606,20 +518,11 @@ export default function ProveedoresCC() {
 
   const askDeleteCobro = useCallback((row) => {
     if (!canDeleteCobro(row)) return;
-
-    setDeleteState({
-      open: true,
-      loading: false,
-      row,
-    });
+    setDeleteState({ open: true, loading: false, row });
   }, []);
 
   const closeDeleteModal = useCallback(() => {
-    setDeleteState({
-      open: false,
-      loading: false,
-      row: null,
-    });
+    setDeleteState({ open: false, loading: false, row: null });
   }, []);
 
   const refreshCurrent = useCallback(async () => {
@@ -633,22 +536,13 @@ export default function ProveedoresCC() {
   const confirmDeleteCobro = useCallback(async () => {
     const row = deleteState.row;
     const idCobro = Number(row?.id_cobro || 0);
-
-    if (idCobro <= 0) {
-      throw new Error("No se encontró un id_cobro válido.");
-    }
-
+    if (idCobro <= 0) throw new Error("No se encontró un id_cobro válido.");
     setDeleteState((prev) => ({ ...prev, loading: true }));
-
     try {
-      const data = await apiPost(`${API}?action=cc_eliminar_cobro`, {
-        id_cobro: idCobro,
-      });
-
+      const data = await apiPost(`${API}?action=cc_eliminar_cobro`, { id_cobro: idCobro });
       if (!data || data.exito !== true) {
         throw new Error(data?.mensaje || "No se pudo eliminar el cobro.");
       }
-
       closeDeleteModal();
       await refreshCurrent();
     } catch (e) {
@@ -660,7 +554,7 @@ export default function ProveedoresCC() {
   const isDetailMode = !!selectedProveedor;
 
   return (
-    <div className="contenedor-cards">
+    <div className="contenedor-cards mov-page">
       {toast && (
         <Toast
           tipo={toast.tipo}
@@ -676,12 +570,7 @@ export default function ProveedoresCC() {
         mime={previewComprobante.mime}
         title={previewComprobante.title}
         onClose={() =>
-          setPreviewComprobante({
-            open: false,
-            url: "",
-            mime: "",
-            title: "Comprobante",
-          })
+          setPreviewComprobante({ open: false, url: "", mime: "", title: "Comprobante" })
         }
       />
 
@@ -712,6 +601,7 @@ export default function ProveedoresCC() {
         cancelLabel="Cancelar"
       />
 
+      {/* ── HEAD ── */}
       <div className="mov-card__head">
         <div className="mov-card__headLeft">
           <div className="title-mov">
@@ -786,11 +676,9 @@ export default function ProveedoresCC() {
                       disabled={loading}
                       autoComplete="off"
                     />
-
                     <span className="cc-floatingLabel">
                       <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
                     </span>
-
                     {safeText(q) !== "" && !loading && (
                       <button
                         type="button"
@@ -807,7 +695,7 @@ export default function ProveedoresCC() {
             </div>
 
             {isDetailMode ? (
-              <button type="button" className="btn-volver" onClick={volverAlListado}>
+              <button type="button" className="mov-btn mov-btn--ghost" onClick={volverAlListado}>
                 Volver al listado
               </button>
             ) : null}
@@ -828,6 +716,7 @@ export default function ProveedoresCC() {
         />
       </div>
 
+      {/* ── LISTADO DE PROVEEDORES ── */}
       {!isDetailMode ? (
         <div className="cc-cliente-table">
           <div
@@ -838,65 +727,41 @@ export default function ProveedoresCC() {
             <div className="mov-gridCell mov-gridCell--head is-right">Saldo actual</div>
           </div>
 
-          <div
-            ref={tableBodyRef}
-            className={`cc-cliente-table__body ${
-              !hasVerticalScroll ? "cc-cliente-table__body--stable" : ""
-            }`}
-          >
+          <div className="cc-cliente-table__body">
             {loading ? (
-              <div className="cc-cliente-table__loading">Cargando proveedores…</div>
+              <div className="mov-emptyRow">Cargando proveedores…</div>
             ) : filteredSummaryRows.length > 0 ? (
-              filteredSummaryRows.map((r, i) => (
-                <React.Fragment key={r.id_proveedor}>
-                  <button
-                    type="button"
-                    className={`cc-cliente-table__row cc-cliente-table__row--desktop ${
-                      i % 2 !== 0 ? "is-alt" : ""
-                    }`}
-                    style={{ gridTemplateColumns: "2fr 1fr", width: "100%", cursor: "pointer" }}
-                    onClick={() => loadHistorial(r)}
-                  >
-                    <div className="cc-cliente-table__cell">
-                      <div className="cc-cliente-table__title">{r.nombre || "-"}</div>
-                    </div>
-
-                    <div className="cc-cliente-table__cell cc-cliente-table__cell--right cc-cliente-table__saldo">
-                      {moneyARS(r.saldo || 0)}
-                    </div>
-                  </button>
-
-                  <article
-                    className="cc-mobileCard"
-                    onClick={() => loadHistorial(r)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <div className="cc-mobileCard__top">
-                      <div className="cc-mobileCard__main">
-                        <div className="cc-mobileCard__title">{r.nombre || "-"}</div>
-                      </div>
-                    </div>
-
-                    <div className="cc-mobileCard__saldoRow">
-                      <span className="cc-mobileCard__label">Saldo actual</span>
-                      <span className="cc-mobileCard__saldo">{moneyARS(r.saldo || 0)}</span>
-                    </div>
-                  </article>
-                </React.Fragment>
+              filteredSummaryRows.map((r) => (
+                <button
+                  key={r.id_proveedor}
+                  type="button"
+                  className="mov-gridTable mov-gridTable--row cc-cliente-table__movRow"
+                  style={{ gridTemplateColumns: "2fr 1fr", width: "100%" }}
+                  onClick={() => loadHistorial(r)}
+                >
+                  <div className="mov-gridCell is-strong">
+                    <span className="mov-ellipsissss mov-ellipsialingf">{r.nombre || "-"}</span>
+                  </div>
+                  <div className="mov-gridCell is-right is-strong">
+                    <span className="mov-ellipsissss">{moneyARS(r.saldo || 0)}</span>
+                  </div>
+                </button>
               ))
             ) : (
-              <div className="cc-cliente-table__empty cc-emptyState">
+              <div className="mov-emptyRow cc-emptyState">
                 <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
                 <div className="cc-emptyText">No se encontraron proveedores.</div>
               </div>
             )}
           </div>
         </div>
+
       ) : (
+        /* ── DETALLE DEL PROVEEDOR ── */
         <div className="cc-cliente-table">
           <div
             className="mov-gridTable mov-gridTable--head cc-cliente-table__desktopHead"
-            style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr 1fr" }}
+            style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr .9fr" }}
           >
             <div className="mov-gridCell mov-gridCell--head">Fecha</div>
             <div className="mov-gridCell mov-gridCell--head">Comprobante</div>
@@ -906,16 +771,9 @@ export default function ProveedoresCC() {
             <div className="mov-gridCell mov-gridCell--head is-center">Acciones</div>
           </div>
 
-          <div
-            ref={tableBodyRef}
-            className={`cc-cliente-table__body ${
-              !hasVerticalScroll ? "cc-cliente-table__body--stable" : ""
-            }`}
-          >
+          <div className="cc-cliente-table__body">
             {loading ? (
-              <div className="cc-cliente-table__loading">
-                Cargando cuenta corriente del proveedor…
-              </div>
+              <div className="mov-emptyRow">Cargando cuenta corriente del proveedor…</div>
             ) : rows.length > 0 ? (
               rows.map((r, i) => {
                 const verHabilitado = canPreviewComprobante(r);
@@ -923,130 +781,39 @@ export default function ProveedoresCC() {
                 const isCobro = Number(r.credito || 0) > 0;
 
                 return (
-                  <React.Fragment key={r.id || `${i}`}>
-                    <div
-                      className={`cc-cliente-table__row cc-cliente-table__row--desktop ${
-                        i % 2 !== 0 ? "is-alt" : ""
-                      }`}
-                    >
-                      <div className="cc-cliente-table__cell cc-cliente-table__cell--date">
+                  <div
+                    key={r.id || `${i}`}
+                    className="mov-gridTable mov-gridTable--row"
+                    style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr .9fr" }}
+                  >
+                    <div className="mov-gridCell">
+                      <span className="mov-ellipsissss">
                         {formatDisplayDate(r.fecha || r.fecha_raw)}
-                      </div>
-
-                      <div className="cc-cliente-table__cell">
-                        <div className="cc-cliente-table__title">{r.comprobante || "-"}</div>
-                        {r.detalle ? (
-                          <div className="cc-cliente-table__detail">{r.detalle}</div>
-                        ) : null}
-                      </div>
-
-                      <div
-                        className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
-                          Number(r.debito || 0) > 0
-                            ? "cc-cliente-table__amount--active"
-                            : "cc-cliente-table__amount--muted"
-                        }`}
-                      >
-                        {Number(r.debito || 0) > 0 ? moneyARS(r.debito || 0) : ""}
-                      </div>
-
-                      <div
-                        className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
-                          Number(r.credito || 0) > 0
-                            ? "cc-cliente-table__amount--active"
-                            : "cc-cliente-table__amount--muted"
-                        }`}
-                      >
-                        {Number(r.credito || 0) > 0 ? moneyARS(r.credito || 0) : ""}
-                      </div>
-
-                      <div className="cc-cliente-table__cell cc-cliente-table__cell--right cc-cliente-table__saldo">
-                        {moneyARS(r.saldo || 0)}
-                      </div>
-
-                      <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
-                        <div className="cc-actionsInline">
-                          <button
-                            type="button"
-                            onMouseEnter={() => verHabilitado && handlePrewarmComprobante(r)}
-                            onPointerEnter={() => verHabilitado && handlePrewarmComprobante(r)}
-                            onFocus={() => verHabilitado && handlePrewarmComprobante(r)}
-                            onClick={() => verHabilitado && openComprobante(r)}
-                            disabled={!verHabilitado}
-                            title={
-                              verHabilitado
-                                ? isCobro
-                                  ? "Ver recibo / comprobante del cobro"
-                                  : "Ver factura / comprobante de la deuda"
-                                : "Este registro no tiene comprobante asociado"
-                            }
-                            className={`cc-verBtn ${verHabilitado ? "" : "is-disabled"}`}
-                          >
-                            <FontAwesomeIcon icon={faEye} />
-                          </button>
-
-                          {puedeEliminar ? (
-                            <button
-                              type="button"
-                              onClick={() => askDeleteCobro(r)}
-                              title="Eliminar solo este registro de cobro"
-                              className="cc-verBtn cc-verBtn--danger"
-                            >
-                              <FontAwesomeIcon icon={faTrashCan} />
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
+                      </span>
                     </div>
 
-                    <article className="cc-mobileCard">
-                      <div className="cc-mobileCard__top">
-                        <div className="cc-mobileCard__main">
-                          <div className="cc-mobileCard__title">{r.comprobante || "-"}</div>
-                          {r.detalle ? (
-                            <div className="cc-mobileCard__detail">{r.detalle}</div>
-                          ) : null}
-                        </div>
+                    <div className="mov-gridCell is-strong">
+                      <span className="mov-ellipsissss">{r.comprobante || "-"}</span>
+                    </div>
 
-                        <div className="cc-mobileCard__date">
-                          {formatDisplayDate(r.fecha || r.fecha_raw)}
-                        </div>
-                      </div>
+                    <div className="mov-gridCell is-right">
+                      <span className="mov-ellipsissss">
+                        {Number(r.debito || 0) > 0 ? moneyARS(r.debito) : "—"}
+                      </span>
+                    </div>
 
-                      <div className="cc-mobileCard__amounts">
-                        <div className="cc-mobileCard__amountBox">
-                          <span className="cc-mobileCard__label">Débito</span>
-                          <span
-                            className={`cc-mobileCard__value ${
-                              Number(r.debito || 0) > 0
-                                ? "cc-mobileCard__value--active"
-                                : "cc-mobileCard__value--muted"
-                            }`}
-                          >
-                            {Number(r.debito || 0) > 0 ? moneyARS(r.debito || 0) : "—"}
-                          </span>
-                        </div>
+                    <div className="mov-gridCell is-right">
+                      <span className="mov-ellipsissss">
+                        {Number(r.credito || 0) > 0 ? moneyARS(r.credito) : "—"}
+                      </span>
+                    </div>
 
-                        <div className="cc-mobileCard__amountBox">
-                          <span className="cc-mobileCard__label">Crédito</span>
-                          <span
-                            className={`cc-mobileCard__value ${
-                              Number(r.credito || 0) > 0
-                                ? "cc-mobileCard__value--active"
-                                : "cc-mobileCard__value--muted"
-                            }`}
-                          >
-                            {Number(r.credito || 0) > 0 ? moneyARS(r.credito || 0) : "—"}
-                          </span>
-                        </div>
-                      </div>
+                    <div className="mov-gridCell is-right is-strong">
+                      <span className="mov-ellipsissss">{moneyARS(r.saldo || 0)}</span>
+                    </div>
 
-                      <div className="cc-mobileCard__saldoRow">
-                        <span className="cc-mobileCard__label">Saldo</span>
-                        <span className="cc-mobileCard__saldo">{moneyARS(r.saldo || 0)}</span>
-                      </div>
-
-                      <div className="cc-mobileCard__actions">
+                    <div className="mov-gridCell mov-gridCell--actions">
+                      <div className="mov-actionsInline">
                         <button
                           type="button"
                           onMouseEnter={() => verHabilitado && handlePrewarmComprobante(r)}
@@ -1061,12 +828,9 @@ export default function ProveedoresCC() {
                                 : "Ver factura / comprobante de la deuda"
                               : "Este registro no tiene comprobante asociado"
                           }
-                          className={`cc-mobileCard__actionBtn ${
-                            verHabilitado ? "" : "is-disabled"
-                          }`}
+                          className="mov-iconBtn"
                         >
                           <FontAwesomeIcon icon={faEye} />
-                          <span>{isCobro ? "Ver recibo" : "Ver comprobante"}</span>
                         </button>
 
                         {puedeEliminar ? (
@@ -1074,19 +838,18 @@ export default function ProveedoresCC() {
                             type="button"
                             onClick={() => askDeleteCobro(r)}
                             title="Eliminar solo este registro de cobro"
-                            className="cc-mobileCard__actionBtn cc-mobileCard__actionBtn--danger"
+                            className="mov-iconBtn mov-iconBtn--danger"
                           >
                             <FontAwesomeIcon icon={faTrashCan} />
-                            <span>Eliminar cobro</span>
                           </button>
                         ) : null}
                       </div>
-                    </article>
-                  </React.Fragment>
+                    </div>
+                  </div>
                 );
               })
             ) : (
-              <div className="cc-cliente-table__empty cc-emptyState">
+              <div className="mov-emptyRow cc-emptyState">
                 <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
                 <div className="cc-emptyText">
                   {hasSearched
@@ -1097,20 +860,24 @@ export default function ProveedoresCC() {
             )}
           </div>
 
+          {/* ── TOTALES ── */}
           <div className="cc-cliente-table__footWrap">
-            <div className="cc-cliente-table__totals">
-              <div className="cc-cliente-table__cell">Totales</div>
-              <div className="cc-cliente-table__cell"></div>
-              <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
+            <div
+              className="mov-gridTable"
+              style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr .9fr" }}
+            >
+              <div className="mov-gridCell is-strong">Totales</div>
+              <div className="mov-gridCell"></div>
+              <div className="mov-gridCell is-right is-strong">
                 {moneyARS(totales?.debito || 0)}
               </div>
-              <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
+              <div className="mov-gridCell is-right is-strong">
                 {moneyARS(totales?.credito || 0)}
               </div>
-              <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
+              <div className="mov-gridCell is-right is-strong">
                 {moneyARS(totales?.saldo || 0)}
               </div>
-              <div className="cc-cliente-table__cell"></div>
+              <div className="mov-gridCell"></div>
             </div>
           </div>
         </div>

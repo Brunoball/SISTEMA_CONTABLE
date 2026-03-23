@@ -809,7 +809,7 @@
 .cc-cliente-table__head,
 .cc-cliente-table__row{
   display: grid;
-  grid-template-columns: 0.8fr 2.2fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr;
   gap: 0;
   align-items: center;
 }
@@ -837,9 +837,7 @@
   background: #fcfcfd;
 }
 
-.cc-cliente-table__row:not(:last-child){
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-}
+
 
 .cc-cliente-table__cell{
   padding: 10px 16px;
@@ -1155,4 +1153,433 @@
 
 .cc-floatingField:focus-within .cc-floatingLabel{
   color: var(--b-action);
+}.cc-cliente-table__cell:first-child {
+  padding-left: 4px !important;
+}
+/* =========================
+   Tabla clientes — FINAL LIMPIO
+========================= */
+
+/* contenedor */
+.cc-cliente-table{
+  background: #fff;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(10, 37, 64, 0.045);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.06);
+}
+
+/* header */
+.cc-cliente-table__headWrap{
+  background: #0A2540;
+  border-bottom: 1px solid rgba(10, 37, 64, 0.06);
+}
+
+/* body */
+.cc-cliente-table__body{
+  height: calc(100vh - 278px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+/* estructura */
+.cc-cliente-table__head,
+.cc-cliente-table__row{
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  align-items: center;
+  width: 100%;
+}
+
+/* ===== FIX BOTÓN (CLAVE) ===== */
+.cc-cliente-table__row,
+button.cc-cliente-table__row{
+  -webkit-appearance: none;
+  appearance: none;
+  border: none !important;
+  outline: none;
+  box-shadow: none;
+  margin: 0;
+  border-radius: 0;
+  background: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+/* zebra */
+.cc-cliente-table__row.is-alt{
+  background: #fcfcfd;
+}
+
+/* 🔥 LÍNEA SUTIL REAL */
+.cc-cliente-table__row + .cc-cliente-table__row{
+  border-top: 1px solid rgba(10, 37, 64, 0.035);
+}
+
+/* hover */
+.cc-cliente-table__row:hover{
+  background: rgba(0, 85, 187, 0.035);
+}
+
+/* focus limpio */
+.cc-cliente-table__row:focus,
+.cc-cliente-table__row:focus-visible{
+  outline: none;
+  box-shadow: none;
+}
+
+/* celdas */
+.cc-cliente-table__cell{
+  padding: 10px 16px;
+  border: none !important;
+  font-size: 13px;
+}
+
+/* cliente */
+.cc-cliente-table__cell:first-child{
+  padding-left: 12px;
+  text-align: left;
+}
+
+/* saldo */
+.cc-cliente-table__cell--right{
+  text-align: right;
+  padding-right: 16px;
+}
+
+/* textos */
+.cc-cliente-table__title{
+  font-weight: 600;
+  color: rgba(10, 37, 64, 0.92);
+}
+
+.cc-cliente-table__saldo{
+  font-weight: 600;
+  color: #0A2540;
+}
+
+/* footer */
+.cc-cliente-table__footWrap{
+  background: #f8fafc;
+  border-top: 1px solid rgba(10, 37, 64, 0.05);
+}
+
+/* estados */
+.cc-cliente-table__empty,
+.cc-cliente-table__loading{
+  padding: 26px 16px;
+  text-align: center;
+  color: #6b7280;
+}
+/* =========================================
+   CUENTAS CORRIENTES — TABLA ESTILO MOVIMIENTOS
+========================================= */
+
+.cc-cliente-table{
+  background: var(--b-white);
+  border: 1px solid rgba(10, 37, 64, 0.10);
+  border-radius: 16px;
+  box-shadow: 0 14px 34px -22px rgba(10, 37, 64, 0.28);
+  overflow: hidden;
+}
+
+/* el head ya usa mov-gridTable--head desde el JSX,
+   pero le damos coherencia al contenedor */
+.cc-cliente-table__desktopHead{
+  background: var(--b-midnight);
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+
+.cc-cliente-table__body{
+  height: calc(100vh - 278px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #fff;
+  scrollbar-gutter: stable;
+}
+
+.cc-cliente-table__body--stable{
+  scrollbar-gutter: stable;
+}
+
+/* fila igual de compacta que movimientos */
+.cc-cliente-table__row,
+button.cc-cliente-table__row{
+  -webkit-appearance: none;
+  appearance: none;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  border: 0 !important;
+  outline: 0;
+  box-shadow: none;
+  border-radius: 0;
+  background: #fff;
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(.4,0,.2,1);
+  min-height: 56px;
+}
+
+/* línea sutil como movimientos */
+.cc-cliente-table__row{
+  border-bottom: 1px solid color-mix(in srgb, var(--b-midnight) 10%, #fff);
+}
+
+.cc-cliente-table__row:last-child{
+  border-bottom: none;
+}
+
+.cc-cliente-table__row:hover,
+button.cc-cliente-table__row:hover{
+  background: rgba(0, 85, 187, 0.05);
+}
+
+.cc-cliente-table__row.is-alt,
+button.cc-cliente-table__row.is-alt{
+  background: #fff;
+}
+
+.cc-cliente-table__row.is-alt:hover,
+button.cc-cliente-table__row.is-alt:hover{
+  background: rgba(0, 85, 187, 0.05);
+}
+
+.cc-cliente-table__row:focus,
+.cc-cliente-table__row:focus-visible,
+button.cc-cliente-table__row:focus,
+button.cc-cliente-table__row:focus-visible{
+  outline: none;
+  box-shadow: none;
+}
+
+/* celdas con spacing tipo movimientos */
+.cc-cliente-table__cell{
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: 10px 16px;
+  border: 0 !important;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--b-midnight) 78%, #000);
+  font-weight: 440;
+}
+
+.cc-cliente-table__cell:first-child{
+  justify-content: flex-start;
+  text-align: left;
+  padding-left: 16px;
+}
+
+.cc-cliente-table__cell--right{
+  justify-content: flex-end;
+  text-align: right;
+  padding-right: 16px;
+}
+
+/* textos tipo movimientos */
+.cc-cliente-table__title{
+  font-weight: 560;
+  color: var(--b-midnight);
+  letter-spacing: -0.01em;
+}
+
+.cc-cliente-table__saldo{
+  font-weight: 560;
+  color: var(--b-midnight);
+  font-variant-numeric: tabular-nums;
+}
+
+/* loading / empty */
+.cc-cliente-table__loading,
+.cc-cliente-table__empty{
+  padding: 22px 12px;
+  text-align: center;
+  color: rgba(66, 84, 102, 0.72);
+  font-weight: 520;
+  background: #fff;
+}
+
+/* footer detalle */
+.cc-cliente-table__footWrap{
+  background: rgba(10, 37, 64, 0.025);
+  border-top: 1px solid rgba(10, 37, 64, 0.10);
+}
+
+.cc-cliente-table__totals{
+  display: grid;
+  grid-template-columns: 0.8fr 2.2fr 1fr 1fr 1fr 1fr;
+  background: rgba(10, 37, 64, 0.025);
+  font-weight: 700;
+}
+
+.cc-cliente-table__totals .cc-cliente-table__cell{
+  font-weight: 700;
+  color: rgba(10, 37, 64, 0.90);
+  min-height: 52px;
+}/* =========================================
+   CUENTAS CORRIENTES — TABLA ESTILO MOVIMIENTOS
+========================================= */
+
+.cc-cliente-table{
+  background: var(--b-white);
+  border: 1px solid rgba(10, 37, 64, 0.10);
+  border-radius: 16px;
+  box-shadow: 0 14px 34px -22px rgba(10, 37, 64, 0.28);
+  overflow: hidden;
+}
+
+/* el head ya usa mov-gridTable--head desde el JSX,
+   pero le damos coherencia al contenedor */
+.cc-cliente-table__desktopHead{
+  background: var(--b-midnight);
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+
+.cc-cliente-table__body{
+  height: calc(100vh - 238px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #fff;
+  scrollbar-gutter: stable;
+}
+
+.cc-cliente-table__body--stable{
+  scrollbar-gutter: stable;
+}
+
+/* fila igual de compacta que movimientos */
+.cc-cliente-table__row,
+button.cc-cliente-table__row{
+  -webkit-appearance: none;
+  appearance: none;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  border: 0 !important;
+  outline: 0;
+  box-shadow: none;
+  border-radius: 0;
+  background: #fff;
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(.4,0,.2,1);
+  min-height: 56px;
+}
+
+/* línea sutil como movimientos */
+.cc-cliente-table__row{
+  border-bottom: 1px solid color-mix(in srgb, var(--b-midnight) 10%, #fff);
+}
+
+.cc-cliente-table__row:last-child{
+  border-bottom: none;
+}
+
+.cc-cliente-table__row:hover,
+button.cc-cliente-table__row:hover{
+  background: rgba(0, 85, 187, 0.05);
+}
+
+.cc-cliente-table__row.is-alt,
+button.cc-cliente-table__row.is-alt{
+  background: #fff;
+}
+
+.cc-cliente-table__row.is-alt:hover,
+button.cc-cliente-table__row.is-alt:hover{
+  background: rgba(0, 85, 187, 0.05);
+}
+
+.cc-cliente-table__row:focus,
+.cc-cliente-table__row:focus-visible,
+button.cc-cliente-table__row:focus,
+button.cc-cliente-table__row:focus-visible{
+  outline: none;
+  box-shadow: none;
+}
+
+/* celdas con spacing tipo movimientos */
+.cc-cliente-table__cell{
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: 10px 16px;
+  border: 0 !important;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--b-midnight) 78%, #000);
+  font-weight: 440;
+}
+
+.cc-cliente-table__cell:first-child{
+  justify-content: flex-start;
+  text-align: left;
+  padding-left: 16px;
+}
+
+.cc-cliente-table__cell--right{
+  justify-content: flex-end;
+  text-align: right;
+  padding-right: 16px;
+}
+
+/* textos tipo movimientos */
+.cc-cliente-table__title{
+  font-weight: 560;
+  color: var(--b-midnight);
+  letter-spacing: -0.01em;
+}
+
+.cc-cliente-table__saldo{
+  font-weight: 560;
+  color: var(--b-midnight);
+  font-variant-numeric: tabular-nums;
+}
+
+/* loading / empty */
+.cc-cliente-table__loading,
+.cc-cliente-table__empty{
+  padding: 22px 12px;
+  text-align: center;
+  color: rgba(66, 84, 102, 0.72);
+  font-weight: 520;
+  background: #fff;
+}
+
+/* footer detalle */
+.cc-cliente-table__footWrap{
+  background: rgba(10, 37, 64, 0.025);
+  border-top: 1px solid rgba(10, 37, 64, 0.10);
+}
+
+.cc-cliente-table__totals{
+  display: grid;
+  grid-template-columns: 0.8fr 2.2fr 1fr 1fr 1fr 1fr;
+  background: rgba(10, 37, 64, 0.025);
+  font-weight: 700;
+}
+
+.cc-cliente-table__totals .cc-cliente-table__cell{
+  font-weight: 700;
+  color: rgba(10, 37, 64, 0.90);
+  min-height: 52px;
+}.cc-cliente-table__movRow {
+  border: 0;
+  border-bottom:1px solid color-mix(in srgb, var(--mov-border) 60%, #fff) ;
+  background: #fff;
+  cursor: pointer;
+  width: 100%;
+}
+.mov-ellipsialingf{
+  text-align: left;
+}
+.cc-cliente-table__movRow:hover {
+  background: rgba(0, 85, 187, 0.05);
+}
+
+.cc-cliente-table__desktopHead {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }

@@ -24,9 +24,6 @@ import ModalEliminarMovimientos from "../../Global/Modales/ModalEliminar.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 
-/* =========================
-   Helpers
-========================= */
 function moneyARS(v) {
   const n = Number(v || 0);
   try {
@@ -158,7 +155,9 @@ function prewarmComprobanteUrl(url, mime = "") {
 }
 
 function canPreviewComprobante(row) {
-  return safeText(row?.comprobante_url) !== "" || Number(row?.id_comprobante || 0) > 0;
+  return (
+    safeText(row?.comprobante_url) !== "" || Number(row?.id_comprobante || 0) > 0
+  );
 }
 
 function canDeleteCobro(row) {
@@ -284,8 +283,6 @@ export default function ClientesCC() {
 
   const [toast, setToast] = useState(null);
 
-  const tableBodyRef = useRef(null);
-  const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
   const comprobanteUrlCacheRef = useRef(new Map());
 
   const showToast = useCallback(
@@ -294,32 +291,6 @@ export default function ClientesCC() {
   );
 
   const closeToast = useCallback(() => setToast(null), []);
-
-  useEffect(() => {
-    const el = tableBodyRef.current;
-    if (!el) return;
-
-    const checkScroll = () => {
-      const hasScroll = el.scrollHeight > el.clientHeight + 1;
-      setHasVerticalScroll(hasScroll);
-    };
-
-    checkScroll();
-
-    const ro = new ResizeObserver(() => checkScroll());
-    ro.observe(el);
-
-    const mo = new MutationObserver(() => checkScroll());
-    mo.observe(el, { childList: true, subtree: true });
-
-    window.addEventListener("resize", checkScroll);
-
-    return () => {
-      ro.disconnect();
-      mo.disconnect();
-      window.removeEventListener("resize", checkScroll);
-    };
-  }, [rows, summaryRows, loading]);
 
   const rangeLabel = useMemo(() => {
     const from = dateRange?.from || null;
@@ -644,7 +615,7 @@ export default function ClientesCC() {
   const isDetailMode = !!selectedCliente;
 
   return (
-    <div className="contenedor-cards">
+    <div className="contenedor-cards mov-page">
       {toast && (
         <Toast
           tipo={toast.tipo}
@@ -789,7 +760,7 @@ export default function ClientesCC() {
             </div>
 
             {isDetailMode ? (
-              <button type="button" className="btn-volver" onClick={volverAlListado}>
+              <button type="button" className="mov-btn mov-btn--ghost" onClick={volverAlListado}>
                 Volver al listado
               </button>
             ) : null}
@@ -816,50 +787,29 @@ export default function ClientesCC() {
             <div className="mov-gridCell mov-gridCell--head is-right">Saldo actual</div>
           </div>
 
-          <div
-            ref={tableBodyRef}
-            className={`cc-cliente-table__body ${
-              !hasVerticalScroll ? "cc-cliente-table__body--stable" : ""
-            }`}
-          >
+          <div className="cc-cliente-table__body">
             {loading ? (
-              <div className="cc-cliente-table__loading">Cargando clientes…</div>
+              <div className="mov-emptyRow">Cargando clientes…</div>
             ) : filteredSummaryRows.length > 0 ? (
-              filteredSummaryRows.map((r, i) => (
-                <React.Fragment key={r.id_cliente}>
-                  <button
-                    type="button"
-                    className={`cc-cliente-table__row cc-cliente-table__row--desktop ${
-                      i % 2 !== 0 ? "is-alt" : ""
-                    }`}
-                    style={{ gridTemplateColumns: "2fr 1fr", width: "100%", cursor: "pointer" }}
-                    onClick={() => loadHistorial(r)}
-                  >
-                    <div className="cc-cliente-table__cell">
-                      <div className="cc-cliente-table__title">{r.nombre || "-"}</div>
-                    </div>
+              filteredSummaryRows.map((r) => (
+                <button
+                  key={r.id_cliente}
+                  type="button"
+                  className="mov-gridTable mov-gridTable--row cc-cliente-table__movRow"
+                  style={{ gridTemplateColumns: "2fr 1fr", width: "100%" }}
+                  onClick={() => loadHistorial(r)}
+                >
+                  <div className="mov-gridCell is-strong">
+                    <span className="mov-ellipsissss mov-ellipsialingf">{r.nombre || "-"}</span>
+                  </div>
 
-                    <div className="cc-cliente-table__cell cc-cliente-table__cell--right cc-cliente-table__saldo">
-                      {moneyARS(r.saldo || 0)}
-                    </div>
-                  </button>
-
-                  <article className="cc-mobileCard" onClick={() => loadHistorial(r)}>
-                    <div className="cc-mobileCard__top">
-                      <div className="cc-mobileCard__main">
-                        <div className="cc-mobileCard__title">{r.nombre || "-"}</div>
-                      </div>
-                    </div>
-
-                    <div className="cc-mobileCard__saldoRow">
-                      <span className="cc-mobileCard__label">Saldo actual</span>
-                      <span className="cc-mobileCard__saldo">{moneyARS(r.saldo || 0)}</span>
-                    </div>
-                  </article>
-                </React.Fragment>
+                  <div className="mov-gridCell is-right is-strong">
+                    <span className="mov-ellipsissss">{moneyARS(r.saldo || 0)}</span>
+                  </div>
+                </button>
               ))
             ) : (
-              <div className="cc-cliente-table__empty cc-emptyState">
+              <div className="mov-emptyRow cc-emptyState">
                 <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
                 <div className="cc-emptyText">No se encontraron clientes.</div>
               </div>
@@ -870,7 +820,7 @@ export default function ClientesCC() {
         <div className="cc-cliente-table">
           <div
             className="mov-gridTable mov-gridTable--head cc-cliente-table__desktopHead"
-            style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr 1fr" }}
+            style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr .9fr" }}
           >
             <div className="mov-gridCell mov-gridCell--head">Fecha</div>
             <div className="mov-gridCell mov-gridCell--head">Comprobante</div>
@@ -880,16 +830,9 @@ export default function ClientesCC() {
             <div className="mov-gridCell mov-gridCell--head is-center">Acciones</div>
           </div>
 
-          <div
-            ref={tableBodyRef}
-            className={`cc-cliente-table__body ${
-              !hasVerticalScroll ? "cc-cliente-table__body--stable" : ""
-            }`}
-          >
+          <div className="cc-cliente-table__body">
             {loading ? (
-              <div className="cc-cliente-table__loading">
-                Cargando cuenta corriente del cliente…
-              </div>
+              <div className="mov-emptyRow">Cargando cuenta corriente del cliente…</div>
             ) : rows.length > 0 ? (
               rows.map((r, i) => {
                 const verHabilitado = canPreviewComprobante(r);
@@ -897,130 +840,39 @@ export default function ClientesCC() {
                 const isCobro = Number(r.credito || 0) > 0;
 
                 return (
-                  <React.Fragment key={r.id || `${i}`}>
-                    <div
-                      className={`cc-cliente-table__row cc-cliente-table__row--desktop ${
-                        i % 2 !== 0 ? "is-alt" : ""
-                      }`}
-                    >
-                      <div className="cc-cliente-table__cell cc-cliente-table__cell--date">
+                  <div
+                    key={r.id || `${i}`}
+                    className="mov-gridTable mov-gridTable--row"
+                    style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr .9fr" }}
+                  >
+                    <div className="mov-gridCell">
+                      <span className="mov-ellipsissss">
                         {formatDisplayDate(r.fecha || r.fecha_raw)}
-                      </div>
-
-                      <div className="cc-cliente-table__cell">
-                        <div className="cc-cliente-table__title">{r.comprobante || "-"}</div>
-                        {r.detalle ? (
-                          <div className="cc-cliente-table__detail">{r.detalle}</div>
-                        ) : null}
-                      </div>
-
-                      <div
-                        className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
-                          Number(r.debito || 0) > 0
-                            ? "cc-cliente-table__amount--active"
-                            : "cc-cliente-table__amount--muted"
-                        }`}
-                      >
-                        {Number(r.debito || 0) > 0 ? moneyARS(r.debito) : ""}
-                      </div>
-
-                      <div
-                        className={`cc-cliente-table__cell cc-cliente-table__cell--right ${
-                          Number(r.credito || 0) > 0
-                            ? "cc-cliente-table__amount--active"
-                            : "cc-cliente-table__amount--muted"
-                        }`}
-                      >
-                        {Number(r.credito || 0) > 0 ? moneyARS(r.credito) : ""}
-                      </div>
-
-                      <div className="cc-cliente-table__cell cc-cliente-table__cell--right cc-cliente-table__saldo">
-                        {moneyARS(r.saldo || 0)}
-                      </div>
-
-                      <div className="cc-cliente-table__cell cc-cliente-table__cell--center">
-                        <div className="cc-actionsInline">
-                          <button
-                            type="button"
-                            onMouseEnter={() => verHabilitado && handlePrewarmComprobante(r)}
-                            onPointerEnter={() => verHabilitado && handlePrewarmComprobante(r)}
-                            onFocus={() => verHabilitado && handlePrewarmComprobante(r)}
-                            onClick={() => verHabilitado && openComprobante(r)}
-                            disabled={!verHabilitado}
-                            title={
-                              verHabilitado
-                                ? isCobro
-                                  ? "Ver recibo / comprobante del cobro"
-                                  : "Ver factura / comprobante de la deuda"
-                                : "Este registro no tiene comprobante asociado"
-                            }
-                            className={`cc-verBtn ${verHabilitado ? "" : "is-disabled"}`}
-                          >
-                            <FontAwesomeIcon icon={faEye} />
-                          </button>
-
-                          {puedeEliminar ? (
-                            <button
-                              type="button"
-                              onClick={() => askDeleteCobro(r)}
-                              title="Eliminar solo este registro de cobro"
-                              className="cc-verBtn cc-verBtn--danger"
-                            >
-                              <FontAwesomeIcon icon={faTrashCan} />
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
+                      </span>
                     </div>
 
-                    <article className="cc-mobileCard">
-                      <div className="cc-mobileCard__top">
-                        <div className="cc-mobileCard__main">
-                          <div className="cc-mobileCard__title">{r.comprobante || "-"}</div>
-                          {r.detalle ? (
-                            <div className="cc-mobileCard__detail">{r.detalle}</div>
-                          ) : null}
-                        </div>
+                    <div className="mov-gridCell is-strong">
+                      <span className="mov-ellipsissss">{r.comprobante || "-"}</span>
+                    </div>
 
-                        <div className="cc-mobileCard__date">
-                          {formatDisplayDate(r.fecha || r.fecha_raw)}
-                        </div>
-                      </div>
+                    <div className="mov-gridCell is-right">
+                      <span className="mov-ellipsissss">
+                        {Number(r.debito || 0) > 0 ? moneyARS(r.debito) : "—"}
+                      </span>
+                    </div>
 
-                      <div className="cc-mobileCard__amounts">
-                        <div className="cc-mobileCard__amountBox">
-                          <span className="cc-mobileCard__label">Débito</span>
-                          <span
-                            className={`cc-mobileCard__value ${
-                              Number(r.debito || 0) > 0
-                                ? "cc-mobileCard__value--active"
-                                : "cc-mobileCard__value--muted"
-                            }`}
-                          >
-                            {Number(r.debito || 0) > 0 ? moneyARS(r.debito) : "—"}
-                          </span>
-                        </div>
+                    <div className="mov-gridCell is-right">
+                      <span className="mov-ellipsissss">
+                        {Number(r.credito || 0) > 0 ? moneyARS(r.credito) : "—"}
+                      </span>
+                    </div>
 
-                        <div className="cc-mobileCard__amountBox">
-                          <span className="cc-mobileCard__label">Crédito</span>
-                          <span
-                            className={`cc-mobileCard__value ${
-                              Number(r.credito || 0) > 0
-                                ? "cc-mobileCard__value--active"
-                                : "cc-mobileCard__value--muted"
-                            }`}
-                          >
-                            {Number(r.credito || 0) > 0 ? moneyARS(r.credito) : "—"}
-                          </span>
-                        </div>
-                      </div>
+                    <div className="mov-gridCell is-right is-strong">
+                      <span className="mov-ellipsissss">{moneyARS(r.saldo || 0)}</span>
+                    </div>
 
-                      <div className="cc-mobileCard__saldoRow">
-                        <span className="cc-mobileCard__label">Saldo</span>
-                        <span className="cc-mobileCard__saldo">{moneyARS(r.saldo || 0)}</span>
-                      </div>
-
-                      <div className="cc-mobileCard__actions">
+                    <div className="mov-gridCell mov-gridCell--actions">
+                      <div className="mov-actionsInline">
                         <button
                           type="button"
                           onMouseEnter={() => verHabilitado && handlePrewarmComprobante(r)}
@@ -1035,12 +887,9 @@ export default function ClientesCC() {
                                 : "Ver factura / comprobante de la deuda"
                               : "Este registro no tiene comprobante asociado"
                           }
-                          className={`cc-mobileCard__actionBtn ${
-                            verHabilitado ? "" : "is-disabled"
-                          }`}
+                          className="mov-iconBtn"
                         >
                           <FontAwesomeIcon icon={faEye} />
-                          <span>{isCobro ? "Ver recibo" : "Ver comprobante"}</span>
                         </button>
 
                         {puedeEliminar ? (
@@ -1048,19 +897,18 @@ export default function ClientesCC() {
                             type="button"
                             onClick={() => askDeleteCobro(r)}
                             title="Eliminar solo este registro de cobro"
-                            className="cc-mobileCard__actionBtn cc-mobileCard__actionBtn--danger"
+                            className="mov-iconBtn mov-iconBtn--danger"
                           >
                             <FontAwesomeIcon icon={faTrashCan} />
-                            <span>Eliminar cobro</span>
                           </button>
                         ) : null}
                       </div>
-                    </article>
-                  </React.Fragment>
+                    </div>
+                  </div>
                 );
               })
             ) : (
-              <div className="cc-cliente-table__empty cc-emptyState">
+              <div className="mov-emptyRow cc-emptyState">
                 <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
                 <div className="cc-emptyText">
                   {hasSearched
@@ -1072,19 +920,22 @@ export default function ClientesCC() {
           </div>
 
           <div className="cc-cliente-table__footWrap">
-            <div className="cc-cliente-table__totals">
-              <div className="cc-cliente-table__cell">Totales</div>
-              <div className="cc-cliente-table__cell"></div>
-              <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
+            <div
+              className="mov-gridTable"
+              style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr .9fr" }}
+            >
+              <div className="mov-gridCell is-strong">Totales</div>
+              <div className="mov-gridCell"></div>
+              <div className="mov-gridCell is-right is-strong">
                 {moneyARS(totales?.debito || 0)}
               </div>
-              <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
+              <div className="mov-gridCell is-right is-strong">
                 {moneyARS(totales?.credito || 0)}
               </div>
-              <div className="cc-cliente-table__cell cc-cliente-table__cell--right">
+              <div className="mov-gridCell is-right is-strong">
                 {moneyARS(totales?.saldo || 0)}
               </div>
-              <div className="cc-cliente-table__cell"></div>
+              <div className="mov-gridCell"></div>
             </div>
           </div>
         </div>

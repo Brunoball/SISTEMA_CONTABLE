@@ -1,330 +1,118 @@
-.stock-page {
-  padding: 24px;
-}
+/* =========================================================
+   BALTO — Lista Productos
+   Hereda toda la base de movimientos.css  (importala antes)
+   Este archivo agrega SÓLO los overrides específicos de productos.
+   ========================================================= */
 
-.stock-header {
+/* ── Imagen / thumb ── */
+.prod-productCell {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.stock-title {
-  margin: 0;
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: #222;
-}
-
-.stock-header-actions {
-  display: flex;
   gap: 10px;
-  flex-wrap: wrap;
+  min-width: 0;
 }
 
-.stock-btn-primary {
-  padding: 9px 20px;
-  background: #4361ee;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.95rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: background 0.2s ease, transform 0.15s ease;
-}
-
-.stock-btn-primary:hover {
-  background: #3a56d4;
-}
-
-.stock-btn-primary:active {
-  transform: scale(0.98);
-}
-
-.stock-btn-primary-icon {
-  font-size: 1.1rem;
-  line-height: 1;
-}
-
-.stock-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.stock-search-wrap {
-  position: relative;
-  flex: 1;
-  min-width: 220px;
-}
-
-.stock-search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #aaa;
-  font-size: 1rem;
-}
-
-.stock-search-input {
-  width: 100%;
-  padding: 9px 12px 9px 36px;
-  border-radius: 8px;
-  border: 1px solid #ddd;
-  font-size: 0.95rem;
-  outline: none;
-  box-sizing: border-box;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.stock-search-input:focus {
-  border-color: #4361ee;
-  box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.12);
-}
-
-.stock-total {
-  color: #666;
-  font-size: 0.9rem;
-  white-space: nowrap;
-}
-
-.stock-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+.prod-thumb {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   overflow: hidden;
-}
-
-.stock-empty {
-  padding: 60px;
-  text-align: center;
-  color: #888;
-}
-
-.stock-empty-error {
-  color: #e74c3c;
-}
-
-.stock-table-responsive {
-  width: 100%;
-  overflow-x: auto;
-}
-
-.stock-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 900px;
-}
-
-.stock-table thead tr {
-  background: #f8f9fa;
-  border-bottom: 2px solid #eee;
-}
-
-.stock-th {
-  padding: 12px 16px;
-  text-align: left;
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: #555;
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
-}
-
-.stock-th-no-pointer {
-  cursor: default;
-}
-
-.stock-td {
-  padding: 12px 16px;
-  font-size: 0.9rem;
-  color: #333;
-  vertical-align: middle;
-}
-
-.stock-row {
-  border-bottom: 1px solid #f0f0f0;
-  background: #fff;
-}
-
-.stock-row-alt {
-  background: #fafafa;
-}
-
-.stock-product-cell {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.stock-product-thumb {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  background: #f0f0f0;
+  border: 1px solid var(--mov-border);
+  background: color-mix(in srgb, var(--balto-bg) 70%, #fff);
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  overflow: hidden;
 }
 
-.stock-product-img {
+.prod-thumb__img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
-.stock-product-noimg {
-  font-size: 1.4rem;
-  color: #ccc;
+.prod-thumb__placeholder {
+  font-size: 15px;
+  color: color-mix(in srgb, var(--balto-text) 50%, #fff);
 }
 
-.stock-product-name {
-  font-weight: 600;
-  color: #4361ee;
-  font-size: 0.9rem;
+/* ── SKU ── */
+.prod-sku {
+  font-size: 12px;
+  font-weight: 560;
+  letter-spacing: .04em;
+  color: var(--mov-muted);
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
 }
 
-.stock-sku {
-  color: #888;
-  font-size: 0.85rem;
+/* ── Precio promo ── */
+.prod-promo {
+  color: var(--balto-success);
+  font-weight: 580;
 }
 
-.stock-badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.stock-badge-success {
-  background: #f0fff4;
-  color: #27ae60;
-}
-
-.stock-badge-danger {
-  background: #fff0f0;
-  color: #e74c3c;
-}
-
-.stock-actions-cell {
-  text-align: center;
-}
-
-.stock-actions {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-}
-
-.stock-action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: none;
+/* ── Columnas con orden: cursor pointer ── */
+.prod-th--sortable {
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.9rem;
-  transition: transform 0.15s ease, opacity 0.15s ease;
+  user-select: none;
+  gap: 6px;
 }
 
-.stock-action-btn:hover {
-  transform: translateY(-1px);
+.prod-th--sortable:hover {
+  background: rgba(255,255,255,.06);
 }
 
-.stock-action-btn:active {
-  transform: scale(0.97);
+/* ── Ícono sort ── */
+.prod-sortIcon {
+  font-size: 10px;
+  margin-left: 4px;
+  flex-shrink: 0;
 }
 
-.stock-action-edit {
-  background: #f0fff4;
-  color: #27ae60;
+.prod-sortIcon--inactive {
+  opacity: .4;
 }
 
-.stock-action-delete {
-  background: #fff0f0;
-  color: #e74c3c;
+.prod-sortIcon--active {
+  opacity: 1;
+  color: rgba(255,255,255,.95);
 }
 
-.stock-pagination {
+/* ── Paginación ── */
+.prod-pagination {
   display: flex;
-  justify-content: center;
   align-items: center;
-  gap: 8px;
-  margin-top: 20px;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 0 6px;
   flex-wrap: wrap;
 }
 
-.stock-page-btn {
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid #ddd;
-  background: #fff;
-  color: #333;
-  cursor: pointer;
-  font-weight: 400;
-  font-size: 0.9rem;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+.prod-page-dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  color: var(--mov-muted);
+  font-size: 14px;
+  font-weight: 500;
 }
 
-.stock-page-btn:hover:not(:disabled) {
-  border-color: #4361ee;
-  color: #4361ee;
+/* ── Dark mode: thumbnail ── */
+html[data-theme="oscuro"] .prod-thumb {
+  background: rgba(15,23,42,.88) !important;
+  border-color: rgba(148,163,184,.14) !important;
 }
 
-.stock-page-btn.active {
-  border: none;
-  background: #4361ee;
-  color: #fff;
-  font-weight: 700;
+html[data-theme="oscuro"] .prod-thumb__placeholder {
+  color: rgba(148,163,184,.55) !important;
 }
 
-.stock-page-btn:disabled {
-  color: #ccc;
-  cursor: not-allowed;
-  background: #f7f7f7;
+html[data-theme="oscuro"] .prod-sku {
+  color: rgba(148,163,184,.72) !important;
 }
 
-.stock-page-dots {
-  color: #888;
-}
-
-.stock-orden-icon {
-  margin-left: 4px;
-}
-
-.stock-orden-inactivo {
-  color: #ccc;
-}
-
-.stock-orden-activo {
-  color: #4361ee;
-}
-
-@media (max-width: 768px) {
-  .stock-page {
-    padding: 16px;
-  }
-
-  .stock-title {
-    font-size: 1.45rem;
-  }
-
-  .stock-empty {
-    padding: 35px 20px;
-  }
+html[data-theme="oscuro"] .prod-promo {
+  color: rgba(34,173,92,.90) !important;
 }

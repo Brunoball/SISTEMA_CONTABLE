@@ -893,8 +893,8 @@ const Principal = () => {
         children: [
           { label: "Categorias", ruta: "/panel/stock/categorias" },
           { label: "Inventario", ruta: "/panel/stock/inventario" },
-          { label: "Lista_Productos", ruta: "/panel/stock/lista-productos" },
-          { label: "Tabla_Precios", ruta: "/panel/stock/tabla-precios" },
+          { label: "Lista de Productos", ruta: "/panel/stock/lista-productos" },
+          { label: "Tabla de Precios", ruta: "/panel/stock/tabla-precios" },
         ],
       },
       { label: "Análisis Financiero", ruta: "/panel/analisis-financiero" },
@@ -1138,7 +1138,7 @@ const Principal = () => {
           </button>
         </div>
 
-        <div className="pp-brand" onClick={handleLogoClick} role="button" tabIndex={0}>
+        <div className="pp-brand panel_contable" onClick={handleLogoClick} role="button" tabIndex={0}>
           <div className="pp-brand__mark">
             <FontAwesomeIcon icon={faChartLine} />
           </div>
@@ -1329,37 +1329,7 @@ const Principal = () => {
           })}
         </nav>
 
-        <div className="pp-sidebar__bottom">
-          {rolUsuario === "admin" && (
-            <button
-              className={`pp-logout ${
-                location.pathname.startsWith("/panel/configuracion") ? "is-active" : ""
-              }`}
-              onClick={() => {
-                handleNavigate("/panel/configuracion");
-              }}
-              style={{ marginBottom: 10 }}
-            >
-              <span className="pp-logout__icon">
-                <FontAwesomeIcon icon={faGear} />
-              </span>
-              <span className="pp-logout__label">Configuración</span>
-            </button>
-          )}
 
-          <button
-            className="pp-logout"
-            onClick={() => {
-              setDrawerOpen(false);
-              setShowLogoutModal(true);
-            }}
-          >
-            <span className="pp-logout__icon">
-              <FontAwesomeIcon icon={faSignOutAlt} />
-            </span>
-            <span className="pp-logout__label">Cerrar sesión</span>
-          </button>
-        </div>
       </aside>
 
       <main className="pp-content">
@@ -1373,6 +1343,11 @@ const Principal = () => {
         onClose={() => setShowPerfilModal(false)}
         usuario={usuario}
         logoSrc={tenantLogoPrincipalLoaded && tenantLogoPrincipalSrc ? tenantLogoPrincipalSrc : ""}
+        rolUsuario={rolUsuario}
+        onConfigRequest={() => {
+          setShowPerfilModal(false);
+          handleNavigate("/panel/configuracion");
+        }}
         onLogoutRequest={() => {
           setShowPerfilModal(false);
           setShowLogoutModal(true);

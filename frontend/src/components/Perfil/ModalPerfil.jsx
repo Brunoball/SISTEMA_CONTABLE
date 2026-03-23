@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faXmark, faGear } from "@fortawesome/free-solid-svg-icons";
 import "./ModalPerfil.css";
 
 function normalizeRolLabel(value) {
@@ -47,10 +47,15 @@ export default function ModalPerfil({
   onClose,
   usuario,
   logoSrc,
+  rolUsuario,
+  onConfigRequest,
   onLogoutRequest,
 }) {
   const closeBtnRef = useRef(null);
   const [logoError, setLogoError] = useState(false);
+
+  const isAdmin =
+    String(rolUsuario ?? "").trim().toLowerCase() === "admin";
 
   useEffect(() => {
     if (!open) return;
@@ -213,7 +218,20 @@ export default function ModalPerfil({
         </div>
 
         <div className="mit-actions">
-          <div className="mit-help"> </div>
+          {/* Configuración — solo visible para admins, alineado a la izquierda */}
+          {isAdmin && (
+            <button
+              type="button"
+              className="mit-btn mit-btn--config"
+              onClick={() => onConfigRequest?.()}
+              title="Ir a Configuración"
+            >
+              <FontAwesomeIcon icon={faGear} style={{ marginRight: 7 }} />
+              Configuración
+            </button>
+          )}
+
+          <div className="mit-help" />
 
           <button
             type="button"

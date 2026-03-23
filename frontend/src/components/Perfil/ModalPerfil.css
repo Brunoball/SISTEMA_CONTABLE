@@ -2,10 +2,6 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
 
 /* =========================
-   Paleta BALTO (Excel)
-   (si ya existen en :root global, esto igual funciona)
-========================= */
-/* =========================
    Tokens SOLO para ModalPerfil
 ========================= */
 .mi-modal__container--perfil{
@@ -79,7 +75,7 @@
 }
 
 /* =========================
-   Header premium (tipo login)
+   Header premium
 ========================= */
 .mi-modal__header{
   position: relative;
@@ -108,7 +104,7 @@
 .mi-modal__title{
   margin: 0;
   font-size: 18px;
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: -0.02em;
   white-space: nowrap;
   overflow: hidden;
@@ -118,7 +114,7 @@
 .mi-modal__subtitle{
   margin: 0;
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 500;
   color: rgba(255,255,255,.82);
   white-space: nowrap;
   overflow: hidden;
@@ -171,7 +167,6 @@
   padding: 18px;
 }
 
-/* scroll suave */
 .perfil-inner::-webkit-scrollbar{ width: 10px; }
 .perfil-inner::-webkit-scrollbar-thumb{
   background: rgba(10, 37, 64, 0.20);
@@ -217,7 +212,7 @@
   object-fit: contain;
   display: block;
 }
-/* Ícono izquierdo (cuadro) */
+
 .perfil-card__icon{
   width: 56px;
   height: 56px;
@@ -232,7 +227,6 @@
   font-size: 26px;
 }
 
-/* Avatar letra */
 .perfil-avatar{
   width: 64px;
   height: 64px;
@@ -241,7 +235,7 @@
   place-items: center;
 
   font-size: 22px;
-  font-weight: 950;
+  font-weight: 800;
   letter-spacing: .02em;
   color: #fff;
 
@@ -254,7 +248,7 @@
 
 .perfil-name{
   font-size: 18px;
-  font-weight: 950;
+  font-weight: 700;
   color: var(--balto-midnight);
   line-height: 1.15;
   word-break: break-word;
@@ -264,10 +258,11 @@
   margin-top: 6px;
   font-size: 13px;
   color: var(--balto-muted);
+  font-weight: 450;
 }
 .perfil-meta b{
   color: rgba(10, 37, 64, 0.92);
-  font-weight: 900;
+  font-weight: 600;
 }
 
 /* =========================
@@ -292,22 +287,21 @@
 
 .perfil-field__label{
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--balto-muted);
   margin-bottom: 4px;
-  letter-spacing: .02em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .perfil-field__value{
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 600;
   color: rgba(10, 37, 64, 0.92);
   word-break: break-word;
 }
 
 /* =========================
-   Footer acciones (estilo login)
+   Footer acciones
 ========================= */
 .mit-actions{
   display: flex;
@@ -318,12 +312,12 @@
 
   border-top: 1px solid rgba(214, 222, 234, 0.95);
   background: rgba(255,255,255,.96);
+  flex-wrap: wrap;
 }
 
 .mit-help{
-  margin-right: auto;
-  font-size: 12px;
-  color: var(--balto-muted);
+  flex: 1;           /* empuja los botones siguientes a la derecha */
+  min-width: 0;
 }
 
 /* Botones */
@@ -333,10 +327,13 @@
   border-radius: 14px;
   height: 44px;
   padding: 0 14px;
-  font-weight: 950;
-  letter-spacing: .02em;
+  font-weight: 600;
+  letter-spacing: 0;
   cursor: pointer;
   transition: transform var(--t), box-shadow var(--t), filter var(--t), background var(--t);
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
 }
 
 .mit-btn--ghost{
@@ -361,6 +358,20 @@
   filter: brightness(.95);
   transform: translateY(-1px);
   box-shadow: 0 14px 26px -18px rgba(225, 61, 69, .55);
+}
+
+/* ── Botón Configuración ── */
+.mit-btn--config{
+  background: rgba(0, 85, 187, 0.08);
+  color: var(--balto-action);
+  border-color: rgba(0, 85, 187, 0.20);
+}
+
+.mit-btn--config:hover{
+  background: rgba(0, 85, 187, 0.14);
+  border-color: rgba(0, 85, 187, 0.32);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px -14px rgba(0, 85, 187, .28);
 }
 
 .mit-btn:focus-visible{
@@ -395,26 +406,23 @@
   .perfil-inner{
     padding: 14px;
   }
+
+  .mit-actions{
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .mit-help{ display: none; }
+
+  .mit-btn--config{
+    width: 100%;
+    justify-content: center;
+    order: 3;
+  }
 }
-/* ===== Ajuste: tipografías menos gruesas (override) ===== */
-.mi-modal__title{ font-weight: 700; }
-.mi-modal__subtitle{ font-weight: 500; }
 
-.perfil-name{ font-weight: 700; }
-.perfil-meta b{ font-weight: 600; }
-
-.perfil-field__label{ font-weight: 600; text-transform: none; letter-spacing: 0; }
-.perfil-field__value{ font-weight: 600; }
-
-.mit-btn{ font-weight: 650; letter-spacing: 0; }
-
-/* si querés aún más finito en general */
-.perfil-meta,
-.mit-help{ font-weight: 450; }
 /* =========================
-   MODO OSCURO (ModalPerfil)
-   Activación: body.dark
-   Pegá esto AL FINAL del archivo
+   MODO OSCURO — body.dark
 ========================= */
 body.dark .mi-modal__overlay{
   background: rgba(0,0,0,.55);
@@ -440,24 +448,11 @@ body.dark .perfil-field{
   box-shadow: 0 10px 25px rgba(0,0,0,.35);
 }
 
-body.dark .perfil-name{
-  color: rgba(255,255,255,.92);
-}
-
-body.dark .perfil-meta{
-  color: rgba(255,255,255,.60);
-}
-body.dark .perfil-meta b{
-  color: rgba(255,255,255,.86);
-}
-
-body.dark .perfil-field__label{
-  color: rgba(255,255,255,.65);
-}
-
-body.dark .perfil-field__value{
-  color: rgba(255,255,255,.88);
-}
+body.dark .perfil-name{ color: rgba(255,255,255,.92); }
+body.dark .perfil-meta{ color: rgba(255,255,255,.60); }
+body.dark .perfil-meta b{ color: rgba(255,255,255,.86); }
+body.dark .perfil-field__label{ color: rgba(255,255,255,.65); }
+body.dark .perfil-field__value{ color: rgba(255,255,255,.88); }
 
 body.dark .mit-actions{
   background: rgba(255,255,255,.03);
@@ -469,9 +464,18 @@ body.dark .mit-btn--ghost{
   color: rgba(255,255,255,.88);
   border-color: rgba(255,255,255,.12);
 }
-
 body.dark .mit-btn--ghost:hover{
   background: rgba(0, 85, 187, 0.18);
+}
+
+body.dark .mit-btn--config{
+  background: rgba(59, 130, 246, 0.12);
+  color: rgba(147, 197, 253, 0.95);
+  border-color: rgba(59, 130, 246, 0.22);
+}
+body.dark .mit-btn--config:hover{
+  background: rgba(59, 130, 246, 0.20);
+  border-color: rgba(59, 130, 246, 0.36);
 }
 
 body.dark .mi-modal__close{
@@ -482,9 +486,9 @@ body.dark .mi-modal__close{
 body.dark .perfil-inner::-webkit-scrollbar-thumb{
   background: rgba(255,255,255,.16);
 }
+
 /* =========================
-   MODO OSCURO (ModalPerfil)
-   Activación: html[data-theme="oscuro"]
+   MODO OSCURO — html[data-theme="oscuro"]
 ========================= */
 html[data-theme="oscuro"] .mi-modal__overlay{
   background: rgba(0,0,0,.60);
@@ -510,24 +514,11 @@ html[data-theme="oscuro"] .perfil-field{
   box-shadow: 0 10px 25px rgba(0,0,0,.35);
 }
 
-html[data-theme="oscuro"] .perfil-name{
-  color: rgba(255,255,255,.92);
-}
-
-html[data-theme="oscuro"] .perfil-meta{
-  color: rgba(255,255,255,.60);
-}
-html[data-theme="oscuro"] .perfil-meta b{
-  color: rgba(255,255,255,.86);
-}
-
-html[data-theme="oscuro"] .perfil-field__label{
-  color: rgba(255,255,255,.65);
-}
-
-html[data-theme="oscuro"] .perfil-field__value{
-  color: rgba(255,255,255,.88);
-}
+html[data-theme="oscuro"] .perfil-name{ color: rgba(255,255,255,.92); }
+html[data-theme="oscuro"] .perfil-meta{ color: rgba(255,255,255,.60); }
+html[data-theme="oscuro"] .perfil-meta b{ color: rgba(255,255,255,.86); }
+html[data-theme="oscuro"] .perfil-field__label{ color: rgba(255,255,255,.65); }
+html[data-theme="oscuro"] .perfil-field__value{ color: rgba(255,255,255,.88); }
 
 html[data-theme="oscuro"] .mit-actions{
   background: rgba(255,255,255,.03);
@@ -539,9 +530,18 @@ html[data-theme="oscuro"] .mit-btn--ghost{
   color: rgba(255,255,255,.88);
   border-color: rgba(255,255,255,.12);
 }
-
 html[data-theme="oscuro"] .mit-btn--ghost:hover{
   background: rgba(0, 85, 187, 0.20);
+}
+
+html[data-theme="oscuro"] .mit-btn--config{
+  background: rgba(59, 130, 246, 0.12);
+  color: rgba(147, 197, 253, 0.95);
+  border-color: rgba(59, 130, 246, 0.22);
+}
+html[data-theme="oscuro"] .mit-btn--config:hover{
+  background: rgba(59, 130, 246, 0.20);
+  border-color: rgba(59, 130, 246, 0.36);
 }
 
 html[data-theme="oscuro"] .mi-modal__close{

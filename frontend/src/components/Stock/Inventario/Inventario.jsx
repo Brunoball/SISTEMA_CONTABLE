@@ -562,8 +562,8 @@ const Inventario = () => {
                                   className="inv-thumb__img"
                                 />
                               ) : (
-                                <span className="inv-thumb__empty">
-                                  <FontAwesomeIcon icon={faImage} />
+                                <span className="prod-thumb__placeholder">
+                                  <FontAwesomeIcon icon={faBoxOpen} />
                                 </span>
                               )}
                             </div>
@@ -691,22 +691,23 @@ const Inventario = () => {
         )}
       </div>
 
-      {modalCargaOpen && (
-        <ModalPortal onClose={() => setModalCargaOpen(false)}>
-          <ModalCargaMasivaInventario
-            onClose={() => setModalCargaOpen(false)}
-            onImportado={async (mensaje) => {
-              setModalCargaOpen(false);
-              await fetchProductos();
-              mostrarToast(
-                "exito",
-                mensaje || "Inventario importado correctamente."
-              );
-            }}
-            onToast={mostrarToast}
-          />
-        </ModalPortal>
-      )}
+{modalCargaOpen && (
+  <ModalPortal onClose={() => setModalCargaOpen(false)}>
+    <ModalCargaMasivaInventario
+      open={modalCargaOpen}
+      onClose={() => setModalCargaOpen(false)}
+      onImportado={async (mensaje) => {
+        setModalCargaOpen(false);
+        await fetchProductos();
+        mostrarToast(
+          "exito",
+          mensaje || "Inventario importado correctamente."
+        );
+      }}
+      onToast={mostrarToast}
+    />
+  </ModalPortal>
+)}
 
       {historialProducto && (
         <ModalPortal onClose={() => setHistorialProducto(null)}>

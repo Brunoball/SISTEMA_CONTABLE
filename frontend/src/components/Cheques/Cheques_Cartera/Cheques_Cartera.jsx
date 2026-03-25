@@ -290,7 +290,7 @@ const Cheques_Cartera = () => {
                         type="text"
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
-                        placeholder="Buscar por emisor, número de cheque, importe o fecha..."
+                        placeholder="Buscar por emisor, número de cheque, importe..."
                         autoComplete="off"
                       />
 

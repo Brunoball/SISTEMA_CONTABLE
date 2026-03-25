@@ -1052,7 +1052,7 @@ html[data-theme="oscuro"] body{
   background: rgba(0,0,0,.45);
   display: grid;
   place-items: center;
-  z-index: 99999;
+  z-index: 9999999999999999999999999999999;
 }
 
 .mi-mini__modal{

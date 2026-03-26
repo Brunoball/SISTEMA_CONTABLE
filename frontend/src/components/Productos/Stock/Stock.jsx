@@ -3,6 +3,7 @@ import BASE_URL from "../../../config/config";
 import "../../Global/Global_css/Global_Section.css";
 import "../../Global/Global_css/Global_responsive.css";
 import Toast from "../../Global/Toast.jsx";
+import ModalCategoriasStock from "./modales/ModalCategoriasStock";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBoxesStacked,
@@ -14,12 +15,16 @@ import {
   faWarehouse,
   faFilter,
   faArrowRotateRight,
+  faTag,
 } from "@fortawesome/free-solid-svg-icons";
 import "./Stock.css";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 const ITEMS_POR_PAGINA = 20;
 
+/* =========================================
+   Helpers auth / api
+========================================= */
 function buildHeadersGET() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
   const token = (localStorage.getItem("token") || "").trim();
@@ -71,6 +76,9 @@ async function apiGet(url) {
   return data;
 }
 
+/* =========================================
+   Helpers visuales
+========================================= */
 function formatMoney(value) {
   if (value === null || value === undefined || value === "") return "—";
 
@@ -83,30 +91,46 @@ function formatMoney(value) {
   })}`;
 }
 
-function getCategoriaVisual(key) {
-  switch (String(key || "").toLowerCase()) {
+function getCategoriaStockKey(stockValue) {
+  const stock = Number(stockValue || 0);
+
+  if (stock <= 0) return "sin_stock";
+  if (stock <= 5) return "bajo";
+  if (stock <= 15) return "medio";
+  return "alto";
+}
+
+function getCategoriaVisualByStock(stockValue) {
+  const key = getCategoriaStockKey(stockValue);
+
+  switch (key) {
     case "sin_stock":
       return {
+        key,
         label: "Sin stock",
         className: "stock-badge stock-badge--sin",
       };
     case "bajo":
       return {
+        key,
         label: "Stock bajo",
         className: "stock-badge stock-badge--bajo",
       };
     case "medio":
       return {
+        key,
         label: "Stock medio",
         className: "stock-badge stock-badge--medio",
       };
     case "alto":
       return {
+        key,
         label: "Stock alto",
         className: "stock-badge stock-badge--alto",
       };
     default:
       return {
+        key: "",
         label: "Sin categoría",
         className: "stock-badge",
       };
@@ -114,10 +138,11 @@ function getCategoriaVisual(key) {
 }
 
 const COLUMNS = [
-  { key: "nombre", label: "PRODUCTO", fr: 2.5, align: "left" },
+  { key: "nombre", label: "PRODUCTO", fr: 2.2, align: "left" },
   { key: "sku", label: "SKU", fr: 1.1, align: "center" },
+  { key: "categoria_global", label: "CATEGORÍA", fr: 1.3, align: "center" },
   { key: "stock", label: "CANTIDAD", fr: 0.9, align: "center" },
-  { key: "categoria", label: "CATEGORÍA", fr: 1.2, align: "center" },
+  { key: "nivel_stock", label: "NIVEL STOCK", fr: 1.2, align: "center" },
   { key: "precio", label: "PRECIO", fr: 1, align: "right" },
   { key: "precio_promo", label: "PRECIO PROMO", fr: 1, align: "right" },
 ];
@@ -125,27 +150,19 @@ const COLUMNS = [
 const GRID_COLS = COLUMNS.map((c) => `${c.fr}fr`).join(" ");
 
 export default function Stock() {
-  const [resumen, setResumen] = useState({
-    total_productos: 0,
-    total_unidades: 0,
-    sin_stock: 0,
-    bajo: 0,
-    medio: 0,
-    alto: 0,
-  });
+  const [allProductos, setAllProductos] = useState([]);
+  const [categoriasGlobales, setCategoriasGlobales] = useState([]);
 
-  const [productos, setProductos] = useState([]);
-  const [total, setTotal] = useState(0);
-
-  const [loadingResumen, setLoadingResumen] = useState(true);
-  const [loadingLista, setLoadingLista] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [busqueda, setBusqueda] = useState("");
-  const [categoria, setCategoria] = useState("todas");
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("todas");
+  const [nivelSeleccionado, setNivelSeleccionado] = useState("todas");
   const [paginaActual, setPaginaActual] = useState(1);
 
   const [toast, setToast] = useState(null);
+  const [modalCategoriasOpen, setModalCategoriasOpen] = useState(false);
 
   const mostrarToast = useCallback((tipo, mensaje, duracion = 2500) => {
     setToast({
@@ -158,82 +175,174 @@ export default function Stock() {
 
   const cerrarToast = useCallback(() => setToast(null), []);
 
-  const fetchResumen = useCallback(async () => {
-    setLoadingResumen(true);
+  /* =========================================
+     Fetch categorías globales
+  ========================================= */
+  const fetchCategoriasGlobales = useCallback(async () => {
+    const params = new URLSearchParams({ action: "obtener_listas" });
+    const data = await apiGet(`${API_URL}?${params.toString()}`);
 
-    try {
-      const data = await apiGet(`${API_URL}?action=stock_resumen_categorias`);
+    const cats = Array.isArray(data?.listas?.stock_categorias)
+      ? data.listas.stock_categorias
+      : [];
 
-      setResumen({
-        total_productos: Number(data?.resumen?.total_productos || 0),
-        total_unidades: Number(data?.resumen?.total_unidades || 0),
-        sin_stock: Number(data?.resumen?.sin_stock || 0),
-        bajo: Number(data?.resumen?.bajo || 0),
-        medio: Number(data?.resumen?.medio || 0),
-        alto: Number(data?.resumen?.alto || 0),
-      });
-    } finally {
-      setLoadingResumen(false);
-    }
+    setCategoriasGlobales(
+      cats.map((cat) => ({
+        id: String(cat.id ?? cat.id_stock_categoria ?? ""),
+        nombre: String(cat.nombre ?? "Sin nombre"),
+      }))
+    );
   }, []);
 
-  const fetchProductos = useCallback(async () => {
-    setLoadingLista(true);
-    setError("");
+  /* =========================================
+     Fetch todos los productos activos
+  ========================================= */
+  const fetchTodosLosProductos = useCallback(async () => {
+    const acumulados = [];
+    let pagina = 1;
+    let totalPaginas = 1;
 
-    try {
+    do {
       const params = new URLSearchParams({
-        action: "stock_categorias_listar",
-        busqueda: busqueda.trim(),
-        categoria,
-        pagina: String(paginaActual),
-        por_pagina: String(ITEMS_POR_PAGINA),
+        action: "stock_productos_listar",
+        pagina: String(pagina),
+        por_pagina: "100",
+        activo: "1",
+        orden_campo: "nombre",
+        orden_dir: "ASC",
       });
 
       const data = await apiGet(`${API_URL}?${params.toString()}`);
 
-      setProductos(Array.isArray(data?.productos) ? data.productos : []);
-      setTotal(Number(data?.total || 0));
-    } catch (err) {
-      setProductos([]);
-      setTotal(0);
-      setError(err?.message || "Error al cargar el stock.");
-    } finally {
-      setLoadingLista(false);
-    }
-  }, [busqueda, categoria, paginaActual]);
+      const productosPagina = Array.isArray(data?.productos)
+        ? data.productos
+        : [];
+      acumulados.push(...productosPagina);
 
-  const recargarTodo = useCallback(async () => {
-    try {
-      await Promise.all([fetchResumen(), fetchProductos()]);
-      mostrarToast("exito", "Stock actualizado correctamente.");
-    } catch (err) {
-      setError(err?.message || "No se pudo actualizar la información.");
-      mostrarToast("error", err?.message || "Error al actualizar.");
-    }
-  }, [fetchResumen, fetchProductos, mostrarToast]);
+      totalPaginas = Number(data?.total_paginas || 1);
+      pagina += 1;
+    } while (pagina <= totalPaginas);
 
+    setAllProductos(acumulados);
+  }, []);
+
+  const recargarTodo = useCallback(
+    async ({ mostrarToastExito = false } = {}) => {
+      setLoading(true);
+      setError("");
+
+      try {
+        await Promise.all([fetchCategoriasGlobales(), fetchTodosLosProductos()]);
+
+        if (mostrarToastExito) {
+          mostrarToast("exito", "Stock actualizado correctamente.");
+        }
+      } catch (err) {
+        const msg = err?.message || "No se pudo actualizar la información.";
+        setError(msg);
+        mostrarToast("error", msg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchCategoriasGlobales, fetchTodosLosProductos, mostrarToast]
+  );
+
+  useEffect(() => {
+    recargarTodo({ mostrarToastExito: false });
+  }, [recargarTodo]);
+
+  /* =========================================
+     Limpiar filtros
+  ========================================= */
   const limpiarFiltros = useCallback(() => {
     setBusqueda("");
-    setCategoria("todas");
+    setCategoriaSeleccionada("todas");
+    setNivelSeleccionado("todas");
     setPaginaActual(1);
   }, []);
 
-  useEffect(() => {
-    fetchResumen().catch((err) => {
-      setError(err?.message || "No se pudo cargar el resumen.");
-    });
-  }, [fetchResumen]);
+  /* =========================================
+     Resumen sobre TODOS los productos
+  ========================================= */
+  const resumen = useMemo(() => {
+    const base = {
+      total_productos: allProductos.length,
+      total_unidades: 0,
+      sin_stock: 0,
+      bajo: 0,
+      medio: 0,
+      alto: 0,
+    };
 
-  useEffect(() => {
-    fetchProductos().catch((err) => {
-      setError(err?.message || "No se pudo cargar la lista.");
+    allProductos.forEach((prod) => {
+      const stock = Number(prod?.stock || 0);
+      base.total_unidades += stock;
+
+      const nivel = getCategoriaStockKey(stock);
+      if (nivel === "sin_stock") base.sin_stock += 1;
+      if (nivel === "bajo") base.bajo += 1;
+      if (nivel === "medio") base.medio += 1;
+      if (nivel === "alto") base.alto += 1;
     });
-  }, [fetchProductos]);
+
+    return base;
+  }, [allProductos]);
+
+  /* =========================================
+     Filtrado frontend
+  ========================================= */
+  const productosFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+
+    return allProductos.filter((prod) => {
+      const nombre = String(prod?.nombre || "").toLowerCase();
+      const sku = String(prod?.sku || "").toLowerCase();
+      const descripcion = String(prod?.descripcion || "").toLowerCase();
+      const categoriaNombre = String(
+        prod?.categoria_nombre || ""
+      ).toLowerCase();
+      const idCategoria = String(prod?.id_categoria_stock ?? "");
+      const nivel = getCategoriaStockKey(prod?.stock);
+
+      const matchBusqueda =
+        q === "" ||
+        nombre.includes(q) ||
+        sku.includes(q) ||
+        descripcion.includes(q) ||
+        categoriaNombre.includes(q);
+
+      const matchCategoria =
+        categoriaSeleccionada === "todas" ||
+        idCategoria === String(categoriaSeleccionada);
+
+      const matchNivel =
+        nivelSeleccionado === "todas" || nivel === nivelSeleccionado;
+
+      return matchBusqueda && matchCategoria && matchNivel;
+    });
+  }, [allProductos, busqueda, categoriaSeleccionada, nivelSeleccionado]);
+
+  /* =========================================
+     Paginación frontend
+  ========================================= */
+  const total = productosFiltrados.length;
 
   const totalPaginas = useMemo(() => {
     return Math.max(1, Math.ceil(total / ITEMS_POR_PAGINA));
   }, [total]);
+
+  useEffect(() => {
+    if (paginaActual > totalPaginas) {
+      setPaginaActual(1);
+    }
+  }, [paginaActual, totalPaginas]);
+
+  const productosPaginados = useMemo(() => {
+    const inicio = (paginaActual - 1) * ITEMS_POR_PAGINA;
+    const fin = inicio + ITEMS_POR_PAGINA;
+    return productosFiltrados.slice(inicio, fin);
+  }, [productosFiltrados, paginaActual]);
 
   const paginasVisibles = useMemo(() => {
     return Array.from({ length: totalPaginas }, (_, i) => i + 1)
@@ -247,6 +356,9 @@ export default function Stock() {
       }, []);
   }, [totalPaginas, paginaActual]);
 
+  /* =========================================
+     Cards resumen
+  ========================================= */
   const cardsResumen = [
     {
       title: "Total productos",
@@ -254,7 +366,7 @@ export default function Stock() {
       icon: faBoxesStacked,
       className: "stock-summaryCard--blue",
       onClick: () => {
-        setCategoria("todas");
+        setNivelSeleccionado("todas");
         setPaginaActual(1);
       },
     },
@@ -264,7 +376,7 @@ export default function Stock() {
       icon: faTriangleExclamation,
       className: "stock-summaryCard--red",
       onClick: () => {
-        setCategoria("sin_stock");
+        setNivelSeleccionado("sin_stock");
         setPaginaActual(1);
       },
     },
@@ -274,7 +386,7 @@ export default function Stock() {
       icon: faLayerGroup,
       className: "stock-summaryCard--orange",
       onClick: () => {
-        setCategoria("bajo");
+        setNivelSeleccionado("bajo");
         setPaginaActual(1);
       },
     },
@@ -284,7 +396,7 @@ export default function Stock() {
       icon: faWarehouse,
       className: "stock-summaryCard--yellow",
       onClick: () => {
-        setCategoria("medio");
+        setNivelSeleccionado("medio");
         setPaginaActual(1);
       },
     },
@@ -294,7 +406,7 @@ export default function Stock() {
       icon: faBoxOpen,
       className: "stock-summaryCard--green",
       onClick: () => {
-        setCategoria("alto");
+        setNivelSeleccionado("alto");
         setPaginaActual(1);
       },
     },
@@ -311,18 +423,30 @@ export default function Stock() {
             <div>
               <h2 className="stock-heroTitle">Stock</h2>
               <p className="stock-heroText">
-                Visualizá los productos agrupados por categorías según su cantidad
-                disponible.
+                Visualizá todos los productos y filtralos por categoría global o
+                por nivel de stock.
               </p>
             </div>
           </div>
 
-          <div className="stock-heroCard__right">
+          <div
+            className="stock-heroCard__right"
+            style={{ display: "flex", gap: 10, flexWrap: "wrap" }}
+          >
+            <button
+              type="button"
+              className="mov-btn mov-btn--ghost"
+              onClick={() => setModalCategoriasOpen(true)}
+              disabled={loading}
+            >
+              <FontAwesomeIcon icon={faTag} /> Categorías
+            </button>
+
             <button
               type="button"
               className="mov-btn mov-btn--ghost"
               onClick={limpiarFiltros}
-              disabled={loadingLista}
+              disabled={loading}
             >
               <FontAwesomeIcon icon={faFilter} /> Limpiar filtros
             </button>
@@ -330,8 +454,8 @@ export default function Stock() {
             <button
               type="button"
               className="mov-btn mov-btn--primary"
-              onClick={recargarTodo}
-              disabled={loadingLista || loadingResumen}
+              onClick={() => recargarTodo({ mostrarToastExito: true })}
+              disabled={loading}
             >
               <FontAwesomeIcon icon={faArrowRotateRight} /> Actualizar
             </button>
@@ -351,7 +475,7 @@ export default function Stock() {
               type="button"
               className={`stock-summaryCard ${card.className}`}
               onClick={card.onClick}
-              disabled={loadingResumen}
+              disabled={loading}
             >
               <div className="stock-summaryCard__icon">
                 <FontAwesomeIcon icon={card.icon} />
@@ -359,7 +483,7 @@ export default function Stock() {
               <div className="stock-summaryCard__body">
                 <span className="stock-summaryCard__title">{card.title}</span>
                 <strong className="stock-summaryCard__value">
-                  {loadingResumen ? "..." : card.value}
+                  {loading ? "..." : card.value}
                 </strong>
               </div>
             </button>
@@ -372,7 +496,7 @@ export default function Stock() {
             <div className="stock-summaryCard__body">
               <span className="stock-summaryCard__title">Total unidades</span>
               <strong className="stock-summaryCard__value">
-                {loadingResumen ? "..." : resumen.total_unidades}
+                {loading ? "..." : resumen.total_unidades}
               </strong>
             </div>
           </div>
@@ -382,7 +506,7 @@ export default function Stock() {
           <div className="mov-card__head">
             <div className="mov-card__headLeft">
               <div className="title-mov">
-                <div className="mov-card__title">Stock por categorías</div>
+                <div className="mov-card__title">Stock por productos</div>
                 <div className="mov-card__hint">
                   Mostrando <b>{total}</b> productos
                 </div>
@@ -400,8 +524,8 @@ export default function Stock() {
                             setBusqueda(e.target.value);
                             setPaginaActual(1);
                           }}
-                          placeholder="Buscar por nombre o SKU..."
-                          disabled={loadingLista}
+                          placeholder="Buscar por nombre, SKU, descripción o categoría..."
+                          disabled={loading}
                         />
 
                         <span className="cc-floatingLabel">
@@ -427,21 +551,24 @@ export default function Stock() {
                 </div>
 
                 <div className="stock-selectWrap">
-                  <label className="stock-selectLabel">Categoría</label>
+                  <label className="stock-selectLabel">
+                    <FontAwesomeIcon icon={faTag} /> Categoría global
+                  </label>
                   <select
                     className="stock-select"
-                    value={categoria}
+                    value={categoriaSeleccionada}
                     onChange={(e) => {
-                      setCategoria(e.target.value);
+                      setCategoriaSeleccionada(e.target.value);
                       setPaginaActual(1);
                     }}
-                    disabled={loadingLista}
+                    disabled={loading}
                   >
                     <option value="todas">Todas</option>
-                    <option value="sin_stock">Sin stock</option>
-                    <option value="bajo">Stock bajo</option>
-                    <option value="medio">Stock medio</option>
-                    <option value="alto">Stock alto</option>
+                    {categoriasGlobales.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.nombre}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -471,20 +598,18 @@ export default function Stock() {
 
           <div className="mov-tableWrap" role="rowgroup">
             <div className="mov-gridBody mov-gridBody--relative">
-              {loadingLista ? (
+              {loading ? (
                 <div className="stock-loadingState">Cargando stock...</div>
-              ) : productos.length === 0 ? (
+              ) : productosPaginados.length === 0 ? (
                 <div className="cc-emptyState">
                   <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
                   <div className="cc-emptyText">
-                    {busqueda.trim()
-                      ? `No se encontraron productos para "${busqueda.trim()}".`
-                      : "No hay productos para mostrar en esta categoría."}
+                    No se encontraron productos con los filtros seleccionados.
                   </div>
                 </div>
               ) : (
-                productos.map((prod) => {
-                  const visual = getCategoriaVisual(prod.categoria_stock);
+                productosPaginados.map((prod) => {
+                  const visual = getCategoriaVisualByStock(prod.stock);
 
                   return (
                     <div
@@ -498,7 +623,9 @@ export default function Stock() {
                         role="cell"
                         data-label="PRODUCTO"
                       >
-                        <span className="mov-ellipsissss">{prod.nombre || "—"}</span>
+                        <span className="mov-ellipsissss">
+                          {prod.nombre || "—"}
+                        </span>
                       </div>
 
                       <div
@@ -506,7 +633,19 @@ export default function Stock() {
                         role="cell"
                         data-label="SKU"
                       >
-                        <span className="mov-ellipsissss">{prod.sku || "—"}</span>
+                        <span className="mov-ellipsissss">
+                          {prod.sku || "—"}
+                        </span>
+                      </div>
+
+                      <div
+                        className="mov-gridCell is-center"
+                        role="cell"
+                        data-label="CATEGORÍA"
+                      >
+                        <span className="mov-ellipsissss">
+                          {prod.categoria_nombre || "Sin categoría"}
+                        </span>
                       </div>
 
                       <div
@@ -528,7 +667,7 @@ export default function Stock() {
                       <div
                         className="mov-gridCell is-center"
                         role="cell"
-                        data-label="CATEGORÍA"
+                        data-label="NIVEL STOCK"
                       >
                         <span className={visual.className}>{visual.label}</span>
                       </div>
@@ -600,6 +739,15 @@ export default function Stock() {
           </div>
         )}
       </div>
+
+      <ModalCategoriasStock
+        open={modalCategoriasOpen}
+        onClose={() => setModalCategoriasOpen(false)}
+        onToast={mostrarToast}
+        onActualizado={async () => {
+          await recargarTodo({ mostrarToastExito: false });
+        }}
+      />
 
       {toast && (
         <Toast

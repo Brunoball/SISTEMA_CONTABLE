@@ -12,6 +12,7 @@ import {
   faRefresh,
   faXmark,
   faFloppyDisk,
+  faListAlt,
 } from "@fortawesome/free-solid-svg-icons";
 import BASE_URL from "../../../../config/config";
 
@@ -95,6 +96,10 @@ const normalizarProducto = (data) => {
     descripcion: p.descripcion ?? "",
     imagen_url: p.imagen_url ?? p.imagen ?? "",
     imagen_archivo_id: p.imagen_archivo_id ? Number(p.imagen_archivo_id) : null,
+    id_categoria_stock:
+      p.id_categoria_stock !== null && p.id_categoria_stock !== undefined && p.id_categoria_stock !== ""
+        ? String(p.id_categoria_stock)
+        : "",
   };
 };
 
@@ -116,7 +121,38 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
     descripcion: "",
     imagen_url: "",
     imagen_archivo_id: null,
+    id_categoria_stock: "",
   });
+
+  /* =========================
+     Categorías
+  ========================= */
+  const [categorias, setCategorias] = useState([]);
+  const [loadingCategorias, setLoadingCategorias] = useState(false);
+
+  useEffect(() => {
+    let cancelado = false;
+    const fetchCategorias = async () => {
+      setLoadingCategorias(true);
+      try {
+        const params = new URLSearchParams({ action: "obtener_listas" });
+        const res = await fetch(`${API_URL}?${params.toString()}`, {
+          method: "GET",
+          headers: buildHeadersGET(),
+        });
+        const data = await res.json();
+        if (!cancelado && data?.listas?.stock_categorias) {
+          setCategorias(data.listas.stock_categorias);
+        }
+      } catch {
+        if (!cancelado) setCategorias([]);
+      } finally {
+        if (!cancelado) setLoadingCategorias(false);
+      }
+    };
+    fetchCategorias();
+    return () => { cancelado = true; };
+  }, []);
 
   const [imagenActualBlob, setImagenActualBlob] = useState(null);
   const [imagenActualCargando, setImagenActualCargando] = useState(false);
@@ -359,6 +395,10 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
         );
         formData.append("stock", form.stock !== "" ? String(form.stock) : "");
         formData.append("descripcion", form.descripcion.trim());
+        formData.append(
+          "id_categoria_stock",
+          form.id_categoria_stock !== "" ? String(form.id_categoria_stock) : ""
+        );
         formData.append("imagen", nuevaImagenFile);
         const res = await fetch(`${API_URL}?action=stock_productos_actualizar`, {
           method: "POST",
@@ -378,6 +418,8 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
             form.precio_promo !== "" ? Number(form.precio_promo) : null,
           stock: form.stock !== "" ? Number(form.stock) : null,
           descripcion: form.descripcion.trim() || null,
+          id_categoria_stock:
+            form.id_categoria_stock !== "" ? Number(form.id_categoria_stock) : null,
         };
         if (eliminarImagenActual) {
           body.imagen_url = null;
@@ -578,6 +620,33 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
                   {errores.stock && (
                     <span className="mep-field-error">{errores.stock}</span>
                   )}
+                </div>
+
+                {/* Categoría */}
+                <div className="fl-field">
+                  <select
+                    name="id_categoria_stock"
+                    value={form.id_categoria_stock}
+                    onChange={handleChange}
+                    className="fl-input mep-select"
+                    disabled={guardando || loadingCategorias}
+                  >
+                    <option value="">
+                      {loadingCategorias ? "Cargando categorías..." : "Sin categoría"}
+                    </option>
+                    {categorias.map((cat) => (
+                      <option key={cat.id} value={String(cat.id)}>
+                        {cat.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="fl-label" style={{ pointerEvents: "none" }}>
+                    <FontAwesomeIcon
+                      icon={faListAlt}
+                      className="mep-label-icon"
+                    />
+                    Categoría
+                  </label>
                 </div>
 
                 {/* Descripción */}
@@ -919,6 +988,23 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
             min-height: 86px;
             padding-top: 18px !important;
             line-height: 1.45;
+          }
+
+          /* ── Select estilo floating label ── */
+          .mep-select {
+            appearance: none;
+            -webkit-appearance: none;
+            padding-top: 18px !important;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235A6A7E' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px !important;
+          }
+
+          .mep-select option {
+            background: var(--nv-bg, #fff);
+            color: var(--nv-text, #0A2540);
           }
 
           .mep-aside {
@@ -1275,6 +1361,15 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
           .mi-modal--dark .mep-aside-title {
             color: rgba(210,220,235,.70) !important;
             border-bottom-color: rgba(255,255,255,.08) !important;
+          }
+
+          .mi-modal--dark .mep-select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23A0AABB' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+          }
+
+          .mi-modal--dark .mep-select option {
+            background: #0f1e30;
+            color: rgba(255,255,255,.90);
           }
 
           @keyframes mep-pulse {

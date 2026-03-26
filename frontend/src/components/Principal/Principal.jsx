@@ -924,8 +924,8 @@ const Principal = () => {
         label: "Productos",
         ruta: "/panel/productos",
         children: [
-          { label: "Stock", ruta: "/panel/productos/stock" },
           { label: "Lista de Productos", ruta: "/panel/productos/lista-productos" },
+          { label: "Stock", ruta: "/panel/productos/stock" },
         ],
       },
       {

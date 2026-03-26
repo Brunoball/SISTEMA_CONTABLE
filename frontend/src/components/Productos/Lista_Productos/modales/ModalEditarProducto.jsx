@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import "./ModalCargaMasiva.css";
 import {
   faBoxOpen,
   faTag,
@@ -8,11 +9,17 @@ import {
   faLayerGroup,
   faAlignLeft,
   faImage,
-  faTrash,
+  faTrashCan,
   faRefresh,
   faXmark,
   faFloppyDisk,
   faListAlt,
+  faCircleExclamation,
+  faPaperclip,
+  faArrowUpFromBracket,
+  faTriangleExclamation,
+  faBarcode,
+  faCubesStacked,
 } from "@fortawesome/free-solid-svg-icons";
 import BASE_URL from "../../../../config/config";
 
@@ -52,10 +59,13 @@ async function parseJsonOrThrow(res) {
   if (res.status === 401 || res.status === 403) {
     throw new Error("Sesión vencida o no autorizada. Volvé a iniciar sesión.");
   }
+
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
+
+  let data;
   try {
-    return JSON.parse(text);
+    data = JSON.parse(text);
   } catch {
     const preview = text.length > 400 ? text.slice(0, 400) + "..." : text;
     throw new Error(
@@ -64,6 +74,12 @@ async function parseJsonOrThrow(res) {
         : `Respuesta inválida del servidor. HTTP ${res.status}\n${preview}`
     );
   }
+
+  if (!res.ok || data?.exito === false) {
+    throw new Error(data?.mensaje || `Error HTTP ${res.status}`);
+  }
+
+  return data;
 }
 
 function isTemaOscuro() {
@@ -73,22 +89,73 @@ function isTemaOscuro() {
   );
 }
 
+/* =========================
+   Helpers monetarios — misma lógica que carga masiva
+========================= */
+function normalizeMoneyInput(raw = "") {
+  let value = String(raw).replace(/[^\d,]/g, "");
+
+  const firstComma = value.indexOf(",");
+  if (firstComma !== -1) {
+    value =
+      value.slice(0, firstComma + 1) +
+      value.slice(firstComma + 1).replace(/,/g, "");
+  }
+
+  const parts = value.split(",");
+  if (parts.length > 1) {
+    parts[1] = parts[1].slice(0, 2);
+    value = `${parts[0]},${parts[1]}`;
+  }
+
+  return value;
+}
+
+function formatMoneyBlur(raw = "") {
+  const cleaned = String(raw).replace(/[^\d,]/g, "").trim();
+  if (!cleaned || cleaned === ",") return "";
+
+  const normalized = cleaned.replace(",", ".");
+  const num = Number(normalized);
+  if (Number.isNaN(num) || num < 0) return "";
+  return num.toFixed(2).replace(".", ",");
+}
+
+function formatMoneyFocus(raw = "") {
+  if (!raw) return "";
+  if (raw === "0,00") return "";
+  if (raw.endsWith(",00")) return raw.slice(0, -3);
+  return raw;
+}
+
+function moneyToApi(raw = "") {
+  if (raw === "" || raw === null || raw === undefined) return null;
+  const num = Number(String(raw).replace(",", "."));
+  if (Number.isNaN(num)) return null;
+  return Number(num.toFixed(2));
+}
+
 const normalizarProducto = (data) => {
   const p = data?.producto || data?.data || data || {};
+
+  const precio =
+    p.precio !== null && p.precio !== undefined && p.precio !== ""
+      ? Number(p.precio).toFixed(2).replace(".", ",")
+      : "";
+
+  const precioPromo =
+    p.precio_promo !== null &&
+    p.precio_promo !== undefined &&
+    p.precio_promo !== ""
+      ? Number(p.precio_promo).toFixed(2).replace(".", ",")
+      : "";
+
   return {
     id: p.id ?? "",
     nombre: p.nombre ?? "",
     sku: p.sku ?? "",
-    precio:
-      p.precio !== null && p.precio !== undefined && p.precio !== ""
-        ? String(p.precio)
-        : "",
-    precio_promo:
-      p.precio_promo !== null &&
-      p.precio_promo !== undefined &&
-      p.precio_promo !== ""
-        ? String(p.precio_promo)
-        : "",
+    precio,
+    precio_promo: precioPromo,
     stock:
       p.stock !== null && p.stock !== undefined && p.stock !== ""
         ? String(p.stock)
@@ -97,20 +164,91 @@ const normalizarProducto = (data) => {
     imagen_url: p.imagen_url ?? p.imagen ?? "",
     imagen_archivo_id: p.imagen_archivo_id ? Number(p.imagen_archivo_id) : null,
     id_categoria_stock:
-      p.id_categoria_stock !== null && p.id_categoria_stock !== undefined && p.id_categoria_stock !== ""
+      p.id_categoria_stock !== null &&
+      p.id_categoria_stock !== undefined &&
+      p.id_categoria_stock !== ""
         ? String(p.id_categoria_stock)
         : "",
   };
 };
 
 /* =========================
-   Componente modal editar
+   Componentes UI reutilizables
 ========================= */
-const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
+const ErrorMsg = ({ msg }) => (
+  <span
+    style={{
+      fontSize: "0.76rem",
+      color: "#ef4444",
+      marginTop: 2,
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+    }}
+  >
+    <FontAwesomeIcon icon={faCircleExclamation} style={{ fontSize: 10 }} />
+    {msg}
+  </span>
+);
+
+function FloatingField({ label, icon, error, children, style }) {
+  return (
+    <div className="cmi-floatingField cmi-floatingField--active" style={style}>
+      {children}
+      <label className="cmi-floatingLabel cmi-floatingLabel--active">
+        {icon && (
+          <FontAwesomeIcon
+            icon={icon}
+            style={{ marginRight: 5, opacity: 0.7, fontSize: 11 }}
+          />
+        )}
+        {label}
+      </label>
+      {error && <ErrorMsg msg={error} />}
+    </div>
+  );
+}
+
+function PriceInput({
+  name,
+  value,
+  onChange,
+  onBlur,
+  onFocus,
+  placeholder,
+  disabled,
+  className,
+}) {
+  return (
+    <input
+      name={name}
+      value={value}
+      onChange={onChange}
+      onBlur={onBlur}
+      onFocus={onFocus}
+      className={className || "cmi-input"}
+      placeholder={placeholder || "0,00"}
+      disabled={disabled}
+      inputMode="decimal"
+    />
+  );
+}
+
+/* =========================
+   Modal editar producto
+========================= */
+export default function ModalEditarProducto({
+  productoId,
+  onClose,
+  onGuardado,
+}) {
+  const closeBtnRef = useRef(null);
+
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [errores, setErrores] = useState({});
   const [dark, setDark] = useState(isTemaOscuro);
+
   const [form, setForm] = useState({
     id: "",
     nombre: "",
@@ -132,6 +270,7 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
 
   useEffect(() => {
     let cancelado = false;
+
     const fetchCategorias = async () => {
       setLoadingCategorias(true);
       try {
@@ -141,6 +280,7 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
           headers: buildHeadersGET(),
         });
         const data = await res.json();
+
         if (!cancelado && data?.listas?.stock_categorias) {
           setCategorias(data.listas.stock_categorias);
         }
@@ -150,8 +290,11 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
         if (!cancelado) setLoadingCategorias(false);
       }
     };
+
     fetchCategorias();
-    return () => { cancelado = true; };
+    return () => {
+      cancelado = true;
+    };
   }, []);
 
   const [imagenActualBlob, setImagenActualBlob] = useState(null);
@@ -160,33 +303,40 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
   const [nuevaImagenPreview, setNuevaImagenPreview] = useState("");
   const [eliminarImagenActual, setEliminarImagenActual] = useState(false);
 
-  const inputImagenRef = useRef();
+  const inputImagenRef = useRef(null);
+
   const nuevaImagenNombre = useMemo(
     () => nuevaImagenFile?.name || "",
     [nuevaImagenFile]
   );
 
+  const isLoading = loading || guardando;
+
   /* Dark mode observer */
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
+
     const o1 = new MutationObserver(update);
     o1.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-theme"],
     });
+
     const o2 = new MutationObserver(update);
-    if (document.body)
+    if (document.body) {
       o2.observe(document.body, {
         attributes: true,
         attributeFilter: ["class"],
       });
+    }
+
     return () => {
       o1.disconnect();
       o2.disconnect();
     };
   }, []);
 
-  /* Block body scroll */
+  /* Bloquear scroll body */
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -195,24 +345,33 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
     };
   }, []);
 
-  /* ESC to close */
+  /* ESC */
   useEffect(() => {
-    const h = (e) => e.key === "Escape" && !guardando && onClose?.();
+    const h = (e) => {
+      if (e.key === "Escape" && !guardando) onClose?.();
+    };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [onClose, guardando]);
 
-  /* ── Cargar producto ── */
+  useEffect(() => {
+    setTimeout(() => closeBtnRef.current?.focus(), 0);
+  }, []);
+
+  /* Cargar producto */
   useEffect(() => {
     let mounted = true;
+
     const cargarProducto = async () => {
       if (!productoId) {
         setErrores({ global: "ID de producto inválido." });
         setLoading(false);
         return;
       }
+
       setLoading(true);
       setErrores({});
+
       try {
         const url = `${API_URL}?action=stock_producto_obtener&id=${encodeURIComponent(
           productoId
@@ -222,48 +381,62 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
           headers: buildHeadersGET(),
         });
         const data = await parseJsonOrThrow(res);
-        if (data.exito === false)
-          throw new Error(data.mensaje || "No se pudo cargar el producto");
-        if (mounted) setForm(normalizarProducto(data));
+
+        if (mounted) {
+          setForm(normalizarProducto(data));
+        }
       } catch (err) {
-        if (mounted)
-          setErrores({ global: err.message || "Error al cargar el producto" });
+        if (mounted) {
+          setErrores({
+            global: err.message || "Error al cargar el producto",
+          });
+        }
       } finally {
         if (mounted) setLoading(false);
       }
     };
+
     cargarProducto();
+
     return () => {
       mounted = false;
     };
   }, [productoId]);
 
-  /* ── Cargar blob de imagen actual ── */
+  /* Cargar imagen actual */
   useEffect(() => {
     let cancelado = false;
     let objectUrl = null;
+
     const cargarImagen = async () => {
       const archivoId = form.imagen_archivo_id;
+
       if (!archivoId || archivoId <= 0) {
         setImagenActualBlob(null);
         return;
       }
+
       setImagenActualCargando(true);
+
       try {
         const params = new URLSearchParams({
           action: "stock_producto_imagen_ver",
           id_archivo: String(archivoId),
         });
+
         const res = await fetch(`${API_URL}?${params.toString()}`, {
           method: "GET",
           headers: buildHeadersGET(),
         });
+
         if (!res.ok) {
           if (!cancelado) setImagenActualBlob(null);
           return;
         }
+
         const blob = await res.blob();
         objectUrl = URL.createObjectURL(blob);
+
         if (!cancelado) setImagenActualBlob(objectUrl);
       } catch {
         if (!cancelado) setImagenActualBlob(null);
@@ -271,30 +444,69 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
         if (!cancelado) setImagenActualCargando(false);
       }
     };
+
     cargarImagen();
+
     return () => {
       cancelado = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [form.imagen_archivo_id]);
 
-  /* Cleanup blob nueva imagen */
   useEffect(() => {
     return () => {
       if (nuevaImagenPreview) URL.revokeObjectURL(nuevaImagenPreview);
     };
   }, [nuevaImagenPreview]);
 
-  /* ── Handlers form ── */
+  /* Handlers */
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+
+    if (name === "precio" || name === "precio_promo") {
+      setForm((prev) => ({
+        ...prev,
+        [name]: normalizeMoneyInput(value),
+      }));
+    } else if (name === "stock") {
+      setForm((prev) => ({
+        ...prev,
+        [name]: value.replace(/[^\d]/g, ""),
+      }));
+    } else {
+      setForm((prev) => ({ ...prev, [name]: value }));
+    }
+
     setErrores((prev) => ({ ...prev, [name]: "", global: "" }));
   };
 
-  /* ── Handlers imagen ── */
+  const handleMoneyBlur = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: formatMoneyBlur(value),
+    }));
+  };
+
+  const handleMoneyFocus = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: formatMoneyFocus(value),
+    }));
+  };
+
+  /* Imagen */
+  const limpiarNuevaImagen = () => {
+    if (nuevaImagenPreview) URL.revokeObjectURL(nuevaImagenPreview);
+    setNuevaImagenFile(null);
+    setNuevaImagenPreview("");
+    if (inputImagenRef.current) inputImagenRef.current.value = "";
+  };
+
   const tomarNuevaImagen = (file) => {
     if (!file) return;
+
     const tiposPermitidos = [
       "image/jpeg",
       "image/jpg",
@@ -302,6 +514,7 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
       "image/webp",
       "image/gif",
     ];
+
     if (!tiposPermitidos.includes(file.type)) {
       setErrores((prev) => ({
         ...prev,
@@ -309,6 +522,7 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
       }));
       return;
     }
+
     if (file.size > 5 * 1024 * 1024) {
       setErrores((prev) => ({
         ...prev,
@@ -316,7 +530,9 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
       }));
       return;
     }
+
     if (nuevaImagenPreview) URL.revokeObjectURL(nuevaImagenPreview);
+
     const blobUrl = URL.createObjectURL(file);
     setNuevaImagenFile(file);
     setNuevaImagenPreview(blobUrl);
@@ -329,34 +545,40 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
     if (file) tomarNuevaImagen(file);
   };
 
-  const limpiarNuevaImagen = () => {
-    if (nuevaImagenPreview) URL.revokeObjectURL(nuevaImagenPreview);
-    setNuevaImagenFile(null);
-    setNuevaImagenPreview("");
-    if (inputImagenRef.current) inputImagenRef.current.value = "";
-  };
-
   const handleEliminarImagenActual = () => {
     setEliminarImagenActual(true);
     limpiarNuevaImagen();
     setErrores((prev) => ({ ...prev, imagen: "", global: "" }));
   };
 
-  const handleCancelarEliminarImagen = () => setEliminarImagenActual(false);
+  const handleCancelarEliminarImagen = () => {
+    setEliminarImagenActual(false);
+  };
 
-  /* ── Validación ── */
+  /* Validación */
   const validar = () => {
     const errs = {};
+
+    const precioNum = Number(String(form.precio || "").replace(",", "."));
+    const promoNum =
+      form.precio_promo !== ""
+        ? Number(String(form.precio_promo).replace(",", "."))
+        : null;
+
     if (!form.nombre.trim()) errs.nombre = "El nombre es obligatorio";
-    if (form.precio === "" || isNaN(form.precio) || Number(form.precio) < 0)
+
+    if (!form.precio || Number.isNaN(precioNum) || precioNum < 0) {
       errs.precio = "Ingresá un precio válido";
-    if (
-      form.precio_promo !== "" &&
-      (isNaN(form.precio_promo) || Number(form.precio_promo) < 0)
-    )
+    }
+
+    if (form.precio_promo !== "" && (Number.isNaN(promoNum) || promoNum < 0)) {
       errs.precio_promo = "Precio promo inválido";
-    if (form.stock !== "" && (isNaN(form.stock) || Number(form.stock) < 0))
+    }
+
+    if (form.stock !== "" && (Number.isNaN(Number(form.stock)) || Number(form.stock) < 0)) {
       errs.stock = "Stock inválido";
+    }
+
     if (nuevaImagenFile) {
       const tiposPermitidos = [
         "image/jpeg",
@@ -365,78 +587,91 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
         "image/webp",
         "image/gif",
       ];
-      if (!tiposPermitidos.includes(nuevaImagenFile.type))
+
+      if (!tiposPermitidos.includes(nuevaImagenFile.type)) {
         errs.imagen = "La imagen debe ser JPG, PNG, WEBP o GIF";
-      if (nuevaImagenFile.size > 5 * 1024 * 1024)
+      }
+
+      if (nuevaImagenFile.size > 5 * 1024 * 1024) {
         errs.imagen = "La imagen no puede superar los 5 MB";
+      }
     }
+
     return errs;
   };
 
-  /* ── Guardar ── */
+  /* Guardar */
   const handleGuardar = async () => {
     const errs = validar();
     if (Object.keys(errs).length > 0) {
       setErrores(errs);
       return;
     }
+
     setGuardando(true);
     setErrores({});
+
     try {
       if (nuevaImagenFile) {
-        const formData = new FormData();
-        formData.append("id", String(Number(form.id || productoId)));
-        formData.append("nombre", form.nombre.trim());
-        formData.append("sku", form.sku.trim());
-        formData.append("precio", String(form.precio));
-        formData.append(
+        const fd = new FormData();
+        fd.append("id", String(Number(form.id || productoId)));
+        fd.append("nombre", form.nombre.trim());
+        fd.append("sku", form.sku.trim());
+        fd.append("precio", String(moneyToApi(form.precio) ?? ""));
+        fd.append(
           "precio_promo",
-          form.precio_promo !== "" ? String(form.precio_promo) : ""
+          form.precio_promo !== ""
+            ? String(moneyToApi(form.precio_promo) ?? "")
+            : ""
         );
-        formData.append("stock", form.stock !== "" ? String(form.stock) : "");
-        formData.append("descripcion", form.descripcion.trim());
-        formData.append(
+        fd.append("stock", form.stock !== "" ? String(form.stock) : "");
+        fd.append("descripcion", form.descripcion.trim());
+        fd.append(
           "id_categoria_stock",
           form.id_categoria_stock !== "" ? String(form.id_categoria_stock) : ""
         );
-        formData.append("imagen", nuevaImagenFile);
+        fd.append("imagen", nuevaImagenFile);
+
         const res = await fetch(`${API_URL}?action=stock_productos_actualizar`, {
           method: "POST",
           headers: buildHeadersMultipart(),
-          body: formData,
+          body: fd,
         });
-        const data = await parseJsonOrThrow(res);
-        if (data.exito === false)
-          throw new Error(data.mensaje || "Error al actualizar el producto");
+
+        await parseJsonOrThrow(res);
       } else {
         const body = {
           id: Number(form.id || productoId),
           nombre: form.nombre.trim(),
           sku: form.sku.trim() || null,
-          precio: Number(form.precio),
+          precio: moneyToApi(form.precio),
           precio_promo:
-            form.precio_promo !== "" ? Number(form.precio_promo) : null,
+            form.precio_promo !== "" ? moneyToApi(form.precio_promo) : null,
           stock: form.stock !== "" ? Number(form.stock) : null,
           descripcion: form.descripcion.trim() || null,
           id_categoria_stock:
-            form.id_categoria_stock !== "" ? Number(form.id_categoria_stock) : null,
+            form.id_categoria_stock !== ""
+              ? Number(form.id_categoria_stock)
+              : null,
         };
+
         if (eliminarImagenActual) {
           body.imagen_url = null;
           body.eliminar_imagen = true;
         }
+
         const res = await fetch(`${API_URL}?action=stock_productos_actualizar`, {
           method: "POST",
           headers: buildHeadersJSON(),
           body: JSON.stringify(body),
         });
-        const data = await parseJsonOrThrow(res);
-        if (data.exito === false)
-          throw new Error(data.mensaje || "Error al actualizar el producto");
+
+        await parseJsonOrThrow(res);
       }
+
       onGuardado?.();
     } catch (err) {
-      setErrores({ global: err.message || "Error al actualizar" });
+      setErrores({ global: err.message || "Error al actualizar el producto" });
     } finally {
       setGuardando(false);
     }
@@ -447,38 +682,37 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
     !nuevaImagenFile &&
     (imagenActualBlob || (form.imagen_url && form.imagen_url.trim() !== ""));
 
-  /* ── Render ── */
   return createPortal(
     <div
-      className={[
-        "mi-modal__overlay",
-        dark ? "mi-modal__overlay--dark" : "",
-      ]
+      className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""]
         .join(" ")
         .trim()}
       onClick={(e) => e.target === e.currentTarget && !guardando && onClose?.()}
     >
       <div
-        className={[
-          "mi-modal__container",
-          "mep-container",
-          dark ? "mi-modal--dark" : "",
-        ]
+        className={["mi-modal__container", "cmi-container", dark ? "mi-modal--dark" : ""]
           .join(" ")
           .trim()}
         role="dialog"
         aria-modal="true"
+        style={{ minHeight: "auto", maxHeight: "92vh" }}
+        onMouseDown={(e) => e.stopPropagation()}
       >
-        {/* ══ HEADER ══ */}
+        {/* HEADER */}
         <div className="mi-modal__header">
           <div className="mi-modal__head-icon" aria-hidden="true">
             <FontAwesomeIcon icon={faBoxOpen} />
           </div>
+
           <div className="mi-modal__head-left">
-            <h2 className="mi-modal__title">Editar Producto</h2>
-            {form.nombre && <p className="mi-modal__subtitle">{form.nombre}</p>}
+            <h2 className="mi-modal__title">Editar producto</h2>
+            <p className="mi-modal__subtitle">
+              {form.nombre ? `Modificando: ${form.nombre}` : "Actualizá los datos del producto"}
+            </p>
           </div>
+
           <button
+            ref={closeBtnRef}
             className="mi-modal__close"
             onClick={() => !guardando && onClose?.()}
             aria-label="Cerrar"
@@ -489,372 +723,265 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
           </button>
         </div>
 
-        {/* ══ CONTENT ══ */}
-        <div className="mi-modal__content mep-content">
+        {/* CONTENT */}
+        <div className="mi-modal__content" style={{ overflowY: "auto", padding: 20 }}>
           {loading ? (
-            <div className="mep-loading">
-              <div className="mep-loading__dot" />
-              <span>Cargando producto...</span>
+            <div className="cmi-uploadBox">
+              <div className="cmi-uploadBox__title">
+                <FontAwesomeIcon icon={faRefresh} spin /> Cargando producto...
+              </div>
             </div>
           ) : (
-            <div className="mep-grid">
-              {/* ── COLUMNA IZQUIERDA: datos ── */}
-              <div className="mep-fields">
-                {errores.global && (
-                  <div className="mov-mi-error">
-                    <FontAwesomeIcon icon={faXmark} style={{ marginRight: 8 }} />
-                    {errores.global}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {errores.global && (
+                <div className="cmi-warnBox">
+                  <div className="cmi-warnBox__title">
+                    <FontAwesomeIcon
+                      icon={faTriangleExclamation}
+                      style={{ marginRight: 8 }}
+                    />
+                    Error
                   </div>
-                )}
-
-                {/* Nombre */}
-                <div className="fl-field">
-                  <input
-                    name="nombre"
-                    value={form.nombre}
-                    onChange={handleChange}
-                    placeholder=" "
-                    className={`fl-input ${errores.nombre ? "fl-input--error" : ""}`}
-                    disabled={guardando}
-                  />
-                  <label className="fl-label">
-                    <FontAwesomeIcon icon={faBoxOpen} className="mep-label-icon" />
-                    Nombre *
-                  </label>
-                  {errores.nombre && (
-                    <span className="mep-field-error">{errores.nombre}</span>
-                  )}
+                  <div>{errores.global}</div>
                 </div>
+              )}
 
-                {/* SKU */}
-                <div className="fl-field">
+              {/* Nombre */}
+              <FloatingField
+                label="Nombre del producto *"
+                icon={faBoxOpen}
+                error={errores.nombre}
+              >
+                <input
+                  name="nombre"
+                  value={form.nombre}
+                  onChange={handleChange}
+                  className="cmi-input"
+                  placeholder="Ej: Auriculares Bluetooth Samsung WH-1000"
+                  disabled={guardando}
+                />
+              </FloatingField>
+
+              {/* SKU + Stock */}
+              <div className="fl-row">
+                <FloatingField label="SKU / Código" icon={faBarcode}>
                   <input
                     name="sku"
                     value={form.sku}
                     onChange={handleChange}
-                    placeholder=" "
-                    className="fl-input"
+                    className="cmi-input"
+                    placeholder="Ej: 04163"
                     disabled={guardando}
                   />
-                  <label className="fl-label">
-                    <FontAwesomeIcon icon={faTag} className="mep-label-icon" />
-                    SKU
-                  </label>
-                </div>
+                </FloatingField>
 
-                {/* Precios */}
-                <div className="mep-row2">
-                  <div className="fl-field">
-                    <input
-                      name="precio"
-                      value={form.precio}
-                      onChange={handleChange}
-                      placeholder=" "
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className={`fl-input ${errores.precio ? "fl-input--error" : ""}`}
-                      disabled={guardando}
-                    />
-                    <label className="fl-label">
-                      <FontAwesomeIcon
-                        icon={faDollarSign}
-                        className="mep-label-icon"
-                      />
-                      Precio *
-                    </label>
-                    {errores.precio && (
-                      <span className="mep-field-error">{errores.precio}</span>
-                    )}
-                  </div>
-
-                  <div className="fl-field">
-                    <input
-                      name="precio_promo"
-                      value={form.precio_promo}
-                      onChange={handleChange}
-                      placeholder=" "
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className={`fl-input ${
-                        errores.precio_promo ? "fl-input--error" : ""
-                      }`}
-                      disabled={guardando}
-                    />
-                    <label className="fl-label">
-                      <FontAwesomeIcon
-                        icon={faDollarSign}
-                        className="mep-label-icon"
-                      />
-                      Precio Promo
-                    </label>
-                    {errores.precio_promo && (
-                      <span className="mep-field-error">
-                        {errores.precio_promo}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Stock */}
-                <div className="fl-field">
+                <FloatingField
+                  label="Stock"
+                  icon={faCubesStacked}
+                  error={errores.stock}
+                >
                   <input
                     name="stock"
                     value={form.stock}
                     onChange={handleChange}
-                    placeholder=" "
-                    type="number"
-                    min="0"
-                    step="1"
-                    className={`fl-input ${errores.stock ? "fl-input--error" : ""}`}
+                    className="cmi-input"
+                    placeholder="Ej: 25"
+                    inputMode="numeric"
                     disabled={guardando}
                   />
-                  <label className="fl-label">
-                    <FontAwesomeIcon
-                      icon={faLayerGroup}
-                      className="mep-label-icon"
-                    />
-                    Stock
-                  </label>
-                  {errores.stock && (
-                    <span className="mep-field-error">{errores.stock}</span>
-                  )}
-                </div>
-
-                {/* Categoría */}
-                <div className="fl-field">
-                  <select
-                    name="id_categoria_stock"
-                    value={form.id_categoria_stock}
-                    onChange={handleChange}
-                    className="fl-input mep-select"
-                    disabled={guardando || loadingCategorias}
-                  >
-                    <option value="">
-                      {loadingCategorias ? "Cargando categorías..." : "Sin categoría"}
-                    </option>
-                    {categorias.map((cat) => (
-                      <option key={cat.id} value={String(cat.id)}>
-                        {cat.nombre}
-                      </option>
-                    ))}
-                  </select>
-                  <label className="fl-label" style={{ pointerEvents: "none" }}>
-                    <FontAwesomeIcon
-                      icon={faListAlt}
-                      className="mep-label-icon"
-                    />
-                    Categoría
-                  </label>
-                </div>
-
-                {/* Descripción */}
-                <div className="fl-field">
-                  <textarea
-                    name="descripcion"
-                    value={form.descripcion}
-                    onChange={handleChange}
-                    placeholder=" "
-                    rows={3}
-                    className="fl-input mep-textarea"
-                    disabled={guardando}
-                  />
-                  <label className="fl-label">
-                    <FontAwesomeIcon
-                      icon={faAlignLeft}
-                      className="mep-label-icon"
-                    />
-                    Descripción
-                  </label>
-                </div>
+                </FloatingField>
               </div>
 
-              {/* ── COLUMNA DERECHA: imagen ── */}
-              <aside className="mep-aside">
-                <div className="mi-card mi-card--full mep-img-card">
-                  <div className="mi-card__title mep-aside-title">
-                    <FontAwesomeIcon
-                      icon={faImage}
-                      style={{ marginRight: 8, opacity: 0.7 }}
-                    />
-                    Imagen del producto
-                  </div>
+              {/* Precio + Promo */}
+              <div className="fl-row">
+                <FloatingField
+                  label="Precio *"
+                  icon={faDollarSign}
+                  error={errores.precio}
+                >
+                  <PriceInput
+                    name="precio"
+                    value={form.precio}
+                    onChange={handleChange}
+                    onBlur={handleMoneyBlur}
+                    onFocus={handleMoneyFocus}
+                    placeholder="0,00"
+                    disabled={guardando}
+                  />
+                </FloatingField>
 
-                  {/* Imagen actual */}
-                  {tieneImagenActual && (
-                    <div className="mep-img-current">
-                      <div className="mep-img-thumb">
-                        {imagenActualCargando ? (
-                          <span className="mep-img-loading">Cargando...</span>
-                        ) : imagenActualBlob ? (
-                          <img
-                            src={imagenActualBlob}
-                            alt="Imagen actual"
-                            className="mep-img-thumb__img"
-                          />
-                        ) : (
-                          <FontAwesomeIcon
-                            icon={faImage}
-                            className="mep-img-placeholder-icon"
-                          />
-                        )}
-                      </div>
-                      <div className="mep-img-info">
-                        <div className="mep-img-info__label">Imagen actual</div>
-                        <div className="mep-img-info__hint">
-                          Reemplazá o eliminá la imagen
-                        </div>
-                      </div>
-                      <div className="mep-img-actions">
+                <FloatingField
+                  label="Precio promocional"
+                  icon={faDollarSign}
+                  error={errores.precio_promo}
+                >
+                  <PriceInput
+                    name="precio_promo"
+                    value={form.precio_promo}
+                    onChange={handleChange}
+                    onBlur={handleMoneyBlur}
+                    onFocus={handleMoneyFocus}
+                    placeholder="0,00"
+                    disabled={guardando}
+                  />
+                </FloatingField>
+              </div>
+
+              {/* Categoría */}
+              <FloatingField label="Categoría" icon={faTag}>
+                <select
+                  name="id_categoria_stock"
+                  value={form.id_categoria_stock}
+                  onChange={handleChange}
+                  className="cmi-input cmi-select"
+                  disabled={guardando || loadingCategorias}
+                >
+                  <option value="">
+                    {loadingCategorias ? "Cargando categorías..." : "Sin categoría"}
+                  </option>
+                  {categorias.map((cat) => (
+                    <option key={cat.id} value={String(cat.id)}>
+                      {cat.nombre}
+                    </option>
+                  ))}
+                </select>
+              </FloatingField>
+
+              {/* Descripción */}
+              <FloatingField label="Descripción" icon={faAlignLeft}>
+                <textarea
+                  name="descripcion"
+                  value={form.descripcion}
+                  onChange={handleChange}
+                  className="cmi-input cmi-textarea"
+                  placeholder="Breve descripción del producto (opcional)"
+                  rows={3}
+                  disabled={guardando}
+                />
+              </FloatingField>
+
+              {/* Imagen */}
+              <div className="cmi-uploadBox">
+                <div className="cmi-uploadBox__title">
+                  <FontAwesomeIcon icon={faPaperclip} /> Imagen del producto
+                </div>
+
+                <input
+                  ref={inputImagenRef}
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,.gif,image/*"
+                  hidden
+                  onChange={handleImagenInput}
+                />
+
+                {tieneImagenActual && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div className="cmi-fileRow" style={{ alignItems: "center" }}>
+                      <span>Imagen actual</span>
+
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <button
                           type="button"
-                          className="mit-btn mit-btn--ghost mep-img-btn"
+                          className="mit-btn mit-btn--ghost"
                           onClick={() => inputImagenRef.current?.click()}
                           disabled={guardando}
                         >
-                          <FontAwesomeIcon icon={faRefresh} />
-                          Reemplazar
+                          <FontAwesomeIcon icon={faArrowUpFromBracket} /> Reemplazar
                         </button>
+
                         <button
                           type="button"
-                          className="mit-btn mep-img-btn mep-img-btn--danger"
+                          className="mit-btn mit-btn--ghost"
                           onClick={handleEliminarImagenActual}
                           disabled={guardando}
                         >
-                          <FontAwesomeIcon icon={faTrash} />
-                          Eliminar
+                          <FontAwesomeIcon icon={faTrashCan} /> Eliminar
                         </button>
                       </div>
                     </div>
-                  )}
 
-                  {/* Marcada para eliminar */}
-                  {eliminarImagenActual && !nuevaImagenFile && (
-                    <div className="mep-img-delete-warning">
-                      <span>⚠️ La imagen se eliminará al guardar</span>
-                      <button
-                        type="button"
-                        className="mit-btn mit-btn--ghost mep-img-btn"
-                        onClick={handleCancelarEliminarImagen}
-                        disabled={guardando}
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Drop zone */}
-                  {!tieneImagenActual && (
-                    <div
-                      className={`mep-dropzone ${
-                        nuevaImagenFile ? "mep-dropzone--active" : ""
-                      } ${errores.imagen ? "mep-dropzone--error" : ""}`}
-                      onClick={() => inputImagenRef.current?.click()}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const file = e.dataTransfer.files?.[0];
-                        if (file) tomarNuevaImagen(file);
-                      }}
-                    >
-                      {!nuevaImagenPreview ? (
-                        <div className="mep-dropzone__empty">
-                          <div className="mep-dropzone__icon">
-                            <FontAwesomeIcon icon={faImage} />
-                          </div>
-                          <div className="mep-dropzone__text">
-                            Arrastrá una imagen o hacé click
-                          </div>
-                          <div className="mep-dropzone__hint">
-                            JPG, PNG, WEBP o GIF · máx 5 MB
-                          </div>
+                    <div className="cmi-previewImgWrap">
+                      {imagenActualCargando ? (
+                        <div style={{ padding: 16, textAlign: "center", opacity: 0.7 }}>
+                          Cargando imagen...
                         </div>
                       ) : (
-                        <div className="mep-dropzone__preview">
-                          <img
-                            src={nuevaImagenPreview}
-                            alt="Preview"
-                            className="mep-dropzone__preview-img"
-                          />
-                          <div className="mep-dropzone__preview-meta">
-                            <div className="mep-dropzone__preview-name">
-                              {nuevaImagenNombre}
-                            </div>
-                            <div className="mep-dropzone__preview-size">
-                              {(nuevaImagenFile.size / 1024).toFixed(1)} KB
-                            </div>
-                            <div className="mep-dropzone__preview-badge">
-                              Nueva imagen seleccionada
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            className="mit-btn mit-btn--ghost mep-img-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              limpiarNuevaImagen();
-                            }}
-                            disabled={guardando}
-                          >
-                            Quitar
-                          </button>
-                        </div>
+                        <img
+                          src={imagenActualBlob || form.imagen_url}
+                          alt="Imagen actual"
+                          className="cmi-previewImg"
+                        />
                       )}
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {/* Preview reemplazo */}
-                  {tieneImagenActual && nuevaImagenFile && (
-                    <div className="mep-img-replace">
-                      <img
-                        src={nuevaImagenPreview}
-                        alt="Nueva imagen"
-                        className="mep-img-replace__thumb"
+                {eliminarImagenActual && !nuevaImagenFile && (
+                  <div className="cmi-warnBox" style={{ marginTop: 10 }}>
+                    <div className="cmi-warnBox__title">
+                      <FontAwesomeIcon
+                        icon={faTriangleExclamation}
+                        style={{ marginRight: 8 }}
                       />
-                      <div className="mep-img-replace__meta">
-                        <div className="mep-img-replace__name">
-                          {nuevaImagenNombre}
-                        </div>
-                        <div className="mep-img-replace__size">
-                          {(nuevaImagenFile.size / 1024).toFixed(1)} KB
-                        </div>
-                        <div className="mep-img-replace__badge">
-                          Reemplazará la imagen al guardar
-                        </div>
-                      </div>
+                      Atención
+                    </div>
+                    <div style={{ marginBottom: 10 }}>
+                      La imagen actual se eliminará al guardar.
+                    </div>
+                    <button
+                      type="button"
+                      className="mit-btn mit-btn--ghost"
+                      onClick={handleCancelarEliminarImagen}
+                      disabled={guardando}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+
+                {!tieneImagenActual && !nuevaImagenFile && (
+                  <button
+                    type="button"
+                    className="mit-btn mit-btn--ghost"
+                    onClick={() => inputImagenRef.current?.click()}
+                    disabled={guardando}
+                  >
+                    <FontAwesomeIcon icon={faArrowUpFromBracket} /> Seleccionar imagen
+                  </button>
+                )}
+
+                {nuevaImagenFile && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div className="cmi-fileRow">
+                      <span>{nuevaImagenNombre}</span>
                       <button
                         type="button"
-                        className="mit-btn mit-btn--ghost mep-img-btn"
+                        className="mit-btn mit-btn--ghost"
                         onClick={limpiarNuevaImagen}
                         disabled={guardando}
                       >
-                        Quitar
+                        <FontAwesomeIcon icon={faTrashCan} /> Quitar
                       </button>
                     </div>
-                  )}
 
-                  {errores.imagen && (
-                    <span className="mep-field-error" style={{ marginTop: 6 }}>
-                      {errores.imagen}
-                    </span>
-                  )}
+                    <div className="cmi-previewImgWrap">
+                      <img
+                        src={nuevaImagenPreview}
+                        alt="Nueva imagen"
+                        className="cmi-previewImg"
+                      />
+                    </div>
+                  </div>
+                )}
 
-                  <input
-                    ref={inputImagenRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
-                    style={{ display: "none" }}
-                    onChange={handleImagenInput}
-                  />
-                </div>
-              </aside>
+                {errores.imagen && <ErrorMsg msg={errores.imagen} />}
+              </div>
             </div>
           )}
         </div>
 
-        {/* ══ FOOTER ══ */}
-        <div className="mep-footer">
+        {/* FOOTER */}
+        <div className="cmi-footer" >
           <button
             type="button"
             className="mit-btn mit-btn--ghost"
@@ -863,553 +990,23 @@ const ModalEditarProducto = ({ productoId, onClose, onGuardado }) => {
           >
             Cancelar
           </button>
+
           <button
             type="button"
             className="mit-btn mit-btn--solid"
             onClick={handleGuardar}
-            disabled={guardando || loading}
+            disabled={isLoading}
           >
             <FontAwesomeIcon
               icon={guardando ? faRefresh : faFloppyDisk}
-              style={{
-                marginRight: 8,
-                ...(guardando
-                  ? { animation: "mep-spin 1s linear infinite" }
-                  : {}),
-              }}
+              spin={guardando}
+              style={{ marginRight: 8 }}
             />
             {guardando ? "Guardando..." : "Guardar cambios"}
           </button>
         </div>
-
-        {/* ══ ESTILOS ══ */}
-        <style>{`
-          .mi-modal__overlay {
-            position: fixed;
-            inset: 0;
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
-            background: rgba(10, 25, 40, 0.38);
-            backdrop-filter: blur(3px);
-            -webkit-backdrop-filter: blur(3px);
-            z-index: 999999;
-            overflow-y: auto;
-          }
-
-          .mi-modal__overlay--dark {
-            background: rgba(0, 0, 0, 0.58);
-          }
-
-          .mep-container {
-            width: min(780px, 96vw);
-            min-height: auto !important;
-            max-height: 92vh;
-            display: flex;
-            flex-direction: column;
-            animation: mi-modal-pop-min .16s ease-out;
-          }
-
-          .mep-content {
-            flex: 1;
-            min-height: 0;
-            overflow-y: auto;
-            padding: 18px !important;
-            background: var(--nv-surface, #F7F9FC);
-          }
-
-          .mep-loading {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 20px;
-            color: var(--nv-muted, #5A6A7E);
-            font-size: 14px;
-            border: 1px solid var(--nv-border, rgba(15,23,42,.10));
-            border-radius: 12px;
-            background: var(--nv-bg, #fff);
-          }
-
-          .mep-loading__dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: var(--blue-action, #0055BB);
-            box-shadow: 0 0 0 6px rgba(0,85,187,.12);
-            flex: 0 0 auto;
-            animation: mep-pulse 1.2s ease infinite;
-          }
-
-          .mep-grid {
-            display: grid;
-            grid-template-columns: 1fr 280px;
-            gap: 14px;
-            align-items: start;
-          }
-
-          .mep-fields {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-          }
-
-          .mep-row2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-          }
-
-          .fl-input--error {
-            border-color: #e74c3c !important;
-          }
-
-          .fl-input--error:focus {
-            box-shadow: 0 0 0 3px rgba(231,76,60,.14) !important;
-          }
-
-          .mep-field-error {
-            font-size: 11.5px;
-            color: #e74c3c;
-            margin-top: 3px;
-            display: block;
-          }
-
-          .mep-label-icon {
-            margin-right: 5px;
-            opacity: 0.6;
-            font-size: 11px;
-          }
-
-          .mep-textarea {
-            resize: vertical;
-            min-height: 86px;
-            padding-top: 18px !important;
-            line-height: 1.45;
-          }
-
-          /* ── Select estilo floating label ── */
-          .mep-select {
-            appearance: none;
-            -webkit-appearance: none;
-            padding-top: 18px !important;
-            cursor: pointer;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235A6A7E' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 12px center;
-            padding-right: 36px !important;
-          }
-
-          .mep-select option {
-            background: var(--nv-bg, #fff);
-            color: var(--nv-text, #0A2540);
-          }
-
-          .mep-aside {
-            position: sticky;
-            top: 0;
-          }
-
-          .mep-img-card {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            padding: 14px !important;
-            border: 1px solid var(--mi-border, rgba(148,163,184,.45)) !important;
-            border-radius: 14px !important;
-            background: var(--nv-bg, #fff);
-            box-shadow: 0 2px 10px rgba(15,23,42,.04);
-          }
-
-          .mep-aside-title {
-            font-size: 13px !important;
-            font-weight: 700 !important;
-            color: var(--nv-muted, #5A6A7E);
-            text-transform: uppercase;
-            letter-spacing: .05em;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--nv-border, rgba(15,23,42,.10));
-          }
-
-          .mep-img-current {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            padding: 12px;
-            border: 1px solid var(--nv-border-md, rgba(15,23,42,.16));
-            border-radius: 12px;
-            background: var(--nv-surface, #F7F9FC);
-          }
-
-          .mep-img-thumb {
-            width: 100%;
-            height: 140px;
-            border-radius: 8px;
-            border: 1px solid var(--nv-border, rgba(15,23,42,.10));
-            background: var(--nv-surface2, #EEF2F8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            flex-shrink: 0;
-          }
-
-          .mep-img-thumb__img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-          }
-
-          .mep-img-loading {
-            font-size: 11px;
-            color: var(--nv-muted, #5A6A7E);
-          }
-
-          .mep-img-placeholder-icon {
-            font-size: 2rem;
-            color: var(--nv-muted, #5A6A7E);
-            opacity: 0.4;
-          }
-
-          .mep-img-info {
-            min-width: 0;
-          }
-
-          .mep-img-info__label {
-            font-weight: 600;
-            font-size: 13px;
-            color: var(--nv-text, #0A2540);
-          }
-
-          .mep-img-info__hint {
-            font-size: 11.5px;
-            color: var(--nv-muted, #5A6A7E);
-            margin-top: 2px;
-          }
-
-          .mep-img-actions {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px;
-          }
-
-          .mep-img-btn {
-            height: 34px !important;
-            padding: 0 10px !important;
-            font-size: 12px !important;
-            border-radius: 9px !important;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
-          }
-
-          .mep-img-btn--danger {
-            background: rgba(231,76,60,.08) !important;
-            border: 1px solid rgba(231,76,60,.30) !important;
-            color: #c0392b !important;
-          }
-
-          .mep-img-btn--danger:hover:not(:disabled) {
-            background: rgba(231,76,60,.15) !important;
-            transform: translateY(-1px);
-          }
-
-          .mep-img-delete-warning {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            padding: 10px 12px;
-            border: 1px solid rgba(231,76,60,.25);
-            border-radius: 10px;
-            background: rgba(231,76,60,.06);
-            font-size: 12.5px;
-            color: #c0392b;
-            font-weight: 500;
-          }
-
-          .mep-dropzone {
-            border: 2px dashed var(--nv-border-md, rgba(15,23,42,.16));
-            border-radius: 12px;
-            background: var(--nv-surface, #F7F9FC);
-            cursor: pointer;
-            transition: all .2s ease;
-            padding: 16px;
-          }
-
-          .mep-dropzone:hover {
-            border-color: var(--nv-action, #0055BB);
-            background: var(--nv-action-10, rgba(0,85,187,.10));
-          }
-
-          .mep-dropzone--active {
-            border-color: var(--nv-action, #0055BB);
-            background: rgba(0,85,187,.05);
-          }
-
-          .mep-dropzone--error {
-            border-color: #e74c3c;
-          }
-
-          .mep-dropzone__empty {
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 0;
-          }
-
-          .mep-dropzone__icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 999px;
-            display: grid;
-            place-items: center;
-            background: var(--nv-action-10, rgba(0,85,187,.10));
-            border: 1px solid var(--nv-action-18, rgba(0,85,187,.18));
-            color: var(--nv-action, #0055BB);
-            font-size: 18px;
-            margin-bottom: 4px;
-          }
-
-          .mep-dropzone__text {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--nv-text, #0A2540);
-          }
-
-          .mep-dropzone__hint {
-            font-size: 11.5px;
-            color: var(--nv-muted, #5A6A7E);
-          }
-
-          .mep-dropzone__preview {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-          }
-
-          .mep-dropzone__preview-img {
-            width: 100%;
-            height: 120px;
-            object-fit: cover;
-            border-radius: 8px;
-            border: 1px solid var(--nv-border, rgba(15,23,42,.10));
-          }
-
-          .mep-dropzone__preview-meta {
-            width: 100%;
-            text-align: left;
-          }
-
-          .mep-dropzone__preview-name {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--nv-text, #0A2540);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-          }
-
-          .mep-dropzone__preview-size {
-            font-size: 11px;
-            color: var(--nv-muted, #5A6A7E);
-            margin-top: 2px;
-          }
-
-          .mep-dropzone__preview-badge {
-            font-size: 11px;
-            color: var(--nv-action, #0055BB);
-            margin-top: 2px;
-            font-weight: 500;
-          }
-
-          .mep-img-replace {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            border: 2px dashed var(--nv-action, #0055BB);
-            border-radius: 12px;
-            background: var(--nv-action-10, rgba(0,85,187,.06));
-            padding: 12px;
-          }
-
-          .mep-img-replace__thumb {
-            width: 100%;
-            height: 120px;
-            object-fit: cover;
-            border-radius: 8px;
-            border: 1px solid rgba(0,85,187,.20);
-          }
-
-          .mep-img-replace__name {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--nv-text, #0A2540);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-          }
-
-          .mep-img-replace__size {
-            font-size: 11px;
-            color: var(--nv-muted, #5A6A7E);
-            margin-top: 2px;
-          }
-
-          .mep-img-replace__badge {
-            font-size: 11px;
-            color: var(--nv-action, #0055BB);
-            font-weight: 500;
-            margin-top: 2px;
-          }
-
-          .mep-footer {
-            flex: 0 0 auto;
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            padding: 14px 18px;
-            border-top: 1px solid var(--nv-border, rgba(15,23,42,.10));
-            background: var(--nv-bg, #fff);
-          }
-
-          .mep-footer .mit-btn {
-            height: 40px;
-            padding: 0 20px;
-            font-size: 13.5px;
-          }
-
-          .mi-modal--dark .mep-content {
-            background: var(--nv-surface, rgba(10,25,40,.72)) !important;
-          }
-
-          .mi-modal--dark .mep-img-card {
-            background: rgba(6,18,28,.78) !important;
-            border-color: rgba(255,255,255,.10) !important;
-          }
-
-          .mi-modal--dark .mep-img-current {
-            background: rgba(255,255,255,.04) !important;
-            border-color: rgba(255,255,255,.10) !important;
-          }
-
-          .mi-modal--dark .mep-img-thumb {
-            background: rgba(255,255,255,.06) !important;
-            border-color: rgba(255,255,255,.08) !important;
-          }
-
-          .mi-modal--dark .mep-img-info__label {
-            color: rgba(255,255,255,.92) !important;
-          }
-
-          .mi-modal--dark .mep-img-info__hint,
-          .mi-modal--dark .mep-img-loading {
-            color: rgba(226,232,240,.70) !important;
-          }
-
-          .mi-modal--dark .mep-dropzone {
-            background: rgba(255,255,255,.03) !important;
-            border-color: rgba(255,255,255,.14) !important;
-          }
-
-          .mi-modal--dark .mep-dropzone:hover {
-            background: rgba(0,85,187,.12) !important;
-            border-color: rgba(0,85,187,.50) !important;
-          }
-
-          .mi-modal--dark .mep-dropzone__text {
-            color: rgba(255,255,255,.90) !important;
-          }
-
-          .mi-modal--dark .mep-dropzone__hint {
-            color: rgba(226,232,240,.65) !important;
-          }
-
-          .mi-modal--dark .mep-dropzone__preview-name,
-          .mi-modal--dark .mep-img-replace__name {
-            color: rgba(255,255,255,.90) !important;
-          }
-
-          .mi-modal--dark .mep-img-delete-warning {
-            background: rgba(231,76,60,.10) !important;
-            border-color: rgba(231,76,60,.28) !important;
-            color: rgba(255,180,180,.92) !important;
-          }
-
-          .mi-modal--dark .mep-img-replace {
-            background: rgba(0,85,187,.08) !important;
-            border-color: rgba(0,85,187,.40) !important;
-          }
-
-          .mi-modal--dark .mep-footer {
-            background: rgba(6,18,28,.96) !important;
-            border-top-color: rgba(255,255,255,.08) !important;
-          }
-
-          .mi-modal--dark .mep-loading {
-            background: rgba(10,25,40,.72) !important;
-            border-color: rgba(255,255,255,.10) !important;
-            color: rgba(226,232,240,.78) !important;
-          }
-
-          .mi-modal--dark .mep-aside-title {
-            color: rgba(210,220,235,.70) !important;
-            border-bottom-color: rgba(255,255,255,.08) !important;
-          }
-
-          .mi-modal--dark .mep-select {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23A0AABB' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-          }
-
-          .mi-modal--dark .mep-select option {
-            background: #0f1e30;
-            color: rgba(255,255,255,.90);
-          }
-
-          @keyframes mep-pulse {
-            0%, 100% { box-shadow: 0 0 0 6px rgba(0,85,187,.12); }
-            50% { box-shadow: 0 0 0 10px rgba(0,85,187,.05); }
-          }
-
-          @keyframes mep-spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-
-          @media (max-width: 600px) {
-            .mep-grid {
-              grid-template-columns: 1fr;
-            }
-
-            .mep-aside {
-              position: static;
-            }
-
-            .mep-row2 {
-              grid-template-columns: 1fr;
-            }
-
-            .mi-modal__overlay {
-              padding: 10px;
-              align-items: flex-start;
-            }
-
-            .mep-container {
-              width: min(100%, 100%);
-              max-height: calc(100vh - 20px);
-            }
-          }
-        `}</style>
       </div>
     </div>,
     document.body
   );
-};
-
-export default ModalEditarProducto;
+}

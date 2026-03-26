@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import ModalAgregarProducto from "./modales/ModalAgregarProducto";
+import ModalCargaMasiva from "./modales/ModalCargaMasiva";
 import ModalEditarProducto from "./modales/ModalEditarProducto";
 import ModalEliminar from "../../Global/Modales/ModalEliminar";
 import Toast from "../../Global/Toast";
@@ -147,7 +147,9 @@ const Lista_Productos = () => {
   const [totalProductos, setTotalProductos] = useState(0);
   const [orden, setOrden] = useState({ campo: "nombre", dir: "ASC" });
 
+  /* Un solo modal de carga (individual + masivo) */
   const [modalAbierto, setModalAbierto] = useState(false);
+
   const [modalEditarAbierto, setModalEditarAbierto] = useState(false);
   const [productoEditarId, setProductoEditarId] = useState(null);
 
@@ -673,13 +675,23 @@ const Lista_Productos = () => {
         )}
       </div>
 
+      {/* ── Modal único: individual + masivo ── */}
       {modalAbierto && (
-        <ModalAgregarProducto
+        <ModalCargaMasiva
+          open={modalAbierto}
           onClose={() => setModalAbierto(false)}
+          onToast={mostrarToast}
+          /* producto guardado individualmente */
           onGuardado={async () => {
             setModalAbierto(false);
             await fetchProductos();
             mostrarToast("exito", "Producto agregado correctamente.");
+          }}
+          /* importación masiva CSV completada */
+          onImportado={async (mensaje) => {
+            setModalAbierto(false);
+            await fetchProductos();
+            mostrarToast("exito", mensaje || "Importación finalizada correctamente.");
           }}
         />
       )}

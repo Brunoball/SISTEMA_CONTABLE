@@ -172,12 +172,9 @@ const ROUTE_PREFETCH = {
   "/panel/configuracion/tiendanube": () =>
     import("../Configuracion/ConfigTiendaNube"),
 
-  "/panel/stock/categorias": () => import("../Stock/Categorias/Categorias"),
-  "/panel/stock/inventario": () => import("../Stock/Inventario/Inventario"),
-  "/panel/stock/lista-productos": () =>
-    import("../Stock/Lista_Productos/Lista_Productos"),
-  "/panel/stock/tabla-precios": () =>
-    import("../Stock/Tabla_Precios/Tabla_Precios"),
+  "/panel/productos/stock": () => import("../Productos/Stock/Stock"),
+  "/panel/productos/lista-productos": () =>
+    import("../Productos/Lista_Productos/Lista_Productos"),
 
   "/panel/cheques/cartera": () =>
     import("../Cheques/Cheques_Cartera/Cheques_Cartera"),
@@ -370,6 +367,7 @@ function pickIcon(label) {
   if (s.includes("cuentas")) return faUsers;
   if (s.includes("analisis")) return faChartLine;
   if (s.includes("config")) return faGear;
+  if (s.includes("producto")) return faBoxesStacked;
   if (s.includes("stock")) return faBoxesStacked;
   return faChartLine;
 }
@@ -423,15 +421,15 @@ const Principal = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [openMovSub, setOpenMovSub] = useState(false);
   const [openCCSub, setOpenCCSub] = useState(false);
-  const [openStockSub, setOpenStockSub] = useState(false);
+  const [openProductosSub, setOpenProductosSub] = useState(false);
   const [openChequesSub, setOpenChequesSub] = useState(false);
 
   const closeTimerRef = useRef(null);
   const openTimerRef = useRef(null);
   const closeCCTimerRef = useRef(null);
   const openCCTimerRef = useRef(null);
-  const closeStockTimerRef = useRef(null);
-  const openStockTimerRef = useRef(null);
+  const closeProductosTimerRef = useRef(null);
+  const openProductosTimerRef = useRef(null);
   const closeChequesTimerRef = useRef(null);
   const openChequesTimerRef = useRef(null);
 
@@ -477,21 +475,21 @@ const Principal = () => {
     openCCTimerRef.current = null;
   };
 
-  const closeStockSoon = (ms = 220) => {
-    if (closeStockTimerRef.current) clearTimeout(closeStockTimerRef.current);
-    closeStockTimerRef.current = setTimeout(() => setOpenStockSub(false), ms);
+  const closeProductosSoon = (ms = 220) => {
+    if (closeProductosTimerRef.current) clearTimeout(closeProductosTimerRef.current);
+    closeProductosTimerRef.current = setTimeout(() => setOpenProductosSub(false), ms);
   };
-  const openStockSoon = (ms = 500) => {
-    if (openStockTimerRef.current) clearTimeout(openStockTimerRef.current);
-    openStockTimerRef.current = setTimeout(() => setOpenStockSub(true), ms);
+  const openProductosSoon = (ms = 500) => {
+    if (openProductosTimerRef.current) clearTimeout(openProductosTimerRef.current);
+    openProductosTimerRef.current = setTimeout(() => setOpenProductosSub(true), ms);
   };
-  const cancelStockClose = () => {
-    if (closeStockTimerRef.current) clearTimeout(closeStockTimerRef.current);
-    closeStockTimerRef.current = null;
+  const cancelProductosClose = () => {
+    if (closeProductosTimerRef.current) clearTimeout(closeProductosTimerRef.current);
+    closeProductosTimerRef.current = null;
   };
-  const cancelStockOpen = () => {
-    if (openStockTimerRef.current) clearTimeout(openStockTimerRef.current);
-    openStockTimerRef.current = null;
+  const cancelProductosOpen = () => {
+    if (openProductosTimerRef.current) clearTimeout(openProductosTimerRef.current);
+    openProductosTimerRef.current = null;
   };
 
   const closeChequesSoon = (ms = 220) => {
@@ -684,7 +682,7 @@ const Principal = () => {
         setDrawerOpen(false);
         setOpenMovSub(false);
         setOpenCCSub(false);
-        setOpenStockSub(false);
+        setOpenProductosSub(false);
         setOpenChequesSub(false);
 
         if (!silent) {
@@ -815,8 +813,8 @@ const Principal = () => {
       if (openTimerRef.current) clearTimeout(openTimerRef.current);
       if (closeCCTimerRef.current) clearTimeout(closeCCTimerRef.current);
       if (openCCTimerRef.current) clearTimeout(openCCTimerRef.current);
-      if (closeStockTimerRef.current) clearTimeout(closeStockTimerRef.current);
-      if (openStockTimerRef.current) clearTimeout(openStockTimerRef.current);
+      if (closeProductosTimerRef.current) clearTimeout(closeProductosTimerRef.current);
+      if (openProductosTimerRef.current) clearTimeout(openProductosTimerRef.current);
       if (closeChequesTimerRef.current) clearTimeout(closeChequesTimerRef.current);
       if (openChequesTimerRef.current) clearTimeout(openChequesTimerRef.current);
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -830,7 +828,7 @@ const Principal = () => {
     setDrawerOpen(false);
     setOpenMovSub(false);
     setOpenCCSub(false);
-    setOpenStockSub(false);
+    setOpenProductosSub(false);
     setOpenChequesSub(false);
   }, [location.pathname]);
 
@@ -923,13 +921,11 @@ const Principal = () => {
         ],
       },
       {
-        label: "Stock",
-        ruta: "/panel/stock",
+        label: "Productos",
+        ruta: "/panel/productos",
         children: [
-          { label: "Categorias", ruta: "/panel/stock/categorias" },
-          { label: "Inventario", ruta: "/panel/stock/inventario" },
-          { label: "Lista de Productos", ruta: "/panel/stock/lista-productos" },
-          { label: "Tabla de Precios", ruta: "/panel/stock/tabla-precios" },
+          { label: "Stock", ruta: "/panel/productos/stock" },
+          { label: "Lista de Productos", ruta: "/panel/productos/lista-productos" },
         ],
       },
       {
@@ -958,7 +954,7 @@ const Principal = () => {
   const activeKey = useMemo(() => {
     if (location.pathname.startsWith("/panel/movimientos")) return "movimientos";
     if (location.pathname.startsWith("/panel/cuentas-corrientes")) return "cuentas-corrientes";
-    if (location.pathname.startsWith("/panel/stock")) return "stock";
+    if (location.pathname.startsWith("/panel/productos")) return "productos";
     if (location.pathname.startsWith("/panel/cheques")) return "cheques";
     if (location.pathname.startsWith("/panel/configuracion")) return "configuracion";
     const found = navItems.find((x) => location.pathname.startsWith(x.ruta));
@@ -969,7 +965,7 @@ const Principal = () => {
     if (location.pathname.startsWith("/panel/movimientos")) return "Movimientos";
     if (location.pathname.startsWith("/panel/cuentas-corrientes/clientes")) return "Cuentas Corrientes";
     if (location.pathname.startsWith("/panel/cuentas-corrientes/proveedores")) return "Cuentas Corrientes";
-    if (location.pathname.startsWith("/panel/stock")) return "Stock";
+    if (location.pathname.startsWith("/panel/productos")) return "Productos";
     if (location.pathname.startsWith("/panel/cheques")) return "Cheques";
     if (location.pathname.startsWith("/panel/configuracion/tiendanube")) return "Configuración";
     if (location.pathname.startsWith("/panel/configuracion")) return "Configuración";
@@ -983,7 +979,7 @@ const Principal = () => {
       setDrawerOpen(false);
       setOpenMovSub(false);
       setOpenCCSub(false);
-      setOpenStockSub(false);
+      setOpenProductosSub(false);
       setOpenChequesSub(false);
     },
     [navigate]
@@ -994,7 +990,7 @@ const Principal = () => {
     setDrawerOpen(false);
     setOpenMovSub(false);
     setOpenCCSub(false);
-    setOpenStockSub(false);
+    setOpenProductosSub(false);
     setOpenChequesSub(false);
   }, [navigate]);
 
@@ -1062,7 +1058,7 @@ const Principal = () => {
 
   const isMovDropdown = (itemKey) => itemKey === "movimientos";
   const isCCDropdown = (itemKey) => itemKey === "cuentas-corrientes";
-  const isStockDropdown = (itemKey) => itemKey === "stock";
+  const isProductosDropdown = (itemKey) => itemKey === "productos";
   const isChequesDropdown = (itemKey) => itemKey === "cheques";
 
   return (
@@ -1112,67 +1108,67 @@ const Principal = () => {
           </div>
         </div>
 
-<div className="mov-topbar__right">
-  <div className="mov-topbar__section">{activeLabel}</div>
+        <div className="mov-topbar__right">
+          <div className="mov-topbar__section">{activeLabel}</div>
 
-  <button
-    className="pp-themeBtn"
-    onClick={toggleTema}
-    title={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-    aria-label={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-  >
-    <FontAwesomeIcon icon={tema === "oscuro" ? faSun : faMoon} />
-  </button>
+          <button
+            className="pp-themeBtn"
+            onClick={toggleTema}
+            title={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            aria-label={tema === "oscuro" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          >
+            <FontAwesomeIcon icon={tema === "oscuro" ? faSun : faMoon} />
+          </button>
 
-  {rolUsuario === "admin" && (
-    <button
-      className="pp-themeBtn"
-      onClick={() => handleNavigate("/panel/configuracion")}
-      title="Configuración"
-      aria-label="Ir a Configuración"
-    >
-      <FontAwesomeIcon icon={faGear} />
-    </button>
-  )}
+          {rolUsuario === "admin" && (
+            <button
+              className="pp-themeBtn"
+              onClick={() => handleNavigate("/panel/configuracion")}
+              title="Configuración"
+              aria-label="Ir a Configuración"
+            >
+              <FontAwesomeIcon icon={faGear} />
+            </button>
+          )}
 
-  <button
-    className="mov-topbar__usericon"
-    onClick={() => setShowPerfilModal(true)}
-    title="Perfil"
-    style={{
-      overflow: "hidden",
-      padding: 8,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-    }}
-  >
-    {tenantLogoIconoLoaded && tenantLogoIconoSrc ? (
-      <img
-        src={tenantLogoIconoSrc}
-        alt="Logo icono de la empresa"
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "block",
-          objectFit: "cover",
-          borderRadius: "50%",
-        }}
-      />
-    ) : (
-      <FontAwesomeIcon icon={faUserCircle} />
-    )}
-  </button>
+          <button
+            className="mov-topbar__usericon"
+            onClick={() => setShowPerfilModal(true)}
+            title="Perfil"
+            style={{
+              overflow: "hidden",
+              padding: 8,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {tenantLogoIconoLoaded && tenantLogoIconoSrc ? (
+              <img
+                src={tenantLogoIconoSrc}
+                alt="Logo icono de la empresa"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  display: "block",
+                  objectFit: "cover",
+                  borderRadius: "50%",
+                }}
+              />
+            ) : (
+              <FontAwesomeIcon icon={faUserCircle} />
+            )}
+          </button>
 
-  <button
-    className="pp-topbarLogout"
-    onClick={() => setShowLogoutModal(true)}
-    title="Cerrar sesión"
-    aria-label="Cerrar sesión"
-  >
-    <FontAwesomeIcon icon={faSignOutAlt} />
-  </button>
-</div>
+          <button
+            className="pp-topbarLogout"
+            onClick={() => setShowLogoutModal(true)}
+            title="Cerrar sesión"
+            aria-label="Cerrar sesión"
+          >
+            <FontAwesomeIcon icon={faSignOutAlt} />
+          </button>
+        </div>
       </header>
 
       <div
@@ -1224,26 +1220,26 @@ const Principal = () => {
 
             const isMov = isMovDropdown(item.key);
             const isCC = isCCDropdown(item.key);
-            const isStock = isStockDropdown(item.key);
+            const isProductos = isProductosDropdown(item.key);
             const isCheques = isChequesDropdown(item.key);
 
             const isActive =
               activeKey === item.key ||
               (isMov && location.pathname.startsWith("/panel/movimientos")) ||
               (isCC && location.pathname.startsWith("/panel/cuentas-corrientes")) ||
-              (isStock && location.pathname.startsWith("/panel/stock")) ||
+              (isProductos && location.pathname.startsWith("/panel/productos")) ||
               (isCheques && location.pathname.startsWith("/panel/cheques"));
 
             const isOpen =
               (isMov && openMovSub) ||
               (isCC && openCCSub) ||
-              (isStock && openStockSub) ||
+              (isProductos && openProductosSub) ||
               (isCheques && openChequesSub);
 
             const toggleSub = () => {
               if (isMov) setOpenMovSub((prev) => !prev);
               if (isCC) setOpenCCSub((prev) => !prev);
-              if (isStock) setOpenStockSub((prev) => !prev);
+              if (isProductos) setOpenProductosSub((prev) => !prev);
               if (isCheques) setOpenChequesSub((prev) => !prev);
             };
 
@@ -1256,9 +1252,9 @@ const Principal = () => {
                 cancelCCClose();
                 openCCSoon(ms);
               }
-              if (isStock) {
-                cancelStockClose();
-                openStockSoon(ms);
+              if (isProductos) {
+                cancelProductosClose();
+                openProductosSoon(ms);
               }
               if (isCheques) {
                 cancelChequesClose();
@@ -1275,9 +1271,9 @@ const Principal = () => {
                 cancelCCOpen();
                 closeCCSoon(ms);
               }
-              if (isStock) {
-                cancelStockOpen();
-                closeStockSoon(ms);
+              if (isProductos) {
+                cancelProductosOpen();
+                closeProductosSoon(ms);
               }
               if (isCheques) {
                 cancelChequesOpen();
@@ -1294,9 +1290,9 @@ const Principal = () => {
                 cancelCCClose();
                 cancelCCOpen();
               }
-              if (isStock) {
-                cancelStockClose();
-                cancelStockOpen();
+              if (isProductos) {
+                cancelProductosClose();
+                cancelProductosOpen();
               }
               if (isCheques) {
                 cancelChequesClose();
@@ -1310,12 +1306,12 @@ const Principal = () => {
                 className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${isOpen ? "is-open" : ""}`}
                 onMouseEnter={() => {
                   prefetchRoute(item.ruta);
-                  if (!isNoHover() && (isMov || isCC || isStock || isCheques)) {
+                  if (!isNoHover() && (isMov || isCC || isProductos || isCheques)) {
                     openSoonLocal(300);
                   }
                 }}
                 onMouseLeave={() => {
-                  if (!isNoHover() && (isMov || isCC || isStock || isCheques)) {
+                  if (!isNoHover() && (isMov || isCC || isProductos || isCheques)) {
                     closeSoonLocal(220);
                   }
                 }}
@@ -1324,18 +1320,18 @@ const Principal = () => {
                   type="button"
                   className={`pp-nav__item ${isActive ? "is-active" : ""}`}
                   onClick={() => {
-                    if ((isCC || isStock || isCheques) && hasSub) {
+                    if ((isCC || isProductos || isCheques) && hasSub) {
                       toggleSub();
                       return;
                     }
 
-                    if (hasSub && isNoHover() && (isMov || isCC || isStock || isCheques)) {
+                    if (hasSub && isNoHover() && (isMov || isCC || isProductos || isCheques)) {
                       const currentOpen = isMov
                         ? openMovSub
                         : isCC
                         ? openCCSub
-                        : isStock
-                        ? openStockSub
+                        : isProductos
+                        ? openProductosSub
                         : openChequesSub;
 
                       if (!currentOpen) {
@@ -1359,8 +1355,8 @@ const Principal = () => {
                         ? openMovSub
                         : isCC
                         ? openCCSub
-                        : isStock
-                        ? openStockSub
+                        : isProductos
+                        ? openProductosSub
                         : isCheques
                         ? openChequesSub
                         : undefined
@@ -1378,19 +1374,19 @@ const Principal = () => {
                   <div
                     className="pp-navSub"
                     onMouseEnter={() => {
-                      if (!isNoHover() && (isMov || isCC || isStock || isCheques)) {
+                      if (!isNoHover() && (isMov || isCC || isProductos || isCheques)) {
                         cancelAllTimersLocal();
                         if (isMov) setOpenMovSub(true);
                         if (isCC) setOpenCCSub(true);
-                        if (isStock) setOpenStockSub(true);
+                        if (isProductos) setOpenProductosSub(true);
                         if (isCheques) setOpenChequesSub(true);
                       }
                     }}
                     onMouseLeave={() => {
-                      if (!isNoHover() && (isMov || isCC || isStock || isCheques)) {
+                      if (!isNoHover() && (isMov || isCC || isProductos || isCheques)) {
                         if (isMov) closeSoon(220);
                         if (isCC) closeCCSoon(220);
-                        if (isStock) closeStockSoon(220);
+                        if (isProductos) closeProductosSoon(220);
                         if (isCheques) closeChequesSoon(220);
                       }
                     }}
@@ -1406,7 +1402,7 @@ const Principal = () => {
                           navigate(sub.ruta);
                           setOpenMovSub(false);
                           setOpenCCSub(false);
-                          setOpenStockSub(false);
+                          setOpenProductosSub(false);
                           setOpenChequesSub(false);
                           setDrawerOpen(false);
                         }}

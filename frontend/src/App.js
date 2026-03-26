@@ -31,11 +31,9 @@ import * as AnalisisFinancieroModule from "./components/Analisis_Financiero/Anal
 import ClientesCC from "./components/Cuentas_Corrientes/Clientes/Clientes";
 import ProveedoresCC from "./components/Cuentas_Corrientes/Proveedores/Proveedores";
 
-/* ✅ STOCK */
-import Categorias from "./components/Stock/Categorias/Categorias";
-import Inventario from "./components/Stock/Inventario/Inventario";
-import Lista_Productos from "./components/Stock/Lista_Productos/Lista_Productos";
-import Tabla_Precios from "./components/Stock/Tabla_Precios/Tabla_Precios";
+/* ✅ PRODUCTOS */
+import Stock from "./components/Productos/Stock/Stock";
+import Lista_Productos from "./components/Productos/Lista_Productos/Lista_Productos";
 
 /* ✅ CHEQUES */
 import Cheques_Cartera from "./components/Cheques/Cheques_Cartera/Cheques_Cartera";
@@ -145,11 +143,9 @@ export default function App() {
           <Route path="cuentas-corrientes/clientes" element={<ClientesCC />} />
           <Route path="cuentas-corrientes/proveedores" element={<ProveedoresCC />} />
 
-          {/* ✅ STOCK */}
-          <Route path="stock/categorias" element={<Categorias />} />
-          <Route path="stock/inventario" element={<Inventario />} />
-          <Route path="stock/lista-productos" element={<Lista_Productos />} />
-          <Route path="stock/tabla-precios" element={<Tabla_Precios />} />
+          {/* ✅ PRODUCTOS */}
+          <Route path="productos/stock" element={<Stock />} />
+          <Route path="productos/lista-productos" element={<Lista_Productos />} />
 
           {/* ✅ CHEQUES */}
           <Route path="cheques/cartera" element={<Cheques_Cartera />} />

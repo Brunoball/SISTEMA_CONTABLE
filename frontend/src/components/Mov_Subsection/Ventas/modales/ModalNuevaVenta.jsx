@@ -76,6 +76,7 @@ function buildEmptyRow() {
     precioDraft: "",
     precioFocused: false,
     ivaPct: 0,
+    stock_disponible: null,
   };
 }
 function uid() { return crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
@@ -308,7 +309,7 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
   /* ── Estado cheque ── */
   const [openChequeModal, setOpenChequeModal] = useState(false);
   const [savingCheque, setSavingCheque] = useState(false);
-  const [chequeGuardado, setChequeGuardado] = useState(null); // datos del cheque guardado
+  const [chequeGuardado, setChequeGuardado] = useState(null);
 
   /* Reset al abrir */
   useEffect(()=>{
@@ -418,6 +419,32 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
     setFiscalError("");
   },[]);
 
+  /* ✅ FIXED: Manejo de selección de detalle con precio y stock automático */
+  const handleSelectDetalle = useCallback((detalle, rowId) => {
+    updateRow(rowId, {
+      id_detalle: String(getDetalleId(detalle) || ""),
+      detalleText: detalle?.nombre || "",
+      precio: Number(detalle?.precio || 0),
+      stock_disponible: detalle?.stock ?? null,
+    });
+  }, [updateRow]);
+
+  /* ✅ FIXED: Validación de cantidad contra stock */
+  const handleCantidadChange = useCallback((rowId, newCantidad) => {
+    const row = rows.find(r => r.id === rowId);
+    if (!row) return;
+    
+    const stockDisponible = row.stock_disponible;
+    let cantidadFinal = newCantidad === "" ? "" : Number(newCantidad);
+    
+    if (stockDisponible !== null && stockDisponible !== undefined && typeof cantidadFinal === "number" && cantidadFinal > stockDisponible) {
+      cantidadFinal = stockDisponible;
+      showToast("advertencia", `Stock máximo disponible: ${stockDisponible}`, 2000);
+    }
+    
+    updateRow(rowId, { cantidad: cantidadFinal });
+  }, [rows, updateRow, showToast]);
+
   /* ── Detección de medio de pago cheque ── */
   const esMedioPagoCheque = useMemo(
     () => isMedioPagoCheque(mediosPagoList, filters.id_medio_pago),
@@ -428,7 +455,7 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
     [mediosPagoList, filters.id_medio_pago]
   );
 
-  /* ── Guardar cheque en el backend (se llama después de guardar la venta) ── */
+  /* ── Guardar cheque en el backend ── */
   const guardarChequeEnBackend = useCallback(async (idMovimiento, datosCheque) => {
     if (!datosCheque) return null;
 
@@ -460,18 +487,15 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
     return await parseJsonOrThrow(res);
   }, [API_CHEQUES_GUARDAR]);
 
-  /* ── Handler: guardar datos del cheque desde el modal ── */
+  /* ── Handler: guardar datos del cheque ── */
   const handleSaveCheque = useCallback(async (datosCheque) => {
     if (savingCheque) return;
 
-    // Validación básica
     if (!datosCheque.emisor) { showToast("advertencia", "El emisor es obligatorio.", 3000); return; }
     if (!datosCheque.numero_cheque) { showToast("advertencia", "El número de cheque es obligatorio.", 3000); return; }
     if (!datosCheque.importe || datosCheque.importe <= 0) { showToast("advertencia", "El importe debe ser mayor a 0.", 3000); return; }
     if (!datosCheque.fecha_pago) { showToast("advertencia", "La fecha de pago es obligatoria.", 3000); return; }
 
-    // Guardamos los datos del cheque en estado para usarlos al guardar la venta
-    // El cheque se persistirá en el backend DESPUÉS de crear la venta (necesitamos el id_movimiento)
     setChequeGuardado(datosCheque);
     setOpenChequeModal(false);
     showToast("exito", `Cheque ${datosCheque.numero_cheque} cargado. Se guardará al confirmar la venta.`, 3200);
@@ -531,7 +555,6 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
     if(!(selectedClienteId>0||cliTxt.length>0))return{ok:false,msg:"Falta seleccionar un Cliente (obligatorio)."};
     const tv=Number(filters.id_tipo_venta);if(!Number.isFinite(tv)||tv<=0)return{ok:false,msg:"Falta seleccionar la Forma de venta."};
     if(isContado){const mp=Number(filters.id_medio_pago);if(!Number.isFinite(mp)||mp<=0)return{ok:false,msg:"Venta Contado: falta seleccionar el Medio de pago."};
-      // Si el medio de pago es cheque, validar que el cheque esté cargado
       if(esMedioPagoCheque&&!chequeGuardado)return{ok:false,msg:"El medio de pago es Cheque: cargá el cheque antes de guardar."};
     }
     const periodoApi=fechaToYYYYMM(fecha);if(!/^\d{4}-\d{2}$/.test(periodoApi))return{ok:false,msg:"La fecha es inválida."};
@@ -720,7 +743,6 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
         await vincularComprobanteAMovimientosLote(restoIds, idComprobante);
       }
 
-      // Guardar cheque si aplica
       if (esMedioPagoCheque && chequeGuardado && idsOk[0]) {
         try {
           await guardarChequeEnBackend(idsOk[0], chequeGuardado);
@@ -773,7 +795,6 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
     try{
       const info=await guardarVentaBatch({clienteFiscalResuelto:null,accionFinal:"guardar",esFacturadaFinal:false});
 
-      // ── Guardar cheque si aplica ──
       if (esMedioPagoCheque && chequeGuardado) {
         const idsOk = (
           Array.isArray(info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
@@ -869,22 +890,19 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
                   {rowsCalc.map(r => (
                     <div key={r.id} className="mi-cr-row">
 
-                      {/* ── Detalle con GlobalAutocomplete ── */}
+                      {/* ✅ FIXED: Detalle con GlobalAutocomplete - SOLO NOMBRE en el desplegable */}
                       <div className="mi-cr-cell mi-cr-cell--detalle">
                         <GlobalAutocomplete
                           value={r.detalleText}
                           onChange={(val) =>
-                            updateRow(r.id, { detalleText: val, id_detalle: NULL_OPTION })
+                            updateRow(r.id, { detalleText: val, id_detalle: NULL_OPTION, stock_disponible: null })
                           }
-                          onSelect={(d) => {
-                            const did = getDetalleId(d);
-                            updateRow(r.id, {
-                              id_detalle: String(did || ""),
-                              detalleText: String(d?.nombre || ""),
-                            });
-                          }}
+                          onSelect={(d) => handleSelectDetalle(d, r.id)}
                           options={detallesList}
-                          getOptionLabel={(d) => String(d?.nombre ?? "")}
+                          getOptionLabel={(d) => {
+                            // ✅ SOLO el nombre, sin stock en el desplegable
+                            return String(d?.nombre ?? "").trim();
+                          }}
                           getOptionValue={(d) => String(getDetalleId(d) ?? d?.nombre ?? "")}
                           placeholder="Escribí o buscá un detalle…"
                           disabled={saving || addUI.open}
@@ -894,7 +912,7 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
                         />
                       </div>
 
-                      {/* ── Cantidad ── */}
+                      {/* ✅ FIXED: Cantidad con validación de stock (stock se muestra después de seleccionar) */}
                       <div className="mi-cr-cell mi-cr-cell--center">
                         <input
                           className="nv-cell-input nv-cell-input--center"
@@ -903,11 +921,17 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
                           step="1"
                           value={r.cantidad}
                           onChange={e =>
-                            updateRow(r.id, { cantidad: e.target.value === "" ? "" : Number(e.target.value) })
+                            handleCantidadChange(r.id, e.target.value === "" ? "" : Number(e.target.value))
                           }
                           disabled={saving}
                           style={{ width: "100%" }}
                         />
+                        {/* ✅ Stock se muestra SOLO después de seleccionar el detalle */}
+                        {r.stock_disponible !== null && r.stock_disponible !== undefined && (
+                          <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>
+                            Stock: {r.stock_disponible}
+                          </div>
+                        )}
                       </div>
 
                       {/* ── Precio ── */}
@@ -1149,7 +1173,6 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
                       </div>
 
                       {chequeGuardado ? (
-                        /* Cheque cargado: mostrar resumen + botón editar */
                         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                           <div
                             style={{
@@ -1181,7 +1204,6 @@ export default function ModalNuevaVenta({open,lists,onClose,onToast,onSaved}) {
                           </button>
                         </div>
                       ) : (
-                        /* Sin cheque: botón cargar */
                         <button
                           type="button"
                           className="mit-btn mit-btn--solid"

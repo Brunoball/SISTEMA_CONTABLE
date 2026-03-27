@@ -23,6 +23,41 @@ function parseMoney(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function isAllowedFile(file) {
+  if (!file) return false;
+
+  const allowedMimeTypes = [
+    "application/pdf",
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/bmp",
+    "image/tiff",
+    "image/heic",
+    "image/heif",
+  ];
+
+  const allowedExtensions = [
+    ".pdf",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp",
+    ".bmp",
+    ".tif",
+    ".tiff",
+    ".heic",
+    ".heif",
+  ];
+
+  const fileName = String(file.name || "").toLowerCase();
+  const mimeType = String(file.type || "").toLowerCase();
+
+  if (allowedMimeTypes.includes(mimeType)) return true;
+  return allowedExtensions.some((ext) => fileName.endsWith(ext));
+}
+
 export default function ModalNuevoChequeRecibo({
   open,
   onClose,
@@ -44,6 +79,7 @@ export default function ModalNuevoChequeRecibo({
 
   const [archivo, setArchivo] = useState(null);
   const [archivoNombre, setArchivoNombre] = useState("");
+  const [errorArchivo, setErrorArchivo] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -66,6 +102,7 @@ export default function ModalNuevoChequeRecibo({
         initialData?.archivoName ||
         ""
     );
+    setErrorArchivo("");
   }, [open, initialData]);
 
   useEffect(() => {
@@ -191,13 +228,30 @@ export default function ModalNuevoChequeRecibo({
               <input
                 ref={fileRef}
                 type="file"
-                accept=".pdf,jpg,jpeg,png,webp,bmp,tif,tiff"
+                accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff,.heic,.heif"
                 style={{ display: "none" }}
                 disabled={saving}
                 onChange={(e) => {
                   const f = e.target.files?.[0] || null;
+
+                  if (!f) {
+                    setArchivo(null);
+                    setArchivoNombre("");
+                    setErrorArchivo("");
+                    return;
+                  }
+
+                  if (!isAllowedFile(f)) {
+                    setArchivo(null);
+                    setArchivoNombre("");
+                    setErrorArchivo("Solo se permiten archivos PDF o imágenes.");
+                    if (fileRef.current) fileRef.current.value = "";
+                    return;
+                  }
+
                   setArchivo(f);
-                  setArchivoNombre(f?.name || "");
+                  setArchivoNombre(f.name || "");
+                  setErrorArchivo("");
                 }}
               />
 
@@ -215,7 +269,7 @@ export default function ModalNuevoChequeRecibo({
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>
-                    Archivo adjunto
+                    Archivo adjunto (PDF o imagen)
                   </div>
                   <div
                     style={{
@@ -229,6 +283,19 @@ export default function ModalNuevoChequeRecibo({
                   >
                     {archivoNombre || "Sin archivo seleccionado"}
                   </div>
+
+                  {errorArchivo && (
+                    <div
+                      style={{
+                        marginTop: 6,
+                        fontSize: 12,
+                        color: "#dc2626",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {errorArchivo}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: "flex", gap: 8 }}>
@@ -248,6 +315,7 @@ export default function ModalNuevoChequeRecibo({
                       onClick={() => {
                         setArchivo(null);
                         setArchivoNombre("");
+                        setErrorArchivo("");
                         if (fileRef.current) fileRef.current.value = "";
                       }}
                       disabled={saving}

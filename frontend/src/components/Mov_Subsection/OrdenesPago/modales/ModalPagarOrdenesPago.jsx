@@ -10,6 +10,7 @@ import {
   faListCheck,
   faMoneyBill1Wave,
   faCircleNotch,
+  faMoneyCheckDollar,
 } from "@fortawesome/free-solid-svg-icons";
 
 import ModalOrdenPagoGenerada from "./ModalOrdenPagoGenerada";
@@ -46,13 +47,17 @@ function isTemaOscuro() {
   return document.documentElement.getAttribute("data-theme") === "oscuro";
 }
 
-function getSessionKey() {
-  return (localStorage.getItem("session_key") || "").trim();
+function getAuthInfo() {
+  return {
+    sessionKey: (localStorage.getItem("session_key") || "").trim(),
+    token: (localStorage.getItem("token") || "").trim(),
+  };
 }
 function buildAuthHeaders() {
-  const session = getSessionKey();
+  const { sessionKey, token } = getAuthInfo();
   const headers = {};
-  if (session) headers["X-Session"] = session;
+  if (sessionKey) headers["X-Session"] = sessionKey;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   return headers;
 }
 
@@ -72,6 +77,20 @@ function normalizeMediosPago(raw) {
       nombre: String(x?.nombre ?? x?.medio_pago ?? "").trim(),
     }))
     .filter((x) => x.id > 0 && x.nombre);
+}
+
+function normalizeChequeTipoFromMedio(nombre) {
+  const s = String(nombre || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!s) return null;
+  if (s.includes("echeq") || s.includes("e-cheq") || s.includes("e cheq")) return "echeq";
+  if (s.includes("cheque")) return "cheque";
+  return null;
 }
 
 function isPagadoRow(row) {
@@ -151,6 +170,24 @@ export default function ModalPagarOrdenesPago({
   const [loadingMedios, setLoadingMedios] = useState(false);
   const [idMedioPago, setIdMedioPago] = useState("");
 
+  const medioPagoSeleccionado = useMemo(() => {
+    return mediosPago.find((x) => String(x.id) === String(idMedioPago)) || null;
+  }, [mediosPago, idMedioPago]);
+
+  const tipoChequeRequerido = useMemo(() => {
+    return normalizeChequeTipoFromMedio(medioPagoSeleccionado?.nombre || "");
+  }, [medioPagoSeleccionado]);
+
+  const requiereChequeCartera = tipoChequeRequerido === "cheque" || tipoChequeRequerido === "echeq";
+
+  const [chequesCartera, setChequesCartera] = useState([]);
+  const [loadingCheques, setLoadingCheques] = useState(false);
+  const [idChequeSeleccionado, setIdChequeSeleccionado] = useState("");
+
+  const chequeSeleccionado = useMemo(() => {
+    return chequesCartera.find((x) => String(x.id_cheque) === String(idChequeSeleccionado)) || null;
+  }, [chequesCartera, idChequeSeleccionado]);
+
   const [openOrden, setOpenOrden] = useState(false);
   const [ordenHtml, setOrdenHtml] = useState("");
   const [ordenTitle, setOrdenTitle] = useState("Orden de Pago");
@@ -179,6 +216,41 @@ export default function ModalPagarOrdenesPago({
     }
   }, [onToast]);
 
+  const fetchChequesCartera = useCallback(
+    async (tipo) => {
+      if (!tipo) {
+        setChequesCartera([]);
+        setIdChequeSeleccionado("");
+        return;
+      }
+
+      try {
+        setLoadingCheques(true);
+        setChequesCartera([]);
+        setIdChequeSeleccionado("");
+
+        const sp = new URLSearchParams();
+        sp.set("action", "ordenes_pago_cheques_cartera_listar");
+        sp.set("tipo", tipo);
+
+        const data = await fetchJsonOrThrow(`${BASE_URL}/api.php?${sp.toString()}`, {
+          method: "GET",
+          headers: buildAuthHeaders(),
+        });
+
+        const lista = Array.isArray(data?.cheques) ? data.cheques : [];
+        setChequesCartera(lista);
+      } catch (e) {
+        setChequesCartera([]);
+        setIdChequeSeleccionado("");
+        onToast?.("error", e?.message || "No se pudieron cargar los cheques en cartera.", 4200);
+      } finally {
+        setLoadingCheques(false);
+      }
+    },
+    [onToast]
+  );
+
   useEffect(() => {
     if (!open) return;
 
@@ -194,6 +266,10 @@ export default function ModalPagarOrdenesPago({
     setIdsMovimientosPagados([]);
     setUltimoCobroId(null);
 
+    setChequesCartera([]);
+    setLoadingCheques(false);
+    setIdChequeSeleccionado("");
+
     if (mediosPagoFromContext.length > 0) {
       setMediosPago(mediosPagoFromContext);
       setLoadingMedios(false);
@@ -205,6 +281,19 @@ export default function ModalPagarOrdenesPago({
     setIdMedioPago("");
     setTimeout(() => firstFocusRef.current?.focus(), 50);
   }, [open, deudas, mediosPagoFromContext, fetchMediosPagoFallback]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    if (!requiereChequeCartera) {
+      setChequesCartera([]);
+      setIdChequeSeleccionado("");
+      setLoadingCheques(false);
+      return;
+    }
+
+    fetchChequesCartera(tipoChequeRequerido);
+  }, [open, requiereChequeCartera, tipoChequeRequerido, fetchChequesCartera]);
 
   useEffect(() => {
     if (!open || openOrden) return;
@@ -312,7 +401,7 @@ export default function ModalPagarOrdenesPago({
     });
   };
 
-  const confirmPagoDefault = async ({ ids_movimiento, id_medio_pago }) => {
+  const confirmPagoDefault = async ({ ids_movimiento, id_medio_pago, id_cheque }) => {
     const url = `${BASE_URL}/api.php?action=ordenes_pago_confirmar_pago`;
     return await fetchJsonOrThrow(url, {
       method: "POST",
@@ -320,21 +409,26 @@ export default function ModalPagarOrdenesPago({
         "Content-Type": "application/json",
         ...buildAuthHeaders(),
       },
-      body: JSON.stringify({ ids_movimiento, id_medio_pago }),
+      body: JSON.stringify({ ids_movimiento, id_medio_pago, id_cheque }),
     });
   };
 
   const buildOrdenFromSeleccion = useCallback(
-    ({ proveedorInfo, mp, seleccion }) => {
+    ({ proveedorInfo, mp, seleccion, cheque }) => {
       const total = seleccion.reduce(
         (acc, r) => acc + (Number(r?.monto_total ?? r?.total ?? 0) || 0),
         0
       );
 
+      const detalleExtra =
+        cheque && (cheque?.numero_cheque || cheque?.emisor)
+          ? ` - ${String(cheque?.tipo || "").toUpperCase()} ${safeText(cheque?.numero_cheque)}`
+          : "";
+
       const html = buildOrdenPagoHTML({
         proveedorNombre: proveedorInfo?.nombre ?? proveedor?.proveedor ?? "",
         proveedorId: proveedorInfo?.id_proveedor ?? proveedor?.id_proveedor ?? "",
-        medioPagoNombre: mp?.nombre ?? "",
+        medioPagoNombre: `${mp?.nombre ?? ""}${detalleExtra}`,
         total,
         seleccion,
         fechaPago: new Date(),
@@ -374,6 +468,11 @@ export default function ModalPagarOrdenesPago({
       return;
     }
 
+    if (requiereChequeCartera && !idChequeSeleccionado) {
+      onToast?.("error", `Seleccioná un ${tipoChequeRequerido === "echeq" ? "eCheq" : "cheque"} de cartera.`, 3000);
+      return;
+    }
+
     const ids = seleccion.map((r) => Number(r?.id_movimiento || 0)).filter(Boolean);
 
     try {
@@ -390,10 +489,16 @@ export default function ModalPagarOrdenesPago({
           totalSeleccionado,
           id_medio_pago: mp.id,
           medio_pago: mp.nombre,
+          id_cheque: requiereChequeCartera ? Number(idChequeSeleccionado || 0) : null,
+          cheque: chequeSeleccionado || null,
           ids_movimiento: ids,
         });
       } else {
-        resp = await confirmPagoDefault({ ids_movimiento: ids, id_medio_pago: mp.id });
+        resp = await confirmPagoDefault({
+          ids_movimiento: ids,
+          id_medio_pago: mp.id,
+          id_cheque: requiereChequeCartera ? Number(idChequeSeleccionado || 0) : null,
+        });
       }
 
       const idsCobroResp = Array.isArray(resp?.ids_cobro)
@@ -420,11 +525,24 @@ export default function ModalPagarOrdenesPago({
         })
       );
 
+      if (requiereChequeCartera && idChequeSeleccionado) {
+        setChequesCartera((prev) =>
+          (Array.isArray(prev) ? prev : []).filter(
+            (x) => String(x?.id_cheque) !== String(idChequeSeleccionado)
+          )
+        );
+      }
+
       const proveedorInfo = {
         id_proveedor: proveedor?.id_proveedor ?? null,
         nombre: proveedor?.proveedor ?? "",
       };
-      const built = buildOrdenFromSeleccion({ proveedorInfo, mp, seleccion });
+      const built = buildOrdenFromSeleccion({
+        proveedorInfo,
+        mp,
+        seleccion,
+        cheque: chequeSeleccionado,
+      });
 
       setOrdenHtml(built.html);
       setOrdenTitle(built.title);
@@ -432,6 +550,7 @@ export default function ModalPagarOrdenesPago({
 
       setSelectedIds(new Set());
       setPagaTodo(false);
+      setIdChequeSeleccionado("");
 
       onToast?.("exito", "Pago realizado correctamente.", 3000);
 
@@ -561,6 +680,88 @@ export default function ModalPagarOrdenesPago({
                   </div>
                 </div>
 
+                {requiereChequeCartera && (
+                  <div className="mpr-card">
+                    <div className="mpr-tableTitle" style={{ marginBottom: 12 }}>
+                      <span>
+                        <FontAwesomeIcon icon={faMoneyCheckDollar} style={{ marginRight: 8 }} />
+                        {tipoChequeRequerido === "echeq" ? "eCheqs en cartera" : "Cheques en cartera"}
+                      </span>
+                    </div>
+
+                    {loadingCheques ? (
+                      <div className="mpr-empty">Cargando cheques disponibles…</div>
+                    ) : chequesCartera.length === 0 ? (
+                      <div className="mpr-empty">
+                        No hay {tipoChequeRequerido === "echeq" ? "eCheqs" : "cheques"} activos en cartera.
+                      </div>
+                    ) : (
+                      <div className="mpr-table">
+                        <div className="mpr-thead" role="row">
+                          <div className="mpr-th mpr-th--center">Sel</div>
+                          <div className="mpr-th">Número</div>
+                          <div className="mpr-th">Emisor</div>
+                          <div className="mpr-th">F. emisión</div>
+                          <div className="mpr-th">F. pago</div>
+                          <div className="mpr-th mpr-th--right">Importe</div>
+                        </div>
+
+                        <div className="mpr-tbody" style={{ maxHeight: 220 }}>
+                          {chequesCartera.map((ch, idx) => {
+                            const checked = String(ch?.id_cheque) === String(idChequeSeleccionado);
+                            return (
+                              <div
+                                key={ch?.id_cheque || idx}
+                                className={`mpr-row ${checked ? "is-checked" : ""}`}
+                                role="row"
+                                onClick={() => setIdChequeSeleccionado(String(ch?.id_cheque || ""))}
+                              >
+                                <div className="mpr-td mpr-td--center" onClick={(e) => e.stopPropagation()}>
+                                  <label className="mpr-checkWrap">
+                                    <input
+                                      className="mpr-checkInput"
+                                      type="radio"
+                                      name="orden_pago_cheque_cartera"
+                                      checked={checked}
+                                      onChange={() => setIdChequeSeleccionado(String(ch?.id_cheque || ""))}
+                                    />
+                                    <span className="mpr-checkBox" aria-hidden="true" />
+                                  </label>
+                                </div>
+
+                                <div className="mpr-td">{safeText(ch?.numero_cheque)}</div>
+                                <div className="mpr-td" title={safeText(ch?.emisor)}>
+                                  {safeText(ch?.emisor)}
+                                </div>
+                                <div className="mpr-td">{safeText(formatFechaDMY(ch?.fecha_emision))}</div>
+                                <div className="mpr-td">{safeText(formatFechaDMY(ch?.fecha_pago))}</div>
+                                <div className="mpr-td mpr-td--right">{moneyARS(ch?.importe || 0)}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {chequeSeleccionado && (
+                      <div
+                        style={{
+                          marginTop: 12,
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          border: "1px solid rgba(255,255,255,.08)",
+                        }}
+                      >
+                        <b>Seleccionado:</b>{" "}
+                        {String(chequeSeleccionado?.tipo || "").toUpperCase()} Nº{" "}
+                        {safeText(chequeSeleccionado?.numero_cheque)} —{" "}
+                        {safeText(chequeSeleccionado?.emisor)} —{" "}
+                        {moneyARS(chequeSeleccionado?.importe || 0)}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="mpr-tableWrap">
                   <div className="mpr-tableTitle">
                     <span>Registros del proveedor</span>
@@ -654,7 +855,12 @@ export default function ModalPagarOrdenesPago({
                 type="button"
                 className="mpr-btn mpr-btn--primary"
                 onClick={handleConfirm}
-                disabled={loading || selectedIds.size === 0 || !idMedioPago}
+                disabled={
+                  loading ||
+                  selectedIds.size === 0 ||
+                  !idMedioPago ||
+                  (requiereChequeCartera && !idChequeSeleccionado)
+                }
               >
                 <FontAwesomeIcon icon={faCheck} />
                 {loading ? "Procesando…" : "Confirmar pago"}

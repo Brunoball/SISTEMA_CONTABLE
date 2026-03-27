@@ -124,6 +124,7 @@ function buildEmptyRow() {
     precioDraft: "",
     precioFocused: false,
     ivaPct: 0,
+    stock_disponible: null, // ✅ Agregado: stock disponible
   };
 }
 
@@ -423,6 +424,8 @@ export default function ModalNuevaCompra({
   const closeBtnRef = useRef(null);
   const prevOpenRef = useRef(false);
   const fechaInputRef = useRef(null);
+  const rowsContainerRef = useRef(null);
+  const [hasScroll, setHasScroll] = useState(false);
 
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
@@ -443,6 +446,24 @@ export default function ModalNuevaCompra({
       setTimeout(() => closeBtnRef.current?.focus(), 0);
     }
   }, [open]);
+
+  // ✅ Detectar scroll en la tabla
+  useEffect(() => {
+    const el = rowsContainerRef.current;
+    if (!el) return;
+    const checkScroll = () => {
+      const scroll = el.scrollHeight > el.clientHeight + 1;
+      setHasScroll(scroll);
+    };
+    checkScroll();
+    const resizeObserver = new ResizeObserver(checkScroll);
+    resizeObserver.observe(el);
+    window.addEventListener("resize", checkScroll);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", checkScroll);
+    };
+  }, [open, rows]);
 
   const updateFilter = useCallback((k, v) => setFilters((p) => ({ ...p, [k]: v })), []);
 
@@ -491,6 +512,33 @@ export default function ModalNuevaCompra({
         getProveedorId(prov) != null ? String(getProveedorId(prov)) : NULL_OPTION,
     }));
   }, []);
+
+  /* ✅ FIXED: Handler para selección de detalle con precio y stock automático */
+  const handleSelectDetalle = useCallback((detalle, rowId) => {
+    updateRow(rowId, {
+      id_detalle: String(getDetalleId(detalle) || ""),
+      detalleText: detalle?.nombre || "",
+      precio: Number(detalle?.precio || 0),
+      stock_disponible: detalle?.stock ?? null, // ✅ Guarda stock disponible
+    });
+  }, [updateRow]);
+
+  /* ✅ FIXED: Validación de cantidad contra stock */
+  const handleCantidadChange = useCallback((rowId, newCantidad) => {
+    const row = rows.find(r => r.id === rowId);
+    if (!row) return;
+    
+    const stockDisponible = row.stock_disponible;
+    let cantidadFinal = newCantidad === "" ? "" : Number(newCantidad);
+    
+    if (stockDisponible !== null && stockDisponible !== undefined && 
+        typeof cantidadFinal === "number" && cantidadFinal > stockDisponible) {
+      cantidadFinal = stockDisponible;
+      showToast("advertencia", `Stock máximo disponible: ${stockDisponible}`, 2000);
+    }
+    
+    updateRow(rowId, { cantidad: cantidadFinal });
+  }, [rows, updateRow, showToast]);
 
   /* ── Mini modal handlers ── */
   const startAddDetalleForRow = useCallback(
@@ -664,7 +712,6 @@ export default function ModalNuevaCompra({
     [API_UPLOAD_LINK]
   );
 
-  // ── FIX: un solo toast "Compra agregada correctamente." ──
   const submit = useCallback(async () => {
     if (saving) return;
     const { sessionKey } = getAuthInfo();
@@ -762,7 +809,6 @@ export default function ModalNuevaCompra({
           7000
         );
       } else {
-        // ── único toast de éxito ──
         showToast("exito", "Compra agregada correctamente.", 3000);
       }
 
@@ -835,11 +881,14 @@ export default function ModalNuevaCompra({
                   <div />
                 </div>
 
-                <div className="mi-cr-table__rows">
+                <div
+                  ref={rowsContainerRef}
+                  className={`mi-cr-table__rows ${hasScroll ? "has-scroll" : ""}`}
+                >
                   {rowsCalc.map((r) => (
                     <div key={r.id} className="mi-cr-row">
 
-                      {/* ── Detalle con GlobalAutocomplete ── */}
+                      {/* ✅ FIXED: Detalle con GlobalAutocomplete y selección automática de precio/stock */}
                       <div className="mi-cr-cell mi-cr-cell--detalle">
                         <GlobalAutocomplete
                           value={r.detalleText}
@@ -847,17 +896,12 @@ export default function ModalNuevaCompra({
                             updateRow(r.id, {
                               detalleText: val,
                               id_detalle: NULL_OPTION,
+                              stock_disponible: null, // ✅ Limpia stock al escribir
                             })
                           }
-                          onSelect={(d) => {
-                            const did = getDetalleId(d);
-                            updateRow(r.id, {
-                              id_detalle: String(did || ""),
-                              detalleText: String(d?.nombre || ""),
-                            });
-                          }}
+                          onSelect={(d) => handleSelectDetalle(d, r.id)}
                           options={detallesList}
-                          getOptionLabel={(d) => String(d?.nombre ?? "")}
+                          getOptionLabel={(d) => String(d?.nombre ?? "").trim()}
                           getOptionValue={(d) => String(getDetalleId(d) ?? d?.nombre ?? "")}
                           placeholder="Escribí o buscá un detalle…"
                           disabled={saving || addUI.open}
@@ -867,6 +911,7 @@ export default function ModalNuevaCompra({
                         />
                       </div>
 
+                      {/* ✅ FIXED: Cantidad con validación de stock */}
                       <div className="mi-cr-cell mi-cr-cell--center">
                         <input
                           className="nv-cell-input nv-cell-input--center"
@@ -874,14 +919,18 @@ export default function ModalNuevaCompra({
                           min="0"
                           step="1"
                           value={r.cantidad}
-                          onChange={(e) =>
-                            updateRow(r.id, {
-                              cantidad: e.target.value === "" ? "" : Number(e.target.value),
-                            })
+                          onChange={e =>
+                            handleCantidadChange(r.id, e.target.value === "" ? "" : Number(e.target.value))
                           }
                           disabled={saving}
                           style={{ width: "100%" }}
                         />
+                        {/* ✅ Stock se muestra SOLO después de seleccionar el detalle */}
+                        {r.stock_disponible !== null && r.stock_disponible !== undefined && (
+                          <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>
+                            Stock: {r.stock_disponible}
+                          </div>
+                        )}
                       </div>
 
                       <div className="mi-cr-cell mi-cr-cell--center">
@@ -1034,7 +1083,6 @@ export default function ModalNuevaCompra({
 
                 <div className="mi-cr-filters__body">
 
-                  {/* ── Proveedor con GlobalAutocomplete ── */}
                   <div className="fl-field mi-cr-rel">
                     <GlobalAutocomplete
                       value={provInput}

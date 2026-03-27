@@ -897,8 +897,7 @@ export default function OrdenesPago() {
   );
 
   /* =========================
-     Confirmar pago:
-     sin toast de carga
+     Confirmar pago
   ========================= */
   const onConfirmPago = useCallback(
     async (payload) => {
@@ -913,6 +912,7 @@ export default function OrdenesPago() {
       const data = await apiPostJson(`${API}?action=ordenes_pago_confirmar_pago`, {
         ids_movimiento: ids,
         id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
+        id_cheque: Number(payload?.id_cheque || payload?.idCheque || 0) || null,
         idUsuario,
       });
 

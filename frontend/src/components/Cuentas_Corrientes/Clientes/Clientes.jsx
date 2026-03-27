@@ -761,7 +761,7 @@ export default function ClientesCC() {
 
             {isDetailMode ? (
               <button type="button" className="mov-btn mov-btn--ghost" onClick={volverAlListado}>
-                Volver al listado
+                Volver
               </button>
             ) : null}
           </div>
@@ -778,7 +778,7 @@ export default function ClientesCC() {
       </div>
 
       {!isDetailMode ? (
-        <div className="cc-cliente-table">
+        <div className="cc-cliente-table cc-cliente-table--summary">
           <div
             className="mov-gridTable mov-gridTable--head cc-cliente-table__desktopHead"
             style={{ gridTemplateColumns: "2fr 1fr" }}
@@ -787,7 +787,7 @@ export default function ClientesCC() {
             <div className="mov-gridCell mov-gridCell--head is-right">Saldo actual</div>
           </div>
 
-          <div className="cc-cliente-table__body">
+          <div className="cc-cliente-table__body cc-cliente-table__body--summary">
             {loading ? (
               <div className="mov-emptyRow">Cargando clientes…</div>
             ) : filteredSummaryRows.length > 0 ? (
@@ -817,7 +817,7 @@ export default function ClientesCC() {
           </div>
         </div>
       ) : (
-        <div className="cc-cliente-table">
+        <div className="cc-cliente-table cc-cliente-table--detail">
           <div
             className="mov-gridTable mov-gridTable--head cc-cliente-table__desktopHead"
             style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr .9fr" }}
@@ -830,7 +830,7 @@ export default function ClientesCC() {
             <div className="mov-gridCell mov-gridCell--head is-center">Acciones</div>
           </div>
 
-          <div className="cc-cliente-table__body">
+          <div className="cc-cliente-table__body cc-cliente-table__body--detail">
             {loading ? (
               <div className="mov-emptyRow">Cargando cuenta corriente del cliente…</div>
             ) : rows.length > 0 ? (

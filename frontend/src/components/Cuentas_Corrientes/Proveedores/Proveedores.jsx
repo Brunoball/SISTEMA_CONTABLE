@@ -696,7 +696,7 @@ export default function ProveedoresCC() {
 
             {isDetailMode ? (
               <button type="button" className="mov-btn mov-btn--ghost" onClick={volverAlListado}>
-                Volver al listado
+                Volver
               </button>
             ) : null}
           </div>

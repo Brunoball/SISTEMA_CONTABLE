@@ -37,7 +37,6 @@
   background: var(--nv-surface);
   color: var(--nv-text);
   border-radius: 12px;
-  padding: 18px 14px 10px;
   font: inherit;
   outline: none;
   transition: border-color .2s, box-shadow .2s, background .2s;

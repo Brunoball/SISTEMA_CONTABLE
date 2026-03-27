@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import BASE_URL from "../../../../config/config";
+import "../Stock.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faXmark,
@@ -11,6 +12,11 @@ import {
   faArrowRotateRight,
   faTriangleExclamation,
   faLayerGroup,
+  faTag,
+  faAlignLeft,
+  faCircleCheck,
+  faCircleXmark,
+  faBoxesStacked,
 } from "@fortawesome/free-solid-svg-icons";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
@@ -32,10 +38,7 @@ function buildHeadersGET() {
 }
 
 function buildHeadersJSON() {
-  return {
-    ...buildHeadersGET(),
-    "Content-Type": "application/json",
-  };
+  return { ...buildHeadersGET(), "Content-Type": "application/json" };
 }
 
 function toUpperValue(value) {
@@ -57,11 +60,16 @@ async function parseJsonOrThrow(res) {
     }
     return data;
   } catch (e) {
-    if (e instanceof Error && e.message && !e.message.startsWith("Unexpected token")) {
+    if (
+      e instanceof Error &&
+      e.message &&
+      !e.message.startsWith("Unexpected token")
+    ) {
       throw e;
     }
 
     const preview = text.length > 400 ? `${text.slice(0, 400)}...` : text;
+
     throw new Error(
       text.startsWith("<!DOCTYPE") || text.startsWith("<")
         ? "La API devolvió HTML en vez de JSON. Revisá la ruta del backend."
@@ -98,46 +106,13 @@ export default function ModalCategoriasStock({
   const [dark, setDark] = useState(isTemaOscuro);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-
   const [categorias, setCategorias] = useState([]);
   const [error, setError] = useState("");
-
   const [modo, setModo] = useState("crear");
   const [editandoId, setEditandoId] = useState(null);
-
-  const [form, setForm] = useState({
-    nombre: "",
-    descripcion: "",
-  });
+  const [form, setForm] = useState({ nombre: "", descripcion: "" });
 
   const isBusy = loading || saving;
-
-  const resetForm = useCallback(() => {
-    setModo("crear");
-    setEditandoId(null);
-    setForm({
-      nombre: "",
-      descripcion: "",
-    });
-  }, []);
-
-  const cargarCategorias = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    try {
-      const params = new URLSearchParams({
-        action: "stock_categorias_listar",
-      });
-
-      const data = await apiGet(`${API_URL}?${params.toString()}`);
-      setCategorias(Array.isArray(data?.categorias) ? data.categorias : []);
-    } catch (err) {
-      setError(err?.message || "No se pudieron cargar las categorías.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
@@ -166,6 +141,7 @@ export default function ModalCategoriasStock({
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
       document.body.style.overflow = prev;
     };
@@ -173,15 +149,11 @@ export default function ModalCategoriasStock({
 
   useEffect(() => {
     if (!open) return;
-    cargarCategorias();
-    resetForm();
-  }, [open, cargarCategorias, resetForm]);
 
-  useEffect(() => {
-    if (!open) return;
     const h = (e) => {
       if (e.key === "Escape" && !isBusy) onClose?.();
     };
+
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [open, onClose, isBusy]);
@@ -191,6 +163,36 @@ export default function ModalCategoriasStock({
       setTimeout(() => closeBtnRef.current?.focus(), 0);
     }
   }, [open]);
+
+  const resetForm = useCallback(() => {
+    setModo("crear");
+    setEditandoId(null);
+    setForm({ nombre: "", descripcion: "" });
+  }, []);
+
+  const cargarCategorias = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const params = new URLSearchParams({
+        action: "stock_categorias_listar",
+      });
+
+      const data = await apiGet(`${API_URL}?${params.toString()}`);
+      setCategorias(Array.isArray(data?.categorias) ? data.categorias : []);
+    } catch (err) {
+      setError(err?.message || "No se pudieron cargar las categorías.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    cargarCategorias();
+    resetForm();
+  }, [open, cargarCategorias, resetForm]);
 
   const categoriasOrdenadas = useMemo(() => {
     return [...categorias].sort((a, b) =>
@@ -234,7 +236,6 @@ export default function ModalCategoriasStock({
           descripcion,
           activo: 1,
         });
-
         onToast?.("exito", data?.mensaje || "Categoría creada correctamente.");
       } else {
         const data = await apiPost("stock_categoria_actualizar", {
@@ -243,7 +244,6 @@ export default function ModalCategoriasStock({
           descripcion,
           activo: 1,
         });
-
         onToast?.(
           "exito",
           data?.mensaje || "Categoría actualizada correctamente."
@@ -263,11 +263,7 @@ export default function ModalCategoriasStock({
 
   const handleEliminar = async (cat) => {
     const nombre = String(cat?.nombre || "esta categoría");
-    const confirmar = window.confirm(
-      `¿Querés eliminar la categoría "${nombre}"?`
-    );
-
-    if (!confirmar) return;
+    if (!window.confirm(`¿Querés eliminar la categoría "${nombre}"?`)) return;
 
     setSaving(true);
     setError("");
@@ -277,15 +273,13 @@ export default function ModalCategoriasStock({
         id_stock_categoria: Number(cat?.id_stock_categoria || 0),
       });
 
-      onToast?.(
-        "exito",
-        data?.mensaje || "Categoría eliminada correctamente."
-      );
-
+      onToast?.("exito", data?.mensaje || "Categoría eliminada correctamente.");
       await cargarCategorias();
       await onActualizado?.();
 
-      if (Number(cat?.id_stock_categoria || 0) === Number(editandoId || 0)) {
+      if (
+        Number(cat?.id_stock_categoria || 0) === Number(editandoId || 0)
+      ) {
         resetForm();
       }
     } catch (err) {
@@ -300,78 +294,33 @@ export default function ModalCategoriasStock({
 
   return createPortal(
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9999,
-        background: dark ? "rgba(2,6,23,.72)" : "rgba(15,23,42,.42)",
-        backdropFilter: "blur(4px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 18,
-      }}
+      className={[
+        "mi-modal__overlay",
+        dark ? "mi-modal__overlay--dark" : "",
+      ]
+        .join(" ")
+        .trim()}
     >
       <div
+        className={[
+          "mi-modal__container",
+          "mi-modal-categorias",
+          dark ? "mi-modal--dark" : "",
+        ]
+          .join(" ")
+          .trim()}
         role="dialog"
         aria-modal="true"
         onMouseDown={(e) => e.stopPropagation()}
-        style={{
-          width: "min(1120px, 96vw)",
-          maxHeight: "92vh",
-          overflow: "hidden",
-          borderRadius: 20,
-          background: "var(--nv-bg, #ffffff)",
-          color: "var(--nv-text, #0f172a)",
-          boxShadow: "0 25px 70px rgba(0,0,0,.22)",
-          border: "1px solid var(--nv-border-md, rgba(148,163,184,.22))",
-          display: "flex",
-          flexDirection: "column",
-        }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            padding: "18px 20px",
-            borderBottom: "1px solid var(--nv-border-md, rgba(148,163,184,.22))",
-            background: "var(--nv-card-bg, rgba(255,255,255,.7))",
-          }}
-        >
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 14,
-              display: "grid",
-              placeItems: "center",
-              background: "rgba(59,130,246,.12)",
-              color: "var(--nv-action, #2563eb)",
-              fontSize: 18,
-              flexShrink: 0,
-            }}
-          >
+        <div className="mi-modal__header">
+          <div className="mi-modal__head-icon" aria-hidden="true">
             <FontAwesomeIcon icon={faLayerGroup} />
           </div>
 
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: "1.08rem",
-                fontWeight: 800,
-              }}
-            >
-              Categorías de stock
-            </h2>
-            <p
-              style={{
-                margin: "4px 0 0",
-                fontSize: ".9rem",
-                color: "var(--nv-muted, #64748b)",
-              }}
-            >
+          <div className="mi-modal__head-left">
+            <h2 className="mi-modal__title">Categorías de stock</h2>
+            <p className="mi-modal__subtitle">
               Agregá, editá o eliminá categorías para tus productos.
             </p>
           </div>
@@ -379,430 +328,295 @@ export default function ModalCategoriasStock({
           <button
             ref={closeBtnRef}
             type="button"
+            className="mi-modal__close"
             disabled={isBusy}
             onClick={() => onClose?.()}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 12,
-              border: "1px solid var(--nv-border-md, rgba(148,163,184,.22))",
-              background: "transparent",
-              cursor: isBusy ? "not-allowed" : "pointer",
-              color: "inherit",
-            }}
+            aria-label="Cerrar"
           >
             <FontAwesomeIcon icon={faXmark} />
           </button>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "360px 1fr",
-            gap: 18,
-            padding: 20,
-            overflow: "auto",
-          }}
-        >
-          <div
-            style={{
-              border: "1px solid var(--nv-border-md, rgba(148,163,184,.22))",
-              borderRadius: 18,
-              padding: 16,
-              background: "var(--nv-card-bg, rgba(255,255,255,.65))",
-              height: "fit-content",
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 800,
-                fontSize: ".96rem",
-                marginBottom: 14,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <FontAwesomeIcon icon={modo === "crear" ? faPlus : faPenToSquare} />
-              {modo === "crear" ? "Nueva categoría" : "Editar categoría"}
-            </div>
-
-            {error && (
-              <div
-                style={{
-                  marginBottom: 12,
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  background: "rgba(239,68,68,.10)",
-                  color: "#b91c1c",
-                  fontSize: ".86rem",
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "flex-start",
-                }}
-              >
-                <FontAwesomeIcon
-                  icon={faTriangleExclamation}
-                  style={{ marginTop: 2 }}
-                />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: ".8rem",
-                    fontWeight: 700,
-                    marginBottom: 6,
-                    color: "var(--nv-muted, #64748b)",
-                  }}
-                >
-                  Nombre *
-                </label>
-                <input
-                  type="text"
-                  value={form.nombre}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      nombre: toUpperValue(e.target.value),
-                    }))
-                  }
-                  placeholder="Ej: ACCESORIOS"
-                  disabled={saving}
-                  style={{
-                    width: "100%",
-                    height: 44,
-                    borderRadius: 12,
-                    border: "1px solid var(--nv-border-md, rgba(148,163,184,.22))",
-                    background: "var(--nv-bg, #fff)",
-                    color: "inherit",
-                    padding: "0 12px",
-                    outline: "none",
-                  }}
-                />
+        <div className="mi-modal__content mi-modal-categorias__content">
+          <div className="mi-modal-categorias__grid">
+            <aside className="mi-cr-filters mi-cr-filters--categorias">
+              <div className="mi-cr-filters__top">
+                <div className="mi-cr-filters__title mi-cr-filters__title--icon">
+                  <FontAwesomeIcon
+                    icon={modo === "crear" ? faPlus : faPenToSquare}
+                    className="mi-cr-filters__title-icon"
+                  />
+                  <span>
+                    {modo === "crear" ? "Nueva categoría" : "Editar categoría"}
+                  </span>
+                </div>
               </div>
 
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: ".8rem",
-                    fontWeight: 700,
-                    marginBottom: 6,
-                    color: "var(--nv-muted, #64748b)",
-                  }}
-                >
-                  Descripción
-                </label>
-                <textarea
-                  value={form.descripcion}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      descripcion: toUpperValue(e.target.value),
-                    }))
-                  }
-                  placeholder="DESCRIPCIÓN OPCIONAL"
-                  disabled={saving}
-                  rows={4}
-                  style={{
-                    width: "100%",
-                    minHeight: 110,
-                    borderRadius: 12,
-                    border: "1px solid var(--nv-border-md, rgba(148,163,184,.22))",
-                    background: "var(--nv-bg, #fff)",
-                    color: "inherit",
-                    padding: "10px 12px",
-                    outline: "none",
-                    resize: "vertical",
-                  }}
-                />
-              </div>
+              <div className="mi-cr-filters__body mi-cr-filters__body--categorias">
+                {error && (
+                  <div className="mov-mi-error mov-mi-error--categorias">
+                    <FontAwesomeIcon
+                      icon={faTriangleExclamation}
+                      className="mov-mi-error__icon"
+                    />
+                    <span className="mov-mi-error__text">{error}</span>
+                  </div>
+                )}
 
-              <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  flexWrap: "wrap",
-                  marginTop: 6,
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={handleGuardar}
-                  disabled={saving}
-                  style={{
-                    height: 42,
-                    padding: "0 14px",
-                    border: "none",
-                    borderRadius: 12,
-                    background: "var(--nv-action, #2563eb)",
-                    color: "#fff",
-                    cursor: saving ? "not-allowed" : "pointer",
-                    fontWeight: 700,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <FontAwesomeIcon icon={faFloppyDisk} />
-                  {saving
-                    ? "Guardando..."
-                    : modo === "crear"
-                    ? "Crear categoría"
-                    : "Guardar cambios"}
-                </button>
+                <div className="fl-field">
+                  <input
+                    type="text"
+                    className="fl-input"
+                    placeholder=" "
+                    value={form.nombre}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        nombre: toUpperValue(e.target.value),
+                      }))
+                    }
+                    disabled={saving}
+                  />
+                  <label className="fl-label">
+                    <FontAwesomeIcon icon={faTag} className="fl-label__icon" />
+                    Nombre *
+                  </label>
+                </div>
 
-                {modo === "editar" && (
+                <div className="fl-field">
+                  <textarea
+                    className="fl-input fl-input--textarea"
+                    placeholder=" "
+                    value={form.descripcion}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        descripcion: toUpperValue(e.target.value),
+                      }))
+                    }
+                    disabled={saving}
+                    rows={4}
+                  />
+                  <label className="fl-label">
+                    <FontAwesomeIcon
+                      icon={faAlignLeft}
+                      className="fl-label__icon"
+                    />
+                    Descripción
+                  </label>
+                </div>
+
+                <div className="mi-cr-filters__actions mi-cr-filters__actions--stack">
                   <button
                     type="button"
-                    onClick={cancelarEdicion}
+                    className="mit-btn mit-btn--solid mit-btn--block"
+                    onClick={handleGuardar}
                     disabled={saving}
-                    style={{
-                      height: 42,
-                      padding: "0 14px",
-                      borderRadius: 12,
-                      border:
-                        "1px solid var(--nv-border-md, rgba(148,163,184,.22))",
-                      background: "transparent",
-                      color: "inherit",
-                      cursor: saving ? "not-allowed" : "pointer",
-                      fontWeight: 700,
-                    }}
                   >
-                    Cancelar edición
+                    <FontAwesomeIcon
+                      icon={faFloppyDisk}
+                      className="mit-btn__icon"
+                    />
+                    {saving
+                      ? "Guardando..."
+                      : modo === "crear"
+                      ? "Crear categoría"
+                      : "Guardar cambios"}
                   </button>
-                )}
-              </div>
-            </div>
-          </div>
 
-          <div
-            style={{
-              border: "1px solid var(--nv-border-md, rgba(148,163,184,.22))",
-              borderRadius: 18,
-              overflow: "hidden",
-              background: "var(--nv-card-bg, rgba(255,255,255,.65))",
-              minWidth: 0,
-            }}
-          >
-            <div
-              style={{
-                padding: "14px 16px",
-                borderBottom:
-                  "1px solid var(--nv-border-md, rgba(148,163,184,.22))",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                flexWrap: "wrap",
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 800, fontSize: ".96rem" }}>
-                  Listado de categorías
-                </div>
-                <div
-                  style={{
-                    fontSize: ".84rem",
-                    color: "var(--nv-muted, #64748b)",
-                    marginTop: 2,
-                  }}
-                >
-                  Total: <b>{categoriasOrdenadas.length}</b>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={cargarCategorias}
-                disabled={loading}
-                style={{
-                  height: 38,
-                  padding: "0 12px",
-                  borderRadius: 10,
-                  border:
-                    "1px solid var(--nv-border-md, rgba(148,163,184,.22))",
-                  background: "transparent",
-                  color: "inherit",
-                  cursor: loading ? "not-allowed" : "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontWeight: 700,
-                }}
-              >
-                <FontAwesomeIcon icon={faArrowRotateRight} />
-                {loading ? "Cargando..." : "Recargar"}
-              </button>
-            </div>
-
-            <div style={{ overflow: "auto", maxHeight: "58vh" }}>
-              {loading ? (
-                <div
-                  style={{
-                    padding: 24,
-                    textAlign: "center",
-                    color: "var(--nv-muted, #64748b)",
-                  }}
-                >
-                  Cargando categorías...
-                </div>
-              ) : categoriasOrdenadas.length === 0 ? (
-                <div
-                  style={{
-                    padding: 24,
-                    textAlign: "center",
-                    color: "var(--nv-muted, #64748b)",
-                  }}
-                >
-                  No hay categorías cargadas.
-                </div>
-              ) : (
-                <table
-                  style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    minWidth: 680,
-                  }}
-                >
-                  <thead>
-                    <tr
-                      style={{
-                        background: "rgba(148,163,184,.08)",
-                      }}
+                  {modo === "editar" && (
+                    <button
+                      type="button"
+                      className="mit-btn mit-btn--ghost mit-btn--block mi-cr-cancel-btn"
+                      onClick={cancelarEdicion}
+                      disabled={saving}
                     >
-                      <th style={thStyle}>Nombre</th>
-                      <th style={thStyle}>Descripción</th>
-                      <th style={thStyleCenter}>Estado</th>
-                      <th style={thStyleCenter}>Productos</th>
-                      <th style={thStyleCenter}>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      Cancelar edición
+                    </button>
+                  )}
+                </div>
+
+                <div className="mi-card__hint mi-card__hint--categorias">
+                  Las categorías <b>en uso</b> se desactivan al eliminarse.
+                </div>
+              </div>
+            </aside>
+
+            <section className="mi-cr-table mi-cr-table--categorias">
+              <div className="mi-cr-table__foot mi-cr-table__foot--top">
+                <div className="mi-cr-table__summary">
+                  <FontAwesomeIcon
+                    icon={faBoxesStacked}
+                    className="mi-cr-table__summary-icon"
+                  />
+
+                  <div>
+                    <div className="mi-cr-table__summary-title">
+                      Listado de categorías
+                    </div>
+                    <div className="mi-cr-table__summary-subtitle">
+                      Total: <b>{categoriasOrdenadas.length}</b>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="nv-foot-btn"
+                  onClick={cargarCategorias}
+                  disabled={loading}
+                >
+                  <FontAwesomeIcon icon={faArrowRotateRight} />
+                  {loading ? "Cargando..." : "Recargar"}
+                </button>
+              </div>
+
+              <div className="mi-cr-table__rows mi-cr-table__rows--categorias">
+                {loading ? (
+                  <EmptyState
+                    icon={faArrowRotateRight}
+                    spin
+                    text="Cargando categorías..."
+                  />
+                ) : categoriasOrdenadas.length === 0 ? (
+                  <EmptyState
+                    icon={faLayerGroup}
+                    text="No hay categorías cargadas."
+                  />
+                ) : (
+                  <>
+                    <div className="mi-cr-table__head mi-cr-grid-categorias">
+                      <div className="mi-cr-table__head-cell mi-cr-table__head-cell--pl">
+                        Nombre
+                      </div>
+                      <div className="mi-cr-table__head-cell">Descripción</div>
+                      <div className="mi-cr-table__head-cell mi-cr-table__head-cell--center">
+                        Estado
+                      </div>
+                      <div className="mi-cr-table__head-cell mi-cr-table__head-cell--center">
+                        Productos
+                      </div>
+                      <div className="mi-cr-table__head-cell mi-cr-table__head-cell--center">
+                        Acciones
+                      </div>
+                    </div>
+
                     {categoriasOrdenadas.map((cat) => {
                       const activo = Number(cat?.activo || 0) === 1;
+                      const isEditing =
+                        Number(cat?.id_stock_categoria) === editandoId &&
+                        modo === "editar";
 
                       return (
-                        <tr
+                        <div
                           key={cat.id_stock_categoria}
-                          style={{
-                            borderTop:
-                              "1px solid var(--nv-border-md, rgba(148,163,184,.14))",
-                          }}
+                          className={[
+                            "mi-cr-row",
+                            "mi-cr-grid-categorias",
+                            isEditing ? "mi-cr-row--editing" : "",
+                          ]
+                            .join(" ")
+                            .trim()}
                         >
-                          <td style={tdStyleStrong}>{cat.nombre || "—"}</td>
-                          <td style={tdStyle}>
-                            {cat.descripcion?.trim()
-                              ? cat.descripcion
-                              : "Sin descripción"}
-                          </td>
-                          <td style={tdStyleCenter}>
+                          <div className="mi-cr-cell mi-cr-cell--pl">
+                            <span className="mi-cr-cell__nombre">
+                              {cat.nombre || "—"}
+                            </span>
+                          </div>
+
+                          <div className="mi-cr-cell">
                             <span
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                minWidth: 84,
-                                height: 28,
-                                padding: "0 10px",
-                                borderRadius: 999,
-                                fontSize: ".78rem",
-                                fontWeight: 800,
-                                background: activo
-                                  ? "rgba(34,197,94,.14)"
-                                  : "rgba(239,68,68,.12)",
-                                color: activo ? "#15803d" : "#b91c1c",
-                              }}
+                              className={[
+                                "mi-cr-cell__descripcion",
+                                cat.descripcion?.trim()
+                                  ? ""
+                                  : "mi-cr-cell__descripcion--empty",
+                              ]
+                                .join(" ")
+                                .trim()}
                             >
+                              {cat.descripcion?.trim() || "Sin descripción"}
+                            </span>
+                          </div>
+
+                          <div className="mi-cr-cell mi-cr-cell--center">
+                            <span
+                              className={[
+                                "mi-cr-status",
+                                activo
+                                  ? "mi-cr-status--activo"
+                                  : "mi-cr-status--inactivo",
+                              ]
+                                .join(" ")
+                                .trim()}
+                            >
+                              <FontAwesomeIcon
+
+                                className="mi-cr-status__icon"
+                              />
                               {activo ? "Activa" : "Inactiva"}
                             </span>
-                          </td>
-                          <td style={tdStyleCenter}>
-                            {Number(cat?.total_productos || 0)}
-                          </td>
-                          <td style={tdStyleCenter}>
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: 8,
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => iniciarEdicion(cat)}
-                                disabled={saving}
-                                title="Editar"
-                                style={iconBtnStyle}
-                              >
-                                <FontAwesomeIcon icon={faPenToSquare} />
-                              </button>
+                          </div>
 
-                              <button
-                                type="button"
-                                onClick={() => handleEliminar(cat)}
-                                disabled={saving}
-                                title="Eliminar"
-                                style={{
-                                  ...iconBtnStyle,
-                                  color: "#dc2626",
-                                }}
-                              >
-                                <FontAwesomeIcon icon={faTrashCan} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                          <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--mono">
+                            <span className="mi-cr-productos">
+                              <FontAwesomeIcon
+                                icon={faBoxesStacked}
+                                className="mi-cr-productos__icon"
+                              />
+                              {Number(cat?.total_productos || 0)}
+                            </span>
+                          </div>
+
+                          <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--actions">
+                            <button
+                              type="button"
+                              className="nv-foot-btn nv-foot-btn--sm"
+                              onClick={() => iniciarEdicion(cat)}
+                              disabled={saving}
+                              title="Editar"
+                            >
+                              <FontAwesomeIcon
+                                icon={faPenToSquare}
+                                className="nv-foot-btn__icon"
+                              />
+                              
+                            </button>
+
+                            <button
+                              type="button"
+                              className="nv-foot-btn nv-foot-btn--sm nv-foot-btn--danger"
+                              onClick={() => handleEliminar(cat)}
+                              disabled={saving}
+                              title="Eliminar"
+                            >
+                              <FontAwesomeIcon
+                                icon={faTrashCan}
+                                className="nv-foot-btn__icon"
+                              />
+                              
+                            </button>
+                          </div>
+                        </div>
                       );
                     })}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                  </>
+                )}
+              </div>
+            </section>
           </div>
         </div>
 
-        <div
-          style={{
-            padding: "14px 20px",
-            borderTop: "1px solid var(--nv-border-md, rgba(148,163,184,.22))",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <div
-            style={{
-              fontSize: ".84rem",
-              color: "var(--nv-muted, #64748b)",
-            }}
-          >
+        <div className="mit-actions">
+          <span className="mit-help">
             Las categorías en uso se desactivan al eliminarse.
-          </div>
+          </span>
 
           <button
             type="button"
+            className="mit-btn mit-btn--ghost"
             onClick={() => onClose?.()}
             disabled={isBusy}
-            style={{
-              height: 42,
-              padding: "0 14px",
-              borderRadius: 12,
-              border: "1px solid var(--nv-border-md, rgba(148,163,184,.22))",
-              background: "transparent",
-              color: "inherit",
-              cursor: isBusy ? "not-allowed" : "pointer",
-              fontWeight: 700,
-            }}
           >
             Cerrar
           </button>
@@ -813,43 +627,13 @@ export default function ModalCategoriasStock({
   );
 }
 
-const thStyle = {
-  textAlign: "left",
-  padding: "12px 14px",
-  fontSize: ".78rem",
-  letterSpacing: ".03em",
-  fontWeight: 800,
-  color: "var(--nv-muted, #64748b)",
-  whiteSpace: "nowrap",
-};
-
-const thStyleCenter = {
-  ...thStyle,
-  textAlign: "center",
-};
-
-const tdStyle = {
-  padding: "12px 14px",
-  fontSize: ".9rem",
-  verticalAlign: "middle",
-};
-
-const tdStyleStrong = {
-  ...tdStyle,
-  fontWeight: 700,
-};
-
-const tdStyleCenter = {
-  ...tdStyle,
-  textAlign: "center",
-};
-
-const iconBtnStyle = {
-  width: 36,
-  height: 36,
-  borderRadius: 10,
-  border: "1px solid var(--nv-border-md, rgba(148,163,184,.22))",
-  background: "transparent",
-  color: "inherit",
-  cursor: "pointer",
-};
+function EmptyState({ icon, text, spin = false }) {
+  return (
+    <div className="mi-empty-state">
+      <div className="mi-empty-state__iconWrap">
+        <FontAwesomeIcon icon={icon} spin={spin} />
+      </div>
+      <span className="mi-empty-state__text">{text}</span>
+    </div>
+  );
+}

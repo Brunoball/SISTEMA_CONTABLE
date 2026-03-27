@@ -52,10 +52,13 @@
 /* =========================
    Contenedor
 ========================= */
-.mi-modal__container{
+.mi-modal__container--perfil{
   width: min(760px, 94vw);
-  max-width: 820px;
+  max-width: 860px;
   max-height: 90vh;
+}
+.mi-modal__container{
+
 
   background: var(--balto-white);
   border-radius: 22px;

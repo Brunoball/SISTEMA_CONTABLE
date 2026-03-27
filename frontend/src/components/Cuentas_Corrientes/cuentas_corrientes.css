@@ -1584,4 +1584,41 @@ button.cc-cliente-table__row:focus-visible{
 
 .cc-cliente-table__desktopHead {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}.cc-cliente-table{
+  background: var(--b-white);
+  border: 1px solid rgba(10, 37, 64, 0.10);
+  border-radius: 16px;
+  box-shadow: 0 14px 34px -22px rgba(10, 37, 64, 0.28);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cc-cliente-table--summary{
+  height: calc(100vh - 200px);
+}
+
+.cc-cliente-table--detail{
+  height: calc(100vh - 200px);
+}
+
+.cc-cliente-table__body{
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #fff;
+  flex: 1 1 auto;
+}
+
+.cc-cliente-table__body--summary{
+  flex: 1 1 auto;
+}
+
+.cc-cliente-table__body--detail{
+  flex: 1 1 auto;
+}
+
+.cc-cliente-table__footWrap{
+  flex: 0 0 auto;
 }

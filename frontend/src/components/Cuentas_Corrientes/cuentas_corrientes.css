@@ -1292,7 +1292,7 @@ button.cc-cliente-table__row{
 }
 
 .cc-cliente-table__body{
-  height: calc(100vh - 278px);
+  height: calc(100vh - 290px);
   overflow-y: auto;
   overflow-x: hidden;
   background: #fff;
@@ -1439,13 +1439,15 @@ button.cc-cliente-table__row:focus-visible{
 }
 
 .cc-cliente-table__body{
-  height: calc(100vh - 238px);
+  
   overflow-y: auto;
   overflow-x: hidden;
   background: #fff;
   scrollbar-gutter: stable;
 }
-
+.cc-cliente-table{
+height: calc(100vh - 200px);
+}
 .cc-cliente-table__body--stable{
   scrollbar-gutter: stable;
 }

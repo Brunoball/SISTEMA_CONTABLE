@@ -1,0 +1,149 @@
+Quiero que refactorices estos archivos PHP del backend para que queden con una estructura ESTÁNDAR, PROFESIONAL y ESCALABLE para un SaaS multi-tenant en PHP.
+
+OBJETIVO
+Unificar la arquitectura de todos los módulos del backend para que tengan exactamente la misma lógica estructural, sin romper el funcionamiento actual, sin cambiar acciones públicas, sin cambiar nombres de parámetros usados por el frontend y sin alterar las reglas de negocio existentes salvo que sea estrictamente necesario para corregir inconsistencias estructurales.
+
+CONTEXTO TÉCNICO OBLIGATORIO
+- Proyecto backend PHP multi-tenant.
+- El $pdo YA viene inyectado desde routes/api.php o tenant_resolver.
+- NO incluir config/db.php.
+- NO crear conexiones nuevas.
+- NO romper compatibilidad con el frontend actual.
+- Mantener nombres de actions, parámetros GET/POST/JSON y formato de respuestas JSON existentes.
+- Mantener queries SQL, tablas, columnas y reglas funcionales actuales, salvo correcciones mínimas de consistencia o seguridad.
+- Quiero resultado listo para producción, ordenado y mantenible.
+
+ESTÁNDAR ARQUITECTÓNICO OBLIGATORIO
+
+1) ESTRUCTURA DEL route.php
+Cada route.php debe:
+- declarar strict_types=1
+- definir una única función pública del tipo:
+  function route_NOMBREMODULO(string $action): bool
+- normalizar $action con trim + strtolower o mb_strtolower
+- agrupar acciones por bloques lógicos
+- usar require_once para cargar archivos
+- verificar con function_exists que exista el handler esperado
+- si el handler no existe, devolver JSON de error técnico claro con:
+  - exito => false
+  - mensaje
+  - action
+  - archivo_esperado
+  - funcion_esperada
+- retornar true si manejó la acción
+- retornar false si la acción no pertenece a ese módulo
+
+2) ESTRUCTURA DEL ARCHIVO PRINCIPAL DEL MÓDULO
+Cada archivo principal del módulo debe:
+- declarar strict_types=1
+- NO ejecutar lógica automática al incluirse
+- exponer una única función pública tipo:
+  function modulo_handle(string $action, ?PDO $pdo = null): void
+- resolver el PDO con helper interno si no vino por parámetro
+- centralizar el dispatch interno en esa función handle
+- usar switch($action) limpio
+- validar método HTTP por acción
+- llamar funciones internas separadas por responsabilidad
+
+3) HELPERS OBLIGATORIOS DENTRO DEL MÓDULO
+Usar helpers con prefijo del módulo para evitar colisiones globales.
+Ejemplo para módulo movimientos:
+- movimientos_ok(...)
+- movimientos_fail(...)
+- movimientos_body(...)
+- movimientos_pdo(...)
+- movimientos_require_methods(...)
+- movimientos_as_int(...)
+- movimientos_as_int_or_null(...)
+- movimientos_as_dec(...)
+- movimientos_as_date_or_null(...)
+- movimientos_is_valid_date(...)
+
+REGLAS:
+- NO usar helpers genéricos globales como ok(), fail(), body(), isValidDate()
+- todos los helpers deben llevar prefijo del módulo
+- si se usan function_exists, que sea también con nombres prefijados
+
+4) RESPUESTAS JSON ESTÁNDAR
+- éxito:
+  { "exito": true, ...payload }
+- error:
+  { "exito": false, "mensaje": "...", ...extra }
+- usar JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES cuando corresponda
+- si corresponde, enviar Content-Type application/json; charset=utf-8
+- si el módulo necesita CORS o preflight, manejarlo de forma consistente y encapsulada
+
+5) MANEJO DE MÉTODOS HTTP
+- cada acción debe validar método permitido
+- crear helper reutilizable:
+  modulo_require_methods(['GET']) / ['POST'] / ['POST','PUT','PATCH'] etc.
+- devolver error claro si el método no corresponde
+
+6) TRANSACCIONES
+Cuando haya inserts/updates/deletes múltiples:
+- usar beginTransaction()
+- commit()
+- rollback() si ocurre excepción
+- no dejar transacciones abiertas
+- no repetir lógica de rollback en muchos lugares si se puede ordenar mejor
+
+7) VALIDACIONES
+- validar parámetros obligatorios
+- validar fechas
+- validar IDs
+- validar números decimales
+- validar body JSON
+- mantener los mismos mensajes funcionales ya existentes cuando sea posible
+
+8) REGLAS DE DISEÑO IMPORTANTES
+- route.php SOLO enruta
+- el archivo del módulo SOLO define lógica del módulo
+- NO mezclar side effects al hacer require
+- NO dejar dispatch global suelto fuera del handle
+- NO inventar nuevas tablas ni columnas
+- NO renombrar actions existentes
+- NO renombrar claves JSON que ya consume el frontend
+- NO tocar la lógica de negocio salvo que la estructura obligue a reordenarla
+- mantener comentarios claros y bloques ordenados
+
+9) PRIORIDADES DE CALIDAD
+Quiero que el resultado final:
+- sea uniforme con el resto del SaaS
+- sea fácil de escalar
+- sea fácil de debuggear
+- sea fácil de testear
+- sea seguro ante includes incompletos o handlers faltantes
+- sea consistente entre módulos
+
+10) QUÉ ESPERO DE LA RESPUESTA
+Quiero que me devuelvas:
+- el código COMPLETO de todos los archivos modificados
+- no fragmentos
+- no pseudocódigo
+- no explicaciones largas entre medio
+- primero los route.php
+- después los archivos principales del módulo
+- todo listo para copiar y pegar
+
+11) PLANTILLA OBJETIVO A RESPETAR
+Tomar como referencia esta arquitectura conceptual:
+- route.php robusto con agrupación de acciones + require_once + verificación de handler
+- módulo principal con function modulo_handle(...)
+- helpers internos prefijados por módulo
+- dispatch central dentro del handle
+- validaciones y respuestas JSON uniformes
+- PDO multi-tenant resuelto internamente sin incluir config/db.php
+
+12) MUY IMPORTANTE
+Antes de escribir código:
+- analizá los archivos que te paso
+- detectá qué actions maneja cada uno
+- preservá compatibilidad total con el frontend
+- si encontrás diferencias de estilo, unificalas
+- si encontrás dispatch ejecutado al incluir archivo, reestructuralo al patrón handle(...)
+- si encontrás helpers sin prefijo, renombrarlos internamente de forma consistente
+- si encontrás route.php que solo hace require, convertirlo al estándar robusto
+- si encontrás validaciones repetidas, encapsularlas en helpers del módulo
+- si encontrás errores de estructura, corregirlos sin cambiar el comportamiento funcional
+
+Ahora te paso los archivos a refactorizar. Adaptalos exactamente a este estándar.

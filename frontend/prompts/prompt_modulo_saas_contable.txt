@@ -1,0 +1,477 @@
+PROMPT MAESTRO — CREAR NUEVO MÓDULO JSX PARA MI SAAS CONTABLE (REACT + PHP)
+
+Quiero que generes un módulo nuevo para mi SaaS contable siguiendo SIEMPRE la misma arquitectura, estilo y forma de conexión con backend. No armes un módulo improvisado ni una mezcla distinta a los existentes. Quiero una estructura sólida, escalable, consistente y profesional, pensada para un SaaS real.
+
+STACK Y CONTEXTO OBLIGATORIO
+- Frontend: React.
+- Backend: PHP.
+- API centralizada: `api.php`.
+- Config base del frontend: `BASE_URL` desde `src/config/config`.
+- Autenticación del frontend:
+  - `session_key` en localStorage.
+  - opcionalmente `token` en localStorage.
+  - El frontend debe enviar `X-Session` y, si existe, `Authorization: Bearer <token>`.
+- El backend responde JSON y normalmente usa esta estructura:
+  - `exito: true|false`
+  - `mensaje: string`
+  - `rows`, `movimientos`, `cheques`, `data`, etc. según el módulo
+  - `has_more`, `next_offset` si hay paginación
+- Estilo visual reutilizable del sistema:
+  - clases globales como `mov-page`, `mov-card`, `mov-card__head`, `mov-headFilters`, `mov-gridTable`, `mov-gridCell`, `cc-emptyState`, `mov-btn`, etc.
+- Componentes globales disponibles:
+  - `Toast`
+  - `Calendario`
+  - `BotonExportar`
+  - `ModalVerComprobante`
+  - modales globales reutilizables si aplica
+- Contextos disponibles:
+  - `useDateRange()` para rango de fechas global
+  - `useListas()` si el módulo depende de listas globales
+
+OBJETIVO GENERAL
+Quiero que el nuevo módulo quede alineado con la mejor estructura de mis módulos más sólidos, especialmente:
+- `Movimientos.jsx` como base principal de arquitectura
+- `ClientesCC.jsx` para vistas con detalle, exportación y comprobantes
+- `Cheques_Cartera.jsx` para tablas simples y limpias
+- `Flujo_Caja.jsx` para módulos resumen por período
+
+Tomá lo mejor de esos patrones y devolveme una implementación homogénea, mantenible y lista para producción.
+
+REGLAS ARQUITECTÓNICAS OBLIGATORIAS
+1. El archivo JSX debe tener una estructura clara y repetible.
+2. Debe separar visualmente estas zonas:
+   - helpers puros
+   - helpers de auth/api
+   - configuración del módulo
+   - componente principal
+   - callbacks de carga
+   - exportación
+   - render
+3. No inventes estructuras nuevas innecesarias.
+4. No mezcles estilos, nombres o patrones distintos a los que ya usa el sistema.
+5. Si el módulo necesita tabla, usar tabla/grid consistente con `mov-gridTable`.
+6. Si el módulo necesita filtros, usar el bloque visual `mov-headFilters` y campos flotantes tipo `cc-floatingField`.
+7. Si el módulo necesita fechas, usar `useDateRange` + `Calendario`.
+8. Si el módulo necesita exportar, usar `BotonExportar` con Excel/CSV/TXT.
+9. Si el módulo necesita comprobantes/archivos, usar `ModalVerComprobante`.
+10. Si el módulo necesita borrado, usar modal de confirmación reutilizable o un modal consistente con el sistema.
+11. No usar librerías raras ni patrones distintos si no son realmente necesarios.
+12. Mantener naming consistente, código legible y preparado para crecer.
+
+ESTRUCTURA OBLIGATORIA DEL ARCHIVO JSX
+Quiero que el módulo siga esta organización, en este orden:
+
+1) IMPORTS
+- React y hooks necesarios.
+- `BASE_URL`.
+- CSS del módulo si aplica.
+- CSS global reutilizable del sistema.
+- componentes globales (`Toast`, `Calendario`, `BotonExportar`, `ModalVerComprobante`, etc.).
+- iconos FontAwesome necesarios.
+- librerías de exportación si aplica (`xlsx`, etc.).
+- contextos (`useDateRange`, `useListas`) si aplica.
+
+2) HELPERS PUROS
+Incluir helpers reutilizables siguiendo este estilo:
+- `safeText(v)`
+- `moneyARS(v)`
+- `formatDateISO(d)` si usa fechas con Date
+- `formatDateLabel(d)` o `formatFechaDMY(v)` para mostrar fechas
+- `numOrZero(v)` si hace falta
+- `pick(obj, keys, fallback)` si el backend puede variar nombres de campos
+- `escapeCSV(value)`
+- `downloadBlob(content, fileName, mimeType)`
+- helpers de URL si maneja comprobantes
+
+Los helpers deben ser puros, chicos y arriba del componente.
+
+3) HELPERS DE AUTH / API
+Siempre usar una capa mínima consistente:
+- `buildHeadersGET()`
+- `buildHeadersJSON()` si hay POST JSON
+- `parseJsonOrThrow(res)`
+- `apiGet(url)`
+- `apiPost(url, body)` si aplica
+
+REGLAS PARA AUTH / API
+- `session_key` sale de localStorage.
+- `token` sale de localStorage.
+- GET debe enviar headers con `X-Session` y opcionalmente `Authorization`.
+- POST JSON debe incluir `Content-Type: application/json` además de auth.
+- `parseJsonOrThrow` debe:
+  - leer `res.text()`
+  - detectar respuesta vacía
+  - intentar `JSON.parse`
+  - si falla, mostrar error útil con preview y status HTTP
+  - si viene 401/403, mostrar mensaje claro de sesión vencida cuando corresponda
+- Nunca asumir que el backend responde perfecto.
+
+PATRÓN OBLIGATORIO DE API_URL
+Usar siempre una construcción robusta como esta:
+`const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;`
+
+Si el archivo ya usa `const API = `${BASE_URL}/api.php`;`, unificarlo al formato robusto con `replace(/\/+$/, "")` para evitar barras duplicadas.
+
+4) CONFIGURACIÓN DEL MÓDULO
+Definir constantes arriba del componente cuando aplique:
+- `PAGE_SIZE = 100`
+- `SKELETON_ROWS = 10`
+- debounce de búsqueda si aplica
+- tiempos de polling solo si realmente el módulo necesita live refresh
+
+No agregar polling en módulos donde no aporta valor real.
+
+5) COMPONENTE PRINCIPAL
+Dentro del componente, organizar los estados de forma consistente.
+
+ESTADOS BASE ESPERADOS EN UN LISTADO SaaS
+- `rows`
+- `loading` o `loadingRows`
+- `loadingMore` si hay paginación
+- `error`
+- `q` para búsqueda
+- `hasMore`
+- `nextOffset`
+- `toast`
+- estados de modales si aplica
+
+ESTADOS OPCIONALES SEGÚN EL CASO
+- `showSkeleton`
+- `calOpen`
+- `selectedItem` o `selectedCliente` si hay vista detalle
+- `previewComprobante`
+- `deleteState`
+- refs para cache, request ids, debounce, polling
+
+TOAST
+Usar siempre:
+- `const [toast, setToast] = useState(null);`
+- `showToast(tipo, mensaje, duracion)` con `useCallback`
+- `closeToast()` con `useCallback`
+
+6) CARGA DE DATOS
+La carga debe hacerse con `useCallback` + `useEffect`, no meter fetches desordenados en cualquier lado.
+
+PATRÓN OBLIGATORIO PARA CARGA PRINCIPAL
+- Crear una función tipo `loadRows` o `fetchModulo` con `useCallback`.
+- Construir `URLSearchParams` con `action=...`.
+- Pasar fechas si el módulo usa rango.
+- Pasar `q` si hay búsqueda.
+- Pasar `limit` y `offset` si hay paginación.
+- Llamar a `apiGet(...)` o `fetch(...)+parseJsonOrThrow(...)`.
+- Validar `exito`.
+- Normalizar arrays: `Array.isArray(data.rows) ? data.rows : []`.
+- Guardar `has_more` y `next_offset` si existen.
+- Manejar errores con mensajes claros.
+
+REGLAS IMPORTANTES
+- No duplicar lógica de carga en varios lugares.
+- No repetir armado de URLs innecesariamente.
+- No hacer `fetch` inline en JSX.
+- Usar `useEffect` para carga inicial.
+- Si cambia el rango o búsqueda, recargar correctamente.
+- Si hay búsqueda con debounce, usar `setTimeout` + cleanup.
+
+7) CACHE Y PAGINACIÓN
+Para módulos listados grandes, usar patrón similar a `Movimientos.jsx`:
+- cache en `useRef(new Map())`
+- key por combinación de filtros (`fecha_desde|fecha_hasta|q`)
+- `PAGE_SIZE = 100`
+- botón “Cargar 100 más”
+- evitar duplicados por id
+
+PAGINACIÓN OBLIGATORIA SI EL MÓDULO PUEDE CRECER MUCHO
+- estado `hasMore`
+- estado `nextOffset`
+- función `handleLoadMore`
+- feedback con toast al cargar más
+
+Si el módulo es chico o resumen diario/mensual, se puede omitir paginación.
+
+8) FILTROS Y RANGO DE FECHAS
+Si el módulo depende de período:
+- usar `useDateRange()`
+- mostrar botón de calendario tipo trigger flotante
+- usar `Calendario`
+- mostrar etiqueta visual del rango seleccionado
+
+Patrón de label esperado:
+- si no hay fechas: “Seleccionar período” o “Seleccionar fechas”
+- si from = to: mostrar una sola fecha
+- si hay rango: `fechaDesde -> fechaHasta`
+
+Si hay búsqueda:
+- usar input con clases globales del sistema
+- placeholder claro
+- botón para limpiar si hay texto
+- debounce ~250 ms salvo que el caso requiera otro valor
+
+9) EXPORTACIÓN
+Si el módulo muestra información exportable, debe incluir exportación.
+
+ESTÁNDAR DE EXPORTACIÓN
+- usar `BotonExportar`
+- formatos: Excel, CSV y TXT
+- helpers:
+  - `buildExportRows(rows)`
+  - `exportToExcel()`
+  - `exportToCSV()`
+  - `exportToTXT()`
+  - `handleExport(type)`
+- nombre base del archivo debe depender del módulo y del rango de fechas si existe
+
+REGLAS
+- Si faltan registros por cargar (`hasMore === true`), avisar antes de exportar si corresponde.
+- El Excel debe usar `xlsx`.
+- CSV con `;` y BOM UTF-8.
+- TXT claro y legible.
+- Nunca exportar datos crudos sin normalizar.
+
+10) COMPROBANTES / ARCHIVOS
+Si el módulo maneja comprobantes, seguir este patrón:
+- `ModalVerComprobante`
+- helper `withSessionKey(url)` para adjuntar `session_key` y `token` a la URL si hace falta
+- si hay `id_comprobante`, preferir endpoint del backend tipo `...?action=..._comprobante_descargar&id_comprobante=...`
+- si hay URL directa, resolverla correctamente
+- si hace falta, agregar `prewarmComprobanteUrl()` o preload/prefetch para mejorar UX
+
+REGLAS IMPORTANTES
+- no abrir archivos directo sin pasar auth si el backend la requiere
+- el botón ver debe deshabilitarse si no hay comprobante
+- si el archivo no existe, mostrar toast claro
+
+11) MODALES Y ACCIONES
+Si el módulo tiene acciones como ver, editar, eliminar, pagar, etc.:
+- agrupar botones en columna de acciones
+- usar iconos consistentes
+- deshabilitar acciones cuando no correspondan
+- usar `title` claros
+- usar modal de confirmación para acciones destructivas
+
+12) TABLAS Y RENDER
+Usar siempre patrón visual uniforme del sistema.
+
+ESTRUCTURA ESPERADA DEL RENDER
+- contenedor raíz: `div.mov-page`
+- `Toast` arriba
+- alertas de error arriba
+- `section.mov-card.mov-card--table`
+- `mov-card__head`
+- filtros en `mov-headFilters`
+- acciones globales a la derecha
+- header de tabla con `mov-gridTable mov-gridTable--head`
+- body con `mov-tableWrap` + `mov-gridBody`
+- empty state consistente
+- botón de cargar más abajo si aplica
+
+COLUMNA DE TABLA
+Definir `columns` con `useMemo` cuando el listado sea tabular.
+Cada columna debe tener, cuando corresponda:
+- `key`
+- `label`
+- `align`
+- `fr`
+- `render`
+
+Luego construir `gridCols` con base en `columns.map(c => `${c.fr}fr`).join(" ")`.
+
+Esto es preferible porque hace el módulo más declarativo y uniforme.
+
+13) EMPTY STATE Y MENSAJES
+Los módulos deben manejar bien estados vacíos.
+
+Usar textos como:
+- “No hay registros para mostrar.”
+- “No se encontraron resultados para ...”
+- “Cargando ...”
+- “Respuesta vacía del servidor.”
+- “Sesión vencida o no autorizada. Volvé a iniciar sesión.”
+
+No mostrar mensajes genéricos feos ni técnicos al usuario salvo que sean útiles.
+
+14) SKELETONS Y UX
+Para módulos listados importantes, usar skeletons si la carga puede demorar.
+Tomar como referencia `Movimientos.jsx` o `Flujo_Caja.jsx`.
+
+REGLAS
+- skeleton arriba del empty state
+- evitar parpadeo innecesario
+- usar `showSkeleton` con pequeño delay si hace falta
+- `loadingMore` puede mostrar skeleton al final
+
+15) CÓDIGO LIMPIO Y CONSISTENCIA
+REGLAS MUY IMPORTANTES
+- No mezclar español e inglés arbitrariamente en variables.
+- Mantener nombres consistentes.
+- No meter lógica de negocio compleja directo en JSX visual.
+- No dejar código muerto.
+- No dejar console.log salvo que yo lo pida.
+- No inventar CSS por cada detalle si ya existe una clase global reutilizable.
+- No copiar lógica de otros módulos si se puede abstraer limpiamente.
+- No importar cosas de otros módulos de negocio salvo que sea estrictamente necesario.
+- Los componentes globales sí se reutilizan.
+- Si se necesita algo reutilizable nuevo, proponer moverlo a `Global/` o `utils/`.
+
+16) CONEXIÓN AL BACKEND — CONTRATO ESPERADO
+Cuando armes el módulo, asumí este contrato estándar con backend PHP:
+- endpoint único: `api.php`
+- routing por `action`
+- parámetros por query string para GET
+- body JSON para POST cuando corresponda
+- respuestas JSON con:
+  - `exito`
+  - `mensaje`
+  - arrays de datos
+  - paginación si aplica
+
+EJEMPLO DE PATRÓN DE LLAMADA
+- listado:
+  - `action=modulo_listar`
+  - `fecha_desde`
+  - `fecha_hasta`
+  - `q`
+  - `limit`
+  - `offset`
+- detalle:
+  - `action=modulo_detalle`
+  - `id_x`
+- eliminar:
+  - `action=modulo_eliminar`
+  - body JSON con id
+- comprobante:
+  - `action=modulo_comprobante_descargar`
+  - `id_comprobante` o id del recurso
+
+17) SI EL MÓDULO TIENE DOS VISTAS (LISTADO + DETALLE)
+Tomar como base `ClientesCC.jsx`.
+
+PATRÓN
+- vista inicial con resumen/listado
+- al hacer click, entrar a detalle
+- en detalle mostrar tabla específica
+- botón “Volver al listado”
+- conservar filtros globales si corresponde
+
+18) SI EL MÓDULO ES SOLO LISTADO GRANDE
+Tomar como base `Movimientos.jsx`.
+
+PATRÓN
+- rango de fechas
+- búsqueda
+- carga inicial
+- paginación
+- exportación
+- skeleton
+- cache opcional
+
+19) SI EL MÓDULO ES RESUMEN POR FECHA O KPIs
+Tomar como base `Flujo_Caja.jsx`.
+
+PATRÓN
+- rango de fechas
+- una tabla más simple o tarjetas + tabla
+- exportación
+- no meter complejidad innecesaria
+
+20) SI EL MÓDULO MANEJA DOCUMENTOS / CHEQUES / ARCHIVOS
+Tomar como base `Cheques_Cartera.jsx` + partes de `ClientesCC.jsx`.
+
+PATRÓN
+- botón ver comprobante
+- mime y url bien resueltos
+- auth en la URL cuando haga falta
+- fallback claro si el archivo no existe
+
+21) FORMATO DE RESPUESTA QUE QUIERO DE LA IA
+Cuando te pida un módulo nuevo, quiero que respondas así:
+
+A. Primero una explicación corta de la arquitectura elegida.
+B. Después todos los archivos completos que haya que crear o modificar.
+C. Cada archivo completo, no fragmentos sueltos.
+D. Respetar nombres de carpetas y rutas reales.
+E. Si usás CSS, dar también el CSS completo.
+F. Si el backend necesita endpoints nuevos, dar también los PHP completos.
+G. No omitir imports.
+H. No dejar partes “asumidas”.
+
+22) REGLA DE ORO
+Antes de escribir el código, pensá así:
+“Este módulo tiene que sentirse parte del mismo SaaS, no un Frankenstein armado distinto”.
+
+23) PLANTILLA DE DECISIÓN INTERNA QUE DEBE SEGUIR LA IA
+Antes de generar el código, decidir:
+- ¿Es un listado grande? -> usar patrón Movimientos.
+- ¿Tiene detalle por entidad? -> usar patrón ClientesCC.
+- ¿Es un resumen simple? -> usar patrón Flujo_Caja.
+- ¿Maneja comprobantes? -> sumar patrón ModalVerComprobante + helpers de URL/auth.
+- ¿Requiere exportación? -> sumar BotonExportar.
+- ¿Requiere fechas? -> usar useDateRange + Calendario.
+- ¿Requiere muchas filas? -> usar paginación + skeleton.
+
+24) EJEMPLO DE ESTRUCTURA BASE ESPERADA DEL COMPONENTE
+La IA debe respetar una forma semejante a esta:
+
+- imports
+- helpers puros
+- helpers auth/api
+- constantes
+- `export default function ModuloX()`
+  - API_URL robusta
+  - contextos
+  - states
+  - toasts
+  - memos (`columns`, `gridCols`, labels)
+  - callbacks (`loadRows`, `handleLoadMore`, `handleExport`, `openModal`, etc.)
+  - effects de carga
+  - render limpio y ordenado
+
+25) COSAS QUE NO QUIERO
+- módulos todos distintos entre sí
+- fetches desordenados
+- auth inconsistente
+- imports cruzados raros entre módulos de negocio
+- tablas con clases inventadas si ya existen globales
+- errores silenciosos
+- respuestas del backend sin validar
+- código incompleto
+- fragmentos sueltos en vez de archivos completos
+
+26) SI HAY DUDAS CON EL MÓDULO NUEVO
+Si falta información funcional, la IA debe:
+- mantener esta arquitectura igual
+- asumir la estructura SaaS descrita arriba
+- y pedirme solo la mínima aclaración necesaria
+
+27) PEDIDO FINAL
+Generá el nuevo módulo respetando TODO lo anterior.
+Si hace falta, creá también helpers reutilizables o movelos a `Global/` o `utils/`, pero sin romper el sistema actual.
+Quiero un resultado homogéneo, profesional, escalable, fácil de mantener y alineado con mis módulos buenos existentes.
+
+
+
+
+
+
+
+
+
+codigo a modificar
+
+
+
+
+
+
+
+refactorizá este módulo para que mantenga exactamente la misma funcionalidad, mismos endpoints, mismos actions, mismos headers y misma lógica, pero adaptándolo a esta estructura estándar SaaS
+
+
+CAMBIOS IMPORTANTES QUE NO DEBÉS HACER
+- No renombres el componente exportado si ya está siendo importado en otras rutas.
+- No cambies nombres de props.
+- No cambies nombres de className globales ya existentes.
+- No cambies imports relativos salvo que sea necesario y los devuelvas corregidos.
+- No migres el archivo a TypeScript.
+- No reemplaces FontAwesome por otra librería.
+- No extraigas helpers a utils/global en esta primera refactorización salvo que te entregue también esos archivos completos y sus imports actualizados.
+- En esta primera fase, priorizá compatibilidad total antes que abstracción.

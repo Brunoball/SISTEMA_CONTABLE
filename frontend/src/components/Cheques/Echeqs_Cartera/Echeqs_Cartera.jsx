@@ -2,11 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState, useRef } from "react"
 import BASE_URL from "../../../config/config";
 import "../../Global/Global_css/Global_Section.css";
 import "../../Global/Global_css/Global_responsive.css";
+import Toast from "../../Global/Toast.jsx";
+import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faMagnifyingGlass,
   faBoxOpen,
   faTimes,
+  faEye,
 } from "@fortawesome/free-solid-svg-icons";
 
 /* =========================
@@ -21,52 +24,74 @@ function getAuthHeaders() {
   return headers;
 }
 
+function withSessionKey(url) {
+  const base = String(url || "").trim();
+  if (!base) return "";
+
+  try {
+    const sessionKey = (localStorage.getItem("session_key") || "").trim();
+    const token = (localStorage.getItem("token") || "").trim();
+
+    const u = new URL(base, window.location.origin);
+
+    if (sessionKey && !u.searchParams.has("session_key")) {
+      u.searchParams.set("session_key", sessionKey);
+    }
+
+    if (token && !u.searchParams.has("token")) {
+      u.searchParams.set("token", token);
+    }
+
+    return u.toString();
+  } catch {
+    return base;
+  }
+}
+
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
+
   let data;
   try {
     data = JSON.parse(text);
   } catch {
     throw new Error("La API devolvió una respuesta inválida.");
   }
+
   if (!res.ok || data?.exito === false) {
     throw new Error(data?.mensaje || `Error HTTP ${res.status}`);
   }
+
   return data;
 }
 
 function formatFecha(fecha) {
   if (!fecha) return "—";
   const s = String(fecha).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    const [y, m, d] = s.split("-");
-    return `${d}/${m}/${y}`;
-  }
+
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+
   return s;
 }
 
 function formatMoney(value) {
   const n = Number(value || 0);
-  return n.toLocaleString("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 2,
-  });
+  try {
+    return n.toLocaleString("es-AR", {
+      style: "currency",
+      currency: "ARS",
+      minimumFractionDigits: 2,
+    });
+  } catch {
+    return `$${n.toFixed(2)}`;
+  }
 }
 
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "—";
-}
-
-function normalizeSearchText(v) {
-  return String(v ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 /* =========================
@@ -80,11 +105,12 @@ const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
    Columns definition
 ========================= */
 const COLUMNS = [
-  { key: "fecha_emision",  label: "FECHA EMISIÓN", fr: 1,   align: "center" },
-  { key: "emisor",         label: "EMISOR",         fr: 2.2, align: "left", strong: true },
-  { key: "numero_cheque",  label: "NÚMERO",         fr: 1.2, align: "center" },
-  { key: "importe",        label: "IMPORTE",        fr: 1.2, align: "right" },
-  { key: "fecha_pago",     label: "FECHA PAGO",     fr: 1,   align: "center" },
+  { key: "fecha_emision", label: "FECHA EMISIÓN", fr: 1, align: "center" },
+  { key: "emisor", label: "EMISOR", fr: 2.2, align: "left", strong: true },
+  { key: "numero_cheque", label: "NÚMERO", fr: 1.2, align: "center" },
+  { key: "importe", label: "IMPORTE", fr: 1.2, align: "right" },
+  { key: "fecha_pago", label: "FECHA PAGO", fr: 1, align: "center" },
+  { key: "acciones", label: "ACCIONES", fr: 0.9, align: "center" },
 ];
 
 const gridCols = COLUMNS.map((c) => `${c.fr}fr`).join(" ");
@@ -94,10 +120,11 @@ const gridCols = COLUMNS.map((c) => `${c.fr}fr`).join(" ");
 ========================= */
 const skelWidths = {
   fecha_emision: ["44%", "38%", "40%", "36%"],
-  emisor:        ["72%", "58%", "66%", "48%"],
+  emisor: ["72%", "58%", "66%", "48%"],
   numero_cheque: ["44%", "34%", "40%", "30%"],
-  importe:       ["38%", "30%", "34%", "28%"],
-  fecha_pago:    ["44%", "38%", "40%", "36%"],
+  importe: ["38%", "30%", "34%", "28%"],
+  fecha_pago: ["44%", "38%", "40%", "36%"],
+  acciones: ["32%", "24%", "28%", "20%"],
 };
 
 function SkeletonRow({ idx }) {
@@ -116,7 +143,7 @@ function SkeletonRow({ idx }) {
             key={c.key}
             className={[
               "mov-gridCell",
-              c.align === "right"  ? "is-right"  : "",
+              c.align === "right" ? "is-right" : "",
               c.align === "center" ? "is-center" : "",
             ].join(" ")}
             role="cell"
@@ -134,16 +161,60 @@ function SkeletonRow({ idx }) {
    Main component
 ========================= */
 const Echeqs_Cartera = () => {
-  const [items, setItems]             = useState([]);
-  const [q, setQ]                     = useState("");
-  const [debouncedQ, setDebouncedQ]   = useState("");
-  const [loading, setLoading]         = useState(false);
+  const [items, setItems] = useState([]);
+  const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore]         = useState(false);
-  const [nextOffset, setNextOffset]   = useState(0);
-  const [error, setError]             = useState("");
+  const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState(0);
+  const [error, setError] = useState("");
+  const [toast, setToast] = useState(null);
+
+  const [modalComprobanteOpen, setModalComprobanteOpen] = useState(false);
+  const [modalComprobanteUrl, setModalComprobanteUrl] = useState("");
+  const [modalComprobanteMime, setModalComprobanteMime] = useState("");
+  const [modalComprobanteTitle, setModalComprobanteTitle] = useState("Comprobante de Echeq");
 
   const searchTimerRef = useRef(null);
+
+  const showToast = useCallback((tipo, mensaje, duracion = 2600) => {
+    setToast({ tipo, mensaje, duracion });
+  }, []);
+
+  const closeToast = useCallback(() => setToast(null), []);
+
+  const closeModalComprobante = useCallback(() => {
+    setModalComprobanteOpen(false);
+    setModalComprobanteUrl("");
+    setModalComprobanteMime("");
+    setModalComprobanteTitle("Comprobante de Echeq");
+  }, []);
+
+  const openModalComprobante = useCallback(
+    (row) => {
+      const idCheque = Number(row?.id_cheque || 0);
+      if (!idCheque) {
+        showToast("error", "Echeq inválido.");
+        return;
+      }
+
+      const params = new URLSearchParams();
+      params.set("action", "echeq_cartera_comprobante_ver");
+      params.set("id_cheque", String(idCheque));
+
+      const rawUrl = `${API_URL}?${params.toString()}`;
+      const finalUrl = withSessionKey(rawUrl);
+
+      setModalComprobanteUrl(finalUrl);
+      setModalComprobanteMime(
+        String(row?.archivo_mime || "").trim() || "application/pdf"
+      );
+      setModalComprobanteTitle("Comprobante de Echeq");
+      setModalComprobanteOpen(true);
+    },
+    [showToast]
+  );
 
   /* Debounce */
   useEffect(() => {
@@ -176,7 +247,15 @@ const Echeqs_Cartera = () => {
         const data = await parseJsonOrThrow(res);
         const nuevos = Array.isArray(data?.echeqs) ? data.echeqs : [];
 
-        setItems((prev) => (reset ? nuevos : [...prev, ...nuevos]));
+        setItems((prev) => {
+          if (reset) return nuevos;
+
+          const existentes = Array.isArray(prev) ? prev : [];
+          const ids = new Set(existentes.map((x) => String(x.id_cheque)));
+          const unicos = nuevos.filter((x) => !ids.has(String(x.id_cheque)));
+          return [...existentes, ...unicos];
+        });
+
         setHasMore(Boolean(data?.has_more));
         setNextOffset(Number(data?.next_offset || 0));
       } catch (err) {
@@ -202,12 +281,34 @@ const Echeqs_Cartera = () => {
   /* Render cell value */
   function renderCell(col, item) {
     switch (col.key) {
-      case "fecha_emision": return safeText(formatFecha(item.fecha_emision));
-      case "emisor":        return safeText(item.emisor);
-      case "numero_cheque": return safeText(item.numero_cheque);
-      case "importe":       return formatMoney(item.importe);
-      case "fecha_pago":    return safeText(formatFecha(item.fecha_pago));
-      default:              return "—";
+      case "fecha_emision":
+        return safeText(formatFecha(item.fecha_emision));
+      case "emisor":
+        return safeText(item.emisor);
+      case "numero_cheque":
+        return safeText(item.numero_cheque);
+      case "importe":
+        return formatMoney(item.importe);
+      case "fecha_pago":
+        return safeText(formatFecha(item.fecha_pago));
+      case "acciones":
+        return (
+          <button
+            type="button"
+            className="mov-actionBtn"
+            onClick={() => openModalComprobante(item)}
+            title={item?.tiene_comprobante ? "Ver comprobante" : "No tiene comprobante"}
+            disabled={!item?.tiene_comprobante}
+            style={{
+              opacity: item?.tiene_comprobante ? 1 : 0.45,
+              cursor: item?.tiene_comprobante ? "pointer" : "not-allowed",
+            }}
+          >
+            <FontAwesomeIcon icon={faEye} />
+          </button>
+        );
+      default:
+        return "—";
     }
   }
 
@@ -216,6 +317,23 @@ const Echeqs_Cartera = () => {
 
   return (
     <div className="mov-page">
+      {toast && (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
+      )}
+
+      <ModalVerComprobante
+        open={modalComprobanteOpen}
+        url={modalComprobanteUrl}
+        mime={modalComprobanteMime}
+        onClose={closeModalComprobante}
+        title={modalComprobanteTitle}
+      />
+
       {error && (
         <div className="mov-alert" role="alert">
           {error}
@@ -223,10 +341,8 @@ const Echeqs_Cartera = () => {
       )}
 
       <section className="mov-card mov-card--table">
-        {/* HEAD */}
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
-            {/* Título */}
             <div className="title-mov">
               <div className="mov-card__title">Echeqs · Cartera</div>
               <div className="mov-card__hint">
@@ -235,7 +351,6 @@ const Echeqs_Cartera = () => {
               </div>
             </div>
 
-            {/* Filtros */}
             <div className="mov-headFilters">
               <div className="cc-filter">
                 <div className="cc-floatingField cc-floatingField--search is-active">
@@ -280,7 +395,6 @@ const Echeqs_Cartera = () => {
           </div>
         </div>
 
-        {/* HEADER DE TABLA */}
         <div
           className="mov-gridTable mov-gridTable--head"
           style={{ gridTemplateColumns: gridCols }}
@@ -292,7 +406,7 @@ const Echeqs_Cartera = () => {
               className={[
                 "mov-gridCell",
                 "mov-gridCell--head",
-                c.align === "right"  ? "is-right"  : "",
+                c.align === "right" ? "is-right" : "",
                 c.align === "center" ? "is-center" : "",
               ].join(" ")}
               role="columnheader"
@@ -302,7 +416,6 @@ const Echeqs_Cartera = () => {
           ))}
         </div>
 
-        {/* BODY */}
         <div className="mov-tableWrap" role="rowgroup">
           <div
             className={[
@@ -312,7 +425,6 @@ const Echeqs_Cartera = () => {
             ].join(" ")}
           >
             {loading ? (
-              /* Skeleton inicial */
               <div className="mov-skeletonWrap" aria-busy="true">
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
                   <SkeletonRow key={`skel-${i}`} idx={i} />
@@ -334,9 +446,9 @@ const Echeqs_Cartera = () => {
                           key={col.key}
                           className={[
                             "mov-gridCell",
-                            col.align === "right"  ? "is-right"  : "",
+                            col.align === "right" ? "is-right" : "",
                             col.align === "center" ? "is-center" : "",
-                            col.strong             ? "is-strong" : "",
+                            col.strong ? "is-strong" : "",
                           ]
                             .filter(Boolean)
                             .join(" ")}
@@ -344,14 +456,13 @@ const Echeqs_Cartera = () => {
                           data-label={col.label}
                           title={typeof val === "string" ? val : undefined}
                         >
-                          <span className="mov-ellipsissss">{val}</span>
+                          {col.key === "acciones" ? val : <span className="mov-ellipsissss">{val}</span>}
                         </div>
                       );
                     })}
                   </div>
                 ))}
 
-                {/* Estado vacío */}
                 {!isAnyLoading && items.length === 0 && (
                   <div className="cc-emptyState">
                     <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
@@ -363,7 +474,6 @@ const Echeqs_Cartera = () => {
                   </div>
                 )}
 
-                {/* Cargar más */}
                 {!loading && hasMore && items.length > 0 && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
@@ -378,7 +488,6 @@ const Echeqs_Cartera = () => {
                   </div>
                 )}
 
-                {/* Skeleton "cargar más" */}
                 {loadingMore && (
                   <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">
                     {Array.from({ length: 6 }).map((_, i) => (

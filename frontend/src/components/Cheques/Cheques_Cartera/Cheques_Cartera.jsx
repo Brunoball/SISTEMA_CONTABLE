@@ -3,11 +3,13 @@ import BASE_URL from "../../../config/config";
 import "../../Global/Global_css/Global_Section.css";
 import "../../Global/Global_css/Global_responsive.css";
 import Toast from "../../Global/Toast.jsx";
+import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faMagnifyingGlass,
   faBoxOpen,
   faMoneyBillWave,
+  faEye,
 } from "@fortawesome/free-solid-svg-icons";
 
 function getAuthHeaders() {
@@ -19,6 +21,30 @@ function getAuthHeaders() {
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   return headers;
+}
+
+function withSessionKey(url) {
+  const base = String(url || "").trim();
+  if (!base) return "";
+
+  try {
+    const sessionKey = (localStorage.getItem("session_key") || "").trim();
+    const token = (localStorage.getItem("token") || "").trim();
+
+    const u = new URL(base, window.location.origin);
+
+    if (sessionKey && !u.searchParams.has("session_key")) {
+      u.searchParams.set("session_key", sessionKey);
+    }
+
+    if (token && !u.searchParams.has("token")) {
+      u.searchParams.set("token", token);
+    }
+
+    return u.toString();
+  } catch {
+    return base;
+  }
 }
 
 async function parseJsonOrThrow(res) {
@@ -85,11 +111,48 @@ const Cheques_Cartera = () => {
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(0);
 
+  const [modalComprobanteOpen, setModalComprobanteOpen] = useState(false);
+  const [modalComprobanteUrl, setModalComprobanteUrl] = useState("");
+  const [modalComprobanteMime, setModalComprobanteMime] = useState("");
+  const [modalComprobanteTitle, setModalComprobanteTitle] = useState("Comprobante de Cheque");
+
   const showToast = useCallback((tipo, mensaje, duracion = 2600) => {
     setToast({ tipo, mensaje, duracion });
   }, []);
 
   const closeToast = useCallback(() => setToast(null), []);
+
+  const closeModalComprobante = useCallback(() => {
+    setModalComprobanteOpen(false);
+    setModalComprobanteUrl("");
+    setModalComprobanteMime("");
+    setModalComprobanteTitle("Comprobante de Cheque");
+  }, []);
+
+  const openModalComprobante = useCallback(
+    (row) => {
+      const idCheque = Number(row?.id_cheque || 0);
+      if (!idCheque) {
+        showToast("error", "Cheque inválido.");
+        return;
+      }
+
+      const params = new URLSearchParams();
+      params.set("action", "cheques_cartera_comprobante_ver");
+      params.set("id_cheque", String(idCheque));
+
+      const rawUrl = `${API_URL}?${params.toString()}`;
+      const finalUrl = withSessionKey(rawUrl);
+
+      setModalComprobanteUrl(finalUrl);
+      setModalComprobanteMime(
+        String(row?.archivo_mime || "").trim() || "application/pdf"
+      );
+      setModalComprobanteTitle("Comprobante de Cheque");
+      setModalComprobanteOpen(true);
+    },
+    [API_URL, showToast]
+  );
 
   const fetchCheques = useCallback(
     async ({ offset = 0, append = false, qValue = "" } = {}) => {
@@ -246,11 +309,31 @@ const Cheques_Cartera = () => {
         align: "left",
         render: (r) => formatFecha(r.fecha_pago),
       },
+      {
+        key: "acciones",
+        label: "ACCIONES",
+        align: "center",
+        render: (r) => (
+          <button
+            type="button"
+            className="mov-actionBtn"
+            onClick={() => openModalComprobante(r)}
+            title={r?.tiene_comprobante ? "Ver comprobante" : "No tiene comprobante"}
+            disabled={!r?.tiene_comprobante}
+            style={{
+              opacity: r?.tiene_comprobante ? 1 : 0.45,
+              cursor: r?.tiene_comprobante ? "pointer" : "not-allowed",
+            }}
+          >
+            <FontAwesomeIcon icon={faEye} />
+          </button>
+        ),
+      },
     ],
-    []
+    [openModalComprobante]
   );
 
-  const gridCols = useMemo(() => "1.2fr 2fr 1.5fr 1.2fr 1.2fr", []);
+  const gridCols = useMemo(() => "1.15fr 2fr 1.35fr 1.15fr 1.15fr 0.8fr", []);
 
   return (
     <div className="mov-page">
@@ -262,6 +345,14 @@ const Cheques_Cartera = () => {
           onClose={closeToast}
         />
       )}
+
+      <ModalVerComprobante
+        open={modalComprobanteOpen}
+        url={modalComprobanteUrl}
+        mime={modalComprobanteMime}
+        onClose={closeModalComprobante}
+        title={modalComprobanteTitle}
+      />
 
       {error && (
         <div className="mov-alert" role="alert">
@@ -359,7 +450,7 @@ const Cheques_Cartera = () => {
                           data-label={c.label}
                           title={typeof val === "string" ? val : undefined}
                         >
-                          <span className="mov-ellipsissss">{val}</span>
+                          {c.key === "acciones" ? val : <span className="mov-ellipsissss">{val}</span>}
                         </div>
                       );
                     })}

@@ -1,0 +1,417 @@
+.fl-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235A6A7E' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px;
+  padding-right: 38px;
+}
+
+.cmi-container {
+  width: min(920px, calc(100vw - 32px));
+}
+
+.cmi-textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.fl-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.fl-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fl-input {
+  width: 100%;
+  border: 1px solid var(--nv-border-md);
+  background: var(--nv-surface);
+  color: var(--nv-text);
+  border-radius: 12px;
+  padding: 18px 14px 10px;
+  font: inherit;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+
+.fl-input:focus {
+  border-color: var(--nv-action);
+  box-shadow: 0 0 0 3px var(--nv-action-10);
+}
+
+.fl-label {
+  position: absolute;
+  left: 12px;
+  top: 13px;
+  font-size: .82rem;
+  color: var(--nv-muted);
+  pointer-events: none;
+  background: transparent;
+  transition: all .18s ease;
+}
+
+.fl-input:focus + .fl-label,
+.fl-input:not(:placeholder-shown) + .fl-label,
+.fl-select + .fl-label,
+textarea.fl-input:not(:placeholder-shown) + .fl-label {
+  top: 6px;
+  font-size: .68rem;
+  color: var(--nv-action);
+}
+
+.cmi-uploadBox,
+.cmi-previewBox,
+.cmi-okBox,
+.cmi-warnBox {
+  border: 1px solid var(--nv-border-md);
+  background: var(--nv-surface);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.cmi-uploadBox__title,
+.cmi-previewBox__title,
+.cmi-okBox__title,
+.cmi-warnBox__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .88rem;
+  font-weight: 700;
+  color: var(--nv-text);
+  margin-bottom: 12px;
+}
+
+.cmi-uploadActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cmi-fileResume {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--nv-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--nv-bg);
+}
+
+.cmi-fileResume__left {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cmi-fileResume__icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--nv-action-10);
+  color: var(--nv-action);
+  border: 1px solid var(--nv-action-18);
+}
+
+.cmi-fileResume__meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cmi-fileResume__name {
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--nv-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 420px;
+}
+
+.cmi-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.cmi-badge--csv {
+  background: rgba(16,185,129,.10);
+  color: #047857;
+  border-color: rgba(16,185,129,.22);
+}
+
+.cmi-badge--pdf {
+  background: rgba(239,68,68,.10);
+  color: #b91c1c;
+  border-color: rgba(239,68,68,.22);
+}
+
+.cmi-badge--img {
+  background: rgba(59,130,246,.10);
+  color: #1d4ed8;
+  border-color: rgba(59,130,246,.22);
+}
+
+.cmi-badge--none {
+  background: rgba(107,114,128,.10);
+  color: #4b5563;
+  border-color: rgba(107,114,128,.22);
+}
+
+.cmi-fileRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cmi-previewImgWrap {
+  margin-top: 12px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--nv-border);
+}
+
+.cmi-previewImg {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  background: var(--nv-bg);
+}
+
+.cmi-tableWrap {
+  overflow-x: auto;
+}
+
+.cmi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .82rem;
+}
+
+.cmi-table th,
+.cmi-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--nv-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.cmi-table th {
+  font-size: .74rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--nv-muted);
+  background: var(--nv-head-bg);
+}
+
+.cmi-resultGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.cmi-resultItem {
+  border: 1px solid var(--nv-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--nv-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cmi-resultItem__label {
+  font-size: .74rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--nv-muted);
+}
+
+.cmi-resultItem__val {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--nv-text);
+}
+
+.cmi-resultItem__val--ok {
+  color: #059669;
+}
+
+.cmi-okBox {
+  border-color: rgba(16,185,129,.24);
+  background: rgba(16,185,129,.06);
+}
+
+.cmi-warnBox {
+  border-color: rgba(245,158,11,.24);
+  background: rgba(245,158,11,.08);
+}
+
+.cmi-warnBox__list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--nv-text);
+}
+
+.cmi-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--nv-border-md);
+  background: var(--nv-bg);
+  flex-wrap: wrap;
+}
+
+.cmi-footer__hint {
+  flex: 1 1 300px;
+}
+
+.cmi-footer__btns {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .cmi-container {
+    width: calc(100vw - 16px);
+  }
+
+  .fl-row {
+    grid-template-columns: 1fr;
+  }
+
+  .cmi-fileResume {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cmi-fileResume__name {
+    max-width: 100%;
+  }
+
+  .cmi-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cmi-footer__btns {
+    justify-content: flex-end;
+  }
+}
+/* =========================================================
+   AGREGAR al final de ModalCargaMasiva.css
+   Floating fields siempre activos + cmi-input base
+========================================================= */
+
+/* ── Contenedor floating field ── */
+.cmi-floatingField {
+  position: relative;
+  width: 100%;
+}
+
+/* ── Input base (reemplaza fl-input dentro del modal) ── */
+.cmi-input {
+  width: 100%;
+  padding:  14px 8px 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--nv-border-md, rgba(10, 37, 64, 0.14));
+  background: var(--nv-bg, #fff);
+  outline: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--nv-text, rgba(10, 37, 64, 0.90));
+  font-family: inherit;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+  box-sizing: border-box;
+}
+
+.cmi-input:hover {
+  border-color: var(--nv-border-strong, rgba(10, 37, 64, 0.28));
+}
+
+.cmi-input:focus {
+  border-color: rgba(0, 85, 187, 0.55);
+  box-shadow: 0 0 0 3px rgba(0, 85, 187, 0.14);
+  background: #fafcff;
+}
+
+.cmi-input::placeholder {
+  color: rgba(66, 84, 102, 0.45);
+  font-weight: 400;
+}
+
+.cmi-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Textarea ── */
+.cmi-input.cmi-textarea {
+  height: auto;
+  min-height: 180px;
+  padding-top: 24px;
+  resize: vertical;
+}
+
+/* ── Select ── */
+.cmi-input.cmi-select {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23425466' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+/* ── Floating label — SIEMPRE ACTIVA ── */
+.cmi-floatingLabel {
+  position: absolute;
+  left: 14px;
+  top: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--nv-action, #0055BB);
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  background: var(--nv-bg, #fff);
+  padding: 0 5px;
+  margin-left: -5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  z-index: 2;
+  white-space: nowrap;
+  /* Sin transición — siempre en posición elevada */
+}

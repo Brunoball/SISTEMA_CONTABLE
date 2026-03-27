@@ -102,10 +102,7 @@ html[data-theme="oscuro"] .pp-nav__icon{
 }
 
 @media (hover:hover) and (pointer:fine){
-  html[data-theme="oscuro"] .pp-nav__item:hover{
-    background: rgba(2, 6, 23, 0.28);
-    border-color: rgba(148,163,184,0.16);
-  }
+
 
   html[data-theme="oscuro"] .pp-nav__item:hover .pp-nav__icon{
     background: var(--pp-icon-gradient);
@@ -639,9 +636,7 @@ button{ font-family: inherit; }
     box-shadow: 0 12px 20px rgba(0,85,187,.16);
   }
 
-  .pp-nav__item:hover .pp-nav__label{
-    color: var(--balto-midnight);
-  }
+
 }
 
 /* =========================

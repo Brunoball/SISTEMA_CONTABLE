@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import "./ModalCargaMasiva.css";
 import {
   faBoxOpen,
   faCloudArrowUp,
@@ -18,16 +19,18 @@ import {
   faPaperclip,
   faTriangleExclamation,
   faTag,
+  faBarcode,
+  faCubesStacked,
+  faAlignLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import BASE_URL from "../../../../config/config";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 
-const EXTENSIONES_IMAGEN = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "tif"];
+const EXTENSIONES_IMAGEN = [
+  "jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "tif",
+];
 
-/* =========================
-   Dark mode helper
-========================= */
 function isTemaOscuro() {
   return (
     document.documentElement.getAttribute("data-theme") === "oscuro" ||
@@ -35,9 +38,6 @@ function isTemaOscuro() {
   );
 }
 
-/* =========================
-   Auth helpers
-========================= */
 function buildHeadersMultipart() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
   const token = (localStorage.getItem("token") || "").trim();
@@ -73,37 +73,66 @@ async function parseJsonOrThrow(res) {
         : `Respuesta inválida del servidor. HTTP ${res.status}\n${preview}`
     );
   }
-  if (!res.ok || data?.exito === false) throw new Error(data?.mensaje || `Error HTTP ${res.status}`);
+  if (!res.ok || data?.exito === false) {
+    throw new Error(data?.mensaje || `Error HTTP ${res.status}`);
+  }
   return data;
 }
 
 /* =========================
-   Helpers monetarios
+   Helpers monetarios — con centavos automáticos
 ========================= */
+
+/**
+ * Formatea mientras el usuario escribe.
+ * Solo deja dígitos y una coma (separador decimal).
+ * Limita a 2 decimales.
+ */
 function normalizeMoneyInput(raw = "") {
-  let value = String(raw).replace(/[^\d,.-]/g, "");
-  value = value.replace(/\./g, ",");
+  let value = String(raw).replace(/[^\d,]/g, "");
+
   const firstComma = value.indexOf(",");
   if (firstComma !== -1) {
     value =
       value.slice(0, firstComma + 1) +
       value.slice(firstComma + 1).replace(/,/g, "");
   }
+
   const parts = value.split(",");
   if (parts.length > 1) {
     parts[1] = parts[1].slice(0, 2);
-    value = `${parts[0]}${parts[1] !== undefined ? `,${parts[1]}` : ""}`;
+    value = `${parts[0]},${parts[1]}`;
   }
+
   return value;
 }
 
+/**
+ * Al hacer blur: completa los centavos como 0,00.
+ * Si está vacío devuelve "".
+ */
 function formatMoneyBlur(raw = "") {
-  const cleaned = normalizeMoneyInput(raw).trim();
-  if (!cleaned) return "";
+  const cleaned = String(raw).replace(/[^\d,]/g, "").trim();
+  if (!cleaned || cleaned === ",") return "";
+
   const normalized = cleaned.replace(",", ".");
   const num = Number(normalized);
   if (Number.isNaN(num) || num < 0) return "";
   return num.toFixed(2).replace(".", ",");
+}
+
+/**
+ * Al hacer focus: si el valor termina en ",00" lo limpiamos para
+ * que sea más fácil de editar, dejando solo la parte entera.
+ * Si es "0,00" limpiamos completamente.
+ */
+function formatMoneyFocus(raw = "") {
+  if (!raw) return "";
+  // Si es exactamente "0,00" lo limpiamos para no entorpecer
+  if (raw === "0,00") return "";
+  // Quitamos los ,00 al final para facilitar edición
+  if (raw.endsWith(",00")) return raw.slice(0, -3);
+  return raw;
 }
 
 function moneyToApi(raw = "") {
@@ -127,14 +156,10 @@ function getTipoArchivo(nombre) {
 
 function getMetodoLabel(metodo) {
   switch (metodo) {
-    case "google_vision":
-      return "Google Vision OCR";
-    case "php_pdfparser":
-      return "PDF Parser";
-    case "pdf_ocr_google_vision":
-      return "PDF escaneado + Google Vision OCR";
-    default:
-      return metodo || "No informado";
+    case "google_vision": return "Google Vision OCR";
+    case "php_pdfparser": return "PDF Parser";
+    case "pdf_ocr_google_vision": return "PDF escaneado + Google Vision OCR";
+    default: return metodo || "No informado";
   }
 }
 
@@ -157,16 +182,7 @@ function IconoArchivo({ tipo }) {
 }
 
 const ErrorMsg = ({ msg }) => (
-  <span
-    style={{
-      fontSize: "0.76rem",
-      color: "#ef4444",
-      marginTop: 2,
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-    }}
-  >
+  <span style={{ fontSize: "0.76rem", color: "#ef4444", marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
     <FontAwesomeIcon icon={faCircleExclamation} style={{ fontSize: 10 }} />
     {msg}
   </span>
@@ -178,7 +194,48 @@ CARGADOR UNIVERSAL NOTEBOOK - ONLY - CON FICHA HP - 8 PINES;00410;25999;;33;Carg
 AFEITADORA CORPORAL 3 EN 1;04162;45999;39999;8;Afeitadora corporal
 `;
 
-export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, onImportado }) {
+/* =========================
+   FloatingField — siempre activo (como Ventas)
+========================= */
+function FloatingField({ label, icon, error, children, style }) {
+  return (
+    <div className="cmi-floatingField cmi-floatingField--active" style={style}>
+      {children}
+      <label className="cmi-floatingLabel cmi-floatingLabel--active">
+        {icon && <FontAwesomeIcon icon={icon} style={{ marginRight: 5, opacity: 0.7, fontSize: 11 }} />}
+        {label}
+      </label>
+      {error && <ErrorMsg msg={error} />}
+    </div>
+  );
+}
+
+/* =========================
+   PriceInput — con centavos automáticos
+========================= */
+function PriceInput({ name, value, onChange, onBlur, onFocus, placeholder, disabled, className }) {
+  return (
+    <input
+      name={name}
+      value={value}
+      onChange={onChange}
+      onBlur={onBlur}
+      onFocus={onFocus}
+      className={className || "cmi-input"}
+      placeholder={placeholder || "0,00"}
+      disabled={disabled}
+      inputMode="decimal"
+    />
+  );
+}
+
+export default function ModalCargaMasiva({
+  open,
+  onClose,
+  onGuardado,
+  onToast,
+  onImportado,
+}) {
   const closeBtnRef = useRef(null);
   const [tab, setTab] = useState("individual");
   const [dark, setDark] = useState(isTemaOscuro);
@@ -219,31 +276,32 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
     const o1 = new MutationObserver(update);
     o1.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const o2 = new MutationObserver(update);
-    if (document.body) o2.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-    return () => {
-      o1.disconnect();
-      o2.disconnect();
-    };
+    if (document.body) {
+      o2.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
+    return () => { o1.disconnect(); o2.disconnect(); };
   }, []);
 
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
+    return () => { document.body.style.overflow = prev; };
   }, [open]);
+
+  const [guardando, setGuardando] = useState(false);
+  const [subiendo, setSubiendo] = useState(false);
+  const isLoading = guardando || subiendo;
 
   useEffect(() => {
     if (!open) return;
-    const h = (e) => e.key === "Escape" && !isLoading && onClose?.();
+    const h = (e) => { if (e.key === "Escape" && !isLoading) onClose?.(); };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
-  }, [open, onClose]);
+  }, [open, onClose, isLoading]);
 
   useEffect(() => {
-    if (open) setTimeout(() => closeBtnRef.current?.focus(), 0);
+    if (open) { setTimeout(() => closeBtnRef.current?.focus(), 0); }
   }, [open]);
 
   useEffect(() => {
@@ -267,7 +325,6 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
     id_categoria_stock: "",
   });
   const [errores, setErrores] = useState({});
-  const [guardando, setGuardando] = useState(false);
   const [imagenFile, setImagenFile] = useState(null);
   const [imagenPreview, setImagenPreview] = useState("");
   const inputImagenRef = useRef();
@@ -275,7 +332,15 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
   const imagenNombre = useMemo(() => imagenFile?.name || "", [imagenFile]);
 
   function resetIndividual() {
-    setForm({ nombre: "", sku: "", precio: "", precio_promo: "", stock: "", descripcion: "", id_categoria_stock: "" });
+    setForm({
+      nombre: "",
+      sku: "",
+      precio: "",
+      precio_promo: "",
+      stock: "",
+      descripcion: "",
+      id_categoria_stock: "",
+    });
     setErrores({});
     setGuardando(false);
     limpiarImagen();
@@ -298,23 +363,31 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
     setForm((p) => ({ ...p, [name]: formatMoneyBlur(value) }));
   };
 
+  const handleMoneyFocus = (e) => {
+    const { name, value } = e.target;
+    setForm((p) => ({ ...p, [name]: formatMoneyFocus(value) }));
+  };
+
   const validar = () => {
     const errs = {};
     const precioNum = Number(String(form.precio || "").replace(",", "."));
-    const promoNum =
-      form.precio_promo !== "" ? Number(String(form.precio_promo).replace(",", ".")) : null;
+    const promoNum = form.precio_promo !== "" ? Number(String(form.precio_promo).replace(",", ".")) : null;
 
     if (!form.nombre.trim()) errs.nombre = "El nombre es obligatorio";
-    if (!form.precio || Number.isNaN(precioNum) || precioNum < 0) errs.precio = "Ingresá un precio válido";
-    if (form.precio_promo && (Number.isNaN(promoNum) || promoNum < 0)) errs.precio_promo = "Precio promo inválido";
-    if (form.stock !== "" && (Number.isNaN(Number(form.stock)) || Number(form.stock) < 0)) errs.stock = "Stock inválido";
-
+    if (!form.precio || Number.isNaN(precioNum) || precioNum < 0) {
+      errs.precio = "Ingresá un precio válido";
+    }
+    if (form.precio_promo && (Number.isNaN(promoNum) || promoNum < 0)) {
+      errs.precio_promo = "Precio promo inválido";
+    }
+    if (form.stock !== "" && (Number.isNaN(Number(form.stock)) || Number(form.stock) < 0)) {
+      errs.stock = "Stock inválido";
+    }
     if (imagenFile) {
       const tipos = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
       if (!tipos.includes(imagenFile.type)) errs.imagen = "La imagen debe ser JPG, PNG, WEBP o GIF";
       if (imagenFile.size > 5 * 1024 * 1024) errs.imagen = "La imagen no puede superar los 5 MB";
     }
-
     return errs;
   };
 
@@ -344,14 +417,9 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
 
   const handleGuardar = async () => {
     const errs = validar();
-    if (Object.keys(errs).length > 0) {
-      setErrores(errs);
-      return;
-    }
-
+    if (Object.keys(errs).length > 0) { setErrores(errs); return; }
     setGuardando(true);
     setErrores({});
-
     try {
       const fd = new FormData();
       fd.append("nombre", form.nombre.trim());
@@ -364,13 +432,11 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
         fd.append("id_categoria_stock", String(form.id_categoria_stock));
       }
       if (imagenFile) fd.append("imagen", imagenFile);
-
       const res = await fetch(`${API_URL}?action=stock_productos_crear`, {
         method: "POST",
         headers: buildHeadersMultipart(),
         body: fd,
       });
-
       const data = await parseJsonOrThrow(res);
       if (data.exito === false) throw new Error(data.mensaje || "Error al guardar el producto");
       onGuardado?.();
@@ -385,7 +451,6 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
      Tab masivo
   ========================= */
   const [archivo, setArchivo] = useState(null);
-  const [subiendo, setSubiendo] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [csvPreview, setCsvPreview] = useState([]);
   const [csvHeaders, setCsvHeaders] = useState([]);
@@ -408,26 +473,20 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
     setResultado(null);
     setCsvPreview([]);
     setCsvHeaders([]);
-
     const tipo = getTipoArchivo(file.name);
     if (tipo !== "csv") return;
-
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result || "";
       const lines = String(text).split("\n").filter((l) => l.trim());
       if (lines.length < 2) return;
-
       const sep = lines[0].includes(";") ? ";" : ",";
       const headers = lines[0].split(sep).map((h) => h.trim().replace(/"/g, ""));
       setCsvHeaders(headers);
-
       const preview = lines.slice(1, 6).map((line) => {
         const values = line.split(sep).map((v) => v.trim().replace(/"/g, ""));
         const obj = {};
-        headers.forEach((h, i) => {
-          obj[h] = values[i] || "";
-        });
+        headers.forEach((h, i) => { obj[h] = values[i] || ""; });
         return obj;
       });
       setCsvPreview(preview);
@@ -448,47 +507,26 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
   };
 
   const handleImportar = async () => {
-    if (!archivo) {
-      onToast?.("error", "Seleccioná un archivo CSV, PDF o imagen.");
-      return;
-    }
-
+    if (!archivo) { onToast?.("error", "Seleccioná un archivo CSV, PDF o imagen."); return; }
     if (!tipoArchivo) {
       onToast?.("error", "Formato no válido. Admitido: CSV, PDF, JPG, PNG y otros formatos de imagen.");
       return;
     }
-
     try {
       setSubiendo(true);
       setResultado(null);
-
       const formData = new FormData();
       let action = "";
-
-      if (tipoArchivo === "csv") {
-        action = "stock_productos_importar_csv";
-        formData.append("archivo_csv", archivo);
-      }
-
-      if (tipoArchivo === "pdf") {
-        action = "stock_productos_importar_pdf";
-        formData.append("archivo_pdf", archivo);
-      }
-
-      if (tipoArchivo === "imagen") {
-        action = "stock_productos_ocr_imagen";
-        formData.append("archivo_imagen", archivo);
-      }
-
+      if (tipoArchivo === "csv") { action = "stock_productos_importar_csv"; formData.append("archivo_csv", archivo); }
+      if (tipoArchivo === "pdf") { action = "stock_productos_importar_pdf"; formData.append("archivo_pdf", archivo); }
+      if (tipoArchivo === "imagen") { action = "stock_productos_ocr_imagen"; formData.append("archivo_imagen", archivo); }
       const res = await fetch(`${API_URL}?action=${encodeURIComponent(action)}`, {
         method: "POST",
         headers: buildHeadersMultipart(),
         body: formData,
       });
-
       const data = await parseJsonOrThrow(res);
       setResultado(data);
-
       if (tipoArchivo === "csv") {
         onImportado?.(`Importación finalizada. Creados: ${data.creados || 0}. Actualizados: ${data.actualizados || 0}.`);
       } else {
@@ -503,26 +541,14 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
     }
   };
 
-  const isLoading = guardando || subiendo;
-
   const btnMasivoLabel = subiendo
-    ? tipoArchivo === "csv"
-      ? "Importando…"
-      : tipoArchivo === "pdf"
-      ? "Extrayendo…"
-      : "Procesando…"
-    : tipoArchivo === "csv"
-    ? "Importar productos"
-    : tipoArchivo === "pdf"
-    ? "Extraer texto del PDF"
-    : tipoArchivo === "imagen"
-    ? "Reconocer texto (OCR)"
+    ? tipoArchivo === "csv" ? "Importando..." : tipoArchivo === "pdf" ? "Extrayendo..." : "Procesando..."
+    : tipoArchivo === "csv" ? "Importar productos"
+    : tipoArchivo === "pdf" ? "Extraer texto del PDF"
+    : tipoArchivo === "imagen" ? "Reconocer texto (OCR)"
     : "Seleccioná un archivo";
 
-  const handleTabChange = (t) => {
-    setTab(t);
-    setErrores({});
-  };
+  const handleTabChange = (t) => { setTab(t); setErrores({}); };
 
   if (!open) return null;
 
@@ -535,6 +561,7 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
         style={{ minHeight: "auto", maxHeight: "92vh" }}
         onMouseDown={(e) => e.stopPropagation()}
       >
+        {/* HEADER */}
         <div className="mi-modal__header">
           <div className="mi-modal__head-icon" aria-hidden="true">
             <FontAwesomeIcon icon={faBoxesStacked} />
@@ -555,17 +582,8 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
           </button>
         </div>
 
-        {/* ── Tabs ── */}
-        <div
-          style={{
-            display: "flex",
-            gap: 4,
-            padding: "0 20px",
-            borderBottom: "1px solid var(--nv-border-md)",
-            background: "var(--nv-bg)",
-            flexShrink: 0,
-          }}
-        >
+        {/* TABS */}
+        <div style={{ display: "flex", gap: 4, padding: "0 20px", borderBottom: "1px solid var(--nv-border-md)", background: "var(--nv-bg)", flexShrink: 0 }}>
           {[
             { key: "individual", icon: faBoxOpen, label: "Individual" },
             { key: "masivo", icon: faCloudArrowUp, label: "Carga masiva" },
@@ -575,19 +593,13 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
               onClick={() => handleTabChange(key)}
               type="button"
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 7,
-                padding: "11px 16px",
+                display: "flex", alignItems: "center", gap: 7, padding: "11px 16px",
                 border: "none",
                 borderBottom: tab === key ? "2px solid var(--nv-action)" : "2px solid transparent",
-                background: "none",
-                cursor: "pointer",
+                background: "none", cursor: "pointer",
                 fontWeight: tab === key ? 700 : 400,
                 color: tab === key ? "var(--nv-action)" : "var(--nv-muted)",
-                fontSize: "0.88rem",
-                transition: "all .15s",
-                fontFamily: "inherit",
+                fontSize: "0.88rem", transition: "all .15s", fontFamily: "inherit",
               }}
             >
               <FontAwesomeIcon icon={icon} style={{ fontSize: 13 }} />
@@ -596,10 +608,13 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
           ))}
         </div>
 
+        {/* CONTENT */}
         <div className="mi-modal__content" style={{ overflowY: "auto", padding: 20 }}>
-          {/* ══ TAB INDIVIDUAL ══ */}
+
+          {/* ── TAB INDIVIDUAL ── */}
           {tab === "individual" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
               {errores.global && (
                 <div className="cmi-warnBox">
                   <div className="cmi-warnBox__title">
@@ -611,113 +626,100 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
               )}
 
               {/* Nombre */}
-              <div className="fl-field">
+              <FloatingField label="Nombre del producto *" error={errores.nombre}>
                 <input
                   name="nombre"
                   value={form.nombre}
                   onChange={handleChange}
-                  className="fl-input"
-                  placeholder=" "
+                  className="cmi-input"
+                  placeholder="Ej: Auriculares Bluetooth Samsung WH-1000"
                 />
-                <label className="fl-label">Nombre *</label>
-                {errores.nombre && <ErrorMsg msg={errores.nombre} />}
-              </div>
+              </FloatingField>
 
               {/* SKU + Stock */}
               <div className="fl-row">
-                <div className="fl-field">
-                  <input name="sku" value={form.sku} onChange={handleChange} className="fl-input" placeholder=" " />
-                  <label className="fl-label">SKU</label>
-                </div>
+                <FloatingField label="SKU / Código" icon={faBarcode}>
+                  <input
+                    name="sku"
+                    value={form.sku}
+                    onChange={handleChange}
+                    className="cmi-input"
+                    placeholder="Ej: 04163"
+                  />
+                </FloatingField>
 
-                <div className="fl-field">
+                <FloatingField label="Stock" icon={faCubesStacked} error={errores.stock}>
                   <input
                     name="stock"
                     value={form.stock}
                     onChange={handleChange}
-                    className="fl-input"
-                    placeholder=" "
+                    className="cmi-input"
+                    placeholder="Ej: 25"
+                    inputMode="numeric"
                   />
-                  <label className="fl-label">Stock</label>
-                  {errores.stock && <ErrorMsg msg={errores.stock} />}
-                </div>
+                </FloatingField>
               </div>
 
-              {/* Precios */}
+              {/* Precio + Precio promo */}
               <div className="fl-row">
-                <div className="fl-field">
-                  <input
+                <FloatingField label="Precio *" error={errores.precio}>
+                  <PriceInput
                     name="precio"
                     value={form.precio}
                     onChange={handleChange}
                     onBlur={handleMoneyBlur}
-                    className="fl-input"
-                    placeholder=" "
+                    onFocus={handleMoneyFocus}
+                    placeholder="0,00"
                   />
-                  <label className="fl-label">Precio *</label>
-                  {errores.precio && <ErrorMsg msg={errores.precio} />}
-                </div>
+                </FloatingField>
 
-                <div className="fl-field">
-                  <input
+                <FloatingField label="Precio promocional" error={errores.precio_promo}>
+                  <PriceInput
                     name="precio_promo"
                     value={form.precio_promo}
                     onChange={handleChange}
                     onBlur={handleMoneyBlur}
-                    className="fl-input"
-                    placeholder=" "
+                    onFocus={handleMoneyFocus}
+                    placeholder="0,00"
                   />
-                  <label className="fl-label">Precio promo</label>
-                  {errores.precio_promo && <ErrorMsg msg={errores.precio_promo} />}
-                </div>
+                </FloatingField>
               </div>
 
               {/* Categoría */}
-              <div className="fl-field">
+              <FloatingField label="Categoría" icon={faTag}>
                 <select
                   name="id_categoria_stock"
                   value={form.id_categoria_stock}
                   onChange={handleChange}
-                  className="fl-input fl-select"
+                  className="cmi-input cmi-select"
                   disabled={loadingCategorias}
-                  style={{ paddingTop: "18px", cursor: "pointer" }}
                 >
                   <option value="">
                     {loadingCategorias ? "Cargando categorías..." : "Sin categoría"}
                   </option>
                   {categorias.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.nombre}
-                    </option>
+                    <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                   ))}
                 </select>
-                <label
-                  className="fl-label"
-                  style={{ pointerEvents: "none" }}
-                >
-                  <FontAwesomeIcon icon={faTag} style={{ marginRight: 5, opacity: 0.6, fontSize: 11 }} />
-                  Categoría
-                </label>
-              </div>
+              </FloatingField>
 
               {/* Descripción */}
-              <div className="fl-field">
+              <FloatingField label="Descripción" icon={faAlignLeft}>
                 <textarea
                   name="descripcion"
                   value={form.descripcion}
                   onChange={handleChange}
-                  className="fl-input cmi-textarea"
-                  placeholder=" "
+                  className="cmi-input cmi-textarea"
+                  placeholder="Breve descripción del producto (opcional)"
+                  rows={3}
                 />
-                <label className="fl-label">Descripción</label>
-              </div>
+              </FloatingField>
 
               {/* Imagen */}
               <div className="cmi-uploadBox">
                 <div className="cmi-uploadBox__title">
                   <FontAwesomeIcon icon={faPaperclip} /> Imagen del producto
                 </div>
-
                 <input
                   ref={inputImagenRef}
                   type="file"
@@ -725,13 +727,8 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
                   hidden
                   onChange={(e) => tomarImagen(e.target.files?.[0])}
                 />
-
                 {!imagenFile ? (
-                  <button
-                    type="button"
-                    className="mit-btn mit-btn--ghost"
-                    onClick={() => inputImagenRef.current?.click()}
-                  >
+                  <button type="button" className="mit-btn mit-btn--ghost" onClick={() => inputImagenRef.current?.click()}>
                     <FontAwesomeIcon icon={faArrowUpFromBracket} /> Seleccionar imagen
                   </button>
                 ) : (
@@ -742,26 +739,23 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
                     </button>
                   </div>
                 )}
-
                 {imagenPreview && (
                   <div className="cmi-previewImgWrap">
                     <img src={imagenPreview} alt="Preview" className="cmi-previewImg" />
                   </div>
                 )}
-
                 {errores.imagen && <ErrorMsg msg={errores.imagen} />}
               </div>
             </div>
           )}
 
-          {/* ══ TAB MASIVO ══ */}
+          {/* ── TAB MASIVO ── */}
           {tab === "masivo" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div className="cmi-uploadBox">
                 <div className="cmi-uploadBox__title">
                   <FontAwesomeIcon icon={faCloudArrowUp} /> Archivo masivo
                 </div>
-
                 <input
                   ref={fileInputMasivoRef}
                   type="file"
@@ -769,16 +763,10 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
                   accept=".csv,.pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.tiff,.tif"
                   onChange={(e) => handleArchivoChange(e.target.files?.[0])}
                 />
-
                 <div className="cmi-uploadActions">
-                  <button
-                    type="button"
-                    className="mit-btn mit-btn--ghost"
-                    onClick={() => fileInputMasivoRef.current?.click()}
-                  >
+                  <button type="button" className="mit-btn mit-btn--ghost" onClick={() => fileInputMasivoRef.current?.click()}>
                     <FontAwesomeIcon icon={faArrowUpFromBracket} /> Seleccionar archivo
                   </button>
-
                   <button type="button" className="mit-btn mit-btn--ghost" onClick={descargarPlantilla}>
                     <FontAwesomeIcon icon={faDownload} /> Descargar plantilla CSV
                   </button>
@@ -787,23 +775,17 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
                 {nombreArchivo && (
                   <div className="cmi-fileResume">
                     <div className="cmi-fileResume__left">
-                      <span className="cmi-fileResume__icon">
-                        <IconoArchivo tipo={tipoArchivo} />
-                      </span>
+                      <span className="cmi-fileResume__icon"><IconoArchivo tipo={tipoArchivo} /></span>
                       <div className="cmi-fileResume__meta">
                         <div className="cmi-fileResume__name">{nombreArchivo}</div>
                         <TipoBadge tipo={tipoArchivo} />
                       </div>
                     </div>
-
                     <button
                       type="button"
                       className="mit-btn mit-btn--ghost"
                       onClick={() => {
-                        setArchivo(null);
-                        setResultado(null);
-                        setCsvPreview([]);
-                        setCsvHeaders([]);
+                        setArchivo(null); setResultado(null); setCsvPreview([]); setCsvHeaders([]);
                         if (fileInputMasivoRef.current) fileInputMasivoRef.current.value = "";
                       }}
                     >
@@ -819,18 +801,12 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
                   <div className="cmi-tableWrap">
                     <table className="cmi-table">
                       <thead>
-                        <tr>
-                          {csvHeaders.map((h) => (
-                            <th key={h}>{h}</th>
-                          ))}
-                        </tr>
+                        <tr>{csvHeaders.map((h) => <th key={h}>{h}</th>)}</tr>
                       </thead>
                       <tbody>
                         {csvPreview.map((row, idx) => (
                           <tr key={idx}>
-                            {csvHeaders.map((h) => (
-                              <td key={h}>{row[h] || "—"}</td>
-                            ))}
+                            {csvHeaders.map((h) => <td key={h}>{row[h] || "—"}</td>)}
                           </tr>
                         ))}
                       </tbody>
@@ -864,7 +840,6 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
                     <FontAwesomeIcon icon={faCheckCircle} style={{ marginRight: 8 }} />
                     Resultado del procesamiento
                   </div>
-
                   <div className="cmi-resultGrid">
                     <div className="cmi-resultItem">
                       <span className="cmi-resultItem__label">Método</span>
@@ -879,15 +854,9 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
                       <b className="cmi-resultItem__val cmi-resultItem__val--ok">{resultado.total_caracteres ?? 0}</b>
                     </div>
                   </div>
-
                   {resultado.texto_detectado && (
                     <div className="fl-field" style={{ marginTop: 12 }}>
-                      <textarea
-                        readOnly
-                        value={resultado.texto_detectado}
-                        className="fl-input cmi-textarea"
-                        placeholder=" "
-                      />
+                      <textarea readOnly value={resultado.texto_detectado} className="fl-input cmi-textarea" placeholder=" " />
                       <label className="fl-label">Texto extraído</label>
                     </div>
                   )}
@@ -901,9 +870,7 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
                     Observaciones
                   </div>
                   <ul className="cmi-warnBox__list">
-                    {resultado.errores.map((err, i) => (
-                      <li key={i}>{err}</li>
-                    ))}
+                    {resultado.errores.map((err, i) => <li key={i}>{err}</li>)}
                   </ul>
                 </div>
               )}
@@ -911,7 +878,7 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
           )}
         </div>
 
-        {/* ── Footer ── */}
+        {/* FOOTER */}
         <div className="cmi-footer">
           <div className="mi-card__hint cmi-footer__hint">
             {tab === "individual" && "Completá los datos del producto y guardá."}
@@ -921,7 +888,6 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
             {tab === "masivo" && tipoArchivo === "" && !nombreArchivo && "Seleccioná un archivo para continuar."}
             {tab === "masivo" && tipoArchivo === "" && nombreArchivo && "El formato no es válido."}
           </div>
-
           <div className="cmi-footer__btns">
             <button
               type="button"
@@ -931,7 +897,6 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
             >
               Cancelar
             </button>
-
             {tab === "individual" ? (
               <button
                 type="button"
@@ -958,22 +923,6 @@ export default function ModalCargaMasiva({ open, onClose, onGuardado, onToast, o
           </div>
         </div>
       </div>
-
-      {/* ── Estilos select flotante ── */}
-      <style>{`
-        .fl-select {
-          appearance: none;
-          -webkit-appearance: none;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235A6A7E' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-          background-repeat: no-repeat;
-          background-position: right 12px center;
-          padding-right: 36px !important;
-        }
-        .fl-select option {
-          background: var(--nv-bg, #fff);
-          color: var(--nv-text, #0A2540);
-        }
-      `}</style>
     </div>,
     document.body
   );

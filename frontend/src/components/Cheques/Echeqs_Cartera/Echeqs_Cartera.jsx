@@ -352,7 +352,7 @@ const Echeqs_Cartera = () => {
             </div>
 
             <div className="mov-headFilters">
-              <div className="cc-filter">
+              <div className="cc-filter cc-filter--search">
                 <div className="cc-floatingField cc-floatingField--search is-active">
                   <div className="cc-searchInput">
                     <div className="cc-searchInput__fieldWrap">

@@ -738,7 +738,6 @@ html[data-theme="oscuro"] .stock-badge--alto  { color: #4ade80 !important; }
   display: grid;
   place-items: center;
   background: rgba(0,85,187,.08);
-  color: #0055BB;
 }
 
 .mi-modal__title {
@@ -827,7 +826,7 @@ html[data-theme="oscuro"] .stock-badge--alto  { color: #4ade80 !important; }
   width: 100%;
   border: 1px solid var(--nv-border-md);
   border-radius: 8px;
-  padding: 16px 10px 6px;
+
   font-size: .85rem;
   background: transparent;
   outline: none;

@@ -177,18 +177,22 @@ function normalizeOtroEgresoRow(r) {
   const medioPagoNombre = r?.medio_pago_nombre ?? r?.medio_pago ?? r?.pago_medio_pago ?? "";
   const idMov = getMovimientoId(r);
 
+  const comprobanteUrl = String(r?.comprobante_url ?? "").trim();
+  const idComprobante = Number(r?.id_comprobante ?? 0) || 0;
+  const archivoMime = String(r?.archivo_mime ?? "").trim();
+  const comprobanteTipo = String(r?.comprobante_tipo ?? "").trim();
+
   return {
     ...r,
     id_movimiento: idMov ?? r?.id_movimiento ?? null,
     fecha: r?.fecha,
     categoria: String(categoria ?? "").trim() || "",
     medio_pago_nombre: String(medioPagoNombre ?? "").trim() || "",
-    id_comprobante: Number(r?.id_comprobante ?? 0) || 0,
-    comprobante_url: String(r?.comprobante_url ?? "").trim(),
-    archivo_mime: String(r?.archivo_mime ?? "").trim(),
-    comprobante_tipo: String(r?.comprobante_tipo ?? "").trim(),
-    tiene_comprobante:
-      Number(r?.id_comprobante ?? 0) > 0 || String(r?.comprobante_url ?? "").trim() !== "",
+    id_comprobante: idComprobante,
+    comprobante_url: comprobanteUrl,
+    archivo_mime: archivoMime,
+    comprobante_tipo: comprobanteTipo,
+    tiene_comprobante: idComprobante > 0 || comprobanteUrl !== "",
   };
 }
 
@@ -269,8 +273,12 @@ function downloadBlob(content, fileName, mimeType) {
 }
 
 function buildComprobanteDownloadUrl(apiBase, row) {
+  const directUrl = String(row?.comprobante_url ?? "").trim();
+  if (directUrl) return directUrl;
+
   const idMovimiento = Number(row?.id_movimiento ?? 0);
   if (!idMovimiento) return "";
+
   return `${apiBase}?action=otros_egresos_comprobantes_descargar&id_movimiento=${idMovimiento}`;
 }
 
@@ -1026,10 +1034,18 @@ export default function OtrosEgresos() {
       const detalle = String(row?.detalle ?? row?.descripcion ?? row?.concepto ?? "").trim();
       const fecha = formatFechaDMY(row?.fecha);
 
+      const esCheque =
+        Number(row?.cheque_id ?? 0) > 0 ||
+        ["CHEQUE", "ECHEQ"].includes(String(row?.medio_pago_nombre ?? "").trim().toUpperCase());
+
       setComprobanteView({
         url,
         mime: String(row?.archivo_mime ?? "").trim() || "application/octet-stream",
-        title: detalle
+        title: esCheque
+          ? detalle
+            ? `Comprobante de cheque - ${detalle} - ${fecha}`
+            : `Comprobante de cheque - ${fecha}`
+          : detalle
           ? `Comprobante de egreso - ${detalle} - ${fecha}`
           : `Comprobante de egreso - ${fecha}`,
       });

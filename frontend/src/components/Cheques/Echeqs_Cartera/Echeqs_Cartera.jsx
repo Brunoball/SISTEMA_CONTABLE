@@ -4,23 +4,26 @@ import "../../Global/Global_css/Global_Section.css";
 import "../../Global/Global_css/Global_responsive.css";
 import Toast from "../../Global/Toast.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
+import ModalDepositarCheque from "../modales/ModalDepositarCheque.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faMagnifyingGlass,
   faBoxOpen,
   faTimes,
   faEye,
+  faBuildingColumns,
 } from "@fortawesome/free-solid-svg-icons";
 
 /* =========================
    Helpers
 ========================= */
-function getAuthHeaders() {
+function getAuthHeaders(json = false) {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
   const token = (localStorage.getItem("token") || "").trim();
   const headers = {};
   if (sessionKey) headers["X-Session"] = sessionKey;
   if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (json) headers["Content-Type"] = "application/json";
   return headers;
 }
 
@@ -94,6 +97,23 @@ function safeText(v) {
   return s ? s : "—";
 }
 
+function normalizeEcheq(row) {
+  return {
+    ...row,
+    id_cheque: Number(row?.id_cheque ?? row?.idCheque ?? row?.id ?? 0),
+    fecha_emision: row?.fecha_emision ?? row?.fechaEmision ?? "",
+    emisor: row?.emisor ?? row?.librador ?? "",
+    numero_cheque: row?.numero_cheque ?? row?.numeroCheque ?? row?.numero ?? "",
+    importe: row?.importe ?? 0,
+    fecha_pago: row?.fecha_pago ?? row?.fechaPago ?? "",
+    archivo_mime: row?.archivo_mime ?? row?.mime ?? "application/pdf",
+    tiene_comprobante:
+      row?.tiene_comprobante ??
+      row?.tieneComprobante ??
+      !!row?.archivo_path,
+  };
+}
+
 /* =========================
    Config
 ========================= */
@@ -110,7 +130,7 @@ const COLUMNS = [
   { key: "numero_cheque", label: "NÚMERO", fr: 1.2, align: "center" },
   { key: "importe", label: "IMPORTE", fr: 1.2, align: "right" },
   { key: "fecha_pago", label: "FECHA PAGO", fr: 1, align: "center" },
-  { key: "acciones", label: "ACCIONES", fr: 0.9, align: "center" },
+  { key: "acciones", label: "ACCIONES", fr: 1.2, align: "center" },
 ];
 
 const gridCols = COLUMNS.map((c) => `${c.fr}fr`).join(" ");
@@ -174,7 +194,12 @@ const Echeqs_Cartera = () => {
   const [modalComprobanteOpen, setModalComprobanteOpen] = useState(false);
   const [modalComprobanteUrl, setModalComprobanteUrl] = useState("");
   const [modalComprobanteMime, setModalComprobanteMime] = useState("");
-  const [modalComprobanteTitle, setModalComprobanteTitle] = useState("Comprobante de Echeq");
+  const [modalComprobanteTitle, setModalComprobanteTitle] =
+    useState("Comprobante de Echeq");
+
+  const [modalDepositarOpen, setModalDepositarOpen] = useState(false);
+  const [echeqSeleccionado, setEcheqSeleccionado] = useState(null);
+  const [depositando, setDepositando] = useState(false);
 
   const searchTimerRef = useRef(null);
 
@@ -193,7 +218,9 @@ const Echeqs_Cartera = () => {
 
   const openModalComprobante = useCallback(
     (row) => {
-      const idCheque = Number(row?.id_cheque || 0);
+      const echeq = normalizeEcheq(row);
+      const idCheque = Number(echeq?.id_cheque || 0);
+
       if (!idCheque) {
         showToast("error", "Echeq inválido.");
         return;
@@ -208,7 +235,7 @@ const Echeqs_Cartera = () => {
 
       setModalComprobanteUrl(finalUrl);
       setModalComprobanteMime(
-        String(row?.archivo_mime || "").trim() || "application/pdf"
+        String(echeq?.archivo_mime || "").trim() || "application/pdf"
       );
       setModalComprobanteTitle("Comprobante de Echeq");
       setModalComprobanteOpen(true);
@@ -216,7 +243,18 @@ const Echeqs_Cartera = () => {
     [showToast]
   );
 
-  /* Debounce */
+  const openModalDepositar = useCallback((row) => {
+    const echeq = normalizeEcheq(row);
+    setEcheqSeleccionado(echeq);
+    setModalDepositarOpen(true);
+  }, []);
+
+  const closeModalDepositar = useCallback(() => {
+    if (depositando) return;
+    setModalDepositarOpen(false);
+    setEcheqSeleccionado(null);
+  }, [depositando]);
+
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
@@ -225,7 +263,6 @@ const Echeqs_Cartera = () => {
     return () => clearTimeout(searchTimerRef.current);
   }, [q]);
 
-  /* Fetch */
   const fetchData = useCallback(
     async ({ reset = false, offset = 0 } = {}) => {
       try {
@@ -245,7 +282,9 @@ const Echeqs_Cartera = () => {
         });
 
         const data = await parseJsonOrThrow(res);
-        const nuevos = Array.isArray(data?.echeqs) ? data.echeqs : [];
+        const nuevos = Array.isArray(data?.echeqs)
+          ? data.echeqs.map(normalizeEcheq)
+          : [];
 
         setItems((prev) => {
           if (reset) return nuevos;
@@ -278,7 +317,47 @@ const Echeqs_Cartera = () => {
     fetchData({ reset: true, offset: 0 });
   }, [fetchData]);
 
-  /* Render cell value */
+  const handleDepositarEcheq = useCallback(async () => {
+    const idCheque = Number(echeqSeleccionado?.id_cheque || 0);
+
+    if (!idCheque) {
+      showToast("error", "No se pudo identificar el echeq seleccionado.");
+      return;
+    }
+
+    setDepositando(true);
+
+    try {
+      const params = new URLSearchParams();
+      params.set("action", "echeq_cartera_depositar");
+
+      const data = await parseJsonOrThrow(
+        await fetch(`${API_URL}?${params.toString()}`, {
+          method: "POST",
+          headers: getAuthHeaders(true),
+          body: JSON.stringify({
+            id_cheque: idCheque,
+          }),
+        })
+      );
+
+      setItems((prev) =>
+        (Array.isArray(prev) ? prev : []).filter(
+          (item) => Number(item?.id_cheque) !== idCheque
+        )
+      );
+
+      setModalDepositarOpen(false);
+      setEcheqSeleccionado(null);
+
+      showToast("exito", data?.mensaje || "Echeq depositado correctamente.");
+    } catch (e) {
+      showToast("error", e?.message || "No se pudo depositar el echeq.");
+    } finally {
+      setDepositando(false);
+    }
+  }, [echeqSeleccionado, showToast]);
+
   function renderCell(col, item) {
     switch (col.key) {
       case "fecha_emision":
@@ -293,19 +372,38 @@ const Echeqs_Cartera = () => {
         return safeText(formatFecha(item.fecha_pago));
       case "acciones":
         return (
-          <button
-            type="button"
-            className="mov-actionBtn"
-            onClick={() => openModalComprobante(item)}
-            title={item?.tiene_comprobante ? "Ver comprobante" : "No tiene comprobante"}
-            disabled={!item?.tiene_comprobante}
+          <div
             style={{
-              opacity: item?.tiene_comprobante ? 1 : 0.45,
-              cursor: item?.tiene_comprobante ? "pointer" : "not-allowed",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              flexWrap: "wrap",
             }}
           >
-            <FontAwesomeIcon icon={faEye} />
-          </button>
+            <button
+              type="button"
+              className="mov-actionBtn"
+              onClick={() => openModalComprobante(item)}
+              title={item?.tiene_comprobante ? "Ver comprobante" : "No tiene comprobante"}
+              disabled={!item?.tiene_comprobante}
+              style={{
+                opacity: item?.tiene_comprobante ? 1 : 0.45,
+                cursor: item?.tiene_comprobante ? "pointer" : "not-allowed",
+              }}
+            >
+              <FontAwesomeIcon icon={faEye} />
+            </button>
+
+            <button
+              type="button"
+              className="mov-actionBtn"
+              onClick={() => openModalDepositar(item)}
+              title="Depositar en el banco"
+            >
+              <FontAwesomeIcon icon={faBuildingColumns} />
+            </button>
+          </div>
         );
       default:
         return "—";
@@ -332,6 +430,20 @@ const Echeqs_Cartera = () => {
         mime={modalComprobanteMime}
         onClose={closeModalComprobante}
         title={modalComprobanteTitle}
+      />
+
+      <ModalDepositarCheque
+        open={modalDepositarOpen}
+        onClose={closeModalDepositar}
+        onConfirm={handleDepositarEcheq}
+        loading={depositando}
+        cheque={echeqSeleccionado}
+        titulo="Depositar echeq en el banco"
+        pregunta="¿Querés depositar este echeq?"
+        tipoLabel="Echeq"
+        confirmText="Depositar"
+        loadingText="Depositando..."
+        infoText="Al presionar Depositar, el echeq se dará de baja de cartera y se registrará en movimientos."
       />
 
       {error && (

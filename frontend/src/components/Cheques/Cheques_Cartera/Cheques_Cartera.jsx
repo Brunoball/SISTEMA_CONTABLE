@@ -4,21 +4,24 @@ import "../../Global/Global_css/Global_Section.css";
 import "../../Global/Global_css/Global_responsive.css";
 import Toast from "../../Global/Toast.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
+import ModalDepositarCheque from "../modales/ModalDepositarCheque.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faMagnifyingGlass,
   faBoxOpen,
   faMoneyBillWave,
   faEye,
+  faBuildingColumns,
 } from "@fortawesome/free-solid-svg-icons";
 
-function getAuthHeaders() {
+function getAuthHeaders(json = false) {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
   const token = (localStorage.getItem("token") || "").trim();
 
   const headers = {};
   if (sessionKey) headers["X-Session"] = sessionKey;
   if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (json) headers["Content-Type"] = "application/json";
 
   return headers;
 }
@@ -95,6 +98,23 @@ function safeText(v) {
   return s !== "" ? s : "-";
 }
 
+function normalizeCheque(row) {
+  return {
+    ...row,
+    id_cheque: Number(row?.id_cheque ?? row?.idCheque ?? row?.id ?? 0),
+    fecha_emision: row?.fecha_emision ?? row?.fechaEmision ?? "",
+    emisor: row?.emisor ?? row?.librador ?? "",
+    numero_cheque: row?.numero_cheque ?? row?.numeroCheque ?? row?.numero ?? "",
+    importe: row?.importe ?? 0,
+    fecha_pago: row?.fecha_pago ?? row?.fechaPago ?? "",
+    archivo_mime: row?.archivo_mime ?? row?.mime ?? "application/pdf",
+    tiene_comprobante:
+      row?.tiene_comprobante ??
+      row?.tieneComprobante ??
+      !!row?.archivo_path,
+  };
+}
+
 const PAGE_SIZE = 100;
 
 const Cheques_Cartera = () => {
@@ -114,7 +134,12 @@ const Cheques_Cartera = () => {
   const [modalComprobanteOpen, setModalComprobanteOpen] = useState(false);
   const [modalComprobanteUrl, setModalComprobanteUrl] = useState("");
   const [modalComprobanteMime, setModalComprobanteMime] = useState("");
-  const [modalComprobanteTitle, setModalComprobanteTitle] = useState("Comprobante de Cheque");
+  const [modalComprobanteTitle, setModalComprobanteTitle] =
+    useState("Comprobante de Cheque");
+
+  const [modalDepositarOpen, setModalDepositarOpen] = useState(false);
+  const [chequeSeleccionado, setChequeSeleccionado] = useState(null);
+  const [depositando, setDepositando] = useState(false);
 
   const showToast = useCallback((tipo, mensaje, duracion = 2600) => {
     setToast({ tipo, mensaje, duracion });
@@ -131,7 +156,9 @@ const Cheques_Cartera = () => {
 
   const openModalComprobante = useCallback(
     (row) => {
-      const idCheque = Number(row?.id_cheque || 0);
+      const cheque = normalizeCheque(row);
+      const idCheque = Number(cheque?.id_cheque || 0);
+
       if (!idCheque) {
         showToast("error", "Cheque inválido.");
         return;
@@ -146,13 +173,25 @@ const Cheques_Cartera = () => {
 
       setModalComprobanteUrl(finalUrl);
       setModalComprobanteMime(
-        String(row?.archivo_mime || "").trim() || "application/pdf"
+        String(cheque?.archivo_mime || "").trim() || "application/pdf"
       );
       setModalComprobanteTitle("Comprobante de Cheque");
       setModalComprobanteOpen(true);
     },
     [API_URL, showToast]
   );
+
+  const openModalDepositar = useCallback((row) => {
+    const cheque = normalizeCheque(row);
+    setChequeSeleccionado(cheque);
+    setModalDepositarOpen(true);
+  }, []);
+
+  const closeModalDepositar = useCallback(() => {
+    if (depositando) return;
+    setModalDepositarOpen(false);
+    setChequeSeleccionado(null);
+  }, [depositando]);
 
   const fetchCheques = useCallback(
     async ({ offset = 0, append = false, qValue = "" } = {}) => {
@@ -173,7 +212,9 @@ const Cheques_Cartera = () => {
         })
       );
 
-      const lista = Array.isArray(data?.cheques) ? data.cheques : [];
+      const lista = Array.isArray(data?.cheques)
+        ? data.cheques.map(normalizeCheque)
+        : [];
 
       if (append) {
         setAllRows((prev) => {
@@ -188,7 +229,7 @@ const Cheques_Cartera = () => {
       setHasMore(!!data?.has_more);
       setNextOffset(Number(data?.next_offset || 0));
 
-      return data;
+      return { ...data, cheques: lista };
     },
     [API_URL]
   );
@@ -277,6 +318,53 @@ const Cheques_Cartera = () => {
     }
   }, [fetchCheques, hasMore, loadingMore, nextOffset, showToast]);
 
+  const handleDepositarCheque = useCallback(async () => {
+    const idCheque = Number(chequeSeleccionado?.id_cheque || 0);
+
+    if (!idCheque) {
+      showToast("error", "No se pudo identificar el cheque seleccionado.");
+      return;
+    }
+
+    setDepositando(true);
+
+    try {
+      const params = new URLSearchParams();
+      params.set("action", "cheques_cartera_depositar");
+
+      const data = await parseJsonOrThrow(
+        await fetch(`${API_URL}?${params.toString()}`, {
+          method: "POST",
+          headers: getAuthHeaders(true),
+          body: JSON.stringify({
+            id_cheque: idCheque,
+          }),
+        })
+      );
+
+      setAllRows((prev) =>
+        (Array.isArray(prev) ? prev : []).filter(
+          (item) => Number(item?.id_cheque) !== idCheque
+        )
+      );
+
+      setRows((prev) =>
+        (Array.isArray(prev) ? prev : []).filter(
+          (item) => Number(item?.id_cheque) !== idCheque
+        )
+      );
+
+      setModalDepositarOpen(false);
+      setChequeSeleccionado(null);
+
+      showToast("exito", data?.mensaje || "Cheque depositado correctamente.");
+    } catch (e) {
+      showToast("error", e?.message || "No se pudo depositar el cheque.");
+    } finally {
+      setDepositando(false);
+    }
+  }, [API_URL, chequeSeleccionado, showToast]);
+
   const columns = useMemo(
     () => [
       {
@@ -314,26 +402,45 @@ const Cheques_Cartera = () => {
         label: "ACCIONES",
         align: "center",
         render: (r) => (
-          <button
-            type="button"
-            className="mov-actionBtn"
-            onClick={() => openModalComprobante(r)}
-            title={r?.tiene_comprobante ? "Ver comprobante" : "No tiene comprobante"}
-            disabled={!r?.tiene_comprobante}
+          <div
             style={{
-              opacity: r?.tiene_comprobante ? 1 : 0.45,
-              cursor: r?.tiene_comprobante ? "pointer" : "not-allowed",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              flexWrap: "wrap",
             }}
           >
-            <FontAwesomeIcon icon={faEye} />
-          </button>
+            <button
+              type="button"
+              className="mov-actionBtn"
+              onClick={() => openModalComprobante(r)}
+              title={r?.tiene_comprobante ? "Ver comprobante" : "No tiene comprobante"}
+              disabled={!r?.tiene_comprobante}
+              style={{
+                opacity: r?.tiene_comprobante ? 1 : 0.45,
+                cursor: r?.tiene_comprobante ? "pointer" : "not-allowed",
+              }}
+            >
+              <FontAwesomeIcon icon={faEye} />
+            </button>
+
+            <button
+              type="button"
+              className="mov-actionBtn"
+              onClick={() => openModalDepositar(r)}
+              title="Depositar en el banco"
+            >
+              <FontAwesomeIcon icon={faBuildingColumns} />
+            </button>
+          </div>
         ),
       },
     ],
-    [openModalComprobante]
+    [openModalComprobante, openModalDepositar]
   );
 
-  const gridCols = useMemo(() => "1.15fr 2fr 1.35fr 1.15fr 1.15fr 0.8fr", []);
+  const gridCols = useMemo(() => "1.15fr 2fr 1.35fr 1.15fr 1.15fr 1fr", []);
 
   return (
     <div className="mov-page">
@@ -352,6 +459,20 @@ const Cheques_Cartera = () => {
         mime={modalComprobanteMime}
         onClose={closeModalComprobante}
         title={modalComprobanteTitle}
+      />
+
+      <ModalDepositarCheque
+        open={modalDepositarOpen}
+        onClose={closeModalDepositar}
+        onConfirm={handleDepositarCheque}
+        loading={depositando}
+        cheque={chequeSeleccionado}
+        titulo="Depositar cheque en el banco"
+        pregunta="¿Querés depositar este cheque?"
+        tipoLabel="Cheque"
+        confirmText="Depositar"
+        loadingText="Depositando..."
+        infoText="Por ahora, al presionar Depositar, el cheque solamente se dará de baja de cartera."
       />
 
       {error && (
@@ -428,7 +549,7 @@ const Cheques_Cartera = () => {
               <>
                 {rows.map((r) => (
                   <div
-                    key={r.id_cheque}
+                    key={r.id_cheque || `${r.numero_cheque}-${r.fecha_pago}`}
                     className="mov-gridTable mov-gridTable--row"
                     style={{ gridTemplateColumns: gridCols }}
                     role="row"
@@ -450,7 +571,11 @@ const Cheques_Cartera = () => {
                           data-label={c.label}
                           title={typeof val === "string" ? val : undefined}
                         >
-                          {c.key === "acciones" ? val : <span className="mov-ellipsissss">{val}</span>}
+                          {c.key === "acciones" ? (
+                            val
+                          ) : (
+                            <span className="mov-ellipsissss">{val}</span>
+                          )}
                         </div>
                       );
                     })}
@@ -469,7 +594,13 @@ const Cheques_Cartera = () => {
                 )}
 
                 {!loading && allRows.length > 0 && hasMore && q.trim() === "" && (
-                  <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      padding: "12px 0",
+                    }}
+                  >
                     <button
                       type="button"
                       className="mov-btn mov-btn--loadAll"

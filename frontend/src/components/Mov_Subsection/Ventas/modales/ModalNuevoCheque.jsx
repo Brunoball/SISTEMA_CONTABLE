@@ -23,6 +23,36 @@ function parseMoney(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function onlyNumbers(value) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+function onlyMoney(value) {
+  let clean = String(value ?? "").replace(/[^\d,.-]/g, "");
+
+  clean = clean.replace(/(?!^)-/g, "");
+
+  const partsComma = clean.split(",");
+  if (partsComma.length > 2) {
+    clean = partsComma[0] + "," + partsComma.slice(1).join("");
+  }
+
+  const partsDot = clean.split(".");
+  if (partsDot.length > 2) {
+    clean = partsDot[0] + "." + partsDot.slice(1).join("");
+  }
+
+  return clean;
+}
+
+function onlyTextUpper(value) {
+  return String(value ?? "")
+    .replace(/[^A-Za-zÁÉÍÓÚáéíóúÑñÜü\s]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^\s+/, "")
+    .toUpperCase();
+}
+
 export default function ModalNuevoCheque({
   open,
   onClose,
@@ -50,8 +80,8 @@ export default function ModalNuevoCheque({
 
     setForm({
       fecha_emision: initialData?.fecha_emision || todayISO(),
-      emisor: initialData?.emisor || "",
-      numero_cheque: initialData?.numero_cheque || "",
+      emisor: onlyTextUpper(initialData?.emisor || ""),
+      numero_cheque: onlyNumbers(initialData?.numero_cheque || ""),
       importe:
         initialData?.importe != null && initialData?.importe !== ""
           ? moneyARSInput(initialData.importe)
@@ -84,7 +114,10 @@ export default function ModalNuevoCheque({
   if (!open) return null;
 
   return createPortal(
-    <div className="mi-mini__overlay" onMouseDown={() => (!saving ? onClose?.() : null)}>
+    <div
+      className="mi-mini__overlay"
+      onMouseDown={() => (!saving ? onClose?.() : null)}
+    >
       <div
         className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
         onMouseDown={(e) => e.stopPropagation()}
@@ -117,7 +150,9 @@ export default function ModalNuevoCheque({
                 type="date"
                 placeholder=" "
                 value={form.fecha_emision}
-                onChange={(e) => setForm((p) => ({ ...p, fecha_emision: e.target.value }))}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, fecha_emision: e.target.value }))
+                }
                 disabled={saving}
               />
               <label className="fl-label">Fecha de emisión *</label>
@@ -128,8 +163,34 @@ export default function ModalNuevoCheque({
                 className="fl-input"
                 placeholder=" "
                 value={form.emisor}
-                onChange={(e) => setForm((p) => ({ ...p, emisor: e.target.value }))}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    emisor: onlyTextUpper(e.target.value),
+                  }))
+                }
+                onKeyDown={(e) => {
+                  const permitidas = [
+                    "Backspace",
+                    "Delete",
+                    "ArrowLeft",
+                    "ArrowRight",
+                    "ArrowUp",
+                    "ArrowDown",
+                    "Tab",
+                    "Home",
+                    "End",
+                    "Enter",
+                  ];
+
+                  if (permitidas.includes(e.key) || e.ctrlKey || e.metaKey) return;
+
+                  if (!/^[A-Za-zÁÉÍÓÚáéíóúÑñÜü\s]$/.test(e.key)) {
+                    e.preventDefault();
+                  }
+                }}
                 disabled={saving}
+                style={{ textTransform: "uppercase" }}
               />
               <label className="fl-label">Emisor *</label>
             </div>
@@ -139,7 +200,30 @@ export default function ModalNuevoCheque({
                 className="fl-input"
                 placeholder=" "
                 value={form.numero_cheque}
-                onChange={(e) => setForm((p) => ({ ...p, numero_cheque: e.target.value }))}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    numero_cheque: onlyNumbers(e.target.value),
+                  }))
+                }
+                onKeyDown={(e) => {
+                  const permitidas = [
+                    "Backspace",
+                    "Delete",
+                    "ArrowLeft",
+                    "ArrowRight",
+                    "ArrowUp",
+                    "ArrowDown",
+                    "Tab",
+                    "Home",
+                    "End",
+                    "Enter",
+                  ];
+
+                  if (permitidas.includes(e.key) || e.ctrlKey || e.metaKey) return;
+                  if (!/^\d$/.test(e.key)) e.preventDefault();
+                }}
+                inputMode="numeric"
                 disabled={saving}
               />
               <label className="fl-label">
@@ -155,9 +239,26 @@ export default function ModalNuevoCheque({
                 onChange={(e) =>
                   setForm((p) => ({
                     ...p,
-                    importe: e.target.value.replace(/[^\d,.\-]/g, ""),
+                    importe: onlyMoney(e.target.value),
                   }))
                 }
+                onKeyDown={(e) => {
+                  const permitidas = [
+                    "Backspace",
+                    "Delete",
+                    "ArrowLeft",
+                    "ArrowRight",
+                    "ArrowUp",
+                    "ArrowDown",
+                    "Tab",
+                    "Home",
+                    "End",
+                    "Enter",
+                  ];
+
+                  if (permitidas.includes(e.key) || e.ctrlKey || e.metaKey) return;
+                  if (!/[\d,.-]/.test(e.key)) e.preventDefault();
+                }}
                 inputMode="decimal"
                 disabled={saving}
               />
@@ -170,7 +271,9 @@ export default function ModalNuevoCheque({
                 type="date"
                 placeholder=" "
                 value={form.fecha_pago}
-                onChange={(e) => setForm((p) => ({ ...p, fecha_pago: e.target.value }))}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, fecha_pago: e.target.value }))
+                }
                 disabled={saving}
               />
               <label className="fl-label">Fecha de pago *</label>
@@ -267,8 +370,8 @@ export default function ModalNuevoCheque({
                 onSave?.({
                   tipo_cheque: tipoCheque === "echeq" ? "echeq" : "cheque",
                   fecha_emision: form.fecha_emision,
-                  emisor: String(form.emisor || "").trim(),
-                  numero_cheque: String(form.numero_cheque || "").trim(),
+                  emisor: String(form.emisor || "").trim().toUpperCase(),
+                  numero_cheque: onlyNumbers(form.numero_cheque),
                   importe: parseMoney(form.importe),
                   fecha_pago: form.fecha_pago,
                   archivo,

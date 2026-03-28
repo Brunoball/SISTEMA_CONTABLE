@@ -21,7 +21,7 @@ import {
   faBarcode,
   faCubesStacked,
 } from "@fortawesome/free-solid-svg-icons";
-import BASE_URL from "../../../../config/config";
+import BASE_URL from "../../../config/config";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import ModalCargaMasiva from "./modales/ModalCargaMasiva";
-import ModalEditarProducto from "./modales/ModalEditarProducto";
-import ModalEliminar from "../../Global/Modales/ModalEliminar";
-import Toast from "../../Global/Toast";
-import BASE_URL from "../../../config/config";
+import ModalEditarProducto from "./modales/ModalEditarStock";
+import ModalCategoriasStock from "./modales/ModalCategoriasStock";
+import ModalEliminar from "../Global/Modales/ModalEliminar";
+import Toast from "../Global/Toast";
+import BASE_URL from "../../config/config";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
@@ -15,8 +16,9 @@ import {
   faChevronUp,
   faChevronDown,
   faSort,
+  faLayerGroup,
 } from "@fortawesome/free-solid-svg-icons";
-import "./Lista_Productos.css";
+import "./Stock.css";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 
@@ -39,6 +41,12 @@ function buildHeadersJSON() {
   if (sessionKey) h["X-Session"] = sessionKey;
   if (token) h["Authorization"] = `Bearer ${token}`;
   return h;
+}
+
+function notifyListsUpdated() {
+  try {
+    window.dispatchEvent(new CustomEvent("balto:listas-updated"));
+  } catch {}
 }
 
 async function parseJsonOrThrow(res) {
@@ -99,6 +107,40 @@ function formatMoney(value) {
   })}`;
 }
 
+function normalizeText(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function compareValues(a, b, campo) {
+  const va = a?.[campo];
+  const vb = b?.[campo];
+
+  if (campo === "stock" || campo === "precio" || campo === "precio_promo") {
+    const na = Number(va ?? 0);
+    const nb = Number(vb ?? 0);
+    return na - nb;
+  }
+
+  return String(va ?? "").localeCompare(String(vb ?? ""), "es", {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function getProductoCategoriaId(prod) {
+  return Number(
+    prod?.id_stock_categoria ??
+      prod?.stock_categoria_id ??
+      prod?.id_categoria_stock ??
+      prod?.id_categoria ??
+      0
+  );
+}
+
 /* =========================
    Columnas
 ========================= */
@@ -137,21 +179,24 @@ const SKEL_WIDTHS = {
 /* =========================
    Componente principal
 ========================= */
-const Lista_Productos = () => {
-  const [productos, setProductos] = useState([]);
+const Stock = () => {
+  const [productosRaw, setProductosRaw] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+
   const [loading, setLoading] = useState(true);
+  const [loadingCategorias, setLoadingCategorias] = useState(false);
   const [error, setError] = useState(null);
 
   const [busqueda, setBusqueda] = useState("");
+  const [categoriaFiltro, setCategoriaFiltro] = useState("");
   const [paginaActual, setPaginaActual] = useState(1);
-  const [totalProductos, setTotalProductos] = useState(0);
   const [orden, setOrden] = useState({ campo: "nombre", dir: "ASC" });
 
-  /* Un solo modal de carga (individual + masivo) */
   const [modalAbierto, setModalAbierto] = useState(false);
-
   const [modalEditarAbierto, setModalEditarAbierto] = useState(false);
   const [productoEditarId, setProductoEditarId] = useState(null);
+
+  const [modalCategoriasAbierto, setModalCategoriasAbierto] = useState(false);
 
   const [modalEliminarAbierto, setModalEliminarAbierto] = useState(false);
   const [productoEliminar, setProductoEliminar] = useState(null);
@@ -168,6 +213,84 @@ const Lista_Productos = () => {
 
   const cerrarToast = useCallback(() => setToast(null), []);
 
+  const recargarTodo = useCallback(async () => {
+    const [productosRes, categoriasRes] = await Promise.allSettled([
+      (async () => {
+        const params = new URLSearchParams({
+          action: "stock_productos_listar",
+          activo: "1",
+          pagina: "1",
+          por_pagina: "10000",
+          orden_campo: "nombre",
+          orden_dir: "ASC",
+        });
+
+        const data = await apiGet(`${API_URL}?${params.toString()}`);
+        if (data?.exito === false) {
+          throw new Error(data?.mensaje || "Error al obtener productos");
+        }
+        return Array.isArray(data?.productos) ? data.productos : [];
+      })(),
+      (async () => {
+        const params = new URLSearchParams({
+          action: "stock_categorias_listar",
+        });
+
+        const data = await apiGet(`${API_URL}?${params.toString()}`);
+        const lista = Array.isArray(data?.categorias) ? data.categorias : [];
+
+        return [...lista].sort((a, b) =>
+          String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", {
+            sensitivity: "base",
+          })
+        );
+      })(),
+    ]);
+
+    if (productosRes.status === "fulfilled") {
+      setProductosRaw(productosRes.value);
+    } else {
+      setProductosRaw([]);
+      throw productosRes.reason;
+    }
+
+    if (categoriasRes.status === "fulfilled") {
+      setCategorias(categoriasRes.value);
+    } else {
+      setCategorias([]);
+    }
+  }, []);
+
+  const fetchCategorias = useCallback(async () => {
+    setLoadingCategorias(true);
+
+    try {
+      const params = new URLSearchParams({
+        action: "stock_categorias_listar",
+      });
+
+      const data = await apiGet(`${API_URL}?${params.toString()}`);
+
+      const lista = Array.isArray(data?.categorias) ? data.categorias : [];
+
+      const ordenadas = [...lista].sort((a, b) =>
+        String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", {
+          sensitivity: "base",
+        })
+      );
+
+      setCategorias(ordenadas);
+    } catch (err) {
+      setCategorias([]);
+      mostrarToast(
+        "error",
+        err?.message || "No se pudieron cargar las categorías."
+      );
+    } finally {
+      setLoadingCategorias(false);
+    }
+  }, [mostrarToast]);
+
   const fetchProductos = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -176,11 +299,10 @@ const Lista_Productos = () => {
       const params = new URLSearchParams({
         action: "stock_productos_listar",
         activo: "1",
-        busqueda,
-        pagina: String(paginaActual),
-        por_pagina: String(productosPorPagina),
-        orden_campo: orden.campo,
-        orden_dir: orden.dir,
+        pagina: "1",
+        por_pagina: "10000",
+        orden_campo: "nombre",
+        orden_dir: "ASC",
       });
 
       const data = await apiGet(`${API_URL}?${params.toString()}`);
@@ -189,22 +311,77 @@ const Lista_Productos = () => {
         throw new Error(data.mensaje || "Error al obtener productos");
       }
 
-      setProductos(Array.isArray(data.productos) ? data.productos : []);
-      setTotalProductos(Number(data.total || 0));
+      setProductosRaw(Array.isArray(data.productos) ? data.productos : []);
     } catch (err) {
-      setProductos([]);
-      setTotalProductos(0);
+      setProductosRaw([]);
       setError(err.message || "Error inesperado");
     } finally {
       setLoading(false);
     }
-  }, [busqueda, paginaActual, orden]);
+  }, []);
 
   useEffect(() => {
     fetchProductos();
-  }, [fetchProductos]);
+    fetchCategorias();
+  }, [fetchProductos, fetchCategorias]);
 
-  /* Imágenes protegidas */
+  useEffect(() => {
+    const handleExternalListsUpdate = async () => {
+      try {
+        await recargarTodo();
+      } catch {}
+    };
+
+    window.addEventListener("balto:stock-updated", handleExternalListsUpdate);
+    return () => {
+      window.removeEventListener("balto:stock-updated", handleExternalListsUpdate);
+    };
+  }, [recargarTodo]);
+
+  const productosFiltradosYOrdenados = useMemo(() => {
+    let lista = Array.isArray(productosRaw) ? [...productosRaw] : [];
+
+    const q = normalizeText(busqueda);
+    const categoriaId = Number(categoriaFiltro || 0);
+
+    if (q) {
+      lista = lista.filter((p) => {
+        const nombre = normalizeText(p.nombre);
+        const sku = normalizeText(p.sku);
+        return nombre.includes(q) || sku.includes(q);
+      });
+    }
+
+    if (categoriaId > 0) {
+      lista = lista.filter((p) => getProductoCategoriaId(p) === categoriaId);
+    }
+
+    lista.sort((a, b) => {
+      const result = compareValues(a, b, orden.campo);
+      return orden.dir === "ASC" ? result : -result;
+    });
+
+    return lista;
+  }, [productosRaw, busqueda, categoriaFiltro, orden]);
+
+  const totalProductos = productosFiltradosYOrdenados.length;
+  const totalPaginas = Math.max(
+    1,
+    Math.ceil(totalProductos / productosPorPagina)
+  );
+
+  useEffect(() => {
+    if (paginaActual > totalPaginas) {
+      setPaginaActual(totalPaginas);
+    }
+  }, [paginaActual, totalPaginas]);
+
+  const productos = useMemo(() => {
+    const inicio = (paginaActual - 1) * productosPorPagina;
+    const fin = inicio + productosPorPagina;
+    return productosFiltradosYOrdenados.slice(inicio, fin);
+  }, [productosFiltradosYOrdenados, paginaActual]);
+
   useEffect(() => {
     let cancelado = false;
     const objectUrls = [];
@@ -264,6 +441,11 @@ const Lista_Productos = () => {
     setPaginaActual(1);
   };
 
+  const handleCategoriaFiltro = (e) => {
+    setCategoriaFiltro(e.target.value);
+    setPaginaActual(1);
+  };
+
   const handleOrden = (campo) => {
     setOrden((prev) =>
       prev.campo === campo
@@ -319,23 +501,21 @@ const Lista_Productos = () => {
         throw new Error(data.mensaje || "Error al eliminar el producto");
       }
 
-      if (productos.length === 1 && paginaActual > 1) {
-        setPaginaActual((prev) => Math.max(1, prev - 1));
-      } else {
-        await fetchProductos();
-      }
-
       setModalEliminarAbierto(false);
       setProductoEliminar(null);
+
+      await fetchProductos();
+      notifyListsUpdated();
+      window.dispatchEvent(new CustomEvent("balto:stock-updated"));
     } finally {
       setEliminando(false);
     }
   };
 
-  const totalPaginas = Math.ceil(totalProductos / productosPorPagina);
-
   const paginasVisibles = Array.from({ length: totalPaginas }, (_, i) => i + 1)
-    .filter((p) => p === 1 || p === totalPaginas || Math.abs(p - paginaActual) <= 2)
+    .filter(
+      (p) => p === 1 || p === totalPaginas || Math.abs(p - paginaActual) <= 2
+    )
     .reduce((acc, p, i, arr) => {
       if (i > 0 && p - arr[i - 1] > 1) acc.push("...");
       acc.push(p);
@@ -456,10 +636,42 @@ const Lista_Productos = () => {
                     </div>
                   </div>
                 </div>
+
+                <div className="cc-filter">
+                  <div className="cc-floatingField is-active">
+                    <select
+                      className="cc-input cc-input--floating"
+                      value={categoriaFiltro}
+                      onChange={handleCategoriaFiltro}
+                      disabled={loading || loadingCategorias}
+                    >
+                      <option value="">Todas</option>
+                      {categorias.map((cat) => (
+                        <option
+                          key={cat.id_stock_categoria}
+                          value={cat.id_stock_categoria}
+                        >
+                          {cat.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="cc-floatingLabel">
+                      <FontAwesomeIcon icon={faLayerGroup} /> Categoría
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="mov-card__actions">
+              <button
+                type="button"
+                className="mov-btn mov-btn--ghost"
+                onClick={() => setModalCategoriasAbierto(true)}
+              >
+                <FontAwesomeIcon icon={faLayerGroup} /> Categorías
+              </button>
+
               <button
                 type="button"
                 className="mov-btn mov-btn--primary"
@@ -512,10 +724,13 @@ const Lista_Productos = () => {
                 <>
                   {productos.length === 0 ? (
                     <div className="cc-emptyState">
-                      <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+                      <FontAwesomeIcon
+                        icon={faBoxOpen}
+                        className="cc-emptyIcon"
+                      />
                       <div className="cc-emptyText">
-                        {busqueda.trim()
-                          ? `No se encontraron productos para "${busqueda.trim()}".`
+                        {busqueda.trim() || categoriaFiltro
+                          ? "No se encontraron productos con los filtros seleccionados."
                           : "No hay productos para mostrar."}
                       </div>
                     </div>
@@ -546,7 +761,9 @@ const Lista_Productos = () => {
                                 </span>
                               )}
                             </div>
-                            <span className="mov-ellipsissss">{prod.nombre}</span>
+                            <span className="mov-ellipsissss">
+                              {prod.nombre}
+                            </span>
                           </div>
                         </div>
 
@@ -666,7 +883,9 @@ const Lista_Productos = () => {
             <button
               type="button"
               className="mov-btn mov-btn--ghost"
-              onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
+              onClick={() =>
+                setPaginaActual((p) => Math.min(totalPaginas, p + 1))
+              }
               disabled={paginaActual === totalPaginas}
             >
               Siguiente →
@@ -675,23 +894,27 @@ const Lista_Productos = () => {
         )}
       </div>
 
-      {/* ── Modal único: individual + masivo ── */}
       {modalAbierto && (
         <ModalCargaMasiva
           open={modalAbierto}
           onClose={() => setModalAbierto(false)}
           onToast={mostrarToast}
-          /* producto guardado individualmente */
           onGuardado={async () => {
             setModalAbierto(false);
-            await fetchProductos();
+            await recargarTodo();
+            notifyListsUpdated();
+            window.dispatchEvent(new CustomEvent("balto:stock-updated"));
             mostrarToast("exito", "Producto agregado correctamente.");
           }}
-          /* importación masiva CSV completada */
           onImportado={async (mensaje) => {
             setModalAbierto(false);
-            await fetchProductos();
-            mostrarToast("exito", mensaje || "Importación finalizada correctamente.");
+            await recargarTodo();
+            notifyListsUpdated();
+            window.dispatchEvent(new CustomEvent("balto:stock-updated"));
+            mostrarToast(
+              "exito",
+              mensaje || "Importación finalizada correctamente."
+            );
           }}
         />
       )}
@@ -702,8 +925,23 @@ const Lista_Productos = () => {
           onClose={handleCerrarEditar}
           onGuardado={async () => {
             handleCerrarEditar();
-            await fetchProductos();
+            await recargarTodo();
+            notifyListsUpdated();
+            window.dispatchEvent(new CustomEvent("balto:stock-updated"));
             mostrarToast("exito", "Producto editado correctamente.");
+          }}
+        />
+      )}
+
+      {modalCategoriasAbierto && (
+        <ModalCategoriasStock
+          open={modalCategoriasAbierto}
+          onClose={() => setModalCategoriasAbierto(false)}
+          onToast={mostrarToast}
+          onActualizado={async () => {
+            await recargarTodo();
+            notifyListsUpdated();
+            window.dispatchEvent(new CustomEvent("balto:stock-updated"));
           }}
         />
       )}
@@ -771,4 +1009,4 @@ const Lista_Productos = () => {
   );
 };
 
-export default Lista_Productos;
+export default Stock;

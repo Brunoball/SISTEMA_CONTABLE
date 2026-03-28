@@ -58,6 +58,42 @@ function isAllowedFile(file) {
   return allowedExtensions.some((ext) => fileName.endsWith(ext));
 }
 
+function onlyTextUpper(value) {
+  return String(value ?? "")
+    .replace(/[^A-Za-zÁÉÍÓÚáéíóúÑñÜü\s]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^\s+/, "")
+    .toUpperCase();
+}
+
+function onlyNumbers(value) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+function onlyMoney(value) {
+  let clean = String(value ?? "").replace(/[^\d,.-]/g, "");
+
+  clean = clean.replace(/(?!^)-/g, "");
+
+  const commaCount = (clean.match(/,/g) || []).length;
+  if (commaCount > 1) {
+    const firstComma = clean.indexOf(",");
+    clean =
+      clean.slice(0, firstComma + 1) +
+      clean.slice(firstComma + 1).replace(/,/g, "");
+  }
+
+  const dotCount = (clean.match(/\./g) || []).length;
+  if (dotCount > 1) {
+    const firstDot = clean.indexOf(".");
+    clean =
+      clean.slice(0, firstDot + 1) +
+      clean.slice(firstDot + 1).replace(/\./g, "");
+  }
+
+  return clean;
+}
+
 export default function ModalNuevoChequeRecibo({
   open,
   onClose,
@@ -86,8 +122,8 @@ export default function ModalNuevoChequeRecibo({
 
     setForm({
       fecha_emision: initialData?.fecha_emision || todayISO(),
-      emisor: initialData?.emisor || "",
-      numero_cheque: initialData?.numero_cheque || "",
+      emisor: onlyTextUpper(initialData?.emisor || ""),
+      numero_cheque: onlyNumbers(initialData?.numero_cheque || ""),
       importe:
         initialData?.importe != null && initialData?.importe !== ""
           ? moneyARSInput(initialData.importe)
@@ -171,9 +207,33 @@ export default function ModalNuevoChequeRecibo({
                 placeholder=" "
                 value={form.emisor}
                 onChange={(e) =>
-                  setForm((p) => ({ ...p, emisor: e.target.value }))
+                  setForm((p) => ({
+                    ...p,
+                    emisor: onlyTextUpper(e.target.value),
+                  }))
                 }
+                onKeyDown={(e) => {
+                  const permitidas = [
+                    "Backspace",
+                    "Delete",
+                    "ArrowLeft",
+                    "ArrowRight",
+                    "ArrowUp",
+                    "ArrowDown",
+                    "Tab",
+                    "Home",
+                    "End",
+                    "Enter",
+                  ];
+
+                  if (permitidas.includes(e.key) || e.ctrlKey || e.metaKey) return;
+
+                  if (!/^[A-Za-zÁÉÍÓÚáéíóúÑñÜü\s]$/.test(e.key)) {
+                    e.preventDefault();
+                  }
+                }}
                 disabled={saving}
+                style={{ textTransform: "uppercase" }}
               />
               <label className="fl-label">Emisor *</label>
             </div>
@@ -184,8 +244,29 @@ export default function ModalNuevoChequeRecibo({
                 placeholder=" "
                 value={form.numero_cheque}
                 onChange={(e) =>
-                  setForm((p) => ({ ...p, numero_cheque: e.target.value }))
+                  setForm((p) => ({
+                    ...p,
+                    numero_cheque: onlyNumbers(e.target.value),
+                  }))
                 }
+                onKeyDown={(e) => {
+                  const permitidas = [
+                    "Backspace",
+                    "Delete",
+                    "ArrowLeft",
+                    "ArrowRight",
+                    "ArrowUp",
+                    "ArrowDown",
+                    "Tab",
+                    "Home",
+                    "End",
+                    "Enter",
+                  ];
+
+                  if (permitidas.includes(e.key) || e.ctrlKey || e.metaKey) return;
+                  if (!/^\d$/.test(e.key)) e.preventDefault();
+                }}
+                inputMode="numeric"
                 disabled={saving}
               />
               <label className="fl-label">
@@ -201,9 +282,26 @@ export default function ModalNuevoChequeRecibo({
                 onChange={(e) =>
                   setForm((p) => ({
                     ...p,
-                    importe: e.target.value.replace(/[^\d,\-]/g, ""),
+                    importe: onlyMoney(e.target.value),
                   }))
                 }
+                onKeyDown={(e) => {
+                  const permitidas = [
+                    "Backspace",
+                    "Delete",
+                    "ArrowLeft",
+                    "ArrowRight",
+                    "ArrowUp",
+                    "ArrowDown",
+                    "Tab",
+                    "Home",
+                    "End",
+                    "Enter",
+                  ];
+
+                  if (permitidas.includes(e.key) || e.ctrlKey || e.metaKey) return;
+                  if (!/[\d,.-]/.test(e.key)) e.preventDefault();
+                }}
                 inputMode="decimal"
                 disabled={saving}
               />
@@ -346,8 +444,8 @@ export default function ModalNuevoChequeRecibo({
                 onSave?.({
                   tipo_cheque: tipoCheque === "echeq" ? "echeq" : "cheque",
                   fecha_emision: form.fecha_emision,
-                  emisor: String(form.emisor || "").trim(),
-                  numero_cheque: String(form.numero_cheque || "").trim(),
+                  emisor: String(form.emisor || "").trim().toUpperCase(),
+                  numero_cheque: onlyNumbers(form.numero_cheque),
                   importe: parseMoney(form.importe),
                   fecha_pago: form.fecha_pago,
                   archivo,

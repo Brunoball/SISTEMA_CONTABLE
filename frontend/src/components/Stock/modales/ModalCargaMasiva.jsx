@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import "./ModalCargaMasiva.css";
-import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante"; // AJUSTÁ ESTA RUTA SI EN TU PROYECTO ESTÁ EN OTRO LADO
+import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante";
 
 import {
   faBoxOpen,
@@ -25,9 +25,11 @@ import {
   faCubesStacked,
   faAlignLeft,
   faEye,
+  faListCheck,
+  faPlus,
 } from "@fortawesome/free-solid-svg-icons";
 
-import BASE_URL from "../../../../config/config";
+import BASE_URL from "../../../config/config";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 
@@ -67,6 +69,13 @@ function buildHeadersGET() {
   return h;
 }
 
+function buildHeadersJSON() {
+  return {
+    "Content-Type": "application/json",
+    ...buildHeadersGET(),
+  };
+}
+
 async function parseJsonOrThrow(res) {
   if (res.status === 401 || res.status === 403) {
     throw new Error("Sesión vencida o no autorizada. Volvé a iniciar sesión.");
@@ -95,9 +104,8 @@ async function parseJsonOrThrow(res) {
 }
 
 /* =========================
-   Helpers monetarios — con centavos automáticos
+   Helpers monetarios
 ========================= */
-
 function normalizeMoneyInput(raw = "") {
   let value = String(raw).replace(/[^\d,]/g, "");
 
@@ -141,6 +149,17 @@ function moneyToApi(raw = "") {
   return num.toFixed(2);
 }
 
+function moneyToInput(raw = "") {
+  if (raw === null || raw === undefined || raw === "") return "";
+  const num = Number(String(raw).replace(",", "."));
+  if (Number.isNaN(num)) return "";
+  return num.toFixed(2).replace(".", ",");
+}
+
+function onlyNumbers(v) {
+  return String(v ?? "").replace(/[^\d]/g, "");
+}
+
 /* =========================
    Helpers tipo archivo masivo
 ========================= */
@@ -160,6 +179,7 @@ function getMetodoLabel(metodo) {
     case "php_pdfparser":
       return "PDF Parser";
     case "pdf_ocr_google_vision":
+    case "imagick_google_vision":
       return "PDF escaneado + Google Vision OCR";
     default:
       return metodo || "No informado";
@@ -196,10 +216,7 @@ const ErrorMsg = ({ msg }) => (
       gap: 4,
     }}
   >
-    <FontAwesomeIcon
-      icon={faCircleExclamation}
-      style={{ fontSize: 10 }}
-    />
+    <FontAwesomeIcon icon={faCircleExclamation} style={{ fontSize: 10 }} />
     {msg}
   </span>
 );
@@ -211,24 +228,17 @@ AFEITADORA CORPORAL 3 EN 1;04162;45999;39999;8;Afeitadora corporal
 `;
 
 /* =========================
-   FloatingField — siempre activo
+   FloatingField
 ========================= */
 function FloatingField({ label, icon, error, children, style }) {
   return (
-    <div
-      className="cmi-floatingField cmi-floatingField--active"
-      style={style}
-    >
+    <div className="cmi-floatingField cmi-floatingField--active" style={style}>
       {children}
       <label className="cmi-floatingLabel cmi-floatingLabel--active">
         {icon && (
           <FontAwesomeIcon
             icon={icon}
-            style={{
-              marginRight: 5,
-              opacity: 0.7,
-              fontSize: 11,
-            }}
+            style={{ marginRight: 5, opacity: 0.7, fontSize: 11 }}
           />
         )}
         {label}
@@ -239,7 +249,7 @@ function FloatingField({ label, icon, error, children, style }) {
 }
 
 /* =========================
-   PriceInput — con centavos automáticos
+   PriceInput
 ========================= */
 function PriceInput({
   name,
@@ -266,6 +276,279 @@ function PriceInput({
   );
 }
 
+/* =========================
+   Modal confirmar productos IA
+========================= */
+function ModalConfirmarProductosIA({
+  open,
+  dark,
+  productos,
+  categorias,
+  loadingCategorias,
+  onClose,
+  onChangeProducto,
+  onAddFila,
+  onRemoveFila,
+  onConfirm,
+  confirmando,
+  errores,
+}) {
+  if (!open) return null;
+
+  return createPortal(
+    <div className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim()}>
+      <div
+        className={["mi-modal__container", "cmi-container", dark ? "mi-modal--dark" : ""].join(" ").trim()}
+        role="dialog"
+        aria-modal="true"
+        style={{ width: "min(1180px, 96vw)", maxHeight: "92vh" }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="mi-modal__header">
+          <div className="mi-modal__head-icon" aria-hidden="true">
+            <FontAwesomeIcon icon={faListCheck} />
+          </div>
+
+          <div className="mi-modal__head-left">
+            <h2 className="mi-modal__title">Confirmar productos detectados</h2>
+            <p className="mi-modal__subtitle">
+              Revisá y corregí los datos antes de cargarlos a la base
+            </p>
+          </div>
+
+          <button
+            className="mi-modal__close"
+            onClick={onClose}
+            aria-label="Cerrar"
+            disabled={confirmando}
+            type="button"
+          >
+            <FontAwesomeIcon icon={faXmark} />
+          </button>
+        </div>
+
+        <div className="mi-modal__content" style={{ overflowY: "auto", padding: 20 }}>
+          {errores.global && (
+            <div className="cmi-warnBox" style={{ marginBottom: 14 }}>
+              <div className="cmi-warnBox__title">
+                <FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 8 }} />
+                Error
+              </div>
+              <div>{errores.global}</div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+            <div className="mi-card__hint">
+              Se detectaron <b>{productos.length}</b> producto{productos.length !== 1 ? "s" : ""}.
+            </div>
+
+            <button
+              type="button"
+              className="mit-btn mit-btn--ghost"
+              onClick={onAddFila}
+              disabled={confirmando}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+            >
+              <FontAwesomeIcon icon={faPlus} />
+              Agregar fila
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {productos.map((item, idx) => {
+              const err = errores[`fila_${idx}`] || {};
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    border: "1px solid var(--nv-border-md)",
+                    borderRadius: 14,
+                    padding: 14,
+                    background: "var(--nv-bg-soft, rgba(255,255,255,0.02))",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>
+                      Producto {idx + 1}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="mit-btn mit-btn--ghost"
+                      onClick={() => onRemoveFila(idx)}
+                      disabled={confirmando || productos.length <= 1}
+                    >
+                      <FontAwesomeIcon icon={faTrashCan} /> Quitar
+                    </button>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <FloatingField label="Nombre *" error={err.nombre}>
+                      <input
+                        className="cmi-input"
+                        value={item.nombre}
+                        onChange={(e) => onChangeProducto(idx, "nombre", e.target.value)}
+                        placeholder="Nombre del producto"
+                      />
+                    </FloatingField>
+
+                    <div className="fl-row">
+                      <FloatingField label="SKU / Código" icon={faBarcode}>
+                        <input
+                          className="cmi-input"
+                          value={item.sku}
+                          onChange={(e) => onChangeProducto(idx, "sku", e.target.value)}
+                          placeholder="Ej: 04163"
+                        />
+                      </FloatingField>
+
+                      <FloatingField label="Stock" icon={faCubesStacked} error={err.stock}>
+                        <input
+                          className="cmi-input"
+                          value={item.stock}
+                          onChange={(e) =>
+                            onChangeProducto(idx, "stock", onlyNumbers(e.target.value))
+                          }
+                          placeholder="Ej: 25"
+                          inputMode="numeric"
+                        />
+                      </FloatingField>
+                    </div>
+
+                    <div className="fl-row">
+                      <FloatingField label="Precio *" error={err.precio}>
+                        <PriceInput
+                          name={`precio_${idx}`}
+                          value={item.precio}
+                          onChange={(e) =>
+                            onChangeProducto(idx, "precio", normalizeMoneyInput(e.target.value))
+                          }
+                          onBlur={(e) =>
+                            onChangeProducto(idx, "precio", formatMoneyBlur(e.target.value))
+                          }
+                          onFocus={(e) =>
+                            onChangeProducto(idx, "precio", formatMoneyFocus(e.target.value))
+                          }
+                          placeholder="0,00"
+                        />
+                      </FloatingField>
+
+                      <FloatingField label="Precio promocional" error={err.precio_promo}>
+                        <PriceInput
+                          name={`precio_promo_${idx}`}
+                          value={item.precio_promo}
+                          onChange={(e) =>
+                            onChangeProducto(
+                              idx,
+                              "precio_promo",
+                              normalizeMoneyInput(e.target.value)
+                            )
+                          }
+                          onBlur={(e) =>
+                            onChangeProducto(
+                              idx,
+                              "precio_promo",
+                              formatMoneyBlur(e.target.value)
+                            )
+                          }
+                          onFocus={(e) =>
+                            onChangeProducto(
+                              idx,
+                              "precio_promo",
+                              formatMoneyFocus(e.target.value)
+                            )
+                          }
+                          placeholder="0,00"
+                        />
+                      </FloatingField>
+                    </div>
+
+                    <FloatingField label="Categoría" icon={faTag}>
+                      <select
+                        className="cmi-input cmi-select"
+                        value={item.id_categoria_stock}
+                        onChange={(e) =>
+                          onChangeProducto(idx, "id_categoria_stock", e.target.value)
+                        }
+                        disabled={loadingCategorias || confirmando}
+                      >
+                        <option value="">
+                          {loadingCategorias ? "Cargando categorías..." : "Sin categoría"}
+                        </option>
+                        {categorias.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </FloatingField>
+
+                    <FloatingField label="Descripción" icon={faAlignLeft}>
+                      <textarea
+                        className="cmi-input cmi-textarea"
+                        rows={3}
+                        value={item.descripcion}
+                        onChange={(e) => onChangeProducto(idx, "descripcion", e.target.value)}
+                        placeholder="Descripción opcional"
+                      />
+                    </FloatingField>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="cmi-footer">
+          <div className="mi-card__hint cmi-footer__hint">
+            Confirmá solo cuando los datos estén correctos.
+          </div>
+
+          <div className="cmi-footer__btns">
+            <button
+              type="button"
+              className="mit-btn mit-btn--ghost"
+              onClick={onClose}
+              disabled={confirmando}
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              className="mit-btn mit-btn--solid"
+              onClick={onConfirm}
+              disabled={confirmando || !productos.length}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+            >
+              <FontAwesomeIcon icon={faCheckCircle} />
+              {confirmando ? "Cargando..." : "Confirmar y cargar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function normalizarProductoDetectado(item = {}) {
+  return {
+    nombre: String(item.nombre ?? "").trim(),
+    sku: String(item.sku ?? "").trim(),
+    precio: moneyToInput(item.precio ?? ""),
+    precio_promo: moneyToInput(item.precio_promo ?? ""),
+    stock:
+      item.stock === null || item.stock === undefined ? "" : String(item.stock),
+    descripcion: String(item.descripcion ?? "").trim(),
+    id_categoria_stock:
+      item.id_categoria_stock === null || item.id_categoria_stock === undefined
+        ? ""
+        : String(item.id_categoria_stock),
+  };
+}
+
 export default function ModalCargaMasiva({
   open,
   onClose,
@@ -280,31 +563,22 @@ export default function ModalCargaMasiva({
   const [tab, setTab] = useState("individual");
   const [dark, setDark] = useState(isTemaOscuro);
 
-  /* =========================
-     Categorías
-  ========================= */
   const [categorias, setCategorias] = useState([]);
   const [loadingCategorias, setLoadingCategorias] = useState(false);
 
-  /* =========================
-     Loading general
-  ========================= */
   const [guardando, setGuardando] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
-  const isLoading = guardando || subiendo;
+  const [clasificando, setClasificando] = useState(false);
+  const [confirmandoDetectados, setConfirmandoDetectados] = useState(false);
+  const isLoading =
+    guardando || subiendo || clasificando || confirmandoDetectados;
 
-  /* =========================
-     Modal global de preview
-  ========================= */
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewMime, setPreviewMime] = useState("");
   const [previewFileName, setPreviewFileName] = useState("");
   const [previewTitle, setPreviewTitle] = useState("Archivo");
 
-  /* =========================
-     Tab individual
-  ========================= */
   const [form, setForm] = useState({
     nombre: "",
     sku: "",
@@ -317,22 +591,20 @@ export default function ModalCargaMasiva({
 
   const [errores, setErrores] = useState({});
   const [imagenFile, setImagenFile] = useState(null);
-
   const imagenNombre = useMemo(() => imagenFile?.name || "", [imagenFile]);
 
-  /* =========================
-     Tab masivo
-  ========================= */
   const [archivo, setArchivo] = useState(null);
   const [resultado, setResultado] = useState(null);
   const [csvPreview, setCsvPreview] = useState([]);
   const [csvHeaders, setCsvHeaders] = useState([]);
 
+  const [modalConfirmOpen, setModalConfirmOpen] = useState(false);
+  const [productosDetectados, setProductosDetectados] = useState([]);
+  const [erroresDetectados, setErroresDetectados] = useState({});
+  const [textoDetectadoOriginal, setTextoDetectadoOriginal] = useState("");
+
   const nombreArchivo = useMemo(() => archivo?.name || "", [archivo]);
-  const tipoArchivo = useMemo(
-    () => getTipoArchivo(archivo?.name),
-    [archivo]
-  );
+  const tipoArchivo = useMemo(() => getTipoArchivo(archivo?.name), [archivo]);
 
   useEffect(() => {
     if (!open) return;
@@ -401,11 +673,18 @@ export default function ModalCargaMasiva({
   useEffect(() => {
     if (!open) return;
     const h = (e) => {
-      if (e.key === "Escape" && !isLoading && !previewOpen) onClose?.();
+      if (
+        e.key === "Escape" &&
+        !isLoading &&
+        !previewOpen &&
+        !modalConfirmOpen
+      ) {
+        onClose?.();
+      }
     };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
-  }, [open, onClose, isLoading, previewOpen]);
+  }, [open, onClose, isLoading, previewOpen, modalConfirmOpen]);
 
   useEffect(() => {
     if (open) {
@@ -418,6 +697,7 @@ export default function ModalCargaMasiva({
       resetIndividual();
       resetMasivo();
       cerrarPreview();
+      cerrarModalConfirmacion();
       setTab("individual");
     }
   }, [open]);
@@ -440,10 +720,19 @@ export default function ModalCargaMasiva({
   function resetMasivo() {
     setArchivo(null);
     setSubiendo(false);
+    setClasificando(false);
+    setConfirmandoDetectados(false);
     setResultado(null);
     setCsvPreview([]);
     setCsvHeaders([]);
+    setTextoDetectadoOriginal("");
     if (fileInputMasivoRef.current) fileInputMasivoRef.current.value = "";
+  }
+
+  function cerrarModalConfirmacion() {
+    setModalConfirmOpen(false);
+    setProductosDetectados([]);
+    setErroresDetectados({});
   }
 
   const cerrarPreview = () => {
@@ -507,11 +796,18 @@ export default function ModalCargaMasiva({
       errs.precio = "Ingresá un precio válido";
     }
 
-    if (
-      form.precio_promo &&
-      (Number.isNaN(promoNum) || promoNum < 0)
-    ) {
+    if (form.precio_promo && (Number.isNaN(promoNum) || promoNum < 0)) {
       errs.precio_promo = "Precio promo inválido";
+    }
+
+    if (
+      form.precio &&
+      form.precio_promo &&
+      !Number.isNaN(precioNum) &&
+      !Number.isNaN(promoNum) &&
+      promoNum > precioNum
+    ) {
+      errs.precio_promo = "La promo no puede ser mayor al precio";
     }
 
     if (
@@ -541,6 +837,63 @@ export default function ModalCargaMasiva({
 
     return errs;
   };
+
+  function validarProductosDetectados() {
+    const errs = {};
+    let hayError = false;
+
+    productosDetectados.forEach((item, idx) => {
+      const fila = {};
+      const precioNum = Number(String(item.precio || "").replace(",", "."));
+      const promoNum =
+        item.precio_promo !== ""
+          ? Number(String(item.precio_promo).replace(",", "."))
+          : null;
+
+      if (!String(item.nombre || "").trim()) {
+        fila.nombre = "El nombre es obligatorio";
+      }
+
+      if (!item.precio || Number.isNaN(precioNum) || precioNum < 0) {
+        fila.precio = "Ingresá un precio válido";
+      }
+
+      if (
+        item.precio_promo &&
+        (Number.isNaN(promoNum) || promoNum < 0)
+      ) {
+        fila.precio_promo = "Precio promo inválido";
+      }
+
+      if (
+        item.precio &&
+        item.precio_promo &&
+        !Number.isNaN(precioNum) &&
+        !Number.isNaN(promoNum) &&
+        promoNum > precioNum
+      ) {
+        fila.precio_promo = "La promo no puede ser mayor al precio";
+      }
+
+      if (
+        item.stock !== "" &&
+        (Number.isNaN(Number(item.stock)) || Number(item.stock) < 0)
+      ) {
+        fila.stock = "Stock inválido";
+      }
+
+      if (Object.keys(fila).length > 0) {
+        errs[`fila_${idx}`] = fila;
+        hayError = true;
+      }
+    });
+
+    if (hayError) {
+      errs.global = "Revisá los productos marcados antes de confirmar.";
+    }
+
+    return errs;
+  }
 
   const limpiarImagen = () => {
     setImagenFile(null);
@@ -635,6 +988,8 @@ export default function ModalCargaMasiva({
     setResultado(null);
     setCsvPreview([]);
     setCsvHeaders([]);
+    setTextoDetectadoOriginal("");
+    cerrarModalConfirmacion();
   };
 
   const descargarPlantilla = () => {
@@ -650,6 +1005,19 @@ export default function ModalCargaMasiva({
     a.remove();
     URL.revokeObjectURL(url);
   };
+
+  async function clasificarTextoDetectado(textoDetectado) {
+    const res = await fetch(
+      `${API_URL}?action=stock_productos_clasificar_texto`,
+      {
+        method: "POST",
+        headers: buildHeadersJSON(),
+        body: JSON.stringify({ texto: textoDetectado }),
+      }
+    );
+
+    return parseJsonOrThrow(res);
+  }
 
   const handleImportar = async () => {
     if (!archivo) {
@@ -668,6 +1036,7 @@ export default function ModalCargaMasiva({
     try {
       setSubiendo(true);
       setResultado(null);
+      cerrarModalConfirmacion();
 
       const formData = new FormData();
       let action = "";
@@ -705,18 +1074,166 @@ export default function ModalCargaMasiva({
             data.actualizados || 0
           }.`
         );
-      } else {
-        const chars = data.total_caracteres ?? 0;
-        const metodo = getMetodoLabel(data.metodo);
-        onToast?.(
-          "success",
-          `Texto extraído con ${metodo}: ${chars} caracteres.`
-        );
+        return;
       }
+
+      const textoDetectado = String(data.texto_detectado || "").trim();
+      setTextoDetectadoOriginal(textoDetectado);
+
+      const chars = data.total_caracteres ?? 0;
+      const metodo = getMetodoLabel(data.metodo);
+
+      onToast?.("success", `Texto extraído con ${metodo}: ${chars} caracteres.`);
+
+      if (!textoDetectado) {
+        onToast?.("error", "No se detectó texto para clasificar productos.");
+        return;
+      }
+
+      setClasificando(true);
+      const clasificado = await clasificarTextoDetectado(textoDetectado);
+      const productos = Array.isArray(clasificado.productos)
+        ? clasificado.productos.map(normalizarProductoDetectado)
+        : [];
+
+      if (!productos.length) {
+        onToast?.(
+          "error",
+          "No se pudieron detectar productos confiables desde el texto."
+        );
+        return;
+      }
+
+      setProductosDetectados(productos);
+      setErroresDetectados({});
+      setModalConfirmOpen(true);
+      onToast?.(
+        "success",
+        `Se detectaron ${productos.length} producto${productos.length !== 1 ? "s" : ""}. Revisalos y confirmá.`
+      );
     } catch (err) {
       onToast?.("error", err.message || "Error al procesar el archivo.");
     } finally {
       setSubiendo(false);
+      setClasificando(false);
+    }
+  };
+
+  const handleProductoDetectadoChange = (idx, field, value) => {
+    setProductosDetectados((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, [field]: value } : item))
+    );
+
+    setErroresDetectados((prev) => {
+      const next = { ...prev };
+      if (next[`fila_${idx}`]?.[field]) {
+        next[`fila_${idx}`] = { ...next[`fila_${idx}`], [field]: "" };
+      }
+      next.global = "";
+      return next;
+    });
+  };
+
+  const handleAddFilaDetectada = () => {
+    setProductosDetectados((prev) => [
+      ...prev,
+      {
+        nombre: "",
+        sku: "",
+        precio: "",
+        precio_promo: "",
+        stock: "",
+        descripcion: "",
+        id_categoria_stock: "",
+      },
+    ]);
+  };
+
+  const handleRemoveFilaDetectada = (idx) => {
+    setProductosDetectados((prev) => prev.filter((_, i) => i !== idx));
+    setErroresDetectados({});
+  };
+
+  const handleConfirmarDetectados = async () => {
+    const errs = validarProductosDetectados();
+    if (Object.keys(errs).length > 0) {
+      setErroresDetectados(errs);
+      return;
+    }
+
+    setConfirmandoDetectados(true);
+    setErroresDetectados({});
+
+    let creados = 0;
+    const erroresCarga = [];
+
+    try {
+      for (let i = 0; i < productosDetectados.length; i++) {
+        const item = productosDetectados[i];
+
+        try {
+          const fd = new FormData();
+          fd.append("nombre", String(item.nombre || "").trim());
+          fd.append("sku", String(item.sku || "").trim());
+          fd.append("precio", moneyToApi(item.precio));
+          fd.append(
+            "precio_promo",
+            item.precio_promo !== "" ? moneyToApi(item.precio_promo) : ""
+          );
+          fd.append("stock", item.stock !== "" ? String(item.stock) : "");
+          fd.append("descripcion", String(item.descripcion || "").trim());
+
+          if (item.id_categoria_stock !== "") {
+            fd.append("id_categoria_stock", String(item.id_categoria_stock));
+          }
+
+          const res = await fetch(`${API_URL}?action=stock_productos_crear`, {
+            method: "POST",
+            headers: buildHeadersMultipart(),
+            body: fd,
+          });
+
+          const data = await parseJsonOrThrow(res);
+          if (data.exito === false) {
+            throw new Error(data.mensaje || "No se pudo guardar el producto");
+          }
+
+          creados++;
+        } catch (err) {
+          erroresCarga.push(
+            `Producto ${i + 1} (${item.nombre || "sin nombre"}): ${
+              err.message || "Error al guardar"
+            }`
+          );
+        }
+      }
+
+      setResultado((prev) => ({
+        ...(prev || {}),
+        confirmacion_ia: {
+          creados,
+          errores: erroresCarga,
+          productos_confirmados: productosDetectados.length,
+        },
+        texto_detectado: textoDetectadoOriginal,
+      }));
+
+      cerrarModalConfirmacion();
+
+      if (creados > 0) {
+        onGuardado?.();
+      }
+
+      if (erroresCarga.length > 0) {
+        onToast?.(
+          "error",
+          `Se cargaron ${creados} producto(s), pero hubo ${erroresCarga.length} error(es).`
+        );
+      } else {
+        onImportado?.(`Se cargaron correctamente ${creados} producto(s).`);
+      }
+    } finally {
+      setConfirmandoDetectados(false);
     }
   };
 
@@ -726,17 +1243,20 @@ export default function ModalCargaMasiva({
       : tipoArchivo === "pdf"
       ? "Extrayendo..."
       : "Procesando..."
+    : clasificando
+    ? "Clasificando..."
     : tipoArchivo === "csv"
     ? "Importar productos"
     : tipoArchivo === "pdf"
-    ? "Extraer texto del PDF"
+    ? "Extraer y clasificar PDF"
     : tipoArchivo === "imagen"
-    ? "Reconocer texto (OCR)"
+    ? "Reconocer y clasificar"
     : "Seleccioná un archivo";
 
   const handleTabChange = (t) => {
     setTab(t);
     setErrores({});
+    cerrarModalConfirmacion();
   };
 
   if (!open) return null;
@@ -744,10 +1264,7 @@ export default function ModalCargaMasiva({
   return createPortal(
     <>
       <div
-        className={[
-          "mi-modal__overlay",
-          dark ? "mi-modal__overlay--dark" : "",
-        ]
+        className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""]
           .join(" ")
           .trim()}
       >
@@ -800,11 +1317,7 @@ export default function ModalCargaMasiva({
           >
             {[
               { key: "individual", icon: faBoxOpen, label: "Individual" },
-              {
-                key: "masivo",
-                icon: faCloudArrowUp,
-                label: "Carga masiva",
-              },
+              { key: "masivo", icon: faCloudArrowUp, label: "Carga masiva" },
             ].map(({ key, icon, label }) => (
               <button
                 key={key}
@@ -823,10 +1336,7 @@ export default function ModalCargaMasiva({
                   background: "none",
                   cursor: "pointer",
                   fontWeight: tab === key ? 700 : 400,
-                  color:
-                    tab === key
-                      ? "var(--nv-action)"
-                      : "var(--nv-muted)",
+                  color: tab === key ? "var(--nv-action)" : "var(--nv-muted)",
                   fontSize: "0.88rem",
                   transition: "all .15s",
                   fontFamily: "inherit",
@@ -843,13 +1353,7 @@ export default function ModalCargaMasiva({
             style={{ overflowY: "auto", padding: 20 }}
           >
             {tab === "individual" && (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 14,
-                }}
-              >
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {errores.global && (
                   <div className="cmi-warnBox">
                     <div className="cmi-warnBox__title">
@@ -863,10 +1367,7 @@ export default function ModalCargaMasiva({
                   </div>
                 )}
 
-                <FloatingField
-                  label="Nombre del producto *"
-                  error={errores.nombre}
-                >
+                <FloatingField label="Nombre del producto *" error={errores.nombre}>
                   <input
                     name="nombre"
                     value={form.nombre}
@@ -904,10 +1405,7 @@ export default function ModalCargaMasiva({
                 </div>
 
                 <div className="fl-row">
-                  <FloatingField
-                    label="Precio *"
-                    error={errores.precio}
-                  >
+                  <FloatingField label="Precio *" error={errores.precio}>
                     <PriceInput
                       name="precio"
                       value={form.precio}
@@ -942,9 +1440,7 @@ export default function ModalCargaMasiva({
                     disabled={loadingCategorias}
                   >
                     <option value="">
-                      {loadingCategorias
-                        ? "Cargando categorías..."
-                        : "Sin categoría"}
+                      {loadingCategorias ? "Cargando categorías..." : "Sin categoría"}
                     </option>
                     {categorias.map((cat) => (
                       <option key={cat.id} value={cat.id}>
@@ -984,8 +1480,7 @@ export default function ModalCargaMasiva({
                       className="mit-btn mit-btn--ghost"
                       onClick={() => inputImagenRef.current?.click()}
                     >
-                      <FontAwesomeIcon icon={faArrowUpFromBracket} />{" "}
-                      Seleccionar imagen
+                      <FontAwesomeIcon icon={faArrowUpFromBracket} /> Seleccionar imagen
                     </button>
                   ) : (
                     <div className="cmi-fileResume">
@@ -995,9 +1490,7 @@ export default function ModalCargaMasiva({
                         </span>
 
                         <div className="cmi-fileResume__meta">
-                          <div className="cmi-fileResume__name">
-                            {imagenNombre}
-                          </div>
+                          <div className="cmi-fileResume__name">{imagenNombre}</div>
                           <TipoBadge tipo="imagen" />
                         </div>
                       </div>
@@ -1035,13 +1528,7 @@ export default function ModalCargaMasiva({
             )}
 
             {tab === "masivo" && (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 16,
-                }}
-              >
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div className="cmi-uploadBox">
                   <div className="cmi-uploadBox__title">
                     <FontAwesomeIcon icon={faCloudArrowUp} /> Archivo masivo
@@ -1061,8 +1548,7 @@ export default function ModalCargaMasiva({
                       className="mit-btn mit-btn--ghost"
                       onClick={() => fileInputMasivoRef.current?.click()}
                     >
-                      <FontAwesomeIcon icon={faArrowUpFromBracket} />{" "}
-                      Seleccionar archivo
+                      <FontAwesomeIcon icon={faArrowUpFromBracket} /> Seleccionar archivo
                     </button>
 
                     <button
@@ -1070,8 +1556,7 @@ export default function ModalCargaMasiva({
                       className="mit-btn mit-btn--ghost"
                       onClick={descargarPlantilla}
                     >
-                      <FontAwesomeIcon icon={faDownload} /> Descargar plantilla
-                      CSV
+                      <FontAwesomeIcon icon={faDownload} /> Descargar plantilla CSV
                     </button>
                   </div>
 
@@ -1083,9 +1568,7 @@ export default function ModalCargaMasiva({
                         </span>
 
                         <div className="cmi-fileResume__meta">
-                          <div className="cmi-fileResume__name">
-                            {nombreArchivo}
-                          </div>
+                          <div className="cmi-fileResume__name">{nombreArchivo}</div>
                           <TipoBadge tipo={tipoArchivo} />
                         </div>
                       </div>
@@ -1114,6 +1597,8 @@ export default function ModalCargaMasiva({
                             setResultado(null);
                             setCsvPreview([]);
                             setCsvHeaders([]);
+                            setTextoDetectadoOriginal("");
+                            cerrarModalConfirmacion();
                             if (fileInputMasivoRef.current) {
                               fileInputMasivoRef.current.value = "";
                             }
@@ -1129,27 +1614,20 @@ export default function ModalCargaMasiva({
                 {resultado && tipoArchivo === "csv" && (
                   <div className="cmi-okBox">
                     <div className="cmi-okBox__title">
-                      <FontAwesomeIcon
-                        icon={faCheckCircle}
-                        style={{ marginRight: 8 }}
-                      />
+                      <FontAwesomeIcon icon={faCheckCircle} style={{ marginRight: 8 }} />
                       Resultado de importación
                     </div>
 
                     <div className="cmi-resultGrid">
                       <div className="cmi-resultItem">
-                        <span className="cmi-resultItem__label">
-                          Creados
-                        </span>
+                        <span className="cmi-resultItem__label">Creados</span>
                         <b className="cmi-resultItem__val cmi-resultItem__val--ok">
                           {resultado.creados ?? 0}
                         </b>
                       </div>
 
                       <div className="cmi-resultItem">
-                        <span className="cmi-resultItem__label">
-                          Actualizados
-                        </span>
+                        <span className="cmi-resultItem__label">Actualizados</span>
                         <b className="cmi-resultItem__val">
                           {resultado.actualizados ?? 0}
                         </b>
@@ -1161,41 +1639,57 @@ export default function ModalCargaMasiva({
                 {resultado && tipoArchivo !== "csv" && (
                   <div className="cmi-okBox">
                     <div className="cmi-okBox__title">
-                      <FontAwesomeIcon
-                        icon={faCheckCircle}
-                        style={{ marginRight: 8 }}
-                      />
+                      <FontAwesomeIcon icon={faCheckCircle} style={{ marginRight: 8 }} />
                       Resultado del procesamiento
                     </div>
 
                     <div className="cmi-resultGrid">
                       <div className="cmi-resultItem">
-                        <span className="cmi-resultItem__label">
-                          Método
-                        </span>
+                        <span className="cmi-resultItem__label">Método</span>
                         <b className="cmi-resultItem__val">
                           {getMetodoLabel(resultado.metodo)}
                         </b>
                       </div>
 
                       <div className="cmi-resultItem">
-                        <span className="cmi-resultItem__label">
-                          Páginas
-                        </span>
+                        <span className="cmi-resultItem__label">Páginas</span>
                         <b className="cmi-resultItem__val">
                           {resultado.total_paginas ?? 1}
                         </b>
                       </div>
 
                       <div className="cmi-resultItem">
-                        <span className="cmi-resultItem__label">
-                          Caracteres
-                        </span>
+                        <span className="cmi-resultItem__label">Caracteres</span>
                         <b className="cmi-resultItem__val cmi-resultItem__val--ok">
                           {resultado.total_caracteres ?? 0}
                         </b>
                       </div>
                     </div>
+
+                    {resultado?.confirmacion_ia && (
+                      <div className="cmi-resultGrid" style={{ marginTop: 12 }}>
+                        <div className="cmi-resultItem">
+                          <span className="cmi-resultItem__label">Confirmados</span>
+                          <b className="cmi-resultItem__val">
+                            {resultado.confirmacion_ia.productos_confirmados ?? 0}
+                          </b>
+                        </div>
+
+                        <div className="cmi-resultItem">
+                          <span className="cmi-resultItem__label">Cargados</span>
+                          <b className="cmi-resultItem__val cmi-resultItem__val--ok">
+                            {resultado.confirmacion_ia.creados ?? 0}
+                          </b>
+                        </div>
+
+                        <div className="cmi-resultItem">
+                          <span className="cmi-resultItem__label">Errores</span>
+                          <b className="cmi-resultItem__val">
+                            {resultado.confirmacion_ia.errores?.length ?? 0}
+                          </b>
+                        </div>
+                      </div>
+                    )}
 
                     {resultado.texto_detectado && (
                       <div className="fl-field" style={{ marginTop: 12 }}>
@@ -1229,23 +1723,39 @@ export default function ModalCargaMasiva({
                       </ul>
                     </div>
                   )}
+
+                {resultado?.confirmacion_ia?.errores?.length > 0 && (
+                  <div className="cmi-warnBox">
+                    <div className="cmi-warnBox__title">
+                      <FontAwesomeIcon
+                        icon={faTriangleExclamation}
+                        style={{ marginRight: 8 }}
+                      />
+                      Errores al cargar productos
+                    </div>
+                    <ul className="cmi-warnBox__list">
+                      {resultado.confirmacion_ia.errores.map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
           <div className="cmi-footer">
             <div className="mi-card__hint cmi-footer__hint">
-              {tab === "individual" &&
-                "Completá los datos del producto y guardá."}
+              {tab === "individual" && "Completá los datos del producto y guardá."}
               {tab === "masivo" &&
                 tipoArchivo === "csv" &&
                 "El CSV se procesará fila a fila actualizando o creando productos."}
               {tab === "masivo" &&
                 tipoArchivo === "pdf" &&
-                "Se extraerá el texto del PDF para revisión o importación."}
+                "Se extraerá el texto, se clasificarán los productos y luego vas a poder confirmarlos."}
               {tab === "masivo" &&
                 tipoArchivo === "imagen" &&
-                "Se aplicará OCR sobre la imagen para detectar texto."}
+                "Se aplicará OCR, se clasificarán los productos y luego vas a poder confirmarlos."}
               {tab === "masivo" &&
                 tipoArchivo === "" &&
                 !nombreArchivo &&
@@ -1272,11 +1782,7 @@ export default function ModalCargaMasiva({
                   className="mit-btn mit-btn--solid"
                   onClick={handleGuardar}
                   disabled={guardando}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
                 >
                   <FontAwesomeIcon icon={faFloppyDisk} />
                   {guardando ? "Guardando..." : "Guardar producto"}
@@ -1286,12 +1792,8 @@ export default function ModalCargaMasiva({
                   type="button"
                   className="mit-btn mit-btn--solid"
                   onClick={handleImportar}
-                  disabled={subiendo || !tipoArchivo}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
+                  disabled={subiendo || clasificando || !tipoArchivo}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
                 >
                   <FontAwesomeIcon icon={faCloudArrowUp} />
                   {btnMasivoLabel}
@@ -1309,6 +1811,21 @@ export default function ModalCargaMasiva({
         fileName={previewFileName}
         title={previewTitle}
         onClose={cerrarPreview}
+      />
+
+      <ModalConfirmarProductosIA
+        open={modalConfirmOpen}
+        dark={dark}
+        productos={productosDetectados}
+        categorias={categorias}
+        loadingCategorias={loadingCategorias}
+        onClose={() => !confirmandoDetectados && cerrarModalConfirmacion()}
+        onChangeProducto={handleProductoDetectadoChange}
+        onAddFila={handleAddFilaDetectada}
+        onRemoveFila={handleRemoveFilaDetectada}
+        onConfirm={handleConfirmarDetectados}
+        confirmando={confirmandoDetectados}
+        errores={erroresDetectados}
       />
     </>,
     document.body

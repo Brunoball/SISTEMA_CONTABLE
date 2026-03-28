@@ -24,16 +24,15 @@ import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 import Configuracion from "./components/Configuracion/Configuracion";
 import ConfigTiendaNube from "./components/Configuracion/ConfigTiendaNube";
 
-/* ✅ IMPORT ROBUSTO (default o named) */
+/* Analisis financiero */
 import * as AnalisisFinancieroModule from "./components/Analisis_Financiero/Analisis_Financiero";
 
-/* ✅ NUEVOS: sub-secciones CC */
+/* Cuentas corrientes */
 import ClientesCC from "./components/Cuentas_Corrientes/Clientes/Clientes";
 import ProveedoresCC from "./components/Cuentas_Corrientes/Proveedores/Proveedores";
 
-/* ✅ PRODUCTOS */
-import Stock from "./components/Productos/Stock/Stock";
-import Lista_Productos from "./components/Productos/Lista_Productos/Lista_Productos";
+/* ✅ STOCK */
+import Stock from "./components/Stock/Stock";
 
 /* ✅ CHEQUES */
 import Cheques_Cartera from "./components/Cheques/Cheques_Cartera/Cheques_Cartera";
@@ -46,7 +45,7 @@ import { ListasProvider } from "./context/ListasContext";
 import { DateRangeProvider } from "./context/DateRangeContext";
 
 /* =========================================================
-   ✅ Helpers: resolver componente (default o named)
+   Helpers: resolver componente (default o named)
 ========================================================= */
 function resolveComponent(mod, fallbacks = []) {
   if (mod && typeof mod.default === "function") return mod.default;
@@ -81,16 +80,19 @@ const AnalisisFinanciero = resolveComponent(AnalisisFinancieroModule, [
 ]);
 
 /* =========================================================
-   ✅ Auth
+   Auth
 ========================================================= */
 function isAuthenticated() {
   try {
     const sessionKey = (localStorage.getItem("session_key") || "").trim();
     const rawUser = localStorage.getItem("usuario");
+
     if (!sessionKey) return false;
     if (!rawUser) return false;
+
     const u = JSON.parse(rawUser);
     if (!u || typeof u !== "object") return false;
+
     return true;
   } catch {
     return false;
@@ -102,7 +104,7 @@ function RutaProtegida({ children }) {
 }
 
 /* =========================================================
-   🚏 Ruteo
+   Ruteo
 ========================================================= */
 export default function App() {
   return (
@@ -113,7 +115,7 @@ export default function App() {
         <Route path="/registro" element={<Registro />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-        {/* Panel (protegido) */}
+        {/* Panel protegido */}
         <Route
           path="/panel"
           element={
@@ -143,11 +145,10 @@ export default function App() {
           <Route path="cuentas-corrientes/clientes" element={<ClientesCC />} />
           <Route path="cuentas-corrientes/proveedores" element={<ProveedoresCC />} />
 
-          {/* ✅ PRODUCTOS */}
-          <Route path="productos/stock" element={<Stock />} />
-          <Route path="productos/lista-productos" element={<Lista_Productos />} />
+          {/* STOCK */}
+          <Route path="stock" element={<Stock />} />
 
-          {/* ✅ CHEQUES */}
+          {/* CHEQUES */}
           <Route path="cheques/cartera" element={<Cheques_Cartera />} />
           <Route path="cheques/flujo" element={<Flujo_Cheques />} />
           <Route path="cheques/echeqs-cartera" element={<Echeqs_Cartera />} />
@@ -155,7 +156,7 @@ export default function App() {
 
           <Route path="analisis-financiero" element={<AnalisisFinanciero />} />
 
-          {/* ✅ CONFIGURACIÓN */}
+          {/* CONFIGURACIÓN */}
           <Route path="configuracion" element={<Configuracion />} />
           <Route path="configuracion/tiendanube" element={<ConfigTiendaNube />} />
         </Route>

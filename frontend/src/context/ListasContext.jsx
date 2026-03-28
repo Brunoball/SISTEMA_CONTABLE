@@ -5,7 +5,7 @@ import BASE_URL from "../config/config";
 /* =========================
    CONFIG
 ========================= */
-const LISTS_TTL_MS = 10 * 60 * 1000; // 10 min (ajustable)
+const LISTS_TTL_MS = 10 * 60 * 1000;
 const CACHE_PREFIX = "balto_lists_cache_v1";
 
 /* =========================
@@ -15,7 +15,6 @@ function getSessionKey() {
   return String(localStorage.getItem("session_key") || "").trim();
 }
 
-// Cache “por sesión/tenant” (suficiente en tu multi-tenant)
 function getCacheKey() {
   const sk = getSessionKey();
   const tag = sk ? sk.slice(0, 12) : "nosession";
@@ -30,7 +29,6 @@ function safeJsonParse(s) {
   }
 }
 
-/* ✅ período helpers */
 function periodoToMMYYYY(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
@@ -74,7 +72,6 @@ const emptyLists = {
   proveedores: [],
   tipos_movimiento: [],
   tipos_venta: [],
-  // ✅ NUEVO
   tipos_operacion: [],
 };
 
@@ -93,7 +90,6 @@ function normalizeLists(raw) {
     proveedores: getArr("proveedores"),
     tipos_movimiento: getArr("tipos_movimiento"),
     tipos_venta: getArr("tipos_venta"),
-    // ✅ NUEVO
     tipos_operacion: getArr("tipos_operacion"),
   };
 }
@@ -111,7 +107,7 @@ export function ListasProvider({ children }) {
   const [errorLists, setErrorLists] = useState("");
   const [lastUpdated, setLastUpdated] = useState(0);
 
-  const inflightRef = useRef(null); // evita duplicar requests simultáneos
+  const inflightRef = useRef(null);
 
   const buildHeadersGET = useCallback(() => {
     const sk = getSessionKey();
@@ -133,18 +129,15 @@ export function ListasProvider({ children }) {
     return data;
   }, []);
 
-  const fetchLists = useCallback(
-    async () => {
-      const res = await fetch(`${API}?action=global_obtener_listas`, {
-        method: "GET",
-        headers: buildHeadersGET(),
-      });
-      const data = await parseJsonOrThrow(res);
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar listas.");
-      return normalizeLists(data);
-    },
-    [API, buildHeadersGET, parseJsonOrThrow]
-  );
+  const fetchLists = useCallback(async () => {
+    const res = await fetch(`${API}?action=global_obtener_listas`, {
+      method: "GET",
+      headers: buildHeadersGET(),
+    });
+    const data = await parseJsonOrThrow(res);
+    if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar listas.");
+    return normalizeLists(data);
+  }, [API, buildHeadersGET, parseJsonOrThrow]);
 
   const writeCache = useCallback((payload) => {
     try {
@@ -171,24 +164,28 @@ export function ListasProvider({ children }) {
     }
   }, []);
 
+  const clearListsCache = useCallback(() => {
+    try {
+      const key = getCacheKey();
+      localStorage.removeItem(key);
+    } catch {}
+  }, []);
+
   const ensureListsLoaded = useCallback(
     async ({ force = false, background = false } = {}) => {
       const cached = readCache();
       const now = Date.now();
       const cacheFresh = cached && now - Number(cached.ts || 0) <= LISTS_TTL_MS;
 
-      // 1) Si hay cache, setear instantáneo (no bloquear UI)
       if (cached?.lists && !force) {
         setLists(cached.lists);
         setLastUpdated(Number(cached.ts) || now);
       }
 
-      // 2) Si cache es fresco y no forzamos, no hace falta red
       if (cacheFresh && !force) {
         return cached.lists;
       }
 
-      // 3) Evitar duplicar requests
       if (inflightRef.current) {
         return inflightRef.current;
       }
@@ -207,7 +204,6 @@ export function ListasProvider({ children }) {
           const msg = e?.message || "Error cargando listas.";
           setErrorLists(msg);
 
-          // si no hay cache útil, dejar vacío; si hay cache, lo mantenemos
           if (!cached?.lists) setLists(emptyLists);
           return cached?.lists || emptyLists;
         } finally {
@@ -222,23 +218,32 @@ export function ListasProvider({ children }) {
     [fetchLists, readCache, writeCache]
   );
 
-  // ✅ Prefetch automatico al montar el Provider (SWR)
   useEffect(() => {
-    // 1) levantar cache instantáneo si existe
     const cached = readCache();
     if (cached?.lists) {
       setLists(cached.lists);
       setLastUpdated(Number(cached.ts) || 0);
     }
 
-    // 2) refrescar en background si está stale
     ensureListsLoaded({ force: false, background: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [readCache, ensureListsLoaded]);
+
+  useEffect(() => {
+    const handleListsUpdated = async () => {
+      clearListsCache();
+      await ensureListsLoaded({ force: true, background: true });
+    };
+
+    window.addEventListener("balto:listas-updated", handleListsUpdated);
+    return () => {
+      window.removeEventListener("balto:listas-updated", handleListsUpdated);
+    };
+  }, [clearListsCache, ensureListsLoaded]);
 
   const refreshLists = useCallback(async () => {
+    clearListsCache();
     return await ensureListsLoaded({ force: true, background: false });
-  }, [ensureListsLoaded]);
+  }, [clearListsCache, ensureListsLoaded]);
 
   const value = useMemo(
     () => ({
@@ -248,9 +253,10 @@ export function ListasProvider({ children }) {
       lastUpdated,
       ensureListsLoaded,
       refreshLists,
+      clearListsCache,
       setLists,
     }),
-    [lists, loadingLists, errorLists, lastUpdated, ensureListsLoaded, refreshLists]
+    [lists, loadingLists, errorLists, lastUpdated, ensureListsLoaded, refreshLists, clearListsCache]
   );
 
   return <ListasCtx.Provider value={value}>{children}</ListasCtx.Provider>;

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import BASE_URL from "../../../../config/config";
+import BASE_URL from "../../../config/config";
 import "../Stock.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {

@@ -116,3 +116,39 @@ html[data-theme="oscuro"] .prod-sku {
 html[data-theme="oscuro"] .prod-promo {
   color: rgba(34,173,92,.90) !important;
 }
+.mi-modal__container--categorias .mi-cr-grid {
+  grid-template-columns: 280px 1fr;
+}
+
+.mi-cr-grid-categorias {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 2fr) 110px 80px 90px;
+  align-items: center;
+}
+
+.mi-cr-cell {
+  min-width: 0;
+}
+
+.mi-cr-cell--ellipsis {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mi-cr-cell__ellipsis {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mi-cr-table__summary{
+  display: flex;
+}
+.nv-foot-btn--sm{
+  padding: 0 8px;
+}
+.mi-cr-table__rows--mcs{
+  height: calc(100vh - 380px);
+}

@@ -138,7 +138,7 @@
   justify-content: center;
   cursor: pointer;
   position: relative;
-  width: 100%;
+
   height: 100%;
 }
 
@@ -553,4 +553,75 @@
 /* Dark */
 .mi-modal--dark .mpr-cheques-table {
   border-color: rgba(255, 255, 255, .10) !important;
+}
+/* ===== Cheques como cards ===== */
+.mpr-cheques-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* Card */
+.mpr-cheque-card-item {
+  border: 1px solid var(--nv-border-md);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--nv-bg);
+  cursor: pointer;
+  transition: all .12s ease;
+}
+
+.mpr-cheque-card-item:hover {
+  border-color: var(--nv-action);
+  background: var(--nv-row-hover);
+}
+
+.mpr-cheque-card-item.is-checked {
+  border-color: var(--nv-action);
+  background: var(--nv-action-10);
+  box-shadow: 0 0 0 2px var(--nv-action-10);
+}
+
+/* Top */
+.mpr-cheque-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.mpr-cheque-card__numero {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--nv-text);
+}
+
+/* Body */
+.mpr-cheque-card__body {
+  font-size: 11px;
+  color: var(--nv-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Importe */
+.mpr-cheque-card__importe {
+  margin-top: 6px;
+  text-align: right;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--nv-text);
+}
+
+/* Dark */
+.mi-modal--dark .mpr-cheque-card-item {
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.12);
+}
+
+.mi-modal--dark .mpr-cheque-card-item.is-checked {
+  background: rgba(0,85,187,.25);
 }

@@ -130,50 +130,58 @@ function EstadoChip({ pagado }) {
   );
 }
 
-/* Tabla de cheques en cartera */
-function ChequesCarteraTable({ cheques, idSeleccionado, onSelect, tipo }) {
+/* Cheques en cartera como tarjetas */
+function ChequesCarteraCards({ cheques, idSeleccionado, onSelect }) {
   if (!cheques.length) return null;
+
   return (
-    <div className="mpr-table-section mpr-cheques-table">
-      {/* Thead */}
-      <div className="mpr-thead mpr-thead--cheques">
-        <div className="mpr-th mpr-th--sel">Sel</div>
-        <div className="mpr-th">Número</div>
-        <div className="mpr-th">Emisor</div>
-        <div className="mpr-th">F. emisión</div>
-        <div className="mpr-th">F. pago</div>
-        <div className="mpr-th mpr-th--right">Importe</div>
-      </div>
-      {/* Tbody */}
-      <div className="mpr-tbody mpr-tbody--cheques">
-        {cheques.map((ch, idx) => {
-          const checked = String(ch?.id_cheque) === String(idSeleccionado);
-          return (
-            <div
-              key={ch?.id_cheque || idx}
-              className={`mpr-row mpr-row--cheques ${checked ? "is-checked" : ""}`}
-              onClick={() => onSelect(String(ch?.id_cheque || ""))}
-            >
-              <div className="mpr-td mpr-td--sel" onClick={(e) => e.stopPropagation()}>
-                <label className="mpr-check">
-                  <input
-                    type="radio"
-                    name="orden_pago_cheque_cartera"
-                    checked={checked}
-                    onChange={() => onSelect(String(ch?.id_cheque || ""))}
-                  />
-                  <span className="mpr-check__box" aria-hidden="true" />
-                </label>
-              </div>
-              <div className="mpr-td">{safeText(ch?.numero_cheque)}</div>
-              <div className="mpr-td mpr-td--desc" title={safeText(ch?.emisor)}>{safeText(ch?.emisor)}</div>
-              <div className="mpr-td">{safeText(formatFechaDMY(ch?.fecha_emision))}</div>
-              <div className="mpr-td">{safeText(formatFechaDMY(ch?.fecha_pago))}</div>
-              <div className="mpr-td mpr-td--right mpr-td--mono">{moneyARS(ch?.importe || 0)}</div>
+    <div className="mpr-cheques-cards">
+      {cheques.map((ch, idx) => {
+        const checked = String(ch?.id_cheque) === String(idSeleccionado);
+
+        return (
+          <div
+            key={ch?.id_cheque || idx}
+            className={`mpr-cheque-card-item ${checked ? "is-checked" : ""}`}
+            onClick={() => onSelect(String(ch?.id_cheque || ""))}
+          >
+            <div className="mpr-cheque-card__top">
+              <label
+                className="mpr-check"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="radio"
+                  name="orden_pago_cheque_cartera"
+                  checked={checked}
+                  onChange={() => onSelect(String(ch?.id_cheque || ""))}
+                />
+                <span className="mpr-check__box" aria-hidden="true" />
+              </label>
+
+              <span className="mpr-cheque-card__numero">
+                N° {safeText(ch?.numero_cheque)}
+              </span>
             </div>
-          );
-        })}
-      </div>
+
+            <div className="mpr-cheque-card__body">
+              <div className="mpr-cheque-card__row">
+                <b>Emisor:</b> <span>{safeText(ch?.emisor)}</span>
+              </div>
+              <div className="mpr-cheque-card__row">
+                <b>F. emisión:</b> <span>{safeText(formatFechaDMY(ch?.fecha_emision))}</span>
+              </div>
+              <div className="mpr-cheque-card__row">
+                <b>F. pago:</b> <span>{safeText(formatFechaDMY(ch?.fecha_pago))}</span>
+              </div>
+            </div>
+
+            <div className="mpr-cheque-card__importe">
+              {moneyARS(ch?.importe || 0)}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -258,7 +266,11 @@ export default function ModalPagarOrdenesPago({
   }, [onToast]);
 
   const fetchChequesCartera = useCallback(async (tipo) => {
-    if (!tipo) { setChequesCartera([]); setIdChequeSeleccionado(""); return; }
+    if (!tipo) {
+      setChequesCartera([]);
+      setIdChequeSeleccionado("");
+      return;
+    }
     try {
       setLoadingCheques(true);
       setChequesCartera([]);
@@ -319,7 +331,11 @@ export default function ModalPagarOrdenesPago({
   useEffect(() => {
     if (!open || openOrden) return;
     const onKey = (e) => {
-      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); if (!loading) onClose?.(); }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!loading) onClose?.();
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -364,14 +380,20 @@ export default function ModalPagarOrdenesPago({
     const mo = new MutationObserver(() => recomputeTbodyScroll());
     mo.observe(el, { childList: true, subtree: true });
     window.addEventListener("resize", recomputeTbodyScroll);
-    return () => { clearTimeout(t); ro.disconnect(); mo.disconnect(); window.removeEventListener("resize", recomputeTbodyScroll); };
+    return () => {
+      clearTimeout(t);
+      ro.disconnect();
+      mo.disconnect();
+      window.removeEventListener("resize", recomputeTbodyScroll);
+    };
   }, [open, openOrden, recomputeTbodyScroll, deudasOrdenadas.length]);
 
   const toggleOne = (id, row) => {
     if (!id || loading || isPagadoRow(row)) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       const pendientes = deudasOrdenadas.filter((x) => !isPagadoRow(x));
       setPagaTodo(next.size === pendientes.length && pendientes.length > 0);
       return next;
@@ -384,6 +406,7 @@ export default function ModalPagarOrdenesPago({
       .filter((r) => !isPagadoRow(r))
       .map((r) => Number(r?.id_movimiento || 0))
       .filter(Boolean);
+
     setSelectedIds((prev) => {
       const next = new Set();
       const shouldSelectAll = prev.size !== pendientes.length;
@@ -402,10 +425,15 @@ export default function ModalPagarOrdenesPago({
   };
 
   const buildOrdenFromSeleccion = useCallback(({ proveedorInfo, mp, seleccion, cheque }) => {
-    const total = seleccion.reduce((acc, r) => acc + (Number(r?.monto_total ?? r?.total ?? 0) || 0), 0);
-    const detalleExtra = cheque && (cheque?.numero_cheque || cheque?.emisor)
-      ? ` - ${String(cheque?.tipo || "").toUpperCase()} ${safeText(cheque?.numero_cheque)}`
-      : "";
+    const total = seleccion.reduce(
+      (acc, r) => acc + (Number(r?.monto_total ?? r?.total ?? 0) || 0),
+      0
+    );
+    const detalleExtra =
+      cheque && (cheque?.numero_cheque || cheque?.emisor)
+        ? ` - ${String(cheque?.tipo || "").toUpperCase()} ${safeText(cheque?.numero_cheque)}`
+        : "";
+
     const html = buildOrdenPagoHTML({
       proveedorNombre: proveedorInfo?.nombre ?? proveedor?.proveedor ?? "",
       proveedorId: proveedorInfo?.id_proveedor ?? proveedor?.id_proveedor ?? "",
@@ -414,59 +442,116 @@ export default function ModalPagarOrdenesPago({
       seleccion,
       fechaPago: new Date(),
     });
-    return { html, title: `Orden de Pago - ${proveedorInfo?.nombre || proveedor?.proveedor || "Proveedor"}` };
+
+    return {
+      html,
+      title: `Orden de Pago - ${proveedorInfo?.nombre || proveedor?.proveedor || "Proveedor"}`,
+    };
   }, [proveedor]);
 
   const handleConfirm = async () => {
-    if (!deudasOrdenadas.length) { onToast?.("error", "Este proveedor no tiene deudas.", 2600); return; }
+    if (!deudasOrdenadas.length) {
+      onToast?.("error", "Este proveedor no tiene deudas.", 2600);
+      return;
+    }
+
     const seleccion = deudasOrdenadas.filter((r) => {
       const id = Number(r?.id_movimiento || 0);
       return id && selectedIds.has(id) && !isPagadoRow(r);
     });
-    if (seleccion.length === 0) { onToast?.("error", "Seleccioná al menos una deuda PENDIENTE para pagar.", 2600); return; }
-    if (!idMedioPago) { onToast?.("error", "Seleccioná un medio de pago.", 2600); return; }
-    const mp = mediosPago.find((x) => String(x.id) === String(idMedioPago));
-    if (!mp) { onToast?.("error", "Medio de pago inválido. Reintentá.", 2800); return; }
-    if (requiereChequeCartera && !idChequeSeleccionado) {
-      onToast?.("error", `Seleccioná un ${tipoChequeRequerido === "echeq" ? "eCheq" : "cheque"} de cartera.`, 3000);
+
+    if (seleccion.length === 0) {
+      onToast?.("error", "Seleccioná al menos una deuda PENDIENTE para pagar.", 2600);
       return;
     }
+
+    if (!idMedioPago) {
+      onToast?.("error", "Seleccioná un medio de pago.", 2600);
+      return;
+    }
+
+    const mp = mediosPago.find((x) => String(x.id) === String(idMedioPago));
+    if (!mp) {
+      onToast?.("error", "Medio de pago inválido. Reintentá.", 2800);
+      return;
+    }
+
+    if (requiereChequeCartera && !idChequeSeleccionado) {
+      onToast?.(
+        "error",
+        `Seleccioná un ${tipoChequeRequerido === "echeq" ? "eCheq" : "cheque"} de cartera.`,
+        3000
+      );
+      return;
+    }
+
     const ids = seleccion.map((r) => Number(r?.id_movimiento || 0)).filter(Boolean);
+
     try {
       setLoading(true);
       let resp = null;
+
       if (onConfirm) {
         resp = await onConfirm({
-          proveedor: { id_proveedor: proveedor?.id_proveedor ?? null, nombre: proveedor?.proveedor ?? "" },
-          seleccion, totalSeleccionado,
-          id_medio_pago: mp.id, medio_pago: mp.nombre,
+          proveedor: {
+            id_proveedor: proveedor?.id_proveedor ?? null,
+            nombre: proveedor?.proveedor ?? "",
+          },
+          seleccion,
+          totalSeleccionado,
+          id_medio_pago: mp.id,
+          medio_pago: mp.nombre,
           id_cheque: requiereChequeCartera ? Number(idChequeSeleccionado || 0) : null,
           cheque: chequeSeleccionado || null,
           ids_movimiento: ids,
         });
       } else {
         resp = await confirmPagoDefault({
-          ids_movimiento: ids, id_medio_pago: mp.id,
+          ids_movimiento: ids,
+          id_medio_pago: mp.id,
           id_cheque: requiereChequeCartera ? Number(idChequeSeleccionado || 0) : null,
         });
       }
-      const idsCobroResp = Array.isArray(resp?.ids_cobro) ? resp.ids_cobro.map((x) => Number(x || 0)).filter(Boolean) : [];
+
+      const idsCobroResp = Array.isArray(resp?.ids_cobro)
+        ? resp.ids_cobro.map((x) => Number(x || 0)).filter(Boolean)
+        : [];
+
       setIdsMovimientosPagados(ids);
       setUltimoCobroId(Number(idsCobroResp?.[0] || resp?.id_cobro || 0) || null);
+
       setRows((prev) =>
         (Array.isArray(prev) ? prev : []).map((r) => {
           const id = Number(r?.id_movimiento || 0);
           if (!id || !ids.includes(id)) return r;
-          return { ...r, cobrado_total: Number(r?.monto_total ?? r?.total ?? 0) || 0, pagado: true, id_medio_pago: mp.id, medio_pago_nombre: mp.nombre };
+          return {
+            ...r,
+            cobrado_total: Number(r?.monto_total ?? r?.total ?? 0) || 0,
+            pagado: true,
+            id_medio_pago: mp.id,
+            medio_pago_nombre: mp.nombre,
+          };
         })
       );
+
       if (requiereChequeCartera && idChequeSeleccionado) {
-        setChequesCartera((prev) => (Array.isArray(prev) ? prev : []).filter((x) => String(x?.id_cheque) !== String(idChequeSeleccionado)));
+        setChequesCartera((prev) =>
+          (Array.isArray(prev) ? prev : []).filter(
+            (x) => String(x?.id_cheque) !== String(idChequeSeleccionado)
+          )
+        );
       }
+
       const built = buildOrdenFromSeleccion({
-        proveedorInfo: { id_proveedor: proveedor?.id_proveedor ?? null, nombre: proveedor?.proveedor ?? "" },
-        mp, seleccion, cheque: chequeSeleccionado,
+        proveedorInfo: {
+          id_proveedor: proveedor?.id_proveedor ?? null,
+          nombre: proveedor?.proveedor ?? "",
+        },
+        mp,
+        seleccion,
+        cheque: chequeSeleccionado,
       });
+
       setOrdenHtml(built.html);
       setOrdenTitle(built.title);
       setOpenOrden(true);
@@ -484,20 +569,33 @@ export default function ModalPagarOrdenesPago({
 
   if (!open) return null;
 
-  const modalClass = ["mi-modal__container", "mi-modal__container--mov", "mpr-modal", dark ? "mi-modal--dark" : ""].join(" ").trim();
-  const overlayClass = ["mi-modal__overlay", "mi-modal__overlay--mov", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim();
+  const modalClass = [
+    "mi-modal__container",
+    "mi-modal__container--mov",
+    "mpr-modal",
+    dark ? "mi-modal--dark" : "",
+  ]
+    .join(" ")
+    .trim();
+
+  const overlayClass = [
+    "mi-modal__overlay",
+    "mi-modal__overlay--mov",
+    dark ? "mi-modal__overlay--dark" : "",
+  ]
+    .join(" ")
+    .trim();
 
   return createPortal(
     <>
       {!openOrden && (
         <div className={overlayClass} role="dialog" aria-modal="true">
           <div className={modalClass} ref={dialogRef} onMouseDown={(e) => e.stopPropagation()}>
-
-            {/* ── HEADER ── */}
             <div className="mi-modal__header mpr-header">
               <div className="mi-modal__head-icon" aria-hidden="true">
                 <FontAwesomeIcon icon={faMoneyBill1Wave} />
               </div>
+
               <div className="mi-modal__head-left">
                 <h2 className="mi-modal__title">
                   Pagar
@@ -511,6 +609,7 @@ export default function ModalPagarOrdenesPago({
                   Pendientes y pagadas · las pagadas quedan bloqueadas
                 </p>
               </div>
+
               <button
                 ref={firstFocusRef}
                 type="button"
@@ -523,11 +622,8 @@ export default function ModalPagarOrdenesPago({
               </button>
             </div>
 
-            {/* ── CONTENT ── */}
             <div className="mi-modal__content mpr-content-wrap">
               <div className="mpr-layout">
-
-                {/* ── TABLA PRINCIPAL (izquierda) ── */}
                 <section className="mpr-table-section">
                   <div className="mpr-thead">
                     <div className="mpr-th mpr-th--sel">Sel</div>
@@ -544,11 +640,13 @@ export default function ModalPagarOrdenesPago({
                     {!deudasOrdenadas.length && (
                       <div className="mpr-empty">No hay deudas para este proveedor.</div>
                     )}
+
                     {deudasOrdenadas.map((r, idx) => {
                       const id = Number(r?.id_movimiento || 0);
                       const pagado = isPagadoRow(r);
                       const checked = selectedIds.has(id);
                       const monto = Number(r?.monto_total ?? r?.total ?? 0) || 0;
+
                       return (
                         <div
                           key={id || `${r?.fecha}-${idx}`}
@@ -568,26 +666,37 @@ export default function ModalPagarOrdenesPago({
                               <span className="mpr-check__box" aria-hidden="true" />
                             </label>
                           </div>
+
                           <div className="mpr-td">{safeText(formatFechaDMY(r?.fecha))}</div>
-                          <div className="mpr-td mpr-td--desc" title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}>
+
+                          <div
+                            className="mpr-td mpr-td--desc"
+                            title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
+                          >
                             {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
                           </div>
+
                           <div className="mpr-td mpr-td--center">
                             <EstadoChip pagado={pagado} />
                           </div>
+
                           <div className="mpr-td mpr-td--right mpr-td--mono">{moneyARS(monto)}</div>
                         </div>
                       );
                     })}
                   </div>
 
-                  {/* Tfoot */}
                   <div className="mpr-tfoot">
                     <div className="mpr-tfoot-stats">
-                      <span className="mpr-stat">Total <b>{deudasOrdenadas.length}</b></span>
+                      <span className="mpr-stat">
+                        Total <b>{deudasOrdenadas.length}</b>
+                      </span>
                       <span className="mpr-stat-sep" />
-                      <span className="mpr-stat">Seleccionadas <b>{cantSeleccionadas}</b></span>
+                      <span className="mpr-stat">
+                        Seleccionadas <b>{cantSeleccionadas}</b>
+                      </span>
                     </div>
+
                     <div className="mpr-tfoot-totals">
                       <div className="mpr-total-pill">
                         <span>Total seleccionado</span>
@@ -597,15 +706,12 @@ export default function ModalPagarOrdenesPago({
                   </div>
                 </section>
 
-                {/* ── ASIDE (derecha) ── */}
                 <aside className="mpr-aside">
                   <div className="mpr-aside__top">
                     <div className="mpr-aside__title">Datos del pago</div>
                   </div>
 
                   <div className="mpr-aside__body">
-
-                    {/* Medio de pago */}
                     <div className="fl-field">
                       <div className="mpr-select-wrap">
                         <select
@@ -617,14 +723,22 @@ export default function ModalPagarOrdenesPago({
                           <option value="">
                             {loadingMedios ? "Cargando…" : "Seleccionar medio de pago…"}
                           </option>
+
                           {!loadingMedios && mediosPago.length === 0 && (
-                            <option value="" disabled>(Sin medios de pago)</option>
+                            <option value="" disabled>
+                              (Sin medios de pago)
+                            </option>
                           )}
+
                           {mediosPago.map((x) => (
-                            <option key={x.id} value={String(x.id)}>{x.nombre}</option>
+                            <option key={x.id} value={String(x.id)}>
+                              {x.nombre}
+                            </option>
                           ))}
                         </select>
+
                         <label className="fl-label">Medio de pago *</label>
+
                         {loadingMedios && (
                           <span className="mpr-select-spinner">
                             <FontAwesomeIcon icon={faCircleNotch} spin />
@@ -633,7 +747,6 @@ export default function ModalPagarOrdenesPago({
                       </div>
                     </div>
 
-                    {/* Seleccionar todo */}
                     <button
                       type="button"
                       className="nv-foot-btn mpr-btn-selall"
@@ -646,7 +759,6 @@ export default function ModalPagarOrdenesPago({
                       {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
                     </button>
 
-                    {/* ── Cheques en cartera ── */}
                     {requiereChequeCartera && (
                       <div className="mi-card mi-card--full mpr-cheque-card">
                         <div className="mi-card__title">
@@ -664,11 +776,10 @@ export default function ModalPagarOrdenesPago({
                             No hay {tipoChequeRequerido === "echeq" ? "eCheqs" : "cheques"} activos en cartera.
                           </div>
                         ) : (
-                          <ChequesCarteraTable
+                          <ChequesCarteraCards
                             cheques={chequesCartera}
                             idSeleccionado={idChequeSeleccionado}
                             onSelect={setIdChequeSeleccionado}
-                            tipo={tipoChequeRequerido}
                           />
                         )}
 
@@ -691,7 +802,6 @@ export default function ModalPagarOrdenesPago({
                       </div>
                     )}
 
-                    {/* ── Acciones ── */}
                     <div className="mpr-aside__actions">
                       <button
                         type="button"
@@ -704,7 +814,6 @@ export default function ModalPagarOrdenesPago({
                           (requiereChequeCartera && !idChequeSeleccionado)
                         }
                       >
-                       
                         {loading ? "Procesando…" : "Confirmar pago"}
                       </button>
 
@@ -730,11 +839,17 @@ export default function ModalPagarOrdenesPago({
         html={ordenHtml}
         title={ordenTitle}
         onToast={onToast}
-        onClose={() => { setOpenOrden(false); onClose?.(); }}
+        onClose={() => {
+          setOpenOrden(false);
+          onClose?.();
+        }}
         idsMovimientos={idsMovimientosPagados}
         idCobro={ultimoCobroId}
         onFinalizar={(saved) => {
-          onOrdenPagoFinalizado?.(saved, { idsMovimiento: idsMovimientosPagados, idCobro: ultimoCobroId });
+          onOrdenPagoFinalizado?.(saved, {
+            idsMovimiento: idsMovimientosPagados,
+            idCobro: ultimoCobroId,
+          });
           setOpenOrden(false);
           onClose?.();
         }}

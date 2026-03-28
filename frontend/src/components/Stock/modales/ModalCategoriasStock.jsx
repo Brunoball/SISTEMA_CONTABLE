@@ -10,7 +10,6 @@ import {
   faTrashCan,
   faFloppyDisk,
   faArrowRotateRight,
-  faTriangleExclamation,
   faLayerGroup,
   faTag,
   faAlignLeft,
@@ -107,7 +106,6 @@ export default function ModalCategoriasStock({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [categorias, setCategorias] = useState([]);
-  const [error, setError] = useState("");
   const [modo, setModo] = useState("crear");
   const [editandoId, setEditandoId] = useState(null);
   const [form, setForm] = useState({ nombre: "", descripcion: "" });
@@ -141,7 +139,6 @@ export default function ModalCategoriasStock({
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-
     return () => {
       document.body.style.overflow = prev;
     };
@@ -172,21 +169,16 @@ export default function ModalCategoriasStock({
 
   const cargarCategorias = useCallback(async () => {
     setLoading(true);
-    setError("");
-
     try {
-      const params = new URLSearchParams({
-        action: "stock_categorias_listar",
-      });
-
+      const params = new URLSearchParams({ action: "stock_categorias_listar" });
       const data = await apiGet(`${API_URL}?${params.toString()}`);
       setCategorias(Array.isArray(data?.categorias) ? data.categorias : []);
     } catch (err) {
-      setError(err?.message || "No se pudieron cargar las categorías.");
+      onToast?.("error", err?.message || "No se pudieron cargar las categorías.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onToast]);
 
   useEffect(() => {
     if (!open) return;
@@ -209,12 +201,10 @@ export default function ModalCategoriasStock({
       nombre: toUpperValue(cat?.nombre),
       descripcion: toUpperValue(cat?.descripcion),
     });
-    setError("");
   };
 
   const cancelarEdicion = () => {
     resetForm();
-    setError("");
   };
 
   const handleGuardar = async () => {
@@ -222,12 +212,11 @@ export default function ModalCategoriasStock({
     const descripcion = toUpperValue(form.descripcion).trim();
 
     if (!nombre) {
-      setError("El nombre de la categoría es obligatorio.");
+      onToast?.("error", "El nombre de la categoría es obligatorio.");
       return;
     }
 
     setSaving(true);
-    setError("");
 
     try {
       if (modo === "crear") {
@@ -254,7 +243,6 @@ export default function ModalCategoriasStock({
       await onActualizado?.();
       resetForm();
     } catch (err) {
-      setError(err?.message || "No se pudo guardar la categoría.");
       onToast?.("error", err?.message || "No se pudo guardar la categoría.");
     } finally {
       setSaving(false);
@@ -266,24 +254,24 @@ export default function ModalCategoriasStock({
     if (!window.confirm(`¿Querés eliminar la categoría "${nombre}"?`)) return;
 
     setSaving(true);
-    setError("");
 
     try {
       const data = await apiPost("stock_categoria_eliminar", {
         id_stock_categoria: Number(cat?.id_stock_categoria || 0),
       });
 
-      onToast?.("exito", data?.mensaje || "Categoría eliminada correctamente.");
+      onToast?.(
+        "exito",
+        data?.mensaje || "Categoría eliminada correctamente."
+      );
+
       await cargarCategorias();
       await onActualizado?.();
 
-      if (
-        Number(cat?.id_stock_categoria || 0) === Number(editandoId || 0)
-      ) {
+      if (Number(cat?.id_stock_categoria || 0) === Number(editandoId || 0)) {
         resetForm();
       }
     } catch (err) {
-      setError(err?.message || "No se pudo eliminar la categoría.");
       onToast?.("error", err?.message || "No se pudo eliminar la categoría.");
     } finally {
       setSaving(false);
@@ -297,18 +285,14 @@ export default function ModalCategoriasStock({
       className={[
         "mi-modal__overlay",
         dark ? "mi-modal__overlay--dark" : "",
-      ]
-        .join(" ")
-        .trim()}
+      ].join(" ").trim()}
     >
       <div
         className={[
           "mi-modal__container",
-          "mi-modal-categorias",
+          "mi-modal__container--categorias",
           dark ? "mi-modal--dark" : "",
-        ]
-          .join(" ")
-          .trim()}
+        ].join(" ").trim()}
         role="dialog"
         aria-modal="true"
         onMouseDown={(e) => e.stopPropagation()}
@@ -337,32 +321,21 @@ export default function ModalCategoriasStock({
           </button>
         </div>
 
-        <div className="mi-modal__content mi-modal-categorias__content">
-          <div className="mi-modal-categorias__grid">
-            <aside className="mi-cr-filters mi-cr-filters--categorias">
+        <div className="mi-modal__content">
+          <div className="mi-cr-grid">
+            {/* PANEL IZQUIERDO */}
+            <aside className="mi-cr-filters">
               <div className="mi-cr-filters__top">
-                <div className="mi-cr-filters__title mi-cr-filters__title--icon">
+                <div className="mi-cr-filters__title">
                   <FontAwesomeIcon
                     icon={modo === "crear" ? faPlus : faPenToSquare}
-                    className="mi-cr-filters__title-icon"
+                    style={{ marginRight: 8, opacity: 0.75, fontSize: 13 }}
                   />
-                  <span>
-                    {modo === "crear" ? "Nueva categoría" : "Editar categoría"}
-                  </span>
+                  {modo === "crear" ? "Nueva categoría" : "Editar categoría"}
                 </div>
               </div>
 
-              <div className="mi-cr-filters__body mi-cr-filters__body--categorias">
-                {error && (
-                  <div className="mov-mi-error mov-mi-error--categorias">
-                    <FontAwesomeIcon
-                      icon={faTriangleExclamation}
-                      className="mov-mi-error__icon"
-                    />
-                    <span className="mov-mi-error__text">{error}</span>
-                  </div>
-                )}
-
+              <div className="mi-cr-filters__body">
                 <div className="fl-field">
                   <input
                     type="text"
@@ -378,7 +351,7 @@ export default function ModalCategoriasStock({
                     disabled={saving}
                   />
                   <label className="fl-label">
-                    <FontAwesomeIcon icon={faTag} className="fl-label__icon" />
+                    <FontAwesomeIcon icon={faTag} style={{ marginRight: 5 }} />
                     Nombre *
                   </label>
                 </div>
@@ -398,15 +371,15 @@ export default function ModalCategoriasStock({
                     rows={4}
                   />
                   <label className="fl-label">
-                    <FontAwesomeIcon
-                      icon={faAlignLeft}
-                      className="fl-label__icon"
-                    />
+                    <FontAwesomeIcon icon={faAlignLeft} style={{ marginRight: 5 }} />
                     Descripción
                   </label>
                 </div>
 
-                <div className="mi-cr-filters__actions mi-cr-filters__actions--stack">
+                <div
+                  className="mi-cr-filters__actions"
+                  style={{ flexDirection: "column" }}
+                >
                   <button
                     type="button"
                     className="mit-btn mit-btn--solid mit-btn--block"
@@ -415,7 +388,7 @@ export default function ModalCategoriasStock({
                   >
                     <FontAwesomeIcon
                       icon={faFloppyDisk}
-                      className="mit-btn__icon"
+                      style={{ marginRight: 8 }}
                     />
                     {saving
                       ? "Guardando..."
@@ -427,7 +400,7 @@ export default function ModalCategoriasStock({
                   {modo === "editar" && (
                     <button
                       type="button"
-                      className="mit-btn mit-btn--ghost mit-btn--block mi-cr-cancel-btn"
+                      className="mit-btn mit-btn--ghost mit-btn--block"
                       onClick={cancelarEdicion}
                       disabled={saving}
                     >
@@ -436,42 +409,72 @@ export default function ModalCategoriasStock({
                   )}
                 </div>
 
-                <div className="mi-card__hint mi-card__hint--categorias">
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--nv-muted)",
+                    marginTop: 4,
+                  }}
+                >
                   Las categorías <b>en uso</b> se desactivan al eliminarse.
                 </div>
               </div>
             </aside>
 
-            <section className="mi-cr-table mi-cr-table--categorias">
+            {/* TABLA DERECHA */}
+            <section className="mi-cr-table">
               <div className="mi-cr-table__foot mi-cr-table__foot--top">
                 <div className="mi-cr-table__summary">
-                  <FontAwesomeIcon
-                    icon={faBoxesStacked}
-                    className="mi-cr-table__summary-icon"
-                  />
 
                   <div>
-                    <div className="mi-cr-table__summary-title">
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: "var(--nv-text)",
+                      }}
+                    >
                       Listado de categorías
                     </div>
-                    <div className="mi-cr-table__summary-subtitle">
+                    <div style={{ fontSize: 12, color: "var(--nv-muted)" }}>
                       Total: <b>{categoriasOrdenadas.length}</b>
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className="nv-foot-btn"
-                  onClick={cargarCategorias}
-                  disabled={loading}
-                >
-                  <FontAwesomeIcon icon={faArrowRotateRight} />
-                  {loading ? "Cargando..." : "Recargar"}
-                </button>
               </div>
 
-              <div className="mi-cr-table__rows mi-cr-table__rows--categorias">
+              {!loading && categoriasOrdenadas.length > 0 && (
+                <div className="mi-cr-table__head mi-cr-grid-categorias">
+                  <div
+                    className="mi-cr-table__head-cell"
+                    style={{ paddingLeft: 10 }}
+                  >
+                    Nombre
+                  </div>
+                  <div className="mi-cr-table__head-cell">Descripción</div>
+                  <div
+                    className="mi-cr-table__head-cell"
+                    style={{ textAlign: "center" }}
+                  >
+                    Estado
+                  </div>
+                  <div
+                    className="mi-cr-table__head-cell"
+                    style={{ textAlign: "center" }}
+                  >
+                    Productos
+                  </div>
+                  <div
+                    className="mi-cr-table__head-cell"
+                    style={{ textAlign: "center" }}
+                  >
+                    Acciones
+                  </div>
+                </div>
+              )}
+
+              <div className="mi-cr-table__rows mi-cr-table__rows--mcs">
                 {loading ? (
                   <EmptyState
                     icon={faArrowRotateRight}
@@ -484,91 +487,122 @@ export default function ModalCategoriasStock({
                     text="No hay categorías cargadas."
                   />
                 ) : (
-                  <>
-                    <div className="mi-cr-table__head mi-cr-grid-categorias">
-                      <div className="mi-cr-table__head-cell mi-cr-table__head-cell--pl">
-                        Nombre
-                      </div>
-                      <div className="mi-cr-table__head-cell">Descripción</div>
-                      <div className="mi-cr-table__head-cell mi-cr-table__head-cell--center">
-                        Estado
-                      </div>
-                      <div className="mi-cr-table__head-cell mi-cr-table__head-cell--center">
-                        Productos
-                      </div>
-                      <div className="mi-cr-table__head-cell mi-cr-table__head-cell--center">
-                        Acciones
-                      </div>
-                    </div>
+                  categoriasOrdenadas.map((cat) => {
+                    const activo = Number(cat?.activo || 0) === 1;
+                    const isEditing =
+                      Number(cat?.id_stock_categoria) === editandoId &&
+                      modo === "editar";
 
-                    {categoriasOrdenadas.map((cat) => {
-                      const activo = Number(cat?.activo || 0) === 1;
-                      const isEditing =
-                        Number(cat?.id_stock_categoria) === editandoId &&
-                        modo === "editar";
-
-                      return (
+                    return (
+                      <div
+                        key={cat.id_stock_categoria}
+                        className={[
+                          "mi-cr-row",
+                          "mi-cr-grid-categorias",
+                          isEditing ? "mi-cr-row--editing" : "",
+                        ].join(" ").trim()}
+                      >
+                        {/* Nombre */}
                         <div
-                          key={cat.id_stock_categoria}
-                          className={[
-                            "mi-cr-row",
-                            "mi-cr-grid-categorias",
-                            isEditing ? "mi-cr-row--editing" : "",
-                          ]
-                            .join(" ")
-                            .trim()}
+                          className="mi-cr-cell mi-cr-cell--ellipsis"
+                          style={{ paddingLeft: 10, minWidth: 0 }}
                         >
-                          <div className="mi-cr-cell mi-cr-cell--pl">
-                            <span className="mi-cr-cell__nombre">
-                              {cat.nombre || "—"}
-                            </span>
-                          </div>
+                          <span
+                            className="mi-cr-cell__ellipsis"
+                            title={cat.nombre || "—"}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              minWidth: 0,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              fontWeight: 600,
+                              fontSize: 13,
+                              color: "var(--nv-text)",
+                            }}
+                          >
+                            {cat.nombre || "—"}
+                          </span>
+                        </div>
 
-                          <div className="mi-cr-cell">
-                            <span
-                              className={[
-                                "mi-cr-cell__descripcion",
-                                cat.descripcion?.trim()
-                                  ? ""
-                                  : "mi-cr-cell__descripcion--empty",
-                              ]
-                                .join(" ")
-                                .trim()}
-                            >
-                              {cat.descripcion?.trim() || "Sin descripción"}
-                            </span>
-                          </div>
+                        {/* Descripción */}
+                        <div
+                          className="mi-cr-cell mi-cr-cell--ellipsis"
+                          style={{ minWidth: 0 }}
+                        >
+                          <span
+                            className="mi-cr-cell__ellipsis"
+                            title={cat.descripcion?.trim() || "Sin descripción"}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              minWidth: 0,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              fontSize: 12,
+                              color: cat.descripcion?.trim()
+                                ? "var(--nv-muted)"
+                                : "var(--nv-placeholder)",
+                              fontStyle: cat.descripcion?.trim()
+                                ? "normal"
+                                : "italic",
+                            }}
+                          >
+                            {cat.descripcion?.trim() || "Sin descripción"}
+                          </span>
+                        </div>
 
-                          <div className="mi-cr-cell mi-cr-cell--center">
-                            <span
-                              className={[
-                                "mi-cr-status",
+                        {/* Estado */}
+                        <div className="mi-cr-cell mi-cr-cell--center">
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              padding: "3px 10px",
+                              borderRadius: 999,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: activo
+                                ? "rgba(16,185,129,.12)"
+                                : "rgba(148,163,184,.12)",
+                              color: activo ? "#057A55" : "#64748b",
+                              border: `1px solid ${
                                 activo
-                                  ? "mi-cr-status--activo"
-                                  : "mi-cr-status--inactivo",
-                              ]
-                                .join(" ")
-                                .trim()}
-                            >
-                              <FontAwesomeIcon
+                                  ? "rgba(16,185,129,.30)"
+                                  : "rgba(148,163,184,.30)"
+                              }`,
+                            }}
+                          >
 
-                                className="mi-cr-status__icon"
-                              />
-                              {activo ? "Activa" : "Inactiva"}
-                            </span>
-                          </div>
+                            {activo ? "Activa" : "Inactiva"}
+                          </span>
+                        </div>
 
-                          <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--mono">
-                            <span className="mi-cr-productos">
-                              <FontAwesomeIcon
-                                icon={faBoxesStacked}
-                                className="mi-cr-productos__icon"
-                              />
-                              {Number(cat?.total_productos || 0)}
-                            </span>
-                          </div>
+                        {/* Productos */}
+                        <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--mono">
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              fontSize: 13,
+                              color: "var(--nv-text)",
+                            }}
+                          >
+                            <FontAwesomeIcon
+                              icon={faBoxesStacked}
+                              style={{ fontSize: 11, color: "var(--nv-muted)" }}
+                            />
+                            {Number(cat?.total_productos || 0)}
+                          </span>
+                        </div>
 
-                          <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--actions">
+                        {/* Acciones */}
+                        <div className="mi-cr-cell mi-cr-cell--center">
+                          <div style={{ display: "flex", gap: 6 , padding: 5}}>
                             <button
                               type="button"
                               className="nv-foot-btn nv-foot-btn--sm"
@@ -576,11 +610,7 @@ export default function ModalCategoriasStock({
                               disabled={saving}
                               title="Editar"
                             >
-                              <FontAwesomeIcon
-                                icon={faPenToSquare}
-                                className="nv-foot-btn__icon"
-                              />
-                              
+                              <FontAwesomeIcon icon={faPenToSquare} />
                             </button>
 
                             <button
@@ -590,18 +620,20 @@ export default function ModalCategoriasStock({
                               disabled={saving}
                               title="Eliminar"
                             >
-                              <FontAwesomeIcon
-                                icon={faTrashCan}
-                                className="nv-foot-btn__icon"
-                              />
-                              
+                              <FontAwesomeIcon icon={faTrashCan} />
                             </button>
                           </div>
                         </div>
-                      );
-                    })}
-                  </>
+                      </div>
+                    );
+                  })
                 )}
+              </div>
+
+              <div className="mi-cr-table__foot">
+                <span style={{ fontSize: 12, color: "var(--nv-muted)" }}>
+                  Las categorías <b>en uso</b> se desactivan al eliminarse.
+                </span>
               </div>
             </section>
           </div>
@@ -611,7 +643,6 @@ export default function ModalCategoriasStock({
           <span className="mit-help">
             Las categorías en uso se desactivan al eliminarse.
           </span>
-
           <button
             type="button"
             className="mit-btn mit-btn--ghost"

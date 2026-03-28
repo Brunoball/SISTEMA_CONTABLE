@@ -88,7 +88,12 @@ function uid() {
 
 function getDetalleId(d) {
   const cand =
-    d?.id ?? d?.id_detalle ?? d?.idDetalle ?? d?.detalle_id ?? d?.iddetalle ?? null;
+    d?.id ??
+    d?.id_detalle ??
+    d?.idDetalle ??
+    d?.detalle_id ??
+    d?.iddetalle ??
+    null;
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
@@ -114,6 +119,24 @@ function getMedioPagoId(mp) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+function getStockDisponible(detalle) {
+  const cand =
+    detalle?.stock ??
+    detalle?.stock_disponible ??
+    detalle?.stockDisponible ??
+    detalle?.cantidad_stock ??
+    detalle?.cantidad ??
+    null;
+
+  if (cand === null || cand === undefined || cand === "") return null;
+  const n = Number(cand);
+  return Number.isFinite(n) ? n : null;
+}
+
+function isSinStock(stock) {
+  return stock !== null && stock !== undefined && Number(stock) <= 0;
+}
+
 function buildEmptyRow() {
   return {
     id: uid(),
@@ -124,7 +147,8 @@ function buildEmptyRow() {
     precioDraft: "",
     precioFocused: false,
     ivaPct: 0,
-    stock_disponible: null, // ✅ Agregado: stock disponible
+    stock_disponible: null,
+    sinStock: false,
   };
 }
 
@@ -232,13 +256,15 @@ function describeLineProblem(r, idx1based) {
     safeNumber(r.cantidad) !== 0 ||
     safeNumber(r.precio) !== 0;
   if (!touched) return null;
+
   const issues = [];
-  if (!(Number.isFinite(detId) && detId > 0))
+  if (!(Number.isFinite(detId) && detId > 0)) {
     issues.push(
       detTxt
         ? `el detalle "${detTxt}" no está seleccionado del listado`
         : "falta el detalle"
     );
+  }
   if (qtyBlank) issues.push("falta la cantidad");
   else if (!(Number.isFinite(qty) && qty > 0))
     issues.push("la cantidad debe ser > 0");
@@ -247,6 +273,7 @@ function describeLineProblem(r, idx1based) {
     issues.push("el precio debe ser > 0");
   if (!(Number.isFinite(total) && total > 0))
     issues.push("el total queda en 0 (revisá cantidad/precio)");
+
   if (!issues.length) return null;
   return `Fila ${idx1based}: ${issues.join(", ")}.`;
 }
@@ -262,11 +289,13 @@ function AddCatalogMiniModal({
   dark = false,
 }) {
   const inputRef = useRef(null);
+
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => inputRef.current?.focus(), 0);
     return () => clearTimeout(t);
   }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const h = (e) => {
@@ -276,7 +305,9 @@ function AddCatalogMiniModal({
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [open, onCancel, onSave]);
+
   if (!open) return null;
+
   return createPortal(
     <div className="mi-mini__overlay" onMouseDown={onCancel}>
       <div
@@ -295,6 +326,7 @@ function AddCatalogMiniModal({
             ✕
           </button>
         </div>
+
         <div className="mi-mini__body">
           <div className="fl-field">
             <input
@@ -308,6 +340,7 @@ function AddCatalogMiniModal({
             />
             <label className="fl-label">Nombre</label>
           </div>
+
           <div className="mi-mini__actions">
             <button
               type="button"
@@ -350,6 +383,7 @@ export default function ModalNuevaCompra({
   );
 
   const [dark, setDark] = useState(isTemaOscuro);
+
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
     const o1 = new MutationObserver(update);
@@ -358,11 +392,12 @@ export default function ModalNuevaCompra({
       attributeFilter: ["data-theme"],
     });
     const o2 = new MutationObserver(update);
-    if (document.body)
+    if (document.body) {
       o2.observe(document.body, {
         attributes: true,
         attributeFilter: ["class"],
       });
+    }
     return () => {
       o1.disconnect();
       o2.disconnect();
@@ -389,7 +424,10 @@ export default function ModalNuevaCompra({
     ...SAFE_LISTS,
     ...normalizeLists(lists),
   }));
-  useEffect(() => setLocalLists({ ...SAFE_LISTS, ...normalizeLists(lists) }), [lists]);
+
+  useEffect(() => {
+    setLocalLists({ ...SAFE_LISTS, ...normalizeLists(lists) });
+  }, [lists]);
 
   const mediosPagoList = useMemo(
     () => (Array.isArray(localLists.medios_pago) ? localLists.medios_pago : []),
@@ -421,6 +459,7 @@ export default function ModalNuevaCompra({
     text: "",
     saving: false,
   });
+
   const closeBtnRef = useRef(null);
   const prevOpenRef = useRef(false);
   const fechaInputRef = useRef(null);
@@ -431,6 +470,7 @@ export default function ModalNuevaCompra({
     const wasOpen = prevOpenRef.current;
     prevOpenRef.current = open;
     if (!open) return;
+
     if (!wasOpen && open) {
       setFecha(todayISO());
       setFilters({
@@ -440,32 +480,43 @@ export default function ModalNuevaCompra({
       });
       setProvInput("");
       setRows([buildEmptyRow()]);
-      setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
+      setAddUI({
+        open: false,
+        kind: null,
+        rowId: null,
+        text: "",
+        saving: false,
+      });
       setSaving(false);
       setArchivoAdjunto(null);
       setTimeout(() => closeBtnRef.current?.focus(), 0);
     }
   }, [open]);
 
-  // ✅ Detectar scroll en la tabla
   useEffect(() => {
     const el = rowsContainerRef.current;
     if (!el) return;
+
     const checkScroll = () => {
       const scroll = el.scrollHeight > el.clientHeight + 1;
       setHasScroll(scroll);
     };
+
     checkScroll();
+
     const resizeObserver = new ResizeObserver(checkScroll);
     resizeObserver.observe(el);
     window.addEventListener("resize", checkScroll);
+
     return () => {
       resizeObserver.disconnect();
       window.removeEventListener("resize", checkScroll);
     };
   }, [open, rows]);
 
-  const updateFilter = useCallback((k, v) => setFilters((p) => ({ ...p, [k]: v })), []);
+  const updateFilter = useCallback((k, v) => {
+    setFilters((p) => ({ ...p, [k]: v }));
+  }, []);
 
   const handleOpenDate = useCallback(
     (e) => {
@@ -474,8 +525,10 @@ export default function ModalNuevaCompra({
         e.preventDefault();
         e.stopPropagation();
       }
+
       const input = fechaInputRef.current;
       if (!input) return;
+
       input.focus();
       try {
         if (typeof input.showPicker === "function") input.showPicker();
@@ -487,18 +540,21 @@ export default function ModalNuevaCompra({
     [saving]
   );
 
-  const addRow = useCallback(() => setRows((p) => [...p, buildEmptyRow()]), []);
+  const addRow = useCallback(() => {
+    setRows((p) => [...p, buildEmptyRow()]);
+  }, []);
+
   const removeRow = useCallback((id) => {
     setRows((p) => {
       const n = p.filter((r) => r.id !== id);
       return n.length ? n : p;
     });
   }, []);
+
   const updateRow = useCallback((id, patch) => {
     setRows((p) => p.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }, []);
 
-  /* ── Handlers Proveedor con GlobalAutocomplete ── */
   const handleProveedorInputChange = useCallback((val) => {
     setProvInput(val);
     setFilters((p) => ({ ...p, id_proveedor: NULL_OPTION }));
@@ -513,41 +569,79 @@ export default function ModalNuevaCompra({
     }));
   }, []);
 
-  /* ✅ FIXED: Handler para selección de detalle con precio y stock automático */
-  const handleSelectDetalle = useCallback((detalle, rowId) => {
-    updateRow(rowId, {
-      id_detalle: String(getDetalleId(detalle) || ""),
-      detalleText: detalle?.nombre || "",
-      precio: Number(detalle?.precio || 0),
-      stock_disponible: detalle?.stock ?? null, // ✅ Guarda stock disponible
-    });
-  }, [updateRow]);
+  const handleSelectDetalle = useCallback(
+    (detalle, rowId) => {
+      const precio = Number(detalle?.precio || 0);
+      const stockDisponible = getStockDisponible(detalle);
+      const sinStock = isSinStock(stockDisponible);
 
-  /* ✅ FIXED: Validación de cantidad contra stock */
-  const handleCantidadChange = useCallback((rowId, newCantidad) => {
-    const row = rows.find(r => r.id === rowId);
-    if (!row) return;
-    
-    const stockDisponible = row.stock_disponible;
-    let cantidadFinal = newCantidad === "" ? "" : Number(newCantidad);
-    
-    if (stockDisponible !== null && stockDisponible !== undefined && 
-        typeof cantidadFinal === "number" && cantidadFinal > stockDisponible) {
-      cantidadFinal = stockDisponible;
-      showToast("advertencia", `Stock máximo disponible: ${stockDisponible}`, 2000);
-    }
-    
-    updateRow(rowId, { cantidad: cantidadFinal });
-  }, [rows, updateRow, showToast]);
+      updateRow(rowId, {
+        id_detalle: String(getDetalleId(detalle) || ""),
+        detalleText: detalle?.nombre || "",
+        precio,
+        stock_disponible: stockDisponible,
+        sinStock,
+        cantidad: sinStock ? "" : 1,
+      });
 
-  /* ── Mini modal handlers ── */
+      if (sinStock) {
+        showToast(
+          "advertencia",
+          `El producto "${detalle?.nombre || ""}" no tiene stock disponible.`,
+          2500
+        );
+      }
+    },
+    [updateRow, showToast]
+  );
+
+  const handleCantidadChange = useCallback(
+    (rowId, newCantidad) => {
+      const row = rows.find((r) => r.id === rowId);
+      if (!row) return;
+
+      if (row.sinStock || isSinStock(row.stock_disponible)) {
+        updateRow(rowId, { cantidad: "" });
+        return;
+      }
+
+      const stockDisponible = row.stock_disponible;
+      let cantidadFinal = newCantidad === "" ? "" : Number(newCantidad);
+
+      if (typeof cantidadFinal === "number" && cantidadFinal < 0) {
+        cantidadFinal = 0;
+      }
+
+      if (
+        stockDisponible !== null &&
+        stockDisponible !== undefined &&
+        stockDisponible !== "" &&
+        typeof cantidadFinal === "number" &&
+        cantidadFinal > Number(stockDisponible)
+      ) {
+        cantidadFinal = Number(stockDisponible);
+        showToast("advertencia", `Stock máximo disponible: ${stockDisponible}`, 2000);
+      }
+
+      updateRow(rowId, { cantidad: cantidadFinal });
+    },
+    [rows, updateRow, showToast]
+  );
+
   const startAddDetalleForRow = useCallback(
     (rowId) => {
       if (saving) return;
-      setAddUI({ open: true, kind: "detalles", rowId, text: "", saving: false });
+      setAddUI({
+        open: true,
+        kind: "detalles",
+        rowId,
+        text: "",
+        saving: false,
+      });
     },
     [saving]
   );
+
   const startAddProveedor = useCallback(() => {
     if (saving) return;
     setAddUI({
@@ -558,9 +652,16 @@ export default function ModalNuevaCompra({
       saving: false,
     });
   }, [saving, provInput]);
+
   const closeAddMini = useCallback(() => {
     if (addUI.saving) return;
-    setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
+    setAddUI({
+      open: false,
+      kind: null,
+      rowId: null,
+      text: "",
+      saving: false,
+    });
   }, [addUI.saving]);
 
   const guardarNuevoCatalogo = useCallback(async () => {
@@ -569,23 +670,39 @@ export default function ModalNuevaCompra({
       showToast("advertencia", "Escribí un nombre antes de guardar.", 2600);
       return;
     }
+
     const kind = addUI.kind;
     if (!kind) return;
+
     setAddUI((p) => ({ ...p, saving: true }));
-    showToast("cargando", `Creando ${kind === "detalles" ? "detalle" : "proveedor"}…`, 12000);
+    showToast(
+      "cargando",
+      `Creando ${kind === "detalles" ? "detalle" : "proveedor"}…`,
+      12000
+    );
+
     try {
       const { idUsuario } = getAuthInfo();
-      const data = await apiPostJson(API_CATALOGO, { catalogo: kind, nombre, idUsuario });
+      const data = await apiPostJson(API_CATALOGO, {
+        catalogo: kind,
+        nombre,
+        idUsuario,
+      });
+
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear.");
+
       const item = data?.item || {};
       const newId =
         kind === "detalles"
           ? getDetalleId(item) ?? Number(item?.id)
           : getProveedorId(item) ?? Number(item?.id);
+
       const newNombre = String(item?.nombre ?? "").trim() || nombre;
+
       if (!Number.isFinite(Number(newId)) || Number(newId) <= 0) {
         throw new Error("El servidor no devolvió un ID válido.");
       }
+
       setLocalLists((prev) => {
         const next = { ...prev };
         const arr = Array.isArray(prev[kind]) ? prev[kind].slice() : [];
@@ -597,14 +714,29 @@ export default function ModalNuevaCompra({
         next[kind] = arr;
         return next;
       });
+
       if (kind === "detalles" && addUI.rowId) {
-        updateRow(addUI.rowId, { id_detalle: String(newId), detalleText: newNombre });
+        updateRow(addUI.rowId, {
+          id_detalle: String(newId),
+          detalleText: newNombre,
+          stock_disponible: null,
+          sinStock: false,
+        });
       }
+
       if (kind === "proveedores") {
         updateFilter("id_proveedor", String(newId));
         setProvInput(newNombre);
       }
-      setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
+
+      setAddUI({
+        open: false,
+        kind: null,
+        rowId: null,
+        text: "",
+        saving: false,
+      });
+
       showToast(
         "exito",
         `${kind === "detalles" ? "Detalle" : "Proveedor"} creado: "${newNombre}"`,
@@ -639,7 +771,11 @@ export default function ModalNuevaCompra({
     [rowsCalc]
   );
 
-  const isContado = useMemo(() => String(filters.forma) === "CONTADO", [filters.forma]);
+  const isContado = useMemo(
+    () => String(filters.forma) === "CONTADO",
+    [filters.forma]
+  );
+
   const isCorriente = useMemo(
     () => String(filters.forma) === "CUENTA_CORRIENTE",
     [filters.forma]
@@ -659,32 +795,41 @@ export default function ModalNuevaCompra({
   const validate = useCallback(() => {
     const provId = Number(filters.id_proveedor);
     const provTxt = String(provInput || "").trim();
+
     if (!((Number.isFinite(provId) && provId > 0) || provTxt.length > 0)) {
       return { ok: false, msg: "Falta seleccionar un Proveedor (obligatorio)." };
     }
+
     if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(filters.forma))) {
       return {
         ok: false,
         msg: "Falta seleccionar el Tipo de compra (Contado / Cuenta Corriente).",
       };
     }
+
     if (isContado) {
       const mp = Number(filters.id_medio_pago);
       if (!Number.isFinite(mp) || mp <= 0) {
-        return { ok: false, msg: "Compra Contado: falta seleccionar el Medio de pago." };
+        return {
+          ok: false,
+          msg: "Compra Contado: falta seleccionar el Medio de pago.",
+        };
       }
     }
+
     const problems = [];
     rowsCalc.forEach((r, i) => {
       const p = describeLineProblem(r, i + 1);
       if (p) problems.push(p);
     });
+
     const usable = rowsCalc.filter(
       (r) =>
         Number.isFinite(Number(r.id_detalle)) &&
         Number(r.id_detalle) > 0 &&
         Number(r.total || 0) > 0
     );
+
     if (!usable.length) {
       if (problems.length) {
         const msg = problems.slice(0, 2).join(" ");
@@ -696,17 +841,20 @@ export default function ModalNuevaCompra({
         msg: "Cargá al menos 1 fila válida (Detalle + Cantidad + Precio).",
       };
     }
+
     return { ok: true, warn: problems.length > 0 };
   }, [filters, provInput, isContado, rowsCalc]);
 
   const subirYVincularArchivo = useCallback(
     async (idsMovimientos, archivo) => {
       if (!archivo || !idsMovimientos?.length) return null;
+
       const fd = new FormData();
       fd.append("archivo", archivo);
       fd.append("tipo", "FACTURA");
       fd.append("force", "0");
       fd.append("ids_movimiento", JSON.stringify(idsMovimientos));
+
       return await apiPostForm(API_UPLOAD_LINK, fd);
     },
     [API_UPLOAD_LINK]
@@ -714,23 +862,34 @@ export default function ModalNuevaCompra({
 
   const submit = useCallback(async () => {
     if (saving) return;
+
     const { sessionKey } = getAuthInfo();
     if (!sessionKey) {
       showToast("error", "No hay sesión activa (Falta X-Session).", 5200);
       return;
     }
+
     if (addUI.open) {
       showToast("advertencia", "Terminá de crear (o cancelá) antes de guardar.", 3200);
       return;
     }
+
     const v = validate();
     if (!v.ok) {
       showToast("advertencia", v.msg || "Faltan datos.", 4200);
       return;
     }
+
     setSaving(true);
-    if (v.warn)
-      showToast("advertencia", "Hay filas incompletas: se guardarán solo las válidas.", 3600);
+
+    if (v.warn) {
+      showToast(
+        "advertencia",
+        "Hay filas incompletas: se guardarán solo las válidas.",
+        3600
+      );
+    }
+
     try {
       const { idUsuario } = getAuthInfo();
       const idTipoVenta = isCorriente ? 2 : 1;
@@ -840,9 +999,17 @@ export default function ModalNuevaCompra({
 
   return createPortal(
     <>
-      <div className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim()}>
+      <div
+        className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""]
+          .join(" ")
+          .trim()}
+      >
         <div
-          className={["mi-modal__container", "mi-modal__container--mov", dark ? "mi-modal--dark" : ""]
+          className={[
+            "mi-modal__container",
+            "mi-modal__container--mov",
+            dark ? "mi-modal--dark" : "",
+          ]
             .join(" ")
             .trim()}
           role="dialog"
@@ -885,133 +1052,174 @@ export default function ModalNuevaCompra({
                   ref={rowsContainerRef}
                   className={`mi-cr-table__rows ${hasScroll ? "has-scroll" : ""}`}
                 >
-                  {rowsCalc.map((r) => (
-                    <div key={r.id} className="mi-cr-row">
+                  {rowsCalc.map((r) => {
+                    const stockNum =
+                      r.stock_disponible !== null && r.stock_disponible !== undefined
+                        ? Number(r.stock_disponible)
+                        : null;
+                    const rowSinStock = r.sinStock || isSinStock(stockNum);
 
-                      {/* ✅ FIXED: Detalle con GlobalAutocomplete y selección automática de precio/stock */}
-                      <div className="mi-cr-cell mi-cr-cell--detalle">
-                        <GlobalAutocomplete
-                          value={r.detalleText}
-                          onChange={(val) =>
-                            updateRow(r.id, {
-                              detalleText: val,
-                              id_detalle: NULL_OPTION,
-                              stock_disponible: null, // ✅ Limpia stock al escribir
-                            })
-                          }
-                          onSelect={(d) => handleSelectDetalle(d, r.id)}
-                          options={detallesList}
-                          getOptionLabel={(d) => String(d?.nombre ?? "").trim()}
-                          getOptionValue={(d) => String(getDetalleId(d) ?? d?.nombre ?? "")}
-                          placeholder="Escribí o buscá un detalle…"
-                          disabled={saving || addUI.open}
-                          showAllOnFocus={false}
-                          maxItems={18}
-                          inputClassName="nv-cell-input"
-                        />
-                      </div>
+                    return (
+                      <div
+                        key={r.id}
+                        className={`mi-cr-row ${rowSinStock ? "mi-cr-row--sin-stock" : ""}`}
+                      >
+                        <div className="mi-cr-cell mi-cr-cell--detalle">
+                          <GlobalAutocomplete
+                            value={r.detalleText}
+                            onChange={(val) =>
+                              updateRow(r.id, {
+                                detalleText: val,
+                                id_detalle: NULL_OPTION,
+                                stock_disponible: null,
+                                sinStock: false,
+                              })
+                            }
+                            onSelect={(d) => handleSelectDetalle(d, r.id)}
+                            options={detallesList}
+                            getOptionLabel={(d) => String(d?.nombre ?? "").trim()}
+                            getOptionValue={(d) =>
+                              String(getDetalleId(d) ?? d?.nombre ?? "")
+                            }
+                            placeholder="Escribí o buscá un detalle…"
+                            disabled={saving || addUI.open}
+                            showAllOnFocus={false}
+                            maxItems={18}
+                            inputClassName="nv-cell-input"
+                          />
+                        </div>
 
-                      {/* ✅ FIXED: Cantidad con validación de stock */}
-                      <div className="mi-cr-cell mi-cr-cell--center">
-                        <input
-                          className="nv-cell-input nv-cell-input--center"
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={r.cantidad}
-                          onChange={e =>
-                            handleCantidadChange(r.id, e.target.value === "" ? "" : Number(e.target.value))
-                          }
-                          disabled={saving}
-                          style={{ width: "100%" }}
-                        />
-                        {/* ✅ Stock se muestra SOLO después de seleccionar el detalle */}
-                        {r.stock_disponible !== null && r.stock_disponible !== undefined && (
-                          <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>
-                            Stock: {r.stock_disponible}
-                          </div>
-                        )}
-                      </div>
+                        <div className="mi-cr-cell mi-cr-cell--center">
+                          <input
+                            className="nv-cell-input nv-cell-input--center"
+                            type="number"
+                            min={rowSinStock ? undefined : "1"}
+                            step="1"
+                            value={rowSinStock ? "" : r.cantidad}
+                            onChange={(e) =>
+                              handleCantidadChange(
+                                r.id,
+                                e.target.value === "" ? "" : Number(e.target.value)
+                              )
+                            }
+                            disabled={saving || rowSinStock}
+                            placeholder={rowSinStock ? "0" : ""}
+                            title={
+                              rowSinStock
+                                ? "No podés ingresar cantidad porque el stock es 0"
+                                : ""
+                            }
+                            style={{
+                              width: "100%",
+                              background: rowSinStock ? "#f3f4f6" : undefined,
+                              color: rowSinStock ? "#b91c1c" : undefined,
+                              borderColor: rowSinStock ? "#fca5a5" : undefined,
+                              cursor: rowSinStock ? "not-allowed" : undefined,
+                              opacity: rowSinStock ? 0.9 : 1,
+                            }}
+                          />
 
-                      <div className="mi-cr-cell mi-cr-cell--center">
-                        <input
-                          className="nv-cell-input nv-cell-input--right"
-                          type="text"
-                          inputMode="decimal"
-                          value={
-                            r.precioFocused
-                              ? r.precioDraft ?? ""
-                              : formatMoneyInputARS(r.precio)
-                          }
-                          onFocus={(e) => {
-                            updateRow(r.id, {
-                              precioFocused: true,
-                              precioDraft: formatEditableMoney(r.precio),
-                            });
-                            setTimeout(() => e.target.select(), 0);
-                          }}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            const cleaned = raw.replace(/[^\d,.\-]/g, "");
-                            updateRow(r.id, {
-                              precioDraft: cleaned,
-                              precio: parseMoneyInputARS(cleaned),
-                            });
-                          }}
-                          onBlur={() => {
-                            const parsed = parseMoneyInputARS(r.precioDraft);
-                            updateRow(r.id, {
-                              precio: parsed,
-                              precioDraft: "",
-                              precioFocused: false,
-                            });
-                          }}
-                          placeholder="$ 0,00"
-                          disabled={saving}
-                          style={{ width: "100%" }}
-                        />
-                      </div>
+                          {r.stock_disponible !== null &&
+                            r.stock_disponible !== undefined && (
+                              <div
+                                style={{
+                                  fontSize: "10px",
+                                  marginTop: "2px",
+                                  fontWeight: rowSinStock ? 700 : 500,
+                                  color: rowSinStock ? "#b91c1c" : "#666",
+                                }}
+                              >
+                                {rowSinStock
+                                  ? "Sin stock"
+                                  : `Stock: ${r.stock_disponible}`}
+                              </div>
+                            )}
+                        </div>
 
-                      <div className="mi-cr-cell mi-cr-cell--center">
-                        <select
-                          className="nv-cell-input nv-cell-input--center nv-cell-input--select"
-                          value={String(r.ivaPct)}
-                          onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
-                          onKeyDown={(e) => {
-                            if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
-                          }}
-                          disabled={saving}
-                          style={{ width: "100%" }}
-                        >
-                          {IVA_OPTIONS.map((x) => (
-                            <option key={x.value} value={x.value}>
-                              {x.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                        <div className="mi-cr-cell mi-cr-cell--center">
+                          <input
+                            className="nv-cell-input nv-cell-input--right"
+                            type="text"
+                            inputMode="decimal"
+                            value={
+                              r.precioFocused
+                                ? r.precioDraft ?? ""
+                                : formatMoneyInputARS(r.precio)
+                            }
+                            onFocus={(e) => {
+                              updateRow(r.id, {
+                                precioFocused: true,
+                                precioDraft: formatEditableMoney(r.precio),
+                              });
+                              setTimeout(() => e.target.select(), 0);
+                            }}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const cleaned = raw.replace(/[^\d,.\-]/g, "");
+                              updateRow(r.id, {
+                                precioDraft: cleaned,
+                                precio: parseMoneyInputARS(cleaned),
+                              });
+                            }}
+                            onBlur={() => {
+                              const parsed = parseMoneyInputARS(r.precioDraft);
+                              updateRow(r.id, {
+                                precio: parsed,
+                                precioDraft: "",
+                                precioFocused: false,
+                              });
+                            }}
+                            placeholder="$ 0,00"
+                            disabled={saving}
+                            style={{ width: "100%" }}
+                          />
+                        </div>
 
-                      <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
-                        {moneyARS(r.ivaMonto)}
-                      </div>
+                        <div className="mi-cr-cell mi-cr-cell--center">
+                          <select
+                            className="nv-cell-input nv-cell-input--center nv-cell-input--select"
+                            value={String(r.ivaPct)}
+                            onChange={(e) =>
+                              updateRow(r.id, { ivaPct: Number(e.target.value) })
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                                e.preventDefault();
+                              }
+                            }}
+                            disabled={saving}
+                            style={{ width: "100%" }}
+                          >
+                            {IVA_OPTIONS.map((x) => (
+                              <option key={x.value} value={x.value}>
+                                {x.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
 
-                      <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
-                        {moneyARS(r.total)}
-                      </div>
+                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
+                          {moneyARS(r.ivaMonto)}
+                        </div>
 
-                      <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
-                        <button
-                          type="button"
-                          className="mi-cr-del"
-                          onClick={() => removeRow(r.id)}
-                          disabled={saving}
-                          title="Eliminar fila"
-                        >
-                          ×
-                        </button>
+                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
+                          {moneyARS(r.total)}
+                        </div>
+
+                        <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
+                          <button
+                            type="button"
+                            className="mi-cr-del"
+                            onClick={() => removeRow(r.id)}
+                            disabled={saving}
+                            title="Eliminar fila"
+                          >
+                            ×
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="mi-cr-table__foot">
@@ -1025,7 +1233,9 @@ export default function ModalNuevaCompra({
                       <span className="nv-foot-btn__icon">+</span>
                       Agregar fila
                     </button>
+
                     <div className="nv-foot-sep" />
+
                     <button
                       type="button"
                       className="nv-foot-btn"
@@ -1060,8 +1270,12 @@ export default function ModalNuevaCompra({
               <aside className="mi-cr-filters">
                 <div className="mi-cr-filters__top">
                   <div className="mi-cr-filters__title">Datos de compra</div>
+
                   <div className="mi-cr-filters__dates">
-                    <div className="fl-field mi-card--full mi-date-field" onClick={handleOpenDate}>
+                    <div
+                      className="fl-field mi-card--full mi-date-field"
+                      onClick={handleOpenDate}
+                    >
                       <input
                         ref={fechaInputRef}
                         className="fl-input mi-date-field__input"
@@ -1082,7 +1296,6 @@ export default function ModalNuevaCompra({
                 </div>
 
                 <div className="mi-cr-filters__body">
-
                   <div className="fl-field mi-cr-rel">
                     <GlobalAutocomplete
                       value={provInput}
@@ -1090,7 +1303,9 @@ export default function ModalNuevaCompra({
                       onSelect={handleSelectProveedor}
                       options={proveedoresList}
                       getOptionLabel={(p) => String(p?.nombre ?? "").trim()}
-                      getOptionValue={(p) => String(getProveedorId(p) ?? p?.nombre ?? "")}
+                      getOptionValue={(p) =>
+                        String(getProveedorId(p) ?? p?.nombre ?? "")
+                      }
                       label="Proveedor *"
                       placeholder=" "
                       disabled={saving || addUI.open}
@@ -1098,6 +1313,7 @@ export default function ModalNuevaCompra({
                       maxItems={25}
                       inputClassName="fl-input"
                     />
+
                     <button
                       type="button"
                       className="mi-cr-link"
@@ -1174,19 +1390,23 @@ export default function ModalNuevaCompra({
                         </div>
                       </div>
                     </div>
+
                     <div className="mi-uploadCard__body">
                       <div className="mi-uploadBar">
                         <label className="mi-uploadBar__pick">
                           <input
                             type="file"
                             className="mi-uploadBar__input"
-                            onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
+                            onChange={(e) =>
+                              setArchivoAdjunto(e.target.files?.[0] || null)
+                            }
                             disabled={saving}
                           />
                           <span className="mi-uploadBar__btn mi-uploadBar__btn--primary">
                             {archivoAdjunto ? "Cambiar" : "Seleccionar"}
                           </span>
                         </label>
+
                         <button
                           type="button"
                           className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
@@ -1196,6 +1416,7 @@ export default function ModalNuevaCompra({
                           Quitar
                         </button>
                       </div>
+
                       <div
                         className={`mi-uploadFile ${
                           archivoAdjunto ? "is-filled" : "is-empty"
@@ -1214,7 +1435,11 @@ export default function ModalNuevaCompra({
                                 {archivoAdjunto.name}
                               </div>
                               <div className="mi-uploadFile__size">
-                                {Math.max(1, Math.round((archivoAdjunto.size || 0) / 1024))} KB
+                                {Math.max(
+                                  1,
+                                  Math.round((archivoAdjunto.size || 0) / 1024)
+                                )}{" "}
+                                KB
                               </div>
                             </div>
                           </>
@@ -1236,6 +1461,7 @@ export default function ModalNuevaCompra({
                     >
                       {saving ? "Guardando..." : "Guardar compra"}
                     </button>
+
                     <button
                       type="button"
                       onClick={() => (!saving ? onClose?.() : null)}

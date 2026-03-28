@@ -1,6 +1,7 @@
 <?php
+declare(strict_types=1);
 
-$origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+$origin = isset($_SERVER['HTTP_ORIGIN']) ? (string)$_SERVER['HTTP_ORIGIN'] : '';
 
 if (!headers_sent()) {
     if ($origin !== '') {
@@ -21,19 +22,19 @@ if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS
     exit;
 }
 
-function tenant_logo_fail($msg, $httpCode, $extra = array()) {
+function tenant_logo_fail(string $msg, int $httpCode, array $extra = array()): void {
     if (!headers_sent()) {
         header('Content-Type: application/json; charset=utf-8');
     }
 
-    http_response_code((int)$httpCode);
+    http_response_code($httpCode);
 
     $base = array(
         'exito'   => false,
         'mensaje' => $msg
     );
 
-    echo json_encode(array_merge($base, is_array($extra) ? $extra : array()));
+    echo json_encode(array_merge($base, $extra), JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -43,18 +44,15 @@ if (!isset($pdo_master) || !($pdo_master instanceof PDO)) {
     tenant_logo_fail('PDO master no disponible.', 500);
 }
 
-function dirname_n_tenant_logo($path, $levels) {
+function dirname_n_tenant_logo(string $path, int $levels): string {
     $out = $path;
-    $levels = (int)$levels;
-
     for ($i = 0; $i < $levels; $i++) {
         $out = dirname($out);
     }
-
     return $out;
 }
 
-function get_public_html_dir_tenant_logo() {
+function get_public_html_dir_tenant_logo(): string {
     $apiDir = realpath(dirname_n_tenant_logo(__DIR__, 3));
 
     if ($apiDir && is_dir($apiDir)) {
@@ -76,7 +74,7 @@ function get_public_html_dir_tenant_logo() {
     return dirname_n_tenant_logo(__DIR__, 5);
 }
 
-function get_balto_private_dir_tenant_logo() {
+function get_balto_private_dir_tenant_logo(): string {
     $publicHtml = get_public_html_dir_tenant_logo();
     $homeDir = realpath($publicHtml . '/..');
 
@@ -108,7 +106,7 @@ function get_balto_private_dir_tenant_logo() {
     tenant_logo_fail('No se encontró balto_private.', 500);
 }
 
-function get_private_uploads_dir_tenant_logo() {
+function get_private_uploads_dir_tenant_logo(): string {
     $baltoPrivate = get_balto_private_dir_tenant_logo();
     $uploads = rtrim($baltoPrivate, '/') . '/uploads';
 
@@ -119,8 +117,8 @@ function get_private_uploads_dir_tenant_logo() {
     return $uploads;
 }
 
-function normalize_db_rel_path_tenant_logo($path) {
-    $p = trim(str_replace('\\', '/', (string)$path));
+function normalize_db_rel_path_tenant_logo(string $path): string {
+    $p = trim(str_replace('\\', '/', $path));
     $p = preg_replace('#/+#', '/', $p);
 
     while (strpos($p, './') === 0) {
@@ -140,7 +138,7 @@ function normalize_db_rel_path_tenant_logo($path) {
     return $p;
 }
 
-function is_inside_tenant_logo($path, $baseDir) {
+function is_inside_tenant_logo(string $path, string $baseDir): bool {
     $pathReal = realpath($path);
     $baseReal = realpath($baseDir);
 
@@ -154,31 +152,29 @@ function is_inside_tenant_logo($path, $baseDir) {
     return (strpos($pathReal, $baseReal . '/') === 0 || $pathReal === $baseReal);
 }
 
-function mime_tenant_logo($abs) {
+function mime_tenant_logo(string $abs): string {
     $ext = strtolower((string)pathinfo($abs, PATHINFO_EXTENSION));
 
     switch ($ext) {
         case 'png':
             return 'image/png';
-
         case 'jpg':
         case 'jpeg':
             return 'image/jpeg';
-
         case 'webp':
             return 'image/webp';
-
         case 'gif':
             return 'image/gif';
-
         case 'svg':
             return 'image/svg+xml';
-
         default:
             return 'application/octet-stream';
     }
 }
 
+/* =========================================================
+   Sesión master
+========================================================= */
 $ses = isset($GLOBALS['SESSION_MASTER']) ? $GLOBALS['SESSION_MASTER'] : null;
 $idTenant = 0;
 
@@ -190,9 +186,21 @@ if ($idTenant <= 0) {
     tenant_logo_fail('Sesión inválida.', 401);
 }
 
+/* =========================================================
+   Tipo de logo
+   ?tipo=principal  -> logo_url
+   ?tipo=icono      -> logo_icono_url
+========================================================= */
+$tipo = isset($_GET['tipo']) ? mb_strtolower(trim((string)$_GET['tipo'])) : 'principal';
+
+$campo = 'logo_url';
+if ($tipo === 'icono') {
+    $campo = 'logo_icono_url';
+}
+
 try {
     $sql = "
-        SELECT logo_url
+        SELECT {$campo} AS logo_path
         FROM tenants
         WHERE idTenant = :idTenant
           AND activo = 1
@@ -207,11 +215,16 @@ try {
         tenant_logo_fail('Tenant no encontrado.', 404);
     }
 
-    $rel = isset($row['logo_url']) ? (string)$row['logo_url'] : '';
+    $rel = isset($row['logo_path']) ? (string)$row['logo_path'] : '';
     $rel = normalize_db_rel_path_tenant_logo($rel);
 
     if ($rel === '') {
-        tenant_logo_fail('El tenant no tiene logo configurado.', 404);
+        tenant_logo_fail(
+            $tipo === 'icono'
+                ? 'El tenant no tiene logo icono configurado.'
+                : 'El tenant no tiene logo principal configurado.',
+            404
+        );
     }
 
     $uploadsBase = get_private_uploads_dir_tenant_logo();
@@ -226,8 +239,9 @@ try {
 
     if (!is_file($abs)) {
         tenant_logo_fail('Logo no encontrado en disco.', 404, array(
-            'logo_url' => $rel,
-            'abs'      => $abs
+            'tipo'      => $tipo,
+            'logo_path' => $rel,
+            'abs'       => $abs
         ));
     }
 
@@ -248,7 +262,7 @@ try {
     readfile($abs);
     exit;
 
-} catch (Exception $e) {
+} catch (Throwable $e) {
     tenant_logo_fail('Error al obtener logo.', 500, array(
         'detalle' => $e->getMessage()
     ));

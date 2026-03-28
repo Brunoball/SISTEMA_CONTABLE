@@ -6,16 +6,14 @@ if (!function_exists('route_global')) {
 
   /**
    * Router del módulo GLOBAL
-   * - NO crea PDO (eso lo hace routes/api.php con tenant_resolver)
+   * - NO crea PDO (eso lo hace routes/api.php con tenant_resolver / db_master)
    * - Solo despacha acciones a sus handlers
    */
   function route_global(string $action): bool
   {
-    // ✅ CLAVE: traer ambos PDO desde el scope global
     global $pdo, $pdo_master;
 
-    // ✅ Normalización fuerte
-    $action = strtolower(trim((string)$action));
+    $action = mb_strtolower(trim((string)$action));
 
     switch ($action) {
 

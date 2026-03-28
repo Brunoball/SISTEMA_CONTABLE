@@ -13,10 +13,9 @@ import {
   faLayerGroup,
   faTag,
   faAlignLeft,
-  faCircleCheck,
-  faCircleXmark,
   faBoxesStacked,
 } from "@fortawesome/free-solid-svg-icons";
+import ModalEliminar from "../../Global/Modales/ModalEliminar";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 
@@ -109,6 +108,13 @@ export default function ModalCategoriasStock({
   const [modo, setModo] = useState("crear");
   const [editandoId, setEditandoId] = useState(null);
   const [form, setForm] = useState({ nombre: "", descripcion: "" });
+
+  // ── Estado del modal de eliminar ────────────────────────────────────────────
+  const [modalEliminar, setModalEliminar] = useState({
+    open: false,
+    cat: null,
+    loading: false,
+  });
 
   const isBusy = loading || saving;
 
@@ -249,21 +255,26 @@ export default function ModalCategoriasStock({
     }
   };
 
-  const handleEliminar = async (cat) => {
-    const nombre = String(cat?.nombre || "esta categoría");
-    if (!window.confirm(`¿Querés eliminar la categoría "${nombre}"?`)) return;
+  // ── Abrir modal de eliminar ─────────────────────────────────────────────────
+  const abrirModalEliminar = useCallback((cat) => {
+    setModalEliminar({ open: true, cat, loading: false });
+  }, []);
 
-    setSaving(true);
+  const cerrarModalEliminar = useCallback(() => {
+    setModalEliminar((prev) => ({ ...prev, open: false, loading: false }));
+  }, []);
+
+  // ── Confirmar eliminación desde el modal ────────────────────────────────────
+  const confirmarEliminar = useCallback(async () => {
+    const cat = modalEliminar.cat;
+    if (!cat) return;
+
+    setModalEliminar((prev) => ({ ...prev, loading: true }));
 
     try {
-      const data = await apiPost("stock_categoria_eliminar", {
+      await apiPost("stock_categoria_eliminar", {
         id_stock_categoria: Number(cat?.id_stock_categoria || 0),
       });
-
-      onToast?.(
-        "exito",
-        data?.mensaje || "Categoría eliminada correctamente."
-      );
 
       await cargarCategorias();
       await onActualizado?.();
@@ -271,12 +282,46 @@ export default function ModalCategoriasStock({
       if (Number(cat?.id_stock_categoria || 0) === Number(editandoId || 0)) {
         resetForm();
       }
+
+      cerrarModalEliminar();
     } catch (err) {
-      onToast?.("error", err?.message || "No se pudo eliminar la categoría.");
-    } finally {
-      setSaving(false);
+      setModalEliminar((prev) => ({ ...prev, loading: false }));
+      throw err; // ModalEliminar lo captura y muestra toast de error
     }
-  };
+  }, [modalEliminar.cat, cargarCategorias, onActualizado, editandoId, resetForm, cerrarModalEliminar]);
+
+  // ── Detalles para el ModalEliminar ──────────────────────────────────────────
+  const detallesModalEliminar = useMemo(() => {
+    const cat = modalEliminar.cat;
+    if (!cat) return [];
+
+    const totalProductos = Number(cat?.total_productos || 0);
+
+    const items = [
+      {
+        label: "Categoría",
+        value: String(cat?.nombre || "—"),
+      },
+      {
+        label: "Descripción",
+        value: String(cat?.descripcion?.trim() || "Sin descripción"),
+      },
+      {
+        label: "Productos asociados",
+        value: String(totalProductos),
+      },
+    ];
+
+    return items;
+  }, [modalEliminar.cat]);
+
+  const mensajeModalEliminar = useMemo(() => {
+    const totalProductos = Number(modalEliminar.cat?.total_productos || 0);
+    if (totalProductos > 0) {
+      return `¿Seguro que querés eliminar esta categoría? Los ${totalProductos} producto${totalProductos !== 1 ? "s" : ""} asociado${totalProductos !== 1 ? "s" : ""} quedarán sin categoría.`;
+    }
+    return "¿Seguro que querés eliminar esta categoría definitivamente?";
+  }, [modalEliminar.cat]);
 
   if (!open) return null;
 
@@ -425,7 +470,6 @@ export default function ModalCategoriasStock({
             <section className="mi-cr-table">
               <div className="mi-cr-table__foot mi-cr-table__foot--top">
                 <div className="mi-cr-table__summary">
-
                   <div>
                     <div
                       style={{
@@ -441,7 +485,6 @@ export default function ModalCategoriasStock({
                     </div>
                   </div>
                 </div>
-
               </div>
 
               {!loading && categoriasOrdenadas.length > 0 && (
@@ -576,7 +619,6 @@ export default function ModalCategoriasStock({
                               }`,
                             }}
                           >
-
                             {activo ? "Activa" : "Inactiva"}
                           </span>
                         </div>
@@ -602,7 +644,7 @@ export default function ModalCategoriasStock({
 
                         {/* Acciones */}
                         <div className="mi-cr-cell mi-cr-cell--center">
-                          <div style={{ display: "flex", gap: 6 , padding: 5}}>
+                          <div style={{ display: "flex", gap: 6, padding: 5 }}>
                             <button
                               type="button"
                               className="nv-foot-btn nv-foot-btn--sm"
@@ -616,7 +658,7 @@ export default function ModalCategoriasStock({
                             <button
                               type="button"
                               className="nv-foot-btn nv-foot-btn--sm nv-foot-btn--danger"
-                              onClick={() => handleEliminar(cat)}
+                              onClick={() => abrirModalEliminar(cat)}
                               disabled={saving}
                               title="Eliminar"
                             >
@@ -653,6 +695,30 @@ export default function ModalCategoriasStock({
           </button>
         </div>
       </div>
+
+      {/* ── Modal global de eliminar ─────────────────────────────────────────── */}
+      <ModalEliminar
+        open={modalEliminar.open}
+        row={modalEliminar.cat}
+        loading={modalEliminar.loading}
+        onClose={cerrarModalEliminar}
+        onConfirm={confirmarEliminar}
+        onToast={onToast}
+        title="Eliminar categoría"
+        message={mensajeModalEliminar}
+        warning={
+          Number(modalEliminar.cat?.total_productos || 0) > 0
+            ? "Esta acción no se puede deshacer. Los productos quedarán sin categoría."
+            : "Esta acción no se puede deshacer."
+        }
+        loadingMessage="Eliminando categoría…"
+        successMessage="Categoría eliminada correctamente."
+        errorMessage="No se pudo eliminar la categoría."
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        details={detallesModalEliminar}
+        hideDefaultCard={false}
+      />
     </div>,
     document.body
   );

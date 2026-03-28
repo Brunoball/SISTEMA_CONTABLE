@@ -105,6 +105,7 @@ try {
 
       t.nombre     AS tenant_nombre,
       t.logo_url,
+      t.logo_icono_url,
       t.db_host,
       t.db_name,
       t.db_user,
@@ -234,7 +235,9 @@ try {
   ]);
 
   $apiBase = build_base_url_login();
-  $tenantLogoViewUrl = $apiBase . '/api.php?action=tenant_logo_ver';
+
+  $tenantLogoPrincipalViewUrl = $apiBase . '/api.php?action=tenant_logo_ver&tipo=principal';
+  $tenantLogoIconoViewUrl    = $apiBase . '/api.php?action=tenant_logo_ver&tipo=icono';
 
   ok([
     'exito' => true,
@@ -244,8 +247,13 @@ try {
       'idUsuarioMaster' => (int)$u['idUsuarioMaster'],
       'idTenant' => (int)$u['idTenant'],
       'tenant_nombre' => (string)($u['tenant_nombre'] ?? ''),
+
       'tenant_logo_url_db' => (string)($u['logo_url'] ?? ''),
-      'tenant_logo_view_url' => $tenantLogoViewUrl,
+      'tenant_logo_icono_url_db' => (string)($u['logo_icono_url'] ?? ''),
+
+      'tenant_logo_principal_view_url' => $tenantLogoPrincipalViewUrl,
+      'tenant_logo_icono_view_url' => $tenantLogoIconoViewUrl,
+
       'Nombre_Completo' => (string)$u['usuario'],
       'nombre' => (string)$u['usuario'],
       'rol' => $rol,

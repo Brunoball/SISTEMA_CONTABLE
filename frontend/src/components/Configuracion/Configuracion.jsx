@@ -133,7 +133,7 @@ export default function Configuracion() {
       ? tiendanube.webhooks_configured
         ? { text: "Finalizada", type: "success" }
         : { text: "Parcial", type: "warning" }
-      : { text: "Pendiente", type: "pending" };
+      : { text: "Sin conexión", type: "pending" };
 
     return {
       title: "Tienda Nube",
@@ -161,13 +161,11 @@ export default function Configuracion() {
               <CardVisual />
 
               <div className="cfg-cardBody">
-                {/* HEADER */}
                 <div className="cfg-cardHeader">
                   <h2>{card.title}</h2>
 
-                  {/* CHIP ARRIBA DERECHA */}
                   <StatusPill type={card.status.type}>
-                    Finalizada
+                    {card.status.text}
                   </StatusPill>
                 </div>
 
@@ -175,7 +173,6 @@ export default function Configuracion() {
               </div>
             </div>
 
-            {/* FOOTER */}
             <div className="cfg-cardFooter">
               <div className="cfg-cardFooterLeft">
                 <div className="cfg-cardMetaLine">
@@ -191,7 +188,6 @@ export default function Configuracion() {
                 </div>
               </div>
 
-              {/* 👉 FLECHA ABAJO DERECHA */}
               <div className="cfg-cardFooterRight">
                 <span className="cfg-cardArrow">
                   <FontAwesomeIcon icon={faChevronRight} />

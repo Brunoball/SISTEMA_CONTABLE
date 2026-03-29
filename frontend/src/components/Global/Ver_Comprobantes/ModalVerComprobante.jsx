@@ -814,7 +814,8 @@ export default function ModalVerComprobante({
           <div style={{ display: "flex", gap: 10, width: "100%", justifyContent: "flex-end" }}>
             <button
               type="button"
-              className="mpr-btn"
+              className="mit-btn mit-btn--ghost mit-btn--block"
+              id="maxBTN"
               onClick={handleDownload}
               disabled={!url || downloading}
               title={`Descargar ${displayFileName}`}
@@ -825,7 +826,8 @@ export default function ModalVerComprobante({
 
             <button
               type="button"
-              className="mpr-btn"
+              className="mit-btn mit-btn--solid mit-btn--block"
+              id="maxBTN"
               onClick={handleOpen}
               disabled={!blobUrl && !url}
               title={`Abrir ${displayFileName} en nueva pestaña`}

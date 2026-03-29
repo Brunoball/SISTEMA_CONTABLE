@@ -153,7 +153,7 @@ input[type="number"]::-webkit-outer-spin-button{
 
 .mi-modal__container{
   width: min(1100px, 96vw);
-  max-height: 94vh;
+  max-height: 90vh;
   background: var(--nv-bg);
   border-radius: var(--nv-r-lg);
   box-shadow: var(--nv-shadow-lg);
@@ -2678,4 +2678,8 @@ input[type="number"]::-webkit-outer-spin-button{
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+.stock_cant{
+  display: flex;
+  flex-direction: column;
 }

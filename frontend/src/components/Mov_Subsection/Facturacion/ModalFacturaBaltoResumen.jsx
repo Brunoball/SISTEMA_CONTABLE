@@ -1273,28 +1273,34 @@ export default function ModalFacturaBaltoResumen({
             aria-label="Cerrar"
             type="button"
           >
-            ×
+            ✕
           </button>
         </div>
 
         <div className="mit-modal__body">
-          <div className="mfb-tabs">
-            <button
-              type="button"
-              className={`mfb-tab ${tabActiva === "resumen" ? "is-active" : ""}`}
-              onClick={() => setTabActiva("resumen")}
-            >
-              {usarModoNC ? "Resumen de nota de crédito" : "Resumen de facturación"}
-            </button>
+<div className="mfb-tabs">
+  <button
+    type="button"
+    className={`mfb-tab ${tabActiva === "resumen" ? "is-active" : ""}`}
+    onClick={() => setTabActiva("resumen")}
+  >
+    <span className="mfb-tab__text">
+      {usarModoNC
+        ? "Resumen de nota de crédito"
+        : "Resumen de facturación"}
+    </span>
+  </button>
 
-            <button
-              type="button"
-              className={`mfb-tab ${tabActiva === "preview" ? "is-active" : ""}`}
-              onClick={() => setTabActiva("preview")}
-            >
-              Vista previa PDF
-            </button>
-          </div>
+  <button
+    type="button"
+    className={`mfb-tab ${tabActiva === "preview" ? "is-active" : ""}`}
+    onClick={() => setTabActiva("preview")}
+  >
+    <span className="mfb-tab__text">
+      Vista previa PDF
+    </span>
+  </button>
+</div>
 
           {error && (
             <div className="mov-mi-error mfb-error-top" role="alert">

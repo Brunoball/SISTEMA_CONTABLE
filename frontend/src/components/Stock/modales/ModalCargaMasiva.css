@@ -414,3 +414,12 @@ textarea.fl-input:not(:placeholder-shown) + .fl-label {
   white-space: nowrap;
   /* Sin transición — siempre en posición elevada */
 }
+.cmi-fileActions{
+  display: flex;
+  max-height: 44px;
+  gap: 10px;
+}
+.mit-btn--ghost{
+  padding: 5px 12px;
+
+}

@@ -14,36 +14,28 @@ import {
   faBuildingColumns,
 } from "@fortawesome/free-solid-svg-icons";
 
+/* =========================
+   Auth helpers
+========================= */
 function getAuthHeaders(json = false) {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
   const token = (localStorage.getItem("token") || "").trim();
-
   const headers = {};
   if (sessionKey) headers["X-Session"] = sessionKey;
   if (token) headers["Authorization"] = `Bearer ${token}`;
   if (json) headers["Content-Type"] = "application/json";
-
   return headers;
 }
 
 function withSessionKey(url) {
   const base = String(url || "").trim();
   if (!base) return "";
-
   try {
     const sessionKey = (localStorage.getItem("session_key") || "").trim();
     const token = (localStorage.getItem("token") || "").trim();
-
     const u = new URL(base, window.location.origin);
-
-    if (sessionKey && !u.searchParams.has("session_key")) {
-      u.searchParams.set("session_key", sessionKey);
-    }
-
-    if (token && !u.searchParams.has("token")) {
-      u.searchParams.set("token", token);
-    }
-
+    if (sessionKey && !u.searchParams.has("session_key")) u.searchParams.set("session_key", sessionKey);
+    if (token && !u.searchParams.has("token")) u.searchParams.set("token", token);
     return u.toString();
   } catch {
     return base;
@@ -52,42 +44,32 @@ function withSessionKey(url) {
 
 async function parseJsonOrThrow(res) {
   const text = await res.text();
-
-  if (!text) {
-    throw new Error("Respuesta vacía del servidor.");
-  }
-
+  if (!text) throw new Error("Respuesta vacía del servidor.");
   let data;
   try {
     data = JSON.parse(text);
   } catch {
     throw new Error(`La API devolvió una respuesta inválida. HTTP ${res.status}`);
   }
-
-  if (!res.ok || data?.exito === false) {
-    throw new Error(data?.mensaje || `Error HTTP ${res.status}`);
-  }
-
+  if (!res.ok || data?.exito === false) throw new Error(data?.mensaje || `Error HTTP ${res.status}`);
   return data;
 }
 
+/* =========================
+   Format helpers
+========================= */
 function formatFecha(fecha) {
   const s = String(fecha || "").trim();
-  if (!s) return "-";
-
+  if (!s) return "—";
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m) return `${m[3]}/${m[2]}/${m[1]}`;
-
   return s;
 }
 
 function moneyARS(valor) {
   const n = Number(valor || 0);
   try {
-    return n.toLocaleString("es-AR", {
-      style: "currency",
-      currency: "ARS",
-    });
+    return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
   } catch {
     return `$${n.toFixed(2)}`;
   }
@@ -95,7 +77,7 @@ function moneyARS(valor) {
 
 function safeText(v) {
   const s = String(v ?? "").trim();
-  return s !== "" ? s : "-";
+  return s !== "" ? s : "—";
 }
 
 function normalizeCheque(row) {
@@ -109,44 +91,45 @@ function normalizeCheque(row) {
     fecha_pago: row?.fecha_pago ?? row?.fechaPago ?? "",
     archivo_mime: row?.archivo_mime ?? row?.mime ?? "application/pdf",
     tiene_comprobante:
-      row?.tiene_comprobante ??
-      row?.tieneComprobante ??
-      !!row?.archivo_path,
+      row?.tiene_comprobante ?? row?.tieneComprobante ?? !!row?.archivo_path,
   };
 }
 
+/* =========================
+   Constants
+========================= */
 const PAGE_SIZE = 100;
+const SKELETON_ROWS = 8;
 
 const Cheques_Cartera = () => {
   const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 
-  const [rows, setRows] = useState([]);
-  const [allRows, setAllRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [allRows, setAllRows]       = useState([]);
+  const [loading, setLoading]       = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState("");
-  const [toast, setToast] = useState(null);
+  const [error, setError]           = useState("");
+  const [toast, setToast]           = useState(null);
 
-  const [q, setQ] = useState("");
-  const [hasMore, setHasMore] = useState(false);
+  const [q, setQ]               = useState("");
+  const [hasMore, setHasMore]   = useState(false);
   const [nextOffset, setNextOffset] = useState(0);
 
   const [modalComprobanteOpen, setModalComprobanteOpen] = useState(false);
-  const [modalComprobanteUrl, setModalComprobanteUrl] = useState("");
+  const [modalComprobanteUrl, setModalComprobanteUrl]   = useState("");
   const [modalComprobanteMime, setModalComprobanteMime] = useState("");
-  const [modalComprobanteTitle, setModalComprobanteTitle] =
-    useState("Comprobante de Cheque");
+  const [modalComprobanteTitle, setModalComprobanteTitle] = useState("Comprobante de Cheque");
 
-  const [modalDepositarOpen, setModalDepositarOpen] = useState(false);
-  const [chequeSeleccionado, setChequeSeleccionado] = useState(null);
-  const [depositando, setDepositando] = useState(false);
+  const [modalDepositarOpen, setModalDepositarOpen]       = useState(false);
+  const [chequeSeleccionado, setChequeSeleccionado]       = useState(null);
+  const [depositando, setDepositando]                     = useState(false);
 
+  /* Toast */
   const showToast = useCallback((tipo, mensaje, duracion = 2600) => {
     setToast({ tipo, mensaje, duracion });
   }, []);
-
   const closeToast = useCallback(() => setToast(null), []);
 
+  /* Modal comprobante */
   const closeModalComprobante = useCallback(() => {
     setModalComprobanteOpen(false);
     setModalComprobanteUrl("");
@@ -158,32 +141,24 @@ const Cheques_Cartera = () => {
     (row) => {
       const cheque = normalizeCheque(row);
       const idCheque = Number(cheque?.id_cheque || 0);
-
-      if (!idCheque) {
-        showToast("error", "Cheque inválido.");
-        return;
-      }
+      if (!idCheque) { showToast("error", "Cheque inválido."); return; }
 
       const params = new URLSearchParams();
       params.set("action", "cheques_cartera_comprobante_ver");
       params.set("id_cheque", String(idCheque));
 
-      const rawUrl = `${API_URL}?${params.toString()}`;
-      const finalUrl = withSessionKey(rawUrl);
-
+      const finalUrl = withSessionKey(`${API_URL}?${params.toString()}`);
       setModalComprobanteUrl(finalUrl);
-      setModalComprobanteMime(
-        String(cheque?.archivo_mime || "").trim() || "application/pdf"
-      );
+      setModalComprobanteMime(String(cheque?.archivo_mime || "").trim() || "application/pdf");
       setModalComprobanteTitle("Comprobante de Cheque");
       setModalComprobanteOpen(true);
     },
     [API_URL, showToast]
   );
 
+  /* Modal depositar */
   const openModalDepositar = useCallback((row) => {
-    const cheque = normalizeCheque(row);
-    setChequeSeleccionado(cheque);
+    setChequeSeleccionado(normalizeCheque(row));
     setModalDepositarOpen(true);
   }, []);
 
@@ -193,20 +168,19 @@ const Cheques_Cartera = () => {
     setChequeSeleccionado(null);
   }, [depositando]);
 
+  /* =========================
+     Fetch
+  ========================= */
   const fetchCheques = useCallback(
     async ({ offset = 0, append = false, qValue = "" } = {}) => {
       const params = new URLSearchParams();
       params.set("action", "cheques_cartera_listar");
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(offset));
-      if (String(qValue || "").trim()) {
-        params.set("q", String(qValue || "").trim());
-      }
-
-      const url = `${API_URL}?${params.toString()}`;
+      if (String(qValue || "").trim()) params.set("q", String(qValue || "").trim());
 
       const data = await parseJsonOrThrow(
-        await fetch(url, {
+        await fetch(`${API_URL}?${params.toString()}`, {
           method: "GET",
           headers: getAuthHeaders(),
         })
@@ -234,78 +208,46 @@ const Cheques_Cartera = () => {
     [API_URL]
   );
 
+  /* Initial load */
   useEffect(() => {
     let active = true;
-
-    const run = async () => {
+    (async () => {
       setLoading(true);
       setError("");
-
       try {
         await fetchCheques({ offset: 0, append: false, qValue: "" });
       } catch (e) {
-        if (!active) return;
-        setError(e?.message || "No se pudieron cargar los cheques.");
+        if (active) setError(e?.message || "No se pudieron cargar los cheques.");
       } finally {
         if (active) setLoading(false);
       }
-    };
-
-    run();
-
-    return () => {
-      active = false;
-    };
+    })();
+    return () => { active = false; };
   }, [fetchCheques]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const value = q.trim().toLowerCase();
-
-      if (!value) {
-        setRows(allRows);
-        return;
-      }
-
-      const filtrados = allRows.filter((item) => {
-        const fechaEmision = String(item?.fecha_emision || "").toLowerCase();
-        const emisor = String(item?.emisor || "").toLowerCase();
-        const numero = String(item?.numero_cheque || "").toLowerCase();
-        const importe = String(item?.importe || "").toLowerCase();
-        const fechaPago = String(item?.fecha_pago || "").toLowerCase();
-
-        return (
-          fechaEmision.includes(value) ||
-          emisor.includes(value) ||
-          numero.includes(value) ||
-          importe.includes(value) ||
-          fechaPago.includes(value)
-        );
-      });
-
-      setRows(filtrados);
-    }, 200);
-
-    return () => clearTimeout(timer);
+  /* Filtered rows (client-side) */
+  const rows = useMemo(() => {
+    const value = q.trim().toLowerCase();
+    if (!value) return allRows;
+    return allRows.filter((item) => {
+      const fields = [
+        item?.fecha_emision,
+        item?.emisor,
+        item?.numero_cheque,
+        item?.importe,
+        item?.fecha_pago,
+      ].map((v) => String(v || "").toLowerCase());
+      return fields.some((f) => f.includes(value));
+    });
   }, [q, allRows]);
 
-  useEffect(() => {
-    setRows(allRows);
-  }, [allRows]);
-
+  /* Load more */
   const handleLoadMore = useCallback(async () => {
     if (!hasMore || loadingMore) return;
-
     setLoadingMore(true);
     setError("");
-
     try {
-      const data = await fetchCheques({
-        offset: nextOffset,
-        append: true,
-        qValue: "",
-      });
-
+      const data = await fetchCheques({ offset: nextOffset, append: true, qValue: "" });
       showToast(
         "exito",
         `${Array.isArray(data?.cheques) ? data.cheques.length : 0} cheques más cargados.`
@@ -318,16 +260,12 @@ const Cheques_Cartera = () => {
     }
   }, [fetchCheques, hasMore, loadingMore, nextOffset, showToast]);
 
+  /* Depositar */
   const handleDepositarCheque = useCallback(async () => {
     const idCheque = Number(chequeSeleccionado?.id_cheque || 0);
-
-    if (!idCheque) {
-      showToast("error", "No se pudo identificar el cheque seleccionado.");
-      return;
-    }
+    if (!idCheque) { showToast("error", "No se pudo identificar el cheque seleccionado."); return; }
 
     setDepositando(true);
-
     try {
       const params = new URLSearchParams();
       params.set("action", "cheques_cartera_depositar");
@@ -336,9 +274,7 @@ const Cheques_Cartera = () => {
         await fetch(`${API_URL}?${params.toString()}`, {
           method: "POST",
           headers: getAuthHeaders(true),
-          body: JSON.stringify({
-            id_cheque: idCheque,
-          }),
+          body: JSON.stringify({ id_cheque: idCheque }),
         })
       );
 
@@ -348,15 +284,8 @@ const Cheques_Cartera = () => {
         )
       );
 
-      setRows((prev) =>
-        (Array.isArray(prev) ? prev : []).filter(
-          (item) => Number(item?.id_cheque) !== idCheque
-        )
-      );
-
       setModalDepositarOpen(false);
       setChequeSeleccionado(null);
-
       showToast("exito", data?.mensaje || "Cheque depositado correctamente.");
     } catch (e) {
       showToast("error", e?.message || "No se pudo depositar el cheque.");
@@ -365,83 +294,121 @@ const Cheques_Cartera = () => {
     }
   }, [API_URL, chequeSeleccionado, showToast]);
 
+  /* =========================
+     Columns
+  ========================= */
   const columns = useMemo(
     () => [
       {
         key: "fecha_emision",
         label: "FECHA DE EMISIÓN",
-        align: "left",
+        align: "center",
+        fr: 1.1,
         render: (r) => formatFecha(r.fecha_emision),
       },
       {
         key: "emisor",
         label: "EMISOR",
         align: "left",
+        fr: 2,
+        strong: true,
         render: (r) => safeText(r.emisor),
       },
       {
         key: "numero_cheque",
         label: "N° DE CHEQUE",
-        align: "left",
+        align: "center",
+        fr: 1.2,
         render: (r) => safeText(r.numero_cheque),
       },
       {
         key: "importe",
         label: "IMPORTE",
         align: "right",
+        fr: 1.1,
         render: (r) => moneyARS(r.importe),
       },
       {
         key: "fecha_pago",
         label: "FECHA DE PAGO",
-        align: "left",
+        align: "center",
+        fr: 1.1,
         render: (r) => formatFecha(r.fecha_pago),
       },
       {
         key: "acciones",
         label: "ACCIONES",
         align: "center",
-        render: (r) => (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              flexWrap: "wrap",
-            }}
-          >
-            <button
-              type="button"
-              className="mov-actionBtn"
-              onClick={() => openModalComprobante(r)}
-              title={r?.tiene_comprobante ? "Ver comprobante" : "No tiene comprobante"}
-              disabled={!r?.tiene_comprobante}
-              style={{
-                opacity: r?.tiene_comprobante ? 1 : 0.45,
-                cursor: r?.tiene_comprobante ? "pointer" : "not-allowed",
-              }}
-            >
-              <FontAwesomeIcon icon={faEye} />
-            </button>
-
-            <button
-              type="button"
-              className="mov-actionBtn"
-              onClick={() => openModalDepositar(r)}
-              title="Depositar en el banco"
-            >
-              <FontAwesomeIcon icon={faBuildingColumns} />
-            </button>
-          </div>
-        ),
+        fr: 0.8,
+        render: () => null,
       },
     ],
-    [openModalComprobante, openModalDepositar]
+    []
   );
 
-  const gridCols = useMemo(() => "1.15fr 2fr 1.35fr 1.15fr 1.15fr 1fr", []);
+  const gridCols = useMemo(
+    () => columns.map((c) => `${c.fr ?? 1}fr`).join(" "),
+    [columns]
+  );
 
+  /* =========================
+     Skeleton
+  ========================= */
+  const skelWidths = useMemo(() => ({
+    fecha_emision:  ["44%", "38%", "42%", "36%"],
+    emisor:         ["72%", "58%", "66%", "50%"],
+    numero_cheque:  ["52%", "44%", "48%", "40%"],
+    importe:        ["38%", "30%", "34%", "28%"],
+    fecha_pago:     ["44%", "36%", "40%", "34%"],
+  }), []);
+
+  const renderSkeletonRow = (idx) => (
+    <div
+      key={`skel-${idx}`}
+      className="mov-gridTable mov-gridTable--row mov-row--skeleton"
+      style={{ gridTemplateColumns: gridCols }}
+      role="row"
+      aria-hidden="true"
+    >
+      {columns.map((c) => {
+        if (c.key === "acciones") {
+          return (
+            <div
+              key={c.key}
+              className="mov-gridCell mov-gridCell--actions is-center"
+              role="cell"
+              data-label={c.label}
+            >
+              <div className="mov-skelActions">
+                <span className="mov-skelIcon" />
+                <span className="mov-skelIcon" />
+              </div>
+            </div>
+          );
+        }
+        const list = skelWidths[c.key] || ["60%"];
+        const w = list[idx % list.length];
+        return (
+          <div
+            key={c.key}
+            className={[
+              "mov-gridCell",
+              c.align === "right"  ? "is-right"  : "",
+              c.align === "center" ? "is-center" : "",
+            ].join(" ")}
+            role="cell"
+            data-label={c.label}
+          >
+            <span className="mov-skeletonBar" style={{ width: w }} />
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  /* =========================
+     Render
+  ========================= */
   return (
     <div className="mov-page">
       {toast && (
@@ -482,6 +449,7 @@ const Cheques_Cartera = () => {
       )}
 
       <section className="mov-card mov-card--table">
+        {/* HEAD */}
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
             <div className="title-mov">
@@ -505,7 +473,6 @@ const Cheques_Cartera = () => {
                         placeholder="Buscar por emisor, número de cheque, importe..."
                         autoComplete="off"
                       />
-
                       <span className="cc-floatingLabel">
                         <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
                       </span>
@@ -517,6 +484,7 @@ const Cheques_Cartera = () => {
           </div>
         </div>
 
+        {/* HEADER TABLA */}
         <div
           className="mov-gridTable mov-gridTable--head"
           style={{ gridTemplateColumns: gridCols }}
@@ -528,7 +496,7 @@ const Cheques_Cartera = () => {
               className={[
                 "mov-gridCell",
                 "mov-gridCell--head",
-                c.align === "right" ? "is-right" : "",
+                c.align === "right"  ? "is-right"  : "",
                 c.align === "center" ? "is-center" : "",
               ].join(" ")}
               role="columnheader"
@@ -538,12 +506,18 @@ const Cheques_Cartera = () => {
           ))}
         </div>
 
+        {/* BODY */}
         <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup">
-          <div className="mov-gridBody mov-gridBody--relative">
+          <div
+            className={[
+              "mov-gridBody",
+              "mov-gridBody--relative",
+              loading ? "mov-softLoading" : "",
+            ].join(" ")}
+          >
             {loading ? (
-              <div className="cc-emptyState">
-                <FontAwesomeIcon icon={faMoneyBillWave} className="cc-emptyIcon" />
-                <div className="cc-emptyText">Cargando cheques...</div>
+              <div className="mov-skeletonWrap" aria-busy="true">
+                {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
               </div>
             ) : (
               <>
@@ -555,15 +529,63 @@ const Cheques_Cartera = () => {
                     role="row"
                   >
                     {columns.map((c) => {
-                      const val = c.render(r);
+                      if (c.key === "acciones") {
+                        return (
+                          <div
+                            key={c.key}
+                            className="mov-gridCell mov-gridCell--actions is-center"
+                            role="cell"
+                            data-label={c.label}
+                          >
+                            <div className="mov-actionsInline">
+                              {/* Ver comprobante */}
+                              <button
+                                type="button"
+                                className={[
+                                  "mov-iconBtn",
+                                  r?.tiene_comprobante
+                                    ? "mov-iconBtn--comprobante"
+                                    : "mov-iconBtn--disabled",
+                                ].join(" ")}
+                                title={
+                                  r?.tiene_comprobante
+                                    ? "Ver comprobante"
+                                    : "Sin comprobante"
+                                }
+                                disabled={!r?.tiene_comprobante}
+                                onClick={() => openModalComprobante(r)}
+                                style={{
+                                  opacity: r?.tiene_comprobante ? 1 : 0.35,
+                                  cursor:  r?.tiene_comprobante ? "pointer" : "not-allowed",
+                                }}
+                              >
+                                <FontAwesomeIcon icon={faEye} />
+                              </button>
+
+                              {/* Depositar */}
+                              <button
+                                type="button"
+                                className="mov-iconBtn"
+                                title="Depositar en el banco"
+                                onClick={() => openModalDepositar(r)}
+                              >
+                                <FontAwesomeIcon icon={faBuildingColumns} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      const val = c.render ? c.render(r) : safeText(r[c.key]);
 
                       return (
                         <div
                           key={c.key}
                           className={[
                             "mov-gridCell",
-                            c.align === "right" ? "is-right" : "",
+                            c.align === "right"  ? "is-right"  : "",
                             c.align === "center" ? "is-center" : "",
+                            c.strong             ? "is-strong" : "",
                           ]
                             .filter(Boolean)
                             .join(" ")}
@@ -571,18 +593,15 @@ const Cheques_Cartera = () => {
                           data-label={c.label}
                           title={typeof val === "string" ? val : undefined}
                         >
-                          {c.key === "acciones" ? (
-                            val
-                          ) : (
-                            <span className="mov-ellipsissss">{val}</span>
-                          )}
+                          <span className="mov-ellipsissss">{val}</span>
                         </div>
                       );
                     })}
                   </div>
                 ))}
 
-                {!loading && rows.length === 0 && (
+                {/* Empty state */}
+                {rows.length === 0 && (
                   <div className="cc-emptyState">
                     <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
                     <div className="cc-emptyText">
@@ -593,14 +612,9 @@ const Cheques_Cartera = () => {
                   </div>
                 )}
 
-                {!loading && allRows.length > 0 && hasMore && q.trim() === "" && (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      padding: "12px 0",
-                    }}
-                  >
+                {/* Cargar más */}
+                {allRows.length > 0 && hasMore && q.trim() === "" && (
+                  <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
                       type="button"
                       className="mov-btn mov-btn--loadAll"
@@ -608,8 +622,15 @@ const Cheques_Cartera = () => {
                       disabled={loadingMore}
                       title="Cargar 100 registros más"
                     >
-                      {loadingMore ? "Cargando..." : "Cargar 100 más"}
+                      {loadingMore ? "Cargando…" : "Cargar 100 más"}
                     </button>
+                  </div>
+                )}
+
+                {/* Skeleton de carga más */}
+                {loadingMore && (
+                  <div className="mov-skeletonMore" aria-busy="true">
+                    {Array.from({ length: 4 }).map((_, i) => renderSkeletonRow(i))}
                   </div>
                 )}
               </>

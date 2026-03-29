@@ -1711,3 +1711,183 @@ html[data-theme="oscuro"] .cmi-floatingLabel {
   background: #0B1220 !important;
   color: rgba(78, 161, 255, 0.92) !important;
 }
+/* =========================================================
+   🌙 DARK MODE — mi-mini__modal (html[data-theme="oscuro"])
+========================================================= */
+
+html[data-theme="oscuro"] .mi-mini__overlay {
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(3px);
+}
+
+html[data-theme="oscuro"] .mi-mini__modal {
+  background: rgba(6, 18, 28, 0.96) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  box-shadow: 0 28px 64px -24px rgba(0, 0, 0, 0.55) !important;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+html[data-theme="oscuro"] .mi-mini__head {
+  background: linear-gradient(180deg, #0a2540, #071a2c) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10) !important;
+}
+
+html[data-theme="oscuro"] .mi-mini__title {
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+html[data-theme="oscuro"] .mi-mini__close {
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+html[data-theme="oscuro"] .mi-mini__close:hover {
+  background: rgba(255, 255, 255, 0.10) !important;
+}
+
+html[data-theme="oscuro"] .mi-mini__body {
+  background: rgba(6, 18, 28, 0.96) !important;
+}
+
+html[data-theme="oscuro"] .mi-mini__actions {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 12px;
+}
+
+/* Floating inputs */
+html[data-theme="oscuro"] .mi-mini__modal .fl-input,
+html[data-theme="oscuro"] .mi-mini__modal .fl-select {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="oscuro"] .mi-mini__modal .fl-input:focus,
+html[data-theme="oscuro"] .mi-mini__modal .fl-select:focus {
+  border-color: rgba(0, 85, 187, 0.65) !important;
+  box-shadow: 0 0 0 3px rgba(0, 85, 187, 0.18) !important;
+}
+
+html[data-theme="oscuro"] .mi-mini__modal .fl-input::placeholder {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+html[data-theme="oscuro"] .mi-mini__modal .fl-input[readonly] {
+  background: rgba(255, 255, 255, 0.04) !important;
+  cursor: default;
+}
+
+html[data-theme="oscuro"] .mi-mini__modal .fl-label {
+  color: rgba(226, 232, 240, 0.72) !important;
+}
+
+html[data-theme="oscuro"] .mi-mini__modal .fl-input:focus + .fl-label,
+html[data-theme="oscuro"] .mi-mini__modal .fl-input:not(:placeholder-shown) + .fl-label {
+  background: rgba(6, 18, 28, 0.96) !important;
+  color: rgba(180, 210, 255, 0.92) !important;
+}
+
+/* Buttons */
+html[data-theme="oscuro"] .mi-mini__modal .mit-btn--ghost {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: rgba(255, 255, 255, 0.86) !important;
+}
+
+html[data-theme="oscuro"] .mi-mini__modal .mit-btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.10) !important;
+}
+
+html[data-theme="oscuro"] .mi-mini__modal .mit-btn--solid {
+  background: #0055BB !important;
+  border-color: rgba(0, 85, 187, 0.85) !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+}
+
+html[data-theme="oscuro"] .mi-mini__modal .mit-btn--solid:hover {
+  filter: brightness(1.06);
+}
+
+
+
+
+
+
+
+
+html[data-theme="oscuro"] .mit-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.88);
+}
+
+html[data-theme="oscuro"] .mit-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.22);
+}
+
+html[data-theme="oscuro"] .mit-btn--ghost {
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.88);
+  border-color: rgba(255,255,255,0.14);
+}
+
+html[data-theme="oscuro"] .mit-btn--solid {
+  background: #0055BB;
+  color: #fff;
+  border-color: #0055BB;
+}
+
+html[data-theme="oscuro"] .mit-btn--solid:hover:not(:disabled) {
+  background: #0b63cf;
+  border-color: #0b63cf;
+}
+
+html[data-theme="oscuro"] .mit-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* =========================
+   🌙 DARK MODE — Tabs Facturación
+========================= */
+
+html[data-theme="oscuro"] .mfb-tabs {
+  background: transparent;
+}
+
+/* Tab base */
+html[data-theme="oscuro"] .mfb-tab {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(226, 232, 240, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 500;
+  transition: all 0.18s ease;
+}
+
+/* Hover */
+html[data-theme="oscuro"] .mfb-tab:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(96, 165, 250, 0.35);
+  color: #ffffff;
+}
+
+/* Activo */
+html[data-theme="oscuro"] .mfb-tab.is-active {
+  background: #0055BB;
+  color: #ffffff;
+  border-color: #0055BB;
+  box-shadow: 0 10px 24px rgba(0, 85, 187, 0.30);
+}
+
+/* Hover activo */
+html[data-theme="oscuro"] .mfb-tab.is-active:hover {
+  background: #0b63cf;
+  border-color: #0b63cf;
+}
+
+/* Texto interno (por si usás span) */
+html[data-theme="oscuro"] .mfb-tab__text {
+  color: inherit;
+}

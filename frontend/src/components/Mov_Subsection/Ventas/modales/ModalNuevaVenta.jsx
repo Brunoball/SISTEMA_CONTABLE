@@ -294,7 +294,7 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
   if (!open) return null;
 
   return createPortal(
-    <div className="mi-mini__overlay" onMouseDown={onCancel}>
+    <div className="mi-mini__overlay">
       <div className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()} onMouseDown={e => e.stopPropagation()}>
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
@@ -1173,7 +1173,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                           />
                         </div>
 
-                        <div className="mi-cr-cell mi-cr-cell--center">
+                        <div className="mi-cr-cell mi-cr-cell--center stock_cant">
                           <input
                             className="nv-cell-input nv-cell-input--center"
                             type="number"
@@ -1198,7 +1198,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                             <div
                               style={{
                                 fontSize: "10px",
-                                marginTop: "2px",
                                 fontWeight: rowSinStock ? 700 : 500,
                                 color: rowSinStock ? "#b91c1c" : "#666",
                               }}
@@ -1248,9 +1247,16 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                             className="nv-cell-input nv-cell-input--center nv-cell-input--select"
                             value={String(r.ivaPct)}
                             onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
-                            onKeyDown={(e) => {
-                              if (["ArrowUp", "ArrowDown"].includes(e.key)) e.preventDefault();
-                            }}
+onKeyDown={(e) => {
+  if (
+    e.key === "ArrowUp" ||
+    e.key === "ArrowDown" ||
+    e.key === "ArrowLeft" ||
+    e.key === "ArrowRight"
+  ) {
+    e.preventDefault();
+  }
+}}
                             disabled={saving}
                             style={{ width: "100%" }}
                           >

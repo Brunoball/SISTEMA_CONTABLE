@@ -1,323 +1,690 @@
 <?php
 declare(strict_types=1);
 
-/**
- * Endpoint: padron_cuit / constancia_cuit
- * Input:
- *  - GET: ?action=movimientos&op=padron_cuit&cuit=20xxxxxxxxx
- *  - GET: ?action=padron_cuit&cuit=20xxxxxxxxx
- *  - JSON body: {"cuit":"20xxxxxxxxx"}
- *
- * Output:
- *  {
- *    ok: true,
- *    data: {
- *      summary: {...},
- *      raw: {...}
- *    }
- *  }
- */
+header('Content-Type: application/json; charset=utf-8');
 
+/* =========================================================
+   JSON helpers
+========================================================= */
 if (!function_exists('json_ok')) {
-  function json_ok($data = [], int $code = 200): void {
-    http_response_code($code);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['ok' => true, 'data' => $data], JSON_UNESCAPED_UNICODE);
-    exit;
-  }
+    function json_ok(array $data = array(), int $code = 200): void
+    {
+        http_response_code($code);
+        echo json_encode(
+            array(
+                'ok' => true,
+                'data' => $data,
+            ),
+            JSON_UNESCAPED_UNICODE
+        );
+        exit;
+    }
 }
 
 if (!function_exists('json_error')) {
-  function json_error(string $msg, int $code = 400, $extra = null): void {
-    http_response_code($code);
-    header('Content-Type: application/json; charset=utf-8');
-    $out = ['ok' => false, 'error' => $msg];
-    if ($extra !== null) {
-      $out['extra'] = $extra;
+    function json_error(string $msg, int $code = 400, $extra = null): void
+    {
+        http_response_code($code);
+
+        $out = array(
+            'ok'    => false,
+            'error' => $msg,
+        );
+
+        if ($extra !== null) {
+            $out['extra'] = $extra;
+        }
+
+        echo json_encode($out, JSON_UNESCAPED_UNICODE);
+        exit;
     }
-    echo json_encode($out, JSON_UNESCAPED_UNICODE);
-    exit;
-  }
 }
 
-if (!function_exists('balto_require_session')) {
-  function balto_require_session(): void
-  {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-      @session_start();
+/* =========================================================
+   Utils
+========================================================= */
+if (!function_exists('only_digits')) {
+    function only_digits($v): string
+    {
+        $out = preg_replace('/\D+/', '', (string)$v);
+        return $out ?? '';
     }
-
-    $ok = false;
-    if (!empty($_SESSION['user_id']) || !empty($_SESSION['balto_user_id']) || !empty($_SESSION['user'])) {
-      $ok = true;
-    }
-
-    if (!$ok) {
-      json_error("No autorizado (sesión requerida).", 401);
-    }
-  }
 }
 
 if (!function_exists('arr_get')) {
-  function arr_get(array $arr, array $path, $default = null) {
-    $tmp = $arr;
-    foreach ($path as $k) {
-      if (!is_array($tmp) || !array_key_exists($k, $tmp)) {
-        return $default;
-      }
-      $tmp = $tmp[$k];
+    function arr_get($arr, string $path, $default = null)
+    {
+        $cur = $arr;
+        foreach (explode('.', $path) as $segment) {
+            if (!is_array($cur) || !array_key_exists($segment, $cur)) {
+                return $default;
+            }
+            $cur = $cur[$segment];
+        }
+        return $cur;
     }
-    return $tmp;
-  }
 }
 
-if (!function_exists('normalize_list')) {
-  function normalize_list($value): array {
-    if ($value === null) return [];
-    if (!is_array($value)) return [$value];
+if (!function_exists('normalize_array')) {
+    function normalize_array($value): array
+    {
+        if ($value === null || $value === '') {
+            return array();
+        }
 
-    $isAssoc = array_keys($value) !== range(0, count($value) - 1);
-    return $isAssoc ? [$value] : $value;
-  }
-}
+        if (is_array($value)) {
+            $isAssoc = array_keys($value) !== range(0, count($value) - 1);
+            return $isAssoc ? array($value) : $value;
+        }
 
-if (!function_exists('pick_persona_root')) {
-  function pick_persona_root(array $resp): array
-  {
-    foreach (['personaReturn', 'return'] as $k) {
-      if (isset($resp[$k]) && is_array($resp[$k])) {
-        return $resp[$k];
-      }
+        return array($value);
     }
-
-    // por si viniera ya "plano"
-    return $resp;
-  }
 }
 
-balto_require_session();
+if (!function_exists('clean_str')) {
+    function clean_str($v): ?string
+    {
+        if ($v === null) {
+            return null;
+        }
 
-// Aceptamos tanto action=padron_cuit como op=padron_cuit
-$action = strtolower(trim((string)($_GET['action'] ?? $_POST['action'] ?? '')));
-$op     = strtolower(trim((string)($_GET['op'] ?? $_POST['op'] ?? '')));
+        if (is_bool($v)) {
+            return $v ? 'true' : 'false';
+        }
 
-$validOps = ['padron_cuit', 'constancia_cuit'];
+        if (!is_scalar($v)) {
+            return null;
+        }
 
-if ($op !== '' && in_array($op, $validOps, true)) {
-  // OK
-} elseif ($action !== '' && in_array($action, $validOps, true)) {
-  // OK
-} elseif ($op === '' && $action === '') {
-  $op = 'padron_cuit';
-} else {
-  json_error("Acción no soportada. Use op=padron_cuit o action=padron_cuit.", 400, [
-    'action' => $action,
-    'op' => $op,
-  ]);
+        $s = trim((string)$v);
+        return $s === '' ? null : $s;
+    }
 }
 
-// input
-$raw = file_get_contents('php://input') ?: '';
-$body = [];
-if ($raw !== '') {
-  $tmp = json_decode($raw, true);
-  if (is_array($tmp)) {
-    $body = $tmp;
-  }
+/* =========================================================
+   Tenant / paths privados
+========================================================= */
+if (!function_exists('get_request_headers_fallback')) {
+    function get_request_headers_fallback(): array
+    {
+        if (function_exists('getallheaders')) {
+            $headers = getallheaders();
+            return is_array($headers) ? $headers : array();
+        }
+
+        $headers = array();
+        foreach ($_SERVER as $key => $value) {
+            if (strpos($key, 'HTTP_') === 0) {
+                $name = str_replace('_', '-', substr($key, 5));
+                $headers[$name] = $value;
+            }
+        }
+        return $headers;
+    }
 }
 
-$cuit = (string)($_GET['cuit'] ?? $_POST['cuit'] ?? ($body['cuit'] ?? ''));
-$cuit = preg_replace('/\D+/', '', $cuit ?? '');
+if (!function_exists('header_value_ci')) {
+    function header_value_ci(string $name): string
+    {
+        $headers = get_request_headers_fallback();
 
-if ($cuit === '' || strlen($cuit) !== 11) {
-  json_error("CUIT inválido. Debe tener 11 dígitos.", 422);
+        foreach ($headers as $k => $v) {
+            if (strcasecmp((string)$k, $name) === 0) {
+                return trim((string)$v);
+            }
+        }
+
+        return '';
+    }
 }
 
-require __DIR__ . '/arca_wsaa.php';
-require __DIR__ . '/padron_arca.php';
-
-$config = require __DIR__ . '/arca_config.php';
-
-// sanity config
-if (empty($config['cuit'])) {
-  json_error("Falta configurar ARCA_CUIT (CUIT representada) en .env o en arca_config.php", 500);
-}
-if (!file_exists((string)$config['cert_path'])) {
-  json_error("No existe certificado: " . $config['cert_path'], 500);
-}
-if (!file_exists((string)$config['key_path'])) {
-  json_error("No existe clave privada: " . $config['key_path'], 500);
+if (!function_exists('try_start_session_if_needed')) {
+    function try_start_session_if_needed(): void
+    {
+        if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+            @session_start();
+        }
+    }
 }
 
-$mode = $config['mode'] ?? 'homo';
-$wsaaWsdl = $config['wsaa'][$mode] ?? null;
-if (!$wsaaWsdl) {
-  json_error("WSAA WSDL no configurado para mode=$mode", 500);
+if (!function_exists('resolve_current_tenant_id')) {
+    function resolve_current_tenant_id(): int
+    {
+        $candidates = array();
+
+        // headers típicos
+        $candidates[] = header_value_ci('X-IdTenant');
+        $candidates[] = header_value_ci('X-Id-Tenant');
+
+        // superglobales server directas
+        $candidates[] = $_SERVER['HTTP_X_IDTENANT'] ?? '';
+        $candidates[] = $_SERVER['HTTP_X_ID_TENANT'] ?? '';
+
+        // globals por si el router/resolver ya cargó tenant
+        if (isset($GLOBALS['tenant']) && is_array($GLOBALS['tenant'])) {
+            $candidates[] = $GLOBALS['tenant']['idTenant'] ?? '';
+            $candidates[] = $GLOBALS['tenant']['id_tenant'] ?? '';
+        }
+
+        if (isset($GLOBALS['currentTenant']) && is_array($GLOBALS['currentTenant'])) {
+            $candidates[] = $GLOBALS['currentTenant']['idTenant'] ?? '';
+            $candidates[] = $GLOBALS['currentTenant']['id_tenant'] ?? '';
+        }
+
+        // sesión
+        try_start_session_if_needed();
+
+        if (isset($_SESSION) && is_array($_SESSION)) {
+            $candidates[] = $_SESSION['idTenant'] ?? '';
+            $candidates[] = $_SESSION['id_tenant'] ?? '';
+            $candidates[] = $_SESSION['tenant_id'] ?? '';
+
+            if (isset($_SESSION['tenant']) && is_array($_SESSION['tenant'])) {
+                $candidates[] = $_SESSION['tenant']['idTenant'] ?? '';
+                $candidates[] = $_SESSION['tenant']['id_tenant'] ?? '';
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            $digits = only_digits((string)$candidate);
+            if ($digits !== '') {
+                $id = (int)$digits;
+                if ($id > 0) {
+                    return $id;
+                }
+            }
+        }
+
+        return 0;
+    }
 }
 
-$svcCfg = $config['constancia_inscripcion'] ?? [];
-$wsn = (string)($svcCfg['wsn'] ?? 'ws_sr_constancia_inscripcion');
+if (!function_exists('resolve_balto_private_root')) {
+    function resolve_balto_private_root(): string
+    {
+        $env = getenv('BALTO_PRIVATE_ROOT');
+        if ($env !== false && trim((string)$env) !== '') {
+            return rtrim(trim((string)$env), '/\\');
+        }
 
-$preferLocal = !empty($svcCfg['prefer_local_wsdl']);
-$localWsdl = (string)($svcCfg['local_wsdl'] ?? '');
-$remoteWsdl = (string)($svcCfg[$mode . '_wsdl'] ?? '');
-$endpoint = (string)($svcCfg[$mode . '_endpoint'] ?? '');
+        /*
+         * Estructura esperada:
+         * /home/USER/domains/DOMINIO/public_html/BALTO/api/modules/movimientos/facturacion/padron.php
+         * Queremos:
+         * /home/USER/domains/DOMINIO/balto_private
+         */
 
-$wsdl = $remoteWsdl;
-if ($preferLocal && $localWsdl !== '' && file_exists($localWsdl)) {
-  $wsdl = $localWsdl;
+        $dir = __DIR__;
+        $facturacion = realpath($dir) ?: $dir;
+        $movimientos = dirname($facturacion);
+        $modules     = dirname($movimientos);
+        $api         = dirname($modules);
+        $baltoRoot   = dirname($api);          // .../public_html/BALTO
+        $publicHtml  = dirname($baltoRoot);    // .../public_html
+        $domainRoot  = dirname($publicHtml);   // .../domains/mi-dominio
+
+        return rtrim($domainRoot, '/\\') . '/balto_private';
+    }
 }
 
-if ($wsdl === '' || $endpoint === '') {
-  json_error("Constancia Inscripción wsdl/endpoint no configurado correctamente (mode=$mode).", 500, [
-    'wsdl' => $wsdl,
-    'endpoint' => $endpoint,
-  ]);
+if (!function_exists('resolve_tenant_secure_dir')) {
+    function resolve_tenant_secure_dir(int $tenantId): string
+    {
+        if ($tenantId <= 0) {
+            throw new RuntimeException('No se pudo resolver el idTenant actual.');
+        }
+
+        $privateRoot = resolve_balto_private_root();
+        $baseDir = $privateRoot . '/balto_arca_clientes';
+        $tenantDir = $baseDir . '/t_' . $tenantId;
+
+        $realBase = realpath($baseDir);
+        $realTenant = realpath($tenantDir);
+
+        if ($realBase === false || !is_dir($realBase)) {
+            throw new RuntimeException('No existe la carpeta base privada: ' . $baseDir);
+        }
+
+        if ($realTenant === false || !is_dir($realTenant)) {
+            throw new RuntimeException('No existe la carpeta privada del tenant: ' . $tenantDir);
+        }
+
+        $realBaseNorm = rtrim(str_replace('\\', '/', $realBase), '/') . '/';
+        $realTenantNorm = rtrim(str_replace('\\', '/', $realTenant), '/') . '/';
+
+        if (strpos($realTenantNorm, $realBaseNorm) !== 0) {
+            throw new RuntimeException('Ruta privada inválida del tenant.');
+        }
+
+        return rtrim($realTenant, '/\\');
+    }
 }
 
-// 1) WSAA
+/* =========================================================
+   Key / cert helpers
+========================================================= */
+if (!function_exists('key_is_encrypted')) {
+    function key_is_encrypted(string $keyPath): bool
+    {
+        if (!is_file($keyPath)) {
+            return false;
+        }
+
+        $txt = (string)@file_get_contents($keyPath);
+        if ($txt === '') {
+            return false;
+        }
+
+        $u = strtoupper($txt);
+
+        if (strpos($u, 'BEGIN ENCRYPTED PRIVATE KEY') !== false) {
+            return true;
+        }
+
+        if (strpos($u, 'BEGIN RSA PRIVATE KEY') !== false && strpos($u, 'ENCRYPTED') !== false) {
+            return true;
+        }
+
+        return false;
+    }
+}
+
+if (!function_exists('load_key_pass')) {
+    function load_key_pass(string $secureDir, string $keyPath): string
+    {
+        $env = getenv('ARCA_KEY_PASS');
+        if ($env !== false && trim((string)$env) !== '') {
+            return trim((string)$env);
+        }
+
+        $passFile = $secureDir . '/arca_key.pass';
+        if (is_file($passFile)) {
+            $txt = trim((string)@file_get_contents($passFile));
+            if ($txt !== '') {
+                return $txt;
+            }
+        }
+
+        if (!key_is_encrypted($keyPath)) {
+            return '';
+        }
+
+        return '__MISSING__';
+    }
+}
+
+if (!function_exists('extract_cuit_from_cert')) {
+    function extract_cuit_from_cert(string $certPath): string
+    {
+        $certContent = (string)@file_get_contents($certPath);
+        if ($certContent === '') {
+            return '';
+        }
+
+        $certData = @openssl_x509_parse($certContent);
+        if (!is_array($certData)) {
+            return '';
+        }
+
+        $candidates = array(
+            $certData['subject']['serialNumber'] ?? '',
+            $certData['subject']['CN'] ?? '',
+            $certData['subject']['O'] ?? '',
+        );
+
+        foreach ($candidates as $field) {
+            $d = only_digits($field);
+            if (strlen($d) === 11) {
+                return $d;
+            }
+        }
+
+        return '';
+    }
+}
+
+/* =========================================================
+   ARCA response mappers
+========================================================= */
+if (!function_exists('map_condicion_iva')) {
+    function map_condicion_iva(array $resp): ?string
+    {
+        $impuestos = array();
+        $candidatos = array(
+            'personaReturn.datosRegimenGeneral.impuesto',
+            'personaReturn.datosMonotributo.impuesto',
+            'personaReturn.impuesto',
+        );
+
+        foreach ($candidatos as $path) {
+            $tmp = arr_get($resp, $path, null);
+            if ($tmp !== null) {
+                foreach (normalize_array($tmp) as $it) {
+                    if (is_array($it)) {
+                        $impuestos[] = $it;
+                    }
+                }
+            }
+        }
+
+        $descs = array();
+        foreach ($impuestos as $imp) {
+            $desc = trim((string)($imp['descripcionImpuesto'] ?? $imp['descripcion'] ?? ''));
+            if ($desc !== '') {
+                $descs[] = $desc;
+            }
+        }
+
+        $texto = strtolower(implode(' | ', array_unique($descs)));
+
+        if (strpos($texto, 'iva exento') !== false || strpos($texto, 'exent') !== false) {
+            return 'IVA Sujeto Exento';
+        }
+        if (strpos($texto, 'monotrib') !== false) {
+            return 'Responsable Monotributo';
+        }
+        if (strpos($texto, 'iva') !== false) {
+            return 'IVA Responsable Inscripto';
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('build_domicilio')) {
+    function build_domicilio(array $df): ?string
+    {
+        $direccion = trim((string)($df['direccion'] ?? ''));
+        $localidad = trim((string)($df['localidad'] ?? ''));
+        $provincia = trim((string)($df['descripcionProvincia'] ?? ''));
+        $cp        = trim((string)($df['codPostal'] ?? ($df['codigoPostal'] ?? '')));
+
+        $parts = array_values(array_filter(
+            array($direccion, $localidad, $provincia, $cp),
+            static function ($v) {
+                return $v !== null && $v !== '';
+            }
+        ));
+
+        return empty($parts) ? null : implode(' - ', $parts);
+    }
+}
+
+/* =========================================================
+   Input
+========================================================= */
+$raw = file_get_contents('php://input');
+$body = array();
+
+if ($raw !== false && trim($raw) !== '') {
+    $tmp = json_decode($raw, true);
+    if (is_array($tmp)) {
+        $body = $tmp;
+    }
+}
+
+$cuitBuscado = '';
+if (isset($_GET['cuit'])) {
+    $cuitBuscado = (string)$_GET['cuit'];
+} elseif (isset($_POST['cuit'])) {
+    $cuitBuscado = (string)$_POST['cuit'];
+} elseif (isset($body['cuit'])) {
+    $cuitBuscado = (string)$body['cuit'];
+}
+
+$cuitBuscado = only_digits($cuitBuscado);
+
+if (strlen($cuitBuscado) !== 11) {
+    json_error('CUIT inválido. Debe tener 11 dígitos.', 422);
+}
+
+/* =========================================================
+   Resolver tenant y carpeta privada
+========================================================= */
+$base = __DIR__;
+
+require_once $base . '/arca_wsaa.php';
+
+$tenantId = resolve_current_tenant_id();
+if ($tenantId <= 0) {
+    json_error(
+        'No se pudo resolver el tenant actual. Enviá X-IdTenant o asegurate de tener la sesión cargada.',
+        401
+    );
+}
+
 try {
-  $cred = ArcaWsaa::login(
-    $wsaaWsdl,
-    $wsn,
-    (string)$config['cert_path'],
-    (string)$config['key_path'],
-    (string)($config['key_pass'] ?? ''),
-    (bool)($config['ssl_verify'] ?? true),
-    (string)($config['ca_file'] ?? ''),
-    (bool)($config['ssl_fallback_if_fail'] ?? false),
-    (bool)($config['debug_log'] ?? false),
-    (string)($config['wsaa_sign']['openssl_bin'] ?? 'openssl')
-  );
+    $secureDir = resolve_tenant_secure_dir($tenantId);
 } catch (Throwable $e) {
-  json_error("WSAA error: " . $e->getMessage(), 500);
+    json_error('Error resolviendo carpeta privada del tenant.', 500, array(
+        'tenant_id' => $tenantId,
+        'detalle'   => $e->getMessage(),
+    ));
 }
 
-// 2) WS constancia
-$auth = [
-  'Token' => $cred['token'],
-  'Sign'  => $cred['sign'],
-  'Cuit'  => (int)$config['cuit'],
-];
+$certPath    = $secureDir . '/arca_cert.pem';
+$keyPath     = $secureDir . '/arca_key.pem';
+$caPath      = $secureDir . '/cacert.pem';
+$wsdlA5Local = $secureDir . '/personaServiceA5.wsdl';
+
+$faltantes = array();
+foreach (array($certPath, $keyPath, $caPath, $wsdlA5Local) as $f) {
+    if (!file_exists($f)) {
+        $faltantes[] = $f;
+    }
+}
+
+if (!empty($faltantes)) {
+    json_error('Faltan archivos requeridos para consultar ARCA.', 500, array(
+        'tenant_id'  => $tenantId,
+        'secure_dir' => $secureDir,
+        'faltantes'  => $faltantes,
+    ));
+}
+
+/* =========================================================
+   Resolver CUIT representada
+========================================================= */
+$cuitRepresentada = extract_cuit_from_cert($certPath);
+
+if (strlen($cuitRepresentada) !== 11) {
+    $envCuit = only_digits((string)(getenv('ARCA_CUIT') ?: ''));
+    if (strlen($envCuit) === 11) {
+        $cuitRepresentada = $envCuit;
+    }
+}
+
+if (strlen($cuitRepresentada) !== 11) {
+    json_error('No se pudo resolver el CUIT del certificado.', 500, array(
+        'tenant_id'  => $tenantId,
+        'cert_path'  => $certPath,
+        'secure_dir' => $secureDir,
+    ));
+}
+
+/* =========================================================
+   Passphrase
+========================================================= */
+$keyPass = load_key_pass($secureDir, $keyPath);
+if ($keyPass === '__MISSING__') {
+    json_error('La clave privada está encriptada y falta la passphrase.', 500, array(
+        'tenant_id' => $tenantId,
+        'key_path'  => $keyPath,
+        'pass_file' => $secureDir . '/arca_key.pass',
+    ));
+}
+
+/* =========================================================
+   WSAA login
+========================================================= */
+$caFile  = file_exists($caPath) ? $caPath : '';
+$wsaaUrl = 'https://wsaa.afip.gov.ar/ws/services/LoginCms?WSDL';
+$wsnA5   = 'ws_sr_constancia_inscripcion';
 
 try {
-  $svc = new ArcaConstanciaInscripcion(
-    $wsdl,
-    $endpoint,
-    (bool)($config['ssl_verify'] ?? true),
-    (string)($config['ca_file'] ?? ''),
-    (bool)($config['debug_log'] ?? false)
-  );
-
-  $resp = $svc->getPersonaV2($auth, (int)$cuit);
+    $cred = ArcaWsaa::login(
+        $wsaaUrl,
+        $wsnA5,
+        $certPath,
+        $keyPath,
+        $keyPass,
+        true,
+        $caFile,
+        true,
+        true,
+        'openssl'
+    );
 } catch (Throwable $e) {
-  json_error("Constancia Inscripción error: " . $e->getMessage(), 500);
+    json_error('WSAA error: ' . $e->getMessage(), 500, array(
+        'tenant_id'         => $tenantId,
+        'secure_dir'        => $secureDir,
+        'cert_path'         => $certPath,
+        'key_path'          => $keyPath,
+        'ca_path'           => $caPath,
+        'cuit_representada' => $cuitRepresentada,
+    ));
 }
 
-$persona = pick_persona_root($resp);
-$datosGenerales = is_array($persona['datosGenerales'] ?? null) ? $persona['datosGenerales'] : [];
-$datosRegimenGeneral = is_array($persona['datosRegimenGeneral'] ?? null) ? $persona['datosRegimenGeneral'] : [];
-$datosMonotributo = is_array($persona['datosMonotributo'] ?? null) ? $persona['datosMonotributo'] : [];
-$domFiscal = is_array($datosGenerales['domicilioFiscal'] ?? null) ? $datosGenerales['domicilioFiscal'] : [];
-
-// impuestos
-$impuestos = normalize_list($datosRegimenGeneral['impuesto'] ?? null);
-$impuestosDesc = [];
-foreach ($impuestos as $imp) {
-  if (is_array($imp) && !empty($imp['descripcionImpuesto'])) {
-    $impuestosDesc[] = (string)$imp['descripcionImpuesto'];
-  }
-}
-$impuestosDesc = array_values(array_unique($impuestosDesc));
-
-// actividades rg
-$actividades = normalize_list($datosRegimenGeneral['actividad'] ?? null);
-$actividadesOut = [];
-foreach ($actividades as $act) {
-  if (!is_array($act)) continue;
-  $actividadesOut[] = [
-    'descripcion' => (string)($act['descripcionActividad'] ?? ''),
-    'id' => isset($act['idActividad']) ? (string)$act['idActividad'] : null,
-    'orden' => isset($act['orden']) ? (string)$act['orden'] : null,
-    'periodo' => isset($act['periodo']) ? (string)$act['periodo'] : null,
-  ];
+/* =========================================================
+   SOAP client A5
+========================================================= */
+if (!extension_loaded('soap')) {
+    json_error('La extensión SOAP no está cargada en PHP.', 500);
 }
 
-// monotributo
-$catMono = $datosMonotributo['categoriaMonotributo'] ?? null;
-if (is_array($catMono)) {
-  $catMono = $catMono['descripcionCategoria'] ?? $catMono['categoria'] ?? null;
-}
+$endpointA5 = 'https://aws.afip.gov.ar/sr-padron/webservices/personaServiceA5';
 
-// domicilio legible
-$domParts = [];
-foreach ([
-  'direccion',
-  'localidad',
-  'descripcionProvincia',
-  'provincia',
-  'codPostal'
-] as $k) {
-  if (!empty($domFiscal[$k])) {
-    $domParts[] = (string)$domFiscal[$k];
-  }
-}
-$domicilio = $domParts ? implode(' - ', $domParts) : null;
-
-// mejor condición IVA visible
-$condIva = null;
-foreach ($impuestosDesc as $descImp) {
-  $descUpper = mb_strtoupper($descImp, 'UTF-8');
-  if (str_contains($descUpper, 'IVA')) {
-    $condIva = $descImp;
-    break;
-  }
-}
-if ($condIva === null && $catMono) {
-  $condIva = 'MONOTRIBUTO';
-}
-
-$tipoPersona = (string)($datosGenerales['tipoPersona'] ?? '');
-$nombreCompleto = trim(
-  implode(' ', array_filter([
-    (string)($datosGenerales['apellido'] ?? ''),
-    (string)($datosGenerales['nombre'] ?? ''),
-  ]))
+$ssl = array(
+    'verify_peer'       => true,
+    'verify_peer_name'  => true,
+    'allow_self_signed' => false,
+    'SNI_enabled'       => true,
 );
 
-$summary = [
-  'cuit' => (string)($datosGenerales['idPersona'] ?? $cuit),
-  'tipo_persona' => $tipoPersona ?: null,
-  'estado_clave' => (string)($datosGenerales['estadoClave'] ?? '') ?: null,
-  'tipo_clave' => (string)($datosGenerales['tipoClave'] ?? '') ?: null,
+if ($caFile !== '') {
+    $ssl['cafile'] = $caFile;
+}
 
-  'razon_social' => (string)($datosGenerales['razonSocial'] ?? '') ?: null,
-  'nombre' => (string)($datosGenerales['nombre'] ?? '') ?: null,
-  'apellido' => (string)($datosGenerales['apellido'] ?? '') ?: null,
-  'nombre_completo' => $nombreCompleto !== '' ? $nombreCompleto : null,
+$ctx = stream_context_create(array(
+    'ssl'  => $ssl,
+    'http' => array(
+        'timeout' => 60,
+        'header'  => "Connection: close\r\n",
+    ),
+));
 
-  'domicilio' => $domicilio,
-  'domicilio_fiscal' => $domFiscal ?: null,
+try {
+    $client = new SoapClient($wsdlA5Local, array(
+        'soap_version'       => SOAP_1_1,
+        'exceptions'         => true,
+        'trace'              => false,
+        'cache_wsdl'         => WSDL_CACHE_NONE,
+        'connection_timeout' => 60,
+        'stream_context'     => $ctx,
+        'features'           => SOAP_SINGLE_ELEMENT_ARRAYS,
+        'user_agent'         => 'Mozilla/5.0 (PHP SoapClient)',
+        'location'           => $endpointA5,
+    ));
+} catch (Throwable $e) {
+    json_error('No se pudo crear el cliente SOAP A5: ' . $e->getMessage(), 500, array(
+        'tenant_id'  => $tenantId,
+        'wsdl_local' => $wsdlA5Local,
+        'endpoint'   => $endpointA5,
+    ));
+}
 
-  'iva' => $condIva,
-  'impuestos' => $impuestosDesc,
-  'monotributo_categoria' => is_string($catMono) && $catMono !== '' ? $catMono : null,
-  'mes_cierre' => isset($datosGenerales['mesCierre']) ? (string)$datosGenerales['mesCierre'] : null,
-  'actividad_principal' => $actividadesOut[0]['descripcion'] ?? null,
-  'actividades' => $actividadesOut,
-];
+/* =========================================================
+   Consulta padrón A5
+========================================================= */
+$req = array(
+    'token'            => $cred['token'],
+    'sign'             => $cred['sign'],
+    'cuitRepresentada' => (int)$cuitRepresentada,
+    'idPersona'        => (int)$cuitBuscado,
+);
 
-// si vino error de constancia, lo exponemos
-$errorConstancia = $persona['errorConstancia'] ?? null;
-$errorRegimenGeneral = $persona['errorRegimenGeneral'] ?? null;
-$errorMonotributo = $persona['errorMonotributo'] ?? null;
+$resp = null;
 
-json_ok([
-  'summary' => $summary,
-  'raw' => $resp,
-  'errors' => [
-    'errorConstancia' => $errorConstancia,
-    'errorRegimenGeneral' => $errorRegimenGeneral,
-    'errorMonotributo' => $errorMonotributo,
-  ],
-]);
+try {
+    $respRaw = $client->__soapCall('getPersona_v2', array($req));
+    $resp = json_decode(json_encode($respRaw), true);
+
+    if (!is_array($resp)) {
+        $respRaw = $client->__soapCall('getPersona', array($req));
+        $resp = json_decode(json_encode($respRaw), true);
+    }
+} catch (Throwable $e2) {
+
+    json_error(
+        'No se pudo encontrar el CUIT en el padrón de ARCA. Verifique que el CUIT sea correcto.',
+        404,
+        array(
+            'debug_error'       => $e2->getMessage(),
+            'tenant_id'         => $tenantId,
+            'cuit_buscado'      => $cuitBuscado,
+            'cuit_representada' => $cuitRepresentada,
+        )
+    );
+}
+
+if (!is_array($resp)) {
+    $resp = array();
+}
+
+/* =========================================================
+   Parse respuesta
+========================================================= */
+$dg = $resp['personaReturn']['datosGenerales'] ?? array();
+$df = $dg['domicilioFiscal'] ?? array();
+
+$cuitDevuelto = only_digits((string)($dg['idPersona'] ?? $cuitBuscado));
+if ($cuitDevuelto !== $cuitBuscado) {
+    json_error(
+        'ARCA devolvió un CUIT distinto al buscado.',
+        409,
+        array(
+            'tenant_id'          => $tenantId,
+            'cuit_buscado'       => $cuitBuscado,
+            'cuit_devuelto'      => $cuitDevuelto,
+            'cuit_representada'  => $cuitRepresentada,
+        )
+    );
+}
+
+$apellido = clean_str($dg['apellido'] ?? null);
+$nombre   = clean_str($dg['nombre'] ?? null);
+
+$razonSocial = clean_str($dg['razonSocial'] ?? null);
+if ($razonSocial === null) {
+    $partesNombre = array_values(array_filter(array($apellido, $nombre), static function ($v) {
+        return $v !== null && $v !== '';
+    }));
+
+    if (!empty($partesNombre)) {
+        $razonSocial = implode(' ', $partesNombre);
+    }
+}
+
+$summary = array(
+    'cuit'         => $cuitDevuelto,
+    'doc_tipo'     => 80,
+    'doc_nro'      => $cuitDevuelto,
+    'iva'          => clean_str(map_condicion_iva($resp)),
+    'razon_social' => $razonSocial,
+    'domicilio'    => clean_str(build_domicilio($df)),
+);
+
+/* =========================================================
+   OK
+========================================================= */
+json_ok(array(
+    'summary' => $summary,
+    'debug'   => array(
+        'tenant_id'         => $tenantId,
+        'secure_dir'        => $secureDir,
+        'cert_path'         => $certPath,
+        'key_path'          => $keyPath,
+        'wsdl_a5_local'     => $wsdlA5Local,
+        'cuit_representada' => $cuitRepresentada,
+    ),
+));

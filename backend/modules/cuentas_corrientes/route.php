@@ -10,16 +10,31 @@ if (!function_exists('route_cuentas_corrientes')) {
     $action = strtolower(trim((string)$action));
 
     switch ($action) {
+      /* =========================================
+         CUENTAS CORRIENTES
+      ========================================= */
       case 'cc_resumen':
       case 'cuentas_corrientes_resumen':
+
+      case 'cc_saldos_clientes':
+      case 'cc_saldos_proveedores':
+
       case 'cc_detalle':
       case 'cuenta_corriente_detalle':
 
-      // ✅ NUEVAS acciones
       case 'cc_historial_cliente':
       case 'cc_historial_proveedor':
 
+      case 'cc_eliminar_cobro':
         require __DIR__ . '/cuentas_corrientes.php';
+        return true;
+
+      /* =========================================
+         COMPROBANTES PROPIOS DE CUENTAS CORRIENTES
+      ========================================= */
+      case 'cc_comprobante_descargar':
+      case 'cc_comprobante_info':
+        require __DIR__ . '/comprobantes.php';
         return true;
 
       default:

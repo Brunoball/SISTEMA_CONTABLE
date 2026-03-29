@@ -22,8 +22,8 @@ function env(string $key, ?string $default = null): ?string {
 }
 
 $DB_HOST = env('DB_HOST', 'localhost');
-$DB_NAME = env('DB_NAME', 'sistema_contable'); // fallback local
-$DB_USER = env('DB_USER', 'root');
+$DB_NAME = env('DB_NAME', 'u590795856_balto_master'); // fallback local
+$DB_USER = env('DB_USER', 'u590795856_admin_balto');
 $DB_PASS = env('DB_PASS', '');
 $DB_PORT = (int)(env('DB_PORT', '3306'));
 

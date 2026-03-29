@@ -5,13 +5,28 @@ declare(strict_types=1);
 /**
  * ✅ ACCIONES (vía route.php):
  * - analisis_financiero_resumen (GET)
- *   Acepta DOS formas de pasar el rango:
- *     A) ?periodo=YYYY-MM                                  (legado, mes completo)
- *     B) ?fecha_desde=YYYY-MM-DD&fecha_hasta=YYYY-MM-DD   (nuevo, desde Calendario)
+ *   Acepta:
+ *     ?fecha_desde=YYYY-MM-DD&fecha_hasta=YYYY-MM-DD
  *
  * ✅ MULTI-TENANT:
  * - NO incluir config/db.php
  * - $pdo ya viene creado por tenant_bootstrap_or_fail() en routes/api.php
+ *
+ * ✅ LÓGICA:
+ * - VENTAS:
+ *   * id_tipo_operacion = 1 + id_tipo_venta = 1 (contado)
+ *   * id_tipo_operacion = 1 + id_tipo_venta = 2 (cuenta corriente) SOLO si existe en cobros
+ *
+ * - COSTO VARIABLE:
+ *   * id_tipo_operacion = 2 + id_tipo_venta = 1 (contado)
+ *   * id_tipo_operacion = 2 + id_tipo_venta = 2 (cuenta corriente) SOLO si existe en cobros
+ *
+ * - COSTO FIJO / OTROS EGRESOS / GASTOS PERSONALES:
+ *   * por id_clasificacion
+ *
+ * ✅ NUEVA REGLA PEDIDA:
+ * - Si id_tipo_operacion = 4 y id_clasificacion IS NULL  => sumar en OTROS EGRESOS
+ * - Si id_tipo_operacion = 4 y id_clasificacion = 1      => sumar en COSTO FIJO
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -28,179 +43,245 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
 /* =========================
    Response helpers
 ========================= */
-function ok(array $arr = []): void {
-  echo json_encode(array_merge(['exito' => true], $arr), JSON_UNESCAPED_UNICODE);
-  exit;
+if (!function_exists('af_ok')) {
+  function af_ok(array $arr = []): void {
+    echo json_encode(array_merge(['exito' => true], $arr), JSON_UNESCAPED_UNICODE);
+    exit;
+  }
 }
-function fail(string $msg, int $http = 200, array $extra = []): void {
-  http_response_code($http);
-  echo json_encode(array_merge(['exito' => false, 'mensaje' => $msg], $extra), JSON_UNESCAPED_UNICODE);
-  exit;
+
+if (!function_exists('af_fail')) {
+  function af_fail(string $msg, int $http = 200, array $extra = []): void {
+    http_response_code($http);
+    echo json_encode(array_merge(['exito' => false, 'mensaje' => $msg], $extra), JSON_UNESCAPED_UNICODE);
+    exit;
+  }
 }
 
 /* =========================
    Helpers
 ========================= */
-function isValidPeriodo(string $p): bool {
-  return (bool)preg_match('/^\d{4}\-\d{2}$/', $p);
+if (!function_exists('af_isValidDate')) {
+  function af_isValidDate(string $d): bool {
+    return (bool)preg_match('/^\d{4}\-\d{2}\-\d{2}$/', $d);
+  }
 }
-function isValidDate(string $d): bool {
-  return (bool)preg_match('/^\d{4}\-\d{2}\-\d{2}$/', $d);
+
+if (!function_exists('af_f')) {
+  function af_f($v): float {
+    return (float)($v ?? 0);
+  }
 }
-function monthStart(string $periodo): string { return $periodo . '-01'; }
-function monthEnd(string $periodo): string {
-  $dt = DateTime::createFromFormat('Y-m-d', $periodo . '-01');
-  if (!$dt) return $periodo . '-28';
-  $dt->modify('last day of this month');
-  return $dt->format('Y-m-d');
+
+/**
+ * Suma por operación con lógica:
+ * - contado => entra siempre
+ * - cuenta corriente => entra solo si existe en cobros
+ *
+ * @param PDO    $pdo
+ * @param string $desde
+ * @param string $hasta
+ * @param int    $idTipoOperacion 1=venta, 2=compra
+ */
+if (!function_exists('af_sumarPorOperacionYCondicionCobro')) {
+  function af_sumarPorOperacionYCondicionCobro(
+    PDO $pdo,
+    string $desde,
+    string $hasta,
+    int $idTipoOperacion
+  ): float {
+    $sql = "
+      SELECT COALESCE(SUM(m.monto_total), 0) AS total
+      FROM movimientos m
+      WHERE m.fecha BETWEEN :desde AND :hasta
+        AND m.id_tipo_operacion = :id_tipo_operacion
+        AND (
+          m.id_tipo_venta = 1
+          OR (
+            m.id_tipo_venta = 2
+            AND EXISTS (
+              SELECT 1
+              FROM cobros c
+              WHERE c.id_movimiento = m.id_movimiento
+            )
+          )
+        )
+    ";
+
+    $st = $pdo->prepare($sql);
+    $st->execute([
+      ':desde'             => $desde,
+      ':hasta'             => $hasta,
+      ':id_tipo_operacion' => $idTipoOperacion,
+    ]);
+
+    return af_f($st->fetchColumn());
+  }
 }
-function f($v): float { return (float)($v ?? 0); }
+
+/**
+ * Obtiene totales por clasificación para:
+ * 1 = costo fijo
+ * 4 = gastos personales
+ * 5 = otros egresos
+ *
+ * ⚠️ No usamos 2 (costo variable) porque ahora se calcula
+ * con lógica especial por operación + cobros.
+ *
+ * ✅ EXCLUIMOS id_tipo_operacion = 4 de esta consulta
+ * porque esos movimientos ahora tienen lógica especial.
+ */
+if (!function_exists('af_obtenerClasificacionesPorFecha')) {
+  function af_obtenerClasificacionesPorFecha(PDO $pdo, string $desde, string $hasta): array {
+    $sql = "
+      SELECT m.id_clasificacion, COALESCE(SUM(m.monto_total), 0) AS total
+      FROM movimientos m
+      WHERE m.fecha BETWEEN :desde AND :hasta
+        AND m.id_clasificacion IN (1,4,5)
+        AND (m.id_tipo_operacion IS NULL OR m.id_tipo_operacion <> 4)
+      GROUP BY m.id_clasificacion
+    ";
+
+    $st = $pdo->prepare($sql);
+    $st->execute([
+      ':desde' => $desde,
+      ':hasta' => $hasta,
+    ]);
+
+    return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  }
+}
+
+/**
+ * ✅ NUEVO:
+ * Trae totales especiales de movimientos con id_tipo_operacion = 4
+ *
+ * Reglas:
+ * - id_clasificacion IS NULL => otros_egresos
+ * - id_clasificacion = 1     => costo_fijo
+ */
+if (!function_exists('af_obtenerTotalesEspecialesTipoOperacion4')) {
+  function af_obtenerTotalesEspecialesTipoOperacion4(PDO $pdo, string $desde, string $hasta): array {
+    $sql = "
+      SELECT
+        COALESCE(SUM(
+          CASE
+            WHEN m.id_clasificacion IS NULL THEN m.monto_total
+            ELSE 0
+          END
+        ), 0) AS total_otros_egresos,
+        COALESCE(SUM(
+          CASE
+            WHEN m.id_clasificacion = 1 THEN m.monto_total
+            ELSE 0
+          END
+        ), 0) AS total_costo_fijo
+      FROM movimientos m
+      WHERE m.fecha BETWEEN :desde AND :hasta
+        AND m.id_tipo_operacion = 4
+    ";
+
+    $st = $pdo->prepare($sql);
+    $st->execute([
+      ':desde' => $desde,
+      ':hasta' => $hasta,
+    ]);
+
+    $row = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    return [
+      'otros_egresos' => af_f($row['total_otros_egresos'] ?? 0),
+      'costo_fijo'    => af_f($row['total_costo_fijo'] ?? 0),
+    ];
+  }
+}
 
 try {
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
 
-  // ── Resolver start / end ─────────────────────────────────
-  $periodoParam = isset($_GET['periodo'])     ? trim((string)$_GET['periodo'])     : '';
-  $fechaDesde   = isset($_GET['fecha_desde']) ? trim((string)$_GET['fecha_desde']) : '';
-  $fechaHasta   = isset($_GET['fecha_hasta']) ? trim((string)$_GET['fecha_hasta']) : '';
+  $fechaDesde = isset($_GET['fecha_desde']) ? trim((string)$_GET['fecha_desde']) : '';
+  $fechaHasta = isset($_GET['fecha_hasta']) ? trim((string)$_GET['fecha_hasta']) : '';
 
-  if ($fechaDesde !== '' && $fechaHasta !== '') {
-    // Modo B: rango libre desde el Calendario
-    if (!isValidDate($fechaDesde)) {
-      fail('Parámetro "fecha_desde" inválido. Formato esperado YYYY-MM-DD', 200, ['recibido' => $fechaDesde]);
-    }
-    if (!isValidDate($fechaHasta)) {
-      fail('Parámetro "fecha_hasta" inválido. Formato esperado YYYY-MM-DD', 200, ['recibido' => $fechaHasta]);
-    }
-    if ($fechaDesde > $fechaHasta) {
-      [$fechaDesde, $fechaHasta] = [$fechaHasta, $fechaDesde];
-    }
-    $desde        = $fechaDesde;
-    $hasta        = $fechaHasta;
-    $periodoLabel = substr($fechaDesde, 0, 7); // YYYY-MM del primer día (para label)
-    $modoFecha    = true;
-  } elseif ($periodoParam !== '') {
-    // Modo A: periodo mensual clásico (legado)
-    if (!isValidPeriodo($periodoParam)) {
-      fail('Parámetro "periodo" inválido. Formato esperado YYYY-MM', 200, ['periodo_recibido' => $periodoParam]);
-    }
-    $desde        = monthStart($periodoParam);
-    $hasta        = monthEnd($periodoParam);
-    $periodoLabel = $periodoParam;
-    $modoFecha    = false;
-  } else {
-    fail('Se requiere "fecha_desde"+"fecha_hasta" o "periodo".', 200);
+  if ($fechaDesde === '' || $fechaHasta === '') {
+    af_fail('Se requieren los parámetros "fecha_desde" y "fecha_hasta".', 200);
   }
-  // ─────────────────────────────────────────────────────────
+
+  if (!af_isValidDate($fechaDesde)) {
+    af_fail('Parámetro "fecha_desde" inválido. Formato esperado YYYY-MM-DD', 200, [
+      'recibido' => $fechaDesde
+    ]);
+  }
+
+  if (!af_isValidDate($fechaHasta)) {
+    af_fail('Parámetro "fecha_hasta" inválido. Formato esperado YYYY-MM-DD', 200, [
+      'recibido' => $fechaHasta
+    ]);
+  }
+
+  if ($fechaDesde > $fechaHasta) {
+    [$fechaDesde, $fechaHasta] = [$fechaHasta, $fechaDesde];
+  }
+
+  $desde = $fechaDesde;
+  $hasta = $fechaHasta;
 
   // ✅ IDs fijos según tabla clasificaciones
   $ID_COSTO_FIJO        = 1;
-  $ID_COSTO_VARIABLE    = 2;
-  $ID_VENTAS            = 3;
   $ID_GASTOS_PERSONALES = 4;
   $ID_OTROS_EGRESOS     = 5;
 
-  $ventas           = 0.0;
-  $costoVariable    = 0.0;
+  // ✅ IDs fijos según tabla tipos_operacion
+  $ID_TIPO_OPERACION_VENTA  = 1;
+  $ID_TIPO_OPERACION_COMPRA = 2;
+  $ID_TIPO_OPERACION_EXTRA  = 4;
+
+  // ✅ VENTAS: operación 1 + contado o cuenta corriente pagada
+  $ventas = af_sumarPorOperacionYCondicionCobro(
+    $pdo,
+    $desde,
+    $hasta,
+    $ID_TIPO_OPERACION_VENTA
+  );
+
+  // ✅ COSTO VARIABLE: operación 2 + contado o cuenta corriente pagada
+  $costoVariable = af_sumarPorOperacionYCondicionCobro(
+    $pdo,
+    $desde,
+    $hasta,
+    $ID_TIPO_OPERACION_COMPRA
+  );
+
+  // ✅ Clasificaciones normales (excluyendo tipo_operacion = 4)
+  $rowsOtros = af_obtenerClasificacionesPorFecha($pdo, $desde, $hasta);
+
   $costoFijo        = 0.0;
   $otrosEgresos     = 0.0;
   $gastosPersonales = 0.0;
 
-  $source = 'fecha'; // siempre por fecha ahora
+  foreach ($rowsOtros as $r) {
+    $id    = (int)($r['id_clasificacion'] ?? 0);
+    $total = af_f($r['total'] ?? 0);
 
-  /* =========================================================
-     1) Intento por PERIODO (solo en modo A cuando $modoFecha=false)
-        Conservamos la lógica original para no romper nada.
-  ========================================================= */
-  $hayAlgoPeriodo = false;
-
-  if (!$modoFecha && $periodoParam !== '') {
-    // A) Ventas con condición extra por periodo
-    $stV = $pdo->prepare("
-      SELECT COALESCE(SUM(m.monto_total),0) total
-      FROM movimientos m
-      WHERE m.periodo = :periodo
-        AND m.id_clasificacion = :idVentas
-        AND (m.id_tipo_venta = 1 OR m.id_cuenta_corriente = 1)
-    ");
-    $stV->execute([':periodo' => $periodoParam, ':idVentas' => $ID_VENTAS]);
-    $ventas = f($stV->fetchColumn());
-
-    // B) Resto de clasificaciones por periodo
-    $stO = $pdo->prepare("
-      SELECT m.id_clasificacion, COALESCE(SUM(m.monto_total),0) total
-      FROM movimientos m
-      WHERE m.periodo = :periodo
-        AND m.id_clasificacion IN (1,2,4,5)
-      GROUP BY m.id_clasificacion
-    ");
-    $stO->execute([':periodo' => $periodoParam]);
-    $rowsOtros = $stO->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-    $hayAlgoPeriodo = ($ventas != 0.0) || (count($rowsOtros) > 0);
-
-    if ($hayAlgoPeriodo) {
-      $source = 'periodo';
-      foreach ($rowsOtros as $r) {
-        $id    = (int)($r['id_clasificacion'] ?? 0);
-        $total = f($r['total'] ?? 0);
-        if ($id === $ID_COSTO_VARIABLE)    $costoVariable    = $total;
-        if ($id === $ID_COSTO_FIJO)        $costoFijo        = $total;
-        if ($id === $ID_OTROS_EGRESOS)     $otrosEgresos     = $total;
-        if ($id === $ID_GASTOS_PERSONALES) $gastosPersonales = $total;
-      }
-    }
+    if ($id === $ID_COSTO_FIJO)        $costoFijo        += $total;
+    if ($id === $ID_OTROS_EGRESOS)     $otrosEgresos     += $total;
+    if ($id === $ID_GASTOS_PERSONALES) $gastosPersonales += $total;
   }
 
-  /* =========================================================
-     2) Por FECHA: modo B directo, o fallback del modo A
-  ========================================================= */
-  if ($modoFecha || !$hayAlgoPeriodo) {
-    $source = 'fecha';
+  // ✅ NUEVO: sumar movimientos especiales con id_tipo_operacion = 4
+  $totalesTipo4 = af_obtenerTotalesEspecialesTipoOperacion4($pdo, $desde, $hasta);
 
-    // Ventas por fecha con condición extra
-    $stV2 = $pdo->prepare("
-      SELECT COALESCE(SUM(m.monto_total),0) total
-      FROM movimientos m
-      WHERE m.fecha BETWEEN :desde AND :hasta
-        AND m.id_clasificacion = :idVentas
-        AND (m.id_tipo_venta = 1 OR m.id_cuenta_corriente = 1)
-    ");
-    $stV2->execute([':desde' => $desde, ':hasta' => $hasta, ':idVentas' => $ID_VENTAS]);
-    $ventas = f($stV2->fetchColumn());
+  $otrosEgresos += af_f($totalesTipo4['otros_egresos'] ?? 0);
+  $costoFijo    += af_f($totalesTipo4['costo_fijo'] ?? 0);
 
-    // Resto por fecha
-    $stO2 = $pdo->prepare("
-      SELECT m.id_clasificacion, COALESCE(SUM(m.monto_total),0) total
-      FROM movimientos m
-      WHERE m.fecha BETWEEN :desde AND :hasta
-        AND m.id_clasificacion IN (1,2,4,5)
-      GROUP BY m.id_clasificacion
-    ");
-    $stO2->execute([':desde' => $desde, ':hasta' => $hasta]);
-    $rowsOtros2 = $stO2->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-    // reset
-    $costoVariable = $costoFijo = $otrosEgresos = $gastosPersonales = 0.0;
-
-    foreach ($rowsOtros2 as $r) {
-      $id    = (int)($r['id_clasificacion'] ?? 0);
-      $total = f($r['total'] ?? 0);
-      if ($id === $ID_COSTO_VARIABLE)    $costoVariable    = $total;
-      if ($id === $ID_COSTO_FIJO)        $costoFijo        = $total;
-      if ($id === $ID_OTROS_EGRESOS)     $otrosEgresos     = $total;
-      if ($id === $ID_GASTOS_PERSONALES) $gastosPersonales = $total;
-    }
-  }
-
-  // Resultado neto
   $resultadoNeto = $ventas - $costoVariable - $costoFijo - $otrosEgresos;
 
-  ok([
-    'periodo' => $periodoLabel,
-    'rango'   => ['desde' => $desde, 'hasta' => $hasta],
-    'source'  => $source,
+  af_ok([
+    'rango' => [
+      'desde' => $desde,
+      'hasta' => $hasta,
+    ],
+    'source' => 'fecha',
     'valores' => [
       'ventas'            => $ventas,
       'costo_variable'    => $costoVariable,
@@ -212,5 +293,5 @@ try {
   ]);
 
 } catch (Throwable $e) {
-  fail('Error generando análisis financiero: ' . $e->getMessage(), 500);
+  af_fail('Error generando análisis financiero: ' . $e->getMessage(), 500);
 }

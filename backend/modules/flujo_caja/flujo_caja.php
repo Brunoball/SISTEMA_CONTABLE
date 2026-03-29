@@ -8,15 +8,15 @@ declare(strict_types=1);
  * - $pdo ya viene creado por tenant_bootstrap_or_fail() en routes/api.php
  *
  * LÓGICA:
- *  INGRESOS = ventas contado (id_tipo_operacion=1, id_tipo_venta=1)
- *           + ventas CC (id_tipo_operacion=1, id_tipo_venta=2) cuyo id_movimiento
- *             esté en tabla cobros → se suma en la fecha_cobro
+ *  INGRESOS =
+ *      a) Ventas contado                 (id_tipo_operacion=1, id_tipo_venta=1) → m.fecha
+ *      b) Ventas CC cobradas             (id_tipo_operacion=1, id_tipo_venta=2) → c.fecha_cobro
+ *      c) Otros ingresos                 (id_tipo_operacion=3)                   → m.fecha
  *
- *  EGRESOS  = compras contado (id_tipo_operacion=2, id_tipo_venta=1)
- *           + compras CC (id_tipo_operacion=2, id_tipo_venta=2) cuyo id_movimiento
- *             esté en tabla cobros → se suma en la fecha_cobro
- *
- *  OTROS eliminado.
+ *  EGRESOS  =
+ *      a) Compras contado                (id_tipo_operacion=2, id_tipo_venta=1) → m.fecha
+ *      b) Compras CC pagadas             (id_tipo_operacion=2, id_tipo_venta=2) → c.fecha_cobro
+ *      c) Otros egresos                  (id_tipo_operacion=4)                   → m.fecha
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -87,11 +87,9 @@ try {
     ========================================================== */
     if ($action === 'flujo_caja_periodos') {
         $sql = "
-            SELECT DISTINCT periodo
+            SELECT DISTINCT DATE_FORMAT(fecha, '%Y-%m') AS periodo
             FROM movimientos
-            WHERE periodo IS NOT NULL
-              AND periodo <> ''
-              AND periodo REGEXP '^[0-9]{4}-[0-9]{2}$'
+            WHERE fecha IS NOT NULL
             ORDER BY periodo DESC
         ";
         $st       = $pdo->query($sql);
@@ -113,10 +111,11 @@ try {
         $periodo        = isset($_GET['periodo']) ? trim((string)$_GET['periodo']) : '';
         $filtrarPeriodo = ($periodo !== '' && isValidPeriodo($periodo));
 
-        $params     = [];
+        $params = [];
         $whereExtra = "";
+
         if ($filtrarPeriodo) {
-            $whereExtra         = " AND m.periodo = :periodo ";
+            $whereExtra = " AND DATE_FORMAT(m.fecha, '%Y-%m') = :periodo ";
             $params[':periodo'] = $periodo;
         }
 
@@ -156,17 +155,15 @@ try {
        FLUJO DIARIO
        action=flujo_caja_resumen
 
-       INGRESOS (agrupados por fecha):
-         a) Ventas contado: id_tipo_operacion=1, id_tipo_venta=1  → usa m.fecha
-         b) Ventas CC cobradas: id_tipo_operacion=1, id_tipo_venta=2
-            que tengan registro en cobros                          → usa c.fecha_cobro
+       INGRESOS:
+         a) Ventas contado:         id_tipo_operacion=1, id_tipo_venta=1 → m.fecha
+         b) Ventas CC cobradas:     id_tipo_operacion=1, id_tipo_venta=2 → c.fecha_cobro
+         c) Otros ingresos:         id_tipo_operacion=3                  → m.fecha
 
-       EGRESOS (agrupados por fecha):
-         a) Compras contado: id_tipo_operacion=2, id_tipo_venta=1 → usa m.fecha
-         b) Compras CC pagadas: id_tipo_operacion=2, id_tipo_venta=2
-            que tengan registro en cobros                          → usa c.fecha_cobro
-
-       SIN columna OTROS.
+       EGRESOS:
+         a) Compras contado:        id_tipo_operacion=2, id_tipo_venta=1 → m.fecha
+         b) Compras CC pagadas:     id_tipo_operacion=2, id_tipo_venta=2 → c.fecha_cobro
+         c) Otros egresos:          id_tipo_operacion=4                  → m.fecha
     ========================================================== */
     if ($action === 'flujo_caja_resumen') {
 
@@ -203,14 +200,7 @@ try {
         $days  = buildDaysFromRange($start, $end);
         $today = (new DateTime('today'))->format('Y-m-d');
 
-        /* ── QUERY principal: ingresos y egresos por día ──────
-         *
-         * Unión de 4 subconjuntos:
-         *  1. Ventas contado         → fecha del movimiento
-         *  2. Ventas CC cobradas     → fecha_cobro de cobros
-         *  3. Compras contado        → fecha del movimiento
-         *  4. Compras CC pagadas     → fecha_cobro de cobros
-         */
+        /* ── QUERY principal: ingresos y egresos por día ────── */
         $sqlDia = "
             SELECT
                 dia,
@@ -220,51 +210,73 @@ try {
 
                 -- 1) Ventas contado (fecha del movimiento)
                 SELECT
-                    m.fecha        AS dia,
+                    m.fecha AS dia,
                     ABS(m.monto_total) AS ingreso,
-                    0              AS egreso
+                    0 AS egreso
                 FROM movimientos m
                 WHERE m.id_tipo_operacion = 1
-                  AND m.id_tipo_venta     = 1
+                  AND m.id_tipo_venta = 1
                   AND m.fecha BETWEEN :desde1 AND :hasta1
 
                 UNION ALL
 
                 -- 2) Ventas CC cobradas (fecha_cobro)
                 SELECT
-                    c.fecha_cobro  AS dia,
+                    c.fecha_cobro AS dia,
                     ABS(m.monto_total) AS ingreso,
-                    0              AS egreso
+                    0 AS egreso
                 FROM movimientos m
                 INNER JOIN cobros c ON c.id_movimiento = m.id_movimiento
                 WHERE m.id_tipo_operacion = 1
-                  AND m.id_tipo_venta     = 2
+                  AND m.id_tipo_venta = 2
                   AND c.fecha_cobro BETWEEN :desde2 AND :hasta2
 
                 UNION ALL
 
-                -- 3) Compras contado (fecha del movimiento)
+                -- 3) Otros ingresos (fecha del movimiento)
                 SELECT
-                    m.fecha        AS dia,
-                    0              AS ingreso,
-                    ABS(m.monto_total) AS egreso
+                    m.fecha AS dia,
+                    ABS(m.monto_total) AS ingreso,
+                    0 AS egreso
                 FROM movimientos m
-                WHERE m.id_tipo_operacion = 2
-                  AND m.id_tipo_venta     = 1
+                WHERE m.id_tipo_operacion = 3
                   AND m.fecha BETWEEN :desde3 AND :hasta3
 
                 UNION ALL
 
-                -- 4) Compras CC pagadas (fecha_cobro)
+                -- 4) Compras contado (fecha del movimiento)
                 SELECT
-                    c.fecha_cobro  AS dia,
-                    0              AS ingreso,
+                    m.fecha AS dia,
+                    0 AS ingreso,
+                    ABS(m.monto_total) AS egreso
+                FROM movimientos m
+                WHERE m.id_tipo_operacion = 2
+                  AND m.id_tipo_venta = 1
+                  AND m.fecha BETWEEN :desde4 AND :hasta4
+
+                UNION ALL
+
+                -- 5) Compras CC pagadas (fecha_cobro)
+                SELECT
+                    c.fecha_cobro AS dia,
+                    0 AS ingreso,
                     ABS(m.monto_total) AS egreso
                 FROM movimientos m
                 INNER JOIN cobros c ON c.id_movimiento = m.id_movimiento
                 WHERE m.id_tipo_operacion = 2
-                  AND m.id_tipo_venta     = 2
-                  AND c.fecha_cobro BETWEEN :desde4 AND :hasta4
+                  AND m.id_tipo_venta = 2
+                  AND c.fecha_cobro BETWEEN :desde5 AND :hasta5
+
+                UNION ALL
+
+                -- 6) Otros egresos (fecha del movimiento)
+                SELECT
+                    m.fecha AS dia,
+                    0 AS ingreso,
+                    ABS(m.monto_total) AS egreso
+                FROM movimientos m
+                WHERE m.id_tipo_operacion = 4
+                  AND m.fecha BETWEEN :desde6 AND :hasta6
 
             ) t
             GROUP BY dia
@@ -276,6 +288,8 @@ try {
             ':desde2' => $start, ':hasta2' => $end,
             ':desde3' => $start, ':hasta3' => $end,
             ':desde4' => $start, ':hasta4' => $end,
+            ':desde5' => $start, ':hasta5' => $end,
+            ':desde6' => $start, ':hasta6' => $end,
         ]);
 
         $mapDia = [];
@@ -289,9 +303,7 @@ try {
             }
         }
 
-        /* ── SALDO BASE: todo lo anterior a $start ───────────
-         * Misma lógica de 4 subconjuntos pero sin límite superior de fecha
-         */
+        /* ── SALDO BASE: todo lo anterior a $start ─────────── */
         $sqlSaldoBase = "
             SELECT
                 COALESCE(SUM(ingreso), 0) AS ingresos,
@@ -302,7 +314,7 @@ try {
                 SELECT ABS(m.monto_total) AS ingreso, 0 AS egreso
                 FROM movimientos m
                 WHERE m.id_tipo_operacion = 1
-                  AND m.id_tipo_venta     = 1
+                  AND m.id_tipo_venta = 1
                   AND m.fecha < :desde1
 
                 UNION ALL
@@ -312,27 +324,43 @@ try {
                 FROM movimientos m
                 INNER JOIN cobros c ON c.id_movimiento = m.id_movimiento
                 WHERE m.id_tipo_operacion = 1
-                  AND m.id_tipo_venta     = 2
+                  AND m.id_tipo_venta = 2
                   AND c.fecha_cobro < :desde2
 
                 UNION ALL
 
-                -- 3) Compras contado anteriores
-                SELECT 0 AS ingreso, ABS(m.monto_total) AS egreso
+                -- 3) Otros ingresos anteriores
+                SELECT ABS(m.monto_total) AS ingreso, 0 AS egreso
                 FROM movimientos m
-                WHERE m.id_tipo_operacion = 2
-                  AND m.id_tipo_venta     = 1
+                WHERE m.id_tipo_operacion = 3
                   AND m.fecha < :desde3
 
                 UNION ALL
 
-                -- 4) Compras CC pagadas anteriores
+                -- 4) Compras contado anteriores
+                SELECT 0 AS ingreso, ABS(m.monto_total) AS egreso
+                FROM movimientos m
+                WHERE m.id_tipo_operacion = 2
+                  AND m.id_tipo_venta = 1
+                  AND m.fecha < :desde4
+
+                UNION ALL
+
+                -- 5) Compras CC pagadas anteriores
                 SELECT 0 AS ingreso, ABS(m.monto_total) AS egreso
                 FROM movimientos m
                 INNER JOIN cobros c ON c.id_movimiento = m.id_movimiento
                 WHERE m.id_tipo_operacion = 2
-                  AND m.id_tipo_venta     = 2
-                  AND c.fecha_cobro < :desde4
+                  AND m.id_tipo_venta = 2
+                  AND c.fecha_cobro < :desde5
+
+                UNION ALL
+
+                -- 6) Otros egresos anteriores
+                SELECT 0 AS ingreso, ABS(m.monto_total) AS egreso
+                FROM movimientos m
+                WHERE m.id_tipo_operacion = 4
+                  AND m.fecha < :desde6
 
             ) t
         ";
@@ -343,12 +371,14 @@ try {
             ':desde2' => $start,
             ':desde3' => $start,
             ':desde4' => $start,
+            ':desde5' => $start,
+            ':desde6' => $start,
         ]);
 
         $base      = $stBase->fetch(PDO::FETCH_ASSOC) ?: ['ingresos' => 0, 'egresos' => 0];
         $saldoBase = (float)($base['ingresos'] ?? 0) - (float)($base['egresos'] ?? 0);
 
-        /* ── Construir filas con saldo acumulado ─────────────*/
+        /* ── Construir filas con saldo acumulado ───────────── */
         $saldo = $saldoBase;
         $rows  = [];
 

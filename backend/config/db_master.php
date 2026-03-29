@@ -14,8 +14,8 @@ function env_master(string $key, ?string $default = null): ?string {
 }
 
 $host   = env_master('MASTER_DB_HOST', 'localhost');
-$dbname = env_master('MASTER_DB_NAME', 'balto_master');
-$user   = env_master('MASTER_DB_USER', 'root');
+$dbname = env_master('MASTER_DB_NAME', 'u590795856_balto_master');
+$user   = env_master('MASTER_DB_USER', 'u590795856_admin_balto');
 $pass   = env_master('MASTER_DB_PASS', '');
 
 // ✅ PRO: no hardcodear password en el repo

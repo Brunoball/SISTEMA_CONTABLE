@@ -46,17 +46,107 @@ function cc_format_date(?string $date): string {
   return date('d/m/Y', $ts);
 }
 
-function cc_sign_from_nombre(string $nombre): int {
-  $n = mb_strtolower(trim($nombre), 'UTF-8');
-  $n = str_replace(['á','é','í','ó','ú','ü','ñ'], ['a','e','i','o','u','u','n'], $n);
+function cc_read_json_body(): array
+{
+  $raw = file_get_contents('php://input');
+  if (!$raw) return [];
+  $data = json_decode($raw, true);
+  return is_array($data) ? $data : [];
+}
 
-  if (strpos($n, 'credito') !== false) return +1;
-  if (strpos($n, 'debito') !== false)  return -1;
-  return 0;
+function cc_table_exists(PDO $pdo, string $tableName): bool
+{
+  static $cache = [];
+
+  $tableName = trim($tableName);
+  if ($tableName === '') return false;
+
+  if (array_key_exists($tableName, $cache)) {
+    return $cache[$tableName];
+  }
+
+  $sql = "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = :table";
+  $st = $pdo->prepare($sql);
+  $st->execute([':table' => $tableName]);
+
+  $exists = (int)$st->fetchColumn() > 0;
+  $cache[$tableName] = $exists;
+
+  return $exists;
 }
 
 /* =========================
-   Helpers búsqueda personas
+   Helpers eliminación comprobantes
+========================= */
+function cc_count_other_cobro_refs(PDO $pdo, int $idComprobante, int $idCobroActual): int
+{
+  if ($idComprobante <= 0) return 0;
+
+  $sql = "
+    SELECT COUNT(*)
+    FROM cobros
+    WHERE id_comprobante = :id_comprobante
+      AND id_cobro <> :id_cobro
+  ";
+  $st = $pdo->prepare($sql);
+  $st->execute([
+    ':id_comprobante' => $idComprobante,
+    ':id_cobro' => $idCobroActual,
+  ]);
+
+  return (int)$st->fetchColumn();
+}
+
+function cc_count_movimientos_comprobantes_refs(PDO $pdo, int $idComprobante): int
+{
+  if ($idComprobante <= 0) return 0;
+  if (!cc_table_exists($pdo, 'movimientos_comprobantes')) return 0;
+
+  $sql = "
+    SELECT COUNT(*)
+    FROM movimientos_comprobantes
+    WHERE id_comprobante = :id_comprobante
+  ";
+  $st = $pdo->prepare($sql);
+  $st->execute([
+    ':id_comprobante' => $idComprobante,
+  ]);
+
+  return (int)$st->fetchColumn();
+}
+
+function cc_can_delete_comprobante(PDO $pdo, int $idComprobante, int $idCobroActual): array
+{
+  if ($idComprobante <= 0) {
+    return [
+      'puede_eliminar' => false,
+      'motivo' => 'id_comprobante inválido',
+      'refs' => [
+        'cobros' => 0,
+        'movimientos_comprobantes' => 0,
+        'total' => 0,
+      ],
+    ];
+  }
+
+  $refsCobros = cc_count_other_cobro_refs($pdo, $idComprobante, $idCobroActual);
+  $refsMovimientosComprobantes = cc_count_movimientos_comprobantes_refs($pdo, $idComprobante);
+
+  $total = $refsCobros + $refsMovimientosComprobantes;
+
+  return [
+    'puede_eliminar' => $total === 0,
+    'motivo' => $total === 0 ? 'sin referencias' : 'comprobante aún referenciado',
+    'refs' => [
+      'cobros' => $refsCobros,
+      'movimientos_comprobantes' => $refsMovimientosComprobantes,
+      'total' => $total,
+    ],
+  ];
+}
+
+/* =========================
+   Helpers búsqueda entidades
 ========================= */
 function cc_find_cliente_id(PDO $pdo, string $q): int
 {
@@ -66,12 +156,10 @@ function cc_find_cliente_id(PDO $pdo, string $q): int
   $sql = "
     SELECT c.id_cliente
     FROM clientes c
-    WHERE c.activo = 1
-      AND (
-        c.nombre LIKE :q
-      )
+    WHERE COALESCE(c.activo, 1) = 1
+      AND COALESCE(c.nombre, '') LIKE :q
     ORDER BY
-      CASE WHEN c.nombre = :exacto THEN 0 ELSE 1 END,
+      CASE WHEN COALESCE(c.nombre, '') = :exacto THEN 0 ELSE 1 END,
       c.nombre ASC
     LIMIT 1
   ";
@@ -92,17 +180,10 @@ function cc_find_proveedor_id(PDO $pdo, string $q): int
     SELECT p.id_proveedor
     FROM proveedores p
     WHERE COALESCE(p.activo, 1) = 1
-      AND (
-        COALESCE(p.razon_social, '') LIKE :q
-        OR COALESCE(p.nombre, '') LIKE :q
-      )
+      AND COALESCE(p.nombre, '') LIKE :q
     ORDER BY
-      CASE
-        WHEN COALESCE(p.razon_social, '') = :exacto THEN 0
-        WHEN COALESCE(p.nombre, '') = :exacto THEN 0
-        ELSE 1
-      END,
-      COALESCE(NULLIF(p.razon_social, ''), p.nombre) ASC
+      CASE WHEN COALESCE(p.nombre, '') = :exacto THEN 0 ELSE 1 END,
+      p.nombre ASC
     LIMIT 1
   ";
   $st = $pdo->prepare($sql);
@@ -137,6 +218,10 @@ function cc_get_movimiento_docs_map(PDO $pdo, array $movIds): array
   })));
 
   if (!$movIds) return [];
+
+  if (!cc_table_exists($pdo, 'movimientos_comprobantes')) {
+    return [];
+  }
 
   $placeholders = implode(',', array_fill(0, count($movIds), '?'));
 
@@ -241,18 +326,16 @@ function cc_get_cobros_by_movimiento(PDO $pdo, array $movIds): array
 
 /* =========================
    Historial tipo cuenta corriente
-   - Un movimiento genera DÉBITO
-   - Un cobro del movimiento genera CRÉDITO
 ========================= */
 function cc_historial_por_entidad(PDO $pdo, array $cfg): array
 {
-  $entityType      = $cfg['entityType'];      // cliente | proveedor
-  $idField         = $cfg['idField'];         // id_cliente | id_proveedor
-  $entityId        = (int)$cfg['entityId'];
-  $tipoOperacion   = (int)$cfg['tipoOperacion'];
-  $tipoVenta       = (int)$cfg['tipoVenta'];
-  $fechaDesde      = cc_safe_text($cfg['fechaDesde']);
-  $fechaHasta      = cc_safe_text($cfg['fechaHasta']);
+  $entityType    = $cfg['entityType'];
+  $idField       = $cfg['idField'];
+  $entityId      = (int)$cfg['entityId'];
+  $tipoOperacion = (int)$cfg['tipoOperacion'];
+  $tipoVenta     = (int)$cfg['tipoVenta'];
+  $fechaDesde    = cc_safe_text($cfg['fechaDesde']);
+  $fechaHasta    = cc_safe_text($cfg['fechaHasta']);
 
   if ($entityId <= 0) {
     return [
@@ -285,12 +368,9 @@ function cc_historial_por_entidad(PDO $pdo, array $cfg): array
     SELECT
       m.id_movimiento,
       m.fecha,
-      m.periodo,
       m.monto_total,
-      m.id_cuenta_corriente,
       m.id_detalle,
-      m.id_medio_pago,
-      m.id_comprobante
+      m.id_medio_pago
     FROM movimientos m
     WHERE m.{$idField} = :entityId
       AND m.id_tipo_operacion = :tipoOperacion
@@ -319,40 +399,23 @@ function cc_historial_por_entidad(PDO $pdo, array $cfg): array
     return $n > 0;
   }));
 
-  // ✅ NUEVO: docs documentales del movimiento (facturas/notas/etc.)
   $movDocsMap = cc_get_movimiento_docs_map($pdo, $movIds);
-
-  // ✅ Cobros del movimiento (recibos)
   $cobrosByMov = cc_get_cobros_by_movimiento($pdo, $movIds);
 
   $ledger = [];
 
   foreach ($movimientos as $m) {
-    $idMov            = (int)($m['id_movimiento'] ?? 0);
-    $fecha            = (string)($m['fecha'] ?? '');
-    $periodo          = cc_safe_text($m['periodo'] ?? '');
-    $monto            = (float)($m['monto_total'] ?? 0);
+    $idMov = (int)($m['id_movimiento'] ?? 0);
+    $fecha = (string)($m['fecha'] ?? '');
+    $monto = (float)($m['monto_total'] ?? 0);
 
     $docMov = $movDocsMap[$idMov] ?? null;
 
-    // fallback viejo: por si todavía hay algo guardado en movimientos.id_comprobante
-    $idComprobanteMov = $docMov
-      ? (int)($docMov['id_comprobante'] ?? 0)
-      : (int)($m['id_comprobante'] ?? 0);
+    $idComprobanteMov = $docMov ? (int)($docMov['id_comprobante'] ?? 0) : 0;
+    $movUrl = $docMov ? cc_safe_text($docMov['comprobante_url'] ?? '') : '';
+    $movMime = $docMov ? cc_safe_text($docMov['comprobante_mime'] ?? '') : '';
+    $movTipoRelacion = $docMov ? cc_safe_text($docMov['tipo_relacion'] ?? '') : '';
 
-    $movUrl = $docMov
-      ? cc_safe_text($docMov['comprobante_url'] ?? '')
-      : '';
-
-    $movMime = $docMov
-      ? cc_safe_text($docMov['comprobante_mime'] ?? '')
-      : '';
-
-    $movTipoRelacion = $docMov
-      ? cc_safe_text($docMov['tipo_relacion'] ?? '')
-      : '';
-
-    $comprobanteMovimiento = '';
     if ($entityType === 'cliente') {
       if ($movTipoRelacion === 'FACTURA') {
         $comprobanteMovimiento = 'Factura / Movimiento #' . $idMov;
@@ -375,11 +438,6 @@ function cc_historial_por_entidad(PDO $pdo, array $cfg): array
       }
     }
 
-    if ($periodo !== '') {
-      $comprobanteMovimiento .= ' · ' . $periodo;
-    }
-
-    // ✅ fila DÉBITO: usa movimientos_comprobantes si existe
     $ledger[] = [
       'tipo_registro'    => 'movimiento',
       'id'               => 'mov_' . $idMov,
@@ -398,23 +456,8 @@ function cc_historial_por_entidad(PDO $pdo, array $cfg): array
       'comprobante_mime' => $movMime,
       'sort_fecha'       => $fecha ?: '0000-00-00',
       'sort_tipo'        => 1,
-      'meta'             => [
-        'periodo'          => $periodo,
-        'id_detalle'       => $m['id_detalle'] ?? null,
-        'id_medio_pago'    => $m['id_medio_pago'] ?? null,
-        'id_comprobante'   => $idComprobanteMov > 0 ? $idComprobanteMov : null,
-        'tipo_relacion'    => $movTipoRelacion,
-        'principal'        => $docMov['principal'] ?? null,
-        'archivo_url'      => $docMov['comprobante_url'] ?? null,
-        'archivo_path'     => $docMov['archivo_path'] ?? null,
-        'archivo_mime'     => $movMime,
-        'archivo_size'     => $docMov['archivo_size'] ?? null,
-        'tipo_archivo'     => $docMov['archivo_tipo'] ?? null,
-        'origen_documento' => $docMov ? 'movimientos_comprobantes' : ((int)($m['id_comprobante'] ?? 0) > 0 ? 'movimientos.id_comprobante' : null),
-      ],
     ];
 
-    // ✅ filas CRÉDITO por cobros: usan cobros.id_comprobante
     $cobrosDelMovimiento = $cobrosByMov[$idMov] ?? [];
     foreach ($cobrosDelMovimiento as $c) {
       $fechaCobro      = (string)($c['fecha_cobro'] ?? '');
@@ -440,16 +483,6 @@ function cc_historial_por_entidad(PDO $pdo, array $cfg): array
         'comprobante_mime' => $comprobanteMime,
         'sort_fecha'       => $fechaCobro ?: '0000-00-00',
         'sort_tipo'        => 2,
-        'meta'             => [
-          'id_comprobante'   => $c['id_comprobante'] ?? null,
-          'id_medio_pago'    => $c['id_medio_pago'] ?? null,
-          'archivo_url'      => $c['archivo_url'] ?? null,
-          'archivo_path'     => $c['archivo_path'] ?? null,
-          'archivo_mime'     => $c['archivo_mime'] ?? null,
-          'archivo_size'     => $c['archivo_size'] ?? null,
-          'tipo_archivo'     => $c['tipo_archivo'] ?? null,
-          'origen_documento' => 'cobros.id_comprobante',
-        ],
       ];
     }
   }
@@ -493,6 +526,130 @@ function cc_historial_por_entidad(PDO $pdo, array $cfg): array
 }
 
 /* =========================
+   Listado saldos clientes
+========================= */
+function cc_saldos_clientes(PDO $pdo): array
+{
+  $sql = "
+    SELECT
+      c.id_cliente,
+      c.nombre,
+      COALESCE(deb.debito_total, 0) AS debito,
+      COALESCE(cre.credito_total, 0) AS credito,
+      COALESCE(deb.debito_total, 0) - COALESCE(cre.credito_total, 0) AS saldo
+    FROM clientes c
+    LEFT JOIN (
+      SELECT
+        m.id_cliente,
+        SUM(COALESCE(m.monto_total, 0)) AS debito_total
+      FROM movimientos m
+      WHERE m.id_cliente IS NOT NULL
+        AND m.id_tipo_operacion = 1
+        AND m.id_tipo_venta = 2
+      GROUP BY m.id_cliente
+    ) deb ON deb.id_cliente = c.id_cliente
+    LEFT JOIN (
+      SELECT
+        m.id_cliente,
+        SUM(COALESCE(cob.monto, 0)) AS credito_total
+      FROM cobros cob
+      INNER JOIN movimientos m ON m.id_movimiento = cob.id_movimiento
+      WHERE m.id_cliente IS NOT NULL
+        AND m.id_tipo_operacion = 1
+        AND m.id_tipo_venta = 2
+      GROUP BY m.id_cliente
+    ) cre ON cre.id_cliente = c.id_cliente
+    WHERE COALESCE(c.activo, 1) = 1
+    ORDER BY c.nombre ASC
+  ";
+
+  $st = $pdo->query($sql);
+  $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+  $out = [];
+  $saldoTotal = 0.0;
+
+  foreach ($rows as $r) {
+    $saldo = (float)($r['saldo'] ?? 0);
+    $saldoTotal += $saldo;
+
+    $out[] = [
+      'id_cliente' => (int)($r['id_cliente'] ?? 0),
+      'nombre'     => (string)($r['nombre'] ?? ''),
+      'saldo'      => $saldo,
+    ];
+  }
+
+  return [
+    'rows' => $out,
+    'total_clientes' => count($out),
+    'saldo_total' => $saldoTotal,
+  ];
+}
+
+/* =========================
+   Listado saldos proveedores
+========================= */
+function cc_saldos_proveedores(PDO $pdo): array
+{
+  $sql = "
+    SELECT
+      p.id_proveedor,
+      p.nombre,
+      COALESCE(deb.debito_total, 0) AS debito,
+      COALESCE(cre.credito_total, 0) AS credito,
+      COALESCE(deb.debito_total, 0) - COALESCE(cre.credito_total, 0) AS saldo
+    FROM proveedores p
+    LEFT JOIN (
+      SELECT
+        m.id_proveedor,
+        SUM(COALESCE(m.monto_total, 0)) AS debito_total
+      FROM movimientos m
+      WHERE m.id_proveedor IS NOT NULL
+        AND m.id_tipo_operacion = 2
+        AND m.id_tipo_venta = 2
+      GROUP BY m.id_proveedor
+    ) deb ON deb.id_proveedor = p.id_proveedor
+    LEFT JOIN (
+      SELECT
+        m.id_proveedor,
+        SUM(COALESCE(cob.monto, 0)) AS credito_total
+      FROM cobros cob
+      INNER JOIN movimientos m ON m.id_movimiento = cob.id_movimiento
+      WHERE m.id_proveedor IS NOT NULL
+        AND m.id_tipo_operacion = 2
+        AND m.id_tipo_venta = 2
+      GROUP BY m.id_proveedor
+    ) cre ON cre.id_proveedor = p.id_proveedor
+    WHERE COALESCE(p.activo, 1) = 1
+    ORDER BY p.nombre ASC
+  ";
+
+  $st = $pdo->query($sql);
+  $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+  $out = [];
+  $saldoTotal = 0.0;
+
+  foreach ($rows as $r) {
+    $saldo = (float)($r['saldo'] ?? 0);
+    $saldoTotal += $saldo;
+
+    $out[] = [
+      'id_proveedor' => (int)($r['id_proveedor'] ?? 0),
+      'nombre'       => (string)($r['nombre'] ?? ''),
+      'saldo'        => $saldo,
+    ];
+  }
+
+  return [
+    'rows' => $out,
+    'total_proveedores' => count($out),
+    'saldo_total' => $saldoTotal,
+  ];
+}
+
+/* =========================
    Acción
 ========================= */
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
@@ -502,205 +659,122 @@ try {
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
 
-  // alias viejos
   if ($action === 'cuentas_corrientes_resumen') $action = 'cc_resumen';
   if ($action === 'cuenta_corriente_detalle')  $action = 'cc_detalle';
 
-  /* =========================================================
-     RESUMEN HISTÓRICO GENERAL
-  ========================================================= */
-  if ($action === 'cc_resumen') {
-    $stC = $pdo->query("
-      SELECT id_cuenta_corriente, nombre
-      FROM cuentas_corrientes
-      WHERE activo = 1
-      ORDER BY id_cuenta_corriente ASC
-    ");
-    $cuentas = $stC->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  if ($action === 'cc_eliminar_cobro') {
+    $json = cc_read_json_body();
+    $idCobro = (int)($json['id_cobro'] ?? cc_param('id_cobro', 0));
 
-    $ccName = [];
-    $ccSign = [];
-    foreach ($cuentas as $c) {
-      $id = (int)($c['id_cuenta_corriente'] ?? 0);
-      $nm = (string)($c['nombre'] ?? '');
-      if ($id > 0) {
-        $ccName[$id] = $nm;
-        $ccSign[$id] = cc_sign_from_nombre($nm);
-      }
+    if ($idCobro <= 0) {
+      cc_fail('Falta id_cobro válido.', 200, ['id_cobro' => $idCobro]);
     }
 
-    if (count($ccName) === 0) {
-      cc_ok([
-        'cuentas' => [],
-        'rows' => [],
-        'totales' => ['columnas' => new stdClass(), 'saldo' => 0],
-        'total_clientes' => 0,
-      ]);
-    }
-
-    $stCli = $pdo->query("
-      SELECT id_cliente, nombre
-      FROM clientes
-      WHERE activo = 1
-      ORDER BY nombre ASC
-    ");
-    $clientes = $stCli->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-    $sqlMov = "
+    $stCobro = $pdo->prepare("
       SELECT
-        m.id_cliente,
-        m.id_cuenta_corriente,
-        COALESCE(SUM(m.monto_total), 0) AS total
-      FROM movimientos m
-      WHERE m.id_cliente IS NOT NULL
-        AND m.id_cuenta_corriente IS NOT NULL
-      GROUP BY m.id_cliente, m.id_cuenta_corriente
-    ";
-    $stM = $pdo->prepare($sqlMov);
-    $stM->execute();
-    $movAgg = $stM->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        c.id_cobro,
+        c.id_movimiento,
+        c.id_comprobante,
+        c.monto,
+        c.fecha_cobro
+      FROM cobros c
+      WHERE c.id_cobro = :id_cobro
+      LIMIT 1
+    ");
+    $stCobro->execute([':id_cobro' => $idCobro]);
+    $cobro = $stCobro->fetch(PDO::FETCH_ASSOC);
 
-    $idx = [];
-    foreach ($movAgg as $r) {
-      $cid = (int)($r['id_cliente'] ?? 0);
-      $ccid = (int)($r['id_cuenta_corriente'] ?? 0);
-      $tot = (float)($r['total'] ?? 0);
-
-      if ($cid <= 0 || $ccid <= 0) continue;
-      if (!isset($ccName[$ccid])) continue;
-
-      if (!isset($idx[$cid])) $idx[$cid] = [];
-      $idx[$cid][$ccid] = $tot;
+    if (!$cobro) {
+      cc_fail('El registro de cobro no existe o ya fue eliminado.');
     }
 
-    $rowsOut = [];
-    $totCols = [];
-    foreach (array_keys($ccName) as $ccid) $totCols[$ccid] = 0.0;
-    $totSaldo = 0.0;
+    $idComprobante = (int)($cobro['id_comprobante'] ?? 0);
 
-    foreach ($clientes as $c) {
-      $cid = (int)($c['id_cliente'] ?? 0);
-      $nombre = (string)($c['nombre'] ?? '');
-      if ($cid <= 0) continue;
+    $pdo->beginTransaction();
 
-      $cols = [];
-      $saldo = 0.0;
+    $stDelCobro = $pdo->prepare("
+      DELETE FROM cobros
+      WHERE id_cobro = :id_cobro
+      LIMIT 1
+    ");
+    $stDelCobro->execute([':id_cobro' => $idCobro]);
 
-      foreach ($ccName as $ccid => $_nm) {
-        $val = (float)($idx[$cid][$ccid] ?? 0.0);
-        $cols[(string)$ccid] = $val;
-        $totCols[$ccid] += $val;
+    if ($stDelCobro->rowCount() < 1) {
+      throw new RuntimeException('No se pudo eliminar el cobro.');
+    }
 
-        $sgn = (int)($ccSign[$ccid] ?? 0);
-        if ($sgn !== 0) $saldo += ($sgn * $val);
+    $comprobanteEliminado = false;
+    $infoRefs = [
+      'cobros' => 0,
+      'movimientos_comprobantes' => 0,
+      'total' => 0,
+    ];
+
+    if ($idComprobante > 0) {
+      $check = cc_can_delete_comprobante($pdo, $idComprobante, $idCobro);
+      $infoRefs = $check['refs'];
+
+      if ($check['puede_eliminar']) {
+        $stDelComp = $pdo->prepare("
+          DELETE FROM comprobantes_archivos
+          WHERE id_comprobante = :id_comprobante
+          LIMIT 1
+        ");
+        $stDelComp->execute([
+          ':id_comprobante' => $idComprobante,
+        ]);
+
+        $comprobanteEliminado = $stDelComp->rowCount() > 0;
       }
-
-      $totSaldo += $saldo;
-
-      $rowsOut[] = [
-        'id_cliente' => $cid,
-        'nombre' => $nombre,
-        'columnas' => $cols,
-        'saldo' => $saldo,
-      ];
     }
 
-    $cuentasOut = [];
-    foreach ($ccName as $ccid => $nm) {
-      $cuentasOut[] = [
-        'id_cuenta_corriente' => (int)$ccid,
-        'nombre' => (string)$nm,
-        'signo_saldo' => (int)($ccSign[$ccid] ?? 0),
-      ];
-    }
+    $pdo->commit();
 
     cc_ok([
-      'cuentas' => $cuentasOut,
-      'rows' => $rowsOut,
-      'totales' => [
-        'columnas' => $totCols,
-        'saldo' => $totSaldo,
-      ],
-      'total_clientes' => count($rowsOut),
+      'mensaje' => $comprobanteEliminado
+        ? 'Cobro y comprobante eliminados correctamente.'
+        : 'Cobro eliminado correctamente.',
+      'id_cobro' => $idCobro,
+      'id_movimiento' => (int)($cobro['id_movimiento'] ?? 0),
+      'id_comprobante' => $idComprobante > 0 ? $idComprobante : null,
+      'comprobante_eliminado' => $comprobanteEliminado,
+      'comprobante_refs_restantes' => $infoRefs,
     ]);
   }
 
-  /* =========================================================
-     DETALLE SIMPLE VIEJO
-  ========================================================= */
+  if ($action === 'cc_resumen' || $action === 'cc_saldos_clientes') {
+    cc_ok(cc_saldos_clientes($pdo));
+  }
+
+  if ($action === 'cc_saldos_proveedores') {
+    cc_ok(cc_saldos_proveedores($pdo));
+  }
+
   if ($action === 'cc_detalle') {
     $idCliente = (int)cc_param('id_cliente', 0);
     if ($idCliente <= 0) {
       cc_fail('Falta id_cliente válido.', 200, ['id_recibido' => $idCliente]);
     }
 
-    $stC = $pdo->query("
-      SELECT id_cuenta_corriente, nombre
-      FROM cuentas_corrientes
-      WHERE activo = 1
-      ORDER BY id_cuenta_corriente ASC
-    ");
-    $cuentas = $stC->fetchAll(PDO::FETCH_ASSOC) ?: [];
-    $ccName = [];
-    $ccSign = [];
-    foreach ($cuentas as $c) {
-      $id = (int)($c['id_cuenta_corriente'] ?? 0);
-      $nm = (string)($c['nombre'] ?? '');
-      if ($id > 0) {
-        $ccName[$id] = $nm;
-        $ccSign[$id] = cc_sign_from_nombre($nm);
-      }
-    }
-
-    $sql = "
-      SELECT
-        m.id_movimiento,
-        m.fecha,
-        m.periodo,
-        m.id_cuenta_corriente,
-        m.monto_total
-      FROM movimientos m
-      WHERE m.id_cliente = :id_cliente
-        AND m.id_cuenta_corriente IS NOT NULL
-      ORDER BY m.fecha ASC, m.id_movimiento ASC
-    ";
-    $st = $pdo->prepare($sql);
-    $st->bindValue(':id_cliente', $idCliente, PDO::PARAM_INT);
-    $st->execute();
-    $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-    $saldo = 0.0;
-    $detalle = [];
-
-    foreach ($rows as $r) {
-      $ccid = (int)($r['id_cuenta_corriente'] ?? 0);
-      $monto = (float)($r['monto_total'] ?? 0);
-
-      $sgn = (int)($ccSign[$ccid] ?? 0);
-      if ($sgn !== 0) $saldo += ($sgn * $monto);
-
-      $detalle[] = [
-        'id_movimiento' => (int)$r['id_movimiento'],
-        'fecha' => (string)$r['fecha'],
-        'periodo' => (string)$r['periodo'],
-        'id_cuenta_corriente' => $ccid,
-        'cuenta' => (string)($ccName[$ccid] ?? ('Cuenta #' . $ccid)),
-        'monto' => $monto,
-        'saldo' => $saldo,
-      ];
-    }
+    $data = cc_historial_por_entidad($pdo, [
+      'entityType'    => 'cliente',
+      'idField'       => 'id_cliente',
+      'entityId'      => $idCliente,
+      'tipoOperacion' => 1,
+      'tipoVenta'     => 2,
+      'fechaDesde'    => cc_safe_text((string)cc_param('fecha_desde', '')),
+      'fechaHasta'    => cc_safe_text((string)cc_param('fecha_hasta', '')),
+    ]);
 
     cc_ok([
-      'id_cliente' => $idCliente,
-      'detalle' => $detalle,
-      'saldo_final' => $saldo,
-      'total_movimientos' => count($detalle),
+      'id_cliente'        => $idCliente,
+      'rows'              => $data['rows'],
+      'saldo_final'       => (float)($data['totales']['saldo'] ?? 0),
+      'total_movimientos' => count($data['rows'] ?? []),
+      'totales'           => $data['totales'] ?? ['debito' => 0, 'credito' => 0, 'saldo' => 0],
     ]);
   }
 
-  /* =========================================================
-     NUEVO: HISTORIAL CLIENTE
-  ========================================================= */
   if ($action === 'cc_historial_cliente') {
     $idCliente = (int)cc_param('id_cliente', 0);
     $q = cc_safe_text((string)cc_param('q', ''));
@@ -731,11 +805,8 @@ try {
     cc_ok($data);
   }
 
-  /* =========================================================
-     NUEVO: HISTORIAL PROVEEDOR
-  ========================================================= */
   if ($action === 'cc_historial_proveedor') {
-    $idProveedor = (int)cc_param('proveedor_id', 0);
+    $idProveedor = (int)cc_param('id_proveedor', cc_param('proveedor_id', 0));
     $q = cc_safe_text((string)cc_param('q', ''));
     $fechaDesde = cc_safe_text((string)cc_param('fecha_desde', ''));
     $fechaHasta = cc_safe_text((string)cc_param('fecha_hasta', ''));
@@ -764,8 +835,11 @@ try {
     cc_ok($data);
   }
 
-  cc_fail('Acción no soportada en cuentas_corrientes.php', 200, ['action' => $action]);
-
+  cc_fail('Acción no válida.', 404, ['action' => $action]);
 } catch (Throwable $e) {
-  cc_fail('Error en cuentas_corrientes: ' . $e->getMessage(), 500);
+  if ($pdo instanceof PDO && $pdo->inTransaction()) {
+    $pdo->rollBack();
+  }
+
+  cc_fail('Error interno: ' . $e->getMessage(), 500);
 }

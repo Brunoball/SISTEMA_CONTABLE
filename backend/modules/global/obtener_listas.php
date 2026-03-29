@@ -5,9 +5,6 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-// ✅ MULTI-TENANT:
-// - NO incluir config/db.php
-// - $pdo debe venir creado por routes/api.php (tenant_resolver)
 if (!isset($pdo) || !($pdo instanceof PDO)) {
   http_response_code(500);
   echo json_encode([
@@ -25,53 +22,56 @@ try {
      Helpers
   ========================= */
 
-  // ✅ normaliza "periodo" a MM-YYYY
-  // soporta: YYYY-MM, YYYY/MM, MM-YYYY, MM/YYYY, YYYYMM, MMYYYY
-  function normalizePeriodoMMYYYY(string $v): string {
-    $s = trim($v);
-    if ($s === '') return '';
+  if (!function_exists('normalizePeriodoMMYYYY')) {
+    function normalizePeriodoMMYYYY(string $v): string {
+      $s = trim($v);
+      if ($s === '') return '';
 
-    $m = '';
-    $y = '';
+      $m = '';
+      $y = '';
 
-    if (preg_match('/^\d{4}[-\/]\d{1,2}$/', $s)) {          // YYYY-MM o YYYY/MM
-      [$y, $m] = preg_split('/[-\/]/', $s);
-    } elseif (preg_match('/^\d{1,2}[-\/]\d{4}$/', $s)) {    // MM-YYYY o MM/YYYY
-      [$m, $y] = preg_split('/[-\/]/', $s);
-    } elseif (preg_match('/^\d{6}$/', $s)) {                // YYYYMM o MMYYYY
-      $a = (int)substr($s, 0, 4);
-      if ($a >= 1900 && $a <= 2100) {
-        $y = substr($s, 0, 4);
-        $m = substr($s, 4, 2);
+      if (preg_match('/^\d{4}[-\/]\d{1,2}$/', $s)) {
+        [$y, $m] = preg_split('/[-\/]/', $s);
+      } elseif (preg_match('/^\d{1,2}[-\/]\d{4}$/', $s)) {
+        [$m, $y] = preg_split('/[-\/]/', $s);
+      } elseif (preg_match('/^\d{6}$/', $s)) {
+        $a = (int)substr($s, 0, 4);
+        if ($a >= 1900 && $a <= 2100) {
+          $y = substr($s, 0, 4);
+          $m = substr($s, 4, 2);
+        } else {
+          $m = substr($s, 0, 2);
+          $y = substr($s, 2, 4);
+        }
       } else {
-        $m = substr($s, 0, 2);
-        $y = substr($s, 2, 4);
+        return $s;
       }
-    } else {
-      return $s; // fallback
+
+      $mi = (int)$m;
+      $yi = (int)$y;
+
+      if ($yi < 1900 || $yi > 2100) return '';
+      if ($mi < 1 || $mi > 12) return '';
+
+      $mm = str_pad((string)$mi, 2, '0', STR_PAD_LEFT);
+      return $mm . '-' . (string)$yi;
     }
-
-    $mi = (int)$m;
-    $yi = (int)$y;
-
-    if ($yi < 1900 || $yi > 2100) return '';
-    if ($mi < 1 || $mi > 12) return '';
-
-    $mm = str_pad((string)$mi, 2, '0', STR_PAD_LEFT);
-    return $mm . '-' . (string)$yi;
   }
 
-  // ✅ devuelve un timestamp para ordenar por fecha real
-  function periodoSortKey(string $mmYYYY): int {
-    $s = trim($mmYYYY);
-    if (!preg_match('/^\d{2}\-\d{4}$/', $s)) return 0;
-    [$mm, $yy] = explode('-', $s);
-    $iso = $yy . '-' . $mm . '-01';
-    $ts = strtotime($iso);
-    return $ts ? (int)$ts : 0;
+  if (!function_exists('periodoSortKey')) {
+    function periodoSortKey(string $mmYYYY): int {
+      $s = trim($mmYYYY);
+      if (!preg_match('/^\d{2}\-\d{4}$/', $s)) return 0;
+      [$mm, $yy] = explode('-', $s);
+      $iso = $yy . '-' . $mm . '-01';
+      $ts = strtotime($iso);
+      return $ts ? (int)$ts : 0;
+    }
   }
 
-  // ✅ fetch robusto (con activo si existe)
+  /**
+   * Fetch genérico para tablas simples
+   */
   $fetch = function(string $table, string $idCol) use ($pdo): array {
     $sql1 = "SELECT `$idCol` AS id, `nombre`
              FROM `$table`
@@ -88,31 +88,105 @@ try {
 
     $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
     $out = [];
+
     foreach ($rows as $r) {
       $id = (int)($r['id'] ?? 0);
       $nombre = trim((string)($r['nombre'] ?? ''));
       if ($id > 0 && $nombre !== '') {
-        $out[] = ['id' => $id, 'nombre' => $nombre];
+        $out[] = [
+          'id' => $id,
+          'nombre' => $nombre,
+        ];
       }
     }
+
+    return $out;
+  };
+
+  /**
+   * NUEVO:
+   * Reemplaza la vieja tabla `detalles` por `stock_productos`
+   * pero mantiene la clave `detalles` para no romper el frontend actual.
+   *
+   * Cada item devuelve:
+   * - id
+   * - nombre
+   * - precio
+   * - stock
+   * - sku
+   * - id_categoria_stock
+   *
+   * Así luego en los modales ya podés usar esta info automáticamente.
+   */
+  $fetchDetallesDesdeStock = function() use ($pdo): array {
+    $sql = "
+      SELECT
+        sp.id AS id,
+        sp.nombre,
+        sp.precio,
+        sp.stock,
+        sp.sku,
+        sp.id_categoria_stock
+      FROM stock_productos sp
+      WHERE sp.activo = 1
+        AND TRIM(COALESCE(sp.nombre, '')) <> ''
+      ORDER BY sp.nombre ASC
+    ";
+
+    $stmt = $pdo->query($sql);
+    $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+
+    $out = [];
+
+    foreach ($rows as $r) {
+      $id = (int)($r['id'] ?? 0);
+      $nombre = trim((string)($r['nombre'] ?? ''));
+      $precio = isset($r['precio']) ? (float)$r['precio'] : 0.0;
+      $stock = isset($r['stock']) && $r['stock'] !== null ? (int)$r['stock'] : 0;
+      $sku = trim((string)($r['sku'] ?? ''));
+      $idCategoriaStock = isset($r['id_categoria_stock']) && $r['id_categoria_stock'] !== null
+        ? (int)$r['id_categoria_stock']
+        : null;
+
+      if ($id <= 0 || $nombre === '') {
+        continue;
+      }
+
+      $out[] = [
+        // se mantiene estructura compatible
+        'id' => $id,
+        'nombre' => $nombre,
+
+        // extra para usar internamente después en modales
+        'precio' => $precio,
+        'stock' => $stock,
+        'sku' => $sku,
+        'id_categoria_stock' => $idCategoriaStock,
+      ];
+    }
+
     return $out;
   };
 
   /* =========================
      Map de tablas
-     ✅ AÑADIMOS tipos_operacion
   ========================= */
   $map = [
-    'clasificaciones'    => ['id' => 'id_clasificacion',    'table' => 'clasificaciones'],
-    'clientes'           => ['id' => 'id_cliente',          'table' => 'clientes'],
-    'cuentas_corrientes' => ['id' => 'id_cuenta_corriente', 'table' => 'cuentas_corrientes'],
-    'detalles'           => ['id' => 'id_detalle',          'table' => 'detalles'],
-    'medios_pago'        => ['id' => 'id_medio_pago',       'table' => 'medios_pago'],
-    'proveedores'        => ['id' => 'id_proveedor',        'table' => 'proveedores'],
-    'tipos_venta'        => ['id' => 'id_tipo_venta',       'table' => 'tipos_venta'],
+    'clasificaciones'  => ['id' => 'id_clasificacion',   'table' => 'clasificaciones'],
+    'clientes'         => ['id' => 'id_cliente',         'table' => 'clientes'],
 
-    // ✅ NUEVO: tabla tipos_operacion (la de tu screenshot)
-    'tipos_operacion'    => ['id' => 'id_tipo_operacion',   'table' => 'tipos_operacion'],
+    // OJO:
+    // 'detalles' ya NO sale de la tabla detalles.
+    // Se arma aparte desde stock_productos para no romper el sistema.
+    // 'detalles' => ['id' => 'id_detalle', 'table' => 'detalles'],
+
+    'medios_pago'      => ['id' => 'id_medio_pago',      'table' => 'medios_pago'],
+    'proveedores'      => ['id' => 'id_proveedor',       'table' => 'proveedores'],
+    'tipos_venta'      => ['id' => 'id_tipo_venta',      'table' => 'tipos_venta'],
+    'tipos_operacion'  => ['id' => 'id_tipo_operacion',  'table' => 'tipos_operacion'],
+
+    // categorías de stock
+    'stock_categorias' => ['id' => 'id_stock_categoria', 'table' => 'stock_categorias'],
   ];
 
   /* =========================
@@ -153,6 +227,10 @@ try {
     'exito' => true,
     'listas' => [
       'periodos' => $periodos,
+
+      // se mantiene el nombre `detalles`
+      // pero ahora viene de stock_productos
+      'detalles' => $fetchDetallesDesdeStock(),
     ],
   ];
 
@@ -160,7 +238,7 @@ try {
     $response['listas'][$key] = $fetch($cfg['table'], $cfg['id']);
   }
 
-  echo json_encode($response, JSON_UNESCAPED_UNICODE);
+  echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   exit;
 
 } catch (Throwable $e) {
@@ -168,6 +246,6 @@ try {
   echo json_encode([
     'exito'   => false,
     'mensaje' => 'Error: ' . $e->getMessage(),
-  ], JSON_UNESCAPED_UNICODE);
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
   exit;
 }

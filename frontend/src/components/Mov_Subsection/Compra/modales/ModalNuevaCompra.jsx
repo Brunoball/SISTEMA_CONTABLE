@@ -747,20 +747,6 @@ export default function ModalNuevaCompra({
     [rows, updateRow, showToast]
   );
 
-  const startAddDetalleForRow = useCallback(
-    (rowId) => {
-      if (saving) return;
-      setAddUI({
-        open: true,
-        kind: "detalles",
-        rowId,
-        text: "",
-        saving: false,
-      });
-    },
-    [saving]
-  );
-
   const startAddProveedor = useCallback(() => {
     if (saving) return;
     setAddUI({
@@ -802,7 +788,7 @@ export default function ModalNuevaCompra({
 
     try {
       const { idUsuario } = getAuthInfo();
-      const data = await apiPostJson(API_CATALOGO, {
+      const data = await apiPostJson(`${BASE_URL}/api.php?action=catalogo_crear`, {
         catalogo: kind,
         nombre,
         idUsuario,
@@ -834,15 +820,6 @@ export default function ModalNuevaCompra({
         return next;
       });
 
-      if (kind === "detalles" && addUI.rowId) {
-        updateRow(addUI.rowId, {
-          id_detalle: String(newId),
-          detalleText: newNombre,
-          stock_disponible: null,
-          sinStock: false,
-        });
-      }
-
       if (kind === "proveedores") {
         updateFilter("id_proveedor", String(newId));
         setProvInput(newNombre);
@@ -865,7 +842,7 @@ export default function ModalNuevaCompra({
       setAddUI((p) => ({ ...p, saving: false }));
       showToast("error", e?.message || "Error creando.", 4200);
     }
-  }, [API_CATALOGO, addUI, showToast, updateRow, updateFilter]);
+  }, [addUI, showToast, updateFilter]);
 
   const rowsCalc = useMemo(
     () =>
@@ -943,7 +920,7 @@ export default function ModalNuevaCompra({
         setIdChequeSeleccionado("");
 
         const sp = new URLSearchParams();
-        sp.set("action", "cheques_cartera_listar");
+        sp.set("action", "compras_cheques_cartera_listar");
         sp.set("tipo", tipo);
 
         const data = await apiGet(`${BASE_URL}/api.php?${sp.toString()}`);
@@ -1467,8 +1444,6 @@ export default function ModalNuevaCompra({
                     </button>
 
                     <div className="nv-foot-sep" />
-
-
                   </div>
 
                   <div className="mi-cr-totals">
@@ -1736,7 +1711,16 @@ export default function ModalNuevaCompra({
             </div>
           </div>
 
-
+          <AddCatalogMiniModal
+            open={addUI.open}
+            title={addUI.kind === "proveedores" ? "Nuevo proveedor" : "Nuevo detalle"}
+            value={addUI.text}
+            saving={addUI.saving}
+            onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
+            onCancel={closeAddMini}
+            onSave={guardarNuevoCatalogo}
+            dark={dark}
+          />
         </div>
       </div>
     </>,

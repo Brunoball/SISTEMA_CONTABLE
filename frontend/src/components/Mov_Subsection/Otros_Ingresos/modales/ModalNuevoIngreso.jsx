@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus, faFileInvoiceDollar } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
 import BASE_URL from "../../../../config/config";
+import ModalNuevoCheque from "./ModalNuevoCheque.jsx";
 
 const NULL_OPTION = "";
 
@@ -58,6 +59,7 @@ function parseMoneyInputARS(v) {
   if (v == null) return 0;
   let s = String(v).trim();
   if (!s) return 0;
+
   s = s.replace(/\$/g, "").replace(/\s+/g, "");
 
   if (s.includes(",") && s.includes(".")) {
@@ -78,6 +80,15 @@ function formatEditableMoney(v) {
 
 function uid() {
   return window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeText(v) {
+  return String(v ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function isTemaOscuro() {
@@ -151,9 +162,32 @@ function optionLabel(x) {
   return safeStr(x?.nombre ?? x?.categoria ?? x?.descripcion ?? x?.detalle ?? "");
 }
 
-/* =========================================================
-   Stock helpers
-========================================================= */
+function isMedioPagoCheque(mediosPagoList, idMedioPago) {
+  const id = Number(idMedioPago);
+  if (!Number.isFinite(id) || id <= 0) return false;
+
+  const medio = mediosPagoList.find(
+    (x) => Number(x?.id ?? x?.id_medio_pago ?? 0) === id
+  );
+  if (!medio) return false;
+
+  const nombre = normalizeText(medio?.nombre ?? "");
+  return nombre.includes("cheque") || nombre.includes("echeq");
+}
+
+function isMedioPagoEcheq(mediosPagoList, idMedioPago) {
+  const id = Number(idMedioPago);
+  if (!Number.isFinite(id) || id <= 0) return false;
+
+  const medio = mediosPagoList.find(
+    (x) => Number(x?.id ?? x?.id_medio_pago ?? 0) === id
+  );
+  if (!medio) return false;
+
+  const nombre = normalizeText(medio?.nombre ?? "");
+  return nombre.includes("echeq");
+}
+
 function getStockDisponible(detalle) {
   const cand =
     detalle?.stock ??
@@ -225,7 +259,7 @@ function buildRowFromData(r) {
   return {
     id: uid(),
     id_detalle: String(getDetalleId(r) ?? ""),
-    detalle: safeStr(r?.detalle ?? r?.descripcion ?? r?.concepto),
+    detalle: safeStr(r?.detalle ?? r?.descripcion ?? r?.concepto ?? r?.detalle_nombre),
     cantidad,
     precio,
     precioDraft: "",
@@ -248,7 +282,7 @@ function buildRowsFromInitial(data) {
     return items.map((x) => ({
       id: uid(),
       id_detalle: String(getDetalleId(x) ?? ""),
-      detalle: safeStr(x?.detalle ?? x?.descripcion ?? x?.concepto),
+      detalle: safeStr(x?.detalle ?? x?.descripcion ?? x?.concepto ?? x?.detalle_nombre),
       cantidad: Math.max(1, safeNumber(x?.cantidad || 1)),
       precio: safeNumber(x?.precio ?? x?.importe ?? x?.monto ?? 0),
       precioDraft: "",
@@ -267,6 +301,7 @@ function describeLineProblem(r, idx1based) {
   const qty = safeNumber(r.cantidad);
   const price = safeNumber(r.precio);
   const total = safeNumber(r.total);
+
   const touched =
     detalle !== "" ||
     String(r.id_detalle || "").trim() !== "" ||
@@ -346,6 +381,7 @@ export default function ModalNuevoIngreso({
   onSaved,
 }) {
   const API_UPLOAD = `${BASE_URL}/api.php?action=otros_ingresos_comprobantes_vincular_movimiento_upload`;
+  const API_CHEQUES_GUARDAR = `${BASE_URL}/api.php?action=otros_ingresos_cheques_guardar`;
 
   const showToast = useCallback(
     (tipo, mensaje, dur = 2800) => onToast?.(tipo, mensaje, dur),
@@ -363,6 +399,10 @@ export default function ModalNuevoIngreso({
   const [rows, setRows] = useState(() => [buildEmptyRow()]);
   const [archivoAdjunto, setArchivoAdjunto] = useState(null);
 
+  const [openChequeModal, setOpenChequeModal] = useState(false);
+  const [savingCheque] = useState(false);
+  const [chequeGuardado, setChequeGuardado] = useState(null);
+
   const rowsContainerRef = useRef(null);
   const [hasScroll, setHasScroll] = useState(false);
   const closeBtnRef = useRef(null);
@@ -378,13 +418,29 @@ export default function ModalNuevoIngreso({
     [localLists.detalles]
   );
 
+  const esMedioPagoCheque = useMemo(
+    () => isMedioPagoCheque(mediosPagoList, filters.id_medio_pago),
+    [mediosPagoList, filters.id_medio_pago]
+  );
+
+  const tipoChequeDetectado = useMemo(
+    () => (isMedioPagoEcheq(mediosPagoList, filters.id_medio_pago) ? "echeq" : "cheque"),
+    [mediosPagoList, filters.id_medio_pago]
+  );
+
+  useEffect(() => {
+    setChequeGuardado(null);
+  }, [filters.id_medio_pago]);
+
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
+
     const o1 = new MutationObserver(update);
     o1.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-theme"],
     });
+
     const o2 = new MutationObserver(update);
     if (document.body) {
       o2.observe(document.body, {
@@ -392,6 +448,7 @@ export default function ModalNuevoIngreso({
         attributeFilter: ["class"],
       });
     }
+
     return () => {
       o1.disconnect();
       o2.disconnect();
@@ -438,7 +495,10 @@ export default function ModalNuevoIngreso({
       );
 
       setArchivoAdjunto(null);
+      setChequeGuardado(null);
+      setOpenChequeModal(false);
       setSaving(false);
+
       setTimeout(() => closeBtnRef.current?.focus(), 0);
     }
   }, [open, mode, initialData]);
@@ -453,6 +513,7 @@ export default function ModalNuevoIngreso({
     };
 
     checkScroll();
+
     const resizeObserver = new ResizeObserver(checkScroll);
     resizeObserver.observe(el);
     window.addEventListener("resize", checkScroll);
@@ -478,9 +539,6 @@ export default function ModalNuevoIngreso({
     setRows((p) => p.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }, []);
 
-  /* =========================================================
-     handleSelectDetalle: extrae precio, stock y detecta sin stock
-  ========================================================= */
   const handleSelectDetalle = useCallback(
     (item, rowId) => {
       const precio = safeNumber(item?.precio || 0);
@@ -507,9 +565,6 @@ export default function ModalNuevoIngreso({
     [updateRow, showToast]
   );
 
-  /* =========================================================
-     handleCantidadChange: bloquea si sinStock, clampea al máximo
-  ========================================================= */
   const handleCantidadChange = useCallback(
     (rowId, newCantidad) => {
       const row = rows.find((r) => r.id === rowId);
@@ -571,10 +626,87 @@ export default function ModalNuevoIngreso({
     };
   }, [rowsCalc]);
 
+  const handleSaveCheque = useCallback(
+    async (datosCheque) => {
+      if (savingCheque) return;
+
+      if (!datosCheque.emisor) {
+        showToast("advertencia", "El emisor es obligatorio.", 3000);
+        return;
+      }
+      if (!datosCheque.numero_cheque) {
+        showToast("advertencia", "El número de cheque es obligatorio.", 3000);
+        return;
+      }
+      if (!datosCheque.importe || datosCheque.importe <= 0) {
+        showToast("advertencia", "El importe debe ser mayor a 0.", 3000);
+        return;
+      }
+      if (!datosCheque.fecha_pago) {
+        showToast("advertencia", "La fecha de pago es obligatoria.", 3000);
+        return;
+      }
+
+      setChequeGuardado(datosCheque);
+      setOpenChequeModal(false);
+      showToast(
+        "exito",
+        `Cheque ${datosCheque.numero_cheque} cargado. Se guardará al confirmar el ingreso.`,
+        3200
+      );
+    },
+    [savingCheque, showToast]
+  );
+
+  const guardarChequeEnBackend = useCallback(
+    async (idMovimiento, datosCheque) => {
+      if (!datosCheque) return null;
+
+      const fd = new FormData();
+      fd.append("id_movimiento", String(idMovimiento));
+      fd.append("tipo", datosCheque.tipo_cheque || "cheque");
+      fd.append("fecha_emision", datosCheque.fecha_emision || todayISO());
+      fd.append("emisor", datosCheque.emisor || "");
+      fd.append("numero_cheque", datosCheque.numero_cheque || "");
+      fd.append("importe", String(datosCheque.importe || 0));
+      fd.append("fecha_pago", datosCheque.fecha_pago || todayISO());
+      fd.append("observaciones", datosCheque.observaciones || "");
+
+      if (datosCheque.archivo instanceof File) {
+        fd.append(
+          "archivo",
+          datosCheque.archivo,
+          datosCheque.archivo_nombre || datosCheque.archivo.name || "adjunto"
+        );
+      }
+
+      const { token, sessionKey } = getAuthInfo();
+      const headers = {};
+      if (sessionKey) headers["X-Session"] = sessionKey;
+      else if (token) headers.Authorization = `Bearer ${token}`;
+
+      const res = await fetch(API_CHEQUES_GUARDAR, {
+        method: "POST",
+        headers,
+        body: fd,
+      });
+
+      return await parseJsonOrThrow(res);
+    },
+    [API_CHEQUES_GUARDAR]
+  );
+
   const validate = useCallback(() => {
     const mp = Number(filters.id_medio_pago);
     if (!Number.isFinite(mp) || mp <= 0) {
       return { ok: false, msg: "Falta seleccionar el medio de pago." };
+    }
+
+    if (esMedioPagoCheque && !chequeGuardado) {
+      return {
+        ok: false,
+        msg: "El medio de pago es Cheque: cargá el cheque antes de guardar.",
+      };
     }
 
     if (!safeStr(fecha)) {
@@ -602,6 +734,7 @@ export default function ModalNuevoIngreso({
         const extra = problems.length > 2 ? ` (y ${problems.length - 2} más)` : "";
         return { ok: false, msg: `No hay filas válidas. ${msg}${extra}` };
       }
+
       return {
         ok: false,
         msg: "Cargá al menos 1 fila válida (Descripción + Cantidad + Importe).",
@@ -609,7 +742,7 @@ export default function ModalNuevoIngreso({
     }
 
     return { ok: true, warn: problems.length > 0, usable };
-  }, [filters, fecha, rowsCalc]);
+  }, [filters, fecha, rowsCalc, esMedioPagoCheque, chequeGuardado]);
 
   const buildPayload = useCallback(() => {
     const usableRows = rowsCalc.filter(
@@ -706,7 +839,6 @@ export default function ModalNuevoIngreso({
       const data = await onSubmit(payload, mode === "edit");
 
       const idMovimientoFinal = getSavedMovimientoIdFromResponse(data, initialData);
-
       if (!idMovimientoFinal) {
         throw new Error(
           "El backend guardó el movimiento pero no devolvió un id_movimiento válido."
@@ -714,7 +846,6 @@ export default function ModalNuevoIngreso({
       }
 
       let warningArchivo = "";
-
       if (archivoAdjunto) {
         try {
           const respArchivo = await subirArchivo(idMovimientoFinal, archivoAdjunto);
@@ -723,6 +854,18 @@ export default function ModalNuevoIngreso({
           }
         } catch (e) {
           warningArchivo = e?.message || "No se pudo vincular el archivo.";
+        }
+      }
+
+      if (esMedioPagoCheque && chequeGuardado) {
+        try {
+          await guardarChequeEnBackend(idMovimientoFinal, chequeGuardado);
+        } catch (eCheque) {
+          showToast(
+            "advertencia",
+            `Ingreso guardado, pero no se pudo guardar el cheque: ${eCheque?.message}`,
+            5000
+          );
         }
       }
 
@@ -754,419 +897,502 @@ export default function ModalNuevoIngreso({
     initialData,
     archivoAdjunto,
     subirArchivo,
+    esMedioPagoCheque,
+    chequeGuardado,
+    guardarChequeEnBackend,
   ]);
 
   if (!open) return null;
 
-  const btnLabel = saving
-    ? "Procesando..."
-    : mode === "edit"
-    ? "Guardar cambios"
-    : "Guardar ingreso";
+  const btnLabel =
+    saving
+      ? "Procesando..."
+      : mode === "edit"
+      ? "Guardar cambios"
+      : "Guardar ingreso";
 
   return createPortal(
-    <div
-      className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim()}
-      onMouseDown={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-      }}
-    >
+    <>
       <div
-        className={[
-          "mi-modal__container",
-          "mi-modal__container--mov",
-          dark ? "mi-modal--dark" : "",
-        ]
-          .join(" ")
-          .trim()}
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => e.stopPropagation()}
+        className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim()}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
       >
-        <div className="mi-modal__header">
-          <div className="mi-modal__head-icon" aria-hidden="true">
-            <FontAwesomeIcon icon={faPlus} />
+        <div
+          className={[
+            "mi-modal__container",
+            "mi-modal__container--mov",
+            dark ? "mi-modal--dark" : "",
+          ]
+            .join(" ")
+            .trim()}
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="mi-modal__header">
+            <div className="mi-modal__head-icon" aria-hidden="true">
+              <FontAwesomeIcon icon={faPlus} />
+            </div>
+
+            <div className="mi-modal__head-left">
+              <h2 className="mi-modal__title">
+                {mode === "edit" ? "Editar Ingreso" : "Nuevo Ingreso"}
+              </h2>
+            </div>
+
+            <button
+              ref={closeBtnRef}
+              className="mi-modal__close"
+              onClick={() => (!saving ? onClose?.() : null)}
+              aria-label="Cerrar"
+              disabled={saving}
+              type="button"
+            >
+              ✕
+            </button>
           </div>
 
-          <div className="mi-modal__head-left">
-            <h2 className="mi-modal__title">
-              {mode === "edit" ? "Editar Ingreso" : "Nuevo Ingreso"}
-            </h2>
-          </div>
+          <div className="mi-modal__content">
+            <div className="mi-cr-grid">
+              <section className="mi-cr-table">
+                <div
+                  className="mi-cr-table__head"
+                  style={{ gridTemplateColumns: "2.4fr 0.8fr 1.1fr 0.9fr 1fr 1.1fr 0.45fr" }}
+                >
+                  <div style={{ paddingLeft: 10 }}>Descripción</div>
+                  <div>Cant.</div>
+                  <div className="right">Importe</div>
+                  <div>IVA %</div>
+                  <div className="right">IVA $</div>
+                  <div className="right">Total</div>
+                  <div />
+                </div>
 
-          <button
-            ref={closeBtnRef}
-            className="mi-modal__close"
-            onClick={() => (!saving ? onClose?.() : null)}
-            aria-label="Cerrar"
-            disabled={saving}
-            type="button"
-          >
-            ✕
-          </button>
-        </div>
+                <div
+                  ref={rowsContainerRef}
+                  className={`mi-cr-table__rows ${hasScroll ? "has-scroll" : ""}`}
+                >
+                  {rowsCalc.map((r) => {
+                    const stockNum =
+                      r.stock_disponible !== null && r.stock_disponible !== undefined
+                        ? Number(r.stock_disponible)
+                        : null;
 
-        <div className="mi-modal__content">
-          <div className="mi-cr-grid">
-            <section className="mi-cr-table">
-              <div
-                className="mi-cr-table__head"
-                style={{ gridTemplateColumns: "2.4fr 0.8fr 1.1fr 0.9fr 1fr 1.1fr 0.45fr" }}
-              >
-                <div style={{ paddingLeft: 10 }}>Descripción</div>
-                <div>Cant.</div>
-                <div className="right">Importe</div>
-                <div>IVA %</div>
-                <div className="right">IVA $</div>
-                <div className="right">Total</div>
-                <div />
-              </div>
+                    const rowSinStock = r.sinStock || isSinStock(stockNum);
 
-              <div
-                ref={rowsContainerRef}
-                className={`mi-cr-table__rows ${hasScroll ? "has-scroll" : ""}`}
-              >
-                {rowsCalc.map((r) => {
-                  const stockNum =
-                    r.stock_disponible !== null && r.stock_disponible !== undefined
-                      ? Number(r.stock_disponible)
-                      : null;
-                  const rowSinStock = r.sinStock || isSinStock(stockNum);
+                    return (
+                      <div
+                        key={r.id}
+                        className={`mi-cr-row ${rowSinStock ? "mi-cr-row--sin-stock" : ""}`}
+                        style={{ gridTemplateColumns: "2.4fr 0.8fr 1.1fr 0.9fr 1fr 1.1fr 0.45fr" }}
+                      >
+                        <div className="mi-cr-cell mi-cr-cell--detalle">
+                          <GlobalAutocomplete
+                            value={r.detalle}
+                            onChange={(val) =>
+                              updateRow(r.id, {
+                                detalle: val,
+                                id_detalle: NULL_OPTION,
+                                stock_disponible: null,
+                                sinStock: false,
+                              })
+                            }
+                            onSelect={(item) => handleSelectDetalle(item, r.id)}
+                            options={detallesList}
+                            getOptionLabel={(d) => optionLabel(d)}
+                            getOptionValue={(d) => String(getDetalleId(d) ?? optionLabel(d))}
+                            placeholder="Escribí o buscá una descripción…"
+                            disabled={saving}
+                            showAllOnFocus={false}
+                            maxItems={18}
+                            inputClassName="nv-cell-input"
+                          />
+                        </div>
 
-                  return (
-                    <div
-                      key={r.id}
-                      className={`mi-cr-row ${rowSinStock ? "mi-cr-row--sin-stock" : ""}`}
-                      style={{ gridTemplateColumns: "2.4fr 0.8fr 1.1fr 0.9fr 1fr 1.1fr 0.45fr" }}
+                        <div className="mi-cr-cell mi-cr-cell--center">
+                          <input
+                            className="nv-cell-input nv-cell-input--center"
+                            type="number"
+                            min={rowSinStock ? undefined : "1"}
+                            step="1"
+                            value={rowSinStock ? "" : r.cantidad}
+                            onChange={(e) =>
+                              handleCantidadChange(
+                                r.id,
+                                e.target.value === "" ? "" : Number(e.target.value)
+                              )
+                            }
+                            disabled={saving || rowSinStock}
+                            placeholder={rowSinStock ? "0" : ""}
+                            title={
+                              rowSinStock
+                                ? "No podés ingresar cantidad porque el stock es 0"
+                                : ""
+                            }
+                            style={{
+                              width: "100%",
+                              background: rowSinStock ? "#f3f4f6" : undefined,
+                              color: rowSinStock ? "#b91c1c" : undefined,
+                              borderColor: rowSinStock ? "#fca5a5" : undefined,
+                              cursor: rowSinStock ? "not-allowed" : undefined,
+                              opacity: rowSinStock ? 0.9 : 1,
+                            }}
+                          />
+
+                          {r.stock_disponible !== null && r.stock_disponible !== undefined && (
+                            <div
+                              style={{
+                                fontSize: "10px",
+                                marginTop: "2px",
+                                fontWeight: rowSinStock ? 700 : 500,
+                                color: rowSinStock ? "#b91c1c" : "#666",
+                              }}
+                            >
+                              {rowSinStock ? "Sin stock" : `Stock: ${r.stock_disponible}`}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mi-cr-cell mi-cr-cell--center">
+                          <input
+                            className="nv-cell-input nv-cell-input--right"
+                            type="text"
+                            inputMode="decimal"
+                            value={
+                              r.precioFocused
+                                ? r.precioDraft ?? ""
+                                : formatMoneyInputARS(r.precio)
+                            }
+                            onFocus={(e) => {
+                              updateRow(r.id, {
+                                precioFocused: true,
+                                precioDraft: formatEditableMoney(r.precio),
+                              });
+                              setTimeout(() => e.target.select(), 0);
+                            }}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const cleaned = raw.replace(/[^\d,.\-]/g, "");
+                              updateRow(r.id, {
+                                precioDraft: cleaned,
+                                precio: parseMoneyInputARS(cleaned),
+                              });
+                            }}
+                            onBlur={() => {
+                              const parsed = parseMoneyInputARS(r.precioDraft);
+                              updateRow(r.id, {
+                                precio: parsed,
+                                precioDraft: "",
+                                precioFocused: false,
+                              });
+                            }}
+                            placeholder="$ 0,00"
+                            disabled={saving}
+                            style={{ width: "100%", padding: "0" }}
+                          />
+                        </div>
+
+                        <div className="mi-cr-cell mi-cr-cell--center">
+                          <select
+                            className="nv-cell-input nv-cell-input--center nv-cell-input--select"
+                            value={String(r.ivaPct)}
+                            onChange={(e) =>
+                              updateRow(r.id, { ivaPct: Number(e.target.value) })
+                            }
+                            disabled={saving}
+                            style={{ width: "100%" }}
+                          >
+                            {IVA_OPTIONS.map((x) => (
+                              <option key={x.value} value={x.value}>
+                                {x.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
+                          {moneyARS(r.ivaMonto)}
+                        </div>
+
+                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
+                          {moneyARS(r.total)}
+                        </div>
+
+                        <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
+                          <button
+                            type="button"
+                            className="mi-cr-del"
+                            onClick={() => removeRow(r.id)}
+                            disabled={saving}
+                            title="Eliminar fila"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mi-cr-table__foot">
+                  <div className="mi-cr-foot-actions">
+                    <button
+                      type="button"
+                      className="nv-foot-btn"
+                      onClick={addRow}
+                      disabled={saving}
                     >
-                      <div className="mi-cr-cell mi-cr-cell--detalle">
-                        <GlobalAutocomplete
-                          value={r.detalle}
-                          onChange={(val) =>
-                            updateRow(r.id, {
-                              detalle: val,
-                              id_detalle: NULL_OPTION,
-                              stock_disponible: null,
-                              sinStock: false,
-                            })
-                          }
-                          onSelect={(item) => handleSelectDetalle(item, r.id)}
-                          options={detallesList}
-                          getOptionLabel={(d) => optionLabel(d)}
-                          getOptionValue={(d) => String(getDetalleId(d) ?? optionLabel(d))}
-                          placeholder="Escribí o buscá una descripción…"
-                          disabled={saving}
-                          showAllOnFocus={false}
-                          maxItems={18}
-                          inputClassName="nv-cell-input"
-                        />
+                      <span className="nv-foot-btn__icon">+</span>
+                      Agregar fila
+                    </button>
+                  </div>
+
+                  <div className="mi-cr-totals">
+                    <div className="mi-cr-totalLine mi-cr-totalLine--sub">
+                      <span>Subtotal</span>
+                      <b>{moneyARS(resumen.subtotal)}</b>
+                    </div>
+
+                    <div className="mi-cr-totalLine mi-cr-totalLine--iva">
+                      <span>IVA</span>
+                      <b>{moneyARS(resumen.iva)}</b>
+                    </div>
+
+                    <div className="mi-cr-totalLine mi-cr-totalLine--total">
+                      <span>Total</span>
+                      <b>{moneyARS(resumen.total)}</b>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <aside className="mi-cr-filters">
+                <div className="mi-cr-filters__top">
+                  <div className="mi-cr-filters__title">Datos del ingreso</div>
+
+                  <div className="mi-cr-filters__dates">
+                    <div
+                      className="fl-field fl-col-full mi-date-field"
+                      onClick={() => {
+                        if (saving) return;
+                        const el = document.getElementById("ni-fecha-input");
+                        if (!el) return;
+                        if (typeof el.showPicker === "function") {
+                          el.showPicker();
+                        } else {
+                          el.focus();
+                          el.click();
+                        }
+                      }}
+                    >
+                      <input
+                        id="ni-fecha-input"
+                        className="fl-input"
+                        type="date"
+                        placeholder=" "
+                        value={fecha}
+                        onChange={(e) => setFecha(String(e.target.value || "").trim())}
+                        disabled={saving}
+                      />
+                      <label className="fl-label">Fecha</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mi-cr-filters__body">
+                  <div className="fl-field">
+                    <select
+                      className="fl-input fl-select"
+                      value={String(filters.id_medio_pago)}
+                      onChange={(e) =>
+                        setFilters((p) => ({ ...p, id_medio_pago: e.target.value }))
+                      }
+                      disabled={saving}
+                    >
+                      <option value="">Seleccionar medio</option>
+                      {mediosPagoList.map((x) => (
+                        <option
+                          key={getMedioPagoId(x) ?? optionLabel(x)}
+                          value={String(getMedioPagoId(x) ?? "")}
+                        >
+                          {optionLabel(x)}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="fl-label">Medio de pago *</label>
+                  </div>
+
+                  {esMedioPagoCheque && (
+                    <div className="mi-card mi-card--full" style={{ marginTop: 4 }}>
+                      <div className="mi-card__title">
+                        {tipoChequeDetectado === "echeq" ? "Echeq" : "Cheque"}
                       </div>
 
-                      <div className="mi-cr-cell mi-cr-cell--center">
-                        <input
-                          className="nv-cell-input nv-cell-input--center"
-                          type="number"
-                          min={rowSinStock ? undefined : "1"}
-                          step="1"
-                          value={rowSinStock ? "" : r.cantidad}
-                          onChange={(e) =>
-                            handleCantidadChange(
-                              r.id,
-                              e.target.value === "" ? "" : Number(e.target.value)
-                            )
-                          }
-                          disabled={saving || rowSinStock}
-                          placeholder={rowSinStock ? "0" : ""}
-                          title={
-                            rowSinStock
-                              ? "No podés ingresar cantidad porque el stock es 0"
-                              : ""
-                          }
-                          style={{
-                            width: "100%",
-                            background: rowSinStock ? "#f3f4f6" : undefined,
-                            color: rowSinStock ? "#b91c1c" : undefined,
-                            borderColor: rowSinStock ? "#fca5a5" : undefined,
-                            cursor: rowSinStock ? "not-allowed" : undefined,
-                            opacity: rowSinStock ? 0.9 : 1,
-                          }}
-                        />
-
-                        {r.stock_disponible !== null && r.stock_disponible !== undefined && (
+                      {chequeGuardado ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                           <div
                             style={{
-                              fontSize: "10px",
-                              marginTop: "2px",
-                              fontWeight: rowSinStock ? 700 : 500,
-                              color: rowSinStock ? "#b91c1c" : "#666",
+                              background: "rgba(16,185,129,.08)",
+                              border: "1px solid rgba(16,185,129,.25)",
+                              borderRadius: 8,
+                              padding: "8px 10px",
+                              fontSize: 12,
+                              lineHeight: 1.6,
                             }}
                           >
-                            {rowSinStock ? "Sin stock" : `Stock: ${r.stock_disponible}`}
+                            <div style={{ fontWeight: 700, color: "#059669", marginBottom: 2 }}>
+                              ✓ Cheque cargado
+                            </div>
+                            <div><b>N°:</b> {chequeGuardado.numero_cheque}</div>
+                            <div><b>Emisor:</b> {chequeGuardado.emisor}</div>
+                            <div><b>Importe:</b> {moneyARS(chequeGuardado.importe)}</div>
+                            <div><b>Fecha pago:</b> {chequeGuardado.fecha_pago}</div>
+                            {chequeGuardado.archivo_nombre && (
+                              <div><b>Archivo:</b> {chequeGuardado.archivo_nombre}</div>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            className="mit-btn mit-btn--ghost"
+                            style={{ width: "100%", fontSize: 12 }}
+                            onClick={() => setOpenChequeModal(true)}
+                            disabled={saving}
+                          >
+                            Editar cheque
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="mit-btn mit-btn--solid"
+                          style={{ width: "100%", marginTop: 4 }}
+                          onClick={() => setOpenChequeModal(true)}
+                          disabled={saving}
+                        >
+                          Cargar {tipoChequeDetectado === "echeq" ? "echeq" : "cheque"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="mi-uploadCard">
+                    <div className="mi-uploadCard__head">
+                      <div>
+                        <div className="mi-uploadCard__title">Archivo adjunto</div>
+                        <div className="mi-uploadCard__sub">
+                          PDF, imagen u otro comprobante
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mi-uploadCard__body">
+                      <div className="mi-uploadBar">
+                        <label className="mi-uploadBar__pick">
+                          <input
+                            type="file"
+                            className="mi-uploadBar__input"
+                            onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
+                            disabled={saving}
+                          />
+                          <span className="mi-uploadBar__btn mi-uploadBar__btn--primary">
+                            {archivoAdjunto ? "Cambiar" : "Seleccionar"}
+                          </span>
+                        </label>
+
+                        <button
+                          type="button"
+                          className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                          onClick={() => setArchivoAdjunto(null)}
+                          disabled={saving || !archivoAdjunto}
+                        >
+                          Quitar
+                        </button>
+                      </div>
+
+                      <div
+                        className={`mi-uploadFile ${
+                          archivoAdjunto ? "is-filled" : "is-empty"
+                        }`}
+                      >
+                        {archivoAdjunto ? (
+                          <>
+                            <div className="mi-uploadFile__icon">
+                              <FontAwesomeIcon icon={faFileInvoiceDollar} />
+                            </div>
+
+                            <div className="mi-uploadFile__meta">
+                              <div className="mi-uploadFile__name" title={archivoAdjunto.name}>
+                                {archivoAdjunto.name}
+                              </div>
+                              <div className="mi-uploadFile__size">
+                                {Math.max(1, Math.round((archivoAdjunto.size || 0) / 1024))} KB
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="mi-uploadFile__empty">
+                            No hay archivo seleccionado
                           </div>
                         )}
                       </div>
-
-                      <div className="mi-cr-cell mi-cr-cell--center">
-                        <input
-                          className="nv-cell-input nv-cell-input--right"
-                          type="text"
-                          inputMode="decimal"
-                          value={
-                            r.precioFocused
-                              ? r.precioDraft ?? ""
-                              : formatMoneyInputARS(r.precio)
-                          }
-                          onFocus={(e) => {
-                            updateRow(r.id, {
-                              precioFocused: true,
-                              precioDraft: formatEditableMoney(r.precio),
-                            });
-                            setTimeout(() => e.target.select(), 0);
-                          }}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            const cleaned = raw.replace(/[^\d,.\-]/g, "");
-                            updateRow(r.id, {
-                              precioDraft: cleaned,
-                              precio: parseMoneyInputARS(cleaned),
-                            });
-                          }}
-                          onBlur={() => {
-                            const parsed = parseMoneyInputARS(r.precioDraft);
-                            updateRow(r.id, {
-                              precio: parsed,
-                              precioDraft: "",
-                              precioFocused: false,
-                            });
-                          }}
-                          placeholder="$ 0,00"
-                          disabled={saving}
-                          style={{ width: "100%", padding: "0" }}
-                        />
-                      </div>
-
-                      <div className="mi-cr-cell mi-cr-cell--center">
-                        <select
-                          className="nv-cell-input nv-cell-input--center nv-cell-input--select"
-                          value={String(r.ivaPct)}
-                          onChange={(e) =>
-                            updateRow(r.id, { ivaPct: Number(e.target.value) })
-                          }
-                          disabled={saving}
-                          style={{ width: "100%" }}
-                        >
-                          {IVA_OPTIONS.map((x) => (
-                            <option key={x.value} value={x.value}>
-                              {x.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
-                        {moneyARS(r.ivaMonto)}
-                      </div>
-
-                      <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
-                        {moneyARS(r.total)}
-                      </div>
-
-                      <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
-                        <button
-                          type="button"
-                          className="mi-cr-del"
-                          onClick={() => removeRow(r.id)}
-                          disabled={saving}
-                          title="Eliminar fila"
-                        >
-                          ×
-                        </button>
-                      </div>
                     </div>
-                  );
-                })}
-              </div>
-
-              <div className="mi-cr-table__foot">
-                <div className="mi-cr-foot-actions">
-                  <button
-                    type="button"
-                    className="nv-foot-btn"
-                    onClick={addRow}
-                    disabled={saving}
-                  >
-                    <span className="nv-foot-btn__icon">+</span>
-                    Agregar fila
-                  </button>
-                </div>
-
-                <div className="mi-cr-totals">
-                  <div className="mi-cr-totalLine mi-cr-totalLine--sub">
-                    <span>Subtotal</span>
-                    <b>{moneyARS(resumen.subtotal)}</b>
                   </div>
 
-                  <div className="mi-cr-totalLine mi-cr-totalLine--iva">
-                    <span>IVA</span>
-                    <b>{moneyARS(resumen.iva)}</b>
-                  </div>
-
-                  <div className="mi-cr-totalLine mi-cr-totalLine--total">
-                    <span>Total</span>
-                    <b>{moneyARS(resumen.total)}</b>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <aside className="mi-cr-filters">
-              <div className="mi-cr-filters__top">
-                <div className="mi-cr-filters__title">Datos del ingreso</div>
-
-                <div className="mi-cr-filters__dates">
-                  <div
-                    className="fl-field fl-col-full mi-date-field"
-                    onClick={() => {
-                      if (saving) return;
-                      const el = document.getElementById("ni-fecha-input");
-                      if (!el) return;
-                      if (typeof el.showPicker === "function") {
-                        el.showPicker();
-                      } else {
-                        el.focus();
-                        el.click();
-                      }
-                    }}
-                  >
-                    <input
-                      id="ni-fecha-input"
-                      className="fl-input"
-                      type="date"
-                      placeholder=" "
-                      value={fecha}
-                      onChange={(e) => setFecha(String(e.target.value || "").trim())}
+                  <div className="mi-cr-filters__actions">
+                    <button
+                      type="button"
+                      onClick={submit}
                       disabled={saving}
-                    />
-                    <label className="fl-label">Fecha</label>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mi-cr-filters__body">
-                <div className="fl-field">
-                  <select
-                    className="fl-input fl-select"
-                    value={String(filters.id_medio_pago)}
-                    onChange={(e) =>
-                      setFilters((p) => ({ ...p, id_medio_pago: e.target.value }))
-                    }
-                    disabled={saving}
-                  >
-                    <option value="">Seleccionar medio</option>
-                    {mediosPagoList.map((x) => (
-                      <option
-                        key={getMedioPagoId(x) ?? optionLabel(x)}
-                        value={String(getMedioPagoId(x) ?? "")}
-                      >
-                        {optionLabel(x)}
-                      </option>
-                    ))}
-                  </select>
-                  <label className="fl-label">Medio de pago *</label>
-                </div>
-
-                <div className="mi-uploadCard">
-                  <div className="mi-uploadCard__head">
-                    <div>
-                      <div className="mi-uploadCard__title">Archivo adjunto</div>
-                      <div className="mi-uploadCard__sub">
-                        PDF, imagen u otro comprobante
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mi-uploadCard__body">
-                    <div className="mi-uploadBar">
-                      <label className="mi-uploadBar__pick">
-                        <input
-                          type="file"
-                          className="mi-uploadBar__input"
-                          onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
-                          disabled={saving}
-                        />
-                        <span className="mi-uploadBar__btn mi-uploadBar__btn--primary">
-                          {archivoAdjunto ? "Cambiar" : "Seleccionar"}
-                        </span>
-                      </label>
-
-                      <button
-                        type="button"
-                        className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                        onClick={() => setArchivoAdjunto(null)}
-                        disabled={saving || !archivoAdjunto}
-                      >
-                        Quitar
-                      </button>
-                    </div>
-
-                    <div
-                      className={`mi-uploadFile ${
-                        archivoAdjunto ? "is-filled" : "is-empty"
-                      }`}
+                      className="mit-btn mit-btn--solid mit-btn--block"
                     >
-                      {archivoAdjunto ? (
-                        <>
-                          <div className="mi-uploadFile__icon">
-                            <FontAwesomeIcon icon={faFileInvoiceDollar} />
-                          </div>
+                      {btnLabel}
+                    </button>
 
-                          <div className="mi-uploadFile__meta">
-                            <div
-                              className="mi-uploadFile__name"
-                              title={archivoAdjunto.name}
-                            >
-                              {archivoAdjunto.name}
-                            </div>
-                            <div className="mi-uploadFile__size">
-                              {Math.max(1, Math.round((archivoAdjunto.size || 0) / 1024))} KB
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="mi-uploadFile__empty">
-                          No hay archivo seleccionado
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => (!saving ? onClose?.() : null)}
+                      disabled={saving}
+                      className="mit-btn mit-btn--ghost mit-btn--block"
+                    >
+                      Cancelar
+                    </button>
                   </div>
                 </div>
-
-                <div className="mi-cr-filters__actions">
-                  <button
-                    type="button"
-                    onClick={submit}
-                    disabled={saving}
-                    className="mit-btn mit-btn--solid mit-btn--block"
-                  >
-                    {btnLabel}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => (!saving ? onClose?.() : null)}
-                    disabled={saving}
-                    className="mit-btn mit-btn--ghost mit-btn--block"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            </aside>
+              </aside>
+            </div>
           </div>
         </div>
       </div>
-    </div>,
+
+      {openChequeModal && (
+        <ModalNuevoCheque
+          open={openChequeModal}
+          onClose={() => setOpenChequeModal(false)}
+          onSave={handleSaveCheque}
+          initialData={
+            chequeGuardado
+              ? {
+                  fecha_emision: chequeGuardado.fecha_emision,
+                  emisor: chequeGuardado.emisor,
+                  numero_cheque: chequeGuardado.numero_cheque,
+                  importe: chequeGuardado.importe,
+                  fecha_pago: chequeGuardado.fecha_pago,
+                  observaciones: chequeGuardado.observaciones,
+                  archivo: chequeGuardado.archivo,
+                  archivo_nombre: chequeGuardado.archivo_nombre,
+                }
+              : undefined
+          }
+          tipoCheque={tipoChequeDetectado}
+          dark={dark}
+          saving={savingCheque}
+        />
+      )}
+    </>,
     document.body
   );
 }

@@ -117,6 +117,13 @@ export default function ModalNuevoChequeRecibo({
   const [archivoNombre, setArchivoNombre] = useState("");
   const [errorArchivo, setErrorArchivo] = useState("");
 
+  const openNativeDatePicker = (e) => {
+    const input = e.currentTarget;
+    try {
+      input.showPicker?.();
+    } catch {}
+  };
+
   useEffect(() => {
     if (!open) return;
 
@@ -157,10 +164,7 @@ export default function ModalNuevoChequeRecibo({
   if (!open) return null;
 
   return createPortal(
-    <div
-      className="mi-mini__overlay"
-      onMouseDown={() => (!saving ? onClose?.() : null)}
-    >
+    <div className="mi-mini__overlay">
       <div
         className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
         onMouseDown={(e) => e.stopPropagation()}
@@ -196,6 +200,8 @@ export default function ModalNuevoChequeRecibo({
                 onChange={(e) =>
                   setForm((p) => ({ ...p, fecha_emision: e.target.value }))
                 }
+                onClick={openNativeDatePicker}
+                onFocus={openNativeDatePicker}
                 disabled={saving}
               />
               <label className="fl-label">Fecha de emisión *</label>
@@ -317,6 +323,8 @@ export default function ModalNuevoChequeRecibo({
                 onChange={(e) =>
                   setForm((p) => ({ ...p, fecha_pago: e.target.value }))
                 }
+                onClick={openNativeDatePicker}
+                onFocus={openNativeDatePicker}
                 disabled={saving}
               />
               <label className="fl-label">Fecha de pago *</label>

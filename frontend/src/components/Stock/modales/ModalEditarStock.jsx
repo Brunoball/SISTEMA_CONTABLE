@@ -683,12 +683,11 @@ export default function ModalEditarProducto({
     (imagenActualBlob || (form.imagen_url && form.imagen_url.trim() !== ""));
 
   return createPortal(
-    <div
-      className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""]
-        .join(" ")
-        .trim()}
-      onClick={(e) => e.target === e.currentTarget && !guardando && onClose?.()}
-    >
+<div
+  className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""]
+    .join(" ")
+    .trim()}
+>
       <div
         className={["mi-modal__container", "cmi-container", dark ? "mi-modal--dark" : ""]
           .join(" ")

@@ -777,23 +777,28 @@ const Stock = () => {
                           </span>
                         </div>
 
-                        <div
-                          className="mov-gridCell is-center"
-                          role="cell"
-                          data-label="STOCK"
-                        >
-                          <span
-                            className={
-                              !prod.stock || Number(prod.stock) === 0
-                                ? "mov-chip mov-chip--warn"
-                                : "mov-chip mov-chip--ok"
-                            }
-                          >
-                            {!prod.stock || Number(prod.stock) === 0
-                              ? "Sin stock"
-                              : prod.stock}
-                          </span>
-                        </div>
+<div
+  className="mov-gridCell is-center"
+  role="cell"
+  data-label="STOCK"
+>
+  {(() => {
+    const stockNum = Number(prod.stock || 0);
+
+    let stockClass = "mov-chip mov-chip--danger";
+    let stockLabel = "Sin stock";
+
+    if (stockNum > 10) {
+      stockClass = "mov-chip mov-chip--ok";
+      stockLabel = stockNum;
+    } else if (stockNum > 0 && stockNum <= 10) {
+      stockClass = "mov-chip mov-chip--warn";
+      stockLabel = stockNum;
+    }
+
+    return <span className={stockClass}>{stockLabel}</span>;
+  })()}
+</div>
 
                         <div
                           className="mov-gridCell is-right"

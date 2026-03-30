@@ -152,3 +152,14 @@ html[data-theme="oscuro"] .prod-promo {
 .mi-cr-table__rows--mcs{
   height: calc(100vh - 380px);
 }
+.mov-chip--danger {
+  background: rgba(220, 38, 38, 0.14);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.22);
+}
+
+html[data-theme="oscuro"] .mov-chip--danger {
+  background: rgba(220, 38, 38, 0.18);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.26);
+}

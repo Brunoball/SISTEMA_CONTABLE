@@ -7,6 +7,8 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faFileInvoiceDollar,
   faBasketShopping,
+  faMoneyCheckDollar,
+  faCircleNotch,
 } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
 
@@ -31,6 +33,10 @@ function safeNumber(v) {
 }
 function isBlank(v) {
   return String(v ?? "").trim() === "";
+}
+function safeText(v) {
+  const s = String(v ?? "").trim();
+  return s ? s : "-";
 }
 function moneyARS(v) {
   try {
@@ -212,10 +218,17 @@ function buildAuthHeaders(isJson = true) {
   const headers = {};
   if (isJson) headers["Content-Type"] = "application/json";
   if (sessionKey) headers["X-Session"] = sessionKey;
-  else if (token) headers.Authorization = `Bearer ${token}`;
+  if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
 }
 
+async function apiGet(url) {
+  const res = await fetch(url, {
+    method: "GET",
+    headers: buildAuthHeaders(false),
+  });
+  return await parseJsonOrThrow(res);
+}
 async function apiPostJson(url, payload) {
   const res = await fetch(url, {
     method: "POST",
@@ -238,6 +251,36 @@ function isTemaOscuro() {
     document.documentElement.getAttribute("data-theme") === "oscuro" ||
     document.body?.classList?.contains("dark")
   );
+}
+
+function normalizeText(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeChequeTipoFromMedio(nombre) {
+  const s = normalizeText(nombre);
+  if (!s) return null;
+  if (s.includes("echeq") || s.includes("e-cheq") || s.includes("e cheq")) return "echeq";
+  if (s.includes("cheque")) return "cheque";
+  return null;
+}
+
+function formatFechaDMY(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return "-";
+  const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m1) {
+    const yyyy = m1[1];
+    const mm = String(Number(m1[2])).padStart(2, "0");
+    const dd = String(Number(m1[3])).padStart(2, "0");
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return s;
 }
 
 function describeLineProblem(r, idx1based) {
@@ -366,6 +409,75 @@ function AddCatalogMiniModal({
   );
 }
 
+function ChequesCarteraCards({ cheques, idSeleccionado, onSelect }) {
+  if (!cheques.length) return null;
+
+  return (
+    <div className="mpr-cheques-cards">
+      {cheques.map((ch, idx) => {
+        const checked = String(ch?.id_cheque) === String(idSeleccionado);
+
+        return (
+          <div
+            key={ch?.id_cheque || idx}
+            className={`mpr-cheque-card-item ${checked ? "is-checked" : ""}`}
+            onClick={() => onSelect(String(ch?.id_cheque || ""))}
+            style={{
+              border: checked ? "1px solid #0f766e" : "1px solid rgba(0,0,0,.08)",
+              borderRadius: 12,
+              padding: 10,
+              cursor: "pointer",
+              marginBottom: 8,
+              background: checked ? "rgba(15,118,110,.06)" : "transparent",
+            }}
+          >
+            <div
+              className="mpr-cheque-card__top"
+              style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}
+            >
+              <label
+                className="mpr-check"
+                onClick={(e) => e.stopPropagation()}
+                style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+              >
+                <input
+                  type="radio"
+                  name="compra_cheque_cartera"
+                  checked={checked}
+                  onChange={() => onSelect(String(ch?.id_cheque || ""))}
+                />
+              </label>
+
+              <span className="mpr-cheque-card__numero" style={{ fontWeight: 700 }}>
+                N° {safeText(ch?.numero_cheque)}
+              </span>
+            </div>
+
+            <div className="mpr-cheque-card__body" style={{ display: "grid", gap: 4 }}>
+              <div className="mpr-cheque-card__row">
+                <b>Emisor:</b> <span>{safeText(ch?.emisor)}</span>
+              </div>
+              <div className="mpr-cheque-card__row">
+                <b>F. emisión:</b> <span>{safeText(formatFechaDMY(ch?.fecha_emision))}</span>
+              </div>
+              <div className="mpr-cheque-card__row">
+                <b>F. pago:</b> <span>{safeText(formatFechaDMY(ch?.fecha_pago))}</span>
+              </div>
+            </div>
+
+            <div
+              className="mpr-cheque-card__importe"
+              style={{ marginTop: 8, fontWeight: 800, textAlign: "right" }}
+            >
+              {moneyARS(ch?.importe || 0)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ModalNuevaCompra({
   open,
   lists,
@@ -460,6 +572,10 @@ export default function ModalNuevaCompra({
     saving: false,
   });
 
+  const [chequesCartera, setChequesCartera] = useState([]);
+  const [loadingCheques, setLoadingCheques] = useState(false);
+  const [idChequeSeleccionado, setIdChequeSeleccionado] = useState("");
+
   const closeBtnRef = useRef(null);
   const prevOpenRef = useRef(false);
   const fechaInputRef = useRef(null);
@@ -489,6 +605,9 @@ export default function ModalNuevaCompra({
       });
       setSaving(false);
       setArchivoAdjunto(null);
+      setChequesCartera([]);
+      setLoadingCheques(false);
+      setIdChequeSeleccionado("");
       setTimeout(() => closeBtnRef.current?.focus(), 0);
     }
   }, [open]);
@@ -781,6 +900,82 @@ export default function ModalNuevaCompra({
     [filters.forma]
   );
 
+  const medioPagoSeleccionado = useMemo(() => {
+    return (
+      mediosPagoList.find(
+        (x) =>
+          String(getMedioPagoId(x) ?? "") === String(filters.id_medio_pago ?? "")
+      ) || null
+    );
+  }, [mediosPagoList, filters.id_medio_pago]);
+
+  const tipoChequeRequerido = useMemo(
+    () => normalizeChequeTipoFromMedio(medioPagoSeleccionado?.nombre || ""),
+    [medioPagoSeleccionado]
+  );
+
+  const requiereChequeCartera = useMemo(
+    () =>
+      isContado &&
+      (tipoChequeRequerido === "cheque" || tipoChequeRequerido === "echeq"),
+    [isContado, tipoChequeRequerido]
+  );
+
+  const chequeSeleccionado = useMemo(
+    () =>
+      chequesCartera.find(
+        (x) => String(x?.id_cheque) === String(idChequeSeleccionado)
+      ) || null,
+    [chequesCartera, idChequeSeleccionado]
+  );
+
+  const fetchChequesCartera = useCallback(
+    async (tipo) => {
+      if (!tipo) {
+        setChequesCartera([]);
+        setIdChequeSeleccionado("");
+        return;
+      }
+
+      try {
+        setLoadingCheques(true);
+        setChequesCartera([]);
+        setIdChequeSeleccionado("");
+
+        const sp = new URLSearchParams();
+        sp.set("action", "cheques_cartera_listar");
+        sp.set("tipo", tipo);
+
+        const data = await apiGet(`${BASE_URL}/api.php?${sp.toString()}`);
+        setChequesCartera(Array.isArray(data?.cheques) ? data.cheques : []);
+      } catch (e) {
+        setChequesCartera([]);
+        setIdChequeSeleccionado("");
+        showToast(
+          "error",
+          e?.message || "No se pudieron cargar los cheques en cartera.",
+          4200
+        );
+      } finally {
+        setLoadingCheques(false);
+      }
+    },
+    [showToast]
+  );
+
+  useEffect(() => {
+    if (!open) return;
+
+    if (!requiereChequeCartera) {
+      setChequesCartera([]);
+      setIdChequeSeleccionado("");
+      setLoadingCheques(false);
+      return;
+    }
+
+    fetchChequesCartera(tipoChequeRequerido);
+  }, [open, requiereChequeCartera, tipoChequeRequerido, fetchChequesCartera]);
+
   useEffect(() => {
     if (!open) return;
     setFilters((prev) => {
@@ -815,6 +1010,18 @@ export default function ModalNuevaCompra({
           msg: "Compra Contado: falta seleccionar el Medio de pago.",
         };
       }
+
+      if (requiereChequeCartera) {
+        const idCheque = Number(idChequeSeleccionado);
+        if (!Number.isFinite(idCheque) || idCheque <= 0) {
+          return {
+            ok: false,
+            msg: `Seleccioná un ${
+              tipoChequeRequerido === "echeq" ? "eCheq" : "cheque"
+            } en cartera.`,
+          };
+        }
+      }
     }
 
     const problems = [];
@@ -843,7 +1050,15 @@ export default function ModalNuevaCompra({
     }
 
     return { ok: true, warn: problems.length > 0 };
-  }, [filters, provInput, isContado, rowsCalc]);
+  }, [
+    filters,
+    provInput,
+    isContado,
+    rowsCalc,
+    requiereChequeCartera,
+    idChequeSeleccionado,
+    tipoChequeRequerido,
+  ]);
 
   const subirYVincularArchivo = useCallback(
     async (idsMovimientos, archivo) => {
@@ -901,6 +1116,10 @@ export default function ModalNuevaCompra({
         isContado && Number(filters.id_medio_pago) > 0
           ? Number(filters.id_medio_pago)
           : null;
+      const idChequeFinal =
+        isContado && requiereChequeCartera && Number(idChequeSeleccionado) > 0
+          ? Number(idChequeSeleccionado)
+          : null;
 
       const payloads = rowsCalc
         .filter(
@@ -930,6 +1149,12 @@ export default function ModalNuevaCompra({
                 id_medio_pago: medioPagoIdFinal,
                 medio_pago_id: medioPagoIdFinal,
                 idMedioPago: medioPagoIdFinal,
+              }
+            : {}),
+          ...(idChequeFinal
+            ? {
+                id_cheque: idChequeFinal,
+                cheque_tipo: tipoChequeRequerido,
               }
             : {}),
         }));
@@ -993,6 +1218,9 @@ export default function ModalNuevaCompra({
     onClose,
     archivoAdjunto,
     subirYVincularArchivo,
+    requiereChequeCartera,
+    idChequeSeleccionado,
+    tipoChequeRequerido,
   ]);
 
   if (!open) return null;
@@ -1131,7 +1359,6 @@ export default function ModalNuevaCompra({
                                 {rowSinStock
                                   ? "Sin stock"
                                   : `Stock: ${r.stock_disponible}`}
-                                  
                               </div>
                             )}
                         </div>
@@ -1182,16 +1409,16 @@ export default function ModalNuevaCompra({
                             onChange={(e) =>
                               updateRow(r.id, { ivaPct: Number(e.target.value) })
                             }
-onKeyDown={(e) => {
-  if (
-    e.key === "ArrowUp" ||
-    e.key === "ArrowDown" ||
-    e.key === "ArrowLeft" ||
-    e.key === "ArrowRight"
-  ) {
-    e.preventDefault();
-  }
-}}
+                            onKeyDown={(e) => {
+                              if (
+                                e.key === "ArrowUp" ||
+                                e.key === "ArrowDown" ||
+                                e.key === "ArrowLeft" ||
+                                e.key === "ArrowRight"
+                              ) {
+                                e.preventDefault();
+                              }
+                            }}
                             disabled={saving}
                             style={{ width: "100%" }}
                           >
@@ -1374,6 +1601,45 @@ onKeyDown={(e) => {
                         })}
                       </select>
                       <label className="fl-label">Medio de pago *</label>
+                    </div>
+                  )}
+
+                  {requiereChequeCartera && (
+                    <div className="mi-card mi-card--full" style={{ marginTop: 8 }}>
+                      <div className="mi-card__title">
+                        <FontAwesomeIcon icon={faMoneyCheckDollar} style={{ marginRight: 6 }} />
+                        {tipoChequeRequerido === "echeq"
+                          ? "eCheqs en cartera"
+                          : "Cheques en cartera"}
+                      </div>
+
+                      {loadingCheques ? (
+                        <div style={{ padding: "10px 0" }}>
+                          <FontAwesomeIcon icon={faCircleNotch} spin style={{ marginRight: 6 }} />
+                          Cargando cheques disponibles...
+                        </div>
+                      ) : chequesCartera.length === 0 ? (
+                        <div style={{ padding: "10px 0" }}>
+                          No hay {tipoChequeRequerido === "echeq" ? "eCheqs" : "cheques"} activos en cartera.
+                        </div>
+                      ) : (
+                        <ChequesCarteraCards
+                          cheques={chequesCartera}
+                          idSeleccionado={idChequeSeleccionado}
+                          onSelect={setIdChequeSeleccionado}
+                        />
+                      )}
+
+                      {chequeSeleccionado && (
+                        <div style={{ marginTop: 8, fontSize: 13 }}>
+                          <div style={{ fontWeight: 700, color: "#0f766e", marginBottom: 6 }}>
+                            ✓ {String(chequeSeleccionado?.tipo || "").toUpperCase()} seleccionado
+                          </div>
+                          <div><b>N°:</b> {safeText(chequeSeleccionado?.numero_cheque)}</div>
+                          <div><b>Emisor:</b> {safeText(chequeSeleccionado?.emisor)}</div>
+                          <div><b>Importe:</b> {moneyARS(chequeSeleccionado?.importe || 0)}</div>
+                        </div>
+                      )}
                     </div>
                   )}
 

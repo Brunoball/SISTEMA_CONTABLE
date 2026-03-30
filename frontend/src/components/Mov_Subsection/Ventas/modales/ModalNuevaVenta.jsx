@@ -1297,18 +1297,7 @@ onKeyDown={(e) => {
 
                     <div className="nv-foot-sep" />
 
-                    <button
-                      type="button"
-                      className="nv-foot-btn"
-                      disabled={saving || addUI.saving}
-                      onClick={() => {
-                        const lastRow = rows[rows.length - 1];
-                        startAddDetalleForRow(lastRow?.id);
-                      }}
-                    >
-                      <span className="nv-foot-btn__icon">✦</span>
-                      Nuevo detalle
-                    </button>
+
                   </div>
 
                   <div className="mi-cr-totals">

@@ -690,3 +690,6 @@ width: 100%;
   padding: 10px;
 
 }
+.mpr-footer--OP{
+  display: flex ; flex-wrap: nowrap; gap: 10px; width: 100%; justify-content: flex-end;
+}

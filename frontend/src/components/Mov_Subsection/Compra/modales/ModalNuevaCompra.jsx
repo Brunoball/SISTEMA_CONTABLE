@@ -1468,18 +1468,7 @@ export default function ModalNuevaCompra({
 
                     <div className="nv-foot-sep" />
 
-                    <button
-                      type="button"
-                      className="nv-foot-btn"
-                      disabled={saving || addUI.saving}
-                      onClick={() => {
-                        const lastRow = rows[rows.length - 1];
-                        startAddDetalleForRow(lastRow?.id);
-                      }}
-                    >
-                      <span className="nv-foot-btn__icon">✦</span>
-                      Nuevo detalle
-                    </button>
+
                   </div>
 
                   <div className="mi-cr-totals">
@@ -1747,16 +1736,7 @@ export default function ModalNuevaCompra({
             </div>
           </div>
 
-          <AddCatalogMiniModal
-            open={addUI.open}
-            title={addUI.kind === "proveedores" ? "Nuevo proveedor" : "Nuevo detalle"}
-            value={addUI.text}
-            saving={addUI.saving}
-            onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
-            onCancel={closeAddMini}
-            onSave={guardarNuevoCatalogo}
-            dark={dark}
-          />
+
         </div>
       </div>
     </>,

@@ -6,14 +6,11 @@ import {
   faBoxOpen,
   faTag,
   faDollarSign,
-  faLayerGroup,
   faAlignLeft,
-  faImage,
   faTrashCan,
   faRefresh,
   faXmark,
   faFloppyDisk,
-  faListAlt,
   faCircleExclamation,
   faPaperclip,
   faArrowUpFromBracket,
@@ -90,7 +87,7 @@ function isTemaOscuro() {
 }
 
 /* =========================
-   Helpers monetarios — misma lógica que carga masiva
+   Helpers monetarios
 ========================= */
 function normalizeMoneyInput(raw = "") {
   let value = String(raw).replace(/[^\d,]/g, "");
@@ -135,6 +132,13 @@ function moneyToApi(raw = "") {
   return Number(num.toFixed(2));
 }
 
+function normalizeCategoriaId(value) {
+  if (value === null || value === undefined) return "";
+  const s = String(value).trim();
+  if (s === "" || s === "0" || s.toLowerCase() === "null") return "";
+  return s;
+}
+
 const normalizarProducto = (data) => {
   const p = data?.producto || data?.data || data || {};
 
@@ -163,12 +167,7 @@ const normalizarProducto = (data) => {
     descripcion: p.descripcion ?? "",
     imagen_url: p.imagen_url ?? p.imagen ?? "",
     imagen_archivo_id: p.imagen_archivo_id ? Number(p.imagen_archivo_id) : null,
-    id_categoria_stock:
-      p.id_categoria_stock !== null &&
-      p.id_categoria_stock !== undefined &&
-      p.id_categoria_stock !== ""
-        ? String(p.id_categoria_stock)
-        : "",
+    id_categoria_stock: normalizeCategoriaId(p.id_categoria_stock),
   };
 };
 
@@ -262,9 +261,6 @@ export default function ModalEditarProducto({
     id_categoria_stock: "",
   });
 
-  /* =========================
-     Categorías
-  ========================= */
   const [categorias, setCategorias] = useState([]);
   const [loadingCategorias, setLoadingCategorias] = useState(false);
 
@@ -279,10 +275,24 @@ export default function ModalEditarProducto({
           method: "GET",
           headers: buildHeadersGET(),
         });
-        const data = await res.json();
 
-        if (!cancelado && data?.listas?.stock_categorias) {
-          setCategorias(data.listas.stock_categorias);
+        const data = await parseJsonOrThrow(res);
+
+        const raw = Array.isArray(data?.listas?.stock_categorias)
+          ? data.listas.stock_categorias
+          : [];
+
+        const normalizadas = raw.map((cat) => ({
+          id: String(cat.id_stock_categoria ?? cat.id ?? "").trim(),
+          nombre: String(cat.nombre ?? cat.label ?? "").trim(),
+          activo:
+            cat.activo === undefined || cat.activo === null
+              ? 1
+              : Number(cat.activo),
+        }));
+
+        if (!cancelado) {
+          setCategorias(normalizadas.filter((c) => c.id !== ""));
         }
       } catch {
         if (!cancelado) setCategorias([]);
@@ -312,7 +322,6 @@ export default function ModalEditarProducto({
 
   const isLoading = loading || guardando;
 
-  /* Dark mode observer */
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
 
@@ -336,7 +345,6 @@ export default function ModalEditarProducto({
     };
   }, []);
 
-  /* Bloquear scroll body */
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -345,7 +353,6 @@ export default function ModalEditarProducto({
     };
   }, []);
 
-  /* ESC */
   useEffect(() => {
     const h = (e) => {
       if (e.key === "Escape" && !guardando) onClose?.();
@@ -358,7 +365,6 @@ export default function ModalEditarProducto({
     setTimeout(() => closeBtnRef.current?.focus(), 0);
   }, []);
 
-  /* Cargar producto */
   useEffect(() => {
     let mounted = true;
 
@@ -403,7 +409,6 @@ export default function ModalEditarProducto({
     };
   }, [productoId]);
 
-  /* Cargar imagen actual */
   useEffect(() => {
     let cancelado = false;
     let objectUrl = null;
@@ -459,7 +464,6 @@ export default function ModalEditarProducto({
     };
   }, [nuevaImagenPreview]);
 
-  /* Handlers */
   const handleChange = (e) => {
     const { name, value } = e.target;
 
@@ -496,7 +500,6 @@ export default function ModalEditarProducto({
     }));
   };
 
-  /* Imagen */
   const limpiarNuevaImagen = () => {
     if (nuevaImagenPreview) URL.revokeObjectURL(nuevaImagenPreview);
     setNuevaImagenFile(null);
@@ -555,7 +558,6 @@ export default function ModalEditarProducto({
     setEliminarImagenActual(false);
   };
 
-  /* Validación */
   const validar = () => {
     const errs = {};
 
@@ -575,7 +577,10 @@ export default function ModalEditarProducto({
       errs.precio_promo = "Precio promo inválido";
     }
 
-    if (form.stock !== "" && (Number.isNaN(Number(form.stock)) || Number(form.stock) < 0)) {
+    if (
+      form.stock !== "" &&
+      (Number.isNaN(Number(form.stock)) || Number(form.stock) < 0)
+    ) {
       errs.stock = "Stock inválido";
     }
 
@@ -600,7 +605,6 @@ export default function ModalEditarProducto({
     return errs;
   };
 
-  /* Guardar */
   const handleGuardar = async () => {
     const errs = validar();
     if (Object.keys(errs).length > 0) {
@@ -612,6 +616,8 @@ export default function ModalEditarProducto({
     setErrores({});
 
     try {
+      const categoriaId = normalizeCategoriaId(form.id_categoria_stock);
+
       if (nuevaImagenFile) {
         const fd = new FormData();
         fd.append("id", String(Number(form.id || productoId)));
@@ -626,10 +632,11 @@ export default function ModalEditarProducto({
         );
         fd.append("stock", form.stock !== "" ? String(form.stock) : "");
         fd.append("descripcion", form.descripcion.trim());
-        fd.append(
-          "id_categoria_stock",
-          form.id_categoria_stock !== "" ? String(form.id_categoria_stock) : ""
-        );
+
+        if (categoriaId !== "") {
+          fd.append("id_categoria_stock", categoriaId);
+        }
+
         fd.append("imagen", nuevaImagenFile);
 
         const res = await fetch(`${API_URL}?action=stock_productos_actualizar`, {
@@ -649,10 +656,7 @@ export default function ModalEditarProducto({
             form.precio_promo !== "" ? moneyToApi(form.precio_promo) : null,
           stock: form.stock !== "" ? Number(form.stock) : null,
           descripcion: form.descripcion.trim() || null,
-          id_categoria_stock:
-            form.id_categoria_stock !== ""
-              ? Number(form.id_categoria_stock)
-              : null,
+          id_categoria_stock: categoriaId !== "" ? Number(categoriaId) : null,
         };
 
         if (eliminarImagenActual) {
@@ -683,13 +687,17 @@ export default function ModalEditarProducto({
     (imagenActualBlob || (form.imagen_url && form.imagen_url.trim() !== ""));
 
   return createPortal(
-<div
-  className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""]
-    .join(" ")
-    .trim()}
->
+    <div
+      className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""]
+        .join(" ")
+        .trim()}
+    >
       <div
-        className={["mi-modal__container", "cmi-container", dark ? "mi-modal--dark" : ""]
+        className={[
+          "mi-modal__container",
+          "cmi-container",
+          dark ? "mi-modal--dark" : "",
+        ]
           .join(" ")
           .trim()}
         role="dialog"
@@ -697,7 +705,6 @@ export default function ModalEditarProducto({
         style={{ minHeight: "auto", maxHeight: "92vh" }}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        {/* HEADER */}
         <div className="mi-modal__header">
           <div className="mi-modal__head-icon" aria-hidden="true">
             <FontAwesomeIcon icon={faBoxOpen} />
@@ -706,7 +713,9 @@ export default function ModalEditarProducto({
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Editar producto</h2>
             <p className="mi-modal__subtitle">
-              {form.nombre ? `Modificando: ${form.nombre}` : "Actualizá los datos del producto"}
+              {form.nombre
+                ? `Modificando: ${form.nombre}`
+                : "Actualizá los datos del producto"}
             </p>
           </div>
 
@@ -722,8 +731,10 @@ export default function ModalEditarProducto({
           </button>
         </div>
 
-        {/* CONTENT */}
-        <div className="mi-modal__content" style={{ overflowY: "auto", padding: 20 }}>
+        <div
+          className="mi-modal__content"
+          style={{ overflowY: "auto", padding: 20 }}
+        >
           {loading ? (
             <div className="cmi-uploadBox">
               <div className="cmi-uploadBox__title">
@@ -745,7 +756,6 @@ export default function ModalEditarProducto({
                 </div>
               )}
 
-              {/* Nombre */}
               <FloatingField
                 label="Nombre del producto *"
                 icon={faBoxOpen}
@@ -761,7 +771,6 @@ export default function ModalEditarProducto({
                 />
               </FloatingField>
 
-              {/* SKU + Stock */}
               <div className="fl-row">
                 <FloatingField label="SKU / Código" icon={faBarcode}>
                   <input
@@ -791,7 +800,6 @@ export default function ModalEditarProducto({
                 </FloatingField>
               </div>
 
-              {/* Precio + Promo */}
               <div className="fl-row">
                 <FloatingField
                   label="Precio *"
@@ -826,7 +834,6 @@ export default function ModalEditarProducto({
                 </FloatingField>
               </div>
 
-              {/* Categoría */}
               <FloatingField label="Categoría" icon={faTag}>
                 <select
                   name="id_categoria_stock"
@@ -838,15 +845,15 @@ export default function ModalEditarProducto({
                   <option value="">
                     {loadingCategorias ? "Cargando categorías..." : "Sin categoría"}
                   </option>
+
                   {categorias.map((cat) => (
-                    <option key={cat.id} value={String(cat.id)}>
+                    <option key={cat.id} value={cat.id}>
                       {cat.nombre}
                     </option>
                   ))}
                 </select>
               </FloatingField>
 
-              {/* Descripción */}
               <FloatingField label="Descripción" icon={faAlignLeft}>
                 <textarea
                   name="descripcion"
@@ -859,7 +866,6 @@ export default function ModalEditarProducto({
                 />
               </FloatingField>
 
-              {/* Imagen */}
               <div className="cmi-uploadBox">
                 <div className="cmi-uploadBox__title">
                   <FontAwesomeIcon icon={faPaperclip} /> Imagen del producto
@@ -979,8 +985,7 @@ export default function ModalEditarProducto({
           )}
         </div>
 
-        {/* FOOTER */}
-        <div className="cmi-footer" >
+        <div className="cmi-footer">
           <button
             type="button"
             className="mit-btn mit-btn--ghost"

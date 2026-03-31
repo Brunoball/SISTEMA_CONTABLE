@@ -138,19 +138,38 @@ function normalizeFlujo(row) {
    Configuración de eventos
 ═══════════════════════════════════════════ */
 const EVENTO_CONFIG = {
-  INGRESO: { label: "Ingreso a cartera", icon: faArrowRightToBracket, color: "#22c55e", bg: "#052e16" },
-  DEPOSITO: { label: "Depositado en banco", icon: faBuildingColumns, color: "#3b82f6", bg: "#0f172a" },
-  PAGO: { label: "Usado como pago", icon: faHandHoldingDollar, color: "#f59e0b", bg: "#1c1007" },
-  DEVOLUCION: { label: "Devuelto", icon: faRotateLeft, color: "#a78bfa", bg: "#1e1030" },
-  ANULACION: { label: "Anulado", icon: faBan, color: "#ef4444", bg: "#2d0a0a" },
+  INGRESO: {
+    label: "Ingreso a cartera",
+    icon: faArrowRightToBracket,
+    chipClass: "mov-chip--ok",
+  },
+  DEPOSITO: {
+    label: "Depositado en banco",
+    icon: faBuildingColumns,
+    chipClass: "mov-chip--info",
+  },
+  PAGO: {
+    label: "Usado como pago",
+    icon: faHandHoldingDollar,
+    chipClass: "mov-chip--warn",
+  },
+  DEVOLUCION: {
+    label: "Devuelto",
+    icon: faRotateLeft,
+    chipClass: "mov-chip--neutral",
+  },
+  ANULACION: {
+    label: "Anulado",
+    icon: faBan,
+    chipClass: "mov-chip--danger",
+  },
 };
 
 function eventoConfig(evento) {
   return EVENTO_CONFIG[String(evento || "").toUpperCase()] ?? {
     label: evento || "—",
     icon: faCircleInfo,
-    color: "#94a3b8",
-    bg: "#1e293b",
+    chipClass: "mov-chip--neutral",
   };
 }
 
@@ -292,7 +311,6 @@ const Flujo_Cheques = () => {
     };
   }, [fetchFlujo, debouncedQ]);
 
-  /* Filtrado client-side adicional (ya no es necesario porque la búsqueda es en el servidor) */
   const rows = useMemo(() => {
     return allRows;
   }, [allRows]);
@@ -395,7 +413,6 @@ const Flujo_Cheques = () => {
 
   const hayBusquedaActiva = q.trim() !== "";
 
-  /* ── Render ── */
   return (
     <div className="mov-page">
       {toast && (
@@ -498,11 +515,7 @@ const Flujo_Cheques = () => {
                               data-label={c.label}
                             >
                               <span
-                                className="flujo-badge"
-                                style={{
-                                  "--badge-color": cfg.color,
-                                  "--badge-bg": cfg.bg,
-                                }}
+                                className={`mov-chip flujo-badge ${cfg.chipClass}`}
                                 title={cfg.label}
                               >
                                 <FontAwesomeIcon icon={cfg.icon} />
@@ -605,29 +618,7 @@ const Flujo_Cheques = () => {
         </div>
       </section>
 
-      <style>{`
-        .flujo-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 3px 9px;
-          border-radius: 999px;
-          font-size: 0.72rem;
-          font-weight: 600;
-          letter-spacing: 0.03em;
-          color: var(--badge-color);
-          background: var(--badge-bg);
-          border: 1px solid color-mix(in srgb, var(--badge-color) 30%, transparent);
-          white-space: nowrap;
-        }
-        .flujo-badge__text {
-          display: inline;
-        }
-        @media (max-width: 900px) {
-          .flujo-badge__text { display: none; }
-          .flujo-badge { padding: 4px 7px; }
-        }
-      `}</style>
+
     </div>
   );
 };

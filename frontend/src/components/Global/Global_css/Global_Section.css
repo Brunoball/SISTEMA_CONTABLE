@@ -1172,3 +1172,37 @@ max-width: 250px;
 .mi-date-field .fl-input{
   cursor: pointer;
 }
+/* OK (verde) */
+.mov-chip--ok {
+  background: rgba(34, 197, 94, 0.14);
+  color: #16a34a;
+  border-color: rgba(34, 197, 94, 0.22);
+}
+
+/* WARN (amarillo/naranja) */
+.mov-chip--warn {
+  background: rgba(245, 158, 11, 0.14);
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+/* DANGER (rojo) */
+.mov-chip--danger {
+  background: rgba(220, 38, 38, 0.14);
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.22);
+}
+
+/* INFO (azul - para depósito) */
+.mov-chip--info {
+  background: rgba(59, 130, 246, 0.14);
+  color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.22);
+}
+
+/* NEUTRO (gris) */
+.mov-chip--neutral {
+  background: rgba(148, 163, 184, 0.14);
+  color: #64748b;
+  border-color: rgba(148, 163, 184, 0.22);
+}

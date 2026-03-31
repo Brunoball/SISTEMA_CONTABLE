@@ -285,7 +285,6 @@ const ConfirmLogoutModal = memo(function ConfirmLogoutModal({
   return (
     <div
       className="pp-modal-overlay"
-      onMouseDown={onClose}
       role="dialog"
       aria-modal="true"
     >

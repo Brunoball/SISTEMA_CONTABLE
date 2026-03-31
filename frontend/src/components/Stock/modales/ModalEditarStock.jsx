@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import "./ModalCargaMasiva.css";
+import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante";
 import {
   faBoxOpen,
   faTag,
@@ -17,6 +18,7 @@ import {
   faTriangleExclamation,
   faBarcode,
   faCubesStacked,
+  faEye,
 } from "@fortawesome/free-solid-svg-icons";
 import BASE_URL from "../../../config/config";
 
@@ -315,6 +317,28 @@ export default function ModalEditarProducto({
 
   const inputImagenRef = useRef(null);
 
+  // ── Preview modal states ──
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewMime, setPreviewMime] = useState("");
+  const [previewFileName, setPreviewFileName] = useState("");
+
+  const cerrarPreview = () => {
+    if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    setPreviewOpen(false);
+    setPreviewUrl("");
+    setPreviewMime("");
+    setPreviewFileName("");
+  };
+
+  const abrirPreview = ({ src, mime = "", name = "" }) => {
+    if (!src) return;
+    setPreviewUrl(src);
+    setPreviewMime(mime);
+    setPreviewFileName(name);
+    setPreviewOpen(true);
+  };
+
   const nuevaImagenNombre = useMemo(
     () => nuevaImagenFile?.name || "",
     [nuevaImagenFile]
@@ -355,11 +379,11 @@ export default function ModalEditarProducto({
 
   useEffect(() => {
     const h = (e) => {
-      if (e.key === "Escape" && !guardando) onClose?.();
+      if (e.key === "Escape" && !guardando && !previewOpen) onClose?.();
     };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
-  }, [onClose, guardando]);
+  }, [onClose, guardando, previewOpen]);
 
   useEffect(() => {
     setTimeout(() => closeBtnRef.current?.focus(), 0);
@@ -687,330 +711,368 @@ export default function ModalEditarProducto({
     (imagenActualBlob || (form.imagen_url && form.imagen_url.trim() !== ""));
 
   return createPortal(
-    <div
-      className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""]
-        .join(" ")
-        .trim()}
-    >
+    <>
       <div
-        className={[
-          "mi-modal__container",
-          "cmi-container",
-          dark ? "mi-modal--dark" : "",
-        ]
+        className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""]
           .join(" ")
           .trim()}
-        role="dialog"
-        aria-modal="true"
-        style={{ minHeight: "auto", maxHeight: "92vh" }}
-        onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="mi-modal__header">
-          <div className="mi-modal__head-icon" aria-hidden="true">
-            <FontAwesomeIcon icon={faBoxOpen} />
-          </div>
-
-          <div className="mi-modal__head-left">
-            <h2 className="mi-modal__title">Editar producto</h2>
-            <p className="mi-modal__subtitle">
-              {form.nombre
-                ? `Modificando: ${form.nombre}`
-                : "Actualizá los datos del producto"}
-            </p>
-          </div>
-
-          <button
-            ref={closeBtnRef}
-            className="mi-modal__close"
-            onClick={() => !guardando && onClose?.()}
-            aria-label="Cerrar"
-            disabled={guardando}
-            type="button"
-          >
-            <FontAwesomeIcon icon={faXmark} />
-          </button>
-        </div>
-
         <div
-          className="mi-modal__content"
-          style={{ overflowY: "auto", padding: 20 }}
+          className={[
+            "mi-modal__container",
+            "cmi-container",
+            dark ? "mi-modal--dark" : "",
+          ]
+            .join(" ")
+            .trim()}
+          role="dialog"
+          aria-modal="true"
+          style={{ minHeight: "auto", maxHeight: "92vh" }}
+          onMouseDown={(e) => e.stopPropagation()}
         >
-          {loading ? (
-            <div className="cmi-uploadBox">
-              <div className="cmi-uploadBox__title">
-                <FontAwesomeIcon icon={faRefresh} spin /> Cargando producto...
-              </div>
+          <div className="mi-modal__header">
+            <div className="mi-modal__head-icon" aria-hidden="true">
+              <FontAwesomeIcon icon={faBoxOpen} />
             </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {errores.global && (
-                <div className="cmi-warnBox">
-                  <div className="cmi-warnBox__title">
-                    <FontAwesomeIcon
-                      icon={faTriangleExclamation}
-                      style={{ marginRight: 8 }}
-                    />
-                    Error
-                  </div>
-                  <div>{errores.global}</div>
-                </div>
-              )}
 
-              <FloatingField
-                label="Nombre del producto *"
-                icon={faBoxOpen}
-                error={errores.nombre}
-              >
-                <input
-                  name="nombre"
-                  value={form.nombre}
-                  onChange={handleChange}
-                  className="cmi-input"
-                  placeholder="Ej: Auriculares Bluetooth Samsung WH-1000"
-                  disabled={guardando}
-                />
-              </FloatingField>
+            <div className="mi-modal__head-left">
+              <h2 className="mi-modal__title">Editar producto</h2>
+              <p className="mi-modal__subtitle">
+                {form.nombre
+                  ? `Modificando: ${form.nombre}`
+                  : "Actualizá los datos del producto"}
+              </p>
+            </div>
 
-              <div className="fl-row">
-                <FloatingField label="SKU / Código" icon={faBarcode}>
-                  <input
-                    name="sku"
-                    value={form.sku}
-                    onChange={handleChange}
-                    className="cmi-input"
-                    placeholder="Ej: 04163"
-                    disabled={guardando}
-                  />
-                </FloatingField>
+            <button
+              ref={closeBtnRef}
+              className="mi-modal__close"
+              onClick={() => !guardando && onClose?.()}
+              aria-label="Cerrar"
+              disabled={guardando}
+              type="button"
+            >
+              <FontAwesomeIcon icon={faXmark} />
+            </button>
+          </div>
 
-                <FloatingField
-                  label="Stock"
-                  icon={faCubesStacked}
-                  error={errores.stock}
-                >
-                  <input
-                    name="stock"
-                    value={form.stock}
-                    onChange={handleChange}
-                    className="cmi-input"
-                    placeholder="Ej: 25"
-                    inputMode="numeric"
-                    disabled={guardando}
-                  />
-                </FloatingField>
-              </div>
-
-              <div className="fl-row">
-                <FloatingField
-                  label="Precio *"
-                  icon={faDollarSign}
-                  error={errores.precio}
-                >
-                  <PriceInput
-                    name="precio"
-                    value={form.precio}
-                    onChange={handleChange}
-                    onBlur={handleMoneyBlur}
-                    onFocus={handleMoneyFocus}
-                    placeholder="0,00"
-                    disabled={guardando}
-                  />
-                </FloatingField>
-
-                <FloatingField
-                  label="Precio promocional"
-                  icon={faDollarSign}
-                  error={errores.precio_promo}
-                >
-                  <PriceInput
-                    name="precio_promo"
-                    value={form.precio_promo}
-                    onChange={handleChange}
-                    onBlur={handleMoneyBlur}
-                    onFocus={handleMoneyFocus}
-                    placeholder="0,00"
-                    disabled={guardando}
-                  />
-                </FloatingField>
-              </div>
-
-              <FloatingField label="Categoría" icon={faTag}>
-                <select
-                  name="id_categoria_stock"
-                  value={form.id_categoria_stock}
-                  onChange={handleChange}
-                  className="cmi-input cmi-select"
-                  disabled={guardando || loadingCategorias}
-                >
-                  <option value="">
-                    {loadingCategorias ? "Cargando categorías..." : "Sin categoría"}
-                  </option>
-
-                  {categorias.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.nombre}
-                    </option>
-                  ))}
-                </select>
-              </FloatingField>
-
-              <FloatingField label="Descripción" icon={faAlignLeft}>
-                <textarea
-                  name="descripcion"
-                  value={form.descripcion}
-                  onChange={handleChange}
-                  className="cmi-input cmi-textarea"
-                  placeholder="Breve descripción del producto (opcional)"
-                  rows={3}
-                  disabled={guardando}
-                />
-              </FloatingField>
-
+          <div
+            className="mi-modal__content"
+            style={{ overflowY: "auto", padding: 20 }}
+          >
+            {loading ? (
               <div className="cmi-uploadBox">
                 <div className="cmi-uploadBox__title">
-                  <FontAwesomeIcon icon={faPaperclip} /> Imagen del producto
+                  <FontAwesomeIcon icon={faRefresh} spin /> Cargando producto...
                 </div>
-
-                <input
-                  ref={inputImagenRef}
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.webp,.gif,image/*"
-                  hidden
-                  onChange={handleImagenInput}
-                />
-
-                {tieneImagenActual && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <div className="cmi-fileRow" style={{ alignItems: "center" }}>
-                      <span>Imagen actual</span>
-
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          className="mit-btn mit-btn--ghost"
-                          onClick={() => inputImagenRef.current?.click()}
-                          disabled={guardando}
-                        >
-                          <FontAwesomeIcon icon={faArrowUpFromBracket} /> Reemplazar
-                        </button>
-
-                        <button
-                          type="button"
-                          className="mit-btn mit-btn--ghost"
-                          onClick={handleEliminarImagenActual}
-                          disabled={guardando}
-                        >
-                          <FontAwesomeIcon icon={faTrashCan} /> Eliminar
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="cmi-previewImgWrap">
-                      {imagenActualCargando ? (
-                        <div style={{ padding: 16, textAlign: "center", opacity: 0.7 }}>
-                          Cargando imagen...
-                        </div>
-                      ) : (
-                        <img
-                          src={imagenActualBlob || form.imagen_url}
-                          alt="Imagen actual"
-                          className="cmi-previewImg"
-                        />
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {eliminarImagenActual && !nuevaImagenFile && (
-                  <div className="cmi-warnBox" style={{ marginTop: 10 }}>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {errores.global && (
+                  <div className="cmi-warnBox">
                     <div className="cmi-warnBox__title">
                       <FontAwesomeIcon
                         icon={faTriangleExclamation}
                         style={{ marginRight: 8 }}
                       />
-                      Atención
+                      Error
                     </div>
-                    <div style={{ marginBottom: 10 }}>
-                      La imagen actual se eliminará al guardar.
-                    </div>
-                    <button
-                      type="button"
-                      className="mit-btn mit-btn--ghost"
-                      onClick={handleCancelarEliminarImagen}
-                      disabled={guardando}
-                    >
-                      Cancelar
-                    </button>
+                    <div>{errores.global}</div>
                   </div>
                 )}
 
-                {!tieneImagenActual && !nuevaImagenFile && (
-                  <button
-                    type="button"
-                    className="mit-btn mit-btn--ghost"
-                    onClick={() => inputImagenRef.current?.click()}
+                <FloatingField
+                  label="Nombre del producto *"
+                  icon={faBoxOpen}
+                  error={errores.nombre}
+                >
+                  <input
+                    name="nombre"
+                    value={form.nombre}
+                    onChange={handleChange}
+                    className="cmi-input"
+                    placeholder="Ej: Auriculares Bluetooth Samsung WH-1000"
                     disabled={guardando}
-                  >
-                    <FontAwesomeIcon icon={faArrowUpFromBracket} /> Seleccionar imagen
-                  </button>
-                )}
+                  />
+                </FloatingField>
 
-                {nuevaImagenFile && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <div className="cmi-fileRow">
-                      <span>{nuevaImagenNombre}</span>
+                <div className="fl-row">
+                  <FloatingField label="SKU / Código" icon={faBarcode}>
+                    <input
+                      name="sku"
+                      value={form.sku}
+                      onChange={handleChange}
+                      className="cmi-input"
+                      placeholder="Ej: 04163"
+                      disabled={guardando}
+                    />
+                  </FloatingField>
+
+                  <FloatingField
+                    label="Stock"
+                    icon={faCubesStacked}
+                    error={errores.stock}
+                  >
+                    <input
+                      name="stock"
+                      value={form.stock}
+                      onChange={handleChange}
+                      className="cmi-input"
+                      placeholder="Ej: 25"
+                      inputMode="numeric"
+                      disabled={guardando}
+                    />
+                  </FloatingField>
+                </div>
+
+                <div className="fl-row">
+                  <FloatingField
+                    label="Precio *"
+                    icon={faDollarSign}
+                    error={errores.precio}
+                  >
+                    <PriceInput
+                      name="precio"
+                      value={form.precio}
+                      onChange={handleChange}
+                      onBlur={handleMoneyBlur}
+                      onFocus={handleMoneyFocus}
+                      placeholder="0,00"
+                      disabled={guardando}
+                    />
+                  </FloatingField>
+
+                  <FloatingField
+                    label="Precio promocional"
+                    icon={faDollarSign}
+                    error={errores.precio_promo}
+                  >
+                    <PriceInput
+                      name="precio_promo"
+                      value={form.precio_promo}
+                      onChange={handleChange}
+                      onBlur={handleMoneyBlur}
+                      onFocus={handleMoneyFocus}
+                      placeholder="0,00"
+                      disabled={guardando}
+                    />
+                  </FloatingField>
+                </div>
+
+                <FloatingField label="Categoría" icon={faTag}>
+                  <select
+                    name="id_categoria_stock"
+                    value={form.id_categoria_stock}
+                    onChange={handleChange}
+                    className="cmi-input cmi-select"
+                    disabled={guardando || loadingCategorias}
+                  >
+                    <option value="">
+                      {loadingCategorias ? "Cargando categorías..." : "Sin categoría"}
+                    </option>
+
+                    {categorias.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </FloatingField>
+
+                <FloatingField label="Descripción" icon={faAlignLeft}>
+                  <textarea
+                    name="descripcion"
+                    value={form.descripcion}
+                    onChange={handleChange}
+                    className="cmi-input cmi-textarea"
+                    placeholder="Breve descripción del producto (opcional)"
+                    rows={3}
+                    disabled={guardando}
+                  />
+                </FloatingField>
+
+                <div className="cmi-uploadBox">
+                  <div className="cmi-uploadBox__title">
+                    <FontAwesomeIcon icon={faPaperclip} /> Imagen del producto
+                  </div>
+
+                  <input
+                    ref={inputImagenRef}
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,.gif,image/*"
+                    hidden
+                    onChange={handleImagenInput}
+                  />
+
+                  {/* ── Imagen actual ── */}
+                  {tieneImagenActual && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div className="cmi-fileRow" style={{ alignItems: "center" }}>
+                        <span>Imagen actual</span>
+
+                        <div className="cmi-fileActions">
+                          <button
+                            type="button"
+                            className="mit-btn mit-btn--ghost"
+                            onClick={() =>
+                              abrirPreview({
+                                src: imagenActualBlob || form.imagen_url,
+                                mime: "image/jpeg",
+                                name: form.nombre || "imagen_actual",
+                              })
+                            }
+                            disabled={
+                              guardando ||
+                              imagenActualCargando ||
+                              (!imagenActualBlob && !form.imagen_url)
+                            }
+                            aria-label="Ver imagen"
+                            title="Ver imagen"
+                          >
+                            <FontAwesomeIcon icon={faEye} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="mit-btn mit-btn--ghost"
+                            onClick={() => inputImagenRef.current?.click()}
+                            disabled={guardando}
+                          >
+                            <FontAwesomeIcon icon={faArrowUpFromBracket} /> Reemplazar
+                          </button>
+
+                          <button
+                            type="button"
+                            className="mit-btn mit-btn--ghost"
+                            onClick={handleEliminarImagenActual}
+                            disabled={guardando}
+                          >
+                            <FontAwesomeIcon icon={faTrashCan} /> Eliminar
+                          </button>
+                        </div>
+                      </div>
+
+
+                    </div>
+                  )}
+
+                  {/* ── Aviso eliminar imagen ── */}
+                  {eliminarImagenActual && !nuevaImagenFile && (
+                    <div className="cmi-warnBox" style={{ marginTop: 10 }}>
+                      <div className="cmi-warnBox__title">
+                        <FontAwesomeIcon
+                          icon={faTriangleExclamation}
+                          style={{ marginRight: 8 }}
+                        />
+                        Atención
+                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        La imagen actual se eliminará al guardar.
+                      </div>
                       <button
                         type="button"
                         className="mit-btn mit-btn--ghost"
-                        onClick={limpiarNuevaImagen}
+                        onClick={handleCancelarEliminarImagen}
                         disabled={guardando}
                       >
-                        <FontAwesomeIcon icon={faTrashCan} /> Quitar
+                        Cancelar
                       </button>
                     </div>
+                  )}
 
-                    <div className="cmi-previewImgWrap">
-                      <img
-                        src={nuevaImagenPreview}
-                        alt="Nueva imagen"
-                        className="cmi-previewImg"
-                      />
+                  {/* ── Sin imagen: botón seleccionar ── */}
+                  {!tieneImagenActual && !nuevaImagenFile && (
+                    <button
+                      type="button"
+                      className="mit-btn mit-btn--ghost"
+                      onClick={() => inputImagenRef.current?.click()}
+                      disabled={guardando}
+                    >
+                      <FontAwesomeIcon icon={faArrowUpFromBracket} /> Seleccionar imagen
+                    </button>
+                  )}
+
+                  {/* ── Nueva imagen seleccionada ── */}
+                  {nuevaImagenFile && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div className="cmi-fileRow">
+                        <span>{nuevaImagenNombre}</span>
+
+                        <div className="cmi-fileActions">
+                          <button
+                            type="button"
+                            className="mit-btn mit-btn--ghost"
+                            onClick={() =>
+                              abrirPreview({
+                                src: nuevaImagenPreview,
+                                mime: nuevaImagenFile?.type || "image/jpeg",
+                                name: nuevaImagenNombre,
+                              })
+                            }
+                            disabled={!nuevaImagenPreview}
+                            aria-label="Ver imagen"
+                            title="Ver imagen"
+                          >
+                            <FontAwesomeIcon icon={faEye} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="mit-btn mit-btn--ghost"
+                            onClick={limpiarNuevaImagen}
+                            disabled={guardando}
+                          >
+                            <FontAwesomeIcon icon={faTrashCan} /> Quitar
+                          </button>
+                        </div>
+                      </div>
+
+
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {errores.imagen && <ErrorMsg msg={errores.imagen} />}
+                  {errores.imagen && <ErrorMsg msg={errores.imagen} />}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        <div className="cmi-footer">
-          <button
-            type="button"
-            className="mit-btn mit-btn--ghost"
-            onClick={() => !guardando && onClose?.()}
-            disabled={guardando}
-          >
-            Cancelar
-          </button>
+          <div className="cmi-footer">
+            <button
+              type="button"
+              className="mit-btn mit-btn--ghost"
+              onClick={() => !guardando && onClose?.()}
+              disabled={guardando}
+            >
+              Cancelar
+            </button>
 
-          <button
-            type="button"
-            className="mit-btn mit-btn--solid"
-            onClick={handleGuardar}
-            disabled={isLoading}
-          >
-            <FontAwesomeIcon
-              icon={guardando ? faRefresh : faFloppyDisk}
-              spin={guardando}
-              style={{ marginRight: 8 }}
-            />
-            {guardando ? "Guardando..." : "Guardar cambios"}
-          </button>
+            <button
+              type="button"
+              className="mit-btn mit-btn--solid"
+              onClick={handleGuardar}
+              disabled={isLoading}
+            >
+              <FontAwesomeIcon
+                icon={guardando ? faRefresh : faFloppyDisk}
+                spin={guardando}
+                style={{ marginRight: 8 }}
+              />
+              {guardando ? "Guardando..." : "Guardar cambios"}
+            </button>
+          </div>
         </div>
       </div>
-    </div>,
+
+      <ModalVerComprobante
+        open={previewOpen}
+        url={previewUrl}
+        mime={previewMime}
+        fileName={previewFileName}
+        title="Imagen del producto"
+        onClose={cerrarPreview}
+      />
+    </>,
     document.body
   );
 }

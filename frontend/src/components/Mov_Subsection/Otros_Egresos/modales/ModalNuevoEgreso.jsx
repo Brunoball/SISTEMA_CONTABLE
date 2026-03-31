@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPlus, faFileInvoiceDollar } from "@fortawesome/free-solid-svg-icons";
+import { faPlus, faFileInvoiceDollar, faMoneyCheckDollar, faCircleNotch } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
 import BASE_URL from "../../../../config/config.jsx";
 
@@ -91,6 +91,9 @@ function normalizeName(v) {
     .trim();
 }
 
+/* =========================================================
+   HELPERS DE IDs
+========================================================= */
 function getMovimientoId(r) {
   const cand =
     r?.id_movimiento ??
@@ -103,7 +106,6 @@ function getMovimientoId(r) {
     r?.movimiento_id ??
     r?.id_movimiento_fk ??
     null;
-
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
@@ -120,7 +122,6 @@ function getSavedMovimientoIdFromResponse(data, initialData = null) {
     initialData?.id_movimiento,
     initialData?.id,
   ];
-
   for (const cand of candidates) {
     const n = Number(cand);
     if (Number.isFinite(n) && n > 0) return n;
@@ -145,7 +146,6 @@ function getDetalleId(d) {
     d?.idCategoriaEgreso ??
     d?.categoria_egreso_id ??
     null;
-
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
@@ -161,7 +161,45 @@ function optionLabel(x) {
 }
 
 /* =========================================================
-   Stock helpers
+   CHEQUES — helpers calcados de ModalNuevaCompra
+========================================================= */
+function normalizeText(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeChequeTipoFromMedio(nombre) {
+  const s = normalizeText(nombre);
+  if (!s) return null;
+  if (s.includes("echeq") || s.includes("e-cheq") || s.includes("e cheq")) return "echeq";
+  if (s.includes("cheque")) return "cheque";
+  return null;
+}
+
+function formatFechaDMY(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return "-";
+  const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m1) {
+    const yyyy = m1[1];
+    const mm = String(Number(m1[2])).padStart(2, "0");
+    const dd = String(Number(m1[3])).padStart(2, "0");
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return s;
+}
+
+function safeText(v) {
+  const s = String(v ?? "").trim();
+  return s ? s : "-";
+}
+
+/* =========================================================
+   STOCK helpers
 ========================================================= */
 function getStockDisponible(detalle) {
   const cand =
@@ -171,7 +209,6 @@ function getStockDisponible(detalle) {
     detalle?.cantidad_stock ??
     detalle?.cantidad ??
     null;
-
   if (cand === null || cand === undefined || cand === "") return null;
   const n = Number(cand);
   return Number.isFinite(n) ? n : null;
@@ -181,6 +218,9 @@ function isSinStock(stock) {
   return stock !== null && stock !== undefined && Number(stock) <= 0;
 }
 
+/* =========================================================
+   LISTAS
+========================================================= */
 function normalizeLists(lists) {
   const src = lists && typeof lists === "object" ? lists : {};
   const l = src?.listas && typeof src.listas === "object" ? src.listas : src;
@@ -219,7 +259,6 @@ function normalizeLists(lists) {
 
 function resolveClasificacionesConfig(clasificacionesList) {
   const arr = Array.isArray(clasificacionesList) ? clasificacionesList : [];
-
   const parsed = arr
     .map((x) => ({
       id: getClasificacionId(x),
@@ -252,7 +291,65 @@ function resolveClasificacionesConfig(clasificacionesList) {
   };
 }
 
-/* ─── Estilos para la caja de clasificación ─── */
+/* =========================================================
+   AUTH
+========================================================= */
+function getAuthInfo() {
+  const sessionKey =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("x_session") ||
+    localStorage.getItem("X-Session") ||
+    "";
+  const token = localStorage.getItem("token") || "";
+  return { sessionKey, token };
+}
+
+function buildAuthHeaders(isJson = true) {
+  const { sessionKey, token } = getAuthInfo();
+  const headers = {};
+  if (isJson) headers["Content-Type"] = "application/json";
+  if (sessionKey) headers["X-Session"] = sessionKey;
+  else if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+async function parseJsonOrThrow(res) {
+  const text = await res.text();
+  if (!text) throw new Error("Respuesta vacía del servidor.");
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    const preview = text.length > 500 ? `${text.slice(0, 500)}...` : text;
+    throw new Error(`Respuesta inválida del servidor. ${preview}`);
+  }
+  if (!res.ok || data?.exito === false) {
+    throw new Error(data?.mensaje || data?.error || `HTTP ${res.status}`);
+  }
+  return data;
+}
+
+async function apiGet(url) {
+  const res = await fetch(url, {
+    method: "GET",
+    headers: buildAuthHeaders(false),
+  });
+  return await parseJsonOrThrow(res);
+}
+
+async function apiPostForm(url, formData) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: buildAuthHeaders(false),
+    body: formData,
+  });
+  return await parseJsonOrThrow(res);
+}
+
+/* =========================================================
+   ESTILOS clasificación
+========================================================= */
 const S = {
   clasificacionBox: {
     border: "1px solid rgba(148,163,184,.32)",
@@ -328,6 +425,9 @@ const S = {
   },
 };
 
+/* =========================================================
+   ROWS helpers
+========================================================= */
 function buildEmptyRow() {
   return {
     id: uid(),
@@ -347,7 +447,6 @@ function buildRowFromData(r) {
   const cantidad = Math.max(1, safeNumber(r?.cantidad || 1));
   const precio = safeNumber(r?.precio ?? r?.importe ?? r?.monto ?? 0);
   const ivaPct = safeNumber(r?.iva_pct ?? r?.ivaPct ?? 0);
-
   return {
     id: uid(),
     id_detalle: String(getDetalleId(r) ?? ""),
@@ -395,7 +494,6 @@ function describeLineProblem(r, idx1based) {
   const total = safeNumber(r.total);
   const touched =
     detalle !== "" || String(r.id_detalle || "").trim() !== "" || qty !== 0 || price !== 0;
-
   if (!touched) return null;
 
   const issues = [];
@@ -408,55 +506,79 @@ function describeLineProblem(r, idx1based) {
   return `Fila ${idx1based}: ${issues.join(", ")}.`;
 }
 
-function getAuthInfo() {
-  const sessionKey =
-    localStorage.getItem("session_key") ||
-    localStorage.getItem("sessionKey") ||
-    localStorage.getItem("x_session") ||
-    localStorage.getItem("X-Session") ||
-    "";
+/* =========================================================
+   ChequesCarteraCards — calcado de ModalNuevaCompra
+========================================================= */
+function ChequesCarteraCards({ cheques, idSeleccionado, onSelect }) {
+  if (!cheques.length) return null;
 
-  const token = localStorage.getItem("token") || "";
-  return { sessionKey, token };
+  return (
+    <div className="mpr-cheques-cards">
+      {cheques.map((ch, idx) => {
+        const checked = String(ch?.id_cheque) === String(idSeleccionado);
+        return (
+          <div
+            key={ch?.id_cheque || idx}
+            className={`mpr-cheque-card-item ${checked ? "is-checked" : ""}`}
+            onClick={() => onSelect(String(ch?.id_cheque || ""))}
+            style={{
+              border: checked ? "1px solid #0f766e" : "1px solid rgba(0,0,0,.08)",
+              borderRadius: 12,
+              padding: 10,
+              cursor: "pointer",
+              marginBottom: 8,
+              background: checked ? "rgba(15,118,110,.06)" : "transparent",
+            }}
+          >
+            <div
+              className="mpr-cheque-card__top"
+              style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}
+            >
+              <label
+                className="mpr-check"
+                onClick={(e) => e.stopPropagation()}
+                style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+              >
+                <input
+                  type="radio"
+                  name="egreso_cheque_cartera"
+                  checked={checked}
+                  onChange={() => onSelect(String(ch?.id_cheque || ""))}
+                />
+              </label>
+              <span className="mpr-cheque-card__numero" style={{ fontWeight: 700 }}>
+                N° {safeText(ch?.numero_cheque)}
+              </span>
+            </div>
+
+            <div className="mpr-cheque-card__body" style={{ display: "grid", gap: 4 }}>
+              <div className="mpr-cheque-card__row">
+                <b>Emisor:</b> <span>{safeText(ch?.emisor)}</span>
+              </div>
+              <div className="mpr-cheque-card__row">
+                <b>F. emisión:</b> <span>{safeText(formatFechaDMY(ch?.fecha_emision))}</span>
+              </div>
+              <div className="mpr-cheque-card__row">
+                <b>F. pago:</b> <span>{safeText(formatFechaDMY(ch?.fecha_pago))}</span>
+              </div>
+            </div>
+
+            <div
+              className="mpr-cheque-card__importe"
+              style={{ marginTop: 8, fontWeight: 800, textAlign: "right" }}
+            >
+              {moneyARS(ch?.importe || 0)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-function buildAuthHeaders(isJson = true) {
-  const { sessionKey, token } = getAuthInfo();
-  const headers = {};
-  if (isJson) headers["Content-Type"] = "application/json";
-  if (sessionKey) headers["X-Session"] = sessionKey;
-  else if (token) headers.Authorization = `Bearer ${token}`;
-  return headers;
-}
-
-async function parseJsonOrThrow(res) {
-  const text = await res.text();
-  if (!text) throw new Error("Respuesta vacía del servidor.");
-
-  let data = null;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    const preview = text.length > 500 ? `${text.slice(0, 500)}...` : text;
-    throw new Error(`Respuesta inválida del servidor. ${preview}`);
-  }
-
-  if (!res.ok || data?.exito === false) {
-    throw new Error(data?.mensaje || data?.error || `HTTP ${res.status}`);
-  }
-
-  return data;
-}
-
-async function apiPostForm(url, formData) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: buildAuthHeaders(false),
-    body: formData,
-  });
-  return await parseJsonOrThrow(res);
-}
-
+/* =========================================================
+   MODAL PRINCIPAL
+========================================================= */
 export default function ModalNuevoEgreso({
   open,
   mode = "create",
@@ -468,6 +590,7 @@ export default function ModalNuevoEgreso({
   onSaved,
 }) {
   const API_UPLOAD = `${BASE_URL}/api.php?action=otros_egresos_comprobantes_vincular_movimiento_upload`;
+  const API_CHEQUES_CARTERA = `${BASE_URL}/api.php`;
 
   const showToast = useCallback(
     (tipo, mensaje, dur = 2800) => onToast?.(tipo, mensaje, dur),
@@ -484,10 +607,16 @@ export default function ModalNuevoEgreso({
   const [rows, setRows] = useState(() => [buildEmptyRow()]);
   const [archivoAdjunto, setArchivoAdjunto] = useState(null);
 
+  /* ── Estado de cheques en cartera (igual que en Compras) ── */
+  const [chequesCartera, setChequesCartera] = useState([]);
+  const [loadingCheques, setLoadingCheques] = useState(false);
+  const [idChequeSeleccionado, setIdChequeSeleccionado] = useState("");
+
   const rowsContainerRef = useRef(null);
   const [hasScroll, setHasScroll] = useState(false);
   const closeBtnRef = useRef(null);
   const prevOpenRef = useRef(false);
+  const fechaInputRef = useRef(null);
 
   const localLists = useMemo(() => normalizeLists(lists), [lists]);
   const mediosPagoList = useMemo(
@@ -510,40 +639,62 @@ export default function ModalNuevoEgreso({
 
   const isCostoFijoChecked =
     String(filters.id_clasificacion) === String(clasificacionConfig.idCostoFijo);
-
   const isNoCostoFijoChecked =
     String(filters.id_clasificacion) === String(clasificacionConfig.idNoCostoFijo);
 
+  /* ── Medio de pago seleccionado ── */
+  const medioPagoSeleccionado = useMemo(() => {
+    const id = Number(filters.id_medio_pago);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    return mediosPagoList.find((x) => Number(getMedioPagoId(x)) === id) || null;
+  }, [filters.id_medio_pago, mediosPagoList]);
+
+  /* ── Detectar si el medio de pago requiere cheque/echeq ── */
+  const tipoChequeRequerido = useMemo(
+    () => normalizeChequeTipoFromMedio(medioPagoSeleccionado?.nombre || ""),
+    [medioPagoSeleccionado]
+  );
+
+  const requiereChequeCartera = useMemo(
+    () => tipoChequeRequerido === "cheque" || tipoChequeRequerido === "echeq",
+    [tipoChequeRequerido]
+  );
+
+  const chequeSeleccionado = useMemo(
+    () =>
+      chequesCartera.find(
+        (x) => String(x?.id_cheque) === String(idChequeSeleccionado)
+      ) || null,
+    [chequesCartera, idChequeSeleccionado]
+  );
+
+  /* ── Dark mode observer ── */
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
     const o1 = new MutationObserver(update);
     o1.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const o2 = new MutationObserver(update);
     if (document.body) o2.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-    return () => {
-      o1.disconnect();
-      o2.disconnect();
-    };
+    return () => { o1.disconnect(); o2.disconnect(); };
   }, []);
 
+  /* ── Body overflow ── */
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
+    return () => { document.body.style.overflow = prev; };
   }, [open]);
 
+  /* ── Escape key ── */
   useEffect(() => {
     if (!open) return;
-    const h = (e) => {
-      if (e.key === "Escape" && !saving) onClose?.();
-    };
+    const h = (e) => { if (e.key === "Escape" && !saving) onClose?.(); };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [open, onClose, saving]);
 
+  /* ── Reset al abrir ── */
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
     prevOpenRef.current = open;
@@ -565,10 +716,14 @@ export default function ModalNuevoEgreso({
       );
       setArchivoAdjunto(null);
       setSaving(false);
+      setChequesCartera([]);
+      setLoadingCheques(false);
+      setIdChequeSeleccionado("");
       setTimeout(() => closeBtnRef.current?.focus(), 0);
     }
   }, [open, mode, initialData]);
 
+  /* ── Scroll detection ── */
   useEffect(() => {
     const el = rowsContainerRef.current;
     if (!el) return;
@@ -577,12 +732,60 @@ export default function ModalNuevoEgreso({
     const ro = new ResizeObserver(checkScroll);
     ro.observe(el);
     window.addEventListener("resize", checkScroll);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", checkScroll);
-    };
+    return () => { ro.disconnect(); window.removeEventListener("resize", checkScroll); };
   }, [open, rows]);
 
+  /* ── Fetch cheques en cartera (calcado de Compras) ── */
+  const fetchChequesCartera = useCallback(
+    async (tipo) => {
+      if (!tipo) {
+        setChequesCartera([]);
+        setIdChequeSeleccionado("");
+        return;
+      }
+      try {
+        setLoadingCheques(true);
+        setChequesCartera([]);
+        setIdChequeSeleccionado("");
+
+        const sp = new URLSearchParams();
+        sp.set("action", "otros_egresos_cheques_cartera_listar");
+        sp.set("tipo", tipo);
+
+        const data = await apiGet(`${API_CHEQUES_CARTERA}?${sp.toString()}`);
+        setChequesCartera(Array.isArray(data?.cheques) ? data.cheques : []);
+      } catch (e) {
+        setChequesCartera([]);
+        setIdChequeSeleccionado("");
+        showToast(
+          "error",
+          e?.message || "No se pudieron cargar los cheques en cartera.",
+          4200
+        );
+      } finally {
+        setLoadingCheques(false);
+      }
+    },
+    [showToast, API_CHEQUES_CARTERA]
+  );
+
+  /* ── Trigger fetch cuando cambia el medio de pago ── */
+  useEffect(() => {
+    if (!open) return;
+
+    if (!requiereChequeCartera) {
+      setChequesCartera([]);
+      setIdChequeSeleccionado("");
+      setLoadingCheques(false);
+      return;
+    }
+
+    fetchChequesCartera(tipoChequeRequerido);
+  }, [open, requiereChequeCartera, tipoChequeRequerido, fetchChequesCartera]);
+
+  /* =========================================================
+     Handlers de filas
+  ========================================================= */
   const addRow = useCallback(() => setRows((p) => [...p, buildEmptyRow()]), []);
   const removeRow = useCallback(
     (id) =>
@@ -597,9 +800,6 @@ export default function ModalNuevoEgreso({
     []
   );
 
-  /* =========================================================
-     handleSelectDetalle: extrae precio, stock y detecta sin stock
-  ========================================================= */
   const handleSelectDetalle = useCallback(
     (item, rowId) => {
       const precio = safeNumber(item?.precio || 0);
@@ -626,9 +826,6 @@ export default function ModalNuevoEgreso({
     [updateRow, showToast]
   );
 
-  /* =========================================================
-     handleCantidadChange: bloquea si sinStock, clampea al máximo
-  ========================================================= */
   const handleCantidadChange = useCallback(
     (rowId, newCantidad) => {
       const row = rows.find((r) => r.id === rowId);
@@ -642,9 +839,7 @@ export default function ModalNuevoEgreso({
       const stockDisponible = row.stock_disponible;
       let cantidadFinal = newCantidad === "" ? "" : Number(newCantidad);
 
-      if (typeof cantidadFinal === "number" && cantidadFinal < 0) {
-        cantidadFinal = 0;
-      }
+      if (typeof cantidadFinal === "number" && cantidadFinal < 0) cantidadFinal = 0;
 
       if (
         stockDisponible !== null &&
@@ -662,12 +857,26 @@ export default function ModalNuevoEgreso({
     [rows, updateRow, showToast]
   );
 
-  const selectedMedioPago = useMemo(() => {
-    const id = Number(filters.id_medio_pago);
-    if (!Number.isFinite(id) || id <= 0) return null;
-    return mediosPagoList.find((x) => Number(getMedioPagoId(x)) === id) || null;
-  }, [filters.id_medio_pago, mediosPagoList]);
+  const handleOpenDate = useCallback(
+    (e) => {
+      if (saving) return;
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      const input = fechaInputRef.current;
+      if (!input) return;
+      input.focus();
+      try {
+        if (typeof input.showPicker === "function") input.showPicker();
+        else input.click();
+      } catch {
+        input.click();
+      }
+    },
+    [saving]
+  );
 
+  /* =========================================================
+     Cálculos
+  ========================================================= */
   const rowsCalc = useMemo(() => {
     return rows.map((r) => {
       const cantidad = Math.max(0, safeNumber(r.cantidad));
@@ -689,6 +898,9 @@ export default function ModalNuevoEgreso({
     [rowsCalc]
   );
 
+  /* =========================================================
+     Validación — incluye cheque si requiere
+  ========================================================= */
   const validate = useCallback(() => {
     const mp = Number(filters.id_medio_pago);
     const clas = Number(filters.id_clasificacion);
@@ -703,6 +915,19 @@ export default function ModalNuevoEgreso({
 
     if (!safeStr(fecha)) {
       return { ok: false, msg: "Falta la fecha." };
+    }
+
+    /* ── Validación de cheque en cartera ── */
+    if (requiereChequeCartera) {
+      const idCheque = Number(idChequeSeleccionado);
+      if (!Number.isFinite(idCheque) || idCheque <= 0) {
+        return {
+          ok: false,
+          msg: `Seleccioná un ${
+            tipoChequeRequerido === "echeq" ? "eCheq" : "cheque"
+          } en cartera para este medio de pago.`,
+        };
+      }
     }
 
     const problems = [];
@@ -733,8 +958,11 @@ export default function ModalNuevoEgreso({
     }
 
     return { ok: true, warn: problems.length > 0, usable };
-  }, [filters, fecha, rowsCalc]);
+  }, [filters, fecha, rowsCalc, requiereChequeCartera, idChequeSeleccionado, tipoChequeRequerido]);
 
+  /* =========================================================
+     buildPayload — incluye id_cheque si hay cheque seleccionado
+  ========================================================= */
   const buildPayload = useCallback(() => {
     const usableRows = rowsCalc.filter(
       (r) =>
@@ -755,11 +983,16 @@ export default function ModalNuevoEgreso({
     const totalFinal = usableRows.reduce((acc, x) => acc + safeNumber(x.total), 0);
     const movId = getMovimientoId(initialData);
 
+    const idChequeFinal =
+      requiereChequeCartera && Number(idChequeSeleccionado) > 0
+        ? Number(idChequeSeleccionado)
+        : null;
+
     return {
       ...(movId ? { id_movimiento: movId, id_egreso: movId, id: movId } : {}),
       fecha: safeStr(fecha).slice(0, 10),
       id_medio_pago: Number(filters.id_medio_pago),
-      medio_pago_nombre: optionLabel(selectedMedioPago),
+      medio_pago_nombre: optionLabel(medioPagoSeleccionado),
       id_clasificacion: Number(filters.id_clasificacion),
       clasificacion_nombre: isCostoFijoChecked
         ? clasificacionConfig.labelCostoFijo.toUpperCase()
@@ -779,6 +1012,13 @@ export default function ModalNuevoEgreso({
       monto_total: safeNumber(totalFinal),
       total: safeNumber(totalFinal),
       total_general: safeNumber(totalFinal),
+      /* ── cheque en cartera ── */
+      ...(idChequeFinal
+        ? {
+            id_cheque: idChequeFinal,
+            cheque_tipo: tipoChequeRequerido,
+          }
+        : {}),
       items: usableRows.map((x, idx) => ({
         orden: idx + 1,
         id_detalle: Number(x.id_detalle || 0) || null,
@@ -798,12 +1038,18 @@ export default function ModalNuevoEgreso({
     initialData,
     fecha,
     filters,
-    selectedMedioPago,
+    medioPagoSeleccionado,
     clasificacionConfig,
     isCostoFijoChecked,
     isNoCostoFijoChecked,
+    requiereChequeCartera,
+    idChequeSeleccionado,
+    tipoChequeRequerido,
   ]);
 
+  /* =========================================================
+     Subir archivo
+  ========================================================= */
   const subirArchivo = useCallback(
     async (idMovimiento, archivo) => {
       if (!archivo || !idMovimiento) return null;
@@ -817,6 +1063,9 @@ export default function ModalNuevoEgreso({
     [API_UPLOAD]
   );
 
+  /* =========================================================
+     Submit
+  ========================================================= */
   const submit = useCallback(async () => {
     if (saving) return;
 
@@ -905,17 +1154,16 @@ export default function ModalNuevoEgreso({
         aria-modal="true"
         onMouseDown={(e) => e.stopPropagation()}
       >
+        {/* ── HEADER ── */}
         <div className="mi-modal__header">
           <div className="mi-modal__head-icon" aria-hidden="true">
             <FontAwesomeIcon icon={faPlus} />
           </div>
-
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">
               {mode === "edit" ? "Editar Egreso" : "Nuevo Egreso"}
             </h2>
           </div>
-
           <button
             ref={closeBtnRef}
             className="mi-modal__close"
@@ -928,8 +1176,11 @@ export default function ModalNuevoEgreso({
           </button>
         </div>
 
+        {/* ── CONTENT ── */}
         <div className="mi-modal__content">
           <div className="mi-cr-grid">
+
+            {/* ── TABLA DE ITEMS ── */}
             <section className="mi-cr-table">
               <div
                 className="mi-cr-table__head"
@@ -961,6 +1212,7 @@ export default function ModalNuevoEgreso({
                       className={`mi-cr-row ${rowSinStock ? "mi-cr-row--sin-stock" : ""}`}
                       style={{ gridTemplateColumns: "2.4fr 0.8fr 1.1fr 0.9fr 1fr 1.1fr 0.45fr" }}
                     >
+                      {/* Descripción */}
                       <div className="mi-cr-cell mi-cr-cell--detalle">
                         <GlobalAutocomplete
                           value={r.detalle}
@@ -984,6 +1236,7 @@ export default function ModalNuevoEgreso({
                         />
                       </div>
 
+                      {/* Cantidad */}
                       <div className="mi-cr-cell mi-cr-cell--center">
                         <input
                           className="nv-cell-input nv-cell-input--center"
@@ -1013,7 +1266,6 @@ export default function ModalNuevoEgreso({
                             opacity: rowSinStock ? 0.9 : 1,
                           }}
                         />
-
                         {r.stock_disponible !== null && r.stock_disponible !== undefined && (
                           <div
                             style={{
@@ -1028,6 +1280,7 @@ export default function ModalNuevoEgreso({
                         )}
                       </div>
 
+                      {/* Precio */}
                       <div className="mi-cr-cell mi-cr-cell--center">
                         <input
                           className="nv-cell-input nv-cell-input--right"
@@ -1065,6 +1318,7 @@ export default function ModalNuevoEgreso({
                         />
                       </div>
 
+                      {/* IVA % */}
                       <div className="mi-cr-cell mi-cr-cell--center">
                         <select
                           className="nv-cell-input nv-cell-input--center nv-cell-input--select"
@@ -1081,14 +1335,17 @@ export default function ModalNuevoEgreso({
                         </select>
                       </div>
 
+                      {/* IVA $ */}
                       <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
                         {moneyARS(r.ivaMonto)}
                       </div>
 
+                      {/* Total */}
                       <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
                         {moneyARS(r.total)}
                       </div>
 
+                      {/* Eliminar */}
                       <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
                         <button
                           type="button"
@@ -1105,6 +1362,7 @@ export default function ModalNuevoEgreso({
                 })}
               </div>
 
+              {/* Foot */}
               <div className="mi-cr-table__foot">
                 <div className="mi-cr-foot-actions">
                   <button
@@ -1117,7 +1375,6 @@ export default function ModalNuevoEgreso({
                     Agregar fila
                   </button>
                 </div>
-
                 <div className="mi-cr-totals">
                   <div className="mi-cr-totalLine mi-cr-totalLine--sub">
                     <span>Subtotal</span>
@@ -1135,6 +1392,7 @@ export default function ModalNuevoEgreso({
               </div>
             </section>
 
+            {/* ── FILTROS / ASIDE ── */}
             <aside className="mi-cr-filters">
               <div className="mi-cr-filters__top">
                 <div className="mi-cr-filters__title">Datos del egreso</div>
@@ -1142,27 +1400,21 @@ export default function ModalNuevoEgreso({
                 <div className="mi-cr-filters__dates">
                   <div
                     className="fl-field fl-col-full mi-date-field"
-                    onClick={() => {
-                      if (saving) return;
-                      const el = document.getElementById("ne-fecha-input");
-                      if (!el) return;
-                      if (typeof el.showPicker === "function") el.showPicker();
-                      else {
-                        el.focus();
-                        el.click();
-                      }
-                    }}
+                    onClick={handleOpenDate}
                   >
                     <input
+                      ref={fechaInputRef}
                       id="ne-fecha-input"
-                      className="fl-input"
+                      className="fl-input mi-date-field__input"
                       type="date"
                       placeholder=" "
                       value={fecha}
                       onChange={(e) => setFecha(String(e.target.value || "").trim())}
                       disabled={saving}
                     />
-                    <label className="fl-label">Fecha</label>
+                    <label className="fl-label mi-date-field__label" onClick={handleOpenDate}>
+                      Fecha
+                    </label>
                   </div>
                 </div>
               </div>
@@ -1177,7 +1429,6 @@ export default function ModalNuevoEgreso({
                       Indicá si este egreso es un costo fijo
                     </div>
                   </div>
-
                   <div style={S.toggleRow}>
                     <div
                       style={S.toggleOption(isCostoFijoChecked, saving)}
@@ -1239,6 +1490,7 @@ export default function ModalNuevoEgreso({
                   </div>
                 </div>
 
+                {/* ── Medio de pago ── */}
                 <div className="fl-field">
                   <select
                     className="fl-input fl-select"
@@ -1261,6 +1513,47 @@ export default function ModalNuevoEgreso({
                   <label className="fl-label">Medio de pago *</label>
                 </div>
 
+                {/* ── Cheques/eCheqs en cartera (calcado de Compras) ── */}
+                {requiereChequeCartera && (
+                  <div className="mi-card mi-card--full" style={{ marginTop: 8 }}>
+                    <div className="mi-card__title">
+                      <FontAwesomeIcon icon={faMoneyCheckDollar} style={{ marginRight: 6 }} />
+                      {tipoChequeRequerido === "echeq"
+                        ? "eCheqs en cartera"
+                        : "Cheques en cartera"}
+                    </div>
+
+                    {loadingCheques ? (
+                      <div style={{ padding: "10px 0" }}>
+                        <FontAwesomeIcon icon={faCircleNotch} spin style={{ marginRight: 6 }} />
+                        Cargando cheques disponibles...
+                      </div>
+                    ) : chequesCartera.length === 0 ? (
+                      <div style={{ padding: "10px 0" }}>
+                        No hay {tipoChequeRequerido === "echeq" ? "eCheqs" : "cheques"} activos en cartera.
+                      </div>
+                    ) : (
+                      <ChequesCarteraCards
+                        cheques={chequesCartera}
+                        idSeleccionado={idChequeSeleccionado}
+                        onSelect={setIdChequeSeleccionado}
+                      />
+                    )}
+
+                    {chequeSeleccionado && (
+                      <div style={{ marginTop: 8, fontSize: 13 }}>
+                        <div style={{ fontWeight: 700, color: "#0f766e", marginBottom: 6 }}>
+                          ✓ {String(chequeSeleccionado?.tipo || "").toUpperCase()} seleccionado
+                        </div>
+                        <div><b>N°:</b> {safeText(chequeSeleccionado?.numero_cheque)}</div>
+                        <div><b>Emisor:</b> {safeText(chequeSeleccionado?.emisor)}</div>
+                        <div><b>Importe:</b> {moneyARS(chequeSeleccionado?.importe || 0)}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Archivo adjunto ── */}
                 <div className="mi-uploadCard">
                   <div className="mi-uploadCard__head">
                     <div>
@@ -1268,7 +1561,6 @@ export default function ModalNuevoEgreso({
                       <div className="mi-uploadCard__sub">PDF, imagen u otro comprobante</div>
                     </div>
                   </div>
-
                   <div className="mi-uploadCard__body">
                     <div className="mi-uploadBar">
                       <label className="mi-uploadBar__pick">
@@ -1282,7 +1574,6 @@ export default function ModalNuevoEgreso({
                           {archivoAdjunto ? "Cambiar" : "Seleccionar"}
                         </span>
                       </label>
-
                       <button
                         type="button"
                         className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
@@ -1292,20 +1583,14 @@ export default function ModalNuevoEgreso({
                         Quitar
                       </button>
                     </div>
-
-                    <div
-                      className={`mi-uploadFile ${archivoAdjunto ? "is-filled" : "is-empty"}`}
-                    >
+                    <div className={`mi-uploadFile ${archivoAdjunto ? "is-filled" : "is-empty"}`}>
                       {archivoAdjunto ? (
                         <>
                           <div className="mi-uploadFile__icon">
                             <FontAwesomeIcon icon={faFileInvoiceDollar} />
                           </div>
                           <div className="mi-uploadFile__meta">
-                            <div
-                              className="mi-uploadFile__name"
-                              title={archivoAdjunto.name}
-                            >
+                            <div className="mi-uploadFile__name" title={archivoAdjunto.name}>
                               {archivoAdjunto.name}
                             </div>
                             <div className="mi-uploadFile__size">
@@ -1320,6 +1605,7 @@ export default function ModalNuevoEgreso({
                   </div>
                 </div>
 
+                {/* ── Acciones ── */}
                 <div className="mi-cr-filters__actions">
                   <button
                     type="button"
@@ -1329,7 +1615,6 @@ export default function ModalNuevoEgreso({
                   >
                     {btnLabel}
                   </button>
-
                   <button
                     type="button"
                     onClick={() => (!saving ? onClose?.() : null)}

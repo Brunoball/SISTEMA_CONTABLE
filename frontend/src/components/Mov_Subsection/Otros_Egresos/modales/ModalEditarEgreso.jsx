@@ -454,25 +454,6 @@ export default function ModalEditarEgreso({
   const detalles = useMemo(() => normalizeDetalles(lists), [lists]);
   const mediosPago = useMemo(() => normalizeMediosPago(lists), [lists]);
 
-  const mediosPagoCheque = useMemo(() => {
-    const filtrados = mediosPago.filter((x) => isChequeMedioName(x.nombre));
-    if (
-      form?.es_movimiento_cheque &&
-      form?.id_medio_pago &&
-      !filtrados.some((x) => String(x.id) === String(form.id_medio_pago))
-    ) {
-      const actual = mediosPago.find(
-        (x) => String(x.id) === String(form.id_medio_pago)
-      );
-      return actual ? [actual, ...filtrados] : filtrados;
-    }
-    return filtrados;
-  }, [mediosPago, form?.es_movimiento_cheque, form?.id_medio_pago]);
-
-  const opcionesMedioPago = form.es_movimiento_cheque
-    ? mediosPagoCheque
-    : mediosPago;
-
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
@@ -763,11 +744,6 @@ export default function ModalEditarEgreso({
         throw new Error("La fecha es obligatoria.");
       }
 
-      const id_medio_pago = Number(form.id_medio_pago || 0);
-      if (!(id_medio_pago > 0)) {
-        throw new Error("El medio de pago es obligatorio.");
-      }
-
       let payload;
 
       if (form.es_movimiento_cheque) {
@@ -801,7 +777,6 @@ export default function ModalEditarEgreso({
         payload = {
           id_movimiento: Number(form.id_movimiento || 0),
           fecha,
-          id_medio_pago,
           id_cheque,
           cheque_id: id_cheque,
           es_edicion_cheque: true,
@@ -813,6 +788,11 @@ export default function ModalEditarEgreso({
           monto_total: importe,
         };
       } else {
+        const id_medio_pago = Number(form.id_medio_pago || 0);
+        if (!(id_medio_pago > 0)) {
+          throw new Error("El medio de pago es obligatorio.");
+        }
+
         const items = (form.items || [])
           .map((it) => {
             const id_detalle = Number(it.id_detalle || 0);
@@ -1263,29 +1243,27 @@ export default function ModalEditarEgreso({
                 </div>
 
                 <div className="mi-em-asideBody mi-em-asideBodyheght">
-                  <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(form.id_medio_pago || "")}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, id_medio_pago: e.target.value }))
-                      }
-                      disabled={saving}
-                    >
-                      <option value="">
-                        {form.es_movimiento_cheque
-                          ? "-- Seleccionar cheque / eCheq --"
-                          : "-- Seleccionar medio de pago --"}
-                      </option>
+                  {!form.es_movimiento_cheque && (
+                    <div className="fl-field">
+                      <select
+                        className="fl-input fl-select"
+                        value={String(form.id_medio_pago || "")}
+                        onChange={(e) =>
+                          setForm((p) => ({ ...p, id_medio_pago: e.target.value }))
+                        }
+                        disabled={saving}
+                      >
+                        <option value="">-- Seleccionar medio de pago --</option>
 
-                      {opcionesMedioPago.map((x) => (
-                        <option key={x.id} value={String(x.id)}>
-                          {x.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    <label className="fl-label">Medio de pago</label>
-                  </div>
+                        {mediosPago.map((x) => (
+                          <option key={x.id} value={String(x.id)}>
+                            {x.nombre}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="fl-label">Medio de pago</label>
+                    </div>
+                  )}
 
                   {!form.es_movimiento_cheque && (
                     <>

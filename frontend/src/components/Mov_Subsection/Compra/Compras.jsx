@@ -9,6 +9,7 @@ import "../../Global/Calendario/calendario.css";
 
 import ModalNuevaCompra from "./modales/ModalNuevaCompra.jsx";
 import ModalEditarCompra from "./modales/ModalEditarCompra.jsx";
+import ModalDetalleMediosPagoCompra from "./modales/ModalDetalleMediosPagoCompra.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import ModalEliminarMovimientos from "../../Global/Modales/ModalEliminar.jsx";
 
@@ -27,6 +28,7 @@ import {
   faArrowRightLong,
   faTimes,
   faBoxOpen,
+  faMoneyCheckDollar,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -241,11 +243,49 @@ function prewarmComprobanteUrl(url, mime = "") {
 /* =========================
    Helpers de compras
 ========================= */
+function getCompraMediosDetalle(r) {
+  if (Array.isArray(r?.medios_pago_detalle)) return r.medios_pago_detalle;
+
+  if (typeof r?.medios_pago_detalle === "string") {
+    try {
+      const parsed = JSON.parse(r.medios_pago_detalle);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function getCompraCantidadMedios(r) {
+  const n = Number(r?.cantidad_medios_pago);
+  if (Number.isFinite(n) && n > 0) return n;
+  return getCompraMediosDetalle(r).length;
+}
+
+function hasCompraDetalleMedios(r) {
+  return getCompraCantidadMedios(r) > 0;
+}
+
 function getCompraPagoLabel(r) {
   const cc = String(r?.cuenta_corriente ?? "").trim();
   if (cc) return "CUENTA CORRIENTE";
-  const mp = String(r?.medio_pago_nombre ?? r?.medio_pago ?? "").trim();
-  return mp ? mp : "CONTADO";
+
+  const explicit = String(r?.medio_pago_nombre ?? r?.medio_pago ?? "").trim();
+  if (explicit) return explicit;
+
+  const detalle = getCompraMediosDetalle(r);
+  if (detalle.length === 1) {
+    return String(detalle[0]?.medio_pago_nombre ?? "").trim() || "CONTADO";
+  }
+
+  if (detalle.length > 1) {
+    const principal = String(detalle[0]?.medio_pago_nombre ?? "").trim() || "CONTADO";
+    return `${principal} +${detalle.length - 1}`;
+  }
+
+  return "CONTADO";
 }
 
 function extractIdComprobanteFromUrlLike(v) {
@@ -416,6 +456,7 @@ export default function Compras() {
   const [openEdit, setOpenEdit] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [openVerComp, setOpenVerComp] = useState(false);
+  const [openMediosPago, setOpenMediosPago] = useState(false);
   const [compUrl, setCompUrl] = useState("");
   const [compMime, setCompMime] = useState("");
 
@@ -1011,6 +1052,11 @@ export default function Compras() {
     setOpenDel(true);
   };
 
+  const openMediosPagoModal = (r) => {
+    setSelectedRow(r);
+    setOpenMediosPago(true);
+  };
+
   const buildComprobanteFastUrl = useCallback((r) => {
     const idComp = getComprobanteId(r);
     const cacheKey = idComp ? `id:${idComp}` : `raw:${getComprobanteUrl(r)}`;
@@ -1414,6 +1460,7 @@ export default function Compras() {
                   const canSee = !!comp;
                   const isDeleting =
                     deletingId !== null && String(deletingId) === String(rowId);
+                  const hasMedios = hasCompraDetalleMedios(r);
 
                   return (
                     <div
@@ -1447,6 +1494,20 @@ export default function Compras() {
                                   disabled={!canSee || isAnyLoading || loadingListsCtx}
                                 >
                                   <FontAwesomeIcon icon={faEye} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={`mov-iconBtn ${!hasMedios ? "is-disabled" : ""}`}
+                                  title={
+                                    hasMedios
+                                      ? "Ver detalle de medios de pago"
+                                      : "Sin detalle de medios de pago"
+                                  }
+                                  onClick={() => hasMedios && openMediosPagoModal(r)}
+                                  disabled={!hasMedios || isAnyLoading || loadingListsCtx}
+                                >
+                                  <FontAwesomeIcon icon={faMoneyCheckDollar} />
                                 </button>
 
                                 <button
@@ -1571,6 +1632,15 @@ export default function Compras() {
         onSaved={async () => {
           await refreshAfterSave();
           showToast("exito", "Compra actualizada correctamente.", 2400);
+        }}
+      />
+
+      <ModalDetalleMediosPagoCompra
+        open={openMediosPago}
+        row={selectedRow}
+        onClose={() => {
+          setOpenMediosPago(false);
+          setSelectedRow(null);
         }}
       />
 

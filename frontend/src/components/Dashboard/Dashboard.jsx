@@ -7,12 +7,14 @@ import {
   faMoneyBillTrendUp,
   faWallet,
   faUsers,
+  faBoxesStacked,
+  faMoneyCheckDollar,
 } from "@fortawesome/free-solid-svg-icons";
 
 import GifCarga from "../Global/Gif_Carga";
 import "./dashboard.css";
 
-// ✅ NUEVO: consumir ListasContext
+// ✅ consumir ListasContext
 import { useListas } from "../../context/ListasContext";
 
 function normalizeRol(value) {
@@ -40,10 +42,14 @@ function normalizePlanNivel(value) {
 
 function pickIcon(label) {
   const s = String(label ?? "").toLowerCase();
+
   if (s.includes("movimientos")) return faMoneyBillTrendUp;
   if (s.includes("flujo")) return faWallet;
   if (s.includes("cuentas") || s.includes("corrientes")) return faUsers;
+  if (s.includes("stock")) return faBoxesStacked;
+  if (s.includes("cheques")) return faMoneyCheckDollar;
   if (s.includes("análisis") || s.includes("analisis")) return faChartLine;
+
   return faChartLine;
 }
 
@@ -59,9 +65,16 @@ function pickInfo(label) {
   if (s.includes("cuentas") || s.includes("corrientes")) {
     return "Controlá saldos, pagos y deudas de clientes.";
   }
+  if (s.includes("stock")) {
+    return "Gestioná productos, cantidades disponibles y el control general del inventario.";
+  }
+  if (s.includes("cheques")) {
+    return "Administrá cheques en cartera, eCheqs y el flujo completo de vencimientos y movimientos.";
+  }
   if (s.includes("análisis") || s.includes("analisis")) {
     return "Analizá indicadores financieros y comparativas del negocio.";
   }
+
   return "";
 }
 
@@ -70,14 +83,8 @@ const DASH_SEEN_KEY = "pp_seen_dashboard";
 export default function Dashboard() {
   const navigate = useNavigate();
 
-  // ✅ ListasContext (cache + fetch centralizado)
   const { ensureListsLoaded } = useListas();
 
-  /* =======================
-     🔥 LOADER INICIAL BALTO
-     - ahora se apaga cuando listas terminan,
-       con fallback a 10s si algo falla.
-  ======================== */
   const [loadingInicial, setLoadingInicial] = useState(true);
   const didWarmupRef = useRef(false);
 
@@ -87,21 +94,16 @@ export default function Dashboard() {
 
     let alive = true;
 
-    // Fallback: no dejes el loader infinito
     const fallback = setTimeout(() => {
       if (!alive) return;
       setLoadingInicial(false);
     }, 10000);
 
-    // ✅ Warm-up fuerte: forzá cargar listas al entrar al Dashboard
-    // background:true => no bloquea con "loadingLists" global,
-    // pero sí calienta cache para TODAS las secciones.
     (async () => {
       try {
         await ensureListsLoaded({ force: true, background: true });
       } catch {
-        // el provider ya maneja el error internamente,
-        // acá no frenamos la UI
+        // el provider ya maneja el error
       } finally {
         if (!alive) return;
         clearTimeout(fallback);
@@ -134,6 +136,8 @@ export default function Dashboard() {
       { key: "movimientos", label: "Movimientos", ruta: "/panel/movimientos" },
       { key: "flujo-de-caja", label: "Flujo de Caja", ruta: "/panel/flujo-de-caja" },
       { key: "cuentas-corrientes", label: "Cuentas Corrientes", ruta: "/panel/cuentas-corrientes" },
+      { key: "stock", label: "Stock", ruta: "/panel/stock" },
+      { key: "cheques", label: "Cheques", ruta: "/panel/cheques/cartera" },
       { key: "analisis-financiero", label: "Análisis Financiero", ruta: "/panel/analisis-financiero" },
     ].map((it) => ({
       ...it,
@@ -141,25 +145,28 @@ export default function Dashboard() {
       info: pickInfo(it.label),
     }));
 
-    const limit = planNivel === 1 ? 1 : planNivel === 2 ? 2 : 4;
-    return base.slice(0, limit);
+    // si querés que todos vean todo, dejá esto:
+    return base;
+
+    // si querés seguir limitando por plan, usá esto en lugar del return base:
+    // const limit = planNivel === 1 ? 2 : planNivel === 2 ? 4 : 6;
+    // return base.slice(0, limit);
   }, [planNivel]);
 
   const handleNavigate = (ruta) => {
     try {
       sessionStorage.setItem(DASH_SEEN_KEY, "1");
     } catch {}
+
     navigate(ruta);
     document.activeElement?.blur?.();
   };
 
   return (
     <>
-      {/* 👇 Loader BALTO */}
       {loadingInicial && <GifCarga />}
 
       <div className="db">
-        {/* HEADER */}
         <header className="db-header">
           <div className="db-header__left">
             <h1 className="db-title">Panel Contable</h1>
@@ -174,7 +181,6 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* HERO */}
         <section className="db-hero">
           <div className="db-hero__card">
             <div className="db-hero__icon" aria-hidden="true">
@@ -183,20 +189,22 @@ export default function Dashboard() {
             <div className="db-hero__text">
               <h2>Bienvenido a BALTO</h2>
               <p>
-                Tu sistema contable para gestionar el negocio de punta a punta: movimientos,
-                caja, cuentas corrientes y análisis financiero en un solo lugar.
+                Tu sistema contable para gestionar el negocio de punta a punta:
+                movimientos, caja, cuentas corrientes, stock, cheques y análisis
+                financiero en un solo lugar.
               </p>
             </div>
           </div>
         </section>
 
-        {/* GRID */}
         <section className="db-grid">
           <div className="db-card">
             <div className="db-card__title">Acceso rápido</div>
-            <div className="db-card__desc">Accedé a los módulos disponibles según tu plan.</div>
+            <div className="db-card__desc">
+              Accedé a los módulos disponibles según tu plan.
+            </div>
 
-            <div className="db-quick">
+            <div className="db-quick db-stats2">
               {navItems.map((it) => (
                 <button
                   key={it.key}
@@ -216,7 +224,9 @@ export default function Dashboard() {
 
           <div className="db-card">
             <div className="db-card__title">Información</div>
-            <div className="db-card__desc">Descripción rápida de cada módulo disponible.</div>
+            <div className="db-card__desc">
+              Descripción rápida de cada módulo disponible.
+            </div>
 
             <div className="db-stats">
               {navItems.map((it) => (
@@ -227,14 +237,21 @@ export default function Dashboard() {
                   tabIndex={0}
                   onClick={() => handleNavigate(it.ruta)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") handleNavigate(it.ruta);
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleNavigate(it.ruta);
+                    }
                   }}
                 >
                   <div className="db-stat__k">
                     <FontAwesomeIcon icon={it.icon} style={{ marginRight: 8 }} />
                     {it.label}
                   </div>
-                  <div className="db-stat__v" style={{ fontSize: 13, lineHeight: 1.25 }}>
+
+                  <div
+                    className="db-stat__v"
+                    style={{ fontSize: 13, lineHeight: 1.25 }}
+                  >
                     {it.info}
                   </div>
                 </div>
@@ -243,7 +260,6 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* FOOTER */}
         <footer className="db-footer">
           Desarrollado por{" "}
           <a href="https://3devsnet.com" target="_blank" rel="noopener noreferrer">

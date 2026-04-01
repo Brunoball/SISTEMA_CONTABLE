@@ -60,7 +60,7 @@ function buildEmptyRow() {
 
 /* ---------- Nuevo: línea de medio de pago vacía ---------- */
 function buildEmptyMedioPago() {
-  return { id: uid(), id_medio_pago: NULL_OPTION, monto: 0, montoDraft: "", montoFocused: false, id_cheque: "", chequesDisponibles: [], loadingCheques: false };
+  return { id: uid(), id_medio_pago: NULL_OPTION, monto: 0, montoDraft: "", montoFocused: false, id_cheque: [], chequesDisponibles: [], loadingCheques: false };
 }
 
 const SAFE_LISTS = { proveedores:[], detalles:[], medios_pago:[] };
@@ -157,7 +157,7 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
         </div>
       </div>
     </div>,
-    document.body
+    document.body  // ← CORRECTO: solo document.body, sin etiquetas
   );
 }
 
@@ -201,10 +201,10 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle }) {
 }
 
 /* ============================================================
-   COMPONENTE: UNA LÍNEA DE MEDIO DE PAGO
+   COMPONENTE: UNA LÍNEA DE MEDIO DE PAGO (con botón completar restante)
 ============================================================ */
 function MedioPagoRow({
-  row, idx, mediosPagoList, totalCompra, onUpdate, onRemove,
+  row, idx, mediosPagoList, totalCompra, sumaMediosPago, onUpdate, onRemove,
   saving, dark, showToast,
 }) {
   const mpSeleccionado = useMemo(()=>
@@ -217,12 +217,26 @@ function MedioPagoRow({
 
   const esCheque = tipoCheque !== null;
 
+  // Cálculo del restante para esta fila específica
+  const restanteParaEstaFila = useMemo(() => {
+    // Suma de todos los medios de pago menos el monto actual
+    const sumaOtros = Math.max(0, safeNumber(sumaMediosPago) - safeNumber(row.monto));
+    // Lo que falta cubrir del total de la compra, considerando los otros medios
+    return Math.max(0, safeNumber(totalCompra) - sumaOtros);
+  }, [sumaMediosPago, totalCompra, row.monto]);
+
+  const puedeCompletarRestante = 
+    !saving && 
+    !esCheque && 
+    totalCompra > 0 && 
+    restanteParaEstaFila > 0.009;
+
   // Cuando cambia el medio de pago, cargar cheques si aplica
   const handleChangeMedio = useCallback(async(val)=>{
     const mp = mediosPagoList.find(x=>String(getMedioPagoId(x)??"")===String(val));
     const tipo = normalizeChequeTipoFromMedio(mp?.nombre||"");
 
-    onUpdate(row.id, { id_medio_pago: val, id_cheque: "", chequesDisponibles: [], loadingCheques: tipo!==null });
+    onUpdate(row.id, { id_medio_pago: val, id_cheque: [], chequesDisponibles: [], loadingCheques: tipo!==null });
 
     if(tipo!==null){
       try {
@@ -302,6 +316,38 @@ function MedioPagoRow({
             style={{width:"100%", background:(esCheque&&chequesSeleccionados.length>0)?"#f3f4f6":undefined}}
             title={esCheque&&chequesSeleccionados.length>0?"El monto se calcula automáticamente de los cheques seleccionados":""}
           />
+
+          {/* Botón "Completar restante" - SOLO PARA MEDIOS NO CHEQUE */}
+          {!esCheque && (
+            <div style={{ marginTop: 6 }}>
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdate(row.id, {
+                    monto: restanteParaEstaFila,
+                    montoDraft: "",
+                    montoFocused: false,
+                  })
+                }
+                disabled={!puedeCompletarRestante}
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  border: "1px solid #0f766e",
+                  background: "transparent",
+                  color: "#0f766e",
+                  borderRadius: 6,
+                  padding: "6px 8px",
+                  cursor: puedeCompletarRestante ? "pointer" : "not-allowed",
+                  opacity: puedeCompletarRestante ? 1 : 0.55,
+                  width: "100%",
+                }}
+                title="Completa automáticamente el importe faltante"
+              >
+                Completar restante
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Botón eliminar fila */}
@@ -833,6 +879,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                           row={mp} idx={idx}
                           mediosPagoList={mediosPagoList}
                           totalCompra={resumen.total}
+                          sumaMediosPago={sumaMediosPago}
                           onUpdate={updateMedioPago}
                           onRemove={removeMedioPago}
                           saving={saving} dark={dark}

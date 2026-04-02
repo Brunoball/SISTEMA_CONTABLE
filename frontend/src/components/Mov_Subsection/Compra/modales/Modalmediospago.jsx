@@ -1,8 +1,4 @@
-// ============================================================
-// ARCHIVO: ModalMediosPago.jsx
-// Mini-modal independiente para seleccionar medios de pago
-// Importar y usar dentro de ModalNuevaCompra.jsx
-// ============================================================
+
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -127,7 +123,7 @@ export function buildEmptyMedioPago() {
 function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle }) {
   if (!cheques.length) return null;
   return (
-    <div className="mpr-cheques-cards">
+    <div className="cheques-cards-pn">
       {cheques.map((ch, idx) => {
         const checked = idsSeleccionados.includes(String(ch?.id_cheque));
         return (

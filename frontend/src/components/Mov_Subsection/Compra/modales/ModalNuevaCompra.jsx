@@ -621,7 +621,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                   </div>
                   <div className="nc-section-body">
 
-                    <div className="nc-row2">
+                    
                       {/* Fecha */}
                       <div className="nc-field" onClick={handleOpenDate}>
                         <input
@@ -635,8 +635,26 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                         />
                         <label className="nc-label" onClick={handleOpenDate}>Fecha</label>
                       </div>
+                    {/* Proveedor */}
+                    <div className="nc-prov-wrap">
+                      <GlobalAutocomplete
+                        value={provInput}
+                        onChange={handleProveedorInputChange}
+                        onSelect={handleSelectProveedor}
+                        options={proveedoresList}
+                        getOptionLabel={(p)=>String(p?.nombre??"").trim()}
+                        getOptionValue={(p)=>String(getProveedorId(p)??p?.nombre??"")}
+                        label="Proveedor *"
+                        placeholder=" "
+                        disabled={saving||addUI.open}
+                        showAllOnFocus={true}
+                        maxItems={25}
+                        inputClassName="nc-input"
+                      />
+                    </div>
 
-                      {/* Tipo compra */}
+                 
+                                          {/* Tipo compra */}
                       <div>
                         <div className="nc-pill-label">Tipo *</div>
                         <div className="nc-pills">
@@ -652,10 +670,9 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                             className={`nc-pill ${isCorriente?"nc-pill--active":""}`}
                             onClick={()=>setForma("CUENTA_CORRIENTE")}
                             disabled={saving}
-                          >Cta. Cte.</button>
+                          >Cuenta Corriente</button>
                         </div>
                       </div>
-                    </div>
 
                     {/* [NUEVO] Resumen de pago configurado — aparece solo si es Contado y hay medios */}
                     {isContado && (
@@ -681,23 +698,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                       </>
                     )}
 
-                    {/* Proveedor */}
-                    <div className="nc-prov-wrap">
-                      <GlobalAutocomplete
-                        value={provInput}
-                        onChange={handleProveedorInputChange}
-                        onSelect={handleSelectProveedor}
-                        options={proveedoresList}
-                        getOptionLabel={(p)=>String(p?.nombre??"").trim()}
-                        getOptionValue={(p)=>String(getProveedorId(p)??p?.nombre??"")}
-                        label="Proveedor *"
-                        placeholder=" "
-                        disabled={saving||addUI.open}
-                        showAllOnFocus={true}
-                        maxItems={25}
-                        inputClassName="nc-input"
-                      />
-                    </div>
+
 
                   </div>
                 </div>

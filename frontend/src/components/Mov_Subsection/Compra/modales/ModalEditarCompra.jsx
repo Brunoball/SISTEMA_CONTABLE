@@ -1785,7 +1785,7 @@ export default function ModalEditarCompra({
                                 disabled={saving || addUI.open}
                                 title="Ver comprobante actual"
                               >
-                                <FontAwesomeIcon icon={faEye} /> Ver
+                                <FontAwesomeIcon icon={faEye} /> 
                               </button>
                             ) : null}
 
@@ -1802,7 +1802,7 @@ export default function ModalEditarCompra({
                               disabled={saving || addUI.open || openVerComp}
                               title="Quitar comprobante actual"
                             >
-                              <FontAwesomeIcon icon={faTrashCan} /> Quitar
+                              <FontAwesomeIcon icon={faTrashCan} /> 
                             </button>
                           </div>
                         </div>

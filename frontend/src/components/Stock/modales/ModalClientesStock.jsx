@@ -10,10 +10,8 @@ import {
   faTrashCan,
   faFloppyDisk,
   faArrowRotateRight,
-  faLayerGroup,
-  faTag,
-  faAlignLeft,
-  faBoxesStacked,
+  faUsers,
+  faUser,
   faUserSlash,
   faUserCheck,
 } from "@fortawesome/free-solid-svg-icons";
@@ -45,8 +43,8 @@ function toUpperValue(value) {
   return String(value || "").toUpperCase();
 }
 
-function getCategoriaId(cat) {
-  return Number(cat?.id_stock_categoria ?? cat?.id ?? 0);
+function getClienteId(row) {
+  return Number(row?.id_cliente ?? row?.id ?? 0);
 }
 
 async function parseJsonOrThrow(res) {
@@ -99,7 +97,7 @@ async function apiPost(action, body) {
   return parseJsonOrThrow(res);
 }
 
-export default function ModalCategoriasStock({
+export default function ModalClientesStock({
   open,
   onClose,
   onActualizado,
@@ -111,13 +109,12 @@ export default function ModalCategoriasStock({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [accionandoId, setAccionandoId] = useState(null);
-  const [categorias, setCategorias] = useState([]);
-  const [pestana, setPestana] = useState("activas");
+  const [clientes, setClientes] = useState([]);
+  const [pestana, setPestana] = useState("activos");
   const [modo, setModo] = useState("crear");
   const [editandoId, setEditandoId] = useState(null);
   const [form, setForm] = useState({
     nombre: "",
-    descripcion: "",
     activo: 1,
   });
 
@@ -184,24 +181,23 @@ export default function ModalCategoriasStock({
     setEditandoId(null);
     setForm({
       nombre: "",
-      descripcion: "",
-      activo: pestana === "inactivas" ? 0 : 1,
+      activo: pestana === "inactivos" ? 0 : 1,
     });
   }, [pestana]);
 
-  const cargarCategorias = useCallback(
+  const cargarClientes = useCallback(
     async (tabActual = pestana) => {
       setLoading(true);
       try {
         const params = new URLSearchParams({
-          action: "stock_categorias_listar",
-          activo: tabActual === "inactivas" ? "0" : "1",
+          action: "stock_clientes_listar",
+          activo: tabActual === "inactivos" ? "0" : "1",
         });
 
         const data = await apiGet(`${API_URL}?${params.toString()}`);
-        setCategorias(Array.isArray(data?.categorias) ? data.categorias : []);
+        setClientes(Array.isArray(data?.clientes) ? data.clientes : []);
       } catch (err) {
-        onToast?.("error", err?.message || "No se pudieron cargar las categorías.");
+        onToast?.("error", err?.message || "No se pudieron cargar los clientes.");
       } finally {
         setLoading(false);
       }
@@ -211,25 +207,24 @@ export default function ModalCategoriasStock({
 
   useEffect(() => {
     if (!open) return;
-    cargarCategorias(pestana);
+    cargarClientes(pestana);
     resetForm();
-  }, [open, pestana, cargarCategorias, resetForm]);
+  }, [open, pestana, cargarClientes, resetForm]);
 
-  const categoriasOrdenadas = useMemo(() => {
-    return [...categorias].sort((a, b) =>
+  const clientesOrdenados = useMemo(() => {
+    return [...clientes].sort((a, b) =>
       String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", {
         sensitivity: "base",
       })
     );
-  }, [categorias]);
+  }, [clientes]);
 
-  const iniciarEdicion = (cat) => {
+  const iniciarEdicion = (row) => {
     setModo("editar");
-    setEditandoId(getCategoriaId(cat));
+    setEditandoId(getClienteId(row));
     setForm({
-      nombre: toUpperValue(cat?.nombre),
-      descripcion: toUpperValue(cat?.descripcion),
-      activo: Number(cat?.activo ?? 1) === 1 ? 1 : 0,
+      nombre: toUpperValue(row?.nombre),
+      activo: Number(row?.activo ?? 1) === 1 ? 1 : 0,
     });
   };
 
@@ -240,12 +235,11 @@ export default function ModalCategoriasStock({
   const handleGuardar = async () => {
     const payload = {
       nombre: toUpperValue(form.nombre).trim(),
-      descripcion: toUpperValue(form.descripcion).trim(),
       activo: Number(form.activo) === 1 ? 1 : 0,
     };
 
     if (!payload.nombre) {
-      onToast?.("error", "El nombre de la categoría es obligatorio.");
+      onToast?.("error", "El nombre del cliente es obligatorio.");
       return;
     }
 
@@ -253,31 +247,33 @@ export default function ModalCategoriasStock({
 
     try {
       if (modo === "crear") {
-        const data = await apiPost("stock_categoria_crear", payload);
-        onToast?.("exito", data?.mensaje || "Categoría creada correctamente.");
+        const data = await apiPost("stock_cliente_crear", payload);
+        onToast?.("exito", data?.mensaje || "Cliente creado correctamente.");
+
+        if (payload.activo === 1) {
+          setPestana("activos");
+        } else {
+          setPestana("inactivos");
+        }
       } else {
-        const data = await apiPost("stock_categoria_actualizar", {
-          id_stock_categoria: editandoId,
+        const data = await apiPost("stock_cliente_actualizar", {
+          id_cliente: editandoId,
           ...payload,
         });
-        onToast?.("exito", data?.mensaje || "Categoría actualizada correctamente.");
+        onToast?.("exito", data?.mensaje || "Cliente actualizado correctamente.");
+
+        if (payload.activo === 1) {
+          setPestana("activos");
+        } else {
+          setPestana("inactivos");
+        }
       }
 
-      const nuevaPestana = payload.activo === 1 ? "activas" : "inactivas";
-      setPestana(nuevaPestana);
-
-      await cargarCategorias(nuevaPestana);
+      await cargarClientes(payload.activo === 1 ? "activos" : "inactivos");
       await onActualizado?.();
-
-      setModo("crear");
-      setEditandoId(null);
-      setForm({
-        nombre: "",
-        descripcion: "",
-        activo: payload.activo,
-      });
+      resetForm();
     } catch (err) {
-      onToast?.("error", err?.message || "No se pudo guardar la categoría.");
+      onToast?.("error", err?.message || "No se pudo guardar el cliente.");
     } finally {
       setSaving(false);
     }
@@ -303,7 +299,7 @@ export default function ModalCategoriasStock({
 
   const ejecutarAccionModal = useCallback(async () => {
     const { row, type } = modalAccion;
-    const id = getCategoriaId(row);
+    const id = getClienteId(row);
 
     if (!id || !type) return;
 
@@ -313,25 +309,19 @@ export default function ModalCategoriasStock({
     try {
       let action = "";
       let successFallback = "";
-      let recargarTab = pestana;
 
       if (type === "baja") {
-        action = "stock_categoria_dar_baja";
-        successFallback = "Categoría dada de baja correctamente.";
-        recargarTab = "activas";
+        action = "stock_cliente_dar_baja";
+        successFallback = "Cliente dado de baja correctamente.";
       } else if (type === "alta") {
-        action = "stock_categoria_dar_alta";
-        successFallback = "Categoría dada de alta correctamente.";
-        recargarTab = "inactivas";
+        action = "stock_cliente_dar_alta";
+        successFallback = "Cliente dado de alta correctamente.";
       } else if (type === "eliminar") {
-        action = "stock_categoria_eliminar";
-        successFallback = "Categoría eliminada correctamente.";
-        recargarTab = pestana;
+        action = "stock_cliente_eliminar";
+        successFallback = "Cliente eliminado correctamente.";
       }
 
-      const data = await apiPost(action, {
-        id_stock_categoria: id,
-      });
+      const data = await apiPost(action, { id_cliente: id });
 
       onToast?.("exito", data?.mensaje || successFallback);
 
@@ -339,7 +329,7 @@ export default function ModalCategoriasStock({
         resetForm();
       }
 
-      await cargarCategorias(recargarTab);
+      await cargarClientes(pestana);
       await onActualizado?.();
       cerrarModalAccion();
     } catch (err) {
@@ -350,70 +340,62 @@ export default function ModalCategoriasStock({
     }
   }, [
     modalAccion,
+    editandoId,
+    cargarClientes,
     pestana,
-    cargarCategorias,
     onActualizado,
     onToast,
-    editandoId,
     resetForm,
     cerrarModalAccion,
   ]);
 
   const modalConfig = useMemo(() => {
-    const cat = modalAccion.row;
-    const nombre = String(cat?.nombre || "—");
-    const totalProductos = Number(cat?.total_productos || 0);
+    const row = modalAccion.row;
+    const nombre = String(row?.nombre || "—");
 
     if (modalAccion.type === "baja") {
       return {
-        title: "Dar de baja categoría",
-        message: "¿Seguro que querés dar de baja esta categoría?",
-        warning:
-          totalProductos > 0
-            ? `La categoría quedará inactiva pero seguirá asociada a ${totalProductos} producto${totalProductos !== 1 ? "s" : ""}.`
-            : "La categoría dejará de aparecer en la pestaña de activas y pasará a inactivas.",
+        title: "Dar de baja cliente",
+        message: "¿Seguro que querés dar de baja este cliente?",
+        warning: "El cliente dejará de aparecer en la pestaña de activos y pasará a inactivos.",
         confirmLabel: "Dar de baja",
         cancelLabel: "Cancelar",
         variant: "danger",
         details: [
-          { label: "Categoría", value: nombre },
-          { label: "Productos", value: String(totalProductos) },
+          { label: "Cliente", value: nombre },
+          { label: "Acción", value: "Dar de baja" },
         ],
       };
     }
 
     if (modalAccion.type === "alta") {
       return {
-        title: "Dar de alta categoría",
-        message: "¿Seguro que querés dar de alta esta categoría?",
-        warning: "La categoría volverá a aparecer en la pestaña de activas.",
+        title: "Dar de alta cliente",
+        message: "¿Seguro que querés dar de alta este cliente?",
+        warning: "El cliente volverá a aparecer en la pestaña de activos.",
         confirmLabel: "Dar de alta",
         cancelLabel: "Cancelar",
         variant: "success",
         details: [
-          { label: "Categoría", value: nombre },
-          { label: "Productos", value: String(totalProductos) },
+          { label: "Cliente", value: nombre },
+          { label: "Acción", value: "Dar de alta" },
         ],
       };
     }
 
     return {
-      title: "Eliminar categoría",
-      message:
-        totalProductos > 0
-          ? `¿Seguro que querés eliminar esta categoría? Los ${totalProductos} producto${totalProductos !== 1 ? "s" : ""} asociados quedarán sin categoría.`
-          : "¿Seguro que querés eliminar esta categoría definitivamente?",
-      warning:
-        totalProductos > 0
-          ? "Esta acción no se puede deshacer. Los productos quedarán sin categoría."
-          : "Esta acción no se puede deshacer.",
+      title: "Eliminar cliente",
+      message: "¿Seguro que querés eliminar este cliente definitivamente?",
+      warning: "Esta acción no se puede deshacer.",
       confirmLabel: "Eliminar",
       cancelLabel: "Cancelar",
       variant: "danger",
       details: [
-        { label: "Categoría", value: nombre },
-        { label: "Descripción", value: String(cat?.descripcion?.trim() || "Sin descripción") },
-        { label: "Productos", value: String(totalProductos) },
+        { label: "Cliente", value: nombre },
+        {
+          label: "Estado",
+          value: Number(row?.activo ?? 1) === 1 ? "Activo" : "Inactivo",
+        },
       ],
     };
   }, [modalAccion]);
@@ -439,13 +421,13 @@ export default function ModalCategoriasStock({
       >
         <div className="mi-modal__header">
           <div className="mi-modal__head-icon" aria-hidden="true">
-            <FontAwesomeIcon icon={faLayerGroup} />
+            <FontAwesomeIcon icon={faUsers} />
           </div>
 
           <div className="mi-modal__head-left">
-            <h2 className="mi-modal__title">Categorías de stock</h2>
+            <h2 className="mi-modal__title">Clientes de stock</h2>
             <p className="mi-modal__subtitle">
-              Agregá, editá, da de baja, da de alta o eliminá categorías.
+              Agregá, editá, da de baja, da de alta o eliminá clientes.
             </p>
           </div>
 
@@ -470,7 +452,7 @@ export default function ModalCategoriasStock({
                     icon={modo === "crear" ? faPlus : faPenToSquare}
                     style={{ marginRight: 8, opacity: 0.75, fontSize: 13 }}
                   />
-                  {modo === "crear" ? "Nueva categoría" : "Editar categoría"}
+                  {modo === "crear" ? "Nuevo cliente" : "Editar cliente"}
                 </div>
               </div>
 
@@ -490,28 +472,8 @@ export default function ModalCategoriasStock({
                     disabled={saving}
                   />
                   <label className="fl-label">
-                    <FontAwesomeIcon icon={faTag} style={{ marginRight: 5 }} />
+                    <FontAwesomeIcon icon={faUser} style={{ marginRight: 5 }} />
                     Nombre *
-                  </label>
-                </div>
-
-                <div className="fl-field">
-                  <textarea
-                    className="fl-input fl-input--textarea"
-                    placeholder=" "
-                    value={form.descripcion}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        descripcion: toUpperValue(e.target.value),
-                      }))
-                    }
-                    disabled={saving}
-                    rows={4}
-                  />
-                  <label className="fl-label">
-                    <FontAwesomeIcon icon={faAlignLeft} style={{ marginRight: 5 }} />
-                    Descripción
                   </label>
                 </div>
 
@@ -527,8 +489,8 @@ export default function ModalCategoriasStock({
                     }
                     disabled={saving}
                   >
-                    <option value="1">Activa</option>
-                    <option value="0">Inactiva</option>
+                    <option value="1">Activo</option>
+                    <option value="0">Inactivo</option>
                   </select>
                   <label className="fl-label">Estado</label>
                 </div>
@@ -547,7 +509,7 @@ export default function ModalCategoriasStock({
                     {saving
                       ? "Guardando..."
                       : modo === "crear"
-                      ? "Crear categoría"
+                      ? "Crear cliente"
                       : "Guardar cambios"}
                   </button>
 
@@ -561,16 +523,6 @@ export default function ModalCategoriasStock({
                       Cancelar edición
                     </button>
                   )}
-                </div>
-
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "var(--nv-muted)",
-                    marginTop: 4,
-                  }}
-                >
-                  Gestioná tus <b>categorías</b> con activas, inactivas, alta, baja y eliminación.
                 </div>
               </div>
             </aside>
@@ -594,10 +546,10 @@ export default function ModalCategoriasStock({
                         color: "var(--nv-text)",
                       }}
                     >
-                      Listado de categorías
+                      Listado de clientes
                     </div>
                     <div style={{ fontSize: 12, color: "var(--nv-muted)" }}>
-                      Total: <b>{categoriasOrdenadas.length}</b>
+                      Total: <b>{clientesOrdenados.length}</b>
                     </div>
                   </div>
                 </div>
@@ -605,47 +557,49 @@ export default function ModalCategoriasStock({
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
                     type="button"
-                    className={`mit-btn ${pestana === "activas" ? "mit-btn--solid" : "mit-btn--ghost"}`}
+                    className={`mit-btn ${pestana === "activos" ? "mit-btn--solid" : "mit-btn--ghost"}`}
                     onClick={() => {
-                      setPestana("activas");
+                      setPestana("activos");
                       setModo("crear");
                       setEditandoId(null);
                       setForm((prev) => ({ ...prev, activo: 1 }));
                     }}
                     disabled={loading || saving}
                   >
-                    Activas
+                    Activos
                   </button>
 
                   <button
                     type="button"
-                    className={`mit-btn ${pestana === "inactivas" ? "mit-btn--solid" : "mit-btn--ghost"}`}
+                    className={`mit-btn ${pestana === "inactivos" ? "mit-btn--solid" : "mit-btn--ghost"}`}
                     onClick={() => {
-                      setPestana("inactivas");
+                      setPestana("inactivos");
                       setModo("crear");
                       setEditandoId(null);
                       setForm((prev) => ({ ...prev, activo: 0 }));
                     }}
                     disabled={loading || saving}
                   >
-                    Inactivas
+                    Inactivos
                   </button>
                 </div>
               </div>
 
-              {!loading && categoriasOrdenadas.length > 0 && (
-                <div className="mi-cr-table__head mi-cr-grid-categorias">
+              {!loading && clientesOrdenados.length > 0 && (
+                <div className="mi-cr-table__head mi-cr-grid-clientes-stock">
                   <div className="mi-cr-table__head-cell" style={{ paddingLeft: 10 }}>
                     Nombre
                   </div>
-                  <div className="mi-cr-table__head-cell">Descripción</div>
-                  <div className="mi-cr-table__head-cell" style={{ textAlign: "center" }}>
+                  <div
+                    className="mi-cr-table__head-cell"
+                    style={{ textAlign: "center" }}
+                  >
                     Estado
                   </div>
-                  <div className="mi-cr-table__head-cell" style={{ textAlign: "center" }}>
-                    Productos
-                  </div>
-                  <div className="mi-cr-table__head-cell" style={{ textAlign: "center" }}>
+                  <div
+                    className="mi-cr-table__head-cell"
+                    style={{ textAlign: "center" }}
+                  >
                     Acciones
                   </div>
                 </div>
@@ -656,31 +610,31 @@ export default function ModalCategoriasStock({
                   <EmptyState
                     icon={faArrowRotateRight}
                     spin
-                    text="Cargando categorías..."
+                    text="Cargando clientes..."
                   />
-                ) : categoriasOrdenadas.length === 0 ? (
+                ) : clientesOrdenados.length === 0 ? (
                   <EmptyState
-                    icon={faLayerGroup}
+                    icon={faUsers}
                     text={
-                      pestana === "activas"
-                        ? "No hay categorías activas."
-                        : "No hay categorías inactivas."
+                      pestana === "activos"
+                        ? "No hay clientes activos."
+                        : "No hay clientes inactivos."
                     }
                   />
                 ) : (
-                  categoriasOrdenadas.map((cat) => {
-                    const activo = Number(cat?.activo ?? 1) === 1;
+                  clientesOrdenados.map((row) => {
+                    const activo = Number(row?.activo ?? 1) === 1;
                     const isEditing =
-                      getCategoriaId(cat) === Number(editandoId || 0) &&
+                      getClienteId(row) === Number(editandoId || 0) &&
                       modo === "editar";
-                    const bloqueado = accionandoId === getCategoriaId(cat) || saving;
+                    const bloqueado = accionandoId === getClienteId(row) || saving;
 
                     return (
                       <div
-                        key={getCategoriaId(cat)}
+                        key={getClienteId(row)}
                         className={[
                           "mi-cr-row",
-                          "mi-cr-grid-categorias",
+                          "mi-cr-grid-clientes-stock",
                           isEditing ? "mi-cr-row--editing" : "",
                         ].join(" ").trim()}
                       >
@@ -690,7 +644,7 @@ export default function ModalCategoriasStock({
                         >
                           <span
                             className="mi-cr-cell__ellipsis"
-                            title={cat?.nombre || "—"}
+                            title={row?.nombre || "—"}
                             style={{
                               display: "block",
                               width: "100%",
@@ -703,29 +657,7 @@ export default function ModalCategoriasStock({
                               color: "var(--nv-text)",
                             }}
                           >
-                            {cat?.nombre || "—"}
-                          </span>
-                        </div>
-
-                        <div className="mi-cr-cell mi-cr-cell--ellipsis" style={{ minWidth: 0 }}>
-                          <span
-                            className="mi-cr-cell__ellipsis"
-                            title={cat?.descripcion?.trim() || "Sin descripción"}
-                            style={{
-                              display: "block",
-                              width: "100%",
-                              minWidth: 0,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              fontSize: 12,
-                              color: cat?.descripcion?.trim()
-                                ? "var(--nv-muted)"
-                                : "var(--nv-placeholder)",
-                              fontStyle: cat?.descripcion?.trim() ? "normal" : "italic",
-                            }}
-                          >
-                            {cat?.descripcion?.trim() || "Sin descripción"}
+                            {row?.nombre || "—"}
                           </span>
                         </div>
 
@@ -750,25 +682,7 @@ export default function ModalCategoriasStock({
                               }`,
                             }}
                           >
-                            {activo ? "Activa" : "Inactiva"}
-                          </span>
-                        </div>
-
-                        <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--mono">
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 5,
-                              fontSize: 13,
-                              color: "var(--nv-text)",
-                            }}
-                          >
-                            <FontAwesomeIcon
-                              icon={faBoxesStacked}
-                              style={{ fontSize: 11, color: "var(--nv-muted)" }}
-                            />
-                            {Number(cat?.total_productos || 0)}
+                            {activo ? "Activo" : "Inactivo"}
                           </span>
                         </div>
 
@@ -787,7 +701,7 @@ export default function ModalCategoriasStock({
                                 <button
                                   type="button"
                                   className="nv-foot-btn nv-foot-btn--sm"
-                                  onClick={() => iniciarEdicion(cat)}
+                                  onClick={() => iniciarEdicion(row)}
                                   disabled={bloqueado}
                                   title="Editar"
                                 >
@@ -797,7 +711,7 @@ export default function ModalCategoriasStock({
                                 <button
                                   type="button"
                                   className="nv-foot-btn nv-foot-btn--sm"
-                                  onClick={() => abrirModalAccion("baja", cat)}
+                                  onClick={() => abrirModalAccion("baja", row)}
                                   disabled={bloqueado}
                                   title="Dar de baja"
                                 >
@@ -808,7 +722,7 @@ export default function ModalCategoriasStock({
                               <button
                                 type="button"
                                 className="nv-foot-btn nv-foot-btn--sm"
-                                onClick={() => abrirModalAccion("alta", cat)}
+                                onClick={() => abrirModalAccion("alta", row)}
                                 disabled={bloqueado}
                                 title="Dar de alta"
                               >
@@ -819,7 +733,7 @@ export default function ModalCategoriasStock({
                             <button
                               type="button"
                               className="nv-foot-btn nv-foot-btn--sm nv-foot-btn--danger"
-                              onClick={() => abrirModalAccion("eliminar", cat)}
+                              onClick={() => abrirModalAccion("eliminar", row)}
                               disabled={bloqueado}
                               title="Eliminar"
                             >
@@ -835,7 +749,7 @@ export default function ModalCategoriasStock({
 
               <div className="mi-cr-table__foot">
                 <span style={{ fontSize: 12, color: "var(--nv-muted)" }}>
-                  Las categorías pueden darse de baja, de alta o eliminarse.
+                  Administrá el padrón de <b>clientes</b>.
                 </span>
               </div>
             </section>
@@ -844,7 +758,7 @@ export default function ModalCategoriasStock({
 
         <div className="mit-actions">
           <span className="mit-help">
-            Gestión de categorías con activas, inactivas, alta, baja y eliminación.
+            Gestión de clientes con activos, inactivos, alta, baja y eliminación.
           </span>
           <button
             type="button"

@@ -24,6 +24,10 @@ function buildHeadersGET() {
   return h;
 }
 
+function isBlobUrl(v = "") {
+  return safeText(v).startsWith("blob:");
+}
+
 function getExtensionFromUrl(url = "") {
   const clean = safeText(url).split("?")[0].split("#")[0].toLowerCase();
   const m = clean.match(/\.([a-z0-9]+)$/i);
@@ -344,6 +348,7 @@ export default function ModalVerComprobante({
   const [resolvedFileName, setResolvedFileName] = useState("");
   const [textPreview, setTextPreview] = useState("");
   const [htmlPreview, setHtmlPreview] = useState("");
+  const internalBlobRef = useRef("");
 
   useEffect(() => {
     if (!open) return;
@@ -376,6 +381,13 @@ export default function ModalVerComprobante({
   }, [open]);
 
   useEffect(() => {
+    const revokeInternalBlob = () => {
+      if (internalBlobRef.current) {
+        URL.revokeObjectURL(internalBlobRef.current);
+        internalBlobRef.current = "";
+      }
+    };
+
     if (!open || !url) {
       setLoading(false);
       setDownloading(false);
@@ -384,15 +396,12 @@ export default function ModalVerComprobante({
       setResolvedFileName("");
       setTextPreview("");
       setHtmlPreview("");
-      setBlobUrl((prev) => {
-        if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-        return "";
-      });
+      setBlobUrl("");
+      revokeInternalBlob();
       return;
     }
 
     let cancelled = false;
-    let localBlobUrl = "";
 
     async function run() {
       setLoading(true);
@@ -401,13 +410,19 @@ export default function ModalVerComprobante({
       setResolvedFileName("");
       setTextPreview("");
       setHtmlPreview("");
-
-      setBlobUrl((prev) => {
-        if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-        return "";
-      });
+      setBlobUrl("");
+      revokeInternalBlob();
 
       try {
+        if (isBlobUrl(url)) {
+          if (cancelled) return;
+
+          setResolvedMime(safeText(mime));
+          setResolvedFileName("");
+          setBlobUrl(url);
+          return;
+        }
+
         const res = await fetch(url, {
           method: "GET",
           headers: buildHeadersGET(),
@@ -451,13 +466,14 @@ export default function ModalVerComprobante({
         }
 
         const blob = await res.blob();
-        localBlobUrl = URL.createObjectURL(blob);
+        const localBlobUrl = URL.createObjectURL(blob);
 
         if (cancelled) {
-          if (localBlobUrl) URL.revokeObjectURL(localBlobUrl);
+          URL.revokeObjectURL(localBlobUrl);
           return;
         }
 
+        internalBlobRef.current = localBlobUrl;
         setResolvedMime(contentType || blob.type || safeText(mime));
         setResolvedFileName(headerFileName);
         setBlobUrl(localBlobUrl);
@@ -473,7 +489,7 @@ export default function ModalVerComprobante({
 
     return () => {
       cancelled = true;
-      if (localBlobUrl) URL.revokeObjectURL(localBlobUrl);
+      revokeInternalBlob();
     };
   }, [open, url, mime]);
 
@@ -513,6 +529,25 @@ export default function ModalVerComprobante({
 
   async function handleDownload() {
     if (!url || downloading) return;
+
+    if (isBlobUrl(url)) {
+      try {
+        setDownloading(true);
+        setErrorMsg("");
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = displayFileName || "archivo";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (e) {
+        setErrorMsg(e?.message || "No se pudo descargar el archivo.");
+      } finally {
+        setDownloading(false);
+      }
+      return;
+    }
 
     setDownloading(true);
     setErrorMsg("");

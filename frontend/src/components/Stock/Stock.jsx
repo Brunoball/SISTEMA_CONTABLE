@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import ModalCargaMasiva from "./modales/ModalCargaMasiva";
 import ModalEditarProducto from "./modales/ModalEditarStock";
 import ModalCategoriasStock from "./modales/ModalCategoriasStock";
+import ModalClientesStock from "./modales/ModalClientesStock";
+import ModalProveedoresStock from "./modales/ModalProveedoresStock";
 import ModalEliminar from "../Global/Modales/ModalEliminar";
 import Toast from "../Global/Toast";
 import BASE_URL from "../../config/config";
@@ -17,6 +19,8 @@ import {
   faChevronDown,
   faSort,
   faLayerGroup,
+  faUsers,
+  faTruckField,
 } from "@fortawesome/free-solid-svg-icons";
 import "./Stock.css";
 
@@ -197,6 +201,8 @@ const Stock = () => {
   const [productoEditarId, setProductoEditarId] = useState(null);
 
   const [modalCategoriasAbierto, setModalCategoriasAbierto] = useState(false);
+  const [modalClientesAbierto, setModalClientesAbierto] = useState(false);
+  const [modalProveedoresAbierto, setModalProveedoresAbierto] = useState(false);
 
   const [modalEliminarAbierto, setModalEliminarAbierto] = useState(false);
   const [productoEliminar, setProductoEliminar] = useState(null);
@@ -663,13 +669,32 @@ const Stock = () => {
               </div>
             </div>
 
-            <div className="mov-card__actions">
+            <div
+              className="mov-card__actions"
+              style={{ display: "flex", gap: 10, flexWrap: "wrap" }}
+            >
               <button
                 type="button"
                 className="mov-btn mov-btn--ghost"
                 onClick={() => setModalCategoriasAbierto(true)}
               >
                 <FontAwesomeIcon icon={faLayerGroup} /> Categorías
+              </button>
+
+              <button
+                type="button"
+                className="mov-btn mov-btn--ghost"
+                onClick={() => setModalClientesAbierto(true)}
+              >
+                <FontAwesomeIcon icon={faUsers} /> Clientes
+              </button>
+
+              <button
+                type="button"
+                className="mov-btn mov-btn--ghost"
+                onClick={() => setModalProveedoresAbierto(true)}
+              >
+                <FontAwesomeIcon icon={faTruckField} /> Proveedores
               </button>
 
               <button
@@ -777,28 +802,28 @@ const Stock = () => {
                           </span>
                         </div>
 
-<div
-  className="mov-gridCell is-center"
-  role="cell"
-  data-label="STOCK"
->
-  {(() => {
-    const stockNum = Number(prod.stock || 0);
+                        <div
+                          className="mov-gridCell is-center"
+                          role="cell"
+                          data-label="STOCK"
+                        >
+                          {(() => {
+                            const stockNum = Number(prod.stock || 0);
 
-    let stockClass = "mov-chip mov-chip--danger";
-    let stockLabel = "Sin stock";
+                            let stockClass = "mov-chip mov-chip--danger";
+                            let stockLabel = "Sin stock";
 
-    if (stockNum > 10) {
-      stockClass = "mov-chip mov-chip--ok";
-      stockLabel = stockNum;
-    } else if (stockNum > 0 && stockNum <= 10) {
-      stockClass = "mov-chip mov-chip--warn";
-      stockLabel = stockNum;
-    }
+                            if (stockNum > 10) {
+                              stockClass = "mov-chip mov-chip--ok";
+                              stockLabel = stockNum;
+                            } else if (stockNum > 0 && stockNum <= 10) {
+                              stockClass = "mov-chip mov-chip--warn";
+                              stockLabel = stockNum;
+                            }
 
-    return <span className={stockClass}>{stockLabel}</span>;
-  })()}
-</div>
+                            return <span className={stockClass}>{stockLabel}</span>;
+                          })()}
+                        </div>
 
                         <div
                           className="mov-gridCell is-right"
@@ -942,6 +967,32 @@ const Stock = () => {
         <ModalCategoriasStock
           open={modalCategoriasAbierto}
           onClose={() => setModalCategoriasAbierto(false)}
+          onToast={mostrarToast}
+          onActualizado={async () => {
+            await recargarTodo();
+            notifyListsUpdated();
+            window.dispatchEvent(new CustomEvent("balto:stock-updated"));
+          }}
+        />
+      )}
+
+      {modalClientesAbierto && (
+        <ModalClientesStock
+          open={modalClientesAbierto}
+          onClose={() => setModalClientesAbierto(false)}
+          onToast={mostrarToast}
+          onActualizado={async () => {
+            await recargarTodo();
+            notifyListsUpdated();
+            window.dispatchEvent(new CustomEvent("balto:stock-updated"));
+          }}
+        />
+      )}
+
+      {modalProveedoresAbierto && (
+        <ModalProveedoresStock
+          open={modalProveedoresAbierto}
+          onClose={() => setModalProveedoresAbierto(false)}
           onToast={mostrarToast}
           onActualizado={async () => {
             await recargarTodo();

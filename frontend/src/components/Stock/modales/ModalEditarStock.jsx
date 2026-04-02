@@ -324,7 +324,6 @@ export default function ModalEditarProducto({
   const [previewFileName, setPreviewFileName] = useState("");
 
   const cerrarPreview = () => {
-    if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
     setPreviewOpen(false);
     setPreviewUrl("");
     setPreviewMime("");

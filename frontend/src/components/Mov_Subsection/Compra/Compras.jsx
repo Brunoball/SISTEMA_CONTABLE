@@ -211,7 +211,8 @@ function ensureResourceHint(url, rel = "prefetch", as = "document") {
   if (!href) return;
 
   const key = `hint:${rel}:${as}:${href}`;
-  const selectorKey = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(key) : key.replace(/"/g, '\\"');
+  const selectorKey =
+    typeof CSS !== "undefined" && CSS.escape ? CSS.escape(key) : key.replace(/"/g, '\\"');
 
   if (document.head.querySelector(`link[data-key="${selectorKey}"]`)) return;
 
@@ -497,9 +498,6 @@ export default function Compras() {
     };
   }, []);
 
-  /* =========================
-     API helpers
-  ========================= */
   const buildHeaders = useCallback(() => {
     const { token, sessionKey } = getAuthInfo();
     const h = { "Content-Type": "application/json" };
@@ -553,9 +551,6 @@ export default function Compras() {
     } catch {}
   }, [refreshLists]);
 
-  /* =========================
-     Editar en backend
-  ========================= */
   const editarCompraEnBackend = useCallback(
     async (payloadFinal) => {
       const { idUsuario } = getAuthInfo();
@@ -583,9 +578,6 @@ export default function Compras() {
     [API, apiPostJson, selectedRow]
   );
 
-  /* =========================
-     LOAD ROWS
-  ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
       const range = opts.dateRange ?? dateRange;
@@ -752,9 +744,6 @@ export default function Compras() {
     [API, apiGet, dateRange, q, beginSkeleton, endSkeleton]
   );
 
-  /* =========================
-     INIT
-  ========================= */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -783,9 +772,6 @@ export default function Compras() {
     };
   }, []); // eslint-disable-line
 
-  /* =========================
-     Debounce búsqueda
-  ========================= */
   useEffect(() => {
     if (skipSearchRef.current) {
       skipSearchRef.current = false;
@@ -800,9 +786,6 @@ export default function Compras() {
     };
   }, [q, dateRange]); // eslint-disable-line
 
-  /* =========================
-     Handler cambio de rango
-  ========================= */
   const handleDateRangeChange = useCallback(
     async (newRange) => {
       if (!newRange?.from && !newRange?.to) return;
@@ -815,18 +798,12 @@ export default function Compras() {
     [setDateRange, loadRows, q]
   );
 
-  /* =========================
-     Filtrado client-side
-  ========================= */
   const filteredRows = useMemo(() => {
     return (Array.isArray(rows) ? rows : []).filter((r) =>
       rowInDateRange(r, dateRange?.from, dateRange?.to)
     );
   }, [rows, dateRange]);
 
-  /* =========================
-     Label botón calendario
-  ========================= */
   const dateRangeLabel = useMemo(() => {
     const { from, to } = dateRange;
 
@@ -856,9 +833,6 @@ export default function Compras() {
     return `Hasta ${formatDateUI(to)}`;
   }, [dateRange]);
 
-  /* =========================
-     Export base name
-  ========================= */
   const exportBaseName = useMemo(() => {
     const { from, to } = dateRange;
     if (from && to) return `compras_${dateToAPI(from)}_${dateToAPI(to)}`;
@@ -866,9 +840,6 @@ export default function Compras() {
     return "compras_todos";
   }, [dateRange]);
 
-  /* =========================
-     Export helpers
-  ========================= */
   const getExportData = useCallback(() => {
     const dataToExport = buildExportRows(filteredRows);
     if (!dataToExport.length) throw new Error("No hay datos para exportar.");
@@ -980,9 +951,6 @@ export default function Compras() {
     [handleExport]
   );
 
-  /* =========================
-     Columnas
-  ========================= */
   const columns = useMemo(
     () => [
       {
@@ -1039,9 +1007,6 @@ export default function Compras() {
       .join(" ");
   }, [columns]);
 
-  /* =========================
-     Acciones UI
-  ========================= */
   const openEditModal = (r) => {
     setSelectedRow(r);
     setOpenEdit(true);
@@ -1103,9 +1068,6 @@ export default function Compras() {
     setCompMime("");
   };
 
-  /* =========================
-     Refresh tras guardar
-  ========================= */
   const refreshAfterSave = useCallback(async () => {
     setOpenNueva(false);
     setOpenEdit(false);
@@ -1115,9 +1077,6 @@ export default function Compras() {
     await refreshPeriodos();
   }, [dateRange, loadRows, refreshPeriodos]);
 
-  /* =========================
-     Guardar edición
-  ========================= */
   const handleSaveEdit = useCallback(
     async (payloadFinal) => {
       const data = await editarCompraEnBackend(payloadFinal);
@@ -1128,36 +1087,43 @@ export default function Compras() {
   );
 
   /* =========================
-     Eliminar
+     ELIMINAR - CORREGIDO
   ========================= */
-  const confirmDelete = async () => {
+  const confirmDelete = useCallback(async () => {
     const id = getRowId(selectedRow);
-    if (!id) return;
+    if (!id) {
+      throw new Error("No se encontró el id del movimiento a eliminar.");
+    }
+
     setDeletingId(id);
+
     try {
       const { idUsuario } = getAuthInfo();
       const sp = new URLSearchParams();
       sp.set("action", "compras_eliminar");
       sp.set("id_movimiento", String(id));
-      showToast("cargando", "Eliminando compra...", 12000);
+
       const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
+
+      if (!data?.exito) {
+        throw new Error(data?.mensaje || "No se pudo eliminar.");
+      }
+
       setOpenDel(false);
       setSelectedRow(null);
       cacheRef.current.clear();
+
       await loadRows({ dateRange, q, offset: 0, append: false });
       await refreshPeriodos();
-      showToast("exito", "Compra eliminada correctamente.", 2600);
+
+      return data;
     } catch (e) {
-      showToast("error", e?.message || "Error eliminando compra.", 4200);
+      throw e;
     } finally {
       setDeletingId(null);
     }
-  };
+  }, [API, apiPostJson, selectedRow, loadRows, dateRange, q, refreshPeriodos]);
 
-  /* =========================
-     Cargar más de 100 en 100
-  ========================= */
   const handleLoadMore = useCallback(async () => {
     if (!hasMore || loadingRows || loadingMore || loadingListsCtx) return;
     if (nextOffset === null) return;
@@ -1193,9 +1159,6 @@ export default function Compras() {
     showToast,
   ]);
 
-  /* =========================
-     Skeleton
-  ========================= */
   const skelWidths = useMemo(
     () => ({
       fecha: ["44%", "38%", "40%", "36%"],
@@ -1256,9 +1219,6 @@ export default function Compras() {
   const canShowEmpty = ready && !loadingRows && !loadingListsCtx && filteredRows.length === 0;
   const isAnyLoading = loadingRows || loadingMore;
 
-  /* =========================
-     RENDER
-  ========================= */
   return (
     <div className="mov-page mov-page--compras">
       {toast && (
@@ -1456,7 +1416,6 @@ export default function Compras() {
                 {filteredRows.map((r) => {
                   const rowId = getRowId(r) ?? `row-${Math.random()}`;
                   const comp = buildComprobanteFastUrl(r);
-                  const compMimeRow = getComprobanteMime(r);
                   const canSee = !!comp;
                   const isDeleting =
                     deletingId !== null && String(deletingId) === String(rowId);
@@ -1662,6 +1621,13 @@ export default function Compras() {
         }}
         onConfirm={confirmDelete}
         onToast={showToast}
+        title="Eliminar compra"
+        message="¿Seguro que querés eliminar esta compra definitivamente?"
+        warning="Esta acción no se puede deshacer."
+        loadingMessage="Eliminando compra..."
+        successMessage="Compra eliminada correctamente."
+        errorMessage="No se pudo eliminar la compra."
+        confirmLabel="Eliminar"
       />
     </div>
   );

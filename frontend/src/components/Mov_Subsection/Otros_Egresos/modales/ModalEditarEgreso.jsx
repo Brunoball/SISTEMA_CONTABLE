@@ -3,6 +3,14 @@ import { createPortal } from "react-dom";
 import BASE_URL from "../../../../config/config.jsx";
 import "../../../Global/Global_css/Global_Modals.css";
 import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
+import {
+  FaFileAlt,
+  FaEye,
+  FaTrash,
+  FaTimes,
+  FaUpload,
+  FaUndo,
+} from "react-icons/fa";
 
 const IVA_OPTIONS = [
   { label: "0%", value: 0 },
@@ -1359,7 +1367,17 @@ export default function ModalEditarEgreso({
                         <>
                           {mostrarArchivoActual && (
                             <div className="mi-uploadFile is-filled">
-                              <div className="mi-uploadFile__icon">📄</div>
+                              <div
+                                className="mi-uploadFile__icon"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <FaFileAlt />
+                              </div>
+
                               <div className="mi-uploadFile__meta">
                                 <div
                                   className="mi-uploadFile__name"
@@ -1383,8 +1401,15 @@ export default function ModalEditarEgreso({
                                   onClick={abrirViewer}
                                   disabled={saving}
                                   title="Ver comprobante"
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: 6,
+                                  }}
                                 >
-                                  👁 Ver
+                                  <FaEye />
+                                  
                                 </button>
 
                                 <button
@@ -1393,8 +1418,15 @@ export default function ModalEditarEgreso({
                                   onClick={marcarEliminar}
                                   disabled={saving}
                                   title="Quitar comprobante"
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: 6,
+                                  }}
                                 >
-                                  🗑 Quitar
+                                  <FaTrash />
+                                
                                 </button>
                               </div>
                             </div>
@@ -1402,7 +1434,16 @@ export default function ModalEditarEgreso({
 
                           {archivoNuevo && (
                             <div className="mi-uploadFile is-filled">
-                              <div className="mi-uploadFile__icon">📄</div>
+                              <div
+                                className="mi-uploadFile__icon"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <FaFileAlt />
+                              </div>
                               <div className="mi-uploadFile__meta">
                                 <div
                                   className="mi-uploadFile__name"
@@ -1424,9 +1465,16 @@ export default function ModalEditarEgreso({
                                 className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
                                 onClick={quitarArchivoNuevo}
                                 disabled={saving}
-                                style={{ marginLeft: "auto" }}
+                                style={{
+                                  marginLeft: "auto",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: 6,
+                                }}
                               >
-                                ✕ Quitar
+                                <FaTimes />
+                                Quitar
                               </button>
                             </div>
                           )}
@@ -1448,7 +1496,14 @@ export default function ModalEditarEgreso({
                                 className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
                                 onClick={restaurarComprobanteActual}
                                 disabled={saving}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: 6,
+                                }}
                               >
+                                <FaUndo />
                                 Cancelar quitar
                               </button>
                             )}
@@ -1472,9 +1527,14 @@ export default function ModalEditarEgreso({
                                   marcarEliminarComprobante && !archivoNuevo
                                     ? "auto"
                                     : "1 / -1",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 6,
                               }}
                             >
-                              ↑ {mostrarArchivoActual
+                              <FaUpload />
+                              {mostrarArchivoActual
                                 ? "Reemplazar archivo"
                                 : "Seleccionar archivo"}
                             </button>

@@ -1363,23 +1363,7 @@ onKeyDown={(e) => {
                       inputClassName="fl-input"
                     />
 
-                    <button
-                      type="button"
-                      className="mi-cr-link"
-                      onClick={startAddCliente}
-                      disabled={saving || addUI.saving}
-                      style={{
-                        fontSize: "11px",
-                        color: "#0f766e",
-                        background: "none",
-                        border: "none",
-                        padding: "4px 0 0",
-                        cursor: "pointer",
-                        fontWeight: 500,
-                      }}
-                    >
-                      + Agregar nuevo cliente
-                    </button>
+
                   </div>
 
                   <div className="fl-field">

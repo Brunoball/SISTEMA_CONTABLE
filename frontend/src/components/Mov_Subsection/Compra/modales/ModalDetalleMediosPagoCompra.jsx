@@ -34,7 +34,9 @@ function formatFechaDMY(v) {
 
   const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) {
-    return `${String(Number(m[3])).padStart(2, "0")}/${String(Number(m[2])).padStart(2, "0")}/${m[1]}`;
+    return `${String(Number(m[3])).padStart(2, "0")}/${String(
+      Number(m[2])
+    ).padStart(2, "0")}/${m[1]}`;
   }
 
   return s;
@@ -42,6 +44,7 @@ function formatFechaDMY(v) {
 
 function getDetalleList(row) {
   if (Array.isArray(row?.medios_pago_detalle)) return row.medios_pago_detalle;
+
   if (typeof row?.medios_pago_detalle === "string") {
     try {
       const parsed = JSON.parse(row.medios_pago_detalle);
@@ -50,15 +53,30 @@ function getDetalleList(row) {
       return [];
     }
   }
+
   return [];
 }
 
-export default function ModalDetalleMediosPagoCompra({ open, row, onClose }) {
+function DetailRow({ label, value }) {
+  return (
+    <div className="mi-detalle-row">
+      <span className="mi-detalle-label">{label}</span>
+      <span className="mi-detalle-value">{value}</span>
+    </div>
+  );
+}
+
+export default function ModalDetalleMediosPagoCompra({
+  open,
+  row,
+  onClose,
+}) {
   const detalle = getDetalleList(row);
   const total = detalle.reduce((acc, item) => acc + Number(item?.monto || 0), 0);
 
   useEffect(() => {
     if (!open) return;
+
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -67,6 +85,7 @@ export default function ModalDetalleMediosPagoCompra({ open, row, onClose }) {
     };
 
     document.addEventListener("keydown", onKey);
+
     return () => {
       document.body.style.overflow = prev;
       document.removeEventListener("keydown", onKey);
@@ -78,7 +97,7 @@ export default function ModalDetalleMediosPagoCompra({ open, row, onClose }) {
   return createPortal(
     <div className="mi-modal__overlay" onMouseDown={onClose}>
       <div
-        className="mi-modal__container mi-modal__container--mov"
+        className="mi-modal__container "
         style={{ maxWidth: 860 }}
         onMouseDown={(e) => e.stopPropagation()}
       >
@@ -89,7 +108,7 @@ export default function ModalDetalleMediosPagoCompra({ open, row, onClose }) {
 
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Detalle de medios de pago</h2>
-            <div className="mi-modal__subtitle" style={{ fontSize: 13, opacity: 0.85 }}>
+            <div className="mi-modal__subtitle">
               Compra #{safeText(row?.id_movimiento)} · {safeText(row?.proveedor)}
             </div>
           </div>
@@ -119,6 +138,7 @@ export default function ModalDetalleMediosPagoCompra({ open, row, onClose }) {
                   display: "grid",
                   gap: 12,
                   marginBottom: 16,
+                  overflow: "auto",
                 }}
               >
                 {detalle.map((item) => {
@@ -126,80 +146,85 @@ export default function ModalDetalleMediosPagoCompra({ open, row, onClose }) {
 
                   return (
                     <div
-                      key={item?.id_compra_medio_pago || `${item?.id_medio_pago}-${item?.id_cheque || "x"}`}
+                      key={
+                        item?.id_compra_medio_pago ||
+                        `${item?.id_medio_pago}-${item?.id_cheque || "x"}`
+                      }
                       className="mi-card mi-card--full"
                       style={{
-                        border: "1px solid rgba(0,0,0,.08)",
                         borderRadius: 14,
                         padding: 14,
                       }}
                     >
                       <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "flex-start",
-                          gap: 12,
-                          flexWrap: "wrap",
-                        }}
                       >
                         <div>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              fontWeight: 700,
-                              fontSize: 15,
-                              marginBottom: 8,
-                            }}
-                          >
-                            <FontAwesomeIcon icon={faReceipt} />
-                            {safeText(item?.medio_pago_nombre)}
+                          <div className="mi-detalle-title"><div>
+                                                        <FontAwesomeIcon icon={faReceipt} />
+                            <span>{safeText(item?.medio_pago_nombre)}</span>
                           </div>
 
-                          <div style={{ display: "grid", gap: 4, fontSize: 13 }}>
-                            <div>
-                              <b>Monto:</b> {moneyARS(item?.monto || 0)}
-                            </div>
+                          <div  className="mi-detalle-monto">
+                          {moneyARS(item?.monto || 0)}
+                          </div>
+                          </div>
+                          
+
+                          <div
+                            style={{
+                              display: "grid",
+                              gap: 7,
+                            }}
+                          >
+                            <DetailRow
+                              label="Monto"
+                              value={moneyARS(item?.monto || 0)}
+                            />
 
                             {esCheque && (
-                              <>
-                                <div>
-                                  <b>Tipo:</b> {safeText(item?.cheque_tipo || "Cheque")}
+                              <div className="mi-detalle-block">
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gap: 7,
+                                    marginTop: 4,
+                                  }}
+                                >
+                                  <DetailRow
+                                    label="Tipo"
+                                    value={safeText(item?.cheque_tipo || "Cheque")}
+                                  />
+                                  <DetailRow
+                                    label="ID cheque"
+                                    value={safeText(item?.id_cheque)}
+                                  />
+                                  <DetailRow
+                                    label="Número"
+                                    value={safeText(item?.numero_cheque)}
+                                  />
+                                  <DetailRow
+                                    label="Emisor"
+                                    value={safeText(item?.emisor)}
+                                  />
+                                  <DetailRow
+                                    label="Fecha emisión"
+                                    value={formatFechaDMY(item?.fecha_emision)}
+                                  />
+                                  <DetailRow
+                                    label="Fecha pago"
+                                    value={formatFechaDMY(item?.fecha_pago)}
+                                  />
+                                  <DetailRow
+                                    label="Importe cheque"
+                                    value={moneyARS(item?.cheque_importe || 0)}
+                                  />
                                 </div>
-                                <div>
-                                  <b>ID cheque:</b> {safeText(item?.id_cheque)}
-                                </div>
-                                <div>
-                                  <b>Número:</b> {safeText(item?.numero_cheque)}
-                                </div>
-                                <div>
-                                  <b>Emisor:</b> {safeText(item?.emisor)}
-                                </div>
-                                <div>
-                                  <b>Fecha emisión:</b> {formatFechaDMY(item?.fecha_emision)}
-                                </div>
-                                <div>
-                                  <b>Fecha pago:</b> {formatFechaDMY(item?.fecha_pago)}
-                                </div>
-                                <div>
-                                  <b>Importe cheque:</b> {moneyARS(item?.cheque_importe || 0)}
-                                </div>
-                              </>
+                              </div>
                             )}
                           </div>
                         </div>
 
-                        <div
-                          style={{
-                            fontWeight: 800,
-                            fontSize: 18,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {moneyARS(item?.monto || 0)}
-                        </div>
+
                       </div>
                     </div>
                   );
@@ -212,12 +237,11 @@ export default function ModalDetalleMediosPagoCompra({ open, row, onClose }) {
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  fontWeight: 800,
-                  fontSize: 16,
+                  gap: 12,
                 }}
               >
-                <span>Total medios</span>
-                <span>{moneyARS(total)}</span>
+                <span className="mi-detalle-title">Total medios</span>
+                <span className="mi-detalle-monto">{moneyARS(total)}</span>
               </div>
             </>
           )}

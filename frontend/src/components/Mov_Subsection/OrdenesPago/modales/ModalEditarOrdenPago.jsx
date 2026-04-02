@@ -667,9 +667,7 @@ export default function ModalEditarOrdenPago({
               </ul>
             )}
 
-            <button type="button" onClick={() => startAdd("proveedores")} disabled={saving} className="mi-cr-link">
-              + Agregar nuevo proveedor
-            </button>
+
           </div>
 
           {/* ✅ Detalle */}
@@ -704,9 +702,7 @@ export default function ModalEditarOrdenPago({
               </ul>
             )}
 
-            <button type="button" onClick={() => startAdd("detalles")} disabled={saving} className="mi-cr-link">
-              + Agregar nuevo detalle
-            </button>
+
           </div>
 
           {/* Monto */}

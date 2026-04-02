@@ -1891,3 +1891,122 @@ html[data-theme="oscuro"] .mfb-tab.is-active:hover {
 html[data-theme="oscuro"] .mfb-tab__text {
   color: inherit;
 }
+/* =========================================================
+   DARK MODE REAL PARA MODAL DETALLE MEDIOS DE PAGO
+========================================================= */
+
+html[data-theme="oscuro"] .mi-modal__container{
+  --mi-bg: #071a2c;
+  --mi-bg-soft: #0a2540;
+  --mi-border: rgba(255,255,255,.10);
+
+  --mi-text: rgba(255,255,255,.92);
+  --mi-muted: rgba(255,255,255,.68);
+
+  --nv-bg: rgba(6,18,28,.96);
+  --nv-surface: rgba(10,25,40,.82);
+  --nv-surface2: rgba(255,255,255,.04);
+
+  --nv-border: rgba(255,255,255,.09);
+  --nv-border-md: rgba(255,255,255,.14);
+
+  --nv-text: rgba(255,255,255,.92);
+  --nv-muted: rgba(220,230,240,.68);
+  --nv-placeholder: rgba(255,255,255,.38);
+
+  --nv-head-bg: rgba(255,255,255,.05);
+  --nv-row-odd: rgba(255,255,255,.025);
+  --nv-row-hover: rgba(255,255,255,.06);
+
+  --nv-shadow-sm: 0 1px 4px rgba(0,0,0,.22);
+  --nv-shadow-md: 0 6px 22px rgba(0,0,0,.32);
+  --nv-shadow-lg: 0 28px 64px rgba(0,0,0,.55);
+
+  background: var(--nv-bg);
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+html[data-theme="oscuro"] .mi-modal__content{
+  background: var(--nv-surface);
+}
+
+html[data-theme="oscuro"] .mi-card{
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 8px 24px rgba(0,0,0,.22);
+}
+
+html[data-theme="oscuro"] .mi-card__title{
+  color: var(--mi-text);
+}
+
+html[data-theme="oscuro"] .mi-card__hint{
+  color: var(--mi-muted);
+}
+
+html[data-theme="oscuro"] .mi-detalle-title{
+  color: var(--mi-text);
+}
+
+html[data-theme="oscuro"] .mi-detalle-label{
+  color: var(--mi-muted);
+}
+
+html[data-theme="oscuro"] .mi-detalle-value{
+  color: var(--mi-text);
+}
+
+html[data-theme="oscuro"] .mi-detalle-monto{
+  color: #60a5fa;
+}
+
+html[data-theme="oscuro"] .mi-detalle-block{
+  border-top: 1px dashed rgba(255,255,255,.10);
+}/* =========================================================
+   TEXTOS MINIMAL (LIVIANOS)
+========================================================= */
+
+.mi-detalle-row{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+/* labels (izquierda) */
+.mi-detalle-label{
+  font-size: 12.5px;
+  font-weight: 400; /* 👈 liviano */
+  color: var(--mi-muted);
+  letter-spacing: 0.2px;
+}
+
+/* valores (derecha) */
+.mi-detalle-value{
+  font-size: 13px;
+  font-weight: 400; /* 👈 liviano */
+  color: var(--mi-text);
+}
+
+/* título del medio de pago */
+.mi-detalle-title{
+  display: flex;
+  justify-content: space-between;
+  font-size: 13.5px;
+  font-weight: 500; /* 👈 apenas destacado */
+  color: var(--mi-text);
+}
+
+/* monto grande */
+.mi-detalle-monto{
+  font-size: 17px;
+  font-weight: 500; /* 👈 no bold */
+  color: var(--blue-action);
+}
+
+/* bloque cheque */
+.mi-detalle-block{
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--mi-border);
+}

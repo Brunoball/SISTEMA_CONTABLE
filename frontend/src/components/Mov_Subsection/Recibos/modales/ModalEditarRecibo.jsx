@@ -624,9 +624,7 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
               </ul>
             )}
 
-            <button type="button" onClick={() => startAdd("detalles")} disabled={saving} className="mi-cr-link">
-              + Agregar nuevo detalle
-            </button>
+
           </div>
 
           {/* ✅ Cliente (igual a detalle, con sugerencias + alta) */}
@@ -661,9 +659,6 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
               </ul>
             )}
 
-            <button type="button" onClick={() => startAdd("clientes")} disabled={saving} className="mi-cr-link">
-              + Agregar nuevo cliente
-            </button>
           </div>
 
           {/* Monto */}

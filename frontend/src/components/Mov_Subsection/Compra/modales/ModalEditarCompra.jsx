@@ -13,8 +13,11 @@ import {
   faMoneyCheckDollar,
   faCircleNotch,
   faPlus,
+  faCreditCard,
 } from "@fortawesome/free-solid-svg-icons";
 import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
+// [NUEVO] Importar el mini-modal de medios de pago y el panel resumen
+import { ModalMediosPago, PagoResumenPanel, buildEmptyMedioPago } from "./Modalmediospago.jsx";
 
 const NULL_OPTION = "";
 const ADD_OPTION = "__ADD__";
@@ -47,10 +50,6 @@ function moneyARS(v) {
   } catch {
     return `$${Number(v || 0).toFixed(2)}`;
   }
-}
-function safeText(v) {
-  const s = String(v ?? "").trim();
-  return s || "-";
 }
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
@@ -89,8 +88,12 @@ function getGenericId(x) {
     x?.id_comprobante ??
     x?.id_cheque ??
     null;
-
   const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function getMedioPagoId(mp) {
+  const c = mp?.id ?? mp?.id_medio_pago ?? mp?.medio_pago_id ?? mp?.idMedioPago ?? null;
+  const n = Number(c);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 function isPositiveId(v) {
@@ -139,11 +142,9 @@ function normalizeChequeTipoFromMedio(nombre) {
 function buildSingleCuentaCorrienteOption(arrRaw) {
   const arr = Array.isArray(arrRaw) ? arrRaw : [];
   if (!arr.length) return { list: [], pickedId: null };
-
   const hit = arr.find((x) => normalizeText(x?.nombre).includes("cuenta corriente")) || arr[0];
   const pickedId = getGenericId(hit);
   if (!pickedId) return { list: [], pickedId: null };
-
   return { list: [{ id: pickedId, nombre: "Cuenta Corriente" }], pickedId };
 }
 
@@ -158,20 +159,17 @@ function getAuthInfo() {
     localStorage.getItem("x_session") ||
     localStorage.getItem("X-Session") ||
     "";
-
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
-
   return { token, sessionKey, idUsuario };
 }
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
-
   let data = null;
   try {
     data = JSON.parse(text);
@@ -179,7 +177,6 @@ async function parseJsonOrThrow(res) {
     const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
     throw new Error(`Respuesta inválida del servidor (no es JSON). HTTP ${res.status}\n${preview}`);
   }
-
   if (!res.ok) {
     const msg = data?.mensaje || data?.error || `HTTP ${res.status}`;
     throw new Error(msg);
@@ -221,19 +218,10 @@ async function apiPostForm(url, formData) {
 function extractIdComprobanteFromUrlLike(v) {
   const s = String(v ?? "").trim();
   if (!s) return null;
-
   const m1 = s.match(/[?&]id_comprobante=(\d+)/i);
-  if (m1) {
-    const n = Number(m1[1]);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  }
-
+  if (m1) { const n = Number(m1[1]); return Number.isFinite(n) && n > 0 ? n : null; }
   const m2 = s.match(/[?&]id=(\d+)/i);
-  if (m2) {
-    const n = Number(m2[1]);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  }
-
+  if (m2) { const n = Number(m2[1]); return Number.isFinite(n) && n > 0 ? n : null; }
   return null;
 }
 function getComprobanteIdFromRow(row) {
@@ -244,28 +232,18 @@ function getComprobanteIdFromRow(row) {
     row?.factura_id_comprobante,
     row?.idFacturaComprobante,
   ];
-
   for (const cand of directCandidates) {
     const n = Number(cand);
     if (Number.isFinite(n) && n > 0) return n;
   }
-
   const urlCandidates = [
-    row?.factura_url,
-    row?.factura,
-    row?.comprobante_url,
-    row?.comprobante,
-    row?.archivo_url,
-    row?.url_factura,
-    row?.path_factura,
-    row?.factura_path,
+    row?.factura_url, row?.factura, row?.comprobante_url, row?.comprobante,
+    row?.archivo_url, row?.url_factura, row?.path_factura, row?.factura_path,
   ];
-
   for (const u of urlCandidates) {
     const n = extractIdComprobanteFromUrlLike(u);
     if (n) return n;
   }
-
   return null;
 }
 function getComprobanteUrl(row) {
@@ -276,24 +254,14 @@ function getComprobanteUrl(row) {
     sp.set("id_comprobante", String(idComp));
     return `${BASE_URL}/api.php?${sp.toString()}`;
   }
-
   const candidates = [
-    row?.factura_url,
-    row?.factura,
-    row?.comprobante_url,
-    row?.comprobante,
-    row?.archivo_url,
-    row?.url_factura,
-    row?.path_factura,
-    row?.factura_path,
+    row?.factura_url, row?.factura, row?.comprobante_url, row?.comprobante,
+    row?.archivo_url, row?.url_factura, row?.path_factura, row?.factura_path,
   ];
-
   const raw = candidates.find((x) => typeof x === "string" && x.trim() !== "");
   if (!raw) return "";
-
   const s = raw.trim();
   if (/^https?:\/\//i.test(s)) return s;
-
   const base = String(BASE_URL || "").replace(/\/$/, "");
   const rel = s.replace(/^\//, "");
   return `${base}/${rel}`;
@@ -301,55 +269,42 @@ function getComprobanteUrl(row) {
 function guessExtensionFromValue(value) {
   const s = String(value || "").trim().toLowerCase();
   if (!s) return "";
-
   const clean = s.split("?")[0].split("#")[0];
   if (clean.endsWith(".pdf")) return ".pdf";
   if (clean.endsWith(".jpg")) return ".jpg";
   if (clean.endsWith(".jpeg")) return ".jpeg";
   if (clean.endsWith(".png")) return ".png";
   if (clean.endsWith(".webp")) return ".webp";
-
   return "";
 }
 function sanitizeDisplayName(name) {
   const raw = String(name || "").trim();
   if (!raw) return "";
-
   const onlyName = raw.split("/").pop()?.split("\\").pop()?.split("?")[0]?.trim() || "";
   if (!onlyName) return "";
-
   const lowered = onlyName.toLowerCase();
   if (
     lowered.includes("api.php") ||
     lowered.includes("action=") ||
     (lowered.includes("comprobante") && lowered.includes("="))
-  ) {
-    return "";
-  }
-
+  ) return "";
   return onlyName;
 }
 function getFriendlyComprobanteName(row, url) {
   const candidates = [
-    row?.archivo_nombre,
-    row?.nombre_archivo,
-    row?.factura_nombre,
-    row?.comprobante_nombre,
-    row?.archivo,
+    row?.archivo_nombre, row?.nombre_archivo, row?.factura_nombre,
+    row?.comprobante_nombre, row?.archivo,
   ];
-
   for (const c of candidates) {
     const clean = sanitizeDisplayName(c);
     if (clean) return clean;
   }
-
   const ext =
     guessExtensionFromValue(url) ||
     guessExtensionFromValue(row?.archivo_nombre) ||
     guessExtensionFromValue(row?.nombre_archivo) ||
     guessExtensionFromValue(row?.factura_nombre) ||
     ".pdf";
-
   return `Comprobante actual${ext}`;
 }
 
@@ -371,41 +326,29 @@ function normalizeIncomingLists(lists) {
   const tiposMov =
     Array.isArray(src.tiposMovimiento) && src.tiposMovimiento.length
       ? src.tiposMovimiento
-      : Array.isArray(src.tipos_movimiento)
-      ? src.tipos_movimiento
-      : [];
+      : Array.isArray(src.tipos_movimiento) ? src.tipos_movimiento : [];
 
   const tiposVenta =
     Array.isArray(src.tiposVenta) && src.tiposVenta.length
       ? src.tiposVenta
-      : Array.isArray(src.tipos_venta)
-      ? src.tipos_venta
-      : [];
+      : Array.isArray(src.tipos_venta) ? src.tipos_venta : [];
 
   const cuentas =
     Array.isArray(src.cuentasCorrientes) && src.cuentasCorrientes.length
       ? src.cuentasCorrientes
-      : Array.isArray(src.cuentas_corrientes)
-      ? src.cuentas_corrientes
-      : Array.isArray(src.cuenta_corriente)
-      ? src.cuenta_corriente
-      : [];
+      : Array.isArray(src.cuentas_corrientes) ? src.cuentas_corrientes
+      : Array.isArray(src.cuenta_corriente) ? src.cuenta_corriente : [];
 
   const medios =
     Array.isArray(src.mediosPago) && src.mediosPago.length
       ? src.mediosPago
-      : Array.isArray(src.medios_pago)
-      ? src.medios_pago
-      : Array.isArray(src.medios)
-      ? src.medios
-      : [];
+      : Array.isArray(src.medios_pago) ? src.medios_pago
+      : Array.isArray(src.medios) ? src.medios : [];
 
   const proveedores =
     Array.isArray(src.proveedores) && src.proveedores.length
       ? src.proveedores
-      : Array.isArray(src.proveedor)
-      ? src.proveedor
-      : [];
+      : Array.isArray(src.proveedor) ? src.proveedor : [];
 
   return {
     tiposVenta: Array.isArray(tiposVenta) ? tiposVenta : [],
@@ -423,20 +366,6 @@ function findIdByIncludes(arr, includesText) {
   const id = getGenericId(hit);
   return id ? String(id) : NULL_OPTION;
 }
-function findIdByExactOrIncludesName(arr, text) {
-  const target = normalizeText(text);
-  if (!target) return null;
-  const list = Array.isArray(arr) ? arr : [];
-
-  const exact = list.find((x) => normalizeText(x?.nombre) === target);
-  if (exact) return getGenericId(exact);
-
-  const partial = list.find((x) => {
-    const n = normalizeText(x?.nombre);
-    return n.includes(target) || target.includes(n);
-  });
-  return partial ? getGenericId(partial) : null;
-}
 function nameById(arr, id) {
   const sid = String(id ?? "").trim();
   if (!sid || sid === NULL_OPTION || sid === ADD_OPTION) return "";
@@ -449,16 +378,6 @@ function nameById(arr, id) {
 /* =========================
    Build form + medios
 ========================= */
-function buildEmptyMedioPago() {
-  return {
-    id: uid(),
-    id_medio_pago: NULL_OPTION,
-    monto: 0,
-    id_cheque: [],
-    chequesDisponibles: [],
-    loadingCheques: false,
-  };
-}
 function buildFormFromRowCompra(row, fixedLocal) {
   const r = row || {};
   const nOrNull = (v) =>
@@ -466,7 +385,6 @@ function buildFormFromRowCompra(row, fixedLocal) {
   const cantidad = r.cantidad != null ? safeNumber(r.cantidad) : 1;
   const precio = r.precio != null ? safeNumber(r.precio) : safeNumber(r.monto_total);
   const iva_pct = r.iva_pct != null ? safeNumber(r.iva_pct) : 0;
-
   const totals = calcItemTotals(cantidad, precio, iva_pct);
   const subtotal = r.subtotal != null ? safeNumber(r.subtotal) : totals.subtotal;
   const iva_monto = r.iva_monto != null ? safeNumber(r.iva_monto) : totals.iva_monto;
@@ -475,9 +393,7 @@ function buildFormFromRowCompra(row, fixedLocal) {
 
   const fallbackTipoVenta = isPositiveId(r?.id_tipo_venta)
     ? String(Number(r.id_tipo_venta))
-    : normalizeText(r?.cuenta_corriente).includes("cuenta corriente")
-    ? "2"
-    : "1";
+    : normalizeText(r?.cuenta_corriente).includes("cuenta corriente") ? "2" : "1";
 
   return {
     id_movimiento: safeNumber(r.id_movimiento ?? r.id ?? r.id_compra) || null,
@@ -504,16 +420,13 @@ function buildMediosFromRowCompra(row, mediosPagoList) {
     for (const mp of list) {
       const idMedio = Number(mp?.id_medio_pago || 0);
       if (!(idMedio > 0)) continue;
-
       const medioObj = (Array.isArray(mediosPagoList) ? mediosPagoList : []).find(
         (x) => String(getGenericId(x) ?? x?.id_medio_pago) === String(idMedio)
       );
       const tipoCheque =
         normalizeChequeTipoFromMedio(medioObj?.nombre || "") ||
         normalizeText(mp?.cheque_tipo || "");
-
       const idCheque = Number(mp?.id_cheque || 0);
-
       if ((tipoCheque === "cheque" || tipoCheque === "echeq") && idCheque > 0) {
         const key = `${idMedio}|${tipoCheque}`;
         if (!groupedCheque.has(key)) {
@@ -521,6 +434,8 @@ function buildMediosFromRowCompra(row, mediosPagoList) {
             id: uid(),
             id_medio_pago: String(idMedio),
             monto: 0,
+            montoDraft: "",
+            montoFocused: false,
             id_cheque: [],
             chequesDisponibles: [],
             loadingCheques: false,
@@ -537,6 +452,8 @@ function buildMediosFromRowCompra(row, mediosPagoList) {
           id: uid(),
           id_medio_pago: String(idMedio),
           monto: Math.round(safeNumber(mp?.monto) * 100) / 100,
+          montoDraft: "",
+          montoFocused: false,
           id_cheque: [],
           chequesDisponibles: [],
           loadingCheques: false,
@@ -548,6 +465,8 @@ function buildMediosFromRowCompra(row, mediosPagoList) {
       id: uid(),
       id_medio_pago: String(Number(row.id_medio_pago)),
       monto: Math.round(safeNumber(row?.monto_total) * 100) / 100,
+      montoDraft: "",
+      montoFocused: false,
       id_cheque: [],
       chequesDisponibles: [],
       loadingCheques: false,
@@ -555,32 +474,22 @@ function buildMediosFromRowCompra(row, mediosPagoList) {
   }
 
   groupedCheque.forEach((value) => out.push(value));
-
   return out.length ? out : [buildEmptyMedioPago()];
 }
 
 /* =========================
-   Mini modal reutilizable
+   Mini modal reutilizable (agregar catálogo)
 ========================= */
 function AddCatalogMiniModal({
-  open,
-  title,
-  label = "Nombre",
-  value,
-  saving,
-  onChange,
-  onCancel,
-  onSave,
-  dark = false,
+  open, title, label = "Nombre", value, saving,
+  onChange, onCancel, onSave, dark = false,
 }) {
   const inputRef = useRef(null);
-
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => inputRef.current?.focus(), 0);
     return () => clearTimeout(t);
   }, [open]);
-
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e) => {
@@ -590,9 +499,7 @@ function AddCatalogMiniModal({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onCancel, onSave]);
-
   if (!open) return null;
-
   return createPortal(
     <div className="mi-mini__overlay" onMouseDown={onCancel}>
       <div
@@ -601,47 +508,20 @@ function AddCatalogMiniModal({
       >
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
-          <button
-            type="button"
-            className="mi-mini__close"
-            onClick={onCancel}
-            disabled={saving}
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
+          <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving} aria-label="Cerrar">✕</button>
         </div>
-
         <div className="mi-mini__body">
           <div className="fl-field">
             <input
-              ref={inputRef}
-              className="fl-input"
-              placeholder=" "
-              value={value}
-              onChange={(e) => onChange?.(e.target.value)}
-              disabled={saving}
-              autoComplete="off"
+              ref={inputRef} className="fl-input" placeholder=" "
+              value={value} onChange={(e) => onChange?.(e.target.value)}
+              disabled={saving} autoComplete="off"
             />
             <label className="fl-label">{label}</label>
           </div>
-
           <div className="mi-mini__actions">
-            <button
-              type="button"
-              className="mit-btn mit-btn--ghost"
-              onClick={onCancel}
-              disabled={saving}
-            >
-              Cancelar
-            </button>
-
-            <button
-              type="button"
-              className="mit-btn mit-btn--solid"
-              onClick={onSave}
-              disabled={saving}
-            >
+            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>Cancelar</button>
+            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
               {saving ? "Guardando..." : "Guardar"}
             </button>
           </div>
@@ -652,266 +532,9 @@ function AddCatalogMiniModal({
   );
 }
 
-/* =========================
-   Tarjetas cheques
-========================= */
-function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle }) {
-  if (!cheques.length) return null;
-
-  return (
-    <div className="mpr-cheques-cards">
-      {cheques.map((ch, idx) => {
-        const checked = idsSeleccionados.includes(String(ch?.id_cheque));
-        const disabledByOther = Number(ch?.activo) !== 1 && !checked;
-
-        return (
-          <div
-            key={ch?.id_cheque || idx}
-            className={`mpr-cheque-card-item ${checked ? "is-checked" : ""}`}
-            onClick={() => !disabledByOther && onToggle(String(ch?.id_cheque || ""))}
-            style={{
-              border: checked ? "1px solid #0f766e" : "1px solid rgba(0,0,0,.08)",
-              borderRadius: 12,
-              padding: 10,
-              cursor: disabledByOther ? "not-allowed" : "pointer",
-              marginBottom: 8,
-              background: checked ? "rgba(15,118,110,.06)" : "transparent",
-              opacity: disabledByOther ? 0.55 : 1,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <input
-                type="checkbox"
-                checked={checked}
-                disabled={disabledByOther}
-                onChange={() => !disabledByOther && onToggle(String(ch?.id_cheque || ""))}
-                onClick={(e) => e.stopPropagation()}
-                style={{ cursor: disabledByOther ? "not-allowed" : "pointer" }}
-              />
-              <span style={{ fontWeight: 700 }}>N° {safeText(ch?.numero_cheque)}</span>
-            </div>
-
-            <div style={{ display: "grid", gap: 4 }}>
-              <div><b>Emisor:</b> {safeText(ch?.emisor)}</div>
-              <div><b>F. emisión:</b> {safeText(formatFechaDMY(ch?.fecha_emision))}</div>
-              <div><b>F. pago:</b> {safeText(formatFechaDMY(ch?.fecha_pago))}</div>
-              {Number(ch?.activo) !== 1 && checked ? (
-                <div style={{ color: "#b45309", fontWeight: 700 }}>
-                  Cheque ya vinculado a esta compra
-                </div>
-              ) : null}
-            </div>
-
-            <div style={{ marginTop: 8, fontWeight: 800, textAlign: "right" }}>
-              {moneyARS(ch?.importe || 0)}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/* =========================
-   Una fila de medio de pago
-========================= */
-function MedioPagoRow({
-  row,
-  idx,
-  mediosPagoList,
-  totalCompra,
-  sumaMediosPago,
-  onUpdate,
-  onRemove,
-  onChangeMedio,
-  onToggleCheque,
-  saving,
-  dark,
-}) {
-  const mpSeleccionado = useMemo(
-    () =>
-      mediosPagoList.find(
-        (x) => String(getGenericId(x) ?? x?.id_medio_pago ?? "") === String(row.id_medio_pago ?? "")
-      ) || null,
-    [mediosPagoList, row.id_medio_pago]
-  );
-
-  const tipoCheque = useMemo(
-    () => normalizeChequeTipoFromMedio(mpSeleccionado?.nombre || ""),
-    [mpSeleccionado]
-  );
-
-  const esCheque = tipoCheque !== null;
-  const chequesSeleccionados = Array.isArray(row.id_cheque)
-    ? row.id_cheque
-    : row.id_cheque
-    ? [String(row.id_cheque)]
-    : [];
-
-  const importeCheques = useMemo(() => {
-    if (!esCheque || !chequesSeleccionados.length) return 0;
-    return (
-      Math.round(
-        chequesSeleccionados.reduce((acc, idStr) => {
-          const ch = row.chequesDisponibles.find((x) => String(x.id_cheque) === String(idStr));
-          return acc + safeNumber(ch?.importe || 0);
-        }, 0) * 100
-      ) / 100
-    );
-  }, [esCheque, chequesSeleccionados, row.chequesDisponibles]);
-
-  useEffect(() => {
-    if (esCheque && chequesSeleccionados.length > 0) {
-      onUpdate(row.id, { monto: importeCheques });
-    }
-  }, [esCheque, chequesSeleccionados, importeCheques, onUpdate, row.id]);
-
-  const restanteParaEstaFila = useMemo(() => {
-    const sumaOtros = Math.max(0, safeNumber(sumaMediosPago) - safeNumber(row.monto));
-    return Math.max(0, safeNumber(totalCompra) - sumaOtros);
-  }, [sumaMediosPago, totalCompra, row.monto]);
-
-  const puedeCompletarRestante =
-    !saving && !esCheque && totalCompra > 0 && restanteParaEstaFila > 0.009;
-
-  return (
-    <div
-      style={{
-        border: "1px solid rgba(0,0,0,.1)",
-        borderRadius: 10,
-        padding: 12,
-        marginBottom: 8,
-        background: dark ? "rgba(255,255,255,.03)" : "rgba(0,0,0,.02)",
-      }}
-    >
-      <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 180px" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: "#666" }}>
-            Medio de pago {idx + 1}
-          </div>
-          <select
-            className="fl-input fl-select"
-            value={String(row.id_medio_pago || "")}
-            onChange={(e) => onChangeMedio(row.id, e.target.value)}
-            disabled={saving}
-            style={{ width: "100%" }}
-          >
-            <option value={NULL_OPTION}>Seleccionar...</option>
-            {mediosPagoList.map((x) => {
-              const idMp = getGenericId(x) ?? x?.id_medio_pago;
-              return (
-                <option key={idMp ?? x?.nombre ?? uid()} value={idMp != null ? String(idMp) : ""}>
-                  {String(x?.nombre ?? "").trim() || "Medio"}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-
-        <div style={{ flex: "1 1 120px" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: "#666" }}>
-            Monto
-          </div>
-          <input
-            className="fl-input"
-            type="number"
-            min="0"
-            step="0.01"
-            value={safeNumber(row.monto)}
-            onChange={(e) => onUpdate(row.id, { monto: safeNumber(e.target.value) })}
-            disabled={saving || (esCheque && chequesSeleccionados.length > 0)}
-            style={{
-              width: "100%",
-              background: esCheque && chequesSeleccionados.length > 0 ? "#f3f4f6" : undefined,
-            }}
-            title={
-              esCheque && chequesSeleccionados.length > 0
-                ? "El monto se calcula automáticamente por los cheques seleccionados"
-                : ""
-            }
-          />
-
-          {!esCheque ? (
-            <div style={{ marginTop: 6 }}>
-              <button
-                type="button"
-                onClick={() => onUpdate(row.id, { monto: restanteParaEstaFila })}
-                disabled={!puedeCompletarRestante}
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  border: "1px solid #0f766e",
-                  background: "transparent",
-                  color: "#0f766e",
-                  borderRadius: 6,
-                  padding: "6px 8px",
-                  cursor: puedeCompletarRestante ? "pointer" : "not-allowed",
-                  opacity: puedeCompletarRestante ? 1 : 0.55,
-                  width: "100%",
-                }}
-              >
-                Completar restante
-              </button>
-            </div>
-          ) : null}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => onRemove(row.id)}
-          disabled={saving}
-          style={{
-            marginTop: 20,
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            color: "#dc2626",
-            fontSize: 18,
-            padding: "0 4px",
-          }}
-          title="Quitar medio de pago"
-        >
-          ×
-        </button>
-      </div>
-
-      {esCheque ? (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#0f766e", marginBottom: 6 }}>
-            <FontAwesomeIcon icon={faMoneyCheckDollar} style={{ marginRight: 5 }} />
-            {tipoCheque === "echeq" ? "eCheqs en cartera" : "Cheques en cartera"} — seleccioná los
-            que querés usar
-          </div>
-
-          {row.loadingCheques ? (
-            <div style={{ padding: "8px 0" }}>
-              <FontAwesomeIcon icon={faCircleNotch} spin style={{ marginRight: 6 }} />
-              Cargando...
-            </div>
-          ) : row.chequesDisponibles.length === 0 ? (
-            <div style={{ padding: "8px 0", color: "#888", fontSize: 13 }}>
-              No hay {tipoCheque === "echeq" ? "eCheqs" : "cheques"} disponibles.
-            </div>
-          ) : (
-            <ChequesCarteraCards
-              cheques={row.chequesDisponibles}
-              idsSeleccionados={chequesSeleccionados}
-              onToggle={(idChequeStr) => onToggleCheque(row.id, idChequeStr)}
-            />
-          )}
-
-          {chequesSeleccionados.length > 0 ? (
-            <div style={{ marginTop: 6, fontSize: 12, fontWeight: 700, color: "#0f766e" }}>
-              ✓ {chequesSeleccionados.length} cheque(s) seleccionado(s) — Total:{" "}
-              {moneyARS(importeCheques)}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
+/* ============================================================
+   MODAL PRINCIPAL — ModalEditarCompra
+============================================================ */
 export default function ModalEditarCompra({
   open,
   lists,
@@ -932,39 +555,25 @@ export default function ModalEditarCompra({
     [onToast]
   );
 
+  // ── Dark mode ──
   const [darkAuto, setDarkAuto] = useState(isTemaOscuro());
   useEffect(() => {
     const update = () => setDarkAuto(isTemaOscuro());
-
     const obsHtml = new MutationObserver(update);
-    obsHtml.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"],
-    });
-
+    obsHtml.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const obsBody = new MutationObserver(update);
-    if (document.body) {
-      obsBody.observe(document.body, {
-        attributes: true,
-        attributeFilter: ["class"],
-      });
-    }
-
+    if (document.body) obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     update();
-    return () => {
-      obsHtml.disconnect();
-      obsBody.disconnect();
-    };
+    return () => { obsHtml.disconnect(); obsBody.disconnect(); };
   }, []);
   const dark = typeof darkProp === "boolean" ? darkProp : darkAuto;
 
+  // ── Bloquear scroll del body ──
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
+    return () => { document.body.style.overflow = prevOverflow; };
   }, [open]);
 
   const listsRef = useRef(lists);
@@ -972,9 +581,9 @@ export default function ModalEditarCompra({
   useEffect(() => void (listsRef.current = lists), [lists]);
   useEffect(() => void (rowRef.current = row), [row]);
 
+  // ── Listas locales ──
   const [localLists, setLocalLists] = useState(() => ({
-    ...SAFE_LISTS,
-    ...normalizeIncomingLists(lists),
+    ...SAFE_LISTS, ...normalizeIncomingLists(lists),
   }));
   useEffect(() => {
     setLocalLists({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) });
@@ -983,10 +592,7 @@ export default function ModalEditarCompra({
   const safeLists = useMemo(() => localLists, [localLists]);
   const tiposVentaUI = useMemo(() => {
     if (Array.isArray(safeLists.tiposVenta) && safeLists.tiposVenta.length) return safeLists.tiposVenta;
-    return [
-      { id: 1, nombre: "CONTADO" },
-      { id: 2, nombre: "CUENTA CORRIENTE" },
-    ];
+    return [{ id: 1, nombre: "CONTADO" }, { id: 2, nombre: "CUENTA CORRIENTE" }];
   }, [safeLists.tiposVenta]);
 
   const ccNormalized = useMemo(
@@ -994,6 +600,7 @@ export default function ModalEditarCompra({
     [safeLists.cuentasCorrientes]
   );
 
+  // ── Estado del formulario ──
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(() => {
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(lists) };
@@ -1006,12 +613,15 @@ export default function ModalEditarCompra({
   const [detalleFocus, setDetalleFocus] = useState(false);
   const [mediosFilas, setMediosFilas] = useState(() => [buildEmptyMedioPago()]);
 
+  // [NUEVO] Estado del mini-modal de medios de pago
+  const [mpModalOpen, setMpModalOpen] = useState(false);
+
+  // ── Comprobante ──
   const [archivoNuevo, setArchivoNuevo] = useState(null);
   const [archivoActualUrl, setArchivoActualUrl] = useState("");
   const [archivoActualNombre, setArchivoActualNombre] = useState("");
   const [archivoActualId, setArchivoActualId] = useState(null);
   const [quitarArchivoActual, setQuitarArchivoActual] = useState(false);
-
   const [openVerComp, setOpenVerComp] = useState(false);
   const [compUrl, setCompUrl] = useState("");
 
@@ -1021,27 +631,21 @@ export default function ModalEditarCompra({
   const detalleInputRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const [addUI, setAddUI] = useState({
-    open: false,
-    catalogo: null,
-    text: "",
-    saving: false,
-  });
+  const [addUI, setAddUI] = useState({ open: false, catalogo: null, text: "", saving: false });
 
+  // ── Derivados ──
   const tipoVentaObj = useMemo(
     () => getTipoVentaObj(tiposVentaUI, form.id_tipo_venta),
     [tiposVentaUI, form.id_tipo_venta]
   );
   const esContado = useMemo(() => isTipoVentaContado(tipoVentaObj), [tipoVentaObj]);
 
-  const resumen = useMemo(
-    () => ({
-      subtotal: safeNumber(form.subtotal),
-      iva: safeNumber(form.iva_monto),
-      total: safeNumber(form.total),
-    }),
-    [form.subtotal, form.iva_monto, form.total]
-  );
+  const resumen = useMemo(() => ({
+    subtotal: safeNumber(form.subtotal),
+    iva: safeNumber(form.iva_monto),
+    total: safeNumber(form.total),
+  }), [form.subtotal, form.iva_monto, form.total]);
+
   const sumaMediosPago = useMemo(
     () => mediosFilas.reduce((acc, mp) => acc + safeNumber(mp.monto), 0),
     [mediosFilas]
@@ -1051,6 +655,14 @@ export default function ModalEditarCompra({
     [resumen.total, sumaMediosPago]
   );
 
+  // [NUEVO] Al cambiar a cta cte, cerrar modal de medios
+  useEffect(() => {
+    if (!esContado) {
+      setMpModalOpen(false);
+    }
+  }, [esContado]);
+
+  // ── Handlers medios de pago ──
   const closeAddMini = useCallback(() => {
     if (addUI.saving) return;
     setAddUI({ open: false, catalogo: null, text: "", saving: false });
@@ -1069,6 +681,7 @@ export default function ModalEditarCompra({
     });
   }, []);
 
+  // ── Cargar cheques para una fila ──
   const cargarChequesParaFila = useCallback(
     async (rowId, idMedioPago, includeIds = []) => {
       const medioObj = (Array.isArray(safeLists.mediosPago) ? safeLists.mediosPago : []).find(
@@ -1076,19 +689,10 @@ export default function ModalEditarCompra({
       );
       const tipoCheque = normalizeChequeTipoFromMedio(medioObj?.nombre || "");
       if (!tipoCheque) {
-        updateMedioPago(rowId, {
-          chequesDisponibles: [],
-          loadingCheques: false,
-          id_cheque: [],
-        });
+        updateMedioPago(rowId, { chequesDisponibles: [], loadingCheques: false, id_cheque: [] });
         return;
       }
-
-      updateMedioPago(rowId, {
-        loadingCheques: true,
-        chequesDisponibles: [],
-      });
-
+      updateMedioPago(rowId, { loadingCheques: true, chequesDisponibles: [] });
       try {
         const sp = new URLSearchParams();
         sp.set("action", "compras_cheques_cartera_listar");
@@ -1096,134 +700,50 @@ export default function ModalEditarCompra({
         if (Array.isArray(includeIds) && includeIds.length) {
           sp.set("include_ids", includeIds.join(","));
         }
-
         const data = await apiGet(`${BASE_URL}/api.php?${sp.toString()}`);
         updateMedioPago(rowId, {
           chequesDisponibles: Array.isArray(data?.cheques) ? data.cheques : [],
           loadingCheques: false,
         });
       } catch (e) {
-        updateMedioPago(rowId, {
-          chequesDisponibles: [],
-          loadingCheques: false,
-        });
+        updateMedioPago(rowId, { chequesDisponibles: [], loadingCheques: false });
         showToast("error", e?.message || "No se pudieron cargar los cheques.", 4200);
       }
     },
     [safeLists.mediosPago, showToast, updateMedioPago]
   );
 
-  const handleChangeMedioPago = useCallback(
-    async (rowId, value) => {
-      const medioObj = (Array.isArray(safeLists.mediosPago) ? safeLists.mediosPago : []).find(
-        (x) => String(getGenericId(x) ?? x?.id_medio_pago ?? "") === String(value ?? "")
-      );
-      const tipoCheque = normalizeChequeTipoFromMedio(medioObj?.nombre || "");
-
-      updateMedioPago(rowId, {
-        id_medio_pago: value,
-        monto: 0,
-        id_cheque: [],
-        chequesDisponibles: [],
-        loadingCheques: Boolean(tipoCheque),
-      });
-
-      if (tipoCheque) {
-        await cargarChequesParaFila(rowId, value, []);
-      }
-    },
-    [safeLists.mediosPago, updateMedioPago, cargarChequesParaFila]
-  );
-
-  const handleToggleCheque = useCallback((rowId, idChequeStr) => {
-    setMediosFilas((prev) =>
-      prev.map((r) => {
-        if (r.id !== rowId) return r;
-        const current = Array.isArray(r.id_cheque)
-          ? r.id_cheque
-          : r.id_cheque
-          ? [String(r.id_cheque)]
-          : [];
-        const next = current.includes(idChequeStr)
-          ? current.filter((x) => x !== idChequeStr)
-          : [...current, idChequeStr];
-
-        const monto =
-          Math.round(
-            next.reduce((acc, idStr) => {
-              const ch = (Array.isArray(r.chequesDisponibles) ? r.chequesDisponibles : []).find(
-                (x) => String(x.id_cheque) === String(idStr)
-              );
-              return acc + safeNumber(ch?.importe || 0);
-            }, 0) * 100
-          ) / 100;
-
-        return { ...r, id_cheque: next, monto };
-      })
-    );
-  }, []);
-
+  // ── Catálogo ──
   const startAddProveedor = useCallback(() => {
     if (saving) return;
     setProveedorFocus(false);
-    setAddUI({
-      open: true,
-      catalogo: "proveedores",
-      text: proveedorInput.trim() || "",
-      saving: false,
-    });
+    setAddUI({ open: true, catalogo: "proveedores", text: proveedorInput.trim() || "", saving: false });
     setForm((p) => ({ ...p, id_proveedor: ADD_OPTION }));
   }, [saving, proveedorInput]);
 
   const startAddDetalle = useCallback(() => {
     if (saving) return;
     setDetalleFocus(false);
-    setAddUI({
-      open: true,
-      catalogo: "detalles",
-      text: detalleInput.trim() || "",
-      saving: false,
-    });
+    setAddUI({ open: true, catalogo: "detalles", text: detalleInput.trim() || "", saving: false });
     setForm((p) => ({ ...p, id_detalle: ADD_OPTION }));
   }, [saving, detalleInput]);
 
   const guardarNuevoCatalogo = useCallback(async () => {
     const catalogo = addUI.catalogo;
     const nombre = String(addUI.text || "").trim();
-
     if (!catalogo) return;
-    if (!nombre) {
-      showToast("advertencia", "Escribí un nombre antes de guardar.", 2600);
-      return;
-    }
-
+    if (!nombre) { showToast("advertencia", "Escribí un nombre antes de guardar.", 2600); return; }
     const { sessionKey, idUsuario } = getAuthInfo();
-    if (!sessionKey) {
-      showToast("error", "No hay sesión activa (Falta X-Session). Iniciá sesión de nuevo.", 5200);
-      return;
-    }
-
+    if (!sessionKey) { showToast("error", "No hay sesión activa (Falta X-Session).", 5200); return; }
     setAddUI((p) => ({ ...p, saving: true }));
-    showToast(
-      "cargando",
-      `Creando ${catalogo === "proveedores" ? "proveedor" : "detalle"}…`,
-      12000
-    );
-
+    showToast("cargando", `Creando ${catalogo === "proveedores" ? "proveedor" : "detalle"}…`, 12000);
     try {
-      const data = await apiPostJson(`${ENDPOINT_BASE}?action=catalogo_crear`, {
-        catalogo,
-        nombre,
-        idUsuario,
-      });
+      const data = await apiPostJson(`${ENDPOINT_BASE}?action=catalogo_crear`, { catalogo, nombre, idUsuario });
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear el ítem.");
-
       const item = data?.item || {};
       const newId = getGenericId(item);
       const newNombre = String(item?.nombre ?? "").trim() || nombre;
-
       if (!newId) throw new Error("El servidor no devolvió un ID válido.");
-
       setLocalLists((prev) => {
         const next = { ...prev };
         const key = catalogo === "proveedores" ? "proveedores" : "detalles";
@@ -1234,14 +754,7 @@ export default function ModalEditarCompra({
         next[key] = arr;
         return next;
       });
-
-      try {
-        onCatalogCreated?.({
-          catalogo,
-          item: { id: Number(newId), nombre: newNombre },
-        });
-      } catch {}
-
+      try { onCatalogCreated?.({ catalogo, item: { id: Number(newId), nombre: newNombre } }); } catch {}
       if (catalogo === "proveedores") {
         setForm((p) => ({ ...p, id_proveedor: String(Number(newId)) }));
         setProveedorInput(newNombre);
@@ -1253,13 +766,8 @@ export default function ModalEditarCompra({
         setDetalleFocus(false);
         setTimeout(() => detalleInputRef.current?.focus(), 0);
       }
-
       setAddUI({ open: false, catalogo: null, text: "", saving: false });
-      showToast(
-        "exito",
-        `${catalogo === "proveedores" ? "Proveedor" : "Detalle"} creado: "${newNombre}"`,
-        2600
-      );
+      showToast("exito", `${catalogo === "proveedores" ? "Proveedor" : "Detalle"} creado: "${newNombre}"`, 2600);
     } catch (e) {
       setAddUI((p) => ({ ...p, saving: false }));
       showToast("error", e?.message || "Error creando el ítem.", 4200);
@@ -1269,28 +777,28 @@ export default function ModalEditarCompra({
   const resolveIdByExactName = useCallback(
     (kind) => {
       const norm = (s) => String(s ?? "").trim().toLowerCase();
-
       if (kind === "proveedor") {
         const name = norm(proveedorInput);
         if (!name) return null;
-        const all = Array.isArray(safeLists.proveedores) ? safeLists.proveedores : [];
-        const hit = all.find((p) => norm(p?.nombre) === name);
+        const hit = (Array.isArray(safeLists.proveedores) ? safeLists.proveedores : []).find(
+          (p) => norm(p?.nombre) === name
+        );
         return hit ? getGenericId(hit) : null;
       }
-
       if (kind === "detalle") {
         const name = norm(detalleInput);
         if (!name) return null;
-        const all = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
-        const hit = all.find((d) => norm(d?.nombre) === name);
+        const hit = (Array.isArray(safeLists.detalles) ? safeLists.detalles : []).find(
+          (d) => norm(d?.nombre) === name
+        );
         return hit ? getGenericId(hit) : null;
       }
-
       return null;
     },
     [proveedorInput, detalleInput, safeLists.proveedores, safeLists.detalles]
   );
 
+  // ── Reset al abrir ──
   const prevOpenRef = useRef(false);
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
@@ -1301,14 +809,12 @@ export default function ModalEditarCompra({
     setAddUI({ open: false, catalogo: null, text: "", saving: false });
     setOpenVerComp(false);
     setCompUrl("");
+    setMpModalOpen(false); // [NUEVO]
 
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(listsRef.current) };
     setLocalLists(merged);
 
-    const fixedLocal = {
-      idEntrada: findIdByIncludes(merged.tiposMovimiento, "entrada"),
-    };
-
+    const fixedLocal = { idEntrada: findIdByIncludes(merged.tiposMovimiento, "entrada") };
     const built = buildFormFromRowCompra(rowRef.current, fixedLocal);
     setForm(built);
     setProveedorInput(
@@ -1330,9 +836,7 @@ export default function ModalEditarCompra({
       const tipoCheque = normalizeChequeTipoFromMedio(medioObj?.nombre || "");
       if (tipoCheque) {
         const includeIds = Array.isArray(mp.id_cheque) ? mp.id_cheque : [];
-        setTimeout(() => {
-          cargarChequesParaFila(mp.id, mp.id_medio_pago, includeIds);
-        }, 0);
+        setTimeout(() => { cargarChequesParaFila(mp.id, mp.id_medio_pago, includeIds); }, 0);
       }
     });
 
@@ -1342,55 +846,45 @@ export default function ModalEditarCompra({
     setArchivoActualId(getComprobanteIdFromRow(rowRef.current));
     setArchivoNuevo(null);
     setQuitarArchivoActual(false);
-
     if (fileInputRef.current) fileInputRef.current.value = "";
     setTimeout(() => closeBtnRef.current?.focus(), 0);
   }, [open, cargarChequesParaFila]);
 
+  // ── Escape ──
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e) => {
       if (e.key !== "Escape") return;
-      if (openVerComp) {
-        setOpenVerComp(false);
-        return;
-      }
+      if (openVerComp) { setOpenVerComp(false); return; }
+      if (mpModalOpen) { setMpModalOpen(false); return; } // [NUEVO]
       if (saving || addUI.open) return;
       onClose?.();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, saving, addUI.open, onClose, openVerComp]);
+  }, [open, saving, addUI.open, onClose, openVerComp, mpModalOpen]);
 
   const cerrar = useCallback(() => {
-    if (saving || addUI.open || openVerComp) return;
+    if (saving || addUI.open || openVerComp || mpModalOpen) return;
     onClose?.();
-  }, [saving, addUI.open, openVerComp, onClose]);
+  }, [saving, addUI.open, openVerComp, mpModalOpen, onClose]);
 
+  // ── Fecha ──
   const openDatePicker = useCallback(() => {
     const el = fechaRef.current;
-    if (!el) return;
-    if (saving || el.disabled) return;
-    try {
-      if (typeof el.showPicker === "function") el.showPicker();
-      else el.focus();
-    } catch {
-      el.focus();
-    }
+    if (!el || saving || el.disabled) return;
+    try { if (typeof el.showPicker === "function") el.showPicker(); else el.focus(); } catch { el.focus(); }
   }, [saving]);
 
   const onFechaChange = useCallback((iso) => {
-    const v = String(iso || "").trim();
-    setForm((p) => ({ ...p, fecha: v }));
+    setForm((p) => ({ ...p, fecha: String(iso || "").trim() }));
   }, []);
 
+  // ── Cálculo ──
   const recalcFromItem = useCallback((nextPartial) => {
     setForm((p) => {
       const next = { ...p, ...nextPartial };
-      const cantidad = safeNumber(next.cantidad);
-      const precio = safeNumber(next.precio);
-      const iva_pct = safeNumber(next.iva_pct);
-      const t = calcItemTotals(cantidad, precio, iva_pct);
+      const t = calcItemTotals(safeNumber(next.cantidad), safeNumber(next.precio), safeNumber(next.iva_pct));
       next.subtotal = t.subtotal;
       next.iva_monto = t.iva_monto;
       next.total = t.total;
@@ -1399,18 +893,9 @@ export default function ModalEditarCompra({
     });
   }, []);
 
-  const onCantidadChange = useCallback(
-    (v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }),
-    [recalcFromItem]
-  );
-  const onPrecioChange = useCallback(
-    (v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }),
-    [recalcFromItem]
-  );
-  const onIvaPctChange = useCallback(
-    (v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }),
-    [recalcFromItem]
-  );
+  const onCantidadChange = useCallback((v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }), [recalcFromItem]);
+  const onPrecioChange = useCallback((v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }), [recalcFromItem]);
+  const onIvaPctChange = useCallback((v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }), [recalcFromItem]);
   const onMontoTotalManual = useCallback((v) => {
     const mt = v === "" ? "" : Number(v);
     setForm((p) => {
@@ -1428,6 +913,7 @@ export default function ModalEditarCompra({
     });
   }, []);
 
+  // ── Autocomplete proveedor/detalle ──
   const filteredProveedores = useMemo(() => {
     const all = Array.isArray(safeLists.proveedores) ? safeLists.proveedores : [];
     const q = proveedorInput.trim().toLowerCase();
@@ -1443,8 +929,7 @@ export default function ModalEditarCompra({
   }, [safeLists.detalles, detalleInput, detalleFocus]);
 
   const handleProveedorInputChange = useCallback((e) => {
-    const value = e.target.value;
-    setProveedorInput(value);
+    setProveedorInput(e.target.value);
     setForm((prev) => ({ ...prev, id_proveedor: NULL_OPTION }));
   }, []);
   const handleSelectProveedor = useCallback((proveedor) => {
@@ -1455,8 +940,7 @@ export default function ModalEditarCompra({
     setProveedorFocus(false);
   }, []);
   const handleDetalleInputChange = useCallback((e) => {
-    const value = e.target.value;
-    setDetalleInput(value);
+    setDetalleInput(e.target.value);
     setForm((prev) => ({ ...prev, id_detalle: NULL_OPTION }));
   }, []);
   const handleSelectDetalle = useCallback((det) => {
@@ -1467,29 +951,13 @@ export default function ModalEditarCompra({
     setDetalleFocus(false);
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    setForm((p) => {
-      if (esContado) return p;
-      return {
-        ...p,
-        id_tipo_venta: p.id_tipo_venta || "2",
-      };
-    });
-  }, [open, esContado]);
-
-  useEffect(() => {
-    if (!open || !esContado) return;
-    setMediosFilas((prev) => (prev.length ? prev : [buildEmptyMedioPago()]));
-  }, [open, esContado]);
-
+  // ── Payload final ──
   const payload = useMemo(() => {
     const toNullableId = (v) => {
       if (v === NULL_OPTION || v === "" || v == null || v === ADD_OPTION) return null;
       const n = Number(v);
       return Number.isFinite(n) && n > 0 ? n : null;
     };
-
     const cantidad = Math.max(0, safeNumber(form.cantidad));
     const precio = Math.max(0, safeNumber(form.precio));
     const iva_pct = Math.max(0, safeNumber(form.iva_pct));
@@ -1499,32 +967,20 @@ export default function ModalEditarCompra({
       ? mediosFilas.flatMap((mp) => {
           const idMp = Number(mp.id_medio_pago || 0);
           if (!(idMp > 0)) return [];
-
           const medioObj = (Array.isArray(safeLists.mediosPago) ? safeLists.mediosPago : []).find(
-            (x) => String(getGenericId(x) ?? x?.id_medio_pago ?? "") === String(idMp)
+            (x) => String(getMedioPagoId(x) ?? "") === String(idMp)
           );
           const tipoCheque = normalizeChequeTipoFromMedio(medioObj?.nombre || "");
           const seleccionados = Array.isArray(mp.id_cheque) ? mp.id_cheque : [];
-
           if (tipoCheque && seleccionados.length) {
             return seleccionados.map((idChequeStr) => {
               const ch = (Array.isArray(mp.chequesDisponibles) ? mp.chequesDisponibles : []).find(
                 (x) => String(x.id_cheque) === String(idChequeStr)
               );
-              return {
-                id_medio_pago: idMp,
-                monto: Math.round(safeNumber(ch?.importe || 0) * 100) / 100,
-                id_cheque: Number(idChequeStr),
-              };
+              return { id_medio_pago: idMp, monto: Math.round(safeNumber(ch?.importe || 0) * 100) / 100, id_cheque: Number(idChequeStr) };
             });
           }
-
-          return [
-            {
-              id_medio_pago: idMp,
-              monto: Math.round(safeNumber(mp.monto) * 100) / 100,
-            },
-          ];
+          return [{ id_medio_pago: idMp, monto: Math.round(safeNumber(mp.monto) * 100) / 100 }];
         })
       : [];
 
@@ -1550,61 +1006,42 @@ export default function ModalEditarCompra({
     };
   }, [form, esContado, mediosFilas, safeLists.mediosPago]);
 
+  // ── Comprobante ──
   const eliminarComprobanteActual = useCallback(async () => {
-    if (!form.id_movimiento) {
-      throw new Error("Falta id_movimiento para eliminar el comprobante.");
-    }
-
+    if (!form.id_movimiento) throw new Error("Falta id_movimiento para eliminar el comprobante.");
     const body = {
       action: "compras_eliminar_comprobante",
       id_movimiento: Number(form.id_movimiento),
       ...(archivoActualId ? { id_comprobante: Number(archivoActualId) } : {}),
     };
-
     const data = await apiPostJson(ENDPOINT_DELETE_COMP, body);
-    if (!data?.exito) {
-      throw new Error(data?.mensaje || "No se pudo eliminar el comprobante actual.");
-    }
-
+    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar el comprobante actual.");
     setArchivoActualUrl("");
     setArchivoActualNombre("");
     setArchivoActualId(null);
     setQuitarArchivoActual(false);
     setOpenVerComp(false);
     setCompUrl("");
-
     return data;
   }, [ENDPOINT_DELETE_COMP, form.id_movimiento, archivoActualId]);
 
-  const subirNuevoComprobante = useCallback(
-    async (idMovimiento, archivo) => {
-      if (!idMovimiento || !archivo) return null;
-
-      const fd = new FormData();
-      fd.append("archivo", archivo);
-      fd.append("tipo", "FACTURA");
-      fd.append("force", "0");
-      fd.append("ids_movimiento", JSON.stringify([Number(idMovimiento)]));
-
-      const data = await apiPostForm(ENDPOINT_UPLOAD_LINK, fd);
-      if (!data?.exito) {
-        throw new Error(data?.mensaje || "No se pudo subir y vincular el nuevo archivo.");
-      }
-
-      setArchivoNuevo(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return data;
-    },
-    [ENDPOINT_UPLOAD_LINK]
-  );
+  const subirNuevoComprobante = useCallback(async (idMovimiento, archivo) => {
+    if (!idMovimiento || !archivo) return null;
+    const fd = new FormData();
+    fd.append("archivo", archivo);
+    fd.append("tipo", "FACTURA");
+    fd.append("force", "0");
+    fd.append("ids_movimiento", JSON.stringify([Number(idMovimiento)]));
+    const data = await apiPostForm(ENDPOINT_UPLOAD_LINK, fd);
+    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo subir y vincular el nuevo archivo.");
+    setArchivoNuevo(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    return data;
+  }, [ENDPOINT_UPLOAD_LINK]);
 
   const handleOpenVerComprobante = useCallback(() => {
     const targetUrl = String(archivoActualUrl || "").trim();
-    if (!targetUrl) {
-      showToast("advertencia", "No hay comprobante para visualizar.", 2600);
-      return;
-    }
-
+    if (!targetUrl) { showToast("advertencia", "No hay comprobante para visualizar.", 2600); return; }
     setCompUrl(targetUrl);
     setOpenVerComp(true);
   }, [archivoActualUrl, showToast]);
@@ -1622,52 +1059,34 @@ export default function ModalEditarCompra({
   const handleFileSelected = useCallback((e) => {
     const file = e.target.files?.[0] || null;
     setArchivoNuevo(file);
-    if (file) {
-      setQuitarArchivoActual(false);
-      setOpenVerComp(false);
-      setCompUrl("");
-    }
+    if (file) { setQuitarArchivoActual(false); setOpenVerComp(false); setCompUrl(""); }
   }, []);
 
+  // ── Submit ──
   const submit = async (e) => {
     e.preventDefault();
-
-    if (addUI.open) {
-      showToast("advertencia", "Terminá de crear el registro (o cancelá) antes de guardar.", 3200);
-      return;
-    }
-
+    if (addUI.open) { showToast("advertencia", "Terminá de crear el registro (o cancelá) antes de guardar.", 3200); return; }
     setSaving(true);
     showToast("cargando", "Guardando cambios…", 12000);
-
     try {
       if (!form.id_movimiento) throw new Error("Falta id_movimiento (no puedo actualizar).");
-      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) {
-        throw new Error("Fecha inválida.");
-      }
-
-      if (!form.id_tipo_venta || String(form.id_tipo_venta) === NULL_OPTION) {
-        throw new Error("Tipo de compra es obligatorio.");
-      }
+      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) throw new Error("Fecha inválida.");
+      if (!form.id_tipo_venta || String(form.id_tipo_venta) === NULL_OPTION) throw new Error("Tipo de compra es obligatorio.");
 
       let proveedorId = form.id_proveedor;
       if (!proveedorId || proveedorId === NULL_OPTION || proveedorId === ADD_OPTION) {
         const resolved = resolveIdByExactName("proveedor");
         if (resolved) proveedorId = String(resolved);
       }
-
       let detalleId = form.id_detalle;
       if (!detalleId || detalleId === NULL_OPTION || detalleId === ADD_OPTION) {
         const resolved = resolveIdByExactName("detalle");
         if (resolved) detalleId = String(resolved);
       }
-
-      if (!proveedorId || proveedorId === NULL_OPTION || proveedorId === ADD_OPTION) {
+      if (!proveedorId || proveedorId === NULL_OPTION || proveedorId === ADD_OPTION)
         throw new Error("Seleccioná un proveedor o crealo con Agregar nuevo proveedor.");
-      }
-      if (!detalleId || detalleId === NULL_OPTION || detalleId === ADD_OPTION) {
+      if (!detalleId || detalleId === NULL_OPTION || detalleId === ADD_OPTION)
         throw new Error("Seleccioná un detalle o crealo con Agregar nuevo detalle.");
-      }
 
       const cantidad = Math.max(0, safeNumber(form.cantidad));
       const precio = Math.max(0, safeNumber(form.precio));
@@ -1675,51 +1094,28 @@ export default function ModalEditarCompra({
       if (!(precio > 0)) throw new Error("El precio debe ser mayor a 0.");
 
       if (esContado) {
-        if (!payload.medios_pago.length) {
-          throw new Error("En compras al contado debés cargar al menos un medio de pago.");
-        }
-
-        for (let i = 0; i < mediosFilas.length; i += 1) {
+        if (!payload.medios_pago.length) throw new Error("En compras al contado debés cargar al menos un medio de pago.");
+        for (let i = 0; i < mediosFilas.length; i++) {
           const mp = mediosFilas[i];
-          if (!mp.id_medio_pago || mp.id_medio_pago === NULL_OPTION) {
+          if (!mp.id_medio_pago || mp.id_medio_pago === NULL_OPTION)
             throw new Error(`Medio de pago ${i + 1}: falta seleccionar el medio.`);
-          }
-
           const medioObj = (Array.isArray(safeLists.mediosPago) ? safeLists.mediosPago : []).find(
-            (x) =>
-              String(getGenericId(x) ?? x?.id_medio_pago ?? "") === String(mp.id_medio_pago ?? "")
+            (x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago ?? "")
           );
           const tipoCheque = normalizeChequeTipoFromMedio(medioObj?.nombre || "");
           const seleccionados = Array.isArray(mp.id_cheque) ? mp.id_cheque : [];
-
           if (tipoCheque) {
-            if (!seleccionados.length) {
-              throw new Error(
-                `Medio de pago ${i + 1}: debés seleccionar al menos un ${
-                  tipoCheque === "echeq" ? "eCheq" : "cheque"
-                }.`
-              );
-            }
+            if (!seleccionados.length)
+              throw new Error(`Medio de pago ${i + 1}: debés seleccionar al menos un ${tipoCheque === "echeq" ? "eCheq" : "cheque"}.`);
           } else if (!(safeNumber(mp.monto) > 0)) {
             throw new Error(`Medio de pago ${i + 1}: el monto debe ser mayor a 0.`);
           }
         }
-
-        if (sumaMediosPago < safeNumber(resumen.total) - 0.05) {
-          throw new Error(
-            `La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no cubre el total (${moneyARS(
-              resumen.total
-            )}).`
-          );
-        }
+        if (sumaMediosPago < safeNumber(resumen.total) - 0.05)
+          throw new Error(`La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no cubre el total (${moneyARS(resumen.total)}).`);
       }
 
-      const payloadFinal = {
-        ...payload,
-        id_proveedor: Number(proveedorId),
-        id_detalle: Number(detalleId),
-      };
-
+      const payloadFinal = { ...payload, id_proveedor: Number(proveedorId), id_detalle: Number(detalleId) };
       await onSave?.(payloadFinal);
 
       const habiaArchivo = Boolean(archivoActualUrl || archivoActualId);
@@ -1727,23 +1123,15 @@ export default function ModalEditarCompra({
       const quiereSubirNuevo = Boolean(archivoNuevo);
 
       if (habiaArchivo && (quiereQuitar || quiereSubirNuevo)) {
-        showToast(
-          "cargando",
-          quiereSubirNuevo ? "Reemplazando archivo…" : "Quitando archivo…",
-          12000
-        );
+        showToast("cargando", quiereSubirNuevo ? "Reemplazando archivo…" : "Quitando archivo…", 12000);
         await eliminarComprobanteActual();
       }
-
       if (quiereSubirNuevo) {
         showToast("cargando", "Subiendo archivo…", 12000);
         await subirNuevoComprobante(form.id_movimiento, archivoNuevo);
       }
 
-      if (typeof onSaved === "function") {
-        await Promise.resolve(onSaved());
-      }
-
+      if (typeof onSaved === "function") await Promise.resolve(onSaved());
       showToast("exito", "Compra actualizada correctamente.", 2400);
       onClose?.();
     } catch (err) {
@@ -1754,30 +1142,9 @@ export default function ModalEditarCompra({
 
   if (!open) return null;
 
-  const overlayClass = [
-    "mi-modal__overlay",
-    "mi-modal__overlay--mov",
-    dark ? "mi-modal__overlay--dark" : "",
-  ]
-    .join(" ")
-    .trim();
-
-  const containerClass = [
-    "mi-modal__container",
-    "mi-modal__container--mov",
-    "mi-modal__container--venta",
-    dark ? "mi-modal--dark" : "",
-  ]
-    .join(" ")
-    .trim();
-
-  const miniTitle =
-    addUI.catalogo === "proveedores"
-      ? "Nuevo proveedor"
-      : addUI.catalogo === "detalles"
-      ? "Nuevo detalle"
-      : "Nuevo";
-
+  const overlayClass = ["mi-modal__overlay", "mi-modal__overlay--mov", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim();
+  const containerClass = ["mi-modal__container", "mi-modal__container--mov", "mi-modal__container--venta", dark ? "mi-modal--dark" : ""].join(" ").trim();
+  const miniTitle = addUI.catalogo === "proveedores" ? "Nuevo proveedor" : addUI.catalogo === "detalles" ? "Nuevo detalle" : "Nuevo";
   const mostrarArchivoActual = Boolean((archivoActualUrl || archivoActualId) && !quitarArchivoActual);
 
   return createPortal(
@@ -1790,6 +1157,7 @@ export default function ModalEditarCompra({
           aria-modal="true"
           onMouseDown={(e) => e.stopPropagation()}
         >
+          {/* HEADER */}
           <div className="mi-modal__header">
             <div className="mi-modal__head-left">
               <h2 className="mi-modal__title">Editar compra</h2>
@@ -1797,7 +1165,6 @@ export default function ModalEditarCompra({
                 Editá el movimiento completo: ítem, medios múltiples, cheques/eCheqs y comprobante.
               </p>
             </div>
-
             <button
               ref={closeBtnRef}
               className="mi-modal__close"
@@ -1805,18 +1172,18 @@ export default function ModalEditarCompra({
               aria-label="Cerrar"
               disabled={saving || addUI.open || openVerComp}
               type="button"
-            >
-              ✕
-            </button>
+            >✕</button>
           </div>
 
           <form onSubmit={submit} className="mi-em-form">
             <div className="mi-em-grid">
+
+              {/* ── PANEL IZQUIERDO: Datos de la compra ── */}
               <section className="mi-em-panel">
                 <div className="mi-em-panelHead">Datos de la compra</div>
-
                 <div className="mi-em-panelBody">
                   <div className="mi-row2">
+                    {/* Tipo de compra */}
                     <div className="fl-field">
                       <select
                         className="fl-input fl-select"
@@ -1837,6 +1204,7 @@ export default function ModalEditarCompra({
                       <label className="fl-label">Tipo de compra</label>
                     </div>
 
+                    {/* Detalle con autocomplete */}
                     <div className="fl-field mi-autocomplete">
                       <input
                         ref={detalleInputRef}
@@ -1850,7 +1218,6 @@ export default function ModalEditarCompra({
                         autoComplete="off"
                       />
                       <label className="fl-label">Detalle</label>
-
                       {detalleFocus && filteredDetalles.length > 0 ? (
                         <ul className="mi-cr-suggest">
                           {filteredDetalles.map((d) => {
@@ -1859,10 +1226,7 @@ export default function ModalEditarCompra({
                               <li
                                 key={did ?? d?.nombre}
                                 className="mi-cr-suggest__item"
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  handleSelectDetalle(d);
-                                }}
+                                onMouseDown={(e) => { e.preventDefault(); handleSelectDetalle(d); }}
                               >
                                 <span className="mi-suggestText">{d.nombre}</span>
                               </li>
@@ -1870,67 +1234,36 @@ export default function ModalEditarCompra({
                           })}
                         </ul>
                       ) : null}
-
-                      <button
-                        type="button"
-                        onClick={startAddDetalle}
-                        disabled={saving || addUI.saving || openVerComp}
-                        className="mi-link"
-                      >
-                        + Agregar nuevo detalle
-                      </button>
                     </div>
                   </div>
 
+                  {/* Ítem */}
                   <div className="mi-em-item fl-col-full">
                     <div className="mi-em-itemTitle">Ítem de la compra</div>
-
                     <div className="mi-em-itemGrid3">
                       <div className="fl-field">
-                        <input
-                          className="fl-input"
-                          type="number"
-                          min="0"
-                          step="0.001"
-                          placeholder=" "
-                          value={form.cantidad}
-                          onChange={(e) => onCantidadChange(e.target.value)}
-                          disabled={saving || addUI.open || openVerComp}
-                        />
+                        <input className="fl-input" type="number" min="0" step="0.001" placeholder=" "
+                          value={form.cantidad} onChange={(e) => onCantidadChange(e.target.value)}
+                          disabled={saving || addUI.open || openVerComp} />
                         <label className="fl-label">Cantidad</label>
                       </div>
-
                       <div className="fl-field">
-                        <input
-                          className="fl-input"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder=" "
-                          value={form.precio}
-                          onChange={(e) => onPrecioChange(e.target.value)}
-                          disabled={saving || addUI.open || openVerComp}
-                        />
+                        <input className="fl-input" type="number" min="0" step="0.01" placeholder=" "
+                          value={form.precio} onChange={(e) => onPrecioChange(e.target.value)}
+                          disabled={saving || addUI.open || openVerComp} />
                         <label className="fl-label">Precio unitario</label>
                       </div>
-
                       <div className="fl-field">
-                        <select
-                          className="fl-input fl-select"
-                          value={String(form.iva_pct)}
+                        <select className="fl-input fl-select" value={String(form.iva_pct)}
                           onChange={(e) => onIvaPctChange(e.target.value)}
-                          disabled={saving || addUI.open || openVerComp}
-                        >
+                          disabled={saving || addUI.open || openVerComp}>
                           {IVA_OPTIONS.map((x) => (
-                            <option key={x.value} value={x.value}>
-                              {x.label}
-                            </option>
+                            <option key={x.value} value={x.value}>{x.label}</option>
                           ))}
                         </select>
                         <label className="fl-label">IVA %</label>
                       </div>
                     </div>
-
                     <div className="mi-em-itemTotalsGrid3">
                       <div className="fl-field">
                         <input className="fl-input" value={form.subtotal} disabled />
@@ -1948,41 +1281,32 @@ export default function ModalEditarCompra({
                   </div>
 
                   <div className="fl-field fl-col-full">
-                    <input
-                      className="fl-input"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder=" "
-                      value={form.monto_total}
-                      onChange={(e) => onMontoTotalManual(e.target.value)}
-                      disabled={saving || addUI.open || openVerComp}
-                    />
+                    <input className="fl-input" type="number" min="0" step="0.01" placeholder=" "
+                      value={form.monto_total} onChange={(e) => onMontoTotalManual(e.target.value)}
+                      disabled={saving || addUI.open || openVerComp} />
                     <label className="fl-label">Monto total (ajusta el precio)</label>
                   </div>
                 </div>
               </section>
 
+              {/* ── PANEL LATERAL DERECHO ── */}
               <aside className="mi-em-aside">
                 <div className="mi-em-asideTitle">Relaciones, pago y archivo</div>
 
+                {/* Fecha */}
                 <div className="mi-em-dates">
                   <div className="fl-field fl-col-full">
-                    <input
-                      ref={fechaRef}
-                      className="fl-input"
-                      type="date"
-                      value={form.fecha}
-                      onChange={(e) => onFechaChange(e.target.value)}
+                    <input ref={fechaRef} className="fl-input" type="date"
+                      value={form.fecha} onChange={(e) => onFechaChange(e.target.value)}
                       disabled={saving || addUI.open || openVerComp}
-                      onClick={openDatePicker}
-                      onFocus={openDatePicker}
-                    />
+                      onClick={openDatePicker} onFocus={openDatePicker} />
                     <label className="fl-label">Fecha</label>
                   </div>
                 </div>
 
                 <div className="mi-em-asideBody mi-em-asideBodyheght">
+
+                  {/* Proveedor */}
                   <div className="fl-field mi-autocomplete">
                     <input
                       ref={proveedorInputRef}
@@ -1996,7 +1320,6 @@ export default function ModalEditarCompra({
                       autoComplete="off"
                     />
                     <label className="fl-label">Proveedor</label>
-
                     {proveedorFocus && filteredProveedores.length > 0 ? (
                       <ul className="mi-cr-suggest">
                         {filteredProveedores.map((p) => {
@@ -2005,10 +1328,7 @@ export default function ModalEditarCompra({
                             <li
                               key={pid ?? p?.nombre}
                               className="mi-cr-suggest__item"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                handleSelectProveedor(p);
-                              }}
+                              onMouseDown={(e) => { e.preventDefault(); handleSelectProveedor(p); }}
                             >
                               <span className="mi-suggestText">{p.nombre}</span>
                             </li>
@@ -2016,47 +1336,41 @@ export default function ModalEditarCompra({
                         })}
                       </ul>
                     ) : null}
-
-                    <button
-                      type="button"
-                      onClick={startAddProveedor}
-                      disabled={saving || addUI.saving || openVerComp}
-                      className="mi-link"
-                    >
-                      + Agregar nuevo proveedor
-                    </button>
                   </div>
 
+                  {/* ── CONTADO: Medios de pago con mini-modal ── */}
                   {esContado ? (
                     <div className="mi-card mi-card--full" style={{ marginTop: 8 }}>
-                      <div className="mi-card__title" style={{ marginBottom: 10 }}>
-                        <FontAwesomeIcon icon={faMoneyCheckDollar} style={{ marginRight: 6 }} />
-                        Medios de pago
-                      </div>
 
-                      {mediosFilas.map((mp, idx) => (
-                        <MedioPagoRow
-                          key={mp.id}
-                          row={mp}
-                          idx={idx}
-                          mediosPagoList={safeLists.mediosPago || []}
-                          totalCompra={resumen.total}
-                          sumaMediosPago={sumaMediosPago}
-                          onUpdate={updateMedioPago}
-                          onRemove={removeMedioPago}
-                          onChangeMedio={handleChangeMedioPago}
-                          onToggleCheque={handleToggleCheque}
-                          saving={saving || addUI.open || openVerComp}
-                          dark={dark}
-                        />
-                      ))}
 
+                      {/* [NUEVO] Resumen del pago configurado */}
+                      <PagoResumenPanel
+                        mediosFilas={mediosFilas}
+                        mediosPagoList={safeLists.mediosPago || []}
+                        totalCompra={resumen.total}
+                        onEdit={() => setMpModalOpen(true)}
+                      />
+
+                      {/* [NUEVO] Botón "Configurar" si aún no hay medios */}
+                      {!mediosFilas.some((r) => r.id_medio_pago && r.id_medio_pago !== "") && (
+                        <button
+                          type="button"
+                          className="nc-pago-btn"
+                          onClick={() => setMpModalOpen(true)}
+                          disabled={saving}
+                        >
+                          <FontAwesomeIcon icon={faCreditCard} style={{ fontSize: 12 }} />
+                          Configurar medios de pago
+                        </button>
+                      )}
+
+                      {/* Totalizador inline */}
                       <div
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
                           alignItems: "center",
-                          marginTop: 8,
+                          marginTop: 10,
                           paddingTop: 8,
                           borderTop: "1px solid rgba(0,0,0,.08)",
                           fontSize: 13,
@@ -2073,37 +1387,13 @@ export default function ModalEditarCompra({
                           <span style={{ color: "#0f766e", fontWeight: 700 }}>✓ Cubierto</span>
                         ) : null}
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={addMedioPago}
-                        disabled={saving || addUI.open || openVerComp}
-                        style={{
-                          marginTop: 10,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          fontSize: 12,
-                          color: "#0f766e",
-                          background: "none",
-                          border: "1px dashed #0f766e",
-                          borderRadius: 8,
-                          padding: "6px 12px",
-                          cursor: "pointer",
-                          width: "100%",
-                          justifyContent: "center",
-                          fontWeight: 600,
-                        }}
-                      >
-                        <FontAwesomeIcon icon={faPlus} /> Agregar otro medio de pago
-                      </button>
                     </div>
                   ) : (
+                    /* ── CUENTA CORRIENTE ── */
                     <div className="mi-card mi-card--full">
                       <div className="mi-card__title">Cuenta Corriente</div>
                       <div className="mi-card__hint">
-                        * La compra quedará como <b>Cuenta Corriente</b>. Los medios de pago no se
-                        editan en este modo.
+                        * La compra quedará como <b>Cuenta Corriente</b>. Los medios de pago no se editan en este modo.
                       </div>
                       {ccNormalized.pickedId ? (
                         <div className="mi-card__hint" style={{ marginTop: 6 }}>
@@ -2113,66 +1403,40 @@ export default function ModalEditarCompra({
                     </div>
                   )}
 
+                  {/* ── COMPROBANTE ── */}
                   <div className="mi-uploadCard">
                     <div className="mi-uploadCard__head">
                       <div>
                         <div className="mi-uploadCard__title">Comprobante</div>
-                        <div className="mi-uploadCard__sub">
-                          Ver, quitar o reemplazar archivo actual
-                        </div>
+                        <div className="mi-uploadCard__sub">Ver, quitar o reemplazar archivo actual</div>
                       </div>
                     </div>
-
                     <div className="mi-uploadCard__body">
                       {mostrarArchivoActual ? (
                         <div className="mi-uploadFile is-filled">
                           <div className="mi-uploadFile__icon">
                             <FontAwesomeIcon icon={faFileInvoiceDollar} />
                           </div>
-
                           <div className="mi-uploadFile__meta">
-                            <div
-                              className="mi-uploadFile__name"
-                              title={archivoActualNombre || "Comprobante actual"}
-                            >
+                            <div className="mi-uploadFile__name" title={archivoActualNombre || "Comprobante actual"}>
                               {archivoActualNombre || "Comprobante actual"}
                             </div>
                           </div>
-
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: 8,
-                              marginLeft: "auto",
-                              flexWrap: "wrap",
-                            }}
-                          >
+                          <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
                             {archivoActualUrl ? (
-                              <button
-                                type="button"
-                                className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                onClick={handleOpenVerComprobante}
-                                disabled={saving || addUI.open}
-                                title="Ver comprobante actual"
-                              >
-                                <FontAwesomeIcon icon={faEye} /> 
+                              <button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                onClick={handleOpenVerComprobante} disabled={saving || addUI.open} title="Ver comprobante actual">
+                                <FontAwesomeIcon icon={faEye} />
                               </button>
                             ) : null}
-
-                            <button
-                              type="button"
-                              className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                            <button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
                               onClick={() => {
-                                setQuitarArchivoActual(true);
-                                setArchivoNuevo(null);
+                                setQuitarArchivoActual(true); setArchivoNuevo(null);
                                 if (fileInputRef.current) fileInputRef.current.value = "";
-                                setOpenVerComp(false);
-                                setCompUrl("");
+                                setOpenVerComp(false); setCompUrl("");
                               }}
-                              disabled={saving || addUI.open || openVerComp}
-                              title="Quitar comprobante actual"
-                            >
-                              <FontAwesomeIcon icon={faTrashCan} /> 
+                              disabled={saving || addUI.open || openVerComp} title="Quitar comprobante actual">
+                              <FontAwesomeIcon icon={faTrashCan} />
                             </button>
                           </div>
                         </div>
@@ -2183,26 +1447,15 @@ export default function ModalEditarCompra({
                               <div className="mi-uploadFile__icon">
                                 <FontAwesomeIcon icon={faFileInvoiceDollar} />
                               </div>
-
                               <div className="mi-uploadFile__meta">
-                                <div className="mi-uploadFile__name" title={archivoNuevo.name}>
-                                  {archivoNuevo.name}
-                                </div>
+                                <div className="mi-uploadFile__name" title={archivoNuevo.name}>{archivoNuevo.name}</div>
                                 <div className="mi-uploadFile__size">
                                   {Math.max(1, Math.round((archivoNuevo.size || 0) / 1024))} KB
                                 </div>
                               </div>
-
-                              <button
-                                type="button"
-                                className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                onClick={() => {
-                                  setArchivoNuevo(null);
-                                  if (fileInputRef.current) fileInputRef.current.value = "";
-                                }}
-                                disabled={saving || addUI.open || openVerComp}
-                                style={{ marginLeft: "auto" }}
-                              >
+                              <button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                onClick={() => { setArchivoNuevo(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                                disabled={saving || addUI.open || openVerComp} style={{ marginLeft: "auto" }}>
                                 <FontAwesomeIcon icon={faXmark} /> Quitar selección
                               </button>
                             </>
@@ -2215,34 +1468,19 @@ export default function ModalEditarCompra({
                           )}
                         </div>
                       )}
-
                       <div className="mi-uploadBar" style={{ marginTop: 10 }}>
                         {quitarArchivoActual && !archivoNuevo ? (
-                          <button
-                            type="button"
-                            className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                          <button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
                             onClick={() => setQuitarArchivoActual(false)}
-                            disabled={saving || addUI.open || openVerComp}
-                          >
+                            disabled={saving || addUI.open || openVerComp}>
                             Cancelar quitar
                           </button>
                         ) : null}
-
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          className="mi-uploadBar__input"
-                          onChange={handleFileSelected}
-                          disabled={saving || addUI.open || openVerComp}
-                          style={{ display: "none" }}
-                        />
-
-                        <button
-                          type="button"
-                          className="mi-uploadBar__btn mi-uploadBar__btn--primary"
-                          onClick={handleReplaceFileClick}
-                          disabled={saving || addUI.open || openVerComp}
-                        >
+                        <input ref={fileInputRef} type="file" className="mi-uploadBar__input"
+                          onChange={handleFileSelected} disabled={saving || addUI.open || openVerComp}
+                          style={{ display: "none" }} />
+                        <button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--primary"
+                          onClick={handleReplaceFileClick} disabled={saving || addUI.open || openVerComp}>
                           <FontAwesomeIcon icon={faUpload} />{" "}
                           {mostrarArchivoActual ? "Reemplazar archivo" : "Seleccionar archivo"}
                         </button>
@@ -2250,24 +1488,19 @@ export default function ModalEditarCompra({
                     </div>
                   </div>
 
+                  {/* Acciones */}
                   <div className="mi-em-actions">
-                    <button
-                      type="submit"
-                      disabled={saving || addUI.open || openVerComp}
-                      className="mit-btn mit-btn--solid mit-btn--block"
-                    >
+                    <button type="submit" disabled={saving || addUI.open || openVerComp}
+                      className="mit-btn mit-btn--solid mit-btn--block">
                       {saving ? "Guardando..." : "Guardar"}
                     </button>
-
-                    <button
-                      type="button"
-                      onClick={cerrar}
+                    <button type="button" onClick={cerrar}
                       disabled={saving || addUI.open || openVerComp}
-                      className="mit-btn mit-btn--ghost mit-btn--block"
-                    >
+                      className="mit-btn mit-btn--ghost mit-btn--block">
                       Cancelar
                     </button>
                   </div>
+
                 </div>
               </aside>
             </div>
@@ -2293,6 +1526,23 @@ export default function ModalEditarCompra({
           />
         </div>
       </div>
+
+      {/* [NUEVO] Mini-modal de medios de pago */}
+      <ModalMediosPago
+        open={mpModalOpen}
+        mediosPagoList={safeLists.mediosPago || []}
+        totalCompra={resumen.total}
+        mediosFilas={mediosFilas}
+        onUpdate={updateMedioPago}
+        onAdd={addMedioPago}
+        onRemove={removeMedioPago}
+        onClose={() => setMpModalOpen(false)}
+        onConfirm={() => setMpModalOpen(false)}
+        apiGet={apiGet}
+        BASE_URL={BASE_URL}
+        showToast={showToast}
+        dark={dark}
+      />
 
       <ModalVerComprobante
         open={openVerComp}

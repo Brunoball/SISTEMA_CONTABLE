@@ -166,12 +166,17 @@ const ROUTE_PREFETCH = {
     import("../Cuentas_Corrientes/Clientes/Clientes"),
   "/panel/cuentas-corrientes/proveedores": () =>
     import("../Cuentas_Corrientes/Proveedores/Proveedores"),
+
+  "/panel/stock": () => import("../Stock/Stock"),
+  "/panel/stock/categorias": () => import("../Stock/StockCategorias"),
+  "/panel/stock/clientes": () => import("../Stock/StockClientes"),
+  "/panel/stock/proveedores": () => import("../Stock/StockProveedores"),
+
   "/panel/analisis-financiero": () =>
     import("../Analisis_Financiero/Analisis_Financiero"),
   "/panel/configuracion": () => import("../Configuracion/Configuracion"),
   "/panel/configuracion/tiendanube": () =>
     import("../Configuracion/ConfigTiendaNube"),
-  "/panel/stock": () => import("../Stock/Stock"),
   "/panel/cheques/cartera": () =>
     import("../Cheques/Cheques_Cartera/Cheques_Cartera"),
   "/panel/cheques/flujo": () =>
@@ -416,6 +421,7 @@ const Principal = () => {
   const [openMovSub, setOpenMovSub] = useState(false);
   const [openCCSub, setOpenCCSub] = useState(false);
   const [openChequesSub, setOpenChequesSub] = useState(false);
+  const [openStockSub, setOpenStockSub] = useState(false);
 
   const closeTimerRef = useRef(null);
   const openTimerRef = useRef(null);
@@ -423,6 +429,8 @@ const Principal = () => {
   const openCCTimerRef = useRef(null);
   const closeChequesTimerRef = useRef(null);
   const openChequesTimerRef = useRef(null);
+  const closeStockTimerRef = useRef(null);
+  const openStockTimerRef = useRef(null);
 
   const closingRef = useRef(false);
   const [closingUI, setClosingUI] = useState(false);
@@ -481,6 +489,23 @@ const Principal = () => {
   const cancelChequesOpen = () => {
     if (openChequesTimerRef.current) clearTimeout(openChequesTimerRef.current);
     openChequesTimerRef.current = null;
+  };
+
+  const closeStockSoon = (ms = 220) => {
+    if (closeStockTimerRef.current) clearTimeout(closeStockTimerRef.current);
+    closeStockTimerRef.current = setTimeout(() => setOpenStockSub(false), ms);
+  };
+  const openStockSoon = (ms = 500) => {
+    if (openStockTimerRef.current) clearTimeout(openStockTimerRef.current);
+    openStockTimerRef.current = setTimeout(() => setOpenStockSub(true), ms);
+  };
+  const cancelStockClose = () => {
+    if (closeStockTimerRef.current) clearTimeout(closeStockTimerRef.current);
+    closeStockTimerRef.current = null;
+  };
+  const cancelStockOpen = () => {
+    if (openStockTimerRef.current) clearTimeout(openStockTimerRef.current);
+    openStockTimerRef.current = null;
   };
 
   const revokeTenantLogoIconoObjectUrl = useCallback(() => {
@@ -657,6 +682,7 @@ const Principal = () => {
         setOpenMovSub(false);
         setOpenCCSub(false);
         setOpenChequesSub(false);
+        setOpenStockSub(false);
 
         if (!silent) {
           setClosingUI(false);
@@ -788,6 +814,8 @@ const Principal = () => {
       if (openCCTimerRef.current) clearTimeout(openCCTimerRef.current);
       if (closeChequesTimerRef.current) clearTimeout(closeChequesTimerRef.current);
       if (openChequesTimerRef.current) clearTimeout(openChequesTimerRef.current);
+      if (closeStockTimerRef.current) clearTimeout(closeStockTimerRef.current);
+      if (openStockTimerRef.current) clearTimeout(openStockTimerRef.current);
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
 
       revokeTenantLogoIconoObjectUrl();
@@ -800,6 +828,7 @@ const Principal = () => {
     setOpenMovSub(false);
     setOpenCCSub(false);
     setOpenChequesSub(false);
+    setOpenStockSub(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -890,7 +919,15 @@ const Principal = () => {
           { label: "Proveedores", ruta: "/panel/cuentas-corrientes/proveedores" },
         ],
       },
-      { label: "Stock", ruta: "/panel/stock" },
+      {
+        label: "Stock",
+        ruta: "/panel/stock",
+        children: [
+          { label: "Categorías", ruta: "/panel/stock/categorias" },
+          { label: "Clientes", ruta: "/panel/stock/clientes" },
+          { label: "Proveedores", ruta: "/panel/stock/proveedores" },
+        ],
+      },
       {
         label: "Cheques",
         ruta: "/panel/cheques",
@@ -928,8 +965,14 @@ const Principal = () => {
     if (location.pathname.startsWith("/panel/movimientos")) return "Movimientos";
     if (location.pathname.startsWith("/panel/cuentas-corrientes/clientes")) return "Cuentas Corrientes";
     if (location.pathname.startsWith("/panel/cuentas-corrientes/proveedores")) return "Cuentas Corrientes";
-    if (location.pathname.startsWith("/panel/cheques")) return "Cheques";
+
+    if (location.pathname === "/panel/stock") return "Stock";
+    if (location.pathname.startsWith("/panel/stock/categorias")) return "Stock · Categorías";
+    if (location.pathname.startsWith("/panel/stock/clientes")) return "Stock · Clientes";
+    if (location.pathname.startsWith("/panel/stock/proveedores")) return "Stock · Proveedores";
     if (location.pathname.startsWith("/panel/stock")) return "Stock";
+
+    if (location.pathname.startsWith("/panel/cheques")) return "Cheques";
     if (location.pathname.startsWith("/panel/configuracion/tiendanube")) return "Configuración";
     if (location.pathname.startsWith("/panel/configuracion")) return "Configuración";
     const found = navItems.find((x) => location.pathname.startsWith(x.ruta));
@@ -943,6 +986,7 @@ const Principal = () => {
       setOpenMovSub(false);
       setOpenCCSub(false);
       setOpenChequesSub(false);
+      setOpenStockSub(false);
     },
     [navigate]
   );
@@ -953,6 +997,7 @@ const Principal = () => {
     setOpenMovSub(false);
     setOpenCCSub(false);
     setOpenChequesSub(false);
+    setOpenStockSub(false);
   }, [navigate]);
 
   const isNoHover = () => {
@@ -1020,6 +1065,7 @@ const Principal = () => {
   const isMovDropdown = (itemKey) => itemKey === "movimientos";
   const isCCDropdown = (itemKey) => itemKey === "cuentas-corrientes";
   const isChequesDropdown = (itemKey) => itemKey === "cheques";
+  const isStockDropdown = (itemKey) => itemKey === "stock";
 
   return (
     <div className="pp-shell">
@@ -1181,7 +1227,7 @@ const Principal = () => {
             const isMov = isMovDropdown(item.key);
             const isCC = isCCDropdown(item.key);
             const isCheques = isChequesDropdown(item.key);
-            const isStock = item.key === "stock";
+            const isStock = isStockDropdown(item.key);
 
             const isActive =
               activeKey === item.key ||
@@ -1193,12 +1239,14 @@ const Principal = () => {
             const isOpen =
               (isMov && openMovSub) ||
               (isCC && openCCSub) ||
-              (isCheques && openChequesSub);
+              (isCheques && openChequesSub) ||
+              (isStock && openStockSub);
 
             const toggleSub = () => {
               if (isMov) setOpenMovSub((prev) => !prev);
               if (isCC) setOpenCCSub((prev) => !prev);
               if (isCheques) setOpenChequesSub((prev) => !prev);
+              if (isStock) setOpenStockSub((prev) => !prev);
             };
 
             const openSoonLocal = (ms = 300) => {
@@ -1213,6 +1261,10 @@ const Principal = () => {
               if (isCheques) {
                 cancelChequesClose();
                 openChequesSoon(ms);
+              }
+              if (isStock) {
+                cancelStockClose();
+                openStockSoon(ms);
               }
             };
 
@@ -1229,6 +1281,10 @@ const Principal = () => {
                 cancelChequesOpen();
                 closeChequesSoon(ms);
               }
+              if (isStock) {
+                cancelStockOpen();
+                closeStockSoon(ms);
+              }
             };
 
             const cancelAllTimersLocal = () => {
@@ -1244,6 +1300,10 @@ const Principal = () => {
                 cancelChequesClose();
                 cancelChequesOpen();
               }
+              if (isStock) {
+                cancelStockClose();
+                cancelStockOpen();
+              }
             };
 
             return (
@@ -1252,12 +1312,12 @@ const Principal = () => {
                 className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${isOpen ? "is-open" : ""}`}
                 onMouseEnter={() => {
                   prefetchRoute(item.ruta);
-                  if (!isNoHover() && (isMov || isCC || isCheques)) {
+                  if (!isNoHover() && (isMov || isCC || isCheques || isStock)) {
                     openSoonLocal(300);
                   }
                 }}
                 onMouseLeave={() => {
-                  if (!isNoHover() && (isMov || isCC || isCheques)) {
+                  if (!isNoHover() && (isMov || isCC || isCheques || isStock)) {
                     closeSoonLocal(220);
                   }
                 }}
@@ -1266,8 +1326,8 @@ const Principal = () => {
                   type="button"
                   className={`pp-nav__item ${isActive ? "is-active" : ""}`}
                   onClick={() => {
-                    if (isStock && !hasSub) {
-                      handleNavigate(item.ruta);
+                    if (isStock) {
+                      handleNavigate("/panel/stock");
                       return;
                     }
 
@@ -1306,6 +1366,8 @@ const Principal = () => {
                         ? openCCSub
                         : isCheques
                         ? openChequesSub
+                        : isStock
+                        ? openStockSub
                         : undefined
                       : undefined
                   }
@@ -1321,18 +1383,20 @@ const Principal = () => {
                   <div
                     className="pp-navSub"
                     onMouseEnter={() => {
-                      if (!isNoHover() && (isMov || isCC || isCheques)) {
+                      if (!isNoHover() && (isMov || isCC || isCheques || isStock)) {
                         cancelAllTimersLocal();
                         if (isMov) setOpenMovSub(true);
                         if (isCC) setOpenCCSub(true);
                         if (isCheques) setOpenChequesSub(true);
+                        if (isStock) setOpenStockSub(true);
                       }
                     }}
                     onMouseLeave={() => {
-                      if (!isNoHover() && (isMov || isCC || isCheques)) {
+                      if (!isNoHover() && (isMov || isCC || isCheques || isStock)) {
                         if (isMov) closeSoon(220);
                         if (isCC) closeCCSoon(220);
                         if (isCheques) closeChequesSoon(220);
+                        if (isStock) closeStockSoon(220);
                       }
                     }}
                   >
@@ -1340,7 +1404,10 @@ const Principal = () => {
                       <button
                         key={sub.ruta + sub.label}
                         className={`pp-navSub__item ${
-                          location.pathname.startsWith(sub.ruta) ? "is-active" : ""
+                          location.pathname === sub.ruta ||
+                          location.pathname.startsWith(`${sub.ruta}/`)
+                            ? "is-active"
+                            : ""
                         }`}
                         onMouseEnter={() => prefetchRoute(sub.ruta)}
                         onClick={() => {
@@ -1348,6 +1415,7 @@ const Principal = () => {
                           setOpenMovSub(false);
                           setOpenCCSub(false);
                           setOpenChequesSub(false);
+                          setOpenStockSub(false);
                           setDrawerOpen(false);
                         }}
                       >

@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import ModalCargaMasiva from "./modales/ModalCargaMasiva";
 import ModalEditarProducto from "./modales/ModalEditarStock";
-import ModalCategoriasStock from "./modales/ModalCategoriasStock";
-import ModalClientesStock from "./modales/ModalClientesStock";
-import ModalProveedoresStock from "./modales/ModalProveedoresStock";
 import ModalEliminar from "../Global/Modales/ModalEliminar";
 import Toast from "../Global/Toast";
 import BASE_URL from "../../config/config";
@@ -19,16 +16,11 @@ import {
   faChevronDown,
   faSort,
   faLayerGroup,
-  faUsers,
-  faTruckField,
 } from "@fortawesome/free-solid-svg-icons";
 import "./Stock.css";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 
-/* =========================
-   Helpers de autenticación
-========================= */
 function buildHeadersGET() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
   const token = (localStorage.getItem("token") || "").trim();
@@ -48,21 +40,15 @@ function buildHeadersJSON() {
 }
 
 function notifyListsUpdated() {
-  try {
-    window.dispatchEvent(new CustomEvent("balto:listas-updated"));
-  } catch {}
+  try { window.dispatchEvent(new CustomEvent("balto:listas-updated")); } catch {}
 }
 
 async function parseJsonOrThrow(res) {
   if (res.status === 401 || res.status === 403) {
-    throw new Error(
-      `${res.status}: Sesión vencida o no autorizada. Volvé a iniciar sesión.`
-    );
+    throw new Error(`${res.status}: Sesión vencida o no autorizada. Volvé a iniciar sesión.`);
   }
-
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
-
   try {
     return JSON.parse(text);
   } catch {
@@ -76,101 +62,51 @@ async function parseJsonOrThrow(res) {
 }
 
 async function apiGet(url) {
-  const res = await fetch(url, {
-    method: "GET",
-    headers: buildHeadersGET(),
-  });
+  const res = await fetch(url, { method: "GET", headers: buildHeadersGET() });
   return await parseJsonOrThrow(res);
 }
 
 async function apiPost(url, body) {
   const { action, ...rest } = body ?? {};
   const finalUrl = action ? `${url}?action=${encodeURIComponent(action)}` : url;
-
-  const res = await fetch(finalUrl, {
-    method: "POST",
-    headers: buildHeadersJSON(),
-    body: JSON.stringify(rest),
-  });
-
+  const res = await fetch(finalUrl, { method: "POST", headers: buildHeadersJSON(), body: JSON.stringify(rest) });
   return await parseJsonOrThrow(res);
 }
 
-/* =========================
-   Helpers visuales
-========================= */
 function formatMoney(value) {
   if (value === null || value === undefined || value === "") return "—";
-
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
-
-  return `$${n.toLocaleString("es-AR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return `$${n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function normalizeText(value) {
-  return String(value ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
+  return String(value ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 }
 
 function compareValues(a, b, campo) {
   const va = a?.[campo];
   const vb = b?.[campo];
-
   if (campo === "stock" || campo === "precio" || campo === "precio_promo") {
-    const na = Number(va ?? 0);
-    const nb = Number(vb ?? 0);
-    return na - nb;
+    return Number(va ?? 0) - Number(vb ?? 0);
   }
-
-  return String(va ?? "").localeCompare(String(vb ?? ""), "es", {
-    numeric: true,
-    sensitivity: "base",
-  });
+  return String(va ?? "").localeCompare(String(vb ?? ""), "es", { numeric: true, sensitivity: "base" });
 }
 
 function getProductoCategoriaId(prod) {
-  return Number(
-    prod?.id_stock_categoria ??
-      prod?.stock_categoria_id ??
-      prod?.id_categoria_stock ??
-      prod?.id_categoria ??
-      0
-  );
+  return Number(prod?.id_stock_categoria ?? prod?.stock_categoria_id ?? prod?.id_categoria_stock ?? prod?.id_categoria ?? 0);
 }
 
-/* =========================
-   Columnas
-========================= */
 const COLUMNS = [
   { key: "nombre", label: "PRODUCTO", fr: 2.4, align: "left", sortable: true },
   { key: "sku", label: "SKU", fr: 1.0, align: "center", sortable: true },
   { key: "stock", label: "STOCK", fr: 0.8, align: "center", sortable: true },
   { key: "precio", label: "PRECIO", fr: 1.0, align: "right", sortable: true },
-  {
-    key: "precio_promo",
-    label: "PRECIO PROMO",
-    fr: 1.0,
-    align: "right",
-    sortable: true,
-  },
-  {
-    key: "acciones",
-    label: "ACCIONES",
-    fr: 0.7,
-    align: "center",
-    sortable: false,
-  },
+  { key: "precio_promo", label: "PRECIO PROMO", fr: 1.0, align: "right", sortable: true },
+  { key: "acciones", label: "ACCIONES", fr: 0.7, align: "center", sortable: false },
 ];
 
 const GRID_COLS = COLUMNS.map((c) => `${c.fr}fr`).join(" ");
-
 const SKELETON_ROWS = 10;
 const SKEL_WIDTHS = {
   nombre: ["68%", "52%", "60%", "48%"],
@@ -180,9 +116,6 @@ const SKEL_WIDTHS = {
   precio_promo: ["46%", "38%", "42%", "34%"],
 };
 
-/* =========================
-   Componente principal
-========================= */
 const Stock = () => {
   const [productosRaw, setProductosRaw] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -199,10 +132,6 @@ const Stock = () => {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [modalEditarAbierto, setModalEditarAbierto] = useState(false);
   const [productoEditarId, setProductoEditarId] = useState(null);
-
-  const [modalCategoriasAbierto, setModalCategoriasAbierto] = useState(false);
-  const [modalClientesAbierto, setModalClientesAbierto] = useState(false);
-  const [modalProveedoresAbierto, setModalProveedoresAbierto] = useState(false);
 
   const [modalEliminarAbierto, setModalEliminarAbierto] = useState(false);
   const [productoEliminar, setProductoEliminar] = useState(null);
@@ -222,76 +151,36 @@ const Stock = () => {
   const recargarTodo = useCallback(async () => {
     const [productosRes, categoriasRes] = await Promise.allSettled([
       (async () => {
-        const params = new URLSearchParams({
-          action: "stock_productos_listar",
-          activo: "1",
-          pagina: "1",
-          por_pagina: "10000",
-          orden_campo: "nombre",
-          orden_dir: "ASC",
-        });
-
+        const params = new URLSearchParams({ action: "stock_productos_listar", activo: "1", pagina: "1", por_pagina: "10000", orden_campo: "nombre", orden_dir: "ASC" });
         const data = await apiGet(`${API_URL}?${params.toString()}`);
-        if (data?.exito === false) {
-          throw new Error(data?.mensaje || "Error al obtener productos");
-        }
+        if (data?.exito === false) throw new Error(data?.mensaje || "Error al obtener productos");
         return Array.isArray(data?.productos) ? data.productos : [];
       })(),
       (async () => {
-        const params = new URLSearchParams({
-          action: "stock_categorias_listar",
-        });
-
+        const params = new URLSearchParams({ action: "stock_categorias_listar" });
         const data = await apiGet(`${API_URL}?${params.toString()}`);
         const lista = Array.isArray(data?.categorias) ? data.categorias : [];
-
-        return [...lista].sort((a, b) =>
-          String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", {
-            sensitivity: "base",
-          })
-        );
+        return [...lista].sort((a, b) => String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", { sensitivity: "base" }));
       })(),
     ]);
 
-    if (productosRes.status === "fulfilled") {
-      setProductosRaw(productosRes.value);
-    } else {
-      setProductosRaw([]);
-      throw productosRes.reason;
-    }
+    if (productosRes.status === "fulfilled") { setProductosRaw(productosRes.value); }
+    else { setProductosRaw([]); throw productosRes.reason; }
 
-    if (categoriasRes.status === "fulfilled") {
-      setCategorias(categoriasRes.value);
-    } else {
-      setCategorias([]);
-    }
+    if (categoriasRes.status === "fulfilled") { setCategorias(categoriasRes.value); }
+    else { setCategorias([]); }
   }, []);
 
   const fetchCategorias = useCallback(async () => {
     setLoadingCategorias(true);
-
     try {
-      const params = new URLSearchParams({
-        action: "stock_categorias_listar",
-      });
-
+      const params = new URLSearchParams({ action: "stock_categorias_listar" });
       const data = await apiGet(`${API_URL}?${params.toString()}`);
-
       const lista = Array.isArray(data?.categorias) ? data.categorias : [];
-
-      const ordenadas = [...lista].sort((a, b) =>
-        String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", {
-          sensitivity: "base",
-        })
-      );
-
-      setCategorias(ordenadas);
+      setCategorias([...lista].sort((a, b) => String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", { sensitivity: "base" })));
     } catch (err) {
       setCategorias([]);
-      mostrarToast(
-        "error",
-        err?.message || "No se pudieron cargar las categorías."
-      );
+      mostrarToast("error", err?.message || "No se pudieron cargar las categorías.");
     } finally {
       setLoadingCategorias(false);
     }
@@ -300,23 +189,10 @@ const Stock = () => {
   const fetchProductos = useCallback(async () => {
     setLoading(true);
     setError(null);
-
     try {
-      const params = new URLSearchParams({
-        action: "stock_productos_listar",
-        activo: "1",
-        pagina: "1",
-        por_pagina: "10000",
-        orden_campo: "nombre",
-        orden_dir: "ASC",
-      });
-
+      const params = new URLSearchParams({ action: "stock_productos_listar", activo: "1", pagina: "1", por_pagina: "10000", orden_campo: "nombre", orden_dir: "ASC" });
       const data = await apiGet(`${API_URL}?${params.toString()}`);
-
-      if (data.exito === false) {
-        throw new Error(data.mensaje || "Error al obtener productos");
-      }
-
+      if (data.exito === false) throw new Error(data.mensaje || "Error al obtener productos");
       setProductosRaw(Array.isArray(data.productos) ? data.productos : []);
     } catch (err) {
       setProductosRaw([]);
@@ -326,41 +202,21 @@ const Stock = () => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchProductos();
-    fetchCategorias();
-  }, [fetchProductos, fetchCategorias]);
+  useEffect(() => { fetchProductos(); fetchCategorias(); }, [fetchProductos, fetchCategorias]);
 
   useEffect(() => {
-    const handleExternalListsUpdate = async () => {
-      try {
-        await recargarTodo();
-      } catch {}
-    };
-
+    const handleExternalListsUpdate = async () => { try { await recargarTodo(); } catch {} };
     window.addEventListener("balto:stock-updated", handleExternalListsUpdate);
-    return () => {
-      window.removeEventListener("balto:stock-updated", handleExternalListsUpdate);
-    };
+    return () => window.removeEventListener("balto:stock-updated", handleExternalListsUpdate);
   }, [recargarTodo]);
 
   const productosFiltradosYOrdenados = useMemo(() => {
     let lista = Array.isArray(productosRaw) ? [...productosRaw] : [];
-
     const q = normalizeText(busqueda);
     const categoriaId = Number(categoriaFiltro || 0);
 
-    if (q) {
-      lista = lista.filter((p) => {
-        const nombre = normalizeText(p.nombre);
-        const sku = normalizeText(p.sku);
-        return nombre.includes(q) || sku.includes(q);
-      });
-    }
-
-    if (categoriaId > 0) {
-      lista = lista.filter((p) => getProductoCategoriaId(p) === categoriaId);
-    }
+    if (q) lista = lista.filter((p) => normalizeText(p.nombre).includes(q) || normalizeText(p.sku).includes(q));
+    if (categoriaId > 0) lista = lista.filter((p) => getProductoCategoriaId(p) === categoriaId);
 
     lista.sort((a, b) => {
       const result = compareValues(a, b, orden.campo);
@@ -371,21 +227,15 @@ const Stock = () => {
   }, [productosRaw, busqueda, categoriaFiltro, orden]);
 
   const totalProductos = productosFiltradosYOrdenados.length;
-  const totalPaginas = Math.max(
-    1,
-    Math.ceil(totalProductos / productosPorPagina)
-  );
+  const totalPaginas = Math.max(1, Math.ceil(totalProductos / productosPorPagina));
 
   useEffect(() => {
-    if (paginaActual > totalPaginas) {
-      setPaginaActual(totalPaginas);
-    }
+    if (paginaActual > totalPaginas) setPaginaActual(totalPaginas);
   }, [paginaActual, totalPaginas]);
 
   const productos = useMemo(() => {
     const inicio = (paginaActual - 1) * productosPorPagina;
-    const fin = inicio + productosPorPagina;
-    return productosFiltradosYOrdenados.slice(inicio, fin);
+    return productosFiltradosYOrdenados.slice(inicio, inicio + productosPorPagina);
   }, [productosFiltradosYOrdenados, paginaActual]);
 
   useEffect(() => {
@@ -393,32 +243,16 @@ const Stock = () => {
     const objectUrls = [];
 
     async function cargarImagenes() {
-      const productosConImagen = productos.filter(
-        (p) => Number(p.imagen_archivo_id || 0) > 0
-      );
-
-      if (productosConImagen.length === 0) {
-        setImagenesMap({});
-        return;
-      }
+      const productosConImagen = productos.filter((p) => Number(p.imagen_archivo_id || 0) > 0);
+      if (productosConImagen.length === 0) { setImagenesMap({}); return; }
 
       const nuevoMap = {};
-
       await Promise.all(
         productosConImagen.map(async (prod) => {
           try {
-            const params = new URLSearchParams({
-              action: "stock_producto_imagen_ver",
-              id_archivo: String(prod.imagen_archivo_id),
-            });
-
-            const res = await fetch(`${API_URL}?${params.toString()}`, {
-              method: "GET",
-              headers: buildHeadersGET(),
-            });
-
+            const params = new URLSearchParams({ action: "stock_producto_imagen_ver", id_archivo: String(prod.imagen_archivo_id) });
+            const res = await fetch(`${API_URL}?${params.toString()}`, { method: "GET", headers: buildHeadersGET() });
             if (!res.ok) return;
-
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
             objectUrls.push(url);
@@ -427,59 +261,31 @@ const Stock = () => {
         })
       );
 
-      if (!cancelado) {
-        setImagenesMap(nuevoMap);
-      } else {
-        objectUrls.forEach((u) => URL.revokeObjectURL(u));
-      }
+      if (!cancelado) { setImagenesMap(nuevoMap); }
+      else { objectUrls.forEach((u) => URL.revokeObjectURL(u)); }
     }
 
     cargarImagenes();
-
-    return () => {
-      cancelado = true;
-      objectUrls.forEach((u) => URL.revokeObjectURL(u));
-    };
+    return () => { cancelado = true; objectUrls.forEach((u) => URL.revokeObjectURL(u)); };
   }, [productos]);
 
-  const handleBusqueda = (e) => {
-    setBusqueda(e.target.value);
-    setPaginaActual(1);
-  };
-
-  const handleCategoriaFiltro = (e) => {
-    setCategoriaFiltro(e.target.value);
-    setPaginaActual(1);
-  };
-
+  const handleBusqueda = (e) => { setBusqueda(e.target.value); setPaginaActual(1); };
+  const handleCategoriaFiltro = (e) => { setCategoriaFiltro(e.target.value); setPaginaActual(1); };
   const handleOrden = (campo) => {
-    setOrden((prev) =>
-      prev.campo === campo
-        ? { campo, dir: prev.dir === "ASC" ? "DESC" : "ASC" }
-        : { campo, dir: "ASC" }
-    );
+    setOrden((prev) => prev.campo === campo ? { campo, dir: prev.dir === "ASC" ? "DESC" : "ASC" } : { campo, dir: "ASC" });
     setPaginaActual(1);
   };
 
   const handleAbrirEditar = (id) => {
-    if (!id || Number(id) <= 0) {
-      mostrarToast("error", "ID de producto inválido.");
-      return;
-    }
+    if (!id || Number(id) <= 0) { mostrarToast("error", "ID de producto inválido."); return; }
     setProductoEditarId(Number(id));
     setModalEditarAbierto(true);
   };
 
-  const handleCerrarEditar = () => {
-    setModalEditarAbierto(false);
-    setProductoEditarId(null);
-  };
+  const handleCerrarEditar = () => { setModalEditarAbierto(false); setProductoEditarId(null); };
 
   const handleAbrirEliminar = (producto) => {
-    if (!producto?.id || Number(producto.id) <= 0) {
-      mostrarToast("error", "ID de producto inválido.");
-      return;
-    }
+    if (!producto?.id || Number(producto.id) <= 0) { mostrarToast("error", "ID de producto inválido."); return; }
     setProductoEliminar(producto);
     setModalEliminarAbierto(true);
   };
@@ -491,25 +297,13 @@ const Stock = () => {
   };
 
   const handleConfirmarEliminar = async () => {
-    if (!productoEliminar?.id || Number(productoEliminar.id) <= 0) {
-      throw new Error("ID de producto inválido.");
-    }
-
+    if (!productoEliminar?.id || Number(productoEliminar.id) <= 0) throw new Error("ID de producto inválido.");
     setEliminando(true);
-
     try {
-      const data = await apiPost(API_URL, {
-        action: "stock_productos_eliminar",
-        id: Number(productoEliminar.id),
-      });
-
-      if (data.exito === false) {
-        throw new Error(data.mensaje || "Error al eliminar el producto");
-      }
-
+      const data = await apiPost(API_URL, { action: "stock_productos_eliminar", id: Number(productoEliminar.id) });
+      if (data.exito === false) throw new Error(data.mensaje || "Error al eliminar el producto");
       setModalEliminarAbierto(false);
       setProductoEliminar(null);
-
       await fetchProductos();
       notifyListsUpdated();
       window.dispatchEvent(new CustomEvent("balto:stock-updated"));
@@ -519,9 +313,7 @@ const Stock = () => {
   };
 
   const paginasVisibles = Array.from({ length: totalPaginas }, (_, i) => i + 1)
-    .filter(
-      (p) => p === 1 || p === totalPaginas || Math.abs(p - paginaActual) <= 2
-    )
+    .filter((p) => p === 1 || p === totalPaginas || Math.abs(p - paginaActual) <= 2)
     .reduce((acc, p, i, arr) => {
       if (i > 0 && p - arr[i - 1] > 1) acc.push("...");
       acc.push(p);
@@ -529,60 +321,24 @@ const Stock = () => {
     }, []);
 
   const OrdenIcon = ({ campo }) => {
-    if (orden.campo !== campo) {
-      return (
-        <FontAwesomeIcon
-          icon={faSort}
-          className="prod-sortIcon prod-sortIcon--inactive"
-        />
-      );
-    }
-
-    return (
-      <FontAwesomeIcon
-        icon={orden.dir === "ASC" ? faChevronUp : faChevronDown}
-        className="prod-sortIcon prod-sortIcon--active"
-      />
-    );
+    if (orden.campo !== campo) return <FontAwesomeIcon icon={faSort} className="prod-sortIcon prod-sortIcon--inactive" />;
+    return <FontAwesomeIcon icon={orden.dir === "ASC" ? faChevronUp : faChevronDown} className="prod-sortIcon prod-sortIcon--active" />;
   };
 
   const renderSkeletonRow = (idx) => (
-    <div
-      key={`skel-${idx}`}
-      className="mov-gridTable mov-gridTable--row mov-row--skeleton"
-      style={{ gridTemplateColumns: GRID_COLS }}
-      role="row"
-      aria-hidden="true"
-    >
+    <div key={`skel-${idx}`} className="mov-gridTable mov-gridTable--row mov-row--skeleton" style={{ gridTemplateColumns: GRID_COLS }} role="row" aria-hidden="true">
       {COLUMNS.map((c) => {
         if (c.key === "acciones") {
           return (
-            <div
-              key={c.key}
-              className="mov-gridCell mov-gridCell--actions is-center"
-              role="cell"
-            >
-              <div className="mov-skelActions">
-                <span className="mov-skelIcon" />
-                <span className="mov-skelIcon" />
-              </div>
+            <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell">
+              <div className="mov-skelActions"><span className="mov-skelIcon" /><span className="mov-skelIcon" /></div>
             </div>
           );
         }
-
         const list = SKEL_WIDTHS[c.key] || ["60%"];
         const w = list[idx % list.length];
-
         return (
-          <div
-            key={c.key}
-            className={[
-              "mov-gridCell",
-              c.align === "right" ? "is-right" : "",
-              c.align === "center" ? "is-center" : "",
-            ].join(" ")}
-            role="cell"
-          >
+          <div key={c.key} className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")} role="cell">
             <span className="mov-skeletonBar" style={{ width: w }} />
           </div>
         );
@@ -593,20 +349,14 @@ const Stock = () => {
   return (
     <>
       <div className="mov-page">
-        {error && (
-          <div className="mov-alert" role="alert">
-            {error}
-          </div>
-        )}
+        {error && <div className="mov-alert" role="alert">{error}</div>}
 
         <section className="mov-card mov-card--table">
           <div className="mov-card__head">
             <div className="mov-card__headLeft">
               <div className="title-mov">
                 <div className="mov-card__title">Stock · Productos</div>
-                <div className="mov-card__hint">
-                  Mostrando <b>{totalProductos}</b> productos
-                </div>
+                <div className="mov-card__hint">Mostrando <b>{totalProductos}</b> productos</div>
               </div>
 
               <div className="mov-headFilters">
@@ -621,20 +371,9 @@ const Stock = () => {
                           placeholder="Buscar por nombre o SKU..."
                           disabled={loading}
                         />
-                        <span className="cc-floatingLabel">
-                          <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                        </span>
-
+                        <span className="cc-floatingLabel"><FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda</span>
                         {busqueda.trim() !== "" && (
-                          <button
-                            type="button"
-                            className="cc-clearSearch cc-clearSearch--inside"
-                            title="Limpiar búsqueda"
-                            onClick={() => {
-                              setBusqueda("");
-                              setPaginaActual(1);
-                            }}
-                          >
+                          <button type="button" className="cc-clearSearch cc-clearSearch--inside" title="Limpiar búsqueda" onClick={() => { setBusqueda(""); setPaginaActual(1); }}>
                             <FontAwesomeIcon icon={faTimes} />
                           </button>
                         )}
@@ -645,83 +384,31 @@ const Stock = () => {
 
                 <div className="cc-filter">
                   <div className="cc-floatingField is-active">
-                    <select
-                      className="cc-input cc-input--floating"
-                      value={categoriaFiltro}
-                      onChange={handleCategoriaFiltro}
-                      disabled={loading || loadingCategorias}
-                    >
+                    <select className="cc-input cc-input--floating" value={categoriaFiltro} onChange={handleCategoriaFiltro} disabled={loading || loadingCategorias}>
                       <option value="">Todas</option>
                       {categorias.map((cat) => (
-                        <option
-                          key={cat.id_stock_categoria}
-                          value={cat.id_stock_categoria}
-                        >
-                          {cat.nombre}
-                        </option>
+                        <option key={cat.id_stock_categoria} value={cat.id_stock_categoria}>{cat.nombre}</option>
                       ))}
                     </select>
-                    <span className="cc-floatingLabel">
-                      <FontAwesomeIcon icon={faLayerGroup} /> Categoría
-                    </span>
+                    <span className="cc-floatingLabel"><FontAwesomeIcon icon={faLayerGroup} /> Categoría</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div
-              className="mov-card__actions"
-              style={{ display: "flex", gap: 10, flexWrap: "wrap" }}
-            >
-              <button
-                type="button"
-                className="mov-btn mov-btn--ghost"
-                onClick={() => setModalCategoriasAbierto(true)}
-              >
-                <FontAwesomeIcon icon={faLayerGroup} /> Categorías
-              </button>
-
-              <button
-                type="button"
-                className="mov-btn mov-btn--ghost"
-                onClick={() => setModalClientesAbierto(true)}
-              >
-                <FontAwesomeIcon icon={faUsers} /> Clientes
-              </button>
-
-              <button
-                type="button"
-                className="mov-btn mov-btn--ghost"
-                onClick={() => setModalProveedoresAbierto(true)}
-              >
-                <FontAwesomeIcon icon={faTruckField} /> Proveedores
-              </button>
-
-              <button
-                type="button"
-                className="mov-btn mov-btn--primary"
-                onClick={() => setModalAbierto(true)}
-              >
+            {/* ✅ Solo botón de agregar producto */}
+            <div className="mov-card__actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button type="button" className="mov-btn mov-btn--primary" onClick={() => setModalAbierto(true)}>
                 <FontAwesomeIcon icon={faPlus} /> Agregar producto
               </button>
             </div>
           </div>
 
-          <div
-            className="mov-gridTable mov-gridTable--head"
-            style={{ gridTemplateColumns: GRID_COLS }}
-            role="row"
-          >
+          <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: GRID_COLS }} role="row">
             {COLUMNS.map((c) => (
               <div
                 key={c.key}
-                className={[
-                  "mov-gridCell",
-                  "mov-gridCell--head",
-                  c.align === "right" ? "is-right" : "",
-                  c.align === "center" ? "is-center" : "",
-                  c.sortable ? "prod-th--sortable" : "",
-                ].join(" ")}
+                className={["mov-gridCell", "mov-gridCell--head", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : "", c.sortable ? "prod-th--sortable" : ""].join(" ")}
                 role="columnheader"
                 onClick={c.sortable ? () => handleOrden(c.key) : undefined}
               >
@@ -732,140 +419,65 @@ const Stock = () => {
           </div>
 
           <div className="mov-tableWrap" role="rowgroup">
-            <div
-              className={[
-                "mov-gridBody",
-                "mov-gridBody--relative",
-                loading ? "mov-softLoading" : "",
-              ].join(" ")}
-            >
+            <div className={["mov-gridBody", "mov-gridBody--relative", loading ? "mov-softLoading" : ""].join(" ")}>
               {loading ? (
                 <div className="mov-skeletonWrap" aria-busy="true">
-                  {Array.from({ length: SKELETON_ROWS }).map((_, i) =>
-                    renderSkeletonRow(i)
-                  )}
+                  {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
                 </div>
               ) : (
                 <>
                   {productos.length === 0 ? (
                     <div className="cc-emptyState">
-                      <FontAwesomeIcon
-                        icon={faBoxOpen}
-                        className="cc-emptyIcon"
-                      />
+                      <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
                       <div className="cc-emptyText">
-                        {busqueda.trim() || categoriaFiltro
-                          ? "No se encontraron productos con los filtros seleccionados."
-                          : "No hay productos para mostrar."}
+                        {busqueda.trim() || categoriaFiltro ? "No se encontraron productos con los filtros seleccionados." : "No hay productos para mostrar."}
                       </div>
                     </div>
                   ) : (
                     productos.map((prod) => (
-                      <div
-                        key={prod.id}
-                        className="mov-gridTable mov-gridTable--row"
-                        style={{ gridTemplateColumns: GRID_COLS }}
-                        role="row"
-                      >
-                        <div
-                          className="mov-gridCell is-strong"
-                          role="cell"
-                          data-label="PRODUCTO"
-                        >
+                      <div key={prod.id} className="mov-gridTable mov-gridTable--row" style={{ gridTemplateColumns: GRID_COLS }} role="row">
+                        <div className="mov-gridCell is-strong" role="cell" data-label="PRODUCTO">
                           <div className="prod-productCell">
                             <div className="prod-thumb">
                               {imagenesMap[prod.id] ? (
-                                <img
-                                  src={imagenesMap[prod.id]}
-                                  alt={prod.nombre}
-                                  className="prod-thumb__img"
-                                />
+                                <img src={imagenesMap[prod.id]} alt={prod.nombre} className="prod-thumb__img" />
                               ) : (
-                                <span className="prod-thumb__placeholder">
-                                  <FontAwesomeIcon icon={faBoxOpen} />
-                                </span>
+                                <span className="prod-thumb__placeholder"><FontAwesomeIcon icon={faBoxOpen} /></span>
                               )}
                             </div>
-                            <span className="mov-ellipsissss">
-                              {prod.nombre}
-                            </span>
+                            <span className="mov-ellipsissss">{prod.nombre}</span>
                           </div>
                         </div>
 
-                        <div
-                          className="mov-gridCell is-center"
-                          role="cell"
-                          data-label="SKU"
-                        >
-                          <span className="mov-ellipsissss prod-sku">
-                            {prod.sku || "—"}
-                          </span>
+                        <div className="mov-gridCell is-center" role="cell" data-label="SKU">
+                          <span className="mov-ellipsissss prod-sku">{prod.sku || "—"}</span>
                         </div>
 
-                        <div
-                          className="mov-gridCell is-center"
-                          role="cell"
-                          data-label="STOCK"
-                        >
+                        <div className="mov-gridCell is-center" role="cell" data-label="STOCK">
                           {(() => {
                             const stockNum = Number(prod.stock || 0);
-
                             let stockClass = "mov-chip mov-chip--danger";
                             let stockLabel = "Sin stock";
-
-                            if (stockNum > 10) {
-                              stockClass = "mov-chip mov-chip--ok";
-                              stockLabel = stockNum;
-                            } else if (stockNum > 0 && stockNum <= 10) {
-                              stockClass = "mov-chip mov-chip--warn";
-                              stockLabel = stockNum;
-                            }
-
+                            if (stockNum > 10) { stockClass = "mov-chip mov-chip--ok"; stockLabel = stockNum; }
+                            else if (stockNum > 0 && stockNum <= 10) { stockClass = "mov-chip mov-chip--warn"; stockLabel = stockNum; }
                             return <span className={stockClass}>{stockLabel}</span>;
                           })()}
                         </div>
 
-                        <div
-                          className="mov-gridCell is-right"
-                          role="cell"
-                          data-label="PRECIO"
-                        >
-                          <span className="mov-ellipsissss">
-                            {formatMoney(prod.precio)}
-                          </span>
+                        <div className="mov-gridCell is-right" role="cell" data-label="PRECIO">
+                          <span className="mov-ellipsissss">{formatMoney(prod.precio)}</span>
                         </div>
 
-                        <div
-                          className="mov-gridCell is-right"
-                          role="cell"
-                          data-label="PRECIO PROMO"
-                        >
-                          <span className="mov-ellipsissss prod-promo">
-                            {formatMoney(prod.precio_promo)}
-                          </span>
+                        <div className="mov-gridCell is-right" role="cell" data-label="PRECIO PROMO">
+                          <span className="mov-ellipsissss prod-promo">{formatMoney(prod.precio_promo)}</span>
                         </div>
 
-                        <div
-                          className="mov-gridCell mov-gridCell--actions is-center"
-                          role="cell"
-                          data-label="ACCIONES"
-                        >
+                        <div className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label="ACCIONES">
                           <div className="mov-actionsInline">
-                            <button
-                              type="button"
-                              title="Editar"
-                              className="mov-iconBtn"
-                              onClick={() => handleAbrirEditar(prod.id)}
-                            >
+                            <button type="button" title="Editar" className="mov-iconBtn" onClick={() => handleAbrirEditar(prod.id)}>
                               <FontAwesomeIcon icon={faPenToSquare} />
                             </button>
-
-                            <button
-                              type="button"
-                              title="Eliminar"
-                              className="mov-iconBtn mov-iconBtn--danger"
-                              onClick={() => handleAbrirEliminar(prod)}
-                            >
+                            <button type="button" title="Eliminar" className="mov-iconBtn mov-iconBtn--danger" onClick={() => handleAbrirEliminar(prod)}>
                               <FontAwesomeIcon icon={faTrashCan} />
                             </button>
                           </div>
@@ -881,43 +493,19 @@ const Stock = () => {
 
         {totalPaginas > 1 && (
           <div className="prod-pagination">
-            <button
-              type="button"
-              className="mov-btn mov-btn--ghost"
-              onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
-              disabled={paginaActual === 1}
-            >
+            <button type="button" className="mov-btn mov-btn--ghost" onClick={() => setPaginaActual((p) => Math.max(1, p - 1))} disabled={paginaActual === 1}>
               ← Anterior
             </button>
-
             {paginasVisibles.map((p, i) =>
               p === "..." ? (
-                <span key={`dots-${i}`} className="prod-page-dots">
-                  …
-                </span>
+                <span key={`dots-${i}`} className="prod-page-dots">…</span>
               ) : (
-                <button
-                  key={p}
-                  type="button"
-                  className={`mov-btn ${
-                    p === paginaActual ? "mov-btn--primary" : "mov-btn--ghost"
-                  }`}
-                  onClick={() => setPaginaActual(p)}
-                  style={{ minWidth: 40, padding: "0 10px" }}
-                >
+                <button key={p} type="button" className={`mov-btn ${p === paginaActual ? "mov-btn--primary" : "mov-btn--ghost"}`} onClick={() => setPaginaActual(p)} style={{ minWidth: 40, padding: "0 10px" }}>
                   {p}
                 </button>
               )
             )}
-
-            <button
-              type="button"
-              className="mov-btn mov-btn--ghost"
-              onClick={() =>
-                setPaginaActual((p) => Math.min(totalPaginas, p + 1))
-              }
-              disabled={paginaActual === totalPaginas}
-            >
+            <button type="button" className="mov-btn mov-btn--ghost" onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))} disabled={paginaActual === totalPaginas}>
               Siguiente →
             </button>
           </div>
@@ -941,10 +529,7 @@ const Stock = () => {
             await recargarTodo();
             notifyListsUpdated();
             window.dispatchEvent(new CustomEvent("balto:stock-updated"));
-            mostrarToast(
-              "exito",
-              mensaje || "Importación finalizada correctamente."
-            );
+            mostrarToast("exito", mensaje || "Importación finalizada correctamente.");
           }}
         />
       )}
@@ -963,58 +548,9 @@ const Stock = () => {
         />
       )}
 
-      {modalCategoriasAbierto && (
-        <ModalCategoriasStock
-          open={modalCategoriasAbierto}
-          onClose={() => setModalCategoriasAbierto(false)}
-          onToast={mostrarToast}
-          onActualizado={async () => {
-            await recargarTodo();
-            notifyListsUpdated();
-            window.dispatchEvent(new CustomEvent("balto:stock-updated"));
-          }}
-        />
-      )}
-
-      {modalClientesAbierto && (
-        <ModalClientesStock
-          open={modalClientesAbierto}
-          onClose={() => setModalClientesAbierto(false)}
-          onToast={mostrarToast}
-          onActualizado={async () => {
-            await recargarTodo();
-            notifyListsUpdated();
-            window.dispatchEvent(new CustomEvent("balto:stock-updated"));
-          }}
-        />
-      )}
-
-      {modalProveedoresAbierto && (
-        <ModalProveedoresStock
-          open={modalProveedoresAbierto}
-          onClose={() => setModalProveedoresAbierto(false)}
-          onToast={mostrarToast}
-          onActualizado={async () => {
-            await recargarTodo();
-            notifyListsUpdated();
-            window.dispatchEvent(new CustomEvent("balto:stock-updated"));
-          }}
-        />
-      )}
-
       <ModalEliminar
         open={modalEliminarAbierto}
-        row={
-          productoEliminar
-            ? {
-                id: productoEliminar.id,
-                nombre: productoEliminar.nombre,
-                sku: productoEliminar.sku,
-                stock: productoEliminar.stock,
-                precio: productoEliminar.precio,
-              }
-            : null
-        }
+        row={productoEliminar ? { id: productoEliminar.id, nombre: productoEliminar.nombre, sku: productoEliminar.sku, stock: productoEliminar.stock, precio: productoEliminar.precio } : null}
         loading={eliminando}
         onClose={handleCerrarEliminar}
         onConfirm={handleConfirmarEliminar}
@@ -1034,33 +570,14 @@ const Stock = () => {
                 { label: "ID Producto", value: `#${productoEliminar.id}` },
                 { label: "Nombre", value: productoEliminar.nombre || "—" },
                 { label: "SKU", value: productoEliminar.sku || "—" },
-                {
-                  label: "Stock",
-                  value:
-                    productoEliminar.stock === null ||
-                    productoEliminar.stock === undefined ||
-                    productoEliminar.stock === ""
-                      ? "—"
-                      : String(productoEliminar.stock),
-                },
-                {
-                  label: "Precio",
-                  value: formatMoney(productoEliminar.precio),
-                },
+                { label: "Stock", value: productoEliminar.stock === null || productoEliminar.stock === undefined || productoEliminar.stock === "" ? "—" : String(productoEliminar.stock) },
+                { label: "Precio", value: formatMoney(productoEliminar.precio) },
               ]
             : []
         }
       />
 
-      {toast && (
-        <Toast
-          key={toast.id}
-          tipo={toast.tipo}
-          mensaje={toast.mensaje}
-          duracion={toast.duracion}
-          onClose={cerrarToast}
-        />
-      )}
+      {toast && <Toast key={toast.id} tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={cerrarToast} />}
     </>
   );
 };

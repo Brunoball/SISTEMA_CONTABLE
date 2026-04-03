@@ -24,17 +24,20 @@ import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 import Configuracion from "./components/Configuracion/Configuracion";
 import ConfigTiendaNube from "./components/Configuracion/ConfigTiendaNube";
 
-/* Analisis financiero */
+/* Análisis financiero */
 import * as AnalisisFinancieroModule from "./components/Analisis_Financiero/Analisis_Financiero";
 
 /* Cuentas corrientes */
 import ClientesCC from "./components/Cuentas_Corrientes/Clientes/Clientes";
 import ProveedoresCC from "./components/Cuentas_Corrientes/Proveedores/Proveedores";
 
-/* ✅ STOCK */
+/* STOCK */
 import Stock from "./components/Stock/Stock";
+import StockCategorias from "./components/Stock/StockCategorias";
+import StockClientes from "./components/Stock/StockClientes";
+import StockProveedores from "./components/Stock/StockProveedores";
 
-/* ✅ CHEQUES */
+/* CHEQUES */
 import Cheques_Cartera from "./components/Cheques/Cheques_Cartera/Cheques_Cartera";
 import Flujo_Cheques from "./components/Cheques/Flujo_Cheques/Flujo_Cheques";
 import Echeqs_Cartera from "./components/Cheques/Echeqs_Cartera/Echeqs_Cartera";
@@ -147,6 +150,9 @@ export default function App() {
 
           {/* STOCK */}
           <Route path="stock" element={<Stock />} />
+          <Route path="stock/categorias" element={<StockCategorias />} />
+          <Route path="stock/clientes" element={<StockClientes />} />
+          <Route path="stock/proveedores" element={<StockProveedores />} />
 
           {/* CHEQUES */}
           <Route path="cheques/cartera" element={<Cheques_Cartera />} />

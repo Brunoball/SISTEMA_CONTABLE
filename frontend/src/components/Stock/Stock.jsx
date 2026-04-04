@@ -18,6 +18,7 @@ import {
   faLayerGroup,
 } from "@fortawesome/free-solid-svg-icons";
 import "./Stock.css";
+import "../Global/Global_css/Global_Section.css";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 

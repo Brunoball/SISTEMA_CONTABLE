@@ -1,8 +1,521 @@
-/* =========================================================
-   BALTO — Lista Productos
-   Hereda toda la base de movimientos.css  (importala antes)
-   Este archivo agrega SÓLO los overrides específicos de productos.
-   ========================================================= */
+/* ================================================
+   StockProveedores.css
+   Estilos propios del componente (prefijo .sp-)
+   Depende de movimientos.css / Global_Section.css para las clases .mov-*
+   ================================================ */
+
+/* ── Grid tabla ── */
+.sp-grid { grid-template-columns: 1fr 120px 108px; }
+
+/* ── Wrapper del botón: necesario para posicionar el dropdown ── */
+.sp-dropWrap {
+  position: relative;
+}
+
+/* ── Dropdown flotante ── */
+.sp-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 300;
+  width: 300px;
+
+  background: #fff;
+  border: 1px solid rgba(10, 37, 64, 0.13);
+  border-radius: 14px;
+  box-shadow:
+    0 20px 48px -10px rgba(10, 37, 64, 0.22),
+    0 4px 12px rgba(10, 37, 64, 0.08);
+
+  padding: 18px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  animation: sp-dropIn 180ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  transform-origin: top right;
+}
+
+@keyframes sp-dropIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
+/* flecha decorativa apuntando al botón */
+.sp-dropdown::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 18px;
+  width: 11px;
+  height: 11px;
+  background: #fff;
+  border-left: 1px solid rgba(10, 37, 64, 0.13);
+  border-top:  1px solid rgba(10, 37, 64, 0.13);
+  transform: rotate(45deg);
+  border-radius: 2px 0 0 0;
+}
+
+/* título del dropdown */
+.sp-dropdown__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--balto-ink);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 2px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(10, 37, 64, 0.08);
+}
+
+/* banner edición */
+.sp-editBanner {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--balto-action);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: -4px;
+}
+
+/* ── Floating field ── */
+.sp-floatingField {
+  position: relative;
+  width: 100%;
+}
+
+.sp-input {
+  width: 100%;
+  height: 52px;
+  padding: 22px 14px 8px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(10, 37, 64, 0.14);
+  background: #fff;
+  outline: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(10, 37, 64, 0.9);
+  font-family: inherit;
+  transition:
+    border-color 140ms ease,
+    box-shadow   140ms ease,
+    background   140ms ease;
+}
+
+.sp-input:hover    { border-color: rgba(10, 37, 64, 0.28); }
+.sp-input:focus    { border-color: rgba(0, 85, 187, 0.55); box-shadow: 0 0 0 3px rgba(0, 85, 187, 0.18); background: #fafcff; }
+.sp-input:disabled { opacity: 0.55; cursor: not-allowed; background: #f6f9fc; }
+
+.sp-floatingLabel {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(66, 84, 102, 0.76);
+  pointer-events: none;
+  background: #fff;
+  padding: 0 6px;
+  margin-left: -6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 2;
+  transition:
+    top       150ms ease,
+    transform 150ms ease,
+    font-size 150ms ease,
+    color     150ms ease;
+}
+
+.sp-floatingField.is-active .sp-floatingLabel,
+.sp-floatingField:focus-within .sp-floatingLabel,
+.sp-input:not(:placeholder-shown) + .sp-floatingLabel {
+  top: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #0055bb;
+  letter-spacing: 0.02em;
+}
+
+/* ── Acciones del form ── */
+.sp-formActions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.sp-formActions .mov-btn {
+  flex: 1;
+  height: 42px;
+  justify-content: center;
+}
+
+/* ── Botón con dropdown abierto ── */
+.sp-btn--open {
+  background:   color-mix(in srgb, var(--balto-action) 10%, #fff) !important;
+  border-color: color-mix(in srgb, var(--balto-action) 35%, #fff) !important;
+  color:        var(--balto-action) !important;
+  box-shadow:   none !important;
+}
+
+/* ── Chips de estado ── */
+.sp-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  border: 1px solid transparent;
+  user-select: none;
+}
+
+.sp-chip--active   { background: rgba(16, 185, 129, 0.12); color: #057a55; border-color: rgba(16, 185, 129, 0.30); }
+.sp-chip--inactive { background: rgba(148, 163, 184, 0.12); color: #64748b; border-color: rgba(148, 163, 184, 0.30); }
+
+/* ── Fila en modo edición ── */
+.sp-row--editing       { background: rgba(0, 85, 187, 0.05) !important; }
+.sp-row--editing:hover { background: rgba(0, 85, 187, 0.08) !important; }
+
+/* ================================================
+   DARK MODE
+   ================================================ */
+html[data-theme="oscuro"] .sp-dropdown {
+  background: #0f1929 !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  box-shadow:
+    0 24px 56px -12px rgba(0, 0, 0, 0.65),
+    0 4px 14px rgba(0, 0, 0, 0.30) !important;
+}
+
+html[data-theme="oscuro"] .sp-dropdown::before {
+  background: #0f1929 !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+html[data-theme="oscuro"] .sp-dropdown__title {
+  color: rgba(226, 232, 240, 0.92) !important;
+  border-bottom-color: rgba(148, 163, 184, 0.14) !important;
+}
+
+html[data-theme="oscuro"] .sp-input {
+  background: rgba(15, 23, 42, 0.88) !important;
+  color: rgba(226, 232, 240, 0.92) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+html[data-theme="oscuro"] .sp-input:focus {
+  background: rgba(15, 23, 42, 0.96) !important;
+  border-color: rgba(78, 161, 255, 0.45) !important;
+  box-shadow: 0 0 0 3px rgba(78, 161, 255, 0.18) !important;
+}
+
+html[data-theme="oscuro"] .sp-floatingLabel {
+  background: transparent !important;
+  color: rgba(226, 232, 240, 0.65) !important;
+}
+
+html[data-theme="oscuro"] .sp-floatingField.is-active .sp-floatingLabel,
+html[data-theme="oscuro"] .sp-floatingField:focus-within .sp-floatingLabel {
+  color: rgba(78, 161, 255, 0.92) !important;
+}
+
+html[data-theme="oscuro"] .sp-btn--open {
+  background:   rgba(78, 161, 255, 0.12) !important;
+  border-color: rgba(78, 161, 255, 0.28) !important;
+  color:        rgba(78, 161, 255, 0.95) !important;
+}
+
+html[data-theme="oscuro"] .sp-chip--active   { background: rgba(16, 185, 129, 0.16) !important; color: #34d399 !important; }
+html[data-theme="oscuro"] .sp-chip--inactive { background: rgba(148, 163, 184, 0.16) !important; color: #94a3b8 !important; }
+
+html[data-theme="oscuro"] .sp-row--editing { background: rgba(78, 161, 255, 0.08) !important; }
+
+html[data-theme="oscuro"] .sp-editBanner { color: rgba(78, 161, 255, 0.90) !important; }
+
+
+/* ── Grid tabla: 5 columnas ── */
+.scat-grid {
+  grid-template-columns: 1.4fr 2fr 110px 90px 108px;
+}
+
+/* ── Wrapper del botón (necesario para posicionar el dropdown) ── */
+.scat-dropWrap {
+  position: relative;
+}
+
+/* ── Dropdown flotante ── */
+.scat-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 300;
+  width: 320px;
+
+  background: #fff;
+  border: 1px solid rgba(10, 37, 64, 0.13);
+  border-radius: 14px;
+  box-shadow:
+    0 20px 48px -10px rgba(10, 37, 64, 0.22),
+    0 4px 12px rgba(10, 37, 64, 0.08);
+
+  padding: 18px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  animation: scat-dropIn 180ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  transform-origin: top right;
+}
+
+@keyframes scat-dropIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
+/* flecha decorativa */
+.scat-dropdown::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 18px;
+  width: 11px;
+  height: 11px;
+  background: #fff;
+  border-left: 1px solid rgba(10, 37, 64, 0.13);
+  border-top:  1px solid rgba(10, 37, 64, 0.13);
+  transform: rotate(45deg);
+  border-radius: 2px 0 0 0;
+}
+
+/* título del dropdown */
+.scat-dropdown__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--balto-ink);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 2px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(10, 37, 64, 0.08);
+}
+
+/* banner modo edición */
+.scat-editBanner {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--balto-action);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: -4px;
+}
+
+/* ── Floating field ── */
+.scat-floatingField {
+  position: relative;
+  width: 100%;
+}
+
+.scat-input {
+  width: 100%;
+  height: 52px;
+  padding: 22px 14px 8px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(10, 37, 64, 0.14);
+  background: #fff;
+  outline: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(10, 37, 64, 0.9);
+  font-family: inherit;
+  transition:
+    border-color 140ms ease,
+    box-shadow   140ms ease,
+    background   140ms ease;
+}
+
+.scat-input:hover    { border-color: rgba(10, 37, 64, 0.28); }
+.scat-input:focus    { border-color: rgba(0, 85, 187, 0.55); box-shadow: 0 0 0 3px rgba(0, 85, 187, 0.18); background: #fafcff; }
+.scat-input:disabled { opacity: 0.55; cursor: not-allowed; background: #f6f9fc; }
+
+/* textarea variante */
+.scat-input--textarea {
+  height: auto;
+  min-height: 80px;
+  padding-top: 22px;
+  resize: vertical;
+}
+
+/* floating label */
+.scat-floatingLabel {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(66, 84, 102, 0.76);
+  pointer-events: none;
+  background: #fff;
+  padding: 0 6px;
+  margin-left: -6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 2;
+  transition:
+    top       150ms ease,
+    transform 150ms ease,
+    font-size 150ms ease,
+    color     150ms ease;
+}
+
+/* label de textarea: ancla en la parte superior desde el inicio */
+.scat-floatingField--textarea .scat-floatingLabel {
+  top: 14px;
+  transform: none;
+}
+
+/* label activo (input) */
+.scat-floatingField.is-active .scat-floatingLabel,
+.scat-floatingField:focus-within .scat-floatingLabel,
+.scat-input:not(:placeholder-shown) + .scat-floatingLabel {
+  top: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #0055bb;
+  letter-spacing: 0.02em;
+}
+
+/* label activo (textarea) */
+.scat-floatingField--textarea.is-active .scat-floatingLabel,
+.scat-floatingField--textarea:focus-within .scat-floatingLabel {
+  top: -8px;
+  transform: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0055bb;
+  letter-spacing: 0.02em;
+}
+
+/* ── Acciones del form ── */
+.scat-formActions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.scat-formActions .mov-btn {
+  flex: 1;
+  height: 42px;
+  justify-content: center;
+}
+
+/* ── Botón con dropdown abierto ── */
+.scat-btn--open {
+  background:    color-mix(in srgb, var(--balto-action) 10%, #fff) !important;
+  border-color:  color-mix(in srgb, var(--balto-action) 35%, #fff) !important;
+  color:         var(--balto-action) !important;
+  box-shadow:    none !important;
+}
+
+/* ── Chips de estado ── */
+.scat-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  border: 1px solid transparent;
+  user-select: none;
+}
+
+.scat-chip--active   { background: rgba(16, 185, 129, 0.12); color: #057a55; border-color: rgba(16, 185, 129, 0.30); }
+.scat-chip--inactive { background: rgba(148, 163, 184, 0.12); color: #64748b; border-color: rgba(148, 163, 184, 0.30); }
+
+/* ── Fila en modo edición ── */
+.scat-row--editing       { background: rgba(0, 85, 187, 0.05) !important; }
+.scat-row--editing:hover { background: rgba(0, 85, 187, 0.08) !important; }
+
+/* ── Contador de productos ── */
+.scat-prodCount {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--balto-text, #425466);
+}
+
+/* ================================================
+   DARK MODE
+   ================================================ */
+html[data-theme="oscuro"] .scat-dropdown {
+  background: #0f1929 !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  box-shadow:
+    0 24px 56px -12px rgba(0, 0, 0, 0.65),
+    0 4px 14px rgba(0, 0, 0, 0.30) !important;
+}
+
+html[data-theme="oscuro"] .scat-dropdown::before {
+  background: #0f1929 !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+html[data-theme="oscuro"] .scat-dropdown__title {
+  color: rgba(226, 232, 240, 0.92) !important;
+  border-bottom-color: rgba(148, 163, 184, 0.14) !important;
+}
+
+html[data-theme="oscuro"] .scat-input {
+  background: rgba(15, 23, 42, 0.88) !important;
+  color: rgba(226, 232, 240, 0.92) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+html[data-theme="oscuro"] .scat-input:focus {
+  background: rgba(15, 23, 42, 0.96) !important;
+  border-color: rgba(78, 161, 255, 0.45) !important;
+  box-shadow: 0 0 0 3px rgba(78, 161, 255, 0.18) !important;
+}
+
+html[data-theme="oscuro"] .scat-floatingLabel {
+  background: transparent !important;
+  color: rgba(226, 232, 240, 0.65) !important;
+}
+
+html[data-theme="oscuro"] .scat-floatingField.is-active .scat-floatingLabel,
+html[data-theme="oscuro"] .scat-floatingField:focus-within .scat-floatingLabel {
+  color: rgba(78, 161, 255, 0.92) !important;
+}
+
+html[data-theme="oscuro"] .scat-btn--open {
+  background:   rgba(78, 161, 255, 0.12) !important;
+  border-color: rgba(78, 161, 255, 0.28) !important;
+  color:        rgba(78, 161, 255, 0.95) !important;
+}
+
+html[data-theme="oscuro"] .scat-chip--active   { background: rgba(16, 185, 129, 0.16) !important; color: #34d399 !important; }
+html[data-theme="oscuro"] .scat-chip--inactive { background: rgba(148, 163, 184, 0.16) !important; color: #94a3b8 !important; }
+
+html[data-theme="oscuro"] .scat-row--editing { background: rgba(78, 161, 255, 0.08) !important; }
+
+html[data-theme="oscuro"] .scat-editBanner { color: rgba(78, 161, 255, 0.90) !important; }
+
+html[data-theme="oscuro"] .scat-prodCount { color: rgba(226, 232, 240, 0.75) !important; }
 
 /* ── Imagen / thumb ── */
 .prod-productCell {
@@ -163,3 +676,207 @@ html[data-theme="oscuro"] .mov-chip--danger {
   color: #f87171;
   border-color: rgba(248, 113, 113, 0.26);
 }
+
+.sc-grid { grid-template-columns: 1fr 120px 108px; }
+
+
+.sc-dropWrap {
+  position: relative;
+}
+
+.sc-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 300;
+  width: 300px;
+
+  background: #fff;
+  border: 1px solid rgba(10,37,64,.13);
+  border-radius: 14px;
+  box-shadow: 0 20px 48px -10px rgba(10,37,64,.22), 0 4px 12px rgba(10,37,64,.08);
+
+  padding: 18px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  animation: sc-dropIn 180ms cubic-bezier(.4,0,.2,1) both;
+  transform-origin: top right;
+}
+
+@keyframes sc-dropIn {
+  from { opacity: 0; transform: scale(.95) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1)  translateY(0);     }
+}
+
+.sc-dropdown::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 18px;
+  width: 11px;
+  height: 11px;
+  background: #fff;
+  border-left: 1px solid rgba(10,37,64,.13);
+  border-top:  1px solid rgba(10,37,64,.13);
+  transform: rotate(45deg);
+  border-radius: 2px 0 0 0;
+}
+
+/* título del dropdown */
+.sc-dropdown__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--balto-ink);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 2px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(10,37,64,.08);
+}
+
+/* banner edición */
+.sc-editBanner {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--balto-action);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: -4px;
+}
+
+/* ── Floating field ── */
+.sc-floatingField { position: relative; width: 100%; }
+
+.sc-input {
+  width: 100%;
+  height: 52px;
+  padding: 22px 14px 8px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(10,37,64,.14);
+  background: #fff;
+  outline: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(10,37,64,.90);
+  font-family: inherit;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+.sc-input:hover   { border-color: rgba(10,37,64,.28); }
+.sc-input:focus   { border-color: rgba(0,85,187,.55); box-shadow: 0 0 0 3px rgba(0,85,187,.18); background: #fafcff; }
+.sc-input:disabled{ opacity: .55; cursor: not-allowed; background: #f6f9fc; }
+
+.sc-floatingLabel {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(66,84,102,.76);
+  pointer-events: none;
+  background: #fff;
+  padding: 0 6px;
+  margin-left: -6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 2;
+  transition: top 150ms ease, transform 150ms ease, font-size 150ms ease, color 150ms ease;
+}
+.sc-floatingField.is-active .sc-floatingLabel,
+.sc-floatingField:focus-within .sc-floatingLabel,
+.sc-input:not(:placeholder-shown) + .sc-floatingLabel {
+  top: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #0055BB;
+  letter-spacing: .02em;
+}
+
+/* ── Acciones del form ── */
+.sc-formActions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+.sc-formActions .mov-btn {
+  flex: 1;
+  height: 42px;
+  justify-content: center;
+}
+
+/* ── Botón activo ── */
+.sc-btn--open {
+  background: color-mix(in srgb, var(--balto-action) 10%, #fff) !important;
+  border-color: color-mix(in srgb, var(--balto-action) 35%, #fff) !important;
+  color: var(--balto-action) !important;
+  box-shadow: none !important;
+}
+
+/* ── Chips estado ── */
+.sc-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 3px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: .2px;
+  border: 1px solid transparent; user-select: none;
+}
+.sc-chip--active  { background: rgba(16,185,129,.12); color: #057A55; border-color: rgba(16,185,129,.30); }
+.sc-chip--inactive{ background: rgba(148,163,184,.12); color: #64748b; border-color: rgba(148,163,184,.30); }
+
+/* ── Fila en edición ── */
+.sc-row--editing { background: rgba(0,85,187,.05) !important; }
+.sc-row--editing:hover { background: rgba(0,85,187,.08) !important; }
+
+/* ─── Dark mode ─── */
+html[data-theme="oscuro"] .sc-dropdown {
+  background: #0f1929 !important;
+  border-color: rgba(148,163,184,.18) !important;
+  box-shadow: 0 24px 56px -12px rgba(0,0,0,.65), 0 4px 14px rgba(0,0,0,.30) !important;
+}
+html[data-theme="oscuro"] .sc-dropdown::before {
+  background: #0f1929 !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+html[data-theme="oscuro"] .sc-dropdown__title { color: rgba(226,232,240,.92) !important; border-bottom-color: rgba(148,163,184,.14) !important; }
+html[data-theme="oscuro"] .sc-input {
+  background: rgba(15,23,42,.88) !important;
+  color: rgba(226,232,240,.92) !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+html[data-theme="oscuro"] .sc-input:focus {
+  background: rgba(15,23,42,.96) !important;
+  border-color: rgba(78,161,255,.45) !important;
+  box-shadow: 0 0 0 3px rgba(78,161,255,.18) !important;
+}
+html[data-theme="oscuro"] .sc-floatingLabel { background: transparent !important; color: rgba(226,232,240,.65) !important; }
+html[data-theme="oscuro"] .sc-floatingField.is-active .sc-floatingLabel,
+html[data-theme="oscuro"] .sc-floatingField:focus-within .sc-floatingLabel { color: rgba(78,161,255,.92) !important; }
+html[data-theme="oscuro"] .sc-btn--open { background: rgba(78,161,255,.12) !important; border-color: rgba(78,161,255,.28) !important; color: rgba(78,161,255,.95) !important; }
+html[data-theme="oscuro"] .sc-chip--active  { background: rgba(16,185,129,.16) !important; color: #34d399 !important; }
+html[data-theme="oscuro"] .sc-chip--inactive{ background: rgba(148,163,184,.16) !important; color: #94a3b8 !important; }
+html[data-theme="oscuro"] .sc-row--editing  { background: rgba(78,161,255,.08) !important; }
+html[data-theme="oscuro"] .sc-editBanner    { color: rgba(78,161,255,.90) !important; }
+;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

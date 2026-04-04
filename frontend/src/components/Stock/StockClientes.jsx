@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../../config/config";
 import "./Stock.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -6,17 +6,216 @@ import {
   faPlus,
   faPenToSquare,
   faTrashCan,
-  faFloppyDisk,
   faArrowRotateRight,
   faUsers,
   faUser,
   faUserSlash,
   faUserCheck,
+  faFloppyDisk,
+  faTimes,
+  faBoxOpen,
 } from "@fortawesome/free-solid-svg-icons";
 import ModalAccionEntidadStock from "./modales/ModalAccionEntidadStock";
 import Toast from "../Global/Toast";
 
+/* ─── CSS extra (dropdown + chips, igual que StockProveedores) ─── */
+const EXTRA_CSS = `
+/* ── Grid tabla ── */
+.sc-grid { grid-template-columns: 1fr 120px 108px; }
+
+/* ── Wrapper del botón ── */
+.sc-dropWrap {
+  position: relative;
+}
+
+/* ── Dropdown flotante ── */
+.sc-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 300;
+  width: 300px;
+
+  background: #fff;
+  border: 1px solid rgba(10,37,64,.13);
+  border-radius: 14px;
+  box-shadow: 0 20px 48px -10px rgba(10,37,64,.22), 0 4px 12px rgba(10,37,64,.08);
+
+  padding: 18px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  animation: sc-dropIn 180ms cubic-bezier(.4,0,.2,1) both;
+  transform-origin: top right;
+}
+
+@keyframes sc-dropIn {
+  from { opacity: 0; transform: scale(.95) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1)  translateY(0);     }
+}
+
+.sc-dropdown::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 18px;
+  width: 11px;
+  height: 11px;
+  background: #fff;
+  border-left: 1px solid rgba(10,37,64,.13);
+  border-top:  1px solid rgba(10,37,64,.13);
+  transform: rotate(45deg);
+  border-radius: 2px 0 0 0;
+}
+
+/* título del dropdown */
+.sc-dropdown__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--balto-ink);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 2px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(10,37,64,.08);
+}
+
+/* banner edición */
+.sc-editBanner {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--balto-action);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: -4px;
+}
+
+/* ── Floating field ── */
+.sc-floatingField { position: relative; width: 100%; }
+
+.sc-input {
+  width: 100%;
+  height: 52px;
+  padding: 22px 14px 8px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(10,37,64,.14);
+  background: #fff;
+  outline: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(10,37,64,.90);
+  font-family: inherit;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+.sc-input:hover   { border-color: rgba(10,37,64,.28); }
+.sc-input:focus   { border-color: rgba(0,85,187,.55); box-shadow: 0 0 0 3px rgba(0,85,187,.18); background: #fafcff; }
+.sc-input:disabled{ opacity: .55; cursor: not-allowed; background: #f6f9fc; }
+
+.sc-floatingLabel {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(66,84,102,.76);
+  pointer-events: none;
+  background: #fff;
+  padding: 0 6px;
+  margin-left: -6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 2;
+  transition: top 150ms ease, transform 150ms ease, font-size 150ms ease, color 150ms ease;
+}
+.sc-floatingField.is-active .sc-floatingLabel,
+.sc-floatingField:focus-within .sc-floatingLabel,
+.sc-input:not(:placeholder-shown) + .sc-floatingLabel {
+  top: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #0055BB;
+  letter-spacing: .02em;
+}
+
+/* ── Acciones del form ── */
+.sc-formActions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+.sc-formActions .mov-btn {
+  flex: 1;
+  height: 42px;
+  justify-content: center;
+}
+
+/* ── Botón activo ── */
+.sc-btn--open {
+  background: color-mix(in srgb, var(--balto-action) 10%, #fff) !important;
+  border-color: color-mix(in srgb, var(--balto-action) 35%, #fff) !important;
+  color: var(--balto-action) !important;
+  box-shadow: none !important;
+}
+
+/* ── Chips estado ── */
+.sc-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 3px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: .2px;
+  border: 1px solid transparent; user-select: none;
+}
+.sc-chip--active  { background: rgba(16,185,129,.12); color: #057A55; border-color: rgba(16,185,129,.30); }
+.sc-chip--inactive{ background: rgba(148,163,184,.12); color: #64748b; border-color: rgba(148,163,184,.30); }
+
+/* ── Fila en edición ── */
+.sc-row--editing { background: rgba(0,85,187,.05) !important; }
+.sc-row--editing:hover { background: rgba(0,85,187,.08) !important; }
+
+/* ─── Dark mode ─── */
+html[data-theme="oscuro"] .sc-dropdown {
+  background: #0f1929 !important;
+  border-color: rgba(148,163,184,.18) !important;
+  box-shadow: 0 24px 56px -12px rgba(0,0,0,.65), 0 4px 14px rgba(0,0,0,.30) !important;
+}
+html[data-theme="oscuro"] .sc-dropdown::before {
+  background: #0f1929 !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+html[data-theme="oscuro"] .sc-dropdown__title { color: rgba(226,232,240,.92) !important; border-bottom-color: rgba(148,163,184,.14) !important; }
+html[data-theme="oscuro"] .sc-input {
+  background: rgba(15,23,42,.88) !important;
+  color: rgba(226,232,240,.92) !important;
+  border-color: rgba(148,163,184,.18) !important;
+}
+html[data-theme="oscuro"] .sc-input:focus {
+  background: rgba(15,23,42,.96) !important;
+  border-color: rgba(78,161,255,.45) !important;
+  box-shadow: 0 0 0 3px rgba(78,161,255,.18) !important;
+}
+html[data-theme="oscuro"] .sc-floatingLabel { background: transparent !important; color: rgba(226,232,240,.65) !important; }
+html[data-theme="oscuro"] .sc-floatingField.is-active .sc-floatingLabel,
+html[data-theme="oscuro"] .sc-floatingField:focus-within .sc-floatingLabel { color: rgba(78,161,255,.92) !important; }
+html[data-theme="oscuro"] .sc-btn--open { background: rgba(78,161,255,.12) !important; border-color: rgba(78,161,255,.28) !important; color: rgba(78,161,255,.95) !important; }
+html[data-theme="oscuro"] .sc-chip--active  { background: rgba(16,185,129,.16) !important; color: #34d399 !important; }
+html[data-theme="oscuro"] .sc-chip--inactive{ background: rgba(148,163,184,.16) !important; color: #94a3b8 !important; }
+html[data-theme="oscuro"] .sc-row--editing  { background: rgba(78,161,255,.08) !important; }
+html[data-theme="oscuro"] .sc-editBanner    { color: rgba(78,161,255,.90) !important; }
+`;
+
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
+
+const COLUMNS = [
+  { key: "nombre",   label: "NOMBRE",   align: "left"   },
+  { key: "estado",   label: "ESTADO",   align: "center" },
+  { key: "acciones", label: "ACCIONES", align: "center" },
+];
+const SKELETON_ROWS = 6;
 
 function buildHeadersGET() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
@@ -43,10 +242,8 @@ async function parseJsonOrThrow(res) {
   if (res.status === 401 || res.status === 403) {
     throw new Error("Sesión vencida o no autorizada. Volvé a iniciar sesión.");
   }
-
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
-
   try {
     const data = JSON.parse(text);
     if (!res.ok || data?.exito === false) {
@@ -54,16 +251,8 @@ async function parseJsonOrThrow(res) {
     }
     return data;
   } catch (e) {
-    if (
-      e instanceof Error &&
-      e.message &&
-      !e.message.startsWith("Unexpected token")
-    ) {
-      throw e;
-    }
-
+    if (e instanceof Error && e.message && !e.message.startsWith("Unexpected token")) throw e;
     const preview = text.length > 400 ? `${text.slice(0, 400)}...` : text;
-
     throw new Error(
       text.startsWith("<!DOCTYPE") || text.startsWith("<")
         ? "La API devolvió HTML en vez de JSON. Revisá la ruta del backend."
@@ -73,10 +262,7 @@ async function parseJsonOrThrow(res) {
 }
 
 async function apiGet(url) {
-  const res = await fetch(url, {
-    method: "GET",
-    headers: buildHeadersGET(),
-  });
+  const res = await fetch(url, { method: "GET", headers: buildHeadersGET() });
   return parseJsonOrThrow(res);
 }
 
@@ -97,20 +283,31 @@ export default function StockClientes() {
 
   const [clientes, setClientes] = useState([]);
   const [pestana, setPestana] = useState("activos");
+
+  /* dropdown */
+  const [dropOpen, setDropOpen] = useState(false);
   const [modo, setModo] = useState("crear");
   const [editandoId, setEditandoId] = useState(null);
+  const [form, setForm] = useState({ nombre: "", activo: 1 });
 
-  const [form, setForm] = useState({
-    nombre: "",
-    activo: 1,
-  });
+  const dropWrapRef = useRef(null);
+  const nombreRef = useRef(null);
 
   const [modalAccion, setModalAccion] = useState({
-    open: false,
-    type: null, // baja | alta | eliminar
-    row: null,
-    loading: false,
+    open: false, type: null, row: null, loading: false,
   });
+
+  /* cerrar dropdown al hacer click fuera */
+  useEffect(() => {
+    if (!dropOpen) return;
+    const handler = (e) => {
+      if (dropWrapRef.current && !dropWrapRef.current.contains(e.target)) {
+        cerrarDrop();
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [dropOpen]); // eslint-disable-line
 
   const mostrarToast = useCallback((tipo, mensaje, duracion = 2500) => {
     setToast({ tipo, mensaje, duracion, id: Date.now() + Math.random() });
@@ -119,71 +316,73 @@ export default function StockClientes() {
   const resetForm = useCallback(() => {
     setModo("crear");
     setEditandoId(null);
-    setForm({
-      nombre: "",
-      activo: pestana === "inactivos" ? 0 : 1,
-    });
-  }, [pestana]);
+    setForm({ nombre: "", activo: 1 });
+  }, []);
 
-  const cargarClientes = useCallback(
-    async (tabActual = pestana) => {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams({
-          action: "stock_clientes_listar",
-          activo: tabActual === "inactivos" ? "0" : "1",
-        });
+  const cerrarDrop = useCallback(() => {
+    setDropOpen(false);
+    setTimeout(resetForm, 180);
+  }, [resetForm]);
 
-        const data = await apiGet(`${API_URL}?${params.toString()}`);
-        setClientes(Array.isArray(data?.clientes) ? data.clientes : []);
-      } catch (err) {
-        mostrarToast("error", err?.message || "No se pudieron cargar los clientes.");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [mostrarToast, pestana]
-  );
+  const abrirDropNuevo = useCallback(() => {
+    resetForm();
+    setDropOpen(true);
+    setTimeout(() => nombreRef.current?.focus(), 120);
+  }, [resetForm]);
+
+  const toggleDrop = useCallback(() => {
+    dropOpen ? cerrarDrop() : abrirDropNuevo();
+  }, [dropOpen, cerrarDrop, abrirDropNuevo]);
+
+  /* carga */
+  const cargarClientes = useCallback(async (tab) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        action: "stock_clientes_listar",
+        activo: tab === "inactivos" ? "0" : "1",
+      });
+      const data = await apiGet(`${API_URL}?${params.toString()}`);
+      setClientes(Array.isArray(data?.clientes) ? data.clientes : []);
+    } catch (err) {
+      mostrarToast("error", err?.message || "No se pudieron cargar los clientes.");
+    } finally {
+      setLoading(false);
+    }
+  }, [mostrarToast]);
 
   useEffect(() => {
     cargarClientes(pestana);
-    resetForm();
-  }, [pestana, cargarClientes, resetForm]);
+    cerrarDrop();
+  }, [pestana]); // eslint-disable-line
 
   const clientesOrdenados = useMemo(() => {
     return [...clientes].sort((a, b) =>
-      String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", {
-        sensitivity: "base",
-      })
+      String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", { sensitivity: "base" })
     );
   }, [clientes]);
 
-  const iniciarEdicion = (row) => {
+  /* editar desde fila */
+  const iniciarEdicion = useCallback((row) => {
     setModo("editar");
     setEditandoId(getClienteId(row));
-    setForm({
-      nombre: toUpperValue(row?.nombre),
-      activo: Number(row?.activo ?? 1) === 1 ? 1 : 0,
-    });
-  };
+    setForm({ nombre: toUpperValue(row?.nombre), activo: Number(row?.activo ?? 1) === 1 ? 1 : 0 });
+    setDropOpen(true);
+    setTimeout(() => nombreRef.current?.focus(), 120);
+  }, []);
 
-  const cancelarEdicion = () => {
-    resetForm();
-  };
-
+  /* guardar */
   const handleGuardar = async () => {
     const payload = {
       nombre: toUpperValue(form.nombre).trim(),
       activo: Number(form.activo) === 1 ? 1 : 0,
     };
-
     if (!payload.nombre) {
       mostrarToast("error", "El nombre del cliente es obligatorio.");
+      nombreRef.current?.focus();
       return;
     }
-
     setSaving(true);
-
     try {
       if (modo === "crear") {
         const data = await apiPost("stock_cliente_crear", payload);
@@ -195,15 +394,12 @@ export default function StockClientes() {
         });
         mostrarToast("exito", data?.mensaje || "Cliente actualizado correctamente.");
       }
-
-      const nuevaPestana = payload.activo === 1 ? "activos" : "inactivos";
-      setPestana(nuevaPestana);
-      await cargarClientes(nuevaPestana);
-
+      const tab = payload.activo === 1 ? "activos" : "inactivos";
+      setPestana(tab);
+      await cargarClientes(tab);
       window.dispatchEvent(new CustomEvent("balto:stock-updated"));
       window.dispatchEvent(new CustomEvent("balto:listas-updated"));
-
-      resetForm();
+      cerrarDrop();
     } catch (err) {
       mostrarToast("error", err?.message || "No se pudo guardar el cliente.");
     } finally {
@@ -211,37 +407,30 @@ export default function StockClientes() {
     }
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter")  { e.preventDefault(); handleGuardar(); }
+    if (e.key === "Escape") { e.preventDefault(); cerrarDrop();    }
+  };
+
+  /* modal acciones */
   const abrirModalAccion = useCallback((type, row) => {
-    setModalAccion({
-      open: true,
-      type,
-      row,
-      loading: false,
-    });
+    setModalAccion({ open: true, type, row, loading: false });
   }, []);
 
   const cerrarModalAccion = useCallback(() => {
-    setModalAccion({
-      open: false,
-      type: null,
-      row: null,
-      loading: false,
-    });
+    setModalAccion({ open: false, type: null, row: null, loading: false });
   }, []);
 
   const ejecutarAccionModal = useCallback(async () => {
     const { row, type } = modalAccion;
     const id = getClienteId(row);
-
     if (!id || !type) return;
 
     setModalAccion((prev) => ({ ...prev, loading: true }));
     setAccionandoId(id);
 
     try {
-      let action = "";
-      let successFallback = "";
-      let recargarTab = pestana;
+      let action = "", successFallback = "", recargarTab = pestana;
 
       if (type === "baja") {
         action = "stock_cliente_dar_baja";
@@ -251,25 +440,22 @@ export default function StockClientes() {
         action = "stock_cliente_dar_alta";
         successFallback = "Cliente dado de alta correctamente.";
         recargarTab = "inactivos";
-      } else if (type === "eliminar") {
+      } else {
         action = "stock_cliente_eliminar";
         successFallback = "Cliente eliminado correctamente.";
         recargarTab = pestana;
       }
 
       const data = await apiPost(action, { id_cliente: id });
-
       mostrarToast("exito", data?.mensaje || successFallback);
 
       if ((type === "baja" || type === "eliminar") && id === Number(editandoId || 0)) {
-        resetForm();
+        cerrarDrop();
       }
 
       await cargarClientes(recargarTab);
-
       window.dispatchEvent(new CustomEvent("balto:stock-updated"));
       window.dispatchEvent(new CustomEvent("balto:listas-updated"));
-
       cerrarModalAccion();
     } catch (err) {
       setModalAccion((prev) => ({ ...prev, loading: false }));
@@ -277,43 +463,32 @@ export default function StockClientes() {
     } finally {
       setAccionandoId(null);
     }
-  }, [modalAccion, editandoId, cargarClientes, pestana, mostrarToast, resetForm, cerrarModalAccion]);
+  }, [modalAccion, editandoId, cargarClientes, pestana, mostrarToast, cerrarDrop, cerrarModalAccion]);
 
   const modalConfig = useMemo(() => {
-    const row = modalAccion.row;
-    const nombre = String(row?.nombre || "—");
-
+    const nombre = String(modalAccion.row?.nombre || "—");
     if (modalAccion.type === "baja") {
       return {
         title: "Dar de baja cliente",
         message: "¿Seguro que querés dar de baja este cliente?",
-        warning:
-          "El cliente dejará de aparecer en la pestaña de activos y pasará a inactivos.",
+        warning: "El cliente pasará a la pestaña de inactivos.",
         confirmLabel: "Dar de baja",
         cancelLabel: "Cancelar",
         variant: "danger",
-        details: [
-          { label: "Cliente", value: nombre },
-          { label: "Acción", value: "Dar de baja" },
-        ],
+        details: [{ label: "Cliente", value: nombre }, { label: "Acción", value: "Dar de baja" }],
       };
     }
-
     if (modalAccion.type === "alta") {
       return {
         title: "Dar de alta cliente",
         message: "¿Seguro que querés dar de alta este cliente?",
-        warning: "El cliente volverá a aparecer en la pestaña de activos.",
+        warning: "El cliente volverá a la pestaña de activos.",
         confirmLabel: "Dar de alta",
         cancelLabel: "Cancelar",
         variant: "success",
-        details: [
-          { label: "Cliente", value: nombre },
-          { label: "Acción", value: "Dar de alta" },
-        ],
+        details: [{ label: "Cliente", value: nombre }, { label: "Acción", value: "Dar de alta" }],
       };
     }
-
     return {
       title: "Eliminar cliente",
       message: "¿Seguro que querés eliminar este cliente definitivamente?",
@@ -323,291 +498,250 @@ export default function StockClientes() {
       variant: "danger",
       details: [
         { label: "Cliente", value: nombre },
-        {
-          label: "Estado",
-          value: Number(row?.activo ?? 1) === 1 ? "Activo" : "Inactivo",
-        },
+        { label: "Estado", value: Number(modalAccion.row?.activo ?? 1) === 1 ? "Activo" : "Inactivo" },
       ],
     };
   }, [modalAccion]);
 
+  /* skeleton */
+  const renderSkelRow = (idx) => (
+    <div key={`sk-${idx}`} className="mov-gridTable mov-gridTable--row mov-row--skeleton sc-grid" role="row" aria-hidden="true">
+      <div className="mov-gridCell" role="cell">
+        <span className="mov-skeletonBar" style={{ width: ["72%","58%","66%","48%","62%","54%"][idx % 6] }} />
+      </div>
+      <div className="mov-gridCell is-center" role="cell">
+        <span className="mov-skeletonBar" style={{ width: "44%" }} />
+      </div>
+      <div className="mov-gridCell mov-gridCell--actions is-center" role="cell">
+        <div className="mov-skelActions"><span className="mov-skelIcon" /><span className="mov-skelIcon" /></div>
+      </div>
+    </div>
+  );
+
   return (
     <>
+      <style>{EXTRA_CSS}</style>
+
       <div className="mov-page">
-        <div
-          className="mi-cr-grid"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "280px 1fr",
-            gap: 20,
-            alignItems: "start",
-          }}
-        >
-          <aside className="mi-cr-filters mov-card" style={{ padding: 20 }}>
-            <div className="mi-cr-filters__top">
-              <div className="mi-cr-filters__title">
-                <FontAwesomeIcon
-                  icon={modo === "crear" ? faPlus : faPenToSquare}
-                  style={{ marginRight: 8, opacity: 0.75, fontSize: 13 }}
-                />
-                {modo === "crear" ? "Nuevo cliente" : "Editar cliente"}
+        <section className="mov-card mov-card--table">
+
+          {/* ── HEAD ── */}
+          <div className="mov-card__head">
+            <div className="mov-card__headLeft">
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <div className="mov-card__title">
+                  Stock · Clientes
+                </div>
+                <div className="mov-card__hint">
+                  Mostrando <b>{clientesOrdenados.length}</b> cliente{clientesOrdenados.length !== 1 ? "s" : ""}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <div className="mov-tabs">
+                  <button
+                    type="button"
+                    className={`mov-tab ${pestana === "activos" ? "is-active" : ""}`}
+                    onClick={() => setPestana("activos")}
+                    disabled={loading || saving}
+                  >
+                    Activos
+                  </button>
+                  <button
+                    type="button"
+                    className={`mov-tab ${pestana === "inactivos" ? "is-active" : ""}`}
+                    onClick={() => setPestana("inactivos")}
+                    disabled={loading || saving}
+                  >
+                    Inactivos
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="mi-cr-filters__body">
-              <div className="fl-field">
-                <input
-                  type="text"
-                  className="fl-input"
-                  placeholder=" "
-                  value={form.nombre}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      nombre: toUpperValue(e.target.value),
-                    }))
-                  }
-                  disabled={saving}
-                />
-                <label className="fl-label">
-                  <FontAwesomeIcon icon={faUser} style={{ marginRight: 5 }} />
-                  Nombre *
-                </label>
-              </div>
-
-              <div className="fl-field">
-                <select
-                  className="fl-input"
-                  value={String(form.activo)}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      activo: Number(e.target.value) === 1 ? 1 : 0,
-                    }))
-                  }
-                  disabled={saving}
-                >
-                  <option value="1">Activo</option>
-                  <option value="0">Inactivo</option>
-                </select>
-                <label className="fl-label">Estado</label>
-              </div>
-
-              <div
-                className="mi-cr-filters__actions"
-                style={{ flexDirection: "column" }}
-              >
+            {/* ── Acciones (nuevo cliente con dropdown) ── */}
+            <div className="mov-card__actions">
+              <div className="sc-dropWrap" ref={dropWrapRef}>
                 <button
                   type="button"
-                  className="mit-btn mit-btn--solid mit-btn--block"
-                  onClick={handleGuardar}
+                  className={`mov-btn mov-btn--primary ${dropOpen ? "sc-btn--open" : ""}`}
+                  onClick={toggleDrop}
                   disabled={saving}
+                  title={dropOpen ? "Cerrar" : "Agregar nuevo cliente"}
                 >
-                  <FontAwesomeIcon icon={faFloppyDisk} style={{ marginRight: 8 }} />
-                  {saving
-                    ? "Guardando..."
-                    : modo === "crear"
-                    ? "Crear cliente"
-                    : "Guardar cambios"}
+                  <FontAwesomeIcon
+                    icon={dropOpen && modo === "editar" ? faPenToSquare : faPlus}
+                    style={{ marginRight: 7 }}
+                  />
+                  {dropOpen && modo === "editar" ? "Editando" : "Nuevo cliente"}
                 </button>
 
-                {modo === "editar" && (
-                  <button
-                    type="button"
-                    className="mit-btn mit-btn--ghost mit-btn--block"
-                    onClick={cancelarEdicion}
-                    disabled={saving}
+                {/* ── DROPDOWN FLOTANTE ── */}
+                {dropOpen && (
+                  <div
+                    className="sc-dropdown"
+                    role="dialog"
+                    aria-modal="false"
+                    aria-label={modo === "crear" ? "Nuevo cliente" : "Editar cliente"}
                   >
-                    Cancelar edición
-                  </button>
+                    {/* título */}
+                    <div className="sc-dropdown__title">
+                      <FontAwesomeIcon icon={modo === "crear" ? faPlus : faPenToSquare} style={{ opacity: .75 }} />
+                      {modo === "crear" ? "Nuevo cliente" : "Editar cliente"}
+                    </div>
+
+                    {/* banner edición */}
+                    {modo === "editar" && (
+                      <div className="sc-editBanner">
+                        <FontAwesomeIcon icon={faPenToSquare} />
+                        Editando #{editandoId}
+                      </div>
+                    )}
+
+                    {/* nombre */}
+                    <div className={`sc-floatingField ${form.nombre ? "is-active" : ""}`}>
+                      <input
+                        ref={nombreRef}
+                        className="sc-input"
+                        placeholder=" "
+                        value={form.nombre}
+                        onChange={(e) => setForm((p) => ({ ...p, nombre: toUpperValue(e.target.value) }))}
+                        onKeyDown={handleKeyDown}
+                        disabled={saving}
+                      />
+                      <label className="sc-floatingLabel">
+                        <FontAwesomeIcon icon={faUser} /> Nombre *
+                      </label>
+                    </div>
+
+                    {/* estado */}
+                    <div className="sc-floatingField is-active">
+                      <select
+                        className="sc-input"
+                        value={String(form.activo)}
+                        onChange={(e) => setForm((p) => ({ ...p, activo: Number(e.target.value) }))}
+                        disabled={saving}
+                      >
+                        <option value="1">Activo</option>
+                        <option value="0">Inactivo</option>
+                      </select>
+                      <label className="sc-floatingLabel">Estado</label>
+                    </div>
+
+                    {/* acciones */}
+                    <div className="sc-formActions">
+                      <button
+                        type="button"
+                        className="mov-btn mov-btn--primary"
+                        onClick={handleGuardar}
+                        disabled={saving}
+                      >
+                        <FontAwesomeIcon icon={faFloppyDisk} style={{ marginRight: 7 }} />
+                        {saving ? "Guardando…" : modo === "crear" ? "Crear" : "Guardar"}
+                      </button>
+                      <button
+                        type="button"
+                        className="mov-btn mov-btn--ghost"
+                        onClick={cerrarDrop}
+                        disabled={saving}
+                      >
+                        <FontAwesomeIcon icon={faTimes} style={{ marginRight: 6 }} />
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
-          </aside>
+          </div>
 
-          <section className="mi-cr-table mov-card" style={{ padding: 20 }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 16,
-                flexWrap: "wrap",
-                gap: 12,
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: "var(--nv-text)",
-                  }}
-                >
-                  <FontAwesomeIcon icon={faUsers} style={{ marginRight: 8, opacity: 0.7 }} />
-                  Stock · Clientes
-                </div>
-                <div style={{ fontSize: 12, color: "var(--nv-muted)", marginTop: 2 }}>
-                  Total: <b>{clientesOrdenados.length}</b>
-                </div>
+          {/* ── HEADER TABLA ── */}
+          <div className="mov-gridTable mov-gridTable--head sc-grid" role="row">
+            {COLUMNS.map((c) => (
+              <div
+                key={c.key}
+                className={[
+                  "mov-gridCell",
+                  "mov-gridCell--head",
+                  c.align === "center" ? "is-center" : "",
+                  c.align === "right" ? "is-right" : "",
+                ].join(" ")}
+                role="columnheader"
+              >
+                {c.label}
               </div>
+            ))}
+          </div>
 
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  type="button"
-                  className={`mit-btn ${pestana === "activos" ? "mit-btn--solid" : "mit-btn--ghost"}`}
-                  onClick={() => {
-                    setPestana("activos");
-                    setModo("crear");
-                    setEditandoId(null);
-                    setForm((prev) => ({ ...prev, activo: 1 }));
-                  }}
-                  disabled={loading || saving}
-                >
-                  Activos
-                </button>
+          {/* ── BODY ── */}
+          <div className="mov-tableWrap" role="rowgroup">
+            <div className={["mov-gridBody", loading ? "mov-softLoading" : ""].join(" ")}>
 
-                <button
-                  type="button"
-                  className={`mit-btn ${pestana === "inactivos" ? "mit-btn--solid" : "mit-btn--ghost"}`}
-                  onClick={() => {
-                    setPestana("inactivos");
-                    setModo("crear");
-                    setEditandoId(null);
-                    setForm((prev) => ({ ...prev, activo: 0 }));
-                  }}
-                  disabled={loading || saving}
-                >
-                  Inactivos
-                </button>
-              </div>
-            </div>
-
-            {!loading && clientesOrdenados.length > 0 && (
-              <div className="mi-cr-table__head mi-cr-grid-clientes-stock">
-                <div className="mi-cr-table__head-cell" style={{ paddingLeft: 10 }}>
-                  Nombre
-                </div>
-                <div
-                  className="mi-cr-table__head-cell"
-                  style={{ textAlign: "center" }}
-                >
-                  Estado
-                </div>
-                <div
-                  className="mi-cr-table__head-cell"
-                  style={{ textAlign: "center" }}
-                >
-                  Acciones
-                </div>
-              </div>
-            )}
-
-            <div className="mi-cr-table__rows mi-cr-table__rows--mcs">
               {loading ? (
-                <EmptyState
-                  icon={faArrowRotateRight}
-                  spin
-                  text="Cargando clientes..."
-                />
+                <div className="mov-skeletonWrap" aria-busy="true">
+                  {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkelRow(i))}
+                </div>
+
               ) : clientesOrdenados.length === 0 ? (
-                <EmptyState
-                  icon={faUsers}
-                  text={
-                    pestana === "activos"
-                      ? "No hay clientes activos."
-                      : "No hay clientes inactivos."
-                  }
-                />
+                <div style={{ padding: "40px 0", textAlign: "center" }}>
+                  <FontAwesomeIcon
+                    icon={faBoxOpen}
+                    style={{ fontSize: 28, opacity: .3, marginBottom: 10, display: "block" }}
+                  />
+                  <div style={{ fontSize: 13, color: "var(--mov-muted)", fontWeight: 520 }}>
+                    {pestana === "activos" ? "No hay clientes activos." : "No hay clientes inactivos."}
+                  </div>
+                </div>
+
               ) : (
                 clientesOrdenados.map((row) => {
                   const activo = Number(row?.activo ?? 1) === 1;
                   const isEditing =
                     getClienteId(row) === Number(editandoId || 0) &&
-                    modo === "editar";
+                    modo === "editar" &&
+                    dropOpen;
                   const bloqueado = accionandoId === getClienteId(row) || saving;
 
                   return (
                     <div
                       key={getClienteId(row)}
                       className={[
-                        "mi-cr-row",
-                        "mi-cr-grid-clientes-stock",
-                        isEditing ? "mi-cr-row--editing" : "",
+                        "mov-gridTable",
+                        "mov-gridTable--row",
+                        "sc-grid",
+                        isEditing ? "sc-row--editing" : "",
                       ].join(" ").trim()}
+                      role="row"
                     >
-                      <div
-                        className="mi-cr-cell mi-cr-cell--ellipsis"
-                        style={{ paddingLeft: 10, minWidth: 0 }}
-                      >
-                        <span
-                          title={row?.nombre || "—"}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            minWidth: 0,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                            fontWeight: 600,
-                            fontSize: 13,
-                            color: "var(--nv-text)",
-                          }}
-                        >
+                      <div className="mov-gridCell is-strong" role="cell" data-label="NOMBRE">
+                        <span className="mov-ellipsissss" title={row?.nombre || "—"}>
                           {row?.nombre || "—"}
                         </span>
                       </div>
 
-                      <div className="mi-cr-cell mi-cr-cell--center">
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 5,
-                            padding: "3px 10px",
-                            borderRadius: 999,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            background: activo
-                              ? "rgba(16,185,129,.12)"
-                              : "rgba(148,163,184,.12)",
-                            color: activo ? "#057A55" : "#64748b",
-                            border: `1px solid ${
-                              activo
-                                ? "rgba(16,185,129,.30)"
-                                : "rgba(148,163,184,.30)"
-                            }`,
-                          }}
-                        >
+                      <div className="mov-gridCell is-center" role="cell" data-label="ESTADO">
+                        <span className={`sc-chip ${activo ? "sc-chip--active" : "sc-chip--inactive"}`}>
                           {activo ? "Activo" : "Inactivo"}
                         </span>
                       </div>
 
-                      <div className="mi-cr-cell mi-cr-cell--center">
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 6,
-                            padding: 5,
-                            flexWrap: "wrap",
-                            justifyContent: "center",
-                          }}
-                        >
+                      <div className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label="ACCIONES">
+                        <div className="mov-actionsInline">
                           {activo ? (
                             <>
                               <button
                                 type="button"
-                                className="nv-foot-btn nv-foot-btn--sm"
+                                className="mov-iconBtn"
                                 onClick={() => iniciarEdicion(row)}
                                 disabled={bloqueado}
                                 title="Editar"
                               >
                                 <FontAwesomeIcon icon={faPenToSquare} />
                               </button>
-
                               <button
                                 type="button"
-                                className="nv-foot-btn nv-foot-btn--sm"
+                                className="mov-iconBtn"
                                 onClick={() => abrirModalAccion("baja", row)}
                                 disabled={bloqueado}
                                 title="Dar de baja"
@@ -618,7 +752,7 @@ export default function StockClientes() {
                           ) : (
                             <button
                               type="button"
-                              className="nv-foot-btn nv-foot-btn--sm"
+                              className="mov-iconBtn"
                               onClick={() => abrirModalAccion("alta", row)}
                               disabled={bloqueado}
                               title="Dar de alta"
@@ -626,10 +760,9 @@ export default function StockClientes() {
                               <FontAwesomeIcon icon={faUserCheck} />
                             </button>
                           )}
-
                           <button
                             type="button"
-                            className="nv-foot-btn nv-foot-btn--sm nv-foot-btn--danger"
+                            className="mov-iconBtn mov-iconBtn--danger"
                             onClick={() => abrirModalAccion("eliminar", row)}
                             disabled={bloqueado}
                             title="Eliminar"
@@ -643,14 +776,8 @@ export default function StockClientes() {
                 })
               )}
             </div>
-
-            <div className="mi-cr-table__foot">
-              <span style={{ fontSize: 12, color: "var(--nv-muted)" }}>
-                Administrá el padrón de <b>clientes</b>.
-              </span>
-            </div>
-          </section>
-        </div>
+          </div>
+        </section>
       </div>
 
       <ModalAccionEntidadStock
@@ -677,16 +804,5 @@ export default function StockClientes() {
         />
       )}
     </>
-  );
-}
-
-function EmptyState({ icon, text, spin = false }) {
-  return (
-    <div className="mi-empty-state">
-      <div className="mi-empty-state__iconWrap">
-        <FontAwesomeIcon icon={icon} spin={spin} />
-      </div>
-      <span className="mi-empty-state__text">{text}</span>
-    </div>
   );
 }

@@ -526,9 +526,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     setFiscalError("");
   }, []);
 
-  /* =========================================================
-     CAMBIO IMPORTANTE: detalle + stock 0 => cantidad bloqueada
-  ========================================================= */
   const handleSelectDetalle = useCallback((detalle, rowId) => {
     const precio = Number(detalle?.precio || 0);
     const stockDisponible = getStockDisponible(detalle);
@@ -649,7 +646,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
   const isContado = useMemo(() => isContadoTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
   const tipoVentaSeleccionado = tipoVentaSelected !== null;
-  const shouldNeedFiscalPanel = open && tipoVentaSeleccionado && accionContado === "facturar" && !clienteFiscalDb;
 
   const fetchClienteFiscal = useCallback(async idCliente => {
     const id = Number(idCliente); if (!Number.isFinite(id) || id <= 0) return null;
@@ -1100,9 +1096,11 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }
   }, [selectedClienteId, clienteFiscalDb, fiscalCuitInput, fetchClienteFiscal, abrirResumenFactura, showToast]);
 
-  if (!open) return null;
+  // Panel fiscal para el caso en que se intenta facturar sin datos fiscales guardados
+  // Se muestra dentro del aside cuando accionContado === "facturar" y no hay clienteFiscalDb
+  const shouldNeedFiscalPanel = open && accionContado === "facturar" && !clienteFiscalDb && selectedClienteId > 0;
 
-  const btnLabel = saving ? "Procesando..." : accionContado === "facturar" ? "Facturar venta" : "Guardar venta";
+  if (!open) return null;
 
   return createPortal(
     <>
@@ -1211,34 +1209,16 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                           <input
                             className="nv-cell-input nv-cell-input--right"
                             type="text"
-                            inputMode="decimal"
-                            value={r.precioFocused ? (r.precioDraft ?? "") : formatMoneyInputARS(r.precio)}
-                            onFocus={(e) => {
-                              updateRow(r.id, {
-                                precioFocused: true,
-                                precioDraft: formatEditableMoney(r.precio),
-                              });
-                              setTimeout(() => e.target.select(), 0);
+                            value={formatMoneyInputARS(r.precio)}
+                            readOnly
+                            tabIndex={-1}
+                            style={{
+                              width: "100%",
+                              padding: "0",
+                              pointerEvents: "none",
+                              background: "transparent",
+                              cursor: "default",
                             }}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              const cleaned = raw.replace(/[^\d,.\-]/g, "");
-                              updateRow(r.id, {
-                                precioDraft: cleaned,
-                                precio: parseMoneyInputARS(cleaned),
-                              });
-                            }}
-                            onBlur={() => {
-                              const parsed = parseMoneyInputARS(r.precioDraft);
-                              updateRow(r.id, {
-                                precio: parsed,
-                                precioDraft: "",
-                                precioFocused: false,
-                              });
-                            }}
-                            placeholder="$ 0,00"
-                            disabled={saving}
-                            style={{ width: "100%", padding: "0" }}
                           />
                         </div>
 
@@ -1247,16 +1227,16 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                             className="nv-cell-input nv-cell-input--center nv-cell-input--select"
                             value={String(r.ivaPct)}
                             onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
-onKeyDown={(e) => {
-  if (
-    e.key === "ArrowUp" ||
-    e.key === "ArrowDown" ||
-    e.key === "ArrowLeft" ||
-    e.key === "ArrowRight"
-  ) {
-    e.preventDefault();
-  }
-}}
+                            onKeyDown={(e) => {
+                              if (
+                                e.key === "ArrowUp" ||
+                                e.key === "ArrowDown" ||
+                                e.key === "ArrowLeft" ||
+                                e.key === "ArrowRight"
+                              ) {
+                                e.preventDefault();
+                              }
+                            }}
                             disabled={saving}
                             style={{ width: "100%" }}
                           >
@@ -1296,8 +1276,6 @@ onKeyDown={(e) => {
                     </button>
 
                     <div className="nv-foot-sep" />
-
-
                   </div>
 
                   <div className="mi-cr-totals">
@@ -1362,8 +1340,6 @@ onKeyDown={(e) => {
                       maxItems={25}
                       inputClassName="fl-input"
                     />
-
-
                   </div>
 
                   <div className="fl-field">
@@ -1451,100 +1427,102 @@ onKeyDown={(e) => {
                     </div>
                   )}
 
-                  {tipoVentaSeleccionado && (
+                  {/* Panel fiscal: se muestra solo cuando se intentó facturar y falta CUIT */}
+                  {shouldNeedFiscalPanel && (
                     <div className="mi-card mi-card--full">
-                      <div className="mi-card__title">Facturación</div>
+                      <div className="mi-card__title">Datos fiscales</div>
 
-                      <div className="mi-card__actionsRow">
-                        <button
-                          type="button"
-                          disabled={saving}
-                          className={`mit-btn ${accionContado === "guardar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
-                          onClick={() => setAccionContado("guardar")}
-                        >Guardar</button>
-                        <button
-                          type="button"
-                          disabled={saving}
-                          className={`mit-btn ${accionContado === "facturar" ? "mit-btn--solid" : "mit-btn--ghost"}`}
-                          onClick={onClickFacturar}
-                        >
-                          {saving && accionContado === "facturar" ? "Procesando..." : "Facturar"}
-                        </button>
-                      </div>
+                      {fiscalLoading ? (
+                        <div className="mi-card__hint">Consultando datos fiscales…</div>
+                      ) : (
+                        <>
+                          <div className="fl-field Margen-top">
+                            <input
+                              className="fl-input"
+                              placeholder=" "
+                              value={fiscalCuitInput}
+                              onChange={e => {
+                                setFiscalCuitInput(onlyDigits(e.target.value));
+                                setFiscalArcaData(null);
+                                setFiscalError("");
+                              }}
+                              inputMode="numeric"
+                              disabled={saving || fiscalLookupLoading}
+                              maxLength={11}
+                            />
+                            <label className="fl-label">CUIT *</label>
+                          </div>
 
-                      <div className="mi-card__hint">
-                        {accionContado === "guardar"
-                          ? <><b>Guardar</b>: queda <b>pendiente</b>.</>
-                          : clienteFiscalDb
-                            ? <>* Datos fiscales encontrados. Presioná <b>Facturar</b> para continuar.</>
-                            : <>* Si el cliente no tiene datos fiscales, ingresá el <b>CUIT</b> abajo.</>
-                        }
-                      </div>
-
-                      {shouldNeedFiscalPanel && (
-                        <div>
-                          {!selectedClienteId ? (
-                            <div className="mi-card__hint">Seleccioná primero un cliente del listado.</div>
-                          ) : fiscalLoading ? (
-                            <div className="mi-card__hint">Consultando datos fiscales…</div>
-                          ) : !clienteFiscalDb ? (
-                            <>
-                              <div className="fl-field Margen-top">
-                                <input
-                                  className="fl-input"
-                                  placeholder=" "
-                                  value={fiscalCuitInput}
-                                  onChange={e => {
-                                    setFiscalCuitInput(onlyDigits(e.target.value));
-                                    setFiscalArcaData(null);
-                                    setFiscalError("");
-                                  }}
-                                  inputMode="numeric"
-                                  disabled={saving || fiscalLookupLoading}
-                                  maxLength={11}
-                                />
-                                <label className="fl-label">CUIT *</label>
+                          {fiscalArcaData && (
+                            <div className="arca-alert arca-alert--info" style={{ marginTop: 8 }}>
+                              <div className="arca-alert__title">Datos encontrados</div>
+                              <div className="arca-resumen">
+                                <div className="arca-row"><b>CUIT:</b><span>{fiscalArcaData.cuit || "—"}</span></div>
+                                <div className="arca-row"><b>IVA:</b><span>{fiscalArcaData.condicion_iva || "—"}</span></div>
+                                <div className="arca-row arca-row--full"><b>Razón social:</b><span>{fiscalArcaData.razon_social || "—"}</span></div>
+                                <div className="arca-row arca-row--full"><b>Domicilio:</b><span>{fiscalArcaData.domicilio || "—"}</span></div>
                               </div>
+                            </div>
+                          )}
 
-                              {fiscalArcaData && (
-                                <div className="arca-alert arca-alert--info" style={{ marginTop: 8 }}>
-                                  <div className="arca-alert__title">Datos encontrados</div>
-                                  <div className="arca-resumen">
-                                    <div className="arca-row"><b>CUIT:</b><span>{fiscalArcaData.cuit || "—"}</span></div>
-                                    <div className="arca-row"><b>IVA:</b><span>{fiscalArcaData.condicion_iva || "—"}</span></div>
-                                    <div className="arca-row arca-row--full"><b>Razón social:</b><span>{fiscalArcaData.razon_social || "—"}</span></div>
-                                    <div className="arca-row arca-row--full"><b>Domicilio:</b><span>{fiscalArcaData.domicilio || "—"}</span></div>
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          ) : null}
                           {fiscalError && (
                             <div className="arca-alert arca-alert--error" style={{ marginTop: 8 }}>
                               {fiscalError}
                             </div>
                           )}
-                        </div>
+                        </>
                       )}
                     </div>
                   )}
 
+                  {/* ── Botones de acción principales ── */}
                   <div className="mi-cr-filters__actions">
                     <button
                       type="button"
-                      onClick={submit}
+                      onClick={() => {
+                        setAccionContado("guardar");
+                        // Llamamos submit directamente; como accionContado se setea síncronamente
+                        // antes del click, pasamos la acción explícita para no depender del closure
+                        if (saving) return;
+                        const { sessionKey } = getAuthInfo();
+                        if (!sessionKey) { showToast("error", "No hay sesión activa (Falta X-Session).", 5200); return; }
+                        if (addUI.open) { showToast("advertencia", "Terminá de crear (o cancelá) antes de guardar.", 3200); return; }
+                        const v = validate();
+                        if (!v.ok) { showToast("advertencia", v.msg || "Faltan datos.", 4200); return; }
+                        setSaving(true);
+                        if (v.warn) showToast("advertencia", "Hay filas incompletas: se guardarán solo las válidas.", 3600);
+                        guardarVentaBatch({ clienteFiscalResuelto: null, accionFinal: "guardar", esFacturadaFinal: false })
+                          .then(async (info) => {
+                            if (esMedioPagoCheque && chequeGuardado) {
+                              const idsOk = (
+                                Array.isArray(info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
+                                  ? (info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
+                                  : (info?.id_movimiento ? [info.id_movimiento] : [])
+                              ).map(x => Number(x)).filter(x => Number.isFinite(x) && x > 0);
+                              if (idsOk.length > 0) {
+                                try { await guardarChequeEnBackend(idsOk[0], chequeGuardado); }
+                                catch (eCheque) { showToast("advertencia", `Venta guardada, pero no se pudo guardar el cheque: ${eCheque?.message}`, 5000); }
+                              }
+                            }
+                            showToast("exito", "Venta agregada correctamente.", 3000);
+                            onSaved?.(info);
+                          })
+                          .catch(e => showToast("error", e?.message || "Error guardando.", 4500))
+                          .finally(() => setSaving(false));
+                      }}
                       disabled={saving}
                       className="mit-btn mit-btn--solid mit-btn--block"
                     >
-                      {btnLabel}
+                      {saving && accionContado === "guardar" ? "Procesando..." : "Guardar venta"}
                     </button>
+
                     <button
                       type="button"
-                      onClick={() => (!saving ? onClose?.() : null)}
+                      onClick={onClickFacturar}
                       disabled={saving}
                       className="mit-btn mit-btn--ghost mit-btn--block"
                     >
-                      Cancelar
+                      {saving && accionContado === "facturar" ? "Procesando..." : "Facturar"}
                     </button>
                   </div>
                 </div>

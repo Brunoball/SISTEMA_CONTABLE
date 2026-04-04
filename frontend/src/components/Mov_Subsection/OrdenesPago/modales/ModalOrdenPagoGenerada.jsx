@@ -729,7 +729,7 @@ export default function ModalOrdenPagoGenerada({
             disabled={busy}
           >
             <FontAwesomeIcon icon={busy ? faCircleNotch : faFilePdf} spin={busy} />{" "}
-            Exportar PDF
+             PDF
           </button>
 
           <button

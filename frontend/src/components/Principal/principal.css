@@ -62,7 +62,7 @@ html[data-theme="oscuro"]{
 
 html[data-theme="oscuro"] body{
   background: var(--balto-bg);
-  color: rgba(226,232,240,.90) !important;
+
 }
 
 html[data-theme="oscuro"] .pp-shell{

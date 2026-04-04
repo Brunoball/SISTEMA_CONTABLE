@@ -563,14 +563,19 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                         </div>
 
                         <div className="mi-cr-cell mi-cr-cell--center">
-                          <input
-                            className="nv-cell-input nv-cell-input--right" type="text" inputMode="decimal"
-                            value={r.precioFocused?r.precioDraft??"":formatMoneyInputARS(r.precio)}
-                            onFocus={(e)=>{ updateRow(r.id,{precioFocused:true,precioDraft:formatEditableMoney(r.precio)}); setTimeout(()=>e.target.select(),0); }}
-                            onChange={(e)=>{ const raw=e.target.value; const c=raw.replace(/[^\d,.\-]/g,""); updateRow(r.id,{precioDraft:c,precio:parseMoneyInputARS(c)}); }}
-                            onBlur={()=>{ const p=parseMoneyInputARS(r.precioDraft); updateRow(r.id,{precio:p,precioDraft:"",precioFocused:false}); }}
-                            placeholder="$ 0,00" disabled={saving} style={{width:"100%"}}
-                          />
+<input
+  className="nv-cell-input nv-cell-input--right"
+  type="text"
+  value={formatMoneyInputARS(r.precio)}
+  readOnly
+  tabIndex={-1}
+  style={{
+    width: "100%",
+    pointerEvents: "none",
+    background: "transparent",
+    cursor: "default",
+  }}
+/>
                         </div>
 
                         <div className="mi-cr-cell mi-cr-cell--center">
@@ -780,11 +785,11 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                 </div>
 
                 {/* ACCIONES */}
-                <div className="nc-actions">
-                  <button type="button" className="nc-btn-guardar" onClick={submit} disabled={saving}>
+                <div className="nc-actions mi-cr-filters__actions">
+                  <button type="button" className="mit-btn mit-btn--solid mit-btn--block" onClick={submit} disabled={saving}>
                     {saving?"Guardando...":"Guardar compra"}
                   </button>
-                  <button type="button" className="nc-btn-cancelar" onClick={()=>!saving&&onClose?.()} disabled={saving}>
+                  <button type="button" className="mit-btn mit-btn--ghost mit-btn--block" onClick={()=>!saving&&onClose?.()} disabled={saving}>
                     Cancelar
                   </button>
                 </div>

@@ -2417,7 +2417,7 @@ html[data-theme="oscuro"] .mpr-cheque-label{
 }
 /* ── Contenedor ── */
 .mp-modal {
-  width: min(680px, 96vw);
+  width: min(980px, 96vw);
   max-height: 92vh;
   background: var(--nv-bg);
   border-radius: 20px;
@@ -2614,4 +2614,673 @@ html[data-theme="oscuro"] .mpr-cheque-label{
   .mp-btn-confirmar {
     justify-content: center;
   }
+}
+/* =========================================================
+   CHEQUE CARD — nuevo diseño visual
+   Agregar al final de Global_Modals_nueva_compra.css
+   (reemplaza los estilos mpr-cheque-card-item anteriores)
+========================================================= */
+
+/* ── Tokens del cheque ── */
+:root {
+  --ch-midnight:        #0A2540;
+  --ch-action:          #0055BB;
+  --ch-teal:            #00C9A7;
+  --ch-teal-dark:       #0f766e;
+  --ch-bg:              #ffffff;
+  --ch-surface:         #F7F9FC;
+  --ch-surface2:        #EEF2F8;
+  --ch-border:          rgba(15, 23, 42, 0.10);
+  --ch-border-md:       rgba(15, 23, 42, 0.18);
+  --ch-text:            #0A2540;
+  --ch-muted:           #64748B;
+  --ch-placeholder:     #94A3B8;
+  --ch-selected-border: #0f766e;
+  --ch-selected-glow:   rgba(15, 118, 110, 0.16);
+  --ch-echeq-glow:      rgba(0, 85, 187, 0.14);
+  --ch-shadow:
+    0 2px 8px  rgba(10, 37, 64, 0.06),
+    0 10px 24px rgba(10, 37, 64, 0.08);
+  --ch-shadow-hover:
+    0 4px 16px  rgba(10, 37, 64, 0.10),
+    0 18px 36px rgba(10, 37, 64, 0.13);
+  --ch-radius: 14px;
+  --ch-radius-sm: 7px;
+}
+
+/* =========================================================
+   GRID DE TARJETAS
+========================================================= */
+.cheques-cards-pn {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* =========================================================
+   TARJETA
+========================================================= */
+.cheque-card {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 1.5px solid var(--ch-border-md);
+  border-radius: var(--ch-radius);
+  background: var(--ch-bg);
+  cursor: pointer;
+  text-align: left;
+  font-family: "DM Sans", "Instrument Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  box-shadow: var(--ch-shadow);
+  transition:
+    border-color 0.17s ease,
+    box-shadow   0.17s ease,
+    transform    0.17s ease;
+  position: relative;
+  padding: 0;
+}
+
+.cheque-card:hover {
+  border-color: rgba(0, 85, 187, 0.28);
+  box-shadow: var(--ch-shadow-hover);
+  transform: translateY(-2px);
+}
+
+.cheque-card:active {
+  transform: translateY(0);
+  box-shadow: var(--ch-shadow);
+}
+
+/* ── Seleccionado ── */
+.cheque-card--selected {
+  border-color: var(--ch-selected-border) !important;
+  box-shadow:
+    0 0 0 3px var(--ch-selected-glow),
+    var(--ch-shadow-hover) !important;
+}
+
+/* ── eCheq: acento azul ── */
+.cheque-card--echeq .cheque-card__header {
+  background: linear-gradient(135deg, #0A2540 0%, #0c2f60 100%);
+}
+
+.cheque-card--echeq .cheque-card__slash {
+  background: linear-gradient(180deg, #0055BB 0%, #00C9A7 100%);
+}
+
+.cheque-card--echeq.cheque-card--selected {
+  border-color: var(--ch-action) !important;
+  box-shadow:
+    0 0 0 3px var(--ch-echeq-glow),
+    var(--ch-shadow-hover) !important;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+.cheque-card__header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--ch-midnight);
+  overflow: hidden;
+  min-height: 62px;
+  flex-shrink: 0;
+}
+
+.cheque-card__header-dots {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 16px 16px;
+  pointer-events: none;
+}
+
+.cheque-card__slash {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--ch-teal) 0%, var(--ch-action) 100%);
+  clip-path: polygon(36% 0, 100% 0, 100% 100%, 60% 100%);
+  pointer-events: none;
+}
+
+.cheque-card__brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  position: relative;
+  z-index: 2;
+}
+
+.cheque-card__logo-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  display: grid;
+  place-items: center;
+  color: var(--ch-teal);
+  flex-shrink: 0;
+}
+
+.cheque-card__bank-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.cheque-card__bank-sub {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.cheque-card__header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  position: relative;
+  z-index: 2;
+  margin-right: 2px;
+}
+
+.cheque-card__num-label {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.cheque-card__num-value {
+  font-family: "Courier New", "Courier", monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.16em;
+  line-height: 1;
+}
+
+/* =========================================================
+   BODY
+========================================================= */
+.cheque-card__body {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px 8px;
+  flex: 1;
+}
+
+.cheque-card__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 7px 0;
+
+}
+
+.cheque-card__row:last-child {
+  border-bottom: none;
+}
+
+.cheque-card__row--spaced {
+  justify-content: space-between;
+}
+
+.cheque-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cheque-card__field--wide {
+  flex: 1;
+}
+
+.cheque-card__field--firma {
+  flex: 1;
+  align-items: flex-end;
+}
+
+.cheque-card__field-label {
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ch-placeholder);
+  white-space: nowrap;
+}
+
+.cheque-card__field-line {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ch-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 220px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--ch-border-md);
+}
+
+.cheque-card__field-line--mono {
+  font-family: "Courier New", monospace;
+  letter-spacing: 0.04em;
+  font-size: 11.5px;
+}
+
+.cheque-card__field-empty {
+  color: var(--ch-placeholder);
+  font-weight: 400;
+}
+
+.cheque-card__importe-box {
+  display: flex;
+  align-items: center;
+  border: 1.5px solid var(--ch-border-md);
+  border-radius: var(--ch-radius-sm);
+  background: var(--ch-surface);
+  overflow: hidden;
+  height: 32px;
+  flex-shrink: 0;
+  min-width: 118px;
+}
+
+.cheque-card__importe-symbol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 100%;
+  background: var(--ch-midnight);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  font-weight: 700;
+  font-family: "Courier New", monospace;
+  flex-shrink: 0;
+}
+
+.cheque-card__importe-value {
+  flex: 1;
+  padding: 0 8px;
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ch-text);
+  letter-spacing: 0.02em;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cheque-card__firma-line {
+  width: 100%;
+  max-width: 180px;
+  border-bottom: 1px solid var(--ch-border-md);
+  min-height: 20px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding-bottom: 2px;
+}
+
+.cheque-card__firmante {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--ch-muted);
+}
+
+/* =========================================================
+   BANDA MICR
+========================================================= */
+.cheque-card__micr {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 14px 7px 18px;
+  background: var(--ch-surface2);
+  border-top: 1px solid var(--ch-border);
+  min-height: 32px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.cheque-card__micr-accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--ch-teal) 0%, var(--ch-action) 100%);
+}
+
+.cheque-card__micr-text {
+  font-family: "Courier New", "Lucida Console", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ch-text);
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+}
+
+.cheque-card__security {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ch-placeholder);
+  flex-shrink: 0;
+}
+
+/* =========================================================
+   BADGE SELECCIONADO
+========================================================= */
+.cheque-card__check-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 19px;
+  height: 19px;
+  border-radius: 5px;
+  background: var(--ch-teal-dark);
+  border: 1.5px solid rgba(255, 255, 255, 0.30);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 6px rgba(15, 118, 110, 0.35);
+  z-index: 10;
+  animation: ch-badge-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes ch-badge-pop {
+  from { opacity: 0; transform: scale(0.4); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* =========================================================
+   DARK MODE
+========================================================= */
+.mi-modal--dark .cheque-card,
+html[data-theme="oscuro"] .cheque-card {
+  background: rgba(10, 25, 40, 0.82);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.mi-modal--dark .cheque-card:hover,
+html[data-theme="oscuro"] .cheque-card:hover {
+  border-color: rgba(0, 85, 187, 0.38);
+  background: rgba(10, 25, 40, 0.92);
+}
+
+.mi-modal--dark .cheque-card--selected,
+html[data-theme="oscuro"] .cheque-card--selected {
+  border-color: rgba(15, 118, 110, 0.72) !important;
+}
+
+.mi-modal--dark .cheque-card--echeq.cheque-card--selected,
+html[data-theme="oscuro"] .cheque-card--echeq.cheque-card--selected {
+  border-color: rgba(0, 85, 187, 0.72) !important;
+}
+
+.mi-modal--dark .cheque-card__field-line,
+html[data-theme="oscuro"] .cheque-card__field-line {
+  color: rgba(255, 255, 255, 0.90);
+  border-bottom-color: rgba(255, 255, 255, 0.11);
+}
+
+.mi-modal--dark .cheque-card__importe-box,
+html[data-theme="oscuro"] .cheque-card__importe-box {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.mi-modal--dark .cheque-card__importe-value,
+html[data-theme="oscuro"] .cheque-card__importe-value {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.mi-modal--dark .cheque-card__micr,
+html[data-theme="oscuro"] .cheque-card__micr {
+  background: rgba(255, 255, 255, 0.04);
+  border-top-color: rgba(255, 255, 255, 0.09);
+}
+
+.mi-modal--dark .cheque-card__micr-text,
+html[data-theme="oscuro"] .cheque-card__micr-text {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+
+
+.mi-modal--dark .cheque-card__firma-line,
+html[data-theme="oscuro"] .cheque-card__firma-line {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+.mi-modal--dark .cheque-card__firmante,
+html[data-theme="oscuro"] .cheque-card__firmante {
+  color: rgba(210, 220, 235, 0.65);
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 480px) {
+  .cheque-card__num-value    { font-size: 13px; letter-spacing: 0.10em; }
+  .cheque-card__slash        { width: 72px; }
+  .cheque-card__importe-box  { min-width: 96px; }
+  .cheque-card__micr-text    { font-size: 9px; letter-spacing: 0.08em; }
+  .cheque-card__field-line   { max-width: 150px; }
+}/* =========================================================
+   ModalDetalleMediosPagoCompra.css
+   Estilos propios del modal de detalle.
+   Los estilos de .cheque-card se importan desde ChequeCard.css
+   (o desde Global_Modals_nueva_compra.css donde estén incluidos).
+========================================================= */
+
+/* ── Tamaño del contenedor ── */
+.mdp-container {
+  max-width: 720px !important;
+  width: min(720px, 96vw) !important;
+}
+
+/* ── Área de contenido ── */
+.mdp-content {
+  padding: 16px !important;
+  gap: 12px;
+  overflow-y: auto;
+  background: var(--nv-surface, #F7F9FC) !important;
+}
+
+/* ── Grid de ítems ── */
+.mdp-items-grid {
+  display: grid;
+  gap: 14px;
+}
+
+/* ── Estado vacío ── */
+.mdp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  color: var(--nv-muted, #5A6A7E);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* =========================================================
+   TARJETA MEDIO GENÉRICO (no cheque)
+========================================================= */
+.mdp-medio-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--nv-border-md, rgba(15,23,42,.16));
+  border-radius: 14px;
+  background: var(--nv-bg, #ffffff);
+  box-shadow: 0 2px 8px rgba(10,37,64,.06), 0 8px 20px rgba(10,37,64,.06);
+  transition: box-shadow .15s, transform .15s;
+}
+
+.mdp-medio-card:hover {
+  box-shadow: 0 4px 14px rgba(10,37,64,.10), 0 14px 28px rgba(10,37,64,.09);
+  transform: translateY(-1px);
+}
+
+.mdp-medio-card__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--nv-action-10, rgba(0,85,187,.10));
+  border: 1px solid rgba(0,85,187,.18);
+  display: grid;
+  place-items: center;
+  color: var(--nv-action, #0055BB);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.mdp-medio-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.mdp-medio-card__nombre {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--nv-text, #0A2540);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mdp-medio-card__sub {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--nv-muted, #5A6A7E);
+}
+
+.mdp-medio-card__monto {
+  font-family: "Courier New", monospace;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--nv-tot-color, #057A55);
+  letter-spacing: .02em;
+  flex-shrink: 0;
+}
+
+/* =========================================================
+   BARRA TOTAL
+========================================================= */
+.mdp-total-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(5, 122, 85, .28);
+  background: rgba(5, 122, 85, .05);
+  box-shadow: 0 6px 18px rgba(5,122,85,.08);
+}
+
+.mdp-total-bar__label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--nv-muted, #5A6A7E);
+}
+
+.mdp-total-bar__value {
+  font-family: "Courier New", monospace;
+  font-size: 18px;
+  font-weight: 800;
+  color: #057A55;
+  letter-spacing: .03em;
+}
+
+/* =========================================================
+   DARK MODE
+========================================================= */
+.mi-modal--dark .mdp-content {
+  background: rgba(6,18,28,.72) !important;
+}
+
+.mi-modal--dark .mdp-medio-card,
+html[data-theme="oscuro"] .mdp-medio-card {
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.10);
+}
+
+.mi-modal--dark .mdp-medio-card:hover,
+html[data-theme="oscuro"] .mdp-medio-card:hover {
+  background: rgba(255,255,255,.07);
+}
+
+.mi-modal--dark .mdp-medio-card__nombre,
+html[data-theme="oscuro"] .mdp-medio-card__nombre {
+  color: rgba(255,255,255,.92);
+}
+
+.mi-modal--dark .mdp-medio-card__sub,
+html[data-theme="oscuro"] .mdp-medio-card__sub {
+  color: rgba(210,220,235,.65);
+}
+
+.mi-modal--dark .mdp-medio-card__icon,
+html[data-theme="oscuro"] .mdp-medio-card__icon {
+  background: rgba(0,85,187,.14);
+  border-color: rgba(0,85,187,.30);
+}
+
+.mi-modal--dark .mdp-total-bar,
+html[data-theme="oscuro"] .mdp-total-bar {
+  background: rgba(5,122,85,.08);
+  border-color: rgba(5,122,85,.22);
+}
+
+.mi-modal--dark .mdp-total-bar__label,
+html[data-theme="oscuro"] .mdp-total-bar__label {
+  color: rgba(210,220,235,.65);
+}
+
+.mi-modal--dark .mdp-total-bar__value,
+html[data-theme="oscuro"] .mdp-total-bar__value {
+  color: rgba(52,211,153,.92);
+}
+
+.mi-modal--dark .mdp-empty,
+html[data-theme="oscuro"] .mdp-empty {
+  color: rgba(210,220,235,.55);
 }

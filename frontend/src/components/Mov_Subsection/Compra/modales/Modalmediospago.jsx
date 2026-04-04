@@ -1,5 +1,3 @@
-
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -11,7 +9,7 @@ import {
   faCheck,
 } from "@fortawesome/free-solid-svg-icons";
 
-// ── Helpers (copiados de ModalNuevaCompra para que sea autónomo) ──
+// ── Helpers ──
 const NULL_OPTION = "";
 function uid() {
   return (
@@ -86,11 +84,7 @@ function normalizeChequeTipoFromMedio(nombre) {
     .replace(/\s+/g, " ")
     .trim();
   if (!s) return null;
-  if (
-    s.includes("echeq") ||
-    s.includes("e-cheq") ||
-    s.includes("e cheq")
-  )
+  if (s.includes("echeq") || s.includes("e-cheq") || s.includes("e cheq"))
     return "echeq";
   if (s.includes("cheque")) return "cheque";
   return null;
@@ -119,7 +113,132 @@ export function buildEmptyMedioPago() {
   };
 }
 
-// ── Tarjetas de cheques ──
+// ============================================================
+// CHEQUE CARD — nuevo diseño inspirado en cheque bancario real
+// ============================================================
+function ChequeCard({ ch, checked, onToggle }) {
+  const isEcheq = String(ch?.tipo || "").toLowerCase().includes("echeq");
+
+  return (
+    <button
+      type="button"
+      className={["cheque-card", checked ? "cheque-card--selected" : "", isEcheq ? "cheque-card--echeq" : ""]
+        .filter(Boolean)
+        .join(" ")}
+      onClick={() => onToggle(String(ch?.id_cheque || ""))}
+    >
+      {/* ── HEADER ── */}
+      <div className="cheque-card__header">
+        <div className="cheque-card__header-dots" aria-hidden="true" />
+
+        {/* Brand */}
+        <div className="cheque-card__brand">
+          <div className="cheque-card__logo-icon">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M8 2C5.8 2 4 3.6 4 5.6c0 1.4.8 2.6 2 3.2V13h4V8.8c1.2-.6 2-1.8 2-3.2C12 3.6 10.2 2 8 2z"
+                fill="currentColor"
+                opacity="0.9"
+              />
+            </svg>
+          </div>
+          <div>
+            <div className="cheque-card__bank-name">
+              {safeText(ch?.banco) !== "-" ? safeText(ch?.banco) : "Cheque"}
+            </div>
+            <div className="cheque-card__bank-sub">
+              {isEcheq ? "E-CHEQ ELECTRÓNICO" : "CHEQUE DE PAGO DIFERIDO"}
+            </div>
+          </div>
+        </div>
+
+        {/* Número */}
+        <div className="cheque-card__header-right">
+          <span className="cheque-card__num-label">N°</span>
+          <span className="cheque-card__num-value">
+            {safeText(ch?.numero_cheque)}
+          </span>
+        </div>
+
+        {/* Slash decorativo */}
+        <div className="cheque-card__slash" aria-hidden="true" />
+      </div>
+
+      {/* ── BODY ── */}
+      <div className="cheque-card__body">
+        {/* Fila 1: Emisor + Fecha emisión */}
+        <div className="cheque-card__row cheque-card__row--spaced">
+          <div className="cheque-card__field cheque-card__field--wide">
+            <span className="cheque-card__field-label">Emisor</span>
+            <div className="cheque-card__field-line">
+              {safeText(ch?.emisor)}
+            </div>
+          </div>
+          <div className="cheque-card__field">
+            <span className="cheque-card__field-label">F. emisión</span>
+            <div className="cheque-card__field-line cheque-card__field-line--mono">
+              {safeText(formatFechaDMY(ch?.fecha_emision))}
+            </div>
+          </div>
+        </div>
+
+        {/* Fila 2: A la orden de + Importe */}
+        <div className="cheque-card__row cheque-card__row--spaced">
+                    <div className="cheque-card__field">
+            <span className="cheque-card__field-label">F. pago</span>
+            <div className="cheque-card__field-line cheque-card__field-line--mono">
+              {safeText(formatFechaDMY(ch?.fecha_pago))}
+            </div>
+          </div>
+
+          <div className="cheque-card__importe-box">
+            <span className="cheque-card__importe-symbol">$</span>
+            <span className="cheque-card__importe-value">
+              {ch?.importe > 0
+                ? moneyARS(ch.importe)
+                : <span className="cheque-card__field-empty">0,00</span>}
+            </span>
+          </div>
+        </div>
+
+
+      </div>
+
+      {/* ── MICR ── */}
+      <div className="cheque-card__micr">
+        <div className="cheque-card__micr-accent" aria-hidden="true" />
+        <span className="cheque-card__micr-text">
+          |:000000000:| &nbsp;00000000 &nbsp;0000
+        </span>
+        <div className="cheque-card__security">
+          <svg width="11" height="13" viewBox="0 0 12 14" fill="none">
+            <rect x="1" y="5" width="10" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+            <path d="M3.5 5V3.5a2.5 2.5 0 0 1 5 0V5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            <circle cx="6" cy="9" r="1.2" fill="currentColor" />
+          </svg>
+          <span>Seguridad</span>
+        </div>
+      </div>
+
+      {/* Badge seleccionado */}
+      {checked && (
+        <div className="cheque-card__check-badge" aria-label="Seleccionado">
+          <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+            <path
+              d="M1 4l2.5 2.5L9 1"
+              stroke="white"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+      )}
+    </button>
+  );
+}
+
+// ── Lista de tarjetas de cheques ──
 function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle }) {
   if (!cheques.length) return null;
   return (
@@ -127,51 +246,12 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle }) {
       {cheques.map((ch, idx) => {
         const checked = idsSeleccionados.includes(String(ch?.id_cheque));
         return (
-          <button
+          <ChequeCard
             key={ch?.id_cheque || idx}
-            type="button"
-            className={`mpr-cheque-card-item ${checked ? "is-checked" : ""}`}
-            onClick={() => onToggle(String(ch?.id_cheque || ""))}
-          >
-            <div className="mpr-cheque-card-top">
-              <label
-                className="mpr-cheque-check"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => onToggle(String(ch?.id_cheque || ""))}
-                />
-                <span className="mpr-cheque-check-ui" />
-              </label>
-              <div className="mpr-cheque-head-texts">
-                <span className="mpr-cheque-number">
-                  N° {safeText(ch?.numero_cheque)}
-                </span>
-              </div>
-            </div>
-            <div className="mpr-cheque-card-body">
-              <div className="mpr-cheque-line">
-                <span className="mpr-cheque-label">Emisor</span>
-                <span className="mpr-cheque-value">
-                  {safeText(ch?.emisor)}
-                </span>
-              </div>
-              <div className="mpr-cheque-line">
-                <span className="mpr-cheque-label">F. emisión</span>
-                <span className="mpr-cheque-value">
-                  {safeText(formatFechaDMY(ch?.fecha_emision))}
-                </span>
-              </div>
-              <div className="mpr-cheque-line">
-                <span className="mpr-cheque-label">F. pago</span>
-                <span className="mpr-cheque-value">
-                  {safeText(formatFechaDMY(ch?.fecha_pago))}
-                </span>
-              </div>
-            </div>
-          </button>
+            ch={ch}
+            checked={checked}
+            onToggle={onToggle}
+          />
         );
       })}
     </div>
@@ -195,8 +275,7 @@ function MpRow({
     () =>
       mediosPagoList.find(
         (x) =>
-          String(getMedioPagoId(x) ?? "") ===
-          String(row.id_medio_pago ?? "")
+          String(getMedioPagoId(x) ?? "") === String(row.id_medio_pago ?? "")
       ) || null,
     [mediosPagoList, row.id_medio_pago]
   );
@@ -209,10 +288,7 @@ function MpRow({
   const esCheque = tipoCheque !== null;
 
   const restanteParaEstaFila = useMemo(() => {
-    const sumaOtros = Math.max(
-      0,
-      safeNumber(sumaMediosPago) - safeNumber(row.monto)
-    );
+    const sumaOtros = Math.max(0, safeNumber(sumaMediosPago) - safeNumber(row.monto));
     return Math.max(0, safeNumber(totalCompra) - sumaOtros);
   }, [sumaMediosPago, totalCompra, row.monto]);
 
@@ -238,9 +314,7 @@ function MpRow({
           sp.set("tipo", tipo);
           const data = await apiGet(`${BASE_URL}/api.php?${sp.toString()}`);
           onUpdate(row.id, {
-            chequesDisponibles: Array.isArray(data?.cheques)
-              ? data.cheques
-              : [],
+            chequesDisponibles: Array.isArray(data?.cheques) ? data.cheques : [],
             loadingCheques: false,
           });
         } catch (e) {
@@ -391,13 +465,8 @@ function MpRow({
       {esCheque && (
         <div className="mp-cheques-panel">
           <div className="mp-cheques-title">
-            <FontAwesomeIcon
-              icon={faMoneyCheckDollar}
-              style={{ fontSize: 12 }}
-            />
-            {tipoCheque === "echeq"
-              ? "eCheqs en cartera"
-              : "Cheques en cartera"}
+            <FontAwesomeIcon icon={faMoneyCheckDollar} style={{ fontSize: 12 }} />
+            {tipoCheque === "echeq" ? "eCheqs en cartera" : "Cheques en cartera"}
           </div>
 
           {row.loadingCheques ? (
@@ -407,8 +476,7 @@ function MpRow({
             </div>
           ) : row.chequesDisponibles.length === 0 ? (
             <div className="mp-cheques-empty">
-              No hay{" "}
-              {tipoCheque === "echeq" ? "eCheqs" : "cheques"} activos en
+              No hay {tipoCheque === "echeq" ? "eCheqs" : "cheques"} activos en
               cartera.
             </div>
           ) : (
@@ -421,8 +489,7 @@ function MpRow({
 
           {chequesSeleccionados.length > 0 && (
             <div className="mp-cheques-sum">
-              ✓ {chequesSeleccionados.length} cheque(s) —{" "}
-              {moneyARS(importeCheques)}
+              ✓ {chequesSeleccionados.length} cheque(s) — {moneyARS(importeCheques)}
             </div>
           )}
         </div>
@@ -548,24 +615,13 @@ export function ModalMediosPago({
         {/* Footer */}
         <div className="mp-modal__footer">
           <div className="mp-footer-left">
-            <button
-              type="button"
-              className="mp-btn-agregar"
-              onClick={onAdd}
-            >
+            <button type="button" className="mp-btn-agregar" onClick={onAdd}>
               <FontAwesomeIcon icon={faPlus} style={{ fontSize: 11 }} />
               Agregar medio
             </button>
           </div>
-          <button
-            type="button"
-            className="mp-btn-confirmar"
-            onClick={onConfirm}
-          >
-            <FontAwesomeIcon
-              icon={faCheck}
-              style={{ fontSize: 12, opacity: 0.85 }}
-            />
+          <button type="button" className="mp-btn-confirmar" onClick={onConfirm}>
+            <FontAwesomeIcon icon={faCheck} style={{ fontSize: 12, opacity: 0.85 }} />
             Confirmar
           </button>
         </div>
@@ -606,11 +662,7 @@ export function PagoResumenPanel({
     <div className="nc-pago-resumen">
       <div className="nc-pago-resumen__head">
         <span className="nc-pago-resumen__label">Pago configurado</span>
-        <button
-          type="button"
-          className="nc-pago-resumen__edit"
-          onClick={onEdit}
-        >
+        <button type="button" className="nc-pago-resumen__edit" onClick={onEdit}>
           ✎ Editar
         </button>
       </div>
@@ -619,11 +671,9 @@ export function PagoResumenPanel({
         {filasConMedio.map((mp) => {
           const mpObj = mediosPagoList.find(
             (x) =>
-              String(getMedioPagoId(x) ?? "") ===
-              String(mp.id_medio_pago ?? "")
+              String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago ?? "")
           );
-          const nombre =
-            String(mpObj?.nombre ?? "").trim() || "Medio";
+          const nombre = String(mpObj?.nombre ?? "").trim() || "Medio";
           const tipoCheque = normalizeChequeTipoFromMedio(nombre);
           const esCheque = tipoCheque !== null;
           const cantCheques = Array.isArray(mp.id_cheque)
@@ -645,9 +695,7 @@ export function PagoResumenPanel({
                   </span>
                 )}
               </div>
-              <span className="nc-pago-resumen__monto">
-                {moneyARS(mp.monto)}
-              </span>
+              <span className="nc-pago-resumen__monto">{moneyARS(mp.monto)}</span>
             </div>
           );
         })}
@@ -664,17 +712,9 @@ export function PagoResumenPanel({
           </>
         )}
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            marginTop: 4,
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
           {cubierto ? (
-            <span className="nc-pago-resumen__ok-badge">
-              ✓ Cubierto
-            </span>
+            <span className="nc-pago-resumen__ok-badge">✓ Cubierto</span>
           ) : (
             <span className="nc-pago-resumen__warn-badge">
               Falta {moneyARS(diferenciaRestante)}

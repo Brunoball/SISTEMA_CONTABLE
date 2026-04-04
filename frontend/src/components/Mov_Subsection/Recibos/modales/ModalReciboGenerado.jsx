@@ -883,10 +883,11 @@ export default function ModalReciboGenerado({
           </div>
         </div>
 
-        <div className="mi-modal__footer mpr-footer">
+        <div className="mi-modal__footer mpr-footer mpr-footer--OP">
           <button
             type="button"
-            className="mpr-btn mpr-btn--ghost"
+            className="mit-btn mit-btn--solid mit-btn--block"
+            id="maxBTN"
             onClick={handlePrint}
             disabled={busy}
           >
@@ -896,17 +897,19 @@ export default function ModalReciboGenerado({
 
           <button
             type="button"
-            className="mpr-btn mpr-btn--ghost"
+            className="mit-btn mit-btn--ghost mit-btn--block"
+            id="maxBTN"
             onClick={handleExportPdf}
             disabled={busy}
           >
             <FontAwesomeIcon icon={busy ? faCircleNotch : faFilePdf} spin={busy} />{" "}
-            Exportar PDF
+             PDF
           </button>
 
           <button
             type="button"
-            className="mpr-btn mpr-btn--primary"
+            className="mit-btn mit-btn--solid mit-btn--block"
+            id="maxBTN"
             onClick={handleFinalizar}
             disabled={busy}
           >

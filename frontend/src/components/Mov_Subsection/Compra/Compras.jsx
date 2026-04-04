@@ -230,17 +230,17 @@ function prewarmComprobanteUrl(url, mime = "") {
 
   const mm = String(mime ?? "").toLowerCase();
   const ll = finalUrl.toLowerCase();
-  const isPdf = mm.includes("pdf") || ll.includes(".pdf") || ll.includes("compras_comprobantes_descargar");
+  const isPdf =
+    mm.includes("pdf") ||
+    ll.includes(".pdf") ||
+    ll.includes("compras_comprobantes_descargar");
 
   if (isPdf) {
-    ensureResourceHint(finalUrl, "preload", "document");
     ensureResourceHint(finalUrl, "prefetch", "document");
   } else {
-    ensureResourceHint(finalUrl, "preload", "image");
     ensureResourceHint(finalUrl, "prefetch", "image");
   }
 }
-
 /* =========================
    Helpers de compras
 ========================= */
@@ -1049,19 +1049,17 @@ export default function Compras() {
     [buildComprobanteFastUrl]
   );
 
-  const openComprobanteModal = useCallback(
-    (r) => {
-      const fastUrl = buildComprobanteFastUrl(r);
-      if (!fastUrl) return;
+const openComprobanteModal = useCallback(
+  (r) => {
+    const fastUrl = buildComprobanteFastUrl(r);
+    if (!fastUrl) return;
 
-      prewarmComprobanteUrl(fastUrl, getComprobanteMime(r));
-      setCompUrl(fastUrl);
-      setCompMime(getComprobanteMime(r));
-      setOpenVerComp(true);
-    },
-    [buildComprobanteFastUrl]
-  );
-
+    setCompUrl(fastUrl);
+    setCompMime(getComprobanteMime(r));
+    setOpenVerComp(true);
+  },
+  [buildComprobanteFastUrl]
+);
   const closeComprobanteModal = () => {
     setOpenVerComp(false);
     setCompUrl("");

@@ -194,10 +194,8 @@ function prewarmComprobanteUrl(url, mime = "") {
   const isPdf = mm.includes("pdf") || finalUrl.toLowerCase().includes(".pdf");
 
   if (isPdf) {
-    ensureResourceHint(finalUrl, "preload", "document");
     ensureResourceHint(finalUrl, "prefetch", "document");
   } else {
-    ensureResourceHint(finalUrl, "preload", "image");
     ensureResourceHint(finalUrl, "prefetch", "image");
   }
 }

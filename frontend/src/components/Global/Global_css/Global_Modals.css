@@ -317,6 +317,7 @@ input[type="number"]::-webkit-outer-spin-button{
 .content-btn-modalrecibo{
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
 }
 
 .btn--modalrecibo{

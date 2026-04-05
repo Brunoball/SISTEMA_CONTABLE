@@ -34,8 +34,12 @@ function withSessionKey(url) {
     const sessionKey = (localStorage.getItem("session_key") || "").trim();
     const token = (localStorage.getItem("token") || "").trim();
     const u = new URL(base, window.location.origin);
-    if (sessionKey && !u.searchParams.has("session_key")) u.searchParams.set("session_key", sessionKey);
-    if (token && !u.searchParams.has("token")) u.searchParams.set("token", token);
+    if (sessionKey && !u.searchParams.has("session_key")) {
+      u.searchParams.set("session_key", sessionKey);
+    }
+    if (token && !u.searchParams.has("token")) {
+      u.searchParams.set("token", token);
+    }
     return u.toString();
   } catch {
     return base;
@@ -109,12 +113,12 @@ const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
    Columns definition
 ========================= */
 const COLUMNS = [
-  { key: "fecha_emision", label: "FECHA EMISIÓN", fr: 1,   align: "center" },
-  { key: "emisor",        label: "EMISOR",         fr: 2.2, align: "left", strong: true },
-  { key: "numero_cheque", label: "NÚMERO",          fr: 1.2, align: "center" },
-  { key: "importe",       label: "IMPORTE",         fr: 1.2, align: "right" },
-  { key: "fecha_pago",    label: "FECHA PAGO",      fr: 1,   align: "center" },
-  { key: "acciones",      label: "ACCIONES",        fr: 1.2, align: "center" },
+  { key: "fecha_emision", label: "FECHA EMISIÓN", fr: 1, align: "center" },
+  { key: "emisor", label: "EMISOR", fr: 2.2, align: "left", strong: true },
+  { key: "numero_cheque", label: "NÚMERO", fr: 1.2, align: "center" },
+  { key: "importe", label: "IMPORTE", fr: 1.2, align: "right" },
+  { key: "fecha_pago", label: "FECHA PAGO", fr: 1, align: "center" },
+  { key: "acciones", label: "ACCIONES", fr: 1.2, align: "center" },
 ];
 
 const gridCols = COLUMNS.map((c) => `${c.fr}fr`).join(" ");
@@ -124,10 +128,10 @@ const gridCols = COLUMNS.map((c) => `${c.fr}fr`).join(" ");
 ========================= */
 const skelWidths = {
   fecha_emision: ["44%", "38%", "40%", "36%"],
-  emisor:        ["72%", "58%", "66%", "48%"],
+  emisor: ["72%", "58%", "66%", "48%"],
   numero_cheque: ["44%", "34%", "40%", "30%"],
-  importe:       ["38%", "30%", "34%", "28%"],
-  fecha_pago:    ["44%", "38%", "40%", "36%"],
+  importe: ["38%", "30%", "34%", "28%"],
+  fecha_pago: ["44%", "38%", "40%", "36%"],
 };
 
 function SkeletonRow({ idx }) {
@@ -162,7 +166,7 @@ function SkeletonRow({ idx }) {
             key={c.key}
             className={[
               "mov-gridCell",
-              c.align === "right"  ? "is-right"  : "",
+              c.align === "right" ? "is-right" : "",
               c.align === "center" ? "is-center" : "",
             ].join(" ")}
             role="cell"
@@ -193,7 +197,8 @@ const Echeqs_Cartera = () => {
   const [modalComprobanteOpen, setModalComprobanteOpen] = useState(false);
   const [modalComprobanteUrl, setModalComprobanteUrl] = useState("");
   const [modalComprobanteMime, setModalComprobanteMime] = useState("");
-  const [modalComprobanteTitle, setModalComprobanteTitle] = useState("Comprobante de Echeq");
+  const [modalComprobanteTitle, setModalComprobanteTitle] =
+    useState("Comprobante de Echeq");
 
   const [modalDepositarOpen, setModalDepositarOpen] = useState(false);
   const [echeqSeleccionado, setEcheqSeleccionado] = useState(null);
@@ -218,16 +223,21 @@ const Echeqs_Cartera = () => {
     (row) => {
       const echeq = normalizeEcheq(row);
       const idCheque = Number(echeq?.id_cheque || 0);
+
       if (!idCheque) {
         showToast("error", "Echeq inválido.");
         return;
       }
+
       const params = new URLSearchParams();
       params.set("action", "echeq_cartera_comprobante_ver");
       params.set("id_cheque", String(idCheque));
+
       const finalUrl = withSessionKey(`${API_URL}?${params.toString()}`);
       setModalComprobanteUrl(finalUrl);
-      setModalComprobanteMime(String(echeq?.archivo_mime || "").trim() || "application/pdf");
+      setModalComprobanteMime(
+        String(echeq?.archivo_mime || "").trim() || "application/pdf"
+      );
       setModalComprobanteTitle("Comprobante de Echeq");
       setModalComprobanteOpen(true);
     },
@@ -271,13 +281,18 @@ const Echeqs_Cartera = () => {
         });
 
         const data = await parseJsonOrThrow(res);
-        const nuevos = Array.isArray(data?.echeqs) ? data.echeqs.map(normalizeEcheq) : [];
+        const nuevos = Array.isArray(data?.echeqs)
+          ? data.echeqs.map(normalizeEcheq)
+          : [];
 
         setItems((prev) => {
           if (reset) return nuevos;
           const existentes = Array.isArray(prev) ? prev : [];
           const ids = new Set(existentes.map((x) => String(x.id_cheque)));
-          return [...existentes, ...nuevos.filter((x) => !ids.has(String(x.id_cheque)))];
+          return [
+            ...existentes,
+            ...nuevos.filter((x) => !ids.has(String(x.id_cheque))),
+          ];
         });
 
         setHasMore(Boolean(data?.has_more));
@@ -304,14 +319,18 @@ const Echeqs_Cartera = () => {
 
   const handleDepositarEcheq = useCallback(async () => {
     const idCheque = Number(echeqSeleccionado?.id_cheque || 0);
+
     if (!idCheque) {
       showToast("error", "No se pudo identificar el echeq seleccionado.");
       return;
     }
+
     setDepositando(true);
+
     try {
       const params = new URLSearchParams();
       params.set("action", "echeq_cartera_depositar");
+
       const data = await parseJsonOrThrow(
         await fetch(`${API_URL}?${params.toString()}`, {
           method: "POST",
@@ -319,11 +338,13 @@ const Echeqs_Cartera = () => {
           body: JSON.stringify({ id_cheque: idCheque }),
         })
       );
+
       setItems((prev) =>
         (Array.isArray(prev) ? prev : []).filter(
           (item) => Number(item?.id_cheque) !== idCheque
         )
       );
+
       setModalDepositarOpen(false);
       setEcheqSeleccionado(null);
       showToast("exito", data?.mensaje || "Echeq depositado correctamente.");
@@ -334,14 +355,18 @@ const Echeqs_Cartera = () => {
     }
   }, [echeqSeleccionado, showToast]);
 
-  /* render celda */
   function renderCell(col, item) {
     switch (col.key) {
-      case "fecha_emision":  return safeText(formatFecha(item.fecha_emision));
-      case "emisor":         return safeText(item.emisor);
-      case "numero_cheque":  return safeText(item.numero_cheque);
-      case "importe":        return formatMoney(item.importe);
-      case "fecha_pago":     return safeText(formatFecha(item.fecha_pago));
+      case "fecha_emision":
+        return safeText(formatFecha(item.fecha_emision));
+      case "emisor":
+        return safeText(item.emisor);
+      case "numero_cheque":
+        return safeText(item.numero_cheque);
+      case "importe":
+        return formatMoney(item.importe);
+      case "fecha_pago":
+        return safeText(formatFecha(item.fecha_pago));
       case "acciones":
         return (
           <div className="mov-actionsInline">
@@ -349,11 +374,13 @@ const Echeqs_Cartera = () => {
               type="button"
               className="mov-iconBtn"
               onClick={() => openModalComprobante(item)}
-              title={item?.tiene_comprobante ? "Ver comprobante" : "Sin comprobante"}
+              title={
+                item?.tiene_comprobante ? "Ver comprobante" : "Sin comprobante"
+              }
               disabled={!item?.tiene_comprobante}
               style={{
                 opacity: item?.tiene_comprobante ? 1 : 0.35,
-                cursor:  item?.tiene_comprobante ? "pointer" : "not-allowed",
+                cursor: item?.tiene_comprobante ? "pointer" : "not-allowed",
               }}
             >
               <FontAwesomeIcon icon={faEye} />
@@ -369,7 +396,8 @@ const Echeqs_Cartera = () => {
             </button>
           </div>
         );
-      default: return "—";
+      default:
+        return "—";
     }
   }
 
@@ -406,7 +434,7 @@ const Echeqs_Cartera = () => {
         tipoLabel="Echeq"
         confirmText="Depositar"
         loadingText="Depositando..."
-        infoText="Al presionar Depositar, el echeq se dará de baja de cartera y se registrará en movimientos."
+        infoText="Al presionar Depositar, el echeq se dará de baja de Echeqs de Cartera y se registrará automáticamente en Otros Egresos, dejando reflejado el movimiento para que la salida de fondos quede correctamente impactada en el sistema."
       />
 
       {error && (
@@ -416,7 +444,6 @@ const Echeqs_Cartera = () => {
       )}
 
       <section className="mov-card mov-card--table">
-        {/* ── HEAD ── */}
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
             <div className="title-mov">
@@ -439,7 +466,9 @@ const Echeqs_Cartera = () => {
                         onChange={(e) => setQ(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
-                            if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                            if (searchTimerRef.current) {
+                              clearTimeout(searchTimerRef.current);
+                            }
                             setDebouncedQ(e.currentTarget.value.trim());
                           }
                         }}
@@ -449,13 +478,16 @@ const Echeqs_Cartera = () => {
                       <span className="cc-floatingLabel">
                         <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
                       </span>
+
                       {q.trim() !== "" && (
                         <button
                           type="button"
                           className="cc-clearSearch cc-clearSearch--inside"
                           title="Limpiar búsqueda"
                           onClick={() => {
-                            if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                            if (searchTimerRef.current) {
+                              clearTimeout(searchTimerRef.current);
+                            }
                             setQ("");
                             setDebouncedQ("");
                           }}
@@ -471,7 +503,6 @@ const Echeqs_Cartera = () => {
           </div>
         </div>
 
-        {/* ── HEADER TABLA ── */}
         <div
           className="mov-gridTable mov-gridTable--head"
           style={{ gridTemplateColumns: gridCols }}
@@ -483,7 +514,7 @@ const Echeqs_Cartera = () => {
               className={[
                 "mov-gridCell",
                 "mov-gridCell--head",
-                c.align === "right"  ? "is-right"  : "",
+                c.align === "right" ? "is-right" : "",
                 c.align === "center" ? "is-center" : "",
               ].join(" ")}
               role="columnheader"
@@ -493,7 +524,6 @@ const Echeqs_Cartera = () => {
           ))}
         </div>
 
-        {/* ── BODY ── */}
         <div className="mov-tableWrap" role="rowgroup">
           <div
             className={[
@@ -538,9 +568,9 @@ const Echeqs_Cartera = () => {
                           key={col.key}
                           className={[
                             "mov-gridCell",
-                            col.align === "right"  ? "is-right"  : "",
+                            col.align === "right" ? "is-right" : "",
                             col.align === "center" ? "is-center" : "",
-                            col.strong             ? "is-strong" : "",
+                            col.strong ? "is-strong" : "",
                           ]
                             .filter(Boolean)
                             .join(" ")}
@@ -555,7 +585,6 @@ const Echeqs_Cartera = () => {
                   </div>
                 ))}
 
-                {/* Empty state */}
                 {!isAnyLoading && items.length === 0 && (
                   <div className="cc-emptyState">
                     <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
@@ -567,13 +596,20 @@ const Echeqs_Cartera = () => {
                   </div>
                 )}
 
-                {/* Cargar más */}
                 {!loading && hasMore && items.length > 0 && (
-                  <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      padding: "12px 0",
+                    }}
+                  >
                     <button
                       type="button"
                       className="mov-btn mov-btn--loadAll"
-                      onClick={() => fetchData({ reset: false, offset: nextOffset })}
+                      onClick={() =>
+                        fetchData({ reset: false, offset: nextOffset })
+                      }
                       disabled={loadingMore}
                       title="Cargar los próximos 100 registros"
                     >
@@ -582,7 +618,6 @@ const Echeqs_Cartera = () => {
                   </div>
                 )}
 
-                {/* Skeleton "cargar más" */}
                 {loadingMore && (
                   <div
                     className="mov-skeletonMore"

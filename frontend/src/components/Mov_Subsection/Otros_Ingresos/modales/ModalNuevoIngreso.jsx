@@ -5,6 +5,7 @@ import { faPlus, faFileInvoiceDollar } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
 import BASE_URL from "../../../../config/config";
 import ModalNuevoCheque from "./ModalNuevoCheque.jsx";
+import ModalNuevaDescripcion from "./ModalNuevaDescripcion.jsx";
 
 const NULL_OPTION = "";
 
@@ -230,9 +231,19 @@ function normalizeLists(lists) {
     ? pick("categorias")
     : [];
 
+  const detallesIngresos = pick("detalles_ingresos").length
+    ? pick("detalles_ingresos")
+    : pick("detallesIngresos").length
+    ? pick("detallesIngresos")
+    : pick("detalles_ingreso").length
+    ? pick("detalles_ingreso")
+    : pick("detallesIngreso").length
+    ? pick("detallesIngreso")
+    : detalles;
+
   return {
     medios_pago: Array.isArray(mediosPago) ? mediosPago : [],
-    detalles: Array.isArray(detalles) ? detalles : [],
+    detalles: Array.isArray(detallesIngresos) ? detallesIngresos : [],
   };
 }
 
@@ -382,6 +393,7 @@ export default function ModalNuevoIngreso({
 }) {
   const API_UPLOAD = `${BASE_URL}/api.php?action=otros_ingresos_comprobantes_vincular_movimiento_upload`;
   const API_CHEQUES_GUARDAR = `${BASE_URL}/api.php?action=otros_ingresos_cheques_guardar`;
+  const API_DETALLES_CREAR = `${BASE_URL}/api.php?action=otros_ingresos_detalles_crear`;
 
   const showToast = useCallback(
     (tipo, mensaje, dur = 2800) => onToast?.(tipo, mensaje, dur),
@@ -403,6 +415,9 @@ export default function ModalNuevoIngreso({
   const [savingCheque] = useState(false);
   const [chequeGuardado, setChequeGuardado] = useState(null);
 
+  const [openNuevaDescripcionModal, setOpenNuevaDescripcionModal] = useState(false);
+  const [currentRowIdForNewDesc, setCurrentRowIdForNewDesc] = useState(null);
+
   const rowsContainerRef = useRef(null);
   const [hasScroll, setHasScroll] = useState(false);
   const closeBtnRef = useRef(null);
@@ -417,6 +432,16 @@ export default function ModalNuevoIngreso({
     () => (Array.isArray(localLists.detalles) ? localLists.detalles : []),
     [localLists.detalles]
   );
+
+  // Modificar la lista de opciones del autocomplete para incluir "Agregar nueva descripción"
+  const enhancedDetallesList = useMemo(() => {
+    const newOption = {
+      id: "new_option",
+      __isNewOption: true,
+      nombre: "+ Agregar nueva descripción",
+    };
+    return [newOption, ...detallesList];
+  }, [detallesList]);
 
   const esMedioPagoCheque = useMemo(
     () => isMedioPagoCheque(mediosPagoList, filters.id_medio_pago),
@@ -539,8 +564,62 @@ export default function ModalNuevoIngreso({
     setRows((p) => p.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }, []);
 
+  const handleCrearNuevaDescripcion = useCallback((rowId) => {
+    setCurrentRowIdForNewDesc(rowId);
+    setOpenNuevaDescripcionModal(true);
+  }, []);
+
+  const handleGuardarNuevaDescripcion = useCallback(async (nombreDescripcion) => {
+    try {
+      const { sessionKey, token } = getAuthInfo();
+      const headers = {
+        "Content-Type": "application/json",
+      };
+      if (sessionKey) headers["X-Session"] = sessionKey;
+      else if (token) headers.Authorization = `Bearer ${token}`;
+
+      const response = await fetch(API_DETALLES_CREAR, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ nombre: nombreDescripcion }),
+      });
+
+      const data = await parseJsonOrThrow(response);
+
+      if (data.exito && data.detalle) {
+        // Actualizar la fila actual con el nuevo detalle
+        const precio = safeNumber(data.detalle?.precio || 0);
+        const stockDisponible = getStockDisponible(data.detalle);
+        const sinStock = isSinStock(stockDisponible);
+
+        updateRow(currentRowIdForNewDesc, {
+          id_detalle: String(data.detalle.id_detalle || data.detalle.id || ""),
+          detalle: data.detalle.nombre || nombreDescripcion,
+          precio,
+          stock_disponible: stockDisponible,
+          sinStock,
+          cantidad: sinStock ? "" : 1,
+        });
+
+        showToast("exito", "Descripción creada y seleccionada correctamente.", 2500);
+        return true;
+      } else {
+        throw new Error(data.mensaje || "Error al crear la descripción");
+      }
+    } catch (error) {
+      showToast("error", error.message || "No se pudo crear la descripción.", 3000);
+      return false;
+    }
+  }, [currentRowIdForNewDesc, updateRow, showToast, API_DETALLES_CREAR]);
+
   const handleSelectDetalle = useCallback(
     (item, rowId) => {
+      // Verificar si es la opción de "Agregar nueva descripción"
+      if (item && item.__isNewOption) {
+        handleCrearNuevaDescripcion(rowId);
+        return;
+      }
+
       const precio = safeNumber(item?.precio || 0);
       const stockDisponible = getStockDisponible(item);
       const sinStock = isSinStock(stockDisponible);
@@ -562,7 +641,7 @@ export default function ModalNuevoIngreso({
         );
       }
     },
-    [updateRow, showToast]
+    [updateRow, showToast, handleCrearNuevaDescripcion]
   );
 
   const handleCantidadChange = useCallback(
@@ -902,14 +981,14 @@ export default function ModalNuevoIngreso({
     guardarChequeEnBackend,
   ]);
 
-  if (!open) return null;
-
   const btnLabel =
     saving
       ? "Procesando..."
       : mode === "edit"
       ? "Guardar cambios"
       : "Guardar ingreso";
+
+  if (!open) return null;
 
   return createPortal(
     <>
@@ -1001,10 +1080,16 @@ export default function ModalNuevoIngreso({
                               })
                             }
                             onSelect={(item) => handleSelectDetalle(item, r.id)}
-                            options={detallesList}
-                            getOptionLabel={(d) => optionLabel(d)}
-                            getOptionValue={(d) => String(getDetalleId(d) ?? optionLabel(d))}
-                            placeholder="Escribí o buscá una descripción…"
+                            options={enhancedDetallesList}
+                            getOptionLabel={(d) => {
+                              if (d && d.__isNewOption) return d.nombre;
+                              return optionLabel(d);
+                            }}
+                            getOptionValue={(d) => {
+                              if (d && d.__isNewOption) return "__new_option__";
+                              return String(getDetalleId(d) ?? optionLabel(d));
+                            }}
+                            placeholder="Escribí o buscá un detalle…"
                             disabled={saving}
                             showAllOnFocus={false}
                             maxItems={18}
@@ -1390,6 +1475,15 @@ export default function ModalNuevoIngreso({
           tipoCheque={tipoChequeDetectado}
           dark={dark}
           saving={savingCheque}
+        />
+      )}
+
+      {openNuevaDescripcionModal && (
+        <ModalNuevaDescripcion
+          open={openNuevaDescripcionModal}
+          onClose={() => setOpenNuevaDescripcionModal(false)}
+          onSave={handleGuardarNuevaDescripcion}
+          dark={dark}
         />
       )}
     </>,

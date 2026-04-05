@@ -161,6 +161,16 @@ function onlyNumbers(v) {
 }
 
 /* =========================
+   Función para convertir a mayúsculas
+========================= */
+function toUpperCaseValue(value, fieldType = "text") {
+  if (fieldType === "money" || fieldType === "number") {
+    return value;
+  }
+  return String(value ?? "").toUpperCase();
+}
+
+/* =========================
    Helpers tipo archivo masivo
 ========================= */
 function getTipoArchivo(nombre) {
@@ -388,7 +398,7 @@ function ModalConfirmarProductosIA({
                       <input
                         className="cmi-input"
                         value={item.nombre}
-                        onChange={(e) => onChangeProducto(idx, "nombre", e.target.value)}
+                        onChange={(e) => onChangeProducto(idx, "nombre", toUpperCaseValue(e.target.value))}
                         placeholder="Nombre del producto"
                       />
                     </FloatingField>
@@ -398,7 +408,7 @@ function ModalConfirmarProductosIA({
                         <input
                           className="cmi-input"
                           value={item.sku}
-                          onChange={(e) => onChangeProducto(idx, "sku", e.target.value)}
+                          onChange={(e) => onChangeProducto(idx, "sku", toUpperCaseValue(e.target.value))}
                           placeholder="Ej: 04163"
                         />
                       </FloatingField>
@@ -489,7 +499,7 @@ function ModalConfirmarProductosIA({
                         className="cmi-input cmi-textarea"
                         rows={3}
                         value={item.descripcion}
-                        onChange={(e) => onChangeProducto(idx, "descripcion", e.target.value)}
+                        onChange={(e) => onChangeProducto(idx, "descripcion", toUpperCaseValue(e.target.value))}
                         placeholder="Descripción opcional"
                       />
                     </FloatingField>
@@ -535,13 +545,13 @@ function ModalConfirmarProductosIA({
 
 function normalizarProductoDetectado(item = {}) {
   return {
-    nombre: String(item.nombre ?? "").trim(),
-    sku: String(item.sku ?? "").trim(),
+    nombre: toUpperCaseValue(String(item.nombre ?? "").trim()),
+    sku: toUpperCaseValue(String(item.sku ?? "").trim()),
     precio: moneyToInput(item.precio ?? ""),
     precio_promo: moneyToInput(item.precio_promo ?? ""),
     stock:
       item.stock === null || item.stock === undefined ? "" : String(item.stock),
-    descripcion: String(item.descripcion ?? "").trim(),
+    descripcion: toUpperCaseValue(String(item.descripcion ?? "").trim()),
     id_categoria_stock:
       item.id_categoria_stock === null || item.id_categoria_stock === undefined
         ? ""
@@ -764,6 +774,8 @@ export default function ModalCargaMasiva({
       setForm((p) => ({ ...p, [name]: normalizeMoneyInput(value) }));
     } else if (name === "stock") {
       setForm((p) => ({ ...p, [name]: value.replace(/[^\d]/g, "") }));
+    } else if (name === "nombre" || name === "sku" || name === "descripcion") {
+      setForm((p) => ({ ...p, [name]: toUpperCaseValue(value) }));
     } else {
       setForm((p) => ({ ...p, [name]: value }));
     }
@@ -943,15 +955,15 @@ export default function ModalCargaMasiva({
 
     try {
       const fd = new FormData();
-      fd.append("nombre", form.nombre.trim());
-      fd.append("sku", form.sku.trim());
+      fd.append("nombre", toUpperCaseValue(form.nombre.trim()));
+      fd.append("sku", toUpperCaseValue(form.sku.trim()));
       fd.append("precio", moneyToApi(form.precio));
       fd.append(
         "precio_promo",
         form.precio_promo !== "" ? moneyToApi(form.precio_promo) : ""
       );
       fd.append("stock", form.stock !== "" ? String(form.stock) : "");
-      fd.append("descripcion", form.descripcion.trim());
+      fd.append("descripcion", toUpperCaseValue(form.descripcion.trim()));
 
       if (form.id_categoria_stock !== "") {
         fd.append("id_categoria_stock", String(form.id_categoria_stock));
@@ -1173,15 +1185,15 @@ export default function ModalCargaMasiva({
 
         try {
           const fd = new FormData();
-          fd.append("nombre", String(item.nombre || "").trim());
-          fd.append("sku", String(item.sku || "").trim());
+          fd.append("nombre", toUpperCaseValue(String(item.nombre || "").trim()));
+          fd.append("sku", toUpperCaseValue(String(item.sku || "").trim()));
           fd.append("precio", moneyToApi(item.precio));
           fd.append(
             "precio_promo",
             item.precio_promo !== "" ? moneyToApi(item.precio_promo) : ""
           );
           fd.append("stock", item.stock !== "" ? String(item.stock) : "");
-          fd.append("descripcion", String(item.descripcion || "").trim());
+          fd.append("descripcion", toUpperCaseValue(String(item.descripcion || "").trim()));
 
           if (item.id_categoria_stock !== "") {
             fd.append("id_categoria_stock", String(item.id_categoria_stock));
@@ -1374,6 +1386,7 @@ export default function ModalCargaMasiva({
                     onChange={handleChange}
                     className="cmi-input"
                     placeholder="Ej: Auriculares Bluetooth Samsung WH-1000"
+                    style={{ textTransform: "uppercase" }}
                   />
                 </FloatingField>
 
@@ -1385,6 +1398,7 @@ export default function ModalCargaMasiva({
                       onChange={handleChange}
                       className="cmi-input"
                       placeholder="Ej: 04163"
+                      style={{ textTransform: "uppercase" }}
                     />
                   </FloatingField>
 
@@ -1458,6 +1472,7 @@ export default function ModalCargaMasiva({
                     className="cmi-input cmi-textarea"
                     placeholder="Breve descripción del producto (opcional)"
                     rows={3}
+                    style={{ textTransform: "uppercase" }}
                   />
                 </FloatingField>
 

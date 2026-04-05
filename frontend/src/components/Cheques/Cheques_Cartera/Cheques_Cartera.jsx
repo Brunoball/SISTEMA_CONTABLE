@@ -104,24 +104,24 @@ const SKELETON_ROWS = 8;
 const Cheques_Cartera = () => {
   const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 
-  const [allRows, setAllRows]       = useState([]);
-  const [loading, setLoading]       = useState(true);
+  const [allRows, setAllRows] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError]           = useState("");
-  const [toast, setToast]           = useState(null);
+  const [error, setError] = useState("");
+  const [toast, setToast] = useState(null);
 
-  const [q, setQ]               = useState("");
-  const [hasMore, setHasMore]   = useState(false);
+  const [q, setQ] = useState("");
+  const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(0);
 
   const [modalComprobanteOpen, setModalComprobanteOpen] = useState(false);
-  const [modalComprobanteUrl, setModalComprobanteUrl]   = useState("");
+  const [modalComprobanteUrl, setModalComprobanteUrl] = useState("");
   const [modalComprobanteMime, setModalComprobanteMime] = useState("");
   const [modalComprobanteTitle, setModalComprobanteTitle] = useState("Comprobante de Cheque");
 
-  const [modalDepositarOpen, setModalDepositarOpen]       = useState(false);
-  const [chequeSeleccionado, setChequeSeleccionado]       = useState(null);
-  const [depositando, setDepositando]                     = useState(false);
+  const [modalDepositarOpen, setModalDepositarOpen] = useState(false);
+  const [chequeSeleccionado, setChequeSeleccionado] = useState(null);
+  const [depositando, setDepositando] = useState(false);
 
   /* Toast */
   const showToast = useCallback((tipo, mensaje, duracion = 2600) => {
@@ -141,7 +141,10 @@ const Cheques_Cartera = () => {
     (row) => {
       const cheque = normalizeCheque(row);
       const idCheque = Number(cheque?.id_cheque || 0);
-      if (!idCheque) { showToast("error", "Cheque inválido."); return; }
+      if (!idCheque) {
+        showToast("error", "Cheque inválido.");
+        return;
+      }
 
       const params = new URLSearchParams();
       params.set("action", "cheques_cartera_comprobante_ver");
@@ -222,7 +225,9 @@ const Cheques_Cartera = () => {
         if (active) setLoading(false);
       }
     })();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [fetchCheques]);
 
   /* Filtered rows (client-side) */
@@ -263,7 +268,10 @@ const Cheques_Cartera = () => {
   /* Depositar */
   const handleDepositarCheque = useCallback(async () => {
     const idCheque = Number(chequeSeleccionado?.id_cheque || 0);
-    if (!idCheque) { showToast("error", "No se pudo identificar el cheque seleccionado."); return; }
+    if (!idCheque) {
+      showToast("error", "No se pudo identificar el cheque seleccionado.");
+      return;
+    }
 
     setDepositando(true);
     try {
@@ -354,13 +362,16 @@ const Cheques_Cartera = () => {
   /* =========================
      Skeleton
   ========================= */
-  const skelWidths = useMemo(() => ({
-    fecha_emision:  ["44%", "38%", "42%", "36%"],
-    emisor:         ["72%", "58%", "66%", "50%"],
-    numero_cheque:  ["52%", "44%", "48%", "40%"],
-    importe:        ["38%", "30%", "34%", "28%"],
-    fecha_pago:     ["44%", "36%", "40%", "34%"],
-  }), []);
+  const skelWidths = useMemo(
+    () => ({
+      fecha_emision: ["44%", "38%", "42%", "36%"],
+      emisor: ["72%", "58%", "66%", "50%"],
+      numero_cheque: ["52%", "44%", "48%", "40%"],
+      importe: ["38%", "30%", "34%", "28%"],
+      fecha_pago: ["44%", "36%", "40%", "34%"],
+    }),
+    []
+  );
 
   const renderSkeletonRow = (idx) => (
     <div
@@ -393,7 +404,7 @@ const Cheques_Cartera = () => {
             key={c.key}
             className={[
               "mov-gridCell",
-              c.align === "right"  ? "is-right"  : "",
+              c.align === "right" ? "is-right" : "",
               c.align === "center" ? "is-center" : "",
             ].join(" ")}
             role="cell"
@@ -406,9 +417,6 @@ const Cheques_Cartera = () => {
     </div>
   );
 
-  /* =========================
-     Render
-  ========================= */
   return (
     <div className="mov-page">
       {toast && (
@@ -439,7 +447,7 @@ const Cheques_Cartera = () => {
         tipoLabel="Cheque"
         confirmText="Depositar"
         loadingText="Depositando..."
-        infoText="Por ahora, al presionar Depositar, el cheque solamente se dará de baja de cartera."
+        infoText="Al presionar Depositar, el cheque se dará de baja de Cheques de Cartera y se registrará automáticamente en Otros Egresos, dejando reflejado el movimiento para que la salida de fondos quede correctamente impactada en el sistema."
       />
 
       {error && (
@@ -449,7 +457,6 @@ const Cheques_Cartera = () => {
       )}
 
       <section className="mov-card mov-card--table">
-        {/* HEAD */}
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
             <div className="title-mov">
@@ -484,7 +491,6 @@ const Cheques_Cartera = () => {
           </div>
         </div>
 
-        {/* HEADER TABLA */}
         <div
           className="mov-gridTable mov-gridTable--head"
           style={{ gridTemplateColumns: gridCols }}
@@ -496,7 +502,7 @@ const Cheques_Cartera = () => {
               className={[
                 "mov-gridCell",
                 "mov-gridCell--head",
-                c.align === "right"  ? "is-right"  : "",
+                c.align === "right" ? "is-right" : "",
                 c.align === "center" ? "is-center" : "",
               ].join(" ")}
               role="columnheader"
@@ -506,7 +512,6 @@ const Cheques_Cartera = () => {
           ))}
         </div>
 
-        {/* BODY */}
         <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup">
           <div
             className={[
@@ -538,7 +543,6 @@ const Cheques_Cartera = () => {
                             data-label={c.label}
                           >
                             <div className="mov-actionsInline">
-                              {/* Ver comprobante */}
                               <button
                                 type="button"
                                 className={[
@@ -556,13 +560,12 @@ const Cheques_Cartera = () => {
                                 onClick={() => openModalComprobante(r)}
                                 style={{
                                   opacity: r?.tiene_comprobante ? 1 : 0.35,
-                                  cursor:  r?.tiene_comprobante ? "pointer" : "not-allowed",
+                                  cursor: r?.tiene_comprobante ? "pointer" : "not-allowed",
                                 }}
                               >
                                 <FontAwesomeIcon icon={faEye} />
                               </button>
 
-                              {/* Depositar */}
                               <button
                                 type="button"
                                 className="mov-iconBtn"
@@ -583,9 +586,9 @@ const Cheques_Cartera = () => {
                           key={c.key}
                           className={[
                             "mov-gridCell",
-                            c.align === "right"  ? "is-right"  : "",
+                            c.align === "right" ? "is-right" : "",
                             c.align === "center" ? "is-center" : "",
-                            c.strong             ? "is-strong" : "",
+                            c.strong ? "is-strong" : "",
                           ]
                             .filter(Boolean)
                             .join(" ")}
@@ -600,7 +603,6 @@ const Cheques_Cartera = () => {
                   </div>
                 ))}
 
-                {/* Empty state */}
                 {rows.length === 0 && (
                   <div className="cc-emptyState">
                     <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
@@ -612,7 +614,6 @@ const Cheques_Cartera = () => {
                   </div>
                 )}
 
-                {/* Cargar más */}
                 {allRows.length > 0 && hasMore && q.trim() === "" && (
                   <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
                     <button
@@ -627,7 +628,6 @@ const Cheques_Cartera = () => {
                   </div>
                 )}
 
-                {/* Skeleton de carga más */}
                 {loadingMore && (
                   <div className="mov-skeletonMore" aria-busy="true">
                     {Array.from({ length: 4 }).map((_, i) => renderSkeletonRow(i))}

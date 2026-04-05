@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { FaXmark, FaCircleInfo, FaBuildingColumns } from "react-icons/fa6";
 
@@ -38,22 +38,40 @@ export default function ModalDepositarCheque({
   tipoLabel = "Cheque",
   confirmText = "Depositar",
   loadingText = "Depositando...",
-  infoText = "Por ahora, al presionar Depositar, el registro solamente se dará de baja de cartera.",
+  infoText = "Al presionar Depositar, este registro se dará de baja de Cartera y se generará automáticamente un movimiento en Otros Egresos, para que la salida de fondos quede correctamente reflejada en el sistema.",
 }) {
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && !loading) {
+        onClose?.();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, loading, onClose]);
+
   if (!open) return null;
 
+  const handleModalMouseDown = (e) => {
+    e.stopPropagation();
+  };
+
   return createPortal(
-    <div className="mi-mini__overlay">
+    <div className="mi-mini__overlay" role="presentation">
       <div
         className="mi-mini__modal"
-        onMouseDown={(e) => e.stopPropagation()}
+        onMouseDown={handleModalMouseDown}
         style={{ width: "min(560px, 94vw)" }}
         role="dialog"
         aria-modal="true"
+        aria-labelledby="modal-depositar-cheque-title"
       >
-        {/* Header */}
         <div className="mi-mini__head">
           <h4
+            id="modal-depositar-cheque-title"
             className="mi-mini__title"
             style={{
               display: "flex",
@@ -77,9 +95,7 @@ export default function ModalDepositarCheque({
           </button>
         </div>
 
-        {/* Body */}
         <div className="mi-mini__body">
-          {/* Pregunta */}
           <p
             style={{
               margin: "0 0 14px",
@@ -91,7 +107,6 @@ export default function ModalDepositarCheque({
             {pregunta}
           </p>
 
-          {/* Grilla de datos */}
           <div
             style={{
               display: "grid",
@@ -160,7 +175,6 @@ export default function ModalDepositarCheque({
             </div>
           </div>
 
-          {/* Info banner */}
           <div
             style={{
               padding: "10px 14px",
@@ -174,6 +188,7 @@ export default function ModalDepositarCheque({
               display: "flex",
               alignItems: "flex-start",
               gap: 10,
+              lineHeight: 1.45,
             }}
           >
             <FaCircleInfo style={{ marginTop: 2, flexShrink: 0 }} />
@@ -182,7 +197,6 @@ export default function ModalDepositarCheque({
             </span>
           </div>
 
-          {/* Actions */}
           <div className="mi-mini__actions" style={{ marginTop: 14 }}>
             <button
               type="button"

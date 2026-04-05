@@ -11,6 +11,7 @@ import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import ModalNuevoEgreso from "./modales/ModalNuevoEgreso.jsx";
 import ModalEditarEgreso from "./modales/ModalEditarEgreso.jsx";
+import ModalDetalleMediosPagoEgreso from "./modales/ModalDetalleMediosPagoEgreso.jsx";
 import ModalEliminar from "../../Global/Modales/ModalEliminar.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -26,6 +27,7 @@ import {
   faTimes,
   faEye,
   faBoxOpen,
+  faMoneyCheckDollar,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -172,6 +174,31 @@ function getRowKey(r) {
   return `fx:${f}|${d}|${cat}|${m}`;
 }
 
+function getOtroEgresoMediosDetalle(row) {
+  if (Array.isArray(row?.medios_pago_detalle)) return row.medios_pago_detalle;
+
+  if (typeof row?.medios_pago_detalle === "string") {
+    try {
+      const parsed = JSON.parse(row.medios_pago_detalle);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function getOtroEgresoCantidadMedios(row) {
+  const n = Number(row?.cantidad_medios_pago);
+  if (Number.isFinite(n) && n > 0) return n;
+  return getOtroEgresoMediosDetalle(row).length;
+}
+
+function hasOtroEgresoDetalleMedios(row) {
+  return getOtroEgresoCantidadMedios(row) > 0;
+}
+
 function normalizeOtroEgresoRow(r) {
   const categoria = r?.categoria ?? r?.categoria_nombre ?? r?.nombre_categoria ?? "";
   const medioPagoNombre = r?.medio_pago_nombre ?? r?.medio_pago ?? r?.pago_medio_pago ?? "";
@@ -181,6 +208,13 @@ function normalizeOtroEgresoRow(r) {
   const idComprobante = Number(r?.id_comprobante ?? 0) || 0;
   const archivoMime = String(r?.archivo_mime ?? "").trim();
   const comprobanteTipo = String(r?.comprobante_tipo ?? "").trim();
+
+  const mediosPagoDetalle = getOtroEgresoMediosDetalle(r);
+  const cantidadMediosPago = (() => {
+    const n = Number(r?.cantidad_medios_pago);
+    if (Number.isFinite(n) && n >= 0) return n;
+    return mediosPagoDetalle.length;
+  })();
 
   return {
     ...r,
@@ -193,6 +227,8 @@ function normalizeOtroEgresoRow(r) {
     archivo_mime: archivoMime,
     comprobante_tipo: comprobanteTipo,
     tiene_comprobante: idComprobante > 0 || comprobanteUrl !== "",
+    medios_pago_detalle: mediosPagoDetalle,
+    cantidad_medios_pago: cantidadMediosPago,
   };
 }
 
@@ -316,6 +352,7 @@ export default function OtrosEgresos() {
 
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
+  const [openMediosPago, setOpenMediosPago] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
 
   const [openDelete, setOpenDelete] = useState(false);
@@ -681,7 +718,7 @@ export default function OtrosEgresos() {
         align: "right",
         render: (r) => moneyARS(r.monto_total ?? r.total ?? r.total_general ?? 0),
       },
-      { key: "acciones", label: "ACCIONES", fr: 0.9, align: "center", render: () => null },
+      { key: "acciones", label: "ACCIONES", fr: 1.15, align: "center", render: () => null },
     ];
   }, []);
 
@@ -1007,7 +1044,7 @@ export default function OtrosEgresos() {
           throw new Error("No se encontró la información del egreso.");
         }
 
-        setSelectedRow(egreso);
+        setSelectedRow(normalizeOtroEgresoRow(egreso));
         setOpenEdit(true);
       } catch (e) {
         showToast("error", e?.message || "No se pudo abrir el editor.", 4200);
@@ -1017,6 +1054,17 @@ export default function OtrosEgresos() {
     },
     [API, apiGet, showToast]
   );
+
+  const handleOpenMediosPago = useCallback((row) => {
+    if (!hasOtroEgresoDetalleMedios(row)) return;
+    setSelectedRow(row);
+    setOpenMediosPago(true);
+  }, []);
+
+  const handleCloseMediosPago = useCallback(() => {
+    setOpenMediosPago(false);
+    setSelectedRow(null);
+  }, []);
 
   const handleOpenComprobante = useCallback(
     (row) => {
@@ -1098,6 +1146,7 @@ export default function OtrosEgresos() {
                 <span className="mov-skelIcon" />
                 <span className="mov-skelIcon" />
                 <span className="mov-skelIcon" />
+                <span className="mov-skelIcon" />
               </div>
             </div>
           );
@@ -1124,7 +1173,7 @@ export default function OtrosEgresos() {
     </div>
   );
 
-  const lists = listasCtx || {
+  const listsBase = listasCtx || {
     periodos: [],
     clientes: [],
     medios_pago: [],
@@ -1135,7 +1184,57 @@ export default function OtrosEgresos() {
     proveedores: [],
     tipos_movimiento: [],
     categorias_egreso: [],
+    categorias_ingreso: [],
+    detalles_egresos: [],
+    detalles_egreso: [],
+    detalles_ingresos: [],
+    detalles_ingreso: [],
   };
+
+  const lists = useMemo(() => {
+    const detallesCompartidos =
+      (Array.isArray(listsBase?.detalles_egresos) && listsBase.detalles_egresos.length
+        ? listsBase.detalles_egresos
+        : null) ||
+      (Array.isArray(listsBase?.detallesEgresos) && listsBase.detallesEgresos.length
+        ? listsBase.detallesEgresos
+        : null) ||
+      (Array.isArray(listsBase?.detalles_egreso) && listsBase.detalles_egreso.length
+        ? listsBase.detalles_egreso
+        : null) ||
+      (Array.isArray(listsBase?.detallesEgreso) && listsBase.detallesEgreso.length
+        ? listsBase.detallesEgreso
+        : null) ||
+      (Array.isArray(listsBase?.detalles_ingresos) && listsBase.detalles_ingresos.length
+        ? listsBase.detalles_ingresos
+        : null) ||
+      (Array.isArray(listsBase?.detallesIngresos) && listsBase.detallesIngresos.length
+        ? listsBase.detallesIngresos
+        : null) ||
+      (Array.isArray(listsBase?.detalles_ingreso) && listsBase.detalles_ingreso.length
+        ? listsBase.detalles_ingreso
+        : null) ||
+      (Array.isArray(listsBase?.detallesIngreso) && listsBase.detallesIngreso.length
+        ? listsBase.detallesIngreso
+        : null) ||
+      (Array.isArray(listsBase?.detalles) && listsBase.detalles.length
+        ? listsBase.detalles
+        : null) ||
+      (Array.isArray(listsBase?.categorias_ingreso) && listsBase.categorias_ingreso.length
+        ? listsBase.categorias_ingreso
+        : null) ||
+      (Array.isArray(listsBase?.categorias_egreso) && listsBase.categorias_egreso.length
+        ? listsBase.categorias_egreso
+        : []);
+
+    return {
+      ...listsBase,
+      detalles_egresos: detallesCompartidos,
+      detallesEgresos: detallesCompartidos,
+      detalles_egreso: detallesCompartidos,
+      detallesEgreso: detallesCompartidos,
+    };
+  }, [listsBase]);
 
   return (
     <div className="mov-page">
@@ -1234,7 +1333,6 @@ export default function OtrosEgresos() {
                           type="button"
                           className="cc-clearSearch cc-clearSearch--inside"
                           title="Limpiar búsqueda"
-                          
                           onClick={async () => {
                             if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                             setQ("");
@@ -1326,6 +1424,7 @@ export default function OtrosEgresos() {
                   const isLoadingThisEdit = loadingEditDataId === r.id_movimiento;
                   const tieneComprobante =
                     Number(r?.id_comprobante ?? 0) > 0 || String(r?.comprobante_url ?? "").trim() !== "";
+                  const hasMedios = hasOtroEgresoDetalleMedios(r);
 
                   return (
                     <div
@@ -1356,6 +1455,20 @@ export default function OtrosEgresos() {
                                   disabled={!tieneComprobante || isAnyLoading || loadingListsCtx}
                                 >
                                   <FontAwesomeIcon icon={faEye} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={`mov-iconBtn ${hasMedios ? "" : "is-disabled"}`}
+                                  title={
+                                    hasMedios
+                                      ? "Ver detalle de medios de pago"
+                                      : "Sin detalle de medios de pago"
+                                  }
+                                  onClick={() => hasMedios && handleOpenMediosPago(r)}
+                                  disabled={!hasMedios || isAnyLoading || loadingListsCtx}
+                                >
+                                  <FontAwesomeIcon icon={faMoneyCheckDollar} />
                                 </button>
 
                                 <button
@@ -1484,6 +1597,12 @@ export default function OtrosEgresos() {
           await refreshPeriodos();
           showToast("exito", "Egreso actualizado correctamente.", 2600);
         }}
+      />
+
+      <ModalDetalleMediosPagoEgreso
+        open={openMediosPago}
+        row={selectedRow}
+        onClose={handleCloseMediosPago}
       />
 
       <ModalEliminar

@@ -4,6 +4,13 @@
    Depende de movimientos.css / Global_Section.css para las clases .mov-*
    ================================================ */
 
+
+.scat-emptyText {
+  font-size: 13px;
+  color: var(--mov-muted);
+  font-weight: 520;
+  text-align: center;
+}
 /* ── Grid tabla ── */
 .sp-grid { grid-template-columns: 1fr 120px 108px; }
 

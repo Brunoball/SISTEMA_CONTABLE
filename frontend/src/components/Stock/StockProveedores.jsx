@@ -544,13 +544,13 @@ export default function StockProveedores() {
           </div>
 
           <div className="mov-tableWrap" role="rowgroup">
-            <div className={["mov-gridBody", loading ? "mov-softLoading" : ""].join(" ")}>
+            <div className={["mov-gridBody mov-gridBody--relative" , loading ? "mov-softLoading" : ""].join(" ")}>
               {loading ? (
                 <div className="mov-skeletonWrap" aria-busy="true">
                   {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkelRow(i))}
                 </div>
               ) : proveedoresOrdenados.length === 0 ? (
-                <div style={{ padding: "40px 0", textAlign: "center" }}>
+<div className="cc-emptyState">
                   <FontAwesomeIcon
                     icon={faBoxOpen}
                     style={{ fontSize: 28, opacity: 0.3, marginBottom: 10, display: "block" }}

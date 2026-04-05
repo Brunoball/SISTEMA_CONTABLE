@@ -583,23 +583,20 @@ export default function StockCategorias() {
           </div>
 
           <div className="mov-tableWrap" role="rowgroup">
-            <div className={["mov-gridBody", loading ? "mov-softLoading" : ""].join(" ")}>
+            <div className={["mov-gridBody mov-gridBody--relative" , loading ? "mov-softLoading" : ""].join(" ")}>
               {loading ? (
                 <div className="mov-skeletonWrap" aria-busy="true">
                   {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkelRow(i))}
                 </div>
               ) : categoriasOrdenadas.length === 0 ? (
-                <div style={{ padding: "40px 0", textAlign: "center" }}>
-                  <FontAwesomeIcon
-                    icon={faBoxOpen}
-                    style={{ fontSize: 28, opacity: 0.3, marginBottom: 10, display: "block" }}
-                  />
-                  <div style={{ fontSize: 13, color: "var(--mov-muted)", fontWeight: 520 }}>
-                    {pestana === "activas"
-                      ? "No hay categorías activas."
-                      : "No hay categorías inactivas."}
-                  </div>
-                </div>
+<div className="cc-emptyState">
+  <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+  <div className="cc-emptyText">
+    {pestana === "activas"
+      ? "No hay categorías activas."
+      : "No hay categorías inactivas."}
+  </div>
+</div>
               ) : (
                 categoriasOrdenadas.map((cat) => {
                   const activo = Number(cat?.activo ?? 1) === 1;

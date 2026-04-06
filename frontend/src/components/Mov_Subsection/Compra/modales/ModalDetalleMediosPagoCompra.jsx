@@ -161,7 +161,6 @@ function ChequeDetalle({ item }) {
       <div className="cheque-card__micr">
         <div className="cheque-card__micr-accent" aria-hidden="true" />
         <span className="cheque-card__micr-text">
-          |:000000000:| &nbsp;00000000 &nbsp;0000
         </span>
         <div className="cheque-card__security">
           <svg width="11" height="13" viewBox="0 0 12 14" fill="none">

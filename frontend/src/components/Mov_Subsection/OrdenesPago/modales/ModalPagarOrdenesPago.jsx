@@ -192,54 +192,128 @@ function EstadoChip({ pagado }) {
 }
 
 /* ─────────────────────────────────────────────────────────
-   TARJETAS DE CHEQUES — idéntica a ModalNuevoEgreso
+   TARJETAS DE CHEQUES — diseño minimalista idéntico a ModalPagarRecibos
+   Fila compacta: checkbox · número + meta · importe
 ───────────────────────────────────────────────────────── */
-function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle }) {
+function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle, esEcheq = false }) {
   if (!cheques.length) return null;
+
+  const accent       = esEcheq ? "#0055BB"            : "#0f766e";
+  const accentBg     = esEcheq ? "rgba(0,85,187,.07)" : "rgba(15,118,110,.07)";
+  const accentBorder = esEcheq ? "rgba(0,85,187,.28)" : "rgba(15,118,110,.28)";
+  const accentGlow   = esEcheq ? "rgba(0,85,187,.10)" : "rgba(15,118,110,.10)";
+
   return (
-    <div className="mpr-cheques-cards">
+    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
       {cheques.map((ch, idx) => {
         const checked = idsSeleccionados.includes(String(ch?.id_cheque));
+
         return (
           <div
             key={ch?.id_cheque || idx}
-            className={`mpr-cheque-card-item ${checked ? "is-checked" : ""}`}
+            role="checkbox"
+            aria-checked={checked}
+            tabIndex={0}
             onClick={() => onToggle(String(ch?.id_cheque || ""))}
+            onKeyDown={(e) =>
+              (e.key === " " || e.key === "Enter") &&
+              onToggle(String(ch?.id_cheque || ""))
+            }
             style={{
-              border: checked ? "1px solid #0f766e" : "1px solid rgba(0,0,0,.08)",
-              borderRadius: 10,
-              padding: 10,
+              display: "grid",
+              gridTemplateColumns: "16px 1fr auto",
+              alignItems: "center",
+              gap: 10,
+              padding: "9px 11px",
+              border: checked
+                ? `1.5px solid ${accent}`
+                : "1.5px solid var(--nv-border-md)",
+              borderRadius: 9,
+              background: checked ? accentBg : "var(--nv-bg)",
               cursor: "pointer",
-              marginBottom: 6,
-              background: checked ? "rgba(15,118,110,.06)" : "transparent",
+              transition: "border-color .14s, background .14s, box-shadow .14s",
+              boxShadow: checked ? `0 0 0 3px ${accentGlow}` : "var(--nv-shadow-sm)",
+              outline: "none",
+              userSelect: "none",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => onToggle(String(ch?.id_cheque || ""))}
-                onClick={(e) => e.stopPropagation()}
-                style={{ cursor: "pointer" }}
-              />
-              <span style={{ fontWeight: 700, fontSize: 13 }}>
-                N° {safeText(ch?.numero_cheque)}
-              </span>
+            {/* ── Checkbox visual ── */}
+            <div
+              aria-hidden="true"
+              style={{
+                width: 16, height: 16,
+                borderRadius: 4,
+                border: checked ? `2px solid ${accent}` : "1.5px solid var(--nv-border-md)",
+                background: checked ? accent : "var(--nv-bg)",
+                display: "grid", placeItems: "center",
+                flexShrink: 0,
+                transition: "all .14s",
+              }}
+            >
+              {checked && (
+                <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                  <path
+                    d="M1 3.5L3.5 6L8 1"
+                    stroke="#fff"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
             </div>
-            <div style={{ display: "grid", gap: 3, fontSize: 12 }}>
-              <div>
-                <b>Emisor:</b> {safeText(ch?.emisor)}
+
+            {/* ── Info principal ── */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+              {/* número + badge */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{
+                  fontFamily: "'Courier New', monospace",
+                  fontSize: 12, fontWeight: 700,
+                  color: "var(--nv-text)", letterSpacing: ".04em",
+                }}>
+                  N°&nbsp;{safeText(ch?.numero_cheque)}
+                </span>
+                {esEcheq && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700,
+                    textTransform: "uppercase", letterSpacing: ".07em",
+                    color: accent,
+                    background: accentBg,
+                    border: `1px solid ${accentBorder}`,
+                    borderRadius: 999, padding: "1px 5px", lineHeight: 1.5,
+                  }}>
+                    eCheq
+                  </span>
+                )}
               </div>
-              <div>
-                <b>F. emisión:</b> {safeText(formatFechaDMY(ch?.fecha_emision))}
-              </div>
-              <div>
-                <b>F. pago:</b> {safeText(formatFechaDMY(ch?.fecha_pago))}
+
+              {/* emisor · fecha pago */}
+              <div style={{
+                display: "flex", flexWrap: "wrap", gap: "2px 8px",
+                fontSize: 11, color: "var(--nv-muted)", lineHeight: 1.3,
+              }}>
+                <span style={{
+                  maxWidth: 120,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {safeText(ch?.emisor)}
+                </span>
+                <span style={{ opacity: .4 }}>·</span>
+                <span>Pago:&nbsp;{safeText(formatFechaDMY(ch?.fecha_pago))}</span>
               </div>
             </div>
-            <div style={{ marginTop: 6, fontWeight: 700, textAlign: "right", fontSize: 13 }}>
+
+            {/* ── Importe ── */}
+            <span style={{
+              fontSize: 13, fontWeight: 800,
+              fontVariantNumeric: "tabular-nums",
+              color: checked ? accent : "var(--nv-text)",
+              whiteSpace: "nowrap",
+              transition: "color .14s",
+            }}>
               {moneyARS(ch?.importe || 0)}
-            </div>
+            </span>
           </div>
         );
       })}
@@ -248,7 +322,7 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle }) {
 }
 
 /* ─────────────────────────────────────────────────────────
-   FILA MEDIO DE PAGO — estética nc-mp-* de ModalNuevoEgreso
+   FILA MEDIO DE PAGO
 ───────────────────────────────────────────────────────── */
 function MedioPagoRow({
   row,
@@ -272,6 +346,7 @@ function MedioPagoRow({
   );
 
   const esCheque = tipoCheque !== null;
+  const esEcheq  = tipoCheque === "echeq";
 
   const chequesSeleccionados = useMemo(
     () => getChequeIdsArray(row.id_cheque),
@@ -296,7 +371,7 @@ function MedioPagoRow({
 
   const handleChangeMedio = useCallback(
     async (val) => {
-      const mp = mediosPagoList.find((x) => String(x.id) === String(val));
+      const mp   = mediosPagoList.find((x) => String(x.id) === String(val));
       const tipo = normalizeChequeTipoFromMedio(mp?.nombre || "");
       onUpdate(row.id, {
         id_medio_pago: val,
@@ -377,7 +452,7 @@ function MedioPagoRow({
             value={
               row.montoFocused
                 ? row.montoDraft ?? ""
-                : formatMoneyInputARS(row.monto)
+                : formatMoneyInputARS(esCheque ? importeCheques : row.monto)
             }
             onFocus={(e) => {
               onUpdate(row.id, {
@@ -437,32 +512,35 @@ function MedioPagoRow({
         </div>
       </div>
 
-      {/* Panel cheques */}
+      {/* Panel cheques — con nuevo diseño minimalista */}
       {esCheque && (
         <div className="nc-mp-cheques">
           <div className="nc-mp-cheques-title">
             <FontAwesomeIcon
               icon={faMoneyCheckDollar}
-              style={{ marginRight: 5, fontSize: 12 }}
+              style={{ fontSize: 11 }}
             />
-            {tipoCheque === "echeq" ? "eCheqs en cartera" : "Cheques en cartera"}
+            {esEcheq ? "eCheqs en cartera" : "Cheques en cartera"}
           </div>
+
           {row.loadingCheques ? (
             <div className="nc-mp-cheques-loading">
               <FontAwesomeIcon icon={faCircleNotch} spin style={{ marginRight: 6 }} />
-              Cargando...
+              Cargando…
             </div>
           ) : row.chequesDisponibles.length === 0 ? (
             <div className="nc-mp-cheques-empty">
-              No hay {tipoCheque === "echeq" ? "eCheqs" : "cheques"} activos en cartera.
+              No hay {esEcheq ? "eCheqs" : "cheques"} activos en cartera.
             </div>
           ) : (
             <ChequesCarteraCards
               cheques={row.chequesDisponibles}
               idsSeleccionados={chequesSeleccionados}
               onToggle={handleToggleCheque}
+              esEcheq={esEcheq}
             />
           )}
+
           {chequesSeleccionados.length > 0 && (
             <div className="nc-mp-cheques-sum">
               ✓ {chequesSeleccionados.length} cheque(s) — {moneyARS(importeCheques)}
@@ -487,9 +565,9 @@ export default function ModalPagarOrdenesPago({
   onOrdenPagoFinalizado,
   lists,
 }) {
-  const dialogRef = useRef(null);
+  const dialogRef     = useRef(null);
   const firstFocusRef = useRef(null);
-  const tbodyRef = useRef(null);
+  const tbodyRef      = useRef(null);
   const [tbodyHasScroll, setTbodyHasScroll] = useState(false);
 
   const [dark, setDark] = useState(isTemaOscuro());
@@ -503,15 +581,15 @@ export default function ModalPagarOrdenesPago({
   }, []);
 
   const [selectedIds, setSelectedIds] = useState(() => new Set());
-  const [pagaTodo, setPagaTodo] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [rows, setRows] = useState(() => []);
+  const [pagaTodo,    setPagaTodo]    = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [rows,        setRows]        = useState(() => []);
 
   const mediosPagoFromContext = useMemo(
     () => normalizeMediosPago(lists || {}),
     [lists]
   );
-  const [mediosPago, setMediosPago] = useState([]);
+  const [mediosPago,    setMediosPago]    = useState([]);
   const [loadingMedios, setLoadingMedios] = useState(false);
 
   const [mediosFilas, setMediosFilas] = useState(() => [buildEmptyMedioPago()]);
@@ -536,11 +614,11 @@ export default function ModalPagarOrdenesPago({
     [mediosFilas]
   );
 
-  const [openOrden, setOpenOrden] = useState(false);
-  const [ordenHtml, setOrdenHtml] = useState("");
-  const [ordenTitle, setOrdenTitle] = useState("Orden de Pago");
+  const [openOrden,             setOpenOrden]             = useState(false);
+  const [ordenHtml,             setOrdenHtml]             = useState("");
+  const [ordenTitle,            setOrdenTitle]            = useState("Orden de Pago");
   const [idsMovimientosPagados, setIdsMovimientosPagados] = useState([]);
-  const [ultimoCobroId, setUltimoCobroId] = useState(null);
+  const [ultimoCobroId,         setUltimoCobroId]         = useState(null);
 
   const showToast = useCallback(
     (tipo, mensaje, dur = 2800) => onToast?.(tipo, mensaje, dur),
@@ -636,7 +714,7 @@ export default function ModalPagarOrdenesPago({
 
   useEffect(() => {
     if (!open || openOrden) return;
-    const t = setTimeout(recomputeTbodyScroll, 0);
+    const t  = setTimeout(recomputeTbodyScroll, 0);
     const el = tbodyRef.current;
     if (!el) return () => clearTimeout(t);
     const ro = new ResizeObserver(() => recomputeTbodyScroll());
@@ -682,7 +760,7 @@ export default function ModalPagarOrdenesPago({
   const buildMediosPagoPayload = useCallback(() => {
     return mediosFilas.flatMap((mp) => {
       const idsCheques = getChequeIdsArray(mp.id_cheque);
-      const mpData = mediosPago.find((x) => String(x.id) === String(mp.id_medio_pago));
+      const mpData     = mediosPago.find((x) => String(x.id) === String(mp.id_medio_pago));
       const tipoCheque = normalizeChequeTipoFromMedio(mpData?.nombre || "");
       if (tipoCheque !== null && idsCheques.length > 0) {
         return idsCheques.map((idChequeStr) => {
@@ -729,7 +807,7 @@ export default function ModalPagarOrdenesPago({
           : mediosPagoInfo.map((x) => x.nombre).join(" + ");
       const html = buildOrdenPagoHTML({
         proveedorNombre: proveedorInfo?.nombre ?? proveedor?.proveedor ?? "",
-        proveedorId: proveedorInfo?.id_proveedor ?? proveedor?.id_proveedor ?? "",
+        proveedorId:     proveedorInfo?.id_proveedor ?? proveedor?.id_proveedor ?? "",
         medioPagoNombre: mpNombre,
         total,
         seleccion,
@@ -751,23 +829,15 @@ export default function ModalPagarOrdenesPago({
       return id && selectedIds.has(id) && !isPagadoRow(r);
     });
     if (seleccion.length === 0) {
-      return {
-        ok: false,
-        msg: "Seleccioná al menos una deuda PENDIENTE para pagar.",
-      };
+      return { ok: false, msg: "Seleccioná al menos una deuda PENDIENTE para pagar." };
     }
     const chequesRepetidos = new Set();
     for (let i = 0; i < mediosFilas.length; i++) {
       const mp = mediosFilas[i];
       if (!mp.id_medio_pago) {
-        return {
-          ok: false,
-          msg: `Medio de pago ${i + 1}: falta seleccionar el medio.`,
-        };
+        return { ok: false, msg: `Medio de pago ${i + 1}: falta seleccionar el medio.` };
       }
-      const mpData = mediosPago.find(
-        (x) => String(x.id) === String(mp.id_medio_pago)
-      );
+      const mpData     = mediosPago.find((x) => String(x.id) === String(mp.id_medio_pago));
       const tipoCheque = normalizeChequeTipoFromMedio(mpData?.nombre || "");
       const idsCheques = getChequeIdsArray(mp.id_cheque);
       if (tipoCheque !== null) {
@@ -790,10 +860,7 @@ export default function ModalPagarOrdenesPago({
         }
       } else {
         if (safeNumber(mp.monto) <= 0) {
-          return {
-            ok: false,
-            msg: `Medio de pago ${i + 1}: el monto debe ser mayor a 0.`,
-          };
+          return { ok: false, msg: `Medio de pago ${i + 1}: el monto debe ser mayor a 0.` };
         }
       }
     }
@@ -806,14 +873,7 @@ export default function ModalPagarOrdenesPago({
       };
     }
     return { ok: true };
-  }, [
-    deudasOrdenadas,
-    selectedIds,
-    mediosFilas,
-    mediosPago,
-    sumaMediosPago,
-    totalSeleccionado,
-  ]);
+  }, [deudasOrdenadas, selectedIds, mediosFilas, mediosPago, sumaMediosPago, totalSeleccionado]);
 
   const handleConfirm = async () => {
     if (!deudasOrdenadas.length) {
@@ -821,26 +881,20 @@ export default function ModalPagarOrdenesPago({
       return;
     }
     const v = validate();
-    if (!v.ok) {
-      showToast("error", v.msg, 3200);
-      return;
-    }
+    if (!v.ok) { showToast("error", v.msg, 3200); return; }
+
     const seleccion = deudasOrdenadas.filter((r) => {
       const id = Number(r?.id_movimiento || 0);
       return id && selectedIds.has(id) && !isPagadoRow(r);
     });
-    const ids = seleccion.map((r) => Number(r?.id_movimiento || 0)).filter(Boolean);
+    const ids              = seleccion.map((r) => Number(r?.id_movimiento || 0)).filter(Boolean);
     const mediosPagoPayload = buildMediosPagoPayload();
 
     const mediosPagoInfo = mediosFilas.map((mp) => {
-      const mpData = mediosPago.find(
-        (x) => String(x.id) === String(mp.id_medio_pago)
-      );
+      const mpData     = mediosPago.find((x) => String(x.id) === String(mp.id_medio_pago));
       const idsCheques = getChequeIdsArray(mp.id_cheque);
       if (idsCheques.length > 1) {
-        return {
-          nombre: `${mpData?.nombre || "Medio de pago"} x${idsCheques.length}`,
-        };
+        return { nombre: `${mpData?.nombre || "Medio de pago"} x${idsCheques.length}` };
       }
       return { nombre: mpData?.nombre || "Medio de pago" };
     });
@@ -849,7 +903,7 @@ export default function ModalPagarOrdenesPago({
       setLoading(true);
       const resp = await confirmPagoDefault({
         ids_movimiento: ids,
-        medios_pago: mediosPagoPayload,
+        medios_pago:    mediosPagoPayload,
       });
       if (typeof onConfirm === "function") {
         try {
@@ -857,13 +911,12 @@ export default function ModalPagarOrdenesPago({
             onConfirm({
               proveedor: {
                 id_proveedor: proveedor?.id_proveedor ?? null,
-                nombre: proveedor?.proveedor ?? "",
+                nombre:       proveedor?.proveedor ?? "",
               },
-              seleccion,
-              totalSeleccionado,
-              medios_pago: mediosPagoPayload,
+              seleccion, totalSeleccionado,
+              medios_pago:    mediosPagoPayload,
               ids_movimiento: ids,
-              response: resp,
+              response:       resp,
             })
           );
         } catch (hookErr) {
@@ -874,9 +927,7 @@ export default function ModalPagarOrdenesPago({
         ? resp.ids_cobro.map((x) => Number(x || 0)).filter(Boolean)
         : [];
       setIdsMovimientosPagados(ids);
-      setUltimoCobroId(
-        Number(idsCobroResp?.[0] || resp?.id_cobro || 0) || null
-      );
+      setUltimoCobroId(Number(idsCobroResp?.[0] || resp?.id_cobro || 0) || null);
       setRows((prev) =>
         (Array.isArray(prev) ? prev : []).map((r) => {
           const id = Number(r?.id_movimiento || 0);
@@ -891,7 +942,7 @@ export default function ModalPagarOrdenesPago({
       const built = buildOrdenFromSeleccion({
         proveedorInfo: {
           id_proveedor: proveedor?.id_proveedor ?? null,
-          nombre: proveedor?.proveedor ?? "",
+          nombre:       proveedor?.proveedor ?? "",
         },
         mediosPagoInfo,
         seleccion,
@@ -989,9 +1040,7 @@ export default function ModalPagarOrdenesPago({
 
                   <div
                     ref={tbodyRef}
-                    className={`mpr-tbody ${
-                      tbodyHasScroll ? "mpr-tbody--scroll" : ""
-                    }`}
+                    className={`mpr-tbody ${tbodyHasScroll ? "mpr-tbody--scroll" : ""}`}
                   >
                     {!deudasOrdenadas.length && (
                       <div className="mpr-empty">
@@ -999,11 +1048,10 @@ export default function ModalPagarOrdenesPago({
                       </div>
                     )}
                     {deudasOrdenadas.map((r, idx) => {
-                      const id = Number(r?.id_movimiento || 0);
+                      const id     = Number(r?.id_movimiento || 0);
                       const pagado = isPagadoRow(r);
                       const checked = selectedIds.has(id);
-                      const monto =
-                        Number(r?.monto_total ?? r?.total ?? 0) || 0;
+                      const monto   = Number(r?.monto_total ?? r?.total ?? 0) || 0;
                       return (
                         <div
                           key={id || `${r?.fecha}-${idx}`}
@@ -1012,11 +1060,7 @@ export default function ModalPagarOrdenesPago({
                           }`}
                           role="row"
                           onClick={() => id && toggleOne(id, r)}
-                          title={
-                            pagado
-                              ? "Este registro ya está PAGADO"
-                              : undefined
-                          }
+                          title={pagado ? "Este registro ya está PAGADO" : undefined}
                         >
                           <div
                             className="mpr-td mpr-td--sel"
@@ -1033,10 +1077,7 @@ export default function ModalPagarOrdenesPago({
                                 onChange={() => toggleOne(id, r)}
                                 disabled={!id || loading || pagado}
                               />
-                              <span
-                                className="mpr-check__box"
-                                aria-hidden="true"
-                              />
+                              <span className="mpr-check__box" aria-hidden="true" />
                             </label>
                           </div>
                           <div className="mpr-td">
@@ -1044,13 +1085,9 @@ export default function ModalPagarOrdenesPago({
                           </div>
                           <div
                             className="mpr-td mpr-td--desc"
-                            title={safeText(
-                              r?.detalle ?? r?.descripcion ?? r?.concepto
-                            )}
+                            title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
                           >
-                            {safeText(
-                              r?.detalle ?? r?.descripcion ?? r?.concepto
-                            )}
+                            {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
                           </div>
                           <div className="mpr-td mpr-td--center">
                             <EstadoChip pagado={pagado} />
@@ -1082,7 +1119,7 @@ export default function ModalPagarOrdenesPago({
                   </div>
                 </section>
 
-                {/* ── PANEL LATERAL — nc-aside idéntico a ModalNuevoEgreso ── */}
+                {/* ── PANEL LATERAL ── */}
                 <aside className="nc-aside">
 
                   {/* SECCIÓN: Datos del pago */}
@@ -1100,14 +1137,9 @@ export default function ModalPagarOrdenesPago({
                         disabled={!deudasOrdenadas.length || loading}
                       >
                         <span className="nv-foot-btn__icon">
-                          <FontAwesomeIcon
-                            icon={faListCheck}
-                            style={{ fontSize: 10 }}
-                          />
+                          <FontAwesomeIcon icon={faListCheck} style={{ fontSize: 10 }} />
                         </span>
-                        {pagaTodo
-                          ? "Deseleccionar todas"
-                          : "Seleccionar todas"}
+                        {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
                       </button>
                     </div>
                   </div>
@@ -1167,10 +1199,9 @@ export default function ModalPagarOrdenesPago({
                             Falta: {moneyARS(diferenciaRestante)}
                           </span>
                         )}
-                        {diferenciaRestante <= 0.01 &&
-                          totalSeleccionado > 0 && (
-                            <span className="nc-mp-totals-ok">✓ Cubierto</span>
-                          )}
+                        {diferenciaRestante <= 0.01 && totalSeleccionado > 0 && (
+                          <span className="nc-mp-totals-ok">✓ Cubierto</span>
+                        )}
                       </div>
 
                       <button
@@ -1191,11 +1222,7 @@ export default function ModalPagarOrdenesPago({
                       type="button"
                       className="nc-btn-guardar"
                       onClick={handleConfirm}
-                      disabled={
-                        loading ||
-                        selectedIds.size === 0 ||
-                        loadingMedios
-                      }
+                      disabled={loading || selectedIds.size === 0 || loadingMedios}
                     >
                       {loading ? "Procesando…" : "Confirmar pago"}
                     </button>

@@ -1,10 +1,7 @@
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals_nueva_compra.css";
 import "../../../Global/Global_css/Global_responsive.css";
-// [NUEVO] importar también el patch de CSS:
-// import "../../../Global/Global_css/Global_Modals_nueva_compra_patch.css";
 import BASE_URL from "../../../../config/config";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
@@ -16,10 +13,9 @@ import {
   faUpload,
   faTrash,
   faXmark,
-  faCreditCard,  // [NUEVO]
+  faCreditCard,
 } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
-// [NUEVO]
 import { ModalMediosPago, PagoResumenPanel, buildEmptyMedioPago } from "./Modalmediospago.jsx";
 
 const NULL_OPTION = "";
@@ -96,13 +92,53 @@ function normalizeLists(lists) {
   return { proveedores:pick("proveedores"), detalles:pick("detalles"), medios_pago:Array.isArray(mediosPago)?mediosPago:[] };
 }
 
+/* ============================================================
+   AUTH MEJORADO
+============================================================ */
 function getAuthInfo() {
-  const sessionKey=localStorage.getItem("session_key")||localStorage.getItem("sessionKey")||localStorage.getItem("x_session")||localStorage.getItem("X-Session")||"";
-  const token=localStorage.getItem("token")||"";
-  let idUsuario=0;
-  try { const u=JSON.parse(localStorage.getItem("usuario")||"null"); const c=u?.idUsuario??u?.id_usuario??u?.id??u?.user_id??0; if(Number.isFinite(Number(c))) idUsuario=Number(c); } catch {}
-  return { token, sessionKey, idUsuario };
+  const sessionKey =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("x_session") ||
+    localStorage.getItem("X-Session") ||
+    "";
+
+  const token = localStorage.getItem("token") || "";
+
+  let idUsuario = 0;
+  let idUsuarioMaster = 0;
+
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+
+    const candMaster =
+      u?.idUsuarioMaster ??
+      u?.id_usuario_master ??
+      0;
+
+    const candUser =
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      candMaster ??
+      0;
+
+    if (Number.isFinite(Number(candMaster)) && Number(candMaster) > 0) {
+      idUsuarioMaster = Number(candMaster);
+    }
+
+    if (Number.isFinite(Number(candUser)) && Number(candUser) > 0) {
+      idUsuario = Number(candUser);
+    }
+
+    if (!idUsuario && idUsuarioMaster) idUsuario = idUsuarioMaster;
+    if (!idUsuarioMaster && idUsuario) idUsuarioMaster = idUsuario;
+  } catch {}
+
+  return { token, sessionKey, idUsuario, idUsuarioMaster };
 }
+
 async function parseJsonOrThrow(res) {
   const text=await res.text();
   if(!text) throw new Error("Respuesta vacía del servidor.");
@@ -130,7 +166,7 @@ function normalizeChequeTipoFromMedio(nombre) {
   return null;
 }
 
-/* ── AddCatalogMiniModal sin cambios ── */
+/* ── AddCatalogMiniModal ── */
 function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark=false }) {
   const inputRef=useRef(null);
   useEffect(()=>{ if(!open) return; const t=setTimeout(()=>inputRef.current?.focus(),0); return()=>clearTimeout(t); },[open]);
@@ -196,7 +232,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const [addUI,setAddUI] = useState({open:false,kind:null,rowId:null,text:"",saving:false});
   const [mediosFilas,setMediosFilas] = useState(()=>[buildEmptyMedioPago()]);
 
-  // [NUEVO] Estado del mini-modal de medios de pago
   const [mpModalOpen, setMpModalOpen] = useState(false);
 
   const closeBtnRef        = useRef(null);
@@ -216,7 +251,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       setRows([buildEmptyRow()]); setMediosFilas([buildEmptyMedioPago()]);
       setAddUI({open:false,kind:null,rowId:null,text:"",saving:false});
       setSaving(false); setArchivoAdjunto(null);
-      setMpModalOpen(false); // [NUEVO]
+      setMpModalOpen(false);
       setTimeout(()=>closeBtnRef.current?.focus(),0);
     }
   },[open]);
@@ -233,7 +268,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const isContado   = String(forma)==="CONTADO";
   const isCorriente = String(forma)==="CUENTA_CORRIENTE";
 
-  // [CAMBIO] Al cambiar a cta cte, resetear medios y cerrar modal
   useEffect(()=>{
     if(isCorriente) {
       setMediosFilas([buildEmptyMedioPago()]);
@@ -257,7 +291,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   }, []);
   const updateMedioPago = useCallback((id,patch)=>setMediosFilas(p=>p.map(r=>r.id===id?{...r,...patch}:r)),[]);
 
-  // [NUEVO] Handler para seleccionar Contado — abre el mini-modal automáticamente
   const handleSeleccionarContado = useCallback(() => {
     setForma("CONTADO");
     setMpModalOpen(true);
@@ -348,44 +381,102 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     try { if(typeof input.showPicker==="function") input.showPicker(); else input.click(); } catch { input.click(); }
   },[saving]);
 
-  const validate = useCallback(()=>{
-    const provId=Number(idProveedor);
-    const provTxt=String(provInput||"").trim();
-    if(!((Number.isFinite(provId)&&provId>0)||provTxt.length>0))
-      return { ok:false, msg:"Falta seleccionar un Proveedor (obligatorio)." };
+  /* ============================================================
+     VALIDATE MEJORADA
+  ============================================================ */
+  const validate = useCallback(() => {
+    const provId = Number(idProveedor);
 
-    if(!["CONTADO","CUENTA_CORRIENTE"].includes(String(forma)))
-      return { ok:false, msg:"Falta seleccionar el Tipo de compra (Contado / Cuenta Corriente)." };
+    if (!(Number.isFinite(provId) && provId > 0)) {
+      return {
+        ok: false,
+        msg: "Falta seleccionar un Proveedor válido de la lista.",
+      };
+    }
 
-    if(isContado){
-      for(let i=0;i<mediosFilas.length;i++){
-        const mp=mediosFilas[i];
-        if(!mp.id_medio_pago||mp.id_medio_pago===NULL_OPTION)
-          return { ok:false, msg:`Medio de pago ${i+1}: falta seleccionar el medio.` };
-        if(safeNumber(mp.monto)<=0)
-          return { ok:false, msg:`Medio de pago ${i+1}: el monto debe ser mayor a 0.` };
-        const mpRow=mediosPagoList.find(x=>String(getMedioPagoId(x)??"")===String(mp.id_medio_pago));
-        const tipoCheque=normalizeChequeTipoFromMedio(mpRow?.nombre||"");
-        if(tipoCheque!==null){
-          const seleccionados=Array.isArray(mp.id_cheque)?mp.id_cheque:(mp.id_cheque?[String(mp.id_cheque)]:[]);
-          if(!seleccionados.length)
-            return { ok:false, msg:`Medio de pago ${i+1}: debés seleccionar al menos un ${tipoCheque==="echeq"?"eCheq":"cheque"} en cartera.` };
+    if (!["CONTADO", "CUENTA_CORRIENTE"].includes(String(forma))) {
+      return { ok: false, msg: "Falta seleccionar el Tipo de compra (Contado / Cuenta Corriente)." };
+    }
+
+    if (isContado) {
+      for (let i = 0; i < mediosFilas.length; i++) {
+        const mp = mediosFilas[i];
+
+        if (!mp.id_medio_pago || mp.id_medio_pago === NULL_OPTION) {
+          return { ok: false, msg: `Medio de pago ${i + 1}: falta seleccionar el medio.` };
+        }
+
+        if (safeNumber(mp.monto) <= 0) {
+          return { ok: false, msg: `Medio de pago ${i + 1}: el monto debe ser mayor a 0.` };
+        }
+
+        const mpRow = mediosPagoList.find(
+          (x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago)
+        );
+
+        const tipoCheque = normalizeChequeTipoFromMedio(mpRow?.nombre || "");
+
+        if (tipoCheque !== null) {
+          const seleccionados = Array.isArray(mp.id_cheque)
+            ? mp.id_cheque
+            : mp.id_cheque
+            ? [String(mp.id_cheque)]
+            : [];
+
+          if (!seleccionados.length) {
+            return {
+              ok: false,
+              msg: `Medio de pago ${i + 1}: debés seleccionar al menos un ${
+                tipoCheque === "echeq" ? "eCheq" : "cheque"
+              } en cartera.`,
+            };
+          }
         }
       }
-      if(sumaMediosPago<(resumen.total-0.05)&&resumen.total>0)
-        return { ok:false, msg:`La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no cubre el total de la compra (${moneyARS(resumen.total)}).` };
+
+      if (sumaMediosPago < resumen.total - 0.05 && resumen.total > 0) {
+        return {
+          ok: false,
+          msg: `La suma de los medios de pago (${moneyARS(
+            sumaMediosPago
+          )}) no cubre el total de la compra (${moneyARS(resumen.total)}).`,
+        };
+      }
     }
 
-    const problems=[]; rowsCalc.forEach((r,i)=>{ const p=describeLineProblem(r,i+1); if(p) problems.push(p); });
-    const usable=rowsCalc.filter(r=>Number.isFinite(Number(r.id_detalle))&&Number(r.id_detalle)>0&&Number(r.total||0)>0);
+    const problems = [];
+    rowsCalc.forEach((r, i) => {
+      const p = describeLineProblem(r, i + 1);
+      if (p) problems.push(p);
+    });
 
-    if(!usable.length){
-      if(problems.length){ const msg=problems.slice(0,2).join(" "); const extra=problems.length>2?` (y ${problems.length-2} más)`:""; return { ok:false, msg:`No hay filas válidas. ${msg}${extra}` }; }
-      return { ok:false, msg:"Cargá al menos 1 fila válida (Detalle + Cantidad + Precio)." };
+    const usable = rowsCalc.filter(
+      (r) =>
+        Number.isFinite(Number(r.id_detalle)) &&
+        Number(r.id_detalle) > 0 &&
+        Number(r.total || 0) > 0
+    );
+
+    if (!usable.length) {
+      if (problems.length) {
+        const msg = problems.slice(0, 2).join(" ");
+        const extra = problems.length > 2 ? ` (y ${problems.length - 2} más)` : "";
+        return { ok: false, msg: `No hay filas válidas. ${msg}${extra}` };
+      }
+      return { ok: false, msg: "Cargá al menos 1 fila válida (Detalle + Cantidad + Precio)." };
     }
 
-    return { ok:true, warn:problems.length>0 };
-  },[idProveedor,provInput,forma,isContado,mediosFilas,mediosPagoList,rowsCalc,resumen.total,sumaMediosPago]);
+    return { ok: true, warn: problems.length > 0 };
+  }, [
+    idProveedor,
+    forma,
+    isContado,
+    mediosFilas,
+    mediosPagoList,
+    rowsCalc,
+    resumen.total,
+    sumaMediosPago,
+  ]);
 
   const subirYVincularArchivo = useCallback(async(idsMovimientos,archivo)=>{
     if(!archivo||!idsMovimientos?.length) return null;
@@ -415,82 +506,181 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     return () => { if (compUrl) URL.revokeObjectURL(compUrl); };
   }, [compUrl]);
 
-  const submit = useCallback(async()=>{
-    if(saving) return;
-    const { sessionKey }=getAuthInfo();
-    if(!sessionKey){ showToast("error","No hay sesión activa (Falta X-Session).",5200); return; }
-    if(addUI.open){ showToast("advertencia","Terminá de crear (o cancelá) antes de guardar.",3200); return; }
-    const v=validate();
-    if(!v.ok){ showToast("advertencia",v.msg||"Faltan datos.",4200); return; }
+  /* ============================================================
+     SUBMIT MEJORADA
+  ============================================================ */
+  const submit = useCallback(async () => {
+    if (saving) return;
+
+    const { sessionKey, token, idUsuario, idUsuarioMaster } = getAuthInfo();
+
+    if (!sessionKey && !token) {
+      showToast("error", "No hay sesión activa.", 5200);
+      return;
+    }
+
+    if (addUI.open) {
+      showToast("advertencia", "Terminá de crear (o cancelá) antes de guardar.", 3200);
+      return;
+    }
+
+    const v = validate();
+    if (!v.ok) {
+      showToast("advertencia", v.msg || "Faltan datos.", 4200);
+      return;
+    }
+
     setSaving(true);
-    if(v.warn) showToast("advertencia","Hay filas incompletas: se guardarán solo las válidas.",3600);
+
+    if (v.warn) {
+      showToast("advertencia", "Hay filas incompletas: se guardarán solo las válidas.", 3600);
+    }
 
     try {
-      const { idUsuario }=getAuthInfo();
-      const idTipoVenta=isCorriente?2:1;
-      const accionFinal=isCorriente?"guardar":"pagar";
-      const esPagadaFinal=!isCorriente;
-      const proveedorIdFinal=Number(idProveedor)>0?Number(idProveedor):null;
+      const idTipoVenta = isCorriente ? 2 : 1;
+      const accionFinal = isCorriente ? "guardar" : "pagar";
+      const esPagadaFinal = !isCorriente;
+      const proveedorIdFinal = Number(idProveedor) > 0 ? Number(idProveedor) : null;
 
       const mediosPagoPayload = isContado
-        ? mediosFilas.flatMap(mp=>{
-            const chequesSeleccionados=Array.isArray(mp.id_cheque)?mp.id_cheque:(mp.id_cheque?[String(mp.id_cheque)]:[]);
-            const mpRow=mediosPagoList.find(x=>String(getMedioPagoId(x)??"")===String(mp.id_medio_pago));
-            const tipoCheque=normalizeChequeTipoFromMedio(mpRow?.nombre||"");
-            if(tipoCheque!==null&&chequesSeleccionados.length>0){
-              return chequesSeleccionados.map(idChequeStr=>{
-                const ch=mp.chequesDisponibles.find(x=>String(x.id_cheque)===idChequeStr);
-                return { id_medio_pago:Number(mp.id_medio_pago), monto:Number(ch?.importe||0), id_cheque:Number(idChequeStr) };
+        ? mediosFilas.flatMap((mp) => {
+            const chequesSeleccionados = Array.isArray(mp.id_cheque)
+              ? mp.id_cheque
+              : mp.id_cheque
+              ? [String(mp.id_cheque)]
+              : [];
+
+            const mpRow = mediosPagoList.find(
+              (x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago)
+            );
+
+            const tipoCheque = normalizeChequeTipoFromMedio(mpRow?.nombre || "");
+
+            if (tipoCheque !== null && chequesSeleccionados.length > 0) {
+              return chequesSeleccionados.map((idChequeStr) => {
+                const ch = mp.chequesDisponibles?.find(
+                  (x) => String(x.id_cheque) === String(idChequeStr)
+                );
+
+                return {
+                  id_medio_pago: Number(mp.id_medio_pago),
+                  monto: Number(ch?.importe || 0),
+                  id_cheque: Number(idChequeStr),
+                };
               });
             }
-            return [{ id_medio_pago:Number(mp.id_medio_pago), monto:safeNumber(mp.monto) }];
+
+            return [
+              {
+                id_medio_pago: Number(mp.id_medio_pago),
+                monto: safeNumber(mp.monto),
+              },
+            ];
           })
         : [];
 
       const payloads = rowsCalc
-        .filter(r=>Number.isFinite(Number(r.id_detalle))&&Number(r.id_detalle)>0&&Number(r.total||0)>0)
-        .map(r=>({
-          idUsuario, fecha,
-          id_tipo_venta:idTipoVenta,
-          id_proveedor:proveedorIdFinal,
-          proveedor_nombre:String(provInput||"").trim()||null,
-          id_detalle:Number(r.id_detalle),
-          cantidad:Math.round(Number(r.cantidad)*100)/100,
-          precio:Math.round(Number(r.precio)*100)/100,
-          iva_pct:Math.round(Number(r.ivaPct)*100)/100,
-          subtotal:Math.round(Number(r.subtotal)*100)/100,
-          iva_monto:Math.round(Number(r.ivaMonto)*100)/100,
-          total:Math.round(Number(r.total)*100)/100,
-          monto_total:Math.round(Number(r.total)*100)/100,
-          accion_compra:accionFinal,
-          es_pagada:esPagadaFinal,
+        .filter(
+          (r) =>
+            Number.isFinite(Number(r.id_detalle)) &&
+            Number(r.id_detalle) > 0 &&
+            Number(r.total || 0) > 0
+        )
+        .map((r) => ({
+          idUsuario,
+          idUsuarioMaster,
+
+          fecha,
+          id_tipo_venta: idTipoVenta,
+          id_proveedor: proveedorIdFinal,
+          proveedor_nombre: String(provInput || "").trim() || null,
+
+          id_detalle: Number(r.id_detalle),
+          id_stock_producto: Number(r.id_detalle),
+
+          cantidad: Math.round(Number(r.cantidad) * 100) / 100,
+          precio: Math.round(Number(r.precio) * 100) / 100,
+          iva_pct: Math.round(Number(r.ivaPct) * 100) / 100,
+          subtotal: Math.round(Number(r.subtotal) * 100) / 100,
+          iva_monto: Math.round(Number(r.ivaMonto) * 100) / 100,
+          total: Math.round(Number(r.total) * 100) / 100,
+          monto_total: Math.round(Number(r.total) * 100) / 100,
+
+          accion_compra: accionFinal,
+          es_pagada: esPagadaFinal,
         }));
 
-      if(!payloads.length){ showToast("advertencia","No hay filas válidas para guardar.",4200); setSaving(false); return; }
-
-      const batchPayload = { items: payloads, medios_pago: mediosPagoPayload };
-      const data=await apiPostJson(API_BATCH, batchPayload);
-      if(!data?.exito) throw new Error(data?.mensaje||"No se pudo guardar el batch de compras.");
-
-      const idsCreados=Array.isArray(data?.ids)?data.ids.map(x=>Number(x)).filter(x=>Number.isFinite(x)&&x>0):[];
-
-      let warningArchivo="";
-      if(archivoAdjunto&&idsCreados.length>0){
-        try { const rFile=await subirYVincularArchivo(idsCreados,archivoAdjunto); if(!rFile?.exito) warningArchivo=rFile?.mensaje||"No se pudo vincular el archivo."; }
-        catch(e){ warningArchivo=e?.message||"No se pudo vincular el archivo."; }
+      if (!payloads.length) {
+        showToast("advertencia", "No hay filas válidas para guardar.", 4200);
+        setSaving(false);
+        return;
       }
 
-      if(warningArchivo) showToast("advertencia",`Compra guardada, pero el archivo no se pudo vincular: ${warningArchivo}`,7000);
-      else showToast("exito","Compra agregada correctamente.",3000);
+      const batchPayload = {
+        idUsuario,
+        idUsuarioMaster,
+        items: payloads,
+        medios_pago: mediosPagoPayload,
+      };
+
+      const data = await apiPostJson(API_BATCH, batchPayload);
+
+      if (!data?.exito) {
+        throw new Error(data?.mensaje || "No se pudo guardar el batch de compras.");
+      }
+
+      const idsCreados = Array.isArray(data?.ids)
+        ? data.ids.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0)
+        : [];
+
+      let warningArchivo = "";
+
+      if (archivoAdjunto && idsCreados.length > 0) {
+        try {
+          const rFile = await subirYVincularArchivo(idsCreados, archivoAdjunto);
+          if (!rFile?.exito) {
+            warningArchivo = rFile?.mensaje || "No se pudo vincular el archivo.";
+          }
+        } catch (e) {
+          warningArchivo = e?.message || "No se pudo vincular el archivo.";
+        }
+      }
+
+      if (warningArchivo) {
+        showToast(
+          "advertencia",
+          `Compra guardada, pero el archivo no se pudo vincular: ${warningArchivo}`,
+          7000
+        );
+      } else {
+        showToast("exito", "Compra agregada correctamente.", 3000);
+      }
 
       await Promise.resolve(onSaved?.(data));
       onClose?.();
-
-    } catch(e){
-      showToast("error",e?.message||"Error guardando.",4500);
+    } catch (e) {
+      showToast("error", e?.message || "Error guardando.", 4500);
       setSaving(false);
     }
-  },[saving,addUI.open,validate,showToast,isCorriente,isContado,rowsCalc,fecha,idProveedor,provInput,mediosFilas,mediosPagoList,API_BATCH,onSaved,onClose,archivoAdjunto,subirYVincularArchivo]);
+  }, [
+    saving,
+    addUI.open,
+    validate,
+    showToast,
+    isCorriente,
+    isContado,
+    rowsCalc,
+    fecha,
+    idProveedor,
+    provInput,
+    mediosFilas,
+    mediosPagoList,
+    API_BATCH,
+    onSaved,
+    onClose,
+    archivoAdjunto,
+    subirYVincularArchivo,
+  ]);
 
   if(!open) return null;
 
@@ -563,19 +753,19 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                         </div>
 
                         <div className="mi-cr-cell mi-cr-cell--center">
-<input
-  className="nv-cell-input nv-cell-input--right"
-  type="text"
-  value={formatMoneyInputARS(r.precio)}
-  readOnly
-  tabIndex={-1}
-  style={{
-    width: "100%",
-    pointerEvents: "none",
-    background: "transparent",
-    cursor: "default",
-  }}
-/>
+                          <input
+                            className="nv-cell-input nv-cell-input--right"
+                            type="text"
+                            value={formatMoneyInputARS(r.precio)}
+                            readOnly
+                            tabIndex={-1}
+                            style={{
+                              width: "100%",
+                              pointerEvents: "none",
+                              background: "transparent",
+                              cursor: "default",
+                            }}
+                          />
                         </div>
 
                         <div className="mi-cr-cell mi-cr-cell--center">
@@ -626,20 +816,20 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                   </div>
                   <div className="nc-section-body">
 
-                    
-                      {/* Fecha */}
-                      <div className="nc-field" onClick={handleOpenDate}>
-                        <input
-                          ref={fechaInputRef}
-                          className="nc-input"
-                          type="date"
-                          placeholder=" "
-                          value={fecha}
-                          onChange={(e)=>setFecha(String(e.target.value||"").trim())}
-                          disabled={saving}
-                        />
-                        <label className="nc-label" onClick={handleOpenDate}>Fecha</label>
-                      </div>
+                    {/* Fecha */}
+                    <div className="nc-field" onClick={handleOpenDate}>
+                      <input
+                        ref={fechaInputRef}
+                        className="nc-input"
+                        type="date"
+                        placeholder=" "
+                        value={fecha}
+                        onChange={(e)=>setFecha(String(e.target.value||"").trim())}
+                        disabled={saving}
+                      />
+                      <label className="nc-label" onClick={handleOpenDate}>Fecha</label>
+                    </div>
+
                     {/* Proveedor */}
                     <div className="nc-prov-wrap">
                       <GlobalAutocomplete
@@ -658,28 +848,26 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                       />
                     </div>
 
-                 
-                                          {/* Tipo compra */}
-                      <div>
-                        <div className="nc-pill-label">Tipo *</div>
-                        <div className="nc-pills">
-                          {/* [CAMBIO] onClick ahora llama a handleSeleccionarContado */}
-                          <button
-                            type="button"
-                            className={`nc-pill ${isContado?"nc-pill--active":""}`}
-                            onClick={handleSeleccionarContado}
-                            disabled={saving}
-                          >Contado</button>
-                          <button
-                            type="button"
-                            className={`nc-pill ${isCorriente?"nc-pill--active":""}`}
-                            onClick={()=>setForma("CUENTA_CORRIENTE")}
-                            disabled={saving}
-                          >Cuenta Corriente</button>
-                        </div>
+                    {/* Tipo compra */}
+                    <div>
+                      <div className="nc-pill-label">Tipo *</div>
+                      <div className="nc-pills">
+                        <button
+                          type="button"
+                          className={`nc-pill ${isContado?"nc-pill--active":""}`}
+                          onClick={handleSeleccionarContado}
+                          disabled={saving}
+                        >Contado</button>
+                        <button
+                          type="button"
+                          className={`nc-pill ${isCorriente?"nc-pill--active":""}`}
+                          onClick={()=>setForma("CUENTA_CORRIENTE")}
+                          disabled={saving}
+                        >Cuenta Corriente</button>
                       </div>
+                    </div>
 
-                    {/* [NUEVO] Resumen de pago configurado — aparece solo si es Contado y hay medios */}
+                    {/* Resumen de pago configurado — aparece solo si es Contado y hay medios */}
                     {isContado && (
                       <>
                         <PagoResumenPanel
@@ -702,8 +890,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                         )}
                       </>
                     )}
-
-
 
                   </div>
                 </div>
@@ -807,7 +993,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
         </div>
       </div>
 
-      {/* [NUEVO] Mini-modal de medios de pago */}
+      {/* Mini-modal de medios de pago */}
       <ModalMediosPago
         open={mpModalOpen}
         mediosPagoList={mediosPagoList}

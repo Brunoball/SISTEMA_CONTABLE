@@ -371,10 +371,17 @@ export default function ModalEditarIngreso({
   }, []);
 
   const eliminarComprobanteExistente = useCallback(async (idMovimiento) => {
+    const { idUsuario } = getAuthInfo();
+    const idUsuarioMaster = idUsuario;
+    
     const res = await fetch(`${API}?action=otros_ingresos_comprobantes_eliminar`, {
       method: "POST",
       headers: buildHeadersJSON(),
-      body: JSON.stringify({ id_movimiento: idMovimiento }),
+      body: JSON.stringify({ 
+        id_movimiento: idMovimiento,
+        idUsuario,
+        idUsuarioMaster,
+      }),
     });
     const data = await parseJsonOrThrow(res);
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar el comprobante.");
@@ -382,9 +389,15 @@ export default function ModalEditarIngreso({
   }, [API]);
 
   const subirComprobanteNuevo = useCallback(async (idMovimiento, archivo) => {
+    const { idUsuario } = getAuthInfo();
+    const idUsuarioMaster = idUsuario;
+    
     const fd = new FormData();
     fd.append("id_movimiento", String(idMovimiento));
     fd.append("archivo", archivo);
+    fd.append("idUsuario", String(idUsuario || 0));
+    fd.append("idUsuarioMaster", String(idUsuarioMaster || 0));
+    
     const res = await fetch(
       `${API}?action=otros_ingresos_comprobantes_vincular_movimiento_upload`,
       { method: "POST", headers: buildHeadersFormData(), body: fd }
@@ -542,123 +555,121 @@ export default function ModalEditarIngreso({
                         </div>
 
                         {/* Grid inputs: Detalle | Cantidad | Precio | IVA% | Monto total */}
-{/* Fila 1: Detalle | Cantidad | Precio */}
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "1.6fr 0.8fr 1fr",
-    gap: 12,
-  }}
->
-  <div className="fl-field">
-    <select
-      className="fl-input fl-select"
-      value={String(it.id_detalle || "")}
-      onChange={(e) => updateItem(it.uid, { id_detalle: e.target.value })}
-      disabled={saving}
-    >
-      <option value="">-- Seleccionar --</option>
-      {detalles.map((d) => (
-        <option key={d.id} value={String(d.id)}>
-          {d.nombre}
-        </option>
-      ))}
-    </select>
-    <label className="fl-label">Detalle</label>
-  </div>
+                        {/* Fila 1: Detalle | Cantidad | Precio */}
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1.6fr 0.8fr 1fr",
+                            gap: 12,
+                          }}
+                        >
+                          <div className="fl-field">
+                            <select
+                              className="fl-input fl-select"
+                              value={String(it.id_detalle || "")}
+                              onChange={(e) => updateItem(it.uid, { id_detalle: e.target.value })}
+                              disabled={saving}
+                            >
+                              <option value="">-- Seleccionar --</option>
+                              {detalles.map((d) => (
+                                <option key={d.id} value={String(d.id)}>
+                                  {d.nombre}
+                                </option>
+                              ))}
+                            </select>
+                            <label className="fl-label">Detalle</label>
+                          </div>
 
-  <div className="fl-field">
-    <input
-      className="fl-input"
-      type="number"
-      min="0"
-      step="0.001"
-      value={it.cantidad}
-      onChange={(e) => updateItem(it.uid, { cantidad: e.target.value })}
-      disabled={saving}
-    />
-    <label className="fl-label">Cantidad</label>
-  </div>
+                          <div className="fl-field">
+                            <input
+                              className="fl-input"
+                              type="number"
+                              min="0"
+                              step="0.001"
+                              value={it.cantidad}
+                              onChange={(e) => updateItem(it.uid, { cantidad: e.target.value })}
+                              disabled={saving}
+                            />
+                            <label className="fl-label">Cantidad</label>
+                          </div>
 
-  <div className="fl-field">
-    <input
-      className="fl-input"
-      type="number"
-      min="0"
-      step="0.01"
-      value={it.precio}
-      onChange={(e) => updateItem(it.uid, { precio: e.target.value })}
-      disabled={saving}
-    />
-    <label className="fl-label">Precio</label>
-  </div>
-</div>
+                          <div className="fl-field">
+                            <input
+                              className="fl-input"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={it.precio}
+                              onChange={(e) => updateItem(it.uid, { precio: e.target.value })}
+                              disabled={saving}
+                            />
+                            <label className="fl-label">Precio</label>
+                          </div>
+                        </div>
 
-{/* Fila 2: IVA % | Monto total */}
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "0.8fr 1fr",
-    gap: 12,
-    marginTop: 12,
-  }}
->
-  <div className="fl-field">
-    <select
-      className="fl-input fl-select"
-      value={String(it.iva_pct)}
-      onChange={(e) => updateItem(it.uid, { iva_pct: e.target.value })}
-      disabled={saving}
-    >
-      {IVA_OPTIONS.map((x) => (
-        <option key={x.value} value={x.value}>
-          {x.label}
-        </option>
-      ))}
-    </select>
-    <label className="fl-label">IVA %</label>
-  </div>
+                        {/* Fila 2: IVA % | Monto total */}
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "0.8fr 1fr",
+                            gap: 12,
+                            marginTop: 12,
+                          }}
+                        >
+                          <div className="fl-field">
+                            <select
+                              className="fl-input fl-select"
+                              value={String(it.iva_pct)}
+                              onChange={(e) => updateItem(it.uid, { iva_pct: e.target.value })}
+                              disabled={saving}
+                            >
+                              {IVA_OPTIONS.map((x) => (
+                                <option key={x.value} value={x.value}>
+                                  {x.label}
+                                </option>
+                              ))}
+                            </select>
+                            <label className="fl-label">IVA %</label>
+                          </div>
 
-  <div className="fl-field">
-    <input
-      className="fl-input"
-      type="number"
-      min="0"
-      step="0.01"
-      value={it.total}
-      onChange={(e) => handleMontoItemManual(it.uid, e.target.value)}
-      disabled={saving}
-    />
-    <label className="fl-label">Monto total</label>
-  </div>
-</div>
+                          <div className="fl-field">
+                            <input
+                              className="fl-input"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={it.total}
+                              onChange={(e) => handleMontoItemManual(it.uid, e.target.value)}
+                              disabled={saving}
+                            />
+                            <label className="fl-label">Monto total</label>
+                          </div>
+                        </div>
 
-{/* Fila 3: Subtotal | IVA $ | Total final */}
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr",
-    gap: 12,
-    marginTop: 12,
-  }}
->
-  <div className="fl-field">
-    <input className="fl-input" value={it.subtotal} disabled />
-    <label className="fl-label">Subtotal</label>
-  </div>
+                        {/* Fila 3: Subtotal | IVA $ | Total final */}
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr 1fr",
+                            gap: 12,
+                            marginTop: 12,
+                          }}
+                        >
+                          <div className="fl-field">
+                            <input className="fl-input" value={it.subtotal} disabled />
+                            <label className="fl-label">Subtotal</label>
+                          </div>
 
-  <div className="fl-field">
-    <input className="fl-input" value={it.iva_monto} disabled />
-    <label className="fl-label">IVA $</label>
-  </div>
+                          <div className="fl-field">
+                            <input className="fl-input" value={it.iva_monto} disabled />
+                            <label className="fl-label">IVA $</label>
+                          </div>
 
-  <div className="fl-field">
-    <input className="fl-input" value={it.total} disabled />
-    <label className="fl-label">Total final</label>
-  </div>
-</div>
-
-
+                          <div className="fl-field">
+                            <input className="fl-input" value={it.total} disabled />
+                            <label className="fl-label">Total final</label>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>

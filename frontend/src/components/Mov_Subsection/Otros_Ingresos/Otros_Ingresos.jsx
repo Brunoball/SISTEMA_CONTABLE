@@ -848,16 +848,20 @@ export default function OtrosIngresos() {
     [handleExport]
   );
 
+  // ==================== CAMBIOS REALIZADOS AQUÍ ====================
+  // Se agregó idUsuarioMaster en los payloads de creación/actualización y eliminación
   const apiPostSave = useCallback(
     async (payload, isEdit) => {
       setError("");
       const { idUsuario } = getAuthInfo();
+      const idUsuarioMaster = idUsuario; // Para compatibilidad con el resolver de auditoría
       const action = isEdit ? "otros_ingresos_actualizar" : "otros_ingresos_crear";
 
       try {
         const data = await apiPostJson(`${API}?action=${action}`, {
           ...(payload || {}),
           idUsuario,
+          idUsuarioMaster, // <-- AGREGADO
         });
 
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
@@ -894,6 +898,8 @@ export default function OtrosIngresos() {
     setOpenDelete(true);
   }, []);
 
+  // ==================== CAMBIOS REALIZADOS AQUÍ ====================
+  // Se agregó idUsuarioMaster en el payload de eliminación
   const handleConfirmDelete = useCallback(async () => {
     if (!rowToDelete?.id_movimiento) {
       throw new Error("No se encontró el movimiento a eliminar.");
@@ -905,11 +911,15 @@ export default function OtrosIngresos() {
 
     try {
       const { idUsuario } = getAuthInfo();
+      const idUsuarioMaster = idUsuario; // Para compatibilidad con el resolver de auditoría
       const sp = new URLSearchParams();
       sp.set("action", "otros_ingresos_eliminar");
       sp.set("id_movimiento", String(id));
 
-      const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
+      const data = await apiPostJson(`${API}?${sp.toString()}`, {
+        idUsuario,
+        idUsuarioMaster, // <-- AGREGADO
+      });
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
 
       if (selectedRow?.id_movimiento === id) {
@@ -1230,7 +1240,6 @@ export default function OtrosIngresos() {
                         <button
                           type="button"
                           className="cc-clearSearch cc-clearSearch--inside"
-                          
                           title="Limpiar búsqueda"
                           onClick={async () => {
                             if (searchTimerRef.current) clearTimeout(searchTimerRef.current);

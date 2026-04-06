@@ -286,7 +286,7 @@ export default function ModalEditarProducto({
 
         const normalizadas = raw.map((cat) => ({
           id: String(cat.id_stock_categoria ?? cat.id ?? "").trim(),
-          nombre: String(cat.nombre ?? cat.label ?? "").trim(),
+          nombre: String(cat.nombre ?? cat.label ?? "").trim().toUpperCase(), // Mayúsculas
           activo:
             cat.activo === undefined || cat.activo === null
               ? 1
@@ -500,6 +500,15 @@ export default function ModalEditarProducto({
         ...prev,
         [name]: value.replace(/[^\d]/g, ""),
       }));
+    } else if (name === "nombre") {
+      // Transformar a mayúsculas
+      setForm((prev) => ({ ...prev, [name]: value.toUpperCase() }));
+    } else if (name === "sku") {
+      // Transformar a mayúsculas
+      setForm((prev) => ({ ...prev, [name]: value.toUpperCase() }));
+    } else if (name === "descripcion") {
+      // Transformar a mayúsculas
+      setForm((prev) => ({ ...prev, [name]: value.toUpperCase() }));
     } else {
       setForm((prev) => ({ ...prev, [name]: value }));
     }
@@ -644,8 +653,8 @@ export default function ModalEditarProducto({
       if (nuevaImagenFile) {
         const fd = new FormData();
         fd.append("id", String(Number(form.id || productoId)));
-        fd.append("nombre", form.nombre.trim());
-        fd.append("sku", form.sku.trim());
+        fd.append("nombre", form.nombre.trim().toUpperCase());
+        fd.append("sku", form.sku.trim().toUpperCase());
         fd.append("precio", String(moneyToApi(form.precio) ?? ""));
         fd.append(
           "precio_promo",
@@ -654,7 +663,7 @@ export default function ModalEditarProducto({
             : ""
         );
         fd.append("stock", form.stock !== "" ? String(form.stock) : "");
-        fd.append("descripcion", form.descripcion.trim());
+        fd.append("descripcion", form.descripcion.trim().toUpperCase());
 
         if (categoriaId !== "") {
           fd.append("id_categoria_stock", categoriaId);
@@ -672,13 +681,13 @@ export default function ModalEditarProducto({
       } else {
         const body = {
           id: Number(form.id || productoId),
-          nombre: form.nombre.trim(),
-          sku: form.sku.trim() || null,
+          nombre: form.nombre.trim().toUpperCase(),
+          sku: form.sku.trim().toUpperCase() || null,
           precio: moneyToApi(form.precio),
           precio_promo:
             form.precio_promo !== "" ? moneyToApi(form.precio_promo) : null,
           stock: form.stock !== "" ? Number(form.stock) : null,
-          descripcion: form.descripcion.trim() || null,
+          descripcion: form.descripcion.trim().toUpperCase() || null,
           id_categoria_stock: categoriaId !== "" ? Number(categoriaId) : null,
         };
 
@@ -790,8 +799,9 @@ export default function ModalEditarProducto({
                     value={form.nombre}
                     onChange={handleChange}
                     className="cmi-input"
-                    placeholder="Ej: Auriculares Bluetooth Samsung WH-1000"
+                    placeholder="Ej: AURICULARES BLUETOOTH SAMSUNG WH-1000"
                     disabled={guardando}
+                    style={{ textTransform: "uppercase" }}
                   />
                 </FloatingField>
 
@@ -804,6 +814,7 @@ export default function ModalEditarProducto({
                       className="cmi-input"
                       placeholder="Ej: 04163"
                       disabled={guardando}
+                      style={{ textTransform: "uppercase" }}
                     />
                   </FloatingField>
 
@@ -884,9 +895,10 @@ export default function ModalEditarProducto({
                     value={form.descripcion}
                     onChange={handleChange}
                     className="cmi-input cmi-textarea"
-                    placeholder="Breve descripción del producto (opcional)"
+                    placeholder="BREVE DESCRIPCIÓN DEL PRODUCTO (OPCIONAL)"
                     rows={3}
                     disabled={guardando}
+                    style={{ textTransform: "uppercase" }}
                   />
                 </FloatingField>
 
@@ -950,8 +962,6 @@ export default function ModalEditarProducto({
                           </button>
                         </div>
                       </div>
-
-
                     </div>
                   )}
 
@@ -1025,8 +1035,6 @@ export default function ModalEditarProducto({
                           </button>
                         </div>
                       </div>
-
-
                     </div>
                   )}
 

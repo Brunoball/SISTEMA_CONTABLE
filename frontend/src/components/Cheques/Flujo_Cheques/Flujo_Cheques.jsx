@@ -159,7 +159,7 @@ const EVENTO_CONFIG = {
     chipClass: "mov-chip--neutral",
   },
   ANULACION: {
-    label: "Anulado",
+    label: "Egreso de la cartera",
     icon: faBan,
     chipClass: "mov-chip--danger",
   },

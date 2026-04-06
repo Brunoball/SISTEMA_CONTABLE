@@ -331,6 +331,7 @@ function describeLineProblem(r, idx1based) {
   return `Fila ${idx1based}: ${issues.join(", ")}.`;
 }
 
+// MODIFICADA: Ahora también obtiene idUsuario e idUsuarioMaster
 function getAuthInfo() {
   const sessionKey =
     localStorage.getItem("session_key") ||
@@ -341,7 +342,15 @@ function getAuthInfo() {
 
   const token = localStorage.getItem("token") || "";
 
-  return { sessionKey, token };
+  let idUsuario = 0;
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const cand =
+      u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
+  } catch {}
+
+  return { sessionKey, token, idUsuario, idUsuarioMaster: idUsuario };
 }
 
 function buildAuthHeaders(isJson = true) {
@@ -569,9 +578,10 @@ export default function ModalNuevoIngreso({
     setOpenNuevaDescripcionModal(true);
   }, []);
 
+  // MODIFICADA: Ahora envía idUsuario e idUsuarioMaster al crear descripción
   const handleGuardarNuevaDescripcion = useCallback(async (nombreDescripcion) => {
     try {
-      const { sessionKey, token } = getAuthInfo();
+      const { sessionKey, token, idUsuario, idUsuarioMaster } = getAuthInfo();
       const headers = {
         "Content-Type": "application/json",
       };
@@ -581,7 +591,11 @@ export default function ModalNuevoIngreso({
       const response = await fetch(API_DETALLES_CREAR, {
         method: "POST",
         headers,
-        body: JSON.stringify({ nombre: nombreDescripcion }),
+        body: JSON.stringify({ 
+          nombre: nombreDescripcion,
+          idUsuario,
+          idUsuarioMaster,
+        }),
       });
 
       const data = await parseJsonOrThrow(response);
@@ -737,6 +751,7 @@ export default function ModalNuevoIngreso({
     [savingCheque, showToast]
   );
 
+  // MODIFICADA: Ahora envía idUsuario e idUsuarioMaster al guardar cheque
   const guardarChequeEnBackend = useCallback(
     async (idMovimiento, datosCheque) => {
       if (!datosCheque) return null;
@@ -751,6 +766,10 @@ export default function ModalNuevoIngreso({
       fd.append("fecha_pago", datosCheque.fecha_pago || todayISO());
       fd.append("observaciones", datosCheque.observaciones || "");
 
+      const { token, sessionKey, idUsuario, idUsuarioMaster } = getAuthInfo();
+      fd.append("idUsuario", String(idUsuario || 0));
+      fd.append("idUsuarioMaster", String(idUsuarioMaster || 0));
+
       if (datosCheque.archivo instanceof File) {
         fd.append(
           "archivo",
@@ -759,7 +778,6 @@ export default function ModalNuevoIngreso({
         );
       }
 
-      const { token, sessionKey } = getAuthInfo();
       const headers = {};
       if (sessionKey) headers["X-Session"] = sessionKey;
       else if (token) headers.Authorization = `Bearer ${token}`;

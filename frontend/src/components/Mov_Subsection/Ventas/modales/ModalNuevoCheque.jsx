@@ -53,6 +53,26 @@ function onlyTextUpper(value) {
     .toUpperCase();
 }
 
+function getSafeId(...values) {
+  for (const v of values) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+function isValidISODate(v) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(v || "").trim());
+}
+
+function isAllowedFile(file) {
+  if (!file) return true;
+
+  const name = String(file.name || "").toLowerCase();
+  const allowedExt = [".pdf", ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"];
+  return allowedExt.some((ext) => name.endsWith(ext));
+}
+
 export default function ModalNuevoCheque({
   open,
   onClose,
@@ -74,9 +94,12 @@ export default function ModalNuevoCheque({
 
   const [archivo, setArchivo] = useState(null);
   const [archivoNombre, setArchivoNombre] = useState("");
+  const [errorLocal, setErrorLocal] = useState("");
 
   useEffect(() => {
     if (!open) return;
+
+    setErrorLocal("");
 
     setForm({
       fecha_emision: initialData?.fecha_emision || todayISO(),
@@ -96,6 +119,10 @@ export default function ModalNuevoCheque({
         initialData?.archivoName ||
         ""
     );
+
+    if (fileRef.current) {
+      fileRef.current.value = "";
+    }
   }, [open, initialData]);
 
   useEffect(() => {
@@ -110,6 +137,100 @@ export default function ModalNuevoCheque({
   const titulo = useMemo(() => {
     return tipoCheque === "echeq" ? "Nuevo Echeq" : "Nuevo Cheque";
   }, [tipoCheque]);
+
+  const idsTecnicos = useMemo(() => {
+    return {
+      id_cheque: getSafeId(
+        initialData?.id_cheque,
+        initialData?.idCheque
+      ),
+      id_movimiento: getSafeId(
+        initialData?.id_movimiento,
+        initialData?.movimiento_id,
+        initialData?.idMovimiento
+      ),
+      id_comprobante: getSafeId(
+        initialData?.id_comprobante,
+        initialData?.comprobante_id,
+        initialData?.idComprobante
+      ),
+    };
+  }, [initialData]);
+
+  const validarAntesDeGuardar = () => {
+    const fechaEmision = String(form.fecha_emision || "").trim();
+    const emisor = String(form.emisor || "").trim();
+    const numeroCheque = onlyNumbers(form.numero_cheque);
+    const importe = parseMoney(form.importe);
+    const fechaPago = String(form.fecha_pago || "").trim();
+
+    if (!isValidISODate(fechaEmision)) {
+      return "La fecha de emisión es obligatoria.";
+    }
+
+    if (!emisor) {
+      return "El emisor es obligatorio.";
+    }
+
+    if (!numeroCheque) {
+      return tipoCheque === "echeq"
+        ? "El número de echeq es obligatorio."
+        : "El número de cheque es obligatorio.";
+    }
+
+    if (!(importe > 0)) {
+      return "El importe debe ser mayor a 0.";
+    }
+
+    if (!isValidISODate(fechaPago)) {
+      return "La fecha de pago es obligatoria.";
+    }
+
+    if (archivo && !isAllowedFile(archivo)) {
+      return "El archivo seleccionado no tiene un formato permitido.";
+    }
+
+    return "";
+  };
+
+  const handleGuardar = () => {
+    const err = validarAntesDeGuardar();
+    if (err) {
+      setErrorLocal(err);
+      return;
+    }
+
+    setErrorLocal("");
+
+    const payload = {
+      id_cheque: idsTecnicos.id_cheque ?? undefined,
+      id_movimiento: idsTecnicos.id_movimiento ?? undefined,
+      id_comprobante: idsTecnicos.id_comprobante ?? undefined,
+
+      tipo: tipoCheque === "echeq" ? "echeq" : "cheque",
+      tipo_cheque: tipoCheque === "echeq" ? "echeq" : "cheque",
+
+      fecha_emision: String(form.fecha_emision || "").trim(),
+      emisor: String(form.emisor || "").trim().toUpperCase(),
+      numero_cheque: onlyNumbers(form.numero_cheque),
+      importe: parseMoney(form.importe),
+      fecha_pago: String(form.fecha_pago || "").trim(),
+
+      archivo,
+      archivo_nombre: archivoNombre,
+
+      archivo_actual_nombre:
+        initialData?.archivo_nombre ||
+        initialData?.archivoName ||
+        "",
+      archivo_actual_url:
+        initialData?.archivo_url ||
+        initialData?.comprobante_url ||
+        "",
+    };
+
+    onSave?.(payload);
+  };
 
   if (!open) return null;
 
@@ -137,6 +258,23 @@ export default function ModalNuevoCheque({
         </div>
 
         <div className="mi-mini__body">
+          {errorLocal && (
+            <div
+              style={{
+                marginBottom: 12,
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: "1px solid rgba(239,68,68,.35)",
+                background: "rgba(239,68,68,.10)",
+                color: "#b91c1c",
+                fontSize: 14,
+                fontWeight: 600,
+              }}
+            >
+              {errorLocal}
+            </div>
+          )}
+
           <div
             style={{
               display: "grid",
@@ -150,9 +288,10 @@ export default function ModalNuevoCheque({
                 type="date"
                 placeholder=" "
                 value={form.fecha_emision}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, fecha_emision: e.target.value }))
-                }
+                onChange={(e) => {
+                  setErrorLocal("");
+                  setForm((p) => ({ ...p, fecha_emision: e.target.value }));
+                }}
                 disabled={saving}
               />
               <label className="fl-label">Fecha de emisión *</label>
@@ -163,12 +302,13 @@ export default function ModalNuevoCheque({
                 className="fl-input"
                 placeholder=" "
                 value={form.emisor}
-                onChange={(e) =>
+                onChange={(e) => {
+                  setErrorLocal("");
                   setForm((p) => ({
                     ...p,
                     emisor: onlyTextUpper(e.target.value),
-                  }))
-                }
+                  }));
+                }}
                 onKeyDown={(e) => {
                   const permitidas = [
                     "Backspace",
@@ -200,12 +340,13 @@ export default function ModalNuevoCheque({
                 className="fl-input"
                 placeholder=" "
                 value={form.numero_cheque}
-                onChange={(e) =>
+                onChange={(e) => {
+                  setErrorLocal("");
                   setForm((p) => ({
                     ...p,
                     numero_cheque: onlyNumbers(e.target.value),
-                  }))
-                }
+                  }));
+                }}
                 onKeyDown={(e) => {
                   const permitidas = [
                     "Backspace",
@@ -236,12 +377,13 @@ export default function ModalNuevoCheque({
                 className="fl-input"
                 placeholder=" "
                 value={form.importe}
-                onChange={(e) =>
+                onChange={(e) => {
+                  setErrorLocal("");
                   setForm((p) => ({
                     ...p,
                     importe: onlyMoney(e.target.value),
-                  }))
-                }
+                  }));
+                }}
                 onKeyDown={(e) => {
                   const permitidas = [
                     "Backspace",
@@ -271,9 +413,10 @@ export default function ModalNuevoCheque({
                 type="date"
                 placeholder=" "
                 value={form.fecha_pago}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, fecha_pago: e.target.value }))
-                }
+                onChange={(e) => {
+                  setErrorLocal("");
+                  setForm((p) => ({ ...p, fecha_pago: e.target.value }));
+                }}
                 disabled={saving}
               />
               <label className="fl-label">Fecha de pago *</label>
@@ -288,6 +431,16 @@ export default function ModalNuevoCheque({
                 disabled={saving}
                 onChange={(e) => {
                   const f = e.target.files?.[0] || null;
+
+                  if (f && !isAllowedFile(f)) {
+                    setErrorLocal("El archivo seleccionado no tiene un formato permitido.");
+                    setArchivo(null);
+                    setArchivoNombre("");
+                    if (fileRef.current) fileRef.current.value = "";
+                    return;
+                  }
+
+                  setErrorLocal("");
                   setArchivo(f);
                   setArchivoNombre(f?.name || "");
                 }}
@@ -338,6 +491,7 @@ export default function ModalNuevoCheque({
                       type="button"
                       className="mit-btn mit-btn--ghost"
                       onClick={() => {
+                        setErrorLocal("");
                         setArchivo(null);
                         setArchivoNombre("");
                         if (fileRef.current) fileRef.current.value = "";
@@ -366,18 +520,7 @@ export default function ModalNuevoCheque({
               type="button"
               className="mit-btn mit-btn--solid"
               disabled={saving}
-              onClick={() => {
-                onSave?.({
-                  tipo_cheque: tipoCheque === "echeq" ? "echeq" : "cheque",
-                  fecha_emision: form.fecha_emision,
-                  emisor: String(form.emisor || "").trim().toUpperCase(),
-                  numero_cheque: onlyNumbers(form.numero_cheque),
-                  importe: parseMoney(form.importe),
-                  fecha_pago: form.fecha_pago,
-                  archivo,
-                  archivo_nombre: archivoNombre,
-                });
-              }}
+              onClick={handleGuardar}
             >
               {saving ? "Guardando..." : "Guardar cheque"}
             </button>

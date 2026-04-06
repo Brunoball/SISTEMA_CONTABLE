@@ -43,6 +43,39 @@ const SKELETON_ROWS = 10;
 const PAGE_LIMIT_API = PAGE_SIZE + 1;
 
 /* =========================
+   Auth Helper MEJORADO
+========================= */
+function getAuthInfo() {
+  const token = (localStorage.getItem("token") || "").trim();
+  const sessionKey = (
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    localStorage.getItem("x_session") ||
+    ""
+  ).trim();
+
+  let idUsuario = 0;
+  let idUsuarioMaster = 0;
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    // Prioridad: idUsuarioMaster > idUsuario > id_usuario > id > user_id
+    const candMaster = u?.idUsuarioMaster ?? 0;
+    const candNormal = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    
+    if (Number.isFinite(Number(candMaster)) && Number(candMaster) > 0) {
+      idUsuarioMaster = Number(candMaster);
+      idUsuario = Number(candMaster); // Para compatibilidad, usamos el mismo
+    } else if (Number.isFinite(Number(candNormal)) && Number(candNormal) > 0) {
+      idUsuario = Number(candNormal);
+      idUsuarioMaster = Number(candNormal);
+    }
+  } catch {}
+
+  return { token, sessionKey, idUsuario, idUsuarioMaster };
+}
+
+/* =========================
    Helpers generales
 ========================= */
 function moneyARS(v) {
@@ -160,87 +193,6 @@ function rowInDateRange(row, from, to) {
   return true;
 }
 
-/* =========================
-   Auth
-========================= */
-function getAuthInfo() {
-  const token = (localStorage.getItem("token") || "").trim();
-  const sessionKey = (
-    localStorage.getItem("session_key") ||
-    localStorage.getItem("sessionKey") ||
-    localStorage.getItem("X-Session") ||
-    localStorage.getItem("x_session") ||
-    ""
-  ).trim();
-
-  let idUsuario = 0;
-  try {
-    const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand =
-      u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
-    if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
-  } catch {}
-
-  return { token, sessionKey, idUsuario };
-}
-
-function withSessionKey(url) {
-  const base = String(url ?? "").trim();
-  if (!base) return "";
-
-  try {
-    const { sessionKey, token } = getAuthInfo();
-    const u = new URL(base, window.location.origin);
-
-    if (sessionKey && !u.searchParams.has("session_key")) {
-      u.searchParams.set("session_key", sessionKey);
-    }
-
-    if (token && !u.searchParams.has("token")) {
-      u.searchParams.set("token", token);
-    }
-
-    return u.toString();
-  } catch {
-    return base;
-  }
-}
-
-function ensureResourceHint(url, rel = "prefetch", as = "document") {
-  const href = String(url ?? "").trim();
-  if (!href) return;
-
-  const key = `hint:${rel}:${as}:${href}`;
-  const selectorKey =
-    typeof CSS !== "undefined" && CSS.escape ? CSS.escape(key) : key.replace(/"/g, '\\"');
-
-  if (document.head.querySelector(`link[data-key="${selectorKey}"]`)) return;
-
-  const link = document.createElement("link");
-  link.rel = rel;
-  if (as) link.as = as;
-  link.href = href;
-  link.setAttribute("data-key", key);
-  document.head.appendChild(link);
-}
-
-function prewarmComprobanteUrl(url, mime = "") {
-  const finalUrl = withSessionKey(url);
-  if (!finalUrl) return;
-
-  const mm = String(mime ?? "").toLowerCase();
-  const ll = finalUrl.toLowerCase();
-  const isPdf =
-    mm.includes("pdf") ||
-    ll.includes(".pdf") ||
-    ll.includes("compras_comprobantes_descargar");
-
-  if (isPdf) {
-    ensureResourceHint(finalUrl, "prefetch", "document");
-  } else {
-    ensureResourceHint(finalUrl, "prefetch", "image");
-  }
-}
 /* =========================
    Helpers de compras
 ========================= */
@@ -426,6 +378,64 @@ function downloadBlob(content, fileName, mimeType) {
   window.URL.revokeObjectURL(url);
 }
 
+function withSessionKey(url) {
+  const base = String(url ?? "").trim();
+  if (!base) return "";
+
+  try {
+    const { sessionKey, token } = getAuthInfo();
+    const u = new URL(base, window.location.origin);
+
+    if (sessionKey && !u.searchParams.has("session_key")) {
+      u.searchParams.set("session_key", sessionKey);
+    }
+
+    if (token && !u.searchParams.has("token")) {
+      u.searchParams.set("token", token);
+    }
+
+    return u.toString();
+  } catch {
+    return base;
+  }
+}
+
+function ensureResourceHint(url, rel = "prefetch", as = "document") {
+  const href = String(url ?? "").trim();
+  if (!href) return;
+
+  const key = `hint:${rel}:${as}:${href}`;
+  const selectorKey =
+    typeof CSS !== "undefined" && CSS.escape ? CSS.escape(key) : key.replace(/"/g, '\\"');
+
+  if (document.head.querySelector(`link[data-key="${selectorKey}"]`)) return;
+
+  const link = document.createElement("link");
+  link.rel = rel;
+  if (as) link.as = as;
+  link.href = href;
+  link.setAttribute("data-key", key);
+  document.head.appendChild(link);
+}
+
+function prewarmComprobanteUrl(url, mime = "") {
+  const finalUrl = withSessionKey(url);
+  if (!finalUrl) return;
+
+  const mm = String(mime ?? "").toLowerCase();
+  const ll = finalUrl.toLowerCase();
+  const isPdf =
+    mm.includes("pdf") ||
+    ll.includes(".pdf") ||
+    ll.includes("compras_comprobantes_descargar");
+
+  if (isPdf) {
+    ensureResourceHint(finalUrl, "prefetch", "document");
+  } else {
+    ensureResourceHint(finalUrl, "prefetch", "image");
+  }
+}
+
 /* =========================
    COMPONENTE
 ========================= */
@@ -498,11 +508,14 @@ export default function Compras() {
     };
   }, []);
 
+  /* =========================
+     Headers con autenticación mejorada
+  ========================= */
   const buildHeaders = useCallback(() => {
     const { token, sessionKey } = getAuthInfo();
     const h = { "Content-Type": "application/json" };
     if (sessionKey) h["X-Session"] = sessionKey;
-    if (token) h.Authorization = `Bearer ${token}`;
+    if (token) h["Authorization"] = `Bearer ${token}`;
     return h;
   }, []);
 
@@ -510,7 +523,7 @@ export default function Compras() {
     const { token, sessionKey } = getAuthInfo();
     const h = {};
     if (sessionKey) h["X-Session"] = sessionKey;
-    if (token) h.Authorization = `Bearer ${token}`;
+    if (token) h["Authorization"] = `Bearer ${token}`;
     return h;
   }, []);
 
@@ -551,13 +564,23 @@ export default function Compras() {
     } catch {}
   }, [refreshLists]);
 
+  /* =========================
+     Editar compra con idUsuarioMaster
+  ========================= */
   const editarCompraEnBackend = useCallback(
     async (payloadFinal) => {
-      const { idUsuario } = getAuthInfo();
+      const { idUsuario, idUsuarioMaster } = getAuthInfo();
       const id = payloadFinal?.id_movimiento ?? payloadFinal?.id ?? getRowId(selectedRow);
       if (!id) throw new Error("No encuentro id_movimiento para editar.");
 
-      const body = { ...payloadFinal, id_movimiento: Number(id), idUsuario };
+      // Aseguramos enviar ambos IDs para máxima compatibilidad
+      const body = { 
+        ...payloadFinal, 
+        id_movimiento: Number(id), 
+        idUsuario,
+        idUsuarioMaster: idUsuarioMaster || idUsuario // Fallback a idUsuario si no hay master
+      };
+      
       const candidates = ["compras_editar", "compras_actualizar", "movimientos_editar"];
 
       let lastErr = null;
@@ -578,6 +601,9 @@ export default function Compras() {
     [API, apiPostJson, selectedRow]
   );
 
+  /* =========================
+     Carga de filas (GET) 
+  ========================= */
   const loadRows = useCallback(
     async (opts = {}) => {
       const range = opts.dateRange ?? dateRange;
@@ -1049,17 +1075,18 @@ export default function Compras() {
     [buildComprobanteFastUrl]
   );
 
-const openComprobanteModal = useCallback(
-  (r) => {
-    const fastUrl = buildComprobanteFastUrl(r);
-    if (!fastUrl) return;
+  const openComprobanteModal = useCallback(
+    (r) => {
+      const fastUrl = buildComprobanteFastUrl(r);
+      if (!fastUrl) return;
 
-    setCompUrl(fastUrl);
-    setCompMime(getComprobanteMime(r));
-    setOpenVerComp(true);
-  },
-  [buildComprobanteFastUrl]
-);
+      setCompUrl(fastUrl);
+      setCompMime(getComprobanteMime(r));
+      setOpenVerComp(true);
+    },
+    [buildComprobanteFastUrl]
+  );
+  
   const closeComprobanteModal = () => {
     setOpenVerComp(false);
     setCompUrl("");
@@ -1085,7 +1112,7 @@ const openComprobanteModal = useCallback(
   );
 
   /* =========================
-     ELIMINAR - CORREGIDO
+     ELIMINAR - CORREGIDO CON idUsuarioMaster
   ========================= */
   const confirmDelete = useCallback(async () => {
     const id = getRowId(selectedRow);
@@ -1096,12 +1123,16 @@ const openComprobanteModal = useCallback(
     setDeletingId(id);
 
     try {
-      const { idUsuario } = getAuthInfo();
+      const { idUsuario, idUsuarioMaster } = getAuthInfo();
       const sp = new URLSearchParams();
       sp.set("action", "compras_eliminar");
       sp.set("id_movimiento", String(id));
 
-      const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario });
+      // Enviamos ambos IDs para máxima compatibilidad
+      const data = await apiPostJson(`${API}?${sp.toString()}`, { 
+        idUsuario,
+        idUsuarioMaster: idUsuarioMaster || idUsuario
+      });
 
       if (!data?.exito) {
         throw new Error(data?.mensaje || "No se pudo eliminar.");

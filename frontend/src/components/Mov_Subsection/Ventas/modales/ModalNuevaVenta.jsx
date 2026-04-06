@@ -581,21 +581,50 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const guardarChequeEnBackend = useCallback(async (idMovimiento, datosCheque) => {
     if (!datosCheque) return null;
 
-    const fd = new FormData();
-    fd.append("id_movimiento", String(idMovimiento));
-    fd.append("tipo", datosCheque.tipo_cheque || "cheque");
-    fd.append("fecha_emision", datosCheque.fecha_emision || todayISO());
-    fd.append("emisor", datosCheque.emisor || "");
-    fd.append("numero_cheque", datosCheque.numero_cheque || "");
-    fd.append("importe", String(datosCheque.importe || 0));
-    fd.append("fecha_pago", datosCheque.fecha_pago || todayISO());
-    fd.append("observaciones", datosCheque.observaciones || "");
-
-    if (datosCheque.archivo instanceof File) {
-      fd.append("archivo", datosCheque.archivo, datosCheque.archivo_nombre || datosCheque.archivo.name || "adjunto");
+    const idMov = Number(idMovimiento || 0);
+    if (!Number.isFinite(idMov) || idMov <= 0) {
+      throw new Error("No se recibió un id_movimiento válido para guardar el cheque.");
     }
 
-    const { token, sessionKey } = getAuthInfo();
+    const tipoFinal = String(
+      datosCheque.tipo ||
+      datosCheque.tipo_cheque ||
+      "cheque"
+    ).trim().toLowerCase() === "echeq"
+      ? "echeq"
+      : "cheque";
+
+    const importeFinal = Number(datosCheque.importe || 0);
+    if (!(importeFinal > 0)) {
+      throw new Error("El importe del cheque es inválido.");
+    }
+
+    const { token, sessionKey, idUsuario } = getAuthInfo();
+
+    const fd = new FormData();
+    fd.append("id_movimiento", String(idMov));
+    fd.append("idUsuario", String(idUsuario || 0));
+    fd.append("tipo", tipoFinal);
+    fd.append("tipo_cheque", tipoFinal);
+    fd.append("fecha_emision", String(datosCheque.fecha_emision || todayISO()).slice(0, 10));
+    fd.append("emisor", String(datosCheque.emisor || "").trim().toUpperCase());
+    fd.append("numero_cheque", String(datosCheque.numero_cheque || "").trim());
+    fd.append("importe", String(importeFinal));
+    fd.append("fecha_pago", String(datosCheque.fecha_pago || todayISO()).slice(0, 10));
+    fd.append("observaciones", String(datosCheque.observaciones || "").trim());
+
+    if (datosCheque.id_comprobante) {
+      fd.append("id_comprobante", String(datosCheque.id_comprobante));
+    }
+
+    if (datosCheque.archivo instanceof File) {
+      fd.append(
+        "archivo",
+        datosCheque.archivo,
+        datosCheque.archivo_nombre || datosCheque.archivo.name || "adjunto"
+      );
+    }
+
     const headers = {};
     if (sessionKey) headers["X-Session"] = sessionKey;
     else if (token) headers.Authorization = `Bearer ${token}`;
@@ -606,7 +635,13 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       body: fd,
     });
 
-    return await parseJsonOrThrow(res);
+    const data = await parseJsonOrThrow(res);
+
+    if (!data?.exito) {
+      throw new Error(data?.mensaje || "No se pudo guardar el cheque.");
+    }
+
+    return data;
   }, [API_CHEQUES_GUARDAR]);
 
   const handleSaveCheque = useCallback(async (datosCheque) => {
@@ -822,6 +857,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const guardarVentaBatch = useCallback(async ({ clienteFiscalResuelto = null, accionFinal = "guardar", esFacturadaFinal = false }) => {
     const { idUsuario } = getAuthInfo();
     const periodoApi = fechaToYYYYMM(fecha);
+
     const payloads = rowsCalc
       .filter(r => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0)
       .map(r => ({
@@ -845,10 +881,26 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         es_facturada: esFacturadaFinal,
         cliente_fiscal: esFacturadaFinal ? clienteFiscalResuelto : null
       }));
+
     if (!payloads.length) throw new Error("No hay filas válidas para guardar.");
-    const data = await apiPostJson(API_BATCH, payloads);
+
+    const data = await apiPostJson(API_BATCH, {
+      idUsuario,
+      items: payloads,
+    });
+
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar el batch de ventas.");
-    return { ...data, periodoApi, fecha, cliente_fiscal: clienteFiscalResuelto, cliente_id: selectedClienteId || null, cliente_nombre: selectedClienteNombre, accion_venta: accionFinal, es_facturada: esFacturadaFinal };
+
+    return {
+      ...data,
+      periodoApi,
+      fecha,
+      cliente_fiscal: clienteFiscalResuelto,
+      cliente_id: selectedClienteId || null,
+      cliente_nombre: selectedClienteNombre,
+      accion_venta: accionFinal,
+      es_facturada: esFacturadaFinal
+    };
   }, [API_BATCH, fecha, rowsCalc, selectedClienteId, selectedClienteNombre, filters, isContado]);
 
   const subirComprobanteYVincularPrimerMovimiento = useCallback(async ({ idMovimiento, blob, filename, facturaMeta }) => {
@@ -1004,11 +1056,15 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       const restoIds = idsOk.slice(1);
       if (restoIds.length > 0) await vincularComprobanteAMovimientosLote(restoIds, idComprobante);
 
-      if (esMedioPagoCheque && chequeGuardado && idsOk[0]) {
+      if (esMedioPagoCheque && chequeGuardado) {
+        if (!idsOk.length || !idsOk[0]) {
+          throw new Error("La venta facturada no devolvió un id_movimiento válido para guardar el cheque.");
+        }
+
         try {
           await guardarChequeEnBackend(idsOk[0], chequeGuardado);
         } catch (eCheque) {
-          showToast("advertencia", `Venta facturada, pero no se pudo guardar el cheque: ${eCheque?.message}`, 5000);
+          throw new Error(`La venta fue facturada, pero no se pudo guardar el cheque: ${eCheque?.message || "error desconocido"}`);
         }
       }
 
@@ -1059,14 +1115,18 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           Array.isArray(info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
             ? (info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
             : (info?.id_movimiento ? [info.id_movimiento] : [])
-        ).map(x => Number(x)).filter(x => Number.isFinite(x) && x > 0);
+        )
+          .map((x) => Number(x))
+          .filter((x) => Number.isFinite(x) && x > 0);
 
-        if (idsOk.length > 0) {
-          try {
-            await guardarChequeEnBackend(idsOk[0], chequeGuardado);
-          } catch (eCheque) {
-            showToast("advertencia", `Venta guardada, pero no se pudo guardar el cheque: ${eCheque?.message}`, 5000);
-          }
+        if (!idsOk.length) {
+          throw new Error("La venta se guardó pero no devolvió un id_movimiento válido para vincular el cheque.");
+        }
+
+        try {
+          await guardarChequeEnBackend(idsOk[0], chequeGuardado);
+        } catch (eCheque) {
+          throw new Error(`La venta se guardó, pero no se pudo guardar el cheque: ${eCheque?.message || "error desconocido"}`);
         }
       }
 
@@ -1096,8 +1156,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }
   }, [selectedClienteId, clienteFiscalDb, fiscalCuitInput, fetchClienteFiscal, abrirResumenFactura, showToast]);
 
-  // Panel fiscal para el caso en que se intenta facturar sin datos fiscales guardados
-  // Se muestra dentro del aside cuando accionContado === "facturar" y no hay clienteFiscalDb
   const shouldNeedFiscalPanel = open && accionContado === "facturar" && !clienteFiscalDb && selectedClienteId > 0;
 
   if (!open) return null;
@@ -1427,7 +1485,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                     </div>
                   )}
 
-                  {/* Panel fiscal: se muestra solo cuando se intentó facturar y falta CUIT */}
                   {shouldNeedFiscalPanel && (
                     <div className="mi-card mi-card--full">
                       <div className="mi-card__title">Datos fiscales</div>
@@ -1475,41 +1532,10 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                     </div>
                   )}
 
-                  {/* ── Botones de acción principales ── */}
                   <div className="mi-cr-filters__actions">
                     <button
                       type="button"
-                      onClick={() => {
-                        setAccionContado("guardar");
-                        // Llamamos submit directamente; como accionContado se setea síncronamente
-                        // antes del click, pasamos la acción explícita para no depender del closure
-                        if (saving) return;
-                        const { sessionKey } = getAuthInfo();
-                        if (!sessionKey) { showToast("error", "No hay sesión activa (Falta X-Session).", 5200); return; }
-                        if (addUI.open) { showToast("advertencia", "Terminá de crear (o cancelá) antes de guardar.", 3200); return; }
-                        const v = validate();
-                        if (!v.ok) { showToast("advertencia", v.msg || "Faltan datos.", 4200); return; }
-                        setSaving(true);
-                        if (v.warn) showToast("advertencia", "Hay filas incompletas: se guardarán solo las válidas.", 3600);
-                        guardarVentaBatch({ clienteFiscalResuelto: null, accionFinal: "guardar", esFacturadaFinal: false })
-                          .then(async (info) => {
-                            if (esMedioPagoCheque && chequeGuardado) {
-                              const idsOk = (
-                                Array.isArray(info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
-                                  ? (info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
-                                  : (info?.id_movimiento ? [info.id_movimiento] : [])
-                              ).map(x => Number(x)).filter(x => Number.isFinite(x) && x > 0);
-                              if (idsOk.length > 0) {
-                                try { await guardarChequeEnBackend(idsOk[0], chequeGuardado); }
-                                catch (eCheque) { showToast("advertencia", `Venta guardada, pero no se pudo guardar el cheque: ${eCheque?.message}`, 5000); }
-                              }
-                            }
-                            showToast("exito", "Venta agregada correctamente.", 3000);
-                            onSaved?.(info);
-                          })
-                          .catch(e => showToast("error", e?.message || "Error guardando.", 4500))
-                          .finally(() => setSaving(false));
-                      }}
+                      onClick={submit}
                       disabled={saving}
                       className="mit-btn mit-btn--solid mit-btn--block"
                     >

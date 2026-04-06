@@ -1010,12 +1010,14 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
         dark={dark}
       />
 
-      <ModalVerComprobante
-        open={openVerComp}
-        url={compUrl}
-        onClose={handleCloseVerComprobante}
-        title="Comprobante de compra"
-      />
+<ModalVerComprobante
+  open={openVerComp}
+  url={compUrl}
+  mime={archivoAdjunto?.type || ""}
+  fileName={archivoAdjunto?.name || ""}
+  onClose={handleCloseVerComprobante}
+  title="Comprobante de compra"
+/>
     </>,
     document.body
   );

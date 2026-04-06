@@ -126,7 +126,7 @@ function rowInDateRange(row, from, to) {
 }
 
 /* =========================
-   Auth helpers
+   Auth helpers (ACTUALIZADO)
 ========================= */
 function getAuthInfo() {
   const token = (localStorage.getItem("token") || "").trim();
@@ -134,23 +134,29 @@ function getAuthInfo() {
     localStorage.getItem("session_key") ||
     localStorage.getItem("sessionKey") ||
     localStorage.getItem("X-Session") ||
+    localStorage.getItem("x_session") ||
     ""
   ).trim();
 
   let idUsuario = 0;
+  let idUsuarioMaster = 0;
+
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand =
-      u?.idUsuarioMaster ??
-      u?.idUsuario ??
-      u?.id_usuario ??
-      u?.id ??
-      u?.user_id ??
-      0;
-    if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
+
+    const candMaster = u?.idUsuarioMaster ?? 0;
+    const candNormal = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+
+    if (Number.isFinite(Number(candMaster)) && Number(candMaster) > 0) {
+      idUsuarioMaster = Number(candMaster);
+      idUsuario = Number(candMaster);
+    } else if (Number.isFinite(Number(candNormal)) && Number(candNormal) > 0) {
+      idUsuario = Number(candNormal);
+      idUsuarioMaster = Number(candNormal);
+    }
   } catch {}
 
-  return { token, sessionKey, idUsuario };
+  return { token, sessionKey, idUsuario, idUsuarioMaster };
 }
 
 /* =========================
@@ -897,7 +903,7 @@ export default function OrdenesPago() {
   );
 
   /* =========================
-     Confirmar pago
+     Confirmar pago (ACTUALIZADO)
   ========================= */
   const onConfirmPago = useCallback(
     async (payload) => {
@@ -907,13 +913,17 @@ export default function OrdenesPago() {
         payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ??
         [];
 
-      const { idUsuario } = getAuthInfo();
+      const { idUsuario, idUsuarioMaster } = getAuthInfo();
+
+      const mediosPagoPayload = Array.isArray(payload?.medios_pago)
+        ? payload.medios_pago
+        : [];
 
       const data = await apiPostJson(`${API}?action=ordenes_pago_confirmar_pago`, {
         ids_movimiento: ids,
-        id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
-        id_cheque: Number(payload?.id_cheque || payload?.idCheque || 0) || null,
+        medios_pago: mediosPagoPayload,
         idUsuario,
+        idUsuarioMaster: idUsuarioMaster || idUsuario,
       });
 
       if (!data?.exito) {
@@ -925,15 +935,19 @@ export default function OrdenesPago() {
     [API, apiPostJson]
   );
 
+  /* =========================
+     Guardar edición (ACTUALIZADO)
+  ========================= */
   const onSaveEditar = useCallback(
     async (payloadFinal) => {
       try {
         showToast("cargando", "Guardando cambios…", 12000);
 
-        const { idUsuario } = getAuthInfo();
+        const { idUsuario, idUsuarioMaster } = getAuthInfo();
         const data = await apiPostJson(`${API}?action=ordenes_pago_actualizar`, {
           ...payloadFinal,
           idUsuario,
+          idUsuarioMaster: idUsuarioMaster || idUsuario,
         });
 
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la orden de pago.");

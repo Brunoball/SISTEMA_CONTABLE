@@ -94,22 +94,35 @@ function formatDateUI(d) {
    Auth helpers
 ========================= */
 function getAuthInfo() {
-  const sessionKey = (localStorage.getItem("session_key") || "").trim();
+  const token = (localStorage.getItem("token") || "").trim();
+
+  const sessionKey = (
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    localStorage.getItem("x_session") ||
+    ""
+  ).trim();
+
   let idUsuario = 0;
+  let idUsuarioMaster = 0;
 
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand =
-      u?.idUsuarioMaster ??
-      u?.idUsuario ??
-      u?.id_usuario ??
-      u?.id ??
-      u?.user_id ??
-      0;
-    if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
+
+    const candMaster = u?.idUsuarioMaster ?? 0;
+    const candNormal = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+
+    if (Number.isFinite(Number(candMaster)) && Number(candMaster) > 0) {
+      idUsuarioMaster = Number(candMaster);
+      idUsuario = Number(candMaster);
+    } else if (Number.isFinite(Number(candNormal)) && Number(candNormal) > 0) {
+      idUsuario = Number(candNormal);
+      idUsuarioMaster = Number(candNormal);
+    }
   } catch {}
 
-  return { sessionKey, idUsuario };
+  return { token, sessionKey, idUsuario, idUsuarioMaster };
 }
 
 /* =========================
@@ -279,16 +292,18 @@ export default function Recibos() {
      API helpers
   ========================= */
   const buildHeadersGET = useCallback(() => {
-    const { sessionKey } = getAuthInfo();
+    const { token, sessionKey } = getAuthInfo();
     const h = {};
     if (sessionKey) h["X-Session"] = sessionKey;
+    if (token) h["Authorization"] = `Bearer ${token}`;
     return h;
   }, []);
 
   const buildHeaders = useCallback(() => {
-    const { sessionKey } = getAuthInfo();
+    const { token, sessionKey } = getAuthInfo();
     const h = { "Content-Type": "application/json" };
     if (sessionKey) h["X-Session"] = sessionKey;
+    if (token) h["Authorization"] = `Bearer ${token}`;
     return h;
   }, []);
 
@@ -913,12 +928,13 @@ export default function Recibos() {
         payload?.seleccion?.map((x) => Number(x?.id_movimiento || 0)).filter(Boolean) ??
         [];
 
-      const { idUsuario } = getAuthInfo();
+      const { idUsuario, idUsuarioMaster } = getAuthInfo();
 
       const data = await apiPostJson(`${API}?action=recibos_confirmar_pago`, {
         ids_movimiento: ids,
         id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
         idUsuario,
+        idUsuarioMaster: idUsuarioMaster || idUsuario,
       });
 
       if (!data?.exito) {
@@ -1324,10 +1340,12 @@ export default function Recibos() {
         }}
         onToast={showToast}
         onSave={async (payloadFinal) => {
-          const { idUsuario } = getAuthInfo();
+          const { idUsuario, idUsuarioMaster } = getAuthInfo();
+
           const data = await apiPostJson(`${API}?action=recibos_actualizar`, {
             ...payloadFinal,
             idUsuario,
+            idUsuarioMaster: idUsuarioMaster || idUsuario,
           });
 
           cacheRef.current.clear();

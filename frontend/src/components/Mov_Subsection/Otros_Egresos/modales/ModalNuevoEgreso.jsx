@@ -257,12 +257,30 @@ function resolveClasificacionesConfig(clasificacionesList) {
   };
 }
 
+// 🔁 CAMBIO 2: getAuthInfo actualizada para incluir idUsuario
 function getAuthInfo() {
   const sessionKey =
     localStorage.getItem("session_key") || localStorage.getItem("sessionKey") ||
     localStorage.getItem("x_session") || localStorage.getItem("X-Session") || "";
   const token = localStorage.getItem("token") || "";
-  return { sessionKey, token };
+
+  let idUsuario = 0;
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      0;
+
+    if (Number.isFinite(Number(cand))) {
+      idUsuario = Number(cand);
+    }
+  } catch {}
+
+  return { sessionKey, token, idUsuario };
 }
 
 function buildAuthHeaders(isJson = true) {
@@ -670,17 +688,22 @@ export default function ModalNuevoEgreso({ open, mode = "create", initialData = 
     setOpenNuevaDescripcionModal(true);
   }, []);
 
+  // 🔁 CAMBIO 1: handleGuardarNuevaDescripcion con idUsuario
   const handleGuardarNuevaDescripcion = useCallback(async (nombreDescripcion) => {
     try {
-      const { sessionKey, token } = getAuthInfo();
+      const { sessionKey, token, idUsuario } = getAuthInfo();
+
       const headers = { "Content-Type": "application/json" };
       if (sessionKey) headers["X-Session"] = sessionKey;
-      else if (token) headers.Authorization = `Bearer ${token}`;
+      if (token) headers.Authorization = `Bearer ${token}`;
 
       const response = await fetch(API_DETALLES_CREAR, {
         method: "POST",
         headers,
-        body: JSON.stringify({ nombre: nombreDescripcion }),
+        body: JSON.stringify({
+          nombre: nombreDescripcion,
+          idUsuario,
+        }),
       });
 
       const data = await parseJsonOrThrow(response);

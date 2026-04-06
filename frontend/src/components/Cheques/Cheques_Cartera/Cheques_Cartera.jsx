@@ -512,10 +512,10 @@ const Cheques_Cartera = () => {
           ))}
         </div>
 
-        <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup">
+        <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup" id="cheques-st">
           <div
             className={[
-              "mov-gridBody",
+              "mov-gridBody ",
               "mov-gridBody--relative",
               loading ? "mov-softLoading" : "",
             ].join(" ")}

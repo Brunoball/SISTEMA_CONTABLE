@@ -524,7 +524,7 @@ const Echeqs_Cartera = () => {
           ))}
         </div>
 
-        <div className="mov-tableWrap" role="rowgroup">
+        <div className="mov-tableWrap" role="rowgroup" id="cheques-st">
           <div
             className={[
               "mov-gridBody",

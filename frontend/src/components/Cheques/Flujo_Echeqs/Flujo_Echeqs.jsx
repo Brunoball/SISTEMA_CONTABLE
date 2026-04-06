@@ -570,7 +570,7 @@ const Flujo_Echeqs = () => {
           ))}
         </div>
 
-        <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup">
+        <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup" id="cheques-st">
           <div
             className={[
               "mov-gridBody",

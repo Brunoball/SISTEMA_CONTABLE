@@ -485,7 +485,7 @@ const Flujo_Cheques = () => {
           ))}
         </div>
 
-        <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup">
+        <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup" id="cheques-st">
           <div className={["mov-gridBody", "mov-gridBody--relative", loading ? "mov-softLoading" : ""].join(" ")}>
             {loading ? (
               <div className="mov-skeletonWrap" aria-busy="true">

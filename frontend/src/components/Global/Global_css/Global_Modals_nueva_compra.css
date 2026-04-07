@@ -1136,7 +1136,7 @@ input[type="number"]::-webkit-outer-spin-button{
 .fl-input[type="date"]{
   width: 100%;
   border: 1px solid rgba(148,163,184,.55);
-  background: #fff;
+
   border-radius: 12px;
   padding: 16px 12px 10px;
   font-size: .95rem !important;
@@ -1199,7 +1199,7 @@ input[type="number"]::-webkit-outer-spin-button{
   display: grid;
   place-items: center;
   z-index: 9999999999;
-  padding: 16px;
+  padding: 10px;
 }
 
 .mi-mini__modal{

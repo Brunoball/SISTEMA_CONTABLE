@@ -76,6 +76,42 @@ function buildHeadersJSON() {
   };
 }
 
+/* =========================
+   Helper para obtener datos de auditoría
+========================= */
+function getUsuarioAuditData() {
+  let idUsuarioMaster = 0;
+  let idTenant = null;
+
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.id_usuario_master ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      0;
+
+    if (Number.isFinite(Number(cand))) {
+      idUsuarioMaster = Number(cand);
+    }
+
+    const tenantCand =
+      u?.idTenant ??
+      u?.id_tenant ??
+      u?.tenant_id ??
+      u?.tenant?.idTenant ??
+      null;
+
+    if (tenantCand !== null && tenantCand !== undefined && tenantCand !== "" && Number(tenantCand) > 0) {
+      idTenant = Number(tenantCand);
+    }
+  } catch {}
+
+  return { idUsuarioMaster, idTenant };
+}
+
 async function parseJsonOrThrow(res) {
   if (res.status === 401 || res.status === 403) {
     throw new Error("Sesión vencida o no autorizada. Volvé a iniciar sesión.");
@@ -954,6 +990,8 @@ export default function ModalCargaMasiva({
     setErrores({});
 
     try {
+      const { idUsuarioMaster, idTenant } = getUsuarioAuditData();
+
       const fd = new FormData();
       fd.append("nombre", toUpperCaseValue(form.nombre.trim()));
       fd.append("sku", toUpperCaseValue(form.sku.trim()));
@@ -967,6 +1005,14 @@ export default function ModalCargaMasiva({
 
       if (form.id_categoria_stock !== "") {
         fd.append("id_categoria_stock", String(form.id_categoria_stock));
+      }
+
+      if (idUsuarioMaster > 0) {
+        fd.append("idUsuarioMaster", String(idUsuarioMaster));
+      }
+
+      if (idTenant) {
+        fd.append("tenant_id", String(idTenant));
       }
 
       if (imagenFile) fd.append("imagen", imagenFile);
@@ -1180,6 +1226,8 @@ export default function ModalCargaMasiva({
     const erroresCarga = [];
 
     try {
+      const { idUsuarioMaster, idTenant } = getUsuarioAuditData();
+
       for (let i = 0; i < productosDetectados.length; i++) {
         const item = productosDetectados[i];
 
@@ -1197,6 +1245,14 @@ export default function ModalCargaMasiva({
 
           if (item.id_categoria_stock !== "") {
             fd.append("id_categoria_stock", String(item.id_categoria_stock));
+          }
+
+          if (idUsuarioMaster > 0) {
+            fd.append("idUsuarioMaster", String(idUsuarioMaster));
+          }
+
+          if (idTenant) {
+            fd.append("tenant_id", String(idTenant));
           }
 
           const res = await fetch(`${API_URL}?action=stock_productos_crear`, {

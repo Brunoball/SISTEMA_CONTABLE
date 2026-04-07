@@ -99,11 +99,14 @@ export default function ModalNuevoChequeRecibo({
   onClose,
   onSave,
   initialData,
+  datosIniciales,
   tipoCheque = "cheque",
   dark = false,
   saving = false,
 }) {
   const fileRef = useRef(null);
+
+  const seedData = initialData ?? datosIniciales ?? null;
 
   const [form, setForm] = useState({
     fecha_emision: todayISO(),
@@ -128,25 +131,25 @@ export default function ModalNuevoChequeRecibo({
     if (!open) return;
 
     setForm({
-      fecha_emision: initialData?.fecha_emision || todayISO(),
-      emisor: onlyTextUpper(initialData?.emisor || ""),
-      numero_cheque: onlyNumbers(initialData?.numero_cheque || ""),
+      fecha_emision: seedData?.fecha_emision || todayISO(),
+      emisor: onlyTextUpper(seedData?.emisor || ""),
+      numero_cheque: onlyNumbers(seedData?.numero_cheque || ""),
       importe:
-        initialData?.importe != null && initialData?.importe !== ""
-          ? moneyARSInput(initialData.importe)
+        seedData?.importe != null && seedData?.importe !== ""
+          ? moneyARSInput(seedData.importe)
           : "",
-      fecha_pago: initialData?.fecha_pago || todayISO(),
+      fecha_pago: seedData?.fecha_pago || todayISO(),
     });
 
-    setArchivo(initialData?.archivo || null);
+    setArchivo(seedData?.archivo || null);
     setArchivoNombre(
-      initialData?.archivo_nombre ||
-        initialData?.archivo?.name ||
-        initialData?.archivoName ||
+      seedData?.archivo_nombre ||
+        seedData?.archivo?.name ||
+        seedData?.archivoName ||
         ""
     );
     setErrorArchivo("");
-  }, [open, initialData]);
+  }, [open, seedData]);
 
   useEffect(() => {
     if (!open) return;
@@ -450,6 +453,7 @@ export default function ModalNuevoChequeRecibo({
               disabled={saving}
               onClick={() => {
                 onSave?.({
+                  tipo: tipoCheque === "echeq" ? "echeq" : "cheque",
                   tipo_cheque: tipoCheque === "echeq" ? "echeq" : "cheque",
                   fecha_emision: form.fecha_emision,
                   emisor: String(form.emisor || "").trim().toUpperCase(),

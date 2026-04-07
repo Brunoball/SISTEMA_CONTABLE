@@ -98,6 +98,39 @@ function getProductoCategoriaId(prod) {
   return Number(prod?.id_stock_categoria ?? prod?.stock_categoria_id ?? prod?.id_categoria_stock ?? prod?.id_categoria ?? 0);
 }
 
+function getUsuarioAuditData() {
+  let idUsuarioMaster = 0;
+  let idTenant = null;
+
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.id_usuario_master ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      0;
+
+    if (Number.isFinite(Number(cand))) {
+      idUsuarioMaster = Number(cand);
+    }
+
+    const tenantCand =
+      u?.idTenant ??
+      u?.id_tenant ??
+      u?.tenant_id ??
+      u?.tenant?.idTenant ??
+      null;
+
+    if (tenantCand !== null && tenantCand !== undefined && tenantCand !== "" && Number(tenantCand) > 0) {
+      idTenant = Number(tenantCand);
+    }
+  } catch {}
+
+  return { idUsuarioMaster, idTenant };
+}
+
 const COLUMNS = [
   { key: "nombre", label: "PRODUCTO", fr: 2.4, align: "left", sortable: true },
   { key: "sku", label: "SKU", fr: 1.0, align: "center", sortable: true },
@@ -298,11 +331,31 @@ const Stock = () => {
   };
 
   const handleConfirmarEliminar = async () => {
-    if (!productoEliminar?.id || Number(productoEliminar.id) <= 0) throw new Error("ID de producto inválido.");
+    if (!productoEliminar?.id || Number(productoEliminar.id) <= 0) {
+      throw new Error("ID de producto inválido.");
+    }
+
     setEliminando(true);
+
     try {
-      const data = await apiPost(API_URL, { action: "stock_productos_eliminar", id: Number(productoEliminar.id) });
-      if (data.exito === false) throw new Error(data.mensaje || "Error al eliminar el producto");
+      const { idUsuarioMaster, idTenant } = getUsuarioAuditData();
+
+      const payload = {
+        action: "stock_productos_eliminar",
+        id: Number(productoEliminar.id),
+        idUsuarioMaster,
+      };
+
+      if (idTenant) {
+        payload.tenant_id = idTenant;
+      }
+
+      const data = await apiPost(API_URL, payload);
+
+      if (data.exito === false) {
+        throw new Error(data.mensaje || "Error al eliminar el producto");
+      }
+
       setModalEliminarAbierto(false);
       setProductoEliminar(null);
       await fetchProductos();
@@ -397,7 +450,6 @@ const Stock = () => {
               </div>
             </div>
 
-            {/* ✅ Solo botón de agregar producto */}
             <div className="mov-card__actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button type="button" className="mov-btn mov-btn--primary" onClick={() => setModalAbierto(true)}>
                 <FontAwesomeIcon icon={faPlus} /> Agregar producto

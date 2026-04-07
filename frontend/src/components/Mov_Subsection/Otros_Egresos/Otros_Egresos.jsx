@@ -1663,3 +1663,5 @@ export default function OtrosEgresos() {
     </div>
   );
 }
+
+

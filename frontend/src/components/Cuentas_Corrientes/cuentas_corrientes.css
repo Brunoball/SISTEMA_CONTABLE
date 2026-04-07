@@ -395,18 +395,6 @@
   border-bottom: none;
 }
 
-/* scrollbar */
-.cc-gridBody::-webkit-scrollbar{
-  width: 6px;
-  height: 6px;
-}
-.cc-gridBody::-webkit-scrollbar-thumb{
-  background: rgba(10, 37, 64, 0.14);
-  border-radius: 999px;
-}
-.cc-gridBody::-webkit-scrollbar-track{
-  background: transparent;
-}
 
 /* filas */
 .cc-grid--row{
@@ -1621,4 +1609,254 @@ button.cc-cliente-table__row:focus-visible{
 
 .cc-cliente-table__footWrap{
   flex: 0 0 auto;
+}
+/* =========================================
+   TABLA CLIENTES - DISTRIBUCIÓN GRID OPTIMIZADA
+========================================= */
+
+/* Contenedor principal de la tabla */
+.cc-cliente-table {
+  background: var(--b-white);
+  border: 1px solid rgba(10, 37, 64, 0.10);
+  border-radius: 16px;
+  box-shadow: 0 14px 34px -22px rgba(10, 37, 64, 0.28);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: calc(100vh - 200px);
+}
+
+/* Header de la tabla - usa grid */
+.cc-cliente-table__desktopHead {
+  background: var(--b-midnight);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  flex: 0 0 auto;
+}
+
+/* Grid del header - 3 columnas fijas */
+.cc-grid-header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 0.8fr;
+  gap: 0;
+  align-items: center;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  width: 100%;
+}
+
+/* Celdas del header */
+.cc-grid-header__cell {
+  padding: 14px 16px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cc-grid-header__cell:first-child {
+  text-align: left;
+  padding-left: 16px;
+}
+
+.cc-grid-header__cell:nth-child(2) {
+  text-align: center;
+}
+
+.cc-grid-header__cell:last-child {
+  text-align: center;
+  padding-right: 16px;
+}
+
+/* Body de la tabla */
+.cc-cliente-table__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #fff;
+  min-height: 0;
+}
+
+/* Contenedor de filas */
+.cc-grid-rows {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* Cada fila - misma estructura grid que el header */
+.cc-grid-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 0.8fr;
+  gap: 0;
+  align-items: center;
+  width: 100%;
+  min-height: 56px;
+  background: #fff;
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.4, 0, 0.2, 1);
+  border-bottom: 1px solid rgba(10, 37, 64, 0.08);
+}
+
+.cc-grid-row:hover {
+  background: rgba(0, 85, 187, 0.05);
+}
+
+.cc-grid-row:last-child {
+  border-bottom: none;
+}
+
+/* Celdas de la fila */
+.cc-grid-cell {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: rgba(10, 37, 64, 0.85);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Primera columna - Nombre */
+.cc-grid-cell:first-child {
+  text-align: left;
+  padding-left: 16px;
+  font-weight: 600;
+  color: var(--b-midnight);
+}
+
+/* Segunda columna - Estado (centrado) */
+.cc-grid-cell:nth-child(2) {
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Tercera columna - Acciones (centrado) */
+.cc-grid-cell:nth-child(3) {
+  text-align: center;
+  padding-right: 16px;
+}
+
+/* Badge de estado */
+.cc-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cc-status-badge--active {
+  background: rgba(16, 185, 129, 0.12);
+  color: #057A55;
+  border: 1px solid rgba(16, 185, 129, 0.30);
+}
+
+.cc-status-badge--inactive {
+  background: rgba(148, 163, 184, 0.12);
+  color: #64748b;
+  border: 1px solid rgba(148, 163, 184, 0.30);
+}
+
+/* Grupo de botones de acción */
+.cc-actions-group {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Botones de acción */
+.cc-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(10, 37, 64, 0.12);
+  background: #fff;
+  color: rgba(10, 37, 64, 0.7);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 160ms ease;
+}
+
+.cc-action-btn:hover:not(:disabled) {
+  background: rgba(0, 85, 187, 0.08);
+  border-color: rgba(0, 85, 187, 0.3);
+  color: var(--b-action);
+  transform: translateY(-1px);
+}
+
+.cc-action-btn--danger:hover:not(:disabled) {
+  background: rgba(225, 61, 69, 0.08);
+  border-color: rgba(225, 61, 69, 0.3);
+  color: var(--cc-danger);
+}
+
+.cc-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Texto truncado para nombre largo */
+.cc-ellipsis-text {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Footer de la tabla */
+.cc-cliente-table__footWrap {
+  flex: 0 0 auto;
+  background: rgba(10, 37, 64, 0.025);
+  border-top: 1px solid rgba(10, 37, 64, 0.10);
+  padding: 12px 16px;
+}
+
+/* Estados vacío y loading */
+.cc-empty-state,
+.cc-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  gap: 12px;
+  color: rgba(66, 84, 102, 0.72);
+}
+
+.cc-empty-state svg,
+.cc-loading-state svg {
+  font-size: 32px;
+  opacity: 0.5;
+}
+
+
+
+
+/* Responsive */
+@media (max-width: 768px) {
+  .cc-grid-header__cell,
+  .cc-grid-cell {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+  
+  .cc-action-btn {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .cc-status-badge {
+    padding: 3px 8px;
+    font-size: 10px;
+  }
 }

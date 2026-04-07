@@ -15,7 +15,7 @@ import {
   faUserSlash,
   faUserCheck,
 } from "@fortawesome/free-solid-svg-icons";
-import ModalAccionEntidadStock from "../../../Stock/modales/ModalAccionEntidadStock";
+import ModalEliminar from "../../../Global/Modales/ModalEliminar";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 
@@ -289,19 +289,23 @@ export default function ModalClientes({
   }, []);
 
   const cerrarModalAccion = useCallback(() => {
+    if (modalAccion.loading) return;
+
     setModalAccion({
       open: false,
       type: null,
       row: null,
       loading: false,
     });
-  }, []);
+  }, [modalAccion.loading]);
 
   const ejecutarAccionModal = useCallback(async () => {
     const { row, type } = modalAccion;
     const id = getClienteId(row);
 
-    if (!id || !type) return;
+    if (!id || !type) {
+      throw new Error("No se encontró el cliente seleccionado.");
+    }
 
     setModalAccion((prev) => ({ ...prev, loading: true }));
     setAccionandoId(id);
@@ -319,6 +323,8 @@ export default function ModalClientes({
       } else if (type === "eliminar") {
         action = "cc_cliente_eliminar";
         successFallback = "Cliente eliminado correctamente.";
+      } else {
+        throw new Error("Acción inválida.");
       }
 
       const data = await apiPost(action, { id_cliente: id });
@@ -331,12 +337,19 @@ export default function ModalClientes({
 
       await cargarClientes(pestana);
       await onActualizado?.();
-      cerrarModalAccion();
+
+      setModalAccion({
+        open: false,
+        type: null,
+        row: null,
+        loading: false,
+      });
     } catch (err) {
-      setModalAccion((prev) => ({ ...prev, loading: false }));
       onToast?.("error", err?.message || "No se pudo completar la acción.");
+      throw err;
     } finally {
       setAccionandoId(null);
+      setModalAccion((prev) => ({ ...prev, loading: false }));
     }
   }, [
     modalAccion,
@@ -346,24 +359,27 @@ export default function ModalClientes({
     onActualizado,
     onToast,
     resetForm,
-    cerrarModalAccion,
   ]);
 
   const modalConfig = useMemo(() => {
     const row = modalAccion.row;
     const nombre = String(row?.nombre || "—");
+    const activo = Number(row?.activo ?? 1) === 1;
 
     if (modalAccion.type === "baja") {
       return {
         title: "Dar de baja cliente",
         message: "¿Seguro que querés dar de baja este cliente?",
-        warning: "El cliente dejará de aparecer en la pestaña de activos y pasará a inactivos.",
+        warning: "El cliente pasará a la pestaña de inactivos.",
+        loadingMessage: "Dando de baja cliente...",
+        successMessage: "Cliente dado de baja correctamente.",
+        errorMessage: "No se pudo dar de baja el cliente.",
         confirmLabel: "Dar de baja",
-        cancelLabel: "Cancelar",
-        variant: "danger",
+        confirmVariant: "danger",
         details: [
-          { label: "Cliente", value: nombre },
-          { label: "Acción", value: "Dar de baja" },
+          { label: "ID Cliente", value: `#${getClienteId(row)}` },
+          { label: "Nombre", value: nombre },
+          { label: "Estado actual", value: "Activo" },
         ],
       };
     }
@@ -372,13 +388,16 @@ export default function ModalClientes({
       return {
         title: "Dar de alta cliente",
         message: "¿Seguro que querés dar de alta este cliente?",
-        warning: "El cliente volverá a aparecer en la pestaña de activos.",
+        warning: "El cliente volverá a la pestaña de activos.",
+        loadingMessage: "Dando de alta cliente...",
+        successMessage: "Cliente dado de alta correctamente.",
+        errorMessage: "No se pudo dar de alta el cliente.",
         confirmLabel: "Dar de alta",
-        cancelLabel: "Cancelar",
-        variant: "success",
+        confirmVariant: "primary",
         details: [
-          { label: "Cliente", value: nombre },
-          { label: "Acción", value: "Dar de alta" },
+          { label: "ID Cliente", value: `#${getClienteId(row)}` },
+          { label: "Nombre", value: nombre },
+          { label: "Estado actual", value: "Inactivo" },
         ],
       };
     }
@@ -387,15 +406,15 @@ export default function ModalClientes({
       title: "Eliminar cliente",
       message: "¿Seguro que querés eliminar este cliente definitivamente?",
       warning: "Esta acción no se puede deshacer.",
+      loadingMessage: "Eliminando cliente...",
+      successMessage: "Cliente eliminado correctamente.",
+      errorMessage: "No se pudo eliminar el cliente.",
       confirmLabel: "Eliminar",
-      cancelLabel: "Cancelar",
-      variant: "danger",
+      confirmVariant: "danger",
       details: [
-        { label: "Cliente", value: nombre },
-        {
-          label: "Estado",
-          value: Number(row?.activo ?? 1) === 1 ? "Activo" : "Inactivo",
-        },
+        { label: "ID Cliente", value: `#${getClienteId(row)}` },
+        { label: "Nombre", value: nombre },
+        { label: "Estado", value: activo ? "Activo" : "Inactivo" },
       ],
     };
   }, [modalAccion]);
@@ -528,24 +547,10 @@ export default function ModalClientes({
             </aside>
 
             <section className="mi-cr-table">
-              <div
-                className="mi-cr-table__foot mi-cr-table__foot--top"
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  flexWrap: "wrap",
-                }}
-              >
+              <div className="mi-cr-table__foot mi-cr-table__foot--top">
                 <div className="mi-cr-table__summary">
                   <div>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: "var(--nv-text)",
-                      }}
-                    >
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--nv-text)" }}>
                       Listado de clientes
                     </div>
                     <div style={{ fontSize: 12, color: "var(--nv-muted)" }}>
@@ -564,7 +569,7 @@ export default function ModalClientes({
                       setEditandoId(null);
                       setForm((prev) => ({ ...prev, activo: 1 }));
                     }}
-                    disabled={loading || saving}
+                    disabled={loading || saving || modalAccion.loading}
                   >
                     Activos
                   </button>
@@ -578,179 +583,128 @@ export default function ModalClientes({
                       setEditandoId(null);
                       setForm((prev) => ({ ...prev, activo: 0 }));
                     }}
-                    disabled={loading || saving}
+                    disabled={loading || saving || modalAccion.loading}
                   >
                     Inactivos
                   </button>
                 </div>
               </div>
 
-              {!loading && clientesOrdenados.length > 0 && (
-                <div className="mi-cr-table__head mi-cr-grid-clientes-stock">
-                  <div className="mi-cr-table__head-cell" style={{ paddingLeft: 10 }}>
-                    Nombre
-                  </div>
-                  <div
-                    className="mi-cr-table__head-cell"
-                    style={{ textAlign: "center" }}
-                  >
-                    Estado
-                  </div>
-                  <div
-                    className="mi-cr-table__head-cell"
-                    style={{ textAlign: "center" }}
-                  >
-                    Acciones
+              <div className="cc-cliente-table">
+                <div className="cc-cliente-table__desktopHead">
+                  <div className="cc-grid-header">
+                    <div className="cc-grid-header__cell">Cliente</div>
+                    <div className="cc-grid-header__cell">Estado</div>
+                    <div className="cc-grid-header__cell">Acciones</div>
                   </div>
                 </div>
-              )}
 
-              <div className="mi-cr-table__rows mi-cr-table__rows--mcs">
-                {loading ? (
-                  <EmptyState
-                    icon={faArrowRotateRight}
-                    spin
-                    text="Cargando clientes..."
-                  />
-                ) : clientesOrdenados.length === 0 ? (
-                  <EmptyState
-                    icon={faUsers}
-                    text={
-                      pestana === "activos"
-                        ? "No hay clientes activos."
-                        : "No hay clientes inactivos."
-                    }
-                  />
-                ) : (
-                  clientesOrdenados.map((row) => {
-                    const activo = Number(row?.activo ?? 1) === 1;
-                    const isEditing =
-                      getClienteId(row) === Number(editandoId || 0) &&
-                      modo === "editar";
-                    const bloqueado = accionandoId === getClienteId(row) || saving;
+                <div className="cc-cliente-table__body">
+                  {loading ? (
+                    <div className="cc-loading-state">
+                      <FontAwesomeIcon icon={faArrowRotateRight} spin />
+                      <span>Cargando clientes...</span>
+                    </div>
+                  ) : clientesOrdenados.length === 0 ? (
+                    <div className="cc-empty-state">
+                      <FontAwesomeIcon icon={faUsers} />
+                      <span>
+                        {pestana === "activos"
+                          ? "No hay clientes activos."
+                          : "No hay clientes inactivos."}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="cc-grid-rows">
+                      {clientesOrdenados.map((row) => {
+                        const activo = Number(row?.activo ?? 1) === 1;
+                        const bloqueado =
+                          accionandoId === getClienteId(row) ||
+                          saving ||
+                          modalAccion.loading;
 
-                    return (
-                      <div
-                        key={getClienteId(row)}
-                        className={[
-                          "mi-cr-row",
-                          "mi-cr-grid-clientes-stock",
-                          isEditing ? "mi-cr-row--editing" : "",
-                        ].join(" ").trim()}
-                      >
-                        <div
-                          className="mi-cr-cell mi-cr-cell--ellipsis"
-                          style={{ paddingLeft: 10, minWidth: 0 }}
-                        >
-                          <span
-                            className="mi-cr-cell__ellipsis"
-                            title={row?.nombre || "—"}
-                            style={{
-                              display: "block",
-                              width: "100%",
-                              minWidth: 0,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              fontWeight: 600,
-                              fontSize: 13,
-                              color: "var(--nv-text)",
-                            }}
-                          >
-                            {row?.nombre || "—"}
-                          </span>
-                        </div>
-
-                        <div className="mi-cr-cell mi-cr-cell--center">
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 5,
-                              padding: "3px 10px",
-                              borderRadius: 999,
-                              fontSize: 11,
-                              fontWeight: 700,
-                              background: activo
-                                ? "rgba(16,185,129,.12)"
-                                : "rgba(148,163,184,.12)",
-                              color: activo ? "#057A55" : "#64748b",
-                              border: `1px solid ${
-                                activo
-                                  ? "rgba(16,185,129,.30)"
-                                  : "rgba(148,163,184,.30)"
-                              }`,
-                            }}
-                          >
-                            {activo ? "Activo" : "Inactivo"}
-                          </span>
-                        </div>
-
-                        <div className="mi-cr-cell mi-cr-cell--center">
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: 6,
-                              padding: 5,
-                              flexWrap: "wrap",
-                              justifyContent: "center",
-                            }}
-                          >
-                            {activo ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="nv-foot-btn nv-foot-btn--sm"
-                                  onClick={() => iniciarEdicion(row)}
-                                  disabled={bloqueado}
-                                  title="Editar"
-                                >
-                                  <FontAwesomeIcon icon={faPenToSquare} />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="nv-foot-btn nv-foot-btn--sm"
-                                  onClick={() => abrirModalAccion("baja", row)}
-                                  disabled={bloqueado}
-                                  title="Dar de baja"
-                                >
-                                  <FontAwesomeIcon icon={faUserSlash} />
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                type="button"
-                                className="nv-foot-btn nv-foot-btn--sm"
-                                onClick={() => abrirModalAccion("alta", row)}
-                                disabled={bloqueado}
-                                title="Dar de alta"
+                        return (
+                          <div key={getClienteId(row)} className="cc-grid-row">
+                            <div className="cc-grid-cell">
+                              <span
+                                className="cc-ellipsis-text"
+                                title={row?.nombre || "—"}
                               >
-                                <FontAwesomeIcon icon={faUserCheck} />
-                              </button>
-                            )}
+                                {row?.nombre || "—"}
+                              </span>
+                            </div>
 
-                            <button
-                              type="button"
-                              className="nv-foot-btn nv-foot-btn--sm nv-foot-btn--danger"
-                              onClick={() => abrirModalAccion("eliminar", row)}
-                              disabled={bloqueado}
-                              title="Eliminar"
-                            >
-                              <FontAwesomeIcon icon={faTrashCan} />
-                            </button>
+                            <div className="cc-grid-cell">
+                              <span
+                                className={`cc-status-badge ${
+                                  activo
+                                    ? "cc-status-badge--active"
+                                    : "cc-status-badge--inactive"
+                                }`}
+                              >
+                                {activo ? "Activo" : "Inactivo"}
+                              </span>
+                            </div>
+
+                            <div className="cc-grid-cell">
+                              <div className="cc-actions-group">
+                                {activo ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="cc-action-btn"
+                                      onClick={() => iniciarEdicion(row)}
+                                      disabled={bloqueado}
+                                      title="Editar"
+                                    >
+                                      <FontAwesomeIcon icon={faPenToSquare} />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className="cc-action-btn"
+                                      onClick={() => abrirModalAccion("baja", row)}
+                                      disabled={bloqueado}
+                                      title="Dar de baja"
+                                    >
+                                      <FontAwesomeIcon icon={faUserSlash} />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="cc-action-btn"
+                                    onClick={() => abrirModalAccion("alta", row)}
+                                    disabled={bloqueado}
+                                    title="Dar de alta"
+                                  >
+                                    <FontAwesomeIcon icon={faUserCheck} />
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  className="cc-action-btn cc-action-btn--danger"
+                                  onClick={() => abrirModalAccion("eliminar", row)}
+                                  disabled={bloqueado}
+                                  title="Eliminar"
+                                >
+                                  <FontAwesomeIcon icon={faTrashCan} />
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
 
-              <div className="mi-cr-table__foot">
-                <span style={{ fontSize: 12, color: "var(--nv-muted)" }}>
-                  Administrá el padrón de <b>clientes</b>.
-                </span>
+                <div className="cc-cliente-table__footWrap">
+                  <span style={{ fontSize: 12, color: "var(--nv-muted)" }}>
+                    Administrá el padrón de <b>clientes</b>.
+                  </span>
+                </div>
               </div>
             </section>
           </div>
@@ -771,18 +725,32 @@ export default function ModalClientes({
         </div>
       </div>
 
-      <ModalAccionEntidadStock
+      <ModalEliminar
         open={modalAccion.open}
+        row={
+          modalAccion.row
+            ? {
+                id: getClienteId(modalAccion.row),
+                nombre: modalAccion.row?.nombre || "—",
+                estado:
+                  Number(modalAccion.row?.activo ?? 1) === 1 ? "Activo" : "Inactivo",
+              }
+            : null
+        }
+        loading={modalAccion.loading}
         onClose={cerrarModalAccion}
         onConfirm={ejecutarAccionModal}
-        loading={modalAccion.loading}
+        onToast={onToast}
         title={modalConfig.title}
         message={modalConfig.message}
         warning={modalConfig.warning}
+        loadingMessage={modalConfig.loadingMessage}
+        successMessage={modalConfig.successMessage}
+        errorMessage={modalConfig.errorMessage}
         confirmLabel={modalConfig.confirmLabel}
-        cancelLabel={modalConfig.cancelLabel}
+        cancelLabel="Cancelar"
+        confirmVariant={modalConfig.confirmVariant}
         details={modalConfig.details}
-        variant={modalConfig.variant}
       />
     </div>,
     document.body

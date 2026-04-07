@@ -2009,4 +2009,375 @@ html[data-theme="oscuro"] .mi-detalle-block{
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px dashed var(--mi-border);
+}/* =========================================
+   MODO OSCURO - TABLA CLIENTES
+   Uso: html[data-theme="oscuro"]
+========================================= */
+
+/* Variables del modo oscuro */
+html[data-theme="oscuro"] {
+  --dark-bg-primary: #0F172A;
+  --dark-bg-secondary: #1E293B;
+  --dark-bg-tertiary: #334155;
+  --dark-text-primary: #F1F5F9;
+  --dark-text-secondary: #94A3B8;
+  --dark-border: #334155;
+  --dark-hover: rgba(255, 255, 255, 0.05);
+  --dark-card: #1E293B;
+  --dark-action: #3B82F6;
+  --dark-success: #10B981;
+  --dark-danger: #EF4444;
+  --dark-warning: #F59E0B;
+}
+
+/* Contenedor principal de la tabla - Modo oscuro */
+html[data-theme="oscuro"] .cc-cliente-table {
+  background: var(--dark-card);
+  border-color: var(--dark-border);
+  box-shadow: 0 14px 34px -22px rgba(0, 0, 0, 0.5);
+}
+
+/* Header de la tabla - Modo oscuro */
+html[data-theme="oscuro"] .cc-cliente-table__desktopHead {
+  background: #0F172A;
+  border-bottom-color: rgba(59, 130, 246, 0.2);
+}
+
+/* Celdas del header - Modo oscuro */
+html[data-theme="oscuro"] .cc-grid-header__cell {
+  color: var(--dark-text-secondary);
+}
+
+/* Body de la tabla - Modo oscuro */
+html[data-theme="oscuro"] .cc-cliente-table__body {
+  background: var(--dark-card);
+}
+
+/* Filas - Modo oscuro */
+html[data-theme="oscuro"] .cc-grid-row {
+  background: var(--dark-card);
+  border-bottom-color: rgba(51, 65, 85, 0.5);
+}
+
+html[data-theme="oscuro"] .cc-grid-row:hover {
+  background: var(--dark-hover);
+}
+
+/* Celdas - Modo oscuro */
+html[data-theme="oscuro"] .cc-grid-cell {
+  color: var(--dark-text-primary);
+}
+
+/* Primera columna - Nombre (modo oscuro) */
+html[data-theme="oscuro"] .cc-grid-cell:first-child {
+  color: var(--dark-text-primary);
+}
+
+/* Badge de estado - Modo oscuro */
+html[data-theme="oscuro"] .cc-status-badge--active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34D399;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+html[data-theme="oscuro"] .cc-status-badge--inactive {
+  background: rgba(100, 116, 139, 0.15);
+  color: #94A3B8;
+  border-color: rgba(100, 116, 139, 0.3);
+}
+
+/* Botones de acción - Modo oscuro */
+html[data-theme="oscuro"] .cc-action-btn {
+  background: var(--dark-bg-secondary);
+  border-color: var(--dark-border);
+  color: var(--dark-text-secondary);
+}
+
+html[data-theme="oscuro"] .cc-action-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60A5FA;
+}
+
+html[data-theme="oscuro"] .cc-action-btn--danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #F87171;
+}
+
+/* Footer de la tabla - Modo oscuro */
+html[data-theme="oscuro"] .cc-cliente-table__footWrap {
+  background: rgba(15, 23, 42, 0.8);
+  border-top-color: var(--dark-border);
+}
+
+html[data-theme="oscuro"] .cc-cliente-table__footWrap span {
+  color: var(--dark-text-secondary);
+}
+
+/* Estados vacío y loading - Modo oscuro */
+html[data-theme="oscuro"] .cc-empty-state,
+html[data-theme="oscuro"] .cc-loading-state {
+  color: var(--dark-text-secondary);
+}
+
+html[data-theme="oscuro"] .cc-empty-state svg,
+html[data-theme="oscuro"] .cc-loading-state svg {
+  color: var(--dark-text-secondary);
+  opacity: 0.6;
+}
+
+/* Scrollbar - Modo oscuro */
+html[data-theme="oscuro"] .cc-cliente-table__body::-webkit-scrollbar-track {
+  background: var(--dark-bg-primary);
+}
+
+html[data-theme="oscuro"] .cc-cliente-table__body::-webkit-scrollbar-thumb {
+  background: var(--dark-border);
+}
+
+html[data-theme="oscuro"] .cc-cliente-table__body::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* =========================================
+   MODO OSCURO - PANEL DE FILTROS Y FORMULARIO
+========================================= */
+
+/* Panel de filtros lateral - Modo oscuro */
+html[data-theme="oscuro"] .mi-cr-filters {
+  background: var(--dark-card);
+  border-color: var(--dark-border);
+}
+
+html[data-theme="oscuro"] .mi-cr-filters__top {
+  background: var(--dark-bg-secondary);
+  border-bottom-color: var(--dark-border);
+  color: var(--dark-text-primary);
+}
+
+html[data-theme="oscuro"] .mi-cr-filters__title {
+  color: var(--dark-text-primary);
+}
+
+/* Campos de formulario - Modo oscuro */
+html[data-theme="oscuro"] .fl-input {
+  background: var(--dark-bg-secondary);
+  border-color: var(--dark-border);
+  color: var(--dark-text-primary);
+}
+
+html[data-theme="oscuro"] .fl-input:focus {
+  border-color: var(--dark-action);
+  background: var(--dark-bg-primary);
+}
+
+html[data-theme="oscuro"] .fl-label {
+  color: var(--dark-text-secondary);
+}
+
+html[data-theme="oscuro"] .fl-input:focus + .fl-label,
+html[data-theme="oscuro"] .fl-input:not(:placeholder-shown) + .fl-label {
+  color: var(--dark-action);
+}
+
+/* Select - Modo oscuro */
+html[data-theme="oscuro"] select.fl-input {
+  background: var(--dark-bg-secondary);
+  color: var(--dark-text-primary);
+}
+
+html[data-theme="oscuro"] select.fl-input option {
+  background: var(--dark-bg-secondary);
+  color: var(--dark-text-primary);
+}
+
+/* Botones - Modo oscuro */
+html[data-theme="oscuro"] .mit-btn--solid {
+  background: var(--dark-action);
+  color: white;
+}
+
+html[data-theme="oscuro"] .mit-btn--ghost {
+  background: transparent;
+  border-color: var(--dark-border);
+  color: var(--dark-text-secondary);
+}
+
+html[data-theme="oscuro"] .mit-btn--ghost:hover:not(:disabled) {
+  background: var(--dark-hover);
+  border-color: var(--dark-action);
+  color: var(--dark-action);
+}
+
+html[data-theme="oscuro"] .mit-btn:disabled {
+  opacity: 0.5;
+}
+
+/* =========================================
+   MODO OSCURO - MODAL PRINCIPAL
+========================================= */
+
+/* Modal container - Modo oscuro */
+html[data-theme="oscuro"] .mi-modal__container {
+  background: var(--dark-bg-primary);
+  border: 1px solid var(--dark-border);
+}
+
+/* Modal header - Modo oscuro */
+html[data-theme="oscuro"] .mi-modal__header {
+  background: var(--dark-bg-secondary);
+  border-bottom-color: var(--dark-border);
+}
+
+html[data-theme="oscuro"] .mi-modal__title {
+  color: var(--dark-text-primary);
+}
+
+html[data-theme="oscuro"] .mi-modal__subtitle {
+  color: var(--dark-text-secondary);
+}
+
+/* Modal close button - Modo oscuro */
+html[data-theme="oscuro"] .mi-modal__close {
+  color: var(--dark-text-secondary);
+}
+
+html[data-theme="oscuro"] .mi-modal__close:hover:not(:disabled) {
+  background: var(--dark-hover);
+  color: var(--dark-text-primary);
+}
+
+/* Modal content - Modo oscuro */
+html[data-theme="oscuro"] .mi-modal__content {
+  background: var(--dark-bg-primary);
+}
+
+/* Modal footer actions - Modo oscuro */
+html[data-theme="oscuro"] .mit-actions {
+  border-top-color: var(--dark-border);
+  background: var(--dark-bg-secondary);
+}
+
+html[data-theme="oscuro"] .mit-help {
+  color: var(--dark-text-secondary);
+}
+
+/* =========================================
+   MODO OSCURO - BOTONES DE PESTAÑAS
+========================================= */
+
+html[data-theme="oscuro"] .mi-cr-table__foot--top .mit-btn--solid {
+  background: var(--dark-action);
+  color: white;
+}
+
+html[data-theme="oscuro"] .mi-cr-table__foot--top .mit-btn--ghost {
+  background: transparent;
+  border-color: var(--dark-border);
+  color: var(--dark-text-secondary);
+}
+
+html[data-theme="oscuro"] .mi-cr-table__foot--top .mit-btn--ghost:hover {
+  background: var(--dark-hover);
+  color: var(--dark-text-primary);
+}
+
+/* =========================================
+   MODO OSCURO - TEXTOS Y MISCELÁNEOS
+========================================= */
+
+html[data-theme="oscuro"] .mi-cr-table__summary div {
+  color: var(--dark-text-primary);
+}
+
+html[data-theme="oscuro"] .mi-cr-table__summary div:last-child {
+  color: var(--dark-text-secondary);
+}
+
+html[data-theme="oscuro"] .mi-cr-table__summary b {
+  color: var(--dark-text-primary);
+}
+
+/* Overlay del modal - Modo oscuro */
+html[data-theme="oscuro"] .mi-modal__overlay {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+/* =========================================
+   MODO OSCURO - MODAL DE CONFIRMACIÓN
+   (ModalAccionEntidadStock)
+========================================= */
+
+html[data-theme="oscuro"] .modal-accion-stock {
+  background: var(--dark-bg-primary);
+  border-color: var(--dark-border);
+}
+
+html[data-theme="oscuro"] .modal-accion-stock__header {
+  background: var(--dark-bg-secondary);
+  border-bottom-color: var(--dark-border);
+}
+
+html[data-theme="oscuro"] .modal-accion-stock__title {
+  color: var(--dark-text-primary);
+}
+
+html[data-theme="oscuro"] .modal-accion-stock__body {
+  color: var(--dark-text-primary);
+}
+
+html[data-theme="oscuro"] .modal-accion-stock__warning {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #FBBF24;
+}
+
+html[data-theme="oscuro"] .modal-accion-stock__details {
+  background: var(--dark-bg-secondary);
+  border-color: var(--dark-border);
+}
+
+html[data-theme="oscuro"] .modal-accion-stock__details-label {
+  color: var(--dark-text-secondary);
+}
+
+html[data-theme="oscuro"] .modal-accion-stock__details-value {
+  color: var(--dark-text-primary);
+}
+
+/* Botones del modal de confirmación - Modo oscuro */
+html[data-theme="oscuro"] .modal-accion-stock__btn--confirm {
+  background: var(--dark-danger);
+  color: white;
+}
+
+html[data-theme="oscuro"] .modal-accion-stock__btn--confirm-success {
+  background: var(--dark-success);
+  color: white;
+}
+
+html[data-theme="oscuro"] .modal-accion-stock__btn--cancel {
+  background: var(--dark-bg-secondary);
+  border-color: var(--dark-border);
+  color: var(--dark-text-secondary);
+}
+
+html[data-theme="oscuro"] .modal-accion-stock__btn--cancel:hover {
+  background: var(--dark-hover);
+  color: var(--dark-text-primary);
+}
+
+/* =========================================
+   TRANSICIONES SUAVES PARA EL MODO OSCURO
+========================================= */
+
+.cc-cliente-table,
+.cc-grid-row,
+.cc-action-btn,
+.mit-btn,
+.fl-input,
+.mi-modal__container,
+.modal-accion-stock {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }

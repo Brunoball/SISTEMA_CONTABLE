@@ -44,6 +44,44 @@ function buildHeadersJSON() {
   return { ...buildHeadersGET(), "Content-Type": "application/json" };
 }
 
+function getUsuarioAuditData() {
+  let idUsuarioMaster = 0;
+  let idTenant = null;
+
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.id_usuario_master ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      0;
+
+    if (Number.isFinite(Number(cand))) {
+      idUsuarioMaster = Number(cand);
+    }
+
+    const tenantCand =
+      u?.idTenant ??
+      u?.id_tenant ??
+      u?.tenant_id ??
+      u?.tenant?.idTenant ??
+      null;
+
+    if (
+      tenantCand !== null &&
+      tenantCand !== undefined &&
+      tenantCand !== "" &&
+      Number(tenantCand) > 0
+    ) {
+      idTenant = Number(tenantCand);
+    }
+  } catch {}
+
+  return { idUsuarioMaster, idTenant };
+}
+
 function toUpperValue(value) {
   return String(value || "").toUpperCase();
 }
@@ -195,11 +233,18 @@ export default function StockCategorias() {
   }, []);
 
   const handleGuardar = async () => {
+    const { idUsuarioMaster, idTenant } = getUsuarioAuditData();
+
     const payload = {
       nombre: toUpperValue(form.nombre).trim(),
       descripcion: toUpperValue(form.descripcion).trim(),
       activo: Number(form.activo) === 1 ? 1 : 0,
+      idUsuarioMaster,
     };
+
+    if (idTenant) {
+      payload.tenant_id = idTenant;
+    }
 
     if (!payload.nombre) {
       mostrarToast("error", "El nombre de la categoría es obligatorio.");
@@ -267,6 +312,8 @@ export default function StockCategorias() {
     setAccionandoId(id);
 
     try {
+      const { idUsuarioMaster, idTenant } = getUsuarioAuditData();
+
       let action = "";
       let mensajeExito = "";
       let recargarTab = pestana;
@@ -287,7 +334,16 @@ export default function StockCategorias() {
         throw new Error("Acción inválida.");
       }
 
-      const data = await apiPost(action, { id_stock_categoria: id });
+      const payload = {
+        id_stock_categoria: id,
+        idUsuarioMaster,
+      };
+
+      if (idTenant) {
+        payload.tenant_id = idTenant;
+      }
+
+      const data = await apiPost(action, payload);
 
       if ((type === "baja" || type === "eliminar") && id === Number(editandoId || 0)) {
         cerrarDrop();
@@ -583,20 +639,20 @@ export default function StockCategorias() {
           </div>
 
           <div className="mov-tableWrap" role="rowgroup">
-            <div className={["mov-gridBody mov-gridBody--relative" , loading ? "mov-softLoading" : ""].join(" ")}>
+            <div className={["mov-gridBody mov-gridBody--relative", loading ? "mov-softLoading" : ""].join(" ")}>
               {loading ? (
                 <div className="mov-skeletonWrap" aria-busy="true">
                   {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkelRow(i))}
                 </div>
               ) : categoriasOrdenadas.length === 0 ? (
-<div className="cc-emptyState">
-  <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
-  <div className="cc-emptyText">
-    {pestana === "activas"
-      ? "No hay categorías activas."
-      : "No hay categorías inactivas."}
-  </div>
-</div>
+                <div className="cc-emptyState">
+                  <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+                  <div className="cc-emptyText">
+                    {pestana === "activas"
+                      ? "No hay categorías activas."
+                      : "No hay categorías inactivas."}
+                  </div>
+                </div>
               ) : (
                 categoriasOrdenadas.map((cat) => {
                   const activo = Number(cat?.activo ?? 1) === 1;

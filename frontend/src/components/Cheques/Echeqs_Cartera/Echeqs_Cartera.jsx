@@ -15,49 +15,99 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 /* =========================
-   Helpers
+   Helpers auth
 ========================= */
-function getAuthHeaders(json = false) {
-  const sessionKey = (localStorage.getItem("session_key") || "").trim();
+function getAuthInfo() {
   const token = (localStorage.getItem("token") || "").trim();
+  const sessionKey = (
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    localStorage.getItem("x_session") ||
+    ""
+  ).trim();
+
+  let idUsuario = 0;
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      0;
+
+    if (Number.isFinite(Number(cand))) {
+      idUsuario = Number(cand);
+    }
+  } catch {}
+
+  return { token, sessionKey, idUsuario };
+}
+
+function getAuthHeaders(json = false) {
+  const { sessionKey, token } = getAuthInfo();
   const headers = {};
+
   if (sessionKey) headers["X-Session"] = sessionKey;
   if (token) headers["Authorization"] = `Bearer ${token}`;
   if (json) headers["Content-Type"] = "application/json";
+
   return headers;
 }
 
 function withSessionKey(url) {
   const base = String(url || "").trim();
   if (!base) return "";
+
   try {
-    const sessionKey = (localStorage.getItem("session_key") || "").trim();
-    const token = (localStorage.getItem("token") || "").trim();
+    const { sessionKey, token } = getAuthInfo();
     const u = new URL(base, window.location.origin);
+
     if (sessionKey && !u.searchParams.has("session_key")) {
       u.searchParams.set("session_key", sessionKey);
     }
     if (token && !u.searchParams.has("token")) {
       u.searchParams.set("token", token);
     }
+
     return u.toString();
   } catch {
     return base;
   }
 }
 
+function buildAuditUserPayload(extra = {}) {
+  const { idUsuario } = getAuthInfo();
+  const payload = { ...extra };
+
+  if (Number.isFinite(Number(idUsuario)) && Number(idUsuario) > 0) {
+    payload.idUsuarioMaster = Number(idUsuario);
+    payload.idUsuario = Number(idUsuario);
+  }
+
+  return payload;
+}
+
+/* =========================
+   Helpers generales
+========================= */
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
+
   let data;
   try {
     data = JSON.parse(text);
   } catch {
     throw new Error("La API devolvió una respuesta inválida.");
   }
+
   if (!res.ok || data?.exito === false) {
     throw new Error(data?.mensaje || `Error HTTP ${res.status}`);
   }
+
   return data;
 }
 
@@ -161,6 +211,7 @@ function SkeletonRow({ idx }) {
 
         const list = skelWidths[c.key] || ["60%"];
         const w = list[idx % list.length];
+
         return (
           <div
             key={c.key}
@@ -287,8 +338,10 @@ const Echeqs_Cartera = () => {
 
         setItems((prev) => {
           if (reset) return nuevos;
+
           const existentes = Array.isArray(prev) ? prev : [];
           const ids = new Set(existentes.map((x) => String(x.id_cheque)));
+
           return [
             ...existentes,
             ...nuevos.filter((x) => !ids.has(String(x.id_cheque))),
@@ -300,6 +353,7 @@ const Echeqs_Cartera = () => {
       } catch (err) {
         const mensaje = err?.message || "No se pudieron cargar los echeqs.";
         setError(mensaje);
+
         if (reset) {
           setItems([]);
           setHasMore(false);
@@ -331,11 +385,15 @@ const Echeqs_Cartera = () => {
       const params = new URLSearchParams();
       params.set("action", "echeq_cartera_depositar");
 
+      const body = buildAuditUserPayload({
+        id_cheque: idCheque,
+      });
+
       const data = await parseJsonOrThrow(
         await fetch(`${API_URL}?${params.toString()}`, {
           method: "POST",
           headers: getAuthHeaders(true),
-          body: JSON.stringify({ id_cheque: idCheque }),
+          body: JSON.stringify(body),
         })
       );
 
@@ -372,7 +430,12 @@ const Echeqs_Cartera = () => {
           <div className="mov-actionsInline">
             <button
               type="button"
-              className="mov-iconBtn"
+              className={[
+                "mov-iconBtn",
+                item?.tiene_comprobante
+                  ? "mov-iconBtn--comprobante"
+                  : "mov-iconBtn--disabled",
+              ].join(" ")}
               onClick={() => openModalComprobante(item)}
               title={
                 item?.tiene_comprobante ? "Ver comprobante" : "Sin comprobante"
@@ -607,9 +670,7 @@ const Echeqs_Cartera = () => {
                     <button
                       type="button"
                       className="mov-btn mov-btn--loadAll"
-                      onClick={() =>
-                        fetchData({ reset: false, offset: nextOffset })
-                      }
+                      onClick={() => fetchData({ reset: false, offset: nextOffset })}
                       disabled={loadingMore}
                       title="Cargar los próximos 100 registros"
                     >

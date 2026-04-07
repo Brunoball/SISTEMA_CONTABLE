@@ -9,7 +9,6 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faMagnifyingGlass,
   faBoxOpen,
-  faMoneyBillWave,
   faEye,
   faBuildingColumns,
 } from "@fortawesome/free-solid-svg-icons";
@@ -17,41 +16,94 @@ import {
 /* =========================
    Auth helpers
 ========================= */
-function getAuthHeaders(json = false) {
-  const sessionKey = (localStorage.getItem("session_key") || "").trim();
+function getAuthInfo() {
   const token = (localStorage.getItem("token") || "").trim();
+  const sessionKey = (
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    localStorage.getItem("x_session") ||
+    ""
+  ).trim();
+
+  let idUsuario = 0;
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      0;
+
+    if (Number.isFinite(Number(cand))) {
+      idUsuario = Number(cand);
+    }
+  } catch {}
+
+  return { token, sessionKey, idUsuario };
+}
+
+function getAuthHeaders(json = false) {
+  const { sessionKey, token } = getAuthInfo();
   const headers = {};
+
   if (sessionKey) headers["X-Session"] = sessionKey;
   if (token) headers["Authorization"] = `Bearer ${token}`;
   if (json) headers["Content-Type"] = "application/json";
+
   return headers;
 }
 
 function withSessionKey(url) {
   const base = String(url || "").trim();
   if (!base) return "";
+
   try {
-    const sessionKey = (localStorage.getItem("session_key") || "").trim();
-    const token = (localStorage.getItem("token") || "").trim();
+    const { sessionKey, token } = getAuthInfo();
     const u = new URL(base, window.location.origin);
-    if (sessionKey && !u.searchParams.has("session_key")) u.searchParams.set("session_key", sessionKey);
-    if (token && !u.searchParams.has("token")) u.searchParams.set("token", token);
+
+    if (sessionKey && !u.searchParams.has("session_key")) {
+      u.searchParams.set("session_key", sessionKey);
+    }
+    if (token && !u.searchParams.has("token")) {
+      u.searchParams.set("token", token);
+    }
+
     return u.toString();
   } catch {
     return base;
   }
 }
 
+function buildAuditUserPayload(extra = {}) {
+  const { idUsuario } = getAuthInfo();
+  const payload = { ...extra };
+
+  if (Number.isFinite(Number(idUsuario)) && Number(idUsuario) > 0) {
+    payload.idUsuarioMaster = Number(idUsuario);
+    payload.idUsuario = Number(idUsuario);
+  }
+
+  return payload;
+}
+
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
+
   let data;
   try {
     data = JSON.parse(text);
   } catch {
     throw new Error(`La API devolvió una respuesta inválida. HTTP ${res.status}`);
   }
-  if (!res.ok || data?.exito === false) throw new Error(data?.mensaje || `Error HTTP ${res.status}`);
+
+  if (!res.ok || data?.exito === false) {
+    throw new Error(data?.mensaje || `Error HTTP ${res.status}`);
+  }
+
   return data;
 }
 
@@ -61,8 +113,10 @@ async function parseJsonOrThrow(res) {
 function formatFecha(fecha) {
   const s = String(fecha || "").trim();
   if (!s) return "—";
+
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+
   return s;
 }
 
@@ -141,6 +195,7 @@ const Cheques_Cartera = () => {
     (row) => {
       const cheque = normalizeCheque(row);
       const idCheque = Number(cheque?.id_cheque || 0);
+
       if (!idCheque) {
         showToast("error", "Cheque inválido.");
         return;
@@ -214,6 +269,7 @@ const Cheques_Cartera = () => {
   /* Initial load */
   useEffect(() => {
     let active = true;
+
     (async () => {
       setLoading(true);
       setError("");
@@ -225,6 +281,7 @@ const Cheques_Cartera = () => {
         if (active) setLoading(false);
       }
     })();
+
     return () => {
       active = false;
     };
@@ -234,6 +291,7 @@ const Cheques_Cartera = () => {
   const rows = useMemo(() => {
     const value = q.trim().toLowerCase();
     if (!value) return allRows;
+
     return allRows.filter((item) => {
       const fields = [
         item?.fecha_emision,
@@ -242,6 +300,7 @@ const Cheques_Cartera = () => {
         item?.importe,
         item?.fecha_pago,
       ].map((v) => String(v || "").toLowerCase());
+
       return fields.some((f) => f.includes(value));
     });
   }, [q, allRows]);
@@ -249,8 +308,10 @@ const Cheques_Cartera = () => {
   /* Load more */
   const handleLoadMore = useCallback(async () => {
     if (!hasMore || loadingMore) return;
+
     setLoadingMore(true);
     setError("");
+
     try {
       const data = await fetchCheques({ offset: nextOffset, append: true, qValue: "" });
       showToast(
@@ -268,21 +329,27 @@ const Cheques_Cartera = () => {
   /* Depositar */
   const handleDepositarCheque = useCallback(async () => {
     const idCheque = Number(chequeSeleccionado?.id_cheque || 0);
+
     if (!idCheque) {
       showToast("error", "No se pudo identificar el cheque seleccionado.");
       return;
     }
 
     setDepositando(true);
+
     try {
       const params = new URLSearchParams();
       params.set("action", "cheques_cartera_depositar");
+
+      const body = buildAuditUserPayload({
+        id_cheque: idCheque,
+      });
 
       const data = await parseJsonOrThrow(
         await fetch(`${API_URL}?${params.toString()}`, {
           method: "POST",
           headers: getAuthHeaders(true),
-          body: JSON.stringify({ id_cheque: idCheque }),
+          body: JSON.stringify(body),
         })
       );
 
@@ -294,7 +361,11 @@ const Cheques_Cartera = () => {
 
       setModalDepositarOpen(false);
       setChequeSeleccionado(null);
-      showToast("exito", data?.mensaje || "Cheque depositado correctamente.");
+
+      showToast(
+        "exito",
+        data?.mensaje || "Cheque depositado correctamente."
+      );
     } catch (e) {
       showToast("error", e?.message || "No se pudo depositar el cheque.");
     } finally {
@@ -397,8 +468,10 @@ const Cheques_Cartera = () => {
             </div>
           );
         }
+
         const list = skelWidths[c.key] || ["60%"];
         const w = list[idx % list.length];
+
         return (
           <div
             key={c.key}
@@ -515,7 +588,7 @@ const Cheques_Cartera = () => {
         <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup" id="cheques-st">
           <div
             className={[
-              "mov-gridBody ",
+              "mov-gridBody",
               "mov-gridBody--relative",
               loading ? "mov-softLoading" : "",
             ].join(" ")}

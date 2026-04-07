@@ -54,6 +54,39 @@ function buildHeadersMultipart() {
   return h;
 }
 
+function getUsuarioAuditData() {
+  let idUsuarioMaster = 0;
+  let idTenant = null;
+
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.id_usuario_master ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      0;
+
+    if (Number.isFinite(Number(cand))) {
+      idUsuarioMaster = Number(cand);
+    }
+
+    const tenantCand =
+      u?.idTenant ??
+      u?.id_tenant ??
+      u?.tenant_id ??
+      u?.tenant?.idTenant ??
+      null;
+
+    if (tenantCand !== null && tenantCand !== undefined && tenantCand !== "" && Number(tenantCand) > 0) {
+      idTenant = Number(tenantCand);
+    }
+  } catch {}
+
+  return { idUsuarioMaster, idTenant };
+}
+
 async function parseJsonOrThrow(res) {
   if (res.status === 401 || res.status === 403) {
     throw new Error("Sesión vencida o no autorizada. Volvé a iniciar sesión.");
@@ -286,7 +319,7 @@ export default function ModalEditarProducto({
 
         const normalizadas = raw.map((cat) => ({
           id: String(cat.id_stock_categoria ?? cat.id ?? "").trim(),
-          nombre: String(cat.nombre ?? cat.label ?? "").trim().toUpperCase(), // Mayúsculas
+          nombre: String(cat.nombre ?? cat.label ?? "").trim().toUpperCase(),
           activo:
             cat.activo === undefined || cat.activo === null
               ? 1
@@ -501,13 +534,10 @@ export default function ModalEditarProducto({
         [name]: value.replace(/[^\d]/g, ""),
       }));
     } else if (name === "nombre") {
-      // Transformar a mayúsculas
       setForm((prev) => ({ ...prev, [name]: value.toUpperCase() }));
     } else if (name === "sku") {
-      // Transformar a mayúsculas
       setForm((prev) => ({ ...prev, [name]: value.toUpperCase() }));
     } else if (name === "descripcion") {
-      // Transformar a mayúsculas
       setForm((prev) => ({ ...prev, [name]: value.toUpperCase() }));
     } else {
       setForm((prev) => ({ ...prev, [name]: value }));
@@ -649,6 +679,7 @@ export default function ModalEditarProducto({
 
     try {
       const categoriaId = normalizeCategoriaId(form.id_categoria_stock);
+      const { idUsuarioMaster, idTenant } = getUsuarioAuditData();
 
       if (nuevaImagenFile) {
         const fd = new FormData();
@@ -667,6 +698,14 @@ export default function ModalEditarProducto({
 
         if (categoriaId !== "") {
           fd.append("id_categoria_stock", categoriaId);
+        }
+
+        if (idUsuarioMaster > 0) {
+          fd.append("idUsuarioMaster", String(idUsuarioMaster));
+        }
+
+        if (idTenant) {
+          fd.append("tenant_id", String(idTenant));
         }
 
         fd.append("imagen", nuevaImagenFile);
@@ -689,7 +728,12 @@ export default function ModalEditarProducto({
           stock: form.stock !== "" ? Number(form.stock) : null,
           descripcion: form.descripcion.trim().toUpperCase() || null,
           id_categoria_stock: categoriaId !== "" ? Number(categoriaId) : null,
+          idUsuarioMaster,
         };
+
+        if (idTenant) {
+          body.tenant_id = idTenant;
+        }
 
         if (eliminarImagenActual) {
           body.imagen_url = null;

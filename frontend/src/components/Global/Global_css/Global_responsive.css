@@ -1280,7 +1280,7 @@
   }
 
   .mi-cr-filters__actions{
-    flex-direction: column;
+    flex-direction: row;
   }
 
   .mi-cr-filters__dates{
@@ -1293,13 +1293,7 @@
     padding: 0;
   }
 
-  .mi-modal__container{
-    width: 100vw;
-    height: 100vh;
-    max-height: 100vh;
-    min-height: 100vh;
-    border-radius: 0;
-  }
+
 
   .mi-modal__container--mov{
     min-height: 100vh;

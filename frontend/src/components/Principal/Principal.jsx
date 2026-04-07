@@ -169,8 +169,6 @@ const ROUTE_PREFETCH = {
 
   "/panel/stock": () => import("../Stock/Stock"),
   "/panel/stock/categorias": () => import("../Stock/StockCategorias"),
-  "/panel/stock/clientes": () => import("../Stock/StockClientes"),
-  "/panel/stock/proveedores": () => import("../Stock/StockProveedores"),
 
   "/panel/analisis-financiero": () =>
     import("../Analisis_Financiero/Analisis_Financiero"),
@@ -924,8 +922,6 @@ const Principal = () => {
         ruta: "/panel/stock",
         children: [
           { label: "Categorías", ruta: "/panel/stock/categorias" },
-          { label: "Clientes", ruta: "/panel/stock/clientes" },
-          { label: "Proveedores", ruta: "/panel/stock/proveedores" },
         ],
       },
       {
@@ -968,8 +964,6 @@ const Principal = () => {
 
     if (location.pathname === "/panel/stock") return "Stock";
     if (location.pathname.startsWith("/panel/stock/categorias")) return "Stock · Categorías";
-    if (location.pathname.startsWith("/panel/stock/clientes")) return "Stock · Clientes";
-    if (location.pathname.startsWith("/panel/stock/proveedores")) return "Stock · Proveedores";
     if (location.pathname.startsWith("/panel/stock")) return "Stock";
 
     if (location.pathname.startsWith("/panel/cheques")) return "Cheques";

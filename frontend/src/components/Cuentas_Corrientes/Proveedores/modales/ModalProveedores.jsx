@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import BASE_URL from "../../../config/config";
-import "../Stock.css";
+import BASE_URL from "../../../../config/config";
+import "../../../Stock/Stock.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faXmark,
@@ -10,12 +10,12 @@ import {
   faTrashCan,
   faFloppyDisk,
   faArrowRotateRight,
-  faUsers,
-  faUser,
+  faTruckField,
+  faBuilding,
   faUserSlash,
   faUserCheck,
 } from "@fortawesome/free-solid-svg-icons";
-import ModalAccionEntidadStock from "./ModalAccionEntidadStock";
+import ModalAccionEntidadStock from "../../../Stock/modales/ModalAccionEntidadStock";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 
@@ -43,8 +43,14 @@ function toUpperValue(value) {
   return String(value || "").toUpperCase();
 }
 
-function getClienteId(row) {
-  return Number(row?.id_cliente ?? row?.id ?? 0);
+function getProveedorId(row) {
+  return Number(
+    row?.id_proveedor ??
+      row?.id_stock_proveedor ??
+      row?.id_proveedor_stock ??
+      row?.id ??
+      0
+  );
 }
 
 async function parseJsonOrThrow(res) {
@@ -97,7 +103,7 @@ async function apiPost(action, body) {
   return parseJsonOrThrow(res);
 }
 
-export default function ModalClientesStock({
+export default function ModalProveedores({
   open,
   onClose,
   onActualizado,
@@ -109,7 +115,7 @@ export default function ModalClientesStock({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [accionandoId, setAccionandoId] = useState(null);
-  const [clientes, setClientes] = useState([]);
+  const [proveedores, setProveedores] = useState([]);
   const [pestana, setPestana] = useState("activos");
   const [modo, setModo] = useState("crear");
   const [editandoId, setEditandoId] = useState(null);
@@ -120,7 +126,7 @@ export default function ModalClientesStock({
 
   const [modalAccion, setModalAccion] = useState({
     open: false,
-    type: null, // baja | alta | eliminar
+    type: null,
     row: null,
     loading: false,
   });
@@ -185,19 +191,19 @@ export default function ModalClientesStock({
     });
   }, [pestana]);
 
-  const cargarClientes = useCallback(
+  const cargarProveedores = useCallback(
     async (tabActual = pestana) => {
       setLoading(true);
       try {
         const params = new URLSearchParams({
-          action: "stock_clientes_listar",
+          action: "cc_proveedores_listar",
           activo: tabActual === "inactivos" ? "0" : "1",
         });
 
         const data = await apiGet(`${API_URL}?${params.toString()}`);
-        setClientes(Array.isArray(data?.clientes) ? data.clientes : []);
+        setProveedores(Array.isArray(data?.proveedores) ? data.proveedores : []);
       } catch (err) {
-        onToast?.("error", err?.message || "No se pudieron cargar los clientes.");
+        onToast?.("error", err?.message || "No se pudieron cargar los proveedores.");
       } finally {
         setLoading(false);
       }
@@ -207,21 +213,21 @@ export default function ModalClientesStock({
 
   useEffect(() => {
     if (!open) return;
-    cargarClientes(pestana);
+    cargarProveedores(pestana);
     resetForm();
-  }, [open, pestana, cargarClientes, resetForm]);
+  }, [open, pestana, cargarProveedores, resetForm]);
 
-  const clientesOrdenados = useMemo(() => {
-    return [...clientes].sort((a, b) =>
+  const proveedoresOrdenados = useMemo(() => {
+    return [...proveedores].sort((a, b) =>
       String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", {
         sensitivity: "base",
       })
     );
-  }, [clientes]);
+  }, [proveedores]);
 
   const iniciarEdicion = (row) => {
     setModo("editar");
-    setEditandoId(getClienteId(row));
+    setEditandoId(getProveedorId(row));
     setForm({
       nombre: toUpperValue(row?.nombre),
       activo: Number(row?.activo ?? 1) === 1 ? 1 : 0,
@@ -239,7 +245,7 @@ export default function ModalClientesStock({
     };
 
     if (!payload.nombre) {
-      onToast?.("error", "El nombre del cliente es obligatorio.");
+      onToast?.("error", "El nombre del proveedor es obligatorio.");
       return;
     }
 
@@ -247,33 +253,31 @@ export default function ModalClientesStock({
 
     try {
       if (modo === "crear") {
-        const data = await apiPost("stock_cliente_crear", payload);
-        onToast?.("exito", data?.mensaje || "Cliente creado correctamente.");
-
-        if (payload.activo === 1) {
-          setPestana("activos");
-        } else {
-          setPestana("inactivos");
-        }
+        const data = await apiPost("cc_proveedor_crear", payload);
+        onToast?.("exito", data?.mensaje || "Proveedor creado correctamente.");
       } else {
-        const data = await apiPost("stock_cliente_actualizar", {
-          id_cliente: editandoId,
+        const data = await apiPost("cc_proveedor_actualizar", {
+          id_proveedor: editandoId,
+          id_stock_proveedor: editandoId,
           ...payload,
         });
-        onToast?.("exito", data?.mensaje || "Cliente actualizado correctamente.");
-
-        if (payload.activo === 1) {
-          setPestana("activos");
-        } else {
-          setPestana("inactivos");
-        }
+        onToast?.("exito", data?.mensaje || "Proveedor actualizado correctamente.");
       }
 
-      await cargarClientes(payload.activo === 1 ? "activos" : "inactivos");
+      const nuevaPestana = payload.activo === 1 ? "activos" : "inactivos";
+      setPestana(nuevaPestana);
+
+      await cargarProveedores(nuevaPestana);
       await onActualizado?.();
-      resetForm();
+
+      setModo("crear");
+      setEditandoId(null);
+      setForm({
+        nombre: "",
+        activo: payload.activo,
+      });
     } catch (err) {
-      onToast?.("error", err?.message || "No se pudo guardar el cliente.");
+      onToast?.("error", err?.message || "No se pudo guardar el proveedor.");
     } finally {
       setSaving(false);
     }
@@ -299,7 +303,7 @@ export default function ModalClientesStock({
 
   const ejecutarAccionModal = useCallback(async () => {
     const { row, type } = modalAccion;
-    const id = getClienteId(row);
+    const id = getProveedorId(row);
 
     if (!id || !type) return;
 
@@ -309,19 +313,26 @@ export default function ModalClientesStock({
     try {
       let action = "";
       let successFallback = "";
+      let recargarTab = pestana;
 
       if (type === "baja") {
-        action = "stock_cliente_dar_baja";
-        successFallback = "Cliente dado de baja correctamente.";
+        action = "cc_proveedor_dar_baja";
+        successFallback = "Proveedor dado de baja correctamente.";
+        recargarTab = "activos";
       } else if (type === "alta") {
-        action = "stock_cliente_dar_alta";
-        successFallback = "Cliente dado de alta correctamente.";
+        action = "cc_proveedor_dar_alta";
+        successFallback = "Proveedor dado de alta correctamente.";
+        recargarTab = "inactivos";
       } else if (type === "eliminar") {
-        action = "stock_cliente_eliminar";
-        successFallback = "Cliente eliminado correctamente.";
+        action = "cc_proveedor_eliminar";
+        successFallback = "Proveedor eliminado correctamente.";
+        recargarTab = pestana;
       }
 
-      const data = await apiPost(action, { id_cliente: id });
+      const data = await apiPost(action, {
+        id_proveedor: id,
+        id_stock_proveedor: id,
+      });
 
       onToast?.("exito", data?.mensaje || successFallback);
 
@@ -329,7 +340,7 @@ export default function ModalClientesStock({
         resetForm();
       }
 
-      await cargarClientes(pestana);
+      await cargarProveedores(recargarTab);
       await onActualizado?.();
       cerrarModalAccion();
     } catch (err) {
@@ -340,11 +351,11 @@ export default function ModalClientesStock({
     }
   }, [
     modalAccion,
-    editandoId,
-    cargarClientes,
     pestana,
+    cargarProveedores,
     onActualizado,
     onToast,
+    editandoId,
     resetForm,
     cerrarModalAccion,
   ]);
@@ -355,14 +366,14 @@ export default function ModalClientesStock({
 
     if (modalAccion.type === "baja") {
       return {
-        title: "Dar de baja cliente",
-        message: "¿Seguro que querés dar de baja este cliente?",
-        warning: "El cliente dejará de aparecer en la pestaña de activos y pasará a inactivos.",
+        title: "Dar de baja proveedor",
+        message: "¿Seguro que querés dar de baja este proveedor?",
+        warning: "El proveedor dejará de aparecer en la pestaña de activos y pasará a inactivos.",
         confirmLabel: "Dar de baja",
         cancelLabel: "Cancelar",
         variant: "danger",
         details: [
-          { label: "Cliente", value: nombre },
+          { label: "Proveedor", value: nombre },
           { label: "Acción", value: "Dar de baja" },
         ],
       };
@@ -370,28 +381,28 @@ export default function ModalClientesStock({
 
     if (modalAccion.type === "alta") {
       return {
-        title: "Dar de alta cliente",
-        message: "¿Seguro que querés dar de alta este cliente?",
-        warning: "El cliente volverá a aparecer en la pestaña de activos.",
+        title: "Dar de alta proveedor",
+        message: "¿Seguro que querés dar de alta este proveedor?",
+        warning: "El proveedor volverá a aparecer en la pestaña de activos.",
         confirmLabel: "Dar de alta",
         cancelLabel: "Cancelar",
         variant: "success",
         details: [
-          { label: "Cliente", value: nombre },
+          { label: "Proveedor", value: nombre },
           { label: "Acción", value: "Dar de alta" },
         ],
       };
     }
 
     return {
-      title: "Eliminar cliente",
-      message: "¿Seguro que querés eliminar este cliente definitivamente?",
+      title: "Eliminar proveedor",
+      message: "¿Seguro que querés eliminar este proveedor definitivamente?",
       warning: "Esta acción no se puede deshacer.",
       confirmLabel: "Eliminar",
       cancelLabel: "Cancelar",
       variant: "danger",
       details: [
-        { label: "Cliente", value: nombre },
+        { label: "Proveedor", value: nombre },
         {
           label: "Estado",
           value: Number(row?.activo ?? 1) === 1 ? "Activo" : "Inactivo",
@@ -421,13 +432,13 @@ export default function ModalClientesStock({
       >
         <div className="mi-modal__header">
           <div className="mi-modal__head-icon" aria-hidden="true">
-            <FontAwesomeIcon icon={faUsers} />
+            <FontAwesomeIcon icon={faTruckField} />
           </div>
 
           <div className="mi-modal__head-left">
-            <h2 className="mi-modal__title">Clientes de stock</h2>
+            <h2 className="mi-modal__title">Proveedores de cuentas corrientes</h2>
             <p className="mi-modal__subtitle">
-              Agregá, editá, da de baja, da de alta o eliminá clientes.
+              Agregá, editá, da de baja, da de alta o eliminá proveedores.
             </p>
           </div>
 
@@ -452,7 +463,7 @@ export default function ModalClientesStock({
                     icon={modo === "crear" ? faPlus : faPenToSquare}
                     style={{ marginRight: 8, opacity: 0.75, fontSize: 13 }}
                   />
-                  {modo === "crear" ? "Nuevo cliente" : "Editar cliente"}
+                  {modo === "crear" ? "Nuevo proveedor" : "Editar proveedor"}
                 </div>
               </div>
 
@@ -472,7 +483,7 @@ export default function ModalClientesStock({
                     disabled={saving}
                   />
                   <label className="fl-label">
-                    <FontAwesomeIcon icon={faUser} style={{ marginRight: 5 }} />
+                    <FontAwesomeIcon icon={faBuilding} style={{ marginRight: 5 }} />
                     Nombre *
                   </label>
                 </div>
@@ -509,7 +520,7 @@ export default function ModalClientesStock({
                     {saving
                       ? "Guardando..."
                       : modo === "crear"
-                      ? "Crear cliente"
+                      ? "Crear proveedor"
                       : "Guardar cambios"}
                   </button>
 
@@ -523,6 +534,16 @@ export default function ModalClientesStock({
                       Cancelar edición
                     </button>
                   )}
+                </div>
+
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--nv-muted)",
+                    marginTop: 4,
+                  }}
+                >
+                  Gestioná tus <b>proveedores</b> desde cuentas corrientes.
                 </div>
               </div>
             </aside>
@@ -546,10 +567,10 @@ export default function ModalClientesStock({
                         color: "var(--nv-text)",
                       }}
                     >
-                      Listado de clientes
+                      Listado de proveedores
                     </div>
                     <div style={{ fontSize: 12, color: "var(--nv-muted)" }}>
-                      Total: <b>{clientesOrdenados.length}</b>
+                      Total: <b>{proveedoresOrdenados.length}</b>
                     </div>
                   </div>
                 </div>
@@ -585,7 +606,7 @@ export default function ModalClientesStock({
                 </div>
               </div>
 
-              {!loading && clientesOrdenados.length > 0 && (
+              {!loading && proveedoresOrdenados.length > 0 && (
                 <div className="mi-cr-table__head mi-cr-grid-clientes-stock">
                   <div className="mi-cr-table__head-cell" style={{ paddingLeft: 10 }}>
                     Nombre
@@ -610,28 +631,28 @@ export default function ModalClientesStock({
                   <EmptyState
                     icon={faArrowRotateRight}
                     spin
-                    text="Cargando clientes..."
+                    text="Cargando proveedores..."
                   />
-                ) : clientesOrdenados.length === 0 ? (
+                ) : proveedoresOrdenados.length === 0 ? (
                   <EmptyState
-                    icon={faUsers}
+                    icon={faTruckField}
                     text={
                       pestana === "activos"
-                        ? "No hay clientes activos."
-                        : "No hay clientes inactivos."
+                        ? "No hay proveedores activos."
+                        : "No hay proveedores inactivos."
                     }
                   />
                 ) : (
-                  clientesOrdenados.map((row) => {
+                  proveedoresOrdenados.map((row) => {
                     const activo = Number(row?.activo ?? 1) === 1;
                     const isEditing =
-                      getClienteId(row) === Number(editandoId || 0) &&
+                      getProveedorId(row) === Number(editandoId || 0) &&
                       modo === "editar";
-                    const bloqueado = accionandoId === getClienteId(row) || saving;
+                    const bloqueado = accionandoId === getProveedorId(row) || saving;
 
                     return (
                       <div
-                        key={getClienteId(row)}
+                        key={getProveedorId(row)}
                         className={[
                           "mi-cr-row",
                           "mi-cr-grid-clientes-stock",
@@ -749,7 +770,7 @@ export default function ModalClientesStock({
 
               <div className="mi-cr-table__foot">
                 <span style={{ fontSize: 12, color: "var(--nv-muted)" }}>
-                  Administrá el padrón de <b>clientes</b>.
+                  Administrá el padrón de <b>proveedores</b>.
                 </span>
               </div>
             </section>
@@ -758,7 +779,7 @@ export default function ModalClientesStock({
 
         <div className="mit-actions">
           <span className="mit-help">
-            Gestión de clientes con activos, inactivos, alta, baja y eliminación.
+            Gestión de proveedores con activos, inactivos, alta, baja y eliminación.
           </span>
           <button
             type="button"

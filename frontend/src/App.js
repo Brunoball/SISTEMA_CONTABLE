@@ -34,8 +34,6 @@ import ProveedoresCC from "./components/Cuentas_Corrientes/Proveedores/Proveedor
 /* STOCK */
 import Stock from "./components/Stock/Stock";
 import StockCategorias from "./components/Stock/StockCategorias";
-import StockClientes from "./components/Stock/StockClientes";
-import StockProveedores from "./components/Stock/StockProveedores";
 
 /* CHEQUES */
 import Cheques_Cartera from "./components/Cheques/Cheques_Cartera/Cheques_Cartera";
@@ -151,8 +149,6 @@ export default function App() {
           {/* STOCK */}
           <Route path="stock" element={<Stock />} />
           <Route path="stock/categorias" element={<StockCategorias />} />
-          <Route path="stock/clientes" element={<StockClientes />} />
-          <Route path="stock/proveedores" element={<StockProveedores />} />
 
           {/* CHEQUES */}
           <Route path="cheques/cartera" element={<Cheques_Cartera />} />

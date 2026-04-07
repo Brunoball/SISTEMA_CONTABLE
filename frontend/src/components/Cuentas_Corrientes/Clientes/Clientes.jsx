@@ -15,6 +15,7 @@ import {
   faArrowRightLong,
   faMagnifyingGlass,
   faTrashCan,
+  faUsers,
 } from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../../Global/Toast.jsx";
@@ -23,6 +24,7 @@ import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComproban
 import ModalEliminarMovimientos from "../../Global/Modales/ModalEliminar.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
+import ModalClientes from "./modales/ModalClientes.jsx";
 
 function moneyARS(v) {
   const n = Number(v || 0);
@@ -245,8 +247,10 @@ async function parseJsonOrThrow(res) {
       `${res.status} (Unauthorized): Sesión vencida o no autorizada. Volvé a iniciar sesión.`
     );
   }
+
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
+
   try {
     return JSON.parse(text);
   } catch {
@@ -278,7 +282,7 @@ function makeComprobanteAccessUrl(row, API) {
 }
 
 export default function ClientesCC() {
-  const API = `${BASE_URL}/api.php`;
+  const API = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
   const { dateRange, setDateRange } = useDateRange();
 
   const [calOpen, setCalOpen] = useState(false);
@@ -307,6 +311,7 @@ export default function ClientesCC() {
     row: null,
   });
 
+  const [clientesModalOpen, setClientesModalOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
   const comprobanteUrlCacheRef = useRef(new Map());
@@ -494,6 +499,7 @@ export default function ClientesCC() {
         if (type === "txt") {
           exportToTXT();
           showToast("exito", "TXT exportado.", 2200);
+          return;
         }
       } catch (e) {
         showToast("error", e?.message || "Error exportando archivo.", 3500);
@@ -611,6 +617,18 @@ export default function ClientesCC() {
     }
   }, [selectedCliente, loadHistorial, loadSummary]);
 
+  const refreshAfterClientesUpdate = useCallback(async () => {
+    await loadSummary();
+
+    if (selectedCliente?.id_cliente) {
+      try {
+        await loadHistorial(selectedCliente);
+      } catch {
+        volverAlListado();
+      }
+    }
+  }, [loadSummary, selectedCliente, loadHistorial, volverAlListado]);
+
   const confirmDeleteCobro = useCallback(async () => {
     const row = deleteState.row;
     const idCobro = Number(row?.id_cobro || 0);
@@ -653,6 +671,13 @@ export default function ClientesCC() {
           onClose={closeToast}
         />
       )}
+
+      <ModalClientes
+        open={clientesModalOpen}
+        onClose={() => setClientesModalOpen(false)}
+        onActualizado={refreshAfterClientesUpdate}
+        onToast={showToast}
+      />
 
       <ModalVerComprobante
         open={previewComprobante.open}
@@ -787,6 +812,17 @@ export default function ClientesCC() {
                 </div>
               </div>
             </div>
+
+            <button
+              type="button"
+              className="mov-btn mov-btn--ghost"
+              onClick={() => setClientesModalOpen(true)}
+              disabled={loading}
+              title="Administrar clientes"
+            >
+              <FontAwesomeIcon icon={faUsers} style={{ marginRight: 8 }} />
+              Clientes
+            </button>
 
             {isDetailMode ? (
               <button type="button" className="mov-btn mov-btn--ghost" onClick={volverAlListado}>

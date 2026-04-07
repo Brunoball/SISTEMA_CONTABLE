@@ -15,6 +15,7 @@ import {
   faArrowRightLong,
   faMagnifyingGlass,
   faTrashCan,
+  faTruckField,
 } from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../../Global/Toast.jsx";
@@ -23,6 +24,7 @@ import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComproban
 import ModalEliminarMovimientos from "../../Global/Modales/ModalEliminar.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
+import ModalProveedores from "./modales/ModalProveedores.jsx";
 
 /* =========================
    Helpers
@@ -320,6 +322,7 @@ export default function ProveedoresCC() {
   });
 
   const [toast, setToast] = useState(null);
+  const [modalProveedoresOpen, setModalProveedoresOpen] = useState(false);
 
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => setToast({ tipo, mensaje, duracion }),
@@ -680,6 +683,13 @@ export default function ProveedoresCC() {
         cancelLabel="Cancelar"
       />
 
+      <ModalProveedores
+        open={modalProveedoresOpen}
+        onClose={() => setModalProveedoresOpen(false)}
+        onActualizado={loadSummary}
+        onToast={showToast}
+      />
+
       <div className="mov-card__head">
         <div className="mov-card__headLeft">
           <div className="title-mov">
@@ -777,6 +787,17 @@ export default function ProveedoresCC() {
                 Volver
               </button>
             ) : null}
+
+            <button
+              type="button"
+              className="mov-btn mov-btn--ghost"
+              onClick={() => setModalProveedoresOpen(true)}
+              disabled={loading}
+              title="Gestionar proveedores"
+            >
+              <FontAwesomeIcon icon={faTruckField} style={{ marginRight: 6 }} />
+              Proveedores
+            </button>
           </div>
         </div>
 

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import BASE_URL from "../../../config/config";
-import "../Stock.css";
+import BASE_URL from "../../../../config/config";
+import "../../cuentas_corrientes.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faXmark,
@@ -10,12 +10,12 @@ import {
   faTrashCan,
   faFloppyDisk,
   faArrowRotateRight,
-  faTruckField,
-  faBuilding,
+  faUsers,
+  faUser,
   faUserSlash,
   faUserCheck,
 } from "@fortawesome/free-solid-svg-icons";
-import ModalAccionEntidadStock from "./ModalAccionEntidadStock";
+import ModalAccionEntidadStock from "../../../Stock/modales/ModalAccionEntidadStock";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 
@@ -43,14 +43,8 @@ function toUpperValue(value) {
   return String(value || "").toUpperCase();
 }
 
-function getProveedorId(row) {
-  return Number(
-    row?.id_proveedor ??
-      row?.id_stock_proveedor ??
-      row?.id_proveedor_stock ??
-      row?.id ??
-      0
-  );
+function getClienteId(row) {
+  return Number(row?.id_cliente ?? row?.id ?? 0);
 }
 
 async function parseJsonOrThrow(res) {
@@ -103,7 +97,7 @@ async function apiPost(action, body) {
   return parseJsonOrThrow(res);
 }
 
-export default function ModalProveedoresStock({
+export default function ModalClientes({
   open,
   onClose,
   onActualizado,
@@ -115,7 +109,7 @@ export default function ModalProveedoresStock({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [accionandoId, setAccionandoId] = useState(null);
-  const [proveedores, setProveedores] = useState([]);
+  const [clientes, setClientes] = useState([]);
   const [pestana, setPestana] = useState("activos");
   const [modo, setModo] = useState("crear");
   const [editandoId, setEditandoId] = useState(null);
@@ -126,7 +120,7 @@ export default function ModalProveedoresStock({
 
   const [modalAccion, setModalAccion] = useState({
     open: false,
-    type: null, // baja | alta | eliminar
+    type: null,
     row: null,
     loading: false,
   });
@@ -191,19 +185,19 @@ export default function ModalProveedoresStock({
     });
   }, [pestana]);
 
-  const cargarProveedores = useCallback(
+  const cargarClientes = useCallback(
     async (tabActual = pestana) => {
       setLoading(true);
       try {
         const params = new URLSearchParams({
-          action: "stock_proveedores_listar",
+          action: "cc_clientes_listar",
           activo: tabActual === "inactivos" ? "0" : "1",
         });
 
         const data = await apiGet(`${API_URL}?${params.toString()}`);
-        setProveedores(Array.isArray(data?.proveedores) ? data.proveedores : []);
+        setClientes(Array.isArray(data?.clientes) ? data.clientes : []);
       } catch (err) {
-        onToast?.("error", err?.message || "No se pudieron cargar los proveedores.");
+        onToast?.("error", err?.message || "No se pudieron cargar los clientes.");
       } finally {
         setLoading(false);
       }
@@ -213,21 +207,21 @@ export default function ModalProveedoresStock({
 
   useEffect(() => {
     if (!open) return;
-    cargarProveedores(pestana);
+    cargarClientes(pestana);
     resetForm();
-  }, [open, pestana, cargarProveedores, resetForm]);
+  }, [open, pestana, cargarClientes, resetForm]);
 
-  const proveedoresOrdenados = useMemo(() => {
-    return [...proveedores].sort((a, b) =>
+  const clientesOrdenados = useMemo(() => {
+    return [...clientes].sort((a, b) =>
       String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", {
         sensitivity: "base",
       })
     );
-  }, [proveedores]);
+  }, [clientes]);
 
   const iniciarEdicion = (row) => {
     setModo("editar");
-    setEditandoId(getProveedorId(row));
+    setEditandoId(getClienteId(row));
     setForm({
       nombre: toUpperValue(row?.nombre),
       activo: Number(row?.activo ?? 1) === 1 ? 1 : 0,
@@ -245,7 +239,7 @@ export default function ModalProveedoresStock({
     };
 
     if (!payload.nombre) {
-      onToast?.("error", "El nombre del proveedor es obligatorio.");
+      onToast?.("error", "El nombre del cliente es obligatorio.");
       return;
     }
 
@@ -253,31 +247,33 @@ export default function ModalProveedoresStock({
 
     try {
       if (modo === "crear") {
-        const data = await apiPost("stock_proveedor_crear", payload);
-        onToast?.("exito", data?.mensaje || "Proveedor creado correctamente.");
+        const data = await apiPost("cc_cliente_crear", payload);
+        onToast?.("exito", data?.mensaje || "Cliente creado correctamente.");
+
+        if (payload.activo === 1) {
+          setPestana("activos");
+        } else {
+          setPestana("inactivos");
+        }
       } else {
-        const data = await apiPost("stock_proveedor_actualizar", {
-          id_proveedor: editandoId,
-          id_stock_proveedor: editandoId,
+        const data = await apiPost("cc_cliente_actualizar", {
+          id_cliente: editandoId,
           ...payload,
         });
-        onToast?.("exito", data?.mensaje || "Proveedor actualizado correctamente.");
+        onToast?.("exito", data?.mensaje || "Cliente actualizado correctamente.");
+
+        if (payload.activo === 1) {
+          setPestana("activos");
+        } else {
+          setPestana("inactivos");
+        }
       }
 
-      const nuevaPestana = payload.activo === 1 ? "activos" : "inactivos";
-      setPestana(nuevaPestana);
-
-      await cargarProveedores(nuevaPestana);
+      await cargarClientes(payload.activo === 1 ? "activos" : "inactivos");
       await onActualizado?.();
-
-      setModo("crear");
-      setEditandoId(null);
-      setForm({
-        nombre: "",
-        activo: payload.activo,
-      });
+      resetForm();
     } catch (err) {
-      onToast?.("error", err?.message || "No se pudo guardar el proveedor.");
+      onToast?.("error", err?.message || "No se pudo guardar el cliente.");
     } finally {
       setSaving(false);
     }
@@ -303,7 +299,7 @@ export default function ModalProveedoresStock({
 
   const ejecutarAccionModal = useCallback(async () => {
     const { row, type } = modalAccion;
-    const id = getProveedorId(row);
+    const id = getClienteId(row);
 
     if (!id || !type) return;
 
@@ -313,26 +309,19 @@ export default function ModalProveedoresStock({
     try {
       let action = "";
       let successFallback = "";
-      let recargarTab = pestana;
 
       if (type === "baja") {
-        action = "stock_proveedor_dar_baja";
-        successFallback = "Proveedor dado de baja correctamente.";
-        recargarTab = "activos";
+        action = "cc_cliente_dar_baja";
+        successFallback = "Cliente dado de baja correctamente.";
       } else if (type === "alta") {
-        action = "stock_proveedor_dar_alta";
-        successFallback = "Proveedor dado de alta correctamente.";
-        recargarTab = "inactivos";
+        action = "cc_cliente_dar_alta";
+        successFallback = "Cliente dado de alta correctamente.";
       } else if (type === "eliminar") {
-        action = "stock_proveedor_eliminar";
-        successFallback = "Proveedor eliminado correctamente.";
-        recargarTab = pestana;
+        action = "cc_cliente_eliminar";
+        successFallback = "Cliente eliminado correctamente.";
       }
 
-      const data = await apiPost(action, {
-        id_proveedor: id,
-        id_stock_proveedor: id,
-      });
+      const data = await apiPost(action, { id_cliente: id });
 
       onToast?.("exito", data?.mensaje || successFallback);
 
@@ -340,7 +329,7 @@ export default function ModalProveedoresStock({
         resetForm();
       }
 
-      await cargarProveedores(recargarTab);
+      await cargarClientes(pestana);
       await onActualizado?.();
       cerrarModalAccion();
     } catch (err) {
@@ -351,11 +340,11 @@ export default function ModalProveedoresStock({
     }
   }, [
     modalAccion,
+    editandoId,
+    cargarClientes,
     pestana,
-    cargarProveedores,
     onActualizado,
     onToast,
-    editandoId,
     resetForm,
     cerrarModalAccion,
   ]);
@@ -366,14 +355,14 @@ export default function ModalProveedoresStock({
 
     if (modalAccion.type === "baja") {
       return {
-        title: "Dar de baja proveedor",
-        message: "¿Seguro que querés dar de baja este proveedor?",
-        warning: "El proveedor dejará de aparecer en la pestaña de activos y pasará a inactivos.",
+        title: "Dar de baja cliente",
+        message: "¿Seguro que querés dar de baja este cliente?",
+        warning: "El cliente dejará de aparecer en la pestaña de activos y pasará a inactivos.",
         confirmLabel: "Dar de baja",
         cancelLabel: "Cancelar",
         variant: "danger",
         details: [
-          { label: "Proveedor", value: nombre },
+          { label: "Cliente", value: nombre },
           { label: "Acción", value: "Dar de baja" },
         ],
       };
@@ -381,28 +370,28 @@ export default function ModalProveedoresStock({
 
     if (modalAccion.type === "alta") {
       return {
-        title: "Dar de alta proveedor",
-        message: "¿Seguro que querés dar de alta este proveedor?",
-        warning: "El proveedor volverá a aparecer en la pestaña de activos.",
+        title: "Dar de alta cliente",
+        message: "¿Seguro que querés dar de alta este cliente?",
+        warning: "El cliente volverá a aparecer en la pestaña de activos.",
         confirmLabel: "Dar de alta",
         cancelLabel: "Cancelar",
         variant: "success",
         details: [
-          { label: "Proveedor", value: nombre },
+          { label: "Cliente", value: nombre },
           { label: "Acción", value: "Dar de alta" },
         ],
       };
     }
 
     return {
-      title: "Eliminar proveedor",
-      message: "¿Seguro que querés eliminar este proveedor definitivamente?",
+      title: "Eliminar cliente",
+      message: "¿Seguro que querés eliminar este cliente definitivamente?",
       warning: "Esta acción no se puede deshacer.",
       confirmLabel: "Eliminar",
       cancelLabel: "Cancelar",
       variant: "danger",
       details: [
-        { label: "Proveedor", value: nombre },
+        { label: "Cliente", value: nombre },
         {
           label: "Estado",
           value: Number(row?.activo ?? 1) === 1 ? "Activo" : "Inactivo",
@@ -432,13 +421,13 @@ export default function ModalProveedoresStock({
       >
         <div className="mi-modal__header">
           <div className="mi-modal__head-icon" aria-hidden="true">
-            <FontAwesomeIcon icon={faTruckField} />
+            <FontAwesomeIcon icon={faUsers} />
           </div>
 
           <div className="mi-modal__head-left">
-            <h2 className="mi-modal__title">Proveedores de stock</h2>
+            <h2 className="mi-modal__title">Clientes</h2>
             <p className="mi-modal__subtitle">
-              Agregá, editá, da de baja, da de alta o eliminá proveedores.
+              Agregá, editá, da de baja, da de alta o eliminá clientes.
             </p>
           </div>
 
@@ -463,7 +452,7 @@ export default function ModalProveedoresStock({
                     icon={modo === "crear" ? faPlus : faPenToSquare}
                     style={{ marginRight: 8, opacity: 0.75, fontSize: 13 }}
                   />
-                  {modo === "crear" ? "Nuevo proveedor" : "Editar proveedor"}
+                  {modo === "crear" ? "Nuevo cliente" : "Editar cliente"}
                 </div>
               </div>
 
@@ -483,7 +472,7 @@ export default function ModalProveedoresStock({
                     disabled={saving}
                   />
                   <label className="fl-label">
-                    <FontAwesomeIcon icon={faBuilding} style={{ marginRight: 5 }} />
+                    <FontAwesomeIcon icon={faUser} style={{ marginRight: 5 }} />
                     Nombre *
                   </label>
                 </div>
@@ -520,7 +509,7 @@ export default function ModalProveedoresStock({
                     {saving
                       ? "Guardando..."
                       : modo === "crear"
-                      ? "Crear proveedor"
+                      ? "Crear cliente"
                       : "Guardar cambios"}
                   </button>
 
@@ -534,16 +523,6 @@ export default function ModalProveedoresStock({
                       Cancelar edición
                     </button>
                   )}
-                </div>
-
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "var(--nv-muted)",
-                    marginTop: 4,
-                  }}
-                >
-                  Gestioná tus <b>proveedores</b> con la misma experiencia visual del sistema.
                 </div>
               </div>
             </aside>
@@ -567,10 +546,10 @@ export default function ModalProveedoresStock({
                         color: "var(--nv-text)",
                       }}
                     >
-                      Listado de proveedores
+                      Listado de clientes
                     </div>
                     <div style={{ fontSize: 12, color: "var(--nv-muted)" }}>
-                      Total: <b>{proveedoresOrdenados.length}</b>
+                      Total: <b>{clientesOrdenados.length}</b>
                     </div>
                   </div>
                 </div>
@@ -606,7 +585,7 @@ export default function ModalProveedoresStock({
                 </div>
               </div>
 
-              {!loading && proveedoresOrdenados.length > 0 && (
+              {!loading && clientesOrdenados.length > 0 && (
                 <div className="mi-cr-table__head mi-cr-grid-clientes-stock">
                   <div className="mi-cr-table__head-cell" style={{ paddingLeft: 10 }}>
                     Nombre
@@ -631,28 +610,28 @@ export default function ModalProveedoresStock({
                   <EmptyState
                     icon={faArrowRotateRight}
                     spin
-                    text="Cargando proveedores..."
+                    text="Cargando clientes..."
                   />
-                ) : proveedoresOrdenados.length === 0 ? (
+                ) : clientesOrdenados.length === 0 ? (
                   <EmptyState
-                    icon={faTruckField}
+                    icon={faUsers}
                     text={
                       pestana === "activos"
-                        ? "No hay proveedores activos."
-                        : "No hay proveedores inactivos."
+                        ? "No hay clientes activos."
+                        : "No hay clientes inactivos."
                     }
                   />
                 ) : (
-                  proveedoresOrdenados.map((row) => {
+                  clientesOrdenados.map((row) => {
                     const activo = Number(row?.activo ?? 1) === 1;
                     const isEditing =
-                      getProveedorId(row) === Number(editandoId || 0) &&
+                      getClienteId(row) === Number(editandoId || 0) &&
                       modo === "editar";
-                    const bloqueado = accionandoId === getProveedorId(row) || saving;
+                    const bloqueado = accionandoId === getClienteId(row) || saving;
 
                     return (
                       <div
-                        key={getProveedorId(row)}
+                        key={getClienteId(row)}
                         className={[
                           "mi-cr-row",
                           "mi-cr-grid-clientes-stock",
@@ -770,7 +749,7 @@ export default function ModalProveedoresStock({
 
               <div className="mi-cr-table__foot">
                 <span style={{ fontSize: 12, color: "var(--nv-muted)" }}>
-                  Administrá el padrón de <b>proveedores</b>.
+                  Administrá el padrón de <b>clientes</b>.
                 </span>
               </div>
             </section>
@@ -779,7 +758,7 @@ export default function ModalProveedoresStock({
 
         <div className="mit-actions">
           <span className="mit-help">
-            Gestión de proveedores con activos, inactivos, alta, baja y eliminación.
+            Gestión de clientes con activos, inactivos, alta, baja y eliminación.
           </span>
           <button
             type="button"

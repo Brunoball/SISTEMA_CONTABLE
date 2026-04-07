@@ -94,19 +94,50 @@ function resolveFileUrl(rawUrl) {
   return `${origin}/${url.replace(/^\.?\//, "")}`;
 }
 
+function getAuthInfo() {
+  const sessionKey = (
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    ""
+  ).trim();
+
+  const token = (localStorage.getItem("token") || "").trim();
+
+  let idUsuario = 0;
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      0;
+
+    if (Number.isFinite(Number(cand))) {
+      idUsuario = Number(cand);
+    }
+  } catch {}
+
+  return { sessionKey, token, idUsuario };
+}
+
 function withSessionKey(url) {
   const base = safeText(url);
   if (!base) return "";
   try {
-    const sessionKey = (localStorage.getItem("session_key") || "").trim();
-    const token = (localStorage.getItem("token") || "").trim();
+    const { sessionKey, token } = getAuthInfo();
     const u = new URL(base, window.location.origin);
+
     if (sessionKey && !u.searchParams.has("session_key")) {
       u.searchParams.set("session_key", sessionKey);
     }
+
     if (token && !u.searchParams.has("token")) {
       u.searchParams.set("token", token);
     }
+
     return u.toString();
   } catch {
     return base;
@@ -121,7 +152,9 @@ function ensureResourceHint(url, rel = "prefetch", as = "document") {
     typeof CSS !== "undefined" && CSS.escape
       ? CSS.escape(key)
       : key.replace(/"/g, '\\"');
+
   if (document.head.querySelector(`link[data-key="${selectorKey}"]`)) return;
+
   const link = document.createElement("link");
   link.rel = rel;
   if (as) link.as = as;
@@ -139,6 +172,7 @@ function prewarmComprobanteUrl(url, mime = "") {
     mm.includes("pdf") ||
     ll.includes(".pdf") ||
     ll.includes("cc_comprobante_descargar");
+
   if (isPdf) {
     ensureResourceHint(finalUrl, "preload", "document");
     ensureResourceHint(finalUrl, "prefetch", "document");
@@ -197,8 +231,7 @@ function buildExportRows(rows) {
    Auth
 ========================= */
 function buildHeadersGET() {
-  const sessionKey = (localStorage.getItem("session_key") || "").trim();
-  const token = (localStorage.getItem("token") || "").trim();
+  const { sessionKey, token } = getAuthInfo();
   const h = {};
   if (sessionKey) h["X-Session"] = sessionKey;
   if (token) h.Authorization = `Bearer ${token}`;
@@ -206,8 +239,7 @@ function buildHeadersGET() {
 }
 
 function buildHeadersJSON() {
-  const sessionKey = (localStorage.getItem("session_key") || "").trim();
-  const token = (localStorage.getItem("token") || "").trim();
+  const { sessionKey, token } = getAuthInfo();
   const h = { "Content-Type": "application/json" };
   if (sessionKey) h["X-Session"] = sessionKey;
   if (token) h.Authorization = `Bearer ${token}`;
@@ -354,20 +386,24 @@ export default function ProveedoresCC() {
         showToast("advertencia", "Seleccioná un período.", 2600);
         return;
       }
+
       setLoading(true);
       setHasSearched(true);
       setSelectedProveedor(proveedor);
       setQueryUsed(proveedor.nombre || "");
+
       try {
         const sp = new URLSearchParams();
         sp.set("action", "cc_historial_proveedor");
         sp.set("id_proveedor", String(proveedor.id_proveedor));
         sp.set("fecha_desde", formatDateISO(dateRange.from));
         sp.set("fecha_hasta", formatDateISO(dateRange.to || dateRange.from));
+
         const data = await apiGet(`${API}?${sp.toString()}`);
         if (!data || data.exito !== true) {
           throw new Error(data?.mensaje || "Error al cargar historial del proveedor.");
         }
+
         setRows(Array.isArray(data.rows) ? data.rows : []);
         setTotales(data.totales || { debito: 0, credito: 0, saldo: 0 });
       } catch (e) {
@@ -448,9 +484,20 @@ export default function ProveedoresCC() {
   const handleExport = useCallback(
     async (type) => {
       try {
-        if (type === "excel") { exportToExcel(); showToast("exito", "Excel exportado.", 2200); return; }
-        if (type === "csv")   { exportToCSV();   showToast("exito", "CSV exportado.",   2200); return; }
-        if (type === "txt")   { exportToTXT();   showToast("exito", "TXT exportado.",   2200); }
+        if (type === "excel") {
+          exportToExcel();
+          showToast("exito", "Excel exportado.", 2200);
+          return;
+        }
+        if (type === "csv") {
+          exportToCSV();
+          showToast("exito", "CSV exportado.", 2200);
+          return;
+        }
+        if (type === "txt") {
+          exportToTXT();
+          showToast("exito", "TXT exportado.", 2200);
+        }
       } catch (e) {
         showToast("error", e?.message || "Error exportando archivo.", 3500);
       }
@@ -460,9 +507,22 @@ export default function ProveedoresCC() {
 
   const exportOptions = useMemo(
     () => [
-      { key: "excel", label: "Exportar Excel (.xlsx)", icon: faFileExcel, onClick: () => handleExport("excel") },
-      { key: "csv",   label: "Exportar CSV (.csv)",                        onClick: () => handleExport("csv")   },
-      { key: "txt",   label: "Exportar TXT (.txt)",                        onClick: () => handleExport("txt")   },
+      {
+        key: "excel",
+        label: "Exportar Excel (.xlsx)",
+        icon: faFileExcel,
+        onClick: () => handleExport("excel"),
+      },
+      {
+        key: "csv",
+        label: "Exportar CSV (.csv)",
+        onClick: () => handleExport("csv"),
+      },
+      {
+        key: "txt",
+        label: "Exportar TXT (.txt)",
+        onClick: () => handleExport("txt"),
+      },
     ],
     [handleExport]
   );
@@ -472,9 +532,11 @@ export default function ProveedoresCC() {
       const idComp = Number(row?.id_comprobante || 0);
       const rawBase = makeComprobanteAccessUrl(row, API);
       const cacheKey = idComp > 0 ? `id:${idComp}` : `raw:${rawBase}`;
+
       if (comprobanteUrlCacheRef.current.has(cacheKey)) {
         return comprobanteUrlCacheRef.current.get(cacheKey) || "";
       }
+
       const finalUrl = withSessionKey(rawBase);
       if (finalUrl) comprobanteUrlCacheRef.current.set(cacheKey, finalUrl);
       return finalUrl;
@@ -499,17 +561,24 @@ export default function ProveedoresCC() {
         showToast("advertencia", "Este registro no tiene comprobante asociado.", 2600);
         return;
       }
+
       const isCobro = Number(row?.credito || 0) > 0;
       const isMovimiento = Number(row?.debito || 0) > 0;
+
       prewarmComprobanteUrl(accessUrl, mime);
+
       setPreviewComprobante({
         open: true,
         url: accessUrl,
         mime,
         title: isCobro
-          ? row?.comprobante ? `Recibo · ${row.comprobante}` : "Recibo"
+          ? row?.comprobante
+            ? `Recibo · ${row.comprobante}`
+            : "Recibo"
           : isMovimiento
-          ? row?.comprobante ? `Factura / Deuda · ${row.comprobante}` : "Factura / Deuda"
+          ? row?.comprobante
+            ? `Factura / Deuda · ${row.comprobante}`
+            : "Factura / Deuda"
           : "Comprobante",
       });
     },
@@ -536,13 +605,23 @@ export default function ProveedoresCC() {
   const confirmDeleteCobro = useCallback(async () => {
     const row = deleteState.row;
     const idCobro = Number(row?.id_cobro || 0);
-    if (idCobro <= 0) throw new Error("No se encontró un id_cobro válido.");
+    if (idCobro <= 0) {
+      throw new Error("No se encontró un id_cobro válido.");
+    }
+
+    const { idUsuario } = getAuthInfo();
+
     setDeleteState((prev) => ({ ...prev, loading: true }));
     try {
-      const data = await apiPost(`${API}?action=cc_eliminar_cobro`, { id_cobro: idCobro });
+      const data = await apiPost(`${API}?action=cc_eliminar_cobro`, {
+        id_cobro: idCobro,
+        idUsuario,
+      });
+
       if (!data || data.exito !== true) {
         throw new Error(data?.mensaje || "No se pudo eliminar el cobro.");
       }
+
       closeDeleteModal();
       await refreshCurrent();
     } catch (e) {
@@ -601,7 +680,6 @@ export default function ProveedoresCC() {
         cancelLabel="Cancelar"
       />
 
-      {/* ── HEAD ── */}
       <div className="mov-card__head">
         <div className="mov-card__headLeft">
           <div className="title-mov">
@@ -716,7 +794,6 @@ export default function ProveedoresCC() {
         />
       </div>
 
-      {/* ── LISTADO DE PROVEEDORES ── */}
       {!isDetailMode ? (
         <div className="cc-cliente-table">
           <div
@@ -755,9 +832,7 @@ export default function ProveedoresCC() {
             )}
           </div>
         </div>
-
       ) : (
-        /* ── DETALLE DEL PROVEEDOR ── */
         <div className="cc-cliente-table">
           <div
             className="mov-gridTable mov-gridTable--head cc-cliente-table__desktopHead"
@@ -860,7 +935,6 @@ export default function ProveedoresCC() {
             )}
           </div>
 
-          {/* ── TOTALES ── */}
           <div className="cc-cliente-table__footWrap">
             <div
               className="mov-gridTable"

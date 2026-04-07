@@ -91,13 +91,41 @@ function resolveFileUrl(rawUrl) {
   return `${origin}/${url.replace(/^\.?\//, "")}`;
 }
 
+function getAuthInfo() {
+  const sessionKey = (
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("X-Session") ||
+    ""
+  ).trim();
+
+  const token = (localStorage.getItem("token") || "").trim();
+
+  let idUsuario = 0;
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      0;
+
+    if (Number.isFinite(Number(cand))) {
+      idUsuario = Number(cand);
+    }
+  } catch {}
+
+  return { sessionKey, token, idUsuario };
+}
+
 function withSessionKey(url) {
   const base = safeText(url);
   if (!base) return "";
 
   try {
-    const sessionKey = (localStorage.getItem("session_key") || "").trim();
-    const token = (localStorage.getItem("token") || "").trim();
+    const { sessionKey, token } = getAuthInfo();
     const u = new URL(base, window.location.origin);
 
     if (sessionKey && !u.searchParams.has("session_key")) {
@@ -196,8 +224,7 @@ function buildExportRows(rows) {
 }
 
 function buildHeadersGET() {
-  const sessionKey = (localStorage.getItem("session_key") || "").trim();
-  const token = (localStorage.getItem("token") || "").trim();
+  const { sessionKey, token } = getAuthInfo();
   const h = {};
   if (sessionKey) h["X-Session"] = sessionKey;
   if (token) h.Authorization = `Bearer ${token}`;
@@ -205,8 +232,7 @@ function buildHeadersGET() {
 }
 
 function buildHeadersJSON() {
-  const sessionKey = (localStorage.getItem("session_key") || "").trim();
-  const token = (localStorage.getItem("token") || "").trim();
+  const { sessionKey, token } = getAuthInfo();
   const h = { "Content-Type": "application/json" };
   if (sessionKey) h["X-Session"] = sessionKey;
   if (token) h.Authorization = `Bearer ${token}`;
@@ -593,11 +619,14 @@ export default function ClientesCC() {
       throw new Error("No se encontró un id_cobro válido.");
     }
 
+    const { idUsuario } = getAuthInfo();
+
     setDeleteState((prev) => ({ ...prev, loading: true }));
 
     try {
       const data = await apiPost(`${API}?action=cc_eliminar_cobro`, {
         id_cobro: idCobro,
+        idUsuario,
       });
 
       if (!data || data.exito !== true) {

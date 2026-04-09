@@ -1,3 +1,5 @@
+// frontend/src/components/Stock/modales/ModalCargaMasiva.jsx
+
 import React, { useState, useRef, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -335,6 +337,9 @@ function ModalConfirmarProductosIA({
   onChangeProducto,
   onAddFila,
   onRemoveFila,
+  onTakeImage,
+  onRemoveImage,
+  onPreviewImage,
   onConfirm,
   confirmando,
   errores,
@@ -539,6 +544,65 @@ function ModalConfirmarProductosIA({
                         placeholder="Descripción opcional"
                       />
                     </FloatingField>
+
+                    {/* Campo de imagen por producto detectado */}
+                    <FloatingField label="Imagen del producto" error={err.imagen}>
+                      <div className="cmi-uploadBox" style={{ marginTop: 6 }}>
+                        <input
+                          id={`imagen_detectada_${idx}`}
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.webp,.gif,image/*"
+                          hidden
+                          onChange={(e) => onTakeImage?.(idx, e.target.files?.[0])}
+                        />
+
+                        {!item.imagen ? (
+                          <button
+                            type="button"
+                            className="mit-btn mit-btn--ghost"
+                            onClick={() =>
+                              document.getElementById(`imagen_detectada_${idx}`)?.click()
+                            }
+                            disabled={confirmando}
+                          >
+                            <FontAwesomeIcon icon={faArrowUpFromBracket} /> Seleccionar imagen
+                          </button>
+                        ) : (
+                          <div className="cmi-fileResume">
+                            <div className="cmi-fileResume__left">
+                              <span className="cmi-fileResume__icon">
+                                <FontAwesomeIcon icon={faImage} />
+                              </span>
+
+                              <div className="cmi-fileResume__meta">
+                                <div className="cmi-fileResume__name">{item.imagen.name}</div>
+                                <TipoBadge tipo="imagen" />
+                              </div>
+                            </div>
+
+                            <div className="cmi-fileActions">
+                              <button
+                                type="button"
+                                className="mit-btn mit-btn--ghost"
+                                onClick={() => onPreviewImage?.(item.imagen)}
+                                title="Ver imagen"
+                              >
+                                <FontAwesomeIcon icon={faEye} />
+                              </button>
+
+                              <button
+                                type="button"
+                                className="mit-btn mit-btn--ghost"
+                                onClick={() => onRemoveImage?.(idx)}
+                                disabled={confirmando}
+                              >
+                                <FontAwesomeIcon icon={faTrashCan} /> Quitar
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </FloatingField>
                   </div>
                 </div>
               );
@@ -592,6 +656,7 @@ function normalizarProductoDetectado(item = {}) {
       item.id_categoria_stock === null || item.id_categoria_stock === undefined
         ? ""
         : String(item.id_categoria_stock),
+    imagen: null,
   };
 }
 
@@ -601,6 +666,8 @@ export default function ModalCargaMasiva({
   onGuardado,
   onToast,
   onImportado,
+  categorias: categoriasProp,
+  loadingCategorias: loadingCategoriasProp,
 }) {
   const closeBtnRef = useRef(null);
   const inputImagenRef = useRef(null);
@@ -609,8 +676,8 @@ export default function ModalCargaMasiva({
   const [tab, setTab] = useState("individual");
   const [dark, setDark] = useState(isTemaOscuro);
 
-  const [categorias, setCategorias] = useState([]);
-  const [loadingCategorias, setLoadingCategorias] = useState(false);
+  const categorias = categoriasProp || [];
+  const loadingCategorias = loadingCategoriasProp || false;
 
   const [guardando, setGuardando] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
@@ -651,38 +718,6 @@ export default function ModalCargaMasiva({
 
   const nombreArchivo = useMemo(() => archivo?.name || "", [archivo]);
   const tipoArchivo = useMemo(() => getTipoArchivo(archivo?.name), [archivo]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    let cancelado = false;
-
-    const fetchCategorias = async () => {
-      setLoadingCategorias(true);
-      try {
-        const params = new URLSearchParams({ action: "obtener_listas" });
-        const res = await fetch(`${API_URL}?${params.toString()}`, {
-          method: "GET",
-          headers: buildHeadersGET(),
-        });
-        const data = await res.json();
-
-        if (!cancelado && data?.listas?.stock_categorias) {
-          setCategorias(data.listas.stock_categorias);
-        }
-      } catch {
-        if (!cancelado) setCategorias([]);
-      } finally {
-        if (!cancelado) setLoadingCategorias(false);
-      }
-    };
-
-    fetchCategorias();
-
-    return () => {
-      cancelado = true;
-    };
-  }, [open]);
 
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
@@ -928,6 +963,24 @@ export default function ModalCargaMasiva({
         (Number.isNaN(Number(item.stock)) || Number(item.stock) < 0)
       ) {
         fila.stock = "Stock inválido";
+      }
+
+      if (item.imagen) {
+        const tipos = [
+          "image/jpeg",
+          "image/jpg",
+          "image/png",
+          "image/webp",
+          "image/gif",
+        ];
+
+        if (!tipos.includes(item.imagen.type)) {
+          fila.imagen = "La imagen debe ser JPG, PNG, WEBP o GIF";
+        }
+
+        if (item.imagen.size > 5 * 1024 * 1024) {
+          fila.imagen = "La imagen no puede superar los 5 MB";
+        }
       }
 
       if (Object.keys(fila).length > 0) {
@@ -1203,6 +1256,7 @@ export default function ModalCargaMasiva({
         stock: "",
         descripcion: "",
         id_categoria_stock: "",
+        imagen: null,
       },
     ]);
   };
@@ -1210,6 +1264,61 @@ export default function ModalCargaMasiva({
   const handleRemoveFilaDetectada = (idx) => {
     setProductosDetectados((prev) => prev.filter((_, i) => i !== idx));
     setErroresDetectados({});
+  };
+
+  const handleImagenProductoDetectado = (idx, file) => {
+    if (!file) return;
+
+    const tipos = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+    ];
+
+    if (!tipos.includes(file.type)) {
+      setErroresDetectados((prev) => ({
+        ...prev,
+        [`fila_${idx}`]: {
+          ...(prev[`fila_${idx}`] || {}),
+          imagen: "La imagen debe ser JPG, PNG, WEBP o GIF",
+        },
+        global: "",
+      }));
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setErroresDetectados((prev) => ({
+        ...prev,
+        [`fila_${idx}`]: {
+          ...(prev[`fila_${idx}`] || {}),
+          imagen: "La imagen no puede superar los 5 MB",
+        },
+        global: "",
+      }));
+      return;
+    }
+
+    setProductosDetectados((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, imagen: file } : item))
+    );
+
+    setErroresDetectados((prev) => ({
+      ...prev,
+      [`fila_${idx}`]: {
+        ...(prev[`fila_${idx}`] || {}),
+        imagen: "",
+      },
+      global: "",
+    }));
+  };
+
+  const handleQuitarImagenProductoDetectado = (idx) => {
+    setProductosDetectados((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, imagen: null } : item))
+    );
   };
 
   const handleConfirmarDetectados = async () => {
@@ -1228,51 +1337,76 @@ export default function ModalCargaMasiva({
     try {
       const { idUsuarioMaster, idTenant } = getUsuarioAuditData();
 
-      for (let i = 0; i < productosDetectados.length; i++) {
-        const item = productosDetectados[i];
+      const batchSize = 3;
+      const batches = [];
 
-        try {
-          const fd = new FormData();
-          fd.append("nombre", toUpperCaseValue(String(item.nombre || "").trim()));
-          fd.append("sku", toUpperCaseValue(String(item.sku || "").trim()));
-          fd.append("precio", moneyToApi(item.precio));
-          fd.append(
-            "precio_promo",
-            item.precio_promo !== "" ? moneyToApi(item.precio_promo) : ""
-          );
-          fd.append("stock", item.stock !== "" ? String(item.stock) : "");
-          fd.append("descripcion", toUpperCaseValue(String(item.descripcion || "").trim()));
+      for (let i = 0; i < productosDetectados.length; i += batchSize) {
+        batches.push(productosDetectados.slice(i, i + batchSize));
+      }
 
-          if (item.id_categoria_stock !== "") {
-            fd.append("id_categoria_stock", String(item.id_categoria_stock));
+      for (const batch of batches) {
+        const batchPromises = batch.map(async (item, batchIdx) => {
+          const globalIdx = productosDetectados.indexOf(item);
+
+          try {
+            const fd = new FormData();
+            fd.append("nombre", toUpperCaseValue(String(item.nombre || "").trim()));
+            fd.append("sku", toUpperCaseValue(String(item.sku || "").trim()));
+            fd.append("precio", moneyToApi(item.precio));
+            fd.append(
+              "precio_promo",
+              item.precio_promo !== "" ? moneyToApi(item.precio_promo) : ""
+            );
+            fd.append("stock", item.stock !== "" ? String(item.stock) : "");
+            fd.append("descripcion", toUpperCaseValue(String(item.descripcion || "").trim()));
+
+            if (item.id_categoria_stock !== "") {
+              fd.append("id_categoria_stock", String(item.id_categoria_stock));
+            }
+
+            if (idUsuarioMaster > 0) {
+              fd.append("idUsuarioMaster", String(idUsuarioMaster));
+            }
+
+            if (idTenant) {
+              fd.append("tenant_id", String(idTenant));
+            }
+
+            if (item.imagen) {
+              fd.append("imagen", item.imagen);
+            }
+
+            const res = await fetch(`${API_URL}?action=stock_productos_crear`, {
+              method: "POST",
+              headers: buildHeadersMultipart(),
+              body: fd,
+            });
+
+            const data = await parseJsonOrThrow(res);
+            if (data.exito === false) {
+              throw new Error(data.mensaje || "No se pudo guardar el producto");
+            }
+
+            return { success: true, idx: globalIdx };
+          } catch (err) {
+            return {
+              success: false,
+              idx: globalIdx,
+              error: `Producto ${globalIdx + 1} (${item.nombre || "sin nombre"}): ${
+                err.message || "Error al guardar"
+              }`
+            };
           }
+        });
 
-          if (idUsuarioMaster > 0) {
-            fd.append("idUsuarioMaster", String(idUsuarioMaster));
+        const results = await Promise.all(batchPromises);
+
+        for (const result of results) {
+          if (result.success) {
+            creados++;
+          } else {
+            erroresCarga.push(result.error);
           }
-
-          if (idTenant) {
-            fd.append("tenant_id", String(idTenant));
-          }
-
-          const res = await fetch(`${API_URL}?action=stock_productos_crear`, {
-            method: "POST",
-            headers: buildHeadersMultipart(),
-            body: fd,
-          });
-
-          const data = await parseJsonOrThrow(res);
-          if (data.exito === false) {
-            throw new Error(data.mensaje || "No se pudo guardar el producto");
-          }
-
-          creados++;
-        } catch (err) {
-          erroresCarga.push(
-            `Producto ${i + 1} (${item.nombre || "sin nombre"}): ${
-              err.message || "Error al guardar"
-            }`
-          );
         }
       }
 
@@ -1762,6 +1896,18 @@ export default function ModalCargaMasiva({
                       </div>
                     )}
 
+                    {productosDetectados.length > 0 && (
+                      <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          className="mit-btn mit-btn--ghost"
+                          onClick={() => setModalConfirmOpen(true)}
+                        >
+                          <FontAwesomeIcon icon={faImage} /> Cargar imágenes / revisar productos detectados
+                        </button>
+                      </div>
+                    )}
+
                     {resultado.texto_detectado && (
                       <div className="fl-field" style={{ marginTop: 12 }}>
                         <textarea
@@ -1894,6 +2040,14 @@ export default function ModalCargaMasiva({
         onChangeProducto={handleProductoDetectadoChange}
         onAddFila={handleAddFilaDetectada}
         onRemoveFila={handleRemoveFilaDetectada}
+        onTakeImage={handleImagenProductoDetectado}
+        onRemoveImage={handleQuitarImagenProductoDetectado}
+        onPreviewImage={(file) =>
+          abrirPreviewLocal({
+            file,
+            title: "Imagen del producto detectado",
+          })
+        }
         onConfirm={handleConfirmarDetectados}
         confirmando={confirmandoDetectados}
         errores={erroresDetectados}

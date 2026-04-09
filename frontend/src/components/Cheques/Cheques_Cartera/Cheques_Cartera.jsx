@@ -287,21 +287,31 @@ const Cheques_Cartera = () => {
     };
   }, [fetchCheques]);
 
-  /* Filtered rows (client-side) */
+  /* Filtered rows (client-side) with descending sort */
   const rows = useMemo(() => {
     const value = q.trim().toLowerCase();
-    if (!value) return allRows;
 
-    return allRows.filter((item) => {
-      const fields = [
-        item?.fecha_emision,
-        item?.emisor,
-        item?.numero_cheque,
-        item?.importe,
-        item?.fecha_pago,
-      ].map((v) => String(v || "").toLowerCase());
+    const filtered = !value
+      ? allRows
+      : allRows.filter((item) => {
+          const fields = [
+            item?.fecha_emision,
+            item?.emisor,
+            item?.numero_cheque,
+            item?.importe,
+            item?.fecha_pago,
+          ].map((v) => String(v || "").toLowerCase());
 
-      return fields.some((f) => f.includes(value));
+          return fields.some((f) => f.includes(value));
+        });
+
+    // Orden descendente: fecha más reciente primero
+    return [...filtered].sort((a, b) => {
+      const fa = String(a?.fecha_pago || a?.fecha_emision || "");
+      const fb = String(b?.fecha_pago || b?.fecha_emision || "");
+      if (fb > fa) return 1;
+      if (fb < fa) return -1;
+      return 0;
     });
   }, [q, allRows]);
 

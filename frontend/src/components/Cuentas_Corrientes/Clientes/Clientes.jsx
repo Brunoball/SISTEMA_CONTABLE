@@ -16,6 +16,7 @@ import {
   faMagnifyingGlass,
   faTrashCan,
   faUsers,
+  faArrowLeft,
 } from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../../Global/Toast.jsx";
@@ -721,126 +722,135 @@ export default function ClientesCC() {
         cancelLabel="Cancelar"
       />
 
-      <div className="mov-card__head">
-        <div className="mov-card__headLeft">
-          <div className="title-mov">
-            <div className="mov-card__title">
-              {isDetailMode ? `Cuenta corriente · ${selectedCliente.nombre}` : "Cuentas Corrientes"}
-            </div>
-            <div className="mov-card__hint">
-              {isDetailMode ? (
-                <>
-                  Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
-                </>
-              ) : (
-                <>
-                  Mostrando <b>{filteredSummaryRows.length}</b> cliente
-                  {filteredSummaryRows.length === 1 ? "" : "s"}
-                </>
+<div className="mov-card__head">
+  <div className="mov-card__headLeft">
+    <div className="title-mov">
+      <div className="mov-card__title">
+        {isDetailMode ? `${selectedCliente.nombre}` : "Cuentas Corrientes"}
+      </div>
+
+      <div className="mov-card__hint">
+        {isDetailMode ? (
+          <>
+            Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
+          </>
+        ) : (
+          <>
+            Mostrando <b>{filteredSummaryRows.length}</b> cliente
+            {filteredSummaryRows.length === 1 ? "" : "s"}
+          </>
+        )}
+      </div>
+    </div>
+
+    <div className="mov-headFilters">
+
+      {/* CALENDARIO */}
+      {isDetailMode && (
+        <div className="cc-filter cc-filter--cal">
+          <div className={`cc-floatingField cc-floatingField--calendar is-active ${calOpen ? "is-open" : ""}`}>
+            <button
+              type="button"
+              className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
+              onClick={() => setCalOpen(v => !v)}
+              disabled={loading}
+            >
+              {rangeLabel}
+              <span className="cc-calTrigger__iconRight">
+                <FontAwesomeIcon icon={faChevronDown} />
+              </span>
+            </button>
+
+            <span className="cc-floatingLabel cc-floatingLabel--active">
+              <FontAwesomeIcon icon={faCalendarDays} /> Período
+            </span>
+
+            {calOpen && (
+              <div className="cc-calDropdown">
+                <Calendario
+                  value={dateRange}
+                  onChange={(range) => {
+                    setDateRange(range);
+                    if (range?.from && range?.to) setCalOpen(false);
+                  }}
+                  onClose={() => setCalOpen(false)}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* BUSQUEDA */}
+      <div className="cc-filter cc-filter--search" id="vents-comppr-wits">
+        <div className="cc-floatingField cc-floatingField--search is-active">
+          <div className="cc-searchInput">
+            <div className="cc-searchInput__fieldWrap">
+              <input
+                className="cc-input cc-input--floating"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Buscar por cliente..."
+                disabled={loading}
+              />
+
+              <span className="cc-floatingLabel">
+                <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+              </span>
+
+              {safeText(q) !== "" && !loading && (
+                <button
+                  type="button"
+                  className="cc-clearSearch cc-clearSearch--inside"
+                  onClick={() => setQ("")}
+                >
+                  <FontAwesomeIcon icon={faTimes} />
+                </button>
               )}
             </div>
           </div>
-
-          <div className="mov-headFilters">
-            {isDetailMode ? (
-              <div className="cc-filter cc-filter--cal">
-                <div
-                  className={`cc-floatingField cc-floatingField--calendar is-active ${
-                    calOpen ? "is-open" : ""
-                  }`}
-                >
-                  <button
-                    type="button"
-                    className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
-                    onClick={() => setCalOpen((v) => !v)}
-                    disabled={loading}
-                  >
-                    {rangeLabel}
-                    <span className="cc-calTrigger__iconRight">
-                      <FontAwesomeIcon icon={faChevronDown} />
-                    </span>
-                  </button>
-
-                  <span className="cc-floatingLabel cc-floatingLabel--active">
-                    <FontAwesomeIcon icon={faCalendarDays} /> Período
-                  </span>
-
-                  {calOpen && (
-                    <div className="cc-calDropdown">
-                      <Calendario
-                        value={dateRange}
-                        onChange={(range) => {
-                          setDateRange(range);
-                          if (range?.from && range?.to) setCalOpen(false);
-                        }}
-                        onClose={() => setCalOpen(false)}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : null}
-
-            <div className="cc-filter cc-filter--search">
-              <div className="cc-floatingField cc-floatingField--search is-active">
-                <div className="cc-searchInput">
-                  <div className="cc-searchInput__fieldWrap">
-                    <input
-                      className="cc-input cc-input--floating"
-                      value={q}
-                      onChange={(e) => setQ(e.target.value)}
-                      placeholder="Buscar por cliente..."
-                      disabled={loading}
-                      autoComplete="off"
-                    />
-
-                    <span className="cc-floatingLabel">
-                      <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                    </span>
-
-                    {safeText(q) !== "" && !loading && (
-                      <button
-                        type="button"
-                        className="cc-clearSearch cc-clearSearch--inside"
-                        title="Limpiar"
-                        onClick={() => setQ("")}
-                      >
-                        <FontAwesomeIcon icon={faTimes} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="mov-btn mov-btn--ghost"
-              onClick={() => setClientesModalOpen(true)}
-              disabled={loading}
-              title="Administrar clientes"
-            >
-              <FontAwesomeIcon icon={faUsers} style={{ marginRight: 8 }} />
-              Clientes
-            </button>
-
-            {isDetailMode ? (
-              <button type="button" className="mov-btn mov-btn--ghost" onClick={volverAlListado}>
-                Volver
-              </button>
-            ) : null}
-          </div>
         </div>
+      </div>
+
+      {/* FILA: CLIENTES + EXPORTAR */}
+      <div className="cc-row-actions">
+
+<button
+  type="button"
+  className="mov-btn mov-btn--ghost mov-btn--icon"
+  onClick={() => setClientesModalOpen(true)}
+  disabled={loading}
+  title="Clientes"
+>
+  <FontAwesomeIcon icon={faUsers} />
+  {!isDetailMode && <span style={{ marginLeft: 8 }}>Clientes</span>}
+</button>
 
         <BotonExportar
           disabled={loading || !isDetailMode || rows.length === 0}
           loading={false}
           label="Exportar"
-          title={isDetailMode ? "Exportar archivo" : "Entrá al detalle de un cliente primero"}
           opciones={exportOptions}
           align="right"
         />
+
       </div>
+
+      {/* VOLVER */}
+      {isDetailMode && (
+<button
+  type="button"
+  className="mov-btn mov-btn--ghost"
+  onClick={volverAlListado}
+  title="Volver al listado"
+>
+  <FontAwesomeIcon icon={faArrowLeft} />
+</button>
+      )}
+
+    </div>
+  </div>
+</div>
 
       {!isDetailMode ? (
         <div className="cc-cliente-table cc-cliente-table--summary">
@@ -860,11 +870,11 @@ export default function ClientesCC() {
                 <button
                   key={r.id_cliente}
                   type="button"
-                  className="mov-gridTable mov-gridTable--row cc-cliente-table__movRow"
+                  className="mov-gridTable mov-gridTable--row cc-cliente-table__movRow responsive"
                   style={{ gridTemplateColumns: "2fr 1fr", width: "100%" }}
                   onClick={() => loadHistorial(r)}
                 >
-                  <div className="mov-gridCell is-strong">
+                  <div className="mov-gridCell is-strong mov-gridTable--row-responsive">
                     <span className="mov-ellipsissss mov-ellipsialingf">{r.nombre || "-"}</span>
                   </div>
 
@@ -907,7 +917,7 @@ export default function ClientesCC() {
                 return (
                   <div
                     key={r.id || `${i}`}
-                    className="mov-gridTable mov-gridTable--row"
+                    className="mov-gridTable mov-gridTable--row "
                     style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr .9fr" }}
                   >
                     <div className="mov-gridCell">
@@ -986,21 +996,21 @@ export default function ClientesCC() {
 
           <div className="cc-cliente-table__footWrap">
             <div
-              className="mov-gridTable"
+              className="mov-gridTable mov-gridTable_rsp"
               style={{ gridTemplateColumns: ".8fr 2.2fr 1fr 1fr 1fr .9fr" }}
             >
-              <div className="mov-gridCell is-strong">Totales</div>
-              <div className="mov-gridCell"></div>
-              <div className="mov-gridCell is-right is-strong">
+              <div className="mov-gridCell mov-gridCellf is-strong">Totales</div>
+              <div className="mov-gridCell mov-gridCellf vacio"></div>
+              <div className="mov-gridCell mov-gridCellf is-right is-strong">
                 {moneyARS(totales?.debito || 0)}
               </div>
-              <div className="mov-gridCell is-right is-strong">
+              <div className="mov-gridCell mov-gridCellf is-right is-strong">
                 {moneyARS(totales?.credito || 0)}
               </div>
-              <div className="mov-gridCell is-right is-strong">
+              <div className="mov-gridCell mov-gridCellf is-right is-strong">
                 {moneyARS(totales?.saldo || 0)}
               </div>
-              <div className="mov-gridCell"></div>
+              <div className="mov-gridCell mov-gridCellf vacio"></div>
             </div>
           </div>
         </div>

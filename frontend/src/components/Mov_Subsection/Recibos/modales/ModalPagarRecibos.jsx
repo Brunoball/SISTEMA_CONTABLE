@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
+import "../../../Global/Global_css/Global_responsive.css";
 import "./ModalPagarRecibos.css";
 import BASE_URL from "../../../../config/config";
 
@@ -967,32 +968,7 @@ export default function ModalPagarRecibos({
                       </div>
                     )}
 
-                    <button
-                      type="button"
-                      className="mit-btn mit-btn--ghost mit-btn--block"
-                      onClick={handleFactura}
-                      disabled={
-                        loading ||
-                        selectedIds.size === 0 ||
-                        !idMedioPago ||
-                        !onFactura ||
-                        (esMedioPagoCheque && !chequeGuardado)
-                      }
-                      title={
-                        !onFactura
-                          ? "Acción no conectada"
-                          : selectedIds.size === 0
-                          ? "Seleccioná al menos una deuda pendiente"
-                          : !idMedioPago
-                          ? "Seleccioná un medio de pago"
-                          : esMedioPagoCheque && !chequeGuardado
-                          ? `Cargá los datos del ${tipoChequeDetectado} primero`
-                          : "Hacer factura"
-                      }
-                    >
-                      <FontAwesomeIcon icon={faMoneyBill1Wave} />
-                      Hacer factura
-                    </button>
+
 
                     <div className="mpr-aside__actions">
                       <button

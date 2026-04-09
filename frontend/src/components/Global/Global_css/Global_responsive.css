@@ -763,6 +763,9 @@
 }
 /* Mobile: convertir tabla a cards */
 @media (max-width: 720px) {
+  #Flujo_Cj-tableWrap{
+    min-height: 60vh !important;
+  }
     .mov-card__actions{
   flex-wrap: nowrap;
 }
@@ -774,8 +777,8 @@
   /* Evitar que el wrapper fuerce scroll horizontal */
   .mov-tableWrap {
    overflow: auto;
-        min-height: 53vh !important;
-        max-height: 53vh !important;
+        min-height: 55vh !important;
+        max-height: 55vh !important;
   }
 
   /* Cada fila como card */
@@ -1292,7 +1295,15 @@
   .mi-modal__overlay{
     padding: 0;
   }
-
+.mi-modal__formPad{
+  position: relative;
+}
+.ordenpagobuttos{
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  margin: 10px;
+}
 
 
   .mi-modal__container--mov{
@@ -2339,5 +2350,276 @@ html[data-theme="oscuro"] .cc-cliente-table__totals .cc-cliente-table__cell:nth-
   .mp-btn-agregar,
   .mp-btn-confirmar {
     justify-content: center;
+  }
+}
+/* =========================================================
+   RESPONSIVE — Modal detalle medios de pago compra
+   Solo mobile / tablet chica.
+   No toca la vista monitor.
+========================================================= */
+
+@media (max-width: 768px) {
+  .mi-modal__overlay {
+    padding: 10px !important;
+    align-items: flex-start;
+  }
+
+  .mdp-container {
+    width: min(100%, 100vw) !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    max-height: calc(100vh - 20px) !important;
+    margin: 0 auto;
+    border-radius: 16px !important;
+  }
+
+  .mdp-content {
+    padding: 12px !important;
+    gap: 10px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mdp-items-grid {
+    gap: 10px;
+  }
+
+  .mi-modal__header {
+    padding: 12px 14px !important;
+    gap: 10px;
+  }
+
+  .mi-modal__head-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+
+  .mi-modal__title {
+    font-size: 0.98rem !important;
+    line-height: 1.15;
+  }
+
+  .mi-modal__subtitle {
+    font-size: 11px !important;
+    margin-top: 1px !important;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .mi-modal__close {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+  }
+
+  .mdp-medio-card {
+    padding: 12px !important;
+    gap: 10px !important;
+    border-radius: 12px;
+    align-items: center;
+  }
+
+  .mdp-medio-card__icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+
+  .mdp-medio-card__info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .mdp-medio-card__nombre {
+    font-size: 13px !important;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mdp-medio-card__sub {
+    font-size: 10px !important;
+    line-height: 1.1;
+  }
+
+  .mdp-medio-card__monto {
+    font-size: 13px !important;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+
+  .mdp-total-bar {
+    padding: 12px 14px !important;
+    border-radius: 14px !important;
+    gap: 10px;
+  }
+
+  .mdp-total-bar__label {
+    font-size: 12px !important;
+  }
+
+  .mdp-total-bar__value {
+    font-size: 13px !important;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 560px) {
+  .mi-modal__overlay {
+    padding: 8px !important;
+  }
+
+  .mdp-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: calc(100vh - 16px) !important;
+    border-radius: 14px !important;
+  }
+
+  .mi-modal__header {
+    padding: 10px 12px !important;
+    gap: 8px;
+  }
+
+  .mi-modal__head-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    font-size: 13px;
+  }
+
+  .mi-modal__title {
+    font-size: 0.93rem !important;
+  }
+
+  .mi-modal__subtitle {
+    font-size: 10px !important;
+  }
+
+  .mi-modal__close {
+    width: 34px;
+    height: 34px;
+  }
+
+  .mdp-content {
+    padding: 10px !important;
+    gap: 8px;
+  }
+
+  .mdp-items-grid {
+    gap: 8px;
+  }
+
+  .mdp-medio-card {
+    padding: 10px !important;
+    gap: 9px !important;
+  }
+
+  .mdp-medio-card__icon {
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+  }
+
+  .mdp-medio-card__nombre {
+    font-size: 12.5px !important;
+  }
+
+  .mdp-medio-card__sub {
+    font-size: 9.5px !important;
+  }
+
+  .mdp-medio-card__monto {
+    font-size: 12.5px !important;
+  }
+
+  .mdp-total-bar {
+    padding: 10px 12px !important;
+  }
+
+  .mdp-total-bar__label {
+    font-size: 11px !important;
+  }
+
+  .mdp-total-bar__value {
+    font-size: 12.5px !important;
+  }
+
+  .mdp-empty {
+    padding: 32px 16px !important;
+    font-size: 13px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .mi-modal__header {
+    padding: 10px 10px !important;
+  }
+
+  .mi-modal__head-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+  }
+
+  .mi-modal__title {
+    font-size: 0.88rem !important;
+  }
+
+  .mi-modal__subtitle {
+    font-size: 10px !important;
+    max-width: 180px;
+  }
+
+  .mi-modal__close {
+    width: 32px;
+    height: 32px;
+  }
+
+  .mdp-content {
+    padding: 8px !important;
+  }
+
+  .mdp-medio-card {
+    padding: 9px !important;
+    gap: 8px !important;
+  }
+
+  .mdp-medio-card__icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    font-size: 13px;
+  }
+
+  .mdp-medio-card__nombre {
+    font-size: 12px !important;
+  }
+
+  .mdp-medio-card__sub {
+    font-size: 9px !important;
+  }
+
+  .mdp-medio-card__monto {
+    font-size: 12px !important;
+  }
+
+  .mdp-total-bar {
+    padding: 9px 10px !important;
+  }
+
+  .mdp-total-bar__label {
+    font-size: 10.5px !important;
+  }
+
+  .mdp-total-bar__value {
+    font-size: 12px !important;
   }
 }

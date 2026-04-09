@@ -492,6 +492,7 @@
     text-overflow: initial;
     white-space: normal;
     line-height: 1.25;
+    text-align: end;
   }
 
   /* centrar ya no sirve en mobile */

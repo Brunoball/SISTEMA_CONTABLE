@@ -438,6 +438,11 @@ const Principal = () => {
   const tenantLogoIconoObjectUrlRef = useRef("");
   const tenantLogoPrincipalObjectUrlRef = useRef("");
 
+  // ✅ FIX: refs para trackear qué logoDb está actualmente cargado
+  // Esto evita recargar (y parpadear) cuando el logoDb no cambia
+  const tenantLogoIconoDbRef = useRef("");
+  const tenantLogoPrincipalDbRef = useRef("");
+
   const closeSoon = (ms = 220) => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => setOpenMovSub(false), ms);
@@ -528,21 +533,33 @@ const Principal = () => {
     return buildApiUrl({ action: "tenant_logo_ver", tipo });
   }, []);
 
+  // ✅ FIX PRINCIPAL: loadSingleLogo ya no limpia el estado si el logo no cambió.
+  // - Si el logoDb es el mismo que ya está cargado → retorna sin tocar nada (sin parpadeo).
+  // - Si el logoDb cambió → revoca el anterior SOLO cuando el nuevo blob está listo.
+  // - Si falla la carga → no limpia el estado para no mostrar el ícono vacío.
   const loadSingleLogo = useCallback(
-    async ({ tipo, logoDb, setSrc, setLoaded, objectUrlRef, revokeFn }) => {
+    async ({ tipo, logoDb, setSrc, setLoaded, objectUrlRef, revokeFn, dbRef }) => {
       try {
-        revokeFn();
-        setSrc("");
-        setLoaded(false);
-
         const sessionKey = getSessionKey();
         if (!sessionKey) return;
 
-        if (isLocalApiBase()) {
+        if (isLocalApiBase()) return;
+
+        const trimmedDb = String(logoDb || "").trim();
+
+        // ✅ Si el logoDb no cambió y ya hay un blob cargado → no hacer nada
+        if (trimmedDb && dbRef.current === trimmedDb && objectUrlRef.current) {
           return;
         }
 
-        if (!String(logoDb || "").trim()) {
+        // ✅ Si no hay logoDb, limpiar solo si antes había algo cargado
+        if (!trimmedDb) {
+          if (objectUrlRef.current) {
+            revokeFn();
+            setSrc("");
+            setLoaded(false);
+            dbRef.current = "";
+          }
           return;
         }
 
@@ -593,19 +610,25 @@ const Principal = () => {
         const blob = await res.blob();
         if (!blob || !blob.size) return;
 
+        // ✅ Revocar el anterior SOLO cuando el nuevo blob ya está listo
+        // Esto evita el flash de "ícono vacío" entre la limpieza y la nueva carga
+        revokeFn();
         const objectUrl = URL.createObjectURL(blob);
         objectUrlRef.current = objectUrl;
+
+        // ✅ Guardar qué logoDb está actualmente cargado
+        dbRef.current = trimmedDb;
 
         setSrc(objectUrl);
         setLoaded(true);
       } catch {
-        setSrc("");
-        setLoaded(false);
+        // ✅ No limpiar en caso de error para no causar parpadeo innecesario
       }
     },
     [buildTenantLogoUrl]
   );
 
+  // ✅ loadTenantLogos pasa los dbRefs a loadSingleLogo
   const loadTenantLogos = useCallback(async () => {
     const usuarioLocal = safeJsonParse(localStorage.getItem("usuario")) || {};
     const u = usuario || usuarioLocal || {};
@@ -621,6 +644,7 @@ const Principal = () => {
         setLoaded: setTenantLogoIconoLoaded,
         objectUrlRef: tenantLogoIconoObjectUrlRef,
         revokeFn: revokeTenantLogoIconoObjectUrl,
+        dbRef: tenantLogoIconoDbRef,
       }),
       loadSingleLogo({
         tipo: "principal",
@@ -629,6 +653,7 @@ const Principal = () => {
         setLoaded: setTenantLogoPrincipalLoaded,
         objectUrlRef: tenantLogoPrincipalObjectUrlRef,
         revokeFn: revokeTenantLogoPrincipalObjectUrl,
+        dbRef: tenantLogoPrincipalDbRef,
       }),
     ]);
   }, [
@@ -673,6 +698,10 @@ const Principal = () => {
         setTenantLogoIconoLoaded(false);
         setTenantLogoPrincipalSrc("");
         setTenantLogoPrincipalLoaded(false);
+
+        // ✅ Limpiar los dbRefs al hacer logout
+        tenantLogoIconoDbRef.current = "";
+        tenantLogoPrincipalDbRef.current = "";
 
         hardClientLogoutCleanup();
         setShowLogoutModal(false);

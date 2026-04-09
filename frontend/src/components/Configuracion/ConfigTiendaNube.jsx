@@ -5,7 +5,6 @@ import {
   faArrowLeft,
   faStore,
   faPlug,
-  faLink,
   faCheckCircle,
   faTriangleExclamation,
   faCircleInfo,
@@ -13,6 +12,9 @@ import {
   faBolt,
   faShieldHalved,
   faChevronRight,
+  faDownload,
+  faXmark,
+  faListCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import BASE_URL from "../../config/config";
 import "./configTiendanube.css";
@@ -119,6 +121,172 @@ function ItemDato({ label, value, full = false }) {
   );
 }
 
+function armarMensajeImportacion(resultado) {
+  const categorias = resultado?.categorias || {};
+  const productos = resultado?.productos || {};
+
+  const totalErrores =
+    Number(categorias.errores || 0) + Number(productos.errores || 0);
+
+  const partes = [
+    `Categorías: ${Number(categorias.procesadas || 0)}/${Number(
+      categorias.total_remotas || 0
+    )} procesadas`,
+    `Productos: ${Number(productos.procesados || 0)}/${Number(
+      productos.total_remotos || 0
+    )} procesados`,
+  ];
+
+  if (Number(categorias.creadas || 0) > 0) {
+    partes.push(`${Number(categorias.creadas)} categorías nuevas`);
+  }
+  if (Number(productos.creadas || 0) > 0) {
+    partes.push(`${Number(productos.creadas)} productos nuevos`);
+  }
+  if (Number(categorias.actualizadas || 0) > 0) {
+    partes.push(`${Number(categorias.actualizadas)} categorías actualizadas`);
+  }
+  if (Number(productos.actualizadas || 0) > 0) {
+    partes.push(`${Number(productos.actualizadas)} productos actualizados`);
+  }
+  if (Number(productos.omitidas || 0) > 0) {
+    partes.push(`${Number(productos.omitidas)} productos omitidos`);
+  }
+  if (totalErrores > 0) {
+    partes.push(`${totalErrores} errores`);
+  }
+
+  return `Importación terminada. ${partes.join(" · ")}.`;
+}
+
+// Componente del Modal Instructivo
+function ModalInstructivo({ isOpen, onClose }) {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="tn-modal-overlay" onClick={onClose}>
+      <div className="tn-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="tn-modal__header">
+          <div className="tn-modal__headerIcon">
+            <FontAwesomeIcon icon={faListCheck} />
+          </div>
+          <h2 className="tn-modal__title">Guía de conexión: Tienda Nube</h2>
+          <button className="tn-modal__close" onClick={onClose}>
+            <FontAwesomeIcon icon={faXmark} />
+          </button>
+        </div>
+
+        <div className="tn-modal__body">
+          <p className="tn-modal__intro">
+            Seguí esta guía paso a paso para conectar Balto con tu tienda Tienda Nube.
+            Una vez completada la integración, todo lo que hagas en Balto impactará
+            automáticamente en tu tienda, y viceversa.
+          </p>
+
+          <div className="tn-steps">
+            {/* Paso 1 */}
+            <div className="tn-step">
+              <div className="tn-step__number">1</div>
+              <div className="tn-step__content">
+                <h3 className="tn-step__title">Conectar con Tienda Nube</h3>
+                <p className="tn-step__description">
+                  Presioná el botón <strong>"Conectar con Tienda Nube"</strong> en la sección de Acciones.
+                  Esto iniciará el flujo de autorización de Tienda Nube.
+                </p>
+                <div className="tn-step__note">
+                  <FontAwesomeIcon icon={faCircleInfo} />
+                  <span>⚠️ Importante: Vas a cerrar sesión en Balto para conectarte con Tienda Nube.</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Paso 2 */}
+            <div className="tn-step">
+              <div className="tn-step__number">2</div>
+              <div className="tn-step__content">
+                <h3 className="tn-step__title">Iniciar sesión nuevamente en Balto</h3>
+                <p className="tn-step__description">
+                  Después de autorizar la conexión en Tienda Nube, volvé a iniciar sesión
+                  en Balto con tus credenciales habituales.
+                </p>
+              </div>
+            </div>
+
+            {/* Paso 3 */}
+            <div className="tn-step">
+              <div className="tn-step__number">3</div>
+              <div className="tn-step__content">
+                <h3 className="tn-step__title">Volver a Configuración</h3>
+                <p className="tn-step__description">
+                  Una vez dentro de Balto, navegá nuevamente a <strong>Configuración → Tienda Nube</strong>.
+                  Vas a ver que el estado de conexión ya aparece como "Conectada".
+                </p>
+              </div>
+            </div>
+
+            {/* Paso 4 */}
+            <div className="tn-step">
+              <div className="tn-step__number">4</div>
+              <div className="tn-step__content">
+                <h3 className="tn-step__title">Configurar Webhooks</h3>
+                <p className="tn-step__description">
+                  Presioná el botón <strong>"Configurar webhooks"</strong>. Esto es fundamental para que
+                  los eventos de Tienda Nube (como nuevas ventas, actualizaciones de stock, etc.)
+                  se sincronicen automáticamente con Balto.
+                </p>
+              </div>
+            </div>
+
+            {/* Paso 5 */}
+            <div className="tn-step">
+              <div className="tn-step__number">5</div>
+              <div className="tn-step__content">
+                <h3 className="tn-step__title">Importar catálogo existente (opcional)</h3>
+                <p className="tn-step__description">
+                  Si ya tenés productos y categorías cargados en Tienda Nube, presioná
+                  <strong> "Obtener todo lo de Tienda Nube"</strong> para importarlos a Balto.
+                  Esto te permitirá administrarlos desde el sistema.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="tn-modal__final">
+            <div className="tn-modal__finalIcon">
+              <FontAwesomeIcon icon={faCheckCircle} />
+            </div>
+            <div className="tn-modal__finalText">
+              <strong>¡Listo! Todo configurado.</strong>
+              <p>
+                A partir de ahora, podés manejar todo desde Balto. Cualquier acción que realices
+                (productos, ventas, stock) se sincronizará automáticamente con Tienda Nube,
+                y viceversa. La integración está completamente activa.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="tn-modal__footer">
+          <button className="tn-modal__button" onClick={onClose}>
+            Entendido, ¡comenzar!
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ConfigTiendaNube() {
   const navigate = useNavigate();
   const usuario = useMemo(() => getUsuario(), []);
@@ -132,6 +300,8 @@ export default function ConfigTiendaNube() {
   const [loading, setLoading] = useState(true);
   const [loadingConnect, setLoadingConnect] = useState(false);
   const [loadingWebhook, setLoadingWebhook] = useState(false);
+  const [loadingImport, setLoadingImport] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
@@ -151,6 +321,9 @@ export default function ConfigTiendaNube() {
     setError("");
     setOkMsg("");
   };
+
+  const abrirModal = () => setIsModalOpen(true);
+  const cerrarModal = () => setIsModalOpen(false);
 
   const cargarEstado = useCallback(async () => {
     setLoading(true);
@@ -284,6 +457,44 @@ export default function ConfigTiendaNube() {
     }
   };
 
+  const handleImportarCatalogo = async () => {
+    limpiarMensajes();
+    setLoadingImport(true);
+
+    try {
+      const res = await apiFetch(
+        {
+          action: "stock_tiendanube_importar_faltantes",
+          idTenant: tenantId,
+        },
+        {
+          method: "POST",
+          body: JSON.stringify({
+            idTenant: tenantId,
+          }),
+        }
+      );
+
+      const txt = await res.text();
+      const data = safeJsonParse(txt);
+
+      if (!res.ok || !data?.exito) {
+        throw new Error(
+          data?.mensaje ||
+            data?.error ||
+            "No se pudo importar el catálogo desde Tienda Nube."
+        );
+      }
+
+      setOkMsg(armarMensajeImportacion(data?.resultado || {}));
+      await cargarEstado();
+    } catch (e) {
+      setError(e?.message || "Error al importar productos y categorías.");
+    } finally {
+      setLoadingImport(false);
+    }
+  };
+
   const progreso = useMemo(() => {
     let total = 2;
     let hechos = 0;
@@ -323,6 +534,8 @@ export default function ConfigTiendaNube() {
 
   return (
     <section className="tn-page">
+      <ModalInstructivo isOpen={isModalOpen} onClose={cerrarModal} />
+
       <div className="tn-topbar" />
 
       <div className="tn-hero">
@@ -427,6 +640,16 @@ export default function ConfigTiendaNube() {
               <h2>Acciones</h2>
               <p>Ejecutá las acciones principales para dejar la integración lista.</p>
             </div>
+
+            {/* Botón de información agregado aquí - a la derecha del título */}
+            <button
+              className="tn-infoButton"
+              onClick={abrirModal}
+              title="Ver guía de conexión"
+            >
+              <FontAwesomeIcon icon={faCircleInfo} />
+              <span>Guía</span>
+            </button>
           </div>
 
           <div className="tn-metaCard__body tn-metaCard__body--stack">
@@ -462,6 +685,29 @@ export default function ConfigTiendaNube() {
                 </span>
               </div>
               <FontAwesomeIcon icon={faChevronRight} />
+            </button>
+
+            <button
+              type="button"
+              className="tn-actionRow"
+              onClick={handleImportarCatalogo}
+              disabled={
+                !tenantId ||
+                !conexion.connected ||
+                loadingImport
+              }
+            >
+              <div className="tn-actionRow__text">
+                <span className="tn-actionRow__title">
+                  {loadingImport
+                    ? "Obteniendo catálogo..."
+                    : "Obtener todo lo de Tienda Nube"}
+                </span>
+                <span className="tn-actionRow__desc">
+                  Importa las categorías y productos que ya existen en la tienda.
+                </span>
+              </div>
+              <FontAwesomeIcon icon={loadingImport ? faPlug : faDownload} />
             </button>
           </div>
         </div>

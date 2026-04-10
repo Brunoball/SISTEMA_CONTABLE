@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -159,104 +160,126 @@ function armarMensajeImportacion(resultado) {
   return `Importación terminada. ${partes.join(" · ")}.`;
 }
 
-// Componente del Modal Instructivo
 function ModalInstructivo({ isOpen, onClose }) {
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
-    return () => {
-      document.body.style.overflow = "unset";
+    if (!isOpen) return;
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") onClose?.();
     };
-  }, [isOpen]);
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="tn-modal-overlay" onClick={onClose}>
-      <div className="tn-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="tn-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tn-modal-title"
+      >
         <div className="tn-modal__header">
           <div className="tn-modal__headerIcon">
             <FontAwesomeIcon icon={faListCheck} />
           </div>
-          <h2 className="tn-modal__title">Guía de conexión: Tienda Nube</h2>
-          <button className="tn-modal__close" onClick={onClose}>
+
+          <h2 id="tn-modal-title" className="tn-modal__title">
+            Guía de conexión: Tienda Nube
+          </h2>
+
+          <button type="button" className="tn-modal__close" onClick={onClose}>
             <FontAwesomeIcon icon={faXmark} />
           </button>
         </div>
 
         <div className="tn-modal__body">
           <p className="tn-modal__intro">
-            Seguí esta guía paso a paso para conectar Balto con tu tienda Tienda Nube.
-            Una vez completada la integración, todo lo que hagas en Balto impactará
-            automáticamente en tu tienda, y viceversa.
+            Seguí esta guía paso a paso para conectar Balto con tu tienda Tienda
+            Nube. Una vez completada la integración, todo lo que hagas en Balto
+            impactará automáticamente en tu tienda, y viceversa.
           </p>
 
           <div className="tn-steps">
-            {/* Paso 1 */}
             <div className="tn-step">
               <div className="tn-step__number">1</div>
               <div className="tn-step__content">
                 <h3 className="tn-step__title">Conectar con Tienda Nube</h3>
                 <p className="tn-step__description">
-                  Presioná el botón <strong>"Conectar con Tienda Nube"</strong> en la sección de Acciones.
-                  Esto iniciará el flujo de autorización de Tienda Nube.
+                  Presioná el botón <strong>"Conectar con Tienda Nube"</strong> en
+                  la sección de Acciones. Esto iniciará el flujo de autorización
+                  de Tienda Nube.
                 </p>
                 <div className="tn-step__note">
                   <FontAwesomeIcon icon={faCircleInfo} />
-                  <span>⚠️ Importante: Vas a cerrar sesión en Balto para conectarte con Tienda Nube.</span>
+                  <span>
+                    ⚠️ Importante: Vas a cerrar sesión en Balto para conectarte
+                    con Tienda Nube.
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Paso 2 */}
             <div className="tn-step">
               <div className="tn-step__number">2</div>
               <div className="tn-step__content">
-                <h3 className="tn-step__title">Iniciar sesión nuevamente en Balto</h3>
+                <h3 className="tn-step__title">
+                  Iniciar sesión nuevamente en Balto
+                </h3>
                 <p className="tn-step__description">
-                  Después de autorizar la conexión en Tienda Nube, volvé a iniciar sesión
-                  en Balto con tus credenciales habituales.
+                  Después de autorizar la conexión en Tienda Nube, volvé a iniciar
+                  sesión en Balto con tus credenciales habituales.
                 </p>
               </div>
             </div>
 
-            {/* Paso 3 */}
             <div className="tn-step">
               <div className="tn-step__number">3</div>
               <div className="tn-step__content">
                 <h3 className="tn-step__title">Volver a Configuración</h3>
                 <p className="tn-step__description">
-                  Una vez dentro de Balto, navegá nuevamente a <strong>Configuración → Tienda Nube</strong>.
-                  Vas a ver que el estado de conexión ya aparece como "Conectada".
+                  Una vez dentro de Balto, navegá nuevamente a{" "}
+                  <strong>Configuración → Tienda Nube</strong>. Vas a ver que el
+                  estado de conexión ya aparece como "Conectada".
                 </p>
               </div>
             </div>
 
-            {/* Paso 4 */}
             <div className="tn-step">
               <div className="tn-step__number">4</div>
               <div className="tn-step__content">
                 <h3 className="tn-step__title">Configurar Webhooks</h3>
                 <p className="tn-step__description">
-                  Presioná el botón <strong>"Configurar webhooks"</strong>. Esto es fundamental para que
-                  los eventos de Tienda Nube (como nuevas ventas, actualizaciones de stock, etc.)
-                  se sincronicen automáticamente con Balto.
+                  Presioná el botón <strong>"Configurar webhooks"</strong>. Esto
+                  es fundamental para que los eventos de Tienda Nube (como nuevas
+                  ventas, actualizaciones de stock, etc.) se sincronicen
+                  automáticamente con Balto.
                 </p>
               </div>
             </div>
 
-            {/* Paso 5 */}
             <div className="tn-step">
               <div className="tn-step__number">5</div>
               <div className="tn-step__content">
-                <h3 className="tn-step__title">Importar catálogo existente (opcional)</h3>
+                <h3 className="tn-step__title">
+                  Importar catálogo existente (opcional)
+                </h3>
                 <p className="tn-step__description">
-                  Si ya tenés productos y categorías cargados en Tienda Nube, presioná
-                  <strong> "Obtener todo lo de Tienda Nube"</strong> para importarlos a Balto.
-                  Esto te permitirá administrarlos desde el sistema.
+                  Si ya tenés productos y categorías cargados en Tienda Nube,
+                  presioná <strong>"Obtener todo lo de Tienda Nube"</strong> para
+                  importarlos a Balto. Esto te permitirá administrarlos desde el
+                  sistema.
                 </p>
               </div>
             </div>
@@ -269,21 +292,23 @@ function ModalInstructivo({ isOpen, onClose }) {
             <div className="tn-modal__finalText">
               <strong>¡Listo! Todo configurado.</strong>
               <p>
-                A partir de ahora, podés manejar todo desde Balto. Cualquier acción que realices
-                (productos, ventas, stock) se sincronizará automáticamente con Tienda Nube,
-                y viceversa. La integración está completamente activa.
+                A partir de ahora, podés manejar todo desde Balto. Cualquier
+                acción que realices (productos, ventas, stock) se sincronizará
+                automáticamente con Tienda Nube, y viceversa. La integración está
+                completamente activa.
               </p>
             </div>
           </div>
         </div>
 
         <div className="tn-modal__footer">
-          <button className="tn-modal__button" onClick={onClose}>
+          <button type="button" className="tn-modal__button" onClick={onClose}>
             Entendido, ¡comenzar!
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -496,7 +521,7 @@ export default function ConfigTiendaNube() {
   };
 
   const progreso = useMemo(() => {
-    let total = 2;
+    const total = 2;
     let hechos = 0;
     if (conexion.connected) hechos += 1;
     if (conexion.webhooks_configured) hechos += 1;
@@ -564,7 +589,7 @@ export default function ConfigTiendaNube() {
             onClick={() => navigate("/panel/configuracion")}
           >
             <FontAwesomeIcon icon={faArrowLeft} />
-            <span>Volver </span>
+            <span>Volver</span>
           </button>
         </div>
       </div>
@@ -641,8 +666,8 @@ export default function ConfigTiendaNube() {
               <p>Ejecutá las acciones principales para dejar la integración lista.</p>
             </div>
 
-            {/* Botón de información agregado aquí - a la derecha del título */}
             <button
+              type="button"
               className="tn-infoButton"
               onClick={abrirModal}
               title="Ver guía de conexión"
@@ -691,11 +716,7 @@ export default function ConfigTiendaNube() {
               type="button"
               className="tn-actionRow"
               onClick={handleImportarCatalogo}
-              disabled={
-                !tenantId ||
-                !conexion.connected ||
-                loadingImport
-              }
+              disabled={!tenantId || !conexion.connected || loadingImport}
             >
               <div className="tn-actionRow__text">
                 <span className="tn-actionRow__title">
@@ -741,7 +762,11 @@ export default function ConfigTiendaNube() {
                   </div>
                 </div>
               </div>
-              <span className={`tn-badge ${conexion.connected ? "tn-badge--ok" : "tn-badge--warn"}`}>
+              <span
+                className={`tn-badge ${
+                  conexion.connected ? "tn-badge--ok" : "tn-badge--warn"
+                }`}
+              >
                 {conexion.connected ? "Lista" : "Pendiente"}
               </span>
             </div>

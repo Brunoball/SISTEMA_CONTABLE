@@ -2004,14 +2004,15 @@ button.cc-cliente-table__row:focus-visible{
   .cc-cliente-table .mov-gridTable.mov-gridTable--row {
     gap: 8px;
     padding: 14px;
-    margin: 0;
+       margin: auto;
     border-bottom: 1px solid rgba(10, 37, 64, 0.08);
     background: #fff;
+     
   }
 
   .cc-cliente-table .mov-gridTable.mov-gridTable--row:last-child {
     border-bottom: none;
-    margin: auto;
+
   }
 
   .cc-cliente-table .mov-gridCell.is-right {
@@ -2284,7 +2285,7 @@ button.cc-cliente-table__row:focus-visible{
   .cc-cliente-table .mov-gridTable.mov-gridTable--row {
     gap: 8px;
     padding: 14px;
-    margin: 0;
+
     border-bottom: 1px solid rgba(10, 37, 64, 0.08);
     background: #fff;
   }
@@ -2889,7 +2890,7 @@ button.cc-cliente-table__row:focus-visible{
   }
 
   .cc-cliente-table__body {
-    max-height: 60vh !important;
+    max-height: 65vh !important;
   }
 
   .cc-grid-header {
@@ -2955,4 +2956,70 @@ button.cc-cliente-table__row:focus-visible{
 #vents-comppr-wits{
   min-width: 200px;
   max-width: 200px;
+}
+/* =========================================
+   FILA DE ACCIONES
+========================================= */
+.cc-row-actions{
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.cc-row-actions__btn{
+  width: fit-content;
+  justify-content: center;
+}
+
+.cc-row-actions__export{
+  width: 100%;
+  display: flex;
+}
+
+.cc-row-actions__export > *{
+  width: 100%;
+}
+
+.cc-row-actions__export .mov-btn,
+.cc-row-actions__export .cc-btn,
+.cc-row-actions__export button{
+  width: 100%;
+  justify-content: center;
+}
+
+/* cuando NO está el botón volver */
+.cc-row-actions:has(.cc-row-actions__export):not(:has([title="Volver"])){
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 820px){
+  .mon{
+    display: none;
+  }
+  #vents-comppr-wits{
+    min-width: 100%;
+  }
+  .cc-row-actions{
+    grid-template-columns: 1fr 1fr 1fr;
+    width: 100%;
+  }
+
+  .cc-row-actions .mov-btn,
+  .cc-row-actions .cc-btn,
+  .cc-row-actions button{
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 480px){
+  .cc-row-actions{
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+
+  .cc-row-actions .mov-btn span{
+    display: none;
+  }
 }

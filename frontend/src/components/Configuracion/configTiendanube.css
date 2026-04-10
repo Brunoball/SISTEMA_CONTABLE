@@ -433,3 +433,532 @@
 }
 
 
+/* ── MODAL INSTRUCTIVO ── */
+
+.tn-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 16, 30, 0.52);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999999999;
+  padding: 16px;
+  animation: tn-fade 0.15s ease;
+}
+
+@keyframes tn-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes tn-modal-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.tn-modal {
+  width: min(540px, 96vw);
+  max-height: 88vh;
+  background: #fff;
+  border-radius: 18px;
+  border: 1px solid #d9e1ea;
+  box-shadow: 0 28px 64px -24px rgba(0, 0, 0, 0.32);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: tn-modal-pop 0.16s ease-out;
+  font-family: "DM Sans", "Instrument Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── HEADER DEL MODAL ── */
+.tn-modal__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--balto-ink, #0a2540);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex: 0 0 auto;
+}
+
+.tn-modal__headerIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  font-size: 14px;
+  color: #fff;
+}
+
+.tn-modal__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.01em;
+  flex: 1;
+  min-width: 0;
+}
+
+.tn-modal__close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  flex: 0 0 auto;
+}
+
+.tn-modal__close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transform: rotate(90deg);
+}
+
+/* ── BODY DEL MODAL ── */
+.tn-modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 20px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #f7f9fc;
+}
+
+.tn-modal__intro {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #5a6a7e;
+  font-weight: 430;
+  background: #fff;
+  border: 1px solid #e4eaf1;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+/* ── PASOS ── */
+.tn-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.tn-step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  position: relative;
+  padding-bottom: 18px;
+}
+
+/* línea vertical conectora */
+.tn-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 34px;
+  bottom: 0;
+  width: 2px;
+  background: #e4eaf1;
+  border-radius: 999px;
+}
+
+.tn-step__number {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--balto-ink, #0a2540);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px #d9e1ea;
+  position: relative;
+  z-index: 1;
+}
+
+.tn-step__content {
+  flex: 1;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.tn-step__title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--balto-ink, #0a2540);
+  line-height: 1.25;
+}
+
+.tn-step__description {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #5a6a7e;
+  font-weight: 430;
+}
+
+.tn-step__description strong {
+  font-weight: 620;
+  color: #23384f;
+}
+
+.tn-step__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 8px;
+  background: #fff8eb;
+  border: 1px solid #f1dfb9;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: #9d6a08;
+  font-weight: 560;
+  line-height: 1.4;
+}
+
+.tn-step__note svg {
+  font-size: 11px;
+  margin-top: 1px;
+  flex: 0 0 auto;
+  color: #b37b10;
+}
+
+/* ── BLOQUE FINAL ── */
+.tn-modal__final {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #edf8f1;
+  border: 1px solid #d4eadc;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 4px;
+}
+
+.tn-modal__finalIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #d4eadc;
+  display: grid;
+  place-items: center;
+  color: #237545;
+  font-size: 14px;
+  flex: 0 0 auto;
+}
+
+.tn-modal__finalText {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #2b5c3a;
+}
+
+.tn-modal__finalText strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  margin-bottom: 4px;
+  color: #1a4a2c;
+}
+
+.tn-modal__finalText p {
+  margin: 0;
+  font-weight: 430;
+}
+
+/* ── FOOTER DEL MODAL ── */
+.tn-modal__footer {
+  flex: 0 0 auto;
+  padding: 12px 18px;
+  border-top: 1px solid #e4eaf1;
+  background: #fff;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.tn-modal__button {
+  height: 38px;
+  padding: 0 20px;
+  border-radius: 10px;
+  background: var(--balto-ink, #0a2540);
+  color: #fff;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  letter-spacing: -0.01em;
+}
+
+.tn-modal__button:hover {
+  background: #0d2f55;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(10, 37, 64, 0.22);
+}
+
+.tn-modal__button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* ── BOTÓN INFO EN CARD ── */
+.tn-infoButton {
+  margin-left: auto;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #d9e1ea;
+  background: #f3f6fa;
+  color: #53657a;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.tn-infoButton:hover {
+  background: #e8edf4;
+  border-color: #b8c6d6;
+  color: var(--balto-ink, #0a2540);
+}
+
+/* ── SCROLL PERSONALIZADO EN EL BODY ── */
+.tn-modal__body::-webkit-scrollbar {
+  width: 6px;
+}
+.tn-modal__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tn-modal__body::-webkit-scrollbar-thumb {
+  background: #c8d2de;
+  border-radius: 999px;
+}
+.tn-modal__body::-webkit-scrollbar-thumb:hover {
+  background: #9aaabb;
+}
+
+/* ── MOBILE ── */
+@media (max-width: 640px) {
+  .tn-modal {
+    border-radius: 14px;
+    max-height: 92vh;
+  }
+
+  .tn-modal__body {
+    padding: 14px 14px 4px;
+  }
+
+  .tn-modal__footer {
+    padding: 10px 14px;
+  }
+
+  .tn-modal__button {
+    width: 100%;
+    justify-content: center;
+  }
+}/* ============================================
+   MODAL INSTRUCTIVO — DARK MODE
+   Activado por: [data-theme="oscuro"] o body.dark
+   ============================================ */
+
+[data-theme="oscuro"] .tn-modal-overlay,
+body.dark .tn-modal-overlay {
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(3px);
+}
+
+[data-theme="oscuro"] .tn-modal,
+body.dark .tn-modal {
+  background: rgba(6, 18, 28, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 28px 64px -24px rgba(0, 0, 0, 0.55);
+}
+
+/* header — ya es oscuro en light, se ajusta levemente */
+[data-theme="oscuro"] .tn-modal__header,
+body.dark .tn-modal__header {
+  background: linear-gradient(180deg, #0a2540, #071a2c);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="oscuro"] .tn-modal__close,
+body.dark .tn-modal__close {
+  color: rgba(255, 255, 255, 0.70);
+}
+
+[data-theme="oscuro"] .tn-modal__close:hover,
+body.dark .tn-modal__close:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
+}
+
+/* body */
+[data-theme="oscuro"] .tn-modal__body,
+body.dark .tn-modal__body {
+  background: rgba(8, 20, 32, 0.96);
+}
+
+[data-theme="oscuro"] .tn-modal__body::-webkit-scrollbar-thumb,
+body.dark .tn-modal__body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="oscuro"] .tn-modal__body::-webkit-scrollbar-thumb:hover,
+body.dark .tn-modal__body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* intro */
+[data-theme="oscuro"] .tn-modal__intro,
+body.dark .tn-modal__intro {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(210, 220, 235, 0.72);
+}
+
+/* línea conectora de pasos */
+[data-theme="oscuro"] .tn-step:not(:last-child)::after,
+body.dark .tn-step:not(:last-child)::after {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+/* número de paso */
+[data-theme="oscuro"] .tn-step__number,
+body.dark .tn-step__number {
+  background: #0055bb;
+  border-color: rgba(6, 18, 28, 0.96);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12);
+}
+
+/* título del paso */
+[data-theme="oscuro"] .tn-step__title,
+body.dark .tn-step__title {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* descripción del paso */
+[data-theme="oscuro"] .tn-step__description,
+body.dark .tn-step__description {
+  color: rgba(210, 220, 235, 0.70);
+}
+
+[data-theme="oscuro"] .tn-step__description strong,
+body.dark .tn-step__description strong {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+/* nota de advertencia */
+[data-theme="oscuro"] .tn-step__note,
+body.dark .tn-step__note {
+  background: rgba(245, 158, 11, 0.10);
+  border-color: rgba(245, 158, 11, 0.22);
+  color: rgba(252, 211, 77, 0.90);
+}
+
+[data-theme="oscuro"] .tn-step__note svg,
+body.dark .tn-step__note svg {
+  color: rgba(252, 211, 77, 0.75);
+}
+
+/* bloque final verde */
+[data-theme="oscuro"] .tn-modal__final,
+body.dark .tn-modal__final {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.20);
+}
+
+[data-theme="oscuro"] .tn-modal__finalIcon,
+body.dark .tn-modal__finalIcon {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(16, 185, 129, 0.25);
+  color: rgba(72, 210, 160, 0.95);
+}
+
+[data-theme="oscuro"] .tn-modal__finalText,
+body.dark .tn-modal__finalText {
+  color: rgba(167, 230, 195, 0.90);
+}
+
+[data-theme="oscuro"] .tn-modal__finalText strong,
+body.dark .tn-modal__finalText strong {
+  color: rgba(210, 245, 225, 0.96);
+}
+
+[data-theme="oscuro"] .tn-modal__finalText p,
+body.dark .tn-modal__finalText p {
+  color: rgba(167, 230, 195, 0.80);
+}
+
+/* footer */
+[data-theme="oscuro"] .tn-modal__footer,
+body.dark .tn-modal__footer {
+  background: rgba(6, 18, 28, 0.96);
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+/* botón principal */
+[data-theme="oscuro"] .tn-modal__button,
+body.dark .tn-modal__button {
+  background: #0055bb;
+  border: 1px solid rgba(0, 85, 187, 0.85);
+  color: rgba(255, 255, 255, 0.96);
+}
+ [data-theme="oscuro"] .tn-actionRow > svg {
+  color: rgba(255, 255, 255, 0.92);
+}
+[data-theme="oscuro"] .tn-modal__button:hover,
+body.dark .tn-modal__button:hover {
+  background: #0063d4;
+  box-shadow: 0 8px 18px rgba(0, 85, 187, 0.30);
+}
+
+/* botón info en card */
+[data-theme="oscuro"] .tn-infoButton,
+body.dark .tn-infoButton {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(210, 220, 235, 0.75);
+}
+
+[data-theme="oscuro"] .tn-infoButton:hover,
+body.dark .tn-infoButton:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.20);
+  color: rgba(255, 255, 255, 0.92);
+}

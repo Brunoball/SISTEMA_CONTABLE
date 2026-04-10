@@ -363,8 +363,16 @@ export default function ClientesCC() {
       if (!data || data.exito !== true) {
         throw new Error(data?.mensaje || "No se pudo cargar el listado de clientes.");
       }
+
       const rowsApi = Array.isArray(data.rows) ? data.rows : [];
-      setSummaryRows(rowsApi);
+      const rowsOrdenadas = [...rowsApi].sort((a, b) =>
+        safeText(a?.nombre).localeCompare(safeText(b?.nombre), "es", {
+          sensitivity: "base",
+          numeric: true,
+        })
+      );
+
+      setSummaryRows(rowsOrdenadas);
     } catch (e) {
       setSummaryRows([]);
       showToast("error", e?.message || "Error cargando clientes.", 3500);
@@ -378,25 +386,28 @@ export default function ClientesCC() {
   }, [loadSummary]);
 
   const loadHistorial = useCallback(
-    async (cliente) => {
+    async (cliente, options = {}) => {
       if (!cliente?.id_cliente) return;
 
-      if (!dateRange?.from) {
-        showToast("advertencia", "Seleccioná un período.", 2600);
-        return;
-      }
+      const keepSelection = options.keepSelection === true;
 
       setLoading(true);
       setHasSearched(true);
-      setSelectedCliente(cliente);
-      setQueryUsed(cliente.nombre || "");
+
+      if (!keepSelection) {
+        setSelectedCliente(cliente);
+        setQueryUsed(cliente.nombre || "");
+      }
 
       try {
         const sp = new URLSearchParams();
         sp.set("action", "cc_historial_cliente");
         sp.set("id_cliente", String(cliente.id_cliente));
-        sp.set("fecha_desde", formatDateISO(dateRange.from));
-        sp.set("fecha_hasta", formatDateISO(dateRange.to || dateRange.from));
+
+        if (dateRange?.from) {
+          sp.set("fecha_desde", formatDateISO(dateRange.from));
+          sp.set("fecha_hasta", formatDateISO(dateRange.to || dateRange.from));
+        }
 
         const data = await apiGet(`${API}?${sp.toString()}`);
 
@@ -426,10 +437,10 @@ export default function ClientesCC() {
   }, []);
 
   useEffect(() => {
-    if (selectedCliente?.id_cliente && dateRange?.from) {
-      loadHistorial(selectedCliente);
+    if (selectedCliente?.id_cliente) {
+      loadHistorial(selectedCliente, { keepSelection: true });
     }
-  }, [dateRange, selectedCliente, loadHistorial]);
+  }, [dateRange?.from, dateRange?.to, selectedCliente, loadHistorial]);
 
   const getExportData = useCallback(() => {
     const data = buildExportRows(rows);
@@ -612,7 +623,7 @@ export default function ClientesCC() {
 
   const refreshCurrent = useCallback(async () => {
     if (selectedCliente?.id_cliente) {
-      await loadHistorial(selectedCliente);
+      await loadHistorial(selectedCliente, { keepSelection: true });
     } else {
       await loadSummary();
     }
@@ -623,7 +634,7 @@ export default function ClientesCC() {
 
     if (selectedCliente?.id_cliente) {
       try {
-        await loadHistorial(selectedCliente);
+        await loadHistorial(selectedCliente, { keepSelection: true });
       } catch {
         volverAlListado();
       }
@@ -722,135 +733,133 @@ export default function ClientesCC() {
         cancelLabel="Cancelar"
       />
 
-<div className="mov-card__head">
-  <div className="mov-card__headLeft">
-    <div className="title-mov">
-      <div className="mov-card__title">
-        {isDetailMode ? `${selectedCliente.nombre}` : "Cuentas Corrientes"}
-      </div>
+      <div className="mov-card__head">
+        <div className="mov-card__headLeft">
+          <div className="title-mov">
+            <div className="mov-card__title">
+              {isDetailMode ? `${selectedCliente.nombre}` : "Cuentas Corrientes"}
+            </div>
 
-      <div className="mov-card__hint">
-        {isDetailMode ? (
-          <>
-            Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
-          </>
-        ) : (
-          <>
-            Mostrando <b>{filteredSummaryRows.length}</b> cliente
-            {filteredSummaryRows.length === 1 ? "" : "s"}
-          </>
-        )}
-      </div>
-    </div>
+            <div className="mov-card__hint">
+              {isDetailMode ? (
+                <>
+                  Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
+                </>
+              ) : (
+                <>
+                  Mostrando <b>{filteredSummaryRows.length}</b> cliente
+                  {filteredSummaryRows.length === 1 ? "" : "s"}
+                </>
+              )}
+            </div>
+          </div>
 
-    <div className="mov-headFilters">
+          <div className="mov-headFilters">
+            {isDetailMode && (
+              <div className="cc-filter cc-filter--cal">
+                <div
+                  className={`cc-floatingField cc-floatingField--calendar is-active ${
+                    calOpen ? "is-open" : ""
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
+                    onClick={() => setCalOpen((v) => !v)}
+                    disabled={loading}
+                  >
+                    {rangeLabel}
+                    <span className="cc-calTrigger__iconRight">
+                      <FontAwesomeIcon icon={faChevronDown} />
+                    </span>
+                  </button>
 
-      {/* CALENDARIO */}
-      {isDetailMode && (
-        <div className="cc-filter cc-filter--cal">
-          <div className={`cc-floatingField cc-floatingField--calendar is-active ${calOpen ? "is-open" : ""}`}>
-            <button
-              type="button"
-              className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
-              onClick={() => setCalOpen(v => !v)}
-              disabled={loading}
-            >
-              {rangeLabel}
-              <span className="cc-calTrigger__iconRight">
-                <FontAwesomeIcon icon={faChevronDown} />
-              </span>
-            </button>
+                  <span className="cc-floatingLabel cc-floatingLabel--active">
+                    <FontAwesomeIcon icon={faCalendarDays} /> Período
+                  </span>
 
-            <span className="cc-floatingLabel cc-floatingLabel--active">
-              <FontAwesomeIcon icon={faCalendarDays} /> Período
-            </span>
-
-            {calOpen && (
-              <div className="cc-calDropdown">
-                <Calendario
-                  value={dateRange}
-                  onChange={(range) => {
-                    setDateRange(range);
-                    if (range?.from && range?.to) setCalOpen(false);
-                  }}
-                  onClose={() => setCalOpen(false)}
-                />
+                  {calOpen && (
+                    <div className="cc-calDropdown">
+                      <Calendario
+                        value={dateRange}
+                        onChange={(range) => {
+                          setDateRange(range);
+                          if (range?.from && range?.to) setCalOpen(false);
+                        }}
+                        onClose={() => setCalOpen(false)}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-          </div>
-        </div>
-      )}
 
-      {/* BUSQUEDA */}
-      <div className="cc-filter cc-filter--search" id="vents-comppr-wits">
-        <div className="cc-floatingField cc-floatingField--search is-active">
-          <div className="cc-searchInput">
-            <div className="cc-searchInput__fieldWrap">
-              <input
-                className="cc-input cc-input--floating"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar por cliente..."
+            <div className="cc-filter cc-filter--search" id="vents-comppr-wits">
+              <div className="cc-floatingField cc-floatingField--search is-active">
+                <div className="cc-searchInput">
+                  <div className="cc-searchInput__fieldWrap">
+                    <input
+                      className="cc-input cc-input--floating"
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="Buscar por cliente..."
+                      disabled={loading}
+                    />
+
+                    <span className="cc-floatingLabel">
+                      <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                    </span>
+
+                    {safeText(q) !== "" && !loading && (
+                      <button
+                        type="button"
+                        className="cc-clearSearch cc-clearSearch--inside"
+                        onClick={() => setQ("")}
+                      >
+                        <FontAwesomeIcon icon={faTimes} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="cc-row-actions">
+              <button
+                type="button"
+                className="mov-btn mov-btn--ghost mov-btn--icon cc-row-actions__btn"
+                onClick={() => setClientesModalOpen(true)}
                 disabled={loading}
-              />
+                title="Clientes"
+              >
+                <FontAwesomeIcon icon={faUsers} />
+                {!isDetailMode && <span style={{ marginLeft: 8 }}>Clientes</span>}
+              </button>
 
-              <span className="cc-floatingLabel">
-                <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-              </span>
+              <div className="cc-row-actions__export">
+                <BotonExportar
+                  disabled={loading || !isDetailMode || rows.length === 0}
+                  loading={false}
+                  label="Exportar"
+                  opciones={exportOptions}
+                  align="right"
+                />
+              </div>
 
-              {safeText(q) !== "" && !loading && (
+              {isDetailMode && (
                 <button
                   type="button"
-                  className="cc-clearSearch cc-clearSearch--inside"
-                  onClick={() => setQ("")}
+                  className="mov-btn mov-btn--ghost mov-btn--icon cc-row-actions__btn"
+                  onClick={volverAlListado}
+                  title="Volver"
                 >
-                  <FontAwesomeIcon icon={faTimes} />
+                  <FontAwesomeIcon icon={faArrowLeft} />
                 </button>
               )}
             </div>
           </div>
         </div>
       </div>
-
-      {/* FILA: CLIENTES + EXPORTAR */}
-      <div className="cc-row-actions">
-
-<button
-  type="button"
-  className="mov-btn mov-btn--ghost mov-btn--icon"
-  onClick={() => setClientesModalOpen(true)}
-  disabled={loading}
-  title="Clientes"
->
-  <FontAwesomeIcon icon={faUsers} />
-  {!isDetailMode && <span style={{ marginLeft: 8 }}>Clientes</span>}
-</button>
-
-        <BotonExportar
-          disabled={loading || !isDetailMode || rows.length === 0}
-          loading={false}
-          label="Exportar"
-          opciones={exportOptions}
-          align="right"
-        />
-
-      </div>
-
-      {/* VOLVER */}
-      {isDetailMode && (
-<button
-  type="button"
-  className="mov-btn mov-btn--ghost"
-  onClick={volverAlListado}
-  title="Volver al listado"
->
-  <FontAwesomeIcon icon={faArrowLeft} />
-</button>
-      )}
-
-    </div>
-  </div>
-</div>
 
       {!isDetailMode ? (
         <div className="cc-cliente-table cc-cliente-table--summary">

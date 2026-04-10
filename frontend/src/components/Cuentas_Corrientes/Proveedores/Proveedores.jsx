@@ -15,9 +15,8 @@ import {
   faArrowRightLong,
   faMagnifyingGlass,
   faTrashCan,
-  faTruckField,
-    faArrowLeft,
-    faUserPlus,
+  faArrowLeft,
+  faUserPlus,
 } from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../../Global/Toast.jsx";
@@ -292,7 +291,7 @@ function makeComprobanteAccessUrl(row, API) {
 }
 
 export default function ProveedoresCC() {
-  const API = `${BASE_URL}/api.php`;
+  const API = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
   const { dateRange, setDateRange } = useDateRange();
 
   const [calOpen, setCalOpen] = useState(false);
@@ -371,7 +370,13 @@ export default function ProveedoresCC() {
         throw new Error(data?.mensaje || "No se pudo cargar el listado de proveedores.");
       }
       const rowsApi = Array.isArray(data.rows) ? data.rows : [];
-      setSummaryRows(rowsApi);
+      const rowsOrdenadas = [...rowsApi].sort((a, b) =>
+        safeText(a?.nombre).localeCompare(safeText(b?.nombre), "es", {
+          sensitivity: "base",
+          numeric: true,
+        })
+      );
+      setSummaryRows(rowsOrdenadas);
     } catch (e) {
       setSummaryRows([]);
       showToast("error", e?.message || "Error cargando proveedores.", 3500);
@@ -385,24 +390,28 @@ export default function ProveedoresCC() {
   }, [loadSummary]);
 
   const loadHistorial = useCallback(
-    async (proveedor) => {
+    async (proveedor, options = {}) => {
       if (!proveedor?.id_proveedor) return;
-      if (!dateRange?.from) {
-        showToast("advertencia", "Seleccioná un período.", 2600);
-        return;
-      }
+
+      const keepSelection = options.keepSelection === true;
 
       setLoading(true);
       setHasSearched(true);
-      setSelectedProveedor(proveedor);
-      setQueryUsed(proveedor.nombre || "");
+
+      if (!keepSelection) {
+        setSelectedProveedor(proveedor);
+        setQueryUsed(proveedor.nombre || "");
+      }
 
       try {
         const sp = new URLSearchParams();
         sp.set("action", "cc_historial_proveedor");
         sp.set("id_proveedor", String(proveedor.id_proveedor));
-        sp.set("fecha_desde", formatDateISO(dateRange.from));
-        sp.set("fecha_hasta", formatDateISO(dateRange.to || dateRange.from));
+
+        if (dateRange?.from) {
+          sp.set("fecha_desde", formatDateISO(dateRange.from));
+          sp.set("fecha_hasta", formatDateISO(dateRange.to || dateRange.from));
+        }
 
         const data = await apiGet(`${API}?${sp.toString()}`);
         if (!data || data.exito !== true) {
@@ -423,10 +432,10 @@ export default function ProveedoresCC() {
   );
 
   useEffect(() => {
-    if (selectedProveedor?.id_proveedor && dateRange?.from) {
-      loadHistorial(selectedProveedor);
+    if (selectedProveedor?.id_proveedor) {
+      loadHistorial(selectedProveedor, { keepSelection: true });
     }
-  }, [dateRange, selectedProveedor, loadHistorial]);
+  }, [dateRange?.from, dateRange?.to, selectedProveedor, loadHistorial]);
 
   const volverAlListado = useCallback(() => {
     setSelectedProveedor(null);
@@ -601,11 +610,23 @@ export default function ProveedoresCC() {
 
   const refreshCurrent = useCallback(async () => {
     if (selectedProveedor?.id_proveedor) {
-      await loadHistorial(selectedProveedor);
+      await loadHistorial(selectedProveedor, { keepSelection: true });
     } else {
       await loadSummary();
     }
   }, [selectedProveedor, loadHistorial, loadSummary]);
+
+  const refreshAfterProveedoresUpdate = useCallback(async () => {
+    await loadSummary();
+
+    if (selectedProveedor?.id_proveedor) {
+      try {
+        await loadHistorial(selectedProveedor, { keepSelection: true });
+      } catch {
+        volverAlListado();
+      }
+    }
+  }, [loadSummary, selectedProveedor, loadHistorial, volverAlListado]);
 
   const confirmDeleteCobro = useCallback(async () => {
     const row = deleteState.row;
@@ -688,143 +709,137 @@ export default function ProveedoresCC() {
       <ModalProveedores
         open={modalProveedoresOpen}
         onClose={() => setModalProveedoresOpen(false)}
-        onActualizado={loadSummary}
+        onActualizado={refreshAfterProveedoresUpdate}
         onToast={showToast}
       />
 
-<div className="mov-card__head">
-  <div className="mov-card__headLeft">
+      <div className="mov-card__head">
+        <div className="mov-card__headLeft">
+          <div className="title-mov">
+            <div className="mov-card__title">
+              {isDetailMode ? `${selectedProveedor.nombre}` : "Cuentas Corrientes"}
+            </div>
 
-    <div className="title-mov">
-      <div className="mov-card__title">
-        {isDetailMode
-          ? `${selectedProveedor.nombre}`
-          : "Cuentas Corrientes"}
-      </div>
+            <div className="mov-card__hint">
+              {isDetailMode ? (
+                <>
+                  Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
+                </>
+              ) : (
+                <>
+                  Mostrando <b>{filteredSummaryRows.length}</b> proveedor
+                  {filteredSummaryRows.length === 1 ? "" : "es"}
+                </>
+              )}
+            </div>
+          </div>
 
-      <div className="mov-card__hint">
-        {isDetailMode ? (
-          <>
-            Mostrando <b>{rows.length}</b> registro{rows.length === 1 ? "" : "s"}
-          </>
-        ) : (
-          <>
-            Mostrando <b>{filteredSummaryRows.length}</b> proveedor
-            {filteredSummaryRows.length === 1 ? "" : "es"}
-          </>
-        )}
-      </div>
-    </div>
+          <div className="mov-headFilters">
+            {isDetailMode && (
+              <div className="cc-filter cc-filter--cal">
+                <div
+                  className={`cc-floatingField cc-floatingField--calendar is-active ${
+                    calOpen ? "is-open" : ""
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
+                    onClick={() => setCalOpen((v) => !v)}
+                    disabled={loading}
+                  >
+                    {rangeLabel}
+                    <span className="cc-calTrigger__iconRight">
+                      <FontAwesomeIcon icon={faChevronDown} />
+                    </span>
+                  </button>
 
-    <div className="mov-headFilters">
+                  <span className="cc-floatingLabel cc-floatingLabel--active">
+                    <FontAwesomeIcon icon={faCalendarDays} /> Período
+                  </span>
 
-      {/* CALENDARIO */}
-      {isDetailMode && (
-        <div className="cc-filter cc-filter--cal">
-          <div className={`cc-floatingField cc-floatingField--calendar is-active ${calOpen ? "is-open" : ""}`}>
-            <button
-              type="button"
-              className={`cc-calTrigger ${calOpen ? "is-open" : ""}`}
-              onClick={() => setCalOpen(v => !v)}
-              disabled={loading}
-            >
-              {rangeLabel}
-              <span className="cc-calTrigger__iconRight">
-                <FontAwesomeIcon icon={faChevronDown} />
-              </span>
-            </button>
-
-            <span className="cc-floatingLabel cc-floatingLabel--active">
-              <FontAwesomeIcon icon={faCalendarDays} /> Período
-            </span>
-
-            {calOpen && (
-              <div className="cc-calDropdown">
-                <Calendario
-                  value={dateRange}
-                  onChange={(range) => {
-                    setDateRange(range);
-                    if (range?.from && range?.to) setCalOpen(false);
-                  }}
-                  onClose={() => setCalOpen(false)}
-                />
+                  {calOpen && (
+                    <div className="cc-calDropdown">
+                      <Calendario
+                        value={dateRange}
+                        onChange={(range) => {
+                          setDateRange(range);
+                          if (range?.from && range?.to) setCalOpen(false);
+                        }}
+                        onClose={() => setCalOpen(false)}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-          </div>
-        </div>
-      )}
 
-      {/* BUSQUEDA */}
-      <div className="cc-filter cc-filter--search" id="vents-comppr-wits">
-        <div className="cc-floatingField cc-floatingField--search is-active">
-          <div className="cc-searchInput">
-            <div className="cc-searchInput__fieldWrap">
-              <input
-                className="cc-input cc-input--floating"
+            <div className="cc-filter cc-filter--search" id="vents-comppr-wits">
+              <div className="cc-floatingField cc-floatingField--search is-active">
+                <div className="cc-searchInput">
+                  <div className="cc-searchInput__fieldWrap">
+                    <input
+                      className="cc-input cc-input--floating"
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="Buscar por proveedor..."
+                      disabled={loading}
+                    />
 
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar por proveedor..."
+                    <span className="cc-floatingLabel">
+                      <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                    </span>
+
+                    {safeText(q) !== "" && !loading && (
+                      <button
+                        type="button"
+                        className="cc-clearSearch cc-clearSearch--inside"
+                        onClick={() => setQ("")}
+                      >
+                        <FontAwesomeIcon icon={faTimes} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="cc-row-actions">
+              <button
+                type="button"
+                className="mov-btn mov-btn--ghost mov-btn--icon cc-row-actions__btn"
+                onClick={() => setModalProveedoresOpen(true)}
                 disabled={loading}
-              />
+                title={!isDetailMode ? "Proveedores" : "Nuevo proveedor"}
+              >
+                <FontAwesomeIcon icon={faUserPlus} />
+                {!isDetailMode && <span style={{ marginLeft: 8 }}>Proveedores</span>}
+              </button>
 
-              <span className="cc-floatingLabel">
-                <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-              </span>
+              <div className="cc-row-actions__export">
+                <BotonExportar
+                  disabled={loading || !isDetailMode || rows.length === 0}
+                  loading={false}
+                  label="Exportar"
+                  opciones={exportOptions}
+                  align="right"
+                />
+              </div>
 
-              {safeText(q) !== "" && !loading && (
+              {isDetailMode && (
                 <button
                   type="button"
-                  className="cc-clearSearch cc-clearSearch--inside"
-                  onClick={() => setQ("")}
+                  className="mov-btn mov-btn--ghost mov-btn--icon cc-row-actions__btn"
+                  onClick={volverAlListado}
+                  title="Volver"
                 >
-                  <FontAwesomeIcon icon={faTimes} />
+                  <FontAwesomeIcon icon={faArrowLeft} />
                 </button>
               )}
             </div>
           </div>
         </div>
       </div>
-
-      {/* FILA PROVEEDORES + EXPORTAR */}
-      <div className="cc-row-actions">
-
-<button
-  type="button"
-  className="mov-btn mov-btn--ghost mov-btn--icon"
-  onClick={() => setModalProveedoresOpen(true)}
-  disabled={loading}
-  title="Nuevo proveedor"
->
-  <FontAwesomeIcon icon={faUserPlus} />
-  {!isDetailMode && <span style={{ marginLeft: 8 }}>Proveedores</span>}
-</button>
-
-        <BotonExportar
-          disabled={loading || !isDetailMode || rows.length === 0}
-          loading={false}
-          label="Exportar"
-          opciones={exportOptions}
-          align="right"
-        />
-
-      </div>
-
-      {/* VOLVER */}
-      {isDetailMode && (
-<button
-  type="button"
-  className="mov-btn mov-btn--ghost mov-btn--icon"
-  onClick={volverAlListado}
-  title="Volver"
->
-  <FontAwesomeIcon icon={faArrowLeft} />
-</button>
-      )}
-
-    </div>
-  </div>
-</div>
 
       {!isDetailMode ? (
         <div className="cc-cliente-table">

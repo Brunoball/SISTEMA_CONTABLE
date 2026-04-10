@@ -199,6 +199,11 @@ function hasOtroEgresoDetalleMedios(row) {
   return getOtroEgresoCantidadMedios(row) > 0;
 }
 
+function getEgresoIdComprobante(row) {
+  const n = Number(row?.id_comprobante ?? row?.comprobante_id ?? 0);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 function normalizeOtroEgresoRow(r) {
   const categoria = r?.categoria ?? r?.categoria_nombre ?? r?.nombre_categoria ?? "";
   const medioPagoNombre = r?.medio_pago_nombre ?? r?.medio_pago ?? r?.pago_medio_pago ?? "";
@@ -308,16 +313,6 @@ function downloadBlob(content, fileName, mimeType) {
   window.URL.revokeObjectURL(url);
 }
 
-function buildComprobanteDownloadUrl(apiBase, row) {
-  const directUrl = String(row?.comprobante_url ?? "").trim();
-  if (directUrl) return directUrl;
-
-  const idMovimiento = Number(row?.id_movimiento ?? 0);
-  if (!idMovimiento) return "";
-
-  return `${apiBase}?action=otros_egresos_comprobantes_descargar&id_movimiento=${idMovimiento}`;
-}
-
 export default function OtrosEgresos() {
   const API = `${BASE_URL}/api.php`;
 
@@ -389,6 +384,10 @@ export default function OtrosEgresos() {
   const moreReqIdRef = useRef(0);
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
+  
+  // Caches para signed URLs
+  const signedUrlCacheRef = useRef(new Map());
+  const signedUrlInFlightRef = useRef(new Set());
 
   const showSkeleton = loadingRows;
 
@@ -906,6 +905,8 @@ export default function OtrosEgresos() {
   const reloadVista = useCallback(async () => {
     try {
       cacheRef.current.clear();
+      signedUrlCacheRef.current.clear();
+      signedUrlInFlightRef.current.clear();
       await loadRows({
         from: dateRange.from,
         to: dateRange.to,
@@ -919,6 +920,67 @@ export default function OtrosEgresos() {
       showToast("error", msg, 4200);
     }
   }, [dateRange.from, dateRange.to, loadRows, q, showToast]);
+
+  const getComprobanteSignedUrl = useCallback(
+    async (idComprobante, idMovimiento = null) => {
+      const id = Number(idComprobante || 0);
+      const mov = Number(idMovimiento || 0);
+
+      if (!id && !mov) return "";
+
+      const cacheKey = id > 0 ? `id:${id}` : `mov:${mov}`;
+
+      if (signedUrlCacheRef.current.has(cacheKey)) {
+        return signedUrlCacheRef.current.get(cacheKey) || "";
+      }
+
+      if (signedUrlInFlightRef.current.has(cacheKey)) {
+        return await new Promise((resolve, reject) => {
+          const poll = setInterval(() => {
+            if (signedUrlCacheRef.current.has(cacheKey)) {
+              clearInterval(poll);
+              resolve(signedUrlCacheRef.current.get(cacheKey) || "");
+            } else if (!signedUrlInFlightRef.current.has(cacheKey)) {
+              clearInterval(poll);
+              reject(new Error("No se pudo obtener el comprobante."));
+            }
+          }, 40);
+
+          setTimeout(() => {
+            clearInterval(poll);
+            reject(new Error("Timeout esperando URL firmada."));
+          }, 8000);
+        });
+      }
+
+      signedUrlInFlightRef.current.add(cacheKey);
+
+      try {
+        const sp = new URLSearchParams();
+        sp.set("action", "otros_egresos_comprobantes_descargar");
+
+        if (id > 0) sp.set("id_comprobante", String(id));
+        else sp.set("id_movimiento", String(mov));
+
+        const data = await apiGet(`${API}?${sp.toString()}`);
+
+        if (!data?.exito) {
+          throw new Error(data?.mensaje || "No se pudo obtener el comprobante.");
+        }
+
+        const finalUrl = String(data?.url || "").trim();
+        if (!finalUrl) {
+          throw new Error("El backend no devolvió la URL del comprobante.");
+        }
+
+        signedUrlCacheRef.current.set(cacheKey, finalUrl);
+        return finalUrl;
+      } finally {
+        signedUrlInFlightRef.current.delete(cacheKey);
+      }
+    },
+    [API, apiGet]
+  );
 
   const handleOpenDeleteModal = useCallback((row) => {
     if (!row?.id_movimiento) return;
@@ -1066,41 +1128,59 @@ export default function OtrosEgresos() {
     setSelectedRow(null);
   }, []);
 
+  const handlePrewarmComprobante = useCallback(
+    async (row) => {
+      const idComprobante = getEgresoIdComprobante(row);
+      const idMovimiento = Number(row?.id_movimiento ?? 0);
+      if (!idComprobante && !idMovimiento) return;
+      getComprobanteSignedUrl(idComprobante, idMovimiento).catch(() => {});
+    },
+    [getComprobanteSignedUrl]
+  );
+
   const handleOpenComprobante = useCallback(
-    (row) => {
+    async (row) => {
+      const idComprobante = getEgresoIdComprobante(row);
+      const idMovimiento = Number(row?.id_movimiento ?? 0);
+
       const tieneComprobante =
-        Number(row?.id_comprobante ?? 0) > 0 || String(row?.comprobante_url ?? "").trim() !== "";
+        (idComprobante && idComprobante > 0) ||
+        String(row?.comprobante_url ?? "").trim() !== "";
 
       if (!tieneComprobante) return;
 
-      const url = buildComprobanteDownloadUrl(API, row);
-      if (!url) {
-        showToast("error", "No se pudo construir la URL del comprobante.", 3500);
-        return;
+      try {
+        const signedUrl = await getComprobanteSignedUrl(idComprobante, idMovimiento);
+        if (!signedUrl) {
+          showToast("error", "No se pudo obtener el comprobante.", 3000);
+          return;
+        }
+
+        const detalle = String(row?.detalle ?? row?.descripcion ?? row?.concepto ?? "").trim();
+        const fecha = formatFechaDMY(row?.fecha);
+
+        const esCheque =
+          Number(row?.cheque_id ?? 0) > 0 ||
+          ["CHEQUE", "ECHEQ"].includes(String(row?.medio_pago_nombre ?? "").trim().toUpperCase());
+
+        setComprobanteView({
+          url: signedUrl,
+          mime: String(row?.archivo_mime ?? "").trim() || "application/octet-stream",
+          title: esCheque
+            ? detalle
+              ? `Comprobante de cheque - ${detalle} - ${fecha}`
+              : `Comprobante de cheque - ${fecha}`
+            : detalle
+            ? `Comprobante de egreso - ${detalle} - ${fecha}`
+            : `Comprobante de egreso - ${fecha}`,
+        });
+
+        setOpenViewComprobante(true);
+      } catch (e) {
+        showToast("error", e?.message || "No se pudo abrir el comprobante.", 3200);
       }
-
-      const detalle = String(row?.detalle ?? row?.descripcion ?? row?.concepto ?? "").trim();
-      const fecha = formatFechaDMY(row?.fecha);
-
-      const esCheque =
-        Number(row?.cheque_id ?? 0) > 0 ||
-        ["CHEQUE", "ECHEQ"].includes(String(row?.medio_pago_nombre ?? "").trim().toUpperCase());
-
-      setComprobanteView({
-        url,
-        mime: String(row?.archivo_mime ?? "").trim() || "application/octet-stream",
-        title: esCheque
-          ? detalle
-            ? `Comprobante de cheque - ${detalle} - ${fecha}`
-            : `Comprobante de cheque - ${fecha}`
-          : detalle
-          ? `Comprobante de egreso - ${detalle} - ${fecha}`
-          : `Comprobante de egreso - ${fecha}`,
-      });
-
-      setOpenViewComprobante(true);
     },
-    [API, showToast]
+    [getComprobanteSignedUrl, showToast]
   );
 
   const closeComprobanteModal = useCallback(() => {
@@ -1422,8 +1502,10 @@ export default function OtrosEgresos() {
                 {filteredRows.map((r) => {
                   const key = getRowKey(r);
                   const isLoadingThisEdit = loadingEditDataId === r.id_movimiento;
+                  const idComprobante = getEgresoIdComprobante(r);
                   const tieneComprobante =
-                    Number(r?.id_comprobante ?? 0) > 0 || String(r?.comprobante_url ?? "").trim() !== "";
+                    (idComprobante && idComprobante > 0) ||
+                    String(r?.comprobante_url ?? "").trim() !== "";
                   const hasMedios = hasOtroEgresoDetalleMedios(r);
 
                   return (
@@ -1452,6 +1534,15 @@ export default function OtrosEgresos() {
                                       : "Este egreso no tiene comprobante"
                                   }
                                   onClick={() => handleOpenComprobante(r)}
+                                  onMouseEnter={() => {
+                                    if (tieneComprobante) handlePrewarmComprobante(r);
+                                  }}
+                                  onPointerEnter={() => {
+                                    if (tieneComprobante) handlePrewarmComprobante(r);
+                                  }}
+                                  onFocus={() => {
+                                    if (tieneComprobante) handlePrewarmComprobante(r);
+                                  }}
                                   disabled={!tieneComprobante || isAnyLoading || loadingListsCtx}
                                 >
                                   <FontAwesomeIcon icon={faEye} />
@@ -1568,12 +1659,16 @@ export default function OtrosEgresos() {
         onClose={() => {
           setOpenAdd(false);
           setSelectedRow(null);
+          signedUrlCacheRef.current.clear();
+          signedUrlInFlightRef.current.clear();
         }}
         onToast={showToast}
         onSubmit={apiPostSave}
         onSaved={async () => {
           setOpenAdd(false);
           setSelectedRow(null);
+          signedUrlCacheRef.current.clear();
+          signedUrlInFlightRef.current.clear();
           await reloadVista();
           await refreshPeriodos();
           showToast("exito", "Egreso guardado correctamente.", 2600);
@@ -1587,12 +1682,16 @@ export default function OtrosEgresos() {
         onClose={() => {
           setOpenEdit(false);
           setSelectedRow(null);
+          signedUrlCacheRef.current.clear();
+          signedUrlInFlightRef.current.clear();
         }}
         onToast={showToast}
         onSubmit={apiPostSave}
         onSaved={async () => {
           setOpenEdit(false);
           setSelectedRow(null);
+          signedUrlCacheRef.current.clear();
+          signedUrlInFlightRef.current.clear();
           await reloadVista();
           await refreshPeriodos();
           showToast("exito", "Egreso actualizado correctamente.", 2600);
@@ -1663,5 +1762,3 @@ export default function OtrosEgresos() {
     </div>
   );
 }
-
-

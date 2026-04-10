@@ -283,11 +283,10 @@ function downloadBlob(content, fileName, mimeType) {
   window.URL.revokeObjectURL(url);
 }
 
-function buildComprobanteDownloadUrl(apiBase, row) {
-  const idMovimiento = Number(row?.id_movimiento ?? 0);
-  if (!idMovimiento) return "";
-
-  return `${apiBase}?action=otros_ingresos_comprobantes_descargar&id_movimiento=${idMovimiento}`;
+// NUEVA FUNCIÓN: Obtener ID de comprobante
+function getIngresoIdComprobante(row) {
+  const n = Number(row?.id_comprobante ?? row?.comprobante_id ?? 0);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 export default function OtrosIngresos() {
@@ -341,6 +340,10 @@ export default function OtrosIngresos() {
     setToast({ tipo, mensaje, duracion });
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
+
+  // NUEVOS REFS PARA CACHE DE URLs FIRMADAS
+  const signedUrlCacheRef = useRef(new Map());
+  const signedUrlInFlightRef = useRef(new Set());
 
   useEffect(() => {
     if (errorListsCtx) showToast("error", errorListsCtx, 4200);
@@ -411,6 +414,67 @@ export default function OtrosIngresos() {
       return await parseJsonOrThrow(res);
     },
     [buildHeadersPOST, parseJsonOrThrow]
+  );
+
+  // NUEVA FUNCIÓN: Obtener URL firmada del comprobante
+  const getComprobanteSignedUrl = useCallback(
+    async (idComprobante, idMovimiento = null) => {
+      const id = Number(idComprobante || 0);
+      const mov = Number(idMovimiento || 0);
+
+      const cacheKey = id > 0 ? `id:${id}` : `mov:${mov}`;
+      if ((!id && !mov)) return "";
+
+      if (signedUrlCacheRef.current.has(cacheKey)) {
+        return signedUrlCacheRef.current.get(cacheKey) || "";
+      }
+
+      if (signedUrlInFlightRef.current.has(cacheKey)) {
+        return await new Promise((resolve, reject) => {
+          const poll = setInterval(() => {
+            if (signedUrlCacheRef.current.has(cacheKey)) {
+              clearInterval(poll);
+              resolve(signedUrlCacheRef.current.get(cacheKey) || "");
+            } else if (!signedUrlInFlightRef.current.has(cacheKey)) {
+              clearInterval(poll);
+              reject(new Error("No se pudo obtener el comprobante."));
+            }
+          }, 40);
+
+          setTimeout(() => {
+            clearInterval(poll);
+            reject(new Error("Timeout esperando URL firmada."));
+          }, 8000);
+        });
+      }
+
+      signedUrlInFlightRef.current.add(cacheKey);
+
+      try {
+        const sp = new URLSearchParams();
+        sp.set("action", "otros_ingresos_comprobantes_descargar");
+
+        if (id > 0) sp.set("id_comprobante", String(id));
+        else sp.set("id_movimiento", String(mov));
+
+        const data = await apiGet(`${API}?${sp.toString()}`);
+
+        if (!data?.exito) {
+          throw new Error(data?.mensaje || "No se pudo obtener el comprobante.");
+        }
+
+        const finalUrl = String(data?.url || "").trim();
+        if (!finalUrl) {
+          throw new Error("El backend no devolvió la URL del comprobante.");
+        }
+
+        signedUrlCacheRef.current.set(cacheKey, finalUrl);
+        return finalUrl;
+      } finally {
+        signedUrlInFlightRef.current.delete(cacheKey);
+      }
+    },
+    [API, apiGet]
   );
 
   const refreshPeriodos = useCallback(async () => {
@@ -848,20 +912,18 @@ export default function OtrosIngresos() {
     [handleExport]
   );
 
-  // ==================== CAMBIOS REALIZADOS AQUÍ ====================
-  // Se agregó idUsuarioMaster en los payloads de creación/actualización y eliminación
   const apiPostSave = useCallback(
     async (payload, isEdit) => {
       setError("");
       const { idUsuario } = getAuthInfo();
-      const idUsuarioMaster = idUsuario; // Para compatibilidad con el resolver de auditoría
+      const idUsuarioMaster = idUsuario;
       const action = isEdit ? "otros_ingresos_actualizar" : "otros_ingresos_crear";
 
       try {
         const data = await apiPostJson(`${API}?action=${action}`, {
           ...(payload || {}),
           idUsuario,
-          idUsuarioMaster, // <-- AGREGADO
+          idUsuarioMaster,
         });
 
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
@@ -877,6 +939,10 @@ export default function OtrosIngresos() {
 
   const reloadVista = useCallback(async () => {
     try {
+      // Limpiar cache de URLs firmadas
+      signedUrlCacheRef.current.clear();
+      signedUrlInFlightRef.current.clear();
+      
       cacheRef.current.clear();
       await loadRows({
         from: dateRange.from,
@@ -898,8 +964,6 @@ export default function OtrosIngresos() {
     setOpenDelete(true);
   }, []);
 
-  // ==================== CAMBIOS REALIZADOS AQUÍ ====================
-  // Se agregó idUsuarioMaster en el payload de eliminación
   const handleConfirmDelete = useCallback(async () => {
     if (!rowToDelete?.id_movimiento) {
       throw new Error("No se encontró el movimiento a eliminar.");
@@ -911,14 +975,14 @@ export default function OtrosIngresos() {
 
     try {
       const { idUsuario } = getAuthInfo();
-      const idUsuarioMaster = idUsuario; // Para compatibilidad con el resolver de auditoría
+      const idUsuarioMaster = idUsuario;
       const sp = new URLSearchParams();
       sp.set("action", "otros_ingresos_eliminar");
       sp.set("id_movimiento", String(id));
 
       const data = await apiPostJson(`${API}?${sp.toString()}`, {
         idUsuario,
-        idUsuarioMaster, // <-- AGREGADO
+        idUsuarioMaster,
       });
       if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar.");
 
@@ -1033,33 +1097,54 @@ export default function OtrosIngresos() {
     [API, apiGet, showToast]
   );
 
+  // NUEVA FUNCIÓN: Pre-cargar URL firmada
+  const handlePrewarmComprobante = useCallback(
+    async (row) => {
+      const idComprobante = getIngresoIdComprobante(row);
+      const idMovimiento = Number(row?.id_movimiento ?? 0);
+      if (!idComprobante && !idMovimiento) return;
+
+      getComprobanteSignedUrl(idComprobante, idMovimiento).catch(() => {});
+    },
+    [getComprobanteSignedUrl]
+  );
+
+  // NUEVA FUNCIÓN: Manejar apertura del comprobante con URL firmada
   const handleOpenComprobante = useCallback(
-    (row) => {
+    async (row) => {
+      const idComprobante = getIngresoIdComprobante(row);
+      const idMovimiento = Number(row?.id_movimiento ?? 0);
+
       const tieneComprobante =
-        Number(row?.id_comprobante ?? 0) > 0 || String(row?.comprobante_url ?? "").trim() !== "";
+        (idComprobante && idComprobante > 0) ||
+        String(row?.comprobante_url ?? "").trim() !== "";
 
       if (!tieneComprobante) return;
 
-      const url = buildComprobanteDownloadUrl(API, row);
-      if (!url) {
-        showToast("error", "No se pudo construir la URL del comprobante.", 3500);
-        return;
+      try {
+        const signedUrl = await getComprobanteSignedUrl(idComprobante, idMovimiento);
+        if (!signedUrl) {
+          showToast("error", "No se pudo obtener el comprobante.", 3000);
+          return;
+        }
+
+        const detalle = String(row?.detalle ?? row?.descripcion ?? row?.concepto ?? "").trim();
+        const fecha = formatFechaDMY(row?.fecha);
+
+        setComprobanteView({
+          url: signedUrl,
+          mime: String(row?.archivo_mime ?? "").trim() || "application/octet-stream",
+          title: detalle
+            ? `Comprobante de ingreso - ${detalle} - ${fecha}`
+            : `Comprobante de ingreso - ${fecha}`,
+        });
+
+        setOpenViewComprobante(true);
+      } catch (e) {
+        showToast("error", e?.message || "No se pudo abrir el comprobante.", 3200);
       }
-
-      const detalle = String(row?.detalle ?? row?.descripcion ?? row?.concepto ?? "").trim();
-      const fecha = formatFechaDMY(row?.fecha);
-
-      setComprobanteView({
-        url,
-        mime: String(row?.archivo_mime ?? "").trim() || "application/octet-stream",
-        title: detalle
-          ? `Comprobante de ingreso - ${detalle} - ${fecha}`
-          : `Comprobante de ingreso - ${fecha}`,
-      });
-
-      setOpenViewComprobante(true);
     },
-    [API, showToast]
+    [getComprobanteSignedUrl, showToast]
   );
 
   const closeComprobanteModal = useCallback(() => {
@@ -1359,6 +1444,15 @@ export default function OtrosIngresos() {
                                       : "Este ingreso no tiene comprobante"
                                   }
                                   onClick={() => handleOpenComprobante(r)}
+                                  onMouseEnter={() => {
+                                    if (tieneComprobante) handlePrewarmComprobante(r);
+                                  }}
+                                  onPointerEnter={() => {
+                                    if (tieneComprobante) handlePrewarmComprobante(r);
+                                  }}
+                                  onFocus={() => {
+                                    if (tieneComprobante) handlePrewarmComprobante(r);
+                                  }}
                                   disabled={!tieneComprobante || isAnyLoading || loadingListsCtx}
                                 >
                                   <FontAwesomeIcon icon={faEye} />
@@ -1467,6 +1561,9 @@ export default function OtrosIngresos() {
         onSaved={async () => {
           setOpenAdd(false);
           setSelectedRow(null);
+          // Limpiar cache de URLs firmadas antes de recargar
+          signedUrlCacheRef.current.clear();
+          signedUrlInFlightRef.current.clear();
           await reloadVista();
           await refreshPeriodos();
           showToast("exito", "Ingreso guardado correctamente.", 2600);
@@ -1486,6 +1583,9 @@ export default function OtrosIngresos() {
         onSaved={async () => {
           setOpenEdit(false);
           setSelectedRow(null);
+          // Limpiar cache de URLs firmadas antes de recargar
+          signedUrlCacheRef.current.clear();
+          signedUrlInFlightRef.current.clear();
           await reloadVista();
           await refreshPeriodos();
           showToast("exito", "Ingreso actualizado correctamente.", 2600);

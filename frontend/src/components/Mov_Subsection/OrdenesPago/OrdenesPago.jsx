@@ -4,6 +4,7 @@ import "../../Global/Global_css/Global_Section.css";
 
 import ModalPagarOrdenesPago from "./modales/ModalPagarOrdenesPago.jsx";
 import ModalEditarOrdenPago from "./modales/ModalEditarOrdenPago.jsx";
+import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 
 import Calendario from "../../Global/Calendario/Calendario.jsx";
 import "../../Global/Calendario/calendario.css";
@@ -384,6 +385,39 @@ export default function OrdenesPago() {
     },
     [buildHeadersPOST, parseJsonOrThrow]
   );
+
+  /* =========================
+     GET COMPROBANTE SIGNED URL
+  ========================= */
+  const getOrdenPagoSignedUrl = useCallback(async (idComprobante) => {
+    const id = Number(idComprobante || 0);
+    if (!id) return "";
+
+    const sp = new URLSearchParams();
+    sp.set("action", "ordenes_pago_comprobante_descargar");
+    sp.set("id_comprobante", String(id));
+
+    const res = await fetch(`${BASE_URL}/api.php?${sp.toString()}`, {
+      method: "GET",
+      headers: buildHeadersGET(),
+    });
+
+    const text = await res.text();
+    if (!text) throw new Error("Respuesta vacía del servidor.");
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("Respuesta inválida al obtener comprobante.");
+    }
+
+    if (!res.ok || !data?.exito) {
+      throw new Error(data?.mensaje || "No se pudo obtener el comprobante.");
+    }
+
+    return String(data?.url || "").trim();
+  }, [buildHeadersGET]);
 
   /* =========================
      LOAD ROWS
@@ -793,7 +827,7 @@ export default function OrdenesPago() {
   }, [hasMore, loadingMore, loadingRows, loadingListsCtx, nextOffset, dateRange, q, loadRows, showToast]);
 
   /* =========================
-     Modales Pagar / Editar
+     Modales Pagar / Editar / Ver Comprobante
   ========================= */
   const [openPagar, setOpenPagar] = useState(false);
   const [pagarProveedor, setPagarProveedor] = useState(null);
@@ -846,6 +880,39 @@ export default function OrdenesPago() {
     setEditRow(r);
     setOpenEditar(true);
   }, []);
+
+  const [openVerComprobante, setOpenVerComprobante] = useState(false);
+  const [comprobanteUrl, setComprobanteUrl] = useState("");
+  const [loadingComprobante, setLoadingComprobante] = useState(false);
+
+  const closeVerComprobanteModal = useCallback(() => {
+    setOpenVerComprobante(false);
+    setComprobanteUrl("");
+    setLoadingComprobante(false);
+  }, []);
+
+  const openVerComprobanteModal = useCallback(async (idComprobante) => {
+    if (!idComprobante) {
+      showToast("error", "No hay comprobante asociado a esta orden.", 3000);
+      return;
+    }
+
+    setLoadingComprobante(true);
+    setOpenVerComprobante(true);
+
+    try {
+      const signedUrl = await getOrdenPagoSignedUrl(idComprobante);
+      if (!signedUrl) {
+        throw new Error("No se pudo obtener el comprobante.");
+      }
+      setComprobanteUrl(signedUrl);
+    } catch (error) {
+      showToast("error", error.message || "Error al cargar el comprobante.", 4000);
+      setOpenVerComprobante(false);
+    } finally {
+      setLoadingComprobante(false);
+    }
+  }, [getOrdenPagoSignedUrl, showToast]);
 
   /* =========================
      Acciones backend
@@ -1349,6 +1416,13 @@ export default function OrdenesPago() {
         onClose={closeEditarModal}
         onToast={showToast}
         onSave={onSaveEditar}
+      />
+
+      <ModalVerComprobante
+        open={openVerComprobante}
+        onClose={closeVerComprobanteModal}
+        url={comprobanteUrl}
+        loading={loadingComprobante}
       />
     </div>
   );

@@ -28,6 +28,28 @@ function isBlobUrl(v = "") {
   return safeText(v).startsWith("blob:");
 }
 
+function isAbsoluteHttpUrl(v = "") {
+  return /^https?:\/\//i.test(safeText(v));
+}
+
+function isSameOriginUrl(v = "") {
+  const s = safeText(v);
+  if (!s) return false;
+
+  try {
+    const u = new URL(s, window.location.origin);
+    return u.origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+function shouldSendAuthHeaders(url = "") {
+  if (!url) return false;
+  if (isBlobUrl(url)) return false;
+  return isSameOriginUrl(url);
+}
+
 function getExtensionFromUrl(url = "") {
   const clean = safeText(url).split("?")[0].split("#")[0].toLowerCase();
   const m = clean.match(/\.([a-z0-9]+)$/i);
@@ -55,6 +77,7 @@ function getUrlParamFileName(url = "") {
       "archivo_url",
       "archivo_path",
       "path",
+      "response-content-disposition",
     ];
 
     for (const key of possibleKeys) {
@@ -330,6 +353,17 @@ function parseCSV(text = "") {
   return { headers, rows: dataRows };
 }
 
+function triggerDirectDownload(targetUrl, filename = "") {
+  const a = document.createElement("a");
+  a.href = targetUrl;
+  if (filename) a.download = filename;
+  a.rel = "noreferrer";
+  a.target = "_blank";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 export default function ModalVerComprobante({
   open,
   url,
@@ -349,6 +383,16 @@ export default function ModalVerComprobante({
   const [textPreview, setTextPreview] = useState("");
   const [htmlPreview, setHtmlPreview] = useState("");
   const internalBlobRef = useRef("");
+
+  const modalTitle = useMemo(() => resolveFixedModalTitle(title), [title]);
+
+  const initialKind = useMemo(() => {
+    return guessKindFromUrlOrMime(url, mime);
+  }, [url, mime]);
+
+  const isDirectPreviewKind = useMemo(() => {
+    return initialKind === "pdf" || initialKind === "img";
+  }, [initialKind]);
 
   useEffect(() => {
     if (!open) return;
@@ -423,10 +467,26 @@ export default function ModalVerComprobante({
           return;
         }
 
-        const res = await fetch(url, {
+        const inferredKind = guessKindFromUrlOrMime(url, mime);
+
+        if (inferredKind === "pdf" || inferredKind === "img") {
+          if (cancelled) return;
+
+          setResolvedMime(safeText(mime));
+          setResolvedFileName("");
+          setBlobUrl("");
+          return;
+        }
+
+        const fetchOptions = {
           method: "GET",
-          headers: buildHeadersGET(),
-        });
+        };
+
+        if (shouldSendAuthHeaders(url)) {
+          fetchOptions.headers = buildHeadersGET();
+        }
+
+        const res = await fetch(url, fetchOptions);
 
         if (res.status === 401 || res.status === 403) {
           throw new Error("Sesión vencida o no autorizada para ver este comprobante.");
@@ -441,27 +501,32 @@ export default function ModalVerComprobante({
           res.headers.get("Content-Disposition") || ""
         );
 
-        const inferredKind = guessKindFromUrlOrMime(url, contentType);
+        const finalKind = guessKindFromUrlOrMime(url, contentType);
+
+        setResolvedMime(contentType);
+        setResolvedFileName(headerFileName);
 
         if (
-          inferredKind === "text" ||
-          inferredKind === "csv" ||
-          inferredKind === "json" ||
-          inferredKind === "html"
+          finalKind === "text" ||
+          finalKind === "csv" ||
+          finalKind === "json" ||
+          finalKind === "html"
         ) {
           const text = await res.text();
 
           if (cancelled) return;
 
-          setResolvedMime(contentType);
-          setResolvedFileName(headerFileName);
-
-          if (inferredKind === "html") {
+          if (finalKind === "html") {
             setHtmlPreview(text);
           } else {
             setTextPreview(text);
           }
 
+          return;
+        }
+
+        if (finalKind === "pdf" || finalKind === "img") {
+          if (cancelled) return;
           return;
         }
 
@@ -474,8 +539,6 @@ export default function ModalVerComprobante({
         }
 
         internalBlobRef.current = localBlobUrl;
-        setResolvedMime(contentType || blob.type || safeText(mime));
-        setResolvedFileName(headerFileName);
         setBlobUrl(localBlobUrl);
       } catch (e) {
         if (cancelled) return;
@@ -493,7 +556,11 @@ export default function ModalVerComprobante({
     };
   }, [open, url, mime]);
 
-  const previewUrl = blobUrl || url || "";
+  const previewUrl = useMemo(() => {
+    if (blobUrl) return blobUrl;
+    if (isDirectPreviewKind) return url || "";
+    return "";
+  }, [blobUrl, isDirectPreviewKind, url]);
 
   const kind = useMemo(() => {
     if (textPreview) {
@@ -502,10 +569,8 @@ export default function ModalVerComprobante({
       return textKind;
     }
     if (htmlPreview) return "html";
-    return guessKindFromUrlOrMime(previewUrl, resolvedMime || mime);
+    return guessKindFromUrlOrMime(previewUrl || url, resolvedMime || mime);
   }, [previewUrl, resolvedMime, mime, textPreview, htmlPreview, url]);
-
-  const modalTitle = useMemo(() => resolveFixedModalTitle(title), [title]);
 
   const displayFileName = useMemo(() => {
     return buildSimpleDisplayName({
@@ -549,14 +614,31 @@ export default function ModalVerComprobante({
       return;
     }
 
-    setDownloading(true);
-    setErrorMsg("");
-
     try {
-      const res = await fetch(url, {
+      setDownloading(true);
+      setErrorMsg("");
+
+      const binaryLikeKinds = ["pdf", "img", "excel", "word", "other"];
+
+      if (binaryLikeKinds.includes(kind) && !shouldSendAuthHeaders(url)) {
+        triggerDirectDownload(url, displayFileName || "archivo");
+        return;
+      }
+
+      if (binaryLikeKinds.includes(kind) && shouldSendAuthHeaders(url)) {
+        triggerDirectDownload(url, displayFileName || "archivo");
+        return;
+      }
+
+      const fetchOptions = {
         method: "GET",
-        headers: buildHeadersGET(),
-      });
+      };
+
+      if (shouldSendAuthHeaders(url)) {
+        fetchOptions.headers = buildHeadersGET();
+      }
+
+      const res = await fetch(url, fetchOptions);
 
       if (res.status === 401 || res.status === 403) {
         throw new Error("Sesión vencida o no autorizada para descargar este comprobante.");

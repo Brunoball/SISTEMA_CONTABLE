@@ -10,7 +10,64 @@ export const useNetwork = () => useContext(NetworkContext);
 
 function buildPingUrl() {
   const base = String(BASE_URL || "").trim().replace(/\/+$/, "");
-  return `${base}/api.php?action=inicio`;
+
+  // Si BASE_URL ya termina en /api.php, usarlo tal cual
+  if (/\/api\.php$/i.test(base)) {
+    return `${base}?action=ping`;
+  }
+
+  // Si BASE_URL termina en /api/routes, llevarlo a /api/routes/api.php
+  if (/\/api\/routes$/i.test(base)) {
+    return `${base}/api.php?action=ping`;
+  }
+
+  // Si BASE_URL termina en /api, usar /api.php
+  if (/\/api$/i.test(base)) {
+    return `${base}.php?action=ping`;
+  }
+
+  // Caso normal: dominio base
+  return `${base}/api.php?action=ping`;
+}
+
+async function pingServidor(url) {
+  const ctrl = new AbortController();
+  const timeoutId = setTimeout(() => ctrl.abort(), 3500);
+
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      signal: ctrl.signal,
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    const text = await res.text().catch(() => "");
+    let data = null;
+
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = null;
+    }
+
+    if (!res.ok) {
+      return false;
+    }
+
+    // Esperamos { exito: true, mensaje: "API OK", action: "ping" }
+    if (data?.exito === true) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export default function NetworkProvider({ children }) {
@@ -41,7 +98,9 @@ export default function NetworkProvider({ children }) {
 
   useEffect(() => {
     if (!offline) {
-      if (retryTimer.current) clearInterval(retryTimer.current);
+      if (retryTimer.current) {
+        clearInterval(retryTimer.current);
+      }
       retryTimer.current = null;
       return;
     }
@@ -51,25 +110,13 @@ export default function NetworkProvider({ children }) {
     const tick = async () => {
       if (!navigator.onLine) return;
 
-      try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 3500);
-
-        const res = await fetch(pingUrl, {
-          method: "GET",
-          cache: "no-store",
-          signal: ctrl.signal,
-        });
-
-        clearTimeout(t);
-
-        if (res.ok) {
-          setOffline(false);
-          if (retryTimer.current) clearInterval(retryTimer.current);
-          retryTimer.current = null;
+      const ok = await pingServidor(pingUrl);
+      if (ok) {
+        setOffline(false);
+        if (retryTimer.current) {
+          clearInterval(retryTimer.current);
         }
-      } catch {
-        // sigue caído
+        retryTimer.current = null;
       }
     };
 
@@ -77,20 +124,26 @@ export default function NetworkProvider({ children }) {
     tick();
 
     return () => {
-      if (retryTimer.current) clearInterval(retryTimer.current);
+      if (retryTimer.current) {
+        clearInterval(retryTimer.current);
+      }
       retryTimer.current = null;
     };
   }, [offline]);
 
   useEffect(() => {
     const prev = prevOfflineRef.current;
-    if (prev === true && offline === false) setToastOk(true);
+    if (prev === true && offline === false) {
+      setToastOk(true);
+    }
     prevOfflineRef.current = offline;
   }, [offline]);
 
   useEffect(() => {
     return () => {
-      if (retryTimer.current) clearInterval(retryTimer.current);
+      if (retryTimer.current) {
+        clearInterval(retryTimer.current);
+      }
     };
   }, []);
 

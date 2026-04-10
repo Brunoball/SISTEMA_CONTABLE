@@ -74,14 +74,10 @@ function StatusPill({ type = "pending", children }) {
   );
 }
 
-function CardVisual() {
+function CardVisual({ children }) {
   return (
     <div className="cfg-cardLogoBox">
-      <img
-        src={logoTiendaNube}
-        alt="Logo Tienda Nube"
-        className="cfg-cardLogo"
-      />
+      {children}
     </div>
   );
 }
@@ -128,74 +124,116 @@ export default function Configuracion() {
     cargarResumen();
   }, [cargarResumen]);
 
-  const card = useMemo(() => {
-    const estado = tiendanube.connected
+  const cards = useMemo(() => {
+    const tiendaNubeEstado = tiendanube.connected
       ? tiendanube.webhooks_configured
         ? { text: "Finalizada", type: "success" }
         : { text: "Parcial", type: "warning" }
       : { text: "Sin conexión", type: "pending" };
 
-    return {
-      title: "Tienda Nube",
-      description:
-        "Conectá tu tienda y configurá la sincronización con una interfaz simple.",
-      route: "/panel/configuracion/tiendanube",
-      status: estado,
-      metaTop: tiendanube.connected ? "Conexión activa" : "Sin conexión",
-      metaBottom: tiendanube.store_id
-        ? `Store ID: ${tiendanube.store_id}`
-        : "Todavía no configurado",
-    };
+    return [
+      {
+        id: "tiendanube",
+        title: "Tienda Nube",
+        description:
+          "Conectá tu tienda y configurá la sincronización con una interfaz simple.",
+        route: "/panel/configuracion/tiendanube",
+        status: tiendaNubeEstado,
+        metaTop: tiendanube.connected ? "Conexión activa" : "Sin conexión",
+        metaBottom: tiendanube.store_id
+          ? `Store ID: ${tiendanube.store_id}`
+          : "Todavía no configurado",
+        logo: "tiendanube",
+      },
+      {
+        id: "r2storage",
+        title: "Cloudflare R2 Storage",
+        description:
+          "Gestioná archivos en la nube con Cloudflare R2. Subí, visualizá y administrá tus archivos de manera segura.",
+        route: "/panel/configuracion/r2-test",
+        status: { text: "Configurable", type: "pending" },
+        metaTop: "Almacenamiento en la nube",
+        metaBottom: "Subí y gestioná archivos",
+        logo: "r2",
+      },
+    ];
   }, [tiendanube]);
+
+  const getLogoContent = (logoType) => {
+    if (logoType === "tiendanube") {
+      return (
+        <img
+          src={logoTiendaNube}
+          alt="Logo Tienda Nube"
+          className="cfg-cardLogo"
+        />
+      );
+    } else {
+      return (
+        <div className="cfg-cardLogoCustom">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span className="cfg-cardLogoText">R2</span>
+        </div>
+      );
+    }
+  };
 
   return (
     <section className="cfg-page">
       <div className="cfg-cards">
-        <div className="cfg-cardWrap">
-          <button
-            type="button"
-            className="cfg-card"
-            onClick={() => navigate(card.route)}
-          >
-            <div className="cfg-cardMain">
-              <CardVisual />
+        {cards.map((card) => (
+          <div key={card.id} className="cfg-cardWrap">
+            <button
+              type="button"
+              className="cfg-card"
+              onClick={() => navigate(card.route)}
+            >
+              <div className="cfg-cardMain">
+                <CardVisual>
+                  {getLogoContent(card.logo)}
+                </CardVisual>
 
-              <div className="cfg-cardBody">
-                <div className="cfg-cardHeader">
-                  <h2>{card.title}</h2>
+                <div className="cfg-cardBody">
+                  <div className="cfg-cardHeader">
+                    <h2>{card.title}</h2>
 
-                  <StatusPill type={card.status.type}>
-                    {card.status.text}
-                  </StatusPill>
+                    <StatusPill type={card.status.type}>
+                      {card.status.text}
+                    </StatusPill>
+                  </div>
+
+                  <p className="cfg-cardDescription">{card.description}</p>
                 </div>
-
-                <p className="cfg-cardDescription">{card.description}</p>
               </div>
-            </div>
 
-            <div className="cfg-cardFooter">
-              <div className="cfg-cardFooterLeft">
-                <div className="cfg-cardMetaLine">
-                  <span className="cfg-cardMetaLabel">Estado</span>
-                  <span className="cfg-cardMetaValue">{card.metaTop}</span>
+              <div className="cfg-cardFooter">
+                <div className="cfg-cardFooterLeft">
+                  <div className="cfg-cardMetaLine">
+                    <span className="cfg-cardMetaLabel">Estado</span>
+                    <span className="cfg-cardMetaValue">{card.metaTop}</span>
+                  </div>
+
+                  <div className="cfg-cardMetaLine">
+                    <span className="cfg-cardMetaLabel">Detalle</span>
+                    <span className="cfg-cardMetaValue">
+                      {card.metaBottom}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="cfg-cardMetaLine">
-                  <span className="cfg-cardMetaLabel">Detalle</span>
-                  <span className="cfg-cardMetaValue">
-                    {card.metaBottom}
+                <div className="cfg-cardFooterRight">
+                  <span className="cfg-cardArrow">
+                    <FontAwesomeIcon icon={faChevronRight} />
                   </span>
                 </div>
               </div>
-
-              <div className="cfg-cardFooterRight">
-                <span className="cfg-cardArrow">
-                  <FontAwesomeIcon icon={faChevronRight} />
-                </span>
-              </div>
-            </div>
-          </button>
-        </div>
+            </button>
+          </div>
+        ))}
       </div>
     </section>
   );

@@ -43,6 +43,10 @@ const PROBE_LIMIT = PAGE_SIZE + 1;
 const SKELETON_ROWS = 10;
 const LIVE_POLL_MS = 5000;
 
+// Prewarm: cuántos comprobantes calentar en lote por vez y el delay entre cada uno
+const PREWARM_BATCH_SIZE = 8;
+const PREWARM_DELAY_MS = 60; // ms entre requests del lote para no saturar
+
 /* =========================
    Helpers
 ========================= */
@@ -171,35 +175,6 @@ function withSessionKey(url) {
   }
 }
 
-function ensureResourceHint(url, rel = "prefetch", as = "document") {
-  const href = String(url ?? "").trim();
-  if (!href) return;
-
-  const key = `hint:${rel}:${as}:${href}`;
-  if (document.head.querySelector(`link[data-key="${CSS.escape(key)}"]`)) return;
-
-  const link = document.createElement("link");
-  link.rel = rel;
-  if (as) link.as = as;
-  link.href = href;
-  link.setAttribute("data-key", key);
-  document.head.appendChild(link);
-}
-
-function prewarmComprobanteUrl(url, mime = "") {
-  const finalUrl = withSessionKey(url);
-  if (!finalUrl) return;
-
-  const mm = String(mime ?? "").toLowerCase();
-  const isPdf = mm.includes("pdf") || finalUrl.toLowerCase().includes(".pdf");
-
-  if (isPdf) {
-    ensureResourceHint(finalUrl, "prefetch", "document");
-  } else {
-    ensureResourceHint(finalUrl, "prefetch", "image");
-  }
-}
-
 function getMovimientoId(r) {
   const cand =
     r?.id_movimiento ??
@@ -228,6 +203,35 @@ function getRowKey(r) {
   const m = String(Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0);
 
   return `fx:${f}|${c}|${d}|${m}`;
+}
+
+function getFacturaIdComprobante(row) {
+  const cand =
+    row?.factura_id_comprobante ??
+    row?.id_comprobante ??
+    row?.comprobante_id ??
+    null;
+
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function getFacturaUrl(row) {
+  return String(
+    row?.factura_comprobante_url ??
+    row?.comprobante_url ??
+    row?.archivo_url ??
+    ""
+  ).trim();
+}
+
+function getFacturaMime(row) {
+  return String(
+    row?.factura_comprobante_tipo ??
+    row?.archivo_mime ??
+    row?.comprobante_mime ??
+    ""
+  ).trim();
 }
 
 function hasCliente(r) {
@@ -264,35 +268,6 @@ function isVentaRow(row) {
   if (hasTipoVentaText(row)) return true;
   if (hasTipoVentaId(row)) return true;
   return isSalida(row);
-}
-
-function getFacturaIdComprobante(row) {
-  const cand =
-    row?.factura_id_comprobante ??
-    row?.id_comprobante ??
-    row?.comprobante_id ??
-    null;
-
-  const n = Number(cand);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-function getFacturaUrl(row) {
-  return String(
-    row?.factura_comprobante_url ??
-      row?.comprobante_url ??
-      row?.archivo_url ??
-      ""
-  ).trim();
-}
-
-function getFacturaMime(row) {
-  return String(
-    row?.factura_comprobante_tipo ??
-      row?.archivo_mime ??
-      row?.comprobante_mime ??
-      ""
-  ).trim();
 }
 
 function normalizeVentaRow(r) {
@@ -449,7 +424,14 @@ export default function Ventas() {
   const [comprobanteUrl, setComprobanteUrl] = useState("");
   const [comprobanteMime, setComprobanteMime] = useState("");
 
-  const comprobanteUrlCacheRef = useRef(new Map());
+  // Cache para URLs firmadas (por id_comprobante)
+  const signedUrlCacheRef = useRef(new Map());
+
+  // Set de ids en progreso para no lanzar el mismo fetch dos veces en paralelo
+  const signedUrlInFlightRef = useRef(new Set());
+
+  // Ref para cancelar el prewarm batch si cambian las filas
+  const prewarmCancelRef = useRef(false);
 
   const [toast, setToast] = useState(null);
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
@@ -475,6 +457,7 @@ export default function Ventas() {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
       if (liveTimerRef.current) clearTimeout(liveTimerRef.current);
+      prewarmCancelRef.current = true;
     };
   }, []);
 
@@ -524,6 +507,117 @@ export default function Ventas() {
       return await parseJsonOrThrow(res);
     },
     [buildHeadersPOST, parseJsonOrThrow]
+  );
+
+  // ---------------------------------------------------------------------------
+  // getComprobanteSignedUrl — obtiene URL firmada con deduplicación de in-flight
+  // ---------------------------------------------------------------------------
+  const getComprobanteSignedUrl = useCallback(
+    async (idComprobante) => {
+      const id = Number(idComprobante || 0);
+      if (!id) return "";
+
+      const cacheKey = String(id);
+
+      // 1. Ya está en cache → retorno inmediato (cero latencia)
+      if (signedUrlCacheRef.current.has(cacheKey)) {
+        return signedUrlCacheRef.current.get(cacheKey) || "";
+      }
+
+      // 2. Ya hay un fetch en vuelo para este id → espero el mismo resultado
+      //    evitando requests duplicados en paralelo
+      if (signedUrlInFlightRef.current.has(cacheKey)) {
+        // Polling liviano hasta que el otro fetch lo resuelva o falle
+        return await new Promise((resolve, reject) => {
+          const poll = setInterval(() => {
+            if (signedUrlCacheRef.current.has(cacheKey)) {
+              clearInterval(poll);
+              resolve(signedUrlCacheRef.current.get(cacheKey) || "");
+            } else if (!signedUrlInFlightRef.current.has(cacheKey)) {
+              // El otro fetch terminó sin guardar en cache → falló
+              clearInterval(poll);
+              reject(new Error("No se pudo obtener el comprobante."));
+            }
+          }, 40);
+          // Timeout de seguridad
+          setTimeout(() => {
+            clearInterval(poll);
+            reject(new Error("Timeout esperando URL firmada."));
+          }, 8000);
+        });
+      }
+
+      // 3. Lanzar nuevo fetch
+      signedUrlInFlightRef.current.add(cacheKey);
+      try {
+        const sp = new URLSearchParams();
+        sp.set("action", "ventas_comprobantes_descargar");
+        sp.set("id_comprobante", String(id));
+
+        const data = await apiGet(`${API}?${sp.toString()}`);
+
+        if (!data?.exito) {
+          throw new Error(data?.mensaje || "No se pudo obtener el comprobante.");
+        }
+
+        const finalUrl = String(data?.url || "").trim();
+        if (!finalUrl) {
+          throw new Error("El backend no devolvió la URL del comprobante.");
+        }
+
+        signedUrlCacheRef.current.set(cacheKey, finalUrl);
+        return finalUrl;
+      } finally {
+        signedUrlInFlightRef.current.delete(cacheKey);
+      }
+    },
+    [API, apiGet]
+  );
+
+  // ---------------------------------------------------------------------------
+  // prewarmAllComprobantes — precalienta en lote todas las filas con comprobante
+  // ---------------------------------------------------------------------------
+  const prewarmAllComprobantes = useCallback(
+    async (rowsToWarm) => {
+      // Cancelar prewarm anterior si lo hay
+      prewarmCancelRef.current = true;
+      // Pequeño yield para que el flag se lea antes de continuar
+      await new Promise((r) => setTimeout(r, 0));
+      prewarmCancelRef.current = false;
+
+      const ids = [];
+      for (const row of rowsToWarm) {
+        const id = getFacturaIdComprobante(row);
+        if (id && !signedUrlCacheRef.current.has(String(id))) {
+          ids.push(id);
+        }
+      }
+
+      if (!ids.length) return;
+
+      // Procesamos en lotes de PREWARM_BATCH_SIZE con un pequeño delay entre cada uno
+      // para no saturar la red ni el backend
+      for (let i = 0; i < ids.length; i += PREWARM_BATCH_SIZE) {
+        if (prewarmCancelRef.current) return;
+
+        const batch = ids.slice(i, i + PREWARM_BATCH_SIZE);
+
+        // Lanzamos el batch en paralelo (dentro del batch no esperamos uno por uno)
+        await Promise.allSettled(
+          batch.map((id) =>
+            getComprobanteSignedUrl(id).catch(() => {
+              // silencioso: si falla el prewarm no pasa nada, el usuario lo reintenta al hacer click
+            })
+          )
+        );
+
+        // Delay entre batches para no saturar
+        if (i + PREWARM_BATCH_SIZE < ids.length && !prewarmCancelRef.current) {
+          await new Promise((r) => setTimeout(r, PREWARM_DELAY_MS));
+        }
+      }
+    },
+    [getComprobanteSignedUrl]
   );
 
   const refreshPeriodos = useCallback(async () => {
@@ -595,6 +689,9 @@ export default function Ventas() {
 
           if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
 
+          // Prewarm silencioso desde caché
+          prewarmAllComprobantes(cachedRows);
+
           return {
             hasMore: !!cached?.hasMore,
             nextOffset: cached?.nextOffset ?? null,
@@ -661,6 +758,9 @@ export default function Ventas() {
               setNextOffset(newNextOffset);
 
               if (moreReqIdRef.current === myReqId) setLoadingMore(false);
+
+              // Prewarm solo las filas nuevas que se agregaron
+              prewarmAllComprobantes(add);
             } else {
               rowsRef.current = page;
               setRows(page);
@@ -676,6 +776,9 @@ export default function Ventas() {
               }
 
               if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
+
+              // Prewarm de todas las filas de la página
+              prewarmAllComprobantes(page);
             }
 
             resolve({
@@ -709,7 +812,7 @@ export default function Ventas() {
         });
       }
     },
-    [API, apiGet, dateRange, q]
+    [API, apiGet, dateRange, q, prewarmAllComprobantes]
   );
 
   useEffect(() => {
@@ -825,6 +928,8 @@ export default function Ventas() {
         } else if (liveTokenRef.current !== token) {
           liveTokenRef.current = token;
           cacheRef.current.clear();
+          signedUrlCacheRef.current.clear();
+          signedUrlInFlightRef.current.clear();
 
           const prevLen = rowsRef.current.length;
           const prevHasMore = hasMore;
@@ -1109,6 +1214,8 @@ export default function Ventas() {
 
   const reloadVista = useCallback(async () => {
     cacheRef.current.clear();
+    signedUrlCacheRef.current.clear();
+    signedUrlInFlightRef.current.clear();
     await loadRows({
       from: dateRange.from,
       to: dateRange.to,
@@ -1184,54 +1291,44 @@ export default function Ventas() {
     fetchLiveToken,
   ]);
 
-  const buildComprobanteFastUrl = useCallback(
-    (r) => {
-      const idComprobante = getFacturaIdComprobante(r);
-      if (!idComprobante) return "";
-
-      const cacheKey = String(idComprobante);
-      if (comprobanteUrlCacheRef.current.has(cacheKey)) {
-        return comprobanteUrlCacheRef.current.get(cacheKey) || "";
-      }
-
-      const urlDirecta = getFacturaUrl(r);
-      let finalUrl = "";
-
-      if (urlDirecta) {
-        finalUrl = withSessionKey(urlDirecta);
-      } else {
-        const sp = new URLSearchParams();
-        sp.set("action", "ventas_comprobantes_descargar");
-        sp.set("id_comprobante", String(idComprobante));
-        finalUrl = withSessionKey(`${API}?${sp.toString()}`);
-      }
-
-      comprobanteUrlCacheRef.current.set(cacheKey, finalUrl);
-      return finalUrl;
-    },
-    [API]
-  );
-
-  const handlePrewarmComprobante = useCallback(
-    (r) => {
-      const fastUrl = buildComprobanteFastUrl(r);
-      if (!fastUrl) return;
-      prewarmComprobanteUrl(fastUrl, getFacturaMime(r));
-    },
-    [buildComprobanteFastUrl]
-  );
-
+  // ---------------------------------------------------------------------------
+  // handleVerComprobante — abre el modal; si ya está en cache es instantáneo
+  // ---------------------------------------------------------------------------
   const handleVerComprobante = useCallback(
-    (r) => {
-      const fastUrl = buildComprobanteFastUrl(r);
-      if (!fastUrl) return;
+    async (r) => {
+      const idComprobante = getFacturaIdComprobante(r);
+      if (!idComprobante) {
+        showToast("error", "No se encontró el comprobante.", 3000);
+        return;
+      }
 
-      prewarmComprobanteUrl(fastUrl, getFacturaMime(r));
-      setComprobanteUrl(fastUrl);
-      setComprobanteMime(getFacturaMime(r));
-      setOpenVerComprobante(true);
+      try {
+        // getComprobanteSignedUrl retorna desde cache si ya fue precalentado
+        const signedUrl = await getComprobanteSignedUrl(idComprobante);
+        if (!signedUrl) {
+          showToast("error", "No se pudo obtener el comprobante.", 3000);
+          return;
+        }
+
+        setComprobanteUrl(signedUrl);
+        setComprobanteMime(getFacturaMime(r));
+        setOpenVerComprobante(true);
+      } catch (e) {
+        showToast("error", e?.message || "No se pudo abrir el comprobante.", 3200);
+      }
     },
-    [buildComprobanteFastUrl]
+    [getComprobanteSignedUrl, showToast]
+  );
+
+  // handlePrewarmComprobante — para hover/focus individual (por si el batch aún no llegó a esa fila)
+  const handlePrewarmComprobante = useCallback(
+    async (r) => {
+      const idComprobante = getFacturaIdComprobante(r);
+      if (!idComprobante) return;
+      // getComprobanteSignedUrl ya maneja el in-flight dedup, simplemente llamamos
+      getComprobanteSignedUrl(idComprobante).catch(() => {});
+    },
+    [getComprobanteSignedUrl]
   );
 
   const requiereNC = useMemo(() => {
@@ -1781,6 +1878,8 @@ export default function Ventas() {
             setQ("");
             skipSearchRef.current = true;
             liveTokenRef.current = null;
+            signedUrlCacheRef.current.clear();
+            signedUrlInFlightRef.current.clear();
             await refreshPeriodos();
             await reloadVista();
           } catch (e) {

@@ -13,6 +13,7 @@
                 },
     "require": {
         "vlucas/phpdotenv": "^5.6",
-        "google/cloud-vision": "^2.2"
+        "google/cloud-vision": "^2.2",
+        "aws/aws-sdk-php": "^3.378"
     }
 }

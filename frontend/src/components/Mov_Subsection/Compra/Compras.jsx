@@ -386,6 +386,17 @@ function withSessionKey(url) {
     const { sessionKey, token } = getAuthInfo();
     const u = new URL(base, window.location.origin);
 
+    const isSameOrigin = u.origin === window.location.origin;
+
+    const hasAwsSignature =
+      u.searchParams.has("X-Amz-Signature") ||
+      u.searchParams.has("X-Amz-Algorithm") ||
+      u.searchParams.has("X-Amz-Credential");
+
+    if (!isSameOrigin || hasAwsSignature) {
+      return u.toString();
+    }
+
     if (sessionKey && !u.searchParams.has("session_key")) {
       u.searchParams.set("session_key", sessionKey);
     }
@@ -485,6 +496,7 @@ export default function Compras() {
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
   const comprobanteUrlCacheRef = useRef(new Map());
+  const signedUrlCacheRef = useRef(new Map()); // <-- NUEVO: cache para signed URLs
 
   const skelTimerRef = useRef(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
@@ -563,6 +575,46 @@ export default function Compras() {
       await refreshLists();
     } catch {}
   }, [refreshLists]);
+
+  /* =========================
+     OBTENER URL FIRMADA (NUEVO)
+  ========================= */
+  const getComprobanteSignedUrl = useCallback(
+    async (idComprobante) => {
+      const id = Number(idComprobante || 0);
+      if (!id) return "";
+
+      const cacheKey = String(id);
+      const cached = signedUrlCacheRef.current.get(cacheKey);
+
+      if (cached && cached.url && cached.expiresAt > Date.now()) {
+        return cached.url;
+      }
+
+      const sp = new URLSearchParams();
+      sp.set("action", "compras_comprobantes_descargar");
+      sp.set("id_comprobante", String(id));
+
+      const data = await apiGet(`${API}?${sp.toString()}`);
+
+      if (!data?.exito) {
+        throw new Error(data?.mensaje || "No se pudo obtener el comprobante.");
+      }
+
+      const finalUrl = String(data?.url || "").trim();
+      if (!finalUrl) {
+        throw new Error("El backend no devolvió la URL del comprobante.");
+      }
+
+      signedUrlCacheRef.current.set(cacheKey, {
+        url: finalUrl,
+        expiresAt: Date.now() + 19 * 60 * 1000,
+      });
+
+      return finalUrl;
+    },
+    [API, apiGet]
+  );
 
   /* =========================
      Editar compra con idUsuarioMaster
@@ -817,6 +869,7 @@ export default function Compras() {
       if (!newRange?.from && !newRange?.to) return;
       setDateRange(newRange);
       cacheRef.current.clear();
+      signedUrlCacheRef.current.clear(); // LIMPIAR CACHE DE SIGNED URLS
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
       await loadRows({ dateRange: newRange, q, offset: 0, append: false });
@@ -1048,43 +1101,51 @@ export default function Compras() {
     setOpenMediosPago(true);
   };
 
+  // NUEVA VERSIÓN SIMPLE (solo devuelve marcador)
   const buildComprobanteFastUrl = useCallback((r) => {
     const idComp = getComprobanteId(r);
-    const cacheKey = idComp ? `id:${idComp}` : `raw:${getComprobanteUrl(r)}`;
-
-    if (comprobanteUrlCacheRef.current.has(cacheKey)) {
-      return comprobanteUrlCacheRef.current.get(cacheKey) || "";
-    }
-
-    const baseUrl = getComprobanteUrl(r);
-    const finalUrl = withSessionKey(baseUrl);
-
-    if (finalUrl) {
-      comprobanteUrlCacheRef.current.set(cacheKey, finalUrl);
-    }
-
-    return finalUrl;
+    if (!idComp) return "";
+    return `id:${idComp}`;
   }, []);
 
+  // NUEVA VERSIÓN: pre-carga asíncrona silenciosa
   const handlePrewarmComprobante = useCallback(
-    (r) => {
-      const fastUrl = buildComprobanteFastUrl(r);
-      if (!fastUrl) return;
-      prewarmComprobanteUrl(fastUrl, getComprobanteMime(r));
+    async (r) => {
+      const idComp = getComprobanteId(r);
+      if (!idComp) return;
+
+      try {
+        const signedUrl = await getComprobanteSignedUrl(idComp);
+        if (!signedUrl) return;
+        prewarmComprobanteUrl(signedUrl, getComprobanteMime(r));
+      } catch {
+        // silencioso
+      }
     },
-    [buildComprobanteFastUrl]
+    [getComprobanteSignedUrl]
   );
 
+  // NUEVA VERSIÓN: abre modal con URL firmada
   const openComprobanteModal = useCallback(
-    (r) => {
-      const fastUrl = buildComprobanteFastUrl(r);
-      if (!fastUrl) return;
+    async (r) => {
+      const idComp = getComprobanteId(r);
+      if (!idComp) return;
 
-      setCompUrl(fastUrl);
-      setCompMime(getComprobanteMime(r));
-      setOpenVerComp(true);
+      try {
+        const signedUrl = await getComprobanteSignedUrl(idComp);
+        if (!signedUrl) {
+          showToast("error", "No se pudo obtener el comprobante.", 3000);
+          return;
+        }
+
+        setCompUrl(signedUrl);
+        setCompMime(getComprobanteMime(r));
+        setOpenVerComp(true);
+      } catch (e) {
+        showToast("error", e?.message || "No se pudo abrir el comprobante.", 3200);
+      }
     },
-    [buildComprobanteFastUrl]
+    [getComprobanteSignedUrl, showToast]
   );
   
   const closeComprobanteModal = () => {
@@ -1098,6 +1159,7 @@ export default function Compras() {
     setOpenEdit(false);
     setSelectedRow(null);
     cacheRef.current.clear();
+    signedUrlCacheRef.current.clear(); // LIMPIAR CACHE DE SIGNED URLS
     await loadRows({ dateRange, q: "", offset: 0, append: false });
     await refreshPeriodos();
   }, [dateRange, loadRows, refreshPeriodos]);
@@ -1141,6 +1203,7 @@ export default function Compras() {
       setOpenDel(false);
       setSelectedRow(null);
       cacheRef.current.clear();
+      signedUrlCacheRef.current.clear(); // LIMPIAR CACHE DE SIGNED URLS
 
       await loadRows({ dateRange, q, offset: 0, append: false });
       await refreshPeriodos();
@@ -1444,8 +1507,9 @@ export default function Compras() {
               <>
                 {filteredRows.map((r) => {
                   const rowId = getRowId(r) ?? `row-${Math.random()}`;
-                  const comp = buildComprobanteFastUrl(r);
-                  const canSee = !!comp;
+                  // NUEVO: canSee basado en ID, no en URL precalculada
+                  const idComp = getComprobanteId(r);
+                  const canSee = !!idComp;
                   const isDeleting =
                     deletingId !== null && String(deletingId) === String(rowId);
                   const hasMedios = hasCompraDetalleMedios(r);

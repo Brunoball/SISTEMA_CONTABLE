@@ -1,0 +1,17 @@
+{
+    "name": "user/r2_storage",
+    "autoload": {
+        "psr-4": {
+            "User\\R2Storage\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Bruno Ballarino",
+            "email": "brunoballarino06@gmail.com"
+        }
+    ],
+    "require": {
+        "aws/aws-sdk-php": "3.300"
+    }
+}

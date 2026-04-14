@@ -1,0 +1,59 @@
+/* =====================================================
+   ModalNuevoEgreso_extra.css
+   Solo clases que NO existen en Global_Modals.css.
+   Todo lo demás lo provee Global_Modals.css.
+   ===================================================== */
+
+/* ── Totales de medios de pago (resumen inline) ── */
+.ne-mp-totals {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--nv-border-md);
+  background: var(--nv-surface);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.ne-mp-totals__asignado {
+  color: var(--nv-muted);
+}
+
+.ne-mp-totals__asignado b {
+  color: var(--nv-text);
+  font-weight: 700;
+}
+
+.ne-mp-totals__falta {
+  color: #dc2626;
+  font-weight: 700;
+  margin-left: auto;
+}
+
+.ne-mp-totals__ok {
+  color: #0f766e;
+  font-weight: 700;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+html[data-theme="oscuro"] .ne-mp-totals {
+  background: rgba(255, 255, 255, .04);
+  border-color: rgba(255, 255, 255, .10);
+}
+
+html[data-theme="oscuro"] .ne-mp-totals__asignado {
+  color: rgba(210, 220, 235, .65);
+}
+
+html[data-theme="oscuro"] .ne-mp-totals__asignado b {
+  color: rgba(255, 255, 255, .90);
+}
+
+html[data-theme="oscuro"] .ne-mp-totals__ok {
+  color: rgba(52, 211, 153, .92);
+}

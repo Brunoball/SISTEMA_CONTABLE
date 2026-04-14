@@ -3,6 +3,15 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
 import BASE_URL from "../../../../config/config";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faReceipt,
+  faCalendarDays,
+  faUser,
+  faBoxOpen,
+  faDollarSign,
+  faPlus,
+} from "@fortawesome/free-solid-svg-icons";
 
 const NULL_OPTION = "";
 
@@ -12,6 +21,19 @@ const NULL_OPTION = "";
 function safeNumber(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+function moneyARS(v) {
+  try {
+    return Number(v || 0).toLocaleString("es-AR", {
+      style: "currency",
+      currency: "ARS",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  } catch {
+    return `$ ${safeNumber(v).toFixed(2)}`;
+  }
 }
 
 function periodoToMMYYYY(input) {
@@ -72,7 +94,6 @@ function isDarkEnabled(darkProp) {
 
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
-
   const sessionKey =
     localStorage.getItem("session_key") ||
     localStorage.getItem("sessionKey") ||
@@ -82,7 +103,13 @@ function getAuthInfo() {
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand = u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
@@ -150,10 +177,6 @@ function getIdCliente(x) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-/* =========================
-   Lists normalize (como Ventas)
-   ✅ ahora incluye clientes
-========================= */
 function normalizeLists(lists) {
   const src = lists && typeof lists === "object" ? lists : {};
   const l = src.listas && typeof src.listas === "object" ? src.listas : src;
@@ -165,9 +188,19 @@ function normalizeLists(lists) {
 }
 
 /* =========================
-   Mini modal: agregar catálogo
+   Mini modal agregar catálogo
 ========================= */
-function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark, label = "Nombre" }) {
+function AddCatalogMiniModal({
+  open,
+  title,
+  value,
+  saving,
+  onChange,
+  onCancel,
+  onSave,
+  dark,
+  label = "Nombre",
+}) {
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -180,7 +213,7 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
     if (!open) return;
     const onKeyDown = (e) => {
       if (e.key === "Escape") {
-        e.stopPropagation(); // ✅ Evitar que cierre el modal padre
+        e.stopPropagation();
         onCancel?.();
       }
       if (e.key === "Enter") {
@@ -195,7 +228,10 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
   if (!open) return null;
 
   return createPortal(
-    <div className={`mi-mini__overlay ${dark ? "mi-mini__overlay--dark" : ""}`} onMouseDown={onCancel}>
+    <div
+      className={`mi-mini__overlay ${dark ? "mi-mini__overlay--dark" : ""}`}
+      onMouseDown={onCancel}
+    >
       <div
         className={`mi-mini__modal ${dark ? "mi-mini__modal--dark" : ""}`}
         onMouseDown={(e) => e.stopPropagation()}
@@ -204,7 +240,12 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
       >
         <div className="mi-mini__head">
           <h4 className="mi-mini__title">{title}</h4>
-          <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving}>
+          <button
+            type="button"
+            className="mi-mini__close"
+            onClick={onCancel}
+            disabled={saving}
+          >
             ✕
           </button>
         </div>
@@ -224,10 +265,20 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
           </div>
 
           <div className="mi-mini__actions">
-            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>
+            <button
+              type="button"
+              className="mit-btn mit-btn--ghost"
+              onClick={onCancel}
+              disabled={saving}
+            >
               Cancelar
             </button>
-            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
+            <button
+              type="button"
+              className="mit-btn mit-btn--solid"
+              onClick={onSave}
+              disabled={saving}
+            >
               {saving ? "Guardando..." : "Guardar"}
             </button>
           </div>
@@ -238,33 +289,36 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
   );
 }
 
-/* =========================
-   ModalEditarRecibo
-========================= */
-export default function ModalEditarRecibo({ open, row, lists, periodoDefault, onClose, onSave, onToast, dark }) {
+export default function ModalEditarRecibo({
+  open,
+  row,
+  lists,
+  periodoDefault,
+  onClose,
+  onSave,
+  onToast,
+  dark,
+}) {
   const API_LISTS = `${BASE_URL}/api.php?action=global_obtener_listas`;
   const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
 
   const darkOn = isDarkEnabled(dark);
 
-  const showToast = useCallback((tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion), [onToast]);
+  const showToast = useCallback(
+    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
+    [onToast]
+  );
 
   const [saving, setSaving] = useState(false);
-
-  // ✅ localLists con refresh al abrir (fix del bug)
   const [localLists, setLocalLists] = useState(() => normalizeLists(lists));
-  useEffect(() => setLocalLists(normalizeLists(lists)), [lists]);
+  const [addUI, setAddUI] = useState({
+    open: false,
+    catalogo: "detalles",
+    text: "",
+    saving: false,
+  });
 
-  const refreshLists = useCallback(async () => {
-    const data = await apiGetJson(API_LISTS);
-    const normalized = normalizeLists(data);
-    setLocalLists((prev) => ({
-      detalles: normalized.detalles?.length ? normalized.detalles : prev.detalles,
-      clientes: normalized.clientes?.length ? normalized.clientes : prev.clientes,
-    }));
-  }, [API_LISTS]);
-
-  const [form, setForm] = useState(() => ({
+  const [form, setForm] = useState({
     id_movimiento: null,
     fecha: "",
     periodo: "",
@@ -272,37 +326,36 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
     clienteInput: "",
     id_detalle: NULL_OPTION,
     detalleInput: "",
-    monto_total: 0,
-  }));
+    monto_total: "",
+  });
 
-  // ✅ Autocomplete Detalles
   const [detalleFocus, setDetalleFocus] = useState(false);
   const [detalleArmed, setDetalleArmed] = useState(false);
-  const detalleInputRef = useRef(null);
-
-  // ✅ Autocomplete Clientes
   const [clienteFocus, setClienteFocus] = useState(false);
   const [clienteArmed, setClienteArmed] = useState(false);
-  const clienteInputRef = useRef(null);
 
-  // Mini-modals
-  const [addUI, setAddUI] = useState({ open: false, catalogo: "detalles", text: "", saving: false });
+  const closeBtnRef = useRef(null);
 
-  /* =========================
-     ESC key handler
-  ========================= */
+  useEffect(() => {
+    setLocalLists(normalizeLists(lists));
+  }, [lists]);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
 
     const handleEscKey = (e) => {
       if (e.key === "Escape") {
-        // Si el mini-modal está abierto, que lo maneje él
         if (addUI.open) return;
-        
-        // Si no, cerrar el modal principal
-        if (!saving) {
-          onClose?.();
-        }
+        if (!saving) onClose?.();
       }
     };
 
@@ -310,9 +363,16 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
     return () => document.removeEventListener("keydown", handleEscKey);
   }, [open, addUI.open, saving, onClose]);
 
-  /* =========================
-     Init form + refresh lists
-  ========================= */
+  const refreshLists = useCallback(async () => {
+    const data = await apiGetJson(API_LISTS);
+    const normalized = normalizeLists(data);
+
+    setLocalLists((prev) => ({
+      detalles: normalized.detalles?.length ? normalized.detalles : prev.detalles,
+      clientes: normalized.clientes?.length ? normalized.clientes : prev.clientes,
+    }));
+  }, [API_LISTS]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -326,24 +386,27 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
     const perAuto = periodoFromISODate(fecha);
 
     const idCliente = r.id_cliente ?? r.cliente_id ?? r.idCliente ?? NULL_OPTION;
-    const clienteTxt = String(r.cliente ?? r.nombre_cliente ?? r.razon_social_cliente ?? "").trim();
-
-    const idDetalle = r.id_detalle ?? NULL_OPTION;
-
-    const detName = String(
-      getArr(localLists.detalles).find((d) => String(getIdGeneric(d)) === String(idDetalle))?.nombre ?? ""
+    const clienteTxt = String(
+      r.cliente ?? r.nombre_cliente ?? r.razon_social_cliente ?? ""
     ).trim();
 
+    const idDetalle = r.id_detalle ?? NULL_OPTION;
     const detFallback = String(r.detalle ?? r.descripcion ?? r.concepto ?? "").trim();
 
-    // nombre cliente desde lista si hay id
     const cliName = String(
-      getArr(localLists.clientes).find((c) => String(getIdCliente(c)) === String(idCliente))?.nombre ?? ""
+      getArr(localLists.clientes).find(
+        (c) => String(getIdCliente(c)) === String(idCliente)
+      )?.nombre ?? ""
+    ).trim();
+
+    const detName = String(
+      getArr(localLists.detalles).find(
+        (d) => String(getIdGeneric(d)) === String(idDetalle)
+      )?.nombre ?? ""
     ).trim();
 
     setSaving(false);
     setAddUI({ open: false, catalogo: "detalles", text: "", saving: false });
-
     setDetalleFocus(false);
     setDetalleArmed(false);
     setClienteFocus(false);
@@ -359,20 +422,30 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
       detalleInput: detName || detFallback || "",
       monto_total: safeNumber(r.monto_total ?? r.total ?? 0),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, row, periodoDefault]); // no metas localLists para no resetear por refresh
 
-  /* =========================
-     Autocomplete detalles (usa localLists)
-  ========================= */
+    setTimeout(() => closeBtnRef.current?.focus(), 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, row, periodoDefault]);
+
   const filteredDetalles = useMemo(() => {
     const all = getArr(localLists.detalles);
     const q = normalizeSearchText(form.detalleInput);
 
     if (!detalleFocus || !detalleArmed || q.length < 1) return [];
-
     return all.filter((d) => normalizeSearchText(d?.nombre).includes(q)).slice(0, 25);
   }, [localLists.detalles, form.detalleInput, detalleFocus, detalleArmed]);
+
+  const filteredClientes = useMemo(() => {
+    const all = getArr(localLists.clientes);
+    const q = normalizeSearchText(form.clienteInput);
+
+    if (!clienteFocus || !clienteArmed || q.length < 1) return [];
+    return all
+      .filter((c) =>
+        normalizeSearchText(c?.nombre ?? c?.razon_social ?? c?.cliente).includes(q)
+      )
+      .slice(0, 25);
+  }, [localLists.clientes, form.clienteInput, clienteFocus, clienteArmed]);
 
   const handleDetalleInputChange = (e) => {
     const value = e.target.value;
@@ -383,154 +456,167 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
   const handleSelectDetalle = (det) => {
     const nombre = String(det?.nombre ?? "").trim();
     const did = getIdGeneric(det) || det?.id;
+
     setForm((p) => ({
       ...p,
       detalleInput: nombre,
       id_detalle: String(did ?? NULL_OPTION),
     }));
+
     setDetalleFocus(false);
     setDetalleArmed(false);
   };
 
-  /* =========================
-     Autocomplete clientes (usa localLists)
-  ========================= */
-  const filteredClientes = useMemo(() => {
-    const all = getArr(localLists.clientes);
-    const q = normalizeSearchText(form.clienteInput);
-
-    if (!clienteFocus || !clienteArmed || q.length < 1) return [];
-
-    return all
-      .filter((c) => normalizeSearchText(c?.nombre ?? c?.razon_social ?? c?.cliente).includes(q))
-      .slice(0, 25);
-  }, [localLists.clientes, form.clienteInput, clienteFocus, clienteArmed]);
-
   const handleClienteInputChange = (e) => {
     const value = e.target.value;
     setClienteArmed(true);
-    // si escribe, invalidamos id_cliente (igual que detalle)
     setForm((p) => ({ ...p, clienteInput: value, id_cliente: NULL_OPTION }));
   };
 
   const handleSelectCliente = (cli) => {
     const nombre = String(cli?.nombre ?? cli?.razon_social ?? cli?.cliente ?? "").trim();
     const cid = getIdCliente(cli) || cli?.id;
+
     setForm((p) => ({
       ...p,
       clienteInput: nombre,
       id_cliente: String(cid ?? NULL_OPTION),
     }));
+
     setClienteFocus(false);
     setClienteArmed(false);
   };
 
-  /* =========================
-     Nuevo catálogo (detalles/clientes)
-  ========================= */
   const startAdd = (catalogo) => {
     if (saving) return;
-
-    // cerrar dropdowns
-    setDetalleFocus(false);
-    setDetalleArmed(false);
-    setClienteFocus(false);
-    setClienteArmed(false);
-
-    setAddUI({ open: true, catalogo, text: "", saving: false });
+    setAddUI({
+      open: true,
+      catalogo,
+      text: "",
+      saving: false,
+    });
   };
 
-  const guardarNuevoCatalogo = async () => {
-    const nombre = String(addUI.text || "").trim();
-    const catalogo = addUI.catalogo;
+  const closeAdd = () => {
+    if (addUI.saving) return;
+    setAddUI((p) => ({ ...p, open: false, text: "", saving: false }));
+  };
 
+  const saveCatalogItem = async () => {
+    const nombre = String(addUI.text || "").trim();
     if (!nombre) {
-      showToast("advertencia", "Escribí un nombre.", 2600);
+      showToast("advertencia", "Escribí un nombre antes de guardar.", 2600);
       return;
     }
 
     setAddUI((p) => ({ ...p, saving: true }));
-    showToast("cargando", `Creando ${catalogo.slice(0, -1)}…`, 12000);
 
     try {
       const { idUsuario } = getAuthInfo();
 
       const data = await apiPostJson(API_CATALOGO, {
-        catalogo, // "detalles" | "clientes"
+        catalogo: addUI.catalogo,
         nombre,
         idUsuario,
       });
 
-      if (!data?.exito) throw new Error(data?.mensaje || `No se pudo crear ${catalogo}.`);
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear.");
 
-      const newId = Number(data?.item?.id);
-      const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
+      const item = data?.item ?? {};
 
-      if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
+      if (addUI.catalogo === "detalles") {
+        const id = getIdGeneric(item) || Number(item?.id);
+        const finalNombre = String(item?.nombre ?? nombre).trim();
 
-      if (catalogo === "detalles") {
-        setLocalLists((prev) => {
-          const arr = getArr(prev.detalles).slice();
-          if (!arr.some((x) => getIdGeneric(x) === newId)) arr.push({ id: newId, nombre: newNombre });
-          return { ...prev, detalles: arr };
-        });
-        setForm((p) => ({ ...p, id_detalle: String(newId), detalleInput: newNombre }));
-      } else if (catalogo === "clientes") {
-        setLocalLists((prev) => {
-          const arr = getArr(prev.clientes).slice();
-          if (!arr.some((x) => getIdCliente(x) === newId)) arr.push({ id: newId, nombre: newNombre });
-          return { ...prev, clientes: arr };
-        });
-        setForm((p) => ({ ...p, id_cliente: String(newId), clienteInput: newNombre }));
+        setLocalLists((prev) => ({
+          ...prev,
+          detalles: [...getArr(prev.detalles), { ...item, id, nombre: finalNombre }],
+        }));
+
+        setForm((p) => ({
+          ...p,
+          id_detalle: String(id),
+          detalleInput: finalNombre,
+        }));
+      }
+
+      if (addUI.catalogo === "clientes") {
+        const id = getIdCliente(item) || Number(item?.id);
+        const finalNombre = String(item?.nombre ?? item?.razon_social ?? nombre).trim();
+
+        setLocalLists((prev) => ({
+          ...prev,
+          clientes: [...getArr(prev.clientes), { ...item, id, nombre: finalNombre }],
+        }));
+
+        setForm((p) => ({
+          ...p,
+          id_cliente: String(id),
+          clienteInput: finalNombre,
+        }));
       }
 
       setAddUI({ open: false, catalogo: "detalles", text: "", saving: false });
-      showToast("exito", `${catalogo.slice(0, -1)} creado: "${newNombre}"`, 2400);
-    } catch (e) {
+      showToast("exito", "Ítem creado correctamente.", 2400);
+    } catch (err) {
       setAddUI((p) => ({ ...p, saving: false }));
-      showToast("error", e?.message || "Error creando.", 4200);
+      showToast("error", err?.message || "No se pudo crear el ítem.", 4200);
     }
   };
 
-  /* =========================
-     Submit
-  ========================= */
+  const resumen = useMemo(() => {
+    const monto = Math.max(0, safeNumber(form.monto_total));
+    return {
+      total: monto,
+      cliente: String(form.clienteInput || "").trim() || "Sin cliente",
+      detalle: String(form.detalleInput || "").trim() || "Sin detalle",
+      periodo: String(form.periodo || "").trim() || "--",
+    };
+  }, [form]);
+
   const submit = async (e) => {
-    e.preventDefault();
-
-    if (addUI.open) {
-      showToast("advertencia", "Terminá de crear (o cancelá) antes de guardar.", 3200);
-      return;
-    }
-
-    setSaving(true);
-    showToast("cargando", "Guardando cambios…", 12000);
+    e?.preventDefault?.();
+    if (saving) return;
 
     try {
-      if (!form.fecha || !/^\d{4}-\d{2}-\d{2}$/.test(form.fecha)) throw new Error("Fecha inválida.");
+      setSaving(true);
+
+      if (!String(form.fecha || "").trim()) throw new Error("Completá la fecha.");
 
       const perUI = periodoToMMYYYY(form.periodo) || periodoFromISODate(form.fecha);
       const perAPI = periodoToYYYYMM(perUI);
 
-      const idDet = form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null;
+      if (!perAPI) throw new Error("Completá el período.");
+
+      const idDet =
+        form.id_detalle && form.id_detalle !== NULL_OPTION
+          ? Number(form.id_detalle)
+          : null;
+
       if (!idDet) throw new Error("Seleccioná un detalle.");
+
+      const montoFinal = Math.max(
+        0,
+        Math.round(safeNumber(form.monto_total) * 100) / 100
+      );
+
+      if (!(montoFinal > 0)) throw new Error("Ingresá un monto válido mayor a 0.");
 
       const payloadFinal = {
         id_movimiento: form.id_movimiento,
         fecha: form.fecha,
-        periodo: perAPI, // YYYY-MM
-
-        id_cliente: form.id_cliente && form.id_cliente !== NULL_OPTION ? Number(form.id_cliente) : null,
+        periodo: perAPI,
+        id_cliente:
+          form.id_cliente && form.id_cliente !== NULL_OPTION
+            ? Number(form.id_cliente)
+            : null,
         cliente: String(form.clienteInput || "").trim(),
-
         id_detalle: idDet,
         detalle: String(form.detalleInput || "").trim(),
-
-        monto_total: Math.max(0, Math.round(safeNumber(form.monto_total) * 100) / 100),
+        monto_total: montoFinal,
       };
 
       await onSave?.(payloadFinal);
-
       showToast("exito", "Recibo actualizado.", 2400);
       onClose?.();
     } catch (err) {
@@ -542,168 +628,411 @@ export default function ModalEditarRecibo({ open, row, lists, periodoDefault, on
   if (!open) return null;
 
   return createPortal(
-    <div
-      className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`}
-      // ✅ Eliminado onMouseDown - el modal solo se cierra con X o ESC
-    >
-      <div
-        className={["mi-modal__container", "mi-modal__container--mov", darkOn ? "mi-modal--dark" : ""].join(" ")}
-        id="mov--modaleditarrecibo"
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="mi-modal__header">
-          <div className="mi-modal__head-left">
-            <h2 className="mi-modal__title">Editar recibo</h2>
-            <p className="mi-modal__subtitle">Fecha, período, detalle, cliente y monto.</p>
-          </div>
-
-          <button className="mi-modal__close" onClick={() => !saving && onClose?.()} disabled={saving} type="button">
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={submit} className="mi-modal__formPad">
-          <div className="mi-row2">
-            <div className="fl-field">
-              <input
-                className="fl-input"
-                type="date"
-                value={form.fecha}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setForm((p) => ({ ...p, fecha: v, periodo: periodoFromISODate(v) || p.periodo }));
-                }}
-                disabled={saving}
-              />
-              <label className="fl-label">Fecha</label>
+    <>
+      <div className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`}>
+        <div
+          className="mi-modal__container"
+          id="mov--modaleditarrecibo"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="mi-modal__header">
+            <div className="mi-modal__head-icon">
+              <FontAwesomeIcon icon={faReceipt} />
             </div>
 
-            <div className="fl-field">
-              <input
-                className="fl-input"
-                placeholder="MM-YYYY"
-                value={form.periodo}
-                onChange={(e) => setForm((p) => ({ ...p, periodo: e.target.value }))}
-                disabled={saving}
-              />
-              <label className="fl-label">Período</label>
+            <div className="mi-modal__head-left">
+              <h2 className="mi-modal__title">Editar recibo</h2>
+              <p className="mi-modal__subtitle">
+                Modificá fecha, período, cliente, detalle y monto con la misma estética de Nueva Compra.
+              </p>
             </div>
-          </div>
 
-          {/* ✅ Detalle */}
-          <div className="fl-field mi-field--mt12 mi-field--rel">
-            <input
-              ref={detalleInputRef}
-              className="fl-input"
-              placeholder=" "
-              value={form.detalleInput}
-              onChange={handleDetalleInputChange}
-              onFocus={() => setDetalleFocus(true)}
-              onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
-              disabled={saving || addUI.open}
-              autoComplete="off"
-            />
-            <label className="fl-label">Descripción (Detalle)</label>
-
-            {detalleFocus && detalleArmed && filteredDetalles.length > 0 && (
-              <ul className="mi-cr-suggest">
-                {filteredDetalles.map((d) => (
-                  <li
-                    key={getIdGeneric(d) || d.id}
-                    className="mi-cr-suggest__item"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleSelectDetalle(d);
-                    }}
-                  >
-                    <span className="mi-cr-suggest__text">{d.nombre}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-
-          </div>
-
-          {/* ✅ Cliente (igual a detalle, con sugerencias + alta) */}
-          <div className="fl-field mi-field--mt12 mi-field--rel">
-            <input
-              ref={clienteInputRef}
-              className="fl-input"
-              placeholder=" "
-              value={form.clienteInput}
-              onChange={handleClienteInputChange}
-              onFocus={() => setClienteFocus(true)}
-              onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
-              disabled={saving || addUI.open}
-              autoComplete="off"
-            />
-            <label className="fl-label">Cliente</label>
-
-            {clienteFocus && clienteArmed && filteredClientes.length > 0 && (
-              <ul className="mi-cr-suggest">
-                {filteredClientes.map((c) => (
-                  <li
-                    key={getIdCliente(c) || c.id}
-                    className="mi-cr-suggest__item"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleSelectCliente(c);
-                    }}
-                  >
-                    <span className="mi-cr-suggest__text">{String(c?.nombre ?? c?.razon_social ?? c?.cliente ?? "").trim()}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-          </div>
-
-          {/* Monto */}
-          <div className="fl-field mi-field--mt12">
-            <input
-              className="fl-input"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder=" "
-              value={form.monto_total}
-              onChange={(e) => setForm((p) => ({ ...p, monto_total: e.target.value }))}
-              disabled={saving}
-            />
-            <label className="fl-label">Monto</label>
-          </div>
-
-          <div className="content-btn-modalrecibo mi-actions--mt14">
-            <button type="submit" disabled={saving} className="mit-btn mit-btn--solid btn--modalrecibo">
-              {saving ? "Guardando..." : "Guardar"}
-            </button>
             <button
-              type="button"
+              ref={closeBtnRef}
+              className="mi-modal__close"
               onClick={() => !saving && onClose?.()}
               disabled={saving}
-              className="mit-btn mit-btn--ghost btn--modalrecibo"
+              type="button"
             >
-              Cancelar
+              ✕
             </button>
           </div>
-        </form>
 
-        <AddCatalogMiniModal
-          open={addUI.open}
-          title={addUI.catalogo === "clientes" ? "Nuevo cliente" : "Nuevo detalle"}
-          label={addUI.catalogo === "clientes" ? "Nombre del cliente" : "Nombre del detalle"}
-          value={addUI.text}
-          saving={addUI.saving}
-          onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
-          onCancel={() => !addUI.saving && setAddUI({ open: false, catalogo: "detalles", text: "", saving: false })}
-          onSave={guardarNuevoCatalogo}
-          dark={darkOn}
-        />
+          <div className="mi-modal__content">
+            <div className="mi-er-layout">
+              <section className="mi-er-main">
+                <form onSubmit={submit} className="mi-er-form">
+                  <div className="mi-er-grid-2">
+                    <div className="nc-section">
+                      <div className="nc-section-head">
+                        <div className="nc-section-dot" />
+                        <span>Fecha y período</span>
+                      </div>
+
+                      <div className="nc-section-body">
+                        <div className="nc-field">
+                          <input
+                            className="nc-input"
+                            type="date"
+                            placeholder=" "
+                            value={form.fecha}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setForm((p) => ({
+                                ...p,
+                                fecha: v,
+                                periodo: periodoFromISODate(v) || p.periodo,
+                              }));
+                            }}
+                            disabled={saving}
+                          />
+                          <label className="nc-label">Fecha</label>
+                        </div>
+
+                        <div className="nc-field">
+                          <input
+                            className="nc-input"
+                            placeholder=" "
+                            value={form.periodo}
+                            onChange={(e) =>
+                              setForm((p) => ({ ...p, periodo: e.target.value }))
+                            }
+                            disabled={saving}
+                          />
+                          <label className="nc-label">Período (MM-YYYY)</label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="nc-section">
+                      <div className="nc-section-head">
+                        <div className="nc-section-dot" />
+                        <span>Monto</span>
+                      </div>
+
+                      <div className="nc-section-body">
+                        <div className="nc-field">
+                          <input
+                            className="nc-input"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder=" "
+                            value={form.monto_total}
+                            onChange={(e) =>
+                              setForm((p) => ({ ...p, monto_total: e.target.value }))
+                            }
+                            disabled={saving}
+                          />
+                          <label className="nc-label">Monto total</label>
+                        </div>
+
+                        <div className="nc-cc-info">
+                          <b>Total actual:</b> {moneyARS(form.monto_total || 0)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" />
+                      <span>Detalle</span>
+                    </div>
+
+                    <div className="nc-section-body">
+                      <div className="mi-er-rel">
+                        <div className="nc-field">
+                          <input
+                            className="nc-input"
+                            placeholder=" "
+                            value={form.detalleInput}
+                            onChange={handleDetalleInputChange}
+                            onFocus={() => {
+                              setDetalleFocus(true);
+                              setDetalleArmed(true);
+                            }}
+                            onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
+                            disabled={saving || addUI.open}
+                            autoComplete="off"
+                          />
+                          <label className="nc-label">Detalle *</label>
+                        </div>
+
+                        {!!filteredDetalles.length && (
+                          <div className="mi-er-autocomplete">
+                            {filteredDetalles.map((det) => {
+                              const id = getIdGeneric(det);
+                              const nombre = String(det?.nombre ?? "").trim();
+
+                              return (
+                                <button
+                                  key={`det-${id}-${nombre}`}
+                                  type="button"
+                                  className="mi-er-autocomplete__item"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => handleSelectDetalle(det)}
+                                >
+                                  {nombre}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="nc-pago-btn"
+                        onClick={() => startAdd("detalles")}
+                        disabled={saving}
+                      >
+                        <FontAwesomeIcon icon={faPlus} />
+                        Nuevo detalle
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </section>
+
+              <aside className="nc-aside">
+                <div className="nc-section">
+                  <div className="nc-section-head">
+                    <div className="nc-section-dot" />
+                    <span>Cliente</span>
+                  </div>
+
+                  <div className="nc-section-body">
+                    <div className="mi-er-rel">
+                      <div className="nc-field">
+                        <input
+                          className="nc-input"
+                          placeholder=" "
+                          value={form.clienteInput}
+                          onChange={handleClienteInputChange}
+                          onFocus={() => {
+                            setClienteFocus(true);
+                            setClienteArmed(true);
+                          }}
+                          onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
+                          disabled={saving || addUI.open}
+                          autoComplete="off"
+                        />
+                        <label className="nc-label">Cliente</label>
+                      </div>
+
+                      {!!filteredClientes.length && (
+                        <div className="mi-er-autocomplete">
+                          {filteredClientes.map((cli) => {
+                            const id = getIdCliente(cli);
+                            const nombre = String(
+                              cli?.nombre ?? cli?.razon_social ?? cli?.cliente ?? ""
+                            ).trim();
+
+                            return (
+                              <button
+                                key={`cli-${id}-${nombre}`}
+                                type="button"
+                                className="mi-er-autocomplete__item"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => handleSelectCliente(cli)}
+                              >
+                                {nombre}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="nc-pago-btn"
+                      onClick={() => startAdd("clientes")}
+                      disabled={saving}
+                    >
+                      <FontAwesomeIcon icon={faPlus} />
+                      Nuevo cliente
+                    </button>
+                  </div>
+                </div>
+
+                <div className="nc-section">
+                  <div className="nc-section-head">
+                    <div className="nc-section-dot" />
+                    <span>Resumen del recibo</span>
+                  </div>
+
+                  <div className="nc-section-body">
+                    <div className="nc-cc-info">
+                      <div className="mi-er-summary-row">
+                        <FontAwesomeIcon icon={faCalendarDays} />
+                        <span><b>Fecha:</b> {form.fecha || "--"}</span>
+                      </div>
+
+                      <div className="mi-er-summary-row">
+                        <FontAwesomeIcon icon={faUser} />
+                        <span><b>Cliente:</b> {resumen.cliente}</span>
+                      </div>
+
+                      <div className="mi-er-summary-row">
+                        <FontAwesomeIcon icon={faBoxOpen} />
+                        <span><b>Detalle:</b> {resumen.detalle}</span>
+                      </div>
+
+                      <div className="mi-er-summary-row">
+                        <FontAwesomeIcon icon={faReceipt} />
+                        <span><b>Período:</b> {resumen.periodo}</span>
+                      </div>
+
+                      <div className="mi-er-summary-row">
+                        <FontAwesomeIcon icon={faDollarSign} />
+                        <span><b>Total:</b> {moneyARS(resumen.total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="nc-actions">
+                  <button
+                    type="button"
+                    className="mit-btn mit-btn--solid mi-er-action"
+                    onClick={submit}
+                    disabled={saving}
+                  >
+                    {saving ? "Guardando..." : "Guardar cambios"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="mit-btn mit-btn--ghost mi-er-action"
+                    onClick={() => !saving && onClose?.()}
+                    disabled={saving}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </aside>
+            </div>
+          </div>
+
+          <AddCatalogMiniModal
+            open={addUI.open}
+            title={addUI.catalogo === "clientes" ? "Nuevo cliente" : "Nuevo detalle"}
+            value={addUI.text}
+            saving={addUI.saving}
+            onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
+            onCancel={closeAdd}
+            onSave={saveCatalogItem}
+            dark={darkOn}
+            label={addUI.catalogo === "clientes" ? "Cliente" : "Detalle"}
+          />
+        </div>
       </div>
-    </div>,
+
+      <style>{`
+        .mi-er-layout{
+          flex:1;
+          min-height:0;
+          display:grid;
+          grid-template-columns:minmax(0,1fr) 430px;
+          gap:18px;
+          overflow:hidden;
+        }
+
+        .mi-er-main{
+          min-width:0;
+          min-height:0;
+          border:1px solid var(--nv-border-md);
+          border-radius:14px;
+          background:var(--nv-bg);
+          box-shadow:var(--nv-shadow-sm);
+          overflow:auto;
+          padding:16px;
+        }
+
+        .mi-er-form{
+          display:flex;
+          flex-direction:column;
+          gap:14px;
+        }
+
+        .mi-er-grid-2{
+          display:grid;
+          grid-template-columns:repeat(2,minmax(0,1fr));
+          gap:14px;
+        }
+
+        .mi-er-rel{
+          position:relative;
+        }
+
+        .mi-er-autocomplete{
+          position:absolute;
+          top:calc(100% + 6px);
+          left:0;
+          right:0;
+          z-index:50;
+          background:var(--nv-bg);
+          border:1px solid var(--nv-border-md);
+          border-radius:12px;
+          box-shadow:var(--nv-shadow-md);
+          overflow:hidden;
+          max-height:240px;
+          overflow-y:auto;
+        }
+
+        .mi-er-autocomplete__item{
+          width:100%;
+          border:none;
+          background:transparent;
+          text-align:left;
+          padding:10px 12px;
+          font-size:13px;
+          color:var(--nv-text);
+          cursor:pointer;
+          transition:background .12s ease;
+          font-family:inherit;
+        }
+
+        .mi-er-autocomplete__item:hover{
+          background:var(--nv-row-hover);
+        }
+
+        .mi-er-summary-row{
+          display:flex;
+          align-items:center;
+          gap:10px;
+          margin-bottom:12px;
+        }
+
+        .mi-er-summary-row:last-child{
+          margin-bottom:0;
+        }
+
+        .mi-er-action{
+          flex:1;
+        }
+
+        @media (max-width: 1100px){
+          .mi-er-layout{
+            grid-template-columns:1fr;
+          }
+        }
+
+        @media (max-width: 700px){
+          .mi-er-grid-2{
+            grid-template-columns:1fr;
+          }
+
+          .nc-actions{
+            flex-direction:column;
+          }
+        }
+      `}</style>
+    </>,
     document.body
   );
 }

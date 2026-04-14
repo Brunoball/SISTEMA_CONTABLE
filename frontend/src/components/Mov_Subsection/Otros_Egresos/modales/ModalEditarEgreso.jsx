@@ -10,44 +10,27 @@ import {
   FaTimes,
   FaUpload,
   FaUndo,
+  FaEdit,
 } from "react-icons/fa";
 
+/* ─── IVA options ─── */
 const IVA_OPTIONS = [
-  { label: "0%", value: 0 },
-  { label: "10,5%", value: 10.5 },
-  { label: "21%", value: 21 },
+  { label: "0%",   value: 0    },
+  { label: "10,5%",value: 10.5 },
+  { label: "21%",  value: 21   },
 ];
 
+/* ─── Pure helpers ─── */
 function safeNumber(v) {
   if (v === "" || v == null) return 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
-
-function round2(n) {
-  return Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100;
-}
-
-function round3(n) {
-  return Math.round((Number(n || 0) + Number.EPSILON) * 1000) / 1000;
-}
-
-function safeText(v) {
-  return String(v ?? "").trim();
-}
-
+function round2(n) { return Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100; }
+function round3(n) { return Math.round((Number(n || 0) + Number.EPSILON) * 1000) / 1000; }
+function safeText(v) { return String(v ?? "").trim(); }
 function normalizeName(v) {
-  return String(v ?? "")
-    .toUpperCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function isChequeMedioName(v) {
-  const n = normalizeName(v);
-  return n.includes("ECHEQ") || n.includes("E-CHEQ") || n.includes("CHEQUE");
+  return String(v ?? "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 }
 
 function calcItemTotals(cantidad, precio, ivaPct) {
@@ -57,111 +40,37 @@ function calcItemTotals(cantidad, precio, ivaPct) {
   const subtotal = c * p;
   const iva_monto = subtotal * (iva / 100);
   const total = subtotal + iva_monto;
-  return {
-    subtotal: round2(subtotal),
-    iva_monto: round2(iva_monto),
-    total: round2(total),
-  };
+  return { subtotal: round2(subtotal), iva_monto: round2(iva_monto), total: round2(total) };
 }
 
 function normalizeDetalles(lists) {
   const raw = Array.isArray(lists?.detalles) ? lists.detalles : [];
-  return raw.map((x) => ({
-    id: Number(x?.id ?? x?.id_detalle ?? 0),
-    nombre: String(x?.nombre ?? x?.descripcion ?? x?.detalle ?? "").trim(),
-  }));
+  return raw.map((x) => ({ id: Number(x?.id ?? x?.id_detalle ?? 0), nombre: String(x?.nombre ?? x?.descripcion ?? x?.detalle ?? "").trim() }));
 }
-
 function normalizeMediosPago(lists) {
-  const raw = Array.isArray(lists?.medios_pago)
-    ? lists.medios_pago
-    : Array.isArray(lists?.mediosPago)
-    ? lists.mediosPago
-    : [];
-  return raw.map((x) => ({
-    id: Number(x?.id ?? x?.id_medio_pago ?? 0),
-    nombre: String(x?.nombre ?? x?.descripcion ?? x?.detalle ?? "").trim(),
-  }));
+  const raw = Array.isArray(lists?.medios_pago) ? lists.medios_pago : Array.isArray(lists?.mediosPago) ? lists.mediosPago : [];
+  return raw.map((x) => ({ id: Number(x?.id ?? x?.id_medio_pago ?? 0), nombre: String(x?.nombre ?? x?.descripcion ?? x?.detalle ?? "").trim() }));
 }
-
 function normalizeClasificaciones(lists) {
-  const raw = Array.isArray(lists?.clasificaciones)
-    ? lists.clasificaciones
-    : Array.isArray(lists?.clasificacion)
-    ? lists.clasificacion
-    : [];
-  return raw.map((x) => ({
-    id: Number(x?.id ?? x?.id_clasificacion ?? 0),
-    nombre: String(x?.nombre ?? x?.descripcion ?? x?.detalle ?? "").trim(),
-  }));
+  const raw = Array.isArray(lists?.clasificaciones) ? lists.clasificaciones : Array.isArray(lists?.clasificacion) ? lists.clasificacion : [];
+  return raw.map((x) => ({ id: Number(x?.id ?? x?.id_clasificacion ?? 0), nombre: String(x?.nombre ?? x?.descripcion ?? x?.detalle ?? "").trim() }));
 }
-
 function resolveCostoFijoConfig(clasificaciones = []) {
   const arr = Array.isArray(clasificaciones) ? clasificaciones : [];
-  const fijo =
-    arr.find((x) => normalizeName(x?.nombre) === "COSTO FIJO") ||
-    arr.find((x) => normalizeName(x?.nombre).includes("COSTO FIJO")) ||
-    null;
-
-  return {
-    idCostoFijo: String(Number(fijo?.id ?? 1) || 1),
-    nombreCostoFijo: fijo?.nombre || "COSTO FIJO",
-  };
+  const fijo = arr.find((x) => normalizeName(x?.nombre) === "COSTO FIJO") || arr.find((x) => normalizeName(x?.nombre).includes("COSTO FIJO")) || null;
+  return { idCostoFijo: String(Number(fijo?.id ?? 1) || 1), nombreCostoFijo: fijo?.nombre || "COSTO FIJO" };
 }
 
 function normalizeChequeData(src = {}) {
   const cheque = src?.cheque && typeof src.cheque === "object" ? src.cheque : src;
-
   return {
-    id_cheque:
-      Number(
-        cheque?.id_cheque ??
-          cheque?.cheque_id ??
-          src?.id_cheque ??
-          src?.cheque_id ??
-          0
-      ) || 0,
-    tipo: String(
-      cheque?.tipo ??
-        cheque?.cheque_tipo ??
-        src?.cheque_tipo ??
-        ""
-    )
-      .trim()
-      .toLowerCase(),
-    fecha_emision: String(
-      cheque?.fecha_emision ??
-        cheque?.cheque_fecha_emision ??
-        src?.cheque_fecha_emision ??
-        ""
-    ).slice(0, 10),
-    emisor: String(
-      cheque?.emisor ??
-        cheque?.cheque_emisor ??
-        src?.cheque_emisor ??
-        ""
-    ).trim(),
-    numero_cheque: String(
-      cheque?.numero_cheque ??
-        cheque?.cheque_numero ??
-        src?.cheque_numero ??
-        ""
-    ).trim(),
-    importe: round2(
-      safeNumber(
-        cheque?.importe ??
-          cheque?.cheque_importe ??
-          src?.cheque_importe ??
-          src?.monto_total ??
-          0
-      )
-    ),
-    fecha_pago: String(
-      cheque?.fecha_pago ??
-        cheque?.cheque_fecha_pago ??
-        src?.cheque_fecha_pago ??
-        ""
-    ).slice(0, 10),
+    id_cheque:     Number(cheque?.id_cheque ?? cheque?.cheque_id ?? src?.id_cheque ?? src?.cheque_id ?? 0) || 0,
+    tipo:          String(cheque?.tipo ?? cheque?.cheque_tipo ?? src?.cheque_tipo ?? "").trim().toLowerCase(),
+    fecha_emision: String(cheque?.fecha_emision ?? cheque?.cheque_fecha_emision ?? src?.cheque_fecha_emision ?? "").slice(0, 10),
+    emisor:        String(cheque?.emisor ?? cheque?.cheque_emisor ?? src?.cheque_emisor ?? "").trim(),
+    numero_cheque: String(cheque?.numero_cheque ?? cheque?.cheque_numero ?? src?.cheque_numero ?? "").trim(),
+    importe:       round2(safeNumber(cheque?.importe ?? cheque?.cheque_importe ?? src?.cheque_importe ?? src?.monto_total ?? 0)),
+    fecha_pago:    String(cheque?.fecha_pago ?? cheque?.cheque_fecha_pago ?? src?.cheque_fecha_pago ?? "").slice(0, 10),
   };
 }
 
@@ -170,13 +79,10 @@ function makeItem(it = {}) {
   const precio = round2(it?.precio ?? it?.total ?? 0);
   const iva_pct = round2(it?.iva_pct ?? 0);
   const calc = calcItemTotals(cantidad, precio, iva_pct);
-
   return {
     uid: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     id_detalle: String(Number(it?.id_detalle ?? 0) || ""),
-    cantidad,
-    precio,
-    iva_pct,
+    cantidad, precio, iva_pct,
     subtotal: round2(it?.subtotal ?? calc.subtotal),
     iva_monto: round2(it?.iva_monto ?? calc.iva_monto),
     total: round2(it?.total ?? calc.total),
@@ -187,24 +93,11 @@ function buildInitialState(data, clasificaciones = []) {
   const src = data && typeof data === "object" ? data : {};
   const cheque = normalizeChequeData(src);
   const esMovimientoCheque = cheque.id_cheque > 0;
-
   const rawItems = Array.isArray(src.items) && src.items.length ? src.items : [src];
-  const items = rawItems
-    .map((it) => makeItem(it))
-    .filter(
-      (it) =>
-        Number(it.cantidad) > 0 &&
-        (Number(it.precio) > 0 || Number(it.total) > 0)
-    );
-
+  const items = rawItems.map((it) => makeItem(it)).filter((it) => Number(it.cantidad) > 0 && (Number(it.precio) > 0 || Number(it.total) > 0));
   const { idCostoFijo } = resolveCostoFijoConfig(clasificaciones);
-  const idClasifActual = String(
-    Number(src?.id_clasificacion ?? src?.clasificacion_id ?? 0) || ""
-  );
-  const esCostoFijoInicial =
-    !!src?.es_costo_fijo ||
-    (!!idClasifActual && idClasifActual === String(idCostoFijo));
-
+  const idClasifActual = String(Number(src?.id_clasificacion ?? src?.clasificacion_id ?? 0) || "");
+  const esCostoFijoInicial = !!src?.es_costo_fijo || (!!idClasifActual && idClasifActual === String(idCostoFijo));
   return {
     id_movimiento: Number(src?.id_movimiento ?? src?.id ?? 0) || 0,
     fecha: String(src?.fecha ?? "").slice(0, 10),
@@ -213,19 +106,12 @@ function buildInitialState(data, clasificaciones = []) {
     es_costo_fijo: esCostoFijoInicial,
     es_movimiento_cheque: esMovimientoCheque,
     cheque,
-    items: items.length
-      ? items
-      : [makeItem({ cantidad: 1, precio: Number(src?.monto_total ?? 0) || 0 })],
+    items: items.length ? items : [makeItem({ cantidad: 1, precio: Number(src?.monto_total ?? 0) || 0 })],
   };
 }
 
 function sumTotalItems(items) {
-  return round2(
-    (Array.isArray(items) ? items : []).reduce(
-      (acc, it) => acc + safeNumber(it?.total),
-      0
-    )
-  );
+  return round2((Array.isArray(items) ? items : []).reduce((acc, it) => acc + safeNumber(it?.total), 0));
 }
 
 function isTemaOscuro() {
@@ -236,241 +122,114 @@ function isTemaOscuro() {
 
 function getAuthInfo() {
   const token = safeText(localStorage.getItem("token"));
-  const sessionKey =
-    safeText(localStorage.getItem("session_key")) ||
-    safeText(localStorage.getItem("sessionKey")) ||
-    safeText(localStorage.getItem("X-Session")) ||
-    safeText(localStorage.getItem("x_session"));
-
+  const sessionKey = safeText(localStorage.getItem("session_key")) || safeText(localStorage.getItem("sessionKey")) || safeText(localStorage.getItem("X-Session")) || safeText(localStorage.getItem("x_session"));
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand =
-      u?.idUsuarioMaster ??
-      u?.idUsuario ??
-      u?.id_usuario ??
-      u?.id ??
-      u?.user_id ??
-      0;
+    const cand = u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
-
   return { token, sessionKey, idUsuario };
 }
-
-function buildHeadersGET() {
-  const { token, sessionKey } = getAuthInfo();
-  const h = {};
-  if (sessionKey) h["X-Session"] = sessionKey;
-  if (token) h.Authorization = `Bearer ${token}`;
-  return h;
-}
-
-function buildHeadersJSON() {
-  const { token, sessionKey } = getAuthInfo();
-  const h = { "Content-Type": "application/json" };
-  if (sessionKey) h["X-Session"] = sessionKey;
-  if (token) h.Authorization = `Bearer ${token}`;
-  return h;
-}
-
-function buildHeadersFormData() {
-  const { token, sessionKey } = getAuthInfo();
-  const h = {};
-  if (sessionKey) h["X-Session"] = sessionKey;
-  if (token) h.Authorization = `Bearer ${token}`;
-  return h;
-}
+function buildHeadersGET()      { const { token, sessionKey } = getAuthInfo(); const h = {}; if (sessionKey) h["X-Session"] = sessionKey; if (token) h.Authorization = `Bearer ${token}`; return h; }
+function buildHeadersJSON()     { const { token, sessionKey } = getAuthInfo(); const h = { "Content-Type": "application/json" }; if (sessionKey) h["X-Session"] = sessionKey; if (token) h.Authorization = `Bearer ${token}`; return h; }
+function buildHeadersFormData() { const { token, sessionKey } = getAuthInfo(); const h = {}; if (sessionKey) h["X-Session"] = sessionKey; if (token) h.Authorization = `Bearer ${token}`; return h; }
 
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    const preview = text.length > 500 ? `${text.slice(0, 500)}...` : text;
-    throw new Error(`Respuesta inválida del servidor. HTTP ${res.status}. ${preview}`);
-  }
+  try { return JSON.parse(text); }
+  catch { throw new Error(`Respuesta inválida del servidor. HTTP ${res.status}. ${text.slice(0, 300)}`); }
 }
 
 function getComprobanteDownloadUrl(idMovimiento) {
-  return `${BASE_URL}/api.php?action=otros_egresos_comprobantes_descargar&id_movimiento=${Number(
-    idMovimiento || 0
-  )}`;
+  return `${BASE_URL}/api.php?action=otros_egresos_comprobantes_descargar&id_movimiento=${Number(idMovimiento || 0)}`;
+}
+function fileAcceptText() { return ".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip"; }
+
+function moneyARS(v) {
+  try { return Number(v || 0).toLocaleString("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  catch { return `$${Number(v || 0).toFixed(2)}`; }
 }
 
-function fileAcceptText() {
-  return ".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip";
-}
-
-/* ─── Estilos inline del módulo ─── */
+/* ─── Clasificación toggle styles ─── */
 const S = {
-  clasificacionBox: {
-    border: "1px solid rgba(148,163,184,.32)",
-    borderRadius: 14,
-    padding: "12px 14px 10px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 0,
-  },
-  clasificacionHead: {
-    paddingBottom: 10,
-    marginBottom: 10,
-    borderBottom: "1px solid rgba(148,163,184,.18)",
-  },
-  clasificacionTitle: {
-    fontSize: 14,
-    fontWeight: 600,
-    lineHeight: 1.2,
-  },
-  clasificacionSub: {
-    marginTop: 3,
-    fontSize: 12,
-    color: "var(--mi-muted, #516173)",
-    lineHeight: 1.3,
-  },
-  toggleRow: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    paddingTop: 4,
-  },
+  toggleRow: { display: "flex", flexDirection: "column", gap: 6 },
   toggleOption: (checked, disabled) => ({
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: checked
-      ? "1.5px solid rgba(0,85,187,.40)"
-      : "1.5px solid rgba(148,163,184,.28)",
-    cursor: disabled ? "not-allowed" : "pointer",
-    transition: "all .16s ease",
-    userSelect: "none",
-    opacity: disabled ? 0.6 : 1,
+    display: "flex", alignItems: "center", gap: 10, padding: "9px 11px",
+    borderRadius: 9, border: checked ? "1.5px solid rgba(0,85,187,.40)" : "1.5px solid rgba(148,163,184,.28)",
+    cursor: disabled ? "not-allowed" : "pointer", transition: "all .16s ease",
+    userSelect: "none", opacity: disabled ? 0.6 : 1,
   }),
   toggleDot: (checked) => ({
-    width: 18,
-    height: 18,
-    borderRadius: "50%",
-    border: checked ? "5px solid #0055BB" : "2px solid rgba(148,163,184,.7)",
-    background: checked ? "#fff" : "transparent",
-    flexShrink: 0,
-    transition: "all .16s ease",
-    boxShadow: checked ? "0 0 0 3px rgba(0,85,187,.14)" : "none",
+    width: 16, height: 16, borderRadius: "50%",
+    border: checked ? "4px solid #0055BB" : "2px solid rgba(148,163,184,.7)",
+    background: checked ? "#fff" : "transparent", flexShrink: 0,
+    transition: "all .16s ease", boxShadow: checked ? "0 0 0 3px rgba(0,85,187,.14)" : "none",
   }),
   toggleLabel: (checked) => ({
-    fontSize: 13,
-    fontWeight: checked ? 600 : 500,
-    color: checked ? "#0A2540" : "var(--mi-muted, #516173)",
-    transition: "all .16s ease",
+    fontSize: 12, fontWeight: checked ? 600 : 500,
+    color: checked ? "#0A2540" : "var(--mi-muted, #516173)", transition: "all .16s ease",
   }),
   toggleBadge: {
-    marginLeft: "auto",
-    fontSize: 10,
-    fontWeight: 700,
-    letterSpacing: ".04em",
-    textTransform: "uppercase",
-    padding: "2px 7px",
-    borderRadius: 999,
-    background: "rgba(0,85,187,.10)",
-    color: "#0055BB",
-    border: "1px solid rgba(0,85,187,.18)",
+    marginLeft: "auto", fontSize: 9, fontWeight: 700, letterSpacing: ".04em",
+    textTransform: "uppercase", padding: "2px 6px", borderRadius: 999,
+    background: "rgba(0,85,187,.10)", color: "#0055BB", border: "1px solid rgba(0,85,187,.18)",
   },
-  chequeGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
-  },
+  chequeGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 },
 };
 
+/* ════════════════════════════════════════════════════════════
+   COMPONENTE PRINCIPAL
+════════════════════════════════════════════════════════════ */
 export default function ModalEditarEgreso({
-  open,
-  initialData,
-  lists,
-  onClose,
-  onToast,
-  onSubmit,
-  onSaved,
-  dark: darkProp,
+  open, initialData, lists, onClose, onToast, onSubmit, onSaved, dark: darkProp,
 }) {
   const API = `${BASE_URL}/api.php`;
+  const showToast = useCallback((tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion), [onToast]);
 
-  const showToast = useCallback(
-    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
-    [onToast]
-  );
-
-  const [darkAuto, setDarkAuto] = useState(isTemaOscuro());
+  const [darkAuto, setDarkAuto] = useState(isTemaOscuro);
   const [saving, setSaving] = useState(false);
   const [loadingComprobante, setLoadingComprobante] = useState(false);
 
   const clasificaciones = useMemo(() => normalizeClasificaciones(lists), [lists]);
-  const costoFijoConfig = useMemo(
-    () => resolveCostoFijoConfig(clasificaciones),
-    [clasificaciones]
-  );
+  const costoFijoConfig  = useMemo(() => resolveCostoFijoConfig(clasificaciones), [clasificaciones]);
 
-  const [form, setForm] = useState(() =>
-    buildInitialState(initialData, clasificaciones)
-  );
+  const [form, setForm] = useState(() => buildInitialState(initialData, clasificaciones));
+  const [comprobanteActual,        setComprobanteActual       ] = useState(null);
+  const [archivoNuevo,             setArchivoNuevo            ] = useState(null);
+  const [marcarEliminarComprobante,setMarcarEliminarComprobante] = useState(false);
+  const [openViewer,  setOpenViewer ] = useState(false);
+  const [viewerData,  setViewerData ] = useState({ url: "", mime: "", title: "Comprobante" });
 
-  const [comprobanteActual, setComprobanteActual] = useState(null);
-  const [archivoNuevo, setArchivoNuevo] = useState(null);
-  const [marcarEliminarComprobante, setMarcarEliminarComprobante] =
-    useState(false);
-
-  const [openViewer, setOpenViewer] = useState(false);
-  const [viewerData, setViewerData] = useState({
-    url: "",
-    mime: "",
-    title: "Comprobante",
-  });
-
-  const closeBtnRef = useRef(null);
+  const closeBtnRef  = useRef(null);
   const inputFileRef = useRef(null);
-  const fechaRef = useRef(null);
+  const fechaRef     = useRef(null);
 
+  /* ── Dark mode observer ── */
   useEffect(() => {
     const update = () => setDarkAuto(isTemaOscuro());
-
     const obsHtml = new MutationObserver(update);
-    obsHtml.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"],
-    });
-
+    obsHtml.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const obsBody = new MutationObserver(update);
-    if (document.body) {
-      obsBody.observe(document.body, {
-        attributes: true,
-        attributeFilter: ["class"],
-      });
-    }
-
+    if (document.body) obsBody.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     update();
-
-    return () => {
-      obsHtml.disconnect();
-      obsBody.disconnect();
-    };
+    return () => { obsHtml.disconnect(); obsBody.disconnect(); };
   }, []);
 
-  const dark = typeof darkProp === "boolean" ? darkProp : darkAuto;
-
-  const detalles = useMemo(() => normalizeDetalles(lists), [lists]);
+  const dark    = typeof darkProp === "boolean" ? darkProp : darkAuto;
+  const detalles   = useMemo(() => normalizeDetalles(lists),   [lists]);
   const mediosPago = useMemo(() => normalizeMediosPago(lists), [lists]);
 
+  /* ── Body overflow lock ── */
   useEffect(() => {
     if (!open) return;
-    const prevOverflow = document.body.style.overflow;
+    const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
+    return () => { document.body.style.overflow = prev; };
   }, [open]);
 
+  /* ── Reset on open ── */
   useEffect(() => {
     if (!open) return;
     setSaving(false);
@@ -481,52 +240,35 @@ export default function ModalEditarEgreso({
     setTimeout(() => closeBtnRef.current?.focus(), 0);
   }, [open, initialData, clasificaciones]);
 
+  /* ── Escape key ── */
   useEffect(() => {
     if (!open) return;
-    const onKeyDown = (e) => {
-      if (e.key === "Escape" && !saving) onClose?.();
-    };
+    const onKeyDown = (e) => { if (e.key === "Escape" && !saving) onClose?.(); };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, saving, onClose]);
 
+  /* ── Load comprobante info ── */
   const cargarInfoComprobante = useCallback(async () => {
     const idMovimiento = Number(initialData?.id_movimiento ?? initialData?.id ?? 0);
-    if (!open || !(idMovimiento > 0)) {
-      setComprobanteActual(null);
-      return;
-    }
-
+    if (!open || !(idMovimiento > 0)) { setComprobanteActual(null); return; }
     setLoadingComprobante(true);
     try {
-      const res = await fetch(
-        `${API}?action=otros_egresos_comprobantes_info&id_movimiento=${idMovimiento}`,
-        {
-          method: "GET",
-          headers: buildHeadersGET(),
-        }
-      );
+      const res  = await fetch(`${API}?action=otros_egresos_comprobantes_info&id_movimiento=${idMovimiento}`, { method: "GET", headers: buildHeadersGET() });
       const data = await parseJsonOrThrow(res);
-      if (!data?.exito) {
-        throw new Error(data?.mensaje || "No se pudo obtener el comprobante.");
-      }
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo obtener el comprobante.");
       setComprobanteActual(data?.comprobante ?? null);
     } catch (err) {
       setComprobanteActual(null);
-      showToast(
-        "error",
-        err?.message || "No se pudo obtener el comprobante.",
-        3500
-      );
+      showToast("error", err?.message || "No se pudo obtener el comprobante.", 3500);
     } finally {
       setLoadingComprobante(false);
     }
   }, [API, initialData, open, showToast]);
 
-  useEffect(() => {
-    if (open) cargarInfoComprobante();
-  }, [open, cargarInfoComprobante]);
+  useEffect(() => { if (open) cargarInfoComprobante(); }, [open, cargarInfoComprobante]);
 
+  /* ── Item helpers ── */
   const updateItem = useCallback((uid, patch) => {
     setForm((prev) => ({
       ...prev,
@@ -534,8 +276,8 @@ export default function ModalEditarEgreso({
         if (it.uid !== uid) return it;
         const next = { ...it, ...patch };
         const cantidad = round3(safeNumber(next.cantidad));
-        const precio = round2(safeNumber(next.precio));
-        const iva_pct = round2(safeNumber(next.iva_pct));
+        const precio   = round2(safeNumber(next.precio));
+        const iva_pct  = round2(safeNumber(next.iva_pct));
         const calc = calcItemTotals(cantidad, precio, iva_pct);
         return { ...next, cantidad, precio, iva_pct, ...calc };
       }),
@@ -548,314 +290,154 @@ export default function ModalEditarEgreso({
       items: prev.items.map((it) => {
         if (it.uid !== uid) return it;
         const totalDeseado = round2(safeNumber(value));
-        const cantidad = Math.max(0.001, round3(safeNumber(it.cantidad) || 1));
-        const iva_pct = round2(safeNumber(it.iva_pct));
-        const divisor = cantidad * (1 + iva_pct / 100);
-        const precio =
-          divisor > 0 ? round2(totalDeseado / divisor) : round2(totalDeseado);
+        const cantidad     = Math.max(0.001, round3(safeNumber(it.cantidad) || 1));
+        const iva_pct      = round2(safeNumber(it.iva_pct));
+        const divisor      = cantidad * (1 + iva_pct / 100);
+        const precio       = divisor > 0 ? round2(totalDeseado / divisor) : round2(totalDeseado);
         const calc = calcItemTotals(cantidad, precio, iva_pct);
         return { ...it, cantidad, precio, ...calc };
       }),
     }));
   }, []);
 
-  const addItem = useCallback(() => {
-    setForm((prev) => ({
-      ...prev,
-      items: [...prev.items, makeItem({ cantidad: 1, precio: 0, iva_pct: 0 })],
-    }));
-  }, []);
-
-  const removeItem = useCallback((uid) => {
-    setForm((prev) => {
-      if ((prev.items || []).length <= 1) return prev;
-      return { ...prev, items: prev.items.filter((it) => it.uid !== uid) };
-    });
-  }, []);
+  const addItem    = useCallback(() => setForm((prev) => ({ ...prev, items: [...prev.items, makeItem({ cantidad: 1, precio: 0, iva_pct: 0 })] })), []);
+  const removeItem = useCallback((uid) => setForm((prev) => { if ((prev.items || []).length <= 1) return prev; return { ...prev, items: prev.items.filter((it) => it.uid !== uid) }; }), []);
 
   const totalGeneral = useMemo(() => {
-    if (form.es_movimiento_cheque) {
-      return round2(safeNumber(form?.cheque?.importe));
-    }
+    if (form.es_movimiento_cheque) return round2(safeNumber(form?.cheque?.importe));
     return sumTotalItems(form.items);
   }, [form]);
 
-  const cerrar = useCallback(() => {
-    if (saving) return;
-    onClose?.();
-  }, [saving, onClose]);
+  const cerrar = useCallback(() => { if (saving) return; onClose?.(); }, [saving, onClose]);
 
   const openDatePicker = useCallback(() => {
     const el = fechaRef.current;
     if (!el || saving || el.disabled) return;
-    try {
-      if (typeof el.showPicker === "function") el.showPicker();
-      else el.focus();
-    } catch {
-      el.focus();
-    }
+    try { if (typeof el.showPicker === "function") el.showPicker(); else el.focus(); } catch { el.focus(); }
   }, [saving]);
 
+  /* ── Comprobante helpers ── */
   const nombreComprobanteVisible = useMemo(() => {
     if (archivoNuevo) return archivoNuevo.name;
     if (marcarEliminarComprobante) return "";
-    return (
-      safeText(comprobanteActual?.archivo_url).split("/").pop() ||
-      "Comprobante actual"
-    );
+    return safeText(comprobanteActual?.archivo_url).split("/").pop() || "Comprobante actual";
   }, [archivoNuevo, marcarEliminarComprobante, comprobanteActual]);
 
   const abrirViewer = useCallback(() => {
     const idMovimiento = Number(form.id_movimiento || 0);
     if (!(idMovimiento > 0)) return;
-
     if (archivoNuevo) {
-      setViewerData({
-        url: URL.createObjectURL(archivoNuevo),
-        mime: archivoNuevo.type || "application/octet-stream",
-        title: `Comprobante - ${archivoNuevo.name}`,
-      });
+      setViewerData({ url: URL.createObjectURL(archivoNuevo), mime: archivoNuevo.type || "application/octet-stream", title: `Comprobante - ${archivoNuevo.name}` });
       setOpenViewer(true);
       return;
     }
-
     if (!comprobanteActual || marcarEliminarComprobante) return;
-
-    setViewerData({
-      url: getComprobanteDownloadUrl(idMovimiento),
-      mime:
-        safeText(comprobanteActual?.archivo_mime) || "application/octet-stream",
-      title: "Comprobante del egreso",
-    });
+    setViewerData({ url: getComprobanteDownloadUrl(idMovimiento), mime: safeText(comprobanteActual?.archivo_mime) || "application/octet-stream", title: "Comprobante del egreso" });
     setOpenViewer(true);
   }, [form.id_movimiento, archivoNuevo, comprobanteActual, marcarEliminarComprobante]);
 
   const cerrarViewer = useCallback(() => {
-    if (viewerData?.url?.startsWith("blob:")) {
-      URL.revokeObjectURL(viewerData.url);
-    }
+    if (viewerData?.url?.startsWith("blob:")) URL.revokeObjectURL(viewerData.url);
     setOpenViewer(false);
     setViewerData({ url: "", mime: "", title: "Comprobante" });
   }, [viewerData]);
 
-  const seleccionarArchivo = useCallback((e) => {
-    const file = e.target.files?.[0] || null;
-    if (!file) return;
-    setArchivoNuevo(file);
-    setMarcarEliminarComprobante(false);
-  }, []);
+  const seleccionarArchivo       = useCallback((e) => { const file = e.target.files?.[0] || null; if (!file) return; setArchivoNuevo(file); setMarcarEliminarComprobante(false); }, []);
+  const quitarArchivoNuevo       = useCallback(() => { setArchivoNuevo(null); if (inputFileRef.current) inputFileRef.current.value = ""; }, []);
+  const marcarEliminar           = useCallback(() => { setArchivoNuevo(null); if (inputFileRef.current) inputFileRef.current.value = ""; setMarcarEliminarComprobante(true); }, []);
+  const restaurarComprobanteActual = useCallback(() => { setMarcarEliminarComprobante(false); setArchivoNuevo(null); if (inputFileRef.current) inputFileRef.current.value = ""; }, []);
 
-  const quitarArchivoNuevo = useCallback(() => {
-    setArchivoNuevo(null);
-    if (inputFileRef.current) inputFileRef.current.value = "";
-  }, []);
+  const eliminarComprobanteExistente = useCallback(async (idMovimiento) => {
+    const res  = await fetch(`${API}?action=otros_egresos_comprobantes_eliminar`, { method: "POST", headers: buildHeadersJSON(), body: JSON.stringify({ id_movimiento: idMovimiento }) });
+    const data = await parseJsonOrThrow(res);
+    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar el comprobante.");
+    return data;
+  }, [API]);
 
-  const marcarEliminar = useCallback(() => {
-    setArchivoNuevo(null);
-    if (inputFileRef.current) inputFileRef.current.value = "";
-    setMarcarEliminarComprobante(true);
-  }, []);
+  const subirComprobanteNuevo = useCallback(async (idMovimiento, archivo) => {
+    const fd = new FormData();
+    fd.append("id_movimiento", String(idMovimiento));
+    fd.append("archivo", archivo);
+    const res  = await fetch(`${API}?action=otros_egresos_comprobantes_vincular_movimiento_upload`, { method: "POST", headers: buildHeadersFormData(), body: fd });
+    const data = await parseJsonOrThrow(res);
+    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo subir el comprobante.");
+    return data;
+  }, [API]);
 
-  const restaurarComprobanteActual = useCallback(() => {
-    setMarcarEliminarComprobante(false);
-    setArchivoNuevo(null);
-    if (inputFileRef.current) inputFileRef.current.value = "";
-  }, []);
-
-  const eliminarComprobanteExistente = useCallback(
-    async (idMovimiento) => {
-      const res = await fetch(`${API}?action=otros_egresos_comprobantes_eliminar`, {
-        method: "POST",
-        headers: buildHeadersJSON(),
-        body: JSON.stringify({ id_movimiento: idMovimiento }),
-      });
-      const data = await parseJsonOrThrow(res);
-      if (!data?.exito) {
-        throw new Error(data?.mensaje || "No se pudo eliminar el comprobante.");
-      }
-      return data;
-    },
-    [API]
-  );
-
-  const subirComprobanteNuevo = useCallback(
-    async (idMovimiento, archivo) => {
-      const fd = new FormData();
-      fd.append("id_movimiento", String(idMovimiento));
-      fd.append("archivo", archivo);
-
-      const res = await fetch(
-        `${API}?action=otros_egresos_comprobantes_vincular_movimiento_upload`,
-        {
-          method: "POST",
-          headers: buildHeadersFormData(),
-          body: fd,
-        }
-      );
-      const data = await parseJsonOrThrow(res);
-      if (!data?.exito) {
-        throw new Error(data?.mensaje || "No se pudo subir el comprobante.");
-      }
-      return data;
-    },
-    [API]
-  );
-
-  const isCostoFijoChecked =
-    !!form.es_costo_fijo &&
-    String(form.id_clasificacion || "") === String(costoFijoConfig.idCostoFijo);
-
-  const isNoCostoFijoChecked =
-    !form.es_costo_fijo && String(form.id_clasificacion || "") === "";
+  /* ── Clasificación ── */
+  const isCostoFijoChecked   = !!form.es_costo_fijo && String(form.id_clasificacion || "") === String(costoFijoConfig.idCostoFijo);
+  const isNoCostoFijoChecked = !form.es_costo_fijo  && String(form.id_clasificacion || "") === "";
 
   const handleSelectCostoFijo = useCallback(() => {
     if (saving) return;
-    setForm((prev) => ({
-      ...prev,
-      es_costo_fijo: true,
-      id_clasificacion: String(costoFijoConfig.idCostoFijo),
-    }));
+    setForm((prev) => ({ ...prev, es_costo_fijo: true, id_clasificacion: String(costoFijoConfig.idCostoFijo) }));
   }, [costoFijoConfig.idCostoFijo, saving]);
 
   const handleSelectNoCostoFijo = useCallback(() => {
     if (saving) return;
-    setForm((prev) => ({
-      ...prev,
-      es_costo_fijo: false,
-      id_clasificacion: "",
-    }));
+    setForm((prev) => ({ ...prev, es_costo_fijo: false, id_clasificacion: "" }));
   }, [saving]);
 
   const updateChequeField = useCallback((field, value) => {
-    setForm((prev) => ({
-      ...prev,
-      cheque: {
-        ...prev.cheque,
-        [field]:
-          field === "importe"
-            ? round2(safeNumber(value))
-            : value,
-      },
-    }));
+    setForm((prev) => ({ ...prev, cheque: { ...prev.cheque, [field]: field === "importe" ? round2(safeNumber(value)) : value } }));
   }, []);
 
+  /* ── Submit ── */
   const submit = async (e) => {
     e.preventDefault();
     if (saving) return;
-
     try {
       setSaving(true);
       showToast("cargando", "Actualizando egreso…", 12000);
 
       const fecha = String(form.fecha || "").trim();
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-        throw new Error("La fecha es obligatoria.");
-      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error("La fecha es obligatoria.");
 
       let payload;
 
       if (form.es_movimiento_cheque) {
-        const id_cheque = Number(form?.cheque?.id_cheque || 0);
-        if (!(id_cheque > 0)) {
-          throw new Error("No se encontró el cheque vinculado a este movimiento.");
-        }
-
+        const id_cheque     = Number(form?.cheque?.id_cheque || 0);
         const fecha_emision = String(form?.cheque?.fecha_emision || "").trim();
-        const fecha_pago = String(form?.cheque?.fecha_pago || "").trim();
-        const emisor = safeText(form?.cheque?.emisor);
+        const fecha_pago    = String(form?.cheque?.fecha_pago    || "").trim();
+        const emisor        = safeText(form?.cheque?.emisor);
         const numero_cheque = safeText(form?.cheque?.numero_cheque);
-        const importe = round2(safeNumber(form?.cheque?.importe));
+        const importe       = round2(safeNumber(form?.cheque?.importe));
 
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha_emision)) {
-          throw new Error("La fecha de emisión del cheque es obligatoria.");
-        }
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha_pago)) {
-          throw new Error("La fecha de pago del cheque es obligatoria.");
-        }
-        if (!emisor) {
-          throw new Error("El emisor del cheque es obligatorio.");
-        }
-        if (!numero_cheque) {
-          throw new Error("El número de cheque es obligatorio.");
-        }
-        if (!(importe > 0)) {
-          throw new Error("El importe del cheque debe ser mayor a 0.");
-        }
+        if (!(id_cheque > 0))                          throw new Error("No se encontró el cheque vinculado.");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha_emision)) throw new Error("La fecha de emisión del cheque es obligatoria.");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha_pago))    throw new Error("La fecha de pago del cheque es obligatoria.");
+        if (!emisor)                                    throw new Error("El emisor del cheque es obligatorio.");
+        if (!numero_cheque)                             throw new Error("El número de cheque es obligatorio.");
+        if (!(importe > 0))                             throw new Error("El importe debe ser mayor a 0.");
 
-        payload = {
-          id_movimiento: Number(form.id_movimiento || 0),
-          fecha,
-          id_cheque,
-          cheque_id: id_cheque,
-          es_edicion_cheque: true,
-          fecha_emision,
-          emisor,
-          numero_cheque,
-          importe,
-          fecha_pago,
-          monto_total: importe,
-        };
+        payload = { id_movimiento: Number(form.id_movimiento || 0), fecha, id_cheque, cheque_id: id_cheque, es_edicion_cheque: true, fecha_emision, emisor, numero_cheque, importe, fecha_pago, monto_total: importe };
       } else {
         const id_medio_pago = Number(form.id_medio_pago || 0);
-        if (!(id_medio_pago > 0)) {
-          throw new Error("El medio de pago es obligatorio.");
-        }
+        if (!(id_medio_pago > 0)) throw new Error("El medio de pago es obligatorio.");
 
         const items = (form.items || [])
-          .map((it) => {
-            const id_detalle = Number(it.id_detalle || 0);
-            const cantidad = round3(safeNumber(it.cantidad));
-            const precio = round2(safeNumber(it.precio));
-            const iva_pct = round2(safeNumber(it.iva_pct));
-            const calc = calcItemTotals(cantidad, precio, iva_pct);
-            return { id_detalle, cantidad, precio, iva_pct, ...calc };
-          })
-          .filter(
-            (it) =>
-              it.id_detalle > 0 &&
-              it.cantidad > 0 &&
-              it.precio > 0 &&
-              it.total > 0
-          );
+          .map((it) => { const id_detalle = Number(it.id_detalle || 0); const cantidad = round3(safeNumber(it.cantidad)); const precio = round2(safeNumber(it.precio)); const iva_pct = round2(safeNumber(it.iva_pct)); const calc = calcItemTotals(cantidad, precio, iva_pct); return { id_detalle, cantidad, precio, iva_pct, ...calc }; })
+          .filter((it) => it.id_detalle > 0 && it.cantidad > 0 && it.precio > 0 && it.total > 0);
 
-        if (!items.length) {
-          throw new Error("Debés cargar al menos un ítem válido.");
-        }
+        if (!items.length) throw new Error("Debés cargar al menos un ítem válido.");
 
         payload = {
-          id_movimiento: Number(form.id_movimiento || 0),
-          fecha,
-          id_medio_pago,
-          id_clasificacion: form.es_costo_fijo
-            ? Number(costoFijoConfig.idCostoFijo)
-            : null,
+          id_movimiento: Number(form.id_movimiento || 0), fecha, id_medio_pago,
+          id_clasificacion: form.es_costo_fijo ? Number(costoFijoConfig.idCostoFijo) : null,
           es_costo_fijo: !!form.es_costo_fijo,
           id_detalle: items[0]?.id_detalle ?? null,
-          monto_total: sumTotalItems(items),
-          items,
+          monto_total: sumTotalItems(items), items,
         };
       }
 
-      if (!(payload.id_movimiento > 0)) {
-        throw new Error("Falta el ID del egreso a editar.");
-      }
+      if (!(payload.id_movimiento > 0)) throw new Error("Falta el ID del egreso a editar.");
 
       const resp = await onSubmit?.(payload, true);
+      const idMovimientoFinal = Number(resp?.id_movimiento ?? resp?.id ?? payload.id_movimiento ?? 0);
+      if (!(idMovimientoFinal > 0)) throw new Error("No se pudo determinar el ID del egreso actualizado.");
 
-      const idMovimientoFinal = Number(
-        resp?.id_movimiento ?? resp?.id ?? payload.id_movimiento ?? 0
-      );
-      if (!(idMovimientoFinal > 0)) {
-        throw new Error("No se pudo determinar el ID del egreso actualizado.");
-      }
-
-      if (marcarEliminarComprobante && comprobanteActual && !archivoNuevo) {
-        await eliminarComprobanteExistente(idMovimientoFinal);
-      }
-
-      if (archivoNuevo) {
-        await subirComprobanteNuevo(idMovimientoFinal, archivoNuevo);
-      }
+      if (marcarEliminarComprobante && comprobanteActual && !archivoNuevo) await eliminarComprobanteExistente(idMovimientoFinal);
+      if (archivoNuevo) await subirComprobanteNuevo(idMovimientoFinal, archivoNuevo);
 
       await onSaved?.(resp);
     } catch (err) {
@@ -866,60 +448,36 @@ export default function ModalEditarEgreso({
 
   if (!open) return null;
 
-  const overlayClass = [
-    "mi-modal__overlay",
-    "mi-modal__overlay--mov",
-    dark ? "mi-modal__overlay--dark" : "",
-  ]
-    .join(" ")
-    .trim();
-
-  const containerClass = [
-    "mi-modal__container",
-    "mi-modal__container--mov",
-    "mi-modal__container--venta",
-    dark ? "mi-modal--dark" : "",
-  ]
-    .join(" ")
-    .trim();
-
-  const mostrarArchivoActual = Boolean(
-    (comprobanteActual?.archivo_url || comprobanteActual) &&
-      !marcarEliminarComprobante &&
-      !archivoNuevo
-  );
-
-  const chequeTitulo =
-    form?.cheque?.tipo === "echeq" ? "Datos del eCheq" : "Datos del cheque";
+  const mostrarArchivoActual = Boolean((comprobanteActual?.archivo_url || comprobanteActual) && !marcarEliminarComprobante && !archivoNuevo);
+  const chequeTitulo = form?.cheque?.tipo === "echeq" ? "Datos del eCheq" : "Datos del cheque";
+  const esMovCheque  = form.es_movimiento_cheque;
 
   return createPortal(
     <>
-      <div
-        className={overlayClass}
-        onMouseDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-      >
+      <div className="mi-modal__overlay" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}>
         <div
-          className={containerClass}
+          className={["mi-modal__container", "mi-modal__container--mov", dark ? "mi-modal--dark" : ""].join(" ").trim()}
           role="dialog"
           aria-modal="true"
-          aria-labelledby="mi-modal-editar-egreso-title"
+          aria-labelledby="mi-ee-title"
           onMouseDown={(e) => e.stopPropagation()}
         >
+
+          {/* ══ HEADER (estilo Nueva Compra) ══ */}
           <div className="mi-modal__header">
+            <div className="mi-modal__head-icon" aria-hidden="true">
+              <FaEdit style={{ fontSize: 16 }} />
+            </div>
             <div className="mi-modal__head-left">
-              <h2 id="mi-modal-editar-egreso-title" className="mi-modal__title">
-                {form.es_movimiento_cheque ? "Editar cheque / eCheq" : "Editar egreso"}
+              <h2 id="mi-ee-title" className="mi-modal__title">
+                {esMovCheque ? "Editar cheque / eCheq" : "Editar egreso"}
               </h2>
               <p className="mi-modal__subtitle">
-                {form.es_movimiento_cheque
+                {esMovCheque
                   ? "Modificá los datos reales del cheque vinculado al movimiento"
                   : "Modificá fecha, clasificación, medio de pago, ítems y comprobante"}
               </p>
             </div>
-
             <button
               ref={closeBtnRef}
               className="mi-modal__close"
@@ -927,624 +485,450 @@ export default function ModalEditarEgreso({
               aria-label="Cerrar"
               disabled={saving}
               type="button"
-            >
-              ✕
-            </button>
+            >✕</button>
           </div>
 
-          <form onSubmit={submit} className="mi-em-form">
-            <div className="mi-em-grid">
-              {!form.es_movimiento_cheque ? (
-                <section className="mi-em-panel">
-                  <div
-                    className="mi-em-panelHead"
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: 12,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <span>Ítems del egreso</span>
-                    <button
-                      type="button"
-                      className="mit-btn mit-btn--ghost"
-                      onClick={addItem}
-                      disabled={saving}
-                      style={{ height: 34, padding: "0 14px", fontSize: 13 }}
-                    >
-                      + Agregar ítem
-                    </button>
-                  </div>
+          {/* ══ CONTENT ══ */}
+          <div className="mi-modal__content">
+            <form onSubmit={submit} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+              <div className="mi-cr-grid">
 
-                  <div className="mi-em-panelBody">
-                    <div style={{ display: "grid", gap: 14 }}>
-                      {(form.items || []).map((it, index) => (
+                {/* ══════ COLUMNA IZQUIERDA (ítems / cheque) ══════ */}
+                {!esMovCheque ? (
+                  /* ── TABLA DE ÍTEMS ── */
+                  <section className="mi-cr-table">
+                    {/* Cabecera tabla */}
+                    <div
+                      className="mi-cr-table__head"
+                      style={{ gridTemplateColumns: "2fr 80px 1fr 90px 90px 1fr 56px" }}
+                    >
+                      <div style={{ paddingLeft: 10 }}>Detalle</div>
+                      <div style={{ textAlign: "center" }}>Cant.</div>
+                      <div style={{ textAlign: "right" }}>Precio</div>
+                      <div style={{ textAlign: "center" }}>IVA %</div>
+                      <div style={{ textAlign: "right" }}>IVA $</div>
+                      <div style={{ textAlign: "right" }}>Total</div>
+                      <div />
+                    </div>
+
+                    {/* Filas */}
+                    <div className="mi-cr-table__rows">
+                      {(form.items || []).map((it) => (
                         <div
                           key={it.uid}
-                          style={{
-                            border: "1px solid rgba(148,163,184,.28)",
-                            borderRadius: 14,
-                            padding: 14,
-                            display: "grid",
-                            gap: 12,
-                          }}
+                          className="mi-cr-row"
+                          style={{ gridTemplateColumns: "2fr 80px 1fr 90px 90px 1fr 56px" }}
                         >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              gap: 10,
-                            }}
-                          >
-                            <strong style={{ fontSize: 13 }}>Ítem {index + 1}</strong>
-
-                            {(form.items || []).length > 1 && (
-                              <button
-                                type="button"
-                                className="mit-btn mit-btn--ghost"
-                                onClick={() => removeItem(it.uid)}
-                                disabled={saving}
-                                style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                              >
-                                Quitar
-                              </button>
-                            )}
+                          {/* Detalle */}
+                          <div className="mi-cr-cell mi-cr-cell--detalle">
+                            <select
+                              className="nv-cell-input nv-cell-input--select"
+                              value={String(it.id_detalle || "")}
+                              onChange={(e) => updateItem(it.uid, { id_detalle: e.target.value })}
+                              disabled={saving}
+                              style={{ width: "100%" }}
+                            >
+                              <option value="">-- Seleccionar --</option>
+                              {detalles.map((d) => (
+                                <option key={d.id} value={String(d.id)}>{d.nombre}</option>
+                              ))}
+                            </select>
                           </div>
 
-                          <div
-                            className="mi-em-itemGrid mi-em-itemGrid--top"
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "1.6fr 0.8fr 1fr",
-                              gap: 12,
-                            }}
-                          >
-                            <div className="fl-field">
-                              <select
-                                className="fl-input fl-select"
-                                value={String(it.id_detalle || "")}
-                                onChange={(e) =>
-                                  updateItem(it.uid, { id_detalle: e.target.value })
-                                }
-                                disabled={saving}
-                              >
-                                <option value="">-- Seleccionar --</option>
-                                {detalles.map((d) => (
-                                  <option key={d.id} value={String(d.id)}>
-                                    {d.nombre}
-                                  </option>
-                                ))}
-                              </select>
-                              <label className="fl-label">Detalle</label>
-                            </div>
-
-                            <div className="fl-field">
-                              <input
-                                className="fl-input"
-                                type="number"
-                                min="0"
-                                step="0.001"
-                                value={it.cantidad}
-                                onChange={(e) =>
-                                  updateItem(it.uid, { cantidad: e.target.value })
-                                }
-                                disabled={saving}
-                              />
-                              <label className="fl-label">Cantidad</label>
-                            </div>
-
-                            <div className="fl-field">
-                              <input
-                                className="fl-input"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={it.precio}
-                                onChange={(e) =>
-                                  updateItem(it.uid, { precio: e.target.value })
-                                }
-                                disabled={saving}
-                              />
-                              <label className="fl-label">Precio</label>
-                            </div>
+                          {/* Cantidad */}
+                          <div className="mi-cr-cell mi-cr-cell--center">
+                            <input
+                              className="nv-cell-input nv-cell-input--center"
+                              type="number" min="0" step="0.001"
+                              value={it.cantidad}
+                              onChange={(e) => updateItem(it.uid, { cantidad: e.target.value })}
+                              disabled={saving}
+                              style={{ width: "100%" }}
+                            />
                           </div>
 
-                          <div
-                            className="mi-em-itemGrid mi-em-itemGrid--middle"
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "0.8fr 1fr",
-                              gap: 12,
-                              marginTop: 12,
-                            }}
-                          >
-                            <div className="fl-field">
-                              <select
-                                className="fl-input fl-select"
-                                value={String(it.iva_pct)}
-                                onChange={(e) =>
-                                  updateItem(it.uid, { iva_pct: e.target.value })
-                                }
-                                disabled={saving}
-                              >
-                                {IVA_OPTIONS.map((x) => (
-                                  <option key={x.value} value={x.value}>
-                                    {x.label}
-                                  </option>
-                                ))}
-                              </select>
-                              <label className="fl-label">IVA %</label>
-                            </div>
-
-                            <div className="fl-field">
-                              <input
-                                className="fl-input"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={it.total}
-                                onChange={(e) =>
-                                  handleMontoItemManual(it.uid, e.target.value)
-                                }
-                                disabled={saving}
-                              />
-                              <label className="fl-label">Monto total</label>
-                            </div>
+                          {/* Precio */}
+                          <div className="mi-cr-cell mi-cr-cell--right">
+                            <input
+                              className="nv-cell-input nv-cell-input--right"
+                              type="number" min="0" step="0.01"
+                              value={it.precio}
+                              onChange={(e) => updateItem(it.uid, { precio: e.target.value })}
+                              disabled={saving}
+                              style={{ width: "100%" }}
+                            />
                           </div>
 
-                          <div
-                            className="mi-em-itemGrid mi-em-itemGrid--bottom"
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "1fr 1fr 1fr",
-                              gap: 12,
-                              marginTop: 12,
-                            }}
-                          >
-                            <div className="fl-field">
-                              <input className="fl-input" value={it.subtotal} disabled />
-                              <label className="fl-label">Subtotal</label>
-                            </div>
+                          {/* IVA % */}
+                          <div className="mi-cr-cell mi-cr-cell--center">
+                            <select
+                              className="nv-cell-input nv-cell-input--center nv-cell-input--select"
+                              value={String(it.iva_pct)}
+                              onChange={(e) => updateItem(it.uid, { iva_pct: e.target.value })}
+                              disabled={saving}
+                              style={{ width: "100%" }}
+                            >
+                              {IVA_OPTIONS.map((x) => (
+                                <option key={x.value} value={x.value}>{x.label}</option>
+                              ))}
+                            </select>
+                          </div>
 
-                            <div className="fl-field">
-                              <input className="fl-input" value={it.iva_monto} disabled />
-                              <label className="fl-label">IVA $</label>
-                            </div>
+                          {/* IVA $ */}
+                          <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
+                            {moneyARS(it.iva_monto)}
+                          </div>
 
-                            <div className="fl-field">
-                              <input className="fl-input" value={it.total} disabled />
-                              <label className="fl-label">Total final</label>
-                            </div>
+                          {/* Total (editable) */}
+                          <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
+                            <input
+                              className="nv-cell-input nv-cell-input--right"
+                              type="number" min="0" step="0.01"
+                              value={it.total}
+                              onChange={(e) => handleMontoItemManual(it.uid, e.target.value)}
+                              disabled={saving}
+                              style={{ width: "100%", fontWeight: 700 }}
+                            />
+                          </div>
+
+                          {/* Eliminar fila */}
+                          <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
+                            <button
+                              type="button"
+                              className="mi-cr-del"
+                              onClick={() => removeItem(it.uid)}
+                              disabled={saving || (form.items || []).length <= 1}
+                              title="Eliminar ítem"
+                            >×</button>
                           </div>
                         </div>
                       ))}
                     </div>
-                  </div>
-                </section>
-              ) : (
-                <section className="mi-em-panel">
-                  <div className="mi-em-panelHead">{chequeTitulo}</div>
 
-                  <div className="mi-em-panelBody">
-                    <div style={{ display: "grid", gap: 14 }}>
+                    {/* Pie tabla */}
+                    <div className="mi-cr-table__foot">
+                      <div className="mi-cr-foot-actions">
+                        <button
+                          type="button"
+                          className="nv-foot-btn"
+                          onClick={addItem}
+                          disabled={saving}
+                        >
+                          <span className="nv-foot-btn__icon">+</span>
+                          Agregar ítem
+                        </button>
+                        <div className="nv-foot-sep" />
+                      </div>
+                      <div className="mi-cr-totals">
+                        <div className="mi-cr-totalLine mi-cr-totalLine--sub">
+                          <span>Subtotal</span>
+                          <b>{moneyARS(sumTotalItems(form.items) - (form.items || []).reduce((a, it) => a + safeNumber(it.iva_monto), 0))}</b>
+                        </div>
+                        <div className="mi-cr-totalLine mi-cr-totalLine--iva">
+                          <span>IVA</span>
+                          <b>{moneyARS((form.items || []).reduce((a, it) => a + safeNumber(it.iva_monto), 0))}</b>
+                        </div>
+                        <div className="mi-cr-totalLine mi-cr-totalLine--total">
+                          <span>Total</span>
+                          <b>{moneyARS(totalGeneral)}</b>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                ) : (
+                  /* ── PANEL CHEQUE ── */
+                  <section className="mi-cr-table" style={{ overflow: "visible" }}>
+                    <div
+                      className="mi-cr-table__head"
+                      style={{ gridTemplateColumns: "1fr", paddingLeft: 14, display: "flex", alignItems: "center" }}
+                    >
+                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--nv-muted)" }}>
+                        {chequeTitulo}
+                      </span>
+                    </div>
+
+                    <div style={{ padding: "18px 16px" }}>
                       <div style={S.chequeGrid}>
+                        {/* ID cheque (readonly) */}
                         <div className="fl-field">
-                          <input
-                            className="fl-input"
-                            value={String(form?.cheque?.id_cheque || "")}
-                            disabled
-                          />
+                          <input className="fl-input" value={String(form?.cheque?.id_cheque || "")} disabled />
                           <label className="fl-label">ID cheque</label>
                         </div>
 
+                        {/* Tipo (readonly) */}
                         <div className="fl-field">
                           <input
                             className="fl-input"
-                            value={
-                              form?.cheque?.tipo === "echeq"
-                                ? "ECHEQ"
-                                : form?.cheque?.tipo === "cheque"
-                                ? "CHEQUE"
-                                : ""
-                            }
+                            value={form?.cheque?.tipo === "echeq" ? "ECHEQ" : form?.cheque?.tipo === "cheque" ? "CHEQUE" : ""}
                             disabled
                           />
                           <label className="fl-label">Tipo actual</label>
                         </div>
 
+                        {/* Emisor */}
                         <div className="fl-field">
                           <input
                             className="fl-input"
                             type="text"
+                            placeholder=" "
                             value={form?.cheque?.emisor || ""}
-                            onChange={(e) =>
-                              updateChequeField("emisor", e.target.value)
-                            }
+                            onChange={(e) => updateChequeField("emisor", e.target.value)}
                             disabled={saving}
                           />
                           <label className="fl-label">Emisor</label>
                         </div>
 
+                        {/* Nº cheque */}
                         <div className="fl-field">
                           <input
                             className="fl-input"
                             type="text"
+                            placeholder=" "
                             value={form?.cheque?.numero_cheque || ""}
-                            onChange={(e) =>
-                              updateChequeField("numero_cheque", e.target.value)
-                            }
+                            onChange={(e) => updateChequeField("numero_cheque", e.target.value)}
                             disabled={saving}
                           />
                           <label className="fl-label">N° de cheque</label>
                         </div>
 
+                        {/* Fecha emisión */}
                         <div className="fl-field">
                           <input
                             className="fl-input"
                             type="date"
                             value={form?.cheque?.fecha_emision || ""}
-                            onChange={(e) =>
-                              updateChequeField("fecha_emision", e.target.value)
-                            }
+                            onChange={(e) => updateChequeField("fecha_emision", e.target.value)}
                             disabled={saving}
                           />
                           <label className="fl-label">Fecha de emisión</label>
                         </div>
 
+                        {/* Fecha pago */}
                         <div className="fl-field">
                           <input
                             className="fl-input"
                             type="date"
                             value={form?.cheque?.fecha_pago || ""}
-                            onChange={(e) =>
-                              updateChequeField("fecha_pago", e.target.value)
-                            }
+                            onChange={(e) => updateChequeField("fecha_pago", e.target.value)}
                             disabled={saving}
                           />
                           <label className="fl-label">Fecha de pago</label>
                         </div>
 
+                        {/* Importe */}
                         <div className="fl-field" style={{ gridColumn: "1 / -1" }}>
                           <input
                             className="fl-input"
                             type="number"
                             min="0"
                             step="0.01"
+                            placeholder=" "
                             value={form?.cheque?.importe ?? 0}
-                            onChange={(e) =>
-                              updateChequeField("importe", e.target.value)
-                            }
+                            onChange={(e) => updateChequeField("importe", e.target.value)}
                             disabled={saving}
                           />
                           <label className="fl-label">Importe</label>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </section>
-              )}
 
-              <aside className="mi-em-aside">
-                <div className="mi-em-asideTitle">
-                  {form.es_movimiento_cheque ? "Datos del movimiento" : "Datos generales"}
-                </div>
-
-                <div className="mi-em-dates">
-                  <div className="fl-field fl-col-full">
-                    <input
-                      ref={fechaRef}
-                      className="fl-input mi-date-field"
-                      type="date"
-                      value={form.fecha}
-                      onChange={(e) =>
-                        setForm((p) => ({ ...p, fecha: e.target.value }))
-                      }
-                      disabled={saving}
-                      onClick={openDatePicker}
-                      onFocus={openDatePicker}
-                    />
-                    <label className="fl-label">Fecha</label>
-                  </div>
-                </div>
-
-                <div className="mi-em-asideBody mi-em-asideBodyheght">
-                  {!form.es_movimiento_cheque && (
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(form.id_medio_pago || "")}
-                        onChange={(e) =>
-                          setForm((p) => ({ ...p, id_medio_pago: e.target.value }))
-                        }
-                        disabled={saving}
-                      >
-                        <option value="">-- Seleccionar medio de pago --</option>
-
-                        {mediosPago.map((x) => (
-                          <option key={x.id} value={String(x.id)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                      </select>
-                      <label className="fl-label">Medio de pago</label>
-                    </div>
-                  )}
-
-                  {!form.es_movimiento_cheque && (
-                    <>
-                      <div style={S.clasificacionBox}>
-                        <div style={S.clasificacionHead}>
-                          <div style={S.clasificacionTitle}>Clasificación</div>
-                          <div style={S.clasificacionSub}>
-                            Indicá si este egreso es un costo fijo
-                          </div>
+                    {/* Pie tabla cheque */}
+                    <div className="mi-cr-table__foot" style={{ justifyContent: "flex-end" }}>
+                      <div className="mi-cr-totals">
+                        <div className="mi-cr-totalLine mi-cr-totalLine--total">
+                          <span>Importe del cheque</span>
+                          <b>{moneyARS(totalGeneral)}</b>
                         </div>
+                      </div>
+                    </div>
+                  </section>
+                )}
 
+                {/* ══════ PANEL LATERAL (aside) ══════ */}
+                <aside className="nc-aside">
+
+                  {/* ── Sección datos generales ── */}
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" />
+                      <span>{esMovCheque ? "Datos del movimiento" : "Datos generales"}</span>
+                    </div>
+                    <div className="nc-section-body">
+
+                      {/* Fecha */}
+                      <div className="nc-field" onClick={openDatePicker}>
+                        <input
+                          ref={fechaRef}
+                          className="nc-input"
+                          type="date"
+                          placeholder=" "
+                          value={form.fecha}
+                          onChange={(e) => setForm((p) => ({ ...p, fecha: e.target.value }))}
+                          disabled={saving}
+                        />
+                        <label className="nc-label" onClick={openDatePicker}>Fecha</label>
+                      </div>
+
+                      {/* Medio de pago (solo egresos normales) */}
+                      {!esMovCheque && (
+                        <div className="nc-field">
+                          <select
+                            className="nc-input"
+                            value={String(form.id_medio_pago || "")}
+                            onChange={(e) => setForm((p) => ({ ...p, id_medio_pago: e.target.value }))}
+                            disabled={saving}
+                            style={{ paddingTop: 8, paddingBottom: 8, cursor: "pointer" }}
+                          >
+                            <option value="">-- Medio de pago --</option>
+                            {mediosPago.map((x) => (
+                              <option key={x.id} value={String(x.id)}>{x.nombre}</option>
+                            ))}
+                          </select>
+                          <label className="nc-label" style={{ pointerEvents: "none" }}>Medio de pago</label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ── Sección clasificación (solo egresos normales) ── */}
+                  {!esMovCheque && (
+                    <div className="nc-section">
+                      <div className="nc-section-head">
+                        <div className="nc-section-dot" style={{ background: "#7c3aed" }} />
+                        <span>Clasificación</span>
+                      </div>
+                      <div className="nc-section-body">
                         <div style={S.toggleRow}>
+                          {/* Costo fijo */}
                           <div
                             style={S.toggleOption(isCostoFijoChecked, saving)}
                             onClick={handleSelectCostoFijo}
                             role="radio"
                             aria-checked={isCostoFijoChecked}
                             tabIndex={saving ? -1 : 0}
-                            onKeyDown={(e) => {
-                              if (e.key === " " || e.key === "Enter") {
-                                handleSelectCostoFijo();
-                              }
-                            }}
+                            onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") handleSelectCostoFijo(); }}
                           >
                             <span style={S.toggleDot(isCostoFijoChecked)} />
-                            <span style={S.toggleLabel(isCostoFijoChecked)}>
-                              {costoFijoConfig.nombreCostoFijo}
-                            </span>
-                            {isCostoFijoChecked && (
-                              <span style={S.toggleBadge}>activo</span>
-                            )}
+                            <span style={S.toggleLabel(isCostoFijoChecked)}>{costoFijoConfig.nombreCostoFijo}</span>
+                            {isCostoFijoChecked && <span style={S.toggleBadge}>activo</span>}
                           </div>
 
+                          {/* No es costo fijo */}
                           <div
                             style={S.toggleOption(isNoCostoFijoChecked, saving)}
                             onClick={handleSelectNoCostoFijo}
                             role="radio"
                             aria-checked={isNoCostoFijoChecked}
                             tabIndex={saving ? -1 : 0}
-                            onKeyDown={(e) => {
-                              if (e.key === " " || e.key === "Enter") {
-                                handleSelectNoCostoFijo();
-                              }
-                            }}
+                            onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") handleSelectNoCostoFijo(); }}
                           >
                             <span style={S.toggleDot(isNoCostoFijoChecked)} />
-                            <span style={S.toggleLabel(isNoCostoFijoChecked)}>
-                              No es costo fijo
-                            </span>
-                            {isNoCostoFijoChecked && (
-                              <span style={S.toggleBadge}>activo</span>
-                            )}
+                            <span style={S.toggleLabel(isNoCostoFijoChecked)}>No es costo fijo</span>
+                            {isNoCostoFijoChecked && <span style={S.toggleBadge}>activo</span>}
                           </div>
                         </div>
                       </div>
-
-                      <div className="fl-field">
-                        <input className="fl-input" value={totalGeneral} disabled />
-                        <label className="fl-label">Total general</label>
-                      </div>
-                    </>
-                  )}
-
-                  {form.es_movimiento_cheque && (
-                    <div className="fl-field">
-                      <input className="fl-input" value={totalGeneral} disabled />
-                      <label className="fl-label">Importe del cheque</label>
                     </div>
                   )}
 
-                  <div className="mi-uploadCard">
-                    <div className="mi-uploadCard__head">
-                      <div>
-                        <div className="mi-uploadCard__title">Comprobante</div>
-                        <div className="mi-uploadCard__sub">
-                          Ver, quitar o reemplazar el archivo actual
+                  {/* ── Sección comprobante ── */}
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" style={{ background: "#64748b" }} />
+                      <span>Comprobante adjunto</span>
+                    </div>
+                    <div className="nc-section-body">
+                      <div className="mi-uploadCard">
+                        <div className="mi-uploadCard__head">
+                          <div className="mi-uploadCard__title">Comprobante</div>
+                          <div className="mi-uploadCard__sub">Ver, quitar o reemplazar el archivo actual</div>
+                        </div>
+
+                        <div className="mi-uploadCard__body">
+                          {loadingComprobante ? (
+                            <div style={{ fontSize: 12, opacity: 0.75, padding: "6px 0" }}>Cargando comprobante…</div>
+                          ) : (
+                            <>
+                              {/* Archivo actual */}
+                              {mostrarArchivoActual && (
+                                <div className="mi-uploadFile is-filled">
+                                  <div className="mi-uploadFile__icon"><FaFileAlt /></div>
+                                  <div className="mi-uploadFile__meta">
+                                    <div className="mi-uploadFile__name" title={nombreComprobanteVisible}>{nombreComprobanteVisible}</div>
+                                  </div>
+                                  <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
+                                    <button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--ghost" onClick={abrirViewer} disabled={saving} title="Ver comprobante" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                                      <FaEye />
+                                    </button>
+                                    <button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--ghost" onClick={marcarEliminar} disabled={saving} title="Quitar comprobante" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                                      <FaTrash />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Archivo nuevo seleccionado */}
+                              {archivoNuevo && (
+                                <div className="mi-uploadFile is-filled">
+                                  <div className="mi-uploadFile__icon"><FaFileAlt /></div>
+                                  <div className="mi-uploadFile__meta">
+                                    <div className="mi-uploadFile__name" title={archivoNuevo.name}>{archivoNuevo.name}</div>
+                                    <div className="mi-uploadFile__size">{Math.max(1, Math.round((archivoNuevo.size || 0) / 1024))} KB</div>
+                                  </div>
+                                  <button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--ghost" onClick={quitarArchivoNuevo} disabled={saving} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                    <FaTimes /> Quitar
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Sin comprobante */}
+                              {!mostrarArchivoActual && !archivoNuevo && (
+                                <div className="mi-uploadFile">
+                                  <div className="mi-uploadFile__empty">
+                                    {marcarEliminarComprobante
+                                      ? "El comprobante actual será eliminado al guardar"
+                                      : "No hay comprobante cargado"}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Barra de acciones */}
+                              <div className="mi-uploadBar" style={{ marginTop: 8 }}>
+                                {marcarEliminarComprobante && !archivoNuevo && (
+                                  <button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--ghost" onClick={restaurarComprobanteActual} disabled={saving} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                    <FaUndo /> Cancelar
+                                  </button>
+                                )}
+
+                                <input
+                                  ref={inputFileRef}
+                                  type="file"
+                                  accept={fileAcceptText()}
+                                  onChange={seleccionarArchivo}
+                                  disabled={saving}
+                                  style={{ display: "none" }}
+                                />
+
+                                <button
+                                  type="button"
+                                  className="mi-uploadBar__btn mi-uploadBar__btn--primary"
+                                  onClick={() => inputFileRef.current?.click()}
+                                  disabled={saving}
+                                  style={{ gridColumn: marcarEliminarComprobante && !archivoNuevo ? "auto" : "1 / -1", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                                >
+                                  <FaUpload />
+                                  {mostrarArchivoActual ? "Reemplazar archivo" : "Seleccionar archivo"}
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
-                    </div>
-
-                    <div className="mi-uploadCard__body">
-                      {loadingComprobante ? (
-                        <div
-                          style={{
-                            fontSize: 13,
-                            opacity: 0.75,
-                            padding: "8px 0",
-                          }}
-                        >
-                          Cargando comprobante…
-                        </div>
-                      ) : (
-                        <>
-                          {mostrarArchivoActual && (
-                            <div className="mi-uploadFile is-filled">
-                              <div
-                                className="mi-uploadFile__icon"
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                }}
-                              >
-                                <FaFileAlt />
-                              </div>
-
-                              <div className="mi-uploadFile__meta">
-                                <div
-                                  className="mi-uploadFile__name"
-                                  title={nombreComprobanteVisible}
-                                >
-                                  {nombreComprobanteVisible}
-                                </div>
-                              </div>
-
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: 8,
-                                  marginLeft: "auto",
-                                  flexWrap: "wrap",
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                  onClick={abrirViewer}
-                                  disabled={saving}
-                                  title="Ver comprobante"
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: 6,
-                                  }}
-                                >
-                                  <FaEye />
-                                  
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                  onClick={marcarEliminar}
-                                  disabled={saving}
-                                  title="Quitar comprobante"
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: 6,
-                                  }}
-                                >
-                                  <FaTrash />
-                                
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {archivoNuevo && (
-                            <div className="mi-uploadFile is-filled">
-                              <div
-                                className="mi-uploadFile__icon"
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                }}
-                              >
-                                <FaFileAlt />
-                              </div>
-                              <div className="mi-uploadFile__meta">
-                                <div
-                                  className="mi-uploadFile__name"
-                                  title={archivoNuevo.name}
-                                >
-                                  {archivoNuevo.name}
-                                </div>
-                                <div className="mi-uploadFile__size">
-                                  {Math.max(
-                                    1,
-                                    Math.round((archivoNuevo.size || 0) / 1024)
-                                  )}{" "}
-                                  KB
-                                </div>
-                              </div>
-
-                              <button
-                                type="button"
-                                className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                onClick={quitarArchivoNuevo}
-                                disabled={saving}
-                                style={{
-                                  marginLeft: "auto",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  gap: 6,
-                                }}
-                              >
-                                <FaTimes />
-                                Quitar
-                              </button>
-                            </div>
-                          )}
-
-                          {!mostrarArchivoActual && !archivoNuevo && (
-                            <div className="mi-uploadFile">
-                              <div className="mi-uploadFile__empty">
-                                {marcarEliminarComprobante
-                                  ? "El comprobante actual será eliminado al guardar"
-                                  : "No hay comprobante cargado"}
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="mi-uploadBar" style={{ marginTop: 10 }}>
-                            {marcarEliminarComprobante && !archivoNuevo && (
-                              <button
-                                type="button"
-                                className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                onClick={restaurarComprobanteActual}
-                                disabled={saving}
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  gap: 6,
-                                }}
-                              >
-                                <FaUndo />
-                                Cancelar quitar
-                              </button>
-                            )}
-
-                            <input
-                              ref={inputFileRef}
-                              type="file"
-                              accept={fileAcceptText()}
-                              onChange={seleccionarArchivo}
-                              disabled={saving}
-                              style={{ display: "none" }}
-                            />
-
-                            <button
-                              type="button"
-                              className="mi-uploadBar__btn mi-uploadBar__btn--primary"
-                              onClick={() => inputFileRef.current?.click()}
-                              disabled={saving}
-                              style={{
-                                gridColumn:
-                                  marcarEliminarComprobante && !archivoNuevo
-                                    ? "auto"
-                                    : "1 / -1",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: 6,
-                              }}
-                            >
-                              <FaUpload />
-                              {mostrarArchivoActual
-                                ? "Reemplazar archivo"
-                                : "Seleccionar archivo"}
-                            </button>
-                          </div>
-                        </>
-                      )}
                     </div>
                   </div>
 
-                  <div className="mi-em-actions">
+                  {/* ── Acciones ── */}
+                  <div className="nc-actions mi-cr-filters__actions">
                     <button
                       type="submit"
                       disabled={saving}
@@ -1552,7 +936,6 @@ export default function ModalEditarEgreso({
                     >
                       {saving ? "Guardando..." : "Guardar cambios"}
                     </button>
-
                     <button
                       type="button"
                       onClick={cerrar}
@@ -1562,10 +945,11 @@ export default function ModalEditarEgreso({
                       Cancelar
                     </button>
                   </div>
-                </div>
-              </aside>
-            </div>
-          </form>
+                </aside>
+
+              </div>
+            </form>
+          </div>
         </div>
       </div>
 

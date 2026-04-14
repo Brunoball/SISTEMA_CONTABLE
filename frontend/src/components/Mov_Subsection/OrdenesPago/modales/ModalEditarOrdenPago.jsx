@@ -1,10 +1,17 @@
-// ✅ REEMPLAZAR COMPLETO
 // src/components/Movimientos/modales/ModalEditarOrdenPago.jsx
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
 import BASE_URL from "../../../../config/config";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faFileInvoiceDollar,
+  faCalendarDays,
+  faTruck,
+  faBoxOpen,
+  faDollarSign,
+  faPlus,
+} from "@fortawesome/free-solid-svg-icons";
 
 const NULL_OPTION = "";
 
@@ -14,6 +21,19 @@ const NULL_OPTION = "";
 function safeNumber(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+function moneyARS(v) {
+  try {
+    return Number(v || 0).toLocaleString("es-AR", {
+      style: "currency",
+      currency: "ARS",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  } catch {
+    return `$ ${safeNumber(v).toFixed(2)}`;
+  }
 }
 
 function periodoToMMYYYY(input) {
@@ -84,7 +104,13 @@ function getAuthInfo() {
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-    const cand = u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    const cand =
+      u?.idUsuarioMaster ??
+      u?.idUsuario ??
+      u?.id_usuario ??
+      u?.id ??
+      u?.user_id ??
+      0;
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
@@ -198,8 +224,14 @@ function AddCatalogMiniModal({
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e) => {
-      if (e.key === "Escape") onCancel?.();
-      if (e.key === "Enter") onSave?.();
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onCancel?.();
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        onSave?.();
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -208,10 +240,7 @@ function AddCatalogMiniModal({
   if (!open) return null;
 
   return createPortal(
-    <div
-      className={`mi-mini__overlay ${dark ? "mi-mini__overlay--dark" : ""}`}
-      // ✅ ya no cierra por click afuera
-    >
+    <div className={`mi-mini__overlay ${dark ? "mi-mini__overlay--dark" : ""}`}>
       <div
         className={`mi-mini__modal ${dark ? "mi-mini__modal--dark" : ""}`}
         onMouseDown={(e) => e.stopPropagation()}
@@ -293,13 +322,13 @@ export default function ModalEditarOrdenPago({
 
   const [detalleFocus, setDetalleFocus] = useState(false);
   const [detalleArmed, setDetalleArmed] = useState(false);
-  const detalleInputRef = useRef(null);
 
   const [provFocus, setProvFocus] = useState(false);
   const [provArmed, setProvArmed] = useState(false);
-  const provInputRef = useRef(null);
 
   const [addUI, setAddUI] = useState({ open: false, catalogo: "detalles", text: "", saving: false });
+
+  const closeBtnRef = useRef(null);
 
   const defaultsRef = useRef({
     fecha: "",
@@ -322,9 +351,15 @@ export default function ModalEditarOrdenPago({
     monto_total: "",
   }));
 
-  /* =========================
-     Init form + refresh lists
-  ========================= */
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -355,7 +390,7 @@ export default function ModalEditarOrdenPago({
     defaultsRef.current = {
       fecha: fecha || "",
       periodoMMYYYY: perRow || perDef || perAuto || "",
-      monto: monto,
+      monto,
       id_proveedor: String(idProv ?? NULL_OPTION),
       proveedorTxt: (provNameFromList || provFallback || "").trim(),
       id_detalle: String(idDet ?? NULL_OPTION),
@@ -380,12 +415,11 @@ export default function ModalEditarOrdenPago({
       detalleInput: defaultsRef.current.detalleTxt,
       monto_total: defaultsRef.current.monto ? String(defaultsRef.current.monto) : "",
     });
+
+    setTimeout(() => closeBtnRef.current?.focus(), 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, row, periodoDefault]);
 
-  /* =========================
-     ESC: cerrar solo modal principal
-  ========================= */
   useEffect(() => {
     if (!open || saving || addUI.open) return;
 
@@ -401,15 +435,19 @@ export default function ModalEditarOrdenPago({
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [open, saving, addUI.open, onClose]);
 
-  /* =========================
-     Autocomplete detalles
-  ========================= */
   const filteredDetalles = useMemo(() => {
     const all = getArr(localLists.detalles);
     const q = normalizeSearchText(form.detalleInput);
     if (!detalleFocus || !detalleArmed || q.length < 1) return [];
     return all.filter((d) => normalizeSearchText(d?.nombre).includes(q)).slice(0, 25);
   }, [localLists.detalles, form.detalleInput, detalleFocus, detalleArmed]);
+
+  const filteredProveedores = useMemo(() => {
+    const all = getArr(localLists.proveedores);
+    const q = normalizeSearchText(form.proveedorInput);
+    if (!provFocus || !provArmed || q.length < 1) return [];
+    return all.filter((p) => normalizeSearchText(p?.nombre).includes(q)).slice(0, 25);
+  }, [localLists.proveedores, form.proveedorInput, provFocus, provArmed]);
 
   const handleDetalleInputChange = (e) => {
     const value = e.target.value;
@@ -425,16 +463,6 @@ export default function ModalEditarOrdenPago({
     setDetalleArmed(false);
   };
 
-  /* =========================
-     Autocomplete proveedores
-  ========================= */
-  const filteredProveedores = useMemo(() => {
-    const all = getArr(localLists.proveedores);
-    const q = normalizeSearchText(form.proveedorInput);
-    if (!provFocus || !provArmed || q.length < 1) return [];
-    return all.filter((p) => normalizeSearchText(p?.nombre).includes(q)).slice(0, 25);
-  }, [localLists.proveedores, form.proveedorInput, provFocus, provArmed]);
-
   const handleProveedorInputChange = (e) => {
     const value = e.target.value;
     setProvArmed(true);
@@ -449,9 +477,6 @@ export default function ModalEditarOrdenPago({
     setProvArmed(false);
   };
 
-  /* =========================
-     Nuevo catálogo
-  ========================= */
   const startAdd = (catalogo) => {
     if (saving) return;
 
@@ -489,7 +514,9 @@ export default function ModalEditarOrdenPago({
       const newId = Number(data?.item?.id);
       const newNombre = String(data?.item?.nombre ?? "").trim() || nombre;
 
-      if (!Number.isFinite(newId) || newId <= 0) throw new Error("El servidor no devolvió un ID válido.");
+      if (!Number.isFinite(newId) || newId <= 0) {
+        throw new Error("El servidor no devolvió un ID válido.");
+      }
 
       if (catalogo === "detalles") {
         setLocalLists((prev) => {
@@ -515,9 +542,16 @@ export default function ModalEditarOrdenPago({
     }
   };
 
-  /* =========================
-     Submit
-  ========================= */
+  const resumen = useMemo(() => {
+    const monto = Math.max(0, safeNumber(form.monto_total));
+    return {
+      total: monto,
+      proveedor: String(form.proveedorInput || "").trim() || "Sin proveedor",
+      detalle: String(form.detalleInput || "").trim() || "Sin detalle",
+      periodo: String(form.periodo || "").trim() || "--",
+    };
+  }, [form]);
+
   const submit = async (e) => {
     e.preventDefault();
 
@@ -581,174 +615,405 @@ export default function ModalEditarOrdenPago({
   if (!open) return null;
 
   return createPortal(
-    <div
-      className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`}
-      // ✅ ya NO cierra al hacer click afuera
-    >
-      <div
-        className={["mi-modal__container", "mi-modal__container--mov", darkOn ? "mi-modal--dark" : ""].join(" ")}
-        id="mov--modaleditarordenpago"
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="mi-modal__header">
-          <div className="mi-modal__head-left">
-            <h2 className="mi-modal__title">Editar orden de pago</h2>
-            <p className="mi-modal__subtitle">Fecha, período, proveedor, detalle y monto.</p>
-          </div>
-
-          <button className="mi-modal__close" onClick={() => !saving && onClose?.()} disabled={saving} type="button">
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={submit} className="mi-modal__formPad">
-          <div className="mi-row2">
-            <div className="fl-field">
-              <input
-                className="fl-input"
-                type="date"
-                value={form.fecha}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setForm((p) => ({
-                    ...p,
-                    fecha: v,
-                    periodo: p.periodo || periodoFromISODate(v) || p.periodo,
-                  }));
-                }}
-                disabled={saving}
-              />
-              <label className="fl-label">Fecha</label>
+    <>
+      <div className={`mi-modal__overlay ${darkOn ? "mi-modal__overlay--dark" : ""}`}>
+        <div
+          className="mi-modal__container"
+          id="mov--modaleditarordenpago"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="mi-modal__header">
+            <div className="mi-modal__head-icon">
+              <FontAwesomeIcon icon={faFileInvoiceDollar} />
             </div>
 
-            <div className="fl-field">
-              <input
-                className="fl-input"
-                placeholder="MM-YYYY"
-                value={form.periodo}
-                onChange={(e) => setForm((p) => ({ ...p, periodo: e.target.value }))}
-                disabled={saving}
-              />
-              <label className="fl-label">Período</label>
+            <div className="mi-modal__head-left">
+              <h2 className="mi-modal__title">Editar orden de pago</h2>
+              <p className="mi-modal__subtitle">
+                Modificá fecha, período, proveedor, detalle y monto con la misma estética del otro modal.
+              </p>
             </div>
-          </div>
-
-          {/* ✅ Proveedor */}
-          <div className="fl-field mi-field--mt12 mi-field--rel">
-            <input
-              ref={provInputRef}
-              className="fl-input"
-              placeholder=" "
-              value={form.proveedorInput}
-              onChange={handleProveedorInputChange}
-              onFocus={() => setProvFocus(true)}
-              onBlur={() => setTimeout(() => setProvFocus(false), 120)}
-              disabled={saving || addUI.open}
-              autoComplete="off"
-            />
-            <label className="fl-label">Proveedor</label>
-
-            {provFocus && provArmed && filteredProveedores.length > 0 && (
-              <ul className="mi-cr-suggest">
-                {filteredProveedores.map((p) => (
-                  <li
-                    key={getIdProveedor(p) || p.id}
-                    className="mi-cr-suggest__item"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleSelectProveedor(p);
-                    }}
-                  >
-                    <span className="mi-cr-suggest__text">{p.nombre}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-
-          </div>
-
-          {/* ✅ Detalle */}
-          <div className="fl-field mi-field--mt12 mi-field--rel">
-            <input
-              ref={detalleInputRef}
-              className="fl-input"
-              placeholder=" "
-              value={form.detalleInput}
-              onChange={handleDetalleInputChange}
-              onFocus={() => setDetalleFocus(true)}
-              onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
-              disabled={saving || addUI.open}
-              autoComplete="off"
-            />
-            <label className="fl-label">Descripción (Detalle)</label>
-
-            {detalleFocus && detalleArmed && filteredDetalles.length > 0 && (
-              <ul className="mi-cr-suggest">
-                {filteredDetalles.map((d) => (
-                  <li
-                    key={getIdGeneric(d) || d.id}
-                    className="mi-cr-suggest__item"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleSelectDetalle(d);
-                    }}
-                  >
-                    <span className="mi-cr-suggest__text">{d.nombre}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-
-          </div>
-
-          {/* Monto */}
-          <div className="fl-field mi-field--mt12">
-            <input
-              className="fl-input"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder=" "
-              value={form.monto_total}
-              onChange={(e) => setForm((p) => ({ ...p, monto_total: e.target.value }))}
-              disabled={saving}
-            />
-            <label className="fl-label">Monto</label>
-          </div>
-
-          <div className="content-btn-modalordenpago mi-actions--mt14 ordenpagobuttos">
-            <button type="submit" disabled={saving} className="mit-btn mit-btn--solid btn--modalordenpago">
-              {saving ? "Guardando..." : "Guardar"}
-            </button>
 
             <button
-              type="button"
+              ref={closeBtnRef}
+              className="mi-modal__close"
               onClick={() => !saving && onClose?.()}
               disabled={saving}
-              className="mit-btn mit-btn--ghost btn--modalordenpago"
+              type="button"
             >
-              Cancelar
+              ✕
             </button>
           </div>
-        </form>
 
-        <AddCatalogMiniModal
-          open={addUI.open}
-          title={addUI.catalogo === "proveedores" ? "Nuevo proveedor" : "Nuevo detalle"}
-          label={addUI.catalogo === "proveedores" ? "Nombre del proveedor" : "Nombre del detalle"}
-          value={addUI.text}
-          saving={addUI.saving}
-          onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
-          onCancel={() => !addUI.saving && setAddUI({ open: false, catalogo: "detalles", text: "", saving: false })}
-          onSave={guardarNuevoCatalogo}
-          dark={darkOn}
-        />
+          <div className="mi-modal__content">
+            <div className="mi-er-layout">
+              <section className="mi-er-main">
+                <form onSubmit={submit} className="mi-er-form">
+                  <div className="mi-er-grid-2">
+                    <div className="nc-section">
+                      <div className="nc-section-head">
+                        <div className="nc-section-dot" />
+                        <span>Fecha y período</span>
+                      </div>
+
+                      <div className="nc-section-body">
+                        <div className="nc-field">
+                          <input
+                            className="nc-input"
+                            type="date"
+                            placeholder=" "
+                            value={form.fecha}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setForm((p) => ({
+                                ...p,
+                                fecha: v,
+                                periodo: p.periodo || periodoFromISODate(v) || p.periodo,
+                              }));
+                            }}
+                            disabled={saving}
+                          />
+                          <label className="nc-label">Fecha</label>
+                        </div>
+
+                        <div className="nc-field">
+                          <input
+                            className="nc-input"
+                            placeholder=" "
+                            value={form.periodo}
+                            onChange={(e) => setForm((p) => ({ ...p, periodo: e.target.value }))}
+                            disabled={saving}
+                          />
+                          <label className="nc-label">Período (MM-YYYY)</label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="nc-section">
+                      <div className="nc-section-head">
+                        <div className="nc-section-dot" />
+                        <span>Monto</span>
+                      </div>
+
+                      <div className="nc-section-body">
+                        <div className="nc-field">
+                          <input
+                            className="nc-input"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder=" "
+                            value={form.monto_total}
+                            onChange={(e) => setForm((p) => ({ ...p, monto_total: e.target.value }))}
+                            disabled={saving}
+                          />
+                          <label className="nc-label">Monto total</label>
+                        </div>
+
+                        <div className="nc-cc-info">
+                          <b>Total actual:</b> {moneyARS(form.monto_total || 0)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" />
+                      <span>Detalle</span>
+                    </div>
+
+                    <div className="nc-section-body">
+                      <div className="mi-er-rel">
+                        <div className="nc-field">
+                          <input
+                            className="nc-input"
+                            placeholder=" "
+                            value={form.detalleInput}
+                            onChange={handleDetalleInputChange}
+                            onFocus={() => {
+                              setDetalleFocus(true);
+                              setDetalleArmed(true);
+                            }}
+                            onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
+                            disabled={saving || addUI.open}
+                            autoComplete="off"
+                          />
+                          <label className="nc-label">Detalle</label>
+                        </div>
+
+                        {!!filteredDetalles.length && (
+                          <div className="mi-er-autocomplete">
+                            {filteredDetalles.map((det) => {
+                              const id = getIdGeneric(det);
+                              const nombre = String(det?.nombre ?? "").trim();
+
+                              return (
+                                <button
+                                  key={`det-${id}-${nombre}`}
+                                  type="button"
+                                  className="mi-er-autocomplete__item"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => handleSelectDetalle(det)}
+                                >
+                                  {nombre}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="nc-pago-btn"
+                        onClick={() => startAdd("detalles")}
+                        disabled={saving}
+                      >
+                        <FontAwesomeIcon icon={faPlus} />
+                        Nuevo detalle
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </section>
+
+              <aside className="nc-aside">
+                <div className="nc-section">
+                  <div className="nc-section-head">
+                    <div className="nc-section-dot" />
+                    <span>Proveedor</span>
+                  </div>
+
+                  <div className="nc-section-body">
+                    <div className="mi-er-rel">
+                      <div className="nc-field">
+                        <input
+                          className="nc-input"
+                          placeholder=" "
+                          value={form.proveedorInput}
+                          onChange={handleProveedorInputChange}
+                          onFocus={() => {
+                            setProvFocus(true);
+                            setProvArmed(true);
+                          }}
+                          onBlur={() => setTimeout(() => setProvFocus(false), 120)}
+                          disabled={saving || addUI.open}
+                          autoComplete="off"
+                        />
+                        <label className="nc-label">Proveedor</label>
+                      </div>
+
+                      {!!filteredProveedores.length && (
+                        <div className="mi-er-autocomplete">
+                          {filteredProveedores.map((prov) => {
+                            const id = getIdProveedor(prov);
+                            const nombre = String(prov?.nombre ?? "").trim();
+
+                            return (
+                              <button
+                                key={`prov-${id}-${nombre}`}
+                                type="button"
+                                className="mi-er-autocomplete__item"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => handleSelectProveedor(prov)}
+                              >
+                                {nombre}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="nc-pago-btn"
+                      onClick={() => startAdd("proveedores")}
+                      disabled={saving}
+                    >
+                      <FontAwesomeIcon icon={faPlus} />
+                      Nuevo proveedor
+                    </button>
+                  </div>
+                </div>
+
+                <div className="nc-section">
+                  <div className="nc-section-head">
+                    <div className="nc-section-dot" />
+                    <span>Resumen de la orden</span>
+                  </div>
+
+                  <div className="nc-section-body">
+                    <div className="nc-cc-info">
+                      <div className="mi-er-summary-row">
+                        <FontAwesomeIcon icon={faCalendarDays} />
+                        <span><b>Fecha:</b> {form.fecha || "--"}</span>
+                      </div>
+
+                      <div className="mi-er-summary-row">
+                        <FontAwesomeIcon icon={faTruck} />
+                        <span><b>Proveedor:</b> {resumen.proveedor}</span>
+                      </div>
+
+                      <div className="mi-er-summary-row">
+                        <FontAwesomeIcon icon={faBoxOpen} />
+                        <span><b>Detalle:</b> {resumen.detalle}</span>
+                      </div>
+
+                      <div className="mi-er-summary-row">
+                        <FontAwesomeIcon icon={faFileInvoiceDollar} />
+                        <span><b>Período:</b> {resumen.periodo}</span>
+                      </div>
+
+                      <div className="mi-er-summary-row">
+                        <FontAwesomeIcon icon={faDollarSign} />
+                        <span><b>Total:</b> {moneyARS(resumen.total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="nc-actions">
+                  <button
+                    type="button"
+                    className="mit-btn mit-btn--solid mi-er-action"
+                    onClick={submit}
+                    disabled={saving}
+                  >
+                    {saving ? "Guardando..." : "Guardar cambios"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="mit-btn mit-btn--ghost mi-er-action"
+                    onClick={() => !saving && onClose?.()}
+                    disabled={saving}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </aside>
+            </div>
+          </div>
+
+          <AddCatalogMiniModal
+            open={addUI.open}
+            title={addUI.catalogo === "proveedores" ? "Nuevo proveedor" : "Nuevo detalle"}
+            label={addUI.catalogo === "proveedores" ? "Nombre del proveedor" : "Nombre del detalle"}
+            value={addUI.text}
+            saving={addUI.saving}
+            onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
+            onCancel={() => !addUI.saving && setAddUI({ open: false, catalogo: "detalles", text: "", saving: false })}
+            onSave={guardarNuevoCatalogo}
+            dark={darkOn}
+          />
+        </div>
       </div>
-    </div>,
+
+      <style>{`
+        .mi-er-layout{
+          flex:1;
+          min-height:0;
+          display:grid;
+          grid-template-columns:minmax(0,1fr) 430px;
+          gap:18px;
+          overflow:hidden;
+        }
+
+        .mi-er-main{
+          min-width:0;
+          min-height:0;
+          border:1px solid var(--nv-border-md);
+          border-radius:14px;
+          background:var(--nv-bg);
+          box-shadow:var(--nv-shadow-sm);
+          overflow:auto;
+          padding:16px;
+        }
+
+        .mi-er-form{
+          display:flex;
+          flex-direction:column;
+          gap:14px;
+        }
+
+        .mi-er-grid-2{
+          display:grid;
+          grid-template-columns:repeat(2,minmax(0,1fr));
+          gap:14px;
+        }
+
+        .mi-er-rel{
+          position:relative;
+        }
+
+        .mi-er-autocomplete{
+          position:absolute;
+          top:calc(100% + 6px);
+          left:0;
+          right:0;
+          z-index:50;
+          background:var(--nv-bg);
+          border:1px solid var(--nv-border-md);
+          border-radius:12px;
+          box-shadow:var(--nv-shadow-md);
+          overflow:hidden;
+          max-height:240px;
+          overflow-y:auto;
+        }
+
+        .mi-er-autocomplete__item{
+          width:100%;
+          border:none;
+          background:transparent;
+          text-align:left;
+          padding:10px 12px;
+          font-size:13px;
+          color:var(--nv-text);
+          cursor:pointer;
+          transition:background .12s ease;
+          font-family:inherit;
+        }
+
+        .mi-er-autocomplete__item:hover{
+          background:var(--nv-row-hover);
+        }
+
+        .mi-er-summary-row{
+          display:flex;
+          align-items:center;
+          gap:10px;
+          margin-bottom:12px;
+        }
+
+        .mi-er-summary-row:last-child{
+          margin-bottom:0;
+        }
+
+        .mi-er-action{
+          flex:1;
+        }
+
+        @media (max-width: 1100px){
+          .mi-er-layout{
+            grid-template-columns:1fr;
+          }
+        }
+
+        @media (max-width: 700px){
+          .mi-er-grid-2{
+            grid-template-columns:1fr;
+          }
+
+          .nc-actions{
+            flex-direction:column;
+          }
+        }
+      `}</style>
+    </>,
     document.body
   );
 }

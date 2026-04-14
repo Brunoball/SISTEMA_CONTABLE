@@ -143,44 +143,9 @@ export default function Configuracion() {
         metaBottom: tiendanube.store_id
           ? `Store ID: ${tiendanube.store_id}`
           : "Todavía no configurado",
-        logo: "tiendanube",
-      },
-      {
-        id: "r2storage",
-        title: "Cloudflare R2 Storage",
-        description:
-          "Gestioná archivos en la nube con Cloudflare R2. Subí, visualizá y administrá tus archivos de manera segura.",
-        route: "/panel/configuracion/r2-test",
-        status: { text: "Configurable", type: "pending" },
-        metaTop: "Almacenamiento en la nube",
-        metaBottom: "Subí y gestioná archivos",
-        logo: "r2",
       },
     ];
   }, [tiendanube]);
-
-  const getLogoContent = (logoType) => {
-    if (logoType === "tiendanube") {
-      return (
-        <img
-          src={logoTiendaNube}
-          alt="Logo Tienda Nube"
-          className="cfg-cardLogo"
-        />
-      );
-    } else {
-      return (
-        <div className="cfg-cardLogoCustom">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          <span className="cfg-cardLogoText">R2</span>
-        </div>
-      );
-    }
-  };
 
   return (
     <section className="cfg-page">
@@ -194,7 +159,11 @@ export default function Configuracion() {
             >
               <div className="cfg-cardMain">
                 <CardVisual>
-                  {getLogoContent(card.logo)}
+                  <img
+                    src={logoTiendaNube}
+                    alt="Logo Tienda Nube"
+                    className="cfg-cardLogo"
+                  />
                 </CardVisual>
 
                 <div className="cfg-cardBody">

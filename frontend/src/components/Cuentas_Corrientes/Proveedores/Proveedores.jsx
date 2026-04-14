@@ -147,10 +147,12 @@ function withSessionKey(url) {
   }
 }
 
-function ensureResourceHint(url, rel = "prefetch", as = "document") {
+function ensureResourceHint(url, rel = "prefetch", as = "") {
   const href = safeText(url);
   if (!href) return;
-  const key = `hint:${rel}:${as}:${href}`;
+
+  const finalAs = rel === "preload" ? safeText(as) : "";
+  const key = `hint:${rel}:${finalAs}:${href}`;
   const selectorKey =
     typeof CSS !== "undefined" && CSS.escape
       ? CSS.escape(key)
@@ -160,7 +162,11 @@ function ensureResourceHint(url, rel = "prefetch", as = "document") {
 
   const link = document.createElement("link");
   link.rel = rel;
-  if (as) link.as = as;
+
+  if (rel === "preload" && finalAs) {
+    link.as = finalAs;
+  }
+
   link.href = href;
   link.setAttribute("data-key", key);
   document.head.appendChild(link);
@@ -169,19 +175,20 @@ function ensureResourceHint(url, rel = "prefetch", as = "document") {
 function prewarmComprobanteUrl(url, mime = "") {
   const finalUrl = withSessionKey(url);
   if (!finalUrl) return;
+
   const mm = safeText(mime).toLowerCase();
   const ll = finalUrl.toLowerCase();
+
   const isPdf =
     mm.includes("pdf") ||
     ll.includes(".pdf") ||
     ll.includes("cc_comprobante_descargar");
 
   if (isPdf) {
-    ensureResourceHint(finalUrl, "preload", "document");
-    ensureResourceHint(finalUrl, "prefetch", "document");
+    ensureResourceHint(finalUrl, "prefetch");
   } else {
     ensureResourceHint(finalUrl, "preload", "image");
-    ensureResourceHint(finalUrl, "prefetch", "image");
+    ensureResourceHint(finalUrl, "prefetch");
   }
 }
 

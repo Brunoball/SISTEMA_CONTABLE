@@ -438,8 +438,6 @@ const Principal = () => {
   const tenantLogoIconoObjectUrlRef = useRef("");
   const tenantLogoPrincipalObjectUrlRef = useRef("");
 
-  // ✅ FIX: refs para trackear qué logoDb está actualmente cargado
-  // Esto evita recargar (y parpadear) cuando el logoDb no cambia
   const tenantLogoIconoDbRef = useRef("");
   const tenantLogoPrincipalDbRef = useRef("");
 
@@ -530,38 +528,24 @@ const Principal = () => {
   }, []);
 
   const buildTenantLogoUrl = useCallback((tipo = "principal") => {
-    return buildApiUrl({ action: "tenant_logo_ver", tipo });
+    const baseRaw = String(BASE_URL || "").trim();
+    const base = baseRaw.replace(/\/+$/, "") + "/";
+    const url = new URL("api.php", base);
+
+    url.searchParams.set("action", "tenant_logo_ver");
+    url.searchParams.set("tipo", tipo);
+
+    return url.toString();
   }, []);
 
-  // ✅ FIX PRINCIPAL: loadSingleLogo ya no limpia el estado si el logo no cambió.
-  // - Si el logoDb es el mismo que ya está cargado → retorna sin tocar nada (sin parpadeo).
-  // - Si el logoDb cambió → revoca el anterior SOLO cuando el nuevo blob está listo.
-  // - Si falla la carga → no limpia el estado para no mostrar el ícono vacío.
+  // ✅ CORRECCIÓN: No depende de usuario, pide directamente a la API
   const loadSingleLogo = useCallback(
-    async ({ tipo, logoDb, setSrc, setLoaded, objectUrlRef, revokeFn, dbRef }) => {
+    async ({ tipo, setSrc, setLoaded, objectUrlRef, revokeFn, dbRef }) => {
       try {
         const sessionKey = getSessionKey();
         if (!sessionKey) return;
 
         if (isLocalApiBase()) return;
-
-        const trimmedDb = String(logoDb || "").trim();
-
-        // ✅ Si el logoDb no cambió y ya hay un blob cargado → no hacer nada
-        if (trimmedDb && dbRef.current === trimmedDb && objectUrlRef.current) {
-          return;
-        }
-
-        // ✅ Si no hay logoDb, limpiar solo si antes había algo cargado
-        if (!trimmedDb) {
-          if (objectUrlRef.current) {
-            revokeFn();
-            setSrc("");
-            setLoaded(false);
-            dbRef.current = "";
-          }
-          return;
-        }
 
         const logoUrl = buildTenantLogoUrl(tipo);
 
@@ -584,62 +568,45 @@ const Principal = () => {
           return;
         }
 
-        if (res.status === 404 || res.status === 500) {
-          return;
-        }
-
-        if (!res.ok) {
-          return;
-        }
-
-        const contentType = res.headers.get("content-type") || "";
-        if (contentType.includes("application/json")) {
-          const txt = await res.clone().text().catch(() => "");
-          if (looksLikeUnauthorizedPayload(txt, contentType)) {
-            try {
-              window.dispatchEvent(
-                new CustomEvent("auth:unauthorized", {
-                  detail: { status: 401, reason: "payload-session-expired" },
-                })
-              );
-            } catch {}
+        if (res.status === 204 || res.status === 404 || res.status === 500) {
+          if (objectUrlRef.current) {
+            revokeFn();
+            setSrc("");
+            setLoaded(false);
+            dbRef.current = "";
           }
           return;
         }
 
+        if (!res.ok) return;
+
+        const contentType = String(res.headers.get("content-type") || "").toLowerCase();
+
+        if (!contentType.startsWith("image/")) return;
+
         const blob = await res.blob();
         if (!blob || !blob.size) return;
 
-        // ✅ Revocar el anterior SOLO cuando el nuevo blob ya está listo
-        // Esto evita el flash de "ícono vacío" entre la limpieza y la nueva carga
         revokeFn();
+
         const objectUrl = URL.createObjectURL(blob);
         objectUrlRef.current = objectUrl;
-
-        // ✅ Guardar qué logoDb está actualmente cargado
-        dbRef.current = trimmedDb;
+        dbRef.current = tipo;
 
         setSrc(objectUrl);
         setLoaded(true);
       } catch {
-        // ✅ No limpiar en caso de error para no causar parpadeo innecesario
+        // No limpiar en caso de error
       }
     },
     [buildTenantLogoUrl]
   );
 
-  // ✅ loadTenantLogos pasa los dbRefs a loadSingleLogo
+  // ✅ CORRECCIÓN: Pide ambos logos siempre, sin depender del usuario
   const loadTenantLogos = useCallback(async () => {
-    const usuarioLocal = safeJsonParse(localStorage.getItem("usuario")) || {};
-    const u = usuario || usuarioLocal || {};
-
-    const logoPrincipalDb = String(u?.tenant_logo_url_db || "").trim();
-    const logoIconoDb = String(u?.tenant_logo_icono_url_db || "").trim();
-
     await Promise.all([
       loadSingleLogo({
         tipo: "icono",
-        logoDb: logoIconoDb,
         setSrc: setTenantLogoIconoSrc,
         setLoaded: setTenantLogoIconoLoaded,
         objectUrlRef: tenantLogoIconoObjectUrlRef,
@@ -648,7 +615,6 @@ const Principal = () => {
       }),
       loadSingleLogo({
         tipo: "principal",
-        logoDb: logoPrincipalDb,
         setSrc: setTenantLogoPrincipalSrc,
         setLoaded: setTenantLogoPrincipalLoaded,
         objectUrlRef: tenantLogoPrincipalObjectUrlRef,
@@ -657,7 +623,6 @@ const Principal = () => {
       }),
     ]);
   }, [
-    usuario,
     loadSingleLogo,
     revokeTenantLogoIconoObjectUrl,
     revokeTenantLogoPrincipalObjectUrl,
@@ -699,7 +664,6 @@ const Principal = () => {
         setTenantLogoPrincipalSrc("");
         setTenantLogoPrincipalLoaded(false);
 
-        // ✅ Limpiar los dbRefs al hacer logout
         tenantLogoIconoDbRef.current = "";
         tenantLogoPrincipalDbRef.current = "";
 
@@ -829,9 +793,10 @@ const Principal = () => {
     } catch {}
   }, [doLogout, navigate]);
 
+  // ✅ Cargar logos al montar componente y cuando cambie la sesión
   useEffect(() => {
     loadTenantLogos();
-  }, [usuario, loadTenantLogos]);
+  }, [loadTenantLogos]);
 
   useEffect(() => {
     return () => {
@@ -1090,6 +1055,14 @@ const Principal = () => {
   const isChequesDropdown = (itemKey) => itemKey === "cheques";
   const isStockDropdown = (itemKey) => itemKey === "stock";
 
+  // ✅ El modal Perfil usa SOLO el logo icono del tenant
+  const getModalLogoSrc = useCallback(() => {
+    if (tenantLogoIconoLoaded && tenantLogoIconoSrc) {
+      return tenantLogoIconoSrc;
+    }
+    return "";
+  }, [tenantLogoIconoLoaded, tenantLogoIconoSrc]);
+
   return (
     <div className="pp-shell">
       <header className="mov-topbar">
@@ -1273,60 +1246,24 @@ const Principal = () => {
             };
 
             const openSoonLocal = (ms = 300) => {
-              if (isMov) {
-                cancelClose();
-                openSoon(ms);
-              }
-              if (isCC) {
-                cancelCCClose();
-                openCCSoon(ms);
-              }
-              if (isCheques) {
-                cancelChequesClose();
-                openChequesSoon(ms);
-              }
-              if (isStock) {
-                cancelStockClose();
-                openStockSoon(ms);
-              }
+              if (isMov) { cancelClose(); openSoon(ms); }
+              if (isCC) { cancelCCClose(); openCCSoon(ms); }
+              if (isCheques) { cancelChequesClose(); openChequesSoon(ms); }
+              if (isStock) { cancelStockClose(); openStockSoon(ms); }
             };
 
             const closeSoonLocal = (ms = 220) => {
-              if (isMov) {
-                cancelOpen();
-                closeSoon(ms);
-              }
-              if (isCC) {
-                cancelCCOpen();
-                closeCCSoon(ms);
-              }
-              if (isCheques) {
-                cancelChequesOpen();
-                closeChequesSoon(ms);
-              }
-              if (isStock) {
-                cancelStockOpen();
-                closeStockSoon(ms);
-              }
+              if (isMov) { cancelOpen(); closeSoon(ms); }
+              if (isCC) { cancelCCOpen(); closeCCSoon(ms); }
+              if (isCheques) { cancelChequesOpen(); closeChequesSoon(ms); }
+              if (isStock) { cancelStockOpen(); closeStockSoon(ms); }
             };
 
             const cancelAllTimersLocal = () => {
-              if (isMov) {
-                cancelClose();
-                cancelOpen();
-              }
-              if (isCC) {
-                cancelCCClose();
-                cancelCCOpen();
-              }
-              if (isCheques) {
-                cancelChequesClose();
-                cancelChequesOpen();
-              }
-              if (isStock) {
-                cancelStockClose();
-                cancelStockOpen();
-              }
+              if (isMov) { cancelClose(); cancelOpen(); }
+              if (isCC) { cancelCCClose(); cancelCCOpen(); }
+              if (isCheques) { cancelChequesClose(); cancelChequesOpen(); }
+              if (isStock) { cancelStockClose(); cancelStockOpen(); }
             };
 
             return (
@@ -1460,11 +1397,12 @@ const Principal = () => {
         </div>
       </main>
 
+      {/* ✅ ModalPerfil recibe SOLO el logo principal */}
       <ModalPerfil
         open={showPerfilModal}
         onClose={() => setShowPerfilModal(false)}
         usuario={usuario}
-        logoSrc={tenantLogoPrincipalLoaded && tenantLogoPrincipalSrc ? tenantLogoPrincipalSrc : ""}
+        logoSrc={getModalLogoSrc()}
         rolUsuario={rolUsuario}
         onConfigRequest={() => {
           setShowPerfilModal(false);

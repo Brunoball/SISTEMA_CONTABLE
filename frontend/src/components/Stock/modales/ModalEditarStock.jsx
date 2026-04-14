@@ -54,6 +54,49 @@ function buildHeadersMultipart() {
   return h;
 }
 
+function withSessionKey(url) {
+  const base = String(url || "").trim();
+  if (!base) return "";
+
+  try {
+    const sessionKey = (localStorage.getItem("session_key") || "").trim();
+    const token = (localStorage.getItem("token") || "").trim();
+    const u = new URL(base, window.location.origin);
+
+    if (sessionKey && !u.searchParams.has("session_key")) {
+      u.searchParams.set("session_key", sessionKey);
+    }
+    if (token && !u.searchParams.has("token")) {
+      u.searchParams.set("token", token);
+    }
+
+    return u.toString();
+  } catch {
+    return base;
+  }
+}
+
+function getProductoImageUrlByArchivoId(archivoId) {
+  const id = Number(archivoId || 0);
+  if (!id) return "";
+
+  const params = new URLSearchParams({
+    action: "stock_producto_imagen_ver",
+    id_archivo: String(id),
+  });
+
+  return withSessionKey(`${API_URL}?${params.toString()}`);
+}
+
+function inferImageMimeFromUrl(url = "") {
+  const s = String(url || "").toLowerCase().split("?")[0].split("#")[0];
+  if (s.endsWith(".png")) return "image/png";
+  if (s.endsWith(".jpg") || s.endsWith(".jpeg")) return "image/jpeg";
+  if (s.endsWith(".webp")) return "image/webp";
+  if (s.endsWith(".gif")) return "image/gif";
+  return "image/jpeg";
+}
+
 function getUsuarioAuditData() {
   let idUsuarioMaster = 0;
   let idTenant = null;
@@ -299,6 +342,52 @@ export default function ModalEditarProducto({
   const [categorias, setCategorias] = useState([]);
   const [loadingCategorias, setLoadingCategorias] = useState(false);
 
+  const [nuevaImagenFile, setNuevaImagenFile] = useState(null);
+  const [nuevaImagenPreview, setNuevaImagenPreview] = useState("");
+  const [eliminarImagenActual, setEliminarImagenActual] = useState(false);
+
+  const inputImagenRef = useRef(null);
+
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewMime, setPreviewMime] = useState("");
+  const [previewFileName, setPreviewFileName] = useState("");
+
+  const cerrarPreview = () => {
+    setPreviewOpen(false);
+    setPreviewUrl("");
+    setPreviewMime("");
+    setPreviewFileName("");
+  };
+
+  const abrirPreview = ({ src, mime = "", name = "" }) => {
+    if (!src) return;
+    setPreviewUrl(src);
+    setPreviewMime(mime);
+    setPreviewFileName(name);
+    setPreviewOpen(true);
+  };
+
+  const nuevaImagenNombre = useMemo(
+    () => nuevaImagenFile?.name || "",
+    [nuevaImagenFile]
+  );
+
+  const imagenActualUrl = useMemo(() => {
+    if (eliminarImagenActual) return "";
+    if (nuevaImagenFile) return "";
+    if (Number(form.imagen_archivo_id || 0) > 0) {
+      return getProductoImageUrlByArchivoId(form.imagen_archivo_id);
+    }
+    return form.imagen_url ? String(form.imagen_url).trim() : "";
+  }, [form.imagen_archivo_id, form.imagen_url, eliminarImagenActual, nuevaImagenFile]);
+
+  const imagenActualMime = useMemo(() => {
+    return inferImageMimeFromUrl(imagenActualUrl);
+  }, [imagenActualUrl]);
+
+  const isLoading = loading || guardando;
+
   useEffect(() => {
     let cancelado = false;
 
@@ -342,41 +431,11 @@ export default function ModalEditarProducto({
     };
   }, []);
 
-  const [imagenActualBlob, setImagenActualBlob] = useState(null);
-  const [imagenActualCargando, setImagenActualCargando] = useState(false);
-  const [nuevaImagenFile, setNuevaImagenFile] = useState(null);
-  const [nuevaImagenPreview, setNuevaImagenPreview] = useState("");
-  const [eliminarImagenActual, setEliminarImagenActual] = useState(false);
-
-  const inputImagenRef = useRef(null);
-
-  // ── Preview modal states ──
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [previewMime, setPreviewMime] = useState("");
-  const [previewFileName, setPreviewFileName] = useState("");
-
-  const cerrarPreview = () => {
-    setPreviewOpen(false);
-    setPreviewUrl("");
-    setPreviewMime("");
-    setPreviewFileName("");
-  };
-
-  const abrirPreview = ({ src, mime = "", name = "" }) => {
-    if (!src) return;
-    setPreviewUrl(src);
-    setPreviewMime(mime);
-    setPreviewFileName(name);
-    setPreviewOpen(true);
-  };
-
-  const nuevaImagenNombre = useMemo(
-    () => nuevaImagenFile?.name || "",
-    [nuevaImagenFile]
-  );
-
-  const isLoading = loading || guardando;
+  useEffect(() => {
+    return () => {
+      if (nuevaImagenPreview) URL.revokeObjectURL(nuevaImagenPreview);
+    };
+  }, [nuevaImagenPreview]);
 
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
@@ -442,6 +501,7 @@ export default function ModalEditarProducto({
           method: "GET",
           headers: buildHeadersGET(),
         });
+
         const data = await parseJsonOrThrow(res);
 
         if (mounted) {
@@ -464,61 +524,6 @@ export default function ModalEditarProducto({
       mounted = false;
     };
   }, [productoId]);
-
-  useEffect(() => {
-    let cancelado = false;
-    let objectUrl = null;
-
-    const cargarImagen = async () => {
-      const archivoId = form.imagen_archivo_id;
-
-      if (!archivoId || archivoId <= 0) {
-        setImagenActualBlob(null);
-        return;
-      }
-
-      setImagenActualCargando(true);
-
-      try {
-        const params = new URLSearchParams({
-          action: "stock_producto_imagen_ver",
-          id_archivo: String(archivoId),
-        });
-
-        const res = await fetch(`${API_URL}?${params.toString()}`, {
-          method: "GET",
-          headers: buildHeadersGET(),
-        });
-
-        if (!res.ok) {
-          if (!cancelado) setImagenActualBlob(null);
-          return;
-        }
-
-        const blob = await res.blob();
-        objectUrl = URL.createObjectURL(blob);
-
-        if (!cancelado) setImagenActualBlob(objectUrl);
-      } catch {
-        if (!cancelado) setImagenActualBlob(null);
-      } finally {
-        if (!cancelado) setImagenActualCargando(false);
-      }
-    };
-
-    cargarImagen();
-
-    return () => {
-      cancelado = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [form.imagen_archivo_id]);
-
-  useEffect(() => {
-    return () => {
-      if (nuevaImagenPreview) URL.revokeObjectURL(nuevaImagenPreview);
-    };
-  }, [nuevaImagenPreview]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -760,7 +765,7 @@ export default function ModalEditarProducto({
   const tieneImagenActual =
     !eliminarImagenActual &&
     !nuevaImagenFile &&
-    (imagenActualBlob || (form.imagen_url && form.imagen_url.trim() !== ""));
+    !!imagenActualUrl;
 
   return createPortal(
     <>
@@ -959,7 +964,6 @@ export default function ModalEditarProducto({
                     onChange={handleImagenInput}
                   />
 
-                  {/* ── Imagen actual ── */}
                   {tieneImagenActual && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                       <div className="cmi-fileRow" style={{ alignItems: "center" }}>
@@ -971,16 +975,12 @@ export default function ModalEditarProducto({
                             className="mit-btn mit-btn--ghost"
                             onClick={() =>
                               abrirPreview({
-                                src: imagenActualBlob || form.imagen_url,
-                                mime: "image/jpeg",
+                                src: imagenActualUrl,
+                                mime: imagenActualMime,
                                 name: form.nombre || "imagen_actual",
                               })
                             }
-                            disabled={
-                              guardando ||
-                              imagenActualCargando ||
-                              (!imagenActualBlob && !form.imagen_url)
-                            }
+                            disabled={guardando || !imagenActualUrl}
                             aria-label="Ver imagen"
                             title="Ver imagen"
                           >
@@ -1009,7 +1009,6 @@ export default function ModalEditarProducto({
                     </div>
                   )}
 
-                  {/* ── Aviso eliminar imagen ── */}
                   {eliminarImagenActual && !nuevaImagenFile && (
                     <div className="cmi-warnBox" style={{ marginTop: 10 }}>
                       <div className="cmi-warnBox__title">
@@ -1033,7 +1032,6 @@ export default function ModalEditarProducto({
                     </div>
                   )}
 
-                  {/* ── Sin imagen: botón seleccionar ── */}
                   {!tieneImagenActual && !nuevaImagenFile && (
                     <button
                       type="button"
@@ -1045,7 +1043,6 @@ export default function ModalEditarProducto({
                     </button>
                   )}
 
-                  {/* ── Nueva imagen seleccionada ── */}
                   {nuevaImagenFile && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                       <div className="cmi-fileRow">

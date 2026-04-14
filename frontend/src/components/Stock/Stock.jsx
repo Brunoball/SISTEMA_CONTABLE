@@ -40,22 +40,43 @@ function buildHeadersJSON() {
   return h;
 }
 
+function withSessionKey(url) {
+  const base = String(url || "").trim();
+  if (!base) return "";
+
+  try {
+    const sessionKey = (localStorage.getItem("session_key") || "").trim();
+    const token = (localStorage.getItem("token") || "").trim();
+    const u = new URL(base, window.location.origin);
+
+    if (sessionKey && !u.searchParams.has("session_key")) {
+      u.searchParams.set("session_key", sessionKey);
+    }
+
+    if (token && !u.searchParams.has("token")) {
+      u.searchParams.set("token", token);
+    }
+
+    return u.toString();
+  } catch {
+    return base;
+  }
+}
+
 function notifyListsUpdated() {
   try {
     window.dispatchEvent(new CustomEvent("balto:listas-updated"));
   } catch {}
 }
 
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function parseJsonOrThrow(res) {
   if (res.status === 401 || res.status === 403) {
     throw new Error(`${res.status}: Sesión vencida o no autorizada. Volvé a iniciar sesión.`);
   }
+
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
+
   try {
     return JSON.parse(text);
   } catch {
@@ -80,18 +101,24 @@ async function apiGet(url) {
 async function apiPost(url, body) {
   const { action, ...rest } = body ?? {};
   const finalUrl = action ? `${url}?action=${encodeURIComponent(action)}` : url;
+
   const res = await fetch(finalUrl, {
     method: "POST",
     headers: buildHeadersJSON(),
     body: JSON.stringify(rest),
   });
+
   return await parseJsonOrThrow(res);
 }
 
 function formatMoney(value) {
   if (value === null || value === undefined || value === "") return "—";
-  const n = Number(value);
+
+  const raw = typeof value === "string" ? value.replace(",", ".") : value;
+  const n = Number(raw);
+
   if (!Number.isFinite(n)) return "—";
+
   return `$${n.toLocaleString("es-AR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -109,9 +136,13 @@ function normalizeText(value) {
 function compareValues(a, b, campo) {
   const va = a?.[campo];
   const vb = b?.[campo];
+
   if (campo === "stock" || campo === "precio" || campo === "precio_promo") {
-    return Number(va ?? 0) - Number(vb ?? 0);
+    const na = Number(String(va ?? 0).replace(",", "."));
+    const nb = Number(String(vb ?? 0).replace(",", "."));
+    return na - nb;
   }
+
   return String(va ?? "").localeCompare(String(vb ?? ""), "es", {
     numeric: true,
     sensitivity: "base",
@@ -132,6 +163,79 @@ function getProductoCategoriaId(prod) {
   );
 }
 
+function normalizeCategoria(cat = {}) {
+  const id = Number(cat?.id ?? cat?.id_stock_categoria ?? 0);
+  return {
+    ...cat,
+    id,
+    id_stock_categoria: id,
+    nombre: String(cat?.nombre ?? cat?.label ?? ""),
+  };
+}
+
+function normalizeProductoListItem(prod = {}) {
+  const id = getProductoId(prod);
+  if (!id) return null;
+
+  const categoriaId = Number(
+    prod?.id_stock_categoria ??
+      prod?.stock_categoria_id ??
+      prod?.id_categoria_stock ??
+      prod?.id_categoria ??
+      0
+  );
+
+  return {
+    ...prod,
+    id,
+    id_stock_producto: Number(prod?.id_stock_producto ?? id),
+    nombre: String(prod?.nombre ?? ""),
+    sku: String(prod?.sku ?? ""),
+    stock: prod?.stock ?? 0,
+    precio: prod?.precio ?? null,
+    precio_promo: prod?.precio_promo ?? null,
+    descripcion: prod?.descripcion ?? "",
+    imagen_archivo_id:
+      Number(prod?.imagen_archivo_id ?? prod?.id_archivo_imagen ?? prod?.archivo_id ?? 0) || 0,
+    id_stock_categoria: categoriaId || null,
+    id_categoria_stock: categoriaId || null,
+    updated_at:
+      prod?.updated_at ??
+      prod?.updatedAt ??
+      prod?.fecha_actualizacion ??
+      prod?.fecha_modificacion ??
+      prod?.modificado_en ??
+      prod?.imagen_actualizada_en ??
+      prod?.ultima_actualizacion ??
+      new Date().toISOString(),
+  };
+}
+
+function mergeProductoEnLista(lista = [], producto = null) {
+  const normalizado = normalizeProductoListItem(producto);
+  if (!normalizado) return Array.isArray(lista) ? lista : [];
+
+  const base = Array.isArray(lista) ? [...lista] : [];
+  const idx = base.findIndex((item) => getProductoId(item) === getProductoId(normalizado));
+
+  if (idx === -1) {
+    return [normalizado, ...base];
+  }
+
+  base[idx] = {
+    ...base[idx],
+    ...normalizado,
+  };
+
+  return base;
+}
+
+function normalizeProductosCollection(items = []) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => normalizeProductoListItem(item))
+    .filter(Boolean);
+}
+
 function getProductoImageRefreshToken(prod, refreshKey = 0, intento = 0) {
   const archivoId = Number(prod?.imagen_archivo_id || 0);
   const updateToken =
@@ -145,6 +249,19 @@ function getProductoImageRefreshToken(prod, refreshKey = 0, intento = 0) {
     "";
 
   return `${archivoId}-${String(updateToken || "")}-${String(refreshKey)}-${String(intento)}`;
+}
+
+function getProductoImageUrl(prod, apiUrl, refreshKey = 0) {
+  const archivoId = Number(prod?.imagen_archivo_id || 0);
+  if (!archivoId) return "";
+
+  const params = new URLSearchParams({
+    action: "stock_producto_imagen_ver",
+    id_archivo: String(archivoId),
+    _imgv: getProductoImageRefreshToken(prod, refreshKey, 0),
+  });
+
+  return withSessionKey(`${apiUrl}?${params.toString()}`);
 }
 
 function getUsuarioAuditData() {
@@ -196,6 +313,7 @@ const COLUMNS = [
 
 const GRID_COLS = COLUMNS.map((c) => `${c.fr}fr`).join(" ");
 const SKELETON_ROWS = 10;
+
 const SKEL_WIDTHS = {
   nombre: ["68%", "52%", "60%", "48%"],
   sku: ["44%", "36%", "40%", "32%"],
@@ -226,8 +344,8 @@ const Stock = () => {
   const [eliminando, setEliminando] = useState(false);
 
   const [toast, setToast] = useState(null);
-  const [imagenesMap, setImagenesMap] = useState({});
-  const [refreshImagenesKey, setRefreshImagenesKey] = useState(0);
+  const [refreshImagenesKey, setRefreshImagenesKey] = useState(Date.now());
+  const [erroresImagenes, setErroresImagenes] = useState({});
 
   const refreshTimersRef = useRef([]);
   const productosPorPagina = 20;
@@ -249,8 +367,9 @@ const Stock = () => {
     };
   }, [limpiarRefreshTimers]);
 
-  const invalidarMiniaturas = useCallback(() => {
-    setRefreshImagenesKey((prev) => prev + 1);
+  const invalidarMiniaturas = useCallback((seed = Date.now()) => {
+    setRefreshImagenesKey(seed);
+    setErroresImagenes({});
   }, []);
 
   const recargarTodo = useCallback(async () => {
@@ -264,14 +383,21 @@ const Stock = () => {
           orden_campo: "nombre",
           orden_dir: "ASC",
         });
+
         const data = await apiGet(`${API_URL}?${params.toString()}`);
-        if (data?.exito === false) throw new Error(data?.mensaje || "Error al obtener productos");
-        return Array.isArray(data?.productos) ? data.productos : [];
+        if (data?.exito === false) {
+          throw new Error(data?.mensaje || "Error al obtener productos");
+        }
+
+        return normalizeProductosCollection(data?.productos);
       })(),
       (async () => {
         const params = new URLSearchParams({ action: "stock_categorias_listar" });
         const data = await apiGet(`${API_URL}?${params.toString()}`);
-        const lista = Array.isArray(data?.categorias) ? data.categorias : [];
+        const lista = (Array.isArray(data?.categorias) ? data.categorias : [])
+          .map((cat) => normalizeCategoria(cat))
+          .filter((cat) => Number(cat.id_stock_categoria) > 0);
+
         return [...lista].sort((a, b) =>
           String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", {
             sensitivity: "base",
@@ -294,29 +420,52 @@ const Stock = () => {
     }
   }, []);
 
-  // ✅ OPTIMIZADO: Solo 1 recarga inmediata + 1 recarga diferida (no 4)
-  const refrescarDespuesDeGuardar = useCallback(async () => {
-    limpiarRefreshTimers();
+  const programarRecargasSuaves = useCallback(
+    (delays = [700, 1800, 3200]) => {
+      limpiarRefreshTimers();
 
-    await recargarTodo();
-    invalidarMiniaturas();
+      delays.forEach((delay) => {
+        const timerId = setTimeout(async () => {
+          try {
+            await recargarTodo();
+            invalidarMiniaturas(Date.now() + delay);
+          } catch {}
+        }, delay);
 
-    // Solo una recarga diferida para capturar cambios tardíos
-    const timerId = setTimeout(async () => {
+        refreshTimersRef.current.push(timerId);
+      });
+    },
+    [limpiarRefreshTimers, recargarTodo, invalidarMiniaturas]
+  );
+
+  // ✅ FIXED: Solo invalidar miniaturas cuando hay un producto nuevo/editado
+  const refrescarDespuesDeGuardar = useCallback(
+    async (productoGuardado = null) => {
+      if (productoGuardado) {
+        setProductosRaw((prev) => mergeProductoEnLista(prev, productoGuardado));
+        invalidarMiniaturas(Date.now());
+      }
+
       try {
         await recargarTodo();
-        invalidarMiniaturas();
+        invalidarMiniaturas(Date.now() + 1);
       } catch {}
-    }, 900);
-    refreshTimersRef.current.push(timerId);
-  }, [limpiarRefreshTimers, recargarTodo, invalidarMiniaturas]);
+
+      programarRecargasSuaves();
+    },
+    [invalidarMiniaturas, programarRecargasSuaves, recargarTodo]
+  );
 
   const fetchCategorias = useCallback(async () => {
     setLoadingCategorias(true);
+
     try {
       const params = new URLSearchParams({ action: "stock_categorias_listar" });
       const data = await apiGet(`${API_URL}?${params.toString()}`);
-      const lista = Array.isArray(data?.categorias) ? data.categorias : [];
+      const lista = (Array.isArray(data?.categorias) ? data.categorias : [])
+        .map((cat) => normalizeCategoria(cat))
+        .filter((cat) => Number(cat.id_stock_categoria) > 0);
+
       setCategorias(
         [...lista].sort((a, b) =>
           String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", {
@@ -335,6 +484,7 @@ const Stock = () => {
   const fetchProductos = useCallback(async () => {
     setLoading(true);
     setError(null);
+
     try {
       const params = new URLSearchParams({
         action: "stock_productos_listar",
@@ -344,10 +494,14 @@ const Stock = () => {
         orden_campo: "nombre",
         orden_dir: "ASC",
       });
+
       const data = await apiGet(`${API_URL}?${params.toString()}`);
-      if (data.exito === false) throw new Error(data.mensaje || "Error al obtener productos");
-      setProductosRaw(Array.isArray(data.productos) ? data.productos : []);
-      invalidarMiniaturas();
+      if (data.exito === false) {
+        throw new Error(data.mensaje || "Error al obtener productos");
+      }
+
+      setProductosRaw(normalizeProductosCollection(data.productos));
+      invalidarMiniaturas(Date.now());
     } catch (err) {
       setProductosRaw([]);
       setError(err.message || "Error inesperado");
@@ -361,7 +515,6 @@ const Stock = () => {
     fetchCategorias();
   }, [fetchProductos, fetchCategorias]);
 
-  // ✅ OPTIMIZADO: Ya no se dispara doble refresh por evento
   useEffect(() => {
     const handleExternalListsUpdate = async () => {
       try {
@@ -400,89 +553,15 @@ const Stock = () => {
   const totalPaginas = Math.max(1, Math.ceil(totalProductos / productosPorPagina));
 
   useEffect(() => {
-    if (paginaActual > totalPaginas) setPaginaActual(totalPaginas);
+    if (paginaActual > totalPaginas) {
+      setPaginaActual(totalPaginas);
+    }
   }, [paginaActual, totalPaginas]);
 
   const productos = useMemo(() => {
     const inicio = (paginaActual - 1) * productosPorPagina;
     return productosFiltradosYOrdenados.slice(inicio, inicio + productosPorPagina);
   }, [productosFiltradosYOrdenados, paginaActual]);
-
-  // ✅ OPTIMIZADO: Reintentos reducidos de 4 a 2, y lazy loading
-  useEffect(() => {
-    let cancelado = false;
-    const objectUrls = [];
-
-    async function obtenerBlobConRetry(prod) {
-      const maxIntentos = 2; // ✅ Reducido de 4 a 2
-
-      for (let intento = 0; intento < maxIntentos; intento++) {
-        try {
-          const params = new URLSearchParams({
-            action: "stock_producto_imagen_ver",
-            id_archivo: String(prod.imagen_archivo_id),
-            _imgv: getProductoImageRefreshToken(prod, refreshImagenesKey, intento),
-          });
-
-          const res = await fetch(`${API_URL}?${params.toString()}`, {
-            method: "GET",
-            headers: buildHeadersGET(),
-            cache: "no-store",
-          });
-
-          if (res.ok) {
-            const blob = await res.blob();
-            if (blob && blob.size > 0) {
-              return blob;
-            }
-          }
-        } catch {}
-
-        if (intento < maxIntentos - 1) {
-          await wait(250 * (intento + 1));
-        }
-      }
-
-      return null;
-    }
-
-    async function cargarImagenes() {
-      const productosConImagen = productos.filter((p) => Number(p.imagen_archivo_id || 0) > 0);
-
-      if (productosConImagen.length === 0) {
-        setImagenesMap({});
-        return;
-      }
-
-      const nuevoMap = {};
-
-      await Promise.all(
-        productosConImagen.map(async (prod) => {
-          const blob = await obtenerBlobConRetry(prod);
-          if (!blob) return;
-
-          try {
-            const url = URL.createObjectURL(blob);
-            objectUrls.push(url);
-            nuevoMap[getProductoId(prod)] = url; // ✅ Usa getProductoId consistente
-          } catch {}
-        })
-      );
-
-      if (!cancelado) {
-        setImagenesMap(nuevoMap);
-      } else {
-        objectUrls.forEach((u) => URL.revokeObjectURL(u));
-      }
-    }
-
-    cargarImagenes();
-
-    return () => {
-      cancelado = true;
-      objectUrls.forEach((u) => URL.revokeObjectURL(u));
-    };
-  }, [productos, refreshImagenesKey]);
 
   const handleBusqueda = (e) => {
     setBusqueda(e.target.value);
@@ -508,6 +587,7 @@ const Stock = () => {
       mostrarToast("error", "ID de producto inválido.");
       return;
     }
+
     setProductoEditarId(Number(id));
     setModalEditarAbierto(true);
   };
@@ -518,11 +598,17 @@ const Stock = () => {
   };
 
   const handleAbrirEliminar = (producto) => {
-    if (!producto?.id || Number(producto.id) <= 0) {
+    const productoId = getProductoId(producto);
+
+    if (!productoId || productoId <= 0) {
       mostrarToast("error", "ID de producto inválido.");
       return;
     }
-    setProductoEliminar(producto);
+
+    setProductoEliminar({
+      ...producto,
+      id: productoId,
+    });
     setModalEliminarAbierto(true);
   };
 
@@ -532,9 +618,11 @@ const Stock = () => {
     setProductoEliminar(null);
   };
 
-  // ✅ OPTIMIZADO: Ya no dispara eventos redundantes
+  // ✅ FIXED: Eliminar producto de la lista local inmediatamente
   const handleConfirmarEliminar = async () => {
-    if (!productoEliminar?.id || Number(productoEliminar.id) <= 0) {
+    const productoId = getProductoId(productoEliminar);
+
+    if (!productoId || productoId <= 0) {
       throw new Error("ID de producto inválido.");
     }
 
@@ -545,7 +633,7 @@ const Stock = () => {
 
       const payload = {
         action: "stock_productos_eliminar",
-        id: Number(productoEliminar.id),
+        id: productoId,
         idUsuarioMaster,
       };
 
@@ -559,11 +647,25 @@ const Stock = () => {
         throw new Error(data.mensaje || "Error al eliminar el producto");
       }
 
+      // ✅ NUEVO: remover de la lista local inmediatamente
+      setProductosRaw((prev) =>
+        prev.filter((p) => getProductoId(p) !== productoId)
+      );
+      
+      // ✅ NUEVO: limpiar el error de imagen de ese producto
+      setErroresImagenes((prev) => {
+        const next = { ...prev };
+        delete next[productoId];
+        return next;
+      });
+
       setModalEliminarAbierto(false);
       setProductoEliminar(null);
       await refrescarDespuesDeGuardar();
       notifyListsUpdated();
-      // ✅ Ya no dispare balto:stock-updated porque el listener ya lo va a manejar
+      mostrarToast("exito", "Producto eliminado correctamente.");
+    } catch (error) {
+      mostrarToast("error", error.message || "No se pudo eliminar el producto.");
     } finally {
       setEliminando(false);
     }
@@ -581,6 +683,7 @@ const Stock = () => {
     if (orden.campo !== campo) {
       return <FontAwesomeIcon icon={faSort} className="prod-sortIcon prod-sortIcon--inactive" />;
     }
+
     return (
       <FontAwesomeIcon
         icon={orden.dir === "ASC" ? faChevronUp : faChevronDown}
@@ -663,6 +766,7 @@ const Stock = () => {
                         <span className="cc-floatingLabel">
                           <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
                         </span>
+
                         {busqueda.trim() !== "" && (
                           <button
                             type="button"
@@ -705,13 +809,21 @@ const Stock = () => {
             </div>
 
             <div className="mov-card__actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button type="button" className="mov-btn mov-btn--primary" onClick={() => setModalAbierto(true)}>
+              <button
+                type="button"
+                className="mov-btn mov-btn--primary"
+                onClick={() => setModalAbierto(true)}
+              >
                 <FontAwesomeIcon icon={faPlus} /> Agregar producto
               </button>
             </div>
           </div>
 
-          <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: GRID_COLS }} role="row">
+          <div
+            className="mov-gridTable mov-gridTable--head"
+            style={{ gridTemplateColumns: GRID_COLS }}
+            role="row"
+          >
             {COLUMNS.map((c) => (
               <div
                 key={c.key}
@@ -732,7 +844,13 @@ const Stock = () => {
           </div>
 
           <div className="mov-tableWrap" role="rowgroup">
-            <div className={["mov-gridBody", "mov-gridBody--relative", loading ? "mov-softLoading" : ""].join(" ")}>
+            <div
+              className={[
+                "mov-gridBody",
+                "mov-gridBody--relative",
+                loading ? "mov-softLoading" : "",
+              ].join(" ")}
+            >
               {loading ? (
                 <div className="mov-skeletonWrap" aria-busy="true">
                   {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
@@ -749,68 +867,114 @@ const Stock = () => {
                       </div>
                     </div>
                   ) : (
-                    productos.map((prod) => (
-                      <div key={getProductoId(prod)} className="mov-gridTable mov-gridTable--row" style={{ gridTemplateColumns: GRID_COLS }} role="row">
-                        <div className="mov-gridCell is-strong" role="cell" data-label="PRODUCTO">
-                          <div className="prod-productCell">
-                            <div className="prod-thumb">
-                              {imagenesMap[getProductoId(prod)] ? (
-                                <img
-                                  src={imagenesMap[getProductoId(prod)]}
-                                  alt={prod.nombre}
-                                  className="prod-thumb__img"
-                                  loading="lazy" // ✅ Cambiado a lazy
-                                />
-                              ) : (
-                                <span className="prod-thumb__placeholder">
-                                  <FontAwesomeIcon icon={faBoxOpen} />
-                                </span>
-                              )}
+                    productos.map((prod) => {
+                      const productoId = getProductoId(prod);
+                      const archivoId = Number(prod?.imagen_archivo_id || 0);
+                      const imagenRota = !!erroresImagenes[productoId];
+                      const imageUrl =
+                        archivoId > 0
+                          ? getProductoImageUrl(prod, API_URL, refreshImagenesKey)
+                          : "";
+
+                      return (
+                        <div
+                          key={productoId}
+                          className="mov-gridTable mov-gridTable--row"
+                          style={{ gridTemplateColumns: GRID_COLS }}
+                          role="row"
+                        >
+                          <div className="mov-gridCell is-strong" role="cell" data-label="PRODUCTO">
+                            <div className="prod-productCell">
+                              <div className="prod-thumb">
+                                {archivoId > 0 && imageUrl && !imagenRota ? (
+                                  <img
+                                    src={imageUrl}
+                                    alt={prod.nombre}
+                                    className="prod-thumb__img"
+                                    loading="lazy"
+                                    decoding="async"
+                                    onError={() => {
+                                      setErroresImagenes((prev) => ({
+                                        ...prev,
+                                        [productoId]: true,
+                                      }));
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="prod-thumb__placeholder">
+                                    <FontAwesomeIcon icon={faBoxOpen} />
+                                  </span>
+                                )}
+                              </div>
+
+                              <span className="mov-ellipsissss">{prod.nombre}</span>
                             </div>
-                            <span className="mov-ellipsissss">{prod.nombre}</span>
+                          </div>
+
+                          <div className="mov-gridCell is-center" role="cell" data-label="SKU">
+                            <span className="mov-ellipsissss prod-sku">{prod.sku || "—"}</span>
+                          </div>
+
+                          <div className="mov-gridCell is-center" role="cell" data-label="STOCK">
+                            {(() => {
+                              const stockNum = Number(prod.stock || 0);
+                              let stockClass = "mov-chip mov-chip--danger";
+                              let stockLabel = "Sin stock";
+
+                              if (stockNum > 10) {
+                                stockClass = "mov-chip mov-chip--ok";
+                                stockLabel = stockNum;
+                              } else if (stockNum > 0 && stockNum <= 10) {
+                                stockClass = "mov-chip mov-chip--warn";
+                                stockLabel = stockNum;
+                              }
+
+                              return <span className={stockClass}>{stockLabel}</span>;
+                            })()}
+                          </div>
+
+                          <div className="mov-gridCell is-right" role="cell" data-label="PRECIO">
+                            <span className="mov-ellipsissss">{formatMoney(prod.precio)}</span>
+                          </div>
+
+                          <div
+                            className="mov-gridCell is-right"
+                            role="cell"
+                            data-label="PRECIO PROMO"
+                          >
+                            <span className="mov-ellipsissss prod-promo">
+                              {formatMoney(prod.precio_promo)}
+                            </span>
+                          </div>
+
+                          <div
+                            className="mov-gridCell mov-gridCell--actions is-center"
+                            role="cell"
+                            data-label="ACCIONES"
+                          >
+                            <div className="mov-actionsInline">
+                              <button
+                                type="button"
+                                title="Editar"
+                                className="mov-iconBtn"
+                                onClick={() => handleAbrirEditar(productoId)}
+                              >
+                                <FontAwesomeIcon icon={faPenToSquare} />
+                              </button>
+
+                              <button
+                                type="button"
+                                title="Eliminar"
+                                className="mov-iconBtn mov-iconBtn--danger"
+                                onClick={() => handleAbrirEliminar(prod)}
+                              >
+                                <FontAwesomeIcon icon={faTrashCan} />
+                              </button>
+                            </div>
                           </div>
                         </div>
-
-                        <div className="mov-gridCell is-center" role="cell" data-label="SKU">
-                          <span className="mov-ellipsissss prod-sku">{prod.sku || "—"}</span>
-                        </div>
-
-                        <div className="mov-gridCell is-center" role="cell" data-label="STOCK">
-                          {(() => {
-                            const stockNum = Number(prod.stock || 0);
-                            let stockClass = "mov-chip mov-chip--danger";
-                            let stockLabel = "Sin stock";
-                            if (stockNum > 10) {
-                              stockClass = "mov-chip mov-chip--ok";
-                              stockLabel = stockNum;
-                            } else if (stockNum > 0 && stockNum <= 10) {
-                              stockClass = "mov-chip mov-chip--warn";
-                              stockLabel = stockNum;
-                            }
-                            return <span className={stockClass}>{stockLabel}</span>;
-                          })()}
-                        </div>
-
-                        <div className="mov-gridCell is-right" role="cell" data-label="PRECIO">
-                          <span className="mov-ellipsissss">{formatMoney(prod.precio)}</span>
-                        </div>
-
-                        <div className="mov-gridCell is-right" role="cell" data-label="PRECIO PROMO">
-                          <span className="mov-ellipsissss prod-promo">{formatMoney(prod.precio_promo)}</span>
-                        </div>
-
-                        <div className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label="ACCIONES">
-                          <div className="mov-actionsInline">
-                            <button type="button" title="Editar" className="mov-iconBtn" onClick={() => handleAbrirEditar(prod.id)}>
-                              <FontAwesomeIcon icon={faPenToSquare} />
-                            </button>
-                            <button type="button" title="Eliminar" className="mov-iconBtn mov-iconBtn--danger" onClick={() => handleAbrirEliminar(prod)}>
-                              <FontAwesomeIcon icon={faTrashCan} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </>
               )}
@@ -828,6 +992,7 @@ const Stock = () => {
             >
               ← Anterior
             </button>
+
             {paginasVisibles.map((p, i) =>
               p === "..." ? (
                 <span key={`dots-${i}`} className="prod-page-dots">
@@ -845,6 +1010,7 @@ const Stock = () => {
                 </button>
               )
             )}
+
             <button
               type="button"
               className="mov-btn mov-btn--ghost"
@@ -862,9 +1028,9 @@ const Stock = () => {
           open={modalAbierto}
           onClose={() => setModalAbierto(false)}
           onToast={mostrarToast}
-          onGuardado={async () => {
+          onGuardado={async (productoGuardado) => {
             setModalAbierto(false);
-            await refrescarDespuesDeGuardar();
+            await refrescarDespuesDeGuardar(productoGuardado);
             notifyListsUpdated();
             mostrarToast("exito", "Producto agregado correctamente.");
           }}
@@ -874,7 +1040,7 @@ const Stock = () => {
             notifyListsUpdated();
             mostrarToast("exito", mensaje || "Importación finalizada correctamente.");
           }}
-          categorias={categorias} // ✅ Pasamos categorías para evitar request extra
+          categorias={categorias}
           loadingCategorias={loadingCategorias}
         />
       )}
@@ -883,9 +1049,9 @@ const Stock = () => {
         <ModalEditarProducto
           productoId={productoEditarId}
           onClose={handleCerrarEditar}
-          onGuardado={async () => {
+          onGuardado={async (productoGuardado) => {
             handleCerrarEditar();
-            await refrescarDespuesDeGuardar();
+            await refrescarDespuesDeGuardar(productoGuardado);
             notifyListsUpdated();
             mostrarToast("exito", "Producto editado correctamente.");
           }}
@@ -897,7 +1063,7 @@ const Stock = () => {
         row={
           productoEliminar
             ? {
-                id: productoEliminar.id,
+                id: getProductoId(productoEliminar),
                 nombre: productoEliminar.nombre,
                 sku: productoEliminar.sku,
                 stock: productoEliminar.stock,
@@ -921,7 +1087,7 @@ const Stock = () => {
         details={
           productoEliminar
             ? [
-                { label: "ID Producto", value: `#${productoEliminar.id}` },
+                { label: "ID Producto", value: `#${getProductoId(productoEliminar)}` },
                 { label: "Nombre", value: productoEliminar.nombre || "—" },
                 { label: "SKU", value: productoEliminar.sku || "—" },
                 {

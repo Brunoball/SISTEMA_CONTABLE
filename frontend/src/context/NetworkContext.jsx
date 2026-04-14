@@ -1,5 +1,13 @@
 // src/context/NetworkContext.jsx
-import React, { createContext, useContext, useEffect, useState, useRef, useMemo } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import BASE_URL from "../config/config";
 import Toast from "../components/Global/Toast.jsx";
 
@@ -8,31 +16,32 @@ import "../components/Global/Global_css/roots.css";
 const NetworkContext = createContext(null);
 export const useNetwork = () => useContext(NetworkContext);
 
+const PING_INTERVAL_MS = 2500;
+const PING_TIMEOUT_MS = 3500;
+const FAILS_TO_LOCK = 2;
+const SUCCESSES_TO_UNLOCK = 3;
+
 function buildPingUrl() {
   const base = String(BASE_URL || "").trim().replace(/\/+$/, "");
 
-  // Si BASE_URL ya termina en /api.php, usarlo tal cual
   if (/\/api\.php$/i.test(base)) {
     return `${base}?action=ping`;
   }
 
-  // Si BASE_URL termina en /api/routes, llevarlo a /api/routes/api.php
   if (/\/api\/routes$/i.test(base)) {
     return `${base}/api.php?action=ping`;
   }
 
-  // Si BASE_URL termina en /api, usar /api.php
   if (/\/api$/i.test(base)) {
     return `${base}.php?action=ping`;
   }
 
-  // Caso normal: dominio base
   return `${base}/api.php?action=ping`;
 }
 
-async function pingServidor(url) {
+async function pingServidor(url, timeoutMs = PING_TIMEOUT_MS) {
   const ctrl = new AbortController();
-  const timeoutId = setTimeout(() => ctrl.abort(), 3500);
+  const timeoutId = setTimeout(() => ctrl.abort(), timeoutMs);
 
   try {
     const res = await fetch(url, {
@@ -44,6 +53,8 @@ async function pingServidor(url) {
       },
     });
 
+    if (!res.ok) return false;
+
     const text = await res.text().catch(() => "");
     let data = null;
 
@@ -53,16 +64,7 @@ async function pingServidor(url) {
       data = null;
     }
 
-    if (!res.ok) {
-      return false;
-    }
-
-    // Esperamos { exito: true, mensaje: "API OK", action: "ping" }
-    if (data?.exito === true) {
-      return true;
-    }
-
-    return false;
+    return data?.exito === true;
   } catch {
     return false;
   } finally {
@@ -72,14 +74,80 @@ async function pingServidor(url) {
 
 export default function NetworkProvider({ children }) {
   const [offline, setOffline] = useState(!navigator.onLine);
+  const [checking, setChecking] = useState(false);
   const [toastOk, setToastOk] = useState(false);
 
   const retryTimer = useRef(null);
-  const prevOfflineRef = useRef(offline);
+  const failCountRef = useRef(0);
+  const successCountRef = useRef(0);
+  const prevOfflineRef = useRef(!navigator.onLine);
+  const runningCheckRef = useRef(false);
+
+  const enterOfflineMode = useCallback(() => {
+    successCountRef.current = 0;
+    setOffline(true);
+  }, []);
+
+  const registerFailure = useCallback(() => {
+    failCountRef.current += 1;
+
+    if (failCountRef.current >= FAILS_TO_LOCK) {
+      enterOfflineMode();
+    }
+  }, [enterOfflineMode]);
+
+  const registerSuccess = useCallback(() => {
+    failCountRef.current = 0;
+  }, []);
+
+  const doHealthCheck = useCallback(async (manual = false) => {
+    if (runningCheckRef.current) return;
+    runningCheckRef.current = true;
+    setChecking(true);
+
+    try {
+      if (!navigator.onLine) {
+        successCountRef.current = 0;
+        enterOfflineMode();
+        return;
+      }
+
+      const ok = await pingServidor(buildPingUrl());
+
+      if (!ok) {
+        successCountRef.current = 0;
+        enterOfflineMode();
+        return;
+      }
+
+      // Aunque el ping haya dado bien una vez, no liberamos todavía:
+      // exigimos varias seguidas para considerar la red estable.
+      successCountRef.current += 1;
+
+      if (successCountRef.current >= SUCCESSES_TO_UNLOCK) {
+        failCountRef.current = 0;
+        setOffline(false);
+      } else if (manual) {
+        // Si fue manual y todavía faltan éxitos, mantenemos bloqueado.
+        setOffline(true);
+      }
+    } finally {
+      setChecking(false);
+      runningCheckRef.current = false;
+    }
+  }, [enterOfflineMode]);
 
   useEffect(() => {
-    const goOffline = () => setOffline(true);
-    const goOnline = () => setOffline(false);
+    const goOffline = () => {
+      enterOfflineMode();
+    };
+
+    const goOnline = () => {
+      // No liberamos de una:
+      // primero verificamos estabilidad real con pings
+      successCountRef.current = 0;
+      doHealthCheck(true);
+    };
 
     window.addEventListener("offline", goOffline);
     window.addEventListener("online", goOnline);
@@ -88,66 +156,78 @@ export default function NetworkProvider({ children }) {
       window.removeEventListener("offline", goOffline);
       window.removeEventListener("online", goOnline);
     };
-  }, []);
+  }, [doHealthCheck, enterOfflineMode]);
 
   useEffect(() => {
-    const handler = () => setOffline(true);
-    window.addEventListener("net:fetch_failed", handler);
-    return () => window.removeEventListener("net:fetch_failed", handler);
-  }, []);
+    const onFetchFailed = () => {
+      registerFailure();
+    };
+
+    const onFetchOk = () => {
+      registerSuccess();
+    };
+
+    window.addEventListener("net:fetch_failed", onFetchFailed);
+    window.addEventListener("net:fetch_timeout", onFetchFailed);
+    window.addEventListener("net:fetch_ok", onFetchOk);
+    window.addEventListener("net:force_offline", onFetchFailed);
+
+    return () => {
+      window.removeEventListener("net:fetch_failed", onFetchFailed);
+      window.removeEventListener("net:fetch_timeout", onFetchFailed);
+      window.removeEventListener("net:fetch_ok", onFetchOk);
+      window.removeEventListener("net:force_offline", onFetchFailed);
+    };
+  }, [registerFailure, registerSuccess]);
 
   useEffect(() => {
     if (!offline) {
-      if (retryTimer.current) {
-        clearInterval(retryTimer.current);
-      }
+      successCountRef.current = SUCCESSES_TO_UNLOCK;
+      if (retryTimer.current) clearInterval(retryTimer.current);
       retryTimer.current = null;
       return;
     }
 
-    const pingUrl = buildPingUrl();
+    successCountRef.current = 0;
 
-    const tick = async () => {
-      if (!navigator.onLine) return;
+    if (retryTimer.current) clearInterval(retryTimer.current);
 
-      const ok = await pingServidor(pingUrl);
-      if (ok) {
-        setOffline(false);
-        if (retryTimer.current) {
-          clearInterval(retryTimer.current);
-        }
-        retryTimer.current = null;
-      }
-    };
+    retryTimer.current = setInterval(() => {
+      void doHealthCheck(false);
+    }, PING_INTERVAL_MS);
 
-    retryTimer.current = setInterval(tick, 2500);
-    tick();
+    void doHealthCheck(false);
 
     return () => {
-      if (retryTimer.current) {
-        clearInterval(retryTimer.current);
-      }
+      if (retryTimer.current) clearInterval(retryTimer.current);
       retryTimer.current = null;
     };
-  }, [offline]);
+  }, [offline, doHealthCheck]);
 
   useEffect(() => {
     const prev = prevOfflineRef.current;
+
     if (prev === true && offline === false) {
       setToastOk(true);
     }
+
     prevOfflineRef.current = offline;
   }, [offline]);
 
   useEffect(() => {
     return () => {
-      if (retryTimer.current) {
-        clearInterval(retryTimer.current);
-      }
+      if (retryTimer.current) clearInterval(retryTimer.current);
     };
   }, []);
 
-  const value = useMemo(() => ({ offline }), [offline]);
+  const value = useMemo(
+    () => ({
+      offline,
+      checking,
+      forceNetworkCheck: () => doHealthCheck(true),
+    }),
+    [offline, checking, doHealthCheck]
+  );
 
   return (
     <NetworkContext.Provider value={value}>
@@ -187,17 +267,25 @@ export default function NetworkProvider({ children }) {
               </svg>
             </div>
 
-            <h2 className="net-title">Sin conexión</h2>
+            <h2 className="net-title">
+              {checking ? "Reconectando..." : "Sin conexión"}
+            </h2>
 
             <p className="net-text">
-              No pudimos comunicarnos con Internet o con el servidor.
-              <br />
-              Estamos reintentando automáticamente…
+              {checking
+                ? "La red todavía no está estable. Estamos verificando nuevamente..."
+                : "No pudimos comunicarnos con Internet o con el servidor. Estamos reintentando automáticamente…"}
             </p>
 
             <div className="net-actions">
-              <button className="net-btn" onClick={() => window.location.reload()}>
-                Reintentar ahora
+              <button
+                className="net-btn"
+                onClick={() => {
+                  void doHealthCheck(true);
+                }}
+                disabled={checking}
+              >
+                {checking ? "Verificando..." : "Reintentar ahora"}
               </button>
 
               <button

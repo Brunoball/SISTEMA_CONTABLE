@@ -1,4 +1,3 @@
-// ✅ REEMPLAZAR COMPLETO
 // src/utils/FacturaPdfBuilder.js
 
 import jsPDF from "jspdf";
@@ -462,7 +461,7 @@ async function buildQrDataUrl(fact) {
 
 /* =========================================================
    LOGO DEL TENANT / NEGOCIO EMISOR
-   Misma lógica general que Principal.jsx
+   ✅ CORRECCIÓN: usa tipo "principal" para la factura
 ========================================================= */
 
 function buildApiUrl(paramsObj) {
@@ -510,6 +509,7 @@ function blobToDataUrl(blob) {
   });
 }
 
+// ✅ CORRECCIÓN: Versión corregida que pide directamente a la API
 async function fetchTenantLogoDataUrl(data, fact) {
   try {
     const direct =
@@ -520,40 +520,15 @@ async function fetchTenantLogoDataUrl(data, fact) {
 
     if (direct) return direct;
 
-    const explicitUrl =
-      s(data?.emisor_logo_url) ||
-      s(fact?.emisor_logo_url) ||
-      s(data?.logo_url) ||
-      s(fact?.logo_url);
-
-    if (explicitUrl && /^data:image\//i.test(explicitUrl)) {
-      return explicitUrl;
-    }
-
-    if (isLocalApiBase()) {
-      return "";
-    }
+    if (isLocalApiBase()) return "";
 
     const sessionKey = getSessionKey();
     if (!sessionKey) return "";
 
-    let usuarioLocal = {};
-    try {
-      usuarioLocal = safeJsonParse(localStorage.getItem("usuario")) || {};
-    } catch {
-      usuarioLocal = {};
-    }
-
-    const logoDb = String(
-      data?.tenant_logo_url_db ||
-        fact?.tenant_logo_url_db ||
-        usuarioLocal?.tenant_logo_url_db ||
-        ""
-    ).trim();
-
-    if (!logoDb) return "";
-
-    const logoUrl = buildApiUrl({ action: "tenant_logo_ver" });
+    const logoUrl = buildApiUrl({
+      action: "tenant_logo_ver",
+      tipo: "principal",
+    });
 
     const res = await fetch(logoUrl, {
       method: "GET",
@@ -563,16 +538,19 @@ async function fetchTenantLogoDataUrl(data, fact) {
       cache: "no-store",
     });
 
+    if (res.status === 204 || res.status === 404 || res.status === 500) {
+      return "";
+    }
+
     if (!res.ok) return "";
 
     const contentType = String(res.headers.get("content-type") || "").toLowerCase();
-    if (contentType.includes("application/json")) return "";
+    if (!contentType.startsWith("image/")) return "";
 
     const blob = await res.blob();
     if (!blob || !blob.size) return "";
 
-    const dataUrl = await blobToDataUrl(blob);
-    return dataUrl || "";
+    return await blobToDataUrl(blob);
   } catch {
     return "";
   }
@@ -710,15 +688,15 @@ async function drawPage(doc, pageName, ctx) {
 
   rect(doc, B, B, innerW, H - 2 * B, 0.75);
 
-const bandH = 28;
-set(doc, "helvetica", "bold", 14);
+  const bandH = 28;
+  set(doc, "helvetica", "bold", 14);
 
-// ✅ centrado horizontal y vertical real dentro de la banda
-const bandCenterX = B + innerW / 2;
-const bandCenterY = B + bandH / 2;
-text(doc, pageName.toUpperCase(), bandCenterX + 10, bandCenterY + 5, {
-  align: "center",
-});
+  // centrado horizontal y vertical real dentro de la banda
+  const bandCenterX = B + innerW / 2;
+  const bandCenterY = B + bandH / 2;
+  text(doc, pageName.toUpperCase(), bandCenterX + 10, bandCenterY + 5, {
+    align: "center",
+  });
   line(doc, B, B + bandH, W - B, B + bandH, 0.55);
 
   const meta = getMeta(fact);

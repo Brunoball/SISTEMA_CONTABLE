@@ -4,30 +4,65 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
+import NetworkProvider from "./context/NetworkContext";
 
-import NetworkProvider from "./context/NetworkContext"; // ✅ IMPORT
-
-// =============================
-// 🚨 INTERCEPTOR GLOBAL DE FETCH
-// (detecta corte de internet)
-// =============================
 if (!window.__BALTO_FETCH_PATCHED__) {
   window.__BALTO_FETCH_PATCHED__ = true;
 
   const realFetch = window.fetch.bind(window);
+  const DEFAULT_TIMEOUT_MS = 15000;
 
-  window.fetch = async (...args) => {
+  function mergeSignals(signalA, signalB) {
+    if (!signalA) return signalB;
+    if (!signalB) return signalA;
+
+    if (typeof AbortSignal !== "undefined" && typeof AbortSignal.any === "function") {
+      return AbortSignal.any([signalA, signalB]);
+    }
+
+    return signalB;
+  }
+
+  window.fetch = async (input, init = {}) => {
+    const ctrl = new AbortController();
+    const timeoutMs =
+      typeof init?.timeoutMs === "number" && init.timeoutMs > 0
+        ? init.timeoutMs
+        : DEFAULT_TIMEOUT_MS;
+
+    const timeoutId = setTimeout(() => {
+      ctrl.abort();
+    }, timeoutMs);
+
     try {
-      return await realFetch(...args);
+      const response = await realFetch(input, {
+        ...init,
+        signal: mergeSignals(init.signal, ctrl.signal),
+      });
+
+      try {
+        window.dispatchEvent(new CustomEvent("net:fetch_ok"));
+      } catch {}
+
+      return response;
     } catch (e) {
+      const isAbort = e?.name === "AbortError";
+
       try {
         window.dispatchEvent(
-          new CustomEvent("net:fetch_failed", {
-            detail: { error: String(e) },
+          new CustomEvent(isAbort ? "net:fetch_timeout" : "net:fetch_failed", {
+            detail: {
+              error: String(e),
+              url: typeof input === "string" ? input : "",
+              timeoutMs,
+            },
           })
         );
       } catch {}
+
       throw e;
+    } finally {
+      clearTimeout(timeoutId);
     }
   };
 }

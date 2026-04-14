@@ -23,7 +23,6 @@ import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 /* Configuración */
 import Configuracion from "./components/Configuracion/Configuracion";
 import ConfigTiendaNube from "./components/Configuracion/ConfigTiendaNube";
-import R2TestUploader from "./components/Configuracion/R2Test/R2TestUploader";
 
 /* Análisis financiero */
 import * as AnalisisFinancieroModule from "./components/Analisis_Financiero/Analisis_Financiero";
@@ -162,7 +161,6 @@ export default function App() {
           {/* CONFIGURACIÓN */}
           <Route path="configuracion" element={<Configuracion />} />
           <Route path="configuracion/tiendanube" element={<ConfigTiendaNube />} />
-          <Route path="configuracion/r2-test" element={<R2TestUploader />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -233,7 +233,7 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle, esEcheq = fa
   const accentGlow = esEcheq ? "rgba(0,85,187,.10)" : "rgba(15,118,110,.10)";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+    <div  className="nc-cheques-list">
       {cheques.map((ch, idx) => {
         const checked = idsSeleccionados.includes(String(ch?.id_cheque));
 
@@ -243,28 +243,14 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle, esEcheq = fa
             role="checkbox"
             aria-checked={checked}
             tabIndex={0}
+                        className={`nc-cheque-item ${checked ? "nc-cheque-item--selected" : ""} ${esEcheq ? "nc-cheque-item--echeq" : ""}`}
+
             onClick={() => onToggle(String(ch?.id_cheque || ""))}
             onKeyDown={(e) =>
               (e.key === " " || e.key === "Enter") &&
               onToggle(String(ch?.id_cheque || ""))
             }
-            style={{
-              display: "grid",
-              gridTemplateColumns: "16px 1fr auto",
-              alignItems: "center",
-              gap: 10,
-              padding: "9px 11px",
-              border: checked
-                ? `1.5px solid ${accent}`
-                : "1.5px solid var(--nv-border-md)",
-              borderRadius: 9,
-              background: checked ? accentBg : "var(--nv-bg)",
-              cursor: "pointer",
-              transition: "border-color .14s, background .14s, box-shadow .14s",
-              boxShadow: checked ? `0 0 0 3px ${accentGlow}` : "var(--nv-shadow-sm)",
-              outline: "none",
-              userSelect: "none",
-            }}
+
           >
             <div
               aria-hidden="true"
@@ -352,14 +338,7 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle, esEcheq = fa
             </div>
 
             <span
-              style={{
-                fontSize: 13,
-                fontWeight: 800,
-                fontVariantNumeric: "tabular-nums",
-                color: checked ? accent : "var(--nv-text)",
-                whiteSpace: "nowrap",
-                transition: "color .14s",
-              }}
+ className="nc-cheque-importe"
             >
               {moneyARS(ch?.importe || 0)}
             </span>
@@ -1298,10 +1277,10 @@ export default function ModalPagarOrdenesPago({
                     </div>
                   </div>
 
-                  <div className="nc-actions">
+                  <div className="mpr-aside__actions">
                     <button
                       type="button"
-                      className="nc-btn-guardar"
+                      className="mit-btn mit-btn--solid mit-btn--block"
                       onClick={handleConfirm}
                       disabled={loading || selectedIds.size === 0 || loadingMedios}
                     >
@@ -1309,7 +1288,7 @@ export default function ModalPagarOrdenesPago({
                     </button>
                     <button
                       type="button"
-                      className="nc-btn-cancelar"
+                      className="mit-btn mit-btn--ghost mit-btn--block"
                       onClick={onClose}
                       disabled={loading}
                     >

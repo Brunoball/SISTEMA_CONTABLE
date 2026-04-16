@@ -10,7 +10,6 @@ import {
   faTruck,
   faBoxOpen,
   faDollarSign,
-  faPlus,
 } from "@fortawesome/free-solid-svg-icons";
 
 const NULL_OPTION = "";
@@ -71,8 +70,8 @@ function periodoToYYYYMM(input) {
 function periodoFromISODate(iso) {
   const s = String(iso ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
-  const [y, m] = s.split("-");
-  return `${m}-${y}`;
+  const [, m] = s.split("-");
+  return `${m}-${s.slice(0, 4)}`;
 }
 
 function normalizeSearchText(v) {
@@ -125,7 +124,7 @@ async function parseJsonOrThrow(res) {
   try {
     data = JSON.parse(text);
   } catch {
-    const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
+    const preview = text.length > 600 ? `${text.slice(0, 600)}...` : text;
     throw new Error(`Respuesta inválida (no JSON). HTTP ${res.status}\n${preview}`);
   }
 
@@ -326,7 +325,12 @@ export default function ModalEditarOrdenPago({
   const [provFocus, setProvFocus] = useState(false);
   const [provArmed, setProvArmed] = useState(false);
 
-  const [addUI, setAddUI] = useState({ open: false, catalogo: "detalles", text: "", saving: false });
+  const [addUI, setAddUI] = useState({
+    open: false,
+    catalogo: "detalles",
+    text: "",
+    saving: false,
+  });
 
   const closeBtnRef = useRef(null);
 
@@ -632,7 +636,7 @@ export default function ModalEditarOrdenPago({
             <div className="mi-modal__head-left">
               <h2 className="mi-modal__title">Editar orden de pago</h2>
               <p className="mi-modal__subtitle">
-                Modificá fecha, período, proveedor, detalle y monto con la misma estética del otro modal.
+                Modificá fecha, proveedor, detalle y monto con la misma estética del otro modal.
               </p>
             </div>
 
@@ -651,70 +655,29 @@ export default function ModalEditarOrdenPago({
             <div className="mi-er-layout">
               <section className="mi-er-main">
                 <form onSubmit={submit} className="mi-er-form">
-                  <div className="mi-er-grid-2">
-                    <div className="nc-section">
-                      <div className="nc-section-head">
-                        <div className="nc-section-dot" />
-                        <span>Fecha y período</span>
-                      </div>
-
-                      <div className="nc-section-body">
-                        <div className="nc-field">
-                          <input
-                            className="nc-input"
-                            type="date"
-                            placeholder=" "
-                            value={form.fecha}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setForm((p) => ({
-                                ...p,
-                                fecha: v,
-                                periodo: p.periodo || periodoFromISODate(v) || p.periodo,
-                              }));
-                            }}
-                            disabled={saving}
-                          />
-                          <label className="nc-label">Fecha</label>
-                        </div>
-
-                        <div className="nc-field">
-                          <input
-                            className="nc-input"
-                            placeholder=" "
-                            value={form.periodo}
-                            onChange={(e) => setForm((p) => ({ ...p, periodo: e.target.value }))}
-                            disabled={saving}
-                          />
-                          <label className="nc-label">Período (MM-YYYY)</label>
-                        </div>
-                      </div>
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" />
+                      <span>Monto</span>
                     </div>
 
-                    <div className="nc-section">
-                      <div className="nc-section-head">
-                        <div className="nc-section-dot" />
-                        <span>Monto</span>
+                    <div className="nc-section-body">
+                      <div className="nc-field">
+                        <input
+                          className="nc-input"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder=" "
+                          value={form.monto_total}
+                          onChange={(e) => setForm((p) => ({ ...p, monto_total: e.target.value }))}
+                          disabled={saving}
+                        />
+                        <label className="nc-label">Monto total</label>
                       </div>
 
-                      <div className="nc-section-body">
-                        <div className="nc-field">
-                          <input
-                            className="nc-input"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder=" "
-                            value={form.monto_total}
-                            onChange={(e) => setForm((p) => ({ ...p, monto_total: e.target.value }))}
-                            disabled={saving}
-                          />
-                          <label className="nc-label">Monto total</label>
-                        </div>
-
-                        <div className="nc-cc-info">
-                          <b>Total actual:</b> {moneyARS(form.monto_total || 0)}
-                        </div>
+                      <div className="nc-cc-info">
+                        <b>Total actual:</b> {moneyARS(form.monto_total || 0)}
                       </div>
                     </div>
                   </div>
@@ -765,16 +728,55 @@ export default function ModalEditarOrdenPago({
                           </div>
                         )}
                       </div>
+                    </div>
+                  </div>
 
-                      <button
-                        type="button"
-                        className="nc-pago-btn"
-                        onClick={() => startAdd("detalles")}
-                        disabled={saving}
-                      >
-                        <FontAwesomeIcon icon={faPlus} />
-                        Nuevo detalle
-                      </button>
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" />
+                      <span>Proveedor</span>
+                    </div>
+
+                    <div className="nc-section-body">
+                      <div className="mi-er-rel">
+                        <div className="nc-field">
+                          <input
+                            className="nc-input"
+                            placeholder=" "
+                            value={form.proveedorInput}
+                            onChange={handleProveedorInputChange}
+                            onFocus={() => {
+                              setProvFocus(true);
+                              setProvArmed(true);
+                            }}
+                            onBlur={() => setTimeout(() => setProvFocus(false), 120)}
+                            disabled={saving || addUI.open}
+                            autoComplete="off"
+                          />
+                          <label className="nc-label">Proveedor</label>
+                        </div>
+
+                        {!!filteredProveedores.length && (
+                          <div className="mi-er-autocomplete">
+                            {filteredProveedores.map((prov) => {
+                              const id = getIdProveedor(prov);
+                              const nombre = String(prov?.nombre ?? "").trim();
+
+                              return (
+                                <button
+                                  key={`prov-${id}-${nombre}`}
+                                  type="button"
+                                  className="mi-er-autocomplete__item"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => handleSelectProveedor(prov)}
+                                >
+                                  {nombre}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </form>
@@ -784,59 +786,28 @@ export default function ModalEditarOrdenPago({
                 <div className="nc-section">
                   <div className="nc-section-head">
                     <div className="nc-section-dot" />
-                    <span>Proveedor</span>
+                    <span>Fecha</span>
                   </div>
 
                   <div className="nc-section-body">
-                    <div className="mi-er-rel">
-                      <div className="nc-field">
-                        <input
-                          className="nc-input"
-                          placeholder=" "
-                          value={form.proveedorInput}
-                          onChange={handleProveedorInputChange}
-                          onFocus={() => {
-                            setProvFocus(true);
-                            setProvArmed(true);
-                          }}
-                          onBlur={() => setTimeout(() => setProvFocus(false), 120)}
-                          disabled={saving || addUI.open}
-                          autoComplete="off"
-                        />
-                        <label className="nc-label">Proveedor</label>
-                      </div>
-
-                      {!!filteredProveedores.length && (
-                        <div className="mi-er-autocomplete">
-                          {filteredProveedores.map((prov) => {
-                            const id = getIdProveedor(prov);
-                            const nombre = String(prov?.nombre ?? "").trim();
-
-                            return (
-                              <button
-                                key={`prov-${id}-${nombre}`}
-                                type="button"
-                                className="mi-er-autocomplete__item"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => handleSelectProveedor(prov)}
-                              >
-                                {nombre}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
+                    <div className="nc-field">
+                      <input
+                        className="nc-input"
+                        type="date"
+                        placeholder=" "
+                        value={form.fecha}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setForm((p) => ({
+                            ...p,
+                            fecha: v,
+                            periodo: periodoFromISODate(v) || p.periodo,
+                          }));
+                        }}
+                        disabled={saving}
+                      />
+                      <label className="nc-label">Fecha</label>
                     </div>
-
-                    <button
-                      type="button"
-                      className="nc-pago-btn"
-                      onClick={() => startAdd("proveedores")}
-                      disabled={saving}
-                    >
-                      <FontAwesomeIcon icon={faPlus} />
-                      Nuevo proveedor
-                    </button>
                   </div>
                 </div>
 
@@ -901,14 +872,14 @@ export default function ModalEditarOrdenPago({
 
           <AddCatalogMiniModal
             open={addUI.open}
-            title={addUI.catalogo === "proveedores" ? "Nuevo proveedor" : "Nuevo detalle"}
-            label={addUI.catalogo === "proveedores" ? "Nombre del proveedor" : "Nombre del detalle"}
+            title={addUI.catalogo === "proveedores" ? "Agregar proveedor" : "Agregar detalle"}
             value={addUI.text}
             saving={addUI.saving}
-            onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
+            onChange={(text) => setAddUI((p) => ({ ...p, text }))}
             onCancel={() => !addUI.saving && setAddUI({ open: false, catalogo: "detalles", text: "", saving: false })}
             onSave={guardarNuevoCatalogo}
             dark={darkOn}
+            label={addUI.catalogo === "proveedores" ? "Proveedor" : "Detalle"}
           />
         </div>
       </div>
@@ -937,12 +908,6 @@ export default function ModalEditarOrdenPago({
         .mi-er-form{
           display:flex;
           flex-direction:column;
-          gap:14px;
-        }
-
-        .mi-er-grid-2{
-          display:grid;
-          grid-template-columns:repeat(2,minmax(0,1fr));
           gap:14px;
         }
 
@@ -1004,10 +969,6 @@ export default function ModalEditarOrdenPago({
         }
 
         @media (max-width: 700px){
-          .mi-er-grid-2{
-            grid-template-columns:1fr;
-          }
-
           .nc-actions{
             flex-direction:column;
           }

@@ -19,7 +19,6 @@ import {
   faBasketShopping,
 } from "@fortawesome/free-solid-svg-icons";
 import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
-// [NUEVO] Importar el mini-modal de medios de pago y el panel resumen
 import { ModalMediosPago, PagoResumenPanel, buildEmptyMedioPago } from "./Modalmediospago.jsx";
 
 const NULL_OPTION = "";
@@ -537,8 +536,6 @@ function AddCatalogMiniModal({
 
 /* ============================================================
    MODAL PRINCIPAL — ModalEditarCompra
-============================================================ *//* ============================================================
-   MODAL PRINCIPAL — ModalEditarCompra (con estética unificada)
 ============================================================ */
 export default function ModalEditarCompra({
   open,
@@ -622,20 +619,24 @@ export default function ModalEditarCompra({
   const [mpModalOpen, setMpModalOpen] = useState(false);
 
   // ── Comprobante ──
-  const [archivoNuevo, setArchivoNuevo] = useState(null);
-  const [archivoActualUrl, setArchivoActualUrl] = useState("");
+  // archivoAdjunto unifica la lógica: si hay archivo nuevo seleccionado, se usa ese;
+  // si no, se usa el actual (URL). Al quitar → null ambos.
+  const [archivoNuevo, setArchivoNuevo]           = useState(null);   // File | null
+  const [archivoActualUrl, setArchivoActualUrl]   = useState("");
   const [archivoActualNombre, setArchivoActualNombre] = useState("");
-  const [archivoActualId, setArchivoActualId] = useState(null);
+  const [archivoActualId, setArchivoActualId]     = useState(null);
   const [quitarArchivoActual, setQuitarArchivoActual] = useState(false);
-  const [openVerComp, setOpenVerComp] = useState(false);
-  const [compUrl, setCompUrl] = useState("");
 
-  const closeBtnRef = useRef(null);
-  const fechaRef = useRef(null);
+  // Para visualizar comprobante — unificado
+  const [openVerComp, setOpenVerComp] = useState(false);
+  const [compUrl, setCompUrl]         = useState("");
+
+  const closeBtnRef       = useRef(null);
+  const fechaRef          = useRef(null);
   const proveedorInputRef = useRef(null);
-  const detalleInputRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const rowsContainerRef = useRef(null);
+  const detalleInputRef   = useRef(null);
+  const fileInputRef      = useRef(null);
+  const rowsContainerRef  = useRef(null);
   const [hasScroll, setHasScroll] = useState(false);
 
   const [addUI, setAddUI] = useState({ open: false, catalogo: null, text: "", saving: false });
@@ -913,24 +914,8 @@ export default function ModalEditarCompra({
   }, []);
 
   const onCantidadChange = useCallback((v) => recalcFromItem({ cantidad: v === "" ? "" : Number(v) }), [recalcFromItem]);
-  const onPrecioChange = useCallback((v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }), [recalcFromItem]);
-  const onIvaPctChange = useCallback((v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }), [recalcFromItem]);
-  const onMontoTotalManual = useCallback((v) => {
-    const mt = v === "" ? "" : Number(v);
-    setForm((p) => {
-      const next = { ...p, monto_total: mt };
-      const cantidad = Math.max(0, safeNumber(next.cantidad) || 1);
-      const iva_pct = Math.max(0, safeNumber(next.iva_pct));
-      const factor = cantidad * (1 + iva_pct / 100);
-      const precio = factor > 0 ? safeNumber(mt) / factor : safeNumber(mt);
-      const t = calcItemTotals(cantidad, precio, iva_pct);
-      next.precio = Math.round(precio * 100) / 100;
-      next.subtotal = t.subtotal;
-      next.iva_monto = t.iva_monto;
-      next.total = t.total;
-      return next;
-    });
-  }, []);
+  const onPrecioChange   = useCallback((v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }), [recalcFromItem]);
+  const onIvaPctChange   = useCallback((v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }), [recalcFromItem]);
 
   // ── Autocomplete proveedor/detalle ──
   const filteredProveedores = useMemo(() => {
@@ -978,8 +963,8 @@ export default function ModalEditarCompra({
       return Number.isFinite(n) && n > 0 ? n : null;
     };
     const cantidad = Math.max(0, safeNumber(form.cantidad));
-    const precio = Math.max(0, safeNumber(form.precio));
-    const iva_pct = Math.max(0, safeNumber(form.iva_pct));
+    const precio   = Math.max(0, safeNumber(form.precio));
+    const iva_pct  = Math.max(0, safeNumber(form.iva_pct));
     const t = calcItemTotals(cantidad, precio, iva_pct);
 
     const mediosPagoPayload = esContado
@@ -1004,28 +989,28 @@ export default function ModalEditarCompra({
       : [];
 
     return {
-      id_movimiento: form.id_movimiento,
-      fecha: form.fecha,
-      id_tipo_venta: toNullableId(form.id_tipo_venta),
+      id_movimiento:      form.id_movimiento,
+      fecha:              form.fecha,
+      id_tipo_venta:      toNullableId(form.id_tipo_venta),
       id_tipo_movimiento: toNullableId(form.id_tipo_movimiento),
-      id_proveedor: toNullableId(form.id_proveedor),
-      id_cliente: null,
-      id_detalle: toNullableId(form.id_detalle),
-      cantidad: Math.round(cantidad * 1000) / 1000,
-      precio: Math.round(precio * 100) / 100,
-      iva_pct: Math.round(iva_pct * 100) / 100,
-      subtotal: t.subtotal,
-      iva_monto: t.iva_monto,
-      total: t.total,
-      monto_total: Math.max(0, Math.round(t.total * 100) / 100),
-      accion_compra: esContado ? "pagar" : "guardar",
-      es_pagada: esContado,
-      id_medio_pago: null,
-      medios_pago: mediosPagoPayload,
+      id_proveedor:       toNullableId(form.id_proveedor),
+      id_cliente:         null,
+      id_detalle:         toNullableId(form.id_detalle),
+      cantidad:           Math.round(cantidad * 1000) / 1000,
+      precio:             Math.round(precio * 100) / 100,
+      iva_pct:            Math.round(iva_pct * 100) / 100,
+      subtotal:           t.subtotal,
+      iva_monto:          t.iva_monto,
+      total:              t.total,
+      monto_total:        Math.max(0, Math.round(t.total * 100) / 100),
+      accion_compra:      esContado ? "pagar" : "guardar",
+      es_pagada:          esContado,
+      id_medio_pago:      null,
+      medios_pago:        mediosPagoPayload,
     };
   }, [form, esContado, mediosFilas, safeLists.mediosPago]);
 
-  // ── Comprobante ──
+  // ── Comprobante: helpers ──
   const eliminarComprobanteActual = useCallback(async () => {
     if (!form.id_movimiento) throw new Error("Falta id_movimiento para eliminar el comprobante.");
     const body = {
@@ -1058,19 +1043,63 @@ export default function ModalEditarCompra({
     return data;
   }, [ENDPOINT_UPLOAD_LINK]);
 
+  // ── Comprobante: acciones de UI ──
+
+  // Qué archivo mostrar actualmente en la UI
+  // Prioridad: archivo nuevo > archivo actual (si no fue quitado)
+  const archivoMostrado = archivoNuevo
+    ? { tipo: "nuevo", nombre: archivoNuevo.name, size: archivoNuevo.size, file: archivoNuevo }
+    : (!quitarArchivoActual && (archivoActualUrl || archivoActualId))
+      ? { tipo: "actual", nombre: archivoActualNombre || "Comprobante actual", url: archivoActualUrl }
+      : null;
+
+  // Ver comprobante — mismo comportamiento que NuevaCompra:
+  // archivo nuevo → createObjectURL; archivo actual → URL del servidor
   const handleOpenVerComprobante = useCallback(() => {
-    const targetUrl = String(archivoActualUrl || "").trim();
-    if (!targetUrl) { showToast("advertencia", "No hay comprobante para visualizar.", 2600); return; }
-    setCompUrl(targetUrl);
-    setOpenVerComp(true);
-  }, [archivoActualUrl, showToast]);
+    if (!archivoMostrado) return;
+    if (archivoMostrado.tipo === "nuevo") {
+      const url = URL.createObjectURL(archivoMostrado.file);
+      setCompUrl(url);
+      setOpenVerComp(true);
+    } else {
+      const targetUrl = String(archivoMostrado.url || "").trim();
+      if (!targetUrl) { showToast("advertencia", "No hay comprobante para visualizar.", 2600); return; }
+      setCompUrl(targetUrl);
+      setOpenVerComp(true);
+    }
+  }, [archivoMostrado, showToast]);
 
   const handleCloseVerComprobante = useCallback(() => {
     setOpenVerComp(false);
+    // Si era un object URL (archivo nuevo), revocarlo
+    if (compUrl && compUrl.startsWith("blob:")) URL.revokeObjectURL(compUrl);
     setCompUrl("");
-  }, []);
+  }, [compUrl]);
 
-  const handleReplaceFileClick = useCallback(() => {
+  // Limpiar object URL al desmontar
+  useEffect(() => {
+    return () => {
+      if (compUrl && compUrl.startsWith("blob:")) URL.revokeObjectURL(compUrl);
+    };
+  }, [compUrl]);
+
+  // Quitar archivo — igual que NuevaCompra
+  const handleQuitarArchivo = useCallback(() => {
+    if (archivoNuevo) {
+      // Había un archivo nuevo seleccionado → solo limpiarlo
+      setArchivoNuevo(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } else {
+      // Había archivo actual → marcar para eliminar al guardar
+      setQuitarArchivoActual(true);
+    }
+    setOpenVerComp(false);
+    if (compUrl && compUrl.startsWith("blob:")) URL.revokeObjectURL(compUrl);
+    setCompUrl("");
+  }, [archivoNuevo, compUrl]);
+
+  // Seleccionar archivo — igual que NuevaCompra
+  const handleOpenFilePicker = useCallback(() => {
     if (saving || addUI.open || openVerComp) return;
     fileInputRef.current?.click();
   }, [saving, addUI.open, openVerComp]);
@@ -1078,8 +1107,14 @@ export default function ModalEditarCompra({
   const handleFileSelected = useCallback((e) => {
     const file = e.target.files?.[0] || null;
     setArchivoNuevo(file);
-    if (file) { setQuitarArchivoActual(false); setOpenVerComp(false); setCompUrl(""); }
-  }, []);
+    if (file) {
+      // Si había archivo actual marcado para quitar, limpiar esa marca
+      setQuitarArchivoActual(false);
+      setOpenVerComp(false);
+      if (compUrl && compUrl.startsWith("blob:")) URL.revokeObjectURL(compUrl);
+      setCompUrl("");
+    }
+  }, [compUrl]);
 
   // ── Submit ──
   const submit = async (e) => {
@@ -1108,9 +1143,9 @@ export default function ModalEditarCompra({
         throw new Error("Seleccioná un detalle o crealo con Agregar nuevo detalle.");
 
       const cantidad = Math.max(0, safeNumber(form.cantidad));
-      const precio = Math.max(0, safeNumber(form.precio));
+      const precio   = Math.max(0, safeNumber(form.precio));
       if (!(cantidad > 0)) throw new Error("La cantidad debe ser mayor a 0.");
-      if (!(precio > 0)) throw new Error("El precio debe ser mayor a 0.");
+      if (!(precio > 0))   throw new Error("El precio debe ser mayor a 0.");
 
       if (esContado) {
         if (!payload.medios_pago.length) throw new Error("En compras al contado debés cargar al menos un medio de pago.");
@@ -1137,8 +1172,8 @@ export default function ModalEditarCompra({
       const payloadFinal = { ...payload, id_proveedor: Number(proveedorId), id_detalle: Number(detalleId) };
       await onSave?.(payloadFinal);
 
-      const habiaArchivo = Boolean(archivoActualUrl || archivoActualId);
-      const quiereQuitar = Boolean(quitarArchivoActual);
+      const habiaArchivo   = Boolean(archivoActualUrl || archivoActualId);
+      const quiereQuitar   = Boolean(quitarArchivoActual);
       const quiereSubirNuevo = Boolean(archivoNuevo);
 
       if (habiaArchivo && (quiereQuitar || quiereSubirNuevo)) {
@@ -1161,10 +1196,9 @@ export default function ModalEditarCompra({
 
   if (!open) return null;
 
-  const overlayClass = ["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim();
-  const containerClass = ["mi-modal__container", "mi-modal__container--mov", dark ? "mi-modal--dark" : ""].join(" ").trim();
-  const miniTitle = addUI.catalogo === "proveedores" ? "Nuevo proveedor" : addUI.catalogo === "detalles" ? "Nuevo detalle" : "Nuevo";
-  const mostrarArchivoActual = Boolean((archivoActualUrl || archivoActualId) && !quitarArchivoActual);
+  const overlayClass    = ["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim();
+  const containerClass  = ["mi-modal__container", "mi-modal__container--mov", dark ? "mi-modal--dark" : ""].join(" ").trim();
+  const miniTitle       = addUI.catalogo === "proveedores" ? "Nuevo proveedor" : addUI.catalogo === "detalles" ? "Nuevo detalle" : "Nuevo";
 
   return createPortal(
     <>
@@ -1176,7 +1210,7 @@ export default function ModalEditarCompra({
           aria-modal="true"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {/* HEADER - MISMO ESTILO QUE NUEVA COMPRA */}
+          {/* HEADER */}
           <div className="mi-modal__header">
             <div className="mi-modal__head-icon" aria-hidden="true">
               <FontAwesomeIcon icon={faBasketShopping} />
@@ -1196,6 +1230,7 @@ export default function ModalEditarCompra({
 
           <div className="mi-modal__content">
             <div className="mi-cr-grid">
+
               {/* ── TABLA DE PRODUCTO (UN SOLO ÍTEM) ── */}
               <section className="mi-cr-table">
                 <div className="mi-cr-table__head">
@@ -1209,7 +1244,6 @@ export default function ModalEditarCompra({
                 </div>
 
                 <div ref={rowsContainerRef} className={`mi-cr-table__rows${hasScroll ? " has-scroll" : ""}`}>
-                  {/* Fila única para editar compra */}
                   <div className="mi-cr-row">
                     <div className="mi-cr-cell mi-cr-cell--detalle">
                       <div className="fl-field mi-autocomplete" style={{ width: "100%" }}>
@@ -1286,9 +1320,7 @@ export default function ModalEditarCompra({
                     <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
                       {moneyARS(form.total)}
                     </div>
-                    <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
-                      {/* Espacio vacío para mantener la estructura */}
-                    </div>
+                    <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell" />
                   </div>
                 </div>
 
@@ -1312,6 +1344,7 @@ export default function ModalEditarCompra({
 
               {/* ── PANEL LATERAL ── */}
               <aside className="nc-aside">
+
                 {/* Datos de compra */}
                 <div className="nc-section">
                   <div className="nc-section-head">
@@ -1436,7 +1469,7 @@ export default function ModalEditarCompra({
                   </div>
                 )}
 
-                {/* Comprobante adjunto */}
+                {/* ── COMPROBANTE ADJUNTO — misma estética y acciones que NuevaCompra ── */}
                 <div className="nc-section">
                   <div className="nc-section-head">
                     <div className="nc-section-dot" style={{ background: "#64748b" }} />
@@ -1446,72 +1479,58 @@ export default function ModalEditarCompra({
                     <div className="mi-uploadCard">
                       <div className="mi-uploadCard__head">
                         <div className="mi-uploadCard__title">Comprobante</div>
-                        <div className="mi-uploadCard__sub">Ver, quitar o reemplazar archivo actual</div>
+                        <div className="mi-uploadCard__sub">Seleccioná, visualizá o quitá el archivo antes de guardar</div>
                       </div>
                       <div className="mi-uploadCard__body">
-                        <div className={`mi-uploadFile${mostrarArchivoActual || archivoNuevo ? " is-filled" : " is-empty"}`}>
-                          {mostrarArchivoActual ? (
+
+                        {/* Bloque archivo — idéntico a NuevaCompra */}
+                        <div className={`mi-uploadFile${archivoMostrado ? " is-filled" : " is-empty"}`}>
+                          {archivoMostrado ? (
                             <>
-                              <div className="mi-uploadFile__icon"><FontAwesomeIcon icon={faFileInvoiceDollar} /></div>
+                              <div className="mi-uploadFile__icon">
+                                <FontAwesomeIcon icon={faFileInvoiceDollar} />
+                              </div>
                               <div className="mi-uploadFile__meta">
-                                <div className="mi-uploadFile__name" title={archivoActualNombre}>
-                                  {archivoActualNombre || "Comprobante actual"}
+                                <div className="mi-uploadFile__name" title={archivoMostrado.nombre}>
+                                  {archivoMostrado.nombre}
                                 </div>
+                                {archivoMostrado.tipo === "nuevo" && (
+                                  <div className="mi-uploadFile__size">
+                                    {Math.max(1, Math.round((archivoMostrado.size || 0) / 1024))} KB
+                                  </div>
+                                )}
                               </div>
                               <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
-                                {archivoActualUrl && (
-                                  <button
-                                    type="button"
-                                    className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                    onClick={handleOpenVerComprobante}
-                                    disabled={saving}
-                                    title="Ver comprobante"
-                                  >
-                                    <FontAwesomeIcon icon={faEye} />
-                                  </button>
-                                )}
                                 <button
                                   type="button"
                                   className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                  onClick={() => {
-                                    setQuitarArchivoActual(true);
-                                    setArchivoNuevo(null);
-                                    if (fileInputRef.current) fileInputRef.current.value = "";
-                                    setOpenVerComp(false);
-                                    setCompUrl("");
-                                  }}
+                                  onClick={handleOpenVerComprobante}
                                   disabled={saving}
+                                  title="Ver comprobante"
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                  onClick={handleQuitarArchivo}
+                                  disabled={saving || openVerComp}
                                   title="Quitar archivo"
                                 >
                                   <FontAwesomeIcon icon={faTrash} />
                                 </button>
                               </div>
                             </>
-                          ) : archivoNuevo ? (
-                            <>
-                              <div className="mi-uploadFile__icon"><FontAwesomeIcon icon={faFileInvoiceDollar} /></div>
-                              <div className="mi-uploadFile__meta">
-                                <div className="mi-uploadFile__name" title={archivoNuevo.name}>{archivoNuevo.name}</div>
-                                <div className="mi-uploadFile__size">{Math.max(1, Math.round((archivoNuevo.size || 0) / 1024))} KB</div>
-                              </div>
-                              <button
-                                type="button"
-                                className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                onClick={() => { setArchivoNuevo(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
-                                disabled={saving}
-                                style={{ marginLeft: "auto" }}
-                              >
-                                <FontAwesomeIcon icon={faTrash} /> Quitar
-                              </button>
-                            </>
                           ) : (
                             <div className="mi-uploadFile__empty">
                               {quitarArchivoActual
                                 ? "El comprobante actual será eliminado al guardar"
-                                : "No hay comprobante cargado"}
+                                : "No hay comprobante seleccionado"}
                             </div>
                           )}
                         </div>
+
+                        {/* Barra de acciones — idéntica a NuevaCompra */}
                         <div className="mi-uploadBar" style={{ marginTop: 10 }}>
                           <input
                             ref={fileInputRef}
@@ -1524,12 +1543,13 @@ export default function ModalEditarCompra({
                           <button
                             type="button"
                             className="mi-uploadBar__btn mi-uploadBar__btn--primary"
-                            onClick={handleReplaceFileClick}
+                            onClick={handleOpenFilePicker}
                             disabled={saving}
                           >
                             <FontAwesomeIcon icon={faUpload} />{" "}
-                            {mostrarArchivoActual ? "Reemplazar archivo" : "Seleccionar archivo"}
+                            {archivoMostrado ? "Reemplazar archivo" : "Seleccionar archivo"}
                           </button>
+                          {/* Botón cancelar quitar solo cuando hay archivo actual marcado y no hay nuevo */}
                           {quitarArchivoActual && !archivoNuevo && (
                             <button
                               type="button"
@@ -1537,10 +1557,11 @@ export default function ModalEditarCompra({
                               onClick={() => setQuitarArchivoActual(false)}
                               disabled={saving}
                             >
-                              Cancelar quitar
+                              Cancelar
                             </button>
                           )}
                         </div>
+
                       </div>
                     </div>
                   </div>
@@ -1565,6 +1586,7 @@ export default function ModalEditarCompra({
                     Cancelar
                   </button>
                 </div>
+
               </aside>
             </div>
           </div>
@@ -1580,7 +1602,7 @@ export default function ModalEditarCompra({
               setForm((p) => ({
                 ...p,
                 id_proveedor: addUI.catalogo === "proveedores" ? NULL_OPTION : p.id_proveedor,
-                id_detalle: addUI.catalogo === "detalles" ? NULL_OPTION : p.id_detalle,
+                id_detalle:   addUI.catalogo === "detalles"    ? NULL_OPTION : p.id_detalle,
               }));
               closeAddMini();
             }}
@@ -1608,6 +1630,8 @@ export default function ModalEditarCompra({
       <ModalVerComprobante
         open={openVerComp}
         url={compUrl}
+        mime={archivoNuevo?.type || ""}
+        fileName={archivoMostrado?.nombre || ""}
         onClose={handleCloseVerComprobante}
         title="Comprobante de compra"
       />

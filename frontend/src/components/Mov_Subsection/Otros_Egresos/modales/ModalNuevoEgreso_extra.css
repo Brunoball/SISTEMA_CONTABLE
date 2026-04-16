@@ -1,12 +1,510 @@
 /* =====================================================
    ModalNuevoEgreso_extra.css
-   Solo clases que NO existen en Global_Modals.css.
-   Todo lo demás lo provee Global_Modals.css.
+   Solo estilos propios de Nuevo Egreso.
+   Unificado con la estética de ModalPagarOrdenesPago.
    ===================================================== */
 
-/* ── Totales de medios de pago (resumen inline) ── */
-.ne-mp-totals {
+/* ─────────────────────────────────────────
+   Secciones laterales
+───────────────────────────────────────── */
+.nc-section{
+  border: 1px solid var(--nv-border-md);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--nv-bg);
+  flex-shrink: 0;
+}
+
+.nc-section-head{
   display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--nv-head-bg);
+  border-bottom: 1px solid var(--nv-border);
+}
+
+.nc-section-dot{
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--nv-midnight);
+  flex: 0 0 auto;
+}
+
+.nc-section-head span{
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--nv-muted);
+}
+
+.nc-section-body{
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ─────────────────────────────────────────
+   Inputs / pills
+───────────────────────────────────────── */
+.nc-row2{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.nc-field{
+  position: relative;
+}
+
+.nc-input{
+  width: 100%;
+  height: 42px;
+  border: 1px solid var(--nv-border-md);
+  border-radius: 10px;
+  background: var(--nv-bg);
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--nv-text);
+  outline: none;
+  transition: border-color .14s, box-shadow .14s;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.nc-input:focus{
+  border-color: var(--blue-action);
+  box-shadow: 0 0 0 3px rgba(0, 85, 187, .10);
+}
+
+.nc-input:disabled{
+  background: rgba(241, 245, 249, .70);
+  opacity: .85;
+  cursor: not-allowed;
+}
+
+.nc-label{
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: var(--nv-muted);
+  pointer-events: none;
+  transform-origin: left top;
+  transition: all .14s ease;
+  background: transparent;
+  padding: 0 3px;
+}
+
+.nc-input:focus + .nc-label,
+.nc-input:not(:placeholder-shown) + .nc-label{
+  top: -5px;
+  transform: translateY(0) scale(.82);
+  color: var(--blue-action);
+  background: var(--nv-bg);
+}
+
+.nc-pill-label{
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--nv-muted);
+  margin-bottom: 5px;
+}
+
+.nc-pills{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.nc-pill{
+  appearance: none;
+  border: 1px solid var(--nv-border-md);
+  border-radius: 8px;
+  padding: 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--nv-bg);
+  color: var(--nv-muted);
+  transition: all .15s;
+  text-align: center;
+  font-family: inherit;
+  line-height: 1;
+}
+
+.nc-pill:hover{
+  border-color: var(--blue-midnight);
+  color: var(--blue-midnight);
+  background: rgba(10, 37, 64, .04);
+}
+
+.nc-pill--active{
+  background: var(--blue-midnight);
+  border-color: var(--blue-midnight);
+  color: #fff;
+}
+
+.nc-pill--active:hover{
+  background: #0d2f55;
+  border-color: #0d2f55;
+  color: #fff;
+}
+
+.nc-pill:disabled{
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.nc-prov-wrap{
+  position: relative;
+}
+
+.nc-prov-hint{
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 3px;
+}
+
+.nc-link{
+  appearance: none;
+  border: none;
+  background: none;
+  color: #0f766e;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: opacity .12s;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.nc-link:hover{
+  opacity: .75;
+  text-decoration: underline;
+}
+
+.nc-link:disabled{
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+/* ─────────────────────────────────────────
+   Medios de pago
+   Estética tomada de ModalPagarOrdenesPago
+───────────────────────────────────────── */
+.nc-mp-card{
+  border: 1px solid var(--nv-border);
+  border-radius: 10px;
+  background: var(--nv-surface);
+  overflow: hidden;
+  box-shadow: var(--nv-shadow-sm, 0 1px 2px rgba(16,24,40,.05));
+}
+
+.nc-mp-inline{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px auto;
+  gap: 8px;
+  align-items: end;
+  padding: 8px 10px;
+}
+
+.nc-mp-medio,
+.nc-mp-monto-wrap{
+  min-width: 0;
+}
+
+.nc-mp-sublabel{
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--nv-muted);
+  margin-bottom: 4px;
+}
+
+.nc-mp-select{
+  width: 100%;
+  height: 32px;
+  border: 1px solid var(--nv-border-md);
+  border-radius: 7px;
+  background: var(--nv-bg);
+  font-size: 12px;
+  color: var(--nv-text);
+  padding: 0 8px;
+  outline: none;
+  transition: border-color .14s, box-shadow .14s;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.nc-mp-select:focus{
+  border-color: var(--blue-action);
+  box-shadow: 0 0 0 2px rgba(0, 85, 187, .10);
+}
+
+.nc-mp-select:disabled{
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.nc-mp-input-monto{
+  width: 100%;
+  height: 32px;
+  border: 1px solid var(--nv-border-md);
+  border-radius: 7px;
+  background: var(--nv-bg);
+  font-size: 12px;
+  color: var(--nv-text);
+  padding: 0 8px;
+  outline: none;
+  transition: border-color .14s, box-shadow .14s, background .14s;
+  font-family: inherit;
+  text-align: right;
+  box-sizing: border-box;
+}
+
+.nc-mp-input-monto:focus{
+  border-color: var(--blue-action);
+  box-shadow: 0 0 0 2px rgba(0, 85, 187, .10);
+}
+
+.nc-mp-input-monto:disabled{
+  opacity: .7;
+  cursor: not-allowed;
+}
+
+.nc-mp-input-monto--locked{
+  background: rgba(0, 0, 0, .03);
+}
+
+.nc-mp-actions-col{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.nc-mp-completar{
+  appearance: none;
+  height: 28px;
+  border: 1px solid rgba(15, 118, 110, .30);
+  background: rgba(15, 118, 110, .07);
+  color: #0f766e;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 7px;
+  white-space: nowrap;
+  transition: all .14s;
+  font-family: inherit;
+  width: 100%;
+}
+
+.nc-mp-completar:hover{
+  background: rgba(15, 118, 110, .14);
+}
+
+.nc-mp-completar:disabled{
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.nc-mp-del-btn{
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--nv-muted);
+  font-size: 16px;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  transition: background .12s, color .12s;
+}
+
+.nc-mp-del-btn:hover{
+  background: rgba(220, 38, 38, .10);
+  color: #dc2626;
+}
+
+.nc-mp-del-btn:disabled{
+  opacity: .3;
+  cursor: not-allowed;
+}
+
+/* ─────────────────────────────────────────
+   Panel de cheques
+───────────────────────────────────────── */
+.nc-mp-cheques{
+  border-top: 1px solid var(--nv-border);
+  padding: 8px 10px;
+  background: rgba(15, 118, 110, .03);
+}
+
+.nc-mp-cheques-title{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f766e;
+  margin-bottom: 6px;
+}
+
+.nc-mp-cheques-loading,
+.nc-mp-cheques-empty{
+  font-size: 12px;
+  color: var(--nv-muted);
+  padding: 4px 0;
+}
+
+.nc-mp-cheques-sum{
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f766e;
+}
+
+/* lista compacta tipo pagar ordenes */
+.nc-cheques-list{
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.nc-cheque-item{
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1.5px solid var(--nv-border-md);
+  border-radius: 9px;
+  background: var(--nv-bg);
+  cursor: pointer;
+  transition: border-color .14s, background .14s, box-shadow .14s, transform .12s;
+  box-shadow: var(--nv-shadow-sm, 0 1px 2px rgba(16,24,40,.05));
+  user-select: none;
+}
+
+.nc-cheque-item:hover{
+  transform: translateY(-1px);
+}
+
+.nc-cheque-item--selected{
+  border-color: #0f766e;
+  background: rgba(15, 118, 110, .07);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, .10);
+}
+
+
+.nc-cheque-check{
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid var(--nv-border-md);
+  background: var(--nv-bg);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: all .14s;
+}
+
+.nc-cheque-item--selected .nc-cheque-check{
+  border-color: #0f766e;
+  background: #0f766e;
+}
+
+
+.nc-cheque-main{
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nc-cheque-line1{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.nc-cheque-number{
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--nv-text);
+  letter-spacing: .04em;
+}
+
+.nc-cheque-badge{
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: #0055BB;
+  background: rgba(0, 85, 187, .07);
+  border: 1px solid rgba(0, 85, 187, .28);
+  border-radius: 999px;
+  padding: 1px 5px;
+  line-height: 1.5;
+}
+
+.nc-cheque-line2{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 11px;
+  color: var(--nv-muted);
+  line-height: 1.3;
+}
+
+.nc-cheque-emisor{
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nc-cheque-dot{
+  opacity: .4;
+}
+
+.nc-cheque-importe{
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--nv-text);
+  white-space: nowrap;
+  transition: color .14s;
+}
+
+.nc-cheque-item--selected .nc-cheque-importe{
+  color: #0f766e;
+}
+
+
+/* ─────────────────────────────────────────
+   Totales y botón agregar
+───────────────────────────────────────── */
+.nc-mp-totals{
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 10px;
   padding: 7px 10px;
@@ -17,22 +515,22 @@
   flex-wrap: wrap;
 }
 
-.ne-mp-totals__asignado {
+.nc-mp-totals-asignado{
   color: var(--nv-muted);
 }
 
-.ne-mp-totals__asignado b {
+.nc-mp-totals-asignado b{
   color: var(--nv-text);
   font-weight: 700;
 }
 
-.ne-mp-totals__falta {
+.nc-mp-totals-falta{
   color: #dc2626;
   font-weight: 700;
   margin-left: auto;
 }
 
-.ne-mp-totals__ok {
+.nc-mp-totals-ok{
   color: #0f766e;
   font-weight: 700;
   margin-left: auto;
@@ -41,19 +539,118 @@
   gap: 4px;
 }
 
-html[data-theme="oscuro"] .ne-mp-totals {
-  background: rgba(255, 255, 255, .04);
-  border-color: rgba(255, 255, 255, .10);
+.nc-add-mp-btn{
+  appearance: none;
+  width: 100%;
+  border: 1px dashed rgba(15, 118, 110, .35);
+  background: transparent;
+  color: #0f766e;
+  border-radius: 8px;
+  height: 32px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background .14s, border-color .14s, color .14s;
+  font-family: inherit;
 }
 
-html[data-theme="oscuro"] .ne-mp-totals__asignado {
-  color: rgba(210, 220, 235, .65);
+.nc-add-mp-btn:hover{
+  background: rgba(15, 118, 110, .06);
+  border-color: rgba(15, 118, 110, .50);
 }
 
-html[data-theme="oscuro"] .ne-mp-totals__asignado b {
-  color: rgba(255, 255, 255, .90);
+.nc-add-mp-btn:disabled{
+  opacity: .4;
+  cursor: not-allowed;
 }
 
-html[data-theme="oscuro"] .ne-mp-totals__ok {
-  color: rgba(52, 211, 153, .92);
+/* ─────────────────────────────────────────
+   Dark mode
+───────────────────────────────────────── */
+html[data-theme="oscuro"] .nc-section{
+  background: rgba(255,255,255,.03);
+  border-color: rgba(255,255,255,.10);
+}
+
+html[data-theme="oscuro"] .nc-section-head{
+  background: rgba(255,255,255,.04);
+  border-bottom-color: rgba(255,255,255,.08);
+}
+
+html[data-theme="oscuro"] .nc-input,
+html[data-theme="oscuro"] .nc-mp-select,
+html[data-theme="oscuro"] .nc-mp-input-monto{
+  background: rgba(255,255,255,.03);
+  border-color: rgba(255,255,255,.10);
+}
+
+html[data-theme="oscuro"] .nc-input:disabled,
+html[data-theme="oscuro"] .nc-mp-input-monto--locked{
+  background: rgba(255,255,255,.04);
+}
+
+
+html[data-theme="oscuro"] .nc-mp-card{
+  background: rgba(255,255,255,.03);
+  border-color: rgba(255,255,255,.10);
+}
+
+html[data-theme="oscuro"] .nc-mp-cheques{
+  background: rgba(15, 118, 110, .08);
+  border-top-color: rgba(255,255,255,.08);
+}
+
+html[data-theme="oscuro"] .nc-cheque-item{
+  background: rgba(255,255,255,.03);
+  border-color: rgba(255,255,255,.10);
+}
+
+html[data-theme="oscuro"] .nc-mp-totals{
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.10);
+}
+
+html[data-theme="oscuro"] .nc-mp-totals-asignado{
+  color: rgba(210,220,235,.65);
+}
+
+html[data-theme="oscuro"] .nc-mp-totals-asignado b{
+  color: rgba(255,255,255,.90);
+}
+
+html[data-theme="oscuro"] .nc-mp-totals-ok{
+  color: rgba(52,211,153,.92);
+}
+
+/* ─────────────────────────────────────────
+   Responsive
+───────────────────────────────────────── */
+@media (max-width: 640px){
+  .nc-mp-inline{
+    grid-template-columns: 1fr;
+  }
+
+  .nc-mp-actions-col{
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .nc-mp-completar{
+    width: auto;
+    min-width: 86px;
+  }
+
+  .nc-mp-totals{
+    align-items: flex-start;
+  }
+
+  .nc-mp-totals-falta,
+  .nc-mp-totals-ok{
+    margin-left: 0;
+    width: 100%;
+  }
 }

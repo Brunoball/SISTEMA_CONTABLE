@@ -10,7 +10,6 @@ import {
   faUser,
   faBoxOpen,
   faDollarSign,
-  faPlus,
 } from "@fortawesome/free-solid-svg-icons";
 
 const NULL_OPTION = "";
@@ -146,21 +145,6 @@ async function apiGetJson(url) {
   return await parseJsonOrThrow(res);
 }
 
-async function apiPostJson(url, payload) {
-  const { token, sessionKey } = getAuthInfo();
-  const headers = { "Content-Type": "application/json" };
-  if (sessionKey) headers["X-Session"] = sessionKey;
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload ?? {}),
-  });
-
-  return await parseJsonOrThrow(res);
-}
-
 function getArr(x) {
   return Array.isArray(x) ? x : [];
 }
@@ -187,108 +171,6 @@ function normalizeLists(lists) {
   };
 }
 
-/* =========================
-   Mini modal agregar catálogo
-========================= */
-function AddCatalogMiniModal({
-  open,
-  title,
-  value,
-  saving,
-  onChange,
-  onCancel,
-  onSave,
-  dark,
-  label = "Nombre",
-}) {
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const t = setTimeout(() => inputRef.current?.focus(), 0);
-    return () => clearTimeout(t);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (e) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onCancel?.();
-      }
-      if (e.key === "Enter") {
-        e.preventDefault();
-        onSave?.();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onCancel, onSave]);
-
-  if (!open) return null;
-
-  return createPortal(
-    <div
-      className={`mi-mini__overlay ${dark ? "mi-mini__overlay--dark" : ""}`}
-      onMouseDown={onCancel}
-    >
-      <div
-        className={`mi-mini__modal ${dark ? "mi-mini__modal--dark" : ""}`}
-        onMouseDown={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="mi-mini__head">
-          <h4 className="mi-mini__title">{title}</h4>
-          <button
-            type="button"
-            className="mi-mini__close"
-            onClick={onCancel}
-            disabled={saving}
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="mi-mini__body">
-          <div className="fl-field">
-            <input
-              ref={inputRef}
-              className="fl-input"
-              placeholder=" "
-              value={value}
-              onChange={(e) => onChange?.(e.target.value)}
-              disabled={saving}
-              autoComplete="off"
-            />
-            <label className="fl-label">{label}</label>
-          </div>
-
-          <div className="mi-mini__actions">
-            <button
-              type="button"
-              className="mit-btn mit-btn--ghost"
-              onClick={onCancel}
-              disabled={saving}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              className="mit-btn mit-btn--solid"
-              onClick={onSave}
-              disabled={saving}
-            >
-              {saving ? "Guardando..." : "Guardar"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
 export default function ModalEditarRecibo({
   open,
   row,
@@ -300,8 +182,6 @@ export default function ModalEditarRecibo({
   dark,
 }) {
   const API_LISTS = `${BASE_URL}/api.php?action=global_obtener_listas`;
-  const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
-
   const darkOn = isDarkEnabled(dark);
 
   const showToast = useCallback(
@@ -311,12 +191,6 @@ export default function ModalEditarRecibo({
 
   const [saving, setSaving] = useState(false);
   const [localLists, setLocalLists] = useState(() => normalizeLists(lists));
-  const [addUI, setAddUI] = useState({
-    open: false,
-    catalogo: "detalles",
-    text: "",
-    saving: false,
-  });
 
   const [form, setForm] = useState({
     id_movimiento: null,
@@ -354,14 +228,13 @@ export default function ModalEditarRecibo({
 
     const handleEscKey = (e) => {
       if (e.key === "Escape") {
-        if (addUI.open) return;
         if (!saving) onClose?.();
       }
     };
 
     document.addEventListener("keydown", handleEscKey);
     return () => document.removeEventListener("keydown", handleEscKey);
-  }, [open, addUI.open, saving, onClose]);
+  }, [open, saving, onClose]);
 
   const refreshLists = useCallback(async () => {
     const data = await apiGetJson(API_LISTS);
@@ -396,7 +269,11 @@ export default function ModalEditarRecibo({
     const cliName = String(
       getArr(localLists.clientes).find(
         (c) => String(getIdCliente(c)) === String(idCliente)
-      )?.nombre ?? ""
+      )?.nombre ??
+        getArr(localLists.clientes).find(
+          (c) => String(getIdCliente(c)) === String(idCliente)
+        )?.razon_social ??
+        ""
     ).trim();
 
     const detName = String(
@@ -406,7 +283,6 @@ export default function ModalEditarRecibo({
     ).trim();
 
     setSaving(false);
-    setAddUI({ open: false, catalogo: "detalles", text: "", saving: false });
     setDetalleFocus(false);
     setDetalleArmed(false);
     setClienteFocus(false);
@@ -487,83 +363,6 @@ export default function ModalEditarRecibo({
     setClienteArmed(false);
   };
 
-  const startAdd = (catalogo) => {
-    if (saving) return;
-    setAddUI({
-      open: true,
-      catalogo,
-      text: "",
-      saving: false,
-    });
-  };
-
-  const closeAdd = () => {
-    if (addUI.saving) return;
-    setAddUI((p) => ({ ...p, open: false, text: "", saving: false }));
-  };
-
-  const saveCatalogItem = async () => {
-    const nombre = String(addUI.text || "").trim();
-    if (!nombre) {
-      showToast("advertencia", "Escribí un nombre antes de guardar.", 2600);
-      return;
-    }
-
-    setAddUI((p) => ({ ...p, saving: true }));
-
-    try {
-      const { idUsuario } = getAuthInfo();
-
-      const data = await apiPostJson(API_CATALOGO, {
-        catalogo: addUI.catalogo,
-        nombre,
-        idUsuario,
-      });
-
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo crear.");
-
-      const item = data?.item ?? {};
-
-      if (addUI.catalogo === "detalles") {
-        const id = getIdGeneric(item) || Number(item?.id);
-        const finalNombre = String(item?.nombre ?? nombre).trim();
-
-        setLocalLists((prev) => ({
-          ...prev,
-          detalles: [...getArr(prev.detalles), { ...item, id, nombre: finalNombre }],
-        }));
-
-        setForm((p) => ({
-          ...p,
-          id_detalle: String(id),
-          detalleInput: finalNombre,
-        }));
-      }
-
-      if (addUI.catalogo === "clientes") {
-        const id = getIdCliente(item) || Number(item?.id);
-        const finalNombre = String(item?.nombre ?? item?.razon_social ?? nombre).trim();
-
-        setLocalLists((prev) => ({
-          ...prev,
-          clientes: [...getArr(prev.clientes), { ...item, id, nombre: finalNombre }],
-        }));
-
-        setForm((p) => ({
-          ...p,
-          id_cliente: String(id),
-          clienteInput: finalNombre,
-        }));
-      }
-
-      setAddUI({ open: false, catalogo: "detalles", text: "", saving: false });
-      showToast("exito", "Ítem creado correctamente.", 2400);
-    } catch (err) {
-      setAddUI((p) => ({ ...p, saving: false }));
-      showToast("error", err?.message || "No se pudo crear el ítem.", 4200);
-    }
-  };
-
   const resumen = useMemo(() => {
     const monto = Math.max(0, safeNumber(form.monto_total));
     return {
@@ -581,12 +380,14 @@ export default function ModalEditarRecibo({
     try {
       setSaving(true);
 
-      if (!String(form.fecha || "").trim()) throw new Error("Completá la fecha.");
+      if (!String(form.fecha || "").trim()) {
+        throw new Error("Completá la fecha.");
+      }
 
       const perUI = periodoToMMYYYY(form.periodo) || periodoFromISODate(form.fecha);
       const perAPI = periodoToYYYYMM(perUI);
 
-      if (!perAPI) throw new Error("Completá el período.");
+      if (!perAPI) throw new Error("No se pudo calcular el período desde la fecha.");
 
       const idDet =
         form.id_detalle && form.id_detalle !== NULL_OPTION
@@ -645,7 +446,7 @@ export default function ModalEditarRecibo({
             <div className="mi-modal__head-left">
               <h2 className="mi-modal__title">Editar recibo</h2>
               <p className="mi-modal__subtitle">
-                Modificá fecha, período, cliente, detalle y monto con la misma estética de Nueva Compra.
+                Modificá fecha, cliente, detalle y monto con la misma estética de Nueva Compra.
               </p>
             </div>
 
@@ -664,74 +465,31 @@ export default function ModalEditarRecibo({
             <div className="mi-er-layout">
               <section className="mi-er-main">
                 <form onSubmit={submit} className="mi-er-form">
-                  <div className="mi-er-grid-2">
-                    <div className="nc-section">
-                      <div className="nc-section-head">
-                        <div className="nc-section-dot" />
-                        <span>Fecha y período</span>
-                      </div>
-
-                      <div className="nc-section-body">
-                        <div className="nc-field">
-                          <input
-                            className="nc-input"
-                            type="date"
-                            placeholder=" "
-                            value={form.fecha}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setForm((p) => ({
-                                ...p,
-                                fecha: v,
-                                periodo: periodoFromISODate(v) || p.periodo,
-                              }));
-                            }}
-                            disabled={saving}
-                          />
-                          <label className="nc-label">Fecha</label>
-                        </div>
-
-                        <div className="nc-field">
-                          <input
-                            className="nc-input"
-                            placeholder=" "
-                            value={form.periodo}
-                            onChange={(e) =>
-                              setForm((p) => ({ ...p, periodo: e.target.value }))
-                            }
-                            disabled={saving}
-                          />
-                          <label className="nc-label">Período (MM-YYYY)</label>
-                        </div>
-                      </div>
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" />
+                      <span>Monto</span>
                     </div>
 
-                    <div className="nc-section">
-                      <div className="nc-section-head">
-                        <div className="nc-section-dot" />
-                        <span>Monto</span>
+                    <div className="nc-section-body">
+                      <div className="nc-field">
+                        <input
+                          className="nc-input"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder=" "
+                          value={form.monto_total}
+                          onChange={(e) =>
+                            setForm((p) => ({ ...p, monto_total: e.target.value }))
+                          }
+                          disabled={saving}
+                        />
+                        <label className="nc-label">Monto total</label>
                       </div>
 
-                      <div className="nc-section-body">
-                        <div className="nc-field">
-                          <input
-                            className="nc-input"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder=" "
-                            value={form.monto_total}
-                            onChange={(e) =>
-                              setForm((p) => ({ ...p, monto_total: e.target.value }))
-                            }
-                            disabled={saving}
-                          />
-                          <label className="nc-label">Monto total</label>
-                        </div>
-
-                        <div className="nc-cc-info">
-                          <b>Total actual:</b> {moneyARS(form.monto_total || 0)}
-                        </div>
+                      <div className="nc-cc-info">
+                        <b>Total actual:</b> {moneyARS(form.monto_total || 0)}
                       </div>
                     </div>
                   </div>
@@ -755,7 +513,7 @@ export default function ModalEditarRecibo({
                               setDetalleArmed(true);
                             }}
                             onBlur={() => setTimeout(() => setDetalleFocus(false), 120)}
-                            disabled={saving || addUI.open}
+                            disabled={saving}
                             autoComplete="off"
                           />
                           <label className="nc-label">Detalle *</label>
@@ -782,16 +540,57 @@ export default function ModalEditarRecibo({
                           </div>
                         )}
                       </div>
+                    </div>
+                  </div>
 
-                      <button
-                        type="button"
-                        className="nc-pago-btn"
-                        onClick={() => startAdd("detalles")}
-                        disabled={saving}
-                      >
-                        <FontAwesomeIcon icon={faPlus} />
-                        Nuevo detalle
-                      </button>
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" />
+                      <span>Cliente</span>
+                    </div>
+
+                    <div className="nc-section-body">
+                      <div className="mi-er-rel">
+                        <div className="nc-field">
+                          <input
+                            className="nc-input"
+                            placeholder=" "
+                            value={form.clienteInput}
+                            onChange={handleClienteInputChange}
+                            onFocus={() => {
+                              setClienteFocus(true);
+                              setClienteArmed(true);
+                            }}
+                            onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
+                            disabled={saving}
+                            autoComplete="off"
+                          />
+                          <label className="nc-label">Cliente</label>
+                        </div>
+
+                        {!!filteredClientes.length && (
+                          <div className="mi-er-autocomplete">
+                            {filteredClientes.map((cli) => {
+                              const id = getIdCliente(cli);
+                              const nombre = String(
+                                cli?.nombre ?? cli?.razon_social ?? cli?.cliente ?? ""
+                              ).trim();
+
+                              return (
+                                <button
+                                  key={`cli-${id}-${nombre}`}
+                                  type="button"
+                                  className="mi-er-autocomplete__item"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => handleSelectCliente(cli)}
+                                >
+                                  {nombre}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </form>
@@ -801,61 +600,28 @@ export default function ModalEditarRecibo({
                 <div className="nc-section">
                   <div className="nc-section-head">
                     <div className="nc-section-dot" />
-                    <span>Cliente</span>
+                    <span>Fecha</span>
                   </div>
 
                   <div className="nc-section-body">
-                    <div className="mi-er-rel">
-                      <div className="nc-field">
-                        <input
-                          className="nc-input"
-                          placeholder=" "
-                          value={form.clienteInput}
-                          onChange={handleClienteInputChange}
-                          onFocus={() => {
-                            setClienteFocus(true);
-                            setClienteArmed(true);
-                          }}
-                          onBlur={() => setTimeout(() => setClienteFocus(false), 120)}
-                          disabled={saving || addUI.open}
-                          autoComplete="off"
-                        />
-                        <label className="nc-label">Cliente</label>
-                      </div>
-
-                      {!!filteredClientes.length && (
-                        <div className="mi-er-autocomplete">
-                          {filteredClientes.map((cli) => {
-                            const id = getIdCliente(cli);
-                            const nombre = String(
-                              cli?.nombre ?? cli?.razon_social ?? cli?.cliente ?? ""
-                            ).trim();
-
-                            return (
-                              <button
-                                key={`cli-${id}-${nombre}`}
-                                type="button"
-                                className="mi-er-autocomplete__item"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => handleSelectCliente(cli)}
-                              >
-                                {nombre}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
+                    <div className="nc-field">
+                      <input
+                        className="nc-input"
+                        type="date"
+                        placeholder=" "
+                        value={form.fecha}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setForm((p) => ({
+                            ...p,
+                            fecha: v,
+                            periodo: periodoFromISODate(v) || p.periodo,
+                          }));
+                        }}
+                        disabled={saving}
+                      />
+                      <label className="nc-label">Fecha</label>
                     </div>
-
-                    <button
-                      type="button"
-                      className="nc-pago-btn"
-                      onClick={() => startAdd("clientes")}
-                      disabled={saving}
-                    >
-                      <FontAwesomeIcon icon={faPlus} />
-                      Nuevo cliente
-                    </button>
                   </div>
                 </div>
 
@@ -917,18 +683,6 @@ export default function ModalEditarRecibo({
               </aside>
             </div>
           </div>
-
-          <AddCatalogMiniModal
-            open={addUI.open}
-            title={addUI.catalogo === "clientes" ? "Nuevo cliente" : "Nuevo detalle"}
-            value={addUI.text}
-            saving={addUI.saving}
-            onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
-            onCancel={closeAdd}
-            onSave={saveCatalogItem}
-            dark={darkOn}
-            label={addUI.catalogo === "clientes" ? "Cliente" : "Detalle"}
-          />
         </div>
       </div>
 
@@ -956,12 +710,6 @@ export default function ModalEditarRecibo({
         .mi-er-form{
           display:flex;
           flex-direction:column;
-          gap:14px;
-        }
-
-        .mi-er-grid-2{
-          display:grid;
-          grid-template-columns:repeat(2,minmax(0,1fr));
           gap:14px;
         }
 
@@ -1023,10 +771,6 @@ export default function ModalEditarRecibo({
         }
 
         @media (max-width: 700px){
-          .mi-er-grid-2{
-            grid-template-columns:1fr;
-          }
-
           .nc-actions{
             flex-direction:column;
           }

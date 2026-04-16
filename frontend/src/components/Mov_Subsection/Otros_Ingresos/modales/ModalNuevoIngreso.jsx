@@ -1,11 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPlus, faFileInvoiceDollar } from "@fortawesome/free-solid-svg-icons";
+import {   faPlus,
+  faFileInvoiceDollar,
+  faEye,
+  faTrash,
+  faUpload, } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
 import BASE_URL from "../../../../config/config";
 import ModalNuevoCheque from "./ModalNuevoCheque.jsx";
 import ModalNuevaDescripcion from "./ModalNuevaDescripcion.jsx";
+import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 
 const NULL_OPTION = "";
 
@@ -331,7 +336,6 @@ function describeLineProblem(r, idx1based) {
   return `Fila ${idx1based}: ${issues.join(", ")}.`;
 }
 
-// MODIFICADA: Ahora también obtiene idUsuario e idUsuarioMaster
 function getAuthInfo() {
   const sessionKey =
     localStorage.getItem("session_key") ||
@@ -420,6 +424,10 @@ export default function ModalNuevoIngreso({
   const [rows, setRows] = useState(() => [buildEmptyRow()]);
   const [archivoAdjunto, setArchivoAdjunto] = useState(null);
 
+  // Estados para el viewer de comprobante
+  const [openViewer, setOpenViewer] = useState(false);
+  const [viewerData, setViewerData] = useState({ url: "", mime: "", title: "Comprobante" });
+
   const [openChequeModal, setOpenChequeModal] = useState(false);
   const [savingCheque] = useState(false);
   const [chequeGuardado, setChequeGuardado] = useState(null);
@@ -431,6 +439,7 @@ export default function ModalNuevoIngreso({
   const [hasScroll, setHasScroll] = useState(false);
   const closeBtnRef = useRef(null);
   const prevOpenRef = useRef(false);
+  const inputFileRef = useRef(null);
 
   const localLists = useMemo(() => normalizeLists(lists), [lists]);
   const mediosPagoList = useMemo(
@@ -442,7 +451,6 @@ export default function ModalNuevoIngreso({
     [localLists.detalles]
   );
 
-  // Modificar la lista de opciones del autocomplete para incluir "Agregar nueva descripción"
   const enhancedDetallesList = useMemo(() => {
     const newOption = {
       id: "new_option",
@@ -558,6 +566,35 @@ export default function ModalNuevoIngreso({
     };
   }, [open, rows]);
 
+  // Limpiar URL de objeto al cerrar viewer
+  const cerrarViewer = useCallback(() => {
+    if (viewerData?.url?.startsWith("blob:")) URL.revokeObjectURL(viewerData.url);
+    setOpenViewer(false);
+    setViewerData({ url: "", mime: "", title: "Comprobante" });
+  }, [viewerData]);
+
+  // Abrir viewer del archivo nuevo seleccionado
+  const abrirViewer = useCallback(() => {
+    if (!archivoAdjunto) return;
+    setViewerData({
+      url: URL.createObjectURL(archivoAdjunto),
+      mime: archivoAdjunto.type || "application/octet-stream",
+      title: `Comprobante - ${archivoAdjunto.name}`,
+    });
+    setOpenViewer(true);
+  }, [archivoAdjunto]);
+
+  const seleccionarArchivo = useCallback((e) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) return;
+    setArchivoAdjunto(file);
+  }, []);
+
+  const quitarArchivo = useCallback(() => {
+    setArchivoAdjunto(null);
+    if (inputFileRef.current) inputFileRef.current.value = "";
+  }, []);
+
   const addRow = useCallback(() => {
     setRows((p) => [...p, buildEmptyRow()]);
   }, []);
@@ -578,7 +615,6 @@ export default function ModalNuevoIngreso({
     setOpenNuevaDescripcionModal(true);
   }, []);
 
-  // MODIFICADA: Ahora envía idUsuario e idUsuarioMaster al crear descripción
   const handleGuardarNuevaDescripcion = useCallback(async (nombreDescripcion) => {
     try {
       const { sessionKey, token, idUsuario, idUsuarioMaster } = getAuthInfo();
@@ -591,7 +627,7 @@ export default function ModalNuevoIngreso({
       const response = await fetch(API_DETALLES_CREAR, {
         method: "POST",
         headers,
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           nombre: nombreDescripcion,
           idUsuario,
           idUsuarioMaster,
@@ -601,7 +637,6 @@ export default function ModalNuevoIngreso({
       const data = await parseJsonOrThrow(response);
 
       if (data.exito && data.detalle) {
-        // Actualizar la fila actual con el nuevo detalle
         const precio = safeNumber(data.detalle?.precio || 0);
         const stockDisponible = getStockDisponible(data.detalle);
         const sinStock = isSinStock(stockDisponible);
@@ -628,7 +663,6 @@ export default function ModalNuevoIngreso({
 
   const handleSelectDetalle = useCallback(
     (item, rowId) => {
-      // Verificar si es la opción de "Agregar nueva descripción"
       if (item && item.__isNewOption) {
         handleCrearNuevaDescripcion(rowId);
         return;
@@ -751,7 +785,6 @@ export default function ModalNuevoIngreso({
     [savingCheque, showToast]
   );
 
-  // MODIFICADA: Ahora envía idUsuario e idUsuarioMaster al guardar cheque
   const guardarChequeEnBackend = useCallback(
     async (idMovimiento, datosCheque) => {
       if (!datosCheque) return null;
@@ -1382,68 +1415,92 @@ export default function ModalNuevoIngreso({
                     </div>
                   )}
 
-                  <div className="mi-uploadCard">
-                    <div className="mi-uploadCard__head">
-                      <div>
-                        <div className="mi-uploadCard__title">Archivo adjunto</div>
-                        <div className="mi-uploadCard__sub">
-                          PDF, imagen u otro comprobante
-                        </div>
-                      </div>
-                    </div>
+                  {/* ── Comprobante adjunto (idéntico a ModalEditarIngreso) ── */}
+{/* Comprobante */}
+<div className="nc-section">
+  <div className="nc-section-head">
+    <div className="nc-section-dot" style={{ background: "#64748b" }} />
+    <span>Comprobante adjunto</span>
+  </div>
+  <div className="nc-section-body">
+    <div className="mi-uploadCard">
+      <div className="mi-uploadCard__head">
+        <div className="mi-uploadCard__title">Comprobante</div>
+        <div className="mi-uploadCard__sub">
+          Seleccioná, visualizá o quitá el archivo antes de guardar
+        </div>
+      </div>
 
-                    <div className="mi-uploadCard__body">
-                      <div className="mi-uploadBar">
-                        <label className="mi-uploadBar__pick">
-                          <input
-                            type="file"
-                            className="mi-uploadBar__input"
-                            onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
-                            disabled={saving}
-                          />
-                          <span className="mi-uploadBar__btn mi-uploadBar__btn--primary">
-                            {archivoAdjunto ? "Cambiar" : "Seleccionar"}
-                          </span>
-                        </label>
+      <div className="mi-uploadCard__body">
+        <div className={`mi-uploadFile${archivoAdjunto ? " is-filled" : " is-empty"}`}>
+          {archivoAdjunto ? (
+            <>
+              <div className="mi-uploadFile__icon">
+                <FontAwesomeIcon icon={faFileInvoiceDollar} />
+              </div>
 
-                        <button
-                          type="button"
-                          className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                          onClick={() => setArchivoAdjunto(null)}
-                          disabled={saving || !archivoAdjunto}
-                        >
-                          Quitar
-                        </button>
-                      </div>
+              <div className="mi-uploadFile__meta">
+                <div className="mi-uploadFile__name" title={archivoAdjunto.name}>
+                  {archivoAdjunto.name}
+                </div>
+                <div className="mi-uploadFile__size">
+                  {Math.max(1, Math.round((archivoAdjunto.size || 0) / 1024))} KB
+                </div>
+              </div>
 
-                      <div
-                        className={`mi-uploadFile ${
-                          archivoAdjunto ? "is-filled" : "is-empty"
-                        }`}
-                      >
-                        {archivoAdjunto ? (
-                          <>
-                            <div className="mi-uploadFile__icon">
-                              <FontAwesomeIcon icon={faFileInvoiceDollar} />
-                            </div>
+              <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                  onClick={abrirViewer}
+                  disabled={saving}
+                  title="Ver comprobante"
+                >
+                  <FontAwesomeIcon icon={faEye} />
+                </button>
 
-                            <div className="mi-uploadFile__meta">
-                              <div className="mi-uploadFile__name" title={archivoAdjunto.name}>
-                                {archivoAdjunto.name}
-                              </div>
-                              <div className="mi-uploadFile__size">
-                                {Math.max(1, Math.round((archivoAdjunto.size || 0) / 1024))} KB
-                              </div>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="mi-uploadFile__empty">
-                            No hay archivo seleccionado
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                <button
+                  type="button"
+                  className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                  onClick={quitarArchivo}
+                  disabled={saving || openViewer}
+                  title="Quitar archivo"
+                >
+                  <FontAwesomeIcon icon={faTrash} />
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="mi-uploadFile__empty">
+              No hay comprobante seleccionado
+            </div>
+          )}
+        </div>
+
+        <div className="mi-uploadBar" style={{ marginTop: 10 }}>
+          <input
+            ref={inputFileRef}
+            type="file"
+            className="mi-uploadBar__input"
+            onChange={seleccionarArchivo}
+            disabled={saving}
+            style={{ display: "none" }}
+          />
+
+          <button
+            type="button"
+            className="mi-uploadBar__btn mi-uploadBar__btn--primary"
+            onClick={() => inputFileRef.current?.click()}
+            disabled={saving}
+          >
+            <FontAwesomeIcon icon={faUpload} />{" "}
+            {archivoAdjunto ? "Reemplazar archivo" : "Seleccionar archivo"}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
                   <div className="mi-cr-filters__actions">
                     <button
@@ -1504,6 +1561,14 @@ export default function ModalNuevoIngreso({
           dark={dark}
         />
       )}
+
+      <ModalVerComprobante
+        open={openViewer}
+        url={viewerData.url}
+        mime={viewerData.mime}
+        title={viewerData.title}
+        onClose={cerrarViewer}
+      />
     </>,
     document.body
   );

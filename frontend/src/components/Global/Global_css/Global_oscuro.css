@@ -1352,7 +1352,6 @@ html[data-theme="oscuro"] .cc-suggestions__item:hover{
 ========================= */
 html[data-theme="oscuro"] .floatingLabel{
   background: #0f172a;
-  color: rgba(226, 232, 240, 0.68);
 }
 
 html[data-theme="oscuro"] .field--floating.is-filled floatingLabel,

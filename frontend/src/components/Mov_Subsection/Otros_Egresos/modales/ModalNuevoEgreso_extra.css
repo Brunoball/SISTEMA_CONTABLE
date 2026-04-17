@@ -10,7 +10,6 @@
 .nc-section{
   border: 1px solid var(--nv-border-md);
   border-radius: 12px;
-  overflow: hidden;
   background: var(--nv-bg);
   flex-shrink: 0;
 }
@@ -582,9 +581,9 @@ html[data-theme="oscuro"] .nc-section-head{
 }
 
 html[data-theme="oscuro"] .nc-input,
-html[data-theme="oscuro"] .nc-mp-select,
+
 html[data-theme="oscuro"] .nc-mp-input-monto{
-  background: rgba(255,255,255,.03);
+  background: rgba(255, 255, 255, .06) !important;
   border-color: rgba(255,255,255,.10);
 }
 

@@ -2875,7 +2875,7 @@ button.cc-cliente-table__row:focus-visible{
   }
 
   .mi-cr-filters__actions {
-    flex-direction: column !important;
+    padding: 10px;
   }
 
   .mi-cr-filters__actions .mit-btn {

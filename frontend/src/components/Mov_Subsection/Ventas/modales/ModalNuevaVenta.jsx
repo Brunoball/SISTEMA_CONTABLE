@@ -270,7 +270,7 @@ function buildEmptyRow() {
 }
 
 /* =========================================================
-   Mini Modal
+   Mini Modal (agregar catálogo)
 ========================================================= */
 function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
@@ -347,11 +347,22 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     return () => { document.body.style.overflow = p; };
   }, [open]);
 
+  // ── Escape: solo cierra este modal cuando el de cheque NO está abierto ──
+  // El ModalNuevoCheque maneja su propio Escape con capture=true (prioridad mayor),
+  // así que aquí usamos capture=false (prioridad menor) y chequeamos openChequeModal.
   useEffect(() => {
     if (!open) return;
-    const h = e => e.key === "Escape" && onClose?.();
+    const h = (e) => {
+      if (e.key !== "Escape") return;
+      // Si el modal de cheque está abierto, lo deja manejar a él (ya lo hizo con capture=true)
+      if (openChequeModal) return;
+      // Si el de factura está abierto, tampoco cerramos aquí
+      if (openResumenFactura) return;
+      onClose?.();
+    };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, onClose]);
 
   const [localLists, setLocalLists] = useState(() => ({ ...SAFE_LISTS, ...normalizeLists(lists) }));
@@ -386,6 +397,12 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const [openChequeModal, setOpenChequeModal] = useState(false);
   const [savingCheque, setSavingCheque] = useState(false);
   const [chequeGuardado, setChequeGuardado] = useState(null);
+
+  // Ref para que el listener de Escape pueda leer el valor actual sin re-registrarse
+  const openChequeModalRef = useRef(openChequeModal);
+  const openResumenFacturaRef = useRef(openResumenFactura);
+  useEffect(() => { openChequeModalRef.current = openChequeModal; }, [openChequeModal]);
+  useEffect(() => { openResumenFacturaRef.current = openResumenFactura; }, [openResumenFactura]);
 
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
@@ -1436,54 +1453,156 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                     </div>
                   )}
 
-                  {isContado && esMedioPagoCheque && (
-                    <div className="mi-card mi-card--full" style={{ marginTop: 4 }}>
-                      <div className="mi-card__title">
-                        {tipoChequeDetectado === "echeq" ? "Echeq" : "Cheque"}
-                      </div>
+{isContado && esMedioPagoCheque && (
+  <div className="mi-card mi-card--full" style={{ marginTop: 4 }}>
+    <div className="mi-card__title">
+                                {tipoChequeDetectado === "echeq" ? "Echeq" : "Cheque"}
 
-                      {chequeGuardado ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          <div
-                            style={{
-                              background: "rgba(16,185,129,.08)",
-                              border: "1px solid rgba(16,185,129,.25)",
-                              borderRadius: 8,
-                              padding: "8px 10px",
-                              fontSize: 12,
-                              lineHeight: 1.6,
-                            }}
-                          >
-                            <div style={{ fontWeight: 700, color: "#059669", marginBottom: 2 }}>✓ Cheque cargado</div>
-                            <div><b>N°:</b> {chequeGuardado.numero_cheque}</div>
-                            <div><b>Emisor:</b> {chequeGuardado.emisor}</div>
-                            <div><b>Importe:</b> {moneyARS(chequeGuardado.importe)}</div>
-                            <div><b>Fecha pago:</b> {chequeGuardado.fecha_pago}</div>
-                            {chequeGuardado.archivo_nombre && <div><b>Archivo:</b> {chequeGuardado.archivo_nombre}</div>}
-                          </div>
-                          <button
-                            type="button"
-                            className="mit-btn mit-btn--ghost"
-                            style={{ width: "100%", fontSize: 12 }}
-                            onClick={() => setOpenChequeModal(true)}
-                            disabled={saving}
-                          >
-                            Editar cheque
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className="mit-btn mit-btn--solid"
-                          style={{ width: "100%", marginTop: 4 }}
-                          onClick={() => setOpenChequeModal(true)}
-                          disabled={saving}
-                        >
-                          Cargar {tipoChequeDetectado === "echeq" ? "echeq" : "cheque"}
-                        </button>
-                      )}
-                    </div>
-                  )}
+    </div>
+
+    {chequeGuardado ? (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="nc-cheques-list" style={{ marginTop: 4 }}>
+          <div
+            className={`nc-cheque-item nc-cheque-item--selected ${
+              tipoChequeDetectado === "echeq" ? "nc-cheque-item--echeq" : ""
+            }`}
+            style={{ cursor: "default" }}
+          >
+            <div
+              aria-hidden="true"
+              style={{
+                width: 16,
+                height: 16,
+                borderRadius: 4,
+                border: `2px solid ${
+                  tipoChequeDetectado === "echeq" ? "#0055BB" : "#0f766e"
+                }`,
+                background:
+                  tipoChequeDetectado === "echeq" ? "#0055BB" : "#0f766e",
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+              }}
+            >
+              <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                <path
+                  d="M1 3.5L3.5 6L8 1"
+                  stroke="#fff"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+                minWidth: 0,
+                flex: 1,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span
+                  style={{
+                    fontFamily: "'Courier New', monospace",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: "var(--nv-text)",
+                    letterSpacing: ".04em",
+                  }}
+                >
+                  N° {chequeGuardado.numero_cheque || "-"}
+                </span>
+
+                {tipoChequeDetectado === "echeq" && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: ".07em",
+                      color: "#0055BB",
+                      background: "rgba(0,85,187,.07)",
+                      border: "1px solid rgba(0,85,187,.28)",
+                      borderRadius: 999,
+                      padding: "1px 5px",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    eCheq
+                  </span>
+                )}
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "2px 8px",
+                  fontSize: 11,
+                  color: "var(--nv-muted)",
+                  lineHeight: 1.3,
+                }}
+              >
+                <span
+                  style={{
+                    maxWidth: 140,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {chequeGuardado.emisor || "-"}
+                </span>
+
+                <span style={{ opacity: 0.4 }}>·</span>
+
+                <span>
+                  Pago:&nbsp;
+                  {chequeGuardado.fecha_pago
+                    ? (() => {
+                        const s = String(chequeGuardado.fecha_pago);
+                        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                        return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
+                      })()
+                    : "-"}
+                </span>
+              </div>
+            </div>
+
+            <span className="nc-cheque-importe">
+              {moneyARS(chequeGuardado.importe || 0)}
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="mit-btn mit-btn--ghost"
+          style={{ width: "100%", fontSize: 12 }}
+          onClick={() => setOpenChequeModal(true)}
+          disabled={saving}
+        >
+          Editar {tipoChequeDetectado === "echeq" ? "eCheq" : "cheque"}
+        </button>
+      </div>
+    ) : (
+      <button
+        type="button"
+        className="mit-btn mit-btn--solid"
+        style={{ width: "100%", marginTop: 4 }}
+        onClick={() => setOpenChequeModal(true)}
+        disabled={saving}
+      >
+        Cargar {tipoChequeDetectado === "echeq" ? "eCheq" : "cheque"}
+      </button>
+    )}
+  </div>
+)}
 
                   {shouldNeedFiscalPanel && (
                     <div className="mi-card mi-card--full">
@@ -1569,6 +1688,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         </div>
       </div>
 
+      {/* ── Modal de nuevo cheque/eCheq ── */}
       {openChequeModal && (
         <ModalNuevoCheque
           open={openChequeModal}

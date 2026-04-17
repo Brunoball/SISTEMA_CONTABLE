@@ -770,11 +770,7 @@ export default function ModalEditarRecibo({
           }
         }
 
-        @media (max-width: 700px){
-          .nc-actions{
-            flex-direction:column;
-          }
-        }
+
       `}</style>
     </>,
     document.body

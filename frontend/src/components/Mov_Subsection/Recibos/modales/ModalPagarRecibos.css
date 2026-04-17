@@ -57,7 +57,6 @@
 }
 
 .mpr-th--sel   { text-align: center; }
-.mpr-th--desc  { /* grow */ }
 .mpr-th--center { text-align: center; }
 .mpr-th--right  { text-align: right; }
 
@@ -69,9 +68,6 @@
   overflow-x: hidden;
 }
 
-.mpr-tbody--scroll {
-  /* se puede agregar shadow interno si se quiere */
-}
 
 /* Filas */
 .mpr-row {
@@ -991,7 +987,7 @@ width: 100%;
   }
 
   .mpr-aside__body {
-    overflow: visible;
+    overflow: scroll;
   }
 
   /* oculto cabecera tabla en mobile */

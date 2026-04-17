@@ -1407,6 +1407,7 @@ min-height: 40vh !important;
 .modal-nc-summary{
   margin: 10px 0;
   overflow: clip;
+  min-height: fit-content;
 }
   .mi-cr-row > .mi-cr-cell::before{
     font-size: 11px;

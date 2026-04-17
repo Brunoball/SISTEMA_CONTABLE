@@ -403,20 +403,25 @@ export default function ModalVerComprobante({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
+useEffect(() => {
+  if (!open) return;
 
-    const onKeyDown = (e) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose?.();
-      }
-    };
+  const onKeyDown = (e) => {
+    if (e.key !== "Escape") return;
 
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (typeof e.stopImmediatePropagation === "function") {
+      e.stopImmediatePropagation();
+    }
+
+    onClose?.();
+  };
+
+  document.addEventListener("keydown", onKeyDown, true);
+  return () => document.removeEventListener("keydown", onKeyDown, true);
+}, [open, onClose]);
 
   useEffect(() => {
     if (!open) return;

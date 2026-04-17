@@ -366,14 +366,25 @@ export default function ModalEditarIngreso({
   }, [open, initialData]);
 
   /* escape */
-  useEffect(() => {
-    if (!open) return;
-    const h = (e) => {
-      if (e.key === "Escape" && !saving) onClose?.();
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [open, saving, onClose]);
+useEffect(() => {
+  if (!open) return;
+
+  const h = (e) => {
+    if (e.key !== "Escape") return;
+    if (saving) return;
+
+    // Si está abierto el visor, no cerrar el modal padre
+    if (openViewer) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    onClose?.();
+  };
+
+  document.addEventListener("keydown", h, true);
+  return () => document.removeEventListener("keydown", h, true);
+}, [open, saving, openViewer, onClose]);
 
   /* cargar comprobante */
   const cargarInfoComprobante = useCallback(async () => {

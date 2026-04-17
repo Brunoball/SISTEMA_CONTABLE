@@ -176,7 +176,6 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const showToast = useCallback((tipo,mensaje,dur=2800)=>onToast?.(tipo,mensaje,dur),[onToast]);
 
   useEffect(()=>{ if(!open) return; const p=document.body.style.overflow; document.body.style.overflow="hidden"; return()=>{ document.body.style.overflow=p; }; },[open]);
-  useEffect(()=>{ if(!open) return; const h=(e)=>e.key==="Escape"&&onClose?.(); document.addEventListener("keydown",h); return()=>document.removeEventListener("keydown",h); },[open,onClose]);
 
   const [localLists,setLocalLists] = useState(()=>({...SAFE_LISTS,...normalizeLists(lists)}));
   useEffect(()=>setLocalLists({...SAFE_LISTS,...normalizeLists(lists)}),[lists]);
@@ -195,6 +194,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const [addUI,setAddUI]             = useState({open:false,kind:null,rowId:null,text:"",saving:false});
   const [mediosFilas,setMediosFilas] = useState(()=>[buildEmptyMedioPago()]);
   const [mpModalOpen,setMpModalOpen] = useState(false);
+  
 
   const closeBtnRef      = useRef(null);
   const prevOpenRef      = useRef(false);
@@ -246,7 +246,23 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
   const handleProveedorInputChange = useCallback((val)=>{ setProvInput(val); setIdProveedor(NULL_OPTION); },[]);
   const handleSelectProveedor      = useCallback((prov)=>{ setProvInput(String(prov?.nombre??"").trim()); setIdProveedor(getProveedorId(prov)!=null?String(getProveedorId(prov)):NULL_OPTION); },[]);
+useEffect(() => {
+  if (!open) return;
 
+  const h = (e) => {
+    if (e.key !== "Escape") return;
+
+    if (mpModalOpen || openVerComp || addUI.open) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    onClose?.();
+  };
+
+  document.addEventListener("keydown", h, true);
+  return () => document.removeEventListener("keydown", h, true);
+}, [open, onClose, mpModalOpen, openVerComp, addUI.open]);
   const handleSelectDetalle = useCallback((detalle,rowId)=>{
     const precio=Number(detalle?.precio||0);
     const stockDisponible=getStockDisponible(detalle);

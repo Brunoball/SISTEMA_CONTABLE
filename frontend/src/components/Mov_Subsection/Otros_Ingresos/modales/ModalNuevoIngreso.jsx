@@ -506,14 +506,25 @@ export default function ModalNuevoIngreso({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const h = (e) => {
-      if (e.key === "Escape" && !saving) onClose?.();
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [open, onClose, saving]);
+useEffect(() => {
+  if (!open) return;
+
+  const h = (e) => {
+    if (e.key !== "Escape") return;
+    if (saving) return;
+
+    // Si hay un submodal abierto, no cerrar el modal principal
+    if (openViewer || openChequeModal || openNuevaDescripcionModal) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    onClose?.();
+  };
+
+  document.addEventListener("keydown", h, true);
+  return () => document.removeEventListener("keydown", h, true);
+}, [open, onClose, saving, openViewer, openChequeModal, openNuevaDescripcionModal]);
 
   useEffect(() => {
     const wasOpen = prevOpenRef.current;

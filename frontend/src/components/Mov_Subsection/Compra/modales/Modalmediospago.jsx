@@ -316,12 +316,25 @@ export function ModalMediosPago({
   showToast,
   /* prop dark eliminada — usa html[data-theme="oscuro"] */
 }) {
-  useEffect(() => {
-    if (!open) return;
-    const h = e => { if (e.key === "Escape") onClose?.(); };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [open, onClose]);
+useEffect(() => {
+  if (!open) return;
+
+  const h = (e) => {
+    if (e.key !== "Escape") return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (typeof e.stopImmediatePropagation === "function") {
+      e.stopImmediatePropagation();
+    }
+
+    onClose?.();
+  };
+
+  document.addEventListener("keydown", h, true);
+  return () => document.removeEventListener("keydown", h, true);
+}, [open, onClose]);
 
   const sumaMediosPago    = useMemo(() => mediosFilas.reduce((a, r) => a + safeNumber(r.monto), 0), [mediosFilas]);
   const diferenciaRestante= useMemo(() => Math.max(0, safeNumber(totalCompra) - sumaMediosPago), [totalCompra, sumaMediosPago]);

@@ -2965,6 +2965,7 @@ button.cc-cliente-table__row:focus-visible{
   grid-template-columns: auto 1fr auto;
   gap: 10px;
   align-items: stretch;
+  justify-items: anchor-center;
   width: 100%;
 }
 

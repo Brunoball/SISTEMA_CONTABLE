@@ -12,6 +12,7 @@ import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComproban
 import ModalNuevoIngreso from "./modales/ModalNuevoIngreso.jsx";
 import ModalEditarIngreso from "./modales/ModalEditarIngreso.jsx";
 import ModalEliminar from "../../Global/Modales/ModalEliminar.jsx";
+import ModalDetalleMediosPago from "../../Global/Modales/ModalDetalleMediosPago.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -26,6 +27,7 @@ import {
   faTimes,
   faBoxOpen,
   faEye,
+  faMoneyCheckDollar,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -67,18 +69,18 @@ function formatFechaDMY(v) {
 
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
-    const yyyy = m1[1];
-    const mm = String(Number(m1[2])).padStart(2, "0");
-    const dd = String(Number(m1[3])).padStart(2, "0");
-    return `${dd}/${mm}/${yyyy}`;
+    return `${String(Number(m1[3])).padStart(2, "0")}/${String(Number(m1[2])).padStart(
+      2,
+      "0"
+    )}/${m1[1]}`;
   }
 
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) {
-    const dd = String(Number(m2[1])).padStart(2, "0");
-    const mm = String(Number(m2[2])).padStart(2, "0");
-    const yyyy = m2[3];
-    return `${dd}/${mm}/${yyyy}`;
+    return `${String(Number(m2[1])).padStart(2, "0")}/${String(Number(m2[2])).padStart(
+      2,
+      "0"
+    )}/${m2[3]}`;
   }
 
   return s;
@@ -107,10 +109,9 @@ function parseRowFecha(v) {
 
 function dateToAPI(d) {
   if (!d) return "";
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
 }
 
 function formatDateUI(d) {
@@ -156,52 +157,81 @@ function getMovimientoId(r) {
     null;
 
   const n = Number(cand);
-  if (Number.isFinite(n) && n > 0) return n;
-  return null;
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 function getRowKey(r) {
   const id = getMovimientoId(r);
   if (id) return `id:${id}`;
 
-  const f = String(r?.fecha ?? "").trim();
-  const d = String(r?.detalle ?? r?.descripcion ?? r?.concepto ?? "").trim();
-  const cat = String(r?.categoria ?? r?.categoria_nombre ?? "").trim();
-  const m = String(Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0);
-
-  return `fx:${f}|${d}|${cat}|${m}`;
+  return `fx:${String(r?.fecha ?? "").trim()}|${String(
+    r?.detalle ?? r?.descripcion ?? r?.concepto ?? ""
+  ).trim()}|${String(r?.categoria ?? r?.categoria_nombre ?? "").trim()}|${String(
+    Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0
+  )}`;
 }
 
-function isOtroIngresoRow(row) {
-  const tmTxt = normalizeSearchText(row?.tipo_movimiento ?? row?.pago_tipo_movimiento ?? "");
-  if (tmTxt.includes("salida")) return false;
+function getIngresoIdComprobante(row) {
+  const n = Number(row?.id_comprobante ?? row?.comprobante_id ?? 0);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
-  const idCli = Number(row?.id_cliente ?? row?.cliente_id ?? row?.idCliente ?? 0);
-  if (Number.isFinite(idCli) && idCli > 0) return false;
+function getOtroIngresoMediosDetalle(row) {
+  if (Array.isArray(row?.medios_pago_detalle)) return row.medios_pago_detalle;
 
-  const cliTxt = String(
-    row?.cliente ?? row?.cliente_nombre ?? row?.nombre_cliente ?? row?.razon_social_cliente ?? ""
-  ).trim();
-  if (cliTxt.length > 0) return false;
+  if (typeof row?.medios_pago_detalle === "string") {
+    try {
+      const parsed = JSON.parse(row.medios_pago_detalle);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
 
-  return true;
+  return [];
+}
+
+function getOtroIngresoCantidadMedios(row) {
+  const n = Number(row?.cantidad_medios_pago);
+  if (Number.isFinite(n) && n > 0) return n;
+
+  const detalle = getOtroIngresoMediosDetalle(row);
+  if (!detalle.length) return 0;
+
+  const unicos = new Set();
+
+  detalle.forEach((mp) => {
+    const id = Number(mp?.id_medio_pago ?? mp?.medio_pago_id ?? mp?.idMedioPago ?? 0);
+    if (Number.isFinite(id) && id > 0) {
+      unicos.add(`id:${id}`);
+      return;
+    }
+
+    const nombre = String(mp?.medio_pago_nombre ?? mp?.medio_pago ?? mp?.nombre ?? "")
+      .trim()
+      .toUpperCase();
+    if (nombre) unicos.add(`nom:${nombre}`);
+  });
+
+  return unicos.size;
+}
+
+function hasOtroIngresoDetalleMedios(row) {
+  return getOtroIngresoCantidadMedios(row) > 1;
 }
 
 function normalizeOtroIngresoRow(r) {
-  const categoria = "OTROS INGRESOS";
-  const medioPagoNombre = r?.medio_pago_nombre ?? r?.medio_pago ?? r?.pago_medio_pago ?? "";
-  const idMov = getMovimientoId(r);
-
   return {
     ...r,
-    id_movimiento: idMov ?? r?.id_movimiento ?? null,
-    fecha: r?.fecha,
-    categoria,
-    medio_pago_nombre: String(medioPagoNombre ?? "").trim() || "",
+    id_movimiento: getMovimientoId(r) ?? r?.id_movimiento ?? null,
+    categoria: "OTROS INGRESOS",
+    medio_pago_nombre: String(r?.medio_pago_nombre ?? r?.medio_pago ?? r?.pago_medio_pago ?? "").trim() || "",
     id_comprobante: Number(r?.id_comprobante ?? 0) || 0,
     comprobante_url: String(r?.comprobante_url ?? "").trim(),
     archivo_mime: String(r?.archivo_mime ?? "").trim(),
     comprobante_tipo: String(r?.comprobante_tipo ?? "").trim(),
+    medios_pago_detalle: getOtroIngresoMediosDetalle(r),
+    cantidad_medios_pago: getOtroIngresoCantidadMedios(r),
     tiene_comprobante:
       Number(r?.id_comprobante ?? 0) > 0 || String(r?.comprobante_url ?? "").trim() !== "",
   };
@@ -222,11 +252,14 @@ function rowMatchesQuery(row, query) {
     }
   }
 
-  parts.push(formatFechaDMY(row?.fecha));
-  parts.push(String(montoNum), String(Math.trunc(montoNum)), moneyARS(montoNum));
+  parts.push(
+    formatFechaDMY(row?.fecha),
+    String(montoNum),
+    String(Math.trunc(montoNum)),
+    moneyARS(montoNum)
+  );
 
-  const hay = normalizeSearchText(parts.join(" | "));
-  return hay.includes(qq);
+  return normalizeSearchText(parts.join(" | ")).includes(qq);
 }
 
 function rowInDateRange(row, from, to) {
@@ -247,12 +280,12 @@ function rowInDateRange(row, from, to) {
 }
 
 function slugifySheetName(name) {
-  const s = String(name || "OtrosIngresos")
-    .replace(/[\[\]\*\/\\\?\:]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return (s || "OtrosIngresos").slice(0, 31);
+  return (
+    String(name || "OtrosIngresos")
+      .replace(/[\[\]\*\/\\\?\:]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() || "OtrosIngresos"
+  ).slice(0, 31);
 }
 
 function buildExportRows(rows) {
@@ -267,8 +300,7 @@ function buildExportRows(rows) {
 
 function escapeCSV(value) {
   const s = String(value ?? "");
-  if (/[",;\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
+  return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 function downloadBlob(content, fileName, mimeType) {
@@ -281,12 +313,6 @@ function downloadBlob(content, fileName, mimeType) {
   a.click();
   a.remove();
   window.URL.revokeObjectURL(url);
-}
-
-// NUEVA FUNCIÓN: Obtener ID de comprobante
-function getIngresoIdComprobante(row) {
-  const n = Number(row?.id_comprobante ?? row?.comprobante_id ?? 0);
-  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 export default function OtrosIngresos() {
@@ -335,13 +361,15 @@ export default function OtrosIngresos() {
     title: "Comprobante",
   });
 
+  const [openMediosPago, setOpenMediosPago] = useState(false);
+  const [selectedMediosRow, setSelectedMediosRow] = useState(null);
+
   const [toast, setToast] = useState(null);
   const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
     setToast({ tipo, mensaje, duracion });
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
-  // NUEVOS REFS PARA CACHE DE URLs FIRMADAS
   const signedUrlCacheRef = useRef(new Map());
   const signedUrlInFlightRef = useRef(new Set());
 
@@ -416,14 +444,13 @@ export default function OtrosIngresos() {
     [buildHeadersPOST, parseJsonOrThrow]
   );
 
-  // NUEVA FUNCIÓN: Obtener URL firmada del comprobante
   const getComprobanteSignedUrl = useCallback(
     async (idComprobante, idMovimiento = null) => {
       const id = Number(idComprobante || 0);
       const mov = Number(idMovimiento || 0);
 
       const cacheKey = id > 0 ? `id:${id}` : `mov:${mov}`;
-      if ((!id && !mov)) return "";
+      if (!id && !mov) return "";
 
       if (signedUrlCacheRef.current.has(cacheKey)) {
         return signedUrlCacheRef.current.get(cacheKey) || "";
@@ -621,7 +648,7 @@ export default function OtrosIngresos() {
       } catch (e) {
         const elapsed = Date.now() - start;
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
-        const msg = e.message || "Error cargando otros ingresos.";
+        const msg = e?.message || "Error cargando otros ingresos.";
 
         return await new Promise((resolve) => {
           setTimeout(() => {
@@ -707,7 +734,6 @@ export default function OtrosIngresos() {
 
   const filteredRows = useMemo(() => {
     return (Array.isArray(rows) ? rows : [])
-      .filter((r) => isOtroIngresoRow(r))
       .filter((r) => rowInDateRange(r, dateRange.from, dateRange.to))
       .filter((r) => rowMatchesQuery(r, q));
   }, [rows, dateRange, q]);
@@ -750,7 +776,7 @@ export default function OtrosIngresos() {
         align: "right",
         render: (r) => moneyARS(r.monto_total ?? r.total ?? r.total_general ?? 0),
       },
-      { key: "acciones", label: "ACCIONES", fr: 0.9, align: "center", render: () => null },
+      { key: "acciones", label: "ACCIONES", fr: 1.2, align: "center", render: () => null },
     ];
   }, []);
 
@@ -939,10 +965,9 @@ export default function OtrosIngresos() {
 
   const reloadVista = useCallback(async () => {
     try {
-      // Limpiar cache de URLs firmadas
       signedUrlCacheRef.current.clear();
       signedUrlInFlightRef.current.clear();
-      
+
       cacheRef.current.clear();
       await loadRows({
         from: dateRange.from,
@@ -1097,7 +1122,56 @@ export default function OtrosIngresos() {
     [API, apiGet, showToast]
   );
 
-  // NUEVA FUNCIÓN: Pre-cargar URL firmada
+  const handleOpenMediosPago = useCallback(
+    async (row) => {
+      const id = Number(row?.id_movimiento ?? 0);
+      if (!id) return;
+
+      const detalleLocal = getOtroIngresoMediosDetalle(row);
+      const cantidadLocal = getOtroIngresoCantidadMedios(row);
+
+      if (detalleLocal.length > 0 && cantidadLocal > 1) {
+        setSelectedMediosRow(normalizeOtroIngresoRow(row));
+        setOpenMediosPago(true);
+        return;
+      }
+
+      try {
+        const sp = new URLSearchParams();
+        sp.set("action", "otros_ingresos_obtener");
+        sp.set("id_movimiento", String(id));
+
+        const data = await apiGet(`${API}?${sp.toString()}`);
+        if (!data?.exito) {
+          throw new Error(data?.mensaje || "No se pudo obtener el detalle de medios de pago.");
+        }
+
+        const ingreso = data?.ingreso ?? data?.otro_ingreso ?? data?.movimiento ?? null;
+        if (!ingreso) {
+          throw new Error("No se encontró la información del ingreso.");
+        }
+
+        const rowNormalizada = normalizeOtroIngresoRow(ingreso);
+
+        if (!hasOtroIngresoDetalleMedios(rowNormalizada)) {
+          showToast("advertencia", "Este ingreso no tiene más de un medio de pago.", 3000);
+          return;
+        }
+
+        setSelectedMediosRow(rowNormalizada);
+        setOpenMediosPago(true);
+      } catch (e) {
+        showToast("error", e?.message || "No se pudo abrir el detalle de medios de pago.", 4200);
+      }
+    },
+    [API, apiGet, showToast]
+  );
+
+  const handleCloseMediosPago = useCallback(() => {
+    setOpenMediosPago(false);
+    setSelectedMediosRow(null);
+  }, []);
+
   const handlePrewarmComprobante = useCallback(
     async (row) => {
       const idComprobante = getIngresoIdComprobante(row);
@@ -1109,7 +1183,6 @@ export default function OtrosIngresos() {
     [getComprobanteSignedUrl]
   );
 
-  // NUEVA FUNCIÓN: Manejar apertura del comprobante con URL firmada
   const handleOpenComprobante = useCallback(
     async (row) => {
       const idComprobante = getIngresoIdComprobante(row);
@@ -1187,6 +1260,7 @@ export default function OtrosIngresos() {
               data-label={c.label}
             >
               <div className="mov-skelActions">
+                <span className="mov-skelIcon" />
                 <span className="mov-skelIcon" />
                 <span className="mov-skelIcon" />
                 <span className="mov-skelIcon" />
@@ -1417,6 +1491,7 @@ export default function OtrosIngresos() {
                   const isLoadingThisEdit = loadingEditDataId === r.id_movimiento;
                   const tieneComprobante =
                     Number(r?.id_comprobante ?? 0) > 0 || String(r?.comprobante_url ?? "").trim() !== "";
+                  const hasMedios = hasOtroIngresoDetalleMedios(r);
 
                   return (
                     <div
@@ -1456,6 +1531,20 @@ export default function OtrosIngresos() {
                                   disabled={!tieneComprobante || isAnyLoading || loadingListsCtx}
                                 >
                                   <FontAwesomeIcon icon={faEye} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={`mov-iconBtn ${hasMedios ? "" : "is-disabled"}`}
+                                  title={
+                                    hasMedios
+                                      ? "Ver detalle de medios de pago"
+                                      : "Este ingreso no tiene más de un medio de pago"
+                                  }
+                                  onClick={() => handleOpenMediosPago(r)}
+                                  disabled={!hasMedios || isAnyLoading || loadingListsCtx}
+                                >
+                                  <FontAwesomeIcon icon={faMoneyCheckDollar} />
                                 </button>
 
                                 <button
@@ -1561,7 +1650,6 @@ export default function OtrosIngresos() {
         onSaved={async () => {
           setOpenAdd(false);
           setSelectedRow(null);
-          // Limpiar cache de URLs firmadas antes de recargar
           signedUrlCacheRef.current.clear();
           signedUrlInFlightRef.current.clear();
           await reloadVista();
@@ -1583,7 +1671,6 @@ export default function OtrosIngresos() {
         onSaved={async () => {
           setOpenEdit(false);
           setSelectedRow(null);
-          // Limpiar cache de URLs firmadas antes de recargar
           signedUrlCacheRef.current.clear();
           signedUrlInFlightRef.current.clear();
           await reloadVista();
@@ -1614,10 +1701,7 @@ export default function OtrosIngresos() {
           },
           {
             label: "Tipo",
-            value:
-              rowToDelete?.tipo_movimiento ||
-              rowToDelete?.tipo ||
-              "OTROS INGRESOS",
+            value: rowToDelete?.tipo_movimiento || rowToDelete?.tipo || "OTROS INGRESOS",
           },
           {
             label: "Concepto",
@@ -1637,6 +1721,13 @@ export default function OtrosIngresos() {
             ),
           },
         ]}
+      />
+
+      <ModalDetalleMediosPago
+        open={openMediosPago}
+        row={selectedMediosRow}
+        onClose={handleCloseMediosPago}
+        tipo="movimiento"
       />
 
       <ModalVerComprobante

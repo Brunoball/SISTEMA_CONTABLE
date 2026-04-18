@@ -2,16 +2,18 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
 import "../../../Global/Global_css/Global_responsive.css";
+import "../../../Global/Global_css/Global_Modals_nueva_compra.css";
 import "./ModalPagarRecibos.css";
 import BASE_URL from "../../../../config/config";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faXmark,
-  faCheck,
   faListCheck,
   faMoneyBill1Wave,
   faCircleNotch,
+  faMoneyCheckDollar,
+  faPlus,
 } from "@fortawesome/free-solid-svg-icons";
 
 import ModalReciboGenerado from "./ModalReciboGenerado";
@@ -64,23 +66,24 @@ function getSessionKey() {
   return (localStorage.getItem("session_key") || "").trim();
 }
 
-function buildAuthHeaders() {
+function buildAuthHeaders(includeJson = false) {
   const session = getSessionKey();
+  const token = (localStorage.getItem("token") || "").trim();
   const headers = {};
+  if (includeJson) headers["Content-Type"] = "application/json";
   if (session) headers["X-Session"] = session;
+  else if (token) headers["Authorization"] = `Bearer ${token}`;
   return headers;
 }
 
 function normalizeMediosPago(raw) {
   const root = raw && typeof raw === "object" ? raw : {};
   const src = root.listas && typeof root.listas === "object" ? root.listas : root;
-
   const arr = Array.isArray(src.medios_pago)
     ? src.medios_pago
     : Array.isArray(src.mediosPago)
     ? src.mediosPago
     : [];
-
   return arr
     .map((x) => ({
       id: Number(x?.id ?? x?.id_medio_pago ?? 0) || 0,
@@ -97,14 +100,19 @@ function isPagadoRow(row) {
 }
 
 function normalizeText(s) {
-  return String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
+  return String(s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function isMedioPagoCheque(mediosPagoList, idMedioPago) {
   const id = Number(idMedioPago);
   if (!Number.isFinite(id) || id <= 0) return false;
   const medio = (Array.isArray(mediosPagoList) ? mediosPagoList : []).find(
-    (x) => Number(x?.id ?? x?.id_medio_pago ?? 0) === id
+    (x) => Number(x?.id ?? 0) === id
   );
   if (!medio) return false;
   const nombre = normalizeText(medio?.nombre ?? "");
@@ -115,11 +123,10 @@ function isMedioPagoEcheq(mediosPagoList, idMedioPago) {
   const id = Number(idMedioPago);
   if (!Number.isFinite(id) || id <= 0) return false;
   const medio = (Array.isArray(mediosPagoList) ? mediosPagoList : []).find(
-    (x) => Number(x?.id ?? x?.id_medio_pago ?? 0) === id
+    (x) => Number(x?.id ?? 0) === id
   );
   if (!medio) return false;
-  const nombre = normalizeText(medio?.nombre ?? "");
-  return nombre.includes("echeq");
+  return normalizeText(medio?.nombre ?? "").includes("echeq");
 }
 
 function getAuthInfo() {
@@ -129,32 +136,20 @@ function getAuthInfo() {
     localStorage.getItem("x_session") ||
     localStorage.getItem("X-Session") ||
     "";
-
   const token = localStorage.getItem("token") || "";
-
   let idUsuario = 0;
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
     const cand =
-      u?.idUsuarioMaster ??
-      u?.idUsuario ??
-      u?.id_usuario ??
-      u?.id ??
-      u?.user_id ??
-      0;
-
-    if (Number.isFinite(Number(cand))) {
-      idUsuario = Number(cand);
-    }
+      u?.idUsuarioMaster ?? u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
+    if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
-
   return { token, sessionKey, idUsuario };
 }
 
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
-
   try {
     const data = JSON.parse(text);
     if (!res.ok || data?.exito === false) {
@@ -184,13 +179,284 @@ async function fetchJsonOrThrow(url, opts = {}) {
 }
 
 /* =========================
-   Sub-componentes
+   Money input helpers
+========================= */
+function safeNumber(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatMoneyInputARS(v) {
+  const n = safeNumber(v);
+  try {
+    return n.toLocaleString("es-AR", {
+      style: "currency",
+      currency: "ARS",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  } catch {
+    return `$ ${n.toFixed(2)}`;
+  }
+}
+
+function parseMoneyInputARS(v) {
+  if (v == null) return 0;
+  let s = String(v).trim();
+  if (!s) return 0;
+  s = s.replace(/\$/g, "").replace(/\s+/g, "");
+  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatEditableMoney(v) {
+  const n = safeNumber(v);
+  if (n === 0) return "";
+  return String(n).replace(".", ",");
+}
+
+function uid() {
+  return crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+/* =========================
+   Estado de una fila de medio de pago
+========================= */
+function buildEmptyMedioPago() {
+  return {
+    id: uid(),
+    id_medio_pago: "",
+    monto: 0,
+    montoDraft: "",
+    montoFocused: false,
+    chequeData: null, // Datos del cheque/echeq ingresados via ModalNuevoChequeRecibo
+  };
+}
+
+/* =========================
+   Sub-componentes UI
 ========================= */
 function EstadoChip({ pagado }) {
   return (
     <span className={`mpr-chip ${pagado ? "mpr-chip--ok" : "mpr-chip--warn"}`}>
       {pagado ? "PAGADO" : "PENDIENTE"}
     </span>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   FILA MEDIO DE PAGO (adaptada para Recibos: cheques nuevos)
+───────────────────────────────────────────────────────── */
+function MedioPagoRowRecibo({
+  row,
+  mediosPagoList,
+  onUpdate,
+  onRemove,
+  saving,
+  canRemove,
+  totalSeleccionado,
+  sumaMediosPago,
+  onRequestCheque,
+}) {
+  const esCheque = useMemo(
+    () => isMedioPagoCheque(mediosPagoList, row.id_medio_pago),
+    [mediosPagoList, row.id_medio_pago]
+  );
+  const esEcheq = useMemo(
+    () => isMedioPagoEcheq(mediosPagoList, row.id_medio_pago),
+    [mediosPagoList, row.id_medio_pago]
+  );
+  const tipoCheque = esEcheq ? "echeq" : "cheque";
+
+  const montoEfectivo = esCheque && row.chequeData
+    ? Number(row.chequeData.importe || 0)
+    : row.monto;
+
+  const restanteParaEstaFila = useMemo(() => {
+    const sumaOtros = Math.max(0, safeNumber(sumaMediosPago) - montoEfectivo);
+    return Math.max(0, safeNumber(totalSeleccionado) - sumaOtros);
+  }, [sumaMediosPago, totalSeleccionado, montoEfectivo]);
+
+  const puedeCompletarRestante =
+    !saving && !esCheque && totalSeleccionado > 0 && restanteParaEstaFila > 0.009;
+
+  // Sincronizar monto cuando cambia el chequeData
+  useEffect(() => {
+    if (esCheque && row.chequeData) {
+      onUpdate(row.id, { monto: Number(row.chequeData.importe || 0) });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.chequeData?.importe, esCheque]);
+
+  const handleChangeMedio = useCallback(
+    (val) => {
+      const isChq = isMedioPagoCheque(mediosPagoList, val);
+      onUpdate(row.id, {
+        id_medio_pago: val,
+        chequeData: null,
+        monto: isChq ? 0 : row.monto,
+        montoDraft: "",
+        montoFocused: false,
+      });
+    },
+    [row.id, row.monto, mediosPagoList, onUpdate]
+  );
+
+  return (
+    <div className="nc-mp-card">
+      <div className="nc-mp-inline">
+        {/* Selector de medio */}
+        <div className="nc-mp-medio">
+          <div className="nc-mp-sublabel">Medio</div>
+          <select
+            className="nc-mp-select"
+            value={String(row.id_medio_pago || "")}
+            onChange={(e) => handleChangeMedio(e.target.value)}
+            disabled={saving}
+          >
+            <option value="">Seleccionar...</option>
+            {mediosPagoList.map((x) => (
+              <option key={x.id} value={String(x.id)}>
+                {x.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Monto (solo para medios no-cheque) */}
+        {!esCheque && (
+          <div className="nc-mp-monto-wrap">
+            <div className="nc-mp-sublabel">Monto</div>
+            <input
+              className="nc-mp-input-monto"
+              type="text"
+              inputMode="decimal"
+              value={
+                row.montoFocused
+                  ? row.montoDraft ?? ""
+                  : formatMoneyInputARS(row.monto)
+              }
+              onFocus={(e) => {
+                onUpdate(row.id, {
+                  montoFocused: true,
+                  montoDraft: formatEditableMoney(row.monto),
+                });
+                setTimeout(() => e.target.select(), 0);
+              }}
+              onChange={(e) => {
+                const c = e.target.value.replace(/[^\d,.\-]/g, "");
+                onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
+              }}
+              onBlur={() => {
+                const p = parseMoneyInputARS(row.montoDraft);
+                onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false });
+              }}
+              placeholder="$ 0,00"
+              disabled={saving}
+            />
+          </div>
+        )}
+
+        {/* Acciones de fila */}
+        <div className="nc-mp-actions-col">
+          {!esCheque && (
+            <button
+              type="button"
+              className="nc-mp-completar"
+              onClick={() =>
+                onUpdate(row.id, {
+                  monto: restanteParaEstaFila,
+                  montoDraft: "",
+                  montoFocused: false,
+                })
+              }
+              disabled={!puedeCompletarRestante}
+              title="Completar importe restante"
+            >
+              ↓ Rest.
+            </button>
+          )}
+          {canRemove && (
+            <button
+              type="button"
+              className="nc-mp-del-btn"
+              onClick={() => onRemove(row.id)}
+              disabled={saving}
+              title="Quitar medio de pago"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Sección de cheque/echeq */}
+      {esCheque && (
+        <div className="nc-mp-cheques">
+          <div className="nc-mp-cheques-title">
+            <FontAwesomeIcon icon={faMoneyCheckDollar} style={{ fontSize: 11 }} />
+            {esEcheq ? "eCheq" : "Cheque"}
+          </div>
+
+          {row.chequeData ? (
+            <div className="mpr-cheque-loaded">
+              <div className="mpr-cheque-info">
+                <div className="mpr-cheque-info__ok">
+                  ✓ {tipoCheque === "echeq" ? "eCheq" : "Cheque"} cargado
+                </div>
+                <div className="mpr-cheque-info__row">
+                  <b>N°:</b> {row.chequeData.numero_cheque}
+                </div>
+                <div className="mpr-cheque-info__row">
+                  <b>Emisor:</b> {row.chequeData.emisor}
+                </div>
+                <div className="mpr-cheque-info__row">
+                  <b>Importe:</b> {moneyARS(row.chequeData.importe || 0)}
+                </div>
+                <div className="mpr-cheque-info__row">
+                  <b>Fecha pago:</b> {row.chequeData.fecha_pago}
+                </div>
+                {row.chequeData.archivo_nombre && (
+                  <div className="mpr-cheque-info__row">
+                    <b>Archivo:</b> {row.chequeData.archivo_nombre}
+                  </div>
+                )}
+              </div>
+              <div className="mpr-cheque-actions">
+                <button
+                  type="button"
+                  className="mit-btn mit-btn--ghost"
+                  onClick={() => onRequestCheque(row.id)}
+                  disabled={saving}
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  className="mit-btn mit-btn--ghost"
+                  onClick={() => onUpdate(row.id, { chequeData: null, monto: 0 })}
+                  disabled={saving}
+                >
+                  Quitar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="mit-btn mit-btn--solid"
+              style={{ width: "100%", marginTop: 4 }}
+              onClick={() => onRequestCheque(row.id)}
+              disabled={saving}
+            >
+              Cargar {tipoCheque === "echeq" ? "eCheq" : "cheque"}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -224,51 +490,111 @@ export default function ModalPagarRecibos({
     return () => obs.disconnect();
   }, []);
 
+  /* =========================
+     Estado principal
+  ========================= */
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [pagaTodo, setPagaTodo] = useState(false);
   const [nota, setNota] = useState("");
   const [loading, setLoading] = useState(false);
+  const [savingCheque, setSavingCheque] = useState(false);
   const [rows, setRows] = useState(() => []);
 
-  const mediosPagoFromContext = useMemo(() => normalizeMediosPago(lists || {}), [lists]);
-
+  /* =========================
+     Medios de pago - lista global
+  ========================= */
+  const mediosPagoFromContext = useMemo(
+    () => normalizeMediosPago(lists || {}),
+    [lists]
+  );
   const [mediosPago, setMediosPago] = useState([]);
   const [loadingMedios, setLoadingMedios] = useState(false);
-  const [idMedioPago, setIdMedioPago] = useState("");
 
+  /* =========================
+     Medios de pago - filas múltiples
+  ========================= */
+  const [mediosFilas, setMediosFilas] = useState(() => [buildEmptyMedioPago()]);
+
+  const addMedioPago = useCallback(() => {
+    setMediosFilas((p) => [...p, buildEmptyMedioPago()]);
+  }, []);
+
+  const removeMedioPago = useCallback((id) => {
+    setMediosFilas((p) => {
+      const next = p.filter((r) => r.id !== id);
+      return next.length ? next : p;
+    });
+  }, []);
+
+  const updateMedioPago = useCallback((id, patch) => {
+    setMediosFilas((p) => p.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }, []);
+
+  const sumaMediosPago = useMemo(
+    () =>
+      mediosFilas.reduce((acc, mp) => {
+        const esCheque = isMedioPagoCheque(mediosPago, mp.id_medio_pago);
+        const monto = esCheque && mp.chequeData
+          ? Number(mp.chequeData.importe || 0)
+          : safeNumber(mp.monto);
+        return acc + monto;
+      }, 0),
+    [mediosFilas, mediosPago]
+  );
+
+  const diferenciaRestante = useMemo(
+    () => Math.max(0, 0), // se calcula abajo con totalSeleccionado
+    []
+  );
+
+  /* =========================
+     Modal cheque - por fila
+  ========================= */
+  const [chequeModalRowId, setChequeModalRowId] = useState(null);
+
+  const openChequeModalForRow = useCallback((rowId) => {
+    setChequeModalRowId(rowId);
+  }, []);
+
+  const rowParaCheque = useMemo(
+    () => (chequeModalRowId ? mediosFilas.find((r) => r.id === chequeModalRowId) || null : null),
+    [chequeModalRowId, mediosFilas]
+  );
+
+  const tipoChequeParaModal = useMemo(
+    () =>
+      rowParaCheque
+        ? isMedioPagoEcheq(mediosPago, rowParaCheque.id_medio_pago)
+          ? "echeq"
+          : "cheque"
+        : "cheque",
+    [rowParaCheque, mediosPago]
+  );
+
+  /* =========================
+     Recibo generado
+  ========================= */
   const [openRecibo, setOpenRecibo] = useState(false);
   const [reciboHtml, setReciboHtml] = useState("");
   const [reciboTitle, setReciboTitle] = useState("Recibo");
   const [idsMovimientosPagados, setIdsMovimientosPagados] = useState([]);
   const [ultimoCobroId, setUltimoCobroId] = useState(null);
 
-  const [openChequeModal, setOpenChequeModal] = useState(false);
-  const [chequeGuardado, setChequeGuardado] = useState(null);
-  const [savingCheque, setSavingCheque] = useState(false);
-
-  const esMedioPagoCheque = useMemo(
-    () => isMedioPagoCheque(mediosPago, idMedioPago),
-    [mediosPago, idMedioPago]
-  );
-
-  const tipoChequeDetectado = useMemo(
-    () => (isMedioPagoEcheq(mediosPago, idMedioPago) ? "echeq" : "cheque"),
-    [mediosPago, idMedioPago]
-  );
-
+  /* =========================
+     Init al abrir
+  ========================= */
   const fetchMediosPagoFallback = useCallback(async () => {
     try {
       setLoadingMedios(true);
       const url = `${BASE_URL}/api.php?action=global_obtener_listas`;
       const data = await fetchJsonOrThrow(url, {
         method: "GET",
-        headers: buildAuthHeaders(),
+        headers: buildAuthHeaders(false),
       });
       setMediosPago(normalizeMediosPago(data));
     } catch (e) {
       onToast?.("error", e?.message || "No se pudieron cargar los medios de pago.", 4200);
       setMediosPago([]);
-      setIdMedioPago("");
     } finally {
       setLoadingMedios(false);
     }
@@ -280,12 +606,15 @@ export default function ModalPagarRecibos({
     setPagaTodo(false);
     setNota("");
     setLoading(false);
+    setSavingCheque(false);
     setRows(Array.isArray(deudas) ? [...deudas] : []);
     setOpenRecibo(false);
     setReciboHtml("");
     setReciboTitle("Recibo");
     setIdsMovimientosPagados([]);
     setUltimoCobroId(null);
+    setMediosFilas([buildEmptyMedioPago()]);
+    setChequeModalRowId(null);
 
     if (mediosPagoFromContext.length > 0) {
       setMediosPago(mediosPagoFromContext);
@@ -295,12 +624,10 @@ export default function ModalPagarRecibos({
       fetchMediosPagoFallback();
     }
 
-    setIdMedioPago("");
-    setChequeGuardado(null);
-    setOpenChequeModal(false);
     setTimeout(() => firstFocusRef.current?.focus(), 50);
   }, [open, deudas, mediosPagoFromContext, fetchMediosPagoFallback]);
 
+  /* ESC handler */
   useEffect(() => {
     if (!open || openRecibo) return;
     const onKey = (e) => {
@@ -314,13 +641,9 @@ export default function ModalPagarRecibos({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, openRecibo, onClose, loading]);
 
-  useEffect(() => {
-    if (!esMedioPagoCheque && chequeGuardado) {
-      setChequeGuardado(null);
-      setOpenChequeModal(false);
-    }
-  }, [esMedioPagoCheque, chequeGuardado]);
-
+  /* =========================
+     Datos ordenados
+  ========================= */
   const deudasOrdenadas = useMemo(() => {
     const arr = Array.isArray(rows) ? [...rows] : [];
     arr.sort((a, b) => {
@@ -342,8 +665,16 @@ export default function ModalPagarRecibos({
     return sum;
   }, [deudasOrdenadas, selectedIds]);
 
+  const diferenciaReal = useMemo(
+    () => Math.max(0, totalSeleccionado - sumaMediosPago),
+    [totalSeleccionado, sumaMediosPago]
+  );
+
   const cantSeleccionadas = useMemo(() => selectedIds.size, [selectedIds]);
 
+  /* =========================
+     Scroll tbody
+  ========================= */
   const recomputeTbodyScroll = useCallback(() => {
     const el = tbodyRef.current;
     if (!el) return;
@@ -368,6 +699,9 @@ export default function ModalPagarRecibos({
     };
   }, [open, openRecibo, recomputeTbodyScroll, deudasOrdenadas.length]);
 
+  /* =========================
+     Toggle selección
+  ========================= */
   const toggleOne = (id, row) => {
     if (!id || loading || isPagadoRow(row)) return;
     setSelectedIds((prev) => {
@@ -395,15 +729,9 @@ export default function ModalPagarRecibos({
     });
   };
 
-  const confirmPagoDefault = async ({ ids_movimiento, id_medio_pago }) => {
-    const url = `${BASE_URL}/api.php?action=recibos_confirmar_pago`;
-    return await fetchJsonOrThrow(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...buildAuthHeaders() },
-      body: JSON.stringify({ ids_movimiento, id_medio_pago }),
-    });
-  };
-
+  /* =========================
+     Guardar cheque en backend
+  ========================= */
   const API_RECIBOS_CHEQUES_GUARDAR = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php?action=recibos_cheques_guardar`;
 
   const guardarChequeEnBackend = useCallback(async (idMovimiento, datosCheque) => {
@@ -416,94 +744,194 @@ export default function ModalPagarRecibos({
     fd.append("idUsuario", String(idUsuario || 0));
     fd.append("tipo", datosCheque.tipo || datosCheque.tipo_cheque || "cheque");
     fd.append("tipo_cheque", datosCheque.tipo_cheque || datosCheque.tipo || "cheque");
-    fd.append(
-      "fecha_emision",
-      datosCheque.fecha_emision || new Date().toISOString().slice(0, 10)
-    );
+    fd.append("fecha_emision", datosCheque.fecha_emision || new Date().toISOString().slice(0, 10));
     fd.append("emisor", datosCheque.emisor || "");
     fd.append("numero_cheque", datosCheque.numero_cheque || "");
     fd.append("importe", String(datosCheque.importe || 0));
-    fd.append(
-      "fecha_pago",
-      datosCheque.fecha_pago || new Date().toISOString().slice(0, 10)
-    );
+    fd.append("fecha_pago", datosCheque.fecha_pago || new Date().toISOString().slice(0, 10));
     fd.append("observaciones", datosCheque.observaciones || "");
-
-    if (datosCheque.id_comprobante) {
-      fd.append("id_comprobante", String(datosCheque.id_comprobante));
-    }
-
+    if (datosCheque.id_comprobante) fd.append("id_comprobante", String(datosCheque.id_comprobante));
     if (datosCheque.archivo instanceof File) {
-      fd.append(
-        "archivo",
-        datosCheque.archivo,
-        datosCheque.archivo_nombre || datosCheque.archivo.name || "adjunto"
-      );
+      fd.append("archivo", datosCheque.archivo, datosCheque.archivo_nombre || datosCheque.archivo.name || "adjunto");
     }
 
     const headers = {};
     if (sessionKey) headers["X-Session"] = sessionKey;
     else if (token) headers.Authorization = `Bearer ${token}`;
 
-    const res = await fetch(API_RECIBOS_CHEQUES_GUARDAR, {
-      method: "POST",
-      headers,
-      body: fd,
-    });
-
+    const res = await fetch(API_RECIBOS_CHEQUES_GUARDAR, { method: "POST", headers, body: fd });
     return await parseJsonOrThrow(res);
   }, []);
 
-  const handleSaveCheque = useCallback(async (datosCheque) => {
-    if (savingCheque) return;
-    if (!datosCheque.emisor) {
-      onToast?.("advertencia", "El emisor es obligatorio.", 3000);
-      return;
-    }
-    if (!datosCheque.numero_cheque) {
-      onToast?.("advertencia", "El número de cheque es obligatorio.", 3000);
-      return;
-    }
-    if (!datosCheque.importe || Number(datosCheque.importe) <= 0) {
-      onToast?.("advertencia", "El importe debe ser mayor a 0.", 3000);
-      return;
-    }
-    if (!datosCheque.fecha_pago) {
-      onToast?.("advertencia", "La fecha de pago es obligatoria.", 3000);
-      return;
-    }
-    setChequeGuardado(datosCheque);
-    setOpenChequeModal(false);
-    onToast?.("exito", `Cheque ${datosCheque.numero_cheque} cargado correctamente.`, 3200);
-  }, [savingCheque, onToast]);
+  /* =========================
+     Guardar cheque desde modal
+  ========================= */
+  const handleSaveCheque = useCallback(
+    (datosCheque) => {
+      if (!datosCheque.emisor) {
+        onToast?.("advertencia", "El emisor es obligatorio.", 3000);
+        return;
+      }
+      if (!datosCheque.numero_cheque) {
+        onToast?.("advertencia", "El número de cheque es obligatorio.", 3000);
+        return;
+      }
+      if (!datosCheque.importe || Number(datosCheque.importe) <= 0) {
+        onToast?.("advertencia", "El importe debe ser mayor a 0.", 3000);
+        return;
+      }
+      if (!datosCheque.fecha_pago) {
+        onToast?.("advertencia", "La fecha de pago es obligatoria.", 3000);
+        return;
+      }
 
-  const buildReciboFromSeleccion = useCallback(({ clienteInfo, mp, seleccion }) => {
-    const items = seleccion.map((r) => ({
-      id_movimiento: r?.id_movimiento,
-      fecha: r?.fecha,
-      descripcion: r?.detalle ?? r?.descripcion ?? r?.concepto,
-      monto: Number(r?.monto_total ?? r?.total ?? 0) || 0,
-    }));
-    const total = items.reduce((acc, it) => acc + (Number(it.monto) || 0), 0);
-    const payload = {
-      fecha_cobro: todayDMY(),
-      cliente: {
-        id_cliente: clienteInfo?.id_cliente ?? null,
-        nombre: clienteInfo?.nombre ?? cliente?.cliente ?? "",
-      },
-      medio_pago: { id: mp?.id, nombre: mp?.nombre },
-      total,
-      items,
-    };
-    return {
-      html: buildReciboHTML(payload),
-      title: `Recibo - ${payload?.cliente?.nombre || "Cliente"}`,
-    };
-  }, [cliente]);
+      if (chequeModalRowId) {
+        updateMedioPago(chequeModalRowId, {
+          chequeData: datosCheque,
+          monto: Number(datosCheque.importe || 0),
+        });
+        onToast?.(
+          "exito",
+          `${datosCheque.tipo_cheque === "echeq" ? "eCheq" : "Cheque"} ${datosCheque.numero_cheque} cargado.`,
+          3200
+        );
+      }
+      setChequeModalRowId(null);
+    },
+    [chequeModalRowId, updateMedioPago, onToast]
+  );
 
+  /* =========================
+     Validaciones
+  ========================= */
+  const validate = useCallback(() => {
+    const seleccion = deudasOrdenadas.filter((r) => {
+      const id = Number(r?.id_movimiento || 0);
+      return id && selectedIds.has(id) && !isPagadoRow(r);
+    });
+
+    if (seleccion.length === 0) {
+      return { ok: false, msg: "Seleccioná al menos una deuda PENDIENTE para pagar." };
+    }
+
+    for (let i = 0; i < mediosFilas.length; i++) {
+      const mp = mediosFilas[i];
+
+      if (!mp.id_medio_pago) {
+        return { ok: false, msg: `Medio de pago ${i + 1}: falta seleccionar el medio.` };
+      }
+
+      const esCheque = isMedioPagoCheque(mediosPago, mp.id_medio_pago);
+      const tipoCheque = isMedioPagoEcheq(mediosPago, mp.id_medio_pago) ? "echeq" : "cheque";
+
+      if (esCheque) {
+        if (!mp.chequeData) {
+          return {
+            ok: false,
+            msg: `Medio de pago ${i + 1}: debés cargar los datos del ${tipoCheque === "echeq" ? "eCheq" : "cheque"}.`,
+          };
+        }
+      } else {
+        if (safeNumber(mp.monto) <= 0) {
+          return { ok: false, msg: `Medio de pago ${i + 1}: el monto debe ser mayor a 0.` };
+        }
+      }
+    }
+
+    if (sumaMediosPago < totalSeleccionado - 0.05 && totalSeleccionado > 0) {
+      return {
+        ok: false,
+        msg: `La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no cubre el total a cobrar (${moneyARS(totalSeleccionado)}).`,
+      };
+    }
+
+    return { ok: true };
+  }, [deudasOrdenadas, selectedIds, mediosFilas, mediosPago, sumaMediosPago, totalSeleccionado]);
+
+  /* =========================
+     Construir payload de medios_pago
+  ========================= */
+  const buildMediosPagoPayload = useCallback(() => {
+    return mediosFilas.map((mp) => {
+      const esCheque = isMedioPagoCheque(mediosPago, mp.id_medio_pago);
+      return {
+        id_medio_pago: Number(mp.id_medio_pago),
+        monto: esCheque && mp.chequeData ? Number(mp.chequeData.importe || 0) : safeNumber(mp.monto),
+        cheque_data: esCheque ? mp.chequeData : null,
+      };
+    });
+  }, [mediosFilas, mediosPago]);
+
+  /* =========================
+     Construir nombre de medios para el recibo
+  ========================= */
+  const buildMpNombre = useCallback(() => {
+    const nombres = mediosFilas.map((mp) => {
+      const found = mediosPago.find((x) => String(x.id) === String(mp.id_medio_pago));
+      return found?.nombre || "Medio de pago";
+    });
+    return nombres.length === 1 ? nombres[0] : nombres.join(" + ");
+  }, [mediosFilas, mediosPago]);
+
+  /* =========================
+     Construir recibo HTML
+  ========================= */
+  const buildReciboFromSeleccion = useCallback(
+    ({ clienteInfo, mpNombre, seleccion }) => {
+      const items = seleccion.map((r) => ({
+        id_movimiento: r?.id_movimiento,
+        fecha: r?.fecha,
+        descripcion: r?.detalle ?? r?.descripcion ?? r?.concepto,
+        monto: Number(r?.monto_total ?? r?.total ?? 0) || 0,
+      }));
+      const total = items.reduce((acc, it) => acc + (Number(it.monto) || 0), 0);
+      const payload = {
+        fecha_cobro: todayDMY(),
+        cliente: {
+          id_cliente: clienteInfo?.id_cliente ?? null,
+          nombre: clienteInfo?.nombre ?? cliente?.cliente ?? "",
+        },
+        medio_pago: { id: null, nombre: mpNombre },
+        total,
+        items,
+      };
+      return {
+        html: buildReciboHTML(payload),
+        title: `Recibo - ${payload?.cliente?.nombre || "Cliente"}`,
+      };
+    },
+    [cliente]
+  );
+
+  /* =========================
+     Pago por defecto (sin onConfirm)
+  ========================= */
+  const confirmPagoDefault = async ({ ids_movimiento, medios_pago }) => {
+    const url = `${BASE_URL}/api.php?action=recibos_confirmar_pago`;
+    const primaryMedio = medios_pago?.[0]?.id_medio_pago || 0;
+    return await fetchJsonOrThrow(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...buildAuthHeaders(false) },
+      body: JSON.stringify({
+        ids_movimiento,
+        medios_pago,
+        id_medio_pago: primaryMedio, // backward compat
+      }),
+    });
+  };
+
+  /* =========================
+     Confirmar pago
+  ========================= */
   const handleConfirm = async () => {
     if (!deudasOrdenadas.length) {
       onToast?.("error", "Este cliente no tiene registros.", 2600);
+      return;
+    }
+
+    const v = validate();
+    if (!v.ok) {
+      onToast?.("error", v.msg, 3200);
       return;
     }
 
@@ -512,53 +940,28 @@ export default function ModalPagarRecibos({
       return id && selectedIds.has(id) && !isPagadoRow(r);
     });
 
-    if (seleccion.length === 0) {
-      onToast?.("error", "Seleccioná al menos una deuda PENDIENTE para pagar.", 2600);
-      return;
-    }
-
-    if (!idMedioPago) {
-      onToast?.("error", "Seleccioná un medio de pago.", 2600);
-      return;
-    }
-
-    const mp = mediosPago.find((x) => String(x.id) === String(idMedioPago));
-    if (!mp) {
-      onToast?.("error", "Medio de pago inválido. Reintentá.", 2800);
-      return;
-    }
-
-    if (esMedioPagoCheque && !chequeGuardado) {
-      onToast?.(
-        "error",
-        `Debés cargar los datos del ${tipoChequeDetectado} antes de confirmar el pago.`,
-        3200
-      );
-      return;
-    }
-
     const ids = seleccion.map((r) => Number(r?.id_movimiento || 0)).filter(Boolean);
+    const mediosPagoPayload = buildMediosPagoPayload();
+    const mpNombre = buildMpNombre();
 
     try {
       setLoading(true);
 
-      if (esMedioPagoCheque && chequeGuardado) {
+      // Guardar cheques en backend (uno por movimiento por cada medio cheque)
+      const chequeFilas = mediosFilas.filter(
+        (mp) => isMedioPagoCheque(mediosPago, mp.id_medio_pago) && mp.chequeData
+      );
+
+      if (chequeFilas.length > 0) {
         setSavingCheque(true);
         try {
-          for (const idMovimiento of ids) {
-            await guardarChequeEnBackend(idMovimiento, chequeGuardado);
+          for (const mp of chequeFilas) {
+            for (const idMovimiento of ids) {
+              await guardarChequeEnBackend(idMovimiento, mp.chequeData);
+            }
           }
-          onToast?.(
-            "exito",
-            `${tipoChequeDetectado === "echeq" ? "Echeq" : "Cheque"} guardado correctamente.`,
-            3000
-          );
         } catch (err) {
-          onToast?.(
-            "error",
-            `Error al guardar ${tipoChequeDetectado}: ${err.message}`,
-            4200
-          );
+          onToast?.("error", `Error al guardar cheque: ${err.message}`, 4200);
           setLoading(false);
           setSavingCheque(false);
           return;
@@ -566,8 +969,8 @@ export default function ModalPagarRecibos({
         setSavingCheque(false);
       }
 
+      // Confirmar pago
       let resp = null;
-
       if (onConfirm) {
         resp = await onConfirm({
           cliente: {
@@ -577,15 +980,15 @@ export default function ModalPagarRecibos({
           seleccion,
           totalSeleccionado,
           nota: nota.trim(),
-          id_medio_pago: mp.id,
-          medio_pago: mp.nombre,
+          medios_pago: mediosPagoPayload,
+          id_medio_pago: mediosPagoPayload[0]?.id_medio_pago || 0, // backward compat
+          medio_pago: mpNombre,
           ids_movimiento: ids,
-          cheque_data: esMedioPagoCheque ? chequeGuardado : null,
         });
       } else {
         resp = await confirmPagoDefault({
           ids_movimiento: ids,
-          id_medio_pago: mp.id,
+          medios_pago: mediosPagoPayload,
         });
       }
 
@@ -604,20 +1007,18 @@ export default function ModalPagarRecibos({
             ...r,
             cobrado_total: Number(r?.monto_total ?? r?.total ?? 0) || 0,
             pagado: true,
-            id_medio_pago: mp.id,
-            medio_pago_nombre: mp.nombre,
           };
         })
       );
 
-      onAfterPaid?.(ids, mp);
+      onAfterPaid?.(ids, { nombre: mpNombre });
 
       const built = buildReciboFromSeleccion({
         clienteInfo: {
           id_cliente: cliente?.id_cliente ?? null,
           nombre: cliente?.cliente ?? "",
         },
-        mp,
+        mpNombre,
         seleccion,
       });
 
@@ -626,7 +1027,7 @@ export default function ModalPagarRecibos({
       setOpenRecibo(true);
       setSelectedIds(new Set());
       setPagaTodo(false);
-      setChequeGuardado(null);
+      setMediosFilas([buildEmptyMedioPago()]);
 
       onToast?.("exito", "Pago realizado correctamente.", 3000);
       setTimeout(recomputeTbodyScroll, 0);
@@ -637,6 +1038,9 @@ export default function ModalPagarRecibos({
     }
   };
 
+  /* =========================
+     Factura (sin cambios)
+  ========================= */
   const handleFactura = async () => {
     if (!onFactura) {
       onToast?.("error", "Falta conectar la acción de factura (onFactura).", 3200);
@@ -652,31 +1056,19 @@ export default function ModalPagarRecibos({
       onToast?.("error", "Este cliente no tiene registros.", 2600);
       return;
     }
-
     if (seleccion.length === 0) {
       onToast?.("error", "Seleccioná al menos una deuda PENDIENTE para facturar.", 2600);
       return;
     }
 
-    if (!idMedioPago) {
-      onToast?.("error", "Seleccioná un medio de pago.", 2600);
+    const v = validate();
+    if (!v.ok) {
+      onToast?.("error", v.msg, 3200);
       return;
     }
 
-    const mp = mediosPago.find((x) => String(x.id) === String(idMedioPago));
-    if (!mp) {
-      onToast?.("error", "Medio de pago inválido. Reintentá.", 2800);
-      return;
-    }
-
-    if (esMedioPagoCheque && !chequeGuardado) {
-      onToast?.(
-        "error",
-        `Debés cargar los datos del ${tipoChequeDetectado} antes de facturar.`,
-        3200
-      );
-      return;
-    }
+    const mediosPagoPayload = buildMediosPagoPayload();
+    const mpNombre = buildMpNombre();
 
     try {
       setLoading(true);
@@ -688,9 +1080,9 @@ export default function ModalPagarRecibos({
         seleccion,
         totalSeleccionado,
         nota: nota.trim(),
-        id_medio_pago: mp.id,
-        medio_pago: mp.nombre,
-        cheque_data: esMedioPagoCheque ? chequeGuardado : null,
+        medios_pago: mediosPagoPayload,
+        id_medio_pago: mediosPagoPayload[0]?.id_medio_pago || 0,
+        medio_pago: mpNombre,
       });
     } catch (e) {
       onToast?.("error", e?.message || "No se pudo generar la factura.", 4200);
@@ -699,7 +1091,13 @@ export default function ModalPagarRecibos({
     }
   };
 
+  /* =========================
+     Render
+  ========================= */
   if (!open) return null;
+
+  const isProcessing = loading || savingCheque;
+  const canConfirm = !isProcessing && selectedIds.size > 0 && !loadingMedios && mediosFilas.every((mp) => mp.id_medio_pago);
 
   const modalClass = [
     "mi-modal__container",
@@ -723,14 +1121,14 @@ export default function ModalPagarRecibos({
       {!openRecibo && (
         <div className={overlayClass} role="dialog" aria-modal="true">
           <div className={modalClass} ref={dialogRef} onMouseDown={(e) => e.stopPropagation()}>
+            {/* Header */}
             <div className="mi-modal__header mpr-header">
               <div className="mi-modal__head-icon" aria-hidden="true">
                 <FontAwesomeIcon icon={faMoneyBill1Wave} />
               </div>
-
               <div className="mi-modal__head-left">
                 <h2 className="mi-modal__title">
-                  Pagar
+                  Cobrar
                   <span className="mpr-header-dot">·</span>
                   <span className="mpr-header-cliente">{safeText(cliente?.cliente)}</span>
                   {cliente?.id_cliente && (
@@ -741,21 +1139,22 @@ export default function ModalPagarRecibos({
                   Pendientes y pagadas · las pagadas quedan bloqueadas
                 </p>
               </div>
-
               <button
                 ref={firstFocusRef}
                 type="button"
                 className="mi-modal__close"
                 onClick={onClose}
                 title="Cerrar"
-                disabled={loading}
+                disabled={isProcessing}
               >
                 <FontAwesomeIcon icon={faXmark} />
               </button>
             </div>
 
+            {/* Contenido */}
             <div className="mi-modal__content mpr-content-wrap">
               <div className="mpr-layout">
+                {/* Tabla de deudas */}
                 <section className="mpr-table-section">
                   <div className="mpr-thead">
                     <div className="mpr-th mpr-th--sel">Sel</div>
@@ -782,42 +1181,32 @@ export default function ModalPagarRecibos({
                       return (
                         <div
                           key={id || `${r?.fecha}-${idx}`}
-                          className={`mpr-row ${checked ? "is-checked" : ""} ${
-                            pagado ? "is-paid" : ""
-                          }`}
+                          className={`mpr-row ${checked ? "is-checked" : ""} ${pagado ? "is-paid" : ""}`}
                           role="row"
                           onClick={() => id && toggleOne(id, r)}
                           title={pagado ? "Este registro ya está PAGADO" : undefined}
                         >
                           <div className="mpr-td mpr-td--sel" onClick={(e) => e.stopPropagation()}>
-                            <label
-                              className={`mpr-check ${
-                                !id || loading || pagado ? "is-disabled" : ""
-                              }`}
-                            >
+                            <label className={`mpr-check ${!id || isProcessing || pagado ? "is-disabled" : ""}`}>
                               <input
                                 type="checkbox"
                                 checked={checked}
                                 onChange={() => toggleOne(id, r)}
-                                disabled={!id || loading || pagado}
+                                disabled={!id || isProcessing || pagado}
                               />
                               <span className="mpr-check__box" aria-hidden="true" />
                             </label>
                           </div>
-
                           <div className="mpr-td">{safeText(formatFechaDMY(r?.fecha))}</div>
-
                           <div
                             className="mpr-td mpr-td--desc"
                             title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
                           >
                             {safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
                           </div>
-
                           <div className="mpr-td mpr-td--center">
                             <EstadoChip pagado={pagado} />
                           </div>
-
                           <div className="mpr-td mpr-td--right mpr-td--mono">
                             {moneyARS(monto)}
                           </div>
@@ -836,7 +1225,6 @@ export default function ModalPagarRecibos({
                         Seleccionadas <b>{cantSeleccionadas}</b>
                       </span>
                     </div>
-
                     <div className="mpr-tfoot-totals">
                       <div className="mpr-total-pill">
                         <span>Total seleccionado</span>
@@ -846,154 +1234,111 @@ export default function ModalPagarRecibos({
                   </div>
                 </section>
 
-                <aside className="mpr-aside">
-                  <div className="mpr-aside__top">
-                    <div className="mpr-aside__title">Datos del pago</div>
+                {/* Aside de datos del pago */}
+                <aside className="nc-aside">
+                  {/* Sección: Selección */}
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" />
+                      <span>Datos del cobro</span>
+                    </div>
+                    <div className="nc-section-body">
+                      <button
+                        type="button"
+                        className="nv-foot-btn"
+                        style={{ width: "100%", justifyContent: "center" }}
+                        onClick={toggleAll}
+                        disabled={!deudasOrdenadas.length || isProcessing}
+                      >
+                        <span className="nv-foot-btn__icon">
+                          <FontAwesomeIcon icon={faListCheck} style={{ fontSize: 10 }} />
+                        </span>
+                        {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="mpr-aside__body">
-                    <div className="fl-field">
-                      <div className="mpr-select-wrap">
-                        <select
-                          className="fl-input fl-select"
-                          value={idMedioPago}
-                          onChange={(e) => setIdMedioPago(e.target.value)}
-                          disabled={loading || loadingMedios}
-                        >
-                          <option value="">
-                            {loadingMedios ? "Cargando…" : "Seleccionar medio de pago…"}
-                          </option>
+                  {/* Sección: Medios de pago */}
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" style={{ background: "#0f766e" }} />
+                      <span>Medios de cobro</span>
+                    </div>
+                    <div className="nc-section-body">
+                      {loadingMedios && (
+                        <div style={{ padding: "4px 0", fontSize: 12, color: "var(--nv-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                          <FontAwesomeIcon icon={faCircleNotch} spin style={{ fontSize: 11 }} />
+                          Cargando medios de pago…
+                        </div>
+                      )}
 
-                          {!loadingMedios && mediosPago.length === 0 && (
-                            <option value="" disabled>
-                              (Sin medios de pago)
-                            </option>
-                          )}
+                      {mediosFilas.map((mp) => (
+                        <MedioPagoRowRecibo
+                          key={mp.id}
+                          row={mp}
+                          mediosPagoList={mediosPago}
+                          onUpdate={updateMedioPago}
+                          onRemove={removeMedioPago}
+                          saving={isProcessing}
+                          canRemove={mediosFilas.length > 1}
+                          totalSeleccionado={totalSeleccionado}
+                          sumaMediosPago={sumaMediosPago}
+                          onRequestCheque={openChequeModalForRow}
+                        />
+                      ))}
 
-                          {mediosPago.map((x) => (
-                            <option key={x.id} value={String(x.id)}>
-                              {x.nombre}
-                            </option>
-                          ))}
-                        </select>
-
-                        <label className="fl-label">Medio de pago *</label>
-
-                        {loadingMedios && (
-                          <span className="mpr-select-spinner">
-                            <FontAwesomeIcon icon={faCircleNotch} spin />
+                      {/* Totales de medios */}
+                      <div className="nc-mp-totals">
+                        <span className="nc-mp-totals-asignado">
+                          Asignado: <b>{moneyARS(sumaMediosPago)}</b>
+                        </span>
+                        {diferenciaReal > 0.01 && (
+                          <span className="nc-mp-totals-falta">
+                            Falta: {moneyARS(diferenciaReal)}
                           </span>
                         )}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="nv-foot-btn mpr-btn-selall"
-                      onClick={toggleAll}
-                      disabled={!deudasOrdenadas.length || loading}
-                    >
-                      <span className="nv-foot-btn__icon">
-                        <FontAwesomeIcon icon={faListCheck} style={{ fontSize: 10 }} />
-                      </span>
-                      {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
-                    </button>
-
-                    {esMedioPagoCheque && (
-                      <div className="mi-card mi-card--full mpr-cheque-card">
-                        <div className="mi-card__title">
-                          {tipoChequeDetectado === "echeq" ? "Echeq" : "Cheque"}
-                        </div>
-
-                        {chequeGuardado ? (
-                          <div className="mpr-cheque-loaded">
-                            <div className="mpr-cheque-info">
-                              <div className="mpr-cheque-info__ok">
-                                ✓ {tipoChequeDetectado === "echeq" ? "Echeq" : "Cheque"} cargado
-                              </div>
-                              <div className="mpr-cheque-info__row">
-                                <b>N°:</b> {chequeGuardado.numero_cheque}
-                              </div>
-                              <div className="mpr-cheque-info__row">
-                                <b>Emisor:</b> {chequeGuardado.emisor}
-                              </div>
-                              <div className="mpr-cheque-info__row">
-                                <b>Importe:</b>{" "}
-                                {Number(chequeGuardado.importe || 0).toLocaleString("es-AR", {
-                                  style: "currency",
-                                  currency: "ARS",
-                                })}
-                              </div>
-                              <div className="mpr-cheque-info__row">
-                                <b>Fecha pago:</b> {chequeGuardado.fecha_pago}
-                              </div>
-                              {chequeGuardado.archivo_nombre && (
-                                <div className="mpr-cheque-info__row">
-                                  <b>Archivo:</b> {chequeGuardado.archivo_nombre}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="mpr-cheque-actions">
-                              <button
-                                type="button"
-                                className="mit-btn mit-btn--ghost"
-                                onClick={() => setOpenChequeModal(true)}
-                                disabled={loading}
-                              >
-                                Editar
-                              </button>
-
-                              <button
-                                type="button"
-                                className="mit-btn mit-btn--ghost"
-                                onClick={() => setChequeGuardado(null)}
-                                disabled={loading}
-                              >
-                                Quitar
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            className="mit-btn mit-btn--solid"
-                            style={{ width: "100%", marginTop: 4 }}
-                            onClick={() => setOpenChequeModal(true)}
-                            disabled={loading}
-                          >
-                            Cargar {tipoChequeDetectado === "echeq" ? "echeq" : "cheque"}
-                          </button>
+                        {diferenciaReal <= 0.01 && totalSeleccionado > 0 && (
+                          <span className="nc-mp-totals-ok">✓ Cubierto</span>
                         )}
                       </div>
-                    )}
-
-
-
-                    <div className="mpr-aside__actions">
-                      <button
-                        type="button"
-                        className="mit-btn mit-btn--solid mit-btn--block"
-                        onClick={handleConfirm}
-                        disabled={
-                          loading ||
-                          selectedIds.size === 0 ||
-                          !idMedioPago ||
-                          (esMedioPagoCheque && !chequeGuardado)
-                        }
-                      >
-                        {loading ? "Procesando…" : "Confirmar pago"}
-                      </button>
 
                       <button
                         type="button"
-                        className="mit-btn mit-btn--ghost mit-btn--block"
-                        onClick={onClose}
-                        disabled={loading}
+                        className="nc-add-mp-btn"
+                        onClick={addMedioPago}
+                        disabled={isProcessing}
                       >
-                        Cancelar
+                        <FontAwesomeIcon icon={faPlus} style={{ fontSize: 11 }} />
+                        Agregar otro medio
                       </button>
                     </div>
+                  </div>
+
+                  {/* Acciones */}
+                  <div className="mpr-aside__actions">
+                    <button
+                      type="button"
+                      className="mit-btn mit-btn--solid mit-btn--block"
+                      onClick={handleConfirm}
+                      disabled={!canConfirm}
+                    >
+                      {isProcessing ? (
+                        <>
+                          <FontAwesomeIcon icon={faCircleNotch} spin style={{ marginRight: 6 }} />
+                          Procesando…
+                        </>
+                      ) : (
+                        "Confirmar cobro"
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className="mit-btn mit-btn--ghost mit-btn--block"
+                      onClick={onClose}
+                      disabled={isProcessing}
+                    >
+                      Cancelar
+                    </button>
                   </div>
                 </aside>
               </div>
@@ -1002,6 +1347,7 @@ export default function ModalPagarRecibos({
         </div>
       )}
 
+      {/* Modal de recibo generado */}
       <ModalReciboGenerado
         open={openRecibo}
         html={reciboHtml}
@@ -1023,17 +1369,18 @@ export default function ModalPagarRecibos({
         }}
       />
 
+      {/* Modal de cheque/echeq - único, se abre para la fila activa */}
       <ModalNuevoChequeRecibo
-        open={openChequeModal}
-        onClose={() => setOpenChequeModal(false)}
+        open={chequeModalRowId !== null}
+        onClose={() => setChequeModalRowId(null)}
         onSave={handleSaveCheque}
-        tipoCheque={tipoChequeDetectado}
-        initialData={chequeGuardado}
-        datosIniciales={chequeGuardado}
+        tipoCheque={tipoChequeParaModal}
+        initialData={rowParaCheque?.chequeData || null}
+        datosIniciales={rowParaCheque?.chequeData || null}
         importeTotal={totalSeleccionado}
         cliente={cliente?.cliente}
         onToast={onToast}
-        saving={loading || savingCheque}
+        saving={isProcessing}
       />
     </>,
     document.body

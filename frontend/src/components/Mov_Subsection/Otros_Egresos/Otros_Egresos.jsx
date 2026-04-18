@@ -11,7 +11,7 @@ import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import ModalNuevoEgreso from "./modales/ModalNuevoEgreso.jsx";
 import ModalEditarEgreso from "./modales/ModalEditarEgreso.jsx";
-import ModalDetalleMediosPagoEgreso from "./modales/ModalDetalleMediosPagoEgreso.jsx";
+import { ModalDetalleMediosPagoEgreso } from "../../Global/Modales/ModalDetalleMediosPago.jsx";
 import ModalEliminar from "../../Global/Modales/ModalEliminar.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";

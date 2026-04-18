@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import BASE_URL from "../../../../config/config";
 import ModalFacturaBaltoResumen from "../../Facturacion/ModalFacturaBaltoResumen.jsx";
-import ModalNuevoCheque from "./ModalNuevoCheque.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faFileInvoiceDollar,
-} from "@fortawesome/free-solid-svg-icons";
+import { faFileInvoiceDollar, faCreditCard } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
+import {
+  ModalMediosPagoVenta,
+  PagoResumenPanelVenta,
+  buildEmptyMedioPagoVenta,
+} from "./ModalMediosPagoVenta.jsx";
 
 const NULL_OPTION = "";
 
@@ -17,9 +19,6 @@ const IVA_OPTIONS = [
   { label: "21 %", value: 21 },
 ];
 
-/* =========================================================
-   Helpers
-========================================================= */
 function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -36,35 +35,6 @@ function moneyARS(v) {
   try { return Number(v || 0).toLocaleString("es-AR", { style: "currency", currency: "ARS" }); }
   catch { return `$${Number(v || 0).toFixed(2)}`; }
 }
-function formatMoneyInputARS(v) {
-  const n = safeNumber(v);
-  try {
-    return n.toLocaleString("es-AR", {
-      style: "currency",
-      currency: "ARS",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  } catch {
-    return `$ ${n.toFixed(2)}`;
-  }
-}
-function parseMoneyInputARS(v) {
-  if (v == null) return 0;
-  let s = String(v).trim();
-  if (!s) return 0;
-  s = s.replace(/\$/g, "").replace(/\s+/g, "");
-  s = s.replace(/\./g, "").replace(",", ".");
-  const n = Number(s);
-  return Number.isFinite(n) ? n : 0;
-}
-function formatEditableMoney(v) {
-  const n = safeNumber(v);
-  if (n === 0) return "";
-  return String(n).replace(".", ",");
-}
-function uid() { return crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
-function onlyDigits(v) { return String(v ?? "").replace(/\D/g, ""); }
 function safeStr(v) { return String(v ?? "").trim(); }
 function normalizeText(v) {
   return String(v ?? "")
@@ -74,7 +44,8 @@ function normalizeText(v) {
     .replace(/\s+/g, " ")
     .trim();
 }
-
+function uid() { return crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
+function onlyDigits(v) { return String(v ?? "").replace(/\D/g, ""); }
 function getDetalleId(d) {
   const cand = d?.id ?? d?.id_detalle ?? d?.idDetalle ?? d?.detalle_id ?? d?.iddetalle ?? null;
   const n = Number(cand);
@@ -90,14 +61,7 @@ function fechaToYYYYMM(isoDate) {
   return /^\d{4}-\d{2}$/.test(s) ? s : "";
 }
 function getStockDisponible(detalle) {
-  const cand =
-    detalle?.stock ??
-    detalle?.stock_disponible ??
-    detalle?.stockDisponible ??
-    detalle?.cantidad_stock ??
-    detalle?.cantidad ??
-    null;
-
+  const cand = detalle?.stock ?? detalle?.stock_disponible ?? detalle?.stockDisponible ?? detalle?.cantidad_stock ?? detalle?.cantidad ?? null;
   if (cand === null || cand === undefined || cand === "") return null;
   const n = Number(cand);
   return Number.isFinite(n) ? n : null;
@@ -105,9 +69,7 @@ function getStockDisponible(detalle) {
 function isSinStock(stock) {
   return stock !== null && stock !== undefined && Number(stock) <= 0;
 }
-
 const SAFE_LISTS = { clientes: [], detalles: [], medios_pago: [], tipos_venta: [], cuentas_corrientes: [] };
-
 function normalizeLists(lists) {
   const src = lists && typeof lists === "object" ? lists : {};
   const l = src.listas && typeof src.listas === "object" ? src.listas : src;
@@ -123,7 +85,6 @@ function normalizeLists(lists) {
     tipos_venta: Array.isArray(tiposVenta) ? tiposVenta : [],
   };
 }
-
 function getAuthInfo() {
   const sessionKey = localStorage.getItem("session_key") || localStorage.getItem("sessionKey") || localStorage.getItem("x_session") || localStorage.getItem("X-Session") || "";
   const token = localStorage.getItem("token") || "";
@@ -135,24 +96,18 @@ function getAuthInfo() {
   } catch {}
   return { token, sessionKey, idUsuario };
 }
-
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
   try {
     const data = JSON.parse(text);
-    if (!res.ok) {
-      const msg = data?.mensaje || data?.error || `HTTP ${res.status}`;
-      throw new Error(msg);
-    }
+    if (!res.ok) throw new Error(data?.mensaje || data?.error || `HTTP ${res.status}`);
     return data;
   } catch (e) {
     if (e instanceof Error) throw e;
-    const preview = text.length > 600 ? text.slice(0, 600) + "..." : text;
-    throw new Error(`Respuesta inválida (no JSON). HTTP ${res.status}\n${preview}`);
+    throw new Error(`Respuesta inválida. HTTP ${res.status}`);
   }
 }
-
 function buildAuthHeaders(isJson = true) {
   const { token, sessionKey } = getAuthInfo();
   const headers = {};
@@ -161,7 +116,6 @@ function buildAuthHeaders(isJson = true) {
   else if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
 }
-
 async function apiPostJson(url, payload) {
   const res = await fetch(url, { method: "POST", headers: buildAuthHeaders(true), body: JSON.stringify(payload ?? {}) });
   return await parseJsonOrThrow(res);
@@ -170,11 +124,9 @@ async function apiGetJson(url) {
   const res = await fetch(url, { method: "GET", headers: buildAuthHeaders(false) });
   return await parseJsonOrThrow(res);
 }
-
 function isTemaOscuro() {
   return document.documentElement.getAttribute("data-theme") === "oscuro" || document.body?.classList?.contains("dark");
 }
-
 function normalizeArcaSummary(s) {
   const x = s && typeof s === "object" ? s : {};
   return {
@@ -212,27 +164,21 @@ function resolveClienteByInput(clientes, inputValue) {
   const contains = wm.filter(x => x.nombreNorm.includes(q)); if (contains.length === 1) return contains[0].raw;
   return null;
 }
-
 function isContadoTipoVenta(tv) {
   return String(tv?.nombre ?? "").toLowerCase().includes("contado") || String(tv?.nombre ?? "").toLowerCase().includes("efectivo");
 }
-function isMedioPagoCheque(mediosPagoList, idMedioPago) {
-  const id = Number(idMedioPago);
-  if (!Number.isFinite(id) || id <= 0) return false;
-  const medio = mediosPagoList.find(x => Number(x?.id ?? x?.id_medio_pago ?? 0) === id);
-  if (!medio) return false;
-  const nombre = normalizeText(medio?.nombre ?? "");
-  return nombre.includes("cheque") || nombre.includes("echeq");
+function getMedioPagoId(mp) {
+  const c = mp?.id ?? mp?.id_medio_pago ?? mp?.medio_pago_id ?? mp?.idMedioPago ?? null;
+  const n = Number(c);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
-function isMedioPagoEcheq(mediosPagoList, idMedioPago) {
-  const id = Number(idMedioPago);
-  if (!Number.isFinite(id) || id <= 0) return false;
-  const medio = mediosPagoList.find(x => Number(x?.id ?? x?.id_medio_pago ?? 0) === id);
-  if (!medio) return false;
-  const nombre = normalizeText(medio?.nombre ?? "");
-  return nombre.includes("echeq");
+function normalizeChequeTipoFromMedio(nombre) {
+  const s = String(nombre || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  if (!s) return null;
+  if (s.includes("echeq") || s.includes("e-cheq") || s.includes("e cheq")) return "echeq";
+  if (s.includes("cheque")) return "cheque";
+  return null;
 }
-
 function describeLineProblem(r, idx1based) {
   const detId = Number(r.id_detalle);
   const detTxt = String(r.detalleText || "").trim();
@@ -253,7 +199,6 @@ function describeLineProblem(r, idx1based) {
   if (!issues.length) return null;
   return `Fila ${idx1based}: ${issues.join(", ")}.`;
 }
-
 function buildEmptyRow() {
   return {
     id: uid(),
@@ -268,19 +213,40 @@ function buildEmptyRow() {
     sinStock: false,
   };
 }
-
-/* =========================================================
-   Mini Modal (agregar catálogo)
-========================================================= */
+function buildMediosPagoPayload(mediosFilas, mediosPagoList) {
+  return (Array.isArray(mediosFilas) ? mediosFilas : [])
+    .filter((mp) => mp.id_medio_pago && mp.id_medio_pago !== "")
+    .map((mp) => {
+      const mpRow = mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago));
+      const tipoCheque = normalizeChequeTipoFromMedio(mpRow?.nombre || "");
+      const base = {
+        frontend_row_uid: mp.id,
+        id_medio_pago: Number(mp.id_medio_pago),
+        monto: tipoCheque !== null ? safeNumber(mp.cheque?.importe) : safeNumber(mp.monto),
+      };
+      if (tipoCheque !== null && mp.cheque) {
+        return {
+          ...base,
+          cheque: {
+            tipo: tipoCheque,
+            fecha_emision: mp.cheque.fecha_emision,
+            emisor: mp.cheque.emisor,
+            numero_cheque: mp.cheque.numero_cheque,
+            importe: safeNumber(mp.cheque.importe),
+            fecha_pago: mp.cheque.fecha_pago,
+            observaciones: mp.cheque.observaciones || "",
+            archivo_nombre:
+              mp.cheque.archivo_nombre ||
+              (mp.cheque.archivo instanceof File ? mp.cheque.archivo.name : ""),
+          },
+        };
+      }
+      return base;
+    });
+}
 function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const t = setTimeout(() => inputRef.current?.focus(), 0);
-    return () => clearTimeout(t);
-  }, [open]);
-
+  useEffect(() => { if (!open) return; const t = setTimeout(() => inputRef.current?.focus(), 0); return () => clearTimeout(t); }, [open]);
   useEffect(() => {
     if (!open) return;
     const h = (e) => {
@@ -290,9 +256,7 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [open, onCancel, onSave]);
-
   if (!open) return null;
-
   return createPortal(
     <div className="mi-mini__overlay">
       <div className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()} onMouseDown={e => e.stopPropagation()}>
@@ -302,7 +266,7 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
         </div>
         <div className="mi-mini__body">
           <div className="fl-field">
-            <input ref={inputRef} className="fl-input" placeholder=" " value={value} onChange={e => onChange?.(e.target.value)} disabled={saving} autoComplete="off" />
+            <input ref={inputRef} className="fl-input" placeholder=" " value={value} onChange={e => onChange?.(e.target.value)} disabled={saving} autoComplete="off"/>
             <label className="fl-label">Nombre</label>
           </div>
           <div className="mi-mini__actions">
@@ -316,9 +280,6 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
   );
 }
 
-/* =========================================================
-   MODAL PRINCIPAL
-========================================================= */
 export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved }) {
   const API_BATCH = `${BASE_URL}/api.php?action=ventas_crear_batch`;
   const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
@@ -328,42 +289,25 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const API_CONFIG_FACTURACION = `${BASE_URL}/api.php?action=config_facturacion_get`;
   const API_VINCULAR_COMPROBANTE = `${BASE_URL}/api.php?action=ventas_comprobantes_vincular_movimiento`;
   const API_VINCULAR_COMPROBANTE_LOTE = `${BASE_URL}/api.php?action=ventas_comprobantes_vincular_movimientos_lote`;
-  const API_CHEQUES_GUARDAR = `${BASE_URL}/api.php?action=ventas_cheques_guardar`;
+  const API_CHEQUES_ACTUALIZAR = `${BASE_URL}/api.php?action=ventas_cheques_actualizar`;
 
   const showToast = useCallback((tipo, mensaje, dur = 2800) => onToast?.(tipo, mensaje, dur), [onToast]);
 
   const [dark, setDark] = useState(isTemaOscuro);
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
-    const o1 = new MutationObserver(update); o1.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    const o2 = new MutationObserver(update); if (document.body) o2.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    const o1 = new MutationObserver(update);
+    o1.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    const o2 = new MutationObserver(update);
+    if (document.body) o2.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     return () => { o1.disconnect(); o2.disconnect(); };
   }, []);
-
   useEffect(() => {
     if (!open) return;
     const p = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = p; };
   }, [open]);
-
-  // ── Escape: solo cierra este modal cuando el de cheque NO está abierto ──
-  // El ModalNuevoCheque maneja su propio Escape con capture=true (prioridad mayor),
-  // así que aquí usamos capture=false (prioridad menor) y chequeamos openChequeModal.
-  useEffect(() => {
-    if (!open) return;
-    const h = (e) => {
-      if (e.key !== "Escape") return;
-      // Si el modal de cheque está abierto, lo deja manejar a él (ya lo hizo con capture=true)
-      if (openChequeModal) return;
-      // Si el de factura está abierto, tampoco cerramos aquí
-      if (openResumenFactura) return;
-      onClose?.();
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, onClose]);
 
   const [localLists, setLocalLists] = useState(() => ({ ...SAFE_LISTS, ...normalizeLists(lists) }));
   useEffect(() => setLocalLists({ ...SAFE_LISTS, ...normalizeLists(lists) }), [lists]);
@@ -378,6 +322,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const [accionContado, setAccionContado] = useState("guardar");
   const [cliInput, setCliInput] = useState("");
   const [rows, setRows] = useState(() => [buildEmptyRow()]);
+  const [mediosFilas, setMediosFilas] = useState(() => [buildEmptyMedioPagoVenta()]);
+  const [mpModalOpen, setMpModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [addUI, setAddUI] = useState({ open: false, kind: null, rowId: null, text: "", saving: false });
   const [fiscalLoading, setFiscalLoading] = useState(false);
@@ -394,27 +340,18 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const rowsContainerRef = useRef(null);
   const [hasScroll, setHasScroll] = useState(false);
 
-  const [openChequeModal, setOpenChequeModal] = useState(false);
-  const [savingCheque, setSavingCheque] = useState(false);
-  const [chequeGuardado, setChequeGuardado] = useState(null);
-
-  // Ref para que el listener de Escape pueda leer el valor actual sin re-registrarse
-  const openChequeModalRef = useRef(openChequeModal);
-  const openResumenFacturaRef = useRef(openResumenFactura);
-  useEffect(() => { openChequeModalRef.current = openChequeModal; }, [openChequeModal]);
-  useEffect(() => { openResumenFacturaRef.current = openResumenFactura; }, [openResumenFactura]);
-
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
     prevOpenRef.current = open;
     if (!open) return;
-
     if (!wasOpen && open) {
       setFecha(todayISO());
       setFilters({ id_tipo_venta: NULL_OPTION, id_medio_pago: NULL_OPTION, id_cliente: NULL_OPTION, id_cuenta_corriente: NULL_OPTION });
       setAccionContado("guardar");
       setCliInput("");
       setRows([buildEmptyRow()]);
+      setMediosFilas([buildEmptyMedioPagoVenta()]);
+      setMpModalOpen(false);
       setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
       setSaving(false);
       setFiscalLoading(false);
@@ -426,40 +363,29 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       setConfigFacturacion(null);
       setOpenResumenFactura(false);
       setResumenFacturaData(null);
-      setOpenChequeModal(false);
-      setSavingCheque(false);
-      setChequeGuardado(null);
       setTimeout(() => closeBtnRef.current?.focus(), 0);
     }
   }, [open]);
 
   useEffect(() => {
-    setChequeGuardado(null);
-  }, [filters.id_medio_pago]);
-
-  useEffect(() => {
     const el = rowsContainerRef.current;
     if (!el) return;
-    const checkScroll = () => {
-      const scroll = el.scrollHeight > el.clientHeight + 1;
-      setHasScroll(scroll);
-    };
-    checkScroll();
-    const resizeObserver = new ResizeObserver(checkScroll);
-    resizeObserver.observe(el);
-    window.addEventListener("resize", checkScroll);
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener("resize", checkScroll);
-    };
+    const check = () => setHasScroll(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    window.addEventListener("resize", check);
+    return () => { ro.disconnect(); window.removeEventListener("resize", check); };
   }, [open, rows]);
 
-  const updateFilter = useCallback((k, v) => setFilters(p => ({ ...p, [k]: v })), []);
+  const updateFilter = useCallback((k, v) => setFilters((p) => ({ ...p, [k]: v })), []);
   const addRow = useCallback(() => setRows((p) => [...p, buildEmptyRow()]), []);
-  const removeRow = useCallback(id => setRows(p => { const n = p.filter(r => r.id !== id); return n.length ? n : p; }), []);
-  const updateRow = useCallback((id, patch) => setRows(p => p.map(r => r.id === id ? { ...r, ...patch } : r)), []);
+  const removeRow = useCallback((id) => setRows((p) => { const n = p.filter((r) => r.id !== id); return n.length ? n : p; }), []);
+  const updateRow = useCallback((id, patch) => setRows((p) => p.map((r) => (r.id === id ? { ...r, ...patch } : r))), []);
+  const addMedioPago = useCallback(() => setMediosFilas((p) => [...p, buildEmptyMedioPagoVenta()]), []);
+  const removeMedioPago = useCallback((id) => setMediosFilas((p) => { const n = p.filter((r) => r.id !== id); return n.length ? n : [buildEmptyMedioPagoVenta()]; }), []);
+  const updateMedioPago = useCallback((id, patch) => setMediosFilas((p) => p.map((r) => (r.id === id ? { ...r, ...patch } : r))), []);
 
-  const startAddDetalleForRow = useCallback(rowId => { if (saving) return; setAddUI({ open: true, kind: "detalles", rowId, text: "", saving: false }); }, [saving]);
   const startAddCliente = useCallback(() => { if (saving) return; setAddUI({ open: true, kind: "clientes", rowId: null, text: cliInput || "", saving: false }); }, [saving, cliInput]);
   const closeAddMini = useCallback(() => { if (addUI.saving) return; setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false }); }, [addUI.saving]);
 
@@ -467,7 +393,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     const nombre = String(addUI.text || "").trim();
     if (!nombre) { showToast("advertencia", "Escribí un nombre antes de guardar.", 2600); return; }
     const kind = addUI.kind; if (!kind) return;
-    setAddUI(p => ({ ...p, saving: true }));
+    setAddUI((p) => ({ ...p, saving: true }));
     showToast("cargando", `Creando ${kind === "detalles" ? "detalle" : "cliente"}…`, 12000);
     try {
       const { idUsuario } = getAuthInfo();
@@ -478,10 +404,10 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       const newNombre = String(item?.nombre ?? "").trim() || nombre;
       if (!Number.isFinite(Number(newId)) || Number(newId) <= 0) throw new Error("El servidor no devolvió un ID válido.");
 
-      setLocalLists(prev => {
+      setLocalLists((prev) => {
         const next = { ...prev };
         const arr = Array.isArray(prev[kind]) ? prev[kind].slice() : [];
-        const already = arr.some(x => {
+        const already = arr.some((x) => {
           const xid = kind === "detalles" ? getDetalleId(x) : getClienteId(x);
           return Number(xid) === Number(newId);
         });
@@ -490,7 +416,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         return next;
       });
 
-      if (kind === "detalles" && addUI.rowId) updateRow(addUI.rowId, { id_detalle: String(newId), detalleText: newNombre });
       if (kind === "clientes") {
         updateFilter("id_cliente", String(newId));
         setCliInput(newNombre);
@@ -503,10 +428,10 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
       showToast("exito", `${kind === "detalles" ? "Detalle" : "Cliente"} creado: "${newNombre}"`, 2600);
     } catch (e) {
-      setAddUI(p => ({ ...p, saving: false }));
+      setAddUI((p) => ({ ...p, saving: false }));
       showToast("error", e?.message || "Error creando.", 4200);
     }
-  }, [API_CATALOGO, addUI, showToast, updateRow, updateFilter]);
+  }, [API_CATALOGO, addUI, showToast, updateFilter]);
 
   const clienteResolvedFromInput = useMemo(() => resolveClienteByInput(clientesList, cliInput), [clientesList, cliInput]);
   const selectedClienteId = useMemo(() => {
@@ -521,13 +446,13 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     const direct = Number(filters.id_cliente);
     const fallbackId = getClienteId(clienteResolvedFromInput);
     if ((!Number.isFinite(direct) || direct <= 0) && fallbackId) {
-      setFilters(prev => String(prev.id_cliente) === String(fallbackId) ? prev : { ...prev, id_cliente: String(fallbackId) });
+      setFilters((prev) => String(prev.id_cliente) === String(fallbackId) ? prev : { ...prev, id_cliente: String(fallbackId) });
     }
   }, [open, filters.id_cliente, clienteResolvedFromInput]);
 
   const handleClienteInputChange = useCallback((val) => {
     setCliInput(val);
-    setFilters(p => ({ ...p, id_cliente: NULL_OPTION }));
+    setFilters((p) => ({ ...p, id_cliente: NULL_OPTION }));
     setClienteFiscalDb(null);
     setFiscalArcaData(null);
     setFiscalCuitInput("");
@@ -536,7 +461,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
   const handleSelectCliente = useCallback((cli) => {
     setCliInput(String(cli?.nombre ?? "").trim());
-    setFilters(p => ({ ...p, id_cliente: getClienteId(cli) != null ? String(getClienteId(cli)) : NULL_OPTION }));
+    setFilters((p) => ({ ...p, id_cliente: getClienteId(cli) != null ? String(getClienteId(cli)) : NULL_OPTION }));
     setClienteFiscalDb(null);
     setFiscalArcaData(null);
     setFiscalCuitInput("");
@@ -547,7 +472,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     const precio = Number(detalle?.precio || 0);
     const stockDisponible = getStockDisponible(detalle);
     const sinStock = isSinStock(stockDisponible);
-
     updateRow(rowId, {
       id_detalle: String(getDetalleId(detalle) || ""),
       detalleText: detalle?.nombre || "",
@@ -556,125 +480,35 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       sinStock,
       cantidad: sinStock ? "" : 1,
     });
-
-    if (sinStock) {
-      showToast("advertencia", `El producto "${detalle?.nombre || ""}" no tiene stock disponible.`, 2500);
-    }
+    if (sinStock) showToast("advertencia", `El producto "${detalle?.nombre || ""}" no tiene stock disponible.`, 2500);
   }, [updateRow, showToast]);
 
   const handleCantidadChange = useCallback((rowId, newCantidad) => {
-    const row = rows.find(r => r.id === rowId);
+    const row = rows.find((r) => r.id === rowId);
     if (!row) return;
-
-    if (row.sinStock || isSinStock(row.stock_disponible)) {
-      updateRow(rowId, { cantidad: "" });
-      return;
-    }
-
+    if (row.sinStock || isSinStock(row.stock_disponible)) { updateRow(rowId, { cantidad: "" }); return; }
     const stockDisponible = row.stock_disponible;
     let cantidadFinal = newCantidad === "" ? "" : Number(newCantidad);
-
-    if (typeof cantidadFinal === "number" && cantidadFinal < 0) {
-      cantidadFinal = 0;
-    }
-
-    if (
-      stockDisponible !== null &&
-      stockDisponible !== undefined &&
-      stockDisponible !== "" &&
-      typeof cantidadFinal === "number" &&
-      cantidadFinal > Number(stockDisponible)
-    ) {
+    if (typeof cantidadFinal === "number" && cantidadFinal < 0) cantidadFinal = 0;
+    if (stockDisponible !== null && stockDisponible !== undefined && stockDisponible !== "" && typeof cantidadFinal === "number" && cantidadFinal > Number(stockDisponible)) {
       cantidadFinal = Number(stockDisponible);
       showToast("advertencia", `Stock máximo disponible: ${stockDisponible}`, 2000);
     }
-
     updateRow(rowId, { cantidad: cantidadFinal });
   }, [rows, updateRow, showToast]);
 
-  const esMedioPagoCheque = useMemo(() => isMedioPagoCheque(mediosPagoList, filters.id_medio_pago), [mediosPagoList, filters.id_medio_pago]);
-  const tipoChequeDetectado = useMemo(() => isMedioPagoEcheq(mediosPagoList, filters.id_medio_pago) ? "echeq" : "cheque", [mediosPagoList, filters.id_medio_pago]);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => {
+      if (e.key !== "Escape") return;
+      if (mpModalOpen || openResumenFactura || addUI.open) return;
+      onClose?.();
+    };
+    document.addEventListener("keydown", h, true);
+    return () => document.removeEventListener("keydown", h, true);
+  }, [open, onClose, mpModalOpen, openResumenFactura, addUI.open]);
 
-  const guardarChequeEnBackend = useCallback(async (idMovimiento, datosCheque) => {
-    if (!datosCheque) return null;
-
-    const idMov = Number(idMovimiento || 0);
-    if (!Number.isFinite(idMov) || idMov <= 0) {
-      throw new Error("No se recibió un id_movimiento válido para guardar el cheque.");
-    }
-
-    const tipoFinal = String(
-      datosCheque.tipo ||
-      datosCheque.tipo_cheque ||
-      "cheque"
-    ).trim().toLowerCase() === "echeq"
-      ? "echeq"
-      : "cheque";
-
-    const importeFinal = Number(datosCheque.importe || 0);
-    if (!(importeFinal > 0)) {
-      throw new Error("El importe del cheque es inválido.");
-    }
-
-    const { token, sessionKey, idUsuario } = getAuthInfo();
-
-    const fd = new FormData();
-    fd.append("id_movimiento", String(idMov));
-    fd.append("idUsuario", String(idUsuario || 0));
-    fd.append("tipo", tipoFinal);
-    fd.append("tipo_cheque", tipoFinal);
-    fd.append("fecha_emision", String(datosCheque.fecha_emision || todayISO()).slice(0, 10));
-    fd.append("emisor", String(datosCheque.emisor || "").trim().toUpperCase());
-    fd.append("numero_cheque", String(datosCheque.numero_cheque || "").trim());
-    fd.append("importe", String(importeFinal));
-    fd.append("fecha_pago", String(datosCheque.fecha_pago || todayISO()).slice(0, 10));
-    fd.append("observaciones", String(datosCheque.observaciones || "").trim());
-
-    if (datosCheque.id_comprobante) {
-      fd.append("id_comprobante", String(datosCheque.id_comprobante));
-    }
-
-    if (datosCheque.archivo instanceof File) {
-      fd.append(
-        "archivo",
-        datosCheque.archivo,
-        datosCheque.archivo_nombre || datosCheque.archivo.name || "adjunto"
-      );
-    }
-
-    const headers = {};
-    if (sessionKey) headers["X-Session"] = sessionKey;
-    else if (token) headers.Authorization = `Bearer ${token}`;
-
-    const res = await fetch(API_CHEQUES_GUARDAR, {
-      method: "POST",
-      headers,
-      body: fd,
-    });
-
-    const data = await parseJsonOrThrow(res);
-
-    if (!data?.exito) {
-      throw new Error(data?.mensaje || "No se pudo guardar el cheque.");
-    }
-
-    return data;
-  }, [API_CHEQUES_GUARDAR]);
-
-  const handleSaveCheque = useCallback(async (datosCheque) => {
-    if (savingCheque) return;
-
-    if (!datosCheque.emisor) { showToast("advertencia", "El emisor es obligatorio.", 3000); return; }
-    if (!datosCheque.numero_cheque) { showToast("advertencia", "El número de cheque es obligatorio.", 3000); return; }
-    if (!datosCheque.importe || datosCheque.importe <= 0) { showToast("advertencia", "El importe debe ser mayor a 0.", 3000); return; }
-    if (!datosCheque.fecha_pago) { showToast("advertencia", "La fecha de pago es obligatoria.", 3000); return; }
-
-    setChequeGuardado(datosCheque);
-    setOpenChequeModal(false);
-    showToast("exito", `Cheque ${datosCheque.numero_cheque} cargado. Se guardará al confirmar la venta.`, 3200);
-  }, [savingCheque, showToast]);
-
-  const rowsCalc = useMemo(() => rows.map(r => {
+  const rowsCalc = useMemo(() => rows.map((r) => {
     const cantidad = Math.max(0, safeNumber(r.cantidad));
     const precio = Math.max(0, safeNumber(r.precio));
     const ivaPct = Math.max(0, safeNumber(r.ivaPct));
@@ -687,19 +521,33 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const resumen = useMemo(() => ({
     subtotal: rowsCalc.reduce((a, r) => a + (r.subtotal || 0), 0),
     iva: rowsCalc.reduce((a, r) => a + (r.ivaMonto || 0), 0),
-    total: rowsCalc.reduce((a, r) => a + (r.total || 0), 0)
+    total: rowsCalc.reduce((a, r) => a + (r.total || 0), 0),
   }), [rowsCalc]);
 
   const tipoVentaSelected = useMemo(() => {
     const id = Number(filters.id_tipo_venta);
     if (!Number.isFinite(id) || id <= 0) return null;
-    return tiposVentaList.find(x => Number(x?.id ?? x?.id_tipo_venta ?? 0) === id) || null;
+    return tiposVentaList.find((x) => Number(x?.id ?? x?.id_tipo_venta ?? 0) === id) || null;
   }, [filters.id_tipo_venta, tiposVentaList]);
 
   const isContado = useMemo(() => isContadoTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
   const tipoVentaSeleccionado = tipoVentaSelected !== null;
 
-  const fetchClienteFiscal = useCallback(async idCliente => {
+  useEffect(() => {
+    if (isContado) return;
+    setMediosFilas([buildEmptyMedioPagoVenta()]);
+    setMpModalOpen(false);
+  }, [isContado]);
+
+  const sumaMediosPago = useMemo(() => {
+    return mediosFilas.reduce((acc, mp) => {
+      const mpRow = mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago ?? ""));
+      const tipoCheque = normalizeChequeTipoFromMedio(mpRow?.nombre || "");
+      return acc + (tipoCheque !== null ? safeNumber(mp.cheque?.importe) : safeNumber(mp.monto));
+    }, 0);
+  }, [mediosFilas, mediosPagoList]);
+
+  const fetchClienteFiscal = useCallback(async (idCliente) => {
     const id = Number(idCliente); if (!Number.isFinite(id) || id <= 0) return null;
     setFiscalLoading(true); setFiscalError(""); setClienteFiscalDb(null); setFiscalArcaData(null);
     try {
@@ -728,7 +576,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     return cfg;
   }, [API_CONFIG_FACTURACION]);
 
-  const buscarFiscalEnArcaPorCuit = useCallback(async cuitRaw => {
+  const buscarFiscalEnArcaPorCuit = useCallback(async (cuitRaw) => {
     const cuit = onlyDigits(cuitRaw);
     setFiscalError("");
     setFiscalArcaData(null);
@@ -751,7 +599,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }
   }, [API_PADRON_CUIT]);
 
-  const guardarClienteFiscal = useCallback(async fiscalSource => {
+  const guardarClienteFiscal = useCallback(async (fiscalSource) => {
     if (!selectedClienteId) throw new Error("Seleccioná un cliente antes de facturar.");
     const fiscal = normalizeClienteFiscalDb(fiscalSource || {});
     if (!fiscal.cuit || !fiscal.razon_social) throw new Error("Datos fiscales inválidos.");
@@ -766,7 +614,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       condicion_iva: fiscal.condicion_iva,
       domicilio: fiscal.domicilio,
       origen: fiscal.origen || "arca_cuit",
-      activo: 1
+      activo: 1,
     });
     if (!saved?.exito || !saved?.cliente_fiscal) throw new Error(saved?.mensaje || "No se pudieron guardar los datos fiscales.");
     const n = normalizeClienteFiscalDb(saved.cliente_fiscal);
@@ -791,14 +639,32 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     const cliTxt = String(cliInput || "").trim();
     if (!(selectedClienteId > 0 || cliTxt.length > 0)) return { ok: false, msg: "Falta seleccionar un Cliente (obligatorio)." };
     const tv = Number(filters.id_tipo_venta); if (!Number.isFinite(tv) || tv <= 0) return { ok: false, msg: "Falta seleccionar la Forma de venta." };
+
     if (isContado) {
-      const mp = Number(filters.id_medio_pago);
-      if (!Number.isFinite(mp) || mp <= 0) return { ok: false, msg: "Venta Contado: falta seleccionar el Medio de pago." };
-      if (esMedioPagoCheque && !chequeGuardado) return { ok: false, msg: "El medio de pago es Cheque: cargá el cheque antes de guardar." };
+      const filasPago = mediosFilas.filter((r) => r.id_medio_pago && r.id_medio_pago !== "");
+      if (!filasPago.length) return { ok: false, msg: "Venta contado: configurá al menos un medio de pago." };
+
+      for (let i = 0; i < filasPago.length; i++) {
+        const mp = filasPago[i];
+        const mpRow = mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago ?? ""));
+        const tipoCheque = normalizeChequeTipoFromMedio(mpRow?.nombre || "");
+        if (!mp.id_medio_pago || mp.id_medio_pago === NULL_OPTION) return { ok: false, msg: `Medio de pago ${i + 1}: falta seleccionar el medio.` };
+        if (tipoCheque !== null) {
+          if (!mp.cheque) return { ok: false, msg: `Medio de pago ${i + 1}: falta cargar el ${tipoCheque === "echeq" ? "eCheq" : "cheque"}.` };
+          if (safeNumber(mp.cheque?.importe) <= 0) return { ok: false, msg: `Medio de pago ${i + 1}: el importe del cheque debe ser mayor a 0.` };
+        } else if (safeNumber(mp.monto) <= 0) {
+          return { ok: false, msg: `Medio de pago ${i + 1}: el monto debe ser mayor a 0.` };
+        }
+      }
+
+      if (sumaMediosPago < resumen.total - 0.05 && resumen.total > 0) {
+        return { ok: false, msg: `La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no cubre el total de la venta (${moneyARS(resumen.total)}).` };
+      }
     }
+
     const periodoApi = fechaToYYYYMM(fecha); if (!/^\d{4}-\d{2}$/.test(periodoApi)) return { ok: false, msg: "La fecha es inválida." };
     const problems = []; rowsCalc.forEach((r, i) => { const p = describeLineProblem(r, i + 1); if (p) problems.push(p); });
-    const usable = rowsCalc.filter(r => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0);
+    const usable = rowsCalc.filter((r) => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0);
     if (!usable.length) {
       if (problems.length) {
         const msg = problems.slice(0, 2).join(" ");
@@ -807,31 +673,31 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       }
       return { ok: false, msg: "Cargá al menos 1 fila válida (Detalle + Cantidad + Precio)." };
     }
-    return { ok: true, warn: problems.length > 0, periodoApi };
-  }, [cliInput, selectedClienteId, filters, isContado, fecha, rowsCalc, esMedioPagoCheque, chequeGuardado]);
+    return { ok: true, warn: problems.length > 0 };
+  }, [cliInput, selectedClienteId, filters, isContado, fecha, rowsCalc, mediosFilas, mediosPagoList, resumen.total, sumaMediosPago]);
 
   const buildResumenFacturaPayload = useCallback((clienteFiscalResuelto, cfg) => {
-    const items = rowsCalc
-      .filter(r => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0)
-      .map((r, i) => ({
-        id: r.id,
-        codigo: String(i + 1),
-        descripcion: safeStr(r.detalleText),
-        cantidad: Number(r.cantidad || 0),
-        unidad: "u",
-        precio_unitario: Number(r.precio || 0),
-        precio: Number(r.precio || 0),
-        bonif_pct: 0,
-        impBonif: 0,
-        subtotal: Number(r.subtotal || 0),
-        ars: Number(r.total || 0),
-        iva_pct: Number(r.ivaPct || 0),
-        iva_monto: Number(r.ivaMonto || 0),
-        total: Number(r.total || 0)
-      }));
+    const items = rowsCalc.filter((r) => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0).map((r, i) => ({
+      id: r.id,
+      codigo: String(i + 1),
+      descripcion: safeStr(r.detalleText),
+      cantidad: Number(r.cantidad || 0),
+      unidad: "u",
+      precio_unitario: Number(r.precio || 0),
+      precio: Number(r.precio || 0),
+      bonif_pct: 0,
+      impBonif: 0,
+      subtotal: Number(r.subtotal || 0),
+      ars: Number(r.total || 0),
+      iva_pct: Number(r.ivaPct || 0),
+      iva_monto: Number(r.ivaMonto || 0),
+      total: Number(r.total || 0),
+    }));
 
     const puntoVenta = Number(String(cfg?.punto_venta || "2").replace(/\D/g, "")) || 2;
     const codigoCbte = Number(String(cfg?.codigo_comprobante || "11").replace(/\D/g, "")) || 11;
+    const mediosPayload = buildMediosPagoPayload(mediosFilas, mediosPagoList);
+    const primerMedioId = mediosPayload[0]?.id_medio_pago || null;
 
     return {
       id_pago: null,
@@ -846,11 +712,11 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         cond_iva: safeStr(clienteFiscalResuelto?.condicion_iva || clienteFiscalResuelto?.cond_iva),
         condicion_iva: safeStr(clienteFiscalResuelto?.condicion_iva || clienteFiscalResuelto?.cond_iva),
         domicilio: safeStr(clienteFiscalResuelto?.domicilio),
-        origen: safeStr(clienteFiscalResuelto?.origen || "arca_cuit")
+        origen: safeStr(clienteFiscalResuelto?.origen || "arca_cuit"),
       },
       id_cliente: selectedClienteId || null,
       id_tipo_venta: Number(filters.id_tipo_venta || 0) || null,
-      id_medio_pago: isContado ? Number(filters.id_medio_pago || 0) || null : null,
+      id_medio_pago: isContado ? primerMedioId : null,
       id_clasificacion: null,
       fecha_cbte_iso: String(fecha || todayISO()).slice(0, 10),
       vto_pago_iso: plusDaysISOFrom(fecha || todayISO(), 10),
@@ -867,24 +733,78 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       cond_iva_emisor: safeStr(cfg?.condicion_iva),
       ingresos_brutos_emisor: safeStr(cfg?.ingresos_brutos),
       fecha_inicio_actividades_emisor: safeStr(cfg?.fecha_inicio_actividades),
-      logo_url: safeStr(cfg?.logo_url)
+      logo_url: safeStr(cfg?.logo_url),
     };
-  }, [rowsCalc, selectedClienteNombre, fecha, resumen.total, selectedClienteId, filters, isContado]);
+  }, [rowsCalc, mediosFilas, mediosPagoList, selectedClienteNombre, selectedClienteId, filters.id_tipo_venta, fecha, isContado, resumen.total]);
+
+  const actualizarChequeConArchivo = useCallback(async ({ idCheque, idMovimiento, cheque }) => {
+    if (!(cheque?.archivo instanceof File)) return null;
+    const fd = new FormData();
+    const { idUsuario } = getAuthInfo();
+    fd.append("id_cheque", String(idCheque));
+    fd.append("id_movimiento", String(idMovimiento));
+    fd.append("idUsuario", String(idUsuario || 0));
+    fd.append("tipo", String(cheque?.tipo || "cheque"));
+    fd.append("tipo_cheque", String(cheque?.tipo || "cheque"));
+    fd.append("fecha_emision", String(cheque?.fecha_emision || todayISO()).slice(0, 10));
+    fd.append("emisor", String(cheque?.emisor || "").trim().toUpperCase());
+    fd.append("numero_cheque", String(cheque?.numero_cheque || "").trim());
+    fd.append("importe", String(safeNumber(cheque?.importe || 0)));
+    fd.append("fecha_pago", String(cheque?.fecha_pago || todayISO()).slice(0, 10));
+    fd.append("observaciones", String(cheque?.observaciones || "").trim());
+    fd.append("archivo", cheque.archivo, cheque.archivo_nombre || cheque.archivo.name || "adjunto");
+
+    const res = await fetch(API_CHEQUES_ACTUALIZAR, {
+      method: "POST",
+      headers: buildAuthHeaders(false),
+      body: fd,
+    });
+    const data = await parseJsonOrThrow(res);
+    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo adjuntar el archivo del cheque.");
+    return data;
+  }, [API_CHEQUES_ACTUALIZAR]);
+
+  const subirArchivosChequesCreados = useCallback(async (info) => {
+    const warnings = [];
+    const creados = Array.isArray(info?.cheques_creados) ? info.cheques_creados : [];
+    if (!creados.length) return warnings;
+
+    const filasCheque = mediosFilas.filter((mp) => mp?.cheque && mp.cheque.archivo instanceof File);
+    for (const mp of filasCheque) {
+      const backendCheque = creados.find((x) => String(x?.frontend_row_uid || "") === String(mp.id));
+      if (!backendCheque?.id_cheque || !backendCheque?.id_movimiento) {
+        warnings.push(`No se pudo vincular el archivo del cheque ${mp?.cheque?.numero_cheque || ""}.`);
+        continue;
+      }
+      try {
+        await actualizarChequeConArchivo({
+          idCheque: backendCheque.id_cheque,
+          idMovimiento: backendCheque.id_movimiento,
+          cheque: mp.cheque,
+        });
+      } catch (e) {
+        warnings.push(e?.message || `No se pudo adjuntar el archivo del cheque ${mp?.cheque?.numero_cheque || ""}.`);
+      }
+    }
+    return warnings;
+  }, [mediosFilas, actualizarChequeConArchivo]);
 
   const guardarVentaBatch = useCallback(async ({ clienteFiscalResuelto = null, accionFinal = "guardar", esFacturadaFinal = false }) => {
     const { idUsuario } = getAuthInfo();
     const periodoApi = fechaToYYYYMM(fecha);
+    const mediosPayload = buildMediosPagoPayload(mediosFilas, mediosPagoList);
+    const primerMedioId = isContado ? (mediosPayload[0]?.id_medio_pago || null) : null;
 
     const payloads = rowsCalc
-      .filter(r => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0)
-      .map(r => ({
+      .filter((r) => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0)
+      .map((r) => ({
         idUsuario,
         fecha,
         periodo: periodoApi,
         id_cliente: selectedClienteId > 0 ? selectedClienteId : null,
         cliente_nombre: selectedClienteNombre || null,
         id_tipo_venta: Number(filters.id_tipo_venta),
-        id_medio_pago: isContado ? Number(filters.id_medio_pago) : null,
+        id_medio_pago: primerMedioId,
         id_cuenta_corriente: null,
         id_detalle: Number(r.id_detalle),
         cantidad: Math.round(Number(r.cantidad) * 100) / 100,
@@ -896,7 +816,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         monto_total: Math.round(Number(r.total) * 100) / 100,
         accion_venta: accionFinal,
         es_facturada: esFacturadaFinal,
-        cliente_fiscal: esFacturadaFinal ? clienteFiscalResuelto : null
+        cliente_fiscal: esFacturadaFinal ? clienteFiscalResuelto : null,
       }));
 
     if (!payloads.length) throw new Error("No hay filas válidas para guardar.");
@@ -904,6 +824,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     const data = await apiPostJson(API_BATCH, {
       idUsuario,
       items: payloads,
+      medios_pago: isContado ? mediosPayload : [],
     });
 
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar el batch de ventas.");
@@ -916,9 +837,9 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       cliente_id: selectedClienteId || null,
       cliente_nombre: selectedClienteNombre,
       accion_venta: accionFinal,
-      es_facturada: esFacturadaFinal
+      es_facturada: esFacturadaFinal,
     };
-  }, [API_BATCH, fecha, rowsCalc, selectedClienteId, selectedClienteNombre, filters, isContado]);
+  }, [API_BATCH, fecha, mediosFilas, mediosPagoList, rowsCalc, selectedClienteId, selectedClienteNombre, filters, isContado]);
 
   const subirComprobanteYVincularPrimerMovimiento = useCallback(async ({ idMovimiento, blob, filename, facturaMeta }) => {
     if (!idMovimiento || !blob) throw new Error("Faltan datos para subir el comprobante.");
@@ -954,45 +875,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       qr_payload: facturaMeta?.qr_payload ?? null,
       json_arca: facturaMeta?.json_arca ?? facturaMeta?.raw_min ?? facturaMeta ?? null,
       resumen_facturacion: {
-        id_pago: resumenFacturaData?.id_pago ?? null,
-        id_sistema: resumenFacturaData?.id_sistema ?? null,
-        labelCliente: resumenFacturaData?.labelCliente ?? null,
-        labelSistema: resumenFacturaData?.labelSistema ?? null,
-        cliente_facturacion: resumenFacturaData?.cliente_facturacion ?? null,
-        id_cliente: resumenFacturaData?.id_cliente ?? null,
-        id_tipo_venta: resumenFacturaData?.id_tipo_venta ?? null,
-        id_medio_pago: resumenFacturaData?.id_medio_pago ?? null,
-        id_clasificacion: resumenFacturaData?.id_clasificacion ?? null,
-        fecha_cbte_iso: resumenFacturaData?.fecha_cbte_iso ?? null,
-        vto_pago_iso: resumenFacturaData?.vto_pago_iso ?? null,
-        cbte_tipo: resumenFacturaData?.cbte_tipo ?? null,
-        pto_vta: resumenFacturaData?.pto_vta ?? null,
+        ...resumenFacturaData,
         items_facturacion: Array.isArray(resumenFacturaData?.items_facturacion) ? resumenFacturaData.items_facturacion : [],
-        total_ars: Number(resumenFacturaData?.total_ars ?? resumen.total ?? 0),
-        monto: Number(resumenFacturaData?.monto ?? resumen.total ?? 0),
-        importe: Number(resumenFacturaData?.importe ?? resumen.total ?? 0),
-        observaciones: resumenFacturaData?.observaciones ?? "",
-        emisor_nombre: resumenFacturaData?.emisor_nombre ?? null,
-        emisor_domicilio: resumenFacturaData?.emisor_domicilio ?? null,
-        cuit_emisor: resumenFacturaData?.cuit_emisor ?? null,
-        cond_iva_emisor: resumenFacturaData?.cond_iva_emisor ?? null,
-        ingresos_brutos_emisor: resumenFacturaData?.ingresos_brutos_emisor ?? null,
-        fecha_inicio_actividades_emisor: resumenFacturaData?.fecha_inicio_actividades_emisor ?? null,
-        logo_url: resumenFacturaData?.logo_url ?? null,
-      },
-      items_facturacion: Array.isArray(resumenFacturaData?.items_facturacion) ? resumenFacturaData.items_facturacion : [],
-      total_ars: resumenFacturaData?.total_ars ?? null,
-      vto_pago: resumenFacturaData?.vto_pago_iso ?? null,
-      observaciones: resumenFacturaData?.observaciones ?? "",
-      cliente_facturacion: resumenFacturaData?.cliente_facturacion ?? null,
-      emisor: {
-        nombre: resumenFacturaData?.emisor_nombre ?? null,
-        domicilio: resumenFacturaData?.emisor_domicilio ?? null,
-        cuit: resumenFacturaData?.cuit_emisor ?? null,
-        condicion_iva: resumenFacturaData?.cond_iva_emisor ?? null,
-        ingresos_brutos: resumenFacturaData?.ingresos_brutos_emisor ?? null,
-        fecha_inicio_actividades: resumenFacturaData?.fecha_inicio_actividades_emisor ?? null,
-        logo_url: resumenFacturaData?.logo_url ?? null,
       },
     };
 
@@ -1003,7 +887,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       body: fd,
       headers: buildAuthHeaders(false),
     });
-
     const j = await parseJsonOrThrow(res);
     if (!j?.exito) throw new Error(j?.mensaje || "No se pudo subir el comprobante.");
     return j;
@@ -1013,8 +896,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     if (!idComprobante || !Array.isArray(idsMovimiento) || !idsMovimiento.length) return;
     const data = await apiPostJson(API_VINCULAR_COMPROBANTE_LOTE, {
       id_comprobante: Number(idComprobante),
-      ids_movimiento: idsMovimiento.map(x => Number(x)).filter(x => Number.isFinite(x) && x > 0),
-      force: false
+      ids_movimiento: idsMovimiento.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0),
+      force: false,
     });
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo vincular el comprobante al lote.");
     return data;
@@ -1040,20 +923,12 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const finalizarFacturacionYGuardarVenta = useCallback(async (factEmitida) => {
     try {
       setSaving(true);
-
       const cf = normalizeClienteFiscalDb(resumenFacturaData?.cliente_facturacion || clienteFiscalDb || fiscalArcaData || {});
+      const info = await guardarVentaBatch({ clienteFiscalResuelto: cf, accionFinal: "facturar", esFacturadaFinal: true });
 
-      const info = await guardarVentaBatch({
-        clienteFiscalResuelto: cf,
-        accionFinal: "facturar",
-        esFacturadaFinal: true,
-      });
-
-      const idsOk = (
-        Array.isArray(info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
-          ? (info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
-          : (info?.id_movimiento ? [info.id_movimiento] : [])
-      )
+      const idsOk = (Array.isArray(info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
+        ? (info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
+        : (info?.id_movimiento ? [info.id_movimiento] : []))
         .map((x) => Number(x))
         .filter((x) => Number.isFinite(x) && x > 0);
 
@@ -1073,46 +948,20 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       const restoIds = idsOk.slice(1);
       if (restoIds.length > 0) await vincularComprobanteAMovimientosLote(restoIds, idComprobante);
 
-      if (esMedioPagoCheque && chequeGuardado) {
-        if (!idsOk.length || !idsOk[0]) {
-          throw new Error("La venta facturada no devolvió un id_movimiento válido para guardar el cheque.");
-        }
-
-        try {
-          await guardarChequeEnBackend(idsOk[0], chequeGuardado);
-        } catch (eCheque) {
-          throw new Error(`La venta fue facturada, pero no se pudo guardar el cheque: ${eCheque?.message || "error desconocido"}`);
-        }
-      }
+      const chequeWarnings = await subirArchivosChequesCreados(info);
 
       setOpenResumenFactura(false);
       setResumenFacturaData(null);
-
       showToast("exito", "Venta agregada correctamente.", 3000);
+      if (chequeWarnings.length) showToast("advertencia", chequeWarnings.join(" "), 5200);
 
-      onSaved?.({
-        ...info,
-        factura_emitida: factEmitida || null,
-        id_comprobante: idComprobante,
-      });
+      onSaved?.({ ...info, factura_emitida: factEmitida || null, id_comprobante: idComprobante });
     } catch (e) {
       showToast("error", e?.message || "La factura se emitió pero no se pudo guardar la venta.", 5200);
     } finally {
       setSaving(false);
     }
-  }, [
-    showToast,
-    guardarVentaBatch,
-    resumenFacturaData,
-    clienteFiscalDb,
-    fiscalArcaData,
-    onSaved,
-    subirComprobanteYVincularPrimerMovimiento,
-    vincularComprobanteAMovimientosLote,
-    esMedioPagoCheque,
-    chequeGuardado,
-    guardarChequeEnBackend,
-  ]);
+  }, [showToast, guardarVentaBatch, resumenFacturaData, clienteFiscalDb, fiscalArcaData, onSaved, subirComprobanteYVincularPrimerMovimiento, vincularComprobanteAMovimientosLote, subirArchivosChequesCreados]);
 
   const submit = useCallback(async () => {
     if (saving) return;
@@ -1126,35 +975,16 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     if (v.warn) showToast("advertencia", "Hay filas incompletas: se guardarán solo las válidas.", 3600);
     try {
       const info = await guardarVentaBatch({ clienteFiscalResuelto: null, accionFinal: "guardar", esFacturadaFinal: false });
-
-      if (esMedioPagoCheque && chequeGuardado) {
-        const idsOk = (
-          Array.isArray(info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
-            ? (info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
-            : (info?.id_movimiento ? [info.id_movimiento] : [])
-        )
-          .map((x) => Number(x))
-          .filter((x) => Number.isFinite(x) && x > 0);
-
-        if (!idsOk.length) {
-          throw new Error("La venta se guardó pero no devolvió un id_movimiento válido para vincular el cheque.");
-        }
-
-        try {
-          await guardarChequeEnBackend(idsOk[0], chequeGuardado);
-        } catch (eCheque) {
-          throw new Error(`La venta se guardó, pero no se pudo guardar el cheque: ${eCheque?.message || "error desconocido"}`);
-        }
-      }
-
+      const chequeWarnings = await subirArchivosChequesCreados(info);
       showToast("exito", "Venta agregada correctamente.", 3000);
+      if (chequeWarnings.length) showToast("advertencia", chequeWarnings.join(" "), 5200);
       onSaved?.(info);
     } catch (e) {
       showToast("error", e?.message || "Error guardando.", 4500);
     } finally {
       setSaving(false);
     }
-  }, [saving, addUI.open, validate, showToast, tipoVentaSeleccionado, accionContado, guardarVentaBatch, onSaved, abrirResumenFactura, esMedioPagoCheque, chequeGuardado, guardarChequeEnBackend]);
+  }, [saving, addUI.open, validate, showToast, tipoVentaSeleccionado, accionContado, guardarVentaBatch, onSaved, abrirResumenFactura, subirArchivosChequesCreados]);
 
   const onClickFacturar = useCallback(async () => {
     setAccionContado("facturar");
@@ -1174,33 +1004,16 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   }, [selectedClienteId, clienteFiscalDb, fiscalCuitInput, fetchClienteFiscal, abrirResumenFactura, showToast]);
 
   const shouldNeedFiscalPanel = open && accionContado === "facturar" && !clienteFiscalDb && selectedClienteId > 0;
-
   if (!open) return null;
 
   return createPortal(
     <>
       <div className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim()}>
-        <div
-          className={["mi-modal__container", "mi-modal__container--mov", dark ? "mi-modal--dark" : ""].join(" ").trim()}
-          role="dialog"
-          aria-modal="true"
-          onMouseDown={e => e.stopPropagation()}
-        >
+        <div className={["mi-modal__container", "mi-modal__container--mov", dark ? "mi-modal--dark" : ""].join(" ").trim()} role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
           <div className="mi-modal__header">
-            <div className="mi-modal__head-icon" aria-hidden="true">
-              <FontAwesomeIcon icon={faFileInvoiceDollar} />
-            </div>
-            <div className="mi-modal__head-left">
-              <h2 className="mi-modal__title">Nueva Venta</h2>
-            </div>
-            <button
-              ref={closeBtnRef}
-              className="mi-modal__close"
-              onClick={() => (!saving ? onClose?.() : null)}
-              aria-label="Cerrar"
-              disabled={saving}
-              type="button"
-            >✕</button>
+            <div className="mi-modal__head-icon" aria-hidden="true"><FontAwesomeIcon icon={faFileInvoiceDollar} /></div>
+            <div className="mi-modal__head-left"><h2 className="mi-modal__title">Nueva Venta</h2></div>
+            <button ref={closeBtnRef} className="mi-modal__close" onClick={() => (!saving ? onClose?.() : null)} aria-label="Cerrar" disabled={saving} type="button">✕</button>
           </div>
 
           <div className="mi-modal__content">
@@ -1217,23 +1030,15 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                 </div>
 
                 <div ref={rowsContainerRef} className={`mi-cr-table__rows ${hasScroll ? "has-scroll" : ""}`}>
-                  {rowsCalc.map(r => {
+                  {rowsCalc.map((r) => {
                     const stockNum = r.stock_disponible !== null && r.stock_disponible !== undefined ? Number(r.stock_disponible) : null;
                     const rowSinStock = r.sinStock || isSinStock(stockNum);
-
                     return (
                       <div key={r.id} className={`mi-cr-row ${rowSinStock ? "mi-cr-row--sin-stock" : ""}`}>
                         <div className="mi-cr-cell mi-cr-cell--detalle">
                           <GlobalAutocomplete
                             value={r.detalleText}
-                            onChange={(val) =>
-                              updateRow(r.id, {
-                                detalleText: val,
-                                id_detalle: NULL_OPTION,
-                                stock_disponible: null,
-                                sinStock: false,
-                              })
-                            }
+                            onChange={(val) => updateRow(r.id, { detalleText: val, id_detalle: NULL_OPTION, stock_disponible: null, sinStock: false })}
                             onSelect={(d) => handleSelectDetalle(d, r.id)}
                             options={detallesList}
                             getOptionLabel={(d) => String(d?.nombre ?? "").trim()}
@@ -1253,90 +1058,33 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                             min={rowSinStock ? undefined : "1"}
                             step="1"
                             value={rowSinStock ? "" : r.cantidad}
-                            onChange={e => handleCantidadChange(r.id, e.target.value === "" ? "" : Number(e.target.value))}
+                            onChange={(e) => handleCantidadChange(r.id, e.target.value === "" ? "" : Number(e.target.value))}
                             disabled={saving || rowSinStock}
                             placeholder={rowSinStock ? "0" : ""}
                             title={rowSinStock ? "No podés ingresar cantidad porque el stock es 0" : ""}
-                            style={{
-                              width: "100%",
-                              background: rowSinStock ? "#f3f4f6" : undefined,
-                              color: rowSinStock ? "#b91c1c" : undefined,
-                              borderColor: rowSinStock ? "#fca5a5" : undefined,
-                              cursor: rowSinStock ? "not-allowed" : undefined,
-                              opacity: rowSinStock ? 0.9 : 1,
-                            }}
+                            style={{ width: "100%", background: rowSinStock ? "#f3f4f6" : undefined, color: rowSinStock ? "#b91c1c" : undefined, borderColor: rowSinStock ? "#fca5a5" : undefined, cursor: rowSinStock ? "not-allowed" : undefined, opacity: rowSinStock ? 0.9 : 1 }}
                           />
-
                           {r.stock_disponible !== null && r.stock_disponible !== undefined && (
-                            <div
-                              style={{
-                                fontSize: "10px",
-                                fontWeight: rowSinStock ? 700 : 500,
-                                color: rowSinStock ? "#b91c1c" : "#666",
-                              }}
-                            >
+                            <div style={{ fontSize: "10px", fontWeight: rowSinStock ? 700 : 500, color: rowSinStock ? "#b91c1c" : "#666" }}>
                               {rowSinStock ? "Sin stock" : `Stock: ${r.stock_disponible}`}
                             </div>
                           )}
                         </div>
 
                         <div className="mi-cr-cell mi-cr-cell--center">
-                          <input
-                            className="nv-cell-input nv-cell-input--right"
-                            type="text"
-                            value={formatMoneyInputARS(r.precio)}
-                            readOnly
-                            tabIndex={-1}
-                            style={{
-                              width: "100%",
-                              padding: "0",
-                              pointerEvents: "none",
-                              background: "transparent",
-                              cursor: "default",
-                            }}
-                          />
+                          <input className="nv-cell-input nv-cell-input--right" type="text" value={moneyARS(r.precio)} readOnly tabIndex={-1} style={{ width: "100%", padding: 0, pointerEvents: "none", background: "transparent", cursor: "default" }} />
                         </div>
 
                         <div className="mi-cr-cell mi-cr-cell--center">
-                          <select
-                            className="nv-cell-input nv-cell-input--center nv-cell-input--select"
-                            value={String(r.ivaPct)}
-                            onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
-                            onKeyDown={(e) => {
-                              if (
-                                e.key === "ArrowUp" ||
-                                e.key === "ArrowDown" ||
-                                e.key === "ArrowLeft" ||
-                                e.key === "ArrowRight"
-                              ) {
-                                e.preventDefault();
-                              }
-                            }}
-                            disabled={saving}
-                            style={{ width: "100%" }}
-                          >
-                            {IVA_OPTIONS.map((x) => (
-                              <option key={x.value} value={x.value}>{x.label}</option>
-                            ))}
+                          <select className="nv-cell-input nv-cell-input--center nv-cell-input--select" value={String(r.ivaPct)} onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })} disabled={saving} style={{ width: "100%" }}>
+                            {IVA_OPTIONS.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}
                           </select>
                         </div>
 
-                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
-                          {moneyARS(r.ivaMonto)}
-                        </div>
-
-                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
-                          {moneyARS(r.total)}
-                        </div>
-
+                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">{moneyARS(r.ivaMonto)}</div>
+                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">{moneyARS(r.total)}</div>
                         <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
-                          <button
-                            type="button"
-                            className="mi-cr-del"
-                            onClick={() => removeRow(r.id)}
-                            disabled={saving}
-                            title="Eliminar fila"
-                          >×</button>
+                          <button type="button" className="mi-cr-del" onClick={() => removeRow(r.id)} disabled={saving} title="Eliminar fila">×</button>
                         </div>
                       </div>
                     );
@@ -1349,23 +1097,13 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                       <span className="nv-foot-btn__icon">+</span>
                       Agregar fila
                     </button>
-
                     <div className="nv-foot-sep" />
                   </div>
 
                   <div className="mi-cr-totals">
-                    <div className="mi-cr-totalLine mi-cr-totalLine--sub">
-                      <span>Subtotal</span>
-                      <b>{moneyARS(resumen.subtotal)}</b>
-                    </div>
-                    <div className="mi-cr-totalLine mi-cr-totalLine--iva">
-                      <span>IVA</span>
-                      <b>{moneyARS(resumen.iva)}</b>
-                    </div>
-                    <div className="mi-cr-totalLine mi-cr-totalLine--total">
-                      <span>Total</span>
-                      <b>{moneyARS(resumen.total)}</b>
-                    </div>
+                    <div className="mi-cr-totalLine mi-cr-totalLine--sub"><span>Subtotal</span><b>{moneyARS(resumen.subtotal)}</b></div>
+                    <div className="mi-cr-totalLine mi-cr-totalLine--iva"><span>IVA</span><b>{moneyARS(resumen.iva)}</b></div>
+                    <div className="mi-cr-totalLine mi-cr-totalLine--total"><span>Total</span><b>{moneyARS(resumen.total)}</b></div>
                   </div>
                 </div>
               </section>
@@ -1373,27 +1111,9 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
               <aside className="mi-cr-filters">
                 <div className="mi-cr-filters__top">
                   <div className="mi-cr-filters__title">Datos de venta</div>
-
                   <div className="mi-cr-filters__dates">
-                    <div
-                      className="fl-field fl-col-full mi-date-field"
-                      onClick={() => {
-                        if (saving) return;
-                        const el = document.getElementById("nv-fecha-input");
-                        if (!el) return;
-                        if (typeof el.showPicker === "function") el.showPicker();
-                        else { el.focus(); el.click(); }
-                      }}
-                    >
-                      <input
-                        id="nv-fecha-input"
-                        className="fl-input"
-                        type="date"
-                        placeholder=" "
-                        value={fecha}
-                        onChange={e => setFecha(String(e.target.value || "").trim())}
-                        disabled={saving}
-                      />
+                    <div className="fl-field fl-col-full mi-date-field">
+                      <input id="nv-fecha-input" className="fl-input" type="date" placeholder=" " value={fecha} onChange={(e) => setFecha(String(e.target.value || "").trim())} disabled={saving} />
                       <label className="fl-label">Fecha</label>
                     </div>
                   </div>
@@ -1418,217 +1138,38 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                   </div>
 
                   <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(filters.id_tipo_venta)}
-                      onChange={e => updateFilter("id_tipo_venta", e.target.value)}
-                      disabled={saving}
-                    >
+                    <select className="fl-input fl-select" value={String(filters.id_tipo_venta)} onChange={(e) => updateFilter("id_tipo_venta", e.target.value)} disabled={saving}>
                       <option value={NULL_OPTION}>Seleccionar...</option>
-                      {tiposVentaList.map(x => (
-                        <option key={x.id ?? x.id_tipo_venta} value={String(x.id ?? x.id_tipo_venta)}>
-                          {x.nombre}
-                        </option>
+                      {tiposVentaList.map((x) => (
+                        <option key={x.id ?? x.id_tipo_venta} value={String(x.id ?? x.id_tipo_venta)}>{x.nombre}</option>
                       ))}
                     </select>
                     <label className="fl-label">Forma de venta *</label>
                   </div>
 
                   {isContado && (
-                    <div className="fl-field">
-                      <select
-                        className="fl-input fl-select"
-                        value={String(filters.id_medio_pago)}
-                        onChange={e => updateFilter("id_medio_pago", e.target.value)}
-                        disabled={saving}
-                      >
-                        <option value={NULL_OPTION}>Seleccionar medio</option>
-                        {mediosPagoList.map(x => (
-                          <option key={x.id ?? x.id_medio_pago} value={String(x.id ?? x.id_medio_pago)}>
-                            {x.nombre}
-                          </option>
-                        ))}
-                      </select>
-                      <label className="fl-label">Medio de pago *</label>
-                    </div>
+                    <>
+                      <PagoResumenPanelVenta mediosFilas={mediosFilas} mediosPagoList={mediosPagoList} totalCompra={resumen.total} onEdit={() => setMpModalOpen(true)} />
+                      {!mediosFilas.some((r) => r.id_medio_pago && r.id_medio_pago !== "") && (
+                        <button type="button" className="nc-pago-btn" onClick={() => setMpModalOpen(true)} disabled={saving}>
+                          <FontAwesomeIcon icon={faCreditCard} style={{ fontSize: 12 }} />
+                          Configurar medios de pago
+                        </button>
+                      )}
+                    </>
                   )}
-
-{isContado && esMedioPagoCheque && (
-  <div className="mi-card mi-card--full" style={{ marginTop: 4 }}>
-    <div className="mi-card__title">
-                                {tipoChequeDetectado === "echeq" ? "Echeq" : "Cheque"}
-
-    </div>
-
-    {chequeGuardado ? (
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div className="nc-cheques-list" style={{ marginTop: 4 }}>
-          <div
-            className={`nc-cheque-item nc-cheque-item--selected ${
-              tipoChequeDetectado === "echeq" ? "nc-cheque-item--echeq" : ""
-            }`}
-            style={{ cursor: "default" }}
-          >
-            <div
-              aria-hidden="true"
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: 4,
-                border: `2px solid ${
-                  tipoChequeDetectado === "echeq" ? "#0055BB" : "#0f766e"
-                }`,
-                background:
-                  tipoChequeDetectado === "echeq" ? "#0055BB" : "#0f766e",
-                display: "grid",
-                placeItems: "center",
-                flexShrink: 0,
-              }}
-            >
-              <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                <path
-                  d="M1 3.5L3.5 6L8 1"
-                  stroke="#fff"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 2,
-                minWidth: 0,
-                flex: 1,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                <span
-                  style={{
-                    fontFamily: "'Courier New', monospace",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: "var(--nv-text)",
-                    letterSpacing: ".04em",
-                  }}
-                >
-                  N° {chequeGuardado.numero_cheque || "-"}
-                </span>
-
-                {tipoChequeDetectado === "echeq" && (
-                  <span
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      letterSpacing: ".07em",
-                      color: "#0055BB",
-                      background: "rgba(0,85,187,.07)",
-                      border: "1px solid rgba(0,85,187,.28)",
-                      borderRadius: 999,
-                      padding: "1px 5px",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    eCheq
-                  </span>
-                )}
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "2px 8px",
-                  fontSize: 11,
-                  color: "var(--nv-muted)",
-                  lineHeight: 1.3,
-                }}
-              >
-                <span
-                  style={{
-                    maxWidth: 140,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {chequeGuardado.emisor || "-"}
-                </span>
-
-                <span style={{ opacity: 0.4 }}>·</span>
-
-                <span>
-                  Pago:&nbsp;
-                  {chequeGuardado.fecha_pago
-                    ? (() => {
-                        const s = String(chequeGuardado.fecha_pago);
-                        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-                        return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
-                      })()
-                    : "-"}
-                </span>
-              </div>
-            </div>
-
-            <span className="nc-cheque-importe">
-              {moneyARS(chequeGuardado.importe || 0)}
-            </span>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          className="mit-btn mit-btn--ghost"
-          style={{ width: "100%", fontSize: 12 }}
-          onClick={() => setOpenChequeModal(true)}
-          disabled={saving}
-        >
-          Editar {tipoChequeDetectado === "echeq" ? "eCheq" : "cheque"}
-        </button>
-      </div>
-    ) : (
-      <button
-        type="button"
-        className="mit-btn mit-btn--solid"
-        style={{ width: "100%", marginTop: 4 }}
-        onClick={() => setOpenChequeModal(true)}
-        disabled={saving}
-      >
-        Cargar {tipoChequeDetectado === "echeq" ? "eCheq" : "cheque"}
-      </button>
-    )}
-  </div>
-)}
 
                   {shouldNeedFiscalPanel && (
                     <div className="mi-card mi-card--full">
                       <div className="mi-card__title">Datos fiscales</div>
-
                       {fiscalLoading ? (
                         <div className="mi-card__hint">Consultando datos fiscales…</div>
                       ) : (
                         <>
                           <div className="fl-field Margen-top">
-                            <input
-                              className="fl-input"
-                              placeholder=" "
-                              value={fiscalCuitInput}
-                              onChange={e => {
-                                setFiscalCuitInput(onlyDigits(e.target.value));
-                                setFiscalArcaData(null);
-                                setFiscalError("");
-                              }}
-                              inputMode="numeric"
-                              disabled={saving || fiscalLookupLoading}
-                              maxLength={11}
-                            />
+                            <input className="fl-input" placeholder=" " value={fiscalCuitInput} onChange={(e) => { setFiscalCuitInput(onlyDigits(e.target.value)); setFiscalArcaData(null); setFiscalError(""); }} inputMode="numeric" disabled={saving || fiscalLookupLoading} maxLength={11} />
                             <label className="fl-label">CUIT *</label>
                           </div>
-
                           {fiscalArcaData && (
                             <div className="arca-alert arca-alert--info" style={{ marginTop: 8 }}>
                               <div className="arca-alert__title">Datos encontrados</div>
@@ -1640,33 +1181,17 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                               </div>
                             </div>
                           )}
-
-                          {fiscalError && (
-                            <div className="arca-alert arca-alert--error" style={{ marginTop: 8 }}>
-                              {fiscalError}
-                            </div>
-                          )}
+                          {fiscalError && <div className="arca-alert arca-alert--error" style={{ marginTop: 8 }}>{fiscalError}</div>}
                         </>
                       )}
                     </div>
                   )}
 
                   <div className="mi-cr-filters__actions">
-                    <button
-                      type="button"
-                      onClick={submit}
-                      disabled={saving}
-                      className="mit-btn mit-btn--solid mit-btn--block"
-                    >
+                    <button type="button" onClick={submit} disabled={saving} className="mit-btn mit-btn--solid mit-btn--block">
                       {saving && accionContado === "guardar" ? "Procesando..." : "Guardar venta"}
                     </button>
-
-                    <button
-                      type="button"
-                      onClick={onClickFacturar}
-                      disabled={saving}
-                      className="mit-btn mit-btn--ghost mit-btn--block"
-                    >
+                    <button type="button" onClick={onClickFacturar} disabled={saving} className="mit-btn mit-btn--ghost mit-btn--block">
                       {saving && accionContado === "facturar" ? "Procesando..." : "Facturar"}
                     </button>
                   </div>
@@ -1675,40 +1200,22 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
             </div>
           </div>
 
-          <AddCatalogMiniModal
-            open={addUI.open}
-            title={addUI.kind === "clientes" ? "Nuevo cliente" : "Nuevo detalle"}
-            value={addUI.text}
-            saving={addUI.saving}
-            onChange={txt => setAddUI(p => ({ ...p, text: txt }))}
-            onCancel={closeAddMini}
-            onSave={guardarNuevoCatalogo}
-            dark={dark}
-          />
+          <AddCatalogMiniModal open={addUI.open} title={addUI.kind === "clientes" ? "Nuevo cliente" : "Nuevo detalle"} value={addUI.text} saving={addUI.saving} onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))} onCancel={closeAddMini} onSave={guardarNuevoCatalogo} dark={dark} />
         </div>
       </div>
 
-      {/* ── Modal de nuevo cheque/eCheq ── */}
-      {openChequeModal && (
-        <ModalNuevoCheque
-          open={openChequeModal}
-          onClose={() => setOpenChequeModal(false)}
-          onSave={handleSaveCheque}
-          initialData={chequeGuardado ? {
-            fecha_emision: chequeGuardado.fecha_emision,
-            emisor: chequeGuardado.emisor,
-            numero_cheque: chequeGuardado.numero_cheque,
-            importe: chequeGuardado.importe,
-            fecha_pago: chequeGuardado.fecha_pago,
-            observaciones: chequeGuardado.observaciones,
-            archivo: chequeGuardado.archivo,
-            archivo_nombre: chequeGuardado.archivo_nombre,
-          } : undefined}
-          tipoCheque={tipoChequeDetectado}
-          dark={dark}
-          saving={savingCheque}
-        />
-      )}
+      <ModalMediosPagoVenta
+        open={mpModalOpen}
+        mediosPagoList={mediosPagoList}
+        totalCompra={resumen.total}
+        mediosFilas={mediosFilas}
+        onUpdate={updateMedioPago}
+        onAdd={addMedioPago}
+        onRemove={removeMedioPago}
+        onClose={() => setMpModalOpen(false)}
+        onConfirm={() => setMpModalOpen(false)}
+        showToast={showToast}
+      />
 
       {openResumenFactura && resumenFacturaData && (
         <ModalFacturaBaltoResumen
@@ -1723,8 +1230,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           docNro={safeStr(resumenFacturaData?.cliente_facturacion?.doc_nro || resumenFacturaData?.cliente_facturacion?.cuit)}
           cbteTipo={Number(resumenFacturaData?.cbte_tipo || 11)}
           ptoVta={String(resumenFacturaData?.pto_vta || 2)}
-          onFacturada={async fact => await finalizarFacturacionYGuardarVenta(fact)}
-          onDone={async fact => await finalizarFacturacionYGuardarVenta(fact)}
+          onFacturada={async (fact) => await finalizarFacturacionYGuardarVenta(fact)}
+          onDone={async (fact) => await finalizarFacturacionYGuardarVenta(fact)}
           forceTestAmount={false}
           testAmount={null}
           skipMovimientoAutocreacion={true}

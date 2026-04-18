@@ -9,7 +9,7 @@ import "../../Global/Calendario/calendario.css";
 
 import ModalNuevaCompra from "./modales/ModalNuevaCompra.jsx";
 import ModalEditarCompra from "./modales/ModalEditarCompra.jsx";
-import ModalDetalleMediosPagoCompra from "./modales/ModalDetalleMediosPagoCompra.jsx";
+import { ModalDetalleMediosPagoCompra } from "../../Global/Modales/ModalDetalleMediosPago.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import ModalEliminarMovimientos from "../../Global/Modales/ModalEliminar.jsx";
 
@@ -221,24 +221,28 @@ function hasCompraDetalleMedios(r) {
   return getCompraCantidadMedios(r) > 0;
 }
 
+// NUEVA VERSIÓN SIMPLIFICADA PARA PAGO (CONTADO / CUENTA CORRIENTE)
 function getCompraPagoLabel(r) {
-  const cc = String(r?.cuenta_corriente ?? "").trim();
-  if (cc) return "CUENTA CORRIENTE";
+  const pago = String(r?.pago_nombre ?? r?.cuenta_corriente ?? "").trim();
+  return pago || "CONTADO";
+}
 
+// NUEVA FUNCIÓN PARA MEDIO DE PAGO (CHEQUE, TRANSFERENCIA, EFECTIVO, etc.)
+function getCompraMedioPagoLabel(r) {
   const explicit = String(r?.medio_pago_nombre ?? r?.medio_pago ?? "").trim();
   if (explicit) return explicit;
 
   const detalle = getCompraMediosDetalle(r);
   if (detalle.length === 1) {
-    return String(detalle[0]?.medio_pago_nombre ?? "").trim() || "CONTADO";
+    return String(detalle[0]?.medio_pago_nombre ?? "").trim() || "-";
   }
 
   if (detalle.length > 1) {
-    const principal = String(detalle[0]?.medio_pago_nombre ?? "").trim() || "CONTADO";
+    const principal = String(detalle[0]?.medio_pago_nombre ?? "").trim() || "-";
     return `${principal} +${detalle.length - 1}`;
   }
 
-  return "CONTADO";
+  return "-";
 }
 
 function extractIdComprobanteFromUrlLike(v) {
@@ -354,6 +358,7 @@ function buildExportRows(rows) {
       pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")
     ),
     PAGO: safeText(getCompraPagoLabel(r)),
+    "MEDIO DE PAGO": safeText(getCompraMedioPagoLabel(r)),
     TOTAL: numOrZero(
       pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)
     ),
@@ -496,7 +501,7 @@ export default function Compras() {
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
   const comprobanteUrlCacheRef = useRef(new Map());
-  const signedUrlCacheRef = useRef(new Map()); // <-- NUEVO: cache para signed URLs
+  const signedUrlCacheRef = useRef(new Map());
 
   const skelTimerRef = useRef(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
@@ -577,7 +582,7 @@ export default function Compras() {
   }, [refreshLists]);
 
   /* =========================
-     OBTENER URL FIRMADA (NUEVO)
+     OBTENER URL FIRMADA
   ========================= */
   const getComprobanteSignedUrl = useCallback(
     async (idComprobante) => {
@@ -625,12 +630,11 @@ export default function Compras() {
       const id = payloadFinal?.id_movimiento ?? payloadFinal?.id ?? getRowId(selectedRow);
       if (!id) throw new Error("No encuentro id_movimiento para editar.");
 
-      // Aseguramos enviar ambos IDs para máxima compatibilidad
       const body = { 
         ...payloadFinal, 
         id_movimiento: Number(id), 
         idUsuario,
-        idUsuarioMaster: idUsuarioMaster || idUsuario // Fallback a idUsuario si no hay master
+        idUsuarioMaster: idUsuarioMaster || idUsuario
       };
       
       const candidates = ["compras_editar", "compras_actualizar", "movimientos_editar"];
@@ -869,7 +873,7 @@ export default function Compras() {
       if (!newRange?.from && !newRange?.to) return;
       setDateRange(newRange);
       cacheRef.current.clear();
-      signedUrlCacheRef.current.clear(); // LIMPIAR CACHE DE SIGNED URLS
+      signedUrlCacheRef.current.clear();
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
       await loadRows({ dateRange: newRange, q, offset: 0, append: false });
@@ -965,6 +969,7 @@ export default function Compras() {
         `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
         `PROVEEDOR: ${row.PROVEEDOR ?? ""}`,
         `PAGO: ${row.PAGO ?? ""}`,
+        `MEDIO DE PAGO: ${row["MEDIO DE PAGO"] ?? ""}`,
         `TOTAL: ${row.TOTAL ?? ""}`,
         "----------------------------------------",
       ].join("\n");
@@ -1064,6 +1069,13 @@ export default function Compras() {
         render: (r) => safeText(getCompraPagoLabel(r)),
       },
       {
+        key: "medio_pago",
+        label: "MEDIO DE PAGO",
+        fr: 1.2,
+        align: "center",
+        render: (r) => safeText(getCompraMedioPagoLabel(r)),
+      },
+      {
         key: "total",
         label: "TOTAL",
         fr: 1.1,
@@ -1101,14 +1113,12 @@ export default function Compras() {
     setOpenMediosPago(true);
   };
 
-  // NUEVA VERSIÓN SIMPLE (solo devuelve marcador)
   const buildComprobanteFastUrl = useCallback((r) => {
     const idComp = getComprobanteId(r);
     if (!idComp) return "";
     return `id:${idComp}`;
   }, []);
 
-  // NUEVA VERSIÓN: pre-carga asíncrona silenciosa
   const handlePrewarmComprobante = useCallback(
     async (r) => {
       const idComp = getComprobanteId(r);
@@ -1125,7 +1135,6 @@ export default function Compras() {
     [getComprobanteSignedUrl]
   );
 
-  // NUEVA VERSIÓN: abre modal con URL firmada
   const openComprobanteModal = useCallback(
     async (r) => {
       const idComp = getComprobanteId(r);
@@ -1159,7 +1168,7 @@ export default function Compras() {
     setOpenEdit(false);
     setSelectedRow(null);
     cacheRef.current.clear();
-    signedUrlCacheRef.current.clear(); // LIMPIAR CACHE DE SIGNED URLS
+    signedUrlCacheRef.current.clear();
     await loadRows({ dateRange, q: "", offset: 0, append: false });
     await refreshPeriodos();
   }, [dateRange, loadRows, refreshPeriodos]);
@@ -1190,7 +1199,6 @@ export default function Compras() {
       sp.set("action", "compras_eliminar");
       sp.set("id_movimiento", String(id));
 
-      // Enviamos ambos IDs para máxima compatibilidad
       const data = await apiPostJson(`${API}?${sp.toString()}`, { 
         idUsuario,
         idUsuarioMaster: idUsuarioMaster || idUsuario
@@ -1203,7 +1211,7 @@ export default function Compras() {
       setOpenDel(false);
       setSelectedRow(null);
       cacheRef.current.clear();
-      signedUrlCacheRef.current.clear(); // LIMPIAR CACHE DE SIGNED URLS
+      signedUrlCacheRef.current.clear();
 
       await loadRows({ dateRange, q, offset: 0, append: false });
       await refreshPeriodos();
@@ -1257,6 +1265,7 @@ export default function Compras() {
       detalle: ["72%", "58%", "66%", "48%"],
       proveedor: ["62%", "54%", "46%", "58%"],
       pago: ["44%", "34%", "40%", "30%"],
+      medio_pago: ["48%", "42%", "52%", "38%"],
       total: ["38%", "30%", "34%", "28%"],
     }),
     []
@@ -1507,7 +1516,6 @@ export default function Compras() {
               <>
                 {filteredRows.map((r) => {
                   const rowId = getRowId(r) ?? `row-${Math.random()}`;
-                  // NUEVO: canSee basado en ID, no en URL precalculada
                   const idComp = getComprobanteId(r);
                   const canSee = !!idComp;
                   const isDeleting =

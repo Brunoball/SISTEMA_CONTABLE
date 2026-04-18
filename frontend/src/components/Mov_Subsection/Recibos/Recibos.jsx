@@ -602,10 +602,6 @@ export default function Recibos() {
     return Array.isArray(rows) ? rows : [];
   }, [rows]);
 
-  const stats = useMemo(() => {
-    return { pagados: 0, pendientes: filteredRows.length, total: filteredRows.length };
-  }, [filteredRows]);
-
   const dateRangeLabel = useMemo(() => {
     const { from, to } = dateRange;
 
@@ -808,6 +804,9 @@ export default function Recibos() {
       .join(" ");
   }, [columns]);
 
+  /* =========================
+     Fetch deudas del cliente
+  ========================= */
   const fetchRecibosCliente = useCallback(
     async (rowCliente) => {
       const idCli = Number(rowCliente?.id_cliente || 0);
@@ -917,8 +916,7 @@ export default function Recibos() {
   );
 
   /* =========================
-     Confirmar pago:
-     sin toast de carga
+     Confirmar pago — ahora soporta medios_pago[]
   ========================= */
   const onConfirmPago = useCallback(
     async (payload) => {
@@ -930,9 +928,20 @@ export default function Recibos() {
 
       const { idUsuario, idUsuarioMaster } = getAuthInfo();
 
+      // Soporta tanto array de medios como medio único (backward compat)
+      const mediosPagoArr = Array.isArray(payload?.medios_pago) && payload.medios_pago.length > 0
+        ? payload.medios_pago
+        : payload?.id_medio_pago
+        ? [{ id_medio_pago: Number(payload.id_medio_pago), monto: payload?.totalSeleccionado || 0 }]
+        : [];
+
+      // Primer medio como primary (backward compat con backends que usan id_medio_pago simple)
+      const primaryMedioId = mediosPagoArr[0]?.id_medio_pago || Number(payload?.id_medio_pago || 0);
+
       const data = await apiPostJson(`${API}?action=recibos_confirmar_pago`, {
         ids_movimiento: ids,
-        id_medio_pago: Number(payload?.id_medio_pago || payload?.idMedioPago || 0),
+        medios_pago: mediosPagoArr,
+        id_medio_pago: primaryMedioId,   // backward compat
         idUsuario,
         idUsuarioMaster: idUsuarioMaster || idUsuario,
       });
@@ -1228,7 +1237,7 @@ export default function Recibos() {
                                 <button
                                   type="button"
                                   className="mov-iconBtn"
-                                  title="Pagar"
+                                  title="Cobrar"
                                   onClick={() => openPagarModal(r)}
                                   disabled={isAnyLoading || loadingListsCtx || loadingClienteDeudas}
                                 >

@@ -340,6 +340,13 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const rowsContainerRef = useRef(null);
   const [hasScroll, setHasScroll] = useState(false);
 
+  // NUEVO: callback para cerrar todo el flujo de facturación junto con el modal principal
+  const cerrarFlujoFacturacion = useCallback(() => {
+    setOpenResumenFactura(false);
+    setResumenFacturaData(null);
+    onClose?.();
+  }, [onClose]);
+
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
     prevOpenRef.current = open;
@@ -847,34 +854,47 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     fd.append("id_movimiento", String(idMovimiento));
     fd.append("pdf", blob instanceof Blob ? blob : new Blob([blob], { type: "application/pdf" }), filename || "factura.pdf");
 
+    const emitidoEnArca = Number(facturaMeta?.emitido_en_arca || 0) === 1;
+
     const meta = {
       tipo: "FACTURA",
-      estado: "emitida",
-      emitido_en_arca: 1,
+      estado: emitidoEnArca ? "emitida" : "solo_pdf",
+      emitido_en_arca: emitidoEnArca ? 1 : 0,
       id_pago: facturaMeta?.id_pago ?? null,
       id_sistema: facturaMeta?.id_sistema ?? null,
       anio: Number(facturaMeta?.anio || 0),
       id_mes: Number(facturaMeta?.id_mes || 0),
       monto_ars: Number(facturaMeta?.imp_total ?? facturaMeta?.importe ?? resumen.total ?? 0),
       doc_tipo: Number(facturaMeta?.doc_tipo ?? resumenFacturaData?.cliente_facturacion?.doc_tipo ?? 80),
-      doc_nro: safeStr(facturaMeta?.doc_nro ?? resumenFacturaData?.cliente_facturacion?.doc_nro ?? resumenFacturaData?.cliente_facturacion?.cuit ?? ""),
+      doc_nro: safeStr(
+        facturaMeta?.doc_nro ??
+        resumenFacturaData?.cliente_facturacion?.doc_nro ??
+        resumenFacturaData?.cliente_facturacion?.cuit ??
+        ""
+      ),
       cbte_tipo: Number(facturaMeta?.cbte_tipo || resumenFacturaData?.cbte_tipo || 11),
       pto_vta: Number(facturaMeta?.pto_vta || resumenFacturaData?.pto_vta || 2),
       cbte_nro: facturaMeta?.cbte_nro ?? null,
       razon_social: resumenFacturaData?.cliente_facturacion?.razon_social || null,
-      cond_iva: resumenFacturaData?.cliente_facturacion?.cond_iva || resumenFacturaData?.cliente_facturacion?.condicion_iva || null,
+      cond_iva: resumenFacturaData?.cliente_facturacion?.cond_iva ||
+        resumenFacturaData?.cliente_facturacion?.condicion_iva ||
+        null,
       domicilio: resumenFacturaData?.cliente_facturacion?.domicilio || null,
-      cae: facturaMeta?.cae ?? null,
-      cae_vto: facturaMeta?.cae_vto ?? null,
+      cae: emitidoEnArca ? (facturaMeta?.cae ?? null) : null,
+      cae_vto: emitidoEnArca ? (facturaMeta?.cae_vto ?? null) : null,
       fecha_cbte: facturaMeta?.fecha_cbte ?? resumenFacturaData?.fecha_cbte_iso ?? null,
-      resultado: facturaMeta?.resultado ?? null,
-      qr_url: facturaMeta?.qr_url ?? null,
-      qr_base64: facturaMeta?.qr_base64 ?? null,
-      qr_payload: facturaMeta?.qr_payload ?? null,
-      json_arca: facturaMeta?.json_arca ?? facturaMeta?.raw_min ?? facturaMeta ?? null,
+      resultado: facturaMeta?.resultado ?? (emitidoEnArca ? null : "P"),
+      qr_url: emitidoEnArca ? (facturaMeta?.qr_url ?? null) : null,
+      qr_base64: emitidoEnArca ? (facturaMeta?.qr_base64 ?? null) : null,
+      qr_payload: emitidoEnArca ? (facturaMeta?.qr_payload ?? null) : null,
+      json_arca: emitidoEnArca
+        ? (facturaMeta?.json_arca ?? facturaMeta?.raw_min ?? facturaMeta ?? null)
+        : (facturaMeta ?? null),
       resumen_facturacion: {
         ...resumenFacturaData,
-        items_facturacion: Array.isArray(resumenFacturaData?.items_facturacion) ? resumenFacturaData.items_facturacion : [],
+        items_facturacion: Array.isArray(resumenFacturaData?.items_facturacion)
+          ? resumenFacturaData.items_facturacion
+          : [],
       },
     };
 
@@ -948,8 +968,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
       const chequeWarnings = await subirArchivosChequesCreados(info);
 
-      setOpenResumenFactura(false);
-      setResumenFacturaData(null);
       showToast("exito", "Venta agregada correctamente.", 3000);
       if (chequeWarnings.length) showToast("advertencia", chequeWarnings.join(" "), 5200);
 
@@ -1216,12 +1234,15 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           open={openResumenFactura}
           onClose={() => setOpenResumenFactura(false)}
           onBack={() => setOpenResumenFactura(false)}
-          onCloseAll={() => setOpenResumenFactura(false)}
+          onCloseAll={cerrarFlujoFacturacion}
           apiBase={`${BASE_URL}/api.php`}
           action="movimientos"
           data={resumenFacturaData}
           docTipo={Number(resumenFacturaData?.cliente_facturacion?.doc_tipo || 80)}
-          docNro={safeStr(resumenFacturaData?.cliente_facturacion?.doc_nro || resumenFacturaData?.cliente_facturacion?.cuit)}
+          docNro={safeStr(
+            resumenFacturaData?.cliente_facturacion?.doc_nro ||
+            resumenFacturaData?.cliente_facturacion?.cuit
+          )}
           cbteTipo={Number(resumenFacturaData?.cbte_tipo || 11)}
           ptoVta={String(resumenFacturaData?.pto_vta || 2)}
           onFacturada={async (fact) => await finalizarFacturacionYGuardarVenta(fact)}

@@ -79,6 +79,34 @@ function getAuthHeaders(extra = {}) {
   return headers;
 }
 
+async function parseJsonSafe(res) {
+  const raw = await res.text();
+  const trimmed = String(raw || "").trim();
+
+  if (trimmed.startsWith("<")) {
+    const preview = trimmed.slice(0, 500);
+    throw new Error(`Backend devolvió HTML en vez de JSON:\n${preview}`);
+  }
+
+  let data = null;
+
+  try {
+    data = trimmed ? JSON.parse(trimmed) : null;
+  } catch {
+    throw new Error(`Respuesta inválida (no es JSON): ${trimmed.slice(0, 300)}`);
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.mensaje || data?.error || `HTTP ${res.status}`);
+  }
+
+  if (data && typeof data === "object" && data.exito === false) {
+    throw new Error(data?.mensaje || "Error de API");
+  }
+
+  return data || {};
+}
+
 function normalizeFacturaEmitida(resp, fallback = {}) {
   const root = resp && typeof resp === "object" ? resp : {};
   const factura = root?.data?.factura || root?.factura || root?.data || root;
@@ -153,7 +181,7 @@ export default function ModalFacturaBaltoResumen({
   forceTestAmount = false,
   testAmount = 1000,
   skipMovimientoAutocreacion = false,
-  pdfMode = "factura", // "factura" | "nota_credito"
+  pdfMode = "factura",
 }) {
   const [loading, setLoading] = useState(false);
   const [loadingPdf, setLoadingPdf] = useState(false);
@@ -165,6 +193,7 @@ export default function ModalFacturaBaltoResumen({
   const firstRef = useRef(null);
 
   const movimientoIdRef = useRef(0);
+  const cbteNoEmitidoRef = useRef(null);
 
   const esNotaCredito = pdfMode === "nota_credito";
   const esCbteNC = [3, 8, 13].includes(Number(cbteTipo || 0));
@@ -242,12 +271,39 @@ export default function ModalFacturaBaltoResumen({
     cbteTipo,
   ]);
 
+  const obtenerCbteNoEmitido = useCallback(async () => {
+    if (usarModoNC) return 0;
+
+    if (Number(cbteNoEmitidoRef.current || 0) > 0) {
+      return Number(cbteNoEmitidoRef.current || 0);
+    }
+
+    const res = await fetch(
+      `${apiBase}?action=comprobantes_proximo_numero_no_emitido&tipo=FACTURA`,
+      {
+        method: "GET",
+        headers: getAuthHeaders(),
+      }
+    );
+
+    const j = await parseJsonSafe(res);
+    const nro = Number(j?.cbte_nro || 0);
+
+    if (nro <= 0) {
+      throw new Error("No se pudo obtener el próximo número de factura no emitida.");
+    }
+
+    cbteNoEmitidoRef.current = nro;
+    return nro;
+  }, [apiBase, usarModoNC]);
+
   useEffect(() => {
     if (!open) return;
     setError("");
     setConfirm(false);
     setTabActiva("resumen");
     movimientoIdRef.current = Number(data?.id_movimiento || 0) || 0;
+    cbteNoEmitidoRef.current = null;
     setTimeout(() => firstRef.current?.focus?.(), 0);
   }, [open, data]);
 
@@ -305,11 +361,15 @@ export default function ModalFacturaBaltoResumen({
           revokeUrl = URL.createObjectURL(blob);
           setPreviewUrl(revokeUrl);
         } else {
+          const cbteNroLocal = await obtenerCbteNoEmitido();
+
           const factMock = {
             pto_vta: Number(ptoVta) || 2,
             cbte_tipo: Number(cbteTipo) || 11,
-            cbte_nro: 1,
-            fecha_cbte: isoToYmd8(fechaCbteISO || new Date().toISOString().slice(0, 10)),
+            cbte_nro: cbteNroLocal,
+            fecha_cbte: isoToYmd8(
+              fechaCbteISO || new Date().toISOString().slice(0, 10)
+            ),
             imp_total: Number(monto) || 0,
             importe: Number(monto) || 0,
             cae: "00000000000000",
@@ -394,6 +454,7 @@ export default function ModalFacturaBaltoResumen({
     emisorIibb,
     emisorFechaInicio,
     usarModoNC,
+    obtenerCbteNoEmitido,
   ]);
 
   const toText = useCallback((v) => {
@@ -660,13 +721,13 @@ export default function ModalFacturaBaltoResumen({
         anio: emitidoEnArca ? Number(fact?.anio || 0) : null,
         id_mes: emitidoEnArca ? Number(fact?.id_mes || 0) : null,
 
-        cbte_nro: emitidoEnArca ? (fact?.cbte_nro ?? null) : null,
+        cbte_nro: fact?.cbte_nro ?? null,
         cae: emitidoEnArca ? (fact?.cae ?? null) : null,
         cae_vto: emitidoEnArca ? (fact?.cae_vto ?? null) : null,
         fecha_cbte: emitidoEnArca
           ? (fact?.fecha_cbte ?? null)
-          : (isoToYmd8(fechaCbteISO) || null),
-        resultado: emitidoEnArca ? (fact?.resultado ?? null) : null,
+          : ((fact?.fecha_cbte ?? isoToYmd8(fechaCbteISO)) || null),
+        resultado: fact?.resultado ?? null,
 
         qr_url: emitidoEnArca ? (fact?.qr_url ?? null) : null,
         qr_base64: emitidoEnArca ? (fact?.qr_base64 ?? null) : null,
@@ -674,7 +735,7 @@ export default function ModalFacturaBaltoResumen({
 
         json_arca: emitidoEnArca
           ? (fact?.json_arca ?? fact?.raw_min ?? fact ?? null)
-          : null,
+          : (fact?.json_arca ?? null),
       };
 
       fd.append("meta", JSON.stringify(meta));
@@ -718,12 +779,17 @@ export default function ModalFacturaBaltoResumen({
 
   const finalizarUnaSolaVez = useCallback(
     async (fact) => {
-      if (typeof onDone === "function") {
-        await Promise.resolve(onDone(fact));
-        return;
-      }
-      if (typeof onFacturada === "function") {
-        await Promise.resolve(onFacturada(fact));
+      try {
+        if (typeof onDone === "function") {
+          await Promise.resolve(onDone(fact));
+          return;
+        }
+
+        if (typeof onFacturada === "function") {
+          await Promise.resolve(onFacturada(fact));
+        }
+      } catch (e) {
+        console.error("Falló callback final del modal:", e);
       }
     },
     [onDone, onFacturada]
@@ -813,12 +879,15 @@ export default function ModalFacturaBaltoResumen({
         };
 
         await finalizarUnaSolaVez(factFinal);
+        onCloseAll?.();
       } else {
+        const cbteNroLocal = await obtenerCbteNoEmitido();
+
         const factPdfOnly = {
           modo: "pdf_only",
           pto_vta: v.pvN,
           cbte_tipo: Number(cbteTipo),
-          cbte_nro: 0,
+          cbte_nro: cbteNroLocal,
           fecha_cbte: isoToYmd8(fechaCbteISO),
           imp_total: importeFinal,
           importe: importeFinal,
@@ -905,10 +974,8 @@ export default function ModalFacturaBaltoResumen({
         };
 
         await finalizarUnaSolaVez(factFinal);
+        onCloseAll?.();
       }
-
-      onClose?.();
-      onCloseAll?.();
     } catch (e) {
       setError(e?.message || "No se pudo descargar el PDF.");
     } finally {
@@ -938,10 +1005,10 @@ export default function ModalFacturaBaltoResumen({
     items,
     guardarFacturaEnDB,
     finalizarUnaSolaVez,
-    onClose,
     onCloseAll,
     usarModoNC,
     ptoVta,
+    obtenerCbteNoEmitido,
   ]);
 
   const emitir = useCallback(async () => {
@@ -1112,6 +1179,7 @@ export default function ModalFacturaBaltoResumen({
         };
 
         await finalizarUnaSolaVez(factFinal);
+        onCloseAll?.();
       } else {
         const out = await saveBaltoInvoicePdf({
           fact: {
@@ -1197,10 +1265,8 @@ export default function ModalFacturaBaltoResumen({
         };
 
         await finalizarUnaSolaVez(factFinal);
+        onCloseAll?.();
       }
-
-      onClose?.();
-      onCloseAll?.();
     } catch (e) {
       setError(e?.message || "No se pudo emitir el comprobante.");
     } finally {
@@ -1232,7 +1298,6 @@ export default function ModalFacturaBaltoResumen({
     fetchJSON,
     guardarFacturaEnDB,
     finalizarUnaSolaVez,
-    onClose,
     onCloseAll,
     usarModoNC,
     ptoVta,
@@ -1278,29 +1343,29 @@ export default function ModalFacturaBaltoResumen({
         </div>
 
         <div className="mit-modal__body">
-<div className="mfb-tabs">
-  <button
-    type="button"
-    className={`mfb-tab ${tabActiva === "resumen" ? "is-active" : ""}`}
-    onClick={() => setTabActiva("resumen")}
-  >
-    <span className="mfb-tab__text">
-      {usarModoNC
-        ? "Resumen de nota de crédito"
-        : "Resumen de facturación"}
-    </span>
-  </button>
+          <div className="mfb-tabs">
+            <button
+              type="button"
+              className={`mfb-tab ${tabActiva === "resumen" ? "is-active" : ""}`}
+              onClick={() => setTabActiva("resumen")}
+            >
+              <span className="mfb-tab__text">
+                {usarModoNC
+                  ? "Resumen de nota de crédito"
+                  : "Resumen de facturación"}
+              </span>
+            </button>
 
-  <button
-    type="button"
-    className={`mfb-tab ${tabActiva === "preview" ? "is-active" : ""}`}
-    onClick={() => setTabActiva("preview")}
-  >
-    <span className="mfb-tab__text">
-      Vista previa PDF
-    </span>
-  </button>
-</div>
+            <button
+              type="button"
+              className={`mfb-tab ${tabActiva === "preview" ? "is-active" : ""}`}
+              onClick={() => setTabActiva("preview")}
+            >
+              <span className="mfb-tab__text">
+                Vista previa PDF
+              </span>
+            </button>
+          </div>
 
           {error && (
             <div className="mov-mi-error mfb-error-top" role="alert">
@@ -1386,9 +1451,7 @@ export default function ModalFacturaBaltoResumen({
 
           {tabActiva === "preview" && (
             <div className="mi-tanel">
-              <div className="mi-card" style={{padding:"0"}}>
-
-
+              <div className="mi-card" style={{ padding: "0" }}>
                 {loadingPreview ? (
                   <div className="arca-alert arca-alert--info">
                     Generando vista previa...
@@ -1447,4 +1510,3 @@ export default function ModalFacturaBaltoResumen({
     </div>
   );
 }
-

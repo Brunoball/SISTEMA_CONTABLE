@@ -13,13 +13,12 @@ import {
   faMoneyCheckDollar,
   faCircleNotch,
   faPlus,
-  faCreditCard,
   faTrash,
   faBackspace,
   faBasketShopping,
 } from "@fortawesome/free-solid-svg-icons";
 import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
-import { ModalMediosPago, PagoResumenPanel, buildEmptyMedioPago } from "./Modalmediospago.jsx";
+import { PanelMediosPagoInlineCompra, buildEmptyMedioPago } from "./Modalmediospago.jsx";
 
 const NULL_OPTION = "";
 const ADD_OPTION = "__ADD__";
@@ -615,8 +614,6 @@ export default function ModalEditarCompra({
   const [detalleFocus, setDetalleFocus] = useState(false);
   const [mediosFilas, setMediosFilas] = useState(() => [buildEmptyMedioPago()]);
 
-  // Estado del mini-modal de medios de pago
-  const [mpModalOpen, setMpModalOpen] = useState(false);
 
   // ── Comprobante ──
   // archivoAdjunto unifica la lógica: si hay archivo nuevo seleccionado, se usa ese;
@@ -678,7 +675,6 @@ export default function ModalEditarCompra({
   // Al cambiar a cta cte, cerrar modal de medios
   useEffect(() => {
     if (!esContado) {
-      setMpModalOpen(false);
     }
   }, [esContado]);
 
@@ -829,7 +825,6 @@ export default function ModalEditarCompra({
     setAddUI({ open: false, catalogo: null, text: "", saving: false });
     setOpenVerComp(false);
     setCompUrl("");
-    setMpModalOpen(false);
 
     const merged = { ...SAFE_LISTS, ...normalizeIncomingLists(listsRef.current) };
     setLocalLists(merged);
@@ -876,18 +871,17 @@ export default function ModalEditarCompra({
     const onKeyDown = (e) => {
       if (e.key !== "Escape") return;
       if (openVerComp) { setOpenVerComp(false); return; }
-      if (mpModalOpen) { setMpModalOpen(false); return; }
       if (saving || addUI.open) return;
       onClose?.();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, saving, addUI.open, onClose, openVerComp, mpModalOpen]);
+  }, [open, saving, addUI.open, onClose, openVerComp]);
 
   const cerrar = useCallback(() => {
-    if (saving || addUI.open || openVerComp || mpModalOpen) return;
+    if (saving || addUI.open || openVerComp) return;
     onClose?.();
-  }, [saving, addUI.open, openVerComp, mpModalOpen, onClose]);
+  }, [saving, addUI.open, openVerComp, onClose]);
 
   // ── Fecha ──
   const openDatePicker = useCallback(() => {
@@ -1431,25 +1425,26 @@ export default function ModalEditarCompra({
 
                     {/* Resumen medios pago */}
                     {esContado && (
-                      <>
-                        <PagoResumenPanel
-                          mediosFilas={mediosFilas}
-                          mediosPagoList={safeLists.mediosPago || []}
-                          totalCompra={resumen.total}
-                          onEdit={() => setMpModalOpen(true)}
-                        />
-                        {!mediosFilas.some(r => r.id_medio_pago && r.id_medio_pago !== "") && (
-                          <button
-                            type="button"
-                            className="nc-pago-btn"
-                            onClick={() => setMpModalOpen(true)}
-                            disabled={saving}
-                          >
-                            <FontAwesomeIcon icon={faCreditCard} style={{ fontSize: 12 }} />
-                            Configurar medios de pago
-                          </button>
-                        )}
-                      </>
+                      <div className="nc-section" style={{ marginTop: 14 }}>
+                        <div className="nc-section-head">
+                          <div className="nc-section-dot" style={{ background: "#0f766e" }} />
+                          <span>Medios de pago</span>
+                        </div>
+                        <div className="nc-section-body">
+                          <PanelMediosPagoInlineCompra
+                            mediosFilas={mediosFilas}
+                            mediosPagoList={safeLists.mediosPago || []}
+                            totalCompra={resumen.total}
+                            onUpdate={updateMedioPago}
+                            onRemove={removeMedioPago}
+                            onAdd={addMedioPago}
+                            apiGet={apiGet}
+                            BASE_URL={BASE_URL}
+                            showToast={showToast}
+                            saving={saving}
+                          />
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1610,22 +1605,6 @@ export default function ModalEditarCompra({
           />
         </div>
       </div>
-
-      {/* Mini-modal medios de pago */}
-      <ModalMediosPago
-        open={mpModalOpen}
-        mediosPagoList={safeLists.mediosPago || []}
-        totalCompra={resumen.total}
-        mediosFilas={mediosFilas}
-        onUpdate={updateMedioPago}
-        onAdd={addMedioPago}
-        onRemove={removeMedioPago}
-        onClose={() => setMpModalOpen(false)}
-        onConfirm={() => setMpModalOpen(false)}
-        apiGet={apiGet}
-        BASE_URL={BASE_URL}
-        showToast={showToast}
-      />
 
       <ModalVerComprobante
         open={openVerComp}

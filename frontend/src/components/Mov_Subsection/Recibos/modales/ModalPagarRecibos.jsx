@@ -17,7 +17,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 import ModalReciboGenerado from "./ModalReciboGenerado";
-import ModalNuevoChequeRecibo from "./ModalNuevoChequeRecibo";
+import ModalNuevoCheque from "../../../Global/Modales/ModalNuevoCheque.jsx";
 import { buildReciboHTML } from "../../../../utils/reciboTemplate";
 
 /* =========================
@@ -231,7 +231,7 @@ function buildEmptyMedioPago() {
     monto: 0,
     montoDraft: "",
     montoFocused: false,
-    chequeData: null, // Datos del cheque/echeq ingresados via ModalNuevoChequeRecibo
+    chequeData: null,
   };
 }
 
@@ -1370,7 +1370,7 @@ export default function ModalPagarRecibos({
       />
 
       {/* Modal de cheque/echeq - único, se abre para la fila activa */}
-      <ModalNuevoChequeRecibo
+      <ModalNuevoCheque
         open={chequeModalRowId !== null}
         onClose={() => setChequeModalRowId(null)}
         onSave={handleSaveCheque}

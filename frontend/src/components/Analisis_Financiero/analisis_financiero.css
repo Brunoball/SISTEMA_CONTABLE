@@ -88,3 +88,173 @@
   line-height: 1.3;
 }
 
+/* =========================
+   Tarjetas resumen
+========================= */
+.af-summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 16px 0 18px;
+}
+
+.af-summaryCard {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  padding: 18px;
+  min-height: 120px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(8, 25, 58, 0.95) 0%, rgba(5, 16, 38, 0.98) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 10px 30px rgba(0, 0, 0, 0.22);
+}
+
+.af-summaryCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  border-radius: 18px 0 0 18px;
+}
+
+.af-summaryCard--ingreso::before {
+  background: linear-gradient(180deg, #11d27c 0%, #0ca35f 100%);
+}
+
+.af-summaryCard--egreso::before {
+  background: linear-gradient(180deg, #ff7b7b 0%, #ff5252 100%);
+}
+
+.af-summaryCard__label {
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.68);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.af-summaryCard__value {
+  font-size: clamp(1.4rem, 2vw, 2rem);
+  font-weight: 800;
+  line-height: 1.1;
+  color: #ffffff;
+  margin-bottom: 8px;
+}
+
+.af-summaryCard--ingreso .af-summaryCard__value {
+  color: #3be38d;
+}
+
+.af-summaryCard--egreso .af-summaryCard__value {
+  color: #ff7b7b;
+}
+
+.af-summaryCard__sub {
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+/* =========================
+   Disponibilidades
+========================= */
+.af-dispoSection {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.af-sectionHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.af-sectionTitle {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.af-dispoTotal {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.98rem;
+  white-space: nowrap;
+}
+
+.af-dispoTotal strong {
+  color: #3be38d;
+}
+
+.af-dispoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.af-dispoCard {
+  border-radius: 18px;
+  padding: 18px;
+  border: 1px solid rgba(59, 227, 141, 0.16);
+  background:
+    linear-gradient(180deg, rgba(7, 24, 56, 0.95) 0%, rgba(4, 15, 34, 0.98) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 22px rgba(0, 0, 0, 0.2);
+}
+
+.af-dispoCard__label {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+.af-dispoCard__value {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: #3be38d;
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+
+.af-dispoCard__sub {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.af-emptyDispo {
+  margin-top: 6px;
+}
+
+/* =========================
+   Responsive
+========================= */
+@media (max-width: 1200px) {
+  .af-summaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .af-summaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .af-sectionHead {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .af-dispoGrid {
+    grid-template-columns: 1fr;
+  }
+}

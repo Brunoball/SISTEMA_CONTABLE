@@ -7,9 +7,44 @@ import {
   faCreditCard,
   faCheck,
 } from "@fortawesome/free-solid-svg-icons";
-import ModalNuevoCheque from "./ModalNuevoCheque.jsx";
+import BASE_URL from "../../../../config/config";
+import ModalNuevoCheque from "../../../Global/Modales/ModalNuevoCheque.jsx";
 
 const NULL_OPTION = "";
+
+const API_CHECK_NUMERO = `${BASE_URL}/api.php?action=ventas_cheques_obtener&modo=verificar_numero`;
+
+function onlyDigits(v) {
+  return String(v ?? "").replace(/\D/g, "");
+}
+
+function getAuthHeaders() {
+  const sessionKey =
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("x_session") ||
+    localStorage.getItem("X-Session") ||
+    "";
+
+  const token = localStorage.getItem("token") || "";
+  const headers = {};
+
+  if (sessionKey) headers["X-Session"] = sessionKey;
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  return headers;
+}
+
+async function parseJsonOrThrow(res) {
+  const text = await res.text();
+  if (!text) throw new Error("Respuesta vacía del servidor.");
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Respuesta inválida del servidor. HTTP ${res.status}`);
+  }
+}
 
 function uid() {
   return crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -238,6 +273,53 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
     },
     [onUpdate, row.id, showToast, tipoCheque]
   );
+  const verificarNumeroChequeVentas = useCallback(
+    async ({ numero_cheque, tipoCheque, initialData }) => {
+      const numeroCheque = onlyDigits(numero_cheque);
+
+      if (!numeroCheque) {
+        return {
+          ok: false,
+          tipo: "advertencia",
+          mensaje: "Ingresá el número de cheque antes de confirmar.",
+          duracion: 3200,
+        };
+      }
+
+      const params = new URLSearchParams();
+      params.set("numero_cheque", numeroCheque);
+      params.set("tipo", String(tipoCheque || "cheque"));
+
+      const idChequeActual = Number(initialData?.id_cheque || row?.cheque?.id_cheque || 0);
+      if (Number.isFinite(idChequeActual) && idChequeActual > 0) {
+        params.set("id_cheque", String(idChequeActual));
+      }
+
+      const res = await fetch(`${API_CHECK_NUMERO}&${params.toString()}`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+
+      const data = await parseJsonOrThrow(res);
+
+      if (!data?.exito) {
+        throw new Error(data?.mensaje || "No se pudo verificar el número del cheque.");
+      }
+
+      if (data?.existe || data?.disponible === false) {
+        return {
+          ok: false,
+          tipo: "error",
+          mensaje: data?.mensaje || "Ese número de cheque ya existe.",
+          duracion: 4600,
+        };
+      }
+
+      return { ok: true };
+    },
+    [row?.cheque?.id_cheque]
+  );
+
 
   return (
     <div className="mp-card">
@@ -359,6 +441,7 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
           }
           tipoCheque={tipoCheque || "cheque"}
           saving={false}
+          verificarNumeroCheque={verificarNumeroChequeVentas}
         />
       )}
     </div>
@@ -457,6 +540,50 @@ export function ModalMediosPagoVenta({
       </div>
     </div>,
     document.body
+  );
+}
+
+export function PanelMediosPagoInlineVenta({ mediosFilas, mediosPagoList, totalCompra, onUpdate, onRemove, onAdd, showToast, saving = false }) {
+  const filas = Array.isArray(mediosFilas) && mediosFilas.length ? mediosFilas : [buildEmptyMedioPagoVenta()];
+  const sumaMediosPago = useMemo(
+    () => filas.reduce((a, r) => {
+      const mpObj = mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(r.id_medio_pago ?? ""));
+      const tipoCheque = normalizeChequeTipoFromMedio(String(mpObj?.nombre ?? "").trim());
+      const monto = tipoCheque !== null && r.cheque ? safeNumber(r.cheque.importe) : safeNumber(r.monto);
+      return a + monto;
+    }, 0),
+    [filas, mediosPagoList]
+  );
+  const diferenciaRestante = useMemo(
+    () => Math.max(0, safeNumber(totalCompra) - sumaMediosPago),
+    [totalCompra, sumaMediosPago]
+  );
+
+  return (
+    <>
+      {filas.map((mp) => (
+        <MpRowVenta
+          key={mp.id}
+          row={mp}
+          mediosPagoList={mediosPagoList}
+          totalCompra={totalCompra}
+          sumaMediosPago={sumaMediosPago}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          showToast={showToast}
+        />
+      ))}
+
+      <div className="nc-mp-totals">
+        <span className="nc-mp-totals-asignado">Asignado: <b>{moneyARS(sumaMediosPago)}</b></span>
+        {diferenciaRestante > 0.01 && <span className="nc-mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>}
+        {diferenciaRestante <= 0.01 && sumaMediosPago > 0 && <span className="nc-mp-totals-ok">✓ Cubierto</span>}
+      </div>
+
+      <button type="button" className="nc-pago-btn" onClick={onAdd} disabled={saving}>
+        <FontAwesomeIcon icon={faPlus} style={{ fontSize: 11 }} /> Agregar otro medio
+      </button>
+    </>
   );
 }
 

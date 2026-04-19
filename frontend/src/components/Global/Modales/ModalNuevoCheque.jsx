@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Toast from "../Toast.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faFileInvoiceDollar,
@@ -16,186 +17,38 @@ function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
 function plusDaysISO(days = 10) {
   const d = new Date();
   d.setDate(d.getDate() + Number(days));
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
 function safeNumber(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
-function moneyARS(v) {
-  try {
-    return Number(v || 0).toLocaleString("es-AR", {
-      style: "currency",
-      currency: "ARS",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  } catch {
-    return `$${Number(v || 0).toFixed(2)}`;
-  }
-}
+
 function onlyDigits(v) {
   return String(v ?? "").replace(/\D/g, "");
 }
 
-/* =========================================================
-   Subcomponente: tarjeta de previsualización de cheque
-========================================================= */
-function ChequePreview({ datos, tipo }) {
-  const isEcheq = String(tipo || "").toLowerCase() === "echeq";
-  const importe = safeNumber(datos?.importe);
-  const numero = String(datos?.numero_cheque || "").trim();
-  const emisor = String(datos?.emisor || "").trim();
-  const fechaEmision = String(datos?.fecha_emision || "").trim();
-  const fechaPago = String(datos?.fecha_pago || "").trim();
-  const obs = String(datos?.observaciones || "").trim();
-
-  if (!numero && !emisor && !(importe > 0)) return null;
-
-  return (
-    <div
-      className={[
-        "cheque-card",
-        isEcheq ? "cheque-card--echeq" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      style={{ cursor: "default", width: "100%" }}
-      tabIndex={-1}
-    >
-      <div className="cheque-card__header">
-        <div className="cheque-card__header-dots" />
-        <div className="cheque-card__slash" />
-        <div className="cheque-card__brand">
-          <div className="cheque-card__logo-icon">
-            <FontAwesomeIcon icon={faMoneyCheckDollar} style={{ fontSize: 14 }} />
-          </div>
-          <div>
-            <div className="cheque-card__bank-name">
-              {emisor || (isEcheq ? "eCheq" : "Cheque")}
-            </div>
-            <div className="cheque-card__bank-sub">
-              {isEcheq ? "Cheque Electrónico" : "Cheque de Papel"}
-            </div>
-          </div>
-        </div>
-        <div className="cheque-card__header-right">
-          <div className="cheque-card__num-label">N°</div>
-          <div className="cheque-card__num-value">
-            {numero
-              ? numero.slice(-6).padStart(6, "·")
-              : "······"}
-          </div>
-        </div>
-      </div>
-
-      <div className="cheque-card__body">
-        <div className="cheque-card__row cheque-card__row--spaced">
-          <div className="cheque-card__field cheque-card__field--wide">
-            <div className="cheque-card__field-label">Emisor</div>
-            <div
-              className={[
-                "cheque-card__field-line",
-                !emisor ? "cheque-card__field-empty" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              {emisor || "—"}
-            </div>
-          </div>
-          <div className="cheque-card__field">
-            <div className="cheque-card__field-label">N° Cheque</div>
-            <div
-              className={[
-                "cheque-card__field-line",
-                "cheque-card__field-line--mono",
-                !numero ? "cheque-card__field-empty" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              {numero || "—"}
-            </div>
-          </div>
-        </div>
-
-        <div className="cheque-card__row cheque-card__row--spaced">
-          <div className="cheque-card__field">
-            <div className="cheque-card__field-label">Emisión</div>
-            <div
-              className={[
-                "cheque-card__field-line",
-                !fechaEmision ? "cheque-card__field-empty" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              {fechaEmision || "—"}
-            </div>
-          </div>
-          <div className="cheque-card__field">
-            <div className="cheque-card__field-label">Fecha pago</div>
-            <div
-              className={[
-                "cheque-card__field-line",
-                !fechaPago ? "cheque-card__field-empty" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              {fechaPago || "—"}
-            </div>
-          </div>
-          <div className="cheque-card__field">
-            <div className="cheque-card__field-label">Importe</div>
-            <div className="cheque-card__importe-box">
-              <div className="cheque-card__importe-symbol">$</div>
-              <div className="cheque-card__importe-value">
-                {importe > 0
-                  ? importe.toLocaleString("es-AR", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })
-                  : "0,00"}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {obs && (
-          <div className="cheque-card__row">
-            <div className="cheque-card__field cheque-card__field--wide">
-              <div className="cheque-card__field-label">Observaciones</div>
-              <div className="cheque-card__field-line">{obs}</div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="cheque-card__micr">
-        <div className="cheque-card__micr-accent" />
-        <span className="cheque-card__micr-text">
-          {isEcheq ? "⟨ECHEQ⟩" : "⟨CHEQUE⟩"}{" "}
-          {numero ? `⟨${numero}⟩` : "⟨······⟩"}{" "}
-          {emisor
-            ? `⟨${emisor.slice(0, 12).toUpperCase()}⟩`
-            : "⟨·······⟩"}
-        </span>
-        <div className="cheque-card__security">
-          <span>✓</span>
-          <span>{isEcheq ? "DIGITAL" : "FÍSICO"}</span>
-        </div>
-      </div>
-    </div>
-  );
+function sanitizeEmitter(v) {
+  return String(v ?? "")
+    .toUpperCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
+    .replace(/\s+/g, " ")
+    .trimStart();
 }
 
 /* =========================================================
-   MODAL PRINCIPAL
+   Modal global reusable
+   verificarNumeroCheque:
+   async ({ numero_cheque, tipoCheque, initialData, form }) => {
+     return true
+     // o:
+     return { ok: false, mensaje: "Ese cheque ya existe." }
+   }
 ========================================================= */
 export default function ModalNuevoCheque({
   open,
@@ -205,6 +58,9 @@ export default function ModalNuevoCheque({
   tipoCheque = "cheque",
   dark = false,
   saving = false,
+  onToast,
+  showToast,
+  verificarNumeroCheque = null,
 }) {
   const isEcheq = String(tipoCheque || "").toLowerCase() === "echeq";
   const titulo = isEcheq ? "Cargar eCheq" : "Cargar Cheque";
@@ -216,7 +72,6 @@ export default function ModalNuevoCheque({
       numero_cheque: "",
       importe: "",
       fecha_pago: plusDaysISO(10),
-      observaciones: "",
     }),
     []
   );
@@ -224,13 +79,71 @@ export default function ModalNuevoCheque({
   const [form, setForm] = useState(emptyForm);
   const [archivo, setArchivo] = useState(null);
   const [archivoNombre, setArchivoNombre] = useState("");
+  const [checkingNumero, setCheckingNumero] = useState(false);
+  const [toast, setToast] = useState(null);
 
   const [openVerComp, setOpenVerComp] = useState(false);
   const [compUrl, setCompUrl] = useState("");
 
   const fileInputRef = useRef(null);
   const closeBtnRef = useRef(null);
+  const numeroInputRef = useRef(null);
   const prevOpenRef = useRef(false);
+
+  const notify = useCallback(
+    (tipo, mensaje, duracion = 3000) => {
+      if (typeof showToast === "function") {
+        showToast(tipo, mensaje, duracion);
+        return;
+      }
+      if (typeof onToast === "function") {
+        onToast(tipo, mensaje, duracion);
+        return;
+      }
+      setToast({ tipo, mensaje, duracion });
+    },
+    [onToast, showToast]
+  );
+
+  const closeLocalToast = useCallback(() => setToast(null), []);
+
+  const runNumeroCheck = useCallback(async () => {
+    if (typeof verificarNumeroCheque !== "function") return true;
+
+    const numeroCheque = onlyDigits(form.numero_cheque);
+    setCheckingNumero(true);
+
+    try {
+      const result = await verificarNumeroCheque({
+        numero_cheque: numeroCheque,
+        tipoCheque,
+        initialData,
+        form: {
+          ...form,
+          numero_cheque: numeroCheque,
+          importe: safeNumber(form.importe),
+        },
+      });
+
+      if (result === true || result?.ok === true || result == null) {
+        return true;
+      }
+
+      const mensaje =
+        result?.mensaje ||
+        "Ese número de cheque ya existe o no se pudo validar.";
+
+      notify(result?.tipo || "error", mensaje, result?.duracion || 4200);
+      numeroInputRef.current?.focus();
+      return false;
+    } catch (e) {
+      notify("error", e?.message || "No se pudo verificar el número del cheque.", 4200);
+      numeroInputRef.current?.focus();
+      return false;
+    } finally {
+      setCheckingNumero(false);
+    }
+  }, [verificarNumeroCheque, form, tipoCheque, initialData, notify]);
 
   useEffect(() => {
     if (!open) return;
@@ -249,11 +162,13 @@ export default function ModalNuevoCheque({
     if (initialData) {
       setForm({
         fecha_emision: initialData.fecha_emision || todayISO(),
-        emisor: initialData.emisor || "",
-        numero_cheque: initialData.numero_cheque || "",
-        importe: initialData.importe != null ? String(initialData.importe) : "",
+        emisor: sanitizeEmitter(initialData.emisor || ""),
+        numero_cheque: onlyDigits(initialData.numero_cheque || ""),
+        importe:
+          initialData.importe != null
+            ? onlyDigits(String(initialData.importe))
+            : "",
         fecha_pago: initialData.fecha_pago || plusDaysISO(10),
-        observaciones: initialData.observaciones || "",
       });
 
       if (initialData.archivo instanceof File) {
@@ -271,6 +186,8 @@ export default function ModalNuevoCheque({
       setArchivoNombre("");
     }
 
+    setCheckingNumero(false);
+    setToast(null);
     setOpenVerComp(false);
     setCompUrl("");
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -282,38 +199,35 @@ export default function ModalNuevoCheque({
     const handler = (e) => {
       if (e.key !== "Escape") return;
       e.stopPropagation();
+
       if (openVerComp) {
         setOpenVerComp(false);
         return;
       }
-      if (!saving) onClose?.();
+
+      if (!saving && !checkingNumero) onClose?.();
     };
+
     document.addEventListener("keydown", handler, true);
     return () => document.removeEventListener("keydown", handler, true);
-  }, [open, saving, onClose, openVerComp]);
+  }, [open, saving, checkingNumero, onClose, openVerComp]);
 
   useEffect(() => {
     return () => {
-      if (compUrl && compUrl.startsWith("blob:")) URL.revokeObjectURL(compUrl);
+      if (compUrl && compUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(compUrl);
+      }
     };
   }, [compUrl]);
-
-  const previewData = useMemo(
-    () => ({
-      ...form,
-      importe: safeNumber(form.importe),
-    }),
-    [form]
-  );
 
   const setField = useCallback((k, v) => {
     setForm((p) => ({ ...p, [k]: v }));
   }, []);
 
   const handleOpenFilePicker = useCallback(() => {
-    if (saving || openVerComp) return;
+    if (saving || checkingNumero || openVerComp) return;
     fileInputRef.current?.click();
-  }, [saving, openVerComp]);
+  }, [saving, checkingNumero, openVerComp]);
 
   const handleFileSelected = useCallback(
     (e) => {
@@ -321,6 +235,7 @@ export default function ModalNuevoCheque({
       setArchivo(file);
       setArchivoNombre(file?.name || "");
       setOpenVerComp(false);
+
       if (compUrl && compUrl.startsWith("blob:")) URL.revokeObjectURL(compUrl);
       setCompUrl("");
     },
@@ -338,27 +253,75 @@ export default function ModalNuevoCheque({
     setArchivo(null);
     setArchivoNombre("");
     setOpenVerComp(false);
+
     if (compUrl && compUrl.startsWith("blob:")) URL.revokeObjectURL(compUrl);
     setCompUrl("");
+
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [compUrl]);
 
-  const handleSave = useCallback(() => {
-    if (saving) return;
+  const handleSave = useCallback(async () => {
+    if (saving || checkingNumero) return;
+
+    if (!String(form.emisor || "").trim()) {
+      notify("advertencia", "Ingresá el emisor del cheque.", 3200);
+      return;
+    }
+
+    if (!onlyDigits(form.numero_cheque)) {
+      notify("advertencia", "Ingresá el número de cheque.", 3200);
+      numeroInputRef.current?.focus();
+      return;
+    }
+
+    if (!(safeNumber(form.importe) > 0)) {
+      notify("advertencia", "Ingresá un importe válido mayor a 0.", 3200);
+      return;
+    }
+
+    if (!String(form.fecha_pago || "").trim()) {
+      notify("advertencia", "Ingresá la fecha de pago.", 3200);
+      return;
+    }
+
+    const disponible = await runNumeroCheck();
+    if (!disponible) return;
+
     onSave?.({
       ...form,
+      emisor: sanitizeEmitter(form.emisor),
+      numero_cheque: onlyDigits(form.numero_cheque),
       importe: safeNumber(form.importe),
       tipo: tipoCheque,
       tipo_cheque: tipoCheque,
       archivo: archivo || null,
       archivo_nombre: archivoNombre || archivo?.name || "",
     });
-  }, [saving, onSave, form, tipoCheque, archivo, archivoNombre]);
+  }, [
+    saving,
+    checkingNumero,
+    form,
+    tipoCheque,
+    archivo,
+    archivoNombre,
+    onSave,
+    notify,
+    runNumeroCheck,
+  ]);
 
   if (!open) return null;
 
   return createPortal(
     <>
+      {toast && (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeLocalToast}
+        />
+      )}
+
       <style>{`
         .mnc-layout {
           display: grid;
@@ -407,8 +370,6 @@ export default function ModalNuevoCheque({
         }
 
         @media (max-width: 640px) {
-
-
           .mi-modal__content {
             padding: 12px !important;
           }
@@ -457,7 +418,9 @@ export default function ModalNuevoCheque({
         className="mp-modal__overlay"
         style={{ zIndex: 9999999999 + 10 }}
         onMouseDown={(e) => {
-          if (e.target === e.currentTarget && !saving) onClose?.();
+          if (e.target === e.currentTarget && !saving && !checkingNumero) {
+            onClose?.();
+          }
         }}
       >
         <div
@@ -485,19 +448,20 @@ export default function ModalNuevoCheque({
             <div className="mi-modal__head-icon" aria-hidden="true">
               <FontAwesomeIcon icon={faMoneyCheckDollar} />
             </div>
+
             <div className="mi-modal__head-left">
               <h2 className="mi-modal__title">{titulo}</h2>
               <p className="mi-modal__subtitle">
-                Completá los datos del{" "}
-                {isEcheq ? "cheque electrónico" : "cheque"} recibido
+                Completá los datos del {isEcheq ? "cheque electrónico" : "cheque"} recibido
               </p>
             </div>
+
             <button
               ref={closeBtnRef}
               className="mi-modal__close"
-              onClick={() => !saving && onClose?.()}
+              onClick={() => !saving && !checkingNumero && onClose?.()}
               aria-label="Cerrar"
-              disabled={saving}
+              disabled={saving || checkingNumero}
               type="button"
             >
               ✕
@@ -509,7 +473,6 @@ export default function ModalNuevoCheque({
             style={{ overflowY: "auto", padding: "14px" }}
           >
             <div className="mnc-layout">
-              {/* IZQUIERDA: formulario */}
               <div className="mnc-left">
                 <div className="nc-section">
                   <div className="nc-section-head">
@@ -524,8 +487,8 @@ export default function ModalNuevoCheque({
                         type="text"
                         placeholder=" "
                         value={form.emisor}
-                        onChange={(e) => setField("emisor", e.target.value.toUpperCase())}
-                        disabled={saving}
+                        onChange={(e) => setField("emisor", sanitizeEmitter(e.target.value))}
+                        disabled={saving || checkingNumero}
                         autoComplete="off"
                       />
                       <label className="nc-label">Emisor / Banco *</label>
@@ -533,14 +496,13 @@ export default function ModalNuevoCheque({
 
                     <div className="nc-field">
                       <input
+                        ref={numeroInputRef}
                         className="nc-input"
                         type="text"
                         placeholder=" "
                         value={form.numero_cheque}
-                        onChange={(e) =>
-                          setField("numero_cheque", onlyDigits(e.target.value))
-                        }
-                        disabled={saving}
+                        onChange={(e) => setField("numero_cheque", onlyDigits(e.target.value))}
+                        disabled={saving || checkingNumero}
                         inputMode="numeric"
                         autoComplete="off"
                       />
@@ -552,13 +514,13 @@ export default function ModalNuevoCheque({
                     <div className="nc-field">
                       <input
                         className="nc-input"
-                        type="number"
+                        type="text"
                         placeholder=" "
-                        min="0"
-                        step="0.01"
                         value={form.importe}
-                        onChange={(e) => setField("importe", e.target.value)}
-                        disabled={saving}
+                        onChange={(e) => setField("importe", onlyDigits(e.target.value))}
+                        disabled={saving || checkingNumero}
+                        inputMode="numeric"
+                        autoComplete="off"
                       />
                       <label className="nc-label">Importe *</label>
                     </div>
@@ -571,7 +533,7 @@ export default function ModalNuevoCheque({
                           placeholder=" "
                           value={form.fecha_emision}
                           onChange={(e) => setField("fecha_emision", e.target.value)}
-                          disabled={saving}
+                          disabled={saving || checkingNumero}
                         />
                         <label className="nc-label">Fecha emisión</label>
                       </div>
@@ -583,39 +545,22 @@ export default function ModalNuevoCheque({
                           placeholder=" "
                           value={form.fecha_pago}
                           onChange={(e) => setField("fecha_pago", e.target.value)}
-                          disabled={saving}
+                          disabled={saving || checkingNumero}
                         />
                         <label className="nc-label">Fecha de pago *</label>
                       </div>
-                    </div>
-
-                    <div className="nc-field">
-                      <input
-                        className="nc-input"
-                        type="text"
-                        placeholder=" "
-                        value={form.observaciones}
-                        onChange={(e) => setField("observaciones", e.target.value)}
-                        disabled={saving}
-                        autoComplete="off"
-                      />
-                      <label className="nc-label">Observaciones</label>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* DERECHA: monitor/panel */}
               <div className="mnc-right">
-                {/* COMPROBANTE ADJUNTO */}
                 <div className="nc-section">
                   <div className="nc-section-head">
-                    <div
-                      className="nc-section-dot"
-                      style={{ background: "#64748b" }}
-                    />
+                    <div className="nc-section-dot" style={{ background: "#64748b" }} />
                     <span>Comprobante adjunto</span>
                   </div>
+
                   <div className="nc-section-body">
                     <div className="mi-uploadCard">
                       <div className="mi-uploadCard__head">
@@ -628,9 +573,7 @@ export default function ModalNuevoCheque({
                       </div>
 
                       <div className="mi-uploadCard__body">
-                        <div
-                          className={`mi-uploadFile${archivo ? " is-filled" : " is-empty"}`}
-                        >
+                        <div className={`mi-uploadFile${archivo ? " is-filled" : " is-empty"}`}>
                           {archivo ? (
                             <>
                               <div className="mi-uploadFile__icon">
@@ -638,10 +581,7 @@ export default function ModalNuevoCheque({
                               </div>
 
                               <div className="mi-uploadFile__meta">
-                                <div
-                                  className="mi-uploadFile__name"
-                                  title={archivo.name}
-                                >
+                                <div className="mi-uploadFile__name" title={archivo.name}>
                                   {archivo.name}
                                 </div>
                                 <div className="mi-uploadFile__size">
@@ -661,7 +601,7 @@ export default function ModalNuevoCheque({
                                   type="button"
                                   className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
                                   onClick={handleOpenVerComprobante}
-                                  disabled={saving}
+                                  disabled={saving || checkingNumero}
                                   title="Ver comprobante"
                                 >
                                   <FontAwesomeIcon icon={faEye} />
@@ -671,7 +611,7 @@ export default function ModalNuevoCheque({
                                   type="button"
                                   className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
                                   onClick={handleQuitarArchivo}
-                                  disabled={saving || openVerComp}
+                                  disabled={saving || checkingNumero || openVerComp}
                                   title="Quitar archivo"
                                 >
                                   <FontAwesomeIcon icon={faTrash} />
@@ -692,7 +632,7 @@ export default function ModalNuevoCheque({
                             accept="image/*,.pdf"
                             className="mi-uploadBar__input"
                             onChange={handleFileSelected}
-                            disabled={saving}
+                            disabled={saving || checkingNumero}
                             style={{ display: "none" }}
                           />
 
@@ -700,7 +640,7 @@ export default function ModalNuevoCheque({
                             type="button"
                             className="mi-uploadBar__btn mi-uploadBar__btn--primary"
                             onClick={handleOpenFilePicker}
-                            disabled={saving}
+                            disabled={saving || checkingNumero}
                           >
                             <FontAwesomeIcon icon={faUpload} />{" "}
                             {archivo ? "Reemplazar archivo" : "Seleccionar archivo"}
@@ -711,15 +651,16 @@ export default function ModalNuevoCheque({
                   </div>
                 </div>
 
-                {/* BOTONES */}
                 <div className="nc-actions" style={{ padding: 0 }}>
                   <button
                     type="button"
                     className="mit-btn mit-btn--solid mit-btn--block"
                     onClick={handleSave}
-                    disabled={saving}
+                    disabled={saving || checkingNumero}
                   >
-                    {saving
+                    {checkingNumero
+                      ? "Verificando..."
+                      : saving
                       ? "Guardando..."
                       : `Confirmar ${isEcheq ? "eCheq" : "cheque"}`}
                   </button>
@@ -727,8 +668,8 @@ export default function ModalNuevoCheque({
                   <button
                     type="button"
                     className="mit-btn mit-btn--ghost mit-btn--block"
-                    onClick={() => !saving && onClose?.()}
-                    disabled={saving}
+                    onClick={() => !saving && !checkingNumero && onClose?.()}
+                    disabled={saving || checkingNumero}
                   >
                     Cancelar
                   </button>

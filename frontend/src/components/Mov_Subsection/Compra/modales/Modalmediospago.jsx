@@ -400,6 +400,42 @@ useEffect(() => {
 /* ============================================================
    RESUMEN EN PANEL
    ============================================================ */
+export function PanelMediosPagoInlineCompra({ mediosFilas, mediosPagoList, totalCompra, onUpdate, onRemove, onAdd, apiGet, BASE_URL, showToast, saving = false }) {
+  const filas = Array.isArray(mediosFilas) && mediosFilas.length ? mediosFilas : [buildEmptyMedioPago()];
+  const sumaMediosPago = useMemo(() => filas.reduce((a, r) => a + safeNumber(r.monto), 0), [filas]);
+  const diferenciaRestante = useMemo(() => Math.max(0, safeNumber(totalCompra) - sumaMediosPago), [totalCompra, sumaMediosPago]);
+
+  return (
+    <>
+      {filas.map((mp, idx) => (
+        <MpRow
+          key={mp.id}
+          row={mp}
+          idx={idx}
+          mediosPagoList={mediosPagoList}
+          totalCompra={totalCompra}
+          sumaMediosPago={sumaMediosPago}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          apiGet={apiGet}
+          BASE_URL={BASE_URL}
+          showToast={showToast}
+        />
+      ))}
+
+      <div className="nc-mp-totals">
+        <span className="nc-mp-totals-asignado">Asignado: <b>{moneyARS(sumaMediosPago)}</b></span>
+        {diferenciaRestante > 0.01 && <span className="nc-mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>}
+        {diferenciaRestante <= 0.01 && sumaMediosPago > 0 && <span className="nc-mp-totals-ok">✓ Cubierto</span>}
+      </div>
+
+      <button type="button" className="nc-pago-btn" onClick={onAdd} disabled={saving}>
+        <FontAwesomeIcon icon={faPlus} style={{ fontSize: 11 }} /> Agregar otro medio
+      </button>
+    </>
+  );
+}
+
 export function PagoResumenPanel({ mediosFilas, mediosPagoList, totalCompra, onEdit }) {
   const sumaMediosPago    = useMemo(() => mediosFilas.reduce((a, r) => a + safeNumber(r.monto), 0), [mediosFilas]);
   const diferenciaRestante= useMemo(() => Math.max(0, safeNumber(totalCompra) - sumaMediosPago), [totalCompra, sumaMediosPago]);

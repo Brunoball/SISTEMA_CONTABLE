@@ -4,7 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus, faFileInvoiceDollar, faEye, faTrash, faUpload, faMoneyCheckDollar } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
 import BASE_URL from "../../../../config/config";
-import ModalNuevoCheque from "./ModalNuevoCheque.jsx";
+import ModalNuevoCheque from "../../../Global/Modales/ModalNuevoCheque.jsx";
 import ModalNuevaDescripcion from "./ModalNuevaDescripcion.jsx";
 import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import "../../../Global/Global_css/Global_Modals.css";

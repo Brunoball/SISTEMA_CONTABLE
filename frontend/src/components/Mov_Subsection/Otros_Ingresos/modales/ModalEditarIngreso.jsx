@@ -7,7 +7,7 @@ import "../../../Global/Global_css/Global_Modals.css";
 import "../../../Global/Global_css/Global_responsive.css";
 import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
-import ModalNuevoCheque from "./ModalNuevoCheque.jsx";
+import ModalNuevoCheque from "../../../Global/Modales/ModalNuevoCheque.jsx";
 import ModalNuevaDescripcion from "./ModalNuevaDescripcion.jsx";
 
 const NULL_OPTION = "";

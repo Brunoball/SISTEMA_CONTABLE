@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import "../../../Global/Global_css/Global_Modals.css";
+import "../../../Global/Global_css/Global_responsive.css";
 import BASE_URL from "../../../../config/config";
 import ModalFacturaBaltoResumen from "../../Facturacion/ModalFacturaBaltoResumen.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faFileInvoiceDollar, faCreditCard } from "@fortawesome/free-solid-svg-icons";
+import { faFileInvoiceDollar } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
 import {
-  ModalMediosPagoVenta,
-  PagoResumenPanelVenta,
+  PanelMediosPagoInlineVenta,
   buildEmptyMedioPagoVenta,
 } from "./ModalMediosPagoVenta.jsx";
 
@@ -323,7 +324,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const [cliInput, setCliInput] = useState("");
   const [rows, setRows] = useState(() => [buildEmptyRow()]);
   const [mediosFilas, setMediosFilas] = useState(() => [buildEmptyMedioPagoVenta()]);
-  const [mpModalOpen, setMpModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [addUI, setAddUI] = useState({ open: false, kind: null, rowId: null, text: "", saving: false });
   const [fiscalLoading, setFiscalLoading] = useState(false);
@@ -351,7 +351,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       setCliInput("");
       setRows([buildEmptyRow()]);
       setMediosFilas([buildEmptyMedioPagoVenta()]);
-      setMpModalOpen(false);
       setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
       setSaving(false);
       setFiscalLoading(false);
@@ -501,12 +500,12 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     if (!open) return;
     const h = (e) => {
       if (e.key !== "Escape") return;
-      if (mpModalOpen || openResumenFactura || addUI.open) return;
+      if (openResumenFactura || addUI.open) return;
       onClose?.();
     };
     document.addEventListener("keydown", h, true);
     return () => document.removeEventListener("keydown", h, true);
-  }, [open, onClose, mpModalOpen, openResumenFactura, addUI.open]);
+  }, [open, onClose, openResumenFactura, addUI.open]);
 
   const rowsCalc = useMemo(() => rows.map((r) => {
     const cantidad = Math.max(0, safeNumber(r.cantidad));
@@ -536,7 +535,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   useEffect(() => {
     if (isContado) return;
     setMediosFilas([buildEmptyMedioPagoVenta()]);
-    setMpModalOpen(false);
   }, [isContado]);
 
   const sumaMediosPago = useMemo(() => {
@@ -1148,15 +1146,24 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                   </div>
 
                   {isContado && (
-                    <>
-                      <PagoResumenPanelVenta mediosFilas={mediosFilas} mediosPagoList={mediosPagoList} totalCompra={resumen.total} onEdit={() => setMpModalOpen(true)} />
-                      {!mediosFilas.some((r) => r.id_medio_pago && r.id_medio_pago !== "") && (
-                        <button type="button" className="nc-pago-btn" onClick={() => setMpModalOpen(true)} disabled={saving}>
-                          <FontAwesomeIcon icon={faCreditCard} style={{ fontSize: 12 }} />
-                          Configurar medios de pago
-                        </button>
-                      )}
-                    </>
+                    <div className="nc-section" style={{ marginTop: 14 }}>
+                      <div className="nc-section-head">
+                        <div className="nc-section-dot" style={{ background: "#0f766e" }} />
+                        <span>Medios de pago</span>
+                      </div>
+                      <div className="nc-section-body">
+                        <PanelMediosPagoInlineVenta
+                          mediosFilas={mediosFilas}
+                          mediosPagoList={mediosPagoList}
+                          totalCompra={resumen.total}
+                          onUpdate={updateMedioPago}
+                          onRemove={removeMedioPago}
+                          onAdd={addMedioPago}
+                          showToast={showToast}
+                          saving={saving}
+                        />
+                      </div>
+                    </div>
                   )}
 
                   {shouldNeedFiscalPanel && (
@@ -1203,19 +1210,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           <AddCatalogMiniModal open={addUI.open} title={addUI.kind === "clientes" ? "Nuevo cliente" : "Nuevo detalle"} value={addUI.text} saving={addUI.saving} onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))} onCancel={closeAddMini} onSave={guardarNuevoCatalogo} dark={dark} />
         </div>
       </div>
-
-      <ModalMediosPagoVenta
-        open={mpModalOpen}
-        mediosPagoList={mediosPagoList}
-        totalCompra={resumen.total}
-        mediosFilas={mediosFilas}
-        onUpdate={updateMedioPago}
-        onAdd={addMedioPago}
-        onRemove={removeMedioPago}
-        onClose={() => setMpModalOpen(false)}
-        onConfirm={() => setMpModalOpen(false)}
-        showToast={showToast}
-      />
 
       {openResumenFactura && resumenFacturaData && (
         <ModalFacturaBaltoResumen

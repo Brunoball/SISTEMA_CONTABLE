@@ -11,9 +11,12 @@ import {
   faEye,
   faUpload,
   faTrash,
+  faMoneyCheckDollar,
+  faCircleNotch,
+  faPlus,
 } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
-import { PanelMediosPagoInlineCompra, buildEmptyMedioPago } from "./Modalmediospago.jsx";
+import { buildEmptyMedioPago } from "./Modalmediospago.jsx";
 
 const NULL_OPTION = "";
 
@@ -49,6 +52,159 @@ function parseMoneyInputARS(v) {
 }
 function formatEditableMoney(v) { const n=safeNumber(v); if(n===0) return ""; return String(n).replace(".",","); }
 function uid() { return crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
+
+function safeText(v) { const s=String(v??"").trim(); return s?s:"-"; }
+
+function getChequeIdsArray(value){
+  if(Array.isArray(value)) return value.map(x=>String(x)).filter(Boolean);
+  if(value==null||value==="") return [];
+  return [String(value)];
+}
+
+function ChequesCarteraCardsCompra({ cheques, idsSeleccionados, onToggle, esEcheq = false }) {
+  if (!cheques.length) return null;
+  const accent = esEcheq ? "#0055BB" : "#0f766e";
+  const accentBg = esEcheq ? "rgba(0,85,187,.07)" : "rgba(15,118,110,.07)";
+  const accentBorder = esEcheq ? "rgba(0,85,187,.28)" : "rgba(15,118,110,.28)";
+
+  return (
+    <div className="nc-cheques-list">
+      {cheques.map((ch, idx) => {
+        const checked = idsSeleccionados.includes(String(ch?.id_cheque));
+        return (
+          <div
+            key={ch?.id_cheque || idx}
+            role="checkbox"
+            aria-checked={checked}
+            tabIndex={0}
+            className={`nc-cheque-item ${checked ? "nc-cheque-item--selected" : ""} ${esEcheq ? "nc-cheque-item--echeq" : ""}`}
+            onClick={() => onToggle(String(ch?.id_cheque || ""))}
+            onKeyDown={(e) => (e.key === " " || e.key === "Enter") && onToggle(String(ch?.id_cheque || ""))}
+          >
+            <div aria-hidden="true" style={{width:16,height:16,borderRadius:4,border: checked ? `2px solid ${accent}` : "1.5px solid var(--nv-border-md)",background: checked ? accent : "var(--nv-bg)",display:"grid",placeItems:"center",flexShrink:0,transition:"all .14s"}}>
+              {checked && (<svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>)}
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:2, minWidth:0 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <span style={{fontFamily:"'Courier New', monospace",fontSize:12,fontWeight:700,color:"var(--nv-text)",letterSpacing:".04em"}}>N°&nbsp;{safeText(ch?.numero_cheque)}</span>
+                {esEcheq && <span style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:accent,background:accentBg,border:`1px solid ${accentBorder}`,borderRadius:999,padding:"1px 5px",lineHeight:1.5}}>eCheq</span>}
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:"2px 8px",fontSize:11,color:"var(--nv-muted)",lineHeight:1.3}}>
+                <span style={{maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{safeText(ch?.emisor)}</span>
+                <span style={{ opacity: 0.4 }}>·</span>
+                <span>Pago:&nbsp;{safeText(ch?.fecha_pago ? String(ch.fecha_pago).match(/^\d{4}-/) ? `${String(Number(String(ch.fecha_pago).slice(8,10))).padStart(2,"0")}/${String(Number(String(ch.fecha_pago).slice(5,7))).padStart(2,"0")}/${String(ch.fecha_pago).slice(0,4)}` : ch.fecha_pago : "-")}</span>
+              </div>
+            </div>
+            <span className="nc-cheque-importe">{moneyARS(ch?.importe || 0)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MedioPagoInlineCompraRow({ row, mediosPagoList, onUpdate, onRemove, saving, showToast, canRemove, totalSeleccionado, sumaMediosPago, apiGet, BASE_URL }) {
+  const mpSeleccionado = useMemo(() => mediosPagoList.find((x) => String(getMedioPagoId(x)) === String(row.id_medio_pago)) || null, [mediosPagoList, row.id_medio_pago]);
+  const tipoCheque = useMemo(() => normalizeChequeTipoFromMedio(mpSeleccionado?.nombre || ""), [mpSeleccionado]);
+  const esCheque = tipoCheque !== null;
+  const esEcheq = tipoCheque === "echeq";
+  const chequesSeleccionados = useMemo(() => getChequeIdsArray(row.id_cheque), [row.id_cheque]);
+  const importeCheques = useMemo(() => {
+    if (!esCheque || !chequesSeleccionados.length) return 0;
+    return chequesSeleccionados.reduce((acc, idStr) => {
+      const ch = row.chequesDisponibles.find((x) => String(x.id_cheque) === idStr);
+      return acc + (ch ? Number(ch.importe || 0) : 0);
+    }, 0);
+  }, [esCheque, chequesSeleccionados, row.chequesDisponibles]);
+  const restanteParaEstaFila = useMemo(() => {
+    const sumaOtros = Math.max(0, safeNumber(sumaMediosPago) - safeNumber(row.monto));
+    return Math.max(0, safeNumber(totalSeleccionado) - sumaOtros);
+  }, [sumaMediosPago, totalSeleccionado, row.monto]);
+  const puedeCompletarRestante = !saving && !esCheque && totalSeleccionado > 0 && restanteParaEstaFila > 0.009;
+
+  const handleChangeMedio = useCallback(async (val) => {
+    const mp = mediosPagoList.find((x) => String(getMedioPagoId(x)) === String(val));
+    const tipo = normalizeChequeTipoFromMedio(mp?.nombre || "");
+    onUpdate(row.id, { id_medio_pago: val, id_cheque: [], chequesDisponibles: [], loadingCheques: tipo !== null, monto: tipo !== null ? 0 : row.monto, montoDraft: "", montoFocused: false });
+    if (tipo !== null) {
+      try {
+        const sp = new URLSearchParams();
+        sp.set("action", "compras_cheques_cartera_listar");
+        sp.set("tipo", tipo);
+        const data = await apiGet(`${BASE_URL}/api.php?${sp.toString()}`);
+        onUpdate(row.id, { chequesDisponibles: Array.isArray(data?.cheques) ? data.cheques : [], loadingCheques: false });
+      } catch (e) {
+        onUpdate(row.id, { chequesDisponibles: [], loadingCheques: false });
+        showToast("error", e?.message || "No se pudieron cargar los cheques.", 4000);
+      }
+    }
+  }, [row.id, row.monto, mediosPagoList, onUpdate, showToast, apiGet, BASE_URL]);
+
+  const handleToggleCheque = useCallback((idChequeStr) => {
+    const current = getChequeIdsArray(row.id_cheque);
+    const next = current.includes(idChequeStr) ? current.filter((x) => x !== idChequeStr) : [...current, idChequeStr];
+    onUpdate(row.id, { id_cheque: next });
+  }, [row.id, row.id_cheque, onUpdate]);
+
+  useEffect(() => {
+    if (esCheque && chequesSeleccionados.length > 0) onUpdate(row.id, { monto: importeCheques, montoDraft: "", montoFocused: false });
+  }, [importeCheques, esCheque, chequesSeleccionados.length, onUpdate, row.id]);
+
+  return (
+    <div className="nc-mp-card">
+      <div className="nc-mp-inline">
+        <div className="nc-mp-medio">
+          <div className="nc-mp-sublabel">Medio</div>
+          <select className="nc-mp-select" value={String(row.id_medio_pago || "")} onChange={(e) => handleChangeMedio(e.target.value)} disabled={saving}>
+            <option value="">Seleccionar...</option>
+            {mediosPagoList.map((x) => (<option key={getMedioPagoId(x) || x?.nombre} value={String(getMedioPagoId(x) || "")}>{x.nombre}</option>))}
+          </select>
+        </div>
+        <div className="nc-mp-monto-wrap">
+          <div className="nc-mp-sublabel">Monto</div>
+          <input className="nc-mp-input-monto" type="text" inputMode="decimal" value={row.montoFocused ? row.montoDraft ?? "" : formatMoneyInputARS(esCheque ? importeCheques : row.monto)} onFocus={(e) => { onUpdate(row.id, { montoFocused: true, montoDraft: formatEditableMoney(row.monto) }); setTimeout(() => e.target.select(), 0); }} onChange={(e) => { const c = e.target.value.replace(/[^\d,.\-]/g, ""); onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) }); }} onBlur={() => { const p = parseMoneyInputARS(row.montoDraft); onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false }); }} placeholder="$ 0,00" disabled={saving || (esCheque && chequesSeleccionados.length > 0)} style={{ background: esCheque && chequesSeleccionados.length > 0 ? "rgba(0,0,0,.03)" : undefined }} />
+        </div>
+        <div className="nc-mp-actions-col">
+          {!esCheque && <button type="button" className="nc-mp-completar" onClick={() => onUpdate(row.id, { monto: restanteParaEstaFila, montoDraft: "", montoFocused: false })} disabled={!puedeCompletarRestante} title="Completar importe restante">↓ Rest.</button>}
+          {canRemove && <button type="button" className="nc-mp-del-btn" onClick={() => onRemove(row.id)} disabled={saving} title="Quitar medio de pago">×</button>}
+        </div>
+      </div>
+      {esCheque && (
+        <div className="nc-mp-cheques">
+          <div className="nc-mp-cheques-title"><FontAwesomeIcon icon={faMoneyCheckDollar} style={{ fontSize: 11 }} />{esEcheq ? "eCheqs en cartera" : "Cheques en cartera"}</div>
+          {row.loadingCheques ? (
+            <div className="nc-mp-cheques-loading"><FontAwesomeIcon icon={faCircleNotch} spin style={{ marginRight: 6 }} />Cargando…</div>
+          ) : row.chequesDisponibles.length === 0 ? (
+            <div className="nc-mp-cheques-empty">No hay {esEcheq ? "eCheqs" : "cheques"} activos en cartera.</div>
+          ) : (
+            <ChequesCarteraCardsCompra cheques={row.chequesDisponibles} idsSeleccionados={chequesSeleccionados} onToggle={handleToggleCheque} esEcheq={esEcheq} />
+          )}
+          {chequesSeleccionados.length > 0 && <div className="nc-mp-cheques-sum">✓ {chequesSeleccionados.length} cheque(s) — {moneyARS(importeCheques)}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PanelMediosPagoCompraLocal({ mediosFilas, mediosPagoList, totalCompra, onUpdate, onRemove, onAdd, apiGet, BASE_URL, showToast, saving }) {
+  const sumaMediosPago = useMemo(() => (Array.isArray(mediosFilas) ? mediosFilas : []).reduce((acc, mp) => acc + safeNumber(mp?.monto), 0), [mediosFilas]);
+  const diferenciaRestante = Math.max(0, safeNumber(totalCompra) - safeNumber(sumaMediosPago));
+  return (
+    <div className="nc-section-body">
+      {(Array.isArray(mediosFilas) ? mediosFilas : []).map((mp) => (
+        <MedioPagoInlineCompraRow key={mp.id} row={mp} mediosPagoList={mediosPagoList} onUpdate={onUpdate} onRemove={onRemove} saving={saving} showToast={showToast} canRemove={mediosFilas.length > 1} totalSeleccionado={totalCompra} sumaMediosPago={sumaMediosPago} apiGet={apiGet} BASE_URL={BASE_URL} />
+      ))}
+      <div className="nc-mp-totals">
+        <span className="nc-mp-totals-asignado">Asignado: <b>{moneyARS(sumaMediosPago)}</b></span>
+        {diferenciaRestante > 0.01 && <span className="nc-mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>}
+        {diferenciaRestante <= 0.01 && safeNumber(totalCompra) > 0 && <span className="nc-mp-totals-ok">✓ Cubierto</span>}
+      </div>
+      <button type="button" className="nc-add-mp-btn" onClick={onAdd} disabled={saving}>
+        <FontAwesomeIcon icon={faPlus} style={{ fontSize: 11 }} /> Agregar otro medio
+      </button>
+    </div>
+  );
+}
 
 function getDetalleId(d)   { const c=d?.id??d?.id_detalle??d?.idDetalle??d?.detalle_id??null;  const n=Number(c); return Number.isFinite(n)&&n>0?n:null; }
 function getProveedorId(p) { const c=p?.id??p?.id_proveedor??p?.idProveedor??p?.proveedor_id??null; const n=Number(c); return Number.isFinite(n)&&n>0?n:null; }
@@ -561,157 +717,189 @@ useEffect(() => {
               </section>
 
               {/* ── PANEL LATERAL ── */}
-              <aside className="mi-cr-filters">
-                <div className="mi-cr-filters__top">
-                  <div className="mi-cr-filters__title">Datos de compra</div>
-                  <div className="mi-cr-filters__dates">
-                    <div className="fl-field fl-col-full mi-date-field">
+              <aside className="nc-aside">
+
+                <div className="nc-section">
+                  <div className="nc-section-head">
+                    <div className="nc-section-dot" />
+                    <span>Datos de compra</span>
+                  </div>
+                  <div className="nc-section-body">
+                    <div className="nc-field" onClick={()=>fechaInputRef.current?.showPicker?.()}>
                       <input
                         ref={fechaInputRef}
                         id="nc-fecha-input"
-                        className="fl-input"
+                        className="nc-input"
                         type="date"
                         placeholder=" "
                         value={fecha}
                         onChange={(e)=>setFecha(String(e.target.value||"").trim())}
                         disabled={saving}
                       />
-                      <label className="fl-label">Fecha</label>
+                      <label className="nc-label">Fecha</label>
+                    </div>
+
+                    <div className="nc-prov-wrap">
+                      <GlobalAutocomplete
+                        value={provInput}
+                        onChange={handleProveedorInputChange}
+                        onSelect={handleSelectProveedor}
+                        options={proveedoresList}
+                        getOptionLabel={(p)=>String(p?.nombre??"").trim()}
+                        getOptionValue={(p)=>String(getProveedorId(p)??p?.nombre??"")}
+                        label="Proveedor *"
+                        placeholder=" "
+                        disabled={saving||addUI.open}
+                        showAllOnFocus={true}
+                        maxItems={25}
+                        inputClassName="nc-input"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="nc-pill-label">Tipo *</div>
+                      <div className="nc-pills">
+                        <button
+                          type="button"
+                          className={`nc-pill${isContado ? " nc-pill--active" : ""}`}
+                          onClick={()=>setForma("CONTADO")}
+                          disabled={saving}
+                        >
+                          Contado
+                        </button>
+                        <button
+                          type="button"
+                          className={`nc-pill${isCorriente ? " nc-pill--active" : ""}`}
+                          onClick={()=>setForma("CUENTA_CORRIENTE")}
+                          disabled={saving}
+                        >
+                          Cuenta Corriente
+                        </button>
+                      </div>
+                    </div>
+
+                    {isContado && (
+                      <div className="nc-section" style={{ marginTop: 14 }}>
+                        <div className="nc-section-head">
+                          <div className="nc-section-dot" style={{ background: "#0f766e" }} />
+                          <span>Medios de pago</span>
+                        </div>
+
+                          <PanelMediosPagoCompraLocal
+                            mediosFilas={mediosFilas}
+                            mediosPagoList={mediosPagoList}
+                            totalCompra={resumen.total}
+                            onUpdate={updateMedioPago}
+                            onRemove={removeMedioPago}
+                            onAdd={addMedioPago}
+                            apiGet={apiGet}
+                            BASE_URL={BASE_URL}
+                            showToast={showToast}
+                            saving={saving}
+                          />
+
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {isCorriente && (
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" style={{ background: "#d97706" }} />
+                      <span>Cuenta Corriente</span>
+                    </div>
+                    <div className="nc-section-body">
+                      <div className="nc-cc-info">
+                        Quedará registrada como <b>pendiente de pago</b>.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="nc-section">
+                  <div className="nc-section-head">
+                    <div className="nc-section-dot" style={{ background: "#64748b" }} />
+                    <span>Comprobante adjunto</span>
+                  </div>
+                  <div className="nc-section-body">
+                    <div className="mi-uploadCard">
+                      <div className="mi-uploadCard__head">
+                        <div className="mi-uploadCard__title">Comprobante</div>
+                        <div className="mi-uploadCard__sub">Seleccioná, visualizá o quitá el archivo antes de guardar</div>
+                      </div>
+                      <div className="mi-uploadCard__body">
+                        <div className={`mi-uploadFile${archivoAdjunto?" is-filled":" is-empty"}`}>
+                          {archivoAdjunto ? (
+                            <>
+                              <div className="mi-uploadFile__icon"><FontAwesomeIcon icon={faFileInvoiceDollar} /></div>
+                              <div className="mi-uploadFile__meta">
+                                <div className="mi-uploadFile__name" title={archivoAdjunto.name}>{archivoAdjunto.name}</div>
+                                <div className="mi-uploadFile__size">{Math.max(1,Math.round((archivoAdjunto.size||0)/1024))} KB</div>
+                              </div>
+                              <div style={{ display:"flex", gap:8, marginLeft:"auto", flexWrap:"wrap" }}>
+                                <button
+                                  type="button"
+                                  className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                  onClick={handleOpenVerComprobante}
+                                  disabled={saving}
+                                  title="Ver comprobante"
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                  onClick={()=>{
+                                    setArchivoAdjunto(null);
+                                    if(fileInputRef.current) fileInputRef.current.value="";
+                                    setOpenVerComp(false);
+                                    if(compUrl) URL.revokeObjectURL(compUrl);
+                                    setCompUrl("");
+                                  }}
+                                  disabled={saving||openVerComp}
+                                  title="Quitar archivo"
+                                >
+                                  <FontAwesomeIcon icon={faTrash} />
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="mi-uploadFile__empty">No hay comprobante seleccionado</div>
+                          )}
+                        </div>
+
+                        <div className="mi-uploadBar" style={{ marginTop:10 }}>
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            className="mi-uploadBar__input"
+                            onChange={(e)=>setArchivoAdjunto(e.target.files?.[0]||null)}
+                            disabled={saving}
+                            style={{ display:"none" }}
+                          />
+                          <button
+                            type="button"
+                            className="mi-uploadBar__btn mi-uploadBar__btn--primary"
+                            onClick={handleOpenFilePicker}
+                            disabled={saving}
+                          >
+                            <FontAwesomeIcon icon={faUpload} /> {" "}
+                            {archivoAdjunto ? "Reemplazar archivo" : "Seleccionar archivo"}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="mi-cr-filters__body">
-                  <div className="fl-field mi-cr-rel">
-                    <GlobalAutocomplete
-                      value={provInput}
-                      onChange={handleProveedorInputChange}
-                      onSelect={handleSelectProveedor}
-                      options={proveedoresList}
-                      getOptionLabel={(p)=>String(p?.nombre??"").trim()}
-                      getOptionValue={(p)=>String(getProveedorId(p)??p?.nombre??"")}
-                      label="Proveedor *"
-                      placeholder=" "
-                      disabled={saving||addUI.open}
-                      showAllOnFocus={true}
-                      maxItems={25}
-                      inputClassName="fl-input"
-                    />
-                  </div>
-
-                  <div className="fl-field">
-                    <select
-                      className="fl-input fl-select"
-                      value={String(forma)}
-                      onChange={(e)=>setForma(String(e.target.value || "").trim())}
-                      disabled={saving}
-                    >
-                      <option value={NULL_OPTION}>Seleccionar...</option>
-                      <option value="CONTADO">CONTADO</option>
-                      <option value="CUENTA_CORRIENTE">CUENTA CORRIENTE</option>
-                    </select>
-                    <label className="fl-label">Forma de compra *</label>
-                  </div>
-
-                  {isContado && (
-                    <div className="nc-section" style={{ marginTop: 14 }}>
-                      <div className="nc-section-head">
-                        <div className="nc-section-dot" style={{ background: "#0f766e" }} />
-                        <span>Medios de pago</span>
-                      </div>
-                      <div className="nc-section-body">
-                        <PanelMediosPagoInlineCompra
-                          mediosFilas={mediosFilas}
-                          mediosPagoList={mediosPagoList}
-                          totalCompra={resumen.total}
-                          onUpdate={updateMedioPago}
-                          onRemove={removeMedioPago}
-                          onAdd={addMedioPago}
-                          apiGet={apiGet}
-                          BASE_URL={BASE_URL}
-                          showToast={showToast}
-                          saving={saving}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {isCorriente && (
-                    <div className="mi-card mi-card--full">
-                      <div className="mi-card__title">Cuenta corriente</div>
-                      <div className="mi-card__hint">Quedará registrada como <b>pendiente de pago</b>.</div>
-                    </div>
-                  )}
-
-                  <div className="mi-card mi-card--full">
-                    <div className="mi-card__title">Comprobante adjunto</div>
-                    <div className="mi-card__hint">Seleccioná, visualizá o quitá el archivo antes de guardar.</div>
-
-                    <div style={{ marginTop: 10 }}>
-                      <div className="mi-uploadCard">
-                        <div className="mi-uploadCard__head">
-                          <div className="mi-uploadCard__title">Comprobante</div>
-                          <div className="mi-uploadCard__sub">Seleccioná, visualizá o quitá el archivo antes de guardar</div>
-                        </div>
-                        <div className="mi-uploadCard__body">
-                          <div className={`mi-uploadFile${archivoAdjunto?" is-filled":" is-empty"}`}>
-                            {archivoAdjunto?(
-                              <>
-                                <div className="mi-uploadFile__icon"><FontAwesomeIcon icon={faFileInvoiceDollar}/></div>
-                                <div className="mi-uploadFile__meta">
-                                  <div className="mi-uploadFile__name" title={archivoAdjunto.name}>{archivoAdjunto.name}</div>
-                                  <div className="mi-uploadFile__size">{Math.max(1,Math.round((archivoAdjunto.size||0)/1024))} KB</div>
-                                </div>
-                                <div style={{display:"flex",gap:8,marginLeft:"auto",flexWrap:"wrap"}}>
-                                  <button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--ghost" onClick={handleOpenVerComprobante} disabled={saving} title="Ver comprobante"><FontAwesomeIcon icon={faEye}/></button>
-                                  <button
-                                    type="button"
-                                    className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                    onClick={()=>{
-                                      setArchivoAdjunto(null);
-                                      if(fileInputRef.current) fileInputRef.current.value="";
-                                      setOpenVerComp(false);
-                                      if(compUrl) URL.revokeObjectURL(compUrl);
-                                      setCompUrl("");
-                                    }}
-                                    disabled={saving||openVerComp}
-                                    title="Quitar archivo"
-                                  >
-                                    <FontAwesomeIcon icon={faTrash}/>
-                                  </button>
-                                </div>
-                              </>
-                            ):(
-                              <div className="mi-uploadFile__empty">No hay comprobante seleccionado</div>
-                            )}
-                          </div>
-
-                          <div className="mi-uploadBar" style={{marginTop:10}}>
-                            <input
-                              ref={fileInputRef}
-                              type="file"
-                              className="mi-uploadBar__input"
-                              onChange={(e)=>setArchivoAdjunto(e.target.files?.[0]||null)}
-                              disabled={saving}
-                              style={{display:"none"}}
-                            />
-                            <button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--primary" onClick={handleOpenFilePicker} disabled={saving}>
-                              <FontAwesomeIcon icon={faUpload}/>{" "}{archivoAdjunto?"Reemplazar archivo":"Seleccionar archivo"}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mi-cr-filters__actions">
-                    <button type="button" className="mit-btn mit-btn--solid mit-btn--block" onClick={submit} disabled={saving}>
-                      {saving?"Guardando...":"Guardar compra"}
-                    </button>
-                    <button type="button" className="mit-btn mit-btn--ghost mit-btn--block" onClick={()=>!saving&&onClose?.()} disabled={saving}>
-                      Cancelar
-                    </button>
-                  </div>
+                <div className="nc-actions mi-cr-filters__actions">
+                  <button type="button" className="mit-btn mit-btn--solid mit-btn--block" onClick={submit} disabled={saving}>
+                    {saving?"Guardando...":"Guardar compra"}
+                  </button>
+                  <button type="button" className="mit-btn mit-btn--ghost mit-btn--block" onClick={()=>!saving&&onClose?.()} disabled={saving}>
+                    Cancelar
+                  </button>
                 </div>
               </aside>
             </div>

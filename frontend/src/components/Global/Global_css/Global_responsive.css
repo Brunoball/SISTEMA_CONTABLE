@@ -785,7 +785,6 @@
 .mov-gridTable--row {
     display: block !important; /* ⚠️ cambia grid por block */
     padding: 6px;
-    width: 83vw;
     margin: 10px;
     border: 1px solid var(--mi-border, rgba(255,255,255,0.08));
     border-radius: 16px;

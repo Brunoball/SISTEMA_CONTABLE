@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import "../../../Global/Global_css/Global_Modals.css";
+import "../../../Global/Global_css/Global_Modals_nueva_compra.css";
+import "../../Recibos/modales/ModalPagarRecibos.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faMoneyCheckDollar,
@@ -136,71 +139,32 @@ export function buildEmptyMedioPagoVenta() {
 function ChequeResumen({ cheque, tipoCheque }) {
   if (!cheque) return null;
 
+  const esEcheq = tipoCheque === "echeq";
+
   return (
-    <div className="nc-cheques-list" style={{ marginTop: 4 }}>
+    <div className="nc-cheques-list">
       <div
         className={`nc-cheque-item nc-cheque-item--selected ${
-          tipoCheque === "echeq" ? "nc-cheque-item--echeq" : ""
+          esEcheq ? "nc-cheque-item--echeq" : ""
         }`}
-        style={{ cursor: "default" }}
       >
-        <div
-          aria-hidden="true"
-          style={{
-            width: 16,
-            height: 16,
-            borderRadius: 4,
-            border: `2px solid ${tipoCheque === "echeq" ? "#0055BB" : "#0f766e"}`,
-            background: tipoCheque === "echeq" ? "#0055BB" : "#0f766e",
-            display: "grid",
-            placeItems: "center",
-            flexShrink: 0,
-          }}
-        >
+        <div className="nc-cheque-check" aria-hidden="true">
           <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
             <path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <span
-              style={{
-                fontFamily: "'Courier New', monospace",
-                fontSize: 12,
-                fontWeight: 700,
-                color: "var(--nv-text)",
-                letterSpacing: ".04em",
-              }}
-            >
-              N° {cheque?.numero_cheque || "-"}
-            </span>
-
-            {tipoCheque === "echeq" && (
-              <span
-                style={{
-                  fontSize: 9,
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: ".07em",
-                  color: "#0055BB",
-                  background: "rgba(0,85,187,.07)",
-                  border: "1px solid rgba(0,85,187,.28)",
-                  borderRadius: 999,
-                  padding: "1px 5px",
-                  lineHeight: 1.5,
-                }}
-              >
-                eCheq
-              </span>
-            )}
+        <div className="nc-cheque-main">
+          <div className="nc-cheque-top">
+            <span className="nc-cheque-numero">N° {cheque?.numero_cheque || "-"}</span>
+            {esEcheq && <span className="nc-cheque-badge">eCheq</span>}
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 8px", fontSize: 11, color: "var(--nv-muted)", lineHeight: 1.3 }}>
-            <span style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div className="nc-cheque-meta">
+            <span className="nc-cheque-emisor" title={cheque?.emisor || "-"}>
               {cheque?.emisor || "-"}
             </span>
-            <span style={{ opacity: 0.4 }}>·</span>
+            <span className="nc-cheque-sep">·</span>
             <span>Pago: {formatFechaDMY(cheque?.fecha_pago)}</span>
           </div>
         </div>
@@ -322,12 +286,12 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
 
 
   return (
-    <div className="mp-card">
-      <div className="mp-card__top">
-        <div>
-          <div className="mp-field-label">Medio de pago</div>
+    <div className="nc-mp-card">
+      <div className="nc-mp-inline">
+        <div className="nc-mp-medio">
+          <div className="nc-mp-sublabel">Medio</div>
           <select
-            className="mp-select"
+            className="nc-mp-select"
             value={String(row.id_medio_pago || "")}
             onChange={(e) => handleChangeMedio(e.target.value)}
           >
@@ -343,10 +307,10 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
           </select>
         </div>
 
-        <div>
-          <div className="mp-field-label">Monto</div>
+        <div className="nc-mp-monto-wrap">
+          <div className="nc-mp-sublabel">Monto</div>
           <input
-            className="mp-input-monto"
+            className="nc-mp-input-monto"
             type="text"
             inputMode="decimal"
             value={row.montoFocused ? row.montoDraft ?? "" : formatMoneyInputARS(montoActual)}
@@ -370,11 +334,11 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
           />
         </div>
 
-        <div className="mp-card__actions">
+        <div className="nc-mp-actions-col">
           {!esCheque && (
             <button
               type="button"
-              className="mp-btn-completar"
+              className="nc-mp-completar"
               onClick={() => onUpdate(row.id, { monto: restanteParaEstaFila, montoDraft: "", montoFocused: false })}
               disabled={!puedeCompletarRestante}
               title="Completar importe restante"
@@ -382,15 +346,15 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
               ↓ Rest.
             </button>
           )}
-          <button type="button" className="mp-btn-del" onClick={() => onRemove(row.id)} title="Quitar">
+          <button type="button" className="nc-mp-del-btn" onClick={() => onRemove(row.id)} title="Quitar">
             ×
           </button>
         </div>
       </div>
 
       {esCheque && (
-        <div className="mp-cheques-panel">
-          <div className="mp-cheques-title">
+        <div className="nc-mp-cheques">
+          <div className="nc-mp-cheques-title">
             <FontAwesomeIcon icon={faMoneyCheckDollar} style={{ fontSize: 12 }} />
             {tipoCheque === "echeq" ? "eCheq cargado" : "Cheque cargado"}
           </div>
@@ -400,8 +364,7 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
               <ChequeResumen cheque={row.cheque} tipoCheque={tipoCheque} />
               <button
                 type="button"
-                className="mit-btn mit-btn--ghost"
-                style={{ width: "100%", marginTop: 10, fontSize: 12 }}
+                className="nc-pago-btn"
                 onClick={() => setOpenChequeModal(true)}
               >
                 Editar {tipoCheque === "echeq" ? "eCheq" : "cheque"}
@@ -410,8 +373,7 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
           ) : (
             <button
               type="button"
-              className="mit-btn mit-btn--solid"
-              style={{ width: "100%", marginTop: 4 }}
+              className="nc-pago-btn"
               onClick={() => setOpenChequeModal(true)}
             >
               Cargar {tipoCheque === "echeq" ? "eCheq" : "cheque"}

@@ -18,7 +18,7 @@ import {
   faBasketShopping,
 } from "@fortawesome/free-solid-svg-icons";
 import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
-import { PanelMediosPagoInlineCompra, buildEmptyMedioPago } from "./Modalmediospago.jsx";
+import { buildEmptyMedioPago } from "./Modalmediospago.jsx";
 
 const NULL_OPTION = "";
 const ADD_OPTION = "__ADD__";
@@ -68,6 +68,168 @@ function calcItemTotals(cantidad, precio, ivaPct) {
   const total = subtotal + iva_monto;
   const r2 = (n) => Math.round(n * 100) / 100;
   return { subtotal: r2(subtotal), iva_monto: r2(iva_monto), total: r2(total) };
+}
+
+function formatMoneyInputARS(v) {
+  const n = safeNumber(v);
+  try {
+    return n.toLocaleString("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  } catch {
+    return `$ ${n.toFixed(2)}`;
+  }
+}
+function parseMoneyInputARS(v) {
+  if (v == null) return 0;
+  let s = String(v).trim();
+  if (!s) return 0;
+  s = s.replace(/\$/g, "").replace(/\s+/g, "");
+  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+function formatEditableMoney(v) { const n = safeNumber(v); if (n === 0) return ""; return String(n).replace(".", ","); }
+function safeText(v) { const s = String(v ?? "").trim(); return s ? s : "-"; }
+function getChequeIdsArray(value) {
+  if (Array.isArray(value)) return value.map((x) => String(x)).filter(Boolean);
+  if (value == null || value === "") return [];
+  return [String(value)];
+}
+
+function ChequesCarteraCardsCompra({ cheques, idsSeleccionados, onToggle, esEcheq = false }) {
+  if (!cheques.length) return null;
+  const accent = esEcheq ? "#0055BB" : "#0f766e";
+  const accentBg = esEcheq ? "rgba(0,85,187,.07)" : "rgba(15,118,110,.07)";
+  const accentBorder = esEcheq ? "rgba(0,85,187,.28)" : "rgba(15,118,110,.28)";
+  return (
+    <div className="nc-cheques-list">
+      {cheques.map((ch, idx) => {
+        const checked = idsSeleccionados.includes(String(ch?.id_cheque));
+        return (
+          <div key={ch?.id_cheque || idx} role="checkbox" aria-checked={checked} tabIndex={0} className={`nc-cheque-item ${checked ? "nc-cheque-item--selected" : ""} ${esEcheq ? "nc-cheque-item--echeq" : ""}`} onClick={() => onToggle(String(ch?.id_cheque || ""))} onKeyDown={(e) => (e.key === " " || e.key === "Enter") && onToggle(String(ch?.id_cheque || ""))}>
+            <div aria-hidden="true" style={{ width: 16, height: 16, borderRadius: 4, border: checked ? `2px solid ${accent}` : "1.5px solid var(--nv-border-md)", background: checked ? accent : "var(--nv-bg)", display: "grid", placeItems: "center", flexShrink: 0, transition: "all .14s" }}>
+              {checked && (<svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>)}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 700, color: "var(--nv-text)", letterSpacing: ".04em" }}>N°&nbsp;{safeText(ch?.numero_cheque)}</span>
+                {esEcheq && <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: accent, background: accentBg, border: `1px solid ${accentBorder}`, borderRadius: 999, padding: "1px 5px", lineHeight: 1.5 }}>eCheq</span>}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 8px", fontSize: 11, color: "var(--nv-muted)", lineHeight: 1.3 }}>
+                <span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{safeText(ch?.emisor)}</span>
+                <span style={{ opacity: 0.4 }}>·</span>
+                <span>Pago:&nbsp;{safeText(formatFechaDMY(ch?.fecha_pago))}</span>
+              </div>
+            </div>
+            <span className="nc-cheque-importe">{moneyARS(ch?.importe || 0)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MedioPagoInlineCompraRow({ row, mediosPagoList, onUpdate, onRemove, saving, showToast, canRemove, totalSeleccionado, sumaMediosPago, apiGet, BASE_URL }) {
+  const mpSeleccionado = useMemo(() => mediosPagoList.find((x) => String(getMedioPagoId(x)) === String(row.id_medio_pago)) || null, [mediosPagoList, row.id_medio_pago]);
+  const tipoCheque = useMemo(() => normalizeChequeTipoFromMedio(mpSeleccionado?.nombre || ""), [mpSeleccionado]);
+  const esCheque = tipoCheque !== null;
+  const esEcheq = tipoCheque === "echeq";
+  const chequesSeleccionados = useMemo(() => getChequeIdsArray(row.id_cheque), [row.id_cheque]);
+  const importeCheques = useMemo(() => {
+    if (!esCheque || !chequesSeleccionados.length) return 0;
+    return chequesSeleccionados.reduce((acc, idStr) => {
+      const ch = row.chequesDisponibles.find((x) => String(x.id_cheque) === idStr);
+      return acc + (ch ? Number(ch.importe || 0) : 0);
+    }, 0);
+  }, [esCheque, chequesSeleccionados, row.chequesDisponibles]);
+  const restanteParaEstaFila = useMemo(() => {
+    const sumaOtros = Math.max(0, safeNumber(sumaMediosPago) - safeNumber(row.monto));
+    return Math.max(0, safeNumber(totalSeleccionado) - sumaOtros);
+  }, [sumaMediosPago, totalSeleccionado, row.monto]);
+  const puedeCompletarRestante = !saving && !esCheque && totalSeleccionado > 0 && restanteParaEstaFila > 0.009;
+
+  const handleChangeMedio = useCallback(async (val) => {
+    const mp = mediosPagoList.find((x) => String(getMedioPagoId(x)) === String(val));
+    const tipo = normalizeChequeTipoFromMedio(mp?.nombre || "");
+    onUpdate(row.id, { id_medio_pago: val, id_cheque: [], chequesDisponibles: [], loadingCheques: tipo !== null, monto: tipo !== null ? 0 : row.monto, montoDraft: "", montoFocused: false });
+    if (tipo !== null) {
+      try {
+        const sp = new URLSearchParams();
+        sp.set("action", "compras_cheques_cartera_listar");
+        sp.set("tipo", tipo);
+        const data = await apiGet(`${BASE_URL}/api.php?${sp.toString()}`);
+        onUpdate(row.id, { chequesDisponibles: Array.isArray(data?.cheques) ? data.cheques : [], loadingCheques: false });
+      } catch (e) {
+        onUpdate(row.id, { chequesDisponibles: [], loadingCheques: false });
+        showToast("error", e?.message || "No se pudieron cargar los cheques.", 4000);
+      }
+    }
+  }, [row.id, row.monto, mediosPagoList, onUpdate, showToast, apiGet, BASE_URL]);
+
+  const handleToggleCheque = useCallback((idChequeStr) => {
+    const current = getChequeIdsArray(row.id_cheque);
+    const next = current.includes(idChequeStr) ? current.filter((x) => x !== idChequeStr) : [...current, idChequeStr];
+    onUpdate(row.id, { id_cheque: next });
+  }, [row.id, row.id_cheque, onUpdate]);
+
+  useEffect(() => {
+    if (esCheque && chequesSeleccionados.length > 0) onUpdate(row.id, { monto: importeCheques, montoDraft: "", montoFocused: false });
+  }, [importeCheques, esCheque, chequesSeleccionados.length, onUpdate, row.id]);
+
+  return (
+    <div className="nc-mp-card">
+      <div className="nc-mp-inline">
+        <div className="nc-mp-medio">
+          <div className="nc-mp-sublabel">Medio</div>
+          <select className="nc-mp-select" value={String(row.id_medio_pago || "")} onChange={(e) => handleChangeMedio(e.target.value)} disabled={saving}>
+            <option value="">Seleccionar...</option>
+            {mediosPagoList.map((x) => (<option key={getMedioPagoId(x) || x?.nombre} value={String(getMedioPagoId(x) || "")}>{x.nombre}</option>))}
+          </select>
+        </div>
+        <div className="nc-mp-monto-wrap">
+          <div className="nc-mp-sublabel">Monto</div>
+          <input className="nc-mp-input-monto" type="text" inputMode="decimal" value={row.montoFocused ? row.montoDraft ?? "" : formatMoneyInputARS(esCheque ? importeCheques : row.monto)} onFocus={(e) => { onUpdate(row.id, { montoFocused: true, montoDraft: formatEditableMoney(row.monto) }); setTimeout(() => e.target.select(), 0); }} onChange={(e) => { const c = e.target.value.replace(/[^\d,.\-]/g, ""); onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) }); }} onBlur={() => { const p = parseMoneyInputARS(row.montoDraft); onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false }); }} placeholder="$ 0,00" disabled={saving || (esCheque && chequesSeleccionados.length > 0)} style={{ background: esCheque && chequesSeleccionados.length > 0 ? "rgba(0,0,0,.03)" : undefined }} />
+        </div>
+        <div className="nc-mp-actions-col">
+          {!esCheque && <button type="button" className="nc-mp-completar" onClick={() => onUpdate(row.id, { monto: restanteParaEstaFila, montoDraft: "", montoFocused: false })} disabled={!puedeCompletarRestante} title="Completar importe restante">↓ Rest.</button>}
+          {canRemove && <button type="button" className="nc-mp-del-btn" onClick={() => onRemove(row.id)} disabled={saving} title="Quitar medio de pago">×</button>}
+        </div>
+      </div>
+      {esCheque && (
+        <div className="nc-mp-cheques">
+          <div className="nc-mp-cheques-title"><FontAwesomeIcon icon={faMoneyCheckDollar} style={{ fontSize: 11 }} />{esEcheq ? "eCheqs en cartera" : "Cheques en cartera"}</div>
+          {row.loadingCheques ? (
+            <div className="nc-mp-cheques-loading"><FontAwesomeIcon icon={faCircleNotch} spin style={{ marginRight: 6 }} />Cargando…</div>
+          ) : row.chequesDisponibles.length === 0 ? (
+            <div className="nc-mp-cheques-empty">No hay {esEcheq ? "eCheqs" : "cheques"} activos en cartera.</div>
+          ) : (
+            <ChequesCarteraCardsCompra cheques={row.chequesDisponibles} idsSeleccionados={chequesSeleccionados} onToggle={handleToggleCheque} esEcheq={esEcheq} />
+          )}
+          {chequesSeleccionados.length > 0 && <div className="nc-mp-cheques-sum">✓ {chequesSeleccionados.length} cheque(s) — {moneyARS(importeCheques)}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PanelMediosPagoCompraLocal({ mediosFilas, mediosPagoList, totalCompra, onUpdate, onRemove, onAdd, apiGet, BASE_URL, showToast, saving }) {
+  const sumaMediosPago = useMemo(() => (Array.isArray(mediosFilas) ? mediosFilas : []).reduce((acc, mp) => acc + safeNumber(mp?.monto), 0), [mediosFilas]);
+  const diferenciaRestante = Math.max(0, safeNumber(totalCompra) - safeNumber(sumaMediosPago));
+  return (
+    <div className="nc-section-body">
+      {(Array.isArray(mediosFilas) ? mediosFilas : []).map((mp) => (
+        <MedioPagoInlineCompraRow key={mp.id} row={mp} mediosPagoList={mediosPagoList} onUpdate={onUpdate} onRemove={onRemove} saving={saving} showToast={showToast} canRemove={mediosFilas.length > 1} totalSeleccionado={totalCompra} sumaMediosPago={sumaMediosPago} apiGet={apiGet} BASE_URL={BASE_URL} />
+      ))}
+      <div className="nc-mp-totals">
+        <span className="nc-mp-totals-asignado">Asignado: <b>{moneyARS(sumaMediosPago)}</b></span>
+        {diferenciaRestante > 0.01 && <span className="nc-mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>}
+        {diferenciaRestante <= 0.01 && safeNumber(totalCompra) > 0 && <span className="nc-mp-totals-ok">✓ Cubierto</span>}
+      </div>
+      <button type="button" className="nc-add-mp-btn" onClick={onAdd} disabled={saving}>
+        <FontAwesomeIcon icon={faPlus} style={{ fontSize: 11 }} /> Agregar otro medio
+      </button>
+    </div>
+  );
 }
 
 /* =========================
@@ -1430,8 +1592,9 @@ export default function ModalEditarCompra({
                           <div className="nc-section-dot" style={{ background: "#0f766e" }} />
                           <span>Medios de pago</span>
                         </div>
-                        <div className="nc-section-body">
-                          <PanelMediosPagoInlineCompra
+                        <div >
+                          <PanelMediosPagoCompraLocal
+
                             mediosFilas={mediosFilas}
                             mediosPagoList={safeLists.mediosPago || []}
                             totalCompra={resumen.total}

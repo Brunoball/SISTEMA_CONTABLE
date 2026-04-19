@@ -1287,7 +1287,7 @@ export default function ModalFacturaBaltoResumen({
     <span className="mfb-tab__text">
       {usarModoNC
         ? "Resumen de nota de crédito"
-        : "Resumen de facturación"}
+        : "Resumen"}
     </span>
   </button>
 

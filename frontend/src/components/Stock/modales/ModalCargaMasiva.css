@@ -286,7 +286,7 @@ textarea.fl-input:not(:placeholder-shown) + .fl-label {
   padding: 14px 20px;
   border-top: 1px solid var(--nv-border-md);
   background: var(--nv-bg);
-  flex-wrap: wrap;
+
 }
 
 .cmi-footer__hint {

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
-import "../../../Global/Global_css/Global_Modals_nueva_compra.css";
 import "../../Recibos/modales/ModalPagarRecibos.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {

@@ -5,7 +5,7 @@ import "../../../Global/Global_css/Global_responsive.css";
 import BASE_URL from "../../../../config/config";
 import ModalFacturaBaltoResumen from "../../Facturacion/ModalFacturaBaltoResumen.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faFileInvoiceDollar } from "@fortawesome/free-solid-svg-icons";
+import { faFileInvoiceDollar, faPlus } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
 import {
   PanelMediosPagoInlineVenta,
@@ -236,24 +236,21 @@ function buildMediosPagoPayload(mediosFilas, mediosPagoList) {
             importe: safeNumber(mp.cheque.importe),
             fecha_pago: mp.cheque.fecha_pago,
             observaciones: mp.cheque.observaciones || "",
-            archivo_nombre:
-              mp.cheque.archivo_nombre ||
-              (mp.cheque.archivo instanceof File ? mp.cheque.archivo.name : ""),
+            archivo_nombre: mp.cheque.archivo_nombre || (mp.cheque.archivo instanceof File ? mp.cheque.archivo.name : ""),
           },
         };
       }
       return base;
     });
 }
+
+/* ── Mini modal para crear cliente / detalle ── */
 function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
   const inputRef = useRef(null);
   useEffect(() => { if (!open) return; const t = setTimeout(() => inputRef.current?.focus(), 0); return () => clearTimeout(t); }, [open]);
   useEffect(() => {
     if (!open) return;
-    const h = (e) => {
-      if (e.key === "Escape") onCancel?.();
-      if (e.key === "Enter") onSave?.();
-    };
+    const h = (e) => { if (e.key === "Escape") onCancel?.(); if (e.key === "Enter") onSave?.(); };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [open, onCancel, onSave]);
@@ -267,7 +264,7 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
         </div>
         <div className="mi-mini__body">
           <div className="fl-field">
-            <input ref={inputRef} className="fl-input" placeholder=" " value={value} onChange={e => onChange?.(e.target.value)} disabled={saving} autoComplete="off"/>
+            <input ref={inputRef} className="fl-input" placeholder=" " value={value} onChange={e => onChange?.(e.target.value)} disabled={saving} autoComplete="off" />
             <label className="fl-label">Nombre</label>
           </div>
           <div className="mi-mini__actions">
@@ -281,19 +278,23 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
   );
 }
 
+/* ================================================================
+   MODAL PRINCIPAL
+================================================================ */
 export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved }) {
-  const API_BATCH = `${BASE_URL}/api.php?action=ventas_crear_batch`;
-  const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
-  const API_GET_CLIENTE_FISCAL = `${BASE_URL}/api.php?action=cliente_fiscal_get`;
-  const API_SAVE_CLIENTE_FISCAL = `${BASE_URL}/api.php?action=cliente_fiscal_upsert`;
-  const API_PADRON_CUIT = `${BASE_URL}/api.php?action=padron_cuit&op=padron_cuit`;
-  const API_CONFIG_FACTURACION = `${BASE_URL}/api.php?action=config_facturacion_get`;
-  const API_VINCULAR_COMPROBANTE = `${BASE_URL}/api.php?action=ventas_comprobantes_vincular_movimiento`;
-  const API_VINCULAR_COMPROBANTE_LOTE = `${BASE_URL}/api.php?action=ventas_comprobantes_vincular_movimientos_lote`;
-  const API_CHEQUES_ACTUALIZAR = `${BASE_URL}/api.php?action=ventas_cheques_actualizar`;
+  const API_BATCH                    = `${BASE_URL}/api.php?action=ventas_crear_batch`;
+  const API_CATALOGO                 = `${BASE_URL}/api.php?action=catalogo_crear`;
+  const API_GET_CLIENTE_FISCAL       = `${BASE_URL}/api.php?action=cliente_fiscal_get`;
+  const API_SAVE_CLIENTE_FISCAL      = `${BASE_URL}/api.php?action=cliente_fiscal_upsert`;
+  const API_PADRON_CUIT              = `${BASE_URL}/api.php?action=padron_cuit&op=padron_cuit`;
+  const API_CONFIG_FACTURACION       = `${BASE_URL}/api.php?action=config_facturacion_get`;
+  const API_VINCULAR_COMPROBANTE     = `${BASE_URL}/api.php?action=ventas_comprobantes_vincular_movimiento`;
+  const API_VINCULAR_COMPROBANTE_LOTE= `${BASE_URL}/api.php?action=ventas_comprobantes_vincular_movimientos_lote`;
+  const API_CHEQUES_ACTUALIZAR       = `${BASE_URL}/api.php?action=ventas_cheques_actualizar`;
 
   const showToast = useCallback((tipo, mensaje, dur = 2800) => onToast?.(tipo, mensaje, dur), [onToast]);
 
+  /* dark mode */
   const [dark, setDark] = useState(isTemaOscuro);
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
@@ -303,6 +304,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     if (document.body) o2.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     return () => { o1.disconnect(); o2.disconnect(); };
   }, []);
+
+  /* bloqueo scroll body */
   useEffect(() => {
     if (!open) return;
     const p = document.body.style.overflow;
@@ -310,43 +313,48 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     return () => { document.body.style.overflow = p; };
   }, [open]);
 
+  /* listas */
   const [localLists, setLocalLists] = useState(() => ({ ...SAFE_LISTS, ...normalizeLists(lists) }));
   useEffect(() => setLocalLists({ ...SAFE_LISTS, ...normalizeLists(lists) }), [lists]);
 
-  const mediosPagoList = useMemo(() => Array.isArray(localLists.medios_pago) ? localLists.medios_pago : [], [localLists.medios_pago]);
-  const tiposVentaList = useMemo(() => Array.isArray(localLists.tipos_venta) ? localLists.tipos_venta : [], [localLists.tipos_venta]);
-  const detallesList = useMemo(() => Array.isArray(localLists.detalles) ? localLists.detalles : [], [localLists.detalles]);
-  const clientesList = useMemo(() => Array.isArray(localLists.clientes) ? localLists.clientes : [], [localLists.clientes]);
+  const mediosPagoList  = useMemo(() => Array.isArray(localLists.medios_pago)  ? localLists.medios_pago  : [], [localLists.medios_pago]);
+  const tiposVentaList  = useMemo(() => Array.isArray(localLists.tipos_venta)  ? localLists.tipos_venta  : [], [localLists.tipos_venta]);
+  const detallesList    = useMemo(() => Array.isArray(localLists.detalles)      ? localLists.detalles     : [], [localLists.detalles]);
+  const clientesList    = useMemo(() => Array.isArray(localLists.clientes)      ? localLists.clientes     : [], [localLists.clientes]);
 
-  const [fecha, setFecha] = useState(todayISO);
-  const [filters, setFilters] = useState({ id_tipo_venta: NULL_OPTION, id_medio_pago: NULL_OPTION, id_cliente: NULL_OPTION, id_cuenta_corriente: NULL_OPTION });
-  const [accionContado, setAccionContado] = useState("guardar");
-  const [cliInput, setCliInput] = useState("");
-  const [rows, setRows] = useState(() => [buildEmptyRow()]);
-  const [mediosFilas, setMediosFilas] = useState(() => [buildEmptyMedioPagoVenta()]);
-  const [saving, setSaving] = useState(false);
-  const [addUI, setAddUI] = useState({ open: false, kind: null, rowId: null, text: "", saving: false });
-  const [fiscalLoading, setFiscalLoading] = useState(false);
-  const [fiscalError, setFiscalError] = useState("");
-  const [clienteFiscalDb, setClienteFiscalDb] = useState(null);
-  const [fiscalCuitInput, setFiscalCuitInput] = useState("");
-  const [fiscalLookupLoading, setFiscalLookupLoading] = useState(false);
-  const [fiscalArcaData, setFiscalArcaData] = useState(null);
-  const [configFacturacion, setConfigFacturacion] = useState(null);
+  /* estado principal */
+  const [fecha,              setFecha]              = useState(todayISO);
+  const [filters,            setFilters]            = useState({ id_tipo_venta: NULL_OPTION, id_medio_pago: NULL_OPTION, id_cliente: NULL_OPTION, id_cuenta_corriente: NULL_OPTION });
+  const [accionContado,      setAccionContado]      = useState("guardar");
+  const [cliInput,           setCliInput]           = useState("");
+  const [rows,               setRows]               = useState(() => [buildEmptyRow()]);
+  const [mediosFilas,        setMediosFilas]        = useState(() => [buildEmptyMedioPagoVenta()]);
+  const [saving,             setSaving]             = useState(false);
+  const [addUI,              setAddUI]              = useState({ open: false, kind: null, rowId: null, text: "", saving: false });
+  const [fiscalLoading,      setFiscalLoading]      = useState(false);
+  const [fiscalError,        setFiscalError]        = useState("");
+  const [clienteFiscalDb,    setClienteFiscalDb]    = useState(null);
+  const [fiscalCuitInput,    setFiscalCuitInput]    = useState("");
+  const [fiscalLookupLoading,setFiscalLookupLoading]= useState(false);
+  const [fiscalArcaData,     setFiscalArcaData]     = useState(null);
+  const [configFacturacion,  setConfigFacturacion]  = useState(null);
   const [openResumenFactura, setOpenResumenFactura] = useState(false);
   const [resumenFacturaData, setResumenFacturaData] = useState(null);
-  const closeBtnRef = useRef(null);
-  const prevOpenRef = useRef(false);
+
+  const closeBtnRef      = useRef(null);
+  const prevOpenRef      = useRef(false);
   const rowsContainerRef = useRef(null);
+  const fechaInputRef    = useRef(null);
   const [hasScroll, setHasScroll] = useState(false);
 
-  // NUEVO: callback para cerrar todo el flujo de facturación junto con el modal principal
+  /* cerrar flujo facturación completo */
   const cerrarFlujoFacturacion = useCallback(() => {
     setOpenResumenFactura(false);
     setResumenFacturaData(null);
     onClose?.();
   }, [onClose]);
 
+  /* reset al abrir */
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
     prevOpenRef.current = open;
@@ -373,6 +381,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }
   }, [open]);
 
+  /* scroll indicator */
   useEffect(() => {
     const el = rowsContainerRef.current;
     if (!el) return;
@@ -384,17 +393,26 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     return () => { ro.disconnect(); window.removeEventListener("resize", check); };
   }, [open, rows]);
 
-  const updateFilter = useCallback((k, v) => setFilters((p) => ({ ...p, [k]: v })), []);
-  const addRow = useCallback(() => setRows((p) => [...p, buildEmptyRow()]), []);
-  const removeRow = useCallback((id) => setRows((p) => { const n = p.filter((r) => r.id !== id); return n.length ? n : p; }), []);
-  const updateRow = useCallback((id, patch) => setRows((p) => p.map((r) => (r.id === id ? { ...r, ...patch } : r))), []);
-  const addMedioPago = useCallback(() => setMediosFilas((p) => [...p, buildEmptyMedioPagoVenta()]), []);
+  /* handlers básicos */
+  const updateFilter    = useCallback((k, v) => setFilters((p) => ({ ...p, [k]: v })), []);
+  const addRow          = useCallback(() => setRows((p) => [...p, buildEmptyRow()]), []);
+  const removeRow       = useCallback((id) => setRows((p) => { const n = p.filter((r) => r.id !== id); return n.length ? n : p; }), []);
+  const updateRow       = useCallback((id, patch) => setRows((p) => p.map((r) => (r.id === id ? { ...r, ...patch } : r))), []);
+  const addMedioPago    = useCallback(() => setMediosFilas((p) => [...p, buildEmptyMedioPagoVenta()]), []);
   const removeMedioPago = useCallback((id) => setMediosFilas((p) => { const n = p.filter((r) => r.id !== id); return n.length ? n : [buildEmptyMedioPagoVenta()]; }), []);
   const updateMedioPago = useCallback((id, patch) => setMediosFilas((p) => p.map((r) => (r.id === id ? { ...r, ...patch } : r))), []);
 
-  const startAddCliente = useCallback(() => { if (saving) return; setAddUI({ open: true, kind: "clientes", rowId: null, text: cliInput || "", saving: false }); }, [saving, cliInput]);
-  const closeAddMini = useCallback(() => { if (addUI.saving) return; setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false }); }, [addUI.saving]);
+  const startAddCliente = useCallback(() => {
+    if (saving) return;
+    setAddUI({ open: true, kind: "clientes", rowId: null, text: cliInput || "", saving: false });
+  }, [saving, cliInput]);
 
+  const closeAddMini = useCallback(() => {
+    if (addUI.saving) return;
+    setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
+  }, [addUI.saving]);
+
+  /* guardar nuevo en catálogo */
   const guardarNuevoCatalogo = useCallback(async () => {
     const nombre = String(addUI.text || "").trim();
     if (!nombre) { showToast("advertencia", "Escribí un nombre antes de guardar.", 2600); return; }
@@ -409,19 +427,14 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       const newId = kind === "detalles" ? getDetalleId(item) ?? Number(item?.id) : getClienteId(item) ?? Number(item?.id);
       const newNombre = String(item?.nombre ?? "").trim() || nombre;
       if (!Number.isFinite(Number(newId)) || Number(newId) <= 0) throw new Error("El servidor no devolvió un ID válido.");
-
       setLocalLists((prev) => {
         const next = { ...prev };
         const arr = Array.isArray(prev[kind]) ? prev[kind].slice() : [];
-        const already = arr.some((x) => {
-          const xid = kind === "detalles" ? getDetalleId(x) : getClienteId(x);
-          return Number(xid) === Number(newId);
-        });
+        const already = arr.some((x) => { const xid = kind === "detalles" ? getDetalleId(x) : getClienteId(x); return Number(xid) === Number(newId); });
         if (!already) arr.push({ id: Number(newId), nombre: newNombre });
         next[kind] = arr;
         return next;
       });
-
       if (kind === "clientes") {
         updateFilter("id_cliente", String(newId));
         setCliInput(newNombre);
@@ -430,7 +443,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         setFiscalCuitInput("");
         setFiscalError("");
       }
-
       setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
       showToast("exito", `${kind === "detalles" ? "Detalle" : "Cliente"} creado: "${newNombre}"`, 2600);
     } catch (e) {
@@ -439,6 +451,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }
   }, [API_CATALOGO, addUI, showToast, updateFilter]);
 
+  /* resolución de cliente */
   const clienteResolvedFromInput = useMemo(() => resolveClienteByInput(clientesList, cliInput), [clientesList, cliInput]);
   const selectedClienteId = useMemo(() => {
     const d = Number(filters.id_cliente);
@@ -478,14 +491,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     const precio = Number(detalle?.precio || 0);
     const stockDisponible = getStockDisponible(detalle);
     const sinStock = isSinStock(stockDisponible);
-    updateRow(rowId, {
-      id_detalle: String(getDetalleId(detalle) || ""),
-      detalleText: detalle?.nombre || "",
-      precio,
-      stock_disponible: stockDisponible,
-      sinStock,
-      cantidad: sinStock ? "" : 1,
-    });
+    updateRow(rowId, { id_detalle: String(getDetalleId(detalle) || ""), detalleText: detalle?.nombre || "", precio, stock_disponible: stockDisponible, sinStock, cantidad: sinStock ? "" : 1 });
     if (sinStock) showToast("advertencia", `El producto "${detalle?.nombre || ""}" no tiene stock disponible.`, 2500);
   }, [updateRow, showToast]);
 
@@ -503,46 +509,44 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     updateRow(rowId, { cantidad: cantidadFinal });
   }, [rows, updateRow, showToast]);
 
+  /* ESC */
   useEffect(() => {
     if (!open) return;
-    const h = (e) => {
-      if (e.key !== "Escape") return;
-      if (openResumenFactura || addUI.open) return;
-      onClose?.();
-    };
+    const h = (e) => { if (e.key !== "Escape") return; if (openResumenFactura || addUI.open) return; onClose?.(); };
     document.addEventListener("keydown", h, true);
     return () => document.removeEventListener("keydown", h, true);
   }, [open, onClose, openResumenFactura, addUI.open]);
 
+  /* cálculos */
   const rowsCalc = useMemo(() => rows.map((r) => {
     const cantidad = Math.max(0, safeNumber(r.cantidad));
-    const precio = Math.max(0, safeNumber(r.precio));
-    const ivaPct = Math.max(0, safeNumber(r.ivaPct));
+    const precio   = Math.max(0, safeNumber(r.precio));
+    const ivaPct   = Math.max(0, safeNumber(r.ivaPct));
     const subtotal = cantidad * precio;
     const ivaMonto = subtotal * (ivaPct / 100);
-    const total = subtotal + ivaMonto;
+    const total    = subtotal + ivaMonto;
     return { ...r, subtotal, ivaMonto, total };
   }), [rows]);
 
   const resumen = useMemo(() => ({
     subtotal: rowsCalc.reduce((a, r) => a + (r.subtotal || 0), 0),
-    iva: rowsCalc.reduce((a, r) => a + (r.ivaMonto || 0), 0),
-    total: rowsCalc.reduce((a, r) => a + (r.total || 0), 0),
+    iva:      rowsCalc.reduce((a, r) => a + (r.ivaMonto || 0), 0),
+    total:    rowsCalc.reduce((a, r) => a + (r.total    || 0), 0),
   }), [rowsCalc]);
 
+  /* tipo de venta */
   const tipoVentaSelected = useMemo(() => {
     const id = Number(filters.id_tipo_venta);
     if (!Number.isFinite(id) || id <= 0) return null;
     return tiposVentaList.find((x) => Number(x?.id ?? x?.id_tipo_venta ?? 0) === id) || null;
   }, [filters.id_tipo_venta, tiposVentaList]);
 
-  const isContado = useMemo(() => isContadoTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
+  const isContado          = useMemo(() => isContadoTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
   const tipoVentaSeleccionado = tipoVentaSelected !== null;
+  /* Es cuenta corriente cuando hay tipo seleccionado pero NO es contado */
+  const isCuentaCorriente  = tipoVentaSeleccionado && !isContado;
 
-  useEffect(() => {
-    if (isContado) return;
-    setMediosFilas([buildEmptyMedioPagoVenta()]);
-  }, [isContado]);
+  useEffect(() => { if (isContado) return; setMediosFilas([buildEmptyMedioPagoVenta()]); }, [isContado]);
 
   const sumaMediosPago = useMemo(() => {
     return mediosFilas.reduce((acc, mp) => {
@@ -552,6 +556,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }, 0);
   }, [mediosFilas, mediosPagoList]);
 
+  /* fiscal */
   const fetchClienteFiscal = useCallback(async (idCliente) => {
     const id = Number(idCliente); if (!Number.isFinite(id) || id <= 0) return null;
     setFiscalLoading(true); setFiscalError(""); setClienteFiscalDb(null); setFiscalArcaData(null);
@@ -583,8 +588,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
   const buscarFiscalEnArcaPorCuit = useCallback(async (cuitRaw) => {
     const cuit = onlyDigits(cuitRaw);
-    setFiscalError("");
-    setFiscalArcaData(null);
+    setFiscalError(""); setFiscalArcaData(null);
     if (cuit.length !== 11) throw new Error("Ingresá un CUIT válido de 11 dígitos.");
     setFiscalLookupLoading(true);
     try {
@@ -610,16 +614,12 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     if (!fiscal.cuit || !fiscal.razon_social) throw new Error("Datos fiscales inválidos.");
     const { idUsuario } = getAuthInfo();
     const saved = await apiPostJson(API_SAVE_CLIENTE_FISCAL, {
-      idUsuario,
-      id_cliente: selectedClienteId,
+      idUsuario, id_cliente: selectedClienteId,
       doc_tipo: Number(fiscal.doc_tipo || 80),
       doc_nro: fiscal.doc_nro || fiscal.cuit,
-      cuit: fiscal.cuit,
-      razon_social: fiscal.razon_social,
-      condicion_iva: fiscal.condicion_iva,
-      domicilio: fiscal.domicilio,
-      origen: fiscal.origen || "arca_cuit",
-      activo: 1,
+      cuit: fiscal.cuit, razon_social: fiscal.razon_social,
+      condicion_iva: fiscal.condicion_iva, domicilio: fiscal.domicilio,
+      origen: fiscal.origen || "arca_cuit", activo: 1,
     });
     if (!saved?.exito || !saved?.cliente_fiscal) throw new Error(saved?.mensaje || "No se pudieron guardar los datos fiscales.");
     const n = normalizeClienteFiscalDb(saved.cliente_fiscal);
@@ -640,15 +640,14 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     return fiscalGuardado;
   }, [selectedClienteId, clienteFiscalDb, fiscalCuitInput, fetchClienteFiscal, buscarFiscalEnArcaPorCuit, guardarClienteFiscal, showToast]);
 
+  /* validación */
   const validate = useCallback(() => {
     const cliTxt = String(cliInput || "").trim();
     if (!(selectedClienteId > 0 || cliTxt.length > 0)) return { ok: false, msg: "Falta seleccionar un Cliente (obligatorio)." };
     const tv = Number(filters.id_tipo_venta); if (!Number.isFinite(tv) || tv <= 0) return { ok: false, msg: "Falta seleccionar la Forma de venta." };
-
     if (isContado) {
       const filasPago = mediosFilas.filter((r) => r.id_medio_pago && r.id_medio_pago !== "");
       if (!filasPago.length) return { ok: false, msg: "Venta contado: configurá al menos un medio de pago." };
-
       for (let i = 0; i < filasPago.length; i++) {
         const mp = filasPago[i];
         const mpRow = mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago ?? ""));
@@ -661,52 +660,36 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           return { ok: false, msg: `Medio de pago ${i + 1}: el monto debe ser mayor a 0.` };
         }
       }
-
       if (sumaMediosPago < resumen.total - 0.05 && resumen.total > 0) {
         return { ok: false, msg: `La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no cubre el total de la venta (${moneyARS(resumen.total)}).` };
       }
     }
-
     const periodoApi = fechaToYYYYMM(fecha); if (!/^\d{4}-\d{2}$/.test(periodoApi)) return { ok: false, msg: "La fecha es inválida." };
     const problems = []; rowsCalc.forEach((r, i) => { const p = describeLineProblem(r, i + 1); if (p) problems.push(p); });
     const usable = rowsCalc.filter((r) => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0);
     if (!usable.length) {
-      if (problems.length) {
-        const msg = problems.slice(0, 2).join(" ");
-        const extra = problems.length > 2 ? ` (y ${problems.length - 2} más)` : "";
-        return { ok: false, msg: `No hay filas válidas. ${msg}${extra}` };
-      }
+      if (problems.length) { const msg = problems.slice(0, 2).join(" "); const extra = problems.length > 2 ? ` (y ${problems.length - 2} más)` : ""; return { ok: false, msg: `No hay filas válidas. ${msg}${extra}` }; }
       return { ok: false, msg: "Cargá al menos 1 fila válida (Detalle + Cantidad + Precio)." };
     }
     return { ok: true, warn: problems.length > 0 };
   }, [cliInput, selectedClienteId, filters, isContado, fecha, rowsCalc, mediosFilas, mediosPagoList, resumen.total, sumaMediosPago]);
 
+  /* payload factura */
   const buildResumenFacturaPayload = useCallback((clienteFiscalResuelto, cfg) => {
     const items = rowsCalc.filter((r) => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0).map((r, i) => ({
-      id: r.id,
-      codigo: String(i + 1),
-      descripcion: safeStr(r.detalleText),
-      cantidad: Number(r.cantidad || 0),
-      unidad: "u",
-      precio_unitario: Number(r.precio || 0),
-      precio: Number(r.precio || 0),
-      bonif_pct: 0,
-      impBonif: 0,
-      subtotal: Number(r.subtotal || 0),
-      ars: Number(r.total || 0),
-      iva_pct: Number(r.ivaPct || 0),
-      iva_monto: Number(r.ivaMonto || 0),
-      total: Number(r.total || 0),
+      id: r.id, codigo: String(i + 1), descripcion: safeStr(r.detalleText),
+      cantidad: Number(r.cantidad || 0), unidad: "u",
+      precio_unitario: Number(r.precio || 0), precio: Number(r.precio || 0),
+      bonif_pct: 0, impBonif: 0,
+      subtotal: Number(r.subtotal || 0), ars: Number(r.total || 0),
+      iva_pct: Number(r.ivaPct || 0), iva_monto: Number(r.ivaMonto || 0), total: Number(r.total || 0),
     }));
-
-    const puntoVenta = Number(String(cfg?.punto_venta || "2").replace(/\D/g, "")) || 2;
-    const codigoCbte = Number(String(cfg?.codigo_comprobante || "11").replace(/\D/g, "")) || 11;
+    const puntoVenta   = Number(String(cfg?.punto_venta          || "2").replace(/\D/g, "")) || 2;
+    const codigoCbte   = Number(String(cfg?.codigo_comprobante   || "11").replace(/\D/g, "")) || 11;
     const mediosPayload = buildMediosPagoPayload(mediosFilas, mediosPagoList);
     const primerMedioId = mediosPayload[0]?.id_medio_pago || null;
-
     return {
-      id_pago: null,
-      id_sistema: null,
+      id_pago: null, id_sistema: null,
       labelCliente: selectedClienteNombre || "Cliente",
       labelSistema: "Nueva venta",
       cliente_facturacion: {
@@ -725,12 +708,9 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       id_clasificacion: null,
       fecha_cbte_iso: String(fecha || todayISO()).slice(0, 10),
       vto_pago_iso: plusDaysISOFrom(fecha || todayISO(), 10),
-      cbte_tipo: codigoCbte,
-      pto_vta: puntoVenta,
+      cbte_tipo: codigoCbte, pto_vta: puntoVenta,
       items_facturacion: items,
-      total_ars: Number(resumen.total || 0),
-      monto: Number(resumen.total || 0),
-      importe: Number(resumen.total || 0),
+      total_ars: Number(resumen.total || 0), monto: Number(resumen.total || 0), importe: Number(resumen.total || 0),
       observaciones: "",
       emisor_nombre: safeStr(cfg?.razon_social || cfg?.nombre_fantasia || "BALTO"),
       emisor_domicilio: safeStr(cfg?.domicilio_comercial),
@@ -742,6 +722,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     };
   }, [rowsCalc, mediosFilas, mediosPagoList, selectedClienteNombre, selectedClienteId, filters.id_tipo_venta, fecha, isContado, resumen.total]);
 
+  /* cheques con archivo */
   const actualizarChequeConArchivo = useCallback(async ({ idCheque, idMovimiento, cheque }) => {
     if (!(cheque?.archivo instanceof File)) return null;
     const fd = new FormData();
@@ -758,12 +739,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     fd.append("fecha_pago", String(cheque?.fecha_pago || todayISO()).slice(0, 10));
     fd.append("observaciones", String(cheque?.observaciones || "").trim());
     fd.append("archivo", cheque.archivo, cheque.archivo_nombre || cheque.archivo.name || "adjunto");
-
-    const res = await fetch(API_CHEQUES_ACTUALIZAR, {
-      method: "POST",
-      headers: buildAuthHeaders(false),
-      body: fd,
-    });
+    const res = await fetch(API_CHEQUES_ACTUALIZAR, { method: "POST", headers: buildAuthHeaders(false), body: fd });
     const data = await parseJsonOrThrow(res);
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo adjuntar el archivo del cheque.");
     return data;
@@ -773,39 +749,26 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     const warnings = [];
     const creados = Array.isArray(info?.cheques_creados) ? info.cheques_creados : [];
     if (!creados.length) return warnings;
-
     const filasCheque = mediosFilas.filter((mp) => mp?.cheque && mp.cheque.archivo instanceof File);
     for (const mp of filasCheque) {
       const backendCheque = creados.find((x) => String(x?.frontend_row_uid || "") === String(mp.id));
-      if (!backendCheque?.id_cheque || !backendCheque?.id_movimiento) {
-        warnings.push(`No se pudo vincular el archivo del cheque ${mp?.cheque?.numero_cheque || ""}.`);
-        continue;
-      }
-      try {
-        await actualizarChequeConArchivo({
-          idCheque: backendCheque.id_cheque,
-          idMovimiento: backendCheque.id_movimiento,
-          cheque: mp.cheque,
-        });
-      } catch (e) {
-        warnings.push(e?.message || `No se pudo adjuntar el archivo del cheque ${mp?.cheque?.numero_cheque || ""}.`);
-      }
+      if (!backendCheque?.id_cheque || !backendCheque?.id_movimiento) { warnings.push(`No se pudo vincular el archivo del cheque ${mp?.cheque?.numero_cheque || ""}.`); continue; }
+      try { await actualizarChequeConArchivo({ idCheque: backendCheque.id_cheque, idMovimiento: backendCheque.id_movimiento, cheque: mp.cheque }); }
+      catch (e) { warnings.push(e?.message || `No se pudo adjuntar el archivo del cheque ${mp?.cheque?.numero_cheque || ""}.`); }
     }
     return warnings;
   }, [mediosFilas, actualizarChequeConArchivo]);
 
+  /* guardar batch */
   const guardarVentaBatch = useCallback(async ({ clienteFiscalResuelto = null, accionFinal = "guardar", esFacturadaFinal = false }) => {
     const { idUsuario } = getAuthInfo();
-    const periodoApi = fechaToYYYYMM(fecha);
+    const periodoApi    = fechaToYYYYMM(fecha);
     const mediosPayload = buildMediosPagoPayload(mediosFilas, mediosPagoList);
     const primerMedioId = isContado ? (mediosPayload[0]?.id_medio_pago || null) : null;
-
     const payloads = rowsCalc
       .filter((r) => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0)
       .map((r) => ({
-        idUsuario,
-        fecha,
-        periodo: periodoApi,
+        idUsuario, fecha, periodo: periodoApi,
         id_cliente: selectedClienteId > 0 ? selectedClienteId : null,
         cliente_nombre: selectedClienteNombre || null,
         id_tipo_venta: Number(filters.id_tipo_venta),
@@ -813,98 +776,54 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         id_cuenta_corriente: null,
         id_detalle: Number(r.id_detalle),
         cantidad: Math.round(Number(r.cantidad) * 100) / 100,
-        precio: Math.round(Number(r.precio) * 100) / 100,
-        iva_pct: Math.round(Number(r.ivaPct) * 100) / 100,
+        precio:   Math.round(Number(r.precio)   * 100) / 100,
+        iva_pct:  Math.round(Number(r.ivaPct)   * 100) / 100,
         subtotal: Math.round(Number(r.subtotal) * 100) / 100,
-        iva_monto: Math.round(Number(r.ivaMonto) * 100) / 100,
-        total: Math.round(Number(r.total) * 100) / 100,
+        iva_monto:Math.round(Number(r.ivaMonto) * 100) / 100,
+        total:    Math.round(Number(r.total)    * 100) / 100,
         monto_total: Math.round(Number(r.total) * 100) / 100,
         accion_venta: accionFinal,
         es_facturada: esFacturadaFinal,
         cliente_fiscal: esFacturadaFinal ? clienteFiscalResuelto : null,
       }));
-
     if (!payloads.length) throw new Error("No hay filas válidas para guardar.");
-
-    const data = await apiPostJson(API_BATCH, {
-      idUsuario,
-      items: payloads,
-      medios_pago: isContado ? mediosPayload : [],
-    });
-
+    const data = await apiPostJson(API_BATCH, { idUsuario, items: payloads, medios_pago: isContado ? mediosPayload : [] });
     if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar el batch de ventas.");
-
-    return {
-      ...data,
-      periodoApi,
-      fecha,
-      cliente_fiscal: clienteFiscalResuelto,
-      cliente_id: selectedClienteId || null,
-      cliente_nombre: selectedClienteNombre,
-      accion_venta: accionFinal,
-      es_facturada: esFacturadaFinal,
-    };
+    return { ...data, periodoApi, fecha, cliente_fiscal: clienteFiscalResuelto, cliente_id: selectedClienteId || null, cliente_nombre: selectedClienteNombre, accion_venta: accionFinal, es_facturada: esFacturadaFinal };
   }, [API_BATCH, fecha, mediosFilas, mediosPagoList, rowsCalc, selectedClienteId, selectedClienteNombre, filters, isContado]);
 
+  /* subir comprobante */
   const subirComprobanteYVincularPrimerMovimiento = useCallback(async ({ idMovimiento, blob, filename, facturaMeta }) => {
     if (!idMovimiento || !blob) throw new Error("Faltan datos para subir el comprobante.");
-
     const fd = new FormData();
     fd.append("tipo", "FACTURA");
     fd.append("id_movimiento", String(idMovimiento));
     fd.append("pdf", blob instanceof Blob ? blob : new Blob([blob], { type: "application/pdf" }), filename || "factura.pdf");
-
     const emitidoEnArca = Number(facturaMeta?.emitido_en_arca || 0) === 1;
-
     const meta = {
-      tipo: "FACTURA",
-      estado: emitidoEnArca ? "emitida" : "solo_pdf",
-      emitido_en_arca: emitidoEnArca ? 1 : 0,
-      id_pago: facturaMeta?.id_pago ?? null,
-      id_sistema: facturaMeta?.id_sistema ?? null,
-      anio: Number(facturaMeta?.anio || 0),
-      id_mes: Number(facturaMeta?.id_mes || 0),
+      tipo: "FACTURA", estado: emitidoEnArca ? "emitida" : "solo_pdf", emitido_en_arca: emitidoEnArca ? 1 : 0,
+      id_pago: facturaMeta?.id_pago ?? null, id_sistema: facturaMeta?.id_sistema ?? null,
+      anio: Number(facturaMeta?.anio || 0), id_mes: Number(facturaMeta?.id_mes || 0),
       monto_ars: Number(facturaMeta?.imp_total ?? facturaMeta?.importe ?? resumen.total ?? 0),
       doc_tipo: Number(facturaMeta?.doc_tipo ?? resumenFacturaData?.cliente_facturacion?.doc_tipo ?? 80),
-      doc_nro: safeStr(
-        facturaMeta?.doc_nro ??
-        resumenFacturaData?.cliente_facturacion?.doc_nro ??
-        resumenFacturaData?.cliente_facturacion?.cuit ??
-        ""
-      ),
+      doc_nro: safeStr(facturaMeta?.doc_nro ?? resumenFacturaData?.cliente_facturacion?.doc_nro ?? resumenFacturaData?.cliente_facturacion?.cuit ?? ""),
       cbte_tipo: Number(facturaMeta?.cbte_tipo || resumenFacturaData?.cbte_tipo || 11),
       pto_vta: Number(facturaMeta?.pto_vta || resumenFacturaData?.pto_vta || 2),
       cbte_nro: facturaMeta?.cbte_nro ?? null,
       razon_social: resumenFacturaData?.cliente_facturacion?.razon_social || null,
-      cond_iva: resumenFacturaData?.cliente_facturacion?.cond_iva ||
-        resumenFacturaData?.cliente_facturacion?.condicion_iva ||
-        null,
+      cond_iva: resumenFacturaData?.cliente_facturacion?.cond_iva || resumenFacturaData?.cliente_facturacion?.condicion_iva || null,
       domicilio: resumenFacturaData?.cliente_facturacion?.domicilio || null,
-      cae: emitidoEnArca ? (facturaMeta?.cae ?? null) : null,
-      cae_vto: emitidoEnArca ? (facturaMeta?.cae_vto ?? null) : null,
+      cae: emitidoEnArca ? (facturaMeta?.cae ?? null) : null, cae_vto: emitidoEnArca ? (facturaMeta?.cae_vto ?? null) : null,
       fecha_cbte: facturaMeta?.fecha_cbte ?? resumenFacturaData?.fecha_cbte_iso ?? null,
       resultado: facturaMeta?.resultado ?? (emitidoEnArca ? null : "P"),
       qr_url: emitidoEnArca ? (facturaMeta?.qr_url ?? null) : null,
       qr_base64: emitidoEnArca ? (facturaMeta?.qr_base64 ?? null) : null,
       qr_payload: emitidoEnArca ? (facturaMeta?.qr_payload ?? null) : null,
-      json_arca: emitidoEnArca
-        ? (facturaMeta?.json_arca ?? facturaMeta?.raw_min ?? facturaMeta ?? null)
-        : (facturaMeta ?? null),
-      resumen_facturacion: {
-        ...resumenFacturaData,
-        items_facturacion: Array.isArray(resumenFacturaData?.items_facturacion)
-          ? resumenFacturaData.items_facturacion
-          : [],
-      },
+      json_arca: emitidoEnArca ? (facturaMeta?.json_arca ?? facturaMeta?.raw_min ?? facturaMeta ?? null) : (facturaMeta ?? null),
+      resumen_facturacion: { ...resumenFacturaData, items_facturacion: Array.isArray(resumenFacturaData?.items_facturacion) ? resumenFacturaData.items_facturacion : [] },
     };
-
     fd.append("meta", JSON.stringify(meta));
-
-    const res = await fetch(API_VINCULAR_COMPROBANTE, {
-      method: "POST",
-      body: fd,
-      headers: buildAuthHeaders(false),
-    });
+    const res = await fetch(API_VINCULAR_COMPROBANTE, { method: "POST", body: fd, headers: buildAuthHeaders(false) });
     const j = await parseJsonOrThrow(res);
     if (!j?.exito) throw new Error(j?.mensaje || "No se pudo subir el comprobante.");
     return j;
@@ -921,13 +840,14 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     return data;
   }, [API_VINCULAR_COMPROBANTE_LOTE]);
 
+  /* abrir resumen factura */
   const abrirResumenFactura = useCallback(async () => {
     const v = validate();
     if (!v.ok) { showToast("advertencia", v.msg || "Faltan datos.", 4200); return; }
     if (v.warn) showToast("advertencia", "Hay filas incompletas: se mostrarán solo las válidas.", 3200);
     setSaving(true);
     try {
-      const cf = await resolveFiscalForFacturacion();
+      const cf  = await resolveFiscalForFacturacion();
       const cfg = configFacturacion || (await fetchConfigFacturacion());
       setResumenFacturaData(buildResumenFacturaPayload(cf, cfg));
       setOpenResumenFactura(true);
@@ -938,39 +858,26 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }
   }, [validate, showToast, resolveFiscalForFacturacion, configFacturacion, fetchConfigFacturacion, buildResumenFacturaPayload]);
 
+  /* finalizar facturación */
   const finalizarFacturacionYGuardarVenta = useCallback(async (factEmitida) => {
     try {
       setSaving(true);
-      const cf = normalizeClienteFiscalDb(resumenFacturaData?.cliente_facturacion || clienteFiscalDb || fiscalArcaData || {});
+      const cf   = normalizeClienteFiscalDb(resumenFacturaData?.cliente_facturacion || clienteFiscalDb || fiscalArcaData || {});
       const info = await guardarVentaBatch({ clienteFiscalResuelto: cf, accionFinal: "facturar", esFacturadaFinal: true });
-
       const idsOk = (Array.isArray(info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
         ? (info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
         : (info?.id_movimiento ? [info.id_movimiento] : []))
-        .map((x) => Number(x))
-        .filter((x) => Number.isFinite(x) && x > 0);
-
+        .map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0);
       if (!idsOk.length) throw new Error("La venta se emitió pero no se devolvieron movimientos para vincular la factura.");
       if (!factEmitida?.pdf_blob) throw new Error("La venta se emitió pero no se recibió el PDF para guardarlo.");
-
-      const subida = await subirComprobanteYVincularPrimerMovimiento({
-        idMovimiento: idsOk[0],
-        blob: factEmitida.pdf_blob,
-        filename: factEmitida.pdf_filename || "factura.pdf",
-        facturaMeta: factEmitida,
-      });
-
+      const subida = await subirComprobanteYVincularPrimerMovimiento({ idMovimiento: idsOk[0], blob: factEmitida.pdf_blob, filename: factEmitida.pdf_filename || "factura.pdf", facturaMeta: factEmitida });
       const idComprobante = Number(subida?.id_comprobante ?? subida?.comprobante?.id_comprobante ?? 0) || null;
       if (!idComprobante) throw new Error("El backend no devolvió un id_comprobante válido al subir la factura.");
-
       const restoIds = idsOk.slice(1);
       if (restoIds.length > 0) await vincularComprobanteAMovimientosLote(restoIds, idComprobante);
-
       const chequeWarnings = await subirArchivosChequesCreados(info);
-
       showToast("exito", "Venta agregada correctamente.", 3000);
       if (chequeWarnings.length) showToast("advertencia", chequeWarnings.join(" "), 5200);
-
       onSaved?.({ ...info, factura_emitida: factEmitida || null, id_comprobante: idComprobante });
     } catch (e) {
       showToast("error", e?.message || "La factura se emitió pero no se pudo guardar la venta.", 5200);
@@ -979,6 +886,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }
   }, [showToast, guardarVentaBatch, resumenFacturaData, clienteFiscalDb, fiscalArcaData, onSaved, subirComprobanteYVincularPrimerMovimiento, vincularComprobanteAMovimientosLote, subirArchivosChequesCreados]);
 
+  /* submit guardar */
   const submit = useCallback(async () => {
     if (saving) return;
     const { sessionKey } = getAuthInfo();
@@ -1002,6 +910,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }
   }, [saving, addUI.open, validate, showToast, tipoVentaSeleccionado, accionContado, guardarVentaBatch, onSaved, abrirResumenFactura, subirArchivosChequesCreados]);
 
+  /* facturar */
   const onClickFacturar = useCallback(async () => {
     setAccionContado("facturar");
     setFiscalError("");
@@ -1020,20 +929,43 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   }, [selectedClienteId, clienteFiscalDb, fiscalCuitInput, fetchClienteFiscal, abrirResumenFactura, showToast]);
 
   const shouldNeedFiscalPanel = open && accionContado === "facturar" && !clienteFiscalDb && selectedClienteId > 0;
+
   if (!open) return null;
 
+  /* ============================================================
+     RENDER
+  ============================================================ */
   return createPortal(
     <>
       <div className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim()}>
-        <div className={["mi-modal__container", "mi-modal__container--mov", dark ? "mi-modal--dark" : ""].join(" ").trim()} role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
+        <div
+          className={["mi-modal__container", "mi-modal__container--mov", dark ? "mi-modal--dark" : ""].join(" ").trim()}
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {/* HEADER */}
           <div className="mi-modal__header">
-            <div className="mi-modal__head-icon" aria-hidden="true"><FontAwesomeIcon icon={faFileInvoiceDollar} /></div>
-            <div className="mi-modal__head-left"><h2 className="mi-modal__title">Nueva Venta</h2></div>
-            <button ref={closeBtnRef} className="mi-modal__close" onClick={() => (!saving ? onClose?.() : null)} aria-label="Cerrar" disabled={saving} type="button">✕</button>
+            <div className="mi-modal__head-icon" aria-hidden="true">
+              <FontAwesomeIcon icon={faFileInvoiceDollar} />
+            </div>
+            <div className="mi-modal__head-left">
+              <h2 className="mi-modal__title">Nueva Venta</h2>
+            </div>
+            <button
+              ref={closeBtnRef}
+              className="mi-modal__close"
+              onClick={() => (!saving ? onClose?.() : null)}
+              aria-label="Cerrar"
+              disabled={saving}
+              type="button"
+            >✕</button>
           </div>
 
           <div className="mi-modal__content">
             <div className="mi-cr-grid">
+
+              {/* ── TABLA DE PRODUCTOS ── */}
               <section className="mi-cr-table">
                 <div className="mi-cr-table__head">
                   <div style={{ paddingLeft: 10 }}>Detalle</div>
@@ -1047,7 +979,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
                 <div ref={rowsContainerRef} className={`mi-cr-table__rows ${hasScroll ? "has-scroll" : ""}`}>
                   {rowsCalc.map((r) => {
-                    const stockNum = r.stock_disponible !== null && r.stock_disponible !== undefined ? Number(r.stock_disponible) : null;
+                    const stockNum    = r.stock_disponible !== null && r.stock_disponible !== undefined ? Number(r.stock_disponible) : null;
                     const rowSinStock = r.sinStock || isSinStock(stockNum);
                     return (
                       <div key={r.id} className={`mi-cr-row ${rowSinStock ? "mi-cr-row--sin-stock" : ""}`}>
@@ -1115,7 +1047,6 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                     </button>
                     <div className="nv-foot-sep" />
                   </div>
-
                   <div className="mi-cr-totals">
                     <div className="mi-cr-totalLine mi-cr-totalLine--sub"><span>Subtotal</span><b>{moneyARS(resumen.subtotal)}</b></div>
                     <div className="mi-cr-totalLine mi-cr-totalLine--iva"><span>IVA</span><b>{moneyARS(resumen.iva)}</b></div>
@@ -1124,79 +1055,140 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                 </div>
               </section>
 
-              <aside className="mi-cr-filters">
-                <div className="mi-cr-filters__top">
-                  <div className="mi-cr-filters__title">Datos de venta</div>
-                  <div className="mi-cr-filters__dates">
-                    <div className="fl-field fl-col-full mi-date-field">
-                      <input id="nv-fecha-input" className="fl-input" type="date" placeholder=" " value={fecha} onChange={(e) => setFecha(String(e.target.value || "").trim())} disabled={saving} />
-                      <label className="fl-label">Fecha</label>
+              {/* ── PANEL LATERAL — mismo estilo que Nueva Compra ── */}
+              <aside className="nc-aside">
+
+                {/* Datos de venta */}
+                <div className="nc-section">
+                  <div className="nc-section-head">
+                    <div className="nc-section-dot" />
+                    <span>Datos de venta</span>
+                  </div>
+                  <div className="nc-section-body">
+
+                    {/* Fecha */}
+                    <div className="nc-field" onClick={() => fechaInputRef.current?.showPicker?.()}>
+                      <input
+                        ref={fechaInputRef}
+                        id="nv-fecha-input"
+                        className="nc-input"
+                        type="date"
+                        placeholder=" "
+                        value={fecha}
+                        onChange={(e) => setFecha(String(e.target.value || "").trim())}
+                        disabled={saving}
+                      />
+                      <label className="nc-label">Fecha</label>
                     </div>
+
+                    {/* Cliente */}
+                    <div className="nc-prov-wrap">
+                      <GlobalAutocomplete
+                        value={cliInput}
+                        onChange={handleClienteInputChange}
+                        onSelect={handleSelectCliente}
+                        options={clientesList}
+                        getOptionLabel={(c) => String(c?.nombre ?? "").trim()}
+                        getOptionValue={(c) => String(getClienteId(c) ?? c?.nombre ?? "")}
+                        label="Cliente *"
+                        placeholder=" "
+                        disabled={saving || addUI.open}
+                        showAllOnFocus={true}
+                        maxItems={25}
+                        inputClassName="nc-input"
+                      />
+                    </div>
+
+                    {/* Botón nuevo cliente */}
+
+
+                    {/* Forma de venta — pills */}
+                    <div>
+                      <div className="nc-pill-label">Forma de venta *</div>
+                      <div className="nc-pills">
+                        {tiposVentaList.map((x) => {
+                          const id = String(x.id ?? x.id_tipo_venta);
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              className={`nc-pill${String(filters.id_tipo_venta) === id ? " nc-pill--active" : ""}`}
+                              onClick={() => updateFilter("id_tipo_venta", id)}
+                              disabled={saving}
+                            >
+                              {x.nombre?.toLowerCase()}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                   </div>
                 </div>
 
-                <div className="mi-cr-filters__body">
-                  <div className="fl-field mi-cr-rel">
-                    <GlobalAutocomplete
-                      value={cliInput}
-                      onChange={handleClienteInputChange}
-                      onSelect={handleSelectCliente}
-                      options={clientesList}
-                      getOptionLabel={(c) => String(c?.nombre ?? "").trim()}
-                      getOptionValue={(c) => String(getClienteId(c) ?? c?.nombre ?? "")}
-                      label="Cliente *"
-                      placeholder=" "
-                      disabled={saving || addUI.open}
-                      showAllOnFocus={true}
-                      maxItems={25}
-                      inputClassName="fl-input"
-                    />
+                {/* Medios de pago — solo si es contado */}
+                {isContado && (
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" style={{ background: "#0f766e" }} />
+                      <span>Medios de pago</span>
+                    </div>
+                    <div className="nc-section-body" style={{ padding: 0 }}>
+                      <PanelMediosPagoInlineVenta
+                        mediosFilas={mediosFilas}
+                        mediosPagoList={mediosPagoList}
+                        totalCompra={resumen.total}
+                        onUpdate={updateMedioPago}
+                        onRemove={removeMedioPago}
+                        onAdd={addMedioPago}
+                        showToast={showToast}
+                        saving={saving}
+                      />
+                    </div>
                   </div>
+                )}
 
-                  <div className="fl-field">
-                    <select className="fl-input fl-select" value={String(filters.id_tipo_venta)} onChange={(e) => updateFilter("id_tipo_venta", e.target.value)} disabled={saving}>
-                      <option value={NULL_OPTION}>Seleccionar...</option>
-                      {tiposVentaList.map((x) => (
-                        <option key={x.id ?? x.id_tipo_venta} value={String(x.id ?? x.id_tipo_venta)}>{x.nombre}</option>
-                      ))}
-                    </select>
-                    <label className="fl-label">Forma de venta *</label>
-                  </div>
-
-                  {isContado && (
-                    <div className="nc-section" style={{ marginTop: 14 }}>
-                      <div className="nc-section-head">
-                        <div className="nc-section-dot" style={{ background: "#0f766e" }} />
-                        <span>Medios de pago</span>
-                      </div>
-                      <div className="nc-section-body">
-                        <PanelMediosPagoInlineVenta
-                          mediosFilas={mediosFilas}
-                          mediosPagoList={mediosPagoList}
-                          totalCompra={resumen.total}
-                          onUpdate={updateMedioPago}
-                          onRemove={removeMedioPago}
-                          onAdd={addMedioPago}
-                          showToast={showToast}
-                          saving={saving}
-                        />
+                {/* Aviso cuenta corriente — cuando hay tipo seleccionado y NO es contado */}
+                {isCuentaCorriente && (
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" style={{ background: "#d97706" }} />
+                      <span>Cuenta Corriente</span>
+                    </div>
+                    <div className="nc-section-body">
+                      <div className="nc-cc-info">
+                        Quedará registrada como <b>pendiente de cobro</b> en la cuenta corriente del cliente.
                       </div>
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {shouldNeedFiscalPanel && (
-                    <div className="mi-card mi-card--full">
-                      <div className="mi-card__title">Datos fiscales</div>
+                {/* Datos fiscales — solo cuando se necesita CUIT para facturar */}
+                {shouldNeedFiscalPanel && (
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" style={{ background: "#0055BB" }} />
+                      <span>Datos fiscales</span>
+                    </div>
+                    <div className="nc-section-body">
                       {fiscalLoading ? (
-                        <div className="mi-card__hint">Consultando datos fiscales…</div>
+                        <div className="nc-mp-cheques-loading">Consultando datos fiscales…</div>
                       ) : (
                         <>
-                          <div className="fl-field Margen-top">
-                            <input className="fl-input" placeholder=" " value={fiscalCuitInput} onChange={(e) => { setFiscalCuitInput(onlyDigits(e.target.value)); setFiscalArcaData(null); setFiscalError(""); }} inputMode="numeric" disabled={saving || fiscalLookupLoading} maxLength={11} />
-                            <label className="fl-label">CUIT *</label>
+                          <div className="nc-field">
+                            <input
+                              className="nc-input"
+                              placeholder=" "
+                              value={fiscalCuitInput}
+                              onChange={(e) => { setFiscalCuitInput(onlyDigits(e.target.value)); setFiscalArcaData(null); setFiscalError(""); }}
+                              inputMode="numeric"
+                              disabled={saving || fiscalLookupLoading}
+                              maxLength={11}
+                            />
+                            <label className="nc-label">CUIT *</label>
                           </div>
                           {fiscalArcaData && (
-                            <div className="arca-alert arca-alert--info" style={{ marginTop: 8 }}>
+                            <div className="arca-alert arca-alert--info">
                               <div className="arca-alert__title">Datos encontrados</div>
                               <div className="arca-resumen">
                                 <div className="arca-row"><b>CUIT:</b><span>{fiscalArcaData.cuit || "—"}</span></div>
@@ -1206,26 +1198,40 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                               </div>
                             </div>
                           )}
-                          {fiscalError && <div className="arca-alert arca-alert--error" style={{ marginTop: 8 }}>{fiscalError}</div>}
+                          {fiscalError && (
+                            <div className="arca-alert arca-alert--error">{fiscalError}</div>
+                          )}
                         </>
                       )}
                     </div>
-                  )}
-
-                  <div className="mi-cr-filters__actions">
-                    <button type="button" onClick={submit} disabled={saving} className="mit-btn mit-btn--solid mit-btn--block">
-                      {saving && accionContado === "guardar" ? "Procesando..." : "Guardar venta"}
-                    </button>
-                    <button type="button" onClick={onClickFacturar} disabled={saving} className="mit-btn mit-btn--ghost mit-btn--block">
-                      {saving && accionContado === "facturar" ? "Procesando..." : "Facturar"}
-                    </button>
                   </div>
+                )}
+
+                {/* Acciones */}
+                <div className="nc-actions mi-cr-filters__actions">
+                  <button
+                    type="button"
+                    onClick={submit}
+                    disabled={saving}
+                    className="mit-btn mit-btn--solid mit-btn--block"
+                  >
+                    {saving && accionContado === "guardar" ? "Procesando..." : "Guardar venta"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClickFacturar}
+                    disabled={saving}
+                    className="mit-btn mit-btn--ghost mit-btn--block"
+                  >
+                    {saving && accionContado === "facturar" ? "Procesando..." : "Facturar"}
+                  </button>
                 </div>
+
               </aside>
             </div>
           </div>
 
-          <AddCatalogMiniModal open={addUI.open} title={addUI.kind === "clientes" ? "Nuevo cliente" : "Nuevo detalle"} value={addUI.text} saving={addUI.saving} onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))} onCancel={closeAddMini} onSave={guardarNuevoCatalogo} dark={dark} />
+
         </div>
       </div>
 
@@ -1239,10 +1245,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           action="movimientos"
           data={resumenFacturaData}
           docTipo={Number(resumenFacturaData?.cliente_facturacion?.doc_tipo || 80)}
-          docNro={safeStr(
-            resumenFacturaData?.cliente_facturacion?.doc_nro ||
-            resumenFacturaData?.cliente_facturacion?.cuit
-          )}
+          docNro={safeStr(resumenFacturaData?.cliente_facturacion?.doc_nro || resumenFacturaData?.cliente_facturacion?.cuit)}
           cbteTipo={Number(resumenFacturaData?.cbte_tipo || 11)}
           ptoVta={String(resumenFacturaData?.pto_vta || 2)}
           onFacturada={async (fact) => await finalizarFacturacionYGuardarVenta(fact)}

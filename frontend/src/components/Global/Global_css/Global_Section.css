@@ -232,7 +232,6 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
   border: 1px solid var(--mov-border);
   border-radius: var(--mov-radius);
   box-shadow: var(--mov-shadow-md);
-  overflow: hidden;
 }
 
 .mov-card--table{

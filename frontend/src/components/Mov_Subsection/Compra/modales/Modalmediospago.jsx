@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+
+import "../../../Global/Global_css/roots.css";
 import {
   faMoneyCheckDollar,
   faPlus,

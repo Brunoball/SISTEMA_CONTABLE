@@ -9,6 +9,7 @@ import ModalNuevaDescripcion from "./ModalNuevaDescripcion.jsx";
 import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import "../../../Global/Global_css/Global_Modals.css";
 import "../../../Global/Global_css/Global_responsive.css";
+import "../../../Global/Global_css/roots.css";
 
 const NULL_OPTION = "";
 const IVA_OPTIONS = [{ label: "0 %", value: 0 }, { label: "10,5 %", value: 10.5 }, { label: "21 %", value: 21 }];

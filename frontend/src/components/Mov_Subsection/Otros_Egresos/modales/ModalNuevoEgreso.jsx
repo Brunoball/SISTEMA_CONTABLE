@@ -18,6 +18,7 @@ import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerCompro
 // ── Usa el MISMO CSS que Nueva Compra ──
 import "../../../Global/Global_css/Global_Modals.css";
 import "../../../Global/Global_css/Global_responsive.css";
+import "../../../Global/Global_css/roots.css";
 // Clases extra exclusivas del egreso (medios de pago inline, etc.)
 import "./ModalNuevoEgreso_extra.css";
 

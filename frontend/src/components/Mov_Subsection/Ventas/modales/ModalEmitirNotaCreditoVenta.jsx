@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import BASE_URL from "../../../../config/config.jsx";
 import ModalFacturaBaltoResumen from "../../Facturacion/ModalFacturaBaltoResumen.jsx";
 import { saveNotaCreditoPdf } from "../../../../utils/NotaCreditoPdfBuilder.js";
+import "../../../Global/Global_css/roots.css";
 
 function todayISO() {
   const d = new Date();

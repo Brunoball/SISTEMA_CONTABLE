@@ -1,5 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
+import "../../../Global/Global_css/roots.css";
 
 export default function ModalEliminarVenta({
   open,

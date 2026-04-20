@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
 import "../../../Global/Global_css/Global_responsive.css";
+import "../../../Global/Global_css/roots.css";
 import "./ModalPagarRecibos.css";
 import BASE_URL from "../../../../config/config";
 

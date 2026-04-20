@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import "../../../Global/Global_css/roots.css";
 
 export default function ModalNuevaDescripcion({ open, onClose, onSave, dark }) {
   const [nombre, setNombre] = useState("");

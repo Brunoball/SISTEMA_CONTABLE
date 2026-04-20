@@ -3,11 +3,7 @@
    El componente hereda mov-page, mov-card, mov-gridTable, etc. de movimientos.css
    ─────────────────────────────────────────────────────────────────────────── */
 
-/* Limitar altura tabla (AF tiene pocas filas, no necesita tanto scroll) */
-.mov-tableWrap--af {
-  max-height: 420px;
-  min-height: 120px;
-}
+
 
 /* ── Fila resaltada (Resultado Neto) ── */
 .af-row--resultado {
@@ -38,7 +34,6 @@
   display: flex;
   gap: 14px;
   padding: 16px 20px;
-  border-top: 1px solid var(--mov-border, rgba(10,37,64,.12));
   background: color-mix(in srgb, var(--balto-bg, #F6F9FC) 55%, #fff);
   flex-wrap: wrap;
 }
@@ -173,6 +168,7 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+  padding: 0 20px;
 }
 
 .af-sectionTitle {
@@ -257,4 +253,529 @@
   .af-dispoGrid {
     grid-template-columns: 1fr;
   }
+}/* =========================
+   Detalle sin tabla
+========================= */
+.af-breakdownSection {
+  margin-top: 6px;
+}
+
+.af-sectionHead--breakdown {
+  margin-bottom: 14px;
+}
+
+.af-sectionTitle--light {
+  color: var(--balto-ink);
+}
+
+.af-breakdownGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.af-breakCard {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  padding: 18px;
+  min-height: 138px;
+  background: #fff;
+  border: 1px solid var(--mov-border, rgba(10, 37, 64, 0.12));
+  box-shadow: 0 10px 26px -20px rgba(10, 37, 64, 0.24);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.af-breakCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px -24px rgba(10, 37, 64, 0.3);
+}
+
+.af-breakCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  border-radius: 18px 0 0 18px;
+  background: linear-gradient(180deg, rgba(10, 37, 64, 0.22) 0%, rgba(0, 85, 187, 0.3) 100%);
+}
+
+.af-breakCard--ingreso::before {
+  background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+}
+
+.af-breakCard--egreso::before {
+  background: linear-gradient(180deg, #fb7185 0%, #dc2626 100%);
+}
+
+.af-breakCard__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.af-breakCard__label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--balto-text);
+  line-height: 1.35;
+}
+
+.af-breakCard__badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(10, 37, 64, 0.06);
+  color: var(--balto-ink);
+  border: 1px solid rgba(10, 37, 64, 0.1);
+}
+
+.af-breakCard__badge--ingreso {
+  background: rgba(34, 197, 94, 0.1);
+  color: #15803d;
+  border-color: rgba(34, 197, 94, 0.18);
+}
+
+.af-breakCard__badge--egreso {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+  border-color: rgba(239, 68, 68, 0.18);
+}
+
+.af-breakCard__value {
+  font-size: clamp(1.25rem, 1.7vw, 1.8rem);
+  line-height: 1.08;
+  font-weight: 720;
+  color: var(--balto-ink);
+  margin-bottom: 10px;
+  letter-spacing: -0.02em;
+}
+
+.af-breakCard__value--ingreso {
+  color: #15803d;
+}
+
+.af-breakCard__value--egreso {
+  color: #b91c1c;
+}
+
+.af-breakCard__sub {
+  font-size: 0.9rem;
+  color: var(--mov-muted);
+  line-height: 1.35;
+  font-weight: 430;
+}
+
+.af-breakCard--skeleton {
+  min-height: 138px;
+  pointer-events: none;
+}
+
+.af-emptyBlock {
+  margin-top: 4px;
+  border: 1px dashed rgba(10, 37, 64, 0.14);
+  border-radius: 16px;
+  background: rgba(246, 249, 252, 0.75);
+}
+
+/* =========================
+   Ajustes resumen superior
+========================= */
+.af-summaryGrid {
+  margin: 16px 0 14px;
+}
+
+.af-summaryCard {
+  min-height: 128px;
+}
+
+/* =========================
+   Disponibilidades
+========================= */
+.af-dispoSection {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--mov-border, rgba(10, 37, 64, 0.12));
+}
+
+/* =========================
+   Responsive
+========================= */
+
+
+@media (max-width: 760px) {
+  .af-summaryGrid,
+  .af-breakdownGrid,
+  .af-dispoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .af-breakCard__top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .af-sectionHead {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* =========================
+   Dark mode
+========================= */
+html[data-theme="oscuro"] .af-sectionTitle--light {
+  color: rgba(226, 232, 240, 0.92);
+}
+
+html[data-theme="oscuro"] .af-breakCard {
+  background: rgba(15, 23, 42, 0.68);
+  border-color: rgba(148, 163, 184, 0.16);
+  box-shadow: 0 16px 34px -24px rgba(0, 0, 0, 0.52);
+}
+
+html[data-theme="oscuro"] .af-breakCard__label {
+  color: rgba(226, 232, 240, 0.72);
+}
+
+html[data-theme="oscuro"] .af-breakCard__value {
+  color: rgba(255, 255, 255, 0.94);
+}
+
+html[data-theme="oscuro"] .af-breakCard__value--ingreso {
+  color: #4ade80;
+}
+
+html[data-theme="oscuro"] .af-breakCard__value--egreso {
+  color: #fb7185;
+}
+
+html[data-theme="oscuro"] .af-breakCard__sub {
+  color: rgba(226, 232, 240, 0.55);
+}
+
+html[data-theme="oscuro"] .af-breakCard__badge {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(226, 232, 240, 0.92);
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+html[data-theme="oscuro"] .af-breakCard__badge--ingreso {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+html[data-theme="oscuro"] .af-breakCard__badge--egreso {
+  background: rgba(244, 63, 94, 0.12);
+  color: #fb7185;
+  border-color: rgba(244, 63, 94, 0.2);
+}
+
+html[data-theme="oscuro"] .af-emptyBlock {
+  background: rgba(15, 23, 42, 0.42);
+  border-color: rgba(148, 163, 184, 0.16);
+}/* =========================
+   AJUSTE COMPACTO
+========================= */
+
+/* contenedor general */
+.mov-page--analisisFinanciero .mov-card--table {
+  gap: 0;
+}
+
+/* resumen superior */
+.af-summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 12px 0 12px;
+}
+
+.af-summaryCard {
+  border-radius: 14px;
+  padding: 14px 14px 12px;
+  min-height: 96px;
+}
+
+.af-summaryCard__label {
+  font-size: 0.72rem;
+  margin-bottom: 6px;
+}
+
+.af-summaryCard__value {
+  font-size: clamp(1.05rem, 1.3vw, 1.45rem);
+  margin-bottom: 4px;
+  line-height: 1.05;
+}
+
+.af-summaryCard__sub {
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+/* detalle en tarjetas */
+.af-breakdownSection {
+  margin-top: 2px;
+}
+
+.af-sectionHead--breakdown {
+  margin-bottom: 10px;
+}
+
+.af-breakdownGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(170px, 1fr));
+  gap: 10px;
+  padding: 0 10px;
+}
+
+.af-breakCard {
+  border-radius: 14px;
+  padding: 14px;
+  min-height: 104px;
+}
+
+.af-breakCard__top {
+  margin-bottom: 10px;
+  gap: 8px;
+}
+
+.af-breakCard__label {
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.af-breakCard__badge {
+  min-height: 20px;
+  padding: 3px 8px;
+  font-size: 0.65rem;
+}
+
+.af-breakCard__value {
+  font-size: clamp(1rem, 1.25vw, 1.35rem);
+  margin-bottom: 6px;
+  line-height: 1.05;
+}
+
+.af-breakCard__sub {
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+/* resultado */
+.af-footTotals {
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.af-totalCard {
+  padding: 12px 14px;
+  border-radius: 14px;
+  flex: 1 1 100%;
+}
+
+.af-totalValue {
+  font-size: 1.35rem;
+  margin-bottom: 2px;
+}
+
+.af-totalSub {
+  font-size: 0.78rem;
+}
+
+/* disponibilidades */
+.af-dispoSection {
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.af-dispoGrid {
+  grid-template-columns: repeat(4, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.af-dispoCard {
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.af-dispoCard__label {
+  font-size: 0.76rem;
+  margin-bottom: 6px;
+}
+
+.af-dispoCard__value {
+  font-size: 1.2rem;
+  margin-bottom: 4px;
+}
+
+.af-dispoCard__sub {
+  font-size: 0.78rem;
+}
+
+
+
+@media (max-width: 760px) {
+  .af-summaryGrid,
+  .af-breakdownGrid,
+  .af-dispoGrid {
+    grid-template-columns: 1fr;
+  }
+}/* =========================
+   Tarjetas resumen - CLARO por defecto
+========================= */
+.af-summaryCard {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  padding: 14px 14px 12px;
+  min-height: 96px;
+  border: 1px solid var(--mov-border, rgba(10, 37, 64, 0.12));
+  background: #ffffff;
+  box-shadow: 0 10px 24px -20px rgba(10, 37, 64, 0.18);
+}
+
+.af-summaryCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  border-radius: 14px 0 0 14px;
+}
+
+.af-summaryCard--ingreso::before {
+  background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+}
+
+.af-summaryCard--egreso::before {
+  background: linear-gradient(180deg, #fb7185 0%, #dc2626 100%);
+}
+
+.af-summaryCard__label {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #516174;
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+
+.af-summaryCard__value {
+  font-size: clamp(1.05rem, 1.3vw, 1.45rem);
+  font-weight: 800;
+  line-height: 1.05;
+  color: #0a2540;
+  margin-bottom: 4px;
+}
+
+.af-summaryCard--ingreso .af-summaryCard__value {
+  color: #15803d;
+}
+
+.af-summaryCard--egreso .af-summaryCard__value {
+  color: #c81e1e;
+}
+
+.af-summaryCard__sub {
+  font-size: 0.8rem;
+  color: #6b7a8c;
+  line-height: 1.2;
+}
+
+/* =========================
+   Disponibilidades - CLARO por defecto
+========================= */
+.af-dispoCard {
+  border-radius: 14px;
+  padding: 14px;
+  border: 1px solid rgba(34, 197, 94, 0.16);
+  background: #ffffff;
+  box-shadow: 0 10px 24px -20px rgba(10, 37, 64, 0.18);
+}
+
+.af-dispoCard__label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #516174;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+
+.af-dispoCard__value {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #15803d;
+  line-height: 1.05;
+  margin-bottom: 4px;
+}
+
+.af-dispoCard__sub {
+  font-size: 0.78rem;
+  color: #6b7a8c;
+}
+
+/* =========================
+   Dark mode
+========================= */
+html[data-theme="oscuro"] .af-summaryCard {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(8, 25, 58, 0.95) 0%, rgba(5, 16, 38, 0.98) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 10px 30px rgba(0, 0, 0, 0.22);
+}
+
+html[data-theme="oscuro"] .af-summaryCard__label {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+html[data-theme="oscuro"] .af-summaryCard__value {
+  color: #ffffff;
+}
+
+html[data-theme="oscuro"] .af-summaryCard--ingreso .af-summaryCard__value {
+  color: #3be38d;
+}
+
+html[data-theme="oscuro"] .af-summaryCard--egreso .af-summaryCard__value {
+  color: #ff7b7b;
+}
+
+html[data-theme="oscuro"] .af-summaryCard__sub {
+  color: rgba(255, 255, 255, 0.52);
+}
+
+html[data-theme="oscuro"] .af-dispoCard {
+  border: 1px solid rgba(59, 227, 141, 0.16);
+  background: linear-gradient(180deg, rgba(7, 24, 56, 0.95) 0%, rgba(4, 15, 34, 0.98) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 22px rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme="oscuro"] .af-dispoCard__label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+html[data-theme="oscuro"] .af-dispoCard__value {
+  color: #3be38d;
+}
+
+html[data-theme="oscuro"] .af-dispoCard__sub {
+  color: rgba(255, 255, 255, 0.5);
+}
+#clrRight{
+  left: -200px;
 }

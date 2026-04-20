@@ -296,7 +296,6 @@ async function parseJsonOrThrow(res) {
 }
 
 const SKELETON_ROWS = 5;
-const gridCols = "2fr 1.2fr";
 
 export default function Analisis_Financiero() {
   const API = `${BASE_URL}/api.php`;
@@ -707,45 +706,8 @@ export default function Analisis_Financiero() {
     [handleExport]
   );
 
-  /* =========================
-     Skeleton
-  ========================= */
-  const skelWidths = useMemo(
-    () => ({
-      concepto: ["42%", "58%", "50%", "64%", "46%"],
-      importe: ["22%", "28%", "20%", "30%", "24%"],
-    }),
-    []
-  );
-
-  const renderSkeletonRow = (idx) => (
-    <div
-      key={`skel-${idx}`}
-      className="mov-gridTable mov-gridTable--row mov-row--skeleton"
-      style={{ gridTemplateColumns: gridCols }}
-      role="row"
-      aria-hidden="true"
-    >
-      <div className="mov-gridCell" role="cell">
-        <span
-          className="mov-skeletonBar"
-          style={{ width: skelWidths.concepto[idx % skelWidths.concepto.length] }}
-        />
-      </div>
-      <div className="mov-gridCell is-right" role="cell">
-        <span
-          className="mov-skeletonBar"
-          style={{ width: skelWidths.importe[idx % skelWidths.importe.length] }}
-        />
-      </div>
-    </div>
-  );
-
   const isLoading = loading && showSkeleton;
 
-  /* =========================
-     Render
-  ========================= */
   return (
     <div className="mov-page mov-page--analisisFinanciero">
       {toast && (
@@ -764,7 +726,6 @@ export default function Analisis_Financiero() {
       )}
 
       <section className="mov-card mov-card--table">
-        {/* ===== HEAD ===== */}
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
             <div className="title-mov">
@@ -795,7 +756,7 @@ export default function Analisis_Financiero() {
                 </span>
 
                 {showCalendario && (
-                  <div className="mov-calDropdown">
+                  <div className="mov-calDropdown" id="clrRight">
                     <Calendario
                       value={dateRange}
                       onChange={(newRange) => {
@@ -829,124 +790,135 @@ export default function Analisis_Financiero() {
           </div>
         </div>
 
-        {/* ===== TARJETAS RESUMEN ===== */}
-        {!loading && !isLoading && data && (
-          <div className="af-summaryGrid">
-            {resumenCards.map((card) => (
-              <div
-                key={card.id}
-                className={`af-summaryCard af-summaryCard--${card.variant}`}
-              >
-                <div className="af-summaryCard__label">{card.label}</div>
-                <div className="af-summaryCard__value">{moneyARS(card.value)}</div>
-                <div className="af-summaryCard__sub">{card.sub}</div>
+
+
+        <div className="af-breakdownSection">
+          <div className="af-sectionHead af-sectionHead--breakdown">
+            <div>
+              <div className="af-sectionTitle af-sectionTitle--light">
+                Resumen del período
               </div>
-            ))}
-          </div>
-        )}
 
-        {/* ===== HEADER TABLA ===== */}
-        <div
-          className="mov-gridTable mov-gridTable--head"
-          style={{ gridTemplateColumns: gridCols }}
-          role="row"
-        >
-          <div className="mov-gridCell mov-gridCell--head" role="columnheader">
-            CONCEPTO
+            </div>
           </div>
-          <div className="mov-gridCell mov-gridCell--head is-right" role="columnheader">
-            IMPORTE
-          </div>
-        </div>
 
-        {/* ===== BODY ===== */}
-        <div className="mov-tableWrap mov-tableWrap--af" id="mov-tableWrap--afs" role="rowgroup">
-          <div className={["mov-gridBody", isLoading ? "mov-softLoading" : ""].join(" ")}>
-            {isLoading ? (
-              <div className="mov-skeletonWrap" aria-busy="true">
-                {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
-              </div>
-            ) : (
-              <>
-                {!!data &&
-                  mainRows.map((r) => {
-                    const conceptoLower = safeText(r.concepto).toLowerCase();
-                    const isResultado =
-                      conceptoLower === "resultado neto" ||
-                      r.tipo === "resultado" ||
-                      safeText(r.id).toLowerCase() === "resultado_neto";
-                    const isEgreso = r.tipo === "egreso";
-                    const isIngreso = r.tipo === "ingreso";
-                    const importeNeg = Number(r.importe) < 0;
+          {isLoading ? (
+            <div className="af-breakdownGrid af-breakdownGrid--skeleton">
+              {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
+                <div key={`af-card-skel-${i}`} className="af-breakCard af-breakCard--skeleton">
+                  <span
+                    className="mov-skeletonBar"
+                    style={{ width: i % 2 === 0 ? "42%" : "58%", marginBottom: 14 }}
+                  />
+                  <span
+                    className="mov-skeletonBar"
+                    style={{ width: i % 2 === 0 ? "66%" : "54%", height: 18, marginBottom: 12 }}
+                  />
+                  <span
+                    className="mov-skeletonBar"
+                    style={{ width: i % 2 === 0 ? "48%" : "62%" }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : data && mainRows.length > 0 ? (
+            <div className="af-breakdownGrid">
+              {mainRows
+                .filter((r) => {
+                  const conceptoLower = safeText(r.concepto).toLowerCase();
+                  const isResultado =
+                    conceptoLower === "resultado neto" ||
+                    r.tipo === "resultado" ||
+                    safeText(r.id).toLowerCase() === "resultado_neto";
 
-                    return (
+                  return !isResultado;
+                })
+                .map((r) => {
+                  const isEgreso = r.tipo === "egreso";
+                  const isIngreso = r.tipo === "ingreso";
+
+                  return (
+                    <div
+                      key={r.id}
+                      className={[
+                        "af-breakCard",
+                        isIngreso ? "af-breakCard--ingreso" : "",
+                        isEgreso ? "af-breakCard--egreso" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <div className="af-breakCard__top">
+                        <div className="af-breakCard__label">{r.concepto}</div>
+
+                        <span
+                          className={[
+                            "af-breakCard__badge",
+                            isIngreso ? "af-breakCard__badge--ingreso" : "",
+                            isEgreso ? "af-breakCard__badge--egreso" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          {isIngreso ? "Ingreso" : isEgreso ? "Egreso" : "Dato"}
+                        </span>
+                      </div>
+
                       <div
-                        key={r.id}
                         className={[
-                          "mov-gridTable mov-gridTable--row",
-                          isResultado ? "af-row--resultado" : "",
+                          "af-breakCard__value",
+                          isIngreso ? "af-breakCard__value--ingreso" : "",
+                          isEgreso ? "af-breakCard__value--egreso" : "",
                         ]
                           .filter(Boolean)
                           .join(" ")}
-                        style={{ gridTemplateColumns: gridCols }}
-                        role="row"
                       >
-                        <div className="mov-gridCell" role="cell" data-label="CONCEPTO">
-                          <span
-                            className={[
-                              "mov-ellipsissss af-concept",
-                              isResultado ? "af-concept--resultado" : "",
-                            ].join(" ")}
-                          >
-                            {r.concepto}
-                          </span>
-                        </div>
-
-                        <div className="mov-gridCell is-right" role="cell" data-label="IMPORTE">
-                          <span
-                            className={[
-                              "af-importe",
-                              isResultado
-                                ? importeNeg
-                                  ? "af-importe--neg"
-                                  : "af-importe--pos"
-                                : "",
-                              !isResultado && isEgreso ? "af-importe--egreso" : "",
-                              !isResultado && isIngreso ? "af-importe--ingreso" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                          >
-                            {moneyARS(r.importe)}
-                          </span>
-                        </div>
+                        {moneyARS(r.importe)}
                       </div>
-                    );
-                  })}
 
-                {hasFetched && !loading && !error && (!data || mainRows.length === 0) && (
-                  <div className="mov-emptyRow">
-                    No hay datos para mostrar en el rango seleccionado.
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+                      <div className="af-breakCard__sub">
+                        {isIngreso
+                          ? "Impacto positivo en el período"
+                          : isEgreso
+                          ? "Salida de dinero del período"
+                          : "Valor calculado del período"}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          ) : (
+            !loading &&
+            hasFetched && (
+              <div className="mov-emptyRow af-emptyBlock">
+                No hay movimientos para mostrar en el rango seleccionado.
+              </div>
+            )
+          )}
         </div>
 
-        {/* ===== RESULTADO ===== */}
         {!loading && !isLoading && data && (
           <div className="af-footTotals">
-            <div className={`af-totalCard ${resultadoIsNeg ? "af-totalCard--neg" : "af-totalCard--pos"}`}>
+            <div
+              className={`af-totalCard ${
+                resultadoIsNeg ? "af-totalCard--neg" : "af-totalCard--pos"
+              }`}
+            >
               <div className="af-totalTop">
                 <div className="af-totalLabel">Resultado Neto</div>
-                <span className={`mov-chip ${resultadoIsNeg ? "mov-chip--warn" : "mov-chip--ok"}`}>
+                <span
+                  className={`mov-chip ${
+                    resultadoIsNeg ? "mov-chip--warn" : "mov-chip--ok"
+                  }`}
+                >
                   {resultadoIsNeg ? "↓ Pérdida" : "↑ Ganancia"}
                 </span>
               </div>
+
               <div className="af-totalValue">
                 {resultadoNeto == null ? "—" : moneyARS(resultadoNeto)}
               </div>
+
               <div className="af-totalSub">
                 Ventas − costo variable − costo fijo − otros egresos
               </div>
@@ -954,37 +926,50 @@ export default function Analisis_Financiero() {
           </div>
         )}
 
-        {/* ===== DISPONIBILIDADES ===== */}
-        {!loading && !isLoading && data && (
-          <div className="af-dispoSection">
-            <div className="af-sectionHead">
-              <div>
-                <div className="af-sectionTitle">Disponibilidades</div>
-                <div className="mov-card__hint">Cajas y saldos donde está la plata</div>
-              </div>
+{(isLoading || disponibilidades.length > 0) && (
+  <div className="af-dispoSection">
+    <div className="af-sectionHead">
+      <div>
+        <div className="af-sectionTitle">Disponibilidades</div>
+      </div>
 
-              <div className="af-dispoTotal">
-                Total: <strong>{moneyARS(totalDisponibilidades)}</strong>
-              </div>
-            </div>
+      <div className="af-dispoTotal">
+        Total disponible: <strong>{moneyARS(totalDisponibilidades)}</strong>
+      </div>
+    </div>
 
-            {disponibilidades.length > 0 ? (
-              <div className="af-dispoGrid">
-                {disponibilidades.map((item) => (
-                  <div key={item.id || item.nombre} className="af-dispoCard">
-                    <div className="af-dispoCard__label">{item.nombre}</div>
-                    <div className="af-dispoCard__value">{moneyARS(item.importe)}</div>
-                    <div className="af-dispoCard__sub">Saldo disponible</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="mov-emptyRow af-emptyDispo">
-                No hay disponibilidades para mostrar en el rango seleccionado.
-              </div>
-            )}
+    {isLoading ? (
+      <div className="af-dispoGrid">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={`dispo-skel-${i}`} className="af-dispoCard af-breakCard--skeleton">
+            <span
+              className="mov-skeletonBar"
+              style={{ width: i % 2 === 0 ? "40%" : "55%", marginBottom: 14 }}
+            />
+            <span
+              className="mov-skeletonBar"
+              style={{ width: i % 2 === 0 ? "62%" : "48%", height: 18, marginBottom: 12 }}
+            />
+            <span
+              className="mov-skeletonBar"
+              style={{ width: i % 2 === 0 ? "45%" : "58%" }}
+            />
           </div>
-        )}
+        ))}
+      </div>
+    ) : (
+      <div className="af-dispoGrid">
+        {disponibilidades.map((item) => (
+          <div key={item.id} className="af-dispoCard">
+            <div className="af-dispoCard__label">{item.nombre}</div>
+            <div className="af-dispoCard__value">{moneyARS(item.importe)}</div>
+            <div className="af-dispoCard__sub">Saldo disponible</div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
       </section>
     </div>
   );

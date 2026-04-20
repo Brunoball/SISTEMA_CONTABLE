@@ -262,6 +262,20 @@ function fileAcceptText() {
    CHEQUE TABLE — estética de tabla
 ───────────────────────────────────────── */
 function ChequeFields({ cheque, saving, onUpdate }) {
+  const fechaEmisionRef = useRef(null);
+  const fechaPagoRef = useRef(null);
+
+  const openPicker = useCallback((ref) => {
+    const el = ref?.current;
+    if (!el || saving || el.disabled) return;
+    try {
+      if (typeof el.showPicker === "function") el.showPicker();
+      else el.focus();
+    } catch {
+      el.focus();
+    }
+  }, [saving]);
+
   const tipoActual =
     cheque?.tipo === "echeq"
       ? "ECHEQ"
@@ -292,7 +306,6 @@ function ChequeFields({ cheque, saving, onUpdate }) {
         style={{
           display: "grid",
           gridTemplateColumns: "110px 120px 1.2fr 1.2fr 150px 150px 140px",
-          minHeight: "74px",
         }}
       >
         <div className="mi-cr-cell">
@@ -333,23 +346,41 @@ function ChequeFields({ cheque, saving, onUpdate }) {
           />
         </div>
 
-        <div className="mi-cr-cell">
+        <div
+          className="mi-cr-cell"
+          onClick={() => openPicker(fechaEmisionRef)}
+          style={{ cursor: saving ? "not-allowed" : "pointer" }}
+        >
           <input
+            ref={fechaEmisionRef}
             className="nv-cell-input"
             type="date"
             value={cheque?.fecha_emision || ""}
             onChange={(e) => onUpdate("fecha_emision", e.target.value)}
             disabled={saving}
+            onClick={(e) => {
+              e.stopPropagation();
+              openPicker(fechaEmisionRef);
+            }}
           />
         </div>
 
-        <div className="mi-cr-cell">
+        <div
+          className="mi-cr-cell"
+          onClick={() => openPicker(fechaPagoRef)}
+          style={{ cursor: saving ? "not-allowed" : "pointer" }}
+        >
           <input
+            ref={fechaPagoRef}
             className="nv-cell-input"
             type="date"
             value={cheque?.fecha_pago || ""}
             onChange={(e) => onUpdate("fecha_pago", e.target.value)}
             disabled={saving}
+            onClick={(e) => {
+              e.stopPropagation();
+              openPicker(fechaPagoRef);
+            }}
           />
         </div>
 

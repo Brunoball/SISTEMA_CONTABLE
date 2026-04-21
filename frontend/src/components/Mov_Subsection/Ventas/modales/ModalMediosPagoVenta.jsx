@@ -28,16 +28,20 @@ function getAuthHeaders() {
     localStorage.getItem("x_session") ||
     localStorage.getItem("X-Session") ||
     "";
+
   const token = localStorage.getItem("token") || "";
   const headers = {};
+
   if (sessionKey) headers["X-Session"] = sessionKey;
   if (token) headers.Authorization = `Bearer ${token}`;
+
   return headers;
 }
 
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
+
   try {
     return JSON.parse(text);
   } catch {
@@ -117,8 +121,7 @@ function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "-";
   const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (m)
-    return `${String(Number(m[3])).padStart(2, "0")}/${String(Number(m[2])).padStart(2, "0")}/${m[1]}`;
+  if (m) return `${String(Number(m[3])).padStart(2, "0")}/${String(Number(m[2])).padStart(2, "0")}/${m[1]}`;
   return s;
 }
 
@@ -133,38 +136,53 @@ export function buildEmptyMedioPagoVenta() {
   };
 }
 
-/* ================================================================
-   CHEQUE RESUMEN — diseño compacto idéntico al nc-cheque-item
-   de Nueva Compra (ChequesCarteraCardsCompra)
-================================================================ */
 function ChequeResumen({ cheque, tipoCheque }) {
   if (!cheque) return null;
 
   const esEcheq = tipoCheque === "echeq";
-  const accent       = esEcheq ? "#0055BB" : "#0f766e";
-  const accentBg     = esEcheq ? "rgba(0,85,187,.07)" : "rgba(15,118,110,.07)";
-  const accentBorder = esEcheq ? "rgba(0,85,187,.28)" : "rgba(15,118,110,.28)";
 
   return (
     <div className="nc-cheques-list">
       <div
-        className={`nc-cheque-item nc-cheque-item--selected${esEcheq ? " nc-cheque-item--echeq" : ""}`}
-        style={{ cursor: "default" }}
+        className={`nc-cheque-item nc-cheque-item--selected ${
+          esEcheq ? "nc-cheque-item--echeq" : ""
+        }`}
       >
-        {/* Checkbox visual — siempre marcado */}
+        <div className="nc-cheque-main">
+          <div className="nc-cheque-top">
+            <span className="nc-cheque-number">
+              N° {safeText(cheque?.numero_cheque)}
+            </span>
+
+            {esEcheq && (
+              <span className="nc-cheque-badge nc-cheque-badge--echeq">
+                eCheq
+              </span>
+            )}
+          </div>
+
+          <div className="nc-cheque-meta">
+            <span
+              className="nc-cheque-emisor"
+              title={safeText(cheque?.emisor)}
+            >
+              {safeText(cheque?.emisor)}
+            </span>
+
+            <span className="nc-cheque-separator">·</span>
+            <span>Pago: {formatFechaDMY(cheque?.fecha_pago)}</span>
+          </div>
+        </div>
+
+        <span className="nc-cheque-importe">
+          {moneyARS(cheque?.importe || 0)}
+        </span>
+
         <div
           aria-hidden="true"
-          style={{
-            width: 16,
-            height: 16,
-            borderRadius: 4,
-            flexShrink: 0,
-            border: `2px solid ${accent}`,
-            background: accent,
-            display: "grid",
-            placeItems: "center",
-            transition: "all .14s",
-          }}
+          className={`nc-cheque-check-icon nc-cheque-check-icon--corner ${
+            esEcheq ? "nc-cheque-check-icon--echeq" : "nc-cheque-check-icon--cheque"
+          }`}
         >
           <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
             <path
@@ -176,83 +194,16 @@ function ChequeResumen({ cheque, tipoCheque }) {
             />
           </svg>
         </div>
-
-        {/* Info */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span
-              style={{
-                fontFamily: "'Courier New', monospace",
-                fontSize: 12,
-                fontWeight: 700,
-                color: "var(--nv-text)",
-                letterSpacing: ".04em",
-              }}
-            >
-              N°&nbsp;{safeText(cheque?.numero_cheque)}
-            </span>
-            {esEcheq && (
-              <span
-                style={{
-                  fontSize: 9,
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: ".07em",
-                  color: accent,
-                  background: accentBg,
-                  border: `1px solid ${accentBorder}`,
-                  borderRadius: 999,
-                  padding: "1px 5px",
-                  lineHeight: 1.5,
-                }}
-              >
-                eCheq
-              </span>
-            )}
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "2px 8px",
-              fontSize: 11,
-              color: "var(--nv-muted)",
-              lineHeight: 1.3,
-            }}
-          >
-            <span
-              style={{
-                maxWidth: 120,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {safeText(cheque?.emisor)}
-            </span>
-            <span style={{ opacity: 0.4 }}>·</span>
-            <span>Pago:&nbsp;{formatFechaDMY(cheque?.fecha_pago)}</span>
-          </div>
-        </div>
-
-        {/* Importe */}
-        <span className="nc-cheque-importe">{moneyARS(cheque?.importe || 0)}</span>
       </div>
     </div>
   );
 }
 
-/* ================================================================
-   FILA DE MEDIO DE PAGO
-================================================================ */
 function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate, onRemove, showToast }) {
   const [openChequeModal, setOpenChequeModal] = useState(false);
 
   const mpSeleccionado = useMemo(
-    () =>
-      mediosPagoList.find(
-        (x) => String(getMedioPagoId(x) ?? "") === String(row.id_medio_pago ?? "")
-      ) || null,
+    () => mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(row.id_medio_pago ?? "")) || null,
     [mediosPagoList, row.id_medio_pago]
   );
 
@@ -312,8 +263,9 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
   );
 
   const verificarNumeroChequeVentas = useCallback(
-    async ({ numero_cheque, tipoCheque: tipoParam, initialData }) => {
+    async ({ numero_cheque, tipoCheque, initialData }) => {
       const numeroCheque = onlyDigits(numero_cheque);
+
       if (!numeroCheque) {
         return {
           ok: false,
@@ -322,21 +274,27 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
           duracion: 3200,
         };
       }
+
       const params = new URLSearchParams();
       params.set("numero_cheque", numeroCheque);
-      params.set("tipo", String(tipoParam || "cheque"));
+      params.set("tipo", String(tipoCheque || "cheque"));
+
       const idChequeActual = Number(initialData?.id_cheque || row?.cheque?.id_cheque || 0);
       if (Number.isFinite(idChequeActual) && idChequeActual > 0) {
         params.set("id_cheque", String(idChequeActual));
       }
+
       const res = await fetch(`${API_CHECK_NUMERO}&${params.toString()}`, {
         method: "GET",
         headers: getAuthHeaders(),
       });
+
       const data = await parseJsonOrThrow(res);
+
       if (!data?.exito) {
         throw new Error(data?.mensaje || "No se pudo verificar el número del cheque.");
       }
+
       if (data?.existe || data?.disponible === false) {
         return {
           ok: false,
@@ -345,6 +303,7 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
           duracion: 4600,
         };
       }
+
       return { ok: true };
     },
     [row?.cheque?.id_cheque]
@@ -352,11 +311,10 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
 
   return (
     <div className="nc-mp-card">
-      <div className="nc-mp-inline">
-        <div className="nc-mp-medio">
-          <div className="nc-mp-sublabel">Medio</div>
+      <div className="nc-mp-row nc-mp-row--medio">
+        <div className="nc-field" style={{ position: "relative" }}>
           <select
-            className="nc-mp-select"
+            className="nc-input nc-select"
             value={String(row.id_medio_pago || "")}
             onChange={(e) => handleChangeMedio(e.target.value)}
           >
@@ -370,12 +328,18 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
               );
             })}
           </select>
+          <label
+            className={`nc-label${row.id_medio_pago && row.id_medio_pago !== "" ? " nc-label--up" : ""}`}
+          >
+            Medio de pago
+          </label>
         </div>
+      </div>
 
-        <div className="nc-mp-monto-wrap">
-          <div className="nc-mp-sublabel">Monto</div>
+      <div className="nc-mp-row nc-mp-row--monto">
+        <div className="nc-field nc-mp-monto-field" style={{ position: "relative" }}>
           <input
-            className="nc-mp-input-monto"
+            className="nc-input nc-mp-monto-input"
             type="text"
             inputMode="decimal"
             value={row.montoFocused ? row.montoDraft ?? "" : formatMoneyInputARS(montoActual)}
@@ -386,7 +350,7 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
             }}
             onChange={(e) => {
               if (esCheque && row.cheque) return;
-              const c = e.target.value.replace(/[^\d,.\-]/g, "");
+              const c = e.target.value.replace(/[^\d,\.\-]/g, "");
               onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
             }}
             onBlur={() => {
@@ -396,7 +360,9 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
             }}
             placeholder="$ 0,00"
             disabled={esCheque && !!row.cheque}
+            style={{ height: 32, padding: "0 10px", fontSize: 13, textAlign: "right" }}
           />
+          <label className="nc-label nc-label--up">Monto</label>
         </div>
 
         <div className="nc-mp-actions-col">
@@ -404,21 +370,14 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
             <button
               type="button"
               className="nc-mp-completar"
-              onClick={() =>
-                onUpdate(row.id, { monto: restanteParaEstaFila, montoDraft: "", montoFocused: false })
-              }
+              onClick={() => onUpdate(row.id, { monto: restanteParaEstaFila, montoDraft: "", montoFocused: false })}
               disabled={!puedeCompletarRestante}
               title="Completar importe restante"
             >
               ↓ Rest.
             </button>
           )}
-          <button
-            type="button"
-            className="nc-mp-del-btn"
-            onClick={() => onRemove(row.id)}
-            title="Quitar"
-          >
+          <button type="button" className="nc-mp-del-btn" onClick={() => onRemove(row.id)} title="Quitar">
             ×
           </button>
         </div>
@@ -482,9 +441,6 @@ function MpRowVenta({ row, mediosPagoList, totalCompra, sumaMediosPago, onUpdate
   );
 }
 
-/* ================================================================
-   MODAL DE MEDIOS DE PAGO (versión standalone)
-================================================================ */
 export function ModalMediosPagoVenta({
   open,
   mediosPagoList,
@@ -513,12 +469,9 @@ export function ModalMediosPagoVenta({
   const sumaMediosPago = useMemo(
     () =>
       mediosFilas.reduce((a, r) => {
-        const mp = mediosPagoList.find(
-          (x) => String(getMedioPagoId(x) ?? "") === String(r.id_medio_pago ?? "")
-        );
+        const mp = mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(r.id_medio_pago ?? ""));
         const tipoCheque = normalizeChequeTipoFromMedio(mp?.nombre || "");
-        const monto =
-          tipoCheque !== null && r.cheque ? safeNumber(r.cheque.importe) : safeNumber(r.monto);
+        const monto = tipoCheque !== null && r.cheque ? safeNumber(r.cheque.importe) : safeNumber(r.monto);
         return a + monto;
       }, 0),
     [mediosFilas, mediosPagoList]
@@ -533,31 +486,15 @@ export function ModalMediosPagoVenta({
   if (!open) return null;
 
   return createPortal(
-    <div
-      className="mp-modal__overlay"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose?.();
-      }}
-    >
-      <div
-        className="mp-modal"
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+    <div className="mp-modal__overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
+      <div className="mp-modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <div className="mp-modal__head">
-          <div className="mp-modal__head-icon">
-            <FontAwesomeIcon icon={faCreditCard} />
-          </div>
+          <div className="mp-modal__head-icon"><FontAwesomeIcon icon={faCreditCard} /></div>
           <div className="mp-modal__head-texts">
             <div className="mp-modal__title">Medios de pago</div>
-            <div className="mp-modal__subtitle">
-              Total a cubrir: {moneyARS(totalCompra)}
-            </div>
+            <div className="mp-modal__subtitle">Total a cubrir: {moneyARS(totalCompra)}</div>
           </div>
-          <button type="button" className="mp-modal__close" onClick={onClose} aria-label="Cerrar">
-            ✕
-          </button>
+          <button type="button" className="mp-modal__close" onClick={onClose} aria-label="Cerrar">✕</button>
         </div>
 
         <div className="mp-modal__body">
@@ -577,17 +514,9 @@ export function ModalMediosPagoVenta({
 
         <div className="mp-modal__totals">
           <div className="mp-totals-info">
-            <span className="mp-totals-asignado">
-              Asignado: <b>{moneyARS(sumaMediosPago)}</b>
-            </span>
-            {diferenciaRestante > 0.01 && (
-              <span className="mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>
-            )}
-            {cubierto && (
-              <span className="mp-totals-ok">
-                <FontAwesomeIcon icon={faCheck} style={{ fontSize: 11 }} /> Cubierto
-              </span>
-            )}
+            <span className="mp-totals-asignado">Asignado: <b>{moneyARS(sumaMediosPago)}</b></span>
+            {diferenciaRestante > 0.01 && <span className="mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>}
+            {cubierto && <span className="mp-totals-ok"><FontAwesomeIcon icon={faCheck} style={{ fontSize: 11 }} /> Cubierto</span>}
           </div>
         </div>
 
@@ -598,7 +527,7 @@ export function ModalMediosPagoVenta({
             </button>
           </div>
           <button type="button" className="mp-btn-confirmar" onClick={onConfirm}>
-            <FontAwesomeIcon icon={faCheck} style={{ fontSize: 12, opacity: 0.85 }} /> Confirmar
+            <FontAwesomeIcon icon={faCheck} style={{ fontSize: 12, opacity: .85 }} /> Confirmar
           </button>
         </div>
       </div>
@@ -607,38 +536,17 @@ export function ModalMediosPagoVenta({
   );
 }
 
-/* ================================================================
-   PANEL INLINE (usado en ModalNuevaVenta dentro del aside)
-================================================================ */
-export function PanelMediosPagoInlineVenta({
-  mediosFilas,
-  mediosPagoList,
-  totalCompra,
-  onUpdate,
-  onRemove,
-  onAdd,
-  showToast,
-  saving = false,
-}) {
-  const filas =
-    Array.isArray(mediosFilas) && mediosFilas.length
-      ? mediosFilas
-      : [buildEmptyMedioPagoVenta()];
-
+export function PanelMediosPagoInlineVenta({ mediosFilas, mediosPagoList, totalCompra, onUpdate, onRemove, onAdd, showToast, saving = false }) {
+  const filas = Array.isArray(mediosFilas) && mediosFilas.length ? mediosFilas : [buildEmptyMedioPagoVenta()];
   const sumaMediosPago = useMemo(
-    () =>
-      filas.reduce((a, r) => {
-        const mpObj = mediosPagoList.find(
-          (x) => String(getMedioPagoId(x) ?? "") === String(r.id_medio_pago ?? "")
-        );
-        const tipoCheque = normalizeChequeTipoFromMedio(String(mpObj?.nombre ?? "").trim());
-        const monto =
-          tipoCheque !== null && r.cheque ? safeNumber(r.cheque.importe) : safeNumber(r.monto);
-        return a + monto;
-      }, 0),
+    () => filas.reduce((a, r) => {
+      const mpObj = mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(r.id_medio_pago ?? ""));
+      const tipoCheque = normalizeChequeTipoFromMedio(String(mpObj?.nombre ?? "").trim());
+      const monto = tipoCheque !== null && r.cheque ? safeNumber(r.cheque.importe) : safeNumber(r.monto);
+      return a + monto;
+    }, 0),
     [filas, mediosPagoList]
   );
-
   const diferenciaRestante = useMemo(
     () => Math.max(0, safeNumber(totalCompra) - sumaMediosPago),
     [totalCompra, sumaMediosPago]
@@ -660,45 +568,26 @@ export function PanelMediosPagoInlineVenta({
       ))}
 
       <div className="nc-mp-totals">
-        <span className="nc-mp-totals-asignado">
-          Asignado: <b>{moneyARS(sumaMediosPago)}</b>
-        </span>
-        {diferenciaRestante > 0.01 && (
-          <span className="nc-mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>
-        )}
-        {diferenciaRestante <= 0.01 && sumaMediosPago > 0 && (
-          <span className="nc-mp-totals-ok">✓ Cubierto</span>
-        )}
+        <span className="nc-mp-totals-asignado">Asignado: <b>{moneyARS(sumaMediosPago)}</b></span>
+        {diferenciaRestante > 0.01 && <span className="nc-mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>}
+        {diferenciaRestante <= 0.01 && sumaMediosPago > 0 && <span className="nc-mp-totals-ok">✓ Cubierto</span>}
       </div>
 
-      <button
-        type="button"
-        className="nc-pago-btn"
-        onClick={onAdd}
-        disabled={saving}
-      >
+      <button type="button" className="nc-pago-btn" onClick={onAdd} disabled={saving}>
         <FontAwesomeIcon icon={faPlus} style={{ fontSize: 11 }} /> Agregar otro medio
       </button>
     </>
   );
 }
 
-/* ================================================================
-   RESUMEN DE PAGO EN PANEL LATERAL
-================================================================ */
 export function PagoResumenPanelVenta({ mediosFilas, mediosPagoList, totalCompra, onEdit }) {
-  const filasConMedio = (mediosFilas || []).filter(
-    (r) => r.id_medio_pago && r.id_medio_pago !== ""
-  );
+  const filasConMedio = (mediosFilas || []).filter((r) => r.id_medio_pago && r.id_medio_pago !== "");
 
   const filasNormalizadas = filasConMedio.map((mp) => {
-    const mpObj = mediosPagoList.find(
-      (x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago ?? "")
-    );
+    const mpObj = mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago ?? ""));
     const nombre = String(mpObj?.nombre ?? "").trim() || "Medio";
     const tipoCheque = normalizeChequeTipoFromMedio(nombre);
-    const monto =
-      tipoCheque !== null && mp.cheque ? safeNumber(mp.cheque.importe) : safeNumber(mp.monto);
+    const monto = tipoCheque !== null && mp.cheque ? safeNumber(mp.cheque.importe) : safeNumber(mp.monto);
     return { ...mp, nombre, tipoCheque, monto };
   });
 
@@ -712,18 +601,14 @@ export function PagoResumenPanelVenta({ mediosFilas, mediosPagoList, totalCompra
     <div className="nc-pago-resumen">
       <div className="nc-pago-resumen__head">
         <span className="nc-pago-resumen__label">Pago configurado</span>
-        <button type="button" className="nc-pago-resumen__edit" onClick={onEdit}>
-          ✎ Editar
-        </button>
+        <button type="button" className="nc-pago-resumen__edit" onClick={onEdit}>✎ Editar</button>
       </div>
       <div className="nc-pago-resumen__body">
         {filasNormalizadas.map((mp) => (
           <div key={mp.id} className="nc-pago-resumen__row">
             <div className="nc-pago-resumen__medio">
               <div className="nc-pago-resumen__dot" />
-              <span className="nc-pago-resumen__nombre" title={mp.nombre}>
-                {mp.nombre}
-              </span>
+              <span className="nc-pago-resumen__nombre" title={mp.nombre}>{mp.nombre}</span>
               {mp.tipoCheque !== null && (
                 <span className="nc-pago-resumen__cheque-badge">
                   {mp.tipoCheque === "echeq" ? "eCheq" : "Cheque"}
@@ -748,9 +633,7 @@ export function PagoResumenPanelVenta({ mediosFilas, mediosPagoList, totalCompra
           {cubierto ? (
             <span className="nc-pago-resumen__ok-badge">✓ Cubierto</span>
           ) : (
-            <span className="nc-pago-resumen__warn-badge">
-              Falta {moneyARS(diferenciaRestante)}
-            </span>
+            <span className="nc-pago-resumen__warn-badge">Falta {moneyARS(diferenciaRestante)}</span>
           )}
         </div>
       </div>

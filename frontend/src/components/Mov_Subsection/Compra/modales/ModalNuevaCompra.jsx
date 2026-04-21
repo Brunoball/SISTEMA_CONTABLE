@@ -191,7 +191,7 @@ function PanelMediosPagoCompraLocal({ mediosFilas, mediosPagoList, totalCompra, 
   const sumaMediosPago = useMemo(() => (Array.isArray(mediosFilas) ? mediosFilas : []).reduce((acc, mp) => acc + safeNumber(mp?.monto), 0), [mediosFilas]);
   const diferenciaRestante = Math.max(0, safeNumber(totalCompra) - safeNumber(sumaMediosPago));
   return (
-    <div className="nc-section-body">
+    <div className="nc-section-body" >
       {(Array.isArray(mediosFilas) ? mediosFilas : []).map((mp) => (
         <MedioPagoInlineCompraRow key={mp.id} row={mp} mediosPagoList={mediosPagoList} onUpdate={onUpdate} onRemove={onRemove} saving={saving} showToast={showToast} canRemove={mediosFilas.length > 1} totalSeleccionado={totalCompra} sumaMediosPago={sumaMediosPago} apiGet={apiGet} BASE_URL={BASE_URL} />
       ))}
@@ -779,7 +779,10 @@ useEffect(() => {
                       </div>
                     </div>
 
-                    {isContado && (
+
+                  </div>
+                </div>
+                                    {isContado && (
                       <div className="nc-section" style={{ marginTop: 14 }}>
                         <div className="nc-section-head">
                           <div className="nc-section-dot" style={{ background: "#0f766e" }} />
@@ -801,8 +804,6 @@ useEffect(() => {
 
                       </div>
                     )}
-                  </div>
-                </div>
 
                 {isCorriente && (
                   <div className="nc-section">
@@ -810,7 +811,7 @@ useEffect(() => {
                       <div className="nc-section-dot" style={{ background: "#d97706" }} />
                       <span>Cuenta Corriente</span>
                     </div>
-                    <div className="nc-section-body">
+                    <div className="nc-section-body" >
                       <div className="nc-cc-info">
                         Quedará registrada como <b>pendiente de pago</b>.
                       </div>

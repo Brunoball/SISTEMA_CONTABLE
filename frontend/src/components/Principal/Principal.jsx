@@ -416,19 +416,12 @@ const Principal = () => {
   const [showPerfilModal, setShowPerfilModal] = useState(false);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // ── Sub-menús: controlados por CLICK, el estado NO se resetea al cerrar el drawer ──
   const [openMovSub, setOpenMovSub] = useState(false);
   const [openCCSub, setOpenCCSub] = useState(false);
   const [openChequesSub, setOpenChequesSub] = useState(false);
   const [openStockSub, setOpenStockSub] = useState(false);
-
-  const closeTimerRef = useRef(null);
-  const openTimerRef = useRef(null);
-  const closeCCTimerRef = useRef(null);
-  const openCCTimerRef = useRef(null);
-  const closeChequesTimerRef = useRef(null);
-  const openChequesTimerRef = useRef(null);
-  const closeStockTimerRef = useRef(null);
-  const openStockTimerRef = useRef(null);
 
   const closingRef = useRef(false);
   const [closingUI, setClosingUI] = useState(false);
@@ -440,74 +433,6 @@ const Principal = () => {
 
   const tenantLogoIconoDbRef = useRef("");
   const tenantLogoPrincipalDbRef = useRef("");
-
-  const closeSoon = (ms = 220) => {
-    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    closeTimerRef.current = setTimeout(() => setOpenMovSub(false), ms);
-  };
-  const openSoon = (ms = 500) => {
-    if (openTimerRef.current) clearTimeout(openTimerRef.current);
-    openTimerRef.current = setTimeout(() => setOpenMovSub(true), ms);
-  };
-  const cancelClose = () => {
-    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    closeTimerRef.current = null;
-  };
-  const cancelOpen = () => {
-    if (openTimerRef.current) clearTimeout(openTimerRef.current);
-    openTimerRef.current = null;
-  };
-
-  const closeCCSoon = (ms = 220) => {
-    if (closeCCTimerRef.current) clearTimeout(closeCCTimerRef.current);
-    closeCCTimerRef.current = setTimeout(() => setOpenCCSub(false), ms);
-  };
-  const openCCSoon = (ms = 500) => {
-    if (openCCTimerRef.current) clearTimeout(openCCTimerRef.current);
-    openCCTimerRef.current = setTimeout(() => setOpenCCSub(true), ms);
-  };
-  const cancelCCClose = () => {
-    if (closeCCTimerRef.current) clearTimeout(closeCCTimerRef.current);
-    closeCCTimerRef.current = null;
-  };
-  const cancelCCOpen = () => {
-    if (openCCTimerRef.current) clearTimeout(openCCTimerRef.current);
-    openCCTimerRef.current = null;
-  };
-
-  const closeChequesSoon = (ms = 220) => {
-    if (closeChequesTimerRef.current) clearTimeout(closeChequesTimerRef.current);
-    closeChequesTimerRef.current = setTimeout(() => setOpenChequesSub(false), ms);
-  };
-  const openChequesSoon = (ms = 500) => {
-    if (openChequesTimerRef.current) clearTimeout(openChequesTimerRef.current);
-    openChequesTimerRef.current = setTimeout(() => setOpenChequesSub(true), ms);
-  };
-  const cancelChequesClose = () => {
-    if (closeChequesTimerRef.current) clearTimeout(closeChequesTimerRef.current);
-    closeChequesTimerRef.current = null;
-  };
-  const cancelChequesOpen = () => {
-    if (openChequesTimerRef.current) clearTimeout(openChequesTimerRef.current);
-    openChequesTimerRef.current = null;
-  };
-
-  const closeStockSoon = (ms = 220) => {
-    if (closeStockTimerRef.current) clearTimeout(closeStockTimerRef.current);
-    closeStockTimerRef.current = setTimeout(() => setOpenStockSub(false), ms);
-  };
-  const openStockSoon = (ms = 500) => {
-    if (openStockTimerRef.current) clearTimeout(openStockTimerRef.current);
-    openStockTimerRef.current = setTimeout(() => setOpenStockSub(true), ms);
-  };
-  const cancelStockClose = () => {
-    if (closeStockTimerRef.current) clearTimeout(closeStockTimerRef.current);
-    closeStockTimerRef.current = null;
-  };
-  const cancelStockOpen = () => {
-    if (openStockTimerRef.current) clearTimeout(openStockTimerRef.current);
-    openStockTimerRef.current = null;
-  };
 
   const revokeTenantLogoIconoObjectUrl = useCallback(() => {
     try {
@@ -538,7 +463,6 @@ const Principal = () => {
     return url.toString();
   }, []);
 
-  // ✅ CORRECCIÓN: No depende de usuario, pide directamente a la API
   const loadSingleLogo = useCallback(
     async ({ tipo, setSrc, setLoaded, objectUrlRef, revokeFn, dbRef }) => {
       try {
@@ -602,7 +526,6 @@ const Principal = () => {
     [buildTenantLogoUrl]
   );
 
-  // ✅ CORRECCIÓN: Pide ambos logos siempre, sin depender del usuario
   const loadTenantLogos = useCallback(async () => {
     await Promise.all([
       loadSingleLogo({
@@ -793,34 +716,21 @@ const Principal = () => {
     } catch {}
   }, [doLogout, navigate]);
 
-  // ✅ Cargar logos al montar componente y cuando cambie la sesión
   useEffect(() => {
     loadTenantLogos();
   }, [loadTenantLogos]);
 
   useEffect(() => {
     return () => {
-      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-      if (openTimerRef.current) clearTimeout(openTimerRef.current);
-      if (closeCCTimerRef.current) clearTimeout(closeCCTimerRef.current);
-      if (openCCTimerRef.current) clearTimeout(openCCTimerRef.current);
-      if (closeChequesTimerRef.current) clearTimeout(closeChequesTimerRef.current);
-      if (openChequesTimerRef.current) clearTimeout(openChequesTimerRef.current);
-      if (closeStockTimerRef.current) clearTimeout(closeStockTimerRef.current);
-      if (openStockTimerRef.current) clearTimeout(openStockTimerRef.current);
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-
       revokeTenantLogoIconoObjectUrl();
       revokeTenantLogoPrincipalObjectUrl();
     };
   }, [revokeTenantLogoIconoObjectUrl, revokeTenantLogoPrincipalObjectUrl]);
 
+  // ── Al cambiar de ruta solo cerramos el drawer; los sub-menús NO se resetean ──
   useEffect(() => {
     setDrawerOpen(false);
-    setOpenMovSub(false);
-    setOpenCCSub(false);
-    setOpenChequesSub(false);
-    setOpenStockSub(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -970,11 +880,8 @@ const Principal = () => {
   const handleNavigate = useCallback(
     (ruta) => {
       navigate(ruta);
+      // Solo cerramos el drawer; los sub-menús mantienen su estado
       setDrawerOpen(false);
-      setOpenMovSub(false);
-      setOpenCCSub(false);
-      setOpenChequesSub(false);
-      setOpenStockSub(false);
     },
     [navigate]
   );
@@ -982,19 +889,7 @@ const Principal = () => {
   const handleLogoClick = useCallback(() => {
     navigate("/panel/dashboard");
     setDrawerOpen(false);
-    setOpenMovSub(false);
-    setOpenCCSub(false);
-    setOpenChequesSub(false);
-    setOpenStockSub(false);
   }, [navigate]);
-
-  const isNoHover = () => {
-    try {
-      return window.matchMedia && window.matchMedia("(hover: none)").matches;
-    } catch {
-      return false;
-    }
-  };
 
   const confirmarCierreSesion = useCallback(async () => {
     await doLogout({ silent: false });
@@ -1050,18 +945,26 @@ const Principal = () => {
     }
   };
 
+  // ── Helpers de identificación por key ──
   const isMovDropdown = (itemKey) => itemKey === "movimientos";
   const isCCDropdown = (itemKey) => itemKey === "cuentas-corrientes";
   const isChequesDropdown = (itemKey) => itemKey === "cheques";
   const isStockDropdown = (itemKey) => itemKey === "stock";
 
-  // ✅ El modal Perfil usa SOLO el logo icono del tenant
   const getModalLogoSrc = useCallback(() => {
     if (tenantLogoIconoLoaded && tenantLogoIconoSrc) {
       return tenantLogoIconoSrc;
     }
     return "";
   }, [tenantLogoIconoLoaded, tenantLogoIconoSrc]);
+
+  // ── Toggle de sub-menú por click ──
+  const handleSubToggle = useCallback((itemKey) => {
+    if (itemKey === "movimientos") setOpenMovSub((prev) => !prev);
+    if (itemKey === "cuentas-corrientes") setOpenCCSub((prev) => !prev);
+    if (itemKey === "cheques") setOpenChequesSub((prev) => !prev);
+    if (itemKey === "stock") setOpenStockSub((prev) => !prev);
+  }, []);
 
   return (
     <div className="pp-shell">
@@ -1232,105 +1135,33 @@ const Principal = () => {
               (isCheques && location.pathname.startsWith("/panel/cheques")) ||
               (isStock && location.pathname.startsWith("/panel/stock"));
 
+            // Estado abierto del sub-menú según key
             const isOpen =
               (isMov && openMovSub) ||
               (isCC && openCCSub) ||
               (isCheques && openChequesSub) ||
               (isStock && openStockSub);
 
-            const toggleSub = () => {
-              if (isMov) setOpenMovSub((prev) => !prev);
-              if (isCC) setOpenCCSub((prev) => !prev);
-              if (isCheques) setOpenChequesSub((prev) => !prev);
-              if (isStock) setOpenStockSub((prev) => !prev);
-            };
-
-            const openSoonLocal = (ms = 300) => {
-              if (isMov) { cancelClose(); openSoon(ms); }
-              if (isCC) { cancelCCClose(); openCCSoon(ms); }
-              if (isCheques) { cancelChequesClose(); openChequesSoon(ms); }
-              if (isStock) { cancelStockClose(); openStockSoon(ms); }
-            };
-
-            const closeSoonLocal = (ms = 220) => {
-              if (isMov) { cancelOpen(); closeSoon(ms); }
-              if (isCC) { cancelCCOpen(); closeCCSoon(ms); }
-              if (isCheques) { cancelChequesOpen(); closeChequesSoon(ms); }
-              if (isStock) { cancelStockOpen(); closeStockSoon(ms); }
-            };
-
-            const cancelAllTimersLocal = () => {
-              if (isMov) { cancelClose(); cancelOpen(); }
-              if (isCC) { cancelCCClose(); cancelCCOpen(); }
-              if (isCheques) { cancelChequesClose(); cancelChequesOpen(); }
-              if (isStock) { cancelStockClose(); cancelStockOpen(); }
-            };
-
             return (
               <div
                 key={item.key}
                 className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${isOpen ? "is-open" : ""}`}
-                onMouseEnter={() => {
-                  prefetchRoute(item.ruta);
-                  if (!isNoHover() && (isMov || isCC || isCheques || isStock)) {
-                    openSoonLocal(300);
-                  }
-                }}
-                onMouseLeave={() => {
-                  if (!isNoHover() && (isMov || isCC || isCheques || isStock)) {
-                    closeSoonLocal(220);
-                  }
-                }}
+                onMouseEnter={() => prefetchRoute(item.ruta)}
               >
                 <button
                   type="button"
                   className={`pp-nav__item ${isActive ? "is-active" : ""}`}
                   onClick={() => {
-                    if (isStock) {
-                      handleNavigate("/panel/stock");
-                      return;
-                    }
+                    prefetchRoute(item.ruta);
 
-                    if ((isCC || isCheques) && hasSub) {
-                      toggleSub();
-                      return;
-                    }
-
-                    if (hasSub && isNoHover() && (isMov || isCC || isCheques)) {
-                      const currentOpen = isMov
-                        ? openMovSub
-                        : isCC
-                        ? openCCSub
-                        : openChequesSub;
-
-                      if (!currentOpen) {
-                        toggleSub();
-                        return;
-                      }
+                    if (hasSub) {
+                      // Click en ítem con sub-menú: toglea el sub-menú
+                      handleSubToggle(item.key);
+                    } else {
                       handleNavigate(item.ruta);
-                      return;
                     }
-
-                    if (isMov && hasSub && !isNoHover()) {
-                      handleNavigate(item.ruta);
-                      return;
-                    }
-
-                    handleNavigate(item.ruta);
                   }}
-                  aria-expanded={
-                    hasSub
-                      ? isMov
-                        ? openMovSub
-                        : isCC
-                        ? openCCSub
-                        : isCheques
-                        ? openChequesSub
-                        : isStock
-                        ? openStockSub
-                        : undefined
-                      : undefined
-                  }
+                  aria-expanded={hasSub ? isOpen : undefined}
                   aria-haspopup={hasSub ? "menu" : undefined}
                 >
                   <span className="pp-nav__icon">
@@ -1340,26 +1171,7 @@ const Principal = () => {
                 </button>
 
                 {hasSub && (
-                  <div
-                    className="pp-navSub"
-                    onMouseEnter={() => {
-                      if (!isNoHover() && (isMov || isCC || isCheques || isStock)) {
-                        cancelAllTimersLocal();
-                        if (isMov) setOpenMovSub(true);
-                        if (isCC) setOpenCCSub(true);
-                        if (isCheques) setOpenChequesSub(true);
-                        if (isStock) setOpenStockSub(true);
-                      }
-                    }}
-                    onMouseLeave={() => {
-                      if (!isNoHover() && (isMov || isCC || isCheques || isStock)) {
-                        if (isMov) closeSoon(220);
-                        if (isCC) closeCCSoon(220);
-                        if (isCheques) closeChequesSoon(220);
-                        if (isStock) closeStockSoon(220);
-                      }
-                    }}
-                  >
+                  <div className="pp-navSub">
                     {item.children.map((sub) => (
                       <button
                         key={sub.ruta + sub.label}
@@ -1372,11 +1184,8 @@ const Principal = () => {
                         onMouseEnter={() => prefetchRoute(sub.ruta)}
                         onClick={() => {
                           navigate(sub.ruta);
-                          setOpenMovSub(false);
-                          setOpenCCSub(false);
-                          setOpenChequesSub(false);
-                          setOpenStockSub(false);
                           setDrawerOpen(false);
+                          // No cerramos los sub-menús al navegar
                         }}
                       >
                         <span className="pp-navSub__dot" />
@@ -1397,7 +1206,6 @@ const Principal = () => {
         </div>
       </main>
 
-      {/* ✅ ModalPerfil recibe SOLO el logo principal */}
       <ModalPerfil
         open={showPerfilModal}
         onClose={() => setShowPerfilModal(false)}

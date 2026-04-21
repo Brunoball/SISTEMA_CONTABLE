@@ -294,7 +294,6 @@ function buildExportRows(rows) {
     FECHA: safeText(formatFechaDMY(r?.fecha)),
     DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
     CATEGORIA: "OTROS INGRESOS",
-    MEDIO_DE_PAGO: safeText(r?.medio_pago_nombre),
     TOTAL: Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0,
   }));
 }
@@ -764,13 +763,6 @@ export default function OtrosIngresos() {
         render: () => "OTROS INGRESOS",
       },
       {
-        key: "medio_pago_nombre",
-        label: "MEDIO DE PAGO",
-        fr: 1.4,
-        align: "center",
-        render: (r) => safeText(r.medio_pago_nombre),
-      },
-      {
         key: "total",
         label: "TOTAL",
         fr: 1.1,
@@ -876,7 +868,6 @@ export default function OtrosIngresos() {
         `FECHA: ${row.FECHA ?? ""}`,
         `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
         `CATEGORIA: ${row.CATEGORIA ?? ""}`,
-        `MEDIO DE PAGO: ${row.MEDIO_DE_PAGO ?? ""}`,
         `TOTAL: ${row.TOTAL ?? ""}`,
         "----------------------------------------",
       ].join("\n");

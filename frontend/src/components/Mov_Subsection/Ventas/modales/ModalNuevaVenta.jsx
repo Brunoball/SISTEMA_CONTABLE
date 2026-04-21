@@ -542,10 +542,9 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     return tiposVentaList.find((x) => Number(x?.id ?? x?.id_tipo_venta ?? 0) === id) || null;
   }, [filters.id_tipo_venta, tiposVentaList]);
 
-  const isContado          = useMemo(() => isContadoTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
+  const isContado = useMemo(() => isContadoTipoVenta(tipoVentaSelected), [tipoVentaSelected]);
   const tipoVentaSeleccionado = tipoVentaSelected !== null;
-  /* Es cuenta corriente cuando hay tipo seleccionado pero NO es contado */
-  const isCuentaCorriente  = tipoVentaSeleccionado && !isContado;
+  const isCuentaCorriente = tipoVentaSeleccionado && !isContado;
 
   useEffect(() => { if (isContado) return; setMediosFilas([buildEmptyMedioPagoVenta()]); }, [isContado]);
 
@@ -1056,160 +1055,143 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                 </div>
               </section>
 
-              {/* ── PANEL LATERAL — mismo estilo que Nueva Compra ── */}
-              <aside className="nc-aside">
+              {/* ── PANEL LATERAL ── */}
+              <div className="mi-cr-filters">
+                <aside className="nc-aside">
 
-                {/* Datos de venta */}
-                <div className="nc-section">
-                  <div className="nc-section-head">
-                    <div className="nc-section-dot" />
-                    <span>Datos de venta</span>
-                  </div>
-                  <div className="nc-section-body">
-
-                    {/* Fecha */}
-                    <div className="nc-field" onClick={() => fechaInputRef.current?.showPicker?.()}>
-                      <input
-                        ref={fechaInputRef}
-                        id="nv-fecha-input"
-                        className="nc-input"
-                        type="date"
-                        placeholder=" "
-                        value={fecha}
-                        onChange={(e) => setFecha(String(e.target.value || "").trim())}
-                        disabled={saving}
-                      />
-                      <label className="nc-label">Fecha</label>
-                    </div>
-
-                    {/* Cliente */}
-                    <div className="nc-prov-wrap">
-                      <GlobalAutocomplete
-                        value={cliInput}
-                        onChange={handleClienteInputChange}
-                        onSelect={handleSelectCliente}
-                        options={clientesList}
-                        getOptionLabel={(c) => String(c?.nombre ?? "").trim()}
-                        getOptionValue={(c) => String(getClienteId(c) ?? c?.nombre ?? "")}
-                        label="Cliente *"
-                        placeholder=" "
-                        disabled={saving || addUI.open}
-                        showAllOnFocus={true}
-                        maxItems={25}
-                        inputClassName="nc-input"
-                      />
-                    </div>
-
-                    {/* Botón nuevo cliente */}
-
-
-                    {/* Forma de venta — pills */}
-                    <div>
-                      <div className="nc-pill-label">Forma de venta *</div>
-                      <div className="nc-pills">
-                        {tiposVentaList.map((x) => {
-                          const id = String(x.id ?? x.id_tipo_venta);
-                          return (
-                            <button
-                              key={id}
-                              type="button"
-                              className={`nc-pill${String(filters.id_tipo_venta) === id ? " nc-pill--active" : ""}`}
-                              onClick={() => updateFilter("id_tipo_venta", id)}
-                              disabled={saving}
-                            >
-                              {x.nombre?.toLowerCase()}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-
-                {/* Medios de pago — solo si es contado */}
-                {isContado && (
-                  <div className="nc-section">
+                  {/* ── ÚNICA SECCIÓN: Datos de venta ── */}
+                  <div className="nc-section ">
                     <div className="nc-section-head">
-                      <div className="nc-section-dot" style={{ background: "#0f766e" }} />
-                      <span>Medios de pago</span>
-                    </div>
-                    <div className="nc-section-body" style={{ padding: 0 }}>
-                      <PanelMediosPagoInlineVenta
-                        mediosFilas={mediosFilas}
-                        mediosPagoList={mediosPagoList}
-                        totalCompra={resumen.total}
-                        onUpdate={updateMedioPago}
-                        onRemove={removeMedioPago}
-                        onAdd={addMedioPago}
-                        showToast={showToast}
-                        saving={saving}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Aviso cuenta corriente — cuando hay tipo seleccionado y NO es contado */}
-                {isCuentaCorriente && (
-                  <div className="nc-section">
-                    <div className="nc-section-head">
-                      <div className="nc-section-dot" style={{ background: "#d97706" }} />
-                      <span>Cuenta Corriente</span>
+                      <div className="nc-section-dot" />
+                      <span>Datos de venta</span>
                     </div>
                     <div className="nc-section-body">
-                      <div className="nc-cc-info">
-                        Quedará registrada como <b>pendiente de cobro</b> en la cuenta corriente del cliente.
-                      </div>
-                    </div>
-                  </div>
-                )}
 
-                {/* Datos fiscales — solo cuando se necesita CUIT para facturar */}
-                {shouldNeedFiscalPanel && (
-                  <div className="nc-section">
-                    <div className="nc-section-head">
-                      <div className="nc-section-dot" style={{ background: "#0055BB" }} />
-                      <span>Datos fiscales</span>
-                    </div>
-                    <div className="nc-section-body">
-                      {fiscalLoading ? (
-                        <div className="nc-mp-cheques-loading">Consultando datos fiscales…</div>
-                      ) : (
+                      {/* Fecha */}
+                      <div className="nc-field" onClick={() => fechaInputRef.current?.showPicker?.()}>
+                        <input
+                          ref={fechaInputRef}
+                          id="nv-fecha-input"
+                          className="nc-input"
+                          type="date"
+                          placeholder=" "
+                          value={fecha}
+                          onChange={(e) => setFecha(String(e.target.value || "").trim())}
+                          disabled={saving}
+                        />
+                        <label className="nc-label">Fecha</label>
+                      </div>
+
+                      {/* Cliente */}
+                      <div className="nc-prov-wrap  ">
+                        <GlobalAutocomplete
+                          value={cliInput}
+                          onChange={handleClienteInputChange}
+                          onSelect={handleSelectCliente}
+                          options={clientesList}
+                          getOptionLabel={(c) => String(c?.nombre ?? "").trim()}
+                          getOptionValue={(c) => String(getClienteId(c) ?? c?.nombre ?? "")}
+                          label="Cliente *"
+                          placeholder=" "
+                          disabled={saving || addUI.open}
+                          showAllOnFocus={true}
+                          maxItems={25}
+                          inputClassName="nc-input"
+                        />
+                      </div>
+
+                      {/* Forma de venta — select */}
+                      <div className="nc-field">
+                        <select
+                          className="nc-input nc-select"
+                          value={filters.id_tipo_venta}
+                          onChange={(e) => updateFilter("id_tipo_venta", e.target.value)}
+                          disabled={saving}
+                        >
+                          <option value="">Seleccionar.</option>
+                          {tiposVentaList.map((x) => {
+                            const id = String(x.id ?? x.id_tipo_venta);
+                            return (
+                              <option key={id} value={id}>
+                                {x.nombre}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <label className={`nc-label${filters.id_tipo_venta ? " nc-label--up" : ""}`}>
+                          Forma de venta *
+                        </label>
+                      </div>
+
+                      {/* Medios de pago — solo si es contado */}
+                      {isContado && (
                         <>
-                          <div className="nc-field">
-                            <input
-                              className="nc-input"
-                              placeholder=" "
-                              value={fiscalCuitInput}
-                              onChange={(e) => { setFiscalCuitInput(onlyDigits(e.target.value)); setFiscalArcaData(null); setFiscalError(""); }}
-                              inputMode="numeric"
-                              disabled={saving || fiscalLookupLoading}
-                              maxLength={11}
-                            />
-                            <label className="nc-label">CUIT *</label>
-                          </div>
-                          {fiscalArcaData && (
-                            <div className="arca-alert arca-alert--info">
-                              <div className="arca-alert__title">Datos encontrados</div>
-                              <div className="arca-resumen">
-                                <div className="arca-row"><b>CUIT:</b><span>{fiscalArcaData.cuit || "—"}</span></div>
-                                <div className="arca-row"><b>IVA:</b><span>{fiscalArcaData.condicion_iva || "—"}</span></div>
-                                <div className="arca-row arca-row--full"><b>Razón social:</b><span>{fiscalArcaData.razon_social || "—"}</span></div>
-                                <div className="arca-row arca-row--full"><b>Domicilio:</b><span>{fiscalArcaData.domicilio || "—"}</span></div>
+                          <PanelMediosPagoInlineVenta
+                            mediosFilas={mediosFilas}
+                            mediosPagoList={mediosPagoList}
+                            totalCompra={resumen.total}
+                            onUpdate={updateMedioPago}
+                            onRemove={removeMedioPago}
+                            onAdd={addMedioPago}
+                            showToast={showToast}
+                            saving={saving}
+                          />
+                        </>
+                      )}
+
+                      {/* Aviso cuenta corriente */}
+                      {isCuentaCorriente && (
+                        <div className="nc-cc-info">
+                          Quedará registrada como <b>pendiente de cobro</b> en la cuenta corriente del cliente.
+                        </div>
+                      )}
+
+                      {/* Datos fiscales */}
+                      {shouldNeedFiscalPanel && (
+                        <>
+                          <div className="nc-section-divider" />
+                          <div className="nc-fiscal-label">Datos fiscales</div>
+                          {fiscalLoading ? (
+                            <div className="nc-mp-cheques-loading">Consultando datos fiscales…</div>
+                          ) : (
+                            <>
+                              <div className="nc-field">
+                                <input
+                                  className="nc-input"
+                                  placeholder=" "
+                                  value={fiscalCuitInput}
+                                  onChange={(e) => { setFiscalCuitInput(onlyDigits(e.target.value)); setFiscalArcaData(null); setFiscalError(""); }}
+                                  inputMode="numeric"
+                                  disabled={saving || fiscalLookupLoading}
+                                  maxLength={11}
+                                />
+                                <label className="nc-label">CUIT *</label>
                               </div>
-                            </div>
-                          )}
-                          {fiscalError && (
-                            <div className="arca-alert arca-alert--error">{fiscalError}</div>
+                              {fiscalArcaData && (
+                                <div className="arca-alert arca-alert--info">
+                                  <div className="arca-alert__title">Datos encontrados</div>
+                                  <div className="arca-resumen">
+                                    <div className="arca-row"><b>CUIT:</b><span>{fiscalArcaData.cuit || "—"}</span></div>
+                                    <div className="arca-row"><b>IVA:</b><span>{fiscalArcaData.condicion_iva || "—"}</span></div>
+                                    <div className="arca-row arca-row--full"><b>Razón social:</b><span>{fiscalArcaData.razon_social || "—"}</span></div>
+                                    <div className="arca-row arca-row--full"><b>Domicilio:</b><span>{fiscalArcaData.domicilio || "—"}</span></div>
+                                  </div>
+                                </div>
+                              )}
+                              {fiscalError && (
+                                <div className="arca-alert arca-alert--error">{fiscalError}</div>
+                              )}
+                            </>
                           )}
                         </>
                       )}
+
                     </div>
                   </div>
-                )}
+                </aside>
 
-                {/* Acciones */}
-                <div className="nc-actions mi-cr-filters__actions">
+                {/* Acciones fijas abajo, fuera del scroll */}
+                <div className="nc-actions mi-cr-filters__actions mi-cr-filters__actions--sticky">
                   <button
                     type="button"
                     onClick={submit}
@@ -1227,11 +1209,9 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                     {saving && accionContado === "facturar" ? "Procesando..." : "Facturar"}
                   </button>
                 </div>
-
-              </aside>
+              </div>
             </div>
           </div>
-
 
         </div>
       </div>
@@ -1256,6 +1236,17 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           skipMovimientoAutocreacion={true}
         />
       )}
+
+      <AddCatalogMiniModal
+        open={addUI.open}
+        title={addUI.kind === "clientes" ? "Nuevo Cliente" : "Nuevo Detalle"}
+        value={addUI.text}
+        saving={addUI.saving}
+        onChange={(v) => setAddUI((p) => ({ ...p, text: v }))}
+        onCancel={closeAddMini}
+        onSave={guardarNuevoCatalogo}
+        dark={dark}
+      />
     </>,
     document.body
   );

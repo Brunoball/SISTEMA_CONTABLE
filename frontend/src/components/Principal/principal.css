@@ -62,8 +62,6 @@ html[data-theme="oscuro"]{
 
 html[data-theme="oscuro"] body{
   background: var(--balto-bg);
-
-
 }
 
 html[data-theme="oscuro"] .pp-shell{
@@ -103,8 +101,6 @@ html[data-theme="oscuro"] .pp-nav__icon{
 }
 
 @media (hover:hover) and (pointer:fine){
-
-
   html[data-theme="oscuro"] .pp-nav__item:hover .pp-nav__icon{
     background: var(--pp-icon-gradient);
     color: #fff;
@@ -185,9 +181,15 @@ html[data-theme="oscuro"] .pp-btn--ghost:hover{
   border-color: rgba(59,130,246,0.22);
 }
 
-html[data-theme="oscuro"]  .mi-em-panelHead{
+html[data-theme="oscuro"] .mi-em-panelHead{
  color: #F6F9FC;
 }
+
+html[data-theme="oscuro"] .pp-navSub--flyout{
+  background: rgba(15, 23, 42, .98);
+  border: 1px solid rgba(148,163,184,0.16);
+}
+
 /* =========================
    BASE
 ========================= */
@@ -203,7 +205,6 @@ button{ font-family: inherit; }
 
 /* =========================
    LAYOUT
-   ✅ sigue empujando contenido
 ========================= */
 .pp-shell{
   min-height:100vh;
@@ -213,7 +214,6 @@ button{ font-family: inherit; }
     radial-gradient(1100px 420px at 50% 8%, rgba(0, 85, 187, 0.08), transparent 55%),
     radial-gradient(900px 340px at 50% 92%, rgba(10, 37, 64, 0.06), transparent 55%),
     var(--balto-bg);
-
   contain: layout style paint;
 }
 
@@ -225,12 +225,10 @@ button{ font-family: inherit; }
   top: 0; left: 0; right: 0;
   height: var(--mov-topbar-h);
   z-index: 1400;
-
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap: 14px;
-
   padding: 0 16px;
   background: linear-gradient(90deg, var(--balto-midnight) 0%, #0D2E52 55%, #09324A 120%);
   border-bottom: 1px solid rgba(255,255,255,.12);
@@ -409,30 +407,25 @@ button{ font-family: inherit; }
 
 /* =========================
    SIDEBAR
-   ✅ sigue expandiendo width y empujando
 ========================= */
 .pp-sidebar{
   position: sticky;
   top: var(--mov-topbar-h);
   height: calc(100vh - var(--mov-topbar-h));
   width: var(--pp-side-collapsed);
-
   background: rgba(255,255,255,.84);
   border-right: 1px solid rgba(10, 37, 64, 0.12);
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(10px);
-
   transition:
     width 180ms cubic-bezier(.2,.8,.2,1),
     box-shadow 180ms ease,
     background 180ms ease;
-
   display:flex;
   flex-direction:column;
   padding: 14px 10px;
-  overflow:hidden;
+  overflow: hidden;
   z-index: 10;
-
   will-change: width;
   contain: layout paint style;
   transform: translateZ(0);
@@ -553,31 +546,27 @@ button{ font-family: inherit; }
   font-weight: 500;
 }
 
-/* nav */
+/* =========================
+   NAV
+========================= */
 .pp-nav{
   margin-top: 14px;
   display:flex;
   flex-direction:column;
   gap: 8px;
   padding: 6px 4px;
-  overflow:auto;
-  overflow-x: hidden;
+  flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
-.pp-nav::-webkit-scrollbar{ width: 8px; }
-.pp-nav::-webkit-scrollbar-thumb{
-  background: rgba(10, 37, 64, 0.16);
-  border-radius: 10px;
-}
-.pp-nav{ scrollbar-width: thin; }
 
 .pp-navGroup{
   display:flex;
   flex-direction:column;
   gap: 6px;
+  position: relative;
 }
 
-/* item */
 .pp-nav__item{
   width:100%;
   border: 1px solid transparent;
@@ -607,7 +596,8 @@ button{ font-family: inherit; }
   transform: translateZ(0);
   transition:
     box-shadow 0.2s ease,
-    color 0.2s ease;
+    color 0.2s ease,
+    background 0.2s ease;
 }
 
 .pp-nav__label{
@@ -629,18 +619,12 @@ button{ font-family: inherit; }
   color:#fff;
 }
 
-/* hover nav */
 @media (hover:hover) and (pointer:fine){
- 
-
   .pp-nav__item:hover .pp-nav__icon{
     background: var(--pp-icon-gradient);
     color: #fff;
-
     box-shadow: 0 12px 20px rgba(0,85,187,.16);
   }
-
-
 }
 
 /* =========================
@@ -650,29 +634,66 @@ button{ font-family: inherit; }
   display:flex;
   flex-direction:column;
   gap: 6px;
-
   padding-left: 36px;
-
   max-height: 0;
   opacity: 0;
   transform: translate3d(0,-4px,0);
   overflow: hidden;
   pointer-events: none;
-
   transition:
     max-height 240ms ease,
     opacity 160ms ease,
     transform 160ms ease;
-
   will-change: max-height, opacity, transform;
 }
 
-.pp-navGroup.has-sub.is-open .pp-navSub{
+.pp-sidebar:hover .pp-navGroup.has-sub.is-open .pp-navSub{
   max-height: var(--sub-open-h);
   opacity: 1;
   transform: translate3d(0,0,0);
   pointer-events: auto;
   padding-top: 5px;
+  position: static;
+  top: auto;
+  left: auto;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  width: auto;
+  overflow: hidden;
+}
+
+.pp-navGroup.has-sub.is-open .pp-navSub{
+  position: absolute;
+  left: calc(var(--pp-side-collapsed) - 10px);
+  top: 0;
+  z-index: 100;
+  width: 200px;
+  padding-left: 0;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid rgba(10, 37, 64, 0.14);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  max-height: none;
+  overflow: visible;
+  opacity: 1;
+  transform: translate3d(0,0,0);
+  pointer-events: auto;
+}
+
+@keyframes flyoutIn {
+  from { opacity: 0; transform: translate3d(-6px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.pp-navGroup.has-sub.is-open .pp-navSub{
+  animation: flyoutIn 140ms ease forwards;
+}
+
+.pp-sidebar:hover .pp-navGroup.has-sub.is-open .pp-navSub{
+  animation: none;
+  position: static;
 }
 
 .pp-navSub__item{
@@ -680,14 +701,11 @@ button{ font-family: inherit; }
   background: rgba(255,255,255,0.78);
   border-radius: 12px;
   padding: 9px 10px;
-
   display:flex;
   align-items:center;
   gap: 10px;
-
   cursor:pointer;
   text-align:left;
-
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 .pp-navSub__dot{
@@ -704,6 +722,8 @@ button{ font-family: inherit; }
   white-space: nowrap;
   overflow:hidden;
   text-overflow: ellipsis;
+  opacity: 1 !important;
+  transform: none !important;
 }
 @media (hover:hover) and (pointer:fine){
   .pp-navSub__item:hover{
@@ -776,8 +796,6 @@ button{ font-family: inherit; }
 
 /* =========================
    CONTENT
-   ✅ sigue siendo empujado por la sidebar
-   pero aislado para reducir costo de repaint/reflow
 ========================= */
 .pp-content{
   flex:1;
@@ -785,7 +803,6 @@ button{ font-family: inherit; }
   padding: 14px;
   display:flex;
   justify-content:center;
-
   contain: layout paint style;
   overflow: hidden;
 }
@@ -795,15 +812,12 @@ button{ font-family: inherit; }
   display:flex;
   flex-direction:column;
   gap: 14px;
-
   background: rgba(255,255,255,.72);
   border: 1px solid rgba(10, 37, 64, 0.12);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-md);
   backdrop-filter: blur(10px);
-
   padding: 14px;
-
   contain: layout paint style;
   overflow: hidden;
 }
@@ -905,7 +919,6 @@ button{ font-family: inherit; }
   .mov-topbar__section{ max-width: 45vw; }
 }
 
-/* mobile/tablet */
 @media (max-width: 720px){
   .ini_page{padding: 0;}
   .pp-burger{ display:grid; }
@@ -922,34 +935,132 @@ button{ font-family: inherit; }
     height: calc(100vh - var(--mov-topbar-h));
     width: var(--drawer-w);
     z-index: 1300;
-
     transform: translateX(-110%);
     transition: transform 220ms cubic-bezier(.4,0,.2,1);
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
   .pp-sidebar:hover{
     width: var(--drawer-w);
   }
   .pp-sidebar.is-drawerOpen{
     transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(2, 6, 23, 0.22);
   }
 
   .pp-drawerHeader{ display:flex; }
   .pp-brand{ display:none; }
 
   .pp-nav__label,
-  .pp-logout__label{
+  .pp-logout__label,
+  .pp-brand__text{
     opacity: 1 !important;
     transform: none !important;
+    transition: none !important;
   }
 
-  .pp-content{ padding: 12px; }
-  .pp-content__inner{ padding: 8px; }
+  .pp-navGroup.has-sub.is-open .pp-navSub{
+    position: static;
+    left: auto;
+    top: auto;
+    width: auto;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0 0 0 36px;
+    padding-top: 5px;
+    max-height: var(--sub-open-h);
+    overflow: hidden;
+    animation: none;
+  }
+
+  :root{ --sub-open-h: 480px; }
+
+  .pp-content{
+    padding: 10px;
+  }
+
+  .pp-content__inner{
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .pp-nav{
+    flex: 1;
+    min-height: 0;
+    padding-bottom: 0;
+    overflow: visible;
+    -webkit-overflow-scrolling: auto;
+  }
 }
 
 @media (max-width: 560px){
   :root{ --mov-topbar-h: 50px; }
+
   .mov-topbar__section{ display:none; }
+
+  .pp-themeBtn,
+  .pp-topbarLogout,
+  .mov-topbar__usericon{
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+    border-radius: 10px;
+  }
+
+  .pp-burger{
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+    border-radius: 10px;
+  }
+
+  .mov-topbar__right{ gap: 6px; }
+
+  .pp-content{ padding: 8px; }
+
+  .pp-content__inner{
+    padding: 8px;
+    border-radius: 10px;
+  }
+}
+
+@media (max-width: 400px){
+  :root{
+    --mov-topbar-h: 48px;
+    --drawer-w: calc(100vw - 48px);
+  }
+
+  .mov-topbar{ padding: 0 8px; gap: 6px; }
+
+  .mov-topbar__logoImg{ height: 28px; }
+
+  .pp-themeBtn,
+  .pp-topbarLogout,
+  .mov-topbar__usericon,
+  .pp-burger{
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+
+  .pp-content{ padding: 6px; }
+
+  .pp-content__inner{
+    padding: 6px;
+    border-radius: 8px;
+  }
+}
+
+@media (min-width: 721px){
+  .pp-sidebar:not(:hover) .pp-navGroup.has-sub.is-open .pp-navSub{
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transform: translate3d(-8px, 0, 0) !important;
+  }
 }
 
 /* =========================
@@ -992,7 +1103,9 @@ button{ font-family: inherit; }
 
 .panel_contable{
   padding: 10px 0 10px 14px;
-}.pp-topbarLogout{
+}
+
+.pp-topbarLogout{
   width: 42px;
   height: 42px;
   border-radius: 14px;
@@ -1013,183 +1126,4 @@ button{ font-family: inherit; }
 .pp-topbarLogout:focus-visible{
   outline: none;
   box-shadow: 0 0 0 4px rgba(225, 61, 69, 0.25);
-}
-/* =========================
-   RESPONSIVE — reemplaza SOLO los bloques @media del archivo principal.css
-   La vista de escritorio NO se modifica.
-========================= */
-
-/* ---- 980px: topbar intermedio ---- */
-@media (max-width: 980px) {
-  :root { --mov-topbar-h: 54px; }
-
-  .mov-topbar { padding: 0 12px; gap: 10px; }
-
-  .mov-topbar__brandType { display: none; }
-
-  .mov-topbar__section {
-    max-width: 36vw;
-    font-size: 11px;
-    padding: 6px 10px;
-  }
-
-  .pp-themeBtn,
-  .pp-topbarLogout,
-  .mov-topbar__usericon {
-    width: 38px;
-    height: 38px;
-    font-size: 16px;
-  }
-}
-
-/* ---- 720px: mobile/tablet (drawer) ---- */
-@media (max-width: 720px) {
-  .ini_page { padding: 0; }
-
-  /* Burger visible */
-  .pp-burger { display: grid; }
-
-  /* Shell pasa a bloque (sidebar sale del flujo) */
-  .pp-shell {
-    display: block;
-    padding-top: var(--mov-topbar-h);
-  }
-
-  /* Topbar ajustes mobile */
-  .mov-topbar {
-    padding: 0 10px;
-    gap: 8px;
-  }
-
-  .mov-topbar__left { gap: 8px; }
-
-  .mov-topbar__right {
-    gap: 7px;
-  }
-
-  /* Logo más compacto en mobile */
-  .mov-topbar__logoImg { height: 32px; }
-
-  /* Sidebar se convierte en drawer deslizable */
-  .pp-sidebar {
-    position: fixed;
-    top: var(--mov-topbar-h);
-    left: 0;
-    height: calc(100vh - var(--mov-topbar-h));
-    width: var(--drawer-w);
-    z-index: 1300;
-    overflow-y: auto;
-    overflow-x: hidden;
-
-    transform: translateX(-110%);
-    transition: transform 240ms cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  /* Overrides: en mobile el drawer NO se expande con hover */
-  .pp-sidebar:hover {
-    width: var(--drawer-w);
-  }
-
-  .pp-sidebar.is-drawerOpen {
-    transform: translateX(0);
-    box-shadow: 4px 0 24px rgba(2, 6, 23, 0.22);
-  }
-
-  /* Header del drawer visible */
-  .pp-drawerHeader { display: flex; }
-
-  /* Brand estático oculto (se reemplaza por pp-drawerBrand) */
-  .pp-brand { display: none; }
-
-  /* Labels siempre visibles en drawer */
-  .pp-nav__label,
-  .pp-logout__label,
-  .pp-brand__text {
-    opacity: 1 !important;
-    transform: none !important;
-    transition: none !important;
-  }
-
-  /* Sub-menú con altura generosa en drawer */
-  :root { --sub-open-h: 480px; }
-
-  /* Contenido principal */
-  .pp-content {
-    padding: 10px;
-  }
-
-  .pp-content__inner {
-    padding: 10px;
-    border-radius: 12px;
-  }
-
-  /* Scroll vertical visible en nav del drawer */
-  .pp-nav {
-    padding-bottom: 16px;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-}
-
-/* ---- 560px: pantallas muy pequeñas ---- */
-@media (max-width: 560px) {
-  :root { --mov-topbar-h: 50px; }
-
-  /* Ocultar sección activa para ganar espacio */
-  .mov-topbar__section { display: none; }
-
-  /* Botones del topbar más pequeños */
-  .pp-themeBtn,
-  .pp-topbarLogout,
-  .mov-topbar__usericon {
-    width: 36px;
-    height: 36px;
-    font-size: 15px;
-    border-radius: 10px;
-  }
-
-  .pp-burger {
-    width: 36px;
-    height: 36px;
-    font-size: 15px;
-    border-radius: 10px;
-  }
-
-  .mov-topbar__right { gap: 6px; }
-
-  .pp-content { padding: 8px; }
-
-  .pp-content__inner {
-    padding: 8px;
-    border-radius: 10px;
-  }
-}
-
-/* ---- 400px: teléfonos muy pequeños (ej. SE) ---- */
-@media (max-width: 400px) {
-  :root {
-    --mov-topbar-h: 48px;
-    --drawer-w: calc(100vw - 48px);
-  }
-
-  .mov-topbar { padding: 0 8px; gap: 6px; }
-
-  .mov-topbar__logoImg { height: 28px; }
-
-  .pp-themeBtn,
-  .pp-topbarLogout,
-  .mov-topbar__usericon,
-  .pp-burger {
-    width: 34px;
-    height: 34px;
-    font-size: 14px;
-    border-radius: 10px;
-  }
-
-  .pp-content { padding: 6px; }
-
-  .pp-content__inner {
-    padding: 6px;
-    border-radius: 8px;
-  }
 }

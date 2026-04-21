@@ -358,8 +358,6 @@ function buildExportRows(rows) {
     PROVEEDOR: safeText(
       pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")
     ),
-    PAGO: safeText(getCompraPagoLabel(r)),
-    "MEDIO DE PAGO": safeText(getCompraMedioPagoLabel(r)),
     TOTAL: numOrZero(
       pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0)
     ),
@@ -969,8 +967,6 @@ export default function Compras() {
         `FECHA: ${row.FECHA ?? ""}`,
         `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
         `PROVEEDOR: ${row.PROVEEDOR ?? ""}`,
-        `PAGO: ${row.PAGO ?? ""}`,
-        `MEDIO DE PAGO: ${row["MEDIO DE PAGO"] ?? ""}`,
         `TOTAL: ${row.TOTAL ?? ""}`,
         "----------------------------------------",
       ].join("\n");
@@ -1061,20 +1057,6 @@ export default function Compras() {
         align: "left",
         render: (r) =>
           safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")),
-      },
-      {
-        key: "pago",
-        label: "PAGO",
-        fr: 1,
-        align: "center",
-        render: (r) => safeText(getCompraPagoLabel(r)),
-      },
-      {
-        key: "medio_pago",
-        label: "MEDIO DE PAGO",
-        fr: 1.2,
-        align: "center",
-        render: (r) => safeText(getCompraMedioPagoLabel(r)),
       },
       {
         key: "total",

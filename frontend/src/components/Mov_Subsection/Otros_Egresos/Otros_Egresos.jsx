@@ -291,7 +291,6 @@ function buildExportRows(rows) {
     FECHA: safeText(formatFechaDMY(r?.fecha)),
     DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
     CATEGORIA: safeText(r?.categoria),
-    MEDIO_DE_PAGO: safeText(r?.medio_pago_nombre),
     TOTAL: Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0,
   }));
 }
@@ -705,13 +704,6 @@ export default function OtrosEgresos() {
         render: (r) => safeText(r.categoria),
       },
       {
-        key: "medio_pago_nombre",
-        label: "MEDIO DE PAGO",
-        fr: 1.4,
-        align: "center",
-        render: (r) => safeText(r.medio_pago_nombre),
-      },
-      {
         key: "total",
         label: "TOTAL",
         fr: 1.1,
@@ -817,7 +809,6 @@ export default function OtrosEgresos() {
         `FECHA: ${row.FECHA ?? ""}`,
         `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
         `CATEGORIA: ${row.CATEGORIA ?? ""}`,
-        `MEDIO DE PAGO: ${row.MEDIO_DE_PAGO ?? ""}`,
         `TOTAL: ${row.TOTAL ?? ""}`,
         "----------------------------------------",
       ].join("\n");
@@ -1200,7 +1191,6 @@ export default function OtrosEgresos() {
       fecha: ["44%", "38%", "40%", "36%"],
       detalle: ["72%", "58%", "66%", "48%"],
       categoria: ["52%", "44%", "58%", "38%"],
-      medio_pago_nombre: ["52%", "44%", "48%", "36%"],
       total: ["38%", "30%", "34%", "28%"],
     }),
     []

@@ -2,15 +2,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import BASE_URL from "../config/config";
 
-/* =========================
-   CONFIG
-========================= */
 const LISTS_TTL_MS = 10 * 60 * 1000;
 const CACHE_PREFIX = "balto_lists_cache_v1";
 
-/* =========================
-   Helpers
-========================= */
 function getSessionKey() {
   return String(localStorage.getItem("session_key") || "").trim();
 }
@@ -74,6 +68,8 @@ const emptyLists = {
   tipos_movimiento: [],
   tipos_venta: [],
   tipos_operacion: [],
+  stock_categorias: [],
+  stock_tipos_precio: [],
 };
 
 function normalizeLists(raw) {
@@ -93,12 +89,11 @@ function normalizeLists(raw) {
     tipos_movimiento: getArr("tipos_movimiento"),
     tipos_venta: getArr("tipos_venta"),
     tipos_operacion: getArr("tipos_operacion"),
+    stock_categorias: getArr("stock_categorias"),
+    stock_tipos_precio: getArr("stock_tipos_precio"),
   };
 }
 
-/* =========================
-   Context
-========================= */
 const ListasCtx = createContext(null);
 
 export function ListasProvider({ children }) {

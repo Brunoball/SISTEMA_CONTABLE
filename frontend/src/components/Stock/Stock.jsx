@@ -438,7 +438,6 @@ const Stock = () => {
     [limpiarRefreshTimers, recargarTodo, invalidarMiniaturas]
   );
 
-  // ✅ FIXED: Solo invalidar miniaturas cuando hay un producto nuevo/editado
   const refrescarDespuesDeGuardar = useCallback(
     async (productoGuardado = null) => {
       if (productoGuardado) {
@@ -515,6 +514,7 @@ const Stock = () => {
     fetchCategorias();
   }, [fetchProductos, fetchCategorias]);
 
+  // Escucha actualizaciones de productos (stock-updated)
   useEffect(() => {
     const handleExternalListsUpdate = async () => {
       try {
@@ -525,6 +525,21 @@ const Stock = () => {
     window.addEventListener("balto:stock-updated", handleExternalListsUpdate);
     return () => window.removeEventListener("balto:stock-updated", handleExternalListsUpdate);
   }, [refrescarDespuesDeGuardar]);
+
+  // ✅ NUEVO: Escucha actualizaciones de listas/categorías (listas-updated)
+  useEffect(() => {
+    const handleExternalCategoriasUpdate = async () => {
+      try {
+        await fetchCategorias();
+      } catch {}
+    };
+
+    window.addEventListener("balto:listas-updated", handleExternalCategoriasUpdate);
+
+    return () => {
+      window.removeEventListener("balto:listas-updated", handleExternalCategoriasUpdate);
+    };
+  }, [fetchCategorias]);
 
   const productosFiltradosYOrdenados = useMemo(() => {
     let lista = Array.isArray(productosRaw) ? [...productosRaw] : [];
@@ -618,7 +633,6 @@ const Stock = () => {
     setProductoEliminar(null);
   };
 
-  // ✅ FIXED: Eliminar producto de la lista local inmediatamente
   const handleConfirmarEliminar = async () => {
     const productoId = getProductoId(productoEliminar);
 
@@ -647,12 +661,10 @@ const Stock = () => {
         throw new Error(data.mensaje || "Error al eliminar el producto");
       }
 
-      // ✅ NUEVO: remover de la lista local inmediatamente
       setProductosRaw((prev) =>
         prev.filter((p) => getProductoId(p) !== productoId)
       );
       
-      // ✅ NUEVO: limpiar el error de imagen de ese producto
       setErroresImagenes((prev) => {
         const next = { ...prev };
         delete next[productoId];

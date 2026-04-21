@@ -153,7 +153,7 @@ async function apiFetch(paramsObj, options = {}) {
 }
 
 /* =========================================================
-   PREFETCH
+   PREFETCH (Eliminada la entrada de stock/categorias)
 ========================================================= */
 const ROUTE_PREFETCH = {
   "/panel/movimientos": () => import("../Movimientos/Movimientos"),
@@ -168,7 +168,6 @@ const ROUTE_PREFETCH = {
     import("../Cuentas_Corrientes/Proveedores/Proveedores"),
 
   "/panel/stock": () => import("../Stock/Stock"),
-  "/panel/stock/categorias": () => import("../Stock/StockCategorias"),
 
   "/panel/analisis-financiero": () =>
     import("../Analisis_Financiero/Analisis_Financiero"),
@@ -798,6 +797,7 @@ const Principal = () => {
   const planNivel = normalizePlanNivel(usuario?.plan_nivel ?? 1);
   const rolUsuario = normalizeRol(usuario?.rol);
 
+  // navItems SIN el submenú de categorías
   const navItems = useMemo(() => {
     const base = [
       {
@@ -824,9 +824,7 @@ const Principal = () => {
       {
         label: "Stock",
         ruta: "/panel/stock",
-        children: [
-          { label: "Categorías", ruta: "/panel/stock/categorias" },
-        ],
+        // SIN children - eliminado el submenú de categorías
       },
       {
         label: "Cheques",
@@ -861,13 +859,13 @@ const Principal = () => {
     return found?.key || "";
   }, [location.pathname, navItems]);
 
+  // activeLabel SIN la línea de stock/categorias
   const activeLabel = useMemo(() => {
     if (location.pathname.startsWith("/panel/movimientos")) return "Movimientos";
     if (location.pathname.startsWith("/panel/cuentas-corrientes/clientes")) return "Cuentas Corrientes";
     if (location.pathname.startsWith("/panel/cuentas-corrientes/proveedores")) return "Cuentas Corrientes";
 
     if (location.pathname === "/panel/stock") return "Stock";
-    if (location.pathname.startsWith("/panel/stock/categorias")) return "Stock · Categorías";
     if (location.pathname.startsWith("/panel/stock")) return "Stock";
 
     if (location.pathname.startsWith("/panel/cheques")) return "Cheques";

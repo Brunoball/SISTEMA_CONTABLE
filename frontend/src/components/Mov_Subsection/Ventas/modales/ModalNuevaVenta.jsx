@@ -71,6 +71,64 @@ function getStockDisponible(detalle) {
 function isSinStock(stock) {
   return stock !== null && stock !== undefined && Number(stock) <= 0;
 }
+function normalizeTipoPrecioNombre(nombre) {
+  return String(nombre ?? "")
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function getDetallePreciosDisponibles(detalle) {
+  const lista = Array.isArray(detalle?.precios) ? detalle.precios : [];
+  const out = [];
+  const seen = new Set();
+
+  for (let i = 0; i < lista.length; i += 1) {
+    const p = lista[i] ?? {};
+    const idTipo = Number(p?.id_tipo_precio_stock ?? 0);
+    const monto = Number(p?.monto ?? p?.precio ?? 0);
+    const tipoPrecio = safeStr(p?.tipo_precio || p?.nombre || (idTipo > 0 ? `Precio ${idTipo}` : `Precio ${i + 1}`));
+    if (!Number.isFinite(monto)) continue;
+    const key = `${idTipo}|${tipoPrecio}|${monto}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      value: idTipo > 0 ? String(idTipo) : `precio_${i + 1}`,
+      id_tipo_precio_stock: idTipo > 0 ? idTipo : null,
+      tipo_precio: tipoPrecio || `Precio ${i + 1}`,
+      monto,
+      label: `${tipoPrecio || `Precio ${i + 1}`} - ${moneyARS(monto)}`,
+    });
+  }
+
+  if (!out.length) {
+    const montoFallback = Number(detalle?.precio ?? detalle?.precio_venta ?? detalle?.precio_promocional ?? 0);
+    out.push({
+      value: 'default',
+      id_tipo_precio_stock: null,
+      tipo_precio: 'PRECIO',
+      monto: Number.isFinite(montoFallback) ? montoFallback : 0,
+      label: `PRECIO - ${moneyARS(Number.isFinite(montoFallback) ? montoFallback : 0)}`,
+    });
+  }
+
+  return out;
+}
+function pickDetallePrecioInicial(precios) {
+  if (!Array.isArray(precios) || !precios.length) return null;
+
+  for (const p of precios) {
+    const nombre = normalizeTipoPrecioNombre(p?.tipo_precio);
+    if (nombre === 'PRECIO DE VENTA' || nombre === 'PRECIO VENTA' || nombre === 'VENTA') return p;
+  }
+
+  for (const p of precios) {
+    if (Number(p?.id_tipo_precio_stock ?? 0) === 2) return p;
+  }
+
+  return precios[0] ?? null;
+}
 const SAFE_LISTS = { clientes: [], detalles: [], medios_pago: [], tipos_venta: [], cuentas_corrientes: [] };
 function normalizeLists(lists) {
   const src = lists && typeof lists === "object" ? lists : {};
@@ -210,6 +268,9 @@ function buildEmptyRow() {
     precio: 0,
     precioDraft: "",
     precioFocused: false,
+    id_tipo_precio_stock: NULL_OPTION,
+    precio_tipo_label: "",
+    precios_disponibles: [],
     ivaPct: 0,
     stock_disponible: null,
     sinStock: false,
@@ -489,12 +550,41 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   }, []);
 
   const handleSelectDetalle = useCallback((detalle, rowId) => {
-    const precio = Number(detalle?.precio || 0);
+    const preciosDisponibles = getDetallePreciosDisponibles(detalle);
+    const precioInicial = pickDetallePrecioInicial(preciosDisponibles);
+    const precio = Number(precioInicial?.monto ?? detalle?.precio ?? 0);
     const stockDisponible = getStockDisponible(detalle);
     const sinStock = isSinStock(stockDisponible);
-    updateRow(rowId, { id_detalle: String(getDetalleId(detalle) || ""), detalleText: detalle?.nombre || "", precio, stock_disponible: stockDisponible, sinStock, cantidad: sinStock ? "" : 1 });
+
+    updateRow(rowId, {
+      id_detalle: String(getDetalleId(detalle) || ""),
+      detalleText: detalle?.nombre || "",
+      precio,
+      id_tipo_precio_stock: String(precioInicial?.value ?? NULL_OPTION),
+      precio_tipo_label: String(precioInicial?.tipo_precio ?? ""),
+      precios_disponibles: preciosDisponibles,
+      stock_disponible: stockDisponible,
+      sinStock,
+      cantidad: sinStock ? "" : 1,
+    });
+
     if (sinStock) showToast("advertencia", `El producto "${detalle?.nombre || ""}" no tiene stock disponible.`, 2500);
   }, [updateRow, showToast]);
+
+  const handlePrecioTipoChange = useCallback((rowId, selectedValue) => {
+    const row = rows.find((x) => x.id === rowId);
+    if (!row) return;
+
+    const precios = Array.isArray(row.precios_disponibles) ? row.precios_disponibles : [];
+    const selected = precios.find((p) => String(p?.value ?? "") === String(selectedValue ?? ""));
+    if (!selected) return;
+
+    updateRow(rowId, {
+      id_tipo_precio_stock: String(selected.value ?? NULL_OPTION),
+      precio_tipo_label: String(selected.tipo_precio ?? ""),
+      precio: Number(selected.monto ?? 0),
+    });
+  }, [rows, updateRow]);
 
   const handleCantidadChange = useCallback((rowId, newCantidad) => {
     const row = rows.find((r) => r.id === rowId);
@@ -986,7 +1076,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                         <div className="mi-cr-cell mi-cr-cell--detalle">
                           <GlobalAutocomplete
                             value={r.detalleText}
-                            onChange={(val) => updateRow(r.id, { detalleText: val, id_detalle: NULL_OPTION, stock_disponible: null, sinStock: false })}
+                            onChange={(val) => updateRow(r.id, { detalleText: val, id_detalle: NULL_OPTION, precio: 0, id_tipo_precio_stock: NULL_OPTION, precio_tipo_label: "", precios_disponibles: [], stock_disponible: null, sinStock: false })}
                             onSelect={(d) => handleSelectDetalle(d, r.id)}
                             options={detallesList}
                             getOptionLabel={(d) => String(d?.nombre ?? "").trim()}
@@ -1020,7 +1110,31 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                         </div>
 
                         <div className="mi-cr-cell mi-cr-cell--center">
-                          <input className="nv-cell-input nv-cell-input--right" type="text" value={moneyARS(r.precio)} readOnly tabIndex={-1} style={{ width: "100%", padding: 0, pointerEvents: "none", background: "transparent", cursor: "default" }} />
+                          {Array.isArray(r.precios_disponibles) && r.precios_disponibles.length > 0 ? (
+                            <select
+                              className="nv-cell-input nv-cell-input--select"
+                              value={String(r.id_tipo_precio_stock || r.precios_disponibles?.[0]?.value || NULL_OPTION)}
+                              onChange={(e) => handlePrecioTipoChange(r.id, e.target.value)}
+                              disabled={saving || !r.id_detalle}
+                              style={{ width: "100%" }}
+                              title={r.precio_tipo_label ? `${r.precio_tipo_label} - ${moneyARS(r.precio)}` : moneyARS(r.precio)}
+                            >
+                              {r.precios_disponibles.map((precioOpt) => (
+                                <option key={`${r.id}-${precioOpt.value}`} value={String(precioOpt.value)}>
+                                  {precioOpt.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              className="nv-cell-input nv-cell-input--right"
+                              type="text"
+                              value={moneyARS(r.precio)}
+                              readOnly
+                              tabIndex={-1}
+                              style={{ width: "100%", padding: 0, pointerEvents: "none", background: "transparent", cursor: "default" }}
+                            />
+                          )}
                         </div>
 
                         <div className="mi-cr-cell mi-cr-cell--center">

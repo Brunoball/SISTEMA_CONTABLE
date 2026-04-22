@@ -17,7 +17,7 @@ import {
   faXmark,
   faListCheck,
 } from "@fortawesome/free-solid-svg-icons";
-import BASE_URL from "../../config/config";
+import BASE_URL from "../../../config/config";
 import "./configTiendanube.css";
 
 const API_RELATIVE = "api.php";

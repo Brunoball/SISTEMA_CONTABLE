@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowRightLong } from "@fortawesome/free-solid-svg-icons";
+import { useDateRange } from "../../../context/DateRangeContext";
 import "./calendario.css";
 import "../Global_css/Global_oscuro.css";
 
@@ -16,9 +17,20 @@ const MONTHS_ES = [
 
 function sameDay(a, b) {
   if (!a || !b) return false;
-  return a.getFullYear() === b.getFullYear() &&
+  return (
+    a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
+    a.getDate() === b.getDate()
+  );
+}
+
+/** true si `date` está en el mismo mes que `ref` o en un mes posterior */
+function sameMonthOrAfter(date, ref) {
+  if (!ref) return false;
+  return (
+    date.getFullYear() > ref.getFullYear() ||
+    (date.getFullYear() === ref.getFullYear() && date.getMonth() >= ref.getMonth())
+  );
 }
 
 function startOfDay(d) {
@@ -28,10 +40,19 @@ function startOfDay(d) {
   return c;
 }
 
+function startOfMonth(d) {
+  if (!d) return null;
+  const c = new Date(d);
+  c.setDate(1);
+  c.setHours(0, 0, 0, 0);
+  return c;
+}
+
 function addMonths(date, n) {
   const d = new Date(date);
   d.setDate(1);
   d.setMonth(d.getMonth() + n);
+  d.setHours(0, 0, 0, 0);
   return d;
 }
 
@@ -56,11 +77,10 @@ function formatDate(d) {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-/* Build grid of days for a given month */
 function buildMonthGrid(year, month) {
   const first = new Date(year, month, 1);
   const last = new Date(year, month + 1, 0);
-  const startDow = first.getDay(); // 0=Sun
+  const startDow = first.getDay();
   const cells = [];
 
   for (let i = 0; i < startDow; i++) cells.push(null);
@@ -69,25 +89,94 @@ function buildMonthGrid(year, month) {
   return cells;
 }
 
+function resolveInitialViewDate(selectedFrom, maxDate) {
+  const base = startOfMonth(selectedFrom || new Date());
+
+  if (!maxDate) return base;
+
+  const maxMonth = startOfMonth(maxDate);
+  const rightStart = addMonths(base, 1);
+
+  // Si el panel derecho ya cae en el mes actual o en uno posterior,
+  // mostramos el mes actual a la derecha y el anterior a la izquierda.
+  if (sameMonthOrAfter(rightStart, maxMonth)) {
+    return addMonths(maxMonth, -1);
+  }
+
+  return base;
+}
+
+function clampViewDate(viewDate, maxDate) {
+  const normalized = startOfMonth(viewDate);
+
+  if (!maxDate) return normalized;
+
+  const maxMonth = startOfMonth(maxDate);
+  const rightStart = addMonths(normalized, 1);
+
+  if (sameMonthOrAfter(rightStart, maxMonth)) {
+    return addMonths(maxMonth, -1);
+  }
+
+  return normalized;
+}
+
 /* =============================================
    Props:
-     value: { from: Date|null, to: Date|null }
+     value:    { from: Date|null, to: Date|null }
      onChange: ({ from, to }) => void
      minDate?: Date
-     maxDate?: Date
+     maxDate?: Date   ← opcional; si no viene, se toma del contexto
      onClose?: () => void
 ============================================= */
-export default function Calendario({ value, onChange, minDate, maxDate, onClose }) {
+export default function Calendario({
+  value,
+  onChange,
+  minDate,
+  maxDate: maxDateProp,
+  onClose,
+}) {
+  const { maxDate: contextMaxDate, calendarConfig } = useDateRange();
+
+  // Prioridad:
+  // 1) maxDate pasado por prop
+  // 2) maxDate del contexto cuando el modo es "dias_atras"
+  const effectiveMaxDate = useMemo(() => {
+    if (maxDateProp) return maxDateProp;
+    if (calendarConfig?.modo === "dias_atras" && contextMaxDate) return contextMaxDate;
+    return null;
+  }, [maxDateProp, contextMaxDate, calendarConfig?.modo]);
+
   const today = startOfDay(new Date());
 
-  const [viewDate, setViewDate] = useState(() => {
-    const base = value?.from ? new Date(value.from) : new Date();
-    base.setDate(1);
-    base.setHours(0, 0, 0, 0);
-    return base;
-  });
+  const [viewDate, setViewDate] = useState(() =>
+    resolveInitialViewDate(value?.from, effectiveMaxDate)
+  );
 
   const rightViewDate = useMemo(() => addMonths(viewDate, 1), [viewDate]);
+
+  // Si cambia el modo o maxDate, reacomodamos automáticamente la vista
+  useEffect(() => {
+    setViewDate((prev) => clampViewDate(prev, effectiveMaxDate));
+  }, [effectiveMaxDate]);
+
+  // Si cambia mucho el rango desde afuera y no hay maxDate,
+  // alineamos la vista al mes del "from"
+  useEffect(() => {
+    if (!value?.from) return;
+    setViewDate((prev) => {
+      const target = startOfMonth(value.from);
+      if (sameDay(startOfMonth(prev), target)) return prev;
+      return clampViewDate(target, effectiveMaxDate);
+    });
+  }, [value?.from, effectiveMaxDate]);
+
+  // No permitir avanzar si el panel derecho ya está mostrando el mes de maxDate
+  const canGoNext = useMemo(() => {
+    if (!effectiveMaxDate) return true;
+    return !sameMonthOrAfter(rightViewDate, effectiveMaxDate);
+  }, [rightViewDate, effectiveMaxDate]);
+
   const [hovered, setHovered] = useState(null);
   const lastClickRef = useRef({ day: null, time: 0 });
 
@@ -95,10 +184,20 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
   const to = value?.to ? startOfDay(value.to) : null;
 
   const prevMonth = () => setViewDate((v) => addMonths(v, -1));
-  const nextMonth = () => setViewDate((v) => addMonths(v, 1));
+  const nextMonth = () => {
+    if (canGoNext) setViewDate((v) => addMonths(v, 1));
+  };
+
+  const isDisabledDay = useCallback((day) => {
+    if (!day) return true;
+    if (minDate && isBefore(day, minDate)) return true;
+    if (effectiveMaxDate && isAfter(day, effectiveMaxDate)) return true;
+    return false;
+  }, [minDate, effectiveMaxDate]);
 
   const handleDayClick = useCallback((day) => {
-    if (!day) return;
+    if (!day || isDisabledDay(day)) return;
+
     const now = Date.now();
     const last = lastClickRef.current;
     const isDoubleClick =
@@ -122,20 +221,19 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
         onChange({ from, to: startOfDay(day) });
       }
     }
-  }, [from, to, onChange]);
+  }, [from, to, onChange, isDisabledDay]);
 
   const previewEnd = from && !to ? hovered : null;
 
   const getDayClass = useCallback((day) => {
     if (!day) return "";
-    const classes = ["cal-day"];
 
+    const classes = ["cal-day"];
     const d = startOfDay(day);
     const isToday = sameDay(d, today);
     const isFrom = from && sameDay(d, from);
-    const isTo = to ? sameDay(d, to) : (previewEnd && sameDay(d, previewEnd));
-
     const rangeEnd = to || previewEnd;
+    const isTo = to ? sameDay(d, to) : (previewEnd && sameDay(d, previewEnd));
     const inR = rangeEnd ? inRange(d, from, rangeEnd) : false;
 
     if (isToday) classes.push("cal-day--today");
@@ -143,22 +241,22 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
     if (isTo) classes.push("cal-day--to");
     if (isFrom && isTo) classes.push("cal-day--single");
     if (inR) classes.push("cal-day--inrange");
-
     if (isFrom && rangeEnd && !sameDay(from, rangeEnd)) classes.push("cal-day--range-start");
     if (isTo && from && !sameDay(from, rangeEnd)) classes.push("cal-day--range-end");
-
-    if (minDate && isBefore(d, minDate)) classes.push("cal-day--disabled");
-    if (maxDate && isAfter(d, maxDate)) classes.push("cal-day--disabled");
+    if (isDisabledDay(d)) classes.push("cal-day--disabled");
 
     return classes.join(" ");
-  }, [from, to, previewEnd, today, minDate, maxDate]);
+  }, [from, to, previewEnd, today, isDisabledDay]);
 
   const wrapRef = useRef(null);
+
   useEffect(() => {
     if (!onClose) return;
+
     const handler = (e) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) onClose();
     };
+
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
@@ -173,25 +271,25 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
         <div className="cal-month__label">
           {MONTHS_ES[month]} {year}
         </div>
+
         <div className="cal-grid">
           {DAYS_ES.map((d) => (
-            <div key={d} className="cal-dow">{d}</div>
+            <div key={d} className="cal-dow">
+              {d}
+            </div>
           ))}
+
           {cells.map((day, idx) => (
             <button
               key={idx}
               type="button"
               className={getDayClass(day)}
               onClick={() => day && handleDayClick(day)}
-              onMouseEnter={() => day && setHovered(startOfDay(day))}
+              onMouseEnter={() => day && !isDisabledDay(day) && setHovered(startOfDay(day))}
               onMouseLeave={() => setHovered(null)}
               tabIndex={day ? 0 : -1}
               aria-label={day ? formatDate(day) : undefined}
-              disabled={
-                !day ||
-                (minDate && isBefore(day, minDate)) ||
-                (maxDate && isAfter(day, maxDate))
-              }
+              disabled={isDisabledDay(day)}
             >
               {day ? day.getDate() : ""}
             </button>
@@ -214,15 +312,18 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
             {from ? formatDate(from) : "——/——/————"}
           </span>
         </div>
+
         <div className="cal-header__arrow">
-  <FontAwesomeIcon icon={faArrowRightLong} />
-</div>
+          <FontAwesomeIcon icon={faArrowRightLong} />
+        </div>
+
         <div className="cal-header__slot">
           <span className="cal-header__label">Hasta</span>
           <span className={`cal-header__date ${rangeEnd ? "is-set" : "is-empty"}`}>
             {rangeEnd ? formatDate(rangeEnd) : "——/——/————"}
           </span>
         </div>
+
         {(from || to) && (
           <button
             type="button"
@@ -237,19 +338,35 @@ export default function Calendario({ value, onChange, minDate, maxDate, onClose 
 
       {/* Months */}
       <div className="cal-panels">
-        <button type="button" className="cal-nav cal-nav--prev" onClick={prevMonth} aria-label="Mes anterior">
+        <button
+          type="button"
+          className="cal-nav cal-nav--prev"
+          onClick={prevMonth}
+          aria-label="Mes anterior"
+        >
           ‹
         </button>
 
         {renderMonth(viewDate)}
         {renderMonth(rightViewDate)}
 
-        <button type="button" className="cal-nav cal-nav--next" onClick={nextMonth} aria-label="Mes siguiente">
+        <button
+          type="button"
+          className={[
+            "cal-nav",
+            "cal-nav--next",
+            !canGoNext ? "cal-nav--hidden" : "",
+          ].filter(Boolean).join(" ")}
+          onClick={nextMonth}
+          disabled={!canGoNext}
+          aria-label="Mes siguiente"
+          aria-hidden={!canGoNext ? "true" : undefined}
+        >
           ›
         </button>
       </div>
 
-      {/* Footer hint */}
+      {/* Footer */}
       <div className="cal-footer">
         {!from && <span>Seleccioná la fecha de inicio del período.</span>}
         {from && !to && <span>Seleccioná la fecha de fin, o doble clic para un día exacto.</span>}

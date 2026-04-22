@@ -173,7 +173,7 @@ const ROUTE_PREFETCH = {
     import("../Analisis_Financiero/Analisis_Financiero"),
   "/panel/configuracion": () => import("../Configuracion/Configuracion"),
   "/panel/configuracion/tiendanube": () =>
-    import("../Configuracion/ConfigTiendaNube"),
+    import("../Configuracion/ConfiguracionTiendaNube/ConfigTiendaNube"),
   "/panel/cheques/cartera": () =>
     import("../Cheques/Cheques_Cartera/Cheques_Cartera"),
   "/panel/cheques/flujo": () =>

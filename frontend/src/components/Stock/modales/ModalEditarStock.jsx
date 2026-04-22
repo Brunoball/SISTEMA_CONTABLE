@@ -15,13 +15,13 @@ import {
   faCircleExclamation,
   faPaperclip,
   faArrowUpFromBracket,
-  faTriangleExclamation,
   faBarcode,
   faCubesStacked,
   faEye,
   faPercent,
   faMoneyBillTrendUp,
   faLayerGroup,
+  faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 import BASE_URL from "../../../config/config";
 
@@ -164,10 +164,8 @@ function isTemaOscuro() {
   );
 }
 
-// NUEVAS FUNCIONES DE MANEJO DE NÚMEROS
 function parseNumberFromInput(value) {
   if (!value || value === "") return null;
-  // Reemplazar coma por punto y eliminar caracteres no numéricos excepto punto
   const normalized = String(value).replace(/\./g, "").replace(",", ".");
   const num = parseFloat(normalized);
   return isNaN(num) ? null : num;
@@ -177,11 +175,9 @@ function formatNumberForDisplay(value) {
   if (value === null || value === undefined || value === "") return "";
   const num = typeof value === "number" ? value : parseFloat(String(value).replace(",", "."));
   if (isNaN(num)) return "";
-  // Si es entero, mostrar sin decimales
   if (Number.isInteger(num)) {
     return num.toString();
   }
-  // Si tiene decimales, mostrar con coma
   return num.toString().replace(".", ",");
 }
 
@@ -582,7 +578,12 @@ function buildEmptyForm() {
   };
 }
 
-export default function ModalEditarProducto({ productoId, onClose, onGuardado }) {
+export default function ModalEditarProducto({
+  productoId,
+  onClose,
+  onGuardado,
+  onToast,  // ✅ Recibir onToast como prop
+}) {
   const closeBtnRef = useRef(null);
   const inputImagenRef = useRef(null);
 
@@ -590,6 +591,11 @@ export default function ModalEditarProducto({ productoId, onClose, onGuardado })
   const [guardando, setGuardando] = useState(false);
   const [errores, setErrores] = useState({});
   const [dark, setDark] = useState(isTemaOscuro);
+
+  // ✅ CORREGIDO: orden de parámetros (tipo, mensaje, duracion)
+  const mostrarToast = (mensaje, tipo = "error", duracion = 2500) => {
+    onToast?.(tipo, errorToText(mensaje), duracion);
+  };
 
   const [form, setForm] = useState(buildEmptyForm());
   const [categorias, setCategorias] = useState([]);
@@ -751,8 +757,9 @@ export default function ModalEditarProducto({ productoId, onClose, onGuardado })
 
     const cargarProducto = async () => {
       if (!productoId) {
-        setErrores({ global: "ID de producto inválido." });
+        mostrarToast("ID de producto inválido.", "error");
         setLoading(false);
+        onClose?.();
         return;
       }
 
@@ -770,7 +777,8 @@ export default function ModalEditarProducto({ productoId, onClose, onGuardado })
         if (mounted) setForm(hydratePricingFormValues(normalizarProducto(data)));
       } catch (err) {
         if (mounted) {
-          setErrores({ global: err.message || "Error al cargar el producto" });
+          mostrarToast(err, "error");
+          onClose?.();
         }
       } finally {
         if (mounted) setLoading(false);
@@ -826,7 +834,13 @@ export default function ModalEditarProducto({ productoId, onClose, onGuardado })
       setForm((prev) => ({ ...prev, [name]: value }));
     }
 
-    setErrores((prev) => ({ ...prev, [name]: "", global: "" }));
+    setErrores((prev) => ({ ...prev, [name]: "" }));
+  };
+
+  const handleCostoChangeLive = (rawValue) => {
+    const value = rawValue;
+    recalcularTodoConCosto(value);
+    setErrores((prev) => ({ ...prev, precio_costo: "" }));
   };
 
   const handlePricingBlur = (source, groupName) => {
@@ -938,7 +952,7 @@ export default function ModalEditarProducto({ productoId, onClose, onGuardado })
         }),
       };
     });
-    setErrores((prev) => ({ ...prev, [`tipo_${idx}`]: "", global: "" }));
+    setErrores((prev) => ({ ...prev, [`tipo_${idx}`]: "" }));
   };
 
   const handleExtraPriceBlur = (idx, source) => {
@@ -1012,7 +1026,7 @@ export default function ModalEditarProducto({ productoId, onClose, onGuardado })
     setNuevaImagenFile(file);
     setNuevaImagenPreview(blobUrl);
     setEliminarImagenActual(false);
-    setErrores((prev) => ({ ...prev, imagen: "", global: "" }));
+    setErrores((prev) => ({ ...prev, imagen: "" }));
   };
 
   const handleImagenInput = (e) => {
@@ -1023,7 +1037,7 @@ export default function ModalEditarProducto({ productoId, onClose, onGuardado })
   const handleEliminarImagenActual = () => {
     setEliminarImagenActual(true);
     limpiarNuevaImagen();
-    setErrores((prev) => ({ ...prev, imagen: "", global: "" }));
+    setErrores((prev) => ({ ...prev, imagen: "" }));
   };
 
   const handleCancelarEliminarImagen = () => {
@@ -1063,9 +1077,8 @@ export default function ModalEditarProducto({ productoId, onClose, onGuardado })
       setForm((prev) => ({ ...prev, id_categoria_stock: normalizada.id }));
       setMiniCategoriaNombre("");
       setMiniCategoriaOpen(false);
-      setErrores((prev) => ({ ...prev, global: "" }));
     } catch (err) {
-      setErrores((prev) => ({ ...prev, global: errorToText(err, "No se pudo crear la categoría") }));
+      mostrarToast(err, "error");
     } finally {
       setGuardandoMiniCategoria(false);
     }
@@ -1116,7 +1129,7 @@ export default function ModalEditarProducto({ productoId, onClose, onGuardado })
       setMiniTipoNombre("");
       setMiniTipoOpen(false);
     } catch (err) {
-      setErrores((prev) => ({ ...prev, global: errorToText(err, "No se pudo crear el tipo de precio") }));
+      mostrarToast(err, "error");
     } finally {
       setGuardandoMiniTipo(false);
     }
@@ -1153,9 +1166,15 @@ export default function ModalEditarProducto({ productoId, onClose, onGuardado })
   const handleGuardar = async () => {
     const formNormalizado = hydratePricingFormValues(form);
     const errs = validar(formNormalizado);
+    
+    // ✅ Si hay errores de validación, mostrar toast con el primer error
     if (Object.keys(errs).length > 0) {
       setErrores(errs);
       setForm((prev) => ({ ...prev, ...formNormalizado }));
+      
+      // ✅ Mostrar el primer error como toast
+      const primerError = Object.values(errs)[0];
+      mostrarToast(primerError || "Revisá los campos del formulario", "error");
       return;
     }
 
@@ -1204,10 +1223,13 @@ export default function ModalEditarProducto({ productoId, onClose, onGuardado })
         body: fd,
       });
 
-      await parseJsonOrThrow(res);
-      onGuardado?.();
+      const data = await parseJsonOrThrow(res);
+      const productoGuardado = data?.producto ?? data?.data?.producto ?? data?.data ?? null;
+      onGuardado?.(productoGuardado);
+      mostrarToast("Producto actualizado correctamente", "success");
+      onClose?.();
     } catch (err) {
-      setErrores({ global: err.message || "Error al actualizar el producto" });
+      mostrarToast(err.message || "Error al actualizar el producto", "error");
     } finally {
       setGuardando(false);
     }
@@ -1256,16 +1278,6 @@ export default function ModalEditarProducto({ productoId, onClose, onGuardado })
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {errores.global && (
-                  <div className="cmi-warnBox">
-                    <div className="cmi-warnBox__title">
-                      <FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 8 }} />
-                      Error
-                    </div>
-                    <div>{errorToText(errores.global)}</div>
-                  </div>
-                )}
-
                 <FloatingField label="Nombre del producto *" icon={faBoxOpen} error={errores.nombre}>
                   <input
                     name="nombre"
@@ -1316,7 +1328,7 @@ export default function ModalEditarProducto({ productoId, onClose, onGuardado })
                     <PriceInput
                       name="precio_costo"
                       value={form.precio_costo}
-                      onChange={handleChange}
+                      onChange={(e) => handleCostoChangeLive(e.target.value)}
                       onBlur={(e) => recalcularTodoConCosto(e.target.value)}
                       placeholder="0"
                       disabled={guardando}

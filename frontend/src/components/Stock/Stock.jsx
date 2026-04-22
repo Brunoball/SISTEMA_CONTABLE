@@ -207,7 +207,7 @@ function normalizeProductoListItem(prod = {}) {
       prod?.modificado_en ??
       prod?.imagen_actualizada_en ??
       prod?.ultima_actualizacion ??
-      new Date().toISOString(),
+      "",
   };
 }
 
@@ -251,14 +251,14 @@ function getProductoImageRefreshToken(prod, refreshKey = 0, intento = 0) {
   return `${archivoId}-${String(updateToken || "")}-${String(refreshKey)}-${String(intento)}`;
 }
 
-function getProductoImageUrl(prod, apiUrl, refreshKey = 0) {
+function getProductoImageUrl(prod, apiUrl, refreshKey = 0, intento = 0) {
   const archivoId = Number(prod?.imagen_archivo_id || 0);
   if (!archivoId) return "";
 
   const params = new URLSearchParams({
     action: "stock_producto_imagen_ver",
     id_archivo: String(archivoId),
-    _imgv: getProductoImageRefreshToken(prod, refreshKey, 0),
+    _imgv: getProductoImageRefreshToken(prod, refreshKey, intento),
   });
 
   return withSessionKey(`${apiUrl}?${params.toString()}`);
@@ -344,8 +344,9 @@ const Stock = () => {
   const [eliminando, setEliminando] = useState(false);
 
   const [toast, setToast] = useState(null);
-  const [refreshImagenesKey, setRefreshImagenesKey] = useState(Date.now());
+  const [versionImagenPorProducto, setVersionImagenPorProducto] = useState({});
   const [erroresImagenes, setErroresImagenes] = useState({});
+  const [reintentosImagenes, setReintentosImagenes] = useState({});
 
   const refreshTimersRef = useRef([]);
   const productosPorPagina = 20;
@@ -367,9 +368,46 @@ const Stock = () => {
     };
   }, [limpiarRefreshTimers]);
 
-  const invalidarMiniaturas = useCallback((seed = Date.now()) => {
-    setRefreshImagenesKey(seed);
-    setErroresImagenes({});
+  const invalidarMiniaturaProducto = useCallback((productoId, seed = Date.now()) => {
+    const id = Number(productoId || 0);
+    if (!id) return;
+
+    setVersionImagenPorProducto((prev) => ({
+      ...prev,
+      [id]: seed,
+    }));
+
+    setErroresImagenes((prev) => {
+      if (!prev?.[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+    setReintentosImagenes((prev) => {
+      if (!prev?.[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
+
+  const programarReintentoImagen = useCallback((productoId) => {
+    const timerId = setTimeout(() => {
+      setReintentosImagenes((prev) => ({
+        ...prev,
+        [productoId]: Number(prev?.[productoId] || 0) + 1,
+      }));
+
+      setErroresImagenes((prev) => {
+        if (!prev?.[productoId]) return prev;
+        const next = { ...prev };
+        delete next[productoId];
+        return next;
+      });
+    }, 900);
+
+    refreshTimersRef.current.push(timerId);
   }, []);
 
   const recargarTodo = useCallback(async () => {
@@ -420,39 +458,21 @@ const Stock = () => {
     }
   }, []);
 
-  const programarRecargasSuaves = useCallback(
-    (delays = [700, 1800, 3200]) => {
-      limpiarRefreshTimers();
-
-      delays.forEach((delay) => {
-        const timerId = setTimeout(async () => {
-          try {
-            await recargarTodo();
-            invalidarMiniaturas(Date.now() + delay);
-          } catch {}
-        }, delay);
-
-        refreshTimersRef.current.push(timerId);
-      });
-    },
-    [limpiarRefreshTimers, recargarTodo, invalidarMiniaturas]
-  );
 
   const refrescarDespuesDeGuardar = useCallback(
     async (productoGuardado = null) => {
+      const productoId = getProductoId(productoGuardado);
+
       if (productoGuardado) {
         setProductosRaw((prev) => mergeProductoEnLista(prev, productoGuardado));
-        invalidarMiniaturas(Date.now());
+        invalidarMiniaturaProducto(productoId);
       }
 
       try {
         await recargarTodo();
-        invalidarMiniaturas(Date.now() + 1);
       } catch {}
-
-      programarRecargasSuaves();
     },
-    [invalidarMiniaturas, programarRecargasSuaves, recargarTodo]
+    [invalidarMiniaturaProducto, recargarTodo]
   );
 
   const fetchCategorias = useCallback(async () => {
@@ -500,14 +520,13 @@ const Stock = () => {
       }
 
       setProductosRaw(normalizeProductosCollection(data.productos));
-      invalidarMiniaturas(Date.now());
     } catch (err) {
       setProductosRaw([]);
       setError(err.message || "Error inesperado");
     } finally {
       setLoading(false);
     }
-  }, [invalidarMiniaturas]);
+  }, []);
 
   useEffect(() => {
     fetchProductos();
@@ -666,6 +685,11 @@ const Stock = () => {
       );
       
       setErroresImagenes((prev) => {
+        const next = { ...prev };
+        delete next[productoId];
+        return next;
+      });
+      setReintentosImagenes((prev) => {
         const next = { ...prev };
         delete next[productoId];
         return next;
@@ -882,10 +906,16 @@ const Stock = () => {
                     productos.map((prod) => {
                       const productoId = getProductoId(prod);
                       const archivoId = Number(prod?.imagen_archivo_id || 0);
+                      const intentoImagen = Number(reintentosImagenes?.[productoId] || 0);
                       const imagenRota = !!erroresImagenes[productoId];
                       const imageUrl =
                         archivoId > 0
-                          ? getProductoImageUrl(prod, API_URL, refreshImagenesKey)
+                          ? getProductoImageUrl(
+                              prod,
+                              API_URL,
+                              versionImagenPorProducto[productoId] || 0,
+                              intentoImagen
+                            )
                           : "";
 
                       return (
@@ -905,7 +935,20 @@ const Stock = () => {
                                     className="prod-thumb__img"
                                     loading="lazy"
                                     decoding="async"
+                                    onLoad={() => {
+                                      setErroresImagenes((prev) => {
+                                        if (!prev?.[productoId]) return prev;
+                                        const next = { ...prev };
+                                        delete next[productoId];
+                                        return next;
+                                      });
+                                    }}
                                     onError={() => {
+                                      if (intentoImagen < 6) {
+                                        programarReintentoImagen(productoId);
+                                        return;
+                                      }
+
                                       setErroresImagenes((prev) => ({
                                         ...prev,
                                         [productoId]: true,
@@ -1061,6 +1104,7 @@ const Stock = () => {
         <ModalEditarProducto
           productoId={productoEditarId}
           onClose={handleCerrarEditar}
+          onToast={mostrarToast}
           onGuardado={async (productoGuardado) => {
             handleCerrarEditar();
             await refrescarDespuesDeGuardar(productoGuardado);

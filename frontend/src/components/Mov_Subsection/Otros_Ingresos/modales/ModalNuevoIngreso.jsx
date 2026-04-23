@@ -7,6 +7,7 @@ import BASE_URL from "../../../../config/config";
 import ModalNuevoCheque from "../../../Global/Modales/ModalNuevoCheque.jsx";
 import ModalNuevaDescripcion from "./ModalNuevaDescripcion.jsx";
 import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
+import { PanelMediosPagoInlineVenta } from "./PanelMediosPagoIngresoLocal.jsx";
 import "../../../Global/Global_css/Global_Modals.css";
 import "../../../Global/Global_css/Global_responsive.css";
 import "../../../Global/Global_css/roots.css";
@@ -108,6 +109,21 @@ function MedioPagoIngresoRow({ row, mediosPagoList, totalIngreso, sumaMediosPago
       </div> : <button type="button" className="mit-btn mit-btn--solid" style={{ width: "100%", marginTop: 4 }} onClick={() => onOpenCheque(row.id, tipoCheque)} disabled={saving}>Cargar {tipoCheque === "echeq" ? "eCheq" : "cheque"}</button>}
     </div>}
   </div>;
+}
+
+function mapIngresoMedioToVentaRow(mp) {
+  return {
+    ...mp,
+    cheque: mp?.cheque ?? mp?.chequeData ?? null,
+  };
+}
+
+function adaptVentaPatchToIngreso(patch) {
+  if (!patch || typeof patch !== "object") return patch;
+  if (Object.prototype.hasOwnProperty.call(patch, "cheque")) {
+    return { ...patch, chequeData: patch.cheque, cheque: patch.cheque };
+  }
+  return patch;
 }
 
 export default function ModalNuevoIngreso({ open, mode = "create", initialData = null, lists, onClose, onToast, onSubmit, onSaved }) {
@@ -332,16 +348,434 @@ export default function ModalNuevoIngreso({ open, mode = "create", initialData =
   const btnLabel = saving ? "Procesando..." : mode === "edit" ? "Guardar cambios" : "Guardar ingreso";
   if (!open) return null;
 
-  return createPortal(<>
-    <div className="mi-modal__overlay"><div className="mi-modal__container mi-modal__container--mov" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
-      <div className="mi-modal__header"><div className="mi-modal__head-icon" aria-hidden="true"><FontAwesomeIcon icon={faPlus} /></div><div className="mi-modal__head-left"><h2 className="mi-modal__title">{mode === "edit" ? "Editar Ingreso" : "Nuevo Ingreso"}</h2></div><button ref={closeBtnRef} className="mi-modal__close" onClick={() => !saving && onClose?.()} aria-label="Cerrar" disabled={saving} type="button">✕</button></div>
-      <div className="mi-modal__content"><div className="mi-cr-grid"><section className="mi-cr-table"><div className="mi-cr-table__head"><div style={{ paddingLeft: 10 }}>Descripción</div><div>Cant.</div><div className="right">Importe</div><div>IVA %</div><div className="right">IVA $</div><div className="right">Total</div><div /></div><div ref={rowsContainerRef} className={`mi-cr-table__rows${hasScroll ? " has-scroll" : ""}`}>{rowsCalc.map((r) => { const stockNum = r.stock_disponible !== null && r.stock_disponible !== undefined ? Number(r.stock_disponible) : null; const rowSinStock = r.sinStock || isSinStock(stockNum); return <div key={r.id} className={`mi-cr-row${rowSinStock ? " mi-cr-row--sin-stock" : ""}`}><div className="mi-cr-cell mi-cr-cell--detalle"><GlobalAutocomplete value={r.detalle} onChange={(val) => updateRow(r.id, { detalle: val, id_detalle: NULL_OPTION, stock_disponible: null, sinStock: false })} onSelect={(item) => handleSelectDetalle(item, r.id)} options={enhancedDetallesList} getOptionLabel={(d) => d && d.__isNewOption ? d.nombre : optionLabel(d)} getOptionValue={(d) => d && d.__isNewOption ? "__new_option__" : String(getDetalleId(d) ?? optionLabel(d))} placeholder="Escribí o buscá un detalle…" disabled={saving} showAllOnFocus={false} maxItems={18} inputClassName="nv-cell-input" /></div><div className="mi-cr-cell mi-cr-cell--center"><input className="nv-cell-input nv-cell-input--center" type="number" min={rowSinStock ? undefined : "1"} step="1" value={rowSinStock ? "" : r.cantidad} onChange={(e) => handleCantidadChange(r.id, e.target.value === "" ? "" : Number(e.target.value))} disabled={saving || rowSinStock} placeholder={rowSinStock ? "0" : ""} title={rowSinStock ? "No podés ingresar cantidad porque el stock es 0" : ""} style={{ width: "100%", background: rowSinStock ? "#f3f4f6" : undefined, color: rowSinStock ? "#b91c1c" : undefined, borderColor: rowSinStock ? "#fca5a5" : undefined, cursor: rowSinStock ? "not-allowed" : undefined, opacity: rowSinStock ? 0.9 : 1 }} />{r.stock_disponible !== null && r.stock_disponible !== undefined && <div style={{ fontSize: "10px", fontWeight: rowSinStock ? 700 : 500, color: rowSinStock ? "#b91c1c" : "#666" }}>{rowSinStock ? "Sin stock" : `Stock: ${r.stock_disponible}`}</div>}</div><div className="mi-cr-cell mi-cr-cell--center"><input className="nv-cell-input nv-cell-input--right" type="text" inputMode="decimal" value={r.precioFocused ? r.precioDraft ?? "" : formatMoneyInputARS(r.precio)} onFocus={(e) => { updateRow(r.id, { precioFocused: true, precioDraft: formatEditableMoney(r.precio) }); setTimeout(() => e.target.select(), 0); }} onChange={(e) => { const c = e.target.value.replace(/[^\d,.\-]/g, ""); updateRow(r.id, { precioDraft: c, precio: parseMoneyInputARS(c) }); }} onBlur={() => { const p = parseMoneyInputARS(r.precioDraft); updateRow(r.id, { precio: p, precioDraft: "", precioFocused: false }); }} placeholder="$ 0,00" disabled={saving} style={{ width: "100%" }} /></div><div className="mi-cr-cell mi-cr-cell--center"><select className="nv-cell-input nv-cell-input--center nv-cell-input--select" value={String(r.ivaPct)} onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })} disabled={saving} style={{ width: "100%" }}>{IVA_OPTIONS.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}</select></div><div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">{moneyARS(r.ivaMonto)}</div><div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">{moneyARS(r.total)}</div><div className="mi-cr-cell mi-cr-cell--center" id="delete_cell"><button type="button" className="mi-cr-del" onClick={() => removeRow(r.id)} disabled={saving} title="Eliminar fila">×</button></div></div>; })}</div><div className="mi-cr-table__foot"><div className="mi-cr-foot-actions"><button type="button" className="nv-foot-btn" onClick={addRow} disabled={saving}><span className="nv-foot-btn__icon">+</span>Agregar fila</button></div><div className="mi-cr-totals"><div className="mi-cr-totalLine mi-cr-totalLine--sub"><span>Subtotal</span><b>{moneyARS(resumen.subtotal)}</b></div><div className="mi-cr-totalLine mi-cr-totalLine--iva"><span>IVA</span><b>{moneyARS(resumen.iva)}</b></div><div className="mi-cr-totalLine mi-cr-totalLine--total"><span>Total</span><b>{moneyARS(resumen.total)}</b></div></div></div></section>
-      <aside className="nc-aside"><div className="nc-section"><div className="nc-section-head"><div className="nc-section-dot" /><span>Datos del ingreso</span></div><div className="nc-section-body"><div className="nc-field"><input className="nc-input" type="date" placeholder=" " value={fecha} onChange={(e) => setFecha(String(e.target.value || "").trim())} disabled={saving} /><label className="nc-label">Fecha</label></div></div></div>
-      <div className="nc-section"><div className="nc-section-head"><div className="nc-section-dot" style={{ background: "#0f766e" }} /><span>Medios de pago</span></div><div className="nc-section-body">{mediosFilas.map((mp) => <MedioPagoIngresoRow key={mp.id} row={mp} mediosPagoList={mediosPagoList} totalIngreso={resumen.total} sumaMediosPago={sumaMediosPago} onUpdate={updateMedioPago} onRemove={removeMedioPago} saving={saving} onOpenCheque={(medioRowId, tipoCheque) => setChequeEditor({ open: true, medioRowId, tipoCheque })} />)}<div className="nc-mp-totals"><span className="nc-mp-totals-asignado">Asignado: <b>{moneyARS(sumaMediosPago)}</b></span>{diferenciaRestante > 0.01 && <span className="nc-mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>}{diferenciaRestante <= 0.01 && sumaMediosPago > 0 && <span className="nc-mp-totals-ok">✓ Cubierto</span>}</div><button type="button" className="nc-pago-btn" onClick={addMedioPago} disabled={saving}><FontAwesomeIcon icon={faPlus} style={{ fontSize: 11 }} /> Agregar otro medio</button></div></div>
-      <div className="nc-section"><div className="nc-section-head"><div className="nc-section-dot" style={{ background: "#64748b" }} /><span>Comprobante adjunto</span></div><div className="nc-section-body"><div className="mi-uploadCard"><div className="mi-uploadCard__head"><div className="mi-uploadCard__title">Comprobante</div><div className="mi-uploadCard__sub">Seleccioná, visualizá o quitá el archivo antes de guardar</div></div><div className="mi-uploadCard__body"><div className={`mi-uploadFile${archivoAdjunto ? " is-filled" : " is-empty"}`}>{archivoAdjunto ? <><div className="mi-uploadFile__icon"><FontAwesomeIcon icon={faFileInvoiceDollar} /></div><div className="mi-uploadFile__meta"><div className="mi-uploadFile__name" title={archivoAdjunto.name}>{archivoAdjunto.name}</div><div className="mi-uploadFile__size">{Math.max(1, Math.round((archivoAdjunto.size || 0) / 1024))} KB</div></div><div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}><button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--ghost" onClick={abrirViewer} disabled={saving} title="Ver comprobante"><FontAwesomeIcon icon={faEye} /></button><button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--ghost" onClick={() => { setArchivoAdjunto(null); if (inputFileRef.current) inputFileRef.current.value = ""; }} disabled={saving || openViewer} title="Quitar archivo"><FontAwesomeIcon icon={faTrash} /></button></div></> : <div className="mi-uploadFile__empty">No hay comprobante seleccionado</div>}</div><div className="mi-uploadBar" style={{ marginTop: 10 }}><input ref={inputFileRef} type="file" className="mi-uploadBar__input" onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)} disabled={saving} style={{ display: "none" }} /><button type="button" className="mi-uploadBar__btn mi-uploadBar__btn--primary" onClick={() => inputFileRef.current?.click()} disabled={saving}><FontAwesomeIcon icon={faUpload} /> {archivoAdjunto ? "Reemplazar archivo" : "Seleccionar archivo"}</button></div></div></div></div></div>
-      <div className="nc-actions mi-cr-filters__actions"><button type="button" className="mit-btn mit-btn--solid mit-btn--block" onClick={submit} disabled={saving}>{btnLabel}</button><button type="button" className="mit-btn mit-btn--ghost mit-btn--block" onClick={() => !saving && onClose?.()} disabled={saving}>Cancelar</button></div></aside></div></div></div></div>
-      {openNuevaDescripcionModal && <ModalNuevaDescripcion open={openNuevaDescripcionModal} onClose={() => setOpenNuevaDescripcionModal(false)} onSave={handleGuardarNuevaDescripcion} dark={dark} />}
-      {chequeEditor.open && <ModalNuevoCheque open={chequeEditor.open} onClose={() => setChequeEditor({ open: false, medioRowId: null, tipoCheque: "cheque" })} onSave={async (datosCheque) => { updateMedioPago(chequeEditor.medioRowId, { chequeData: { ...datosCheque, tipo_cheque: chequeEditor.tipoCheque }, monto: Number(datosCheque?.importe || 0), montoDraft: "", montoFocused: false }); setChequeEditor({ open: false, medioRowId: null, tipoCheque: "cheque" }); showToast("exito", `${chequeEditor.tipoCheque === "echeq" ? "eCheq" : "Cheque"} cargado. Se guardará al confirmar el ingreso.`, 3200); }} initialData={mediosFilas.find((x) => x.id === chequeEditor.medioRowId)?.chequeData || undefined} tipoCheque={chequeEditor.tipoCheque} dark={dark} saving={false} />}
-      <ModalVerComprobante open={openViewer} url={viewerData.url} mime={viewerData.mime} title={viewerData.title} onClose={cerrarViewer} />
-    </>, document.body);
+  return createPortal(
+    <>
+      <div className="mi-modal__overlay">
+        <div
+          className="mi-modal__container mi-modal__container--mov"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="mi-modal__header">
+            <div className="mi-modal__head-icon" aria-hidden="true">
+              <FontAwesomeIcon icon={faPlus} />
+            </div>
+
+            <div className="mi-modal__head-left">
+              <h2 className="mi-modal__title">
+                {mode === "edit" ? "Editar Ingreso" : "Nuevo Ingreso"}
+              </h2>
+            </div>
+
+            <button
+              ref={closeBtnRef}
+              className="mi-modal__close"
+              onClick={() => !saving && onClose?.()}
+              aria-label="Cerrar"
+              disabled={saving}
+              type="button"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="mi-modal__content">
+            <div className="mi-cr-grid">
+              <section className="mi-cr-table">
+                <div className="mi-cr-table__head">
+                  <div style={{ paddingLeft: 10 }}>Descripción</div>
+                  <div>Cant.</div>
+                  <div className="right">Importe</div>
+                  <div>IVA %</div>
+                  <div className="right">IVA $</div>
+                  <div className="right">Total</div>
+                  <div />
+                </div>
+
+                <div
+                  ref={rowsContainerRef}
+                  className={`mi-cr-table__rows${hasScroll ? " has-scroll" : ""}`}
+                >
+                  {rowsCalc.map((r) => {
+                    const stockNum =
+                      r.stock_disponible !== null && r.stock_disponible !== undefined
+                        ? Number(r.stock_disponible)
+                        : null;
+
+                    const rowSinStock = r.sinStock || isSinStock(stockNum);
+
+                    return (
+                      <div
+                        key={r.id}
+                        className={`mi-cr-row ${rowSinStock ? "mi-cr-row--sin-stock" : ""}`}
+                      >
+                        <div className="mi-cr-cell mi-cr-cell--detalle">
+                          <GlobalAutocomplete
+                            value={r.detalle}
+                            onChange={(val) =>
+                              updateRow(r.id, {
+                                detalle: val,
+                                id_detalle: NULL_OPTION,
+                                stock_disponible: null,
+                                sinStock: false,
+                              })
+                            }
+                            onSelect={(item) => handleSelectDetalle(item, r.id)}
+                            options={enhancedDetallesList}
+                            getOptionLabel={(d) => optionLabel(d)}
+                            getOptionValue={(d) =>
+                              String(getDetalleId(d) ?? optionLabel(d))
+                            }
+                            placeholder="Escribí o buscá una descripción…"
+                            disabled={saving}
+                            showAllOnFocus={false}
+                            maxItems={18}
+                            inputClassName="nv-cell-input"
+                          />
+                        </div>
+
+                        <div className="mi-cr-cell mi-cr-cell--center">
+                          <input
+                            className="nv-cell-input nv-cell-input--center"
+                            type="number"
+                            min={rowSinStock ? undefined : "1"}
+                            step="1"
+                            value={rowSinStock ? "" : r.cantidad}
+                            onChange={(e) =>
+                              handleCantidadChange(
+                                r.id,
+                                e.target.value === "" ? "" : Number(e.target.value)
+                              )
+                            }
+                            disabled={saving || rowSinStock}
+                            placeholder={rowSinStock ? "0" : ""}
+                            title={
+                              rowSinStock
+                                ? "Sin stock disponible"
+                                : stockNum !== null
+                                ? `Stock disponible: ${stockNum}`
+                                : ""
+                            }
+                            style={{
+                              width: "100%",
+                              background: rowSinStock ? "#f3f4f6" : undefined,
+                              color: rowSinStock ? "#b91c1c" : undefined,
+                              borderColor: rowSinStock ? "#fca5a5" : undefined,
+                              cursor: rowSinStock ? "not-allowed" : undefined,
+                              opacity: rowSinStock ? 0.9 : 1,
+                            }}
+                          />
+                        </div>
+
+                        <div className="mi-cr-cell mi-cr-cell--right">
+                          <input
+                            className="nv-cell-input nv-cell-input--right"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={r.precio}
+                            onChange={(e) =>
+                              updateRow(r.id, { precio: Number(e.target.value) })
+                            }
+                            disabled={saving}
+                            style={{ width: "100%" }}
+                          />
+                        </div>
+
+                        <div className="mi-cr-cell mi-cr-cell--center">
+                          <select
+                            className="nv-cell-input nv-cell-input--center nv-cell-input--select"
+                            value={String(r.ivaPct)}
+                            onChange={(e) =>
+                              updateRow(r.id, { ivaPct: Number(e.target.value) })
+                            }
+                            disabled={saving}
+                            style={{ width: "100%" }}
+                          >
+                            {IVA_OPTIONS.map((x) => (
+                              <option key={x.value} value={x.value}>
+                                {x.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
+                          {moneyARS(r.ivaMonto)}
+                        </div>
+
+                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
+                          {moneyARS(r.total)}
+                        </div>
+
+                        <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
+                          <button
+                            type="button"
+                            className="mi-cr-del"
+                            onClick={() => removeRow(r.id)}
+                            disabled={saving}
+                            title="Eliminar fila"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mi-cr-table__foot">
+                  <div className="mi-cr-foot-actions">
+                    <button
+                      type="button"
+                      className="nv-foot-btn"
+                      onClick={addRow}
+                      disabled={saving}
+                    >
+                      <span className="nv-foot-btn__icon">+</span>
+                      Agregar fila
+                    </button>
+                  </div>
+
+                  <div className="mi-cr-totals">
+                    <div className="mi-cr-totalLine mi-cr-totalLine--sub">
+                      <span>Subtotal</span>
+                      <b>{moneyARS(resumen.subtotal)}</b>
+                    </div>
+                    <div className="mi-cr-totalLine mi-cr-totalLine--iva">
+                      <span>IVA</span>
+                      <b>{moneyARS(resumen.iva)}</b>
+                    </div>
+                    <div className="mi-cr-totalLine mi-cr-totalLine--total">
+                      <span>Total</span>
+                      <b>{moneyARS(resumen.total)}</b>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div className="mi-cr-filters">
+                <aside className="nc-aside">
+                  <div className="nc-section">
+                    <div className="nc-section-head">
+                      <div className="nc-section-dot" />
+                      <span>Datos del ingreso</span>
+                    </div>
+
+                    <div className="nc-section-body">
+                      <div className="nc-field">
+                        <input
+                          className="nc-input"
+                          type="date"
+                          placeholder=" "
+                          value={fecha}
+                          onChange={(e) => setFecha(String(e.target.value || "").trim())}
+                          disabled={saving}
+                        />
+                        <label className="nc-label">Fecha</label>
+                      </div>
+
+                      <PanelMediosPagoInlineVenta
+                        mediosFilas={mediosFilas.map(mapIngresoMedioToVentaRow)}
+                        mediosPagoList={mediosPagoList}
+                        totalCompra={resumen.total}
+                        onUpdate={(id, patch) =>
+                          updateMedioPago(id, adaptVentaPatchToIngreso(patch))
+                        }
+                        onRemove={removeMedioPago}
+                        onAdd={addMedioPago}
+                        showToast={showToast}
+                        saving={saving}
+                      />
+
+                      <div className="mi-uploadCard" style={{ marginTop: 14 }}>
+                        <div className="mi-uploadCard__head">
+                          <div className="mi-uploadCard__title">Comprobante</div>
+                          <div className="mi-uploadCard__sub">
+                            Seleccioná, visualizá o quitá el archivo antes de guardar
+                          </div>
+                        </div>
+
+                        <div className="mi-uploadCard__body">
+                          <div
+                            className={`mi-uploadFile${
+                              archivoAdjunto ? " is-filled" : " is-empty"
+                            }`}
+                          >
+                            {archivoAdjunto ? (
+                              <>
+                                <div className="mi-uploadFile__icon">
+                                  <FontAwesomeIcon icon={faFileInvoiceDollar} />
+                                </div>
+
+                                <div className="mi-uploadFile__meta">
+                                  <div
+                                    className="mi-uploadFile__name"
+                                    title={archivoAdjunto.name}
+                                  >
+                                    {archivoAdjunto.name}
+                                  </div>
+                                  <div className="mi-uploadFile__size">
+                                    {Math.max(
+                                      1,
+                                      Math.round((archivoAdjunto.size || 0) / 1024)
+                                    )}{" "}
+                                    KB
+                                  </div>
+                                </div>
+
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: 8,
+                                    marginLeft: "auto",
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                    onClick={abrirViewer}
+                                    disabled={saving}
+                                  >
+                                    <FontAwesomeIcon icon={faEye} />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                    onClick={() => {
+                                      setArchivoAdjunto(null);
+                                      if (inputFileRef.current) inputFileRef.current.value = "";
+                                    }}
+                                    disabled={saving}
+                                  >
+                                    <FontAwesomeIcon icon={faTrash} />
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="mi-uploadFile__meta">
+
+                                <div className="mi-uploadFile__size">
+                                  No hay comprobante seleccionado
+
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="mi-uploadBar" style={{ marginTop: 12 }}>
+                            <input
+                              ref={inputFileRef}
+                              type="file"
+                              className="mi-uploadBar__input"
+                              onChange={(e) =>
+                                setArchivoAdjunto(e.target.files?.[0] || null)
+                              }
+                              disabled={saving}
+                              style={{ display: "none" }}
+                            />
+
+                            <button
+                              type="button"
+                              className="mi-uploadBar__btn mi-uploadBar__btn--primary"
+                              onClick={() => inputFileRef.current?.click()}
+                              disabled={saving}
+                            >
+                              {archivoAdjunto ? "Reemplazar archivo" : "Seleccionar archivo"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+
+                <div className="nc-actions mi-cr-filters__actions mi-cr-filters__actions--sticky">
+                  <button
+                    type="button"
+                    className="mit-btn mit-btn--solid mit-btn--block"
+                    onClick={submit}
+                    disabled={saving}
+                  >
+                    {btnLabel}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="mit-btn mit-btn--ghost mit-btn--block"
+                    onClick={() => !saving && onClose?.()}
+                    disabled={saving}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {openNuevaDescripcionModal && (
+        <ModalNuevaDescripcion
+          open={openNuevaDescripcionModal}
+          onClose={() => setOpenNuevaDescripcionModal(false)}
+          onSave={handleGuardarNuevaDescripcion}
+          dark={dark}
+        />
+      )}
+
+      {chequeEditor.open && (
+        <ModalNuevoCheque
+          open={chequeEditor.open}
+          onClose={() =>
+            setChequeEditor({ open: false, medioRowId: null, tipoCheque: "cheque" })
+          }
+          onSave={async (datosCheque) => {
+            updateMedioPago(chequeEditor.medioRowId, {
+              chequeData: {
+                ...datosCheque,
+                tipo_cheque: chequeEditor.tipoCheque,
+              },
+              monto: Number(datosCheque?.importe || 0),
+              montoDraft: "",
+              montoFocused: false,
+            });
+
+            setChequeEditor({
+              open: false,
+              medioRowId: null,
+              tipoCheque: "cheque",
+            });
+
+            showToast(
+              "exito",
+              `${
+                chequeEditor.tipoCheque === "echeq" ? "eCheq" : "Cheque"
+              } cargado. Se guardará al confirmar el ingreso.`,
+              3200
+            );
+          }}
+          initialData={
+            mediosFilas.find((x) => x.id === chequeEditor.medioRowId)?.chequeData ||
+            undefined
+          }
+          tipoCheque={chequeEditor.tipoCheque}
+          dark={dark}
+          saving={false}
+        />
+      )}
+
+      <ModalVerComprobante
+        open={openViewer}
+        url={viewerData.url}
+        mime={viewerData.mime}
+        title={viewerData.title}
+        onClose={cerrarViewer}
+      />
+    </>,
+    document.body
+  );
 }

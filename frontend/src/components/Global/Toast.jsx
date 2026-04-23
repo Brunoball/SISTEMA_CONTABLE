@@ -7,13 +7,19 @@ import {
   faTimesCircle,
   faSpinner,
   faInfoCircle,
+  faTimes,
 } from "@fortawesome/free-solid-svg-icons";
 import "./Toast.css";
 
+const TIPOS_CON_CIERRE_MANUAL = ["error", "advertencia"];
+
 const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
   const [desapareciendo, setDesapareciendo] = useState(false);
+  const esManual = TIPOS_CON_CIERRE_MANUAL.includes(tipo);
 
   useEffect(() => {
+    if (esManual) return; // error y advertencia no se cierran solos
+
     const d = Number(duracion) || 2500;
 
     const mostrarTimer = setTimeout(() => {
@@ -28,7 +34,7 @@ const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
       clearTimeout(mostrarTimer);
       clearTimeout(ocultarTimer);
     };
-  }, [onClose, duracion]);
+  }, [onClose, duracion, esManual]);
 
   const iconos = {
     exito: faCheckCircle,
@@ -60,6 +66,17 @@ const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
         className={`toast-icon ${tipo === "cargando" ? "spin" : ""}`}
       />
       <span className="toast-message">{mensaje}</span>
+
+      {/* Botón de cierre solo para error y advertencia */}
+      {esManual && (
+        <button
+          className="toast-close-btn"
+          onClick={onClose}
+          aria-label="Cerrar notificación"
+        >
+          <FontAwesomeIcon icon={faTimes} />
+        </button>
+      )}
     </div>,
     document.body
   );

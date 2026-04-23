@@ -186,6 +186,11 @@ function getStockDisponible(d) {
 function isSinStock(s) {
   return s !== null && s !== undefined && Number(s) <= 0;
 }
+function getChequeIdsArray(v) {
+  if (Array.isArray(v)) return v.map((x) => String(x));
+  if (v == null || v === "") return [];
+  return [String(v)];
+}
 
 /* Listas */
 function normalizeLists(lists) {
@@ -426,7 +431,7 @@ function buildMediosPagoFromInitial(data) {
 ───────────────────────────────────────── */
 
 function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle, esEcheq = false }) {
-  if (!cheques.length) return null;
+  if (!Array.isArray(cheques) || cheques.length === 0) return null;
 
   return (
     <div className="nc-cheques-list">
@@ -435,46 +440,36 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle, esEcheq = fa
         return (
           <div
             key={ch?.id_cheque || idx}
-            role="checkbox"
-            aria-checked={checked}
-            tabIndex={0}
             className={`nc-cheque-item ${checked ? "nc-cheque-item--selected" : ""} ${esEcheq ? "nc-cheque-item--echeq" : ""}`}
+            role="button"
+            tabIndex={0}
             onClick={() => onToggle(String(ch?.id_cheque || ""))}
             onKeyDown={(e) => {
-              if (e.key === " " || e.key === "Enter") {
-                e.preventDefault();
-                onToggle(String(ch?.id_cheque || ""));
-              }
+              if (e.key === " " || e.key === "Enter") onToggle(String(ch?.id_cheque || ""));
             }}
           >
-            <div className="nc-cheque-check" aria-hidden="true">
-              {checked && (
-                <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                  <path
-                    d="M1 3.5L3.5 6L8 1"
-                    stroke="#fff"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-            </div>
-
             <div className="nc-cheque-main">
-              <div className="nc-cheque-line1">
+              <div className="nc-cheque-top">
                 <span className="nc-cheque-number">N° {safeText(ch?.numero_cheque)}</span>
-                {esEcheq && <span className="nc-cheque-badge">eCheq</span>}
+                {esEcheq && <span className="nc-cheque-badge nc-cheque-badge--echeq">eCheq</span>}
               </div>
-
-              <div className="nc-cheque-line2">
-                <span className="nc-cheque-emisor">{safeText(ch?.emisor)}</span>
-                <span className="nc-cheque-dot">·</span>
-                <span>Pago:{safeText(formatFechaDMY(ch?.fecha_pago))}</span>
+              <div className="nc-cheque-meta">
+                <span className="nc-cheque-emisor" title={safeText(ch?.emisor)}>{safeText(ch?.emisor)}</span>
+                <span className="nc-cheque-separator">·</span>
+                <span>Pago: {formatFechaDMY(ch?.fecha_pago)}</span>
               </div>
             </div>
-
             <span className="nc-cheque-importe">{moneyARS(ch?.importe || 0)}</span>
+            {checked && (
+              <div
+                aria-hidden="true"
+                className={`nc-cheque-check-icon nc-cheque-check-icon--corner ${esEcheq ? "nc-cheque-check-icon--echeq" : "nc-cheque-check-icon--cheque"}`}
+              >
+                <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                  <path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            )}
           </div>
         );
       })}
@@ -482,109 +477,129 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle, esEcheq = fa
   );
 }
 
-function MedioPagoRow({ row, mediosPagoList, totalEgreso, sumaMediosPago, onUpdate, onRemove, saving, showToast }) {
+function MedioPagoRow({ row, mediosPagoList, totalEgreso, sumaMediosPago, onUpdate, onRemove, onLoadCheques, saving }) {
   const mpSeleccionado = useMemo(
     () => mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(row.id_medio_pago ?? "")) || null,
     [mediosPagoList, row.id_medio_pago]
   );
-  const tipoCheque = useMemo(() => normalizeChequeTipoFromMedio(mpSeleccionado?.nombre || ""), [mpSeleccionado]);
+
+  const tipoCheque = useMemo(
+    () => normalizeChequeTipoFromMedio(mpSeleccionado?.nombre || ""),
+    [mpSeleccionado]
+  );
   const esCheque = tipoCheque !== null;
-  const chequesSeleccionados = Array.isArray(row.id_cheque) ? row.id_cheque : [];
+  const esEcheq = tipoCheque === "echeq";
+  const chequesSeleccionados = useMemo(() => getChequeIdsArray(row.id_cheque), [row.id_cheque]);
+
+  const importeCheques = useMemo(() => {
+    if (!esCheque || !chequesSeleccionados.length) return 0;
+    return chequesSeleccionados.reduce((acc, idStr) => {
+      const ch = Array.isArray(row.chequesDisponibles)
+        ? row.chequesDisponibles.find((x) => String(x?.id_cheque) === idStr)
+        : null;
+      return acc + (ch ? safeNumber(ch?.importe) : 0);
+    }, 0);
+  }, [esCheque, chequesSeleccionados, row.chequesDisponibles]);
+
+  const montoActual = esCheque ? importeCheques : safeNumber(row.monto);
 
   const restanteParaEstaFila = useMemo(() => {
-    const sumaOtros = Math.max(0, safeNumber(sumaMediosPago) - safeNumber(row.monto));
+    const sumaOtros = Math.max(0, safeNumber(sumaMediosPago) - montoActual);
     return Math.max(0, safeNumber(totalEgreso) - sumaOtros);
-  }, [sumaMediosPago, totalEgreso, row.monto]);
+  }, [sumaMediosPago, totalEgreso, montoActual]);
 
-  const puedeCompletarRestante = !saving && !esCheque && totalEgreso > 0 && restanteParaEstaFila > 0.009;
+  const puedeCompletarRestante = !esCheque && totalEgreso > 0 && restanteParaEstaFila > 0.009;
 
   const handleChangeMedio = useCallback(
     async (val) => {
       const mp = mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(val));
       const tipo = normalizeChequeTipoFromMedio(mp?.nombre || "");
-      onUpdate(row.id, { id_medio_pago: val, id_cheque: [], chequesDisponibles: [], loadingCheques: tipo !== null });
+
+      onUpdate(row.id, {
+        id_medio_pago: val,
+        id_cheque: [],
+        chequesDisponibles: [],
+        loadingCheques: tipo !== null,
+        monto: tipo !== null ? 0 : safeNumber(row.monto),
+        montoDraft: "",
+        montoFocused: false,
+      });
+
       if (tipo !== null) {
-        try {
-          const sp = new URLSearchParams();
-          sp.set("action", "otros_egresos_cheques_cartera_listar");
-          sp.set("tipo", tipo);
-          const data = await apiGet(`${BASE_URL}/api.php?${sp.toString()}`);
-          onUpdate(row.id, { chequesDisponibles: Array.isArray(data?.cheques) ? data.cheques : [], loadingCheques: false });
-        } catch (e) {
-          onUpdate(row.id, { chequesDisponibles: [], loadingCheques: false });
-          showToast("error", e?.message || "No se pudieron cargar los cheques.", 4200);
-        }
+        await onLoadCheques?.(row.id, tipo);
       }
     },
-    [mediosPagoList, onUpdate, row.id, showToast]
+    [mediosPagoList, onUpdate, onLoadCheques, row.id, row.monto]
   );
 
   const handleToggleCheque = useCallback(
-    (idStr) => {
-      const current = Array.isArray(row.id_cheque) ? row.id_cheque : [];
-      const next = current.includes(idStr) ? current.filter((x) => x !== idStr) : [...current, idStr];
+    (idChequeStr) => {
+      const current = getChequeIdsArray(row.id_cheque);
+      const next = current.includes(idChequeStr)
+        ? current.filter((x) => x !== idChequeStr)
+        : [...current, idChequeStr];
       onUpdate(row.id, { id_cheque: next });
     },
     [row.id, row.id_cheque, onUpdate]
   );
 
-  const importeCheques = useMemo(() => {
-    if (!esCheque || !chequesSeleccionados.length) return 0;
-    return chequesSeleccionados.reduce((acc, idStr) => {
-      const ch = row.chequesDisponibles.find((x) => String(x.id_cheque) === idStr);
-      return acc + (ch ? Number(ch.importe || 0) : 0);
-    }, 0);
-  }, [esCheque, chequesSeleccionados, row.chequesDisponibles]);
-
   useEffect(() => {
-    if (esCheque && chequesSeleccionados.length > 0) onUpdate(row.id, { monto: importeCheques });
-  }, [importeCheques, esCheque, chequesSeleccionados.length, onUpdate, row.id]);
+    if (esCheque && chequesSeleccionados.length > 0) {
+      onUpdate(row.id, { monto: importeCheques, montoDraft: "", montoFocused: false });
+    }
+  }, [esCheque, chequesSeleccionados.length, importeCheques, onUpdate, row.id]);
 
   return (
     <div className="nc-mp-card">
-      <div className="nc-mp-inline">
-        <div className="nc-mp-medio">
-          <div className="nc-mp-sublabel">Medio</div>
+      <div className="nc-mp-row nc-mp-row--medio">
+        <div className="nc-field" style={{ position: "relative" }}>
           <select
-            className="nc-mp-select"
+            className="nc-input nc-select"
             value={String(row.id_medio_pago || "")}
             onChange={(e) => handleChangeMedio(e.target.value)}
             disabled={saving}
           >
-            <option value={NULL_OPTION}>Seleccionar...</option>
+            <option value={NULL_OPTION}>Seleccionar…</option>
             {mediosPagoList.map((x) => {
               const idMp = getMedioPagoId(x);
               return (
-                <option key={idMp ?? uid()} value={idMp != null ? String(idMp) : ""}>
+                <option key={idMp ?? x?.nombre ?? uid()} value={idMp != null ? String(idMp) : ""}>
                   {String(x?.nombre ?? "").trim() || "Medio"}
                 </option>
               );
             })}
           </select>
+          <label className={`nc-label${row.id_medio_pago ? " nc-label--up" : ""}`}>Medio de pago</label>
         </div>
+      </div>
 
-        <div className="nc-mp-monto-wrap">
-          <div className="nc-mp-sublabel">Monto</div>
+      <div className="nc-mp-row nc-mp-row--monto">
+        <div className="nc-field nc-mp-monto-field" style={{ position: "relative" }}>
           <input
-            className={`nc-mp-input-monto ${esCheque && chequesSeleccionados.length > 0 ? "nc-mp-input-monto--locked" : ""}`}
+            className="nc-input nc-mp-monto-input"
             type="text"
             inputMode="decimal"
-            value={row.montoFocused ? row.montoDraft ?? "" : formatMoneyInputARS(row.monto)}
+            value={row.montoFocused ? row.montoDraft ?? "" : formatMoneyInputARS(montoActual)}
             onFocus={(e) => {
-              onUpdate(row.id, { montoFocused: true, montoDraft: formatEditableMoney(row.monto) });
+              if (esCheque && chequesSeleccionados.length > 0) return;
+              onUpdate(row.id, { montoFocused: true, montoDraft: formatEditableMoney(montoActual) });
               setTimeout(() => e.target.select(), 0);
             }}
             onChange={(e) => {
-              const c = e.target.value.replace(/[^\d,.\-]/g, "");
+              if (esCheque && chequesSeleccionados.length > 0) return;
+              const c = e.target.value.replace(/[^\d,\.\-]/g, "");
               onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
             }}
             onBlur={() => {
+              if (esCheque && chequesSeleccionados.length > 0) return;
               const p = parseMoneyInputARS(row.montoDraft);
               onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false });
             }}
             placeholder="$ 0,00"
             disabled={saving || (esCheque && chequesSeleccionados.length > 0)}
+            style={{ height: 32, padding: "0 10px", fontSize: 13, textAlign: "right" }}
           />
+          <label className="nc-label nc-label--up">Monto</label>
         </div>
 
         <div className="nc-mp-actions-col">
@@ -593,13 +608,13 @@ function MedioPagoRow({ row, mediosPagoList, totalEgreso, sumaMediosPago, onUpda
               type="button"
               className="nc-mp-completar"
               onClick={() => onUpdate(row.id, { monto: restanteParaEstaFila, montoDraft: "", montoFocused: false })}
-              disabled={!puedeCompletarRestante}
+              disabled={!puedeCompletarRestante || saving}
               title="Completar importe restante"
             >
               ↓ Rest.
             </button>
           )}
-          <button type="button" className="nc-mp-del-btn" onClick={() => onRemove(row.id)} disabled={saving} title="Quitar medio de pago">
+          <button type="button" className="nc-mp-del-btn" onClick={() => onRemove(row.id)} title="Quitar" disabled={saving}>
             ×
           </button>
         </div>
@@ -608,25 +623,106 @@ function MedioPagoRow({ row, mediosPagoList, totalEgreso, sumaMediosPago, onUpda
       {esCheque && (
         <div className="nc-mp-cheques">
           <div className="nc-mp-cheques-title">
-            <FontAwesomeIcon icon={faMoneyCheckDollar} />
-            {tipoCheque === "echeq" ? "eCheqs en cartera" : "Cheques en cartera"}
+            <FontAwesomeIcon icon={faMoneyCheckDollar} style={{ fontSize: 12 }} />
+            {esEcheq ? "eCheqs en cartera" : "Cheques en cartera"}
           </div>
+
           {row.loadingCheques ? (
-            <div className="mp-cheques-loading">
+            <div className="nc-mp-cheques-loading">
               <FontAwesomeIcon icon={faCircleNotch} spin style={{ marginRight: 6 }} />
               Cargando...
             </div>
-          ) : row.chequesDisponibles.length === 0 ? (
-            <div className="mp-cheques-empty">No hay {tipoCheque === "echeq" ? "eCheqs" : "cheques"} activos en cartera.</div>
+          ) : !Array.isArray(row.chequesDisponibles) || row.chequesDisponibles.length === 0 ? (
+            <div className="nc-mp-cheques-empty">No hay {esEcheq ? "eCheqs" : "cheques"} activos en cartera.</div>
           ) : (
-            <ChequesCarteraCards cheques={row.chequesDisponibles} idsSeleccionados={chequesSeleccionados} onToggle={handleToggleCheque} />
+            <ChequesCarteraCards
+              cheques={row.chequesDisponibles}
+              idsSeleccionados={chequesSeleccionados}
+              onToggle={handleToggleCheque}
+              esEcheq={esEcheq}
+            />
           )}
+
           {chequesSeleccionados.length > 0 && (
-            <div className="mp-cheques-sum">✓ {chequesSeleccionados.length} cheque(s) — {moneyARS(importeCheques)}</div>
+            <div className="nc-mp-cheques-sum">
+              ✓ {chequesSeleccionados.length} cheque(s) — {moneyARS(importeCheques)}
+            </div>
           )}
         </div>
       )}
     </div>
+  );
+}
+
+function PanelMediosPagoInlineCompraGlobal({
+  mediosFilas,
+  mediosPagoList,
+  totalCompra,
+  onUpdate,
+  onRemove,
+  onAdd,
+  showToast,
+  saving = false,
+  apiGet,
+  BASE_URL: baseUrlCompra,
+  chequesAction = "compras_cheques_cartera_listar",
+}) {
+  const filas = Array.isArray(mediosFilas) && mediosFilas.length ? mediosFilas : [buildEmptyMedioPago()];
+
+  const handleLoadCheques = useCallback(
+    async (rowId, tipo) => {
+      try {
+        const sp = new URLSearchParams();
+        sp.set("action", chequesAction);
+        sp.set("tipo", tipo);
+        const data = await apiGet(`${baseUrlCompra}/api.php?${sp.toString()}`);
+        onUpdate(rowId, {
+          chequesDisponibles: Array.isArray(data?.cheques) ? data.cheques : [],
+          loadingCheques: false,
+        });
+      } catch (e) {
+        onUpdate(rowId, { chequesDisponibles: [], loadingCheques: false });
+        showToast?.("error", e?.message || "No se pudieron cargar los cheques.", 4000);
+      }
+    },
+    [apiGet, baseUrlCompra, chequesAction, onUpdate, showToast]
+  );
+
+  const sumaMediosPago = useMemo(
+    () => filas.reduce((a, r) => a + safeNumber(r?.monto), 0),
+    [filas]
+  );
+  const diferenciaRestante = useMemo(
+    () => Math.max(0, safeNumber(totalCompra) - sumaMediosPago),
+    [totalCompra, sumaMediosPago]
+  );
+
+  return (
+    <>
+      {filas.map((mp) => (
+        <MedioPagoRow
+          key={mp.id}
+          row={mp}
+          mediosPagoList={mediosPagoList}
+          totalEgreso={totalCompra}
+          sumaMediosPago={sumaMediosPago}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          onLoadCheques={handleLoadCheques}
+          saving={saving}
+        />
+      ))}
+
+      <div className="nc-mp-totals">
+        <span className="nc-mp-totals-asignado">Asignado: <b>{moneyARS(sumaMediosPago)}</b></span>
+        {diferenciaRestante > 0.01 && <span className="nc-mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>}
+        {diferenciaRestante <= 0.01 && safeNumber(totalCompra) > 0 && <span className="nc-mp-totals-ok">✓ Cubierto</span>}
+      </div>
+
+      <button type="button" className="nc-pago-btn" onClick={onAdd} disabled={saving}>
+        <FontAwesomeIcon icon={faPlus} style={{ fontSize: 11 }} /> Agregar otro medio
+      </button>
+    </>
   );
 }
 
@@ -906,7 +1002,6 @@ export default function ModalNuevoEgreso({
   );
 
   const sumaMediosPago = useMemo(() => mediosFilas.reduce((a, r) => a + safeNumber(r.monto), 0), [mediosFilas]);
-  const diferenciaRestante = useMemo(() => Math.max(0, resumen.total - sumaMediosPago), [resumen.total, sumaMediosPago]);
 
   const validate = useCallback(() => {
     const clas = Number(filters.id_clasificacion);
@@ -1251,7 +1346,8 @@ export default function ModalNuevoEgreso({
                 </div>
               </section>
 
-              <aside className="nc-aside">
+              <div className="mi-cr-filters">
+                <aside className="nc-aside">
                 <div className="nc-section">
                   <div className="nc-section-head">
                     <div className="nc-section-dot" />
@@ -1273,79 +1369,40 @@ export default function ModalNuevoEgreso({
                       </label>
                     </div>
 
-                    <div>
-                      <div className="nc-pill-label">Clasificación *</div>
-                      <div className="nc-pills">
-                        <button
-                          type="button"
-                          className={`nc-pill${isCostoFijoChecked ? " nc-pill--active" : ""}`}
-                          onClick={() => {
-                            if (!saving) setFilters((p) => ({ ...p, id_clasificacion: clasificacionConfig.idCostoFijo }));
-                          }}
-                          disabled={saving}
-                        >
+                    <div className="nc-field">
+                      <select
+                        className="nc-input nc-select"
+                        value={String(filters.id_clasificacion || "")}
+                        onChange={(e) => setFilters((p) => ({ ...p, id_clasificacion: e.target.value }))}
+                        disabled={saving}
+                      >
+                        <option value="">Seleccionar...</option>
+                        <option value={String(clasificacionConfig.idCostoFijo)}>
                           {clasificacionConfig.labelCostoFijo}
-                        </button>
-                        <button
-                          type="button"
-                          className={`nc-pill${isNoCostoFijoChecked ? " nc-pill--active" : ""}`}
-                          onClick={() => {
-                            if (!saving) setFilters((p) => ({ ...p, id_clasificacion: clasificacionConfig.idNoCostoFijo }));
-                          }}
-                          disabled={saving}
-                        >
+                        </option>
+                        <option value={String(clasificacionConfig.idNoCostoFijo)}>
                           {clasificacionConfig.labelNoCostoFijo}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="nc-section">
-                  <div className="nc-section-head">
-                    <div className="nc-section-dot" style={{ background: "#0f766e" }} />
-                    <span>Medios de pago</span>
-                  </div>
-                  <div className="nc-section-body">
-                    {mediosFilas.map((mp, idx) => (
-                      <MedioPagoRow
-                        key={mp.id}
-                        row={mp}
-                        idx={idx}
-                        mediosPagoList={mediosPagoList}
-                        totalEgreso={resumen.total}
-                        sumaMediosPago={sumaMediosPago}
-                        onUpdate={updateMedioPago}
-                        onRemove={removeMedioPago}
-                        saving={saving}
-                        showToast={showToast}
-                      />
-                    ))}
-
-                    <div className="nc-mp-totals">
-                      <span className="nc-mp-totals-asignado">
-                        Asignado: <b>{moneyARS(sumaMediosPago)}</b>
-                      </span>
-
-                      {diferenciaRestante > 0.01 && <span className="nc-mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>}
-
-                      {diferenciaRestante <= 0.01 && sumaMediosPago > 0 && <span className="nc-mp-totals-ok">✓ Cubierto</span>}
+                        </option>
+                      </select>
+                      <label className="nc-label" style={{ pointerEvents: "none" }}>
+                        Clasificación *
+                      </label>
                     </div>
 
-                    <button type="button" className="nc-pago-btn" onClick={addMedioPago} disabled={saving}>
-                      <FontAwesomeIcon icon={faPlus} style={{ fontSize: 11 }} />
-                      Agregar otro medio
-                    </button>
-                  </div>
-                </div>
-
-                <div className="nc-section">
-                  <div className="nc-section-head">
-                    <div className="nc-section-dot" style={{ background: "#64748b" }} />
-                    <span>Comprobante adjunto</span>
-                  </div>
-                  <div className="nc-section-body">
-                    <div className="mi-uploadCard">
+                    <PanelMediosPagoInlineCompraGlobal
+                      mediosFilas={mediosFilas}
+                      mediosPagoList={mediosPagoList}
+                      totalCompra={resumen.total}
+                      onUpdate={updateMedioPago}
+                      onRemove={removeMedioPago}
+                      onAdd={addMedioPago}
+                      showToast={showToast}
+                      saving={saving}
+                      apiGet={apiGet}
+                      BASE_URL={BASE_URL}
+                      chequesAction="otros_egresos_cheques_cartera_listar"
+                    />
+                     <div className="mi-uploadCard">
                       <div className="mi-uploadCard__head">
                         <div className="mi-uploadCard__title">Comprobante</div>
                         <div className="mi-uploadCard__sub">Seleccioná, visualizá o quitá el archivo antes de guardar</div>
@@ -1421,9 +1478,15 @@ export default function ModalNuevoEgreso({
                       </div>
                     </div>
                   </div>
+                                     
                 </div>
 
-                <div className="nc-actions mi-cr-filters__actions">
+
+
+
+
+                </aside>
+                                <div className="nc-actions mi-cr-filters__actions mi-cr-filters__actions--sticky">
                   <button type="button" className="mit-btn mit-btn--solid mit-btn--block" onClick={submit} disabled={saving}>
                     {btnLabel}
                   </button>
@@ -1431,7 +1494,7 @@ export default function ModalNuevoEgreso({
                     Cancelar
                   </button>
                 </div>
-              </aside>
+              </div>
             </div>
           </div>
         </div>

@@ -490,41 +490,68 @@ html[data-theme="oscuro"] .mi-cr-table__foot {
 
 .mi-cr-foot-actions { display: flex; align-items: center; gap: 8px; }
 
-/* ── Botón agregar fila (pie) ── */
+/* en Global_Modals.css — reemplazá .nv-foot-btn y .nv-foot-btn__icon */
 .nv-foot-btn {
   appearance: none;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid var(--nv-border-md);
-  background: var(--nv-bg);
-  color: var(--nv-text);
-  font-size: 12px;
-  font-weight: 600;
+  height: 32px;
+  padding: 0 14px 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 85, 187, .45);
+  background: rgba(0, 85, 187, .08);
+  color: var(--nv-action);
+  font-size: 12.5px;
+  font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  transition: all .14s;
+  gap: 7px;
+  transition: background .14s, border-color .14s, color .14s, transform .14s;
   font-family: inherit;
   white-space: nowrap;
 }
 
-.nv-foot-btn:hover { border-color: var(--nv-action); color: var(--nv-action); background: var(--nv-action-10); transform: translateY(-1px); box-shadow: var(--nv-shadow-sm); }
-.nv-foot-btn:disabled { opacity: .38; cursor: not-allowed; transform: none; box-shadow: none; }
+.nv-foot-btn:hover {
+  background: rgba(0, 85, 187, .15);
+  border-color: rgba(0, 85, 187, .70);
+  color: #003f99;
+  transform: translateY(-1px);
+}
+
+.nv-foot-btn:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+  transform: none;
+}
 
 .nv-foot-btn__icon {
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 12px;
-  font-weight: 800;
-  background: var(--nv-action-10);
-  border: 1px solid rgba(0, 85, 187, .20);
-  color: var(--nv-action);
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--nv-action);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: background .14s;
+}
+
+.nv-foot-btn:hover .nv-foot-btn__icon {
+  background: #003f99;
+}
+
+html[data-theme="oscuro"] .nv-foot-btn {
+  background: rgba(0, 85, 187, .14);
+  border-color: rgba(0, 85, 187, .40);
+  color: #85B7EB;
+}
+
+html[data-theme="oscuro"] .nv-foot-btn:hover {
+  background: rgba(0, 85, 187, .25);
+  border-color: rgba(0, 85, 187, .65);
+  color: #B5D4F4;
+}
+
+html[data-theme="oscuro"] .nv-foot-btn__icon {
+  background: rgba(0, 85, 187, .70);
 }
 
 .nv-foot-sep { width: 1px; height: 16px; background: var(--nv-border-md); }
@@ -2424,3 +2451,246 @@ html[data-theme="oscuro"] .nc-section-head{
   z-index: 400;
 }
 
+
+
+/* =========================================================
+   UNIFICACIÓN VISUAL — EDITAR / PAGAR
+   Base visual: ModalNuevaVenta
+   No toca ModalEditarRecibo ni ModalEditarOrdenPago
+   ========================================================= */
+.mi-modal__container--venta .mi-em-form {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mi-modal__container--venta .mi-em-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 12px;
+}
+.mi-modal__container--venta .mi-em-panel,
+.mi-modal__container--venta .mi-em-aside,
+.mpr-modal .mpr-table-section {
+  border: 1px solid var(--nv-border-md);
+  border-radius: var(--nv-r-md);
+  background: var(--nv-bg);
+  box-shadow: var(--nv-shadow-sm);
+  min-width: 0;
+}
+.mi-modal__container--venta .mi-em-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.mi-modal__container--venta .mi-em-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+}
+.mi-modal__container--venta .mi-em-panelHead,
+.mi-modal__container--venta .mi-em-asideTitle {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--nv-muted);
+  background: var(--nv-head-bg);
+  border-bottom: 1px solid var(--nv-border);
+}
+.mi-modal__container--venta .mi-em-panelHead::before,
+.mi-modal__container--venta .mi-em-asideTitle::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--blue-action);
+  box-shadow: 0 0 0 4px rgba(0, 85, 187, .10);
+  flex: 0 0 auto;
+}
+.mi-modal__container--venta .mi-em-panelBody,
+.mi-modal__container--venta .mi-em-asideBody {
+  padding: 12px;
+}
+.mi-modal__container--venta .mi-em-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.mi-modal__container--venta .mi-row2,
+.mi-modal__container--venta .mi-em-itemGrid3,
+.mi-modal__container--venta .mi-em-itemTotalsGrid3 {
+  display: grid;
+  gap: 10px;
+}
+.mi-modal__container--venta .mi-row2 { grid-template-columns: 1fr 1fr; }
+.mi-modal__container--venta .mi-em-itemGrid3,
+.mi-modal__container--venta .mi-em-itemTotalsGrid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mi-modal__container--venta .mi-em-item {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--nv-border);
+  border-radius: 12px;
+  background: var(--nv-surface);
+}
+.mi-modal__container--venta .mi-em-itemTitle {
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--nv-midnight);
+}
+.mi-modal__container--venta .fl-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mi-modal__container--venta .fl-field { position: relative; }
+.mi-modal__container--venta .fl-input,
+.mi-modal__container--venta .fl-select {
+  width: 100%;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--nv-border);
+  background: var(--nv-bg);
+  color: var(--nv-text);
+  padding: 16px 12px 0;
+  font-size: .95rem;
+  outline: none;
+  transition: border-color .14s ease, box-shadow .14s ease, background .14s ease;
+  box-sizing: border-box;
+}
+.mi-modal__container--venta .fl-select {
+  appearance: none;
+  padding-top: 18px;
+}
+.mi-modal__container--venta .fl-input:hover,
+.mi-modal__container--venta .fl-select:hover { border-color: rgba(10, 37, 64, .18); }
+.mi-modal__container--venta .fl-input:focus,
+.mi-modal__container--venta .fl-select:focus {
+  border-color: var(--blue-action);
+  box-shadow: 0 0 0 3px rgba(0, 85, 187, .10);
+}
+.mi-modal__container--venta .fl-label {
+  position: absolute;
+  left: 12px;
+  top: 13px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--nv-muted);
+  pointer-events: none;
+  transition: all .14s ease;
+  transform-origin: left top;
+  background: transparent;
+  padding: 0 4px;
+}
+.mi-modal__container--venta .fl-input:focus + .fl-label,
+.mi-modal__container--venta .fl-input:not(:placeholder-shown) + .fl-label,
+.mi-modal__container--venta .fl-select + .fl-label,
+.mi-modal__container--venta .fl-input:disabled + .fl-label {
+  top: 7px;
+  transform: scale(.82);
+  color: var(--blue-action);
+}
+.mi-modal__container--venta .mi-cr-link {
+  appearance: none;
+  border: 1px dashed rgba(0, 85, 187, .35);
+  background: rgba(0, 85, 187, .06);
+  color: var(--nv-action);
+  border-radius: 10px;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mi-modal__container--venta .mi-em-actions,
+.mpr-modal .mpr-aside__actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+.mi-modal__container--venta .mit-btn,
+.mpr-modal .mit-btn { min-height: 38px; border-radius: 10px; }
+.mpr-modal .mpr-content-wrap { padding: 14px; overflow: hidden; }
+.mpr-modal .mpr-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 12px;
+}
+.mpr-modal .mpr-table-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.mpr-modal .mpr-thead {
+  background: var(--nv-head-bg);
+  border-bottom: 1px solid var(--nv-border);
+}
+.mpr-modal .mpr-tbody { flex: 1; min-height: 0; overflow: auto; }
+.mpr-modal .mpr-row { transition: background .12s ease, border-color .12s ease, box-shadow .12s ease; }
+.mpr-modal .mpr-row:hover { background: var(--nv-row-hover); }
+.mpr-modal .mpr-tfoot {
+  border-top: 1px solid var(--nv-border);
+  background: var(--nv-head-bg);
+}
+.mpr-modal .mpr-total-pill {
+  border-radius: 10px;
+  border: 1px solid rgba(16, 185, 129, .20);
+  background: rgba(16, 185, 129, .08);
+  box-shadow: none;
+}
+html[data-theme="oscuro"] .mi-modal__container--venta .mi-em-panel,
+html[data-theme="oscuro"] .mi-modal__container--venta .mi-em-aside,
+html[data-theme="oscuro"] .mpr-modal .mpr-table-section {
+  border-color: rgba(255, 255, 255, .08);
+  background: var(--nv-bg);
+}
+html[data-theme="oscuro"] .mi-modal__container--venta .mi-em-item {
+  background: rgba(255,255,255,.03);
+  border-color: rgba(255,255,255,.08);
+}
+html[data-theme="oscuro"] .mi-modal__container--venta .mi-em-itemTitle {
+  color: rgba(255,255,255,.92);
+}
+html[data-theme="oscuro"] .mi-modal__container--venta .fl-input,
+html[data-theme="oscuro"] .mi-modal__container--venta .fl-select {
+  background: rgba(10, 25, 40, .90);
+  border-color: rgba(255,255,255,.10);
+  color: rgba(255,255,255,.92);
+}
+html[data-theme="oscuro"] .mi-modal__container--venta .fl-label {
+  color: rgba(210, 220, 235, .70);
+}
+html[data-theme="oscuro"] .mi-modal__container--venta .fl-input:focus + .fl-label,
+html[data-theme="oscuro"] .mi-modal__container--venta .fl-input:not(:placeholder-shown) + .fl-label,
+html[data-theme="oscuro"] .mi-modal__container--venta .fl-select + .fl-label {
+  color: #85B7EB;
+}
+@media (max-width: 980px) {
+  .mi-modal__container--venta .mi-em-grid,
+  .mpr-modal .mpr-layout {
+    grid-template-columns: 1fr;
+  }
+  .mi-modal__container--venta .mi-row2,
+  .mi-modal__container--venta .mi-em-dates,
+  .mi-modal__container--venta .mi-em-itemGrid3,
+  .mi-modal__container--venta .mi-em-itemTotalsGrid3 {
+    grid-template-columns: 1fr;
+  }
+}

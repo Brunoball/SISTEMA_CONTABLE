@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
+import "../../../Global/Global_css/Global_responsive.css";
 import "../../../Global/Global_css/roots.css";
 import "../../Recibos/modales/ModalPagarRecibos.css";
 import BASE_URL from "../../../../config/config";
@@ -68,14 +69,9 @@ function getAuthInfo() {
 
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
-
     const candMaster = u?.idUsuarioMaster ?? 0;
     const candNormal =
-      u?.idUsuario ??
-      u?.id_usuario ??
-      u?.id ??
-      u?.user_id ??
-      0;
+      u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? 0;
 
     if (Number.isFinite(Number(candMaster)) && Number(candMaster) > 0) {
       idUsuarioMaster = Number(candMaster);
@@ -230,10 +226,9 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle, esEcheq = fa
   const accent = esEcheq ? "#0055BB" : "#0f766e";
   const accentBg = esEcheq ? "rgba(0,85,187,.07)" : "rgba(15,118,110,.07)";
   const accentBorder = esEcheq ? "rgba(0,85,187,.28)" : "rgba(15,118,110,.28)";
-  const accentGlow = esEcheq ? "rgba(0,85,187,.10)" : "rgba(15,118,110,.10)";
 
   return (
-    <div  className="nc-cheques-list">
+    <div className="nc-cheques-list">
       {cheques.map((ch, idx) => {
         const checked = idsSeleccionados.includes(String(ch?.id_cheque));
 
@@ -243,14 +238,12 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle, esEcheq = fa
             role="checkbox"
             aria-checked={checked}
             tabIndex={0}
-                        className={`nc-cheque-item ${checked ? "nc-cheque-item--selected" : ""} ${esEcheq ? "nc-cheque-item--echeq" : ""}`}
-
+            className={`nc-cheque-item ${checked ? "nc-cheque-item--selected" : ""} ${esEcheq ? "nc-cheque-item--echeq" : ""}`}
             onClick={() => onToggle(String(ch?.id_cheque || ""))}
             onKeyDown={(e) =>
               (e.key === " " || e.key === "Enter") &&
               onToggle(String(ch?.id_cheque || ""))
             }
-
           >
             <div
               aria-hidden="true"
@@ -337,11 +330,7 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle, esEcheq = fa
               </div>
             </div>
 
-            <span
- className="nc-cheque-importe"
-            >
-              {moneyARS(ch?.importe || 0)}
-            </span>
+            <span className="nc-cheque-importe">{moneyARS(ch?.importe || 0)}</span>
           </div>
         );
       })}
@@ -389,10 +378,12 @@ function MedioPagoRow({
     }, 0);
   }, [esCheque, chequesSeleccionados, row.chequesDisponibles]);
 
+  const montoVisible = esCheque ? importeCheques : row.monto;
+
   const restanteParaEstaFila = useMemo(() => {
-    const sumaOtros = Math.max(0, safeNumber(sumaMediosPago) - safeNumber(row.monto));
+    const sumaOtros = Math.max(0, safeNumber(sumaMediosPago) - safeNumber(montoVisible));
     return Math.max(0, safeNumber(totalSeleccionado) - sumaOtros);
-  }, [sumaMediosPago, totalSeleccionado, row.monto]);
+  }, [sumaMediosPago, totalSeleccionado, montoVisible]);
 
   const puedeCompletarRestante =
     !saving && !esCheque && totalSeleccionado > 0 && restanteParaEstaFila > 0.009;
@@ -453,34 +444,39 @@ function MedioPagoRow({
 
   return (
     <div className="nc-mp-card">
-      <div className="nc-mp-inline">
-        <div className="nc-mp-medio">
-          <div className="nc-mp-sublabel">Medio</div>
+      {/* Fila: selector de medio */}
+      <div className="nc-mp-row nc-mp-row--medio">
+        <div className="nc-field" style={{ position: "relative" }}>
           <select
-            className="nc-mp-select"
+            className="nc-input nc-select"
             value={String(row.id_medio_pago || "")}
             onChange={(e) => handleChangeMedio(e.target.value)}
             disabled={saving}
           >
-            <option value="">Seleccionar...</option>
+            <option value="">Seleccionar…</option>
             {mediosPagoList.map((x) => (
               <option key={x.id} value={String(x.id)}>
                 {x.nombre}
               </option>
             ))}
           </select>
+          <label className={`nc-label${row.id_medio_pago ? " nc-label--up" : ""}`}>
+            Medio de pago
+          </label>
         </div>
+      </div>
 
-        <div className="nc-mp-monto-wrap">
-          <div className="nc-mp-sublabel">Monto</div>
+      {/* Fila: monto + acciones */}
+      <div className="nc-mp-row nc-mp-row--monto">
+        <div className="nc-field nc-mp-monto-field" style={{ position: "relative" }}>
           <input
-            className="nc-mp-input-monto"
+            className="nc-input nc-mp-monto-input"
             type="text"
             inputMode="decimal"
             value={
               row.montoFocused
                 ? row.montoDraft ?? ""
-                : formatMoneyInputARS(esCheque ? importeCheques : row.monto)
+                : formatMoneyInputARS(montoVisible)
             }
             onFocus={(e) => {
               onUpdate(row.id, {
@@ -504,8 +500,13 @@ function MedioPagoRow({
                 esCheque && chequesSeleccionados.length > 0
                   ? "rgba(0,0,0,.03)"
                   : undefined,
+              height: 32,
+              padding: "0 10px",
+              fontSize: 13,
+              textAlign: "right",
             }}
           />
+          <label className="nc-label nc-label--up">Monto</label>
         </div>
 
         <div className="nc-mp-actions-col">
@@ -540,6 +541,7 @@ function MedioPagoRow({
         </div>
       </div>
 
+      {/* Sección cheques de cartera */}
       {esCheque && (
         <div className="nc-mp-cheques">
           <div className="nc-mp-cheques-title">
@@ -573,6 +575,81 @@ function MedioPagoRow({
         </div>
       )}
     </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+   PANEL MEDIOS DE PAGO (igual a PanelMediosPagoReciboLocal)
+───────────────────────────────────────────────────────── */
+function PanelMediosPago({
+  mediosFilas,
+  mediosPagoList,
+  totalSeleccionado,
+  onUpdate,
+  onRemove,
+  onAdd,
+  saving,
+  loadingMedios,
+  sumaMediosPago,
+  diferenciaRestante,
+  showToast,
+}) {
+  return (
+    <>
+      {loadingMedios && (
+        <div
+          style={{
+            padding: "4px 0",
+            fontSize: 12,
+            color: "var(--nv-muted)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <FontAwesomeIcon icon={faCircleNotch} spin style={{ fontSize: 11 }} />
+          Cargando medios de pago…
+        </div>
+      )}
+
+      {mediosFilas.map((mp) => (
+        <MedioPagoRow
+          key={mp.id}
+          row={mp}
+          mediosPagoList={mediosPagoList}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          saving={saving}
+          showToast={showToast}
+          canRemove={mediosFilas.length > 1}
+          totalSeleccionado={totalSeleccionado}
+          sumaMediosPago={sumaMediosPago}
+        />
+      ))}
+
+      <div className="nc-mp-totals">
+        <span className="nc-mp-totals-asignado">
+          Asignado: <b>{moneyARS(sumaMediosPago)}</b>
+        </span>
+        {diferenciaRestante > 0.01 && (
+          <span className="nc-mp-totals-falta">
+            Falta: {moneyARS(diferenciaRestante)}
+          </span>
+        )}
+        {diferenciaRestante <= 0.01 && totalSeleccionado > 0 && (
+          <span className="nc-mp-totals-ok">✓ Cubierto</span>
+        )}
+      </div>
+
+      <button
+        type="button"
+        className="nc-pago-btn"
+        onClick={onAdd}
+        disabled={saving}
+      >
+        <FontAwesomeIcon icon={faPlus} style={{ fontSize: 11 }} /> Agregar otro medio
+      </button>
+    </>
   );
 }
 
@@ -744,10 +821,8 @@ export default function ModalPagarOrdenesPago({
 
     const ro = new ResizeObserver(() => recomputeTbodyScroll());
     ro.observe(el);
-
     const mo = new MutationObserver(() => recomputeTbodyScroll());
     mo.observe(el, { childList: true, subtree: true });
-
     window.addEventListener("resize", recomputeTbodyScroll);
 
     return () => {
@@ -817,7 +892,6 @@ export default function ModalPagarOrdenesPago({
 
   const confirmPagoDefault = async ({ ids_movimiento, medios_pago }) => {
     const { idUsuario, idUsuarioMaster } = getAuthInfo();
-
     return await fetchJsonOrThrow(
       `${BASE_URL}/api.php?action=ordenes_pago_confirmar_pago`,
       {
@@ -839,7 +913,6 @@ export default function ModalPagarOrdenesPago({
         (acc, r) => acc + (Number(r?.monto_total ?? r?.total ?? 0) || 0),
         0
       );
-
       const mpNombre =
         mediosPagoInfo.length === 1
           ? mediosPagoInfo[0].nombre
@@ -894,7 +967,6 @@ export default function ModalPagarOrdenesPago({
             } de cartera.`,
           };
         }
-
         for (const idCh of idsCheques) {
           if (chequesRepetidos.has(idCh)) {
             return {
@@ -914,9 +986,7 @@ export default function ModalPagarOrdenesPago({
     if (sumaMediosPago < totalSeleccionado - 0.05 && totalSeleccionado > 0) {
       return {
         ok: false,
-        msg: `La suma de los medios de pago (${moneyARS(
-          sumaMediosPago
-        )}) no cubre el total a pagar (${moneyARS(totalSeleccionado)}).`,
+        msg: `La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no cubre el total a pagar (${moneyARS(totalSeleccionado)}).`,
       };
     }
 
@@ -940,20 +1010,15 @@ export default function ModalPagarOrdenesPago({
       return id && selectedIds.has(id) && !isPagadoRow(r);
     });
 
-    const ids = seleccion
-      .map((r) => Number(r?.id_movimiento || 0))
-      .filter(Boolean);
-
+    const ids = seleccion.map((r) => Number(r?.id_movimiento || 0)).filter(Boolean);
     const mediosPagoPayload = buildMediosPagoPayload();
 
     const mediosPagoInfo = mediosFilas.map((mp) => {
       const mpData = mediosPago.find((x) => String(x.id) === String(mp.id_medio_pago));
       const idsCheques = getChequeIdsArray(mp.id_cheque);
-
       if (idsCheques.length > 1) {
         return { nombre: `${mpData?.nombre || "Medio de pago"} x${idsCheques.length}` };
       }
-
       return { nombre: mpData?.nombre || "Medio de pago" };
     });
 
@@ -961,7 +1026,6 @@ export default function ModalPagarOrdenesPago({
       setLoading(true);
 
       let resp;
-
       if (typeof onConfirm === "function") {
         resp = await Promise.resolve(
           onConfirm({
@@ -1028,6 +1092,9 @@ export default function ModalPagarOrdenesPago({
 
   if (!open) return null;
 
+  const canConfirm =
+    !loading && selectedIds.size > 0 && !loadingMedios && mediosFilas.every((mp) => mp.id_medio_pago);
+
   const modalClass = [
     "mi-modal__container",
     "mi-modal__container--mov",
@@ -1054,25 +1121,16 @@ export default function ModalPagarOrdenesPago({
             ref={dialogRef}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <div className="mi-modal__header mpr-header">
+            {/* ── Header ── */}
+            <div className="mi-modal__header">
               <div className="mi-modal__head-icon" aria-hidden="true">
                 <FontAwesomeIcon icon={faMoneyBill1Wave} />
               </div>
               <div className="mi-modal__head-left">
-                <h2 className="mi-modal__title">
-                  Pagar
-                  <span className="mpr-header-dot">·</span>
-                  <span className="mpr-header-cliente">
-                    {safeText(proveedor?.proveedor)}
-                  </span>
-                  {proveedor?.id_proveedor && (
-                    <span className="mpr-header-id">
-                      ID {String(proveedor.id_proveedor)}
-                    </span>
-                  )}
-                </h2>
+                <h2 className="mi-modal__title">Pagar orden</h2>
                 <p className="mi-modal__subtitle">
-                  Pendientes y pagadas · las pagadas quedan bloqueadas
+                  {safeText(proveedor?.proveedor)}
+                  {proveedor?.id_proveedor ? ` · ID ${String(proveedor.id_proveedor)}` : ""}
                 </p>
               </div>
               <button
@@ -1087,9 +1145,12 @@ export default function ModalPagarOrdenesPago({
               </button>
             </div>
 
-            <div className="mi-modal__content mpr-content-wrap">
-              <div className="mpr-layout">
-                <section className="mpr-table-section">
+            {/* ── Contenido ── */}
+            <div className="mi-modal__content">
+              <div className="mi-cr-grid">
+
+                {/* Tabla de deudas */}
+                <section className="mi-cr-table">
                   <div className="mpr-thead">
                     <div className="mpr-th mpr-th--sel">Sel</div>
                     <div className="mpr-th">Fecha</div>
@@ -1117,9 +1178,7 @@ export default function ModalPagarOrdenesPago({
                       return (
                         <div
                           key={id || `${r?.fecha}-${idx}`}
-                          className={`mpr-row ${checked ? "is-checked" : ""} ${
-                            pagado ? "is-paid" : ""
-                          }`}
+                          className={`mpr-row ${checked ? "is-checked" : ""} ${pagado ? "is-paid" : ""}`}
                           role="row"
                           onClick={() => id && toggleOne(id, r)}
                           title={pagado ? "Este registro ya está PAGADO" : undefined}
@@ -1129,9 +1188,7 @@ export default function ModalPagarOrdenesPago({
                             onClick={(e) => e.stopPropagation()}
                           >
                             <label
-                              className={`mpr-check ${
-                                !id || loading || pagado ? "is-disabled" : ""
-                              }`}
+                              className={`mpr-check ${!id || loading || pagado ? "is-disabled" : ""}`}
                             >
                               <input
                                 type="checkbox"
@@ -1185,106 +1242,63 @@ export default function ModalPagarOrdenesPago({
                   </div>
                 </section>
 
-                <aside className="nc-aside">
-                  <div className="nc-section">
-                    <div className="nc-section-head">
-                      <div className="nc-section-dot"></div>
-                      <span>Datos del pago</span>
-                    </div>
-                    <div className="nc-section-body">
-                      <button
-                        type="button"
-                        className="nv-foot-btn"
-                        style={{ width: "100%", justifyContent: "center" }}
-                        onClick={toggleAll}
-                        disabled={!deudasOrdenadas.length || loading}
-                      >
-                        <span className="nv-foot-btn__icon">
-                          <FontAwesomeIcon icon={faListCheck} style={{ fontSize: 10 }} />
-                        </span>
-                        {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="nc-section">
-                    <div className="nc-section-head">
-                      <div
-                        className="nc-section-dot"
-                        style={{ background: "#0f766e" }}
-                      ></div>
-                      <span>Medios de pago</span>
-                    </div>
-                    <div className="nc-section-body">
-                      {loadingMedios && (
-                        <div
-                          style={{
-                            padding: "4px 0",
-                            fontSize: 12,
-                            color: "var(--nv-muted)",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                          }}
-                        >
-                          <FontAwesomeIcon
-                            icon={faCircleNotch}
-                            spin
-                            style={{ fontSize: 11 }}
-                          />
-                          Cargando medios de pago…
-                        </div>
-                      )}
-
-                      {mediosFilas.map((mp) => (
-                        <MedioPagoRow
-                          key={mp.id}
-                          row={mp}
-                          mediosPagoList={mediosPago}
-                          onUpdate={updateMedioPago}
-                          onRemove={removeMedioPago}
-                          saving={loading}
-                          showToast={showToast}
-                          canRemove={mediosFilas.length > 1}
-                          totalSeleccionado={totalSeleccionado}
-                          sumaMediosPago={sumaMediosPago}
-                        />
-                      ))}
-
-                      <div className="nc-mp-totals">
-                        <span className="nc-mp-totals-asignado">
-                          Asignado: <b>{moneyARS(sumaMediosPago)}</b>
-                        </span>
-                        {diferenciaRestante > 0.01 && (
-                          <span className="nc-mp-totals-falta">
-                            Falta: {moneyARS(diferenciaRestante)}
-                          </span>
-                        )}
-                        {diferenciaRestante <= 0.01 && totalSeleccionado > 0 && (
-                          <span className="nc-mp-totals-ok">✓ Cubierto</span>
-                        )}
+                {/* Aside de pago */}
+                <div className="mi-cr-filters">
+                  <aside className="nc-aside">
+                    <div className="nc-section">
+                      <div className="nc-section-head">
+                        <div className="nc-section-dot" />
+                        <span>Datos del pago</span>
                       </div>
 
-                      <button
-                        type="button"
-                        className="nc-add-mp-btn"
-                        onClick={addMedioPago}
-                        disabled={loading}
-                      >
-                        <FontAwesomeIcon icon={faPlus} style={{ fontSize: 11 }} />
-                        Agregar otro medio
-                      </button>
-                    </div>
-                  </div>
+                      <div className="nc-section-body">
+                        <button
+                          type="button"
+                          className="nv-foot-btn"
+                          style={{ width: "100%", justifyContent: "center" }}
+                          onClick={toggleAll}
+                          disabled={!deudasOrdenadas.length || loading}
+                        >
+                          <span className="nv-foot-btn__icon">
+                            <FontAwesomeIcon icon={faListCheck} style={{ fontSize: 10 }} />
+                          </span>
+                          {pagaTodo ? "Deseleccionar todas" : "Seleccionar todas"}
+                        </button>
 
-                  <div className="mpr-aside__actions">
+                        <div className="nc-section-divider" />
+
+                        <PanelMediosPago
+                          mediosFilas={mediosFilas}
+                          mediosPagoList={mediosPago}
+                          totalSeleccionado={totalSeleccionado}
+                          onUpdate={updateMedioPago}
+                          onRemove={removeMedioPago}
+                          onAdd={addMedioPago}
+                          saving={loading}
+                          loadingMedios={loadingMedios}
+                          sumaMediosPago={sumaMediosPago}
+                          diferenciaRestante={diferenciaRestante}
+                          showToast={showToast}
+                        />
+                      </div>
+                    </div>
+                  </aside>
+
+                  <div className="nc-actions mi-cr-filters__actions mi-cr-filters__actions--sticky">
                     <button
                       type="button"
                       className="mit-btn mit-btn--solid mit-btn--block"
                       onClick={handleConfirm}
-                      disabled={loading || selectedIds.size === 0 || loadingMedios}
+                      disabled={!canConfirm}
                     >
-                      {loading ? "Procesando…" : "Confirmar pago"}
+                      {loading ? (
+                        <>
+                          <FontAwesomeIcon icon={faCircleNotch} spin style={{ marginRight: 6 }} />
+                          Procesando…
+                        </>
+                      ) : (
+                        "Confirmar pago"
+                      )}
                     </button>
                     <button
                       type="button"
@@ -1295,7 +1309,8 @@ export default function ModalPagarOrdenesPago({
                       Cancelar
                     </button>
                   </div>
-                </aside>
+                </div>
+
               </div>
             </div>
           </div>

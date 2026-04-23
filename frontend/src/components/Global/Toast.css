@@ -149,3 +149,19 @@
     width: calc(100vw - 32px);
   }
 }
+.toast-close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.7;
+  margin-left: 10px;
+  padding: 0 2px;
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: opacity 0.2s;
+}
+
+.toast-close-btn:hover {
+  opacity: 1;
+}

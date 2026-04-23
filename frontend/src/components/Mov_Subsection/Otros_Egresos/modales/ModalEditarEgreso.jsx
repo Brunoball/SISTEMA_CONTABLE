@@ -1036,7 +1036,8 @@ export default function ModalEditarEgreso({
                   </section>
                 )}
 
-                <aside className="nc-aside">
+                <div className="mi-cr-filters">
+                  <aside className="nc-aside">
                   <div className="nc-section">
                     <div className="nc-section-head">
                       <div className="nc-section-dot" />
@@ -1061,7 +1062,7 @@ export default function ModalEditarEgreso({
                       {!esMovCheque && (
                         <div className="nc-field">
                           <select
-                            className="nc-input"
+                            className="nc-input nc-select"
                             value={String(form.id_medio_pago || "")}
                             onChange={(e) => setForm((p) => ({ ...p, id_medio_pago: e.target.value }))}
                             disabled={saving}
@@ -1080,38 +1081,27 @@ export default function ModalEditarEgreso({
                       )}
 
                       {!esMovCheque && (
-                        <div>
-                          <div className="nc-pill-label">Clasificación *</div>
-                          <div className="nc-pills">
-                            <button
-                              type="button"
-                              className={`nc-pill${isCostoFijoChecked ? " nc-pill--active" : ""}`}
-                              onClick={handleSelectCostoFijo}
-                              disabled={saving}
-                            >
+                        <div className="nc-field">
+                          <select
+                            className="nc-input nc-select"
+                            value={String(form.id_clasificacion || "")}
+                            onChange={(e) => setForm((p) => ({ ...p, id_clasificacion: e.target.value }))}
+                            disabled={saving}
+                          >
+                            <option value="">Seleccionar...</option>
+                            <option value={String(clasificacionConfig.idCostoFijo)}>
                               {clasificacionConfig.labelCostoFijo}
-                            </button>
-                            <button
-                              type="button"
-                              className={`nc-pill${isNoCostoFijoChecked ? " nc-pill--active" : ""}`}
-                              onClick={handleSelectNoCostoFijo}
-                              disabled={saving}
-                            >
+                            </option>
+                            <option value={String(clasificacionConfig.idNoCostoFijo)}>
                               {clasificacionConfig.labelNoCostoFijo}
-                            </button>
-                          </div>
+                            </option>
+                          </select>
+                          <label className="nc-label" style={{ pointerEvents: "none" }}>
+                            Clasificación *
+                          </label>
                         </div>
                       )}
-                    </div>
-                  </div>
-
-                  <div className="nc-section">
-                    <div className="nc-section-head">
-                      <div className="nc-section-dot" style={{ background: "#64748b" }} />
-                      <span>Comprobante adjunto</span>
-                    </div>
-                    <div className="nc-section-body">
-                      <div className="mi-uploadCard">
+                                            <div className="mi-uploadCard">
                         <div className="mi-uploadCard__head">
                           <div className="mi-uploadCard__title">Comprobante</div>
                           <div className="mi-uploadCard__sub">
@@ -1241,9 +1231,12 @@ export default function ModalEditarEgreso({
                         </div>
                       </div>
                     </div>
+
                   </div>
 
-                  <div className="nc-actions mi-cr-filters__actions">
+
+                  </aside>
+                                    <div className="nc-actions mi-cr-filters__actions mi-cr-filters__actions--sticky">
                     <button
                       type="submit"
                       disabled={saving}
@@ -1260,7 +1253,7 @@ export default function ModalEditarEgreso({
                       Cancelar
                     </button>
                   </div>
-                </aside>
+                </div>
               </div>
             </form>
           </div>

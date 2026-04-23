@@ -1,15 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import "../../../Global/Global_css/Global_Modals.css";
-import "../../../Global/Global_css/roots.css";
-import "../../Recibos/modales/ModalPagarRecibos.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faMoneyCheckDollar,
-  faPlus,
-  faCreditCard,
-  faCheck,
-} from "@fortawesome/free-solid-svg-icons";
+import { faMoneyCheckDollar, faPlus, faCreditCard, faCheck } from "@fortawesome/free-solid-svg-icons";
 import BASE_URL from "../../../../config/config";
 import ModalNuevoCheque from "../../../Global/Modales/ModalNuevoCheque.jsx";
 
@@ -640,3 +632,4 @@ export function PagoResumenPanelVenta({ mediosFilas, mediosPagoList, totalCompra
     </div>
   );
 }
+

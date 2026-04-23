@@ -285,11 +285,7 @@ const ConfirmLogoutModal = memo(function ConfirmLogoutModal({
   const stop = (e) => e.stopPropagation();
 
   return (
-    <div
-      className="pp-modal-overlay"
-      role="dialog"
-      aria-modal="true"
-    >
+    <div className="pp-modal-overlay" role="dialog" aria-modal="true">
       <div className="pp-modal" onMouseDown={stop}>
         <div className="pp-modal__icon">
           <FontAwesomeIcon icon={faSignOutAlt} />
@@ -416,7 +412,6 @@ const Principal = () => {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // ── Sub-menús: controlados por CLICK, el estado NO se resetea al cerrar el drawer ──
   const [openMovSub, setOpenMovSub] = useState(false);
   const [openCCSub, setOpenCCSub] = useState(false);
   const [openChequesSub, setOpenChequesSub] = useState(false);
@@ -503,7 +498,9 @@ const Principal = () => {
 
         if (!res.ok) return;
 
-        const contentType = String(res.headers.get("content-type") || "").toLowerCase();
+        const contentType = String(
+          res.headers.get("content-type") || ""
+        ).toLowerCase();
 
         if (!contentType.startsWith("image/")) return;
 
@@ -621,7 +618,8 @@ const Principal = () => {
   useEffect(() => {
     const onUnauthorized = () => doLogout({ silent: true });
     window.addEventListener("auth:unauthorized", onUnauthorized);
-    return () => window.removeEventListener("auth:unauthorized", onUnauthorized);
+    return () =>
+      window.removeEventListener("auth:unauthorized", onUnauthorized);
   }, [doLogout]);
 
   useEffect(() => {
@@ -727,7 +725,6 @@ const Principal = () => {
     };
   }, [revokeTenantLogoIconoObjectUrl, revokeTenantLogoPrincipalObjectUrl]);
 
-  // ── Al cambiar de ruta solo cerramos el drawer; los sub-menús NO se resetean ──
   useEffect(() => {
     setDrawerOpen(false);
   }, [location.pathname]);
@@ -797,7 +794,6 @@ const Principal = () => {
   const planNivel = normalizePlanNivel(usuario?.plan_nivel ?? 1);
   const rolUsuario = normalizeRol(usuario?.rol);
 
-  // navItems SIN el submenú de categorías
   const navItems = useMemo(() => {
     const base = [
       {
@@ -824,7 +820,6 @@ const Principal = () => {
       {
         label: "Stock",
         ruta: "/panel/stock",
-        // SIN children - eliminado el submenú de categorías
       },
       {
         label: "Cheques",
@@ -851,26 +846,31 @@ const Principal = () => {
 
   const activeKey = useMemo(() => {
     if (location.pathname.startsWith("/panel/movimientos")) return "movimientos";
-    if (location.pathname.startsWith("/panel/cuentas-corrientes")) return "cuentas-corrientes";
+    if (location.pathname.startsWith("/panel/cuentas-corrientes"))
+      return "cuentas-corrientes";
     if (location.pathname.startsWith("/panel/cheques")) return "cheques";
     if (location.pathname.startsWith("/panel/stock")) return "stock";
-    if (location.pathname.startsWith("/panel/configuracion")) return "configuracion";
+    if (location.pathname.startsWith("/panel/configuracion"))
+      return "configuracion";
     const found = navItems.find((x) => location.pathname.startsWith(x.ruta));
     return found?.key || "";
   }, [location.pathname, navItems]);
 
-  // activeLabel SIN la línea de stock/categorias
   const activeLabel = useMemo(() => {
     if (location.pathname.startsWith("/panel/movimientos")) return "Movimientos";
-    if (location.pathname.startsWith("/panel/cuentas-corrientes/clientes")) return "Cuentas Corrientes";
-    if (location.pathname.startsWith("/panel/cuentas-corrientes/proveedores")) return "Cuentas Corrientes";
+    if (location.pathname.startsWith("/panel/cuentas-corrientes/clientes"))
+      return "Cuentas Corrientes";
+    if (location.pathname.startsWith("/panel/cuentas-corrientes/proveedores"))
+      return "Cuentas Corrientes";
 
     if (location.pathname === "/panel/stock") return "Stock";
     if (location.pathname.startsWith("/panel/stock")) return "Stock";
 
     if (location.pathname.startsWith("/panel/cheques")) return "Cheques";
-    if (location.pathname.startsWith("/panel/configuracion/tiendanube")) return "Configuración";
-    if (location.pathname.startsWith("/panel/configuracion")) return "Configuración";
+    if (location.pathname.startsWith("/panel/configuracion/tiendanube"))
+      return "Configuración";
+    if (location.pathname.startsWith("/panel/configuracion"))
+      return "Configuración";
     const found = navItems.find((x) => location.pathname.startsWith(x.ruta));
     return found?.label || "Dashboard";
   }, [location.pathname, navItems]);
@@ -878,7 +878,6 @@ const Principal = () => {
   const handleNavigate = useCallback(
     (ruta) => {
       navigate(ruta);
-      // Solo cerramos el drawer; los sub-menús mantienen su estado
       setDrawerOpen(false);
     },
     [navigate]
@@ -943,7 +942,6 @@ const Principal = () => {
     }
   };
 
-  // ── Helpers de identificación por key ──
   const isMovDropdown = (itemKey) => itemKey === "movimientos";
   const isCCDropdown = (itemKey) => itemKey === "cuentas-corrientes";
   const isChequesDropdown = (itemKey) => itemKey === "cheques";
@@ -956,13 +954,34 @@ const Principal = () => {
     return "";
   }, [tenantLogoIconoLoaded, tenantLogoIconoSrc]);
 
-  // ── Toggle de sub-menú por click ──
-  const handleSubToggle = useCallback((itemKey) => {
-    if (itemKey === "movimientos") setOpenMovSub((prev) => !prev);
-    if (itemKey === "cuentas-corrientes") setOpenCCSub((prev) => !prev);
-    if (itemKey === "cheques") setOpenChequesSub((prev) => !prev);
-    if (itemKey === "stock") setOpenStockSub((prev) => !prev);
+  const closeAllSubs = useCallback(() => {
+    setOpenMovSub(false);
+    setOpenCCSub(false);
+    setOpenChequesSub(false);
+    setOpenStockSub(false);
   }, []);
+
+  const toggleSubmenu = useCallback(
+    (itemKey, isCurrentlyOpen) => {
+      if (isCurrentlyOpen) {
+        closeAllSubs();
+        return;
+      }
+
+      setOpenMovSub(itemKey === "movimientos");
+      setOpenCCSub(itemKey === "cuentas-corrientes");
+      setOpenChequesSub(itemKey === "cheques");
+      setOpenStockSub(itemKey === "stock");
+    },
+    [closeAllSubs]
+  );
+
+  const handleSubDoubleClick = useCallback(
+    (itemRuta) => {
+      handleNavigate(itemRuta);
+    },
+    [handleNavigate]
+  );
 
   return (
     <div className="pp-shell">
@@ -1107,7 +1126,12 @@ const Principal = () => {
           </button>
         </div>
 
-        <div className="pp-brand panel_contable" onClick={handleLogoClick} role="button" tabIndex={0}>
+        <div
+          className="pp-brand panel_contable"
+          onClick={handleLogoClick}
+          role="button"
+          tabIndex={0}
+        >
           <div className="pp-brand__mark">
             <FontAwesomeIcon icon={faChartLine} />
           </div>
@@ -1129,11 +1153,11 @@ const Principal = () => {
             const isActive =
               activeKey === item.key ||
               (isMov && location.pathname.startsWith("/panel/movimientos")) ||
-              (isCC && location.pathname.startsWith("/panel/cuentas-corrientes")) ||
+              (isCC &&
+                location.pathname.startsWith("/panel/cuentas-corrientes")) ||
               (isCheques && location.pathname.startsWith("/panel/cheques")) ||
               (isStock && location.pathname.startsWith("/panel/stock"));
 
-            // Estado abierto del sub-menú según key
             const isOpen =
               (isMov && openMovSub) ||
               (isCC && openCCSub) ||
@@ -1143,7 +1167,9 @@ const Principal = () => {
             return (
               <div
                 key={item.key}
-                className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${isOpen ? "is-open" : ""}`}
+                className={`pp-navGroup ${hasSub ? "has-sub" : ""} ${
+                  isOpen ? "is-open" : ""
+                }`}
                 onMouseEnter={() => prefetchRoute(item.ruta)}
               >
                 <button
@@ -1153,10 +1179,15 @@ const Principal = () => {
                     prefetchRoute(item.ruta);
 
                     if (hasSub) {
-                      // Click en ítem con sub-menú: toglea el sub-menú
-                      handleSubToggle(item.key);
+                      toggleSubmenu(item.key, isOpen);
                     } else {
                       handleNavigate(item.ruta);
+                    }
+                  }}
+                  onDoubleClick={() => {
+                    if (hasSub) {
+                      prefetchRoute(item.ruta);
+                      handleSubDoubleClick(item.ruta);
                     }
                   }}
                   aria-expanded={hasSub ? isOpen : undefined}
@@ -1183,7 +1214,6 @@ const Principal = () => {
                         onClick={() => {
                           navigate(sub.ruta);
                           setDrawerOpen(false);
-                          // No cerramos los sub-menús al navegar
                         }}
                       >
                         <span className="pp-navSub__dot" />

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Toast from "../Toast.jsx";
+import "../Global_css/Global_Modals.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faFileInvoiceDollar,
@@ -42,13 +43,39 @@ function sanitizeEmitter(v) {
 }
 
 /* =========================================================
+   Importe con centavos
+   Se guarda internamente como string de dígitos:
+   "1"    => 0,01
+   "12"   => 0,12
+   "123"  => 1,23
+   "1234" => 12,34
+========================================================= */
+function formatImporteFromDigits(v) {
+  const digits = onlyDigits(v);
+  if (!digits) return "0,00";
+
+  const padded = digits.padStart(3, "0");
+  const enteros = padded.slice(0, -2).replace(/^0+(?=\d)/, "") || "0";
+  const decimales = padded.slice(-2);
+
+  return `${enteros},${decimales}`;
+}
+
+function importeDigitsToNumber(v) {
+  const digits = onlyDigits(v);
+  if (!digits) return 0;
+  return Number(digits) / 100;
+}
+
+function numberToImporteDigits(v) {
+  if (v == null || v === "") return "";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "";
+  return String(Math.round(n * 100));
+}
+
+/* =========================================================
    Modal global reusable
-   verificarNumeroCheque:
-   async ({ numero_cheque, tipoCheque, initialData, form }) => {
-     return true
-     // o:
-     return { ok: false, mensaje: "Ese cheque ya existe." }
-   }
 ========================================================= */
 export default function ModalNuevoCheque({
   open,
@@ -121,7 +148,7 @@ export default function ModalNuevoCheque({
         form: {
           ...form,
           numero_cheque: numeroCheque,
-          importe: safeNumber(form.importe),
+          importe: importeDigitsToNumber(form.importe),
         },
       });
 
@@ -137,7 +164,11 @@ export default function ModalNuevoCheque({
       numeroInputRef.current?.focus();
       return false;
     } catch (e) {
-      notify("error", e?.message || "No se pudo verificar el número del cheque.", 4200);
+      notify(
+        "error",
+        e?.message || "No se pudo verificar el número del cheque.",
+        4200
+      );
       numeroInputRef.current?.focus();
       return false;
     } finally {
@@ -164,10 +195,7 @@ export default function ModalNuevoCheque({
         fecha_emision: initialData.fecha_emision || todayISO(),
         emisor: sanitizeEmitter(initialData.emisor || ""),
         numero_cheque: onlyDigits(initialData.numero_cheque || ""),
-        importe:
-          initialData.importe != null
-            ? onlyDigits(String(initialData.importe))
-            : "",
+        importe: numberToImporteDigits(initialData.importe),
         fecha_pago: initialData.fecha_pago || plusDaysISO(10),
       });
 
@@ -274,7 +302,7 @@ export default function ModalNuevoCheque({
       return;
     }
 
-    if (!(safeNumber(form.importe) > 0)) {
+    if (!(importeDigitsToNumber(form.importe) > 0)) {
       notify("advertencia", "Ingresá un importe válido mayor a 0.", 3200);
       return;
     }
@@ -291,7 +319,7 @@ export default function ModalNuevoCheque({
       ...form,
       emisor: sanitizeEmitter(form.emisor),
       numero_cheque: onlyDigits(form.numero_cheque),
-      importe: safeNumber(form.importe),
+      importe: importeDigitsToNumber(form.importe),
       tipo: tipoCheque,
       tipo_cheque: tipoCheque,
       archivo: archivo || null,
@@ -515,14 +543,19 @@ export default function ModalNuevoCheque({
                       <input
                         className="nc-input"
                         type="text"
-                        placeholder=" "
-                        value={form.importe}
+                        placeholder="0,00"
+                        value={formatImporteFromDigits(form.importe)}
                         onChange={(e) => setField("importe", onlyDigits(e.target.value))}
                         disabled={saving || checkingNumero}
                         inputMode="numeric"
                         autoComplete="off"
                       />
-                      <label className="nc-label">Importe *</label>
+                      <label
+                        className="nc-label"
+
+                      >
+                        Importe *
+                      </label>
                     </div>
 
                     <div className="mnc-dates">

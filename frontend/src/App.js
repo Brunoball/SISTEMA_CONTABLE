@@ -22,7 +22,8 @@ import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 
 /* Configuración */
 import Configuracion from "./components/Configuracion/Configuracion";
-import ConfigTiendaNube from "./components/Configuracion/ConfigTiendaNube";
+import ConfigTiendaNube from "./components/Configuracion/ConfiguracionTiendaNube/ConfigTiendaNube";
+import ConfiguracionCalendario from "./components/Configuracion/ConfiguracionCalendario/ConfiguracionCalendario";
 
 /* Análisis financiero */
 import * as AnalisisFinancieroModule from "./components/Analisis_Financiero/Analisis_Financiero";
@@ -145,7 +146,7 @@ export default function App() {
           <Route path="cuentas-corrientes/clientes" element={<ClientesCC />} />
           <Route path="cuentas-corrientes/proveedores" element={<ProveedoresCC />} />
 
-          {/* STOCK - Sin categorías */}
+          {/* STOCK */}
           <Route path="stock" element={<Stock />} />
 
           {/* CHEQUES */}
@@ -159,6 +160,7 @@ export default function App() {
           {/* CONFIGURACIÓN */}
           <Route path="configuracion" element={<Configuracion />} />
           <Route path="configuracion/tiendanube" element={<ConfigTiendaNube />} />
+          <Route path="configuracion/calendario" element={<ConfiguracionCalendario />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

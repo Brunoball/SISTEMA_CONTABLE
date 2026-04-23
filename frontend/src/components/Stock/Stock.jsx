@@ -137,7 +137,7 @@ function compareValues(a, b, campo) {
   const va = a?.[campo];
   const vb = b?.[campo];
 
-  if (campo === "stock" || campo === "precio" || campo === "precio_promo") {
+  if (campo === "stock" || campo === "precio_costo" || campo === "precio" || campo === "precio_promo") {
     const na = Number(String(va ?? 0).replace(",", "."));
     const nb = Number(String(vb ?? 0).replace(",", "."));
     return na - nb;
@@ -192,6 +192,7 @@ function normalizeProductoListItem(prod = {}) {
     nombre: String(prod?.nombre ?? ""),
     sku: String(prod?.sku ?? ""),
     stock: prod?.stock ?? 0,
+    precio_costo: prod?.precio_costo ?? null,
     precio: prod?.precio ?? null,
     precio_promo: prod?.precio_promo ?? null,
     descripcion: prod?.descripcion ?? "",
@@ -207,7 +208,7 @@ function normalizeProductoListItem(prod = {}) {
       prod?.modificado_en ??
       prod?.imagen_actualizada_en ??
       prod?.ultima_actualizacion ??
-      new Date().toISOString(),
+      "",
   };
 }
 
@@ -251,14 +252,14 @@ function getProductoImageRefreshToken(prod, refreshKey = 0, intento = 0) {
   return `${archivoId}-${String(updateToken || "")}-${String(refreshKey)}-${String(intento)}`;
 }
 
-function getProductoImageUrl(prod, apiUrl, refreshKey = 0) {
+function getProductoImageUrl(prod, apiUrl, refreshKey = 0, intento = 0) {
   const archivoId = Number(prod?.imagen_archivo_id || 0);
   if (!archivoId) return "";
 
   const params = new URLSearchParams({
     action: "stock_producto_imagen_ver",
     id_archivo: String(archivoId),
-    _imgv: getProductoImageRefreshToken(prod, refreshKey, 0),
+    _imgv: getProductoImageRefreshToken(prod, refreshKey, intento),
   });
 
   return withSessionKey(`${apiUrl}?${params.toString()}`);
@@ -303,12 +304,13 @@ function getUsuarioAuditData() {
 }
 
 const COLUMNS = [
-  { key: "nombre", label: "PRODUCTO", fr: 2.4, align: "left", sortable: true },
-  { key: "sku", label: "SKU", fr: 1.0, align: "center", sortable: true },
+  { key: "nombre", label: "PRODUCTO", fr: 2.2, align: "left", sortable: true },
+  { key: "sku", label: "SKU", fr: 0.95, align: "center", sortable: true },
   { key: "stock", label: "STOCK", fr: 0.8, align: "center", sortable: true },
-  { key: "precio", label: "PRECIO", fr: 1.0, align: "right", sortable: true },
+  { key: "precio_costo", label: "PRECIO COSTO", fr: 1.0, align: "right", sortable: true },
+  { key: "precio", label: "PRECIO VENTA", fr: 1.0, align: "right", sortable: true },
   { key: "precio_promo", label: "PRECIO PROMO", fr: 1.0, align: "right", sortable: true },
-  { key: "acciones", label: "ACCIONES", fr: 0.7, align: "center", sortable: false },
+  { key: "acciones", label: "ACCIONES", fr: 0.75, align: "center", sortable: false },
 ];
 
 const GRID_COLS = COLUMNS.map((c) => `${c.fr}fr`).join(" ");
@@ -318,6 +320,7 @@ const SKEL_WIDTHS = {
   nombre: ["68%", "52%", "60%", "48%"],
   sku: ["44%", "36%", "40%", "32%"],
   stock: ["38%", "30%", "34%", "28%"],
+  precio_costo: ["48%", "40%", "44%", "36%"],
   precio: ["50%", "42%", "46%", "38%"],
   precio_promo: ["46%", "38%", "42%", "34%"],
 };
@@ -344,8 +347,9 @@ const Stock = () => {
   const [eliminando, setEliminando] = useState(false);
 
   const [toast, setToast] = useState(null);
-  const [refreshImagenesKey, setRefreshImagenesKey] = useState(Date.now());
+  const [versionImagenPorProducto, setVersionImagenPorProducto] = useState({});
   const [erroresImagenes, setErroresImagenes] = useState({});
+  const [reintentosImagenes, setReintentosImagenes] = useState({});
 
   const refreshTimersRef = useRef([]);
   const productosPorPagina = 20;
@@ -367,9 +371,46 @@ const Stock = () => {
     };
   }, [limpiarRefreshTimers]);
 
-  const invalidarMiniaturas = useCallback((seed = Date.now()) => {
-    setRefreshImagenesKey(seed);
-    setErroresImagenes({});
+  const invalidarMiniaturaProducto = useCallback((productoId, seed = Date.now()) => {
+    const id = Number(productoId || 0);
+    if (!id) return;
+
+    setVersionImagenPorProducto((prev) => ({
+      ...prev,
+      [id]: seed,
+    }));
+
+    setErroresImagenes((prev) => {
+      if (!prev?.[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+    setReintentosImagenes((prev) => {
+      if (!prev?.[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
+
+  const programarReintentoImagen = useCallback((productoId) => {
+    const timerId = setTimeout(() => {
+      setReintentosImagenes((prev) => ({
+        ...prev,
+        [productoId]: Number(prev?.[productoId] || 0) + 1,
+      }));
+
+      setErroresImagenes((prev) => {
+        if (!prev?.[productoId]) return prev;
+        const next = { ...prev };
+        delete next[productoId];
+        return next;
+      });
+    }, 900);
+
+    refreshTimersRef.current.push(timerId);
   }, []);
 
   const recargarTodo = useCallback(async () => {
@@ -420,39 +461,21 @@ const Stock = () => {
     }
   }, []);
 
-  const programarRecargasSuaves = useCallback(
-    (delays = [700, 1800, 3200]) => {
-      limpiarRefreshTimers();
-
-      delays.forEach((delay) => {
-        const timerId = setTimeout(async () => {
-          try {
-            await recargarTodo();
-            invalidarMiniaturas(Date.now() + delay);
-          } catch {}
-        }, delay);
-
-        refreshTimersRef.current.push(timerId);
-      });
-    },
-    [limpiarRefreshTimers, recargarTodo, invalidarMiniaturas]
-  );
 
   const refrescarDespuesDeGuardar = useCallback(
     async (productoGuardado = null) => {
+      const productoId = getProductoId(productoGuardado);
+
       if (productoGuardado) {
         setProductosRaw((prev) => mergeProductoEnLista(prev, productoGuardado));
-        invalidarMiniaturas(Date.now());
+        invalidarMiniaturaProducto(productoId);
       }
 
       try {
         await recargarTodo();
-        invalidarMiniaturas(Date.now() + 1);
       } catch {}
-
-      programarRecargasSuaves();
     },
-    [invalidarMiniaturas, programarRecargasSuaves, recargarTodo]
+    [invalidarMiniaturaProducto, recargarTodo]
   );
 
   const fetchCategorias = useCallback(async () => {
@@ -500,14 +523,13 @@ const Stock = () => {
       }
 
       setProductosRaw(normalizeProductosCollection(data.productos));
-      invalidarMiniaturas(Date.now());
     } catch (err) {
       setProductosRaw([]);
       setError(err.message || "Error inesperado");
     } finally {
       setLoading(false);
     }
-  }, [invalidarMiniaturas]);
+  }, []);
 
   useEffect(() => {
     fetchProductos();
@@ -666,6 +688,11 @@ const Stock = () => {
       );
       
       setErroresImagenes((prev) => {
+        const next = { ...prev };
+        delete next[productoId];
+        return next;
+      });
+      setReintentosImagenes((prev) => {
         const next = { ...prev };
         delete next[productoId];
         return next;
@@ -882,10 +909,16 @@ const Stock = () => {
                     productos.map((prod) => {
                       const productoId = getProductoId(prod);
                       const archivoId = Number(prod?.imagen_archivo_id || 0);
+                      const intentoImagen = Number(reintentosImagenes?.[productoId] || 0);
                       const imagenRota = !!erroresImagenes[productoId];
                       const imageUrl =
                         archivoId > 0
-                          ? getProductoImageUrl(prod, API_URL, refreshImagenesKey)
+                          ? getProductoImageUrl(
+                              prod,
+                              API_URL,
+                              versionImagenPorProducto[productoId] || 0,
+                              intentoImagen
+                            )
                           : "";
 
                       return (
@@ -905,7 +938,20 @@ const Stock = () => {
                                     className="prod-thumb__img"
                                     loading="lazy"
                                     decoding="async"
+                                    onLoad={() => {
+                                      setErroresImagenes((prev) => {
+                                        if (!prev?.[productoId]) return prev;
+                                        const next = { ...prev };
+                                        delete next[productoId];
+                                        return next;
+                                      });
+                                    }}
                                     onError={() => {
+                                      if (intentoImagen < 6) {
+                                        programarReintentoImagen(productoId);
+                                        return;
+                                      }
+
                                       setErroresImagenes((prev) => ({
                                         ...prev,
                                         [productoId]: true,
@@ -945,7 +991,19 @@ const Stock = () => {
                             })()}
                           </div>
 
-                          <div className="mov-gridCell is-right" role="cell" data-label="PRECIO">
+                          <div
+                            className="mov-gridCell is-right"
+                            role="cell"
+                            data-label="PRECIO COSTO"
+                          >
+                            <span className="mov-ellipsissss">{formatMoney(prod.precio_costo)}</span>
+                          </div>
+
+                          <div
+                            className="mov-gridCell is-right"
+                            role="cell"
+                            data-label="PRECIO VENTA"
+                          >
                             <span className="mov-ellipsissss">{formatMoney(prod.precio)}</span>
                           </div>
 
@@ -1061,6 +1119,7 @@ const Stock = () => {
         <ModalEditarProducto
           productoId={productoEditarId}
           onClose={handleCerrarEditar}
+          onToast={mostrarToast}
           onGuardado={async (productoGuardado) => {
             handleCerrarEditar();
             await refrescarDespuesDeGuardar(productoGuardado);
@@ -1079,6 +1138,7 @@ const Stock = () => {
                 nombre: productoEliminar.nombre,
                 sku: productoEliminar.sku,
                 stock: productoEliminar.stock,
+                precio_costo: productoEliminar.precio_costo,
                 precio: productoEliminar.precio,
               }
             : null
@@ -1111,7 +1171,8 @@ const Stock = () => {
                       ? "—"
                       : String(productoEliminar.stock),
                 },
-                { label: "Precio", value: formatMoney(productoEliminar.precio) },
+                { label: "Precio costo", value: formatMoney(productoEliminar.precio_costo) },
+                { label: "Precio venta", value: formatMoney(productoEliminar.precio) },
               ]
             : []
         }

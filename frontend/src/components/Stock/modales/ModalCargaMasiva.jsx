@@ -5,6 +5,7 @@ import "./ModalCargaMasiva.css";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante";
 import ModalCargaIndividualProducto from "./ModalCargaIndividualProducto";
 import { useListas } from "../../../context/ListasContext";
+import Toast from "../../Global/Toast.jsx";
 
 import {
   faBoxOpen,
@@ -19,7 +20,6 @@ import {
   faCheckCircle,
   faBoxesStacked,
   faFilePdf,
-  faTriangleExclamation,
   faTag,
   faBarcode,
   faCubesStacked,
@@ -51,6 +51,14 @@ import {
 
 const EXTENSIONES_IMAGEN = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "tif"];
 
+function errorToText(error, fallback = "Ocurrió un error inesperado") {
+  if (!error) return fallback;
+  if (typeof error === "string") return error;
+  if (error.message) return error.message;
+  if (error.error) return error.error;
+  return fallback;
+}
+
 function isTemaOscuro() {
   return (
     document.documentElement.getAttribute("data-theme") === "oscuro" ||
@@ -81,6 +89,78 @@ function getMetodoLabel(metodo) {
   }
 }
 
+
+function normalizarNombreTipoPrecio(nombre) {
+  return String(nombre || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+function buscarTipoPrecioExistentePorNombre(tiposPrecio = [], nombre = "") {
+  const nombreNormalizado = normalizarNombreTipoPrecio(nombre);
+  if (!nombreNormalizado) return null;
+
+  return (
+    tiposPrecio.find(
+      (tipo) => normalizarNombreTipoPrecio(tipo?.nombre) === nombreNormalizado
+    ) || null
+  );
+}
+
+function esTipoPrecioBaseCosto(nombre) {
+  const n = normalizarNombreTipoPrecio(nombre);
+  return ["COSTO", "PRECIO DE COSTO"].includes(n);
+}
+
+function esTipoPrecioBaseVenta(nombre) {
+  const n = normalizarNombreTipoPrecio(nombre);
+  return [
+    "VENTA",
+    "PRECIO DE VENTA",
+    "PRECIO VENTA",
+    "PUBLICO",
+    "PRECIO PUBLICO",
+    "LISTA",
+    "PRECIO LISTA",
+    "FINAL",
+  ].includes(n);
+}
+
+function esTipoPrecioBasePromo(nombre) {
+  const n = normalizarNombreTipoPrecio(nombre);
+  return [
+    "PROMO",
+    "PROMOCION",
+    "PROMOCIONAL",
+    "PRECIO PROMO",
+    "PRECIO PROMOCIONAL",
+    "OFERTA",
+    "DESCUENTO",
+  ].includes(n);
+}
+
+function normalizarFilaTipoPrecioExtra(row = {}, tiposPrecio = []) {
+  const tipoNombre = toUpperCaseValue(
+    String(row.tipo_nombre ?? row.nombre ?? row.tipo ?? row.label ?? "").trim()
+  );
+
+  const existente = buscarTipoPrecioExistentePorNombre(tiposPrecio, tipoNombre);
+  const idTipo = row.id_tipo_precio_stock ?? row.id ?? existente?.id ?? existente?.id_tipo_precio_stock ?? "";
+
+  return {
+    id_tipo_precio_stock: idTipo ? String(idTipo) : "",
+    tipo_nombre: tipoNombre || toUpperCaseValue(String(existente?.nombre || "").trim()),
+    precio: moneyToInput(row.precio ?? row.monto ?? ""),
+    margen_porcentaje: moneyToInput(row.margen_porcentaje ?? ""),
+    margen_valor: moneyToInput(row.margen_valor ?? ""),
+  };
+}
+
 function TipoBadge({ tipo }) {
   const map = {
     csv: { label: "CSV", cls: "cmi-badge--csv" },
@@ -97,7 +177,7 @@ function IconoArchivo({ tipo }) {
   if (tipo === "csv") return <FontAwesomeIcon icon={faFileCsv} />;
   if (tipo === "pdf") return <FontAwesomeIcon icon={faFilePdf} />;
   if (tipo === "imagen") return <FontAwesomeIcon icon={faImage} />;
-  return <FontAwesomeIcon icon={faTriangleExclamation} />;
+  return <FontAwesomeIcon icon={faCircleExclamation} />;
 }
 
 const ErrorMsg = ({ msg }) => (
@@ -187,15 +267,115 @@ function MiniCreateModal({ open, title, value, loading, onChange, onCancel, onSa
   );
 }
 
-function normalizarProductoDetectado(item = {}) {
+// NUEVA FUNCIÓN: recalcula los precios y márgenes de un producto detectado
+function recalcularProductoDetectadoInicial(producto = {}) {
+  const venta = recalculatePricingGroup({
+    cost: producto.precio_costo,
+    price: producto.precio,
+    marginPct: producto.margen_venta_porcentaje,
+    marginValue: producto.margen_venta_valor,
+    source: producto.precio
+      ? "price"
+      : producto.margen_venta_porcentaje
+      ? "marginPct"
+      : producto.margen_venta_valor
+      ? "marginValue"
+      : null,
+  });
+
+  const promo = recalculatePricingGroup({
+    cost: producto.precio_costo,
+    price: producto.precio_promo,
+    marginPct: producto.margen_promo_porcentaje,
+    marginValue: producto.margen_promo_valor,
+    source: producto.precio_promo
+      ? "price"
+      : producto.margen_promo_porcentaje
+      ? "marginPct"
+      : producto.margen_promo_valor
+      ? "marginValue"
+      : null,
+  });
+
+  const extras = (producto.tipos_precio_extra || []).map((row) => {
+    const r = recalculatePricingGroup({
+      cost: producto.precio_costo,
+      price: row.precio,
+      marginPct: row.margen_porcentaje,
+      marginValue: row.margen_valor,
+      source: row.precio
+        ? "price"
+        : row.margen_porcentaje
+        ? "marginPct"
+        : row.margen_valor
+        ? "marginValue"
+        : null,
+    });
+
+    return {
+      ...row,
+      precio: r.price,
+      margen_porcentaje: r.marginPct,
+      margen_valor: r.marginValue,
+    };
+  });
+
   return {
+    ...producto,
+    precio: venta.price,
+    margen_venta_porcentaje: venta.marginPct,
+    margen_venta_valor: venta.marginValue,
+    precio_promo: promo.price,
+    margen_promo_porcentaje: promo.marginPct,
+    margen_promo_valor: promo.marginValue,
+    tipos_precio_extra: extras,
+  };
+}
+
+function normalizarProductoDetectado(item = {}, tiposPrecio = []) {
+  let precioCosto = moneyToInput(item.precio_costo ?? "");
+  let precioVenta = moneyToInput(item.precio ?? item.precio_venta ?? "");
+  let precioPromo = moneyToInput(item.precio_promo ?? item.precio_promocional ?? "");
+
+  const tiposExtra = [];
+  const vistos = new Set();
+
+  (Array.isArray(item.tipos_precio_extra) ? item.tipos_precio_extra : []).forEach((row) => {
+    const fila = normalizarFilaTipoPrecioExtra(row, tiposPrecio);
+    const tipoNormalizado = normalizarNombreTipoPrecio(fila.tipo_nombre);
+    const precioFila = fila.precio;
+
+    if (!tipoNormalizado || !precioFila) return;
+
+    if (esTipoPrecioBaseCosto(tipoNormalizado)) {
+      if (!precioCosto) precioCosto = precioFila;
+      return;
+    }
+
+    if (esTipoPrecioBaseVenta(tipoNormalizado)) {
+      if (!precioVenta) precioVenta = precioFila;
+      return;
+    }
+
+    if (esTipoPrecioBasePromo(tipoNormalizado)) {
+      if (!precioPromo) precioPromo = precioFila;
+      return;
+    }
+
+    if (vistos.has(tipoNormalizado)) return;
+    vistos.add(tipoNormalizado);
+    tiposExtra.push(fila);
+  });
+
+  // Primero armamos el objeto base
+  const productoBase = {
     nombre: toUpperCaseValue(String(item.nombre ?? "").trim()),
     sku: toUpperCaseValue(String(item.sku ?? "").trim()),
-    precio_costo: moneyToInput(item.precio_costo ?? ""),
-    precio: moneyToInput(item.precio ?? item.precio_venta ?? ""),
+    precio_costo: precioCosto,
+    precio: precioVenta,
     margen_venta_porcentaje: moneyToInput(item.margen_venta_porcentaje ?? ""),
     margen_venta_valor: moneyToInput(item.margen_venta_valor ?? ""),
-    precio_promo: moneyToInput(item.precio_promo ?? item.precio_promocional ?? ""),
+    precio_promo: precioPromo,
     margen_promo_porcentaje: moneyToInput(item.margen_promo_porcentaje ?? ""),
     margen_promo_valor: moneyToInput(item.margen_promo_valor ?? ""),
     stock: item.stock === null || item.stock === undefined ? "" : String(item.stock),
@@ -205,8 +385,11 @@ function normalizarProductoDetectado(item = {}) {
         ? ""
         : String(item.id_categoria_stock),
     imagen: null,
-    tipos_precio_extra: [],
+    tipos_precio_extra: tiposExtra,
   };
+
+  // Luego lo recalculamos antes de devolverlo
+  return recalcularProductoDetectadoInicial(productoBase);
 }
 
 function ModalConfirmarProductosIA({
@@ -231,6 +414,9 @@ function ModalConfirmarProductosIA({
   errores,
   onCategoriaCreate,
   onTipoCreate,
+  mostrarToast,
+  onPricingChange,
+  onExtraPricingChange,
 }) {
   const [miniCategoriaOpen, setMiniCategoriaOpen] = useState(false);
   const [miniCategoriaNombre, setMiniCategoriaNombre] = useState("");
@@ -253,6 +439,8 @@ function ModalConfirmarProductosIA({
       setMiniCategoriaOpen(false);
       setMiniCategoriaNombre("");
       setMiniCategoriaFila(null);
+    } catch (err) {
+      mostrarToast(errorToText(err, "No se pudo crear la categoría"), "error");
     } finally {
       setGuardandoMiniCategoria(false);
     }
@@ -268,12 +456,13 @@ function ModalConfirmarProductosIA({
       setMiniTipoOpen(false);
       setMiniTipoNombre("");
       setMiniTipoFila(null);
+    } catch (err) {
+      mostrarToast(errorToText(err, "No se pudo crear el tipo de precio"), "error");
     } finally {
       setGuardandoMiniTipo(false);
     }
   };
 
-  // Agrega un tipo de precio inmediatamente al seleccionarlo del select
   const handleTipoSelectChange = (idx, item, val) => {
     if (!val) return;
 
@@ -283,14 +472,19 @@ function ModalConfirmarProductosIA({
       return;
     }
 
-    const existe = (item.tipos_precio_extra || []).some(
-      (x) => String(x.id_tipo_precio_stock) === String(val)
-    );
-    if (existe) return;
-
     const tipo = tiposPrecio.find(
       (t) => String(t.id ?? t.id_tipo_precio_stock) === String(val)
     );
+    if (!tipo) return;
+
+    const nombreTipo = normalizarNombreTipoPrecio(tipo.nombre);
+    const existe = (item.tipos_precio_extra || []).some((x) => {
+      const mismoId = String(x.id_tipo_precio_stock || "") === String(val);
+      const mismoNombre = normalizarNombreTipoPrecio(x.tipo_nombre) === nombreTipo;
+      return mismoId || mismoNombre;
+    });
+    if (existe) return;
+
     onChangeProducto(idx, "tipos_precio_extra", [
       ...(item.tipos_precio_extra || []),
       emptyExtraPriceRow(tipo),
@@ -325,16 +519,6 @@ function ModalConfirmarProductosIA({
           </div>
 
           <div className="mi-modal__content" style={{ overflowY: "auto", padding: 20 }}>
-            {errores.global && (
-              <div className="cmi-warnBox" style={{ marginBottom: 14 }}>
-                <div className="cmi-warnBox__title">
-                  <FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 8 }} />
-                  Error
-                </div>
-                <div>{errores.global}</div>
-              </div>
-            )}
-
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
               <div className="mi-card__hint">
                 Se detectaron <b>{productos.length}</b> producto{productos.length !== 1 ? "s" : ""}.
@@ -405,7 +589,7 @@ function ModalConfirmarProductosIA({
                           <PriceInput
                             name={`precio_costo_${idx}`}
                             value={item.precio_costo}
-                            onChange={(e) => onChangeProducto(idx, "precio_costo", normalizeMoneyInput(e.target.value))}
+                            onChange={(e) => onRecalcByCost(idx, e.target.value)}
                             onBlur={(e) => onRecalcByCost(idx, e.target.value)}
                             onFocus={(e) => onChangeProducto(idx, "precio_costo", formatMoneyFocus(e.target.value))}
                           />
@@ -416,7 +600,7 @@ function ModalConfirmarProductosIA({
                             <PriceInput
                               name={`precio_${idx}`}
                               value={item.precio}
-                              onChange={(e) => onChangeProducto(idx, "precio", normalizeMoneyInput(e.target.value))}
+                              onChange={(e) => onPricingChange(idx, e.target.value, "price", "venta")}
                               onBlur={() => onPricingBlur(idx, "price", "venta")}
                               onFocus={(e) => onChangeProducto(idx, "precio", formatMoneyFocus(e.target.value))}
                             />
@@ -426,9 +610,7 @@ function ModalConfirmarProductosIA({
                             <PriceInput
                               name={`margen_venta_porcentaje_${idx}`}
                               value={item.margen_venta_porcentaje}
-                              onChange={(e) =>
-                                onChangeProducto(idx, "margen_venta_porcentaje", normalizeMoneyInput(e.target.value))
-                              }
+                              onChange={(e) => onPricingChange(idx, e.target.value, "marginPct", "venta")}
                               onBlur={() => onPricingBlur(idx, "marginPct", "venta")}
                               onFocus={(e) =>
                                 onChangeProducto(idx, "margen_venta_porcentaje", formatMoneyFocus(e.target.value))
@@ -441,9 +623,7 @@ function ModalConfirmarProductosIA({
                             <PriceInput
                               name={`margen_venta_valor_${idx}`}
                               value={item.margen_venta_valor}
-                              onChange={(e) =>
-                                onChangeProducto(idx, "margen_venta_valor", normalizeMoneyInput(e.target.value))
-                              }
+                              onChange={(e) => onPricingChange(idx, e.target.value, "marginValue", "venta")}
                               onBlur={() => onPricingBlur(idx, "marginValue", "venta")}
                               onFocus={(e) =>
                                 onChangeProducto(idx, "margen_venta_valor", formatMoneyFocus(e.target.value))
@@ -458,7 +638,7 @@ function ModalConfirmarProductosIA({
                             <PriceInput
                               name={`precio_promo_${idx}`}
                               value={item.precio_promo}
-                              onChange={(e) => onChangeProducto(idx, "precio_promo", normalizeMoneyInput(e.target.value))}
+                              onChange={(e) => onPricingChange(idx, e.target.value, "price", "promo")}
                               onBlur={() => onPricingBlur(idx, "price", "promo")}
                               onFocus={(e) => onChangeProducto(idx, "precio_promo", formatMoneyFocus(e.target.value))}
                             />
@@ -468,9 +648,7 @@ function ModalConfirmarProductosIA({
                             <PriceInput
                               name={`margen_promo_porcentaje_${idx}`}
                               value={item.margen_promo_porcentaje}
-                              onChange={(e) =>
-                                onChangeProducto(idx, "margen_promo_porcentaje", normalizeMoneyInput(e.target.value))
-                              }
+                              onChange={(e) => onPricingChange(idx, e.target.value, "marginPct", "promo")}
                               onBlur={() => onPricingBlur(idx, "marginPct", "promo")}
                               onFocus={(e) =>
                                 onChangeProducto(idx, "margen_promo_porcentaje", formatMoneyFocus(e.target.value))
@@ -483,9 +661,7 @@ function ModalConfirmarProductosIA({
                             <PriceInput
                               name={`margen_promo_valor_${idx}`}
                               value={item.margen_promo_valor}
-                              onChange={(e) =>
-                                onChangeProducto(idx, "margen_promo_valor", normalizeMoneyInput(e.target.value))
-                              }
+                              onChange={(e) => onPricingChange(idx, e.target.value, "marginValue", "promo")}
                               onBlur={() => onPricingBlur(idx, "marginValue", "promo")}
                               onFocus={(e) =>
                                 onChangeProducto(idx, "margen_promo_valor", formatMoneyFocus(e.target.value))
@@ -501,7 +677,6 @@ function ModalConfirmarProductosIA({
                           <FontAwesomeIcon icon={faLayerGroup} /> Tipos de precio adicionales
                         </div>
 
-                        {/* SELECT: al cambiar agrega inmediatamente o abre modal si es __nuevo_tipo__ */}
                         <FloatingField label="Agregar tipo de precio">
                           <select
                             className="cmi-input cmi-select"
@@ -543,11 +718,7 @@ function ModalConfirmarProductosIA({
                                 <PriceInput
                                   name={`tipo_precio_${idx}_${tIdx}`}
                                   value={tipoItem.precio}
-                                  onChange={(e) => {
-                                    const next = [...(item.tipos_precio_extra || [])];
-                                    next[tIdx] = { ...next[tIdx], precio: normalizeMoneyInput(e.target.value) };
-                                    onChangeProducto(idx, "tipos_precio_extra", next);
-                                  }}
+                                  onChange={(e) => onExtraPricingChange(idx, tIdx, e.target.value, "price")}
                                   onBlur={() => {
                                     const result = recalculatePricingGroup({
                                       cost: item.precio_costo,
@@ -572,14 +743,7 @@ function ModalConfirmarProductosIA({
                                 <PriceInput
                                   name={`tipo_pct_${idx}_${tIdx}`}
                                   value={tipoItem.margen_porcentaje}
-                                  onChange={(e) => {
-                                    const next = [...(item.tipos_precio_extra || [])];
-                                    next[tIdx] = {
-                                      ...next[tIdx],
-                                      margen_porcentaje: normalizeMoneyInput(e.target.value),
-                                    };
-                                    onChangeProducto(idx, "tipos_precio_extra", next);
-                                  }}
+                                  onChange={(e) => onExtraPricingChange(idx, tIdx, e.target.value, "marginPct")}
                                   onBlur={() => {
                                     const result = recalculatePricingGroup({
                                       cost: item.precio_costo,
@@ -605,11 +769,7 @@ function ModalConfirmarProductosIA({
                                 <PriceInput
                                   name={`tipo_val_${idx}_${tIdx}`}
                                   value={tipoItem.margen_valor}
-                                  onChange={(e) => {
-                                    const next = [...(item.tipos_precio_extra || [])];
-                                    next[tIdx] = { ...next[tIdx], margen_valor: normalizeMoneyInput(e.target.value) };
-                                    onChangeProducto(idx, "tipos_precio_extra", next);
-                                  }}
+                                  onChange={(e) => onExtraPricingChange(idx, tIdx, e.target.value, "marginValue")}
                                   onBlur={() => {
                                     const result = recalculatePricingGroup({
                                       cost: item.precio_costo,
@@ -787,6 +947,7 @@ export default function ModalCargaMasiva({
 
   const [tab, setTab] = useState("individual");
   const [dark, setDark] = useState(isTemaOscuro);
+  const [toast, setToast] = useState({ open: false, tipo: "error", mensaje: "" });
 
   const [categoriasLocal, setCategoriasLocal] = useState(categoriasProp || []);
 
@@ -821,6 +982,14 @@ export default function ModalCargaMasiva({
   const [productosDetectados, setProductosDetectados] = useState([]);
   const [erroresDetectados, setErroresDetectados] = useState({});
   const [textoDetectadoOriginal, setTextoDetectadoOriginal] = useState("");
+
+  const mostrarToast = (mensaje, tipo = "error") => {
+    setToast({
+      open: true,
+      tipo,
+      mensaje: errorToText(mensaje),
+    });
+  };
 
   useEffect(() => {
     setCategoriasLocal(categoriasProp || []);
@@ -874,6 +1043,7 @@ export default function ModalCargaMasiva({
       cerrarModalConfirmacion();
       setTab("individual");
       setIndividualLoading(false);
+      setToast({ open: false, tipo: "error", mensaje: "" });
     }
   }, [open]);
 
@@ -993,7 +1163,6 @@ export default function ModalCargaMasiva({
       };
     });
 
-    // Intentar refresh en background sin bloquear ni lanzar error
     try {
       if (typeof refreshLists === "function") {
         refreshLists().catch(() => {});
@@ -1024,7 +1193,6 @@ export default function ModalCargaMasiva({
       return [...prev, nueva].sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""), "es"));
     });
 
-    // Refresh en background sin bloquear
     try {
       window.dispatchEvent(new Event("balto:listas-updated"));
     } catch {}
@@ -1074,11 +1242,11 @@ export default function ModalCargaMasiva({
 
   const handleImportar = async () => {
     if (!archivo) {
-      onToast?.("error", "Seleccioná un archivo CSV, PDF o imagen.");
+      mostrarToast("Seleccioná un archivo CSV, PDF o imagen.", "error");
       return;
     }
     if (!tipoArchivo) {
-      onToast?.("error", "Formato no válido. Admitido: CSV, PDF, JPG, PNG y otros formatos de imagen.");
+      mostrarToast("Formato no válido. Admitido: CSV, PDF, JPG, PNG y otros formatos de imagen.", "error");
       return;
     }
 
@@ -1121,30 +1289,36 @@ export default function ModalCargaMasiva({
       setTextoDetectadoOriginal(textoDetectado);
       const chars = data.total_caracteres ?? 0;
       const metodo = getMetodoLabel(data.metodo);
-      onToast?.("success", `Texto extraído con ${metodo}: ${chars} caracteres.`);
+      mostrarToast(`Texto extraído con ${metodo}: ${chars} caracteres.`, "success");
 
       if (!textoDetectado) {
-        onToast?.("error", "No se detectó texto para clasificar productos.");
+        mostrarToast("No se detectó texto para clasificar productos.", "error");
         return;
       }
 
       setClasificando(true);
       const clasificado = await clasificarTextoDetectado(textoDetectado);
+      
+      // MODIFICACIÓN AQUÍ: Aplicar recalcularProductoDetectadoInicial después de normalizar
       const productos = Array.isArray(clasificado.productos)
-        ? clasificado.productos.map(normalizarProductoDetectado)
+        ? clasificado.productos.map((item) =>
+            recalcularProductoDetectadoInicial(
+              normalizarProductoDetectado(item, tiposPrecio)
+            )
+          )
         : [];
 
       if (!productos.length) {
-        onToast?.("error", "No se pudieron detectar productos confiables desde el texto.");
+        mostrarToast("No se pudieron detectar productos confiables desde el texto.", "error");
         return;
       }
 
       setProductosDetectados(productos);
       setErroresDetectados({});
       setModalConfirmOpen(true);
-      onToast?.("success", `Se detectaron ${productos.length} producto${productos.length !== 1 ? "s" : ""}. Revisalos y confirmá.`);
+      mostrarToast(`Se detectaron ${productos.length} producto${productos.length !== 1 ? "s" : ""}. Revisalos y confirmá.`, "success");
     } catch (err) {
-      onToast?.("error", err.message || "Error al procesar el archivo.");
+      mostrarToast(err.message || "Error al procesar el archivo.", "error");
     } finally {
       setSubiendo(false);
       setClasificando(false);
@@ -1158,7 +1332,6 @@ export default function ModalCargaMasiva({
     setErroresDetectados((prev) => {
       const next = { ...prev };
       if (next[`fila_${idx}`]?.[field]) next[`fila_${idx}`] = { ...next[`fila_${idx}`], [field]: "" };
-      next.global = "";
       return next;
     });
   };
@@ -1187,6 +1360,86 @@ export default function ModalCargaMasiva({
               margen_promo_porcentaje: result.marginPct,
               margen_promo_valor: result.marginValue,
             };
+      })
+    );
+  };
+
+  const handlePricingChangeDetectado = (idx, rawValue, source, groupName) => {
+    const value = normalizeMoneyInput(rawValue);
+
+    setProductosDetectados((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+
+        const result = recalculatePricingGroup({
+          cost: item.precio_costo,
+          price:
+            source === "price"
+              ? value
+              : groupName === "venta"
+              ? item.precio
+              : item.precio_promo,
+          marginPct:
+            source === "marginPct"
+              ? value
+              : groupName === "venta"
+              ? item.margen_venta_porcentaje
+              : item.margen_promo_porcentaje,
+          marginValue:
+            source === "marginValue"
+              ? value
+              : groupName === "venta"
+              ? item.margen_venta_valor
+              : item.margen_promo_valor,
+          source,
+        });
+
+        return groupName === "venta"
+          ? {
+              ...item,
+              precio: result.price,
+              margen_venta_porcentaje: result.marginPct,
+              margen_venta_valor: result.marginValue,
+            }
+          : {
+              ...item,
+              precio_promo: result.price,
+              margen_promo_porcentaje: result.marginPct,
+              margen_promo_valor: result.marginValue,
+            };
+      })
+    );
+  };
+
+  const handleExtraPricingChangeDetectado = (idx, tIdx, rawValue, source) => {
+    const value = normalizeMoneyInput(rawValue);
+
+    setProductosDetectados((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+
+        const next = [...(item.tipos_precio_extra || [])];
+        const actual = next[tIdx] || {};
+
+        const result = recalculatePricingGroup({
+          cost: item.precio_costo,
+          price: source === "price" ? value : actual.precio,
+          marginPct: source === "marginPct" ? value : actual.margen_porcentaje,
+          marginValue: source === "marginValue" ? value : actual.margen_valor,
+          source,
+        });
+
+        next[tIdx] = {
+          ...actual,
+          precio: result.price,
+          margen_porcentaje: result.marginPct,
+          margen_valor: result.marginValue,
+        };
+
+        return {
+          ...item,
+          tipos_precio_extra: next,
+        };
       })
     );
   };
@@ -1235,7 +1488,7 @@ export default function ModalCargaMasiva({
   };
 
   const handleAddFilaDetectada = () => {
-    setProductosDetectados((prev) => [...prev, normalizarProductoDetectado({})]);
+    setProductosDetectados((prev) => [...prev, recalcularProductoDetectadoInicial(normalizarProductoDetectado({}, tiposPrecio))]);
   };
 
   const handleRemoveFilaDetectada = (idx) => {
@@ -1250,7 +1503,6 @@ export default function ModalCargaMasiva({
       setErroresDetectados((prev) => ({
         ...prev,
         [`fila_${idx}`]: { ...(prev[`fila_${idx}`] || {}), imagen: "La imagen debe ser JPG, PNG, WEBP o GIF" },
-        global: "",
       }));
       return;
     }
@@ -1258,7 +1510,6 @@ export default function ModalCargaMasiva({
       setErroresDetectados((prev) => ({
         ...prev,
         [`fila_${idx}`]: { ...(prev[`fila_${idx}`] || {}), imagen: "La imagen no puede superar los 5 MB" },
-        global: "",
       }));
       return;
     }
@@ -1285,8 +1536,16 @@ export default function ModalCargaMasiva({
       if (item.precio_promo && (Number.isNaN(promo) || promo < 0)) fila.precio_promo = "Precio promo inválido";
       if (item.stock !== "" && (Number.isNaN(Number(item.stock)) || Number(item.stock) < 0)) fila.stock = "Stock inválido";
 
-      if ((item.tipos_precio_extra || []).some((x) => !x.id_tipo_precio_stock)) {
-        fila.tipos = "Hay un tipo de precio inválido";
+      const extrasInvalidos = (item.tipos_precio_extra || []).some((x) => {
+        const nombreTipo = String(x.tipo_nombre || "").trim();
+        const precioTipo = String(x.precio || "").trim();
+        if (!nombreTipo) return true;
+        if (!precioTipo) return true;
+        const precioNumero = Number(precioTipo.replace(",", "."));
+        return Number.isNaN(precioNumero) || precioNumero < 0;
+      });
+      if (extrasInvalidos) {
+        fila.tipos = "Revisá los tipos de precio adicionales detectados";
       }
 
       if (item.imagen) {
@@ -1305,6 +1564,47 @@ export default function ModalCargaMasiva({
     return errs;
   }
 
+  const resolverTiposPrecioExtrasPendientes = async (productosBase) => {
+    const cache = new Map();
+    const normalizados = (Array.isArray(productosBase) ? productosBase : []).map((item) => ({
+      ...item,
+      tipos_precio_extra: (item.tipos_precio_extra || []).map((row) => ({ ...row })),
+    }));
+
+    for (const item of normalizados) {
+      for (const row of item.tipos_precio_extra || []) {
+        if (Number(row.id_tipo_precio_stock) > 0) continue;
+
+        const nombreOriginal = toUpperCaseValue(String(row.tipo_nombre || row.nombre || "").trim());
+        const nombreNormalizado = normalizarNombreTipoPrecio(nombreOriginal);
+        if (!nombreNormalizado) continue;
+
+        const existente = buscarTipoPrecioExistentePorNombre(tiposPrecio, nombreOriginal);
+        if (existente) {
+          row.id_tipo_precio_stock = String(existente.id ?? existente.id_tipo_precio_stock ?? "");
+          row.tipo_nombre = toUpperCaseValue(String(existente.nombre || nombreOriginal).trim());
+          continue;
+        }
+
+        if (!cache.has(nombreNormalizado)) {
+          cache.set(
+            nombreNormalizado,
+            crearTipoPrecioRapido(nombreOriginal)
+          );
+        }
+
+        const nuevo = await cache.get(nombreNormalizado);
+        row.id_tipo_precio_stock = String(nuevo?.id ?? nuevo?.id_tipo_precio_stock ?? "");
+        row.tipo_nombre = toUpperCaseValue(String(nuevo?.nombre || nombreOriginal).trim());
+      }
+    }
+
+    return {
+      productos: normalizados,
+      cantidadNuevosTipos: cache.size,
+    };
+  };
+
   const handleConfirmarDetectados = async () => {
     const errs = validarProductosDetectados();
     if (Object.keys(errs).length > 0) {
@@ -1319,16 +1619,19 @@ export default function ModalCargaMasiva({
     const erroresCarga = [];
 
     try {
+      const { productos: productosPreparados, cantidadNuevosTipos } = await resolverTiposPrecioExtrasPendientes(productosDetectados);
+      setProductosDetectados(productosPreparados);
+
       const { idUsuarioMaster, idTenant } = getUsuarioAuditData();
       const batchSize = 3;
       const batches = [];
-      for (let i = 0; i < productosDetectados.length; i += batchSize) {
-        batches.push(productosDetectados.slice(i, i + batchSize));
+      for (let i = 0; i < productosPreparados.length; i += batchSize) {
+        batches.push(productosPreparados.slice(i, i + batchSize));
       }
 
       for (const batch of batches) {
         const batchPromises = batch.map(async (item) => {
-          const globalIdx = productosDetectados.indexOf(item);
+          const globalIdx = productosPreparados.indexOf(item);
           try {
             const fd = new FormData();
             fd.append("nombre", toUpperCaseValue(String(item.nombre || "").trim()));
@@ -1389,7 +1692,7 @@ export default function ModalCargaMasiva({
         confirmacion_ia: {
           creados,
           errores: erroresCarga,
-          productos_confirmados: productosDetectados.length,
+          productos_confirmados: productosPreparados.length,
         },
         texto_detectado: textoDetectadoOriginal,
       }));
@@ -1397,10 +1700,14 @@ export default function ModalCargaMasiva({
       cerrarModalConfirmacion();
       if (creados > 0) onGuardado?.();
       if (erroresCarga.length > 0) {
-        onToast?.("error", `Se cargaron ${creados} producto(s), pero hubo ${erroresCarga.length} error(es).`);
+        mostrarToast(`Se cargaron ${creados} producto(s), pero hubo ${erroresCarga.length} error(es).`, "error");
       } else {
-        onImportado?.(`Se cargaron correctamente ${creados} producto(s).`);
+        const msgTipos = cantidadNuevosTipos > 0 ? ` y se crearon ${cantidadNuevosTipos} tipo(s) de precio nuevo(s)` : "";
+        onImportado?.(`Se cargaron correctamente ${creados} producto(s)${msgTipos}.`);
+        mostrarToast(`Se cargaron correctamente ${creados} producto(s)${msgTipos}.`, "success");
       }
+    } catch (err) {
+      mostrarToast(errorToText(err, "Error inesperado al confirmar los productos"), "error");
     } finally {
       setConfirmandoDetectados(false);
     }
@@ -1500,6 +1807,7 @@ export default function ModalCargaMasiva({
             onLoadingChange={setIndividualLoading}
             onCategoriaCreada={registrarCategoriaCreadaLocal}
             onTipoPrecioCreado={registrarTipoPrecioCreadoLocal}
+            onToast={mostrarToast}
           />
 
           <div style={{ display: tab === "masivo" ? "contents" : "none" }}>
@@ -1637,7 +1945,7 @@ export default function ModalCargaMasiva({
                 {resultado && Array.isArray(resultado.errores) && resultado.errores.length > 0 && (
                   <div className="cmi-warnBox">
                     <div className="cmi-warnBox__title">
-                      <FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 8 }} /> Observaciones
+                      <FontAwesomeIcon icon={faCircleExclamation} style={{ marginRight: 8 }} /> Observaciones
                     </div>
                     <ul className="cmi-warnBox__list">
                       {resultado.errores.map((err, i) => (
@@ -1650,7 +1958,7 @@ export default function ModalCargaMasiva({
                 {resultado?.confirmacion_ia?.errores?.length > 0 && (
                   <div className="cmi-warnBox">
                     <div className="cmi-warnBox__title">
-                      <FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 8 }} /> Errores al cargar productos
+                      <FontAwesomeIcon icon={faCircleExclamation} style={{ marginRight: 8 }} /> Errores al cargar productos
                     </div>
                     <ul className="cmi-warnBox__list">
                       {resultado.confirmacion_ia.errores.map((err, i) => (
@@ -1707,7 +2015,23 @@ export default function ModalCargaMasiva({
         errores={erroresDetectados}
         onCategoriaCreate={crearCategoriaRapida}
         onTipoCreate={crearTipoPrecioRapido}
+        mostrarToast={mostrarToast}
+        onPricingChange={handlePricingChangeDetectado}
+        onExtraPricingChange={handleExtraPricingChangeDetectado}
       />
+
+      {toast.open && (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          onClose={() =>
+            setToast((prev) => ({
+              ...prev,
+              open: false,
+            }))
+          }
+        />
+      )}
     </>,
     document.body
   );

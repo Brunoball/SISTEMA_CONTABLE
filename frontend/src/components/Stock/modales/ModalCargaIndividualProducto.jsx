@@ -4,7 +4,6 @@ import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComproban
 import "./ModalCargaMasiva.css";
 
 import {
-  faTriangleExclamation,
   faBarcode,
   faCubesStacked,
   faTag,
@@ -70,7 +69,6 @@ function errorToText(err, fallback = "Ocurrió un error inesperado") {
   }
   return fallback;
 }
-
 
 function hasMoneyValue(value) {
   return value !== null && value !== undefined && String(value).trim() !== "";
@@ -354,6 +352,7 @@ export default function ModalCargaIndividualProducto({
   onLoadingChange,
   onCategoriaCreada,
   onTipoPrecioCreado,
+  onToast,
 }) {
   const inputImagenRef = useRef(null);
 
@@ -374,6 +373,10 @@ export default function ModalCargaIndividualProducto({
   const [miniTipoOpen, setMiniTipoOpen] = useState(false);
   const [miniTipoNombre, setMiniTipoNombre] = useState("");
   const [guardandoMiniTipo, setGuardandoMiniTipo] = useState(false);
+
+  const mostrarToast = (mensaje, tipo = "error") => {
+    onToast?.(errorToText(mensaje), tipo);
+  };
 
   const imagenNombre = useMemo(() => imagenFile?.name || "", [imagenFile]);
 
@@ -447,7 +450,7 @@ export default function ModalCargaIndividualProducto({
       return;
     }
     setImagenFile(file);
-    setErrores((p) => ({ ...p, imagen: "", global: "" }));
+    setErrores((p) => ({ ...p, imagen: "" }));
   };
 
   const handleChange = (e) => {
@@ -479,7 +482,13 @@ export default function ModalCargaIndividualProducto({
       setForm((p) => ({ ...p, [name]: value }));
     }
 
-    setErrores((p) => ({ ...p, [name]: "", global: "" }));
+    setErrores((p) => ({ ...p, [name]: "" }));
+  };
+
+  const handleCostoChangeLive = (rawValue) => {
+    const value = normalizeMoneyInput(rawValue);
+    recalcularTodoConCosto(value);
+    setErrores((p) => ({ ...p, precio_costo: "" }));
   };
 
   const applyPricingResult = (prefix, result) => {
@@ -605,7 +614,7 @@ export default function ModalCargaIndividualProducto({
         }),
       };
     });
-    setErrores((p) => ({ ...p, [`tipo_${idx}`]: "", global: "" }));
+    setErrores((p) => ({ ...p, [`tipo_${idx}`]: "" }));
   };
 
   const handleExtraPriceBlur = (idx, source) => {
@@ -744,12 +753,8 @@ export default function ModalCargaIndividualProducto({
 
       setMiniCategoriaNombre("");
       setMiniCategoriaOpen(false);
-      setErrores((p) => ({ ...p, global: "" }));
     } catch (err) {
-      setErrores((p) => ({
-        ...p,
-        global: errorToText(err, "No se pudo crear la categoría"),
-      }));
+      mostrarToast(errorToText(err, "No se pudo crear la categoría"), "error");
     } finally {
       setGuardandoMiniCategoria(false);
     }
@@ -798,10 +803,7 @@ export default function ModalCargaIndividualProducto({
       setMiniTipoNombre("");
       setMiniTipoOpen(false);
     } catch (err) {
-      setErrores((p) => ({
-        ...p,
-        global: errorToText(err, "No se pudo crear el tipo de precio"),
-      }));
+      mostrarToast(errorToText(err, "No se pudo crear el tipo de precio"), "error");
     } finally {
       setGuardandoMiniTipo(false);
     }
@@ -868,7 +870,7 @@ export default function ModalCargaIndividualProducto({
       await parseJsonOrThrow(res);
       onGuardado?.();
     } catch (err) {
-      setErrores({ global: errorToText(err, "Error al guardar el producto") });
+      mostrarToast(errorToText(err, "Error al guardar el producto"), "error");
     } finally {
       setGuardando(false);
     }
@@ -880,16 +882,6 @@ export default function ModalCargaIndividualProducto({
     <div style={{ display: visible ? "contents" : "none" }}>
       <div className="mi-modal__content" style={{ overflowY: "auto", padding: 20 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {errores.global && (
-            <div className="cmi-warnBox">
-              <div className="cmi-warnBox__title">
-                <FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 8 }} />
-                Error
-              </div>
-              <div>{errorToText(errores.global)}</div>
-            </div>
-          )}
-
           <FloatingField label="Nombre del producto *" error={errores.nombre}>
             <input
               name="nombre"
@@ -937,7 +929,7 @@ export default function ModalCargaIndividualProducto({
               <PriceInput
                 name="precio_costo"
                 value={form.precio_costo}
-                onChange={handleChange}
+                onChange={(e) => handleCostoChangeLive(e.target.value)}
                 onBlur={(e) => recalcularTodoConCosto(e.target.value)}
                 onFocus={(e) =>
                   setForm((p) => ({ ...p, precio_costo: formatMoneyFocus(e.target.value) }))

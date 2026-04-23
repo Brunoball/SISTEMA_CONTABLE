@@ -1,0 +1,292 @@
+/* src/components/Configuracion/ConfiguracionCalendario/configuracion_calendario.css */
+
+/* ── página ──────────────────────────────────────────────────────────────── */
+.cfgcal-page {
+  padding: 24px 28px;
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ── header ──────────────────────────────────────────────────────────────── */
+.cfgcal-header {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cfgcal-backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary, #888);
+  font-size: 0.85rem;
+  padding: 0;
+  width: fit-content;
+  transition: color 0.15s;
+}
+.cfgcal-backBtn:hover {
+  color: var(--color-primary, #6366f1);
+}
+
+.cfgcal-headerTitle {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.cfgcal-headerIcon {
+  font-size: 1.6rem;
+  color: var(--color-primary, #6366f1);
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.cfgcal-title {
+  margin: 0 0 4px 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-primary, #1a1a2e);
+}
+.cfgcal-subtitle {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary, #666);
+  line-height: 1.5;
+}
+
+/* ── card ────────────────────────────────────────────────────────────────── */
+.cfgcal-card {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 14px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ── sección ─────────────────────────────────────────────────────────────── */
+.cfgcal-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cfgcal-sectionTitle {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a2e);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cfgcal-sectionHint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary, #888);
+  line-height: 1.5;
+}
+
+/* ── selector de modos ───────────────────────────────────────────────────── */
+.cfgcal-modos {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cfgcal-modoBtn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  background: var(--color-surface, #fff);
+  border: 2px solid var(--color-border, #e5e7eb);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  position: relative;
+}
+.cfgcal-modoBtn:hover {
+  border-color: var(--color-primary, #6366f1);
+  background: var(--color-primary-soft, #f0f0ff);
+}
+.cfgcal-modoBtn--active {
+  border-color: var(--color-primary, #6366f1);
+  background: var(--color-primary-soft, #f0f0ff);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.cfgcal-modoBtnIcon {
+  font-size: 1.3rem;
+  color: var(--color-primary, #6366f1);
+  flex-shrink: 0;
+  width: 28px;
+  text-align: center;
+}
+.cfgcal-modoBtnText {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+.cfgcal-modoBtnLabel {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a2e);
+}
+.cfgcal-modoBtnDesc {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #888);
+  line-height: 1.4;
+}
+.cfgcal-modoBtnCheck {
+  font-size: 0.85rem;
+  color: var(--color-primary, #6366f1);
+  flex-shrink: 0;
+}
+
+/* ── input días ──────────────────────────────────────────────────────────── */
+.cfgcal-section--dias {
+  background: var(--color-bg-soft, #f8f9fa);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.cfgcal-diasRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cfgcal-diasInput {
+  width: 90px;
+  padding: 8px 12px;
+  border: 2px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: center;
+  background: var(--color-surface, #fff);
+  color: var(--color-text-primary, #1a1a2e);
+  transition: border-color 0.15s;
+  -moz-appearance: textfield;
+}
+.cfgcal-diasInput::-webkit-inner-spin-button,
+.cfgcal-diasInput::-webkit-outer-spin-button {
+  opacity: 1;
+}
+.cfgcal-diasInput:focus {
+  outline: none;
+  border-color: var(--color-primary, #6366f1);
+}
+
+.cfgcal-diasLabel {
+  font-size: 0.95rem;
+  color: var(--color-text-secondary, #888);
+}
+
+/* ── preview de rango ────────────────────────────────────────────────────── */
+.cfgcal-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 10px 14px;
+  background: var(--color-primary-soft, #f0f0ff);
+  border-radius: 8px;
+  border: 1px dashed var(--color-primary, #6366f1);
+  flex-wrap: wrap;
+}
+.cfgcal-previewLabel {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #888);
+  white-space: nowrap;
+}
+.cfgcal-previewRange {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-primary, #6366f1);
+}
+.cfgcal-previewArrow {
+  opacity: 0.5;
+}
+
+/* ── alertas ─────────────────────────────────────────────────────────────── */
+.cfgcal-alert {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cfgcal-alert--error {
+  background: #fff1f0;
+  border: 1px solid #ffa39e;
+  color: #cf1322;
+}
+.cfgcal-alert--success {
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  color: #237804;
+}
+
+/* ── acciones ────────────────────────────────────────────────────────────── */
+.cfgcal-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-border, #e5e7eb);
+}
+
+.cfgcal-saveBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  background: var(--color-primary, #6366f1);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.cfgcal-saveBtn:hover:not(:disabled) {
+  background: var(--color-primary-dark, #4f46e5);
+}
+.cfgcal-saveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cfgcal-noChanges {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #aaa);
+  font-style: italic;
+}
+
+/* ── responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .cfgcal-page {
+    padding: 16px;
+  }
+  .cfgcal-card {
+    padding: 16px;
+  }
+  .cfgcal-preview {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

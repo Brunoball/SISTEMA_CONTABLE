@@ -137,7 +137,7 @@ function compareValues(a, b, campo) {
   const va = a?.[campo];
   const vb = b?.[campo];
 
-  if (campo === "stock" || campo === "precio" || campo === "precio_promo") {
+  if (campo === "stock" || campo === "precio_costo" || campo === "precio" || campo === "precio_promo") {
     const na = Number(String(va ?? 0).replace(",", "."));
     const nb = Number(String(vb ?? 0).replace(",", "."));
     return na - nb;
@@ -192,6 +192,7 @@ function normalizeProductoListItem(prod = {}) {
     nombre: String(prod?.nombre ?? ""),
     sku: String(prod?.sku ?? ""),
     stock: prod?.stock ?? 0,
+    precio_costo: prod?.precio_costo ?? null,
     precio: prod?.precio ?? null,
     precio_promo: prod?.precio_promo ?? null,
     descripcion: prod?.descripcion ?? "",
@@ -303,12 +304,13 @@ function getUsuarioAuditData() {
 }
 
 const COLUMNS = [
-  { key: "nombre", label: "PRODUCTO", fr: 2.4, align: "left", sortable: true },
-  { key: "sku", label: "SKU", fr: 1.0, align: "center", sortable: true },
+  { key: "nombre", label: "PRODUCTO", fr: 2.2, align: "left", sortable: true },
+  { key: "sku", label: "SKU", fr: 0.95, align: "center", sortable: true },
   { key: "stock", label: "STOCK", fr: 0.8, align: "center", sortable: true },
-  { key: "precio", label: "PRECIO", fr: 1.0, align: "right", sortable: true },
+  { key: "precio_costo", label: "PRECIO COSTO", fr: 1.0, align: "right", sortable: true },
+  { key: "precio", label: "PRECIO VENTA", fr: 1.0, align: "right", sortable: true },
   { key: "precio_promo", label: "PRECIO PROMO", fr: 1.0, align: "right", sortable: true },
-  { key: "acciones", label: "ACCIONES", fr: 0.7, align: "center", sortable: false },
+  { key: "acciones", label: "ACCIONES", fr: 0.75, align: "center", sortable: false },
 ];
 
 const GRID_COLS = COLUMNS.map((c) => `${c.fr}fr`).join(" ");
@@ -318,6 +320,7 @@ const SKEL_WIDTHS = {
   nombre: ["68%", "52%", "60%", "48%"],
   sku: ["44%", "36%", "40%", "32%"],
   stock: ["38%", "30%", "34%", "28%"],
+  precio_costo: ["48%", "40%", "44%", "36%"],
   precio: ["50%", "42%", "46%", "38%"],
   precio_promo: ["46%", "38%", "42%", "34%"],
 };
@@ -988,7 +991,19 @@ const Stock = () => {
                             })()}
                           </div>
 
-                          <div className="mov-gridCell is-right" role="cell" data-label="PRECIO">
+                          <div
+                            className="mov-gridCell is-right"
+                            role="cell"
+                            data-label="PRECIO COSTO"
+                          >
+                            <span className="mov-ellipsissss">{formatMoney(prod.precio_costo)}</span>
+                          </div>
+
+                          <div
+                            className="mov-gridCell is-right"
+                            role="cell"
+                            data-label="PRECIO VENTA"
+                          >
                             <span className="mov-ellipsissss">{formatMoney(prod.precio)}</span>
                           </div>
 
@@ -1123,6 +1138,7 @@ const Stock = () => {
                 nombre: productoEliminar.nombre,
                 sku: productoEliminar.sku,
                 stock: productoEliminar.stock,
+                precio_costo: productoEliminar.precio_costo,
                 precio: productoEliminar.precio,
               }
             : null
@@ -1155,7 +1171,8 @@ const Stock = () => {
                       ? "—"
                       : String(productoEliminar.stock),
                 },
-                { label: "Precio", value: formatMoney(productoEliminar.precio) },
+                { label: "Precio costo", value: formatMoney(productoEliminar.precio_costo) },
+                { label: "Precio venta", value: formatMoney(productoEliminar.precio) },
               ]
             : []
         }

@@ -67,8 +67,43 @@ async function apiFetch(params = {}, options = {}) {
   }
 }
 
-function clampDias(value) {
-  return Math.max(1, Math.min(Number(value) || 10, 365));
+function normalizeDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function getMaxDiasAtrasDelMesActual(date = new Date()) {
+  const hoy = normalizeDay(date);
+  return Math.max(0, hoy.getDate() - 1);
+}
+
+function clampDiasToMonth(value, maxDias = getMaxDiasAtrasDelMesActual()) {
+  const n = Number(value);
+
+  if (Number.isNaN(n)) {
+    return Math.min(10, maxDias);
+  }
+
+  return Math.max(0, Math.min(Math.trunc(n), maxDias));
+}
+
+function getDefaultDiasInput(value, maxDias = getMaxDiasAtrasDelMesActual()) {
+  return String(clampDiasToMonth(value ?? 10, maxDias));
+}
+
+function getDiasAtrasRangeWithinMonth(value) {
+  const to = normalizeDay(new Date());
+  const dias = clampDiasToMonth(value, getMaxDiasAtrasDelMesActual(to));
+
+  const from = new Date(to);
+  from.setDate(from.getDate() - dias);
+
+  return {
+    from,
+    to,
+    dias,
+  };
 }
 
 // ─── constantes de modo ──────────────────────────────────────────────────────
@@ -83,7 +118,8 @@ const MODOS = [
   {
     value: "dias_atras",
     label: "Últimos N días",
-    description: "Muestra desde hoy hacia atrás la cantidad de días que elijas.",
+    description:
+      "Solo permite días hacia atrás dentro del mes actual, sin cruzar al mes anterior.",
     icon: faCalendarWeek,
   },
 ];
@@ -94,11 +130,15 @@ export default function ConfiguracionCalendario() {
   const navigate = useNavigate();
   const { calendarConfig, applyCalendarConfig } = useDateRange();
 
+  const maxDiasAtrasPermitidos = useMemo(
+    () => getMaxDiasAtrasDelMesActual(),
+    []
+  );
+
   const [modo, setModo] = useState(calendarConfig?.modo ?? "mes_completo");
 
-  // Se guarda como string para permitir borrar y reescribir libremente
   const [diasAtrasInput, setDiasAtrasInput] = useState(
-    String(calendarConfig?.dias_atras ?? 10)
+    getDefaultDiasInput(calendarConfig?.dias_atras, maxDiasAtrasPermitidos)
   );
 
   const [saving, setSaving] = useState(false);
@@ -108,31 +148,46 @@ export default function ConfiguracionCalendario() {
   const diasAtrasNormalizado = useMemo(() => {
     const raw = String(diasAtrasInput ?? "").trim();
 
-    if (raw === "") return 10;
+    if (raw === "") {
+      return Math.min(10, maxDiasAtrasPermitidos);
+    }
 
     const n = parseInt(raw, 10);
-    if (Number.isNaN(n)) return 10;
 
-    return clampDias(n);
-  }, [diasAtrasInput]);
+    if (Number.isNaN(n)) {
+      return Math.min(10, maxDiasAtrasPermitidos);
+    }
+
+    return clampDiasToMonth(n, maxDiasAtrasPermitidos);
+  }, [diasAtrasInput, maxDiasAtrasPermitidos]);
 
   useEffect(() => {
     setModo(calendarConfig?.modo ?? "mes_completo");
-    setDiasAtrasInput(String(calendarConfig?.dias_atras ?? 10));
-  }, [calendarConfig]);
+    setDiasAtrasInput(
+      getDefaultDiasInput(calendarConfig?.dias_atras, maxDiasAtrasPermitidos)
+    );
+  }, [calendarConfig, maxDiasAtrasPermitidos]);
 
   const hasChanges = useMemo(() => {
-    if (modo !== (calendarConfig?.modo ?? "mes_completo")) return true;
+    const modoActual = calendarConfig?.modo ?? "mes_completo";
+    const diasActuales = clampDiasToMonth(
+      calendarConfig?.dias_atras ?? 10,
+      maxDiasAtrasPermitidos
+    );
 
-    if (
-      modo === "dias_atras" &&
-      diasAtrasNormalizado !== Number(calendarConfig?.dias_atras ?? 10)
-    ) {
+    if (modo !== modoActual) return true;
+
+    if (modo === "dias_atras" && diasAtrasNormalizado !== diasActuales) {
       return true;
     }
 
     return false;
-  }, [modo, diasAtrasNormalizado, calendarConfig]);
+  }, [
+    modo,
+    diasAtrasNormalizado,
+    calendarConfig,
+    maxDiasAtrasPermitidos,
+  ]);
 
   const showToast = useCallback((tipo, mensaje, duracion = 2500) => {
     setToast({
@@ -181,15 +236,32 @@ export default function ConfiguracionCalendario() {
   }, [modo, diasAtrasNormalizado, applyCalendarConfig, showToast]);
 
   // ── input handlers ───────────────────────────────────────────────────────
-  const handleDiasChange = useCallback((e) => {
-    const raw = e.target.value;
+  const handleDiasChange = useCallback(
+    (e) => {
+      const raw = e.target.value;
 
-    if (/^\d*$/.test(raw)) {
-      setDiasAtrasInput(raw);
+      if (!/^\d*$/.test(raw)) return;
+
       setErrorMsg("");
       setToast(null);
-    }
-  }, []);
+
+      if (raw === "") {
+        setDiasAtrasInput("");
+        return;
+      }
+
+      const n = parseInt(raw, 10);
+      if (Number.isNaN(n)) return;
+
+      // Bloquea directamente cualquier número que cruce al mes anterior
+      if (n > maxDiasAtrasPermitidos) {
+        return;
+      }
+
+      setDiasAtrasInput(String(n));
+    },
+    [maxDiasAtrasPermitidos]
+  );
 
   const handleDiasBlur = useCallback(() => {
     setDiasAtrasInput(String(diasAtrasNormalizado));
@@ -201,11 +273,20 @@ export default function ConfiguracionCalendario() {
       setErrorMsg("");
       setToast(null);
 
-      if (nuevoModo === "dias_atras" && String(diasAtrasInput).trim() === "") {
-        setDiasAtrasInput("10");
+      if (nuevoModo === "dias_atras") {
+        const raw = String(diasAtrasInput ?? "").trim();
+
+        if (raw === "") {
+          setDiasAtrasInput(String(Math.min(10, maxDiasAtrasPermitidos)));
+          return;
+        }
+
+        setDiasAtrasInput(
+          String(clampDiasToMonth(raw, maxDiasAtrasPermitidos))
+        );
       }
     },
-    [diasAtrasInput]
+    [diasAtrasInput, maxDiasAtrasPermitidos]
   );
 
   // ── render ───────────────────────────────────────────────────────────────
@@ -284,8 +365,11 @@ export default function ConfiguracionCalendario() {
           {modo === "dias_atras" && (
             <div className="cfgcal-section cfgcal-section--dias">
               <h2 className="cfgcal-sectionTitle">¿Cuántos días hacia atrás?</h2>
+
               <p className="cfgcal-sectionHint">
-                El rango irá desde hoy menos este valor hasta hoy (máx. 365).
+                Solo podés ingresar valores entre <strong>0</strong> y{" "}
+                <strong>{maxDiasAtrasPermitidos}</strong>, porque no se permite
+                cruzar al mes anterior.
               </p>
 
               <div className="cfgcal-diasRow">
@@ -298,7 +382,7 @@ export default function ConfiguracionCalendario() {
                   onChange={handleDiasChange}
                   onBlur={handleDiasBlur}
                   onFocus={(e) => e.target.select()}
-                  placeholder="10"
+                  placeholder={String(Math.min(10, maxDiasAtrasPermitidos))}
                   aria-label="Cantidad de días hacia atrás"
                   autoComplete="off"
                 />
@@ -354,15 +438,12 @@ function formatDate(d) {
 }
 
 function DiaPreview({ dias }) {
-  const diasNum = clampDias(dias);
-  const to = new Date();
-  const from = new Date();
-
-  from.setDate(from.getDate() - diasNum);
+  const { from, to } = getDiasAtrasRangeWithinMonth(dias);
 
   return (
     <div className="cfgcal-preview">
       <span className="cfgcal-previewLabel">Vista previa del rango:</span>
+
       <span className="cfgcal-previewRange">
         {formatDate(from)}
         <span className="cfgcal-previewArrow">→</span>

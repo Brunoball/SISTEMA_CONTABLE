@@ -3,17 +3,10 @@ import { FaCheck } from "react-icons/fa";
 import "./ModalFacturaBalto.css";
 import "../../Global/Global_css/Global_oscuro.css";
 
-import {
-  saveBaltoInvoicePdf,
-  buildBaltoInvoicePdf,
-} from "../../../utils/FacturaPdfBuilder";
+import { buildBaltoInvoicePdf, saveBaltoInvoicePdf } from "../../../utils/FacturaPdfBuilder";
+import { buildNotaCreditoPdf, saveNotaCreditoPdf } from "../../../utils/NotaCreditoPdfBuilder";
 
-import {
-  saveNotaCreditoPdf,
-  buildNotaCreditoPdf,
-} from "../../../utils/NotaCreditoPdfBuilder";
-
-const DOC_TIPOS = [
+const DOC_TIPOS = [ 
   { id: 80, label: "CUIT (80)" },
   { id: 96, label: "DNI (96)" },
 ];
@@ -184,7 +177,6 @@ export default function ModalFacturaBaltoResumen({
   pdfMode = "factura",
 }) {
   const [loading, setLoading] = useState(false);
-  const [loadingPdf, setLoadingPdf] = useState(false);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [error, setError] = useState("");
@@ -795,221 +787,6 @@ export default function ModalFacturaBaltoResumen({
     [onDone, onFacturada]
   );
 
-  const exportarSoloPDF = useCallback(async () => {
-    setError("");
-    const v = validar();
-    if (!v.ok) return setError(v.msg);
-    if (!confirm) return setError("Tenés que confirmar antes de descargar el PDF.");
-
-    setLoadingPdf(true);
-    try {
-      const idMovimiento = skipMovimientoAutocreacion
-        ? null
-        : await ensureMovimientoGuardado();
-
-      const importeFinal = forceTestAmount ? Number(testAmount) : Number(monto);
-
-      if (usarModoNC) {
-        const pdfData = {
-          ...data,
-          id_movimiento: idMovimiento,
-          total_ars: importeFinal,
-          monto: importeFinal,
-          importe: importeFinal,
-          cbte_tipo: Number(cbteTipo) || 13,
-          pto_vta: Number(ptoVta) || 2,
-          fecha_cbte_iso: fechaCbteISO,
-          fecha_cbte: fechaCbteISO,
-          vto_pago_iso: vtoPagoISO,
-          cliente_facturacion: data?.cliente_facturacion || {},
-          items_facturacion: items,
-          observaciones: data?.observaciones || "",
-          emisor_nombre: emisorNombre || "BALTO",
-          emisor_domicilio: emisorDomicilio || "",
-          cuit_emisor: emisorCuit || "",
-          cond_iva_emisor: emisorCondIva || "",
-          ingresos_brutos_emisor: emisorIibb || "",
-          fecha_inicio_actividades_emisor: emisorFechaInicio || "",
-          factura_original: data?.factura_original || null,
-          cbte_nro: 0,
-          cae: "",
-          cae_vto: "",
-          resultado: "",
-          qr_url: "",
-          qr_base64: "",
-          qr_payload: null,
-        };
-
-        const out = await saveNotaCreditoPdf(pdfData, { autoDownload: true });
-        const blob = out?.pdfBlob instanceof Blob ? out.pdfBlob : null;
-        const filename = out?.pdfFilename || "nota_credito.pdf";
-
-        let idComprobante = null;
-
-        if (!skipMovimientoAutocreacion && blob && idMovimiento) {
-          const dbResp = await guardarFacturaEnDB({
-            blob,
-            filename,
-            fact: {
-              ...pdfData,
-              anio: v.anio,
-              id_mes: v.id_mes,
-              importe: importeFinal,
-              fecha_cbte: fechaCbteISO,
-            },
-            estado: "solo_pdf",
-            emitidoEnArca: false,
-            idMovimiento,
-            tipo: "NOTA_CREDITO",
-          });
-
-          idComprobante =
-            dbResp?.id_comprobante ??
-            dbResp?.comprobante?.id_comprobante ??
-            null;
-        }
-
-        const factFinal = {
-          ...pdfData,
-          emitido_en_arca: 0,
-          id_movimiento: idMovimiento,
-          id_comprobante: idComprobante,
-          pdf_blob: blob || null,
-          pdf_filename: filename,
-        };
-
-        await finalizarUnaSolaVez(factFinal);
-        onCloseAll?.();
-      } else {
-        const cbteNroLocal = await obtenerCbteNoEmitido();
-
-        const factPdfOnly = {
-          modo: "pdf_only",
-          pto_vta: v.pvN,
-          cbte_tipo: Number(cbteTipo),
-          cbte_nro: cbteNroLocal,
-          fecha_cbte: isoToYmd8(fechaCbteISO),
-          imp_total: importeFinal,
-          importe: importeFinal,
-          cae: "",
-          cae_vto: "",
-          resultado: "",
-          qr_url: "",
-          qr_base64: "",
-          qr_payload: null,
-          anio: v.anio,
-          id_mes: v.id_mes,
-          doc_tipo: Number(docTipo),
-          doc_nro: v.docN,
-          emisor_nombre: emisorNombre || "BALTO",
-          emisor_domicilio: emisorDomicilio || "",
-          cuit_emisor: emisorCuit || "",
-          cond_iva_emisor: emisorCondIva || "",
-          ingresos_brutos_emisor: emisorIibb || "",
-          fecha_inicio_actividades_emisor: emisorFechaInicio || "",
-          receptor_nombre: data?.cliente_facturacion?.razon_social || nombreCliente,
-          receptor_domicilio:
-            data?.cliente_facturacion?.domicilio || data?.cliente_domicilio || "",
-          cond_iva_receptor:
-            data?.cliente_facturacion?.cond_iva ||
-            data?.cliente_facturacion?.condicion_iva ||
-            "",
-        };
-
-        const out = await saveBaltoInvoicePdf({
-          fact: factPdfOnly,
-          data: {
-            ...data,
-            id_movimiento: idMovimiento,
-            monto: importeFinal,
-            importe: importeFinal,
-            total_ars: importeFinal,
-            fecha_cbte: isoToYmd8(fechaCbteISO),
-            vto_pago: isoToYmd8(vtoPagoISO),
-            labelCliente: nombreCliente,
-            labelSistema: nombreSistema,
-            items_facturacion: items,
-          },
-          forceTestAmount,
-          testAmount,
-          download: true,
-        });
-
-        const blob =
-          out?.blob instanceof Blob ? out.blob : out instanceof Blob ? out : null;
-        const filename = out?.filename || "factura.pdf";
-
-        let idComprobante = null;
-
-        if (!skipMovimientoAutocreacion && blob && idMovimiento) {
-          const dbResp = await guardarFacturaEnDB({
-            blob,
-            filename,
-            fact: {
-              ...factPdfOnly,
-              anio: v.anio,
-              id_mes: v.id_mes,
-              importe: importeFinal,
-              fecha_cbte: factPdfOnly.fecha_cbte || isoToYmd8(fechaCbteISO),
-            },
-            estado: "solo_pdf",
-            emitidoEnArca: false,
-            idMovimiento,
-            tipo: "FACTURA",
-          });
-
-          idComprobante =
-            dbResp?.id_comprobante ??
-            dbResp?.comprobante?.id_comprobante ??
-            null;
-        }
-
-        const factFinal = {
-          ...factPdfOnly,
-          emitido_en_arca: 0,
-          id_movimiento: idMovimiento,
-          id_comprobante: idComprobante,
-          pdf_blob: blob || null,
-          pdf_filename: filename,
-        };
-
-        await finalizarUnaSolaVez(factFinal);
-        onCloseAll?.();
-      }
-    } catch (e) {
-      setError(e?.message || "No se pudo descargar el PDF.");
-    } finally {
-      setLoadingPdf(false);
-    }
-  }, [
-    validar,
-    confirm,
-    skipMovimientoAutocreacion,
-    ensureMovimientoGuardado,
-    forceTestAmount,
-    testAmount,
-    monto,
-    cbteTipo,
-    docTipo,
-    fechaCbteISO,
-    vtoPagoISO,
-    emisorNombre,
-    emisorDomicilio,
-    emisorCuit,
-    emisorCondIva,
-    emisorIibb,
-    emisorFechaInicio,
-    data,
-    nombreCliente,
-    nombreSistema,
-    items,
-    guardarFacturaEnDB,
-    finalizarUnaSolaVez,
-    onCloseAll,
-    usarModoNC,
-    ptoVta,
-    obtenerCbteNoEmitido,
-  ]);
 
   const emitir = useCallback(async () => {
     setError("");
@@ -1306,7 +1083,7 @@ export default function ModalFacturaBaltoResumen({
   if (!open) return null;
 
   const cerrar = () => {
-    if (!loading && !loadingPdf) onClose?.();
+    if (!loading) onClose?.();
   };
 
   return (
@@ -1328,7 +1105,7 @@ export default function ModalFacturaBaltoResumen({
               {usarModoNC ? "Resumen antes de emitir nota de crédito" : "Resumen antes de emitir"}
             </h2>
             <p className="mi-modal__subtitle">
-              Confirmá datos → Vista previa → Descargar PDF o Emitir + PDF
+              Confirmá datos → Vista previa → Emitir y facturar
             </p>
           </div>
 
@@ -1431,7 +1208,7 @@ export default function ModalFacturaBaltoResumen({
                         type="checkbox"
                         checked={confirm}
                         onChange={(e) => setConfirm(e.target.checked)}
-                        disabled={loading || loadingPdf}
+                        disabled={loading}
                         className="mfb-check__input"
                       />
 
@@ -1475,32 +1252,23 @@ export default function ModalFacturaBaltoResumen({
             <button
               type="button"
               className="mit-btn mit-btn--ghost"
-              onClick={() => !(loading || loadingPdf) && onBack?.()}
-              disabled={loading || loadingPdf}
+              onClick={() => !loading && onBack?.()}
+              disabled={loading}
             >
               Volver
             </button>
 
             <button
               type="button"
-              className="mit-btn mit-btn--ghost"
-              onClick={exportarSoloPDF}
-              disabled={loading || loadingPdf || !confirm}
-            >
-              {loadingPdf ? "Guardando y descargando..." : "Descargar PDF"}
-            </button>
-
-            <button
-              type="button"
               className="mit-btn mit-btn--solid"
               onClick={emitir}
-              disabled={loading || loadingPdf || !confirm}
+              disabled={loading || !confirm}
             >
               {loading ? (
                 usarModoNC ? "Emitiendo nota de crédito..." : "Emitiendo..."
               ) : (
                 <>
-                  Emitir + PDF <FaCheck className="mfb-icon" />
+                  Emitir + facturar <FaCheck className="mfb-icon" />
                 </>
               )}
             </button>

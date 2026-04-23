@@ -601,9 +601,7 @@ export default function ClientesCC() {
             ? `Recibo · ${row.comprobante}`
             : "Recibo"
           : isMovimiento
-          ? row?.comprobante
-            ? `Factura / Deuda · ${row.comprobante}`
-            : "Factura / Deuda"
+          ? row?.comprobante || "Movimiento"
           : "Comprobante",
       });
     },
@@ -975,7 +973,7 @@ export default function ClientesCC() {
                             verHabilitado
                               ? isCobro
                                 ? "Ver recibo / comprobante del cobro"
-                                : "Ver factura / comprobante de la deuda"
+                                : "Ver comprobante del movimiento"
                               : "Este registro no tiene comprobante asociado"
                           }
                           className="mov-iconBtn"

@@ -273,15 +273,9 @@ export default function OrdenesPago() {
   const [nextOffset, setNextOffset] = useState(null);
 
   const [toast, setToast] = useState(null);
-  const toastTimerRef = useRef(null);
   const toastRafRef = useRef(null);
 
-  const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
-    if (toastTimerRef.current) {
-      clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = null;
-    }
-
+  const showToast = useCallback((tipo, mensaje) => {
     if (toastRafRef.current) {
       cancelAnimationFrame(toastRafRef.current);
       toastRafRef.current = null;
@@ -292,21 +286,11 @@ export default function OrdenesPago() {
     setToast(null);
 
     toastRafRef.current = window.requestAnimationFrame(() => {
-      const nextToast = { id: nextId, tipo, mensaje, duracion };
-      setToast(nextToast);
-
-      toastTimerRef.current = window.setTimeout(() => {
-        setToast((curr) => (curr?.id === nextId ? null : curr));
-        toastTimerRef.current = null;
-      }, duracion);
+      setToast({ id: nextId, tipo, mensaje });
     });
   }, []);
 
   const closeToast = useCallback(() => {
-    if (toastTimerRef.current) {
-      clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = null;
-    }
     if (toastRafRef.current) {
       cancelAnimationFrame(toastRafRef.current);
       toastRafRef.current = null;
@@ -332,7 +316,6 @@ export default function OrdenesPago() {
 
   useEffect(() => {
     return () => {
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       if (toastRafRef.current) cancelAnimationFrame(toastRafRef.current);
     };
   }, []);
@@ -760,30 +743,28 @@ export default function OrdenesPago() {
         if (hasMore) {
           showToast(
             "error",
-            'Todavía hay más registros sin cargar. Tocá "Cargar 100 más" hasta completar todo.',
-            5200
-          );
+            'Todavía hay más registros sin cargar. Tocá "Cargar 100 más" hasta completar todo.');
           return;
         }
 
         if (type === "excel") {
           exportToExcel();
-          showToast("exito", "Excel exportado.", 2200);
+          showToast("exito", "Excel exportado.");
           return;
         }
 
         if (type === "csv") {
           exportToCSV();
-          showToast("exito", "CSV exportado.", 2200);
+          showToast("exito", "CSV exportado.");
           return;
         }
 
         if (type === "txt") {
           exportToTXT();
-          showToast("exito", "TXT exportado.", 2200);
+          showToast("exito", "TXT exportado.");
         }
       } catch (e) {
-        showToast("error", e?.message || "Error exportando archivo.", 3500);
+        showToast("error", e?.message || "Error exportando archivo.");
       }
     },
     [hasMore, exportToExcel, exportToCSV, exportToTXT, showToast]
@@ -805,7 +786,7 @@ export default function OrdenesPago() {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx) return;
     if (nextOffset === null) return;
 
-    showToast("cargando", "Cargando registros...", 12000);
+    showToast("cargando", "Cargando registros...");
 
     try {
       const res = await loadRows({
@@ -817,13 +798,13 @@ export default function OrdenesPago() {
       });
 
       if (!res) {
-        showToast("error", "No se pudieron cargar más órdenes de pago.", 4200);
+        showToast("error", "No se pudieron cargar más órdenes de pago.");
         return;
       }
 
-      showToast("exito", `${res.received || PAGE_SIZE} registros más cargados.`, 2400);
+      showToast("exito", `${res.received || PAGE_SIZE} registros más cargados.`);
     } catch (e) {
-      showToast("error", e?.message || "Error cargando más órdenes.", 4200);
+      showToast("error", e?.message || "Error cargando más órdenes.");
     }
   }, [hasMore, loadingMore, loadingRows, loadingListsCtx, nextOffset, dateRange, q, loadRows, showToast]);
 
@@ -894,7 +875,7 @@ export default function OrdenesPago() {
 
   const openVerComprobanteModal = useCallback(async (idComprobante) => {
     if (!idComprobante) {
-      showToast("error", "No hay comprobante asociado a esta orden.", 3000);
+      showToast("error", "No hay comprobante asociado a esta orden.");
       return;
     }
 
@@ -908,7 +889,7 @@ export default function OrdenesPago() {
       }
       setComprobanteUrl(signedUrl);
     } catch (error) {
-      showToast("error", error.message || "Error al cargar el comprobante.", 4000);
+      showToast("error", error.message || "Error al cargar el comprobante.");
       setOpenVerComprobante(false);
     } finally {
       setLoadingComprobante(false);
@@ -956,15 +937,13 @@ export default function OrdenesPago() {
         if (rowsFailed || listsFailed) {
           showToast(
             "error",
-            "La orden se guardó, pero no pude refrescar toda la pantalla automáticamente.",
-            4200
-          );
+            "La orden se guardó, pero no pude refrescar toda la pantalla automáticamente.");
           return;
         }
 
-        showToast("exito", "Orden de pago guardada correctamente.", 3000);
+        showToast("exito", "Orden de pago guardada correctamente.");
       } catch (e) {
-        showToast("error", e?.message || "La orden se guardó, pero no pude refrescar la lista.", 4200);
+        showToast("error", e?.message || "La orden se guardó, pero no pude refrescar la lista.");
       }
     },
     [dateRange, q, loadRows, refreshLists, showToast]
@@ -1009,7 +988,7 @@ export default function OrdenesPago() {
   const onSaveEditar = useCallback(
     async (payloadFinal) => {
       try {
-        showToast("cargando", "Guardando cambios…", 12000);
+        showToast("cargando", "Guardando cambios…");
 
         const { idUsuario, idUsuarioMaster } = getAuthInfo();
         const data = await apiPostJson(`${API}?action=ordenes_pago_actualizar`, {
@@ -1021,11 +1000,11 @@ export default function OrdenesPago() {
         if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar la orden de pago.");
 
         await refreshAfterMutation();
-        showToast("exito", data?.mensaje || "Orden de pago actualizada.", 2400);
+        showToast("exito", data?.mensaje || "Orden de pago actualizada.");
 
         return data;
       } catch (e) {
-        showToast("error", e?.message || "Error guardando orden de pago.", 4200);
+        showToast("error", e?.message || "Error guardando orden de pago.");
         throw e;
       }
     },
@@ -1143,7 +1122,6 @@ export default function OrdenesPago() {
           key={toast.id}
           tipo={toast.tipo}
           mensaje={toast.mensaje}
-          duracion={toast.duracion}
           onClose={closeToast}
         />
       )}

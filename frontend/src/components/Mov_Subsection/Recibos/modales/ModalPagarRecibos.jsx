@@ -752,8 +752,7 @@ export default function ModalPagarRecibos({
     } catch (e) {
       onToast?.(
         "error",
-        e?.message || "No se pudieron cargar los medios de pago.",
-        4200
+        e?.message || "No se pudieron cargar los medios de pago."
       );
       setMediosPago([]);
     } finally {
@@ -965,30 +964,27 @@ export default function ModalPagarRecibos({
   const handleSaveCheque = useCallback(
     (datosCheque) => {
       if (!datosCheque.emisor) {
-        onToast?.("advertencia", "El emisor es obligatorio.", 3000);
+        onToast?.("advertencia", "El emisor es obligatorio.");
         return;
       }
       if (!datosCheque.numero_cheque) {
         onToast?.(
           "advertencia",
-          "El número de cheque es obligatorio.",
-          3000
+          "El número de cheque es obligatorio."
         );
         return;
       }
       if (!datosCheque.importe || Number(datosCheque.importe) <= 0) {
         onToast?.(
           "advertencia",
-          "El importe debe ser mayor a 0.",
-          3000
+          "El importe debe ser mayor a 0."
         );
         return;
       }
       if (!datosCheque.fecha_pago) {
         onToast?.(
           "advertencia",
-          "La fecha de pago es obligatoria.",
-          3000
+          "La fecha de pago es obligatoria."
         );
         return;
       }
@@ -1002,8 +998,7 @@ export default function ModalPagarRecibos({
           "exito",
           `${
             datosCheque.tipo_cheque === "echeq" ? "eCheq" : "Cheque"
-          } ${datosCheque.numero_cheque} cargado.`,
-          3200
+          } ${datosCheque.numero_cheque} cargado.`
         );
       }
       setChequeModalRowId(null);
@@ -1172,13 +1167,13 @@ export default function ModalPagarRecibos({
   ========================= */
   const handleConfirm = async () => {
     if (!deudasOrdenadas.length) {
-      onToast?.("error", "Este cliente no tiene registros.", 2600);
+      onToast?.("error", "Este cliente no tiene registros.");
       return;
     }
 
     const v = validate();
     if (!v.ok) {
-      onToast?.("error", v.msg, 3200);
+      onToast?.("error", v.msg);
       return;
     }
 
@@ -1212,8 +1207,7 @@ export default function ModalPagarRecibos({
         } catch (err) {
           onToast?.(
             "error",
-            `Error al guardar cheque: ${err.message}`,
-            4200
+            `Error al guardar cheque: ${err.message}`
           );
           setLoading(false);
           setSavingCheque(false);
@@ -1284,13 +1278,12 @@ export default function ModalPagarRecibos({
       setPagaTodo(false);
       setMediosFilas([buildEmptyMedioPago()]);
 
-      onToast?.("exito", "Pago realizado correctamente.", 3000);
+      onToast?.("exito", "Pago realizado correctamente.");
       setTimeout(recomputeTbodyScroll, 0);
     } catch (e) {
       onToast?.(
         "error",
-        e?.message || "No se pudo registrar el pago.",
-        4200
+        e?.message || "No se pudo registrar el pago."
       );
     } finally {
       setLoading(false);
@@ -1304,8 +1297,7 @@ export default function ModalPagarRecibos({
     if (!onFactura) {
       onToast?.(
         "error",
-        "Falta conectar la acción de factura (onFactura).",
-        3200
+        "Falta conectar la acción de factura (onFactura)."
       );
       return;
     }
@@ -1316,21 +1308,20 @@ export default function ModalPagarRecibos({
     });
 
     if (!deudasOrdenadas.length) {
-      onToast?.("error", "Este cliente no tiene registros.", 2600);
+      onToast?.("error", "Este cliente no tiene registros.");
       return;
     }
     if (seleccion.length === 0) {
       onToast?.(
         "error",
-        "Seleccioná al menos una deuda PENDIENTE para facturar.",
-        2600
+        "Seleccioná al menos una deuda PENDIENTE para facturar."
       );
       return;
     }
 
     const v = validate();
     if (!v.ok) {
-      onToast?.("error", v.msg, 3200);
+      onToast?.("error", v.msg);
       return;
     }
 
@@ -1354,8 +1345,7 @@ export default function ModalPagarRecibos({
     } catch (e) {
       onToast?.(
         "error",
-        e?.message || "No se pudo generar la factura.",
-        4200
+        e?.message || "No se pudo generar la factura."
       );
     } finally {
       setLoading(false);

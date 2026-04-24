@@ -335,9 +335,7 @@ function MedioPagoRow({
       setOpenChequeModal(false);
       showToast?.(
         "exito",
-        `${tipoCheque === "echeq" ? "eCheq" : "Cheque"} ${cheque.numero_cheque || ""} cargado.`,
-        2500
-      );
+        `${tipoCheque === "echeq" ? "eCheq" : "Cheque"} ${cheque.numero_cheque || ""} cargado.`);
     },
     [onUpdate, row.id, showToast, tipoCheque]
   );
@@ -350,7 +348,6 @@ function MedioPagoRow({
           ok: false,
           tipo: "advertencia",
           mensaje: "Ingresá el número de cheque antes de confirmar.",
-          duracion: 3200,
         };
       }
       const params = new URLSearchParams();
@@ -371,7 +368,6 @@ function MedioPagoRow({
           ok: false,
           tipo: "error",
           mensaje: data?.mensaje || "Ese número de cheque ya existe.",
-          duracion: 4600,
         };
       }
       return { ok: true };
@@ -627,7 +623,7 @@ export default function ModalNuevoIngreso({
   const API_CHECK_NUMERO = `${BASE_URL}/api.php?action=ventas_cheques_obtener&modo=verificar_numero`;
 
   const showToast = useCallback(
-    (tipo, mensaje, dur = 2800) => onToast?.(tipo, mensaje, dur),
+    (tipo, mensaje) => onToast?.(tipo, mensaje),
     [onToast]
   );
 
@@ -787,12 +783,12 @@ export default function ModalNuevoIngreso({
             sinStock,
             cantidad: sinStock ? "" : 1,
           });
-          showToast("exito", "Descripción creada y seleccionada correctamente.", 2500);
+          showToast("exito", "Descripción creada y seleccionada correctamente.");
           return true;
         }
         throw new Error(data.mensaje || "Error al crear la descripción");
       } catch (error) {
-        showToast("error", error.message || "No se pudo crear la descripción.", 3000);
+        showToast("error", error.message || "No se pudo crear la descripción.");
         return false;
       }
     },
@@ -817,7 +813,7 @@ export default function ModalNuevoIngreso({
         cantidad: sinStock ? "" : 1,
       });
       if (sinStock)
-        showToast("advertencia", `El producto "${optionLabel(item)}" no tiene stock disponible.`, 2500);
+        showToast("advertencia", `El producto "${optionLabel(item)}" no tiene stock disponible.`);
     },
     [updateRow, showToast, handleCrearNuevaDescripcion]
   );
@@ -840,7 +836,7 @@ export default function ModalNuevoIngreso({
         cantidadFinal > Number(row.stock_disponible)
       ) {
         cantidadFinal = Number(row.stock_disponible);
-        showToast("advertencia", `Stock máximo disponible: ${row.stock_disponible}`, 2000);
+        showToast("advertencia", `Stock máximo disponible: ${row.stock_disponible}`);
       }
       updateRow(rowId, { cantidad: cantidadFinal });
     },
@@ -1069,14 +1065,14 @@ export default function ModalNuevoIngreso({
   const submit = useCallback(async () => {
     if (saving) return;
     if (typeof onSubmit !== "function") {
-      showToast("error", "Falta la función de guardado del modal.", 4200);
+      showToast("error", "Falta la función de guardado del modal.");
       return;
     }
     const v = validate();
-    if (!v.ok) { showToast("advertencia", v.msg || "Faltan datos.", 4200); return; }
+    if (!v.ok) { showToast("advertencia", v.msg || "Faltan datos."); return; }
     setSaving(true);
     if (v.warn)
-      showToast("advertencia", "Hay filas incompletas: se guardarán solo las válidas.", 3600);
+      showToast("advertencia", "Hay filas incompletas: se guardarán solo las válidas.");
     try {
       const payload = buildPayload();
       const data = await onSubmit(payload, mode === "edit");
@@ -1107,22 +1103,18 @@ export default function ModalNuevoIngreso({
         } catch (eCheque) {
           showToast(
             "advertencia",
-            `Ingreso guardado, pero no se pudo guardar un cheque: ${eCheque?.message || "error"}`,
-            5000
-          );
+            `Ingreso guardado, pero no se pudo guardar un cheque: ${eCheque?.message || "error"}`);
         }
       }
 
       if (warningArchivo)
         showToast(
           "advertencia",
-          `Ingreso guardado, pero el archivo no se pudo vincular: ${warningArchivo}`,
-          7000
-        );
+          `Ingreso guardado, pero el archivo no se pudo vincular: ${warningArchivo}`);
 
       await onSaved?.({ ...(data || {}), id_movimiento: idMovimientoFinal });
     } catch (e) {
-      showToast("error", e?.message || "No se pudo guardar el ingreso.", 4500);
+      showToast("error", e?.message || "No se pudo guardar el ingreso.");
     } finally {
       setSaving(false);
     }

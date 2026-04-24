@@ -302,7 +302,7 @@ export default function ModalEditarOrdenPago({
   const darkOn = isDarkEnabled(dark);
 
   const showToast = useCallback(
-    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
+    (tipo, mensaje) => onToast?.(tipo, mensaje),
     [onToast]
   );
 
@@ -498,12 +498,12 @@ export default function ModalEditarOrdenPago({
     const catalogo = addUI.catalogo;
 
     if (!nombre) {
-      showToast("advertencia", "Escribí un nombre.", 2600);
+      showToast("advertencia", "Escribí un nombre.");
       return;
     }
 
     setAddUI((p) => ({ ...p, saving: true }));
-    showToast("cargando", `Creando ${catalogo.slice(0, -1)}…`, 12000);
+    showToast("cargando", `Creando ${catalogo.slice(0, -1)}…`);
 
     try {
       const { idUsuario } = getAuthInfo();
@@ -540,10 +540,10 @@ export default function ModalEditarOrdenPago({
       }
 
       setAddUI({ open: false, catalogo: "detalles", text: "", saving: false });
-      showToast("exito", `${catalogo.slice(0, -1)} creado: "${newNombre}"`, 2400);
+      showToast("exito", `${catalogo.slice(0, -1)} creado: "${newNombre}"`);
     } catch (e) {
       setAddUI((p) => ({ ...p, saving: false }));
-      showToast("error", e?.message || "Error creando.", 4200);
+      showToast("error", e?.message || "Error creando.");
     }
   };
 
@@ -561,12 +561,12 @@ export default function ModalEditarOrdenPago({
     e.preventDefault();
 
     if (addUI.open) {
-      showToast("advertencia", "Terminá de crear (o cancelá) antes de guardar.", 3200);
+      showToast("advertencia", "Terminá de crear (o cancelá) antes de guardar.");
       return;
     }
 
     setSaving(true);
-    showToast("cargando", "Guardando cambios…", 12000);
+    showToast("cargando", "Guardando cambios…");
 
     try {
       const fechaFinal = String(form.fecha || defaultsRef.current.fecha || "").trim();
@@ -609,10 +609,10 @@ export default function ModalEditarOrdenPago({
 
       await onSave?.(payloadFinal);
 
-      showToast("exito", "Orden de pago actualizada.", 2400);
+      showToast("exito", "Orden de pago actualizada.");
       onClose?.();
     } catch (err) {
-      showToast("error", err?.message || "Error guardando orden de pago.", 4200);
+      showToast("error", err?.message || "Error guardando orden de pago.");
       setSaving(false);
     }
   };

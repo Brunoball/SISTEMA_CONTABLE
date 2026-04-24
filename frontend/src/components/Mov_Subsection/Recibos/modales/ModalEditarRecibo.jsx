@@ -186,7 +186,7 @@ export default function ModalEditarRecibo({
   const darkOn = isDarkEnabled(dark);
 
   const showToast = useCallback(
-    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
+    (tipo, mensaje) => onToast?.(tipo, mensaje),
     [onToast]
   );
 
@@ -419,10 +419,10 @@ export default function ModalEditarRecibo({
       };
 
       await onSave?.(payloadFinal);
-      showToast("exito", "Recibo actualizado.", 2400);
+      showToast("exito", "Recibo actualizado.");
       onClose?.();
     } catch (err) {
-      showToast("error", err?.message || "Error guardando recibo.", 4200);
+      showToast("error", err?.message || "Error guardando recibo.");
       setSaving(false);
     }
   };

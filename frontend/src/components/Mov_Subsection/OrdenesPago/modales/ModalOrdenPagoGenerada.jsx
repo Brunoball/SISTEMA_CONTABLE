@@ -388,9 +388,9 @@ export default function ModalOrdenPagoGenerada({
       w.focus();
       w.print();
 
-      onToast?.("exito", "Panel de impresión abierto.", 2200);
+      onToast?.("exito", "Panel de impresión abierto.");
     } catch (e) {
-      onToast?.("error", e?.message || "No se pudo imprimir.", 4200);
+      onToast?.("error", e?.message || "No se pudo imprimir.");
     }
   }, [fullHtml, onToast]);
 
@@ -410,9 +410,9 @@ export default function ModalOrdenPagoGenerada({
       a.remove();
       URL.revokeObjectURL(url);
 
-      onToast?.("exito", "PDF exportado", 2400);
+      onToast?.("exito", "PDF exportado");
     } catch (e) {
-      onToast?.("error", e?.message || "No se pudo exportar el PDF.", 4200);
+      onToast?.("error", e?.message || "No se pudo exportar el PDF.");
     } finally {
       setBusy(false);
     }
@@ -596,9 +596,7 @@ export default function ModalOrdenPagoGenerada({
     } catch (e) {
       onToast?.(
         "error",
-        e?.message || "No se pudo finalizar la orden de pago. Reintentá.",
-        5000
-      );
+        e?.message || "No se pudo finalizar la orden de pago. Reintentá.");
     } finally {
       closingAndSavingRef.current = false;
       setBusy(false);

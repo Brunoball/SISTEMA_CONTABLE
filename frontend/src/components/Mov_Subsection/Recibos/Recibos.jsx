@@ -228,15 +228,9 @@ export default function Recibos() {
   const [loadingClienteDeudas, setLoadingClienteDeudas] = useState(false);
 
   const [toast, setToast] = useState(null);
-  const toastTimerRef = useRef(null);
   const toastRafRef = useRef(null);
 
-  const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
-    if (toastTimerRef.current) {
-      clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = null;
-    }
-
+  const showToast = useCallback((tipo, mensaje) => {
     if (toastRafRef.current) {
       cancelAnimationFrame(toastRafRef.current);
       toastRafRef.current = null;
@@ -247,21 +241,12 @@ export default function Recibos() {
     setToast(null);
 
     toastRafRef.current = window.requestAnimationFrame(() => {
-      const nextToast = { id: nextId, tipo, mensaje, duracion };
-      setToast(nextToast);
-
-      toastTimerRef.current = window.setTimeout(() => {
-        setToast((curr) => (curr?.id === nextId ? null : curr));
-        toastTimerRef.current = null;
-      }, duracion);
+      setToast({ id: nextId, tipo, mensaje });
+      toastRafRef.current = null;
     });
   }, []);
 
   const closeToast = useCallback(() => {
-    if (toastTimerRef.current) {
-      clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = null;
-    }
     if (toastRafRef.current) {
       cancelAnimationFrame(toastRafRef.current);
       toastRafRef.current = null;
@@ -284,7 +269,6 @@ export default function Recibos() {
 
   useEffect(() => {
     return () => {
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       if (toastRafRef.current) cancelAnimationFrame(toastRafRef.current);
     };
   }, []);
@@ -700,30 +684,29 @@ export default function Recibos() {
         if (hasMore) {
           showToast(
             "error",
-            'Todavía hay más registros sin cargar. Tocá "Cargar 100 más" hasta completar todo.',
-            5200
+            'Todavía hay más registros sin cargar. Tocá "Cargar 100 más" hasta completar todo.'
           );
           return;
         }
 
         if (type === "excel") {
           exportToExcel();
-          showToast("exito", "Excel exportado.", 2200);
+          showToast("exito", "Excel exportado.");
           return;
         }
 
         if (type === "csv") {
           exportToCSV();
-          showToast("exito", "CSV exportado.", 2200);
+          showToast("exito", "CSV exportado.");
           return;
         }
 
         if (type === "txt") {
           exportToTXT();
-          showToast("exito", "TXT exportado.", 2200);
+          showToast("exito", "TXT exportado.");
         }
       } catch (e) {
-        showToast("error", e?.message || "Error exportando archivo.", 3500);
+        showToast("error", e?.message || "Error exportando archivo.");
       }
     },
     [hasMore, exportToExcel, exportToCSV, exportToTXT, showToast]
@@ -851,7 +834,7 @@ export default function Recibos() {
         setPagarDeudas(deudas);
         setOpenPagar(true);
       } catch (e) {
-        showToast("error", e?.message || "No se pudieron cargar los registros del cliente.", 5200);
+        showToast("error", e?.message || "No se pudieron cargar los registros del cliente.");
       } finally {
         setLoadingClienteDeudas(false);
       }
@@ -902,15 +885,14 @@ export default function Recibos() {
         if (rowsFailed || listsFailed) {
           showToast(
             "error",
-            "El recibo se guardó, pero no pude refrescar toda la pantalla automáticamente.",
-            4200
+            "El recibo se guardó, pero no pude refrescar toda la pantalla automáticamente."
           );
           return;
         }
 
-        showToast("exito", "Recibo guardado correctamente.", 3000);
+        showToast("exito", "Recibo guardado correctamente.");
       } catch (e) {
-        showToast("error", e?.message || "El recibo se guardó, pero no pude refrescar la lista.", 4200);
+        showToast("error", e?.message || "El recibo se guardó, pero no pude refrescar la lista.");
       }
     },
     [applyComprobanteToRows, dateRange, q, loadRows, refreshLists, showToast]
@@ -960,7 +942,7 @@ export default function Recibos() {
     if (!hasMore || loadingMore || loadingRows || loadingListsCtx) return;
     if (nextOffset === null) return;
 
-    showToast("cargando", "Cargando registros...", 12000);
+    showToast("cargando", "Cargando registros...");
 
     try {
       const res = await loadRows({
@@ -972,13 +954,13 @@ export default function Recibos() {
       });
 
       if (!res) {
-        showToast("error", "No se pudieron cargar más registros.", 4200);
+        showToast("error", "No se pudieron cargar más registros.");
         return;
       }
 
-      showToast("exito", `${res.received || PAGE_SIZE} registros más cargados.`, 2400);
+      showToast("exito", `${res.received || PAGE_SIZE} registros más cargados.`);
     } catch (e) {
-      showToast("error", e?.message || "Error cargando más registros.", 4200);
+      showToast("error", e?.message || "Error cargando más registros.");
     }
   }, [
     hasMore,
@@ -1065,7 +1047,6 @@ export default function Recibos() {
           key={toast.id}
           tipo={toast.tipo}
           mensaje={toast.mensaje}
-          duracion={toast.duracion}
           onClose={closeToast}
         />
       )}

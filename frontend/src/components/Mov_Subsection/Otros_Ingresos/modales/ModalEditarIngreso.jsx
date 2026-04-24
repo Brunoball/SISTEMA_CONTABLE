@@ -444,9 +444,7 @@ function MedioPagoRow({
       setOpenChequeModal(false);
       showToast?.(
         "exito",
-        `${tipoCheque === "echeq" ? "eCheq" : "Cheque"} ${cheque.numero_cheque || ""} actualizado.`,
-        2500
-      );
+        `${tipoCheque === "echeq" ? "eCheq" : "Cheque"} ${cheque.numero_cheque || ""} actualizado.`);
     },
     [onUpdate, row.id, row.cheque, row.id_cheque, showToast, tipoCheque]
   );
@@ -459,7 +457,6 @@ function MedioPagoRow({
           ok: false,
           tipo: "advertencia",
           mensaje: "Ingresá el número de cheque antes de confirmar.",
-          duracion: 3200,
         };
       }
       const params = new URLSearchParams();
@@ -481,7 +478,6 @@ function MedioPagoRow({
           ok: false,
           tipo: "error",
           mensaje: data?.mensaje || "Ese número de cheque ya existe.",
-          duracion: 4600,
         };
       }
       return { ok: true };
@@ -742,7 +738,7 @@ export default function ModalEditarIngreso({
   const API_CHECK_NUMERO = `${BASE_URL}/api.php?action=ventas_cheques_obtener&modo=verificar_numero`;
 
   const showToast = useCallback(
-    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
+    (tipo, mensaje) => onToast?.(tipo, mensaje),
     [onToast]
   );
 
@@ -831,7 +827,7 @@ export default function ModalEditarIngreso({
       setComprobanteActual(data?.comprobante ?? null);
     } catch (err) {
       setComprobanteActual(null);
-      showToast("error", err?.message || "No se pudo obtener el comprobante.", 3500);
+      showToast("error", err?.message || "No se pudo obtener el comprobante.");
     } finally {
       setLoadingComprobante(false);
     }
@@ -905,9 +901,7 @@ export default function ModalEditarIngreso({
       if (sinStock)
         showToast(
           "advertencia",
-          `El producto "${optionLabel(item)}" no tiene stock disponible.`,
-          2500
-        );
+          `El producto "${optionLabel(item)}" no tiene stock disponible.`);
     },
     [updateItem, showToast]
   );
@@ -931,7 +925,7 @@ export default function ModalEditarIngreso({
         cantidadFinal > Number(stockDisponible)
       ) {
         cantidadFinal = Number(stockDisponible);
-        showToast("advertencia", `Stock máximo disponible: ${stockDisponible}`, 2000);
+        showToast("advertencia", `Stock máximo disponible: ${stockDisponible}`);
       }
       updateItem(uid, { cantidad: cantidadFinal });
     },
@@ -1233,7 +1227,7 @@ export default function ModalEditarIngreso({
     if (saving) return;
     try {
       setSaving(true);
-      showToast("cargando", "Actualizando ingreso…", 12000);
+      showToast("cargando", "Actualizando ingreso…");
 
       const v = validate();
       if (!v.ok) throw new Error(v.msg);
@@ -1306,7 +1300,7 @@ export default function ModalEditarIngreso({
 
       await onSaved?.(resp);
     } catch (err) {
-      showToast("error", err?.message || "Error actualizando ingreso.", 4200);
+      showToast("error", err?.message || "Error actualizando ingreso.");
       setSaving(false);
     }
   };
@@ -1339,10 +1333,10 @@ export default function ModalEditarIngreso({
           sinStock,
           cantidad: sinStock ? "" : 1,
         });
-        showToast("exito", "Descripción creada y seleccionada correctamente.", 2500);
+        showToast("exito", "Descripción creada y seleccionada correctamente.");
         return true;
       } catch (e) {
-        showToast("error", e?.message || "No se pudo crear la descripción.", 3000);
+        showToast("error", e?.message || "No se pudo crear la descripción.");
         return false;
       }
     },

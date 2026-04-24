@@ -21,6 +21,7 @@ function moneyARS(v) {
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim();
   if (!s) return "-";
+
   const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m1) {
     const yyyy = m1[1];
@@ -28,6 +29,7 @@ function formatFechaDMY(v) {
     const dd = String(Number(m1[3])).padStart(2, "0");
     return `${dd}/${mm}/${yyyy}`;
   }
+
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m2) {
     const dd = String(Number(m2[1])).padStart(2, "0");
@@ -35,6 +37,7 @@ function formatFechaDMY(v) {
     const yyyy = m2[3];
     return `${dd}/${mm}/${yyyy}`;
   }
+
   return s;
 }
 
@@ -54,30 +57,42 @@ function todayDMY() {
  *   cliente: { id_cliente, nombre },
  *   medio_pago: { id, nombre },
  *   total: number,
- *   items: [{ id_movimiento, fecha, descripcion, monto }]
+ *   items: [{ id_movimiento, fecha, descripcion, monto, medio_pago }]
  * }
  */
 export function buildReciboHTML(payload) {
   const fechaCobro = esc(payload?.fecha_cobro || todayDMY());
   const nro = esc(payload?.nro || "");
   const clienteNom = esc(payload?.cliente?.nombre || payload?.cliente?.cliente || "—");
-  const clienteId = payload?.cliente?.id_cliente ? esc(payload.cliente.id_cliente) : "";
-  const medioPago = esc(payload?.medio_pago?.nombre || "—");
+
+  const medioPagoRaw = payload?.medio_pago?.nombre || "—";
+  const medioPago = esc(medioPagoRaw);
+
   const total = moneyARS(payload?.total || 0);
 
   const items = Array.isArray(payload?.items) ? payload.items : [];
+
   const rows = items
-    .map((it, i) => {
-      const id = esc(it?.id_movimiento || "");
+    .map((it) => {
       const fecha = esc(formatFechaDMY(it?.fecha));
       const desc = esc(it?.descripcion || it?.detalle || it?.concepto || "—");
+
+      const medioItem = esc(
+        it?.medio_pago?.nombre ||
+          it?.medio_pago ||
+          it?.medio ||
+          it?.nombre_medio_pago ||
+          medioPagoRaw ||
+          "—"
+      );
+
       const monto = moneyARS(it?.monto || it?.monto_total || it?.total || 0);
+
       return `
         <tr>
-          <td class="c center">${i + 1}</td>
-          <td class="c center">${id}</td>
           <td class="c center">${fecha}</td>
           <td class="c">${desc}</td>
+          <td class="c center">${medioItem}</td>
           <td class="c right">${monto}</td>
         </tr>
       `;
@@ -90,10 +105,9 @@ export function buildReciboHTML(payload) {
       <table class="tbl">
         <thead>
           <tr>
-            <th class="center" style="width:44px">#</th>
-            <th class="center" style="width:90px">ID Mov</th>
             <th class="center" style="width:110px">Fecha</th>
             <th>Descripción</th>
+            <th class="center" style="width:200px">Medio de pago</th>
             <th class="right" style="width:130px">Importe</th>
           </tr>
         </thead>
@@ -103,6 +117,8 @@ export function buildReciboHTML(payload) {
       </table>
     `
       : `<div class="muted">Sin ítems.</div>`;
+
+  const cantidadItems = items.length;
 
   return `<!doctype html>
 <html lang="es">
@@ -117,8 +133,11 @@ export function buildReciboHTML(payload) {
       --line:#e2e8f0;
       --soft:#f8fafc;
       --accent:#0ea5e9;
+      --accentSoft:#e0f2fe;
     }
+
     *{ box-sizing:border-box; }
+
     html, body{
       margin:0;
       padding:0;
@@ -129,36 +148,50 @@ export function buildReciboHTML(payload) {
       print-color-adjust: exact;
     }
 
-    /* ✅ UNA SOLA DEFINICIÓN DE PÁGINA */
     @page { size: A4; margin: 10mm; }
 
-    /* Vista normal (iframe) */
-    body{ padding: 24px; }
+    body{ padding:24px; }
 
-    /* ✅ PRINT: SIN ALTURAS FIJAS, SIN OVERFLOW QUE EMPUJE A 2DA HOJA */
     @media print{
       body{ padding:0 !important; }
+
       .paper{
         margin:0 !important;
-        width: 100% !important;
-        max-width: 190mm !important;
+        width:100% !important;
+        max-width:190mm !important;
         border:none !important;
         border-radius:0 !important;
         padding:0 !important;
-        overflow: visible !important;
-        page-break-after: avoid !important;
-        break-after: avoid !important;
+        overflow:visible !important;
+        page-break-after:avoid !important;
+        break-after:avoid !important;
       }
+
       .top, .grid, .tbl, .totals, .footer{
-        break-inside: avoid !important;
-        page-break-inside: avoid !important;
+        break-inside:avoid !important;
+        page-break-inside:avoid !important;
       }
     }
 
     .paper{
-      max-width: 920px;
-      margin: 0 auto;
+      max-width:1020px;
+      margin:0 auto;
       background:#fff;
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:22px;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .paper::before{
+      content:"";
+      position:absolute;
+      top:0;
+      left:0;
+      right:0;
+      height:5px;
+      background:linear-gradient(90deg, var(--accent), #38bdf8);
     }
 
     .top{
@@ -175,26 +208,23 @@ export function buildReciboHTML(payload) {
       display:flex;
       flex-direction:column;
       gap:8px;
-      min-width: 0;
+      min-width:0;
     }
 
-    /* ✅ NUEVO: fila título + chip */
     .headRow{
       display:flex;
       align-items:center;
       gap:10px;
-      flex-wrap: wrap;
+      flex-wrap:wrap;
     }
 
-    /* ✅ título más fino */
     .brand .title{
-      font-size:18px;
-      font-weight:600; /* antes 800 */
+      font-size:19px;
+      font-weight:650;
       letter-spacing:0.2px;
       margin:0;
     }
 
-    /* ✅ chip medio al lado del título */
     .pill{
       display:inline-block;
       padding:6px 10px;
@@ -202,9 +232,15 @@ export function buildReciboHTML(payload) {
       background:var(--soft);
       border:1px solid var(--line);
       color:var(--text);
-      font-weight:600; /* antes 700 */
+      font-weight:600;
       font-size:12px;
-      white-space: nowrap;
+      white-space:nowrap;
+    }
+
+    .pillAccent{
+      background:var(--accentSoft);
+      border-color:#bae6fd;
+      color:#0369a1;
     }
 
     .meta{
@@ -214,25 +250,29 @@ export function buildReciboHTML(payload) {
       display:flex;
       flex-direction:column;
       gap:6px;
+      white-space:nowrap;
     }
 
     .grid{
       display:grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns:1fr 1fr;
       gap:10px 14px;
-      margin: 12px 0 14px;
+      margin:12px 0 14px;
     }
+
     .field{
       border:1px solid var(--line);
-      border-radius:10px;
-      padding:10px 12px;
+      border-radius:12px;
+      padding:11px 12px;
       background:#fff;
     }
+
     .field .k{
       font-size:11px;
       color:var(--muted);
       margin-bottom:4px;
     }
+
     .field .v{
       font-size:13px;
       font-weight:700;
@@ -245,9 +285,10 @@ export function buildReciboHTML(payload) {
       border-collapse:separate;
       border-spacing:0;
       overflow:hidden;
-      border-radius:12px;
+      border-radius:14px;
       border:1px solid var(--line);
     }
+
     .tbl thead th{
       background:var(--soft);
       font-size:12px;
@@ -255,39 +296,52 @@ export function buildReciboHTML(payload) {
       padding:10px 10px;
       border-bottom:1px solid var(--line);
       color:#0b1220;
+      font-weight:700;
     }
+
     .tbl tbody td{
       padding:10px 10px;
       border-bottom:1px solid var(--line);
       font-size:12px;
       vertical-align:top;
     }
-    .tbl tbody tr:last-child td{ border-bottom:none; }
+
+    .tbl tbody tr:last-child td{
+      border-bottom:none;
+    }
+
     .center{ text-align:center; }
     .right{ text-align:right; }
-    .muted{ color:var(--muted); font-size:12px; }
+
+    .muted{
+      color:var(--muted);
+      font-size:12px;
+    }
 
     .totals{
       display:flex;
       justify-content:flex-end;
       margin-top:14px;
     }
+
     .totalBox{
       border:1px solid var(--line);
       background:var(--soft);
-      border-radius:12px;
+      border-radius:14px;
       padding:12px 14px;
-      min-width: 260px;
+      min-width:260px;
       text-align:right;
     }
+
     .totalBox .k{
-      font-size:11px; color:var(--muted); margin-bottom:4px;
+      font-size:11px;
+      color:var(--muted);
+      margin-bottom:4px;
     }
 
-    /* ✅ monto más fino */
     .totalBox .v{
       font-size:20px;
-      font-weight:600; /* antes 900 */
+      font-weight:650;
       letter-spacing:0.2px;
     }
 
@@ -307,13 +361,11 @@ export function buildReciboHTML(payload) {
   <div class="paper">
     <div class="top">
       <div class="brand">
-        <!-- ✅ título + medio al lado -->
         <div class="headRow">
           <div class="title">RECIBO DE COBRO</div>
-          <div class="pill">Medio: ${medioPago}</div>
+          <div class="pill pillAccent">Medio: ${medioPago}</div>
         </div>
 
-        <!-- ✅ ELIMINADO: “Sistema Contable · Comprobante interno” -->
         ${nro ? `<div class="pill">N° ${nro}</div>` : ``}
       </div>
 
@@ -327,9 +379,10 @@ export function buildReciboHTML(payload) {
         <div class="k">Cliente</div>
         <div class="v">${clienteNom}</div>
       </div>
+
       <div class="field">
-        <div class="k">ID Cliente</div>
-        <div class="v">${clienteId || "—"}</div>
+        <div class="k">Comprobantes abonados</div>
+        <div class="v">${cantidadItems || "—"}</div>
       </div>
     </div>
 

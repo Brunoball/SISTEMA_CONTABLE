@@ -12,7 +12,6 @@ import {
   faFilePdf,
   faCheck,
   faCircleNotch,
-  faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 
 import html2pdf from "html2pdf.js/dist/html2pdf.min";
@@ -44,6 +43,7 @@ function ensureFullHtmlDocument(html, title) {
     if (/<head[\s>]/i.test(s) && /<\/head>/i.test(s)) {
       return s.replace(/<\/head>/i, `${printCss}</head>`);
     }
+
     return s;
   }
 
@@ -63,15 +63,18 @@ function ensureFullHtmlDocument(html, title) {
 
 function extractBodyWithStyles(fullHtml) {
   const s = String(fullHtml || "").trim();
+
   if (!s) return { styles: "", body: "" };
 
   try {
     const doc = new DOMParser().parseFromString(s, "text/html");
+
     const styles = Array.from(doc.querySelectorAll("style"))
       .map((x) => x.textContent || "")
       .join("\n");
 
     const body = doc.body ? doc.body.innerHTML : s;
+
     return { styles, body };
   } catch {
     return { styles: "", body: s };
@@ -93,24 +96,37 @@ function getSessionKey() {
     "X-Session",
     "x-session",
   ];
+
   for (const k of keys) {
     const v = localStorage.getItem(k);
-    if (v && String(v).trim() !== "") return String(v).trim();
+
+    if (v && String(v).trim() !== "") {
+      return String(v).trim();
+    }
   }
+
   return "";
 }
 
 function getApiPhpUrl() {
   const base = String(BASE_URL || "").replace(/\/+$/, "");
-  if (/\/api\.php$/i.test(base)) return base;
+
+  if (/\/api\.php$/i.test(base)) {
+    return base;
+  }
+
   return `${base}/api.php`;
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 60000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
   } finally {
     clearTimeout(id);
   }
@@ -129,6 +145,7 @@ function extractIdComprobante(data) {
     0;
 
   const n = Number(cand || 0);
+
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
@@ -144,7 +161,9 @@ async function retryAsync(fn, attempts = 4, baseDelay = 450) {
       return await fn(i + 1);
     } catch (e) {
       lastErr = e;
+
       if (i >= attempts - 1) break;
+
       const wait = baseDelay * Math.pow(2, i);
       await sleep(wait);
     }
@@ -160,12 +179,14 @@ const EXTRA_RECIBO_CSS = `
   font-weight: 600 !important;
   letter-spacing: .2px !important;
 }
+
 .paper .rc-headRow{
   display:flex !important;
   align-items:center !important;
   gap:10px !important;
   flex-wrap: wrap !important;
 }
+
 .paper .rc-chip{
   display:inline-flex !important;
   align-items:center !important;
@@ -178,10 +199,12 @@ const EXTRA_RECIBO_CSS = `
   font-size: 12px !important;
   white-space: nowrap !important;
 }
+
 .paper .recibo-subtitle,
 .paper .rc-subtitle{
   display:none !important;
 }
+
 .paper .totalBox .v,
 .paper .totalBox .amount,
 .paper .rc-totalValue,
@@ -192,6 +215,7 @@ const EXTRA_RECIBO_CSS = `
 
 function transformReciboBodyHtml(bodyHtml) {
   const s = String(bodyHtml || "").trim();
+
   if (!s) return s;
 
   try {
@@ -199,8 +223,10 @@ function transformReciboBodyHtml(bodyHtml) {
     const root = doc.body;
 
     const allEls = Array.from(root.querySelectorAll("*"));
+
     for (const el of allEls) {
       const t = normalizeText(el.textContent);
+
       if (
         t === "sistema contable · comprobante interno" ||
         t === "sistema contable · comprobante interno."
@@ -211,8 +237,10 @@ function transformReciboBodyHtml(bodyHtml) {
     }
 
     let titleEl = null;
+
     for (const el of allEls) {
       const t = normalizeText(el.textContent);
+
       if (t === "recibo de cobro" || t.includes("recibo de cobro")) {
         if (String(el.textContent || "").trim().length <= 40) {
           titleEl = el;
@@ -223,8 +251,10 @@ function transformReciboBodyHtml(bodyHtml) {
 
     let chipEl = null;
     const allEls2 = Array.from(root.querySelectorAll("*"));
+
     for (const el of allEls2) {
       const t = normalizeText(el.textContent);
+
       if (t.startsWith("medio:") || t.startsWith("medio de pago:")) {
         if (String(el.textContent || "").trim().length <= 60) {
           chipEl = el;
@@ -248,6 +278,7 @@ function transformReciboBodyHtml(bodyHtml) {
           row.className = "rc-headRow";
 
           const parent = titleEl.parentElement;
+
           if (parent) {
             parent.insertBefore(row, titleEl);
             row.appendChild(titleEl);
@@ -294,8 +325,11 @@ function savePendingSnapshot(snapshot) {
 function clearPendingSnapshot(expectedKey) {
   try {
     const raw = localStorage.getItem(LS_KEY);
+
     if (!raw) return;
+
     const parsed = JSON.parse(raw);
+
     if (!parsed?.pendingKey || parsed.pendingKey === expectedKey) {
       localStorage.removeItem(LS_KEY);
     }
@@ -334,6 +368,7 @@ export default function ModalReciboGenerado({
   const pdfBlobRef = useRef(null);
   const warmupStartedRef = useRef(false);
   const warmupTimerRef = useRef(null);
+  const lastSaveErrorToastRef = useRef("");
 
   const fullHtml = useMemo(() => ensureFullHtmlDocument(html, title), [html, title]);
   const extracted = useMemo(() => extractBodyWithStyles(fullHtml), [fullHtml]);
@@ -342,24 +377,33 @@ export default function ModalReciboGenerado({
     const transformedBody = transformReciboBodyHtml(extracted.body || "");
     const mergedStyles = `${extracted.styles || ""}\n${EXTRA_RECIBO_CSS}`.trim();
     const stylesTag = mergedStyles ? `<style>${mergedStyles}</style>` : "";
+
     return `${stylesTag}${transformedBody || ""}`;
   }, [extracted.styles, extracted.body]);
 
   const idsMovs = useMemo(() => {
     const arr = Array.isArray(idsMovimientos) ? idsMovimientos : [idsMovimientos];
+
     return arr
       .map((x) => Number(x || 0))
       .filter((x) => Number.isFinite(x) && x > 0);
   }, [idsMovimientos]);
 
   const pendingKey = useMemo(
-    () => buildPendingKey({ idsMovs, idCobro, title }),
+    () =>
+      buildPendingKey({
+        idsMovs,
+        idCobro,
+        title,
+      }),
     [idsMovs, idCobro, title]
   );
 
   useEffect(() => {
     if (!open) return;
+
     const t = setTimeout(() => firstFocusRef.current?.focus(), 50);
+
     return () => clearTimeout(t);
   }, [open]);
 
@@ -378,7 +422,10 @@ export default function ModalReciboGenerado({
 
   useEffect(() => {
     if (!open) {
-      if (warmupTimerRef.current) clearTimeout(warmupTimerRef.current);
+      if (warmupTimerRef.current) {
+        clearTimeout(warmupTimerRef.current);
+      }
+
       warmupTimerRef.current = null;
       warmupStartedRef.current = false;
       pdfBlobRef.current = null;
@@ -386,6 +433,8 @@ export default function ModalReciboGenerado({
       savedRef.current = null;
       savingRef.current = false;
       closingAndSavingRef.current = false;
+      lastSaveErrorToastRef.current = "";
+
       setAutoSaving(false);
       setBusy(false);
       setSaveError("");
@@ -401,18 +450,25 @@ export default function ModalReciboGenerado({
         e.returnValue = "";
         return "";
       }
+
       return undefined;
     };
 
     window.addEventListener("beforeunload", onBeforeUnload);
+
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [open, autoSaving, busy]);
 
   const buildWrapperForPdf = useCallback(async () => {
-    if (!previewRef.current) throw new Error("No hay vista previa para exportar.");
+    if (!previewRef.current) {
+      throw new Error("No hay vista previa para exportar.");
+    }
 
     const host = exportHostRef.current;
-    if (!host) throw new Error("No se pudo preparar el área de exportación.");
+
+    if (!host) {
+      throw new Error("No se pudo preparar el área de exportación.");
+    }
 
     host.innerHTML = "";
 
@@ -441,6 +497,7 @@ export default function ModalReciboGenerado({
     host.appendChild(wrapper);
 
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
     return wrapper;
   }, []);
 
@@ -455,7 +512,10 @@ export default function ModalReciboGenerado({
 
       const opt = {
         margin: 0,
-        image: { type: "jpeg", quality: quality === "export" ? 0.96 : 0.9 },
+        image: {
+          type: "jpeg",
+          quality: quality === "export" ? 0.96 : 0.9,
+        },
         html2canvas: {
           scale,
           useCORS: true,
@@ -466,14 +526,25 @@ export default function ModalReciboGenerado({
           windowWidth: 794,
           windowHeight: contentH > 0 ? contentH : undefined,
         },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+        jsPDF: {
+          unit: "mm",
+          format: "a4",
+          orientation: "portrait",
+        },
+        pagebreak: {
+          mode: ["avoid-all", "css", "legacy"],
+        },
       };
 
       const worker = html2pdf().set(opt).from(wrapper).toPdf();
       const blob = await worker.output("blob");
-      if (!blob) throw new Error("No se pudo generar el PDF.");
+
+      if (!blob) {
+        throw new Error("No se pudo generar el PDF.");
+      }
+
       pdfBlobRef.current = blob;
+
       return blob;
     },
     [buildWrapperForPdf]
@@ -481,10 +552,15 @@ export default function ModalReciboGenerado({
 
   const handlePrint = useCallback(() => {
     try {
-      if (!fullHtml) throw new Error("No hay HTML para imprimir.");
+      if (!fullHtml) {
+        throw new Error("No hay HTML para imprimir.");
+      }
 
       const w = window.open("", "_blank");
-      if (!w) throw new Error("El navegador bloqueó el popup de impresión.");
+
+      if (!w) {
+        throw new Error("El navegador bloqueó el popup de impresión.");
+      }
 
       w.document.open();
       w.document.write(fullHtml);
@@ -492,9 +568,9 @@ export default function ModalReciboGenerado({
       w.focus();
       w.print();
 
-      onToast?.("exito", "Panel de impresión abierto.", 2200);
+      onToast?.("exito", "Panel de impresión abierto.");
     } catch (e) {
-      onToast?.("error", e?.message || "No se pudo imprimir.", 4200);
+      onToast?.("error", e?.message || "No se pudo imprimir.");
     }
   }, [fullHtml, onToast]);
 
@@ -507,16 +583,19 @@ export default function ModalReciboGenerado({
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
+
       a.href = url;
       a.download = filename;
+
       document.body.appendChild(a);
       a.click();
       a.remove();
+
       URL.revokeObjectURL(url);
 
-      onToast?.("exito", "PDF exportado", 2400);
+      onToast?.("exito", "PDF exportado");
     } catch (e) {
-      onToast?.("error", e?.message || "No se pudo exportar el PDF.", 4200);
+      onToast?.("error", e?.message || "No se pudo exportar el PDF.");
     } finally {
       setBusy(false);
     }
@@ -525,7 +604,10 @@ export default function ModalReciboGenerado({
   const uploadPdfToServer = useCallback(
     async (pdfBlob) => {
       const sessionKey = getSessionKey();
-      if (!sessionKey) throw new Error("Sesión inválida (no hay X-Session).");
+
+      if (!sessionKey) {
+        throw new Error("Sesión inválida (no hay X-Session).");
+      }
 
       const safeName = sanitizeFileName(title);
       const file = new File([pdfBlob], `${safeName}.pdf`, {
@@ -533,12 +615,19 @@ export default function ModalReciboGenerado({
       });
 
       const fd = new FormData();
+
       fd.append("titulo", String(title || "Recibo"));
 
-      if (idsMovs[0]) fd.append("id_movimiento", String(idsMovs[0]));
-      idsMovs.forEach((id) => fd.append("ids_movimiento[]", String(id)));
+      if (idsMovs[0]) {
+        fd.append("id_movimiento", String(idsMovs[0]));
+      }
+
+      idsMovs.forEach((id) => {
+        fd.append("ids_movimiento[]", String(id));
+      });
 
       const cob = Number(idCobro);
+
       if (Number.isFinite(cob) && cob > 0) {
         fd.append("id_cobro", String(cob));
       }
@@ -551,7 +640,9 @@ export default function ModalReciboGenerado({
         url,
         {
           method: "POST",
-          headers: { "X-Session": sessionKey },
+          headers: {
+            "X-Session": sessionKey,
+          },
           body: fd,
         },
         PDF_SAVE_TIMEOUT
@@ -564,22 +655,30 @@ export default function ModalReciboGenerado({
       }
 
       let data = null;
+
       try {
         data = JSON.parse(text);
       } catch {
         throw new Error(
-          `Respuesta inválida al subir comprobante (HTTP ${res.status}). ${text.slice(0, 300)}`
+          `Respuesta inválida al subir comprobante (HTTP ${res.status}). ${text.slice(
+            0,
+            300
+          )}`
         );
       }
 
       if (!res.ok || !data?.exito) {
         throw new Error(
           data?.mensaje ||
-            `No se pudo guardar el comprobante (HTTP ${res.status}). ${text.slice(0, 300)}`
+            `No se pudo guardar el comprobante (HTTP ${res.status}). ${text.slice(
+              0,
+              300
+            )}`
         );
       }
 
       const idComp = extractIdComprobante(data);
+
       if (!idComp) {
         throw new Error("El backend guardó el PDF pero no devolvió id_comprobante.");
       }
@@ -594,7 +693,10 @@ export default function ModalReciboGenerado({
 
   const asociarComprobanteAMovimientos = useCallback(async (idComprobante, ids) => {
     const sessionKey = getSessionKey();
-    if (!sessionKey) throw new Error("Sesión inválida (no hay X-Session).");
+
+    if (!sessionKey) {
+      throw new Error("Sesión inválida (no hay X-Session).");
+    }
 
     const idsOk = (Array.isArray(ids) ? ids : [])
       .map((x) => Number(x || 0))
@@ -629,18 +731,25 @@ export default function ModalReciboGenerado({
     }
 
     let data = null;
+
     try {
       data = JSON.parse(text);
     } catch {
       throw new Error(
-        `Respuesta inválida al asociar comprobante (HTTP ${res.status}). ${text.slice(0, 300)}`
+        `Respuesta inválida al asociar comprobante (HTTP ${res.status}). ${text.slice(
+          0,
+          300
+        )}`
       );
     }
 
     if (!res.ok || !data?.exito) {
       throw new Error(
         data?.mensaje ||
-          `No se pudo asociar el comprobante (HTTP ${res.status}). ${text.slice(0, 300)}`
+          `No se pudo asociar el comprobante (HTTP ${res.status}). ${text.slice(
+            0,
+            300
+          )}`
       );
     }
 
@@ -649,7 +758,10 @@ export default function ModalReciboGenerado({
 
   const ensureSaved = useCallback(async () => {
     if (savedRef.current) return savedRef.current;
-    if (savePromiseRef.current) return await savePromiseRef.current;
+
+    if (savePromiseRef.current) {
+      return await savePromiseRef.current;
+    }
 
     if (!idsMovs.length) {
       throw new Error("Faltan idsMovimientos válidos para vincular el recibo.");
@@ -659,6 +771,7 @@ export default function ModalReciboGenerado({
 
     const task = (async () => {
       savingRef.current = true;
+
       try {
         const pdfBlob = await retryAsync(() => generatePdfBlob("save"), 3, 250);
 
@@ -690,10 +803,23 @@ export default function ModalReciboGenerado({
         savedRef.current = saved;
 
         clearPendingSnapshot(pendingKey);
+
         return saved;
       } catch (e) {
         const msg = e?.message || "No se pudo guardar el comprobante.";
+
         setSaveError(msg);
+
+        const toastKey = `autosave-error:${msg}`;
+
+        if (lastSaveErrorToastRef.current !== toastKey) {
+          lastSaveErrorToastRef.current = toastKey;
+
+          onToast?.(
+            "error",
+            `No se pudo guardar automáticamente todavía. ${msg}`
+          );
+        }
 
         savePendingSnapshot({
           pendingKey,
@@ -712,6 +838,7 @@ export default function ModalReciboGenerado({
     })();
 
     savePromiseRef.current = task;
+
     return await task;
   }, [
     idsMovs,
@@ -722,6 +849,7 @@ export default function ModalReciboGenerado({
     title,
     html,
     idCobro,
+    onToast,
   ]);
 
   const startWarmupSave = useCallback(() => {
@@ -736,16 +864,21 @@ export default function ModalReciboGenerado({
       try {
         await ensureSaved();
       } catch {
-        // se informa sólo si el usuario finaliza o cierra
+        // El error ya se informa por toast dentro de ensureSaved.
       } finally {
         setAutoSaving(false);
       }
     };
 
     if ("requestIdleCallback" in window) {
-      window.requestIdleCallback(() => {
-        void runner();
-      }, { timeout: 350 });
+      window.requestIdleCallback(
+        () => {
+          void runner();
+        },
+        {
+          timeout: 350,
+        }
+      );
     } else {
       warmupTimerRef.current = setTimeout(() => {
         void runner();
@@ -755,6 +888,7 @@ export default function ModalReciboGenerado({
 
   useEffect(() => {
     if (!open) return;
+
     startWarmupSave();
   }, [open, startWarmupSave]);
 
@@ -766,12 +900,12 @@ export default function ModalReciboGenerado({
       setBusy(true);
 
       const saved = await ensureSaved();
+
       onFinalizar?.(saved);
     } catch (e) {
       onToast?.(
         "error",
-        e?.message || "No se pudo finalizar el recibo. Reintentá.",
-        5000
+        e?.message || "No se pudo finalizar el recibo. Reintentá."
       );
     } finally {
       closingAndSavingRef.current = false;
@@ -790,11 +924,13 @@ export default function ModalReciboGenerado({
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
+
         void finalizeAndCloseAll();
       }
     };
 
     document.addEventListener("keydown", onKey, true);
+
     return () => document.removeEventListener("keydown", onKey, true);
   }, [open, finalizeAndCloseAll]);
 
@@ -816,7 +952,10 @@ export default function ModalReciboGenerado({
     >
       <div
         className={modalClass}
-        style={{ width: "min(980px, 96vw)", maxWidth: "980px" }}
+        style={{
+          width: "min(980px, 96vw)",
+          maxWidth: "980px",
+        }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="mi-modal__header mpr-header">
@@ -824,6 +963,7 @@ export default function ModalReciboGenerado({
             <div className="mi-modal__title mpr-title">
               <span>{title}</span>
             </div>
+
             <div className="mi-modal__subtitle mpr-subtitle">
               Vista previa · X / ESC / Finalizar guardan y cierran todo igual
               {autoSaving ? " · guardando en segundo plano…" : ""}
@@ -844,35 +984,15 @@ export default function ModalReciboGenerado({
 
         <div className="mi-modal__body mpr-body">
           <div className="mpr-content">
-            {saveError ? (
-              <div
-                style={{
-                  marginBottom: 12,
-                  padding: 12,
-                  borderRadius: 10,
-                  border: "1px solid rgba(245, 158, 11, .35)",
-                  background: "rgba(245, 158, 11, .08)",
-                  color: "var(--text-color, #111)",
-                }}
-              >
-                <div style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 700 }}>
-                  <FontAwesomeIcon icon={faTriangleExclamation} />
-                  <span>No se pudo guardar automáticamente todavía</span>
-                </div>
-                <div style={{ marginTop: 6, fontSize: 14, opacity: 0.9 }}>
-                  {saveError}
-                </div>
-                <div style={{ marginTop: 6, fontSize: 13, opacity: 0.8 }}>
-                  Podés tocar <b>Finalizar</b> otra vez y reintentará automáticamente.
-                </div>
-              </div>
-            ) : null}
-
             <div className="mpr-card mpr-viewCard">
               <div className="mpr-previewScroll">
                 <div
                   ref={previewRef}
-                  style={{ background: "#fff", padding: 12, borderRadius: 10 }}
+                  style={{
+                    background: "#fff",
+                    padding: 12,
+                    borderRadius: 10,
+                  }}
                   dangerouslySetInnerHTML={{
                     __html:
                       previewMarkup ||
@@ -904,7 +1024,7 @@ export default function ModalReciboGenerado({
             disabled={busy}
           >
             <FontAwesomeIcon icon={busy ? faCircleNotch : faFilePdf} spin={busy} />{" "}
-             PDF
+            PDF
           </button>
 
           <button

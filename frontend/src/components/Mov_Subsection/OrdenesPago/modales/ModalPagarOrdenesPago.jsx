@@ -417,7 +417,7 @@ function MedioPagoRow({
           });
         } catch (e) {
           onUpdate(row.id, { chequesDisponibles: [], loadingCheques: false });
-          showToast("error", e?.message || "No se pudieron cargar los cheques.", 4000);
+          showToast("error", e?.message || "No se pudieron cargar los cheques.");
         }
       }
     },
@@ -732,7 +732,7 @@ export default function ModalPagarOrdenesPago({
   const [ultimoCobroId, setUltimoCobroId] = useState(null);
 
   const showToast = useCallback(
-    (tipo, mensaje, dur = 2800) => onToast?.(tipo, mensaje, dur),
+    (tipo, mensaje) => onToast?.(tipo, mensaje),
     [onToast]
   );
 
@@ -745,7 +745,7 @@ export default function ModalPagarOrdenesPago({
       );
       setMediosPago(normalizeMediosPago(data));
     } catch (e) {
-      showToast("error", e?.message || "No se pudieron cargar los medios de pago.", 4200);
+      showToast("error", e?.message || "No se pudieron cargar los medios de pago.");
       setMediosPago([]);
     } finally {
       setLoadingMedios(false);
@@ -1005,13 +1005,13 @@ export default function ModalPagarOrdenesPago({
 
   const handleConfirm = async () => {
     if (!deudasOrdenadas.length) {
-      showToast("error", "Este proveedor no tiene deudas.", 2600);
+      showToast("error", "Este proveedor no tiene deudas.");
       return;
     }
 
     const v = validate();
     if (!v.ok) {
-      showToast("error", v.msg, 3200);
+      showToast("error", v.msg);
       return;
     }
 
@@ -1091,10 +1091,10 @@ export default function ModalPagarOrdenesPago({
       setPagaTodo(false);
       setMediosFilas([buildEmptyMedioPago()]);
 
-      showToast("exito", "Pago realizado correctamente.", 3000);
+      showToast("exito", "Pago realizado correctamente.");
       setTimeout(recomputeTbodyScroll, 0);
     } catch (e) {
-      showToast("error", e?.message || "No se pudo registrar el pago.", 4200);
+      showToast("error", e?.message || "No se pudo registrar el pago.");
     } finally {
       setLoading(false);
     }

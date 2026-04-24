@@ -336,40 +336,50 @@ function MedioPagoRowRecibo({
 
       <div className="nc-mp-row nc-mp-row--monto">
         <div className="nc-field nc-mp-monto-field" style={{ position: "relative" }}>
-          <input
-            className="nc-input nc-mp-monto-input"
-            type="text"
-            inputMode="decimal"
-            value={
-              row.montoFocused
-                ? row.montoDraft ?? ""
-                : formatMoneyInputARS(montoVisible)
-            }
-            onFocus={(e) => {
-              onUpdate(row.id, {
-                montoFocused: true,
-                montoDraft: formatEditableMoney(montoVisible),
-              });
-              setTimeout(() => e.target.select(), 0);
-            }}
-            onChange={(e) => {
-              const c = e.target.value.replace(/[^\d,.\-]/g, "");
-              onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
-            }}
-            onBlur={() => {
-              const p = parseMoneyInputARS(row.montoDraft);
-              onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false });
-            }}
-            placeholder="$ 0,00"
-            disabled={saving || esCheque}
-            style={{
-              background: esCheque ? "rgba(0,0,0,.03)" : undefined,
-              height: 32,
-              padding: "0 10px",
-              fontSize: 13,
-              textAlign: "right",
-            }}
-          />
+<input
+  className="nc-input nc-mp-monto-input"
+  type="text"
+  inputMode="decimal"
+  value={
+    row.montoFocused
+      ? row.montoDraft ?? ""
+      : formatMoneyInputARS(montoVisible)
+  }
+  onFocus={(e) => {
+    if (saving || esCheque) return;
+    onUpdate(row.id, {
+      montoFocused: true,
+      montoDraft: formatEditableMoney(montoVisible),
+    });
+    setTimeout(() => e.target.select(), 0);
+  }}
+  onChange={(e) => {
+    if (saving || esCheque) return;
+    const c = e.target.value.replace(/[^\d,.\-]/g, "");
+    onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
+  }}
+  onBlur={() => {
+    if (saving || esCheque) return;
+    const p = parseMoneyInputARS(row.montoDraft);
+    onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false });
+  }}
+  onKeyDown={(e) => {
+    if (saving || esCheque) return;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.currentTarget.blur();
+    }
+  }}
+  placeholder="$ 0,00"
+  disabled={saving || esCheque}
+  style={{
+    background: esCheque ? "rgba(0,0,0,.03)" : undefined,
+    height: 32,
+    padding: "0 10px",
+    fontSize: 13,
+    textAlign: "right",
+  }}
+/>
           <label className="nc-label nc-label--up">Monto</label>
         </div>
 

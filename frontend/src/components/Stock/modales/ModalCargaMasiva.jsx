@@ -31,6 +31,7 @@ import {
   faPercent,
   faDollarSign,
   faLayerGroup,
+  faPaperclip,
 } from "@fortawesome/free-solid-svg-icons";
 
 import {
@@ -89,7 +90,6 @@ function getMetodoLabel(metodo) {
   }
 }
 
-
 function normalizarNombreTipoPrecio(nombre) {
   return String(nombre || "")
     .normalize("NFD")
@@ -104,7 +104,6 @@ function normalizarNombreTipoPrecio(nombre) {
 function buscarTipoPrecioExistentePorNombre(tiposPrecio = [], nombre = "") {
   const nombreNormalizado = normalizarNombreTipoPrecio(nombre);
   if (!nombreNormalizado) return null;
-
   return (
     tiposPrecio.find(
       (tipo) => normalizarNombreTipoPrecio(tipo?.nombre) === nombreNormalizado
@@ -148,10 +147,8 @@ function normalizarFilaTipoPrecioExtra(row = {}, tiposPrecio = []) {
   const tipoNombre = toUpperCaseValue(
     String(row.tipo_nombre ?? row.nombre ?? row.tipo ?? row.label ?? "").trim()
   );
-
   const existente = buscarTipoPrecioExistentePorNombre(tiposPrecio, tipoNombre);
   const idTipo = row.id_tipo_precio_stock ?? row.id ?? existente?.id ?? existente?.id_tipo_precio_stock ?? "";
-
   return {
     id_tipo_precio_stock: idTipo ? String(idTipo) : "",
     tipo_nombre: tipoNombre || toUpperCaseValue(String(existente?.nombre || "").trim()),
@@ -165,10 +162,9 @@ function TipoBadge({ tipo }) {
   const map = {
     csv: { label: "CSV", cls: "cmi-badge--csv" },
     pdf: { label: "PDF", cls: "cmi-badge--pdf" },
-    imagen: { label: "OCR IMG", cls: "cmi-badge--img" },
+    imagen: { label: "Imagen", cls: "cmi-badge--img" },
     "": { label: "NO VÁLIDO", cls: "cmi-badge--none" },
   };
-
   const { label, cls } = map[tipo] ?? map[""];
   return <span className={`cmi-badge ${cls}`}>{label}</span>;
 }
@@ -267,7 +263,6 @@ function MiniCreateModal({ open, title, value, loading, onChange, onCancel, onSa
   );
 }
 
-// NUEVA FUNCIÓN: recalcula los precios y márgenes de un producto detectado
 function recalcularProductoDetectadoInicial(producto = {}) {
   const venta = recalculatePricingGroup({
     cost: producto.precio_costo,
@@ -311,7 +306,6 @@ function recalcularProductoDetectadoInicial(producto = {}) {
         ? "marginValue"
         : null,
     });
-
     return {
       ...row,
       precio: r.price,
@@ -346,28 +340,14 @@ function normalizarProductoDetectado(item = {}, tiposPrecio = []) {
     const precioFila = fila.precio;
 
     if (!tipoNormalizado || !precioFila) return;
-
-    if (esTipoPrecioBaseCosto(tipoNormalizado)) {
-      if (!precioCosto) precioCosto = precioFila;
-      return;
-    }
-
-    if (esTipoPrecioBaseVenta(tipoNormalizado)) {
-      if (!precioVenta) precioVenta = precioFila;
-      return;
-    }
-
-    if (esTipoPrecioBasePromo(tipoNormalizado)) {
-      if (!precioPromo) precioPromo = precioFila;
-      return;
-    }
-
+    if (esTipoPrecioBaseCosto(tipoNormalizado)) { if (!precioCosto) precioCosto = precioFila; return; }
+    if (esTipoPrecioBaseVenta(tipoNormalizado)) { if (!precioVenta) precioVenta = precioFila; return; }
+    if (esTipoPrecioBasePromo(tipoNormalizado)) { if (!precioPromo) precioPromo = precioFila; return; }
     if (vistos.has(tipoNormalizado)) return;
     vistos.add(tipoNormalizado);
     tiposExtra.push(fila);
   });
 
-  // Primero armamos el objeto base
   const productoBase = {
     nombre: toUpperCaseValue(String(item.nombre ?? "").trim()),
     sku: toUpperCaseValue(String(item.sku ?? "").trim()),
@@ -388,7 +368,6 @@ function normalizarProductoDetectado(item = {}, tiposPrecio = []) {
     tipos_precio_extra: tiposExtra,
   };
 
-  // Luego lo recalculamos antes de devolverlo
   return recalcularProductoDetectadoInicial(productoBase);
 }
 
@@ -465,18 +444,13 @@ function ModalConfirmarProductosIA({
 
   const handleTipoSelectChange = (idx, item, val) => {
     if (!val) return;
-
     if (val === "__nuevo_tipo__") {
       setMiniTipoFila(idx);
       setMiniTipoOpen(true);
       return;
     }
-
-    const tipo = tiposPrecio.find(
-      (t) => String(t.id ?? t.id_tipo_precio_stock) === String(val)
-    );
+    const tipo = tiposPrecio.find((t) => String(t.id ?? t.id_tipo_precio_stock) === String(val));
     if (!tipo) return;
-
     const nombreTipo = normalizarNombreTipoPrecio(tipo.nombre);
     const existe = (item.tipos_precio_extra || []).some((x) => {
       const mismoId = String(x.id_tipo_precio_stock || "") === String(val);
@@ -484,7 +458,6 @@ function ModalConfirmarProductosIA({
       return mismoId || mismoNombre;
     });
     if (existe) return;
-
     onChangeProducto(idx, "tipos_precio_extra", [
       ...(item.tipos_precio_extra || []),
       emptyExtraPriceRow(tipo),
@@ -495,9 +468,7 @@ function ModalConfirmarProductosIA({
     <>
       <div className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim()}>
         <div
-          className={["mi-modal__container", "cmi-container", dark ? "mi-modal--dark" : ""]
-            .join(" ")
-            .trim()}
+          className={["mi-modal__container", "cmi-container", dark ? "mi-modal--dark" : ""].join(" ").trim()}
           role="dialog"
           aria-modal="true"
           style={{ width: "min(1180px, 96vw)", maxHeight: "92vh" }}
@@ -507,12 +478,10 @@ function ModalConfirmarProductosIA({
             <div className="mi-modal__head-icon" aria-hidden="true">
               <FontAwesomeIcon icon={faListCheck} />
             </div>
-
             <div className="mi-modal__head-left">
               <h2 className="mi-modal__title">Confirmar productos detectados</h2>
               <p className="mi-modal__subtitle">Revisá y corregí los datos antes de cargarlos a la base</p>
             </div>
-
             <button className="mi-modal__close" onClick={onClose} aria-label="Cerrar" disabled={confirmando} type="button">
               <FontAwesomeIcon icon={faXmark} />
             </button>
@@ -523,8 +492,13 @@ function ModalConfirmarProductosIA({
               <div className="mi-card__hint">
                 Se detectaron <b>{productos.length}</b> producto{productos.length !== 1 ? "s" : ""}.
               </div>
-
-              <button type="button" className="mit-btn mit-btn--ghost" onClick={onAddFila} disabled={confirmando} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <button
+                type="button"
+                className="mit-btn mit-btn--ghost"
+                onClick={onAddFila}
+                disabled={confirmando}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+              >
                 <FontAwesomeIcon icon={faPlus} /> Agregar fila
               </button>
             </div>
@@ -544,7 +518,12 @@ function ModalConfirmarProductosIA({
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
                       <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>Producto {idx + 1}</div>
-                      <button type="button" className="mit-btn mit-btn--ghost" onClick={() => onRemoveFila(idx)} disabled={confirmando || productos.length <= 1}>
+                      <button
+                        type="button"
+                        className="mit-btn mit-btn--ghost"
+                        onClick={() => onRemoveFila(idx)}
+                        disabled={confirmando || productos.length <= 1}
+                      >
                         <FontAwesomeIcon icon={faTrashCan} /> Quitar
                       </button>
                     </div>
@@ -568,7 +547,6 @@ function ModalConfirmarProductosIA({
                             placeholder="Ej: 04163"
                           />
                         </FloatingField>
-
                         <FloatingField label="Stock" icon={faCubesStacked} error={err.stock}>
                           <input
                             className="cmi-input"
@@ -580,6 +558,7 @@ function ModalConfirmarProductosIA({
                         </FloatingField>
                       </div>
 
+                      {/* ── PRECIOS ── */}
                       <div className="cmi-priceBlock">
                         <div className="cmi-priceBlock__title">
                           <FontAwesomeIcon icon={faMoneyBillTrendUp} /> Precios principales
@@ -605,29 +584,23 @@ function ModalConfirmarProductosIA({
                               onFocus={(e) => onChangeProducto(idx, "precio", formatMoneyFocus(e.target.value))}
                             />
                           </FloatingField>
-
                           <FloatingField label="Margen %" icon={faPercent}>
                             <PriceInput
                               name={`margen_venta_porcentaje_${idx}`}
                               value={item.margen_venta_porcentaje}
                               onChange={(e) => onPricingChange(idx, e.target.value, "marginPct", "venta")}
                               onBlur={() => onPricingBlur(idx, "marginPct", "venta")}
-                              onFocus={(e) =>
-                                onChangeProducto(idx, "margen_venta_porcentaje", formatMoneyFocus(e.target.value))
-                              }
+                              onFocus={(e) => onChangeProducto(idx, "margen_venta_porcentaje", formatMoneyFocus(e.target.value))}
                               disabled={!item.precio_costo}
                             />
                           </FloatingField>
-
                           <FloatingField label="Margen $" icon={faDollarSign}>
                             <PriceInput
                               name={`margen_venta_valor_${idx}`}
                               value={item.margen_venta_valor}
                               onChange={(e) => onPricingChange(idx, e.target.value, "marginValue", "venta")}
                               onBlur={() => onPricingBlur(idx, "marginValue", "venta")}
-                              onFocus={(e) =>
-                                onChangeProducto(idx, "margen_venta_valor", formatMoneyFocus(e.target.value))
-                              }
+                              onFocus={(e) => onChangeProducto(idx, "margen_venta_valor", formatMoneyFocus(e.target.value))}
                               disabled={!item.precio_costo}
                             />
                           </FloatingField>
@@ -643,35 +616,30 @@ function ModalConfirmarProductosIA({
                               onFocus={(e) => onChangeProducto(idx, "precio_promo", formatMoneyFocus(e.target.value))}
                             />
                           </FloatingField>
-
                           <FloatingField label="Margen promo %" icon={faPercent}>
                             <PriceInput
                               name={`margen_promo_porcentaje_${idx}`}
                               value={item.margen_promo_porcentaje}
                               onChange={(e) => onPricingChange(idx, e.target.value, "marginPct", "promo")}
                               onBlur={() => onPricingBlur(idx, "marginPct", "promo")}
-                              onFocus={(e) =>
-                                onChangeProducto(idx, "margen_promo_porcentaje", formatMoneyFocus(e.target.value))
-                              }
+                              onFocus={(e) => onChangeProducto(idx, "margen_promo_porcentaje", formatMoneyFocus(e.target.value))}
                               disabled={!item.precio_costo}
                             />
                           </FloatingField>
-
                           <FloatingField label="Margen promo $" icon={faDollarSign}>
                             <PriceInput
                               name={`margen_promo_valor_${idx}`}
                               value={item.margen_promo_valor}
                               onChange={(e) => onPricingChange(idx, e.target.value, "marginValue", "promo")}
                               onBlur={() => onPricingBlur(idx, "marginValue", "promo")}
-                              onFocus={(e) =>
-                                onChangeProducto(idx, "margen_promo_valor", formatMoneyFocus(e.target.value))
-                              }
+                              onFocus={(e) => onChangeProducto(idx, "margen_promo_valor", formatMoneyFocus(e.target.value))}
                               disabled={!item.precio_costo}
                             />
                           </FloatingField>
                         </div>
                       </div>
 
+                      {/* ── TIPOS DE PRECIO ADICIONALES ── */}
                       <div className="cmi-priceBlock">
                         <div className="cmi-priceBlock__title">
                           <FontAwesomeIcon icon={faLayerGroup} /> Tipos de precio adicionales
@@ -728,17 +696,11 @@ function ModalConfirmarProductosIA({
                                       source: "price",
                                     });
                                     const next = [...(item.tipos_precio_extra || [])];
-                                    next[tIdx] = {
-                                      ...next[tIdx],
-                                      precio: result.price,
-                                      margen_porcentaje: result.marginPct,
-                                      margen_valor: result.marginValue,
-                                    };
+                                    next[tIdx] = { ...next[tIdx], precio: result.price, margen_porcentaje: result.marginPct, margen_valor: result.marginValue };
                                     onChangeProducto(idx, "tipos_precio_extra", next);
                                   }}
                                 />
                               </FloatingField>
-
                               <FloatingField label="Margen %">
                                 <PriceInput
                                   name={`tipo_pct_${idx}_${tIdx}`}
@@ -753,18 +715,12 @@ function ModalConfirmarProductosIA({
                                       source: "marginPct",
                                     });
                                     const next = [...(item.tipos_precio_extra || [])];
-                                    next[tIdx] = {
-                                      ...next[tIdx],
-                                      precio: result.price,
-                                      margen_porcentaje: result.marginPct,
-                                      margen_valor: result.marginValue,
-                                    };
+                                    next[tIdx] = { ...next[tIdx], precio: result.price, margen_porcentaje: result.marginPct, margen_valor: result.marginValue };
                                     onChangeProducto(idx, "tipos_precio_extra", next);
                                   }}
                                   disabled={!item.precio_costo}
                                 />
                               </FloatingField>
-
                               <FloatingField label="Margen $">
                                 <PriceInput
                                   name={`tipo_val_${idx}_${tIdx}`}
@@ -779,12 +735,7 @@ function ModalConfirmarProductosIA({
                                       source: "marginValue",
                                     });
                                     const next = [...(item.tipos_precio_extra || [])];
-                                    next[tIdx] = {
-                                      ...next[tIdx],
-                                      precio: result.price,
-                                      margen_porcentaje: result.marginPct,
-                                      margen_valor: result.marginValue,
-                                    };
+                                    next[tIdx] = { ...next[tIdx], precio: result.price, margen_porcentaje: result.marginPct, margen_valor: result.marginValue };
                                     onChangeProducto(idx, "tipos_precio_extra", next);
                                   }}
                                   disabled={!item.precio_costo}
@@ -795,6 +746,7 @@ function ModalConfirmarProductosIA({
                         ))}
                       </div>
 
+                      {/* ── CATEGORÍA ── */}
                       <FloatingField label="Categoría" icon={faTag}>
                         <select
                           className="cmi-input cmi-select"
@@ -819,6 +771,7 @@ function ModalConfirmarProductosIA({
                         </select>
                       </FloatingField>
 
+                      {/* ── DESCRIPCIÓN ── */}
                       <FloatingField label="Descripción" icon={faAlignLeft}>
                         <textarea
                           className="cmi-input cmi-textarea"
@@ -829,50 +782,82 @@ function ModalConfirmarProductosIA({
                         />
                       </FloatingField>
 
-                      <FloatingField label="Imagen del producto" error={err.imagen}>
-                        <div className="cmi-uploadBox" style={{ marginTop: 6 }}>
-                          <input
-                            id={`imagen_detectada_${idx}`}
-                            type="file"
-                            accept=".jpg,.jpeg,.png,.webp,.gif,image/*"
-                            hidden
-                            onChange={(e) => onTakeImage?.(idx, e.target.files?.[0])}
-                          />
+                      {/* ── IMAGEN (diseño unificado con ModalCargaIndividualProducto) ── */}
+                      <div className="cmi-uploadBox">
+                        <div className="cmi-uploadBox__title">
+                          <FontAwesomeIcon icon={faPaperclip} />
+                          Imagen del producto
+                        </div>
 
-                          {!item.imagen ? (
-                            <button
-                              type="button"
-                              className="mit-btn mit-btn--ghost"
-                              onClick={() => document.getElementById(`imagen_detectada_${idx}`)?.click()}
-                              disabled={confirmando}
-                            >
-                              <FontAwesomeIcon icon={faArrowUpFromBracket} /> Seleccionar imagen
-                            </button>
-                          ) : (
-                            <div className="cmi-fileResume">
-                              <div className="cmi-fileResume__left">
-                                <span className="cmi-fileResume__icon">
-                                  <FontAwesomeIcon icon={faImage} />
-                                </span>
+                        <input
+                          id={`imagen_detectada_${idx}`}
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.webp,.gif,image/*"
+                          hidden
+                          onChange={(e) => onTakeImage?.(idx, e.target.files?.[0])}
+                        />
 
-                                <div className="cmi-fileResume__meta">
-                                  <div className="cmi-fileResume__name">{item.imagen.name}</div>
-                                  <TipoBadge tipo="imagen" />
-                                </div>
-                              </div>
-
-                              <div className="cmi-fileActions">
-                                <button type="button" className="mit-btn mit-btn--ghost" onClick={() => onPreviewImage?.(item.imagen)} title="Ver imagen">
-                                  <FontAwesomeIcon icon={faEye} />
-                                </button>
-                                <button type="button" className="mit-btn mit-btn--ghost" onClick={() => onRemoveImage?.(idx)} disabled={confirmando}>
-                                  <FontAwesomeIcon icon={faTrashCan} /> Quitar
-                                </button>
+                        {!item.imagen ? (
+                          <button
+                            type="button"
+                            className="mit-btn mit-btn--ghost"
+                            onClick={() => document.getElementById(`imagen_detectada_${idx}`)?.click()}
+                            disabled={confirmando}
+                            style={{
+                              alignSelf: "flex-start",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 8,
+                              fontSize: 13,
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faArrowUpFromBracket} style={{ fontSize: 12 }} />
+                            Seleccionar imagen
+                          </button>
+                        ) : (
+                          <div className="cmi-fileResume">
+                            <div className="cmi-fileResume__left">
+                              <span className="cmi-fileResume__icon">
+                                <FontAwesomeIcon icon={faImage} />
+                              </span>
+                              <div className="cmi-fileResume__meta">
+                                <div className="cmi-fileResume__name">{item.imagen.name}</div>
+                                <TipoBadge tipo="imagen" />
                               </div>
                             </div>
-                          )}
-                        </div>
-                      </FloatingField>
+
+                            <div className="cmi-fileActions">
+                              <button
+                                type="button"
+                                className="mit-btn mit-btn--ghost"
+                                onClick={() => onPreviewImage?.(item.imagen)}
+                                style={{ padding: "6px 10px", fontSize: 13 }}
+                                title="Ver imagen"
+                              >
+                                <FontAwesomeIcon icon={faEye} />
+                              </button>
+                              <button
+                                type="button"
+                                className="mit-btn mit-btn--ghost"
+                                onClick={() => onRemoveImage?.(idx)}
+                                disabled={confirmando}
+                                style={{
+                                  padding: "6px 10px",
+                                  fontSize: 13,
+                                  color: "#ef4444",
+                                  borderColor: "rgba(239,68,68,0.25)",
+                                }}
+                                title="Quitar imagen"
+                              >
+                                <FontAwesomeIcon icon={faTrashCan} />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {err.imagen && <ErrorMsg msg={err.imagen} />}
+                      </div>
+
                     </div>
                   </div>
                 );
@@ -907,25 +892,16 @@ function ModalConfirmarProductosIA({
         value={miniCategoriaNombre}
         loading={guardandoMiniCategoria}
         onChange={setMiniCategoriaNombre}
-        onCancel={() => {
-          setMiniCategoriaOpen(false);
-          setMiniCategoriaNombre("");
-          setMiniCategoriaFila(null);
-        }}
+        onCancel={() => { setMiniCategoriaOpen(false); setMiniCategoriaNombre(""); setMiniCategoriaFila(null); }}
         onSave={guardarCategoria}
       />
-
       <MiniCreateModal
         open={miniTipoOpen}
         title="Nuevo tipo de precio"
         value={miniTipoNombre}
         loading={guardandoMiniTipo}
         onChange={setMiniTipoNombre}
-        onCancel={() => {
-          setMiniTipoOpen(false);
-          setMiniTipoNombre("");
-          setMiniTipoFila(null);
-        }}
+        onCancel={() => { setMiniTipoOpen(false); setMiniTipoNombre(""); setMiniTipoFila(null); }}
         onSave={guardarTipo}
       />
     </>,
@@ -959,7 +935,6 @@ export default function ModalCargaMasiva({
   );
 
   const loadingTiposPrecio = loadingLists && tiposPrecio.length === 0;
-
   const loadingCategorias = loadingCategoriasProp || false;
 
   const [individualLoading, setIndividualLoading] = useState(false);
@@ -984,16 +959,10 @@ export default function ModalCargaMasiva({
   const [textoDetectadoOriginal, setTextoDetectadoOriginal] = useState("");
 
   const mostrarToast = (mensaje, tipo = "error") => {
-    setToast({
-      open: true,
-      tipo,
-      mensaje: errorToText(mensaje),
-    });
+    setToast({ open: true, tipo, mensaje: errorToText(mensaje) });
   };
 
-  useEffect(() => {
-    setCategoriasLocal(categoriasProp || []);
-  }, [categoriasProp]);
+  useEffect(() => { setCategoriasLocal(categoriasProp || []); }, [categoriasProp]);
 
   const nombreArchivo = useMemo(() => archivo?.name || "", [archivo]);
   const tipoArchivo = useMemo(() => getTipoArchivo(archivo?.name), [archivo]);
@@ -1003,30 +972,21 @@ export default function ModalCargaMasiva({
     const o1 = new MutationObserver(update);
     o1.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const o2 = new MutationObserver(update);
-    if (document.body) {
-      o2.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-    }
-    return () => {
-      o1.disconnect();
-      o2.disconnect();
-    };
+    if (document.body) o2.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    return () => { o1.disconnect(); o2.disconnect(); };
   }, []);
 
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
+    return () => { document.body.style.overflow = prev; };
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const h = (e) => {
-      if (e.key === "Escape" && !isLoading && !previewOpen && !modalConfirmOpen) {
-        onClose?.();
-      }
+      if (e.key === "Escape" && !isLoading && !previewOpen && !modalConfirmOpen) onClose?.();
     };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
@@ -1118,59 +1078,31 @@ export default function ModalCargaMasiva({
 
   const registrarCategoriaCreadaLocal = async (nueva) => {
     if (!nueva) return null;
-
     setCategoriasLocal((prev) => {
       const idNuevo = String(nueva.id ?? nueva.id_stock_categoria ?? "");
-      const existe = prev.some(
-        (x) => String(x.id ?? x.id_stock_categoria) === idNuevo
-      );
+      const existe = prev.some((x) => String(x.id ?? x.id_stock_categoria) === idNuevo);
       if (existe) return prev;
-
-      return [...prev, nueva].sort((a, b) =>
-        String(a.nombre || "").localeCompare(String(b.nombre || ""), "es")
-      );
+      return [...prev, nueva].sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""), "es"));
     });
-
-    try {
-      window.dispatchEvent(new Event("balto:listas-updated"));
-    } catch {}
-
+    try { window.dispatchEvent(new Event("balto:listas-updated")); } catch {}
     return nueva;
   };
 
   const registrarTipoPrecioCreadoLocal = async (nuevo) => {
     if (!nuevo) return null;
-
     setLists((prev) => {
-      const actuales = Array.isArray(prev?.stock_tipos_precio)
-        ? prev.stock_tipos_precio
-        : [];
-
+      const actuales = Array.isArray(prev?.stock_tipos_precio) ? prev.stock_tipos_precio : [];
       const idNuevo = String(nuevo.id ?? nuevo.id_tipo_precio_stock ?? "");
-      const existe = actuales.some(
-        (x) => String(x.id ?? x.id_tipo_precio_stock) === idNuevo
-      );
-
+      const existe = actuales.some((x) => String(x.id ?? x.id_tipo_precio_stock) === idNuevo);
       const next = existe
         ? actuales
-        : [...actuales, nuevo].sort((a, b) =>
-            String(a.nombre || "").localeCompare(String(b.nombre || ""), "es")
-          );
-
-      return {
-        ...(prev || {}),
-        stock_tipos_precio: next,
-      };
+        : [...actuales, nuevo].sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""), "es"));
+      return { ...(prev || {}), stock_tipos_precio: next };
     });
-
     try {
-      if (typeof refreshLists === "function") {
-        refreshLists().catch(() => {});
-      } else {
-        window.dispatchEvent(new Event("balto:listas-updated"));
-      }
+      if (typeof refreshLists === "function") refreshLists().catch(() => {});
+      else window.dispatchEvent(new Event("balto:listas-updated"));
     } catch {}
-
     return nuevo;
   };
 
@@ -1181,74 +1113,44 @@ export default function ModalCargaMasiva({
       body: JSON.stringify({ nombre }),
     });
     const data = await parseJsonOrThrow(res);
-    const nueva = data.categoria || {
-      id: data.id_stock_categoria,
-      id_stock_categoria: data.id_stock_categoria,
-      nombre,
-    };
-
+    const nueva = data.categoria || { id: data.id_stock_categoria, id_stock_categoria: data.id_stock_categoria, nombre };
     setCategoriasLocal((prev) => {
       const existe = prev.some((x) => String(x.id ?? x.id_stock_categoria) === String(nueva.id ?? nueva.id_stock_categoria));
       if (existe) return prev;
       return [...prev, nueva].sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""), "es"));
     });
-
-    try {
-      window.dispatchEvent(new Event("balto:listas-updated"));
-    } catch {}
-
+    try { window.dispatchEvent(new Event("balto:listas-updated")); } catch {}
     return nueva;
   };
 
   const crearTipoPrecioRapido = async (nombre) => {
     const nombreLimpio = String(nombre ?? "").trim().toUpperCase();
-    if (!nombreLimpio) {
-      throw new Error("El nombre del tipo de precio es obligatorio.");
-    }
-
+    if (!nombreLimpio) throw new Error("El nombre del tipo de precio es obligatorio.");
     const res = await fetch(`${API_URL}?action=stock_tipos_precio_crear`, {
       method: "POST",
       headers: buildHeadersJSON(),
       body: JSON.stringify({ nombre: nombreLimpio }),
     });
     const data = await parseJsonOrThrow(res);
-    const nuevo = data.tipo_precio || {
-      id: data.id_tipo_precio_stock,
-      id_tipo_precio_stock: data.id_tipo_precio_stock,
-      nombre: nombreLimpio,
-    };
-
+    const nuevo = data.tipo_precio || { id: data.id_tipo_precio_stock, id_tipo_precio_stock: data.id_tipo_precio_stock, nombre: nombreLimpio };
     setLists((prev) => {
       const actuales = Array.isArray(prev?.stock_tipos_precio) ? prev.stock_tipos_precio : [];
       const idNuevo = String(nuevo.id ?? nuevo.id_tipo_precio_stock ?? "");
       const existe = actuales.some((x) => String(x.id ?? x.id_tipo_precio_stock) === idNuevo);
       if (existe) return prev;
-      const next = [...actuales, nuevo].sort((a, b) =>
-        String(a.nombre || "").localeCompare(String(b.nombre || ""), "es")
-      );
+      const next = [...actuales, nuevo].sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""), "es"));
       return { ...(prev || {}), stock_tipos_precio: next };
     });
-
     try {
-      if (typeof refreshLists === "function") {
-        refreshLists().catch(() => {});
-      } else {
-        window.dispatchEvent(new Event("balto:listas-updated"));
-      }
+      if (typeof refreshLists === "function") refreshLists().catch(() => {});
+      else window.dispatchEvent(new Event("balto:listas-updated"));
     } catch {}
-
     return nuevo;
   };
 
   const handleImportar = async () => {
-    if (!archivo) {
-      mostrarToast("Seleccioná un archivo CSV, PDF o imagen.", "error");
-      return;
-    }
-    if (!tipoArchivo) {
-      mostrarToast("Formato no válido. Admitido: CSV, PDF, JPG, PNG y otros formatos de imagen.", "error");
-      return;
-    }
+    if (!archivo) { mostrarToast("Seleccioná un archivo CSV, PDF o imagen.", "error"); return; }
+    if (!tipoArchivo) { mostrarToast("Formato no válido. Admitido: CSV, PDF, JPG, PNG y otros formatos de imagen.", "error"); return; }
 
     try {
       setSubiendo(true);
@@ -1257,19 +1159,9 @@ export default function ModalCargaMasiva({
 
       const formData = new FormData();
       let action = "";
-
-      if (tipoArchivo === "csv") {
-        action = "stock_productos_importar_csv";
-        formData.append("archivo_csv", archivo);
-      }
-      if (tipoArchivo === "pdf") {
-        action = "stock_productos_importar_pdf";
-        formData.append("archivo_pdf", archivo);
-      }
-      if (tipoArchivo === "imagen") {
-        action = "stock_productos_ocr_imagen";
-        formData.append("archivo_imagen", archivo);
-      }
+      if (tipoArchivo === "csv") { action = "stock_productos_importar_csv"; formData.append("archivo_csv", archivo); }
+      if (tipoArchivo === "pdf") { action = "stock_productos_importar_pdf"; formData.append("archivo_pdf", archivo); }
+      if (tipoArchivo === "imagen") { action = "stock_productos_ocr_imagen"; formData.append("archivo_imagen", archivo); }
 
       const res = await fetch(`${API_URL}?action=${encodeURIComponent(action)}`, {
         method: "POST",
@@ -1287,31 +1179,19 @@ export default function ModalCargaMasiva({
 
       const textoDetectado = String(data.texto_detectado || "").trim();
       setTextoDetectadoOriginal(textoDetectado);
-      const chars = data.total_caracteres ?? 0;
-      const metodo = getMetodoLabel(data.metodo);
-      mostrarToast(`Texto extraído con ${metodo}: ${chars} caracteres.`, "success");
+      mostrarToast(`Texto extraído con ${getMetodoLabel(data.metodo)}: ${data.total_caracteres ?? 0} caracteres.`, "success");
 
-      if (!textoDetectado) {
-        mostrarToast("No se detectó texto para clasificar productos.", "error");
-        return;
-      }
+      if (!textoDetectado) { mostrarToast("No se detectó texto para clasificar productos.", "error"); return; }
 
       setClasificando(true);
       const clasificado = await clasificarTextoDetectado(textoDetectado);
-      
-      // MODIFICACIÓN AQUÍ: Aplicar recalcularProductoDetectadoInicial después de normalizar
       const productos = Array.isArray(clasificado.productos)
         ? clasificado.productos.map((item) =>
-            recalcularProductoDetectadoInicial(
-              normalizarProductoDetectado(item, tiposPrecio)
-            )
+            recalcularProductoDetectadoInicial(normalizarProductoDetectado(item, tiposPrecio))
           )
         : [];
 
-      if (!productos.length) {
-        mostrarToast("No se pudieron detectar productos confiables desde el texto.", "error");
-        return;
-      }
+      if (!productos.length) { mostrarToast("No se pudieron detectar productos confiables desde el texto.", "error"); return; }
 
       setProductosDetectados(productos);
       setErroresDetectados({});
@@ -1326,9 +1206,7 @@ export default function ModalCargaMasiva({
   };
 
   const handleProductoDetectadoChange = (idx, field, value) => {
-    setProductosDetectados((prev) =>
-      prev.map((item, i) => (i === idx ? { ...item, [field]: value } : item))
-    );
+    setProductosDetectados((prev) => prev.map((item, i) => (i === idx ? { ...item, [field]: value } : item)));
     setErroresDetectados((prev) => {
       const next = { ...prev };
       if (next[`fila_${idx}`]?.[field]) next[`fila_${idx}`] = { ...next[`fila_${idx}`], [field]: "" };
@@ -1348,79 +1226,38 @@ export default function ModalCargaMasiva({
           source,
         });
         return groupName === "venta"
-          ? {
-              ...item,
-              precio: result.price,
-              margen_venta_porcentaje: result.marginPct,
-              margen_venta_valor: result.marginValue,
-            }
-          : {
-              ...item,
-              precio_promo: result.price,
-              margen_promo_porcentaje: result.marginPct,
-              margen_promo_valor: result.marginValue,
-            };
+          ? { ...item, precio: result.price, margen_venta_porcentaje: result.marginPct, margen_venta_valor: result.marginValue }
+          : { ...item, precio_promo: result.price, margen_promo_porcentaje: result.marginPct, margen_promo_valor: result.marginValue };
       })
     );
   };
 
   const handlePricingChangeDetectado = (idx, rawValue, source, groupName) => {
     const value = normalizeMoneyInput(rawValue);
-
     setProductosDetectados((prev) =>
       prev.map((item, i) => {
         if (i !== idx) return item;
-
         const result = recalculatePricingGroup({
           cost: item.precio_costo,
-          price:
-            source === "price"
-              ? value
-              : groupName === "venta"
-              ? item.precio
-              : item.precio_promo,
-          marginPct:
-            source === "marginPct"
-              ? value
-              : groupName === "venta"
-              ? item.margen_venta_porcentaje
-              : item.margen_promo_porcentaje,
-          marginValue:
-            source === "marginValue"
-              ? value
-              : groupName === "venta"
-              ? item.margen_venta_valor
-              : item.margen_promo_valor,
+          price: source === "price" ? value : groupName === "venta" ? item.precio : item.precio_promo,
+          marginPct: source === "marginPct" ? value : groupName === "venta" ? item.margen_venta_porcentaje : item.margen_promo_porcentaje,
+          marginValue: source === "marginValue" ? value : groupName === "venta" ? item.margen_venta_valor : item.margen_promo_valor,
           source,
         });
-
         return groupName === "venta"
-          ? {
-              ...item,
-              precio: result.price,
-              margen_venta_porcentaje: result.marginPct,
-              margen_venta_valor: result.marginValue,
-            }
-          : {
-              ...item,
-              precio_promo: result.price,
-              margen_promo_porcentaje: result.marginPct,
-              margen_promo_valor: result.marginValue,
-            };
+          ? { ...item, precio: result.price, margen_venta_porcentaje: result.marginPct, margen_venta_valor: result.marginValue }
+          : { ...item, precio_promo: result.price, margen_promo_porcentaje: result.marginPct, margen_promo_valor: result.marginValue };
       })
     );
   };
 
   const handleExtraPricingChangeDetectado = (idx, tIdx, rawValue, source) => {
     const value = normalizeMoneyInput(rawValue);
-
     setProductosDetectados((prev) =>
       prev.map((item, i) => {
         if (i !== idx) return item;
-
         const next = [...(item.tipos_precio_extra || [])];
         const actual = next[tIdx] || {};
-
         const result = recalculatePricingGroup({
           cost: item.precio_costo,
           price: source === "price" ? value : actual.precio,
@@ -1428,18 +1265,8 @@ export default function ModalCargaMasiva({
           marginValue: source === "marginValue" ? value : actual.margen_valor,
           source,
         });
-
-        next[tIdx] = {
-          ...actual,
-          precio: result.price,
-          margen_porcentaje: result.marginPct,
-          margen_valor: result.marginValue,
-        };
-
-        return {
-          ...item,
-          tipos_precio_extra: next,
-        };
+        next[tIdx] = { ...actual, precio: result.price, margen_porcentaje: result.marginPct, margen_valor: result.marginValue };
+        return { ...item, tipos_precio_extra: next };
       })
     );
   };
@@ -1448,41 +1275,13 @@ export default function ModalCargaMasiva({
     setProductosDetectados((prev) =>
       prev.map((item, i) => {
         if (i !== idx) return item;
-        const venta = recalculatePricingGroup({
-          cost: value,
-          price: item.precio,
-          marginPct: item.margen_venta_porcentaje,
-          marginValue: item.margen_venta_valor,
-          source: item.precio ? "price" : item.margen_venta_porcentaje ? "marginPct" : item.margen_venta_valor ? "marginValue" : null,
-        });
-        const promo = recalculatePricingGroup({
-          cost: value,
-          price: item.precio_promo,
-          marginPct: item.margen_promo_porcentaje,
-          marginValue: item.margen_promo_valor,
-          source: item.precio_promo ? "price" : item.margen_promo_porcentaje ? "marginPct" : item.margen_promo_valor ? "marginValue" : null,
-        });
+        const venta = recalculatePricingGroup({ cost: value, price: item.precio, marginPct: item.margen_venta_porcentaje, marginValue: item.margen_venta_valor, source: item.precio ? "price" : item.margen_venta_porcentaje ? "marginPct" : item.margen_venta_valor ? "marginValue" : null });
+        const promo = recalculatePricingGroup({ cost: value, price: item.precio_promo, marginPct: item.margen_promo_porcentaje, marginValue: item.margen_promo_valor, source: item.precio_promo ? "price" : item.margen_promo_porcentaje ? "marginPct" : item.margen_promo_valor ? "marginValue" : null });
         const extras = (item.tipos_precio_extra || []).map((row) => {
-          const r = recalculatePricingGroup({
-            cost: value,
-            price: row.precio,
-            marginPct: row.margen_porcentaje,
-            marginValue: row.margen_valor,
-            source: row.precio ? "price" : row.margen_porcentaje ? "marginPct" : row.margen_valor ? "marginValue" : null,
-          });
+          const r = recalculatePricingGroup({ cost: value, price: row.precio, marginPct: row.margen_porcentaje, marginValue: row.margen_valor, source: row.precio ? "price" : row.margen_porcentaje ? "marginPct" : row.margen_valor ? "marginValue" : null });
           return { ...row, precio: r.price, margen_porcentaje: r.marginPct, margen_valor: r.marginValue };
         });
-        return {
-          ...item,
-          precio_costo: normalizeMoneyInput(value),
-          precio: venta.price,
-          margen_venta_porcentaje: venta.marginPct,
-          margen_venta_valor: venta.marginValue,
-          precio_promo: promo.price,
-          margen_promo_porcentaje: promo.marginPct,
-          margen_promo_valor: promo.marginValue,
-          tipos_precio_extra: extras,
-        };
+        return { ...item, precio_costo: normalizeMoneyInput(value), precio: venta.price, margen_venta_porcentaje: venta.marginPct, margen_venta_valor: venta.marginValue, precio_promo: promo.price, margen_promo_porcentaje: promo.marginPct, margen_promo_valor: promo.marginValue, tipos_precio_extra: extras };
       })
     );
   };
@@ -1500,17 +1299,11 @@ export default function ModalCargaMasiva({
     if (!file) return;
     const tipos = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
     if (!tipos.includes(file.type)) {
-      setErroresDetectados((prev) => ({
-        ...prev,
-        [`fila_${idx}`]: { ...(prev[`fila_${idx}`] || {}), imagen: "La imagen debe ser JPG, PNG, WEBP o GIF" },
-      }));
+      setErroresDetectados((prev) => ({ ...prev, [`fila_${idx}`]: { ...(prev[`fila_${idx}`] || {}), imagen: "La imagen debe ser JPG, PNG, WEBP o GIF" } }));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setErroresDetectados((prev) => ({
-        ...prev,
-        [`fila_${idx}`]: { ...(prev[`fila_${idx}`] || {}), imagen: "La imagen no puede superar los 5 MB" },
-      }));
+      setErroresDetectados((prev) => ({ ...prev, [`fila_${idx}`]: { ...(prev[`fila_${idx}`] || {}), imagen: "La imagen no puede superar los 5 MB" } }));
       return;
     }
     setProductosDetectados((prev) => prev.map((item, i) => (i === idx ? { ...item, imagen: file } : item)));
@@ -1523,43 +1316,31 @@ export default function ModalCargaMasiva({
   function validarProductosDetectados() {
     const errs = {};
     let hayError = false;
-
     productosDetectados.forEach((item, idx) => {
       const fila = {};
       const venta = Number(String(item.precio || "").replace(",", "."));
       const costo = item.precio_costo !== "" ? Number(String(item.precio_costo).replace(",", ".")) : null;
       const promo = item.precio_promo !== "" ? Number(String(item.precio_promo).replace(",", ".")) : null;
-
       if (!String(item.nombre || "").trim()) fila.nombre = "El nombre es obligatorio";
       if (costo !== null && (Number.isNaN(costo) || costo < 0)) fila.precio_costo = "Costo inválido";
       if (!item.precio || Number.isNaN(venta) || venta < 0) fila.precio = "Ingresá un precio válido";
       if (item.precio_promo && (Number.isNaN(promo) || promo < 0)) fila.precio_promo = "Precio promo inválido";
       if (item.stock !== "" && (Number.isNaN(Number(item.stock)) || Number(item.stock) < 0)) fila.stock = "Stock inválido";
-
       const extrasInvalidos = (item.tipos_precio_extra || []).some((x) => {
         const nombreTipo = String(x.tipo_nombre || "").trim();
         const precioTipo = String(x.precio || "").trim();
-        if (!nombreTipo) return true;
-        if (!precioTipo) return true;
+        if (!nombreTipo || !precioTipo) return true;
         const precioNumero = Number(precioTipo.replace(",", "."));
         return Number.isNaN(precioNumero) || precioNumero < 0;
       });
-      if (extrasInvalidos) {
-        fila.tipos = "Revisá los tipos de precio adicionales detectados";
-      }
-
+      if (extrasInvalidos) fila.tipos = "Revisá los tipos de precio adicionales detectados";
       if (item.imagen) {
         const tipos = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
         if (!tipos.includes(item.imagen.type)) fila.imagen = "La imagen debe ser JPG, PNG, WEBP o GIF";
         if (item.imagen.size > 5 * 1024 * 1024) fila.imagen = "La imagen no puede superar los 5 MB";
       }
-
-      if (Object.keys(fila).length > 0) {
-        errs[`fila_${idx}`] = fila;
-        hayError = true;
-      }
+      if (Object.keys(fila).length > 0) { errs[`fila_${idx}`] = fila; hayError = true; }
     });
-
     if (hayError) errs.global = "Revisá los productos marcados antes de confirmar.";
     return errs;
   }
@@ -1570,64 +1351,43 @@ export default function ModalCargaMasiva({
       ...item,
       tipos_precio_extra: (item.tipos_precio_extra || []).map((row) => ({ ...row })),
     }));
-
     for (const item of normalizados) {
       for (const row of item.tipos_precio_extra || []) {
         if (Number(row.id_tipo_precio_stock) > 0) continue;
-
         const nombreOriginal = toUpperCaseValue(String(row.tipo_nombre || row.nombre || "").trim());
         const nombreNormalizado = normalizarNombreTipoPrecio(nombreOriginal);
         if (!nombreNormalizado) continue;
-
         const existente = buscarTipoPrecioExistentePorNombre(tiposPrecio, nombreOriginal);
         if (existente) {
           row.id_tipo_precio_stock = String(existente.id ?? existente.id_tipo_precio_stock ?? "");
           row.tipo_nombre = toUpperCaseValue(String(existente.nombre || nombreOriginal).trim());
           continue;
         }
-
-        if (!cache.has(nombreNormalizado)) {
-          cache.set(
-            nombreNormalizado,
-            crearTipoPrecioRapido(nombreOriginal)
-          );
-        }
-
+        if (!cache.has(nombreNormalizado)) cache.set(nombreNormalizado, crearTipoPrecioRapido(nombreOriginal));
         const nuevo = await cache.get(nombreNormalizado);
         row.id_tipo_precio_stock = String(nuevo?.id ?? nuevo?.id_tipo_precio_stock ?? "");
         row.tipo_nombre = toUpperCaseValue(String(nuevo?.nombre || nombreOriginal).trim());
       }
     }
-
-    return {
-      productos: normalizados,
-      cantidadNuevosTipos: cache.size,
-    };
+    return { productos: normalizados, cantidadNuevosTipos: cache.size };
   };
 
   const handleConfirmarDetectados = async () => {
     const errs = validarProductosDetectados();
-    if (Object.keys(errs).length > 0) {
-      setErroresDetectados(errs);
-      return;
-    }
+    if (Object.keys(errs).length > 0) { setErroresDetectados(errs); return; }
 
     setConfirmandoDetectados(true);
     setErroresDetectados({});
-
     let creados = 0;
     const erroresCarga = [];
 
     try {
       const { productos: productosPreparados, cantidadNuevosTipos } = await resolverTiposPrecioExtrasPendientes(productosDetectados);
       setProductosDetectados(productosPreparados);
-
       const { idUsuarioMaster, idTenant } = getUsuarioAuditData();
       const batchSize = 3;
       const batches = [];
-      for (let i = 0; i < productosPreparados.length; i += batchSize) {
-        batches.push(productosPreparados.slice(i, i + batchSize));
-      }
+      for (let i = 0; i < productosPreparados.length; i += batchSize) batches.push(productosPreparados.slice(i, i + batchSize));
 
       for (const batch of batches) {
         const batchPromises = batch.map(async (item) => {
@@ -1645,12 +1405,9 @@ export default function ModalCargaMasiva({
             fd.append("margen_promo_valor", moneyToApi(item.margen_promo_valor));
             fd.append("stock", item.stock !== "" ? String(item.stock) : "");
             fd.append("descripcion", toUpperCaseValue(String(item.descripcion || "").trim()));
-            if (item.id_categoria_stock !== "") {
-              fd.append("id_categoria_stock", String(item.id_categoria_stock));
-            }
+            if (item.id_categoria_stock !== "") fd.append("id_categoria_stock", String(item.id_categoria_stock));
             if (idUsuarioMaster > 0) fd.append("idUsuarioMaster", String(idUsuarioMaster));
             if (idTenant) fd.append("tenant_id", String(idTenant));
-
             const tiposPrecioPayload = (item.tipos_precio_extra || []).map((row) => ({
               id_tipo_precio_stock: Number(row.id_tipo_precio_stock) || 0,
               tipo_nombre: String(row.tipo_nombre || "").trim(),
@@ -1660,40 +1417,21 @@ export default function ModalCargaMasiva({
               margen_valor: moneyToApi(row.margen_valor),
             }));
             fd.append("tipos_precio", JSON.stringify(tiposPrecioPayload));
-
             if (item.imagen) fd.append("imagen", item.imagen);
-
-            const res = await fetch(`${API_URL}?action=stock_productos_crear`, {
-              method: "POST",
-              headers: buildHeadersMultipart(),
-              body: fd,
-            });
-
+            const res = await fetch(`${API_URL}?action=stock_productos_crear`, { method: "POST", headers: buildHeadersMultipart(), body: fd });
             await parseJsonOrThrow(res);
             return { success: true, idx: globalIdx };
           } catch (err) {
-            return {
-              success: false,
-              idx: globalIdx,
-              error: `Producto ${globalIdx + 1} (${item.nombre || "sin nombre"}): ${err.message || "Error al guardar"}`,
-            };
+            return { success: false, idx: globalIdx, error: `Producto ${globalIdx + 1} (${item.nombre || "sin nombre"}): ${err.message || "Error al guardar"}` };
           }
         });
-
         const results = await Promise.all(batchPromises);
-        for (const result of results) {
-          if (result.success) creados++;
-          else erroresCarga.push(result.error);
-        }
+        for (const result of results) { if (result.success) creados++; else erroresCarga.push(result.error); }
       }
 
       setResultado((prev) => ({
         ...(prev || {}),
-        confirmacion_ia: {
-          creados,
-          errores: erroresCarga,
-          productos_confirmados: productosPreparados.length,
-        },
+        confirmacion_ia: { creados, errores: erroresCarga, productos_confirmados: productosPreparados.length },
         texto_detectado: textoDetectadoOriginal,
       }));
 
@@ -1714,19 +1452,11 @@ export default function ModalCargaMasiva({
   };
 
   const btnMasivoLabel = subiendo
-    ? tipoArchivo === "csv"
-      ? "Importando..."
-      : tipoArchivo === "pdf"
-      ? "Extrayendo..."
-      : "Procesando..."
-    : clasificando
-    ? "Clasificando..."
-    : tipoArchivo === "csv"
-    ? "Importar productos"
-    : tipoArchivo === "pdf"
-    ? "Extraer y clasificar PDF"
-    : tipoArchivo === "imagen"
-    ? "Reconocer y clasificar"
+    ? tipoArchivo === "csv" ? "Importando..." : tipoArchivo === "pdf" ? "Extrayendo..." : "Procesando..."
+    : clasificando ? "Clasificando..."
+    : tipoArchivo === "csv" ? "Importar productos"
+    : tipoArchivo === "pdf" ? "Extraer y clasificar PDF"
+    : tipoArchivo === "imagen" ? "Reconocer y clasificar"
     : "Seleccioná un archivo";
 
   if (!open) return null;
@@ -1761,6 +1491,7 @@ export default function ModalCargaMasiva({
             </button>
           </div>
 
+          {/* ── TABS ── */}
           <div style={{ display: "flex", gap: 4, padding: "0 20px", borderBottom: "1px solid var(--nv-border-md)", background: "var(--nv-bg)", flexShrink: 0 }}>
             {[
               { key: "individual", icon: faBoxOpen, label: "Individual" },
@@ -1768,25 +1499,16 @@ export default function ModalCargaMasiva({
             ].map(({ key, icon, label }) => (
               <button
                 key={key}
-                onClick={() => {
-                  setTab(key);
-                  cerrarModalConfirmacion();
-                }}
+                onClick={() => { setTab(key); cerrarModalConfirmacion(); }}
                 type="button"
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 7,
-                  padding: "11px 16px",
-                  border: "none",
+                  display: "flex", alignItems: "center", gap: 7,
+                  padding: "11px 16px", border: "none",
                   borderBottom: tab === key ? "2px solid var(--nv-action)" : "2px solid transparent",
-                  background: "none",
-                  cursor: "pointer",
+                  background: "none", cursor: "pointer",
                   fontWeight: tab === key ? 700 : 400,
                   color: tab === key ? "var(--nv-action)" : "var(--nv-muted)",
-                  fontSize: "0.88rem",
-                  transition: "all .15s",
-                  fontFamily: "inherit",
+                  fontSize: "0.88rem", transition: "all .15s", fontFamily: "inherit",
                 }}
               >
                 <FontAwesomeIcon icon={icon} style={{ fontSize: 13 }} />
@@ -1795,6 +1517,7 @@ export default function ModalCargaMasiva({
             ))}
           </div>
 
+          {/* ── TAB INDIVIDUAL ── */}
           <ModalCargaIndividualProducto
             open={open}
             visible={tab === "individual"}
@@ -1810,6 +1533,7 @@ export default function ModalCargaMasiva({
             onToast={mostrarToast}
           />
 
+          {/* ── TAB MASIVO ── */}
           <div style={{ display: tab === "masivo" ? "contents" : "none" }}>
             <div className="mi-modal__content" style={{ overflowY: "auto", padding: 20 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1846,7 +1570,6 @@ export default function ModalCargaMasiva({
                           <TipoBadge tipo={tipoArchivo} />
                         </div>
                       </div>
-
                       <div className="cmi-fileActions">
                         <button type="button" className="mit-btn mit-btn--ghost" onClick={() => abrirPreviewLocal({ file: archivo, title: "Archivo masivo" })}>
                           <FontAwesomeIcon icon={faEye} />
@@ -1855,14 +1578,12 @@ export default function ModalCargaMasiva({
                           type="button"
                           className="mit-btn mit-btn--ghost"
                           onClick={() => {
-                            setArchivo(null);
-                            setResultado(null);
-                            setTextoDetectadoOriginal("");
+                            setArchivo(null); setResultado(null); setTextoDetectadoOriginal("");
                             cerrarModalConfirmacion();
                             if (fileInputMasivoRef.current) fileInputMasivoRef.current.value = "";
                           }}
                         >
-                          <FontAwesomeIcon icon={faTrashCan} /> Quitar
+                          <FontAwesomeIcon icon={faTrashCan} />
                         </button>
                       </div>
                     </div>
@@ -1875,14 +1596,8 @@ export default function ModalCargaMasiva({
                       <FontAwesomeIcon icon={faCheckCircle} style={{ marginRight: 8 }} /> Resultado de importación
                     </div>
                     <div className="cmi-resultGrid">
-                      <div className="cmi-resultItem">
-                        <span className="cmi-resultItem__label">Creados</span>
-                        <b className="cmi-resultItem__val cmi-resultItem__val--ok">{resultado.creados ?? 0}</b>
-                      </div>
-                      <div className="cmi-resultItem">
-                        <span className="cmi-resultItem__label">Actualizados</span>
-                        <b className="cmi-resultItem__val">{resultado.actualizados ?? 0}</b>
-                      </div>
+                      <div className="cmi-resultItem"><span className="cmi-resultItem__label">Creados</span><b className="cmi-resultItem__val cmi-resultItem__val--ok">{resultado.creados ?? 0}</b></div>
+                      <div className="cmi-resultItem"><span className="cmi-resultItem__label">Actualizados</span><b className="cmi-resultItem__val">{resultado.actualizados ?? 0}</b></div>
                     </div>
                   </div>
                 )}
@@ -1892,39 +1607,18 @@ export default function ModalCargaMasiva({
                     <div className="cmi-okBox__title">
                       <FontAwesomeIcon icon={faCheckCircle} style={{ marginRight: 8 }} /> Resultado del procesamiento
                     </div>
-
                     <div className="cmi-resultGrid">
-                      <div className="cmi-resultItem">
-                        <span className="cmi-resultItem__label">Método</span>
-                        <b className="cmi-resultItem__val">{getMetodoLabel(resultado.metodo)}</b>
-                      </div>
-                      <div className="cmi-resultItem">
-                        <span className="cmi-resultItem__label">Páginas</span>
-                        <b className="cmi-resultItem__val">{resultado.total_paginas ?? 1}</b>
-                      </div>
-                      <div className="cmi-resultItem">
-                        <span className="cmi-resultItem__label">Caracteres</span>
-                        <b className="cmi-resultItem__val cmi-resultItem__val--ok">{resultado.total_caracteres ?? 0}</b>
-                      </div>
+                      <div className="cmi-resultItem"><span className="cmi-resultItem__label">Método</span><b className="cmi-resultItem__val">{getMetodoLabel(resultado.metodo)}</b></div>
+                      <div className="cmi-resultItem"><span className="cmi-resultItem__label">Páginas</span><b className="cmi-resultItem__val">{resultado.total_paginas ?? 1}</b></div>
+                      <div className="cmi-resultItem"><span className="cmi-resultItem__label">Caracteres</span><b className="cmi-resultItem__val cmi-resultItem__val--ok">{resultado.total_caracteres ?? 0}</b></div>
                     </div>
-
                     {resultado?.confirmacion_ia && (
                       <div className="cmi-resultGrid" style={{ marginTop: 12 }}>
-                        <div className="cmi-resultItem">
-                          <span className="cmi-resultItem__label">Confirmados</span>
-                          <b className="cmi-resultItem__val">{resultado.confirmacion_ia.productos_confirmados ?? 0}</b>
-                        </div>
-                        <div className="cmi-resultItem">
-                          <span className="cmi-resultItem__label">Cargados</span>
-                          <b className="cmi-resultItem__val cmi-resultItem__val--ok">{resultado.confirmacion_ia.creados ?? 0}</b>
-                        </div>
-                        <div className="cmi-resultItem">
-                          <span className="cmi-resultItem__label">Errores</span>
-                          <b className="cmi-resultItem__val">{resultado.confirmacion_ia.errores?.length ?? 0}</b>
-                        </div>
+                        <div className="cmi-resultItem"><span className="cmi-resultItem__label">Confirmados</span><b className="cmi-resultItem__val">{resultado.confirmacion_ia.productos_confirmados ?? 0}</b></div>
+                        <div className="cmi-resultItem"><span className="cmi-resultItem__label">Cargados</span><b className="cmi-resultItem__val cmi-resultItem__val--ok">{resultado.confirmacion_ia.creados ?? 0}</b></div>
+                        <div className="cmi-resultItem"><span className="cmi-resultItem__label">Errores</span><b className="cmi-resultItem__val">{resultado.confirmacion_ia.errores?.length ?? 0}</b></div>
                       </div>
                     )}
-
                     {productosDetectados.length > 0 && (
                       <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
                         <button type="button" className="mit-btn mit-btn--ghost" onClick={() => setModalConfirmOpen(true)}>
@@ -1932,7 +1626,6 @@ export default function ModalCargaMasiva({
                         </button>
                       </div>
                     )}
-
                     {resultado.texto_detectado && (
                       <div className="fl-field" style={{ marginTop: 12 }}>
                         <textarea readOnly value={resultado.texto_detectado} className="fl-input cmi-textarea" placeholder=" " />
@@ -1944,27 +1637,15 @@ export default function ModalCargaMasiva({
 
                 {resultado && Array.isArray(resultado.errores) && resultado.errores.length > 0 && (
                   <div className="cmi-warnBox">
-                    <div className="cmi-warnBox__title">
-                      <FontAwesomeIcon icon={faCircleExclamation} style={{ marginRight: 8 }} /> Observaciones
-                    </div>
-                    <ul className="cmi-warnBox__list">
-                      {resultado.errores.map((err, i) => (
-                        <li key={i}>{err}</li>
-                      ))}
-                    </ul>
+                    <div className="cmi-warnBox__title"><FontAwesomeIcon icon={faCircleExclamation} style={{ marginRight: 8 }} /> Observaciones</div>
+                    <ul className="cmi-warnBox__list">{resultado.errores.map((err, i) => <li key={i}>{err}</li>)}</ul>
                   </div>
                 )}
 
                 {resultado?.confirmacion_ia?.errores?.length > 0 && (
                   <div className="cmi-warnBox">
-                    <div className="cmi-warnBox__title">
-                      <FontAwesomeIcon icon={faCircleExclamation} style={{ marginRight: 8 }} /> Errores al cargar productos
-                    </div>
-                    <ul className="cmi-warnBox__list">
-                      {resultado.confirmacion_ia.errores.map((err, i) => (
-                        <li key={i}>{err}</li>
-                      ))}
-                    </ul>
+                    <div className="cmi-warnBox__title"><FontAwesomeIcon icon={faCircleExclamation} style={{ marginRight: 8 }} /> Errores al cargar productos</div>
+                    <ul className="cmi-warnBox__list">{resultado.confirmacion_ia.errores.map((err, i) => <li key={i}>{err}</li>)}</ul>
                   </div>
                 )}
               </div>
@@ -1982,7 +1663,13 @@ export default function ModalCargaMasiva({
                 <button type="button" className="mit-btn mit-btn--ghost" onClick={() => !isLoading && onClose?.()} disabled={isLoading}>
                   Cancelar
                 </button>
-                <button type="button" className="mit-btn mit-btn--solid" onClick={handleImportar} disabled={subiendo || clasificando || !tipoArchivo} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <button
+                  type="button"
+                  className="mit-btn mit-btn--solid"
+                  onClick={handleImportar}
+                  disabled={subiendo || clasificando || !tipoArchivo}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                >
                   <FontAwesomeIcon icon={faCloudArrowUp} /> {btnMasivoLabel}
                 </button>
               </div>
@@ -2024,12 +1711,7 @@ export default function ModalCargaMasiva({
         <Toast
           tipo={toast.tipo}
           mensaje={toast.mensaje}
-          onClose={() =>
-            setToast((prev) => ({
-              ...prev,
-              open: false,
-            }))
-          }
+          onClose={() => setToast((prev) => ({ ...prev, open: false }))}
         />
       )}
     </>,

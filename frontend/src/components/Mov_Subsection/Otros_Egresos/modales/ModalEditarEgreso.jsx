@@ -59,6 +59,42 @@ function moneyARS(v) {
     return `$${Number(v || 0).toFixed(2)}`;
   }
 }
+function formatMoneyInputARS(v) {
+  const n = safeNumber(v);
+  try {
+    return n.toLocaleString("es-AR", {
+      style: "currency",
+      currency: "ARS",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  } catch {
+    return `$ ${n.toFixed(2)}`;
+  }
+}
+
+function parseMoneyInputARS(v) {
+  if (v == null) return 0;
+  let s = String(v).trim();
+  if (!s) return 0;
+
+  s = s.replace(/\$/g, "").replace(/\s+/g, "");
+
+  if (s.includes(",") && s.includes(".")) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (s.includes(",")) {
+    s = s.replace(",", ".");
+  }
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatEditableMoney(v) {
+  const n = safeNumber(v);
+  if (n === 0) return "";
+  return String(n).replace(".", ",");
+}
 function getDetalleId(d) {
   const c =
     d?.id ?? d?.id_detalle ?? d?.idDetalle ?? d?.detalle_id ??
@@ -907,39 +943,42 @@ export default function ModalEditarEgreso({
                           </div>
 
                           <div className="mi-cr-cell mi-cr-cell--center">
-                            <input
-                              className="nv-cell-input nv-cell-input--right"
-                              type="text"
-                              inputMode="decimal"
-                              value={
-                                it.precioFocused
-                                  ? (it.precioDraft ?? "")
-                                  : it.precio === 0
-                                    ? ""
-                                    : Number(it.precio).toLocaleString("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                              }
-                              onFocus={(e) => {
-                                updateItem(it.uid, {
-                                  precioFocused: true,
-                                  precioDraft: it.precio === 0 ? "" : String(it.precio).replace(".", ","),
-                                });
-                                setTimeout(() => e.target.select(), 0);
-                              }}
-                              onChange={(e) => {
-                                const c = e.target.value.replace(/[^\d,.\-]/g, "");
-                                let s = c;
-                                if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
-                                else if (s.includes(",")) s = s.replace(",", ".");
-                                const n = Number(s);
-                                updateItem(it.uid, { precioDraft: c, precio: Number.isFinite(n) ? n : 0 });
-                              }}
-                              onBlur={() => {
-                                updateItem(it.uid, { precioFocused: false, precioDraft: "" });
-                              }}
-                              placeholder="$ 0,00"
-                              disabled={saving}
-                              style={{ width: "100%" }}
-                            />
+<input
+  className="nv-cell-input nv-cell-input--right"
+  type="text"
+  inputMode="decimal"
+  value={it.precioFocused ? it.precioDraft ?? "" : formatMoneyInputARS(it.precio)}
+  onFocus={(e) => {
+    updateItem(it.uid, {
+      precioFocused: true,
+      precioDraft: formatEditableMoney(it.precio),
+    });
+    setTimeout(() => e.target.select(), 0);
+  }}
+  onChange={(e) => {
+    const c = e.target.value.replace(/[^\d,.\-]/g, "");
+    updateItem(it.uid, {
+      precioDraft: c,
+      precio: parseMoneyInputARS(c),
+    });
+  }}
+  onBlur={() => {
+    const p = parseMoneyInputARS(it.precioDraft);
+    updateItem(it.uid, {
+      precio: p,
+      precioDraft: "",
+      precioFocused: false,
+    });
+  }}
+  onKeyDown={(e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.currentTarget.blur();
+    }
+  }}
+  placeholder="$ 0,00"
+  disabled={saving}
+/>
                           </div>
 
                           <div className="mi-cr-cell mi-cr-cell--center">

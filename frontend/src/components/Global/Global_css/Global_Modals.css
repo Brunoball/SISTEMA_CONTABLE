@@ -508,6 +508,10 @@ html[data-theme="oscuro"] .mi-cr-table__foot {
   transition: background .14s, border-color .14s, color .14s, transform .14s;
   font-family: inherit;
   white-space: nowrap;
+  
+}
+.nv-foot-btn svg{
+  color: #fff;
 }
 
 .nv-foot-btn:hover {
@@ -2693,4 +2697,7 @@ html[data-theme="oscuro"] .mi-modal__container--venta .fl-select + .fl-label {
   .mi-modal__container--venta .mi-em-itemTotalsGrid3 {
     grid-template-columns: 1fr;
   }
+}
+.nc-mp-cheques-empty{
+  font-size: 12px; color: var(--mi-muted); line-height: 1.3;
 }

@@ -22,6 +22,7 @@ import {
   faMoneyBillTrendUp,
   faLayerGroup,
   faTriangleExclamation,
+  faImage,
 } from "@fortawesome/free-solid-svg-icons";
 import BASE_URL from "../../../config/config";
 
@@ -66,6 +67,7 @@ function withSessionKey(url) {
     if (sessionKey && !u.searchParams.has("session_key")) {
       u.searchParams.set("session_key", sessionKey);
     }
+
     if (token && !u.searchParams.has("token")) {
       u.searchParams.set("token", token);
     }
@@ -165,27 +167,51 @@ function isTemaOscuro() {
 }
 
 function parseNumberFromInput(value) {
-  if (!value || value === "") return null;
+  if (value === null || value === undefined || value === "") return null;
+
   const normalized = String(value).replace(/\./g, "").replace(",", ".");
   const num = parseFloat(normalized);
-  return isNaN(num) ? null : num;
+
+  return Number.isNaN(num) ? null : num;
 }
 
 function formatNumberForDisplay(value) {
   if (value === null || value === undefined || value === "") return "";
+
   const num = typeof value === "number" ? value : parseFloat(String(value).replace(",", "."));
-  if (isNaN(num)) return "";
-  if (Number.isInteger(num)) {
-    return num.toString();
-  }
+  if (Number.isNaN(num)) return "";
+
+  if (Number.isInteger(num)) return num.toString();
+
   return num.toString().replace(".", ",");
+}
+
+function formatNumberWithCents(value) {
+  if (value === null || value === undefined || value === "") return "";
+
+  const num = parseNumberFromInput(value);
+  if (num === null) return "";
+
+  return num.toFixed(2).replace(".", ",");
 }
 
 function formatNumberForApi(value) {
   if (value === null || value === undefined || value === "") return null;
-  const num = typeof value === "number" ? value : parseFloat(String(value).replace(",", "."));
-  if (isNaN(num)) return null;
+
+  const num = typeof value === "number" ? value : parseNumberFromInput(value);
+  if (num === null) return null;
+
   return Number(num.toFixed(2));
+}
+
+function formatPricingResult(result, withCents = false) {
+  const formatter = withCents ? formatNumberWithCents : formatNumberForDisplay;
+
+  return {
+    price: formatter(result.price),
+    marginPct: formatter(result.marginPct),
+    marginValue: formatter(result.marginValue),
+  };
 }
 
 function recalculatePricingGroup({ cost, price, marginPct, marginValue, source }) {
@@ -286,9 +312,7 @@ function hydratePricingGroupValues({ cost, price, marginPct, marginValue }) {
   }
 
   const source = hasPrice ? "price" : hasPct ? "marginPct" : hasVal ? "marginValue" : null;
-  if (!source) {
-    return { price: "", marginPct: "", marginValue: "" };
-  }
+  if (!source) return { price: "", marginPct: "", marginValue: "" };
 
   return recalculatePricingGroup({
     cost,
@@ -321,6 +345,7 @@ function hydratePricingFormValues(sourceForm) {
       marginPct: item.margen_porcentaje,
       marginValue: item.margen_valor,
     });
+
     return {
       ...item,
       precio: result.price,
@@ -354,8 +379,8 @@ function recalculatePricingFormLive(prev, fieldName, rawValue) {
       fieldName === "precio"
         ? "price"
         : fieldName === "margen_venta_porcentaje"
-        ? "marginPct"
-        : "marginValue";
+          ? "marginPct"
+          : "marginValue";
 
     const result = recalculatePricingGroup({
       cost: next.precio_costo,
@@ -378,8 +403,8 @@ function recalculatePricingFormLive(prev, fieldName, rawValue) {
       fieldName === "precio_promo"
         ? "price"
         : fieldName === "margen_promo_porcentaje"
-        ? "marginPct"
-        : "marginValue";
+          ? "marginPct"
+          : "marginValue";
 
     const result = recalculatePricingGroup({
       cost: next.precio_costo,
@@ -454,15 +479,16 @@ function normalizarProducto(data) {
     imagen_url: p.imagen_url ?? p.imagen ?? "",
     imagen_archivo_id: p.imagen_archivo_id ? Number(p.imagen_archivo_id) : null,
     id_categoria_stock: normalizeCategoriaId(p.id_categoria_stock),
-    tipos_precio_extra: Array.isArray(p.tipos_precio_extra) && p.tipos_precio_extra.length > 0
-      ? p.tipos_precio_extra.map((item) => ({
-          id_tipo_precio_stock: String(item?.id_tipo_precio_stock ?? item?.id ?? ""),
-          tipo_nombre: normalizeOptionLabel(item, item?.tipo_nombre ?? ""),
-          precio: formatNumberForDisplay(item?.precio ?? item?.monto ?? ""),
-          margen_porcentaje: formatNumberForDisplay(item?.margen_porcentaje ?? ""),
-          margen_valor: formatNumberForDisplay(item?.margen_valor ?? ""),
-        }))
-      : tiposExtra,
+    tipos_precio_extra:
+      Array.isArray(p.tipos_precio_extra) && p.tipos_precio_extra.length > 0
+        ? p.tipos_precio_extra.map((item) => ({
+            id_tipo_precio_stock: String(item?.id_tipo_precio_stock ?? item?.id ?? ""),
+            tipo_nombre: normalizeOptionLabel(item, item?.tipo_nombre ?? ""),
+            precio: formatNumberForDisplay(item?.precio ?? item?.monto ?? ""),
+            margen_porcentaje: formatNumberForDisplay(item?.margen_porcentaje ?? ""),
+            margen_valor: formatNumberForDisplay(item?.margen_valor ?? ""),
+          }))
+        : tiposExtra,
   };
 }
 
@@ -506,10 +532,22 @@ function PriceInput({
   onChange,
   onBlur,
   onFocus,
+  onKeyDown,
+  onEnter,
   placeholder,
   disabled,
   className,
 }) {
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onEnter?.(e);
+      return;
+    }
+
+    onKeyDown?.(e);
+  };
+
   return (
     <input
       name={name}
@@ -517,8 +555,9 @@ function PriceInput({
       onChange={onChange}
       onBlur={onBlur}
       onFocus={onFocus}
+      onKeyDown={handleKeyDown}
       className={className || "cmi-input"}
-      placeholder={placeholder || "0"}
+      placeholder={placeholder || "0,00"}
       disabled={disabled}
       inputMode="decimal"
     />
@@ -528,16 +567,27 @@ function PriceInput({
 function MiniCreateModal({ open, title, value, loading, onChange, onCancel, onSave }) {
   if (!open) return null;
 
+  const handleMiniEnter = (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+
+    if (!loading) {
+      onSave?.();
+    }
+  };
+
   return (
     <div className="cmi-miniOverlay">
       <div className="cmi-miniModal">
         <div className="cmi-miniModal__head">{title}</div>
+
         <div className="cmi-miniModal__body">
           <FloatingField label="Nombre *">
             <input
               className="cmi-input"
               value={value}
               onChange={(e) => onChange(toUpperCaseValue(e.target.value))}
+              onKeyDown={handleMiniEnter}
               placeholder="Escribí el nombre"
               autoFocus
             />
@@ -547,6 +597,7 @@ function MiniCreateModal({ open, title, value, loading, onChange, onCancel, onSa
             <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={loading}>
               Cancelar
             </button>
+
             <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={loading}>
               {loading ? "Guardando..." : "Guardar"}
             </button>
@@ -582,7 +633,7 @@ export default function ModalEditarProducto({
   productoId,
   onClose,
   onGuardado,
-  onToast,  // ✅ Recibir onToast como prop
+  onToast,
 }) {
   const closeBtnRef = useRef(null);
   const inputImagenRef = useRef(null);
@@ -591,11 +642,6 @@ export default function ModalEditarProducto({
   const [guardando, setGuardando] = useState(false);
   const [errores, setErrores] = useState({});
   const [dark, setDark] = useState(isTemaOscuro);
-
-  // ✅ CORREGIDO: orden de parámetros (tipo, mensaje, duracion)
-  const mostrarToast = (mensaje, tipo = "error", duracion = 2500) => {
-    onToast?.(tipo, errorToText(mensaje), duracion);
-  };
 
   const [form, setForm] = useState(buildEmptyForm());
   const [categorias, setCategorias] = useState([]);
@@ -620,14 +666,62 @@ export default function ModalEditarProducto({
   const [previewMime, setPreviewMime] = useState("");
   const [previewFileName, setPreviewFileName] = useState("");
 
+  const mostrarToast = (mensaje, tipo = "error", duracion = 2500) => {
+    onToast?.(tipo, errorToText(mensaje), duracion);
+  };
+
+  const focusNextField = (currentTarget) => {
+    const root =
+      currentTarget?.closest?.(".mi-modal__container") ||
+      currentTarget?.closest?.(".mi-modal__content") ||
+      document;
+
+    const fields = Array.from(
+      root.querySelectorAll(
+        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'
+      )
+    ).filter((el) => {
+      const style = window.getComputedStyle(el);
+      return style.display !== "none" && style.visibility !== "hidden";
+    });
+
+    const index = fields.indexOf(currentTarget);
+
+    if (index >= 0 && fields[index + 1]) {
+      fields[index + 1].focus();
+      fields[index + 1].select?.();
+    }
+  };
+
+  const handleFieldEnter = (e) => {
+    if (e.key !== "Enter") return;
+
+    if (e.currentTarget?.tagName === "TEXTAREA" && e.shiftKey) return;
+
+    e.preventDefault();
+    focusNextField(e.currentTarget);
+  };
+
+  const handlePriceEnter = (e, formatAction) => {
+    e.preventDefault();
+
+    formatAction?.(e);
+
+    requestAnimationFrame(() => {
+      focusNextField(e.currentTarget);
+    });
+  };
+
   const nuevaImagenNombre = useMemo(() => nuevaImagenFile?.name || "", [nuevaImagenFile]);
 
   const imagenActualUrl = useMemo(() => {
     if (eliminarImagenActual) return "";
     if (nuevaImagenFile) return "";
+
     if (Number(form.imagen_archivo_id || 0) > 0) {
       return getProductoImageUrlByArchivoId(form.imagen_archivo_id);
     }
+
     return form.imagen_url ? String(form.imagen_url).trim() : "";
   }, [form.imagen_archivo_id, form.imagen_url, eliminarImagenActual, nuevaImagenFile]);
 
@@ -681,6 +775,7 @@ export default function ModalEditarProducto({
             try {
               const dataTipos = await parseJsonOrThrow(resTipos.value);
               const rawTipos = Array.isArray(dataTipos?.tipos_precio) ? dataTipos.tipos_precio : [];
+
               setTiposPrecio(
                 rawTipos
                   .map((tipo) => ({
@@ -707,6 +802,7 @@ export default function ModalEditarProducto({
     };
 
     fetchCatalogos();
+
     return () => {
       cancelado = true;
     };
@@ -720,12 +816,15 @@ export default function ModalEditarProducto({
 
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
+
     const o1 = new MutationObserver(update);
     o1.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
     const o2 = new MutationObserver(update);
     if (document.body) {
       o2.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     }
+
     return () => {
       o1.disconnect();
       o2.disconnect();
@@ -735,6 +834,7 @@ export default function ModalEditarProducto({
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
       document.body.style.overflow = prev;
     };
@@ -744,7 +844,9 @@ export default function ModalEditarProducto({
     const h = (e) => {
       if (e.key === "Escape" && !guardando && !previewOpen) onClose?.();
     };
+
     document.addEventListener("keydown", h);
+
     return () => document.removeEventListener("keydown", h);
   }, [onClose, guardando, previewOpen]);
 
@@ -774,7 +876,10 @@ export default function ModalEditarProducto({
         });
 
         const data = await parseJsonOrThrow(res);
-        if (mounted) setForm(hydratePricingFormValues(normalizarProducto(data)));
+
+        if (mounted) {
+          setForm(hydratePricingFormValues(normalizarProducto(data)));
+        }
       } catch (err) {
         if (mounted) {
           mostrarToast(err, "error");
@@ -786,9 +891,11 @@ export default function ModalEditarProducto({
     };
 
     cargarProducto();
+
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productoId]);
 
   const cerrarPreview = () => {
@@ -800,6 +907,7 @@ export default function ModalEditarProducto({
 
   const abrirPreview = ({ src, mime = "", name = "" }) => {
     if (!src) return;
+
     setPreviewUrl(src);
     setPreviewMime(mime);
     setPreviewFileName(name);
@@ -809,15 +917,17 @@ export default function ModalEditarProducto({
   const handleChange = (e) => {
     const { name, value } = e.target;
 
-    if ([
-      "precio_costo",
-      "precio",
-      "margen_venta_porcentaje",
-      "margen_venta_valor",
-      "precio_promo",
-      "margen_promo_porcentaje",
-      "margen_promo_valor",
-    ].includes(name)) {
+    if (
+      [
+        "precio_costo",
+        "precio",
+        "margen_venta_porcentaje",
+        "margen_venta_valor",
+        "precio_promo",
+        "margen_promo_porcentaje",
+        "margen_promo_valor",
+      ].includes(name)
+    ) {
       setForm((prev) => recalculatePricingFormLive(prev, name, value));
     } else if (name === "stock") {
       const numbersOnly = value.replace(/[^\d]/g, "");
@@ -829,6 +939,7 @@ export default function ModalEditarProducto({
         setMiniCategoriaOpen(true);
         return;
       }
+
       setForm((prev) => ({ ...prev, [name]: normalizeIdValue(value) }));
     } else {
       setForm((prev) => ({ ...prev, [name]: value }));
@@ -838,24 +949,33 @@ export default function ModalEditarProducto({
   };
 
   const handleCostoChangeLive = (rawValue) => {
-    const value = rawValue;
-    recalcularTodoConCosto(value);
+    recalcularTodoConCosto(rawValue, false);
     setErrores((prev) => ({ ...prev, precio_costo: "" }));
   };
 
-  const handlePricingBlur = (source, groupName) => {
+  const handlePricingBlur = (source, groupName, withCents = true) => {
     const prefix =
       groupName === "venta"
-        ? { price: "precio", marginPct: "margen_venta_porcentaje", marginVal: "margen_venta_valor" }
-        : { price: "precio_promo", marginPct: "margen_promo_porcentaje", marginVal: "margen_promo_valor" };
+        ? {
+            price: "precio",
+            marginPct: "margen_venta_porcentaje",
+            marginVal: "margen_venta_valor",
+          }
+        : {
+            price: "precio_promo",
+            marginPct: "margen_promo_porcentaje",
+            marginVal: "margen_promo_valor",
+          };
 
-    const result = recalculatePricingGroup({
+    const resultRaw = recalculatePricingGroup({
       cost: form.precio_costo,
       price: form[prefix.price],
       marginPct: form[prefix.marginPct],
       marginValue: form[prefix.marginVal],
       source,
     });
+
+    const result = formatPricingResult(resultRaw, withCents);
 
     setForm((prev) => ({
       ...prev,
@@ -865,32 +985,56 @@ export default function ModalEditarProducto({
     }));
   };
 
-  const recalcularTodoConCosto = (nuevoCosto) => {
+  const recalcularTodoConCosto = (nuevoCosto, withCents = false) => {
     setForm((prev) => {
-      const venta = recalculatePricingGroup({
+      const ventaRaw = recalculatePricingGroup({
         cost: nuevoCosto,
         price: prev.precio,
         marginPct: prev.margen_venta_porcentaje,
         marginValue: prev.margen_venta_valor,
-        source: prev.precio ? "price" : prev.margen_venta_porcentaje ? "marginPct" : prev.margen_venta_valor ? "marginValue" : null,
+        source: prev.precio
+          ? "price"
+          : prev.margen_venta_porcentaje
+            ? "marginPct"
+            : prev.margen_venta_valor
+              ? "marginValue"
+              : null,
       });
 
-      const promo = recalculatePricingGroup({
+      const promoRaw = recalculatePricingGroup({
         cost: nuevoCosto,
         price: prev.precio_promo,
         marginPct: prev.margen_promo_porcentaje,
         marginValue: prev.margen_promo_valor,
-        source: prev.precio_promo ? "price" : prev.margen_promo_porcentaje ? "marginPct" : prev.margen_promo_valor ? "marginValue" : null,
+        source: prev.precio_promo
+          ? "price"
+          : prev.margen_promo_porcentaje
+            ? "marginPct"
+            : prev.margen_promo_valor
+              ? "marginValue"
+              : null,
       });
 
+      const venta = formatPricingResult(ventaRaw, withCents);
+      const promo = formatPricingResult(promoRaw, withCents);
+
       const extras = (prev.tipos_precio_extra || []).map((item) => {
-        const result = recalculatePricingGroup({
+        const resultRaw = recalculatePricingGroup({
           cost: nuevoCosto,
           price: item.precio,
           marginPct: item.margen_porcentaje,
           marginValue: item.margen_valor,
-          source: item.precio ? "price" : item.margen_porcentaje ? "marginPct" : item.margen_valor ? "marginValue" : null,
+          source: item.precio
+            ? "price"
+            : item.margen_porcentaje
+              ? "marginPct"
+              : item.margen_valor
+                ? "marginValue"
+                : null,
         });
+
+        const result = formatPricingResult(resultRaw, withCents);
+
         return {
           ...item,
           precio: result.price,
@@ -901,7 +1045,7 @@ export default function ModalEditarProducto({
 
       return {
         ...prev,
-        precio_costo: formatNumberForDisplay(nuevoCosto),
+        precio_costo: withCents ? formatNumberWithCents(nuevoCosto) : formatNumberForDisplay(nuevoCosto),
         precio: venta.price,
         margen_venta_porcentaje: venta.marginPct,
         margen_venta_valor: venta.marginValue,
@@ -935,7 +1079,14 @@ export default function ModalEditarProducto({
         ...next,
         tipos_precio_extra: next.tipos_precio_extra.map((item, i) => {
           if (i !== idx) return item;
-          const source = field === "precio" ? "price" : field === "margen_porcentaje" ? "marginPct" : "marginValue";
+
+          const source =
+            field === "precio"
+              ? "price"
+              : field === "margen_porcentaje"
+                ? "marginPct"
+                : "marginValue";
+
           const result = recalculatePricingGroup({
             cost: next.precio_costo,
             price: item.precio,
@@ -943,6 +1094,7 @@ export default function ModalEditarProducto({
             marginValue: item.margen_valor,
             source,
           });
+
           return {
             ...item,
             precio: result.price,
@@ -952,21 +1104,26 @@ export default function ModalEditarProducto({
         }),
       };
     });
+
     setErrores((prev) => ({ ...prev, [`tipo_${idx}`]: "" }));
   };
 
-  const handleExtraPriceBlur = (idx, source) => {
+  const handleExtraPriceBlur = (idx, source, withCents = true) => {
     setForm((prev) => ({
       ...prev,
       tipos_precio_extra: prev.tipos_precio_extra.map((item, i) => {
         if (i !== idx) return item;
-        const result = recalculatePricingGroup({
+
+        const resultRaw = recalculatePricingGroup({
           cost: prev.precio_costo,
           price: item.precio,
           marginPct: item.margen_porcentaje,
           marginValue: item.margen_valor,
           source,
         });
+
+        const result = formatPricingResult(resultRaw, withCents);
+
         return {
           ...item,
           precio: result.price,
@@ -979,6 +1136,7 @@ export default function ModalEditarProducto({
 
   const handleTipoSelectChange = (val) => {
     if (!val) return;
+
     if (val === "__nuevo_tipo__") {
       setMiniTipoOpen(true);
       return;
@@ -987,9 +1145,11 @@ export default function ModalEditarProducto({
     const yaExiste = form.tipos_precio_extra.some(
       (item) => String(item.id_tipo_precio_stock) === String(val)
     );
+
     if (yaExiste) return;
 
     const tipo = tiposPrecio.find((t) => String(t.id ?? t.id_tipo_precio_stock) === String(val));
+
     setForm((prev) => ({
       ...prev,
       tipos_precio_extra: [...prev.tipos_precio_extra, emptyExtraPriceRow(tipo)],
@@ -1005,24 +1165,34 @@ export default function ModalEditarProducto({
 
   const limpiarNuevaImagen = () => {
     if (nuevaImagenPreview) URL.revokeObjectURL(nuevaImagenPreview);
+
     setNuevaImagenFile(null);
     setNuevaImagenPreview("");
-    if (inputImagenRef.current) inputImagenRef.current.value = "";
+
+    if (inputImagenRef.current) {
+      inputImagenRef.current.value = "";
+    }
   };
 
   const tomarNuevaImagen = (file) => {
     if (!file) return;
+
     const tiposPermitidos = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+
     if (!tiposPermitidos.includes(file.type)) {
       setErrores((prev) => ({ ...prev, imagen: "La imagen debe ser JPG, PNG, WEBP o GIF" }));
       return;
     }
+
     if (file.size > 5 * 1024 * 1024) {
       setErrores((prev) => ({ ...prev, imagen: "La imagen no puede superar los 5 MB" }));
       return;
     }
+
     if (nuevaImagenPreview) URL.revokeObjectURL(nuevaImagenPreview);
+
     const blobUrl = URL.createObjectURL(file);
+
     setNuevaImagenFile(file);
     setNuevaImagenPreview(blobUrl);
     setEliminarImagenActual(false);
@@ -1049,13 +1219,16 @@ export default function ModalEditarProducto({
     if (!nombreLimpio) return;
 
     setGuardandoMiniCategoria(true);
+
     try {
       const res = await fetch(`${API_URL}?action=stock_categorias_crear`, {
         method: "POST",
         headers: buildHeadersJSON(),
         body: JSON.stringify({ nombre: nombreLimpio }),
       });
+
       const data = await parseJsonOrThrow(res);
+
       const nueva = data.categoria || data.nueva || {
         id: data.id_stock_categoria,
         id_stock_categoria: data.id_stock_categoria,
@@ -1071,7 +1244,10 @@ export default function ModalEditarProducto({
       setCategorias((prev) => {
         const existe = prev.some((x) => String(x.id) === String(normalizada.id));
         if (existe) return prev;
-        return [...prev, normalizada].sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""), "es"));
+
+        return [...prev, normalizada].sort((a, b) =>
+          String(a.nombre || "").localeCompare(String(b.nombre || ""), "es")
+        );
       });
 
       setForm((prev) => ({ ...prev, id_categoria_stock: normalizada.id }));
@@ -1089,13 +1265,16 @@ export default function ModalEditarProducto({
     if (!nombreLimpio) return;
 
     setGuardandoMiniTipo(true);
+
     try {
       const res = await fetch(`${API_URL}?action=stock_tipos_precio_crear`, {
         method: "POST",
         headers: buildHeadersJSON(),
         body: JSON.stringify({ nombre: nombreLimpio }),
       });
+
       const data = await parseJsonOrThrow(res);
+
       const nuevo = data.tipo_precio || {
         id: data.id_tipo_precio_stock,
         id_tipo_precio_stock: data.id_tipo_precio_stock,
@@ -1110,16 +1289,24 @@ export default function ModalEditarProducto({
       };
 
       setTiposPrecio((prev) => {
-        const existe = prev.some((x) => String(x.id ?? x.id_tipo_precio_stock) === String(normalizado.id ?? normalizado.id_tipo_precio_stock));
+        const existe = prev.some(
+          (x) => String(x.id ?? x.id_tipo_precio_stock) === String(normalizado.id ?? normalizado.id_tipo_precio_stock)
+        );
+
         if (existe) return prev;
-        return [...prev, normalizado].sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""), "es"));
+
+        return [...prev, normalizado].sort((a, b) =>
+          String(a.nombre || "").localeCompare(String(b.nombre || ""), "es")
+        );
       });
 
       setForm((prev) => {
         const yaExiste = (prev.tipos_precio_extra || []).some(
           (item) => String(item.id_tipo_precio_stock) === String(normalizado.id ?? normalizado.id_tipo_precio_stock)
         );
+
         if (yaExiste) return prev;
+
         return {
           ...prev,
           tipos_precio_extra: [...prev.tipos_precio_extra, emptyExtraPriceRow(normalizado)],
@@ -1137,6 +1324,7 @@ export default function ModalEditarProducto({
 
   const validar = (sourceForm = form) => {
     const errs = {};
+
     const precioVenta = parseNumberFromInput(sourceForm.precio);
     const precioCosto = parseNumberFromInput(sourceForm.precio_costo);
     const promo = parseNumberFromInput(sourceForm.precio_promo);
@@ -1145,10 +1333,14 @@ export default function ModalEditarProducto({
     if (precioCosto !== null && precioCosto < 0) errs.precio_costo = "Ingresá un costo válido";
     if (!sourceForm.precio || precioVenta === null || precioVenta < 0) errs.precio = "Ingresá un precio de venta válido";
     if (sourceForm.precio_promo && (promo === null || promo < 0)) errs.precio_promo = "Precio promocional inválido";
-    if (sourceForm.stock !== "" && (Number.isNaN(Number(sourceForm.stock)) || Number(sourceForm.stock) < 0)) errs.stock = "Stock inválido";
+
+    if (sourceForm.stock !== "" && (Number.isNaN(Number(sourceForm.stock)) || Number(sourceForm.stock) < 0)) {
+      errs.stock = "Stock inválido";
+    }
 
     sourceForm.tipos_precio_extra.forEach((item, idx) => {
       if (!item.id_tipo_precio_stock) errs[`tipo_${idx}`] = "Tipo de precio inválido";
+
       if (item.precio && (parseNumberFromInput(item.precio) === null || parseNumberFromInput(item.precio) < 0)) {
         errs[`tipo_${idx}`] = "Precio extra inválido";
       }
@@ -1156,6 +1348,7 @@ export default function ModalEditarProducto({
 
     if (nuevaImagenFile) {
       const tipos = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+
       if (!tipos.includes(nuevaImagenFile.type)) errs.imagen = "La imagen debe ser JPG, PNG, WEBP o GIF";
       if (nuevaImagenFile.size > 5 * 1024 * 1024) errs.imagen = "La imagen no puede superar los 5 MB";
     }
@@ -1166,13 +1359,11 @@ export default function ModalEditarProducto({
   const handleGuardar = async () => {
     const formNormalizado = hydratePricingFormValues(form);
     const errs = validar(formNormalizado);
-    
-    // ✅ Si hay errores de validación, mostrar toast con el primer error
+
     if (Object.keys(errs).length > 0) {
       setErrores(errs);
       setForm((prev) => ({ ...prev, ...formNormalizado }));
-      
-      // ✅ Mostrar el primer error como toast
+
       const primerError = Object.values(errs)[0];
       mostrarToast(primerError || "Revisá los campos del formulario", "error");
       return;
@@ -1187,6 +1378,7 @@ export default function ModalEditarProducto({
       const { idUsuarioMaster, idTenant } = getUsuarioAuditData();
 
       const fd = new FormData();
+
       fd.append("id", String(Number(formNormalizado.id || productoId)));
       fd.append("nombre", toUpperCaseValue(formNormalizado.nombre.trim()));
       fd.append("sku", toUpperCaseValue(formNormalizado.sku.trim()));
@@ -1212,6 +1404,7 @@ export default function ModalEditarProducto({
         margen_porcentaje: formatNumberForApi(item.margen_porcentaje),
         margen_valor: formatNumberForApi(item.margen_valor),
       }));
+
       fd.append("tipos_precio", JSON.stringify(tiposPrecioPayload));
 
       if (eliminarImagenActual && !nuevaImagenFile) fd.append("eliminar_imagen", "1");
@@ -1225,6 +1418,7 @@ export default function ModalEditarProducto({
 
       const data = await parseJsonOrThrow(res);
       const productoGuardado = data?.producto ?? data?.data?.producto ?? data?.data ?? null;
+
       onGuardado?.(productoGuardado);
       mostrarToast("Producto actualizado correctamente", "success");
       onClose?.();
@@ -1251,12 +1445,14 @@ export default function ModalEditarProducto({
             <div className="mi-modal__head-icon" aria-hidden="true">
               <FontAwesomeIcon icon={faBoxOpen} />
             </div>
+
             <div className="mi-modal__head-left">
               <h2 className="mi-modal__title">Editar producto</h2>
               <p className="mi-modal__subtitle">
                 {form.nombre ? `Modificando: ${form.nombre}` : "Actualizá los datos del producto"}
               </p>
             </div>
+
             <button
               ref={closeBtnRef}
               className="mi-modal__close"
@@ -1283,6 +1479,7 @@ export default function ModalEditarProducto({
                     name="nombre"
                     value={form.nombre}
                     onChange={handleChange}
+                    onKeyDown={handleFieldEnter}
                     className="cmi-input"
                     placeholder="Ej: AURICULARES BLUETOOTH"
                     disabled={guardando}
@@ -1296,6 +1493,7 @@ export default function ModalEditarProducto({
                       name="sku"
                       value={form.sku}
                       onChange={handleChange}
+                      onKeyDown={handleFieldEnter}
                       className="cmi-input"
                       placeholder="Ej: 04163"
                       disabled={guardando}
@@ -1308,6 +1506,7 @@ export default function ModalEditarProducto({
                       name="stock"
                       value={form.stock}
                       onChange={handleChange}
+                      onKeyDown={handleFieldEnter}
                       className="cmi-input"
                       placeholder="Ej: 25"
                       inputMode="numeric"
@@ -1320,6 +1519,7 @@ export default function ModalEditarProducto({
                   <div className="cmi-priceBlock__title">
                     <FontAwesomeIcon icon={faMoneyBillTrendUp} /> Precios principales
                   </div>
+
                   <div className="cmi-priceBlock__subtitle">
                     Con el costo cargado podés escribir el precio final o el margen en % / $ y se calcula solo.
                   </div>
@@ -1329,8 +1529,9 @@ export default function ModalEditarProducto({
                       name="precio_costo"
                       value={form.precio_costo}
                       onChange={(e) => handleCostoChangeLive(e.target.value)}
-                      onBlur={(e) => recalcularTodoConCosto(e.target.value)}
-                      placeholder="0"
+                      onBlur={(e) => recalcularTodoConCosto(e.target.value, true)}
+                      onEnter={(e) => handlePriceEnter(e, () => recalcularTodoConCosto(e.currentTarget.value, true))}
+                      placeholder="0,00"
                       disabled={guardando}
                     />
                   </FloatingField>
@@ -1341,7 +1542,8 @@ export default function ModalEditarProducto({
                         name="precio"
                         value={form.precio}
                         onChange={handleChange}
-                        onBlur={() => handlePricingBlur("price", "venta")}
+                        onBlur={() => handlePricingBlur("price", "venta", true)}
+                        onEnter={(e) => handlePriceEnter(e, () => handlePricingBlur("price", "venta", true))}
                         disabled={guardando}
                       />
                     </FloatingField>
@@ -1351,7 +1553,8 @@ export default function ModalEditarProducto({
                         name="margen_venta_porcentaje"
                         value={form.margen_venta_porcentaje}
                         onChange={handleChange}
-                        onBlur={() => handlePricingBlur("marginPct", "venta")}
+                        onBlur={() => handlePricingBlur("marginPct", "venta", true)}
+                        onEnter={(e) => handlePriceEnter(e, () => handlePricingBlur("marginPct", "venta", true))}
                         disabled={!form.precio_costo || guardando}
                       />
                     </FloatingField>
@@ -1361,7 +1564,8 @@ export default function ModalEditarProducto({
                         name="margen_venta_valor"
                         value={form.margen_venta_valor}
                         onChange={handleChange}
-                        onBlur={() => handlePricingBlur("marginValue", "venta")}
+                        onBlur={() => handlePricingBlur("marginValue", "venta", true)}
+                        onEnter={(e) => handlePriceEnter(e, () => handlePricingBlur("marginValue", "venta", true))}
                         disabled={!form.precio_costo || guardando}
                       />
                     </FloatingField>
@@ -1373,7 +1577,8 @@ export default function ModalEditarProducto({
                         name="precio_promo"
                         value={form.precio_promo}
                         onChange={handleChange}
-                        onBlur={() => handlePricingBlur("price", "promo")}
+                        onBlur={() => handlePricingBlur("price", "promo", true)}
+                        onEnter={(e) => handlePriceEnter(e, () => handlePricingBlur("price", "promo", true))}
                         disabled={guardando}
                       />
                     </FloatingField>
@@ -1383,7 +1588,8 @@ export default function ModalEditarProducto({
                         name="margen_promo_porcentaje"
                         value={form.margen_promo_porcentaje}
                         onChange={handleChange}
-                        onBlur={() => handlePricingBlur("marginPct", "promo")}
+                        onBlur={() => handlePricingBlur("marginPct", "promo", true)}
+                        onEnter={(e) => handlePriceEnter(e, () => handlePricingBlur("marginPct", "promo", true))}
                         disabled={!form.precio_costo || guardando}
                       />
                     </FloatingField>
@@ -1393,7 +1599,8 @@ export default function ModalEditarProducto({
                         name="margen_promo_valor"
                         value={form.margen_promo_valor}
                         onChange={handleChange}
-                        onBlur={() => handlePricingBlur("marginValue", "promo")}
+                        onBlur={() => handlePricingBlur("marginValue", "promo", true)}
+                        onEnter={(e) => handlePriceEnter(e, () => handlePricingBlur("marginValue", "promo", true))}
                         disabled={!form.precio_costo || guardando}
                       />
                     </FloatingField>
@@ -1410,10 +1617,15 @@ export default function ModalEditarProducto({
                       className="cmi-input cmi-select"
                       value=""
                       onChange={(e) => handleTipoSelectChange(e.target.value)}
+                      onKeyDown={handleFieldEnter}
                       disabled={loadingTiposPrecio || guardando}
                     >
-                      <option value="">{loadingTiposPrecio ? "Cargando tipos..." : "Seleccionar tipo para agregar..."}</option>
+                      <option value="">
+                        {loadingTiposPrecio ? "Cargando tipos..." : "Seleccionar tipo para agregar..."}
+                      </option>
+
                       <option value="__nuevo_tipo__">+ Nuevo tipo de precio</option>
+
                       {tiposPrecio.map((tipo) => (
                         <option key={tipo.id ?? tipo.id_tipo_precio_stock} value={tipo.id ?? tipo.id_tipo_precio_stock}>
                           {tipo.nombre}
@@ -1426,8 +1638,14 @@ export default function ModalEditarProducto({
                     <div className="cmi-extraPriceCard" key={`${tipoItem.id_tipo_precio_stock}-${idx}`}>
                       <div className="cmi-extraPriceCard__head">
                         <div className="cmi-extraPriceCard__title">{tipoItem.tipo_nombre || `Tipo ${idx + 1}`}</div>
-                        <button type="button" className="mit-btn mit-btn--ghost" onClick={() => quitarTipoPrecio(idx)} disabled={guardando}>
-                          <FontAwesomeIcon icon={faTrashCan} /> Quitar
+
+                        <button
+                          type="button"
+                          className="mit-btn mit-btn--ghost"
+                          onClick={() => quitarTipoPrecio(idx)}
+                          disabled={guardando}
+                        >
+                          <FontAwesomeIcon icon={faTrashCan} />
                         </button>
                       </div>
 
@@ -1443,7 +1661,8 @@ export default function ModalEditarProducto({
                             name={`tipo_precio_${idx}`}
                             value={tipoItem.precio}
                             onChange={(e) => handleExtraPriceChange(idx, "precio", e.target.value)}
-                            onBlur={() => handleExtraPriceBlur(idx, "price")}
+                            onBlur={() => handleExtraPriceBlur(idx, "price", true)}
+                            onEnter={(e) => handlePriceEnter(e, () => handleExtraPriceBlur(idx, "price", true))}
                             disabled={guardando}
                           />
                         </FloatingField>
@@ -1453,7 +1672,8 @@ export default function ModalEditarProducto({
                             name={`tipo_pct_${idx}`}
                             value={tipoItem.margen_porcentaje}
                             onChange={(e) => handleExtraPriceChange(idx, "margen_porcentaje", e.target.value)}
-                            onBlur={() => handleExtraPriceBlur(idx, "marginPct")}
+                            onBlur={() => handleExtraPriceBlur(idx, "marginPct", true)}
+                            onEnter={(e) => handlePriceEnter(e, () => handleExtraPriceBlur(idx, "marginPct", true))}
                             disabled={!form.precio_costo || guardando}
                           />
                         </FloatingField>
@@ -1463,7 +1683,8 @@ export default function ModalEditarProducto({
                             name={`tipo_val_${idx}`}
                             value={tipoItem.margen_valor}
                             onChange={(e) => handleExtraPriceChange(idx, "margen_valor", e.target.value)}
-                            onBlur={() => handleExtraPriceBlur(idx, "marginValue")}
+                            onBlur={() => handleExtraPriceBlur(idx, "marginValue", true)}
+                            onEnter={(e) => handlePriceEnter(e, () => handleExtraPriceBlur(idx, "marginValue", true))}
                             disabled={!form.precio_costo || guardando}
                           />
                         </FloatingField>
@@ -1477,11 +1698,13 @@ export default function ModalEditarProducto({
                     name="id_categoria_stock"
                     value={form.id_categoria_stock}
                     onChange={handleChange}
+                    onKeyDown={handleFieldEnter}
                     className="cmi-input cmi-select"
                     disabled={guardando || loadingCategorias}
                   >
                     <option value="">{loadingCategorias ? "Cargando categorías..." : "Sin categoría"}</option>
                     <option value="__nueva_categoria__">+ Nueva categoría</option>
+
                     {categorias.map((cat) => (
                       <option key={cat.id} value={cat.id}>
                         {cat.nombre}
@@ -1495,6 +1718,7 @@ export default function ModalEditarProducto({
                     name="descripcion"
                     value={form.descripcion}
                     onChange={handleChange}
+                    onKeyDown={handleFieldEnter}
                     className="cmi-input cmi-textarea"
                     placeholder="BREVE DESCRIPCIÓN DEL PRODUCTO (OPCIONAL)"
                     rows={3}
@@ -1505,7 +1729,8 @@ export default function ModalEditarProducto({
 
                 <div className="cmi-uploadBox">
                   <div className="cmi-uploadBox__title">
-                    <FontAwesomeIcon icon={faPaperclip} /> Imagen del producto
+                    <FontAwesomeIcon icon={faPaperclip} />
+                    Imagen del producto
                   </div>
 
                   <input
@@ -1516,30 +1741,85 @@ export default function ModalEditarProducto({
                     onChange={handleImagenInput}
                   />
 
+                  {!tieneImagenActual && !nuevaImagenFile && (
+                    <button
+                      type="button"
+                      className="mit-btn mit-btn--ghost"
+                      onClick={() => inputImagenRef.current?.click()}
+                      disabled={guardando}
+                      style={{
+                        alignSelf: "flex-start",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                        fontSize: 13,
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faArrowUpFromBracket} style={{ fontSize: 12 }} />
+                      Seleccionar imagen
+                    </button>
+                  )}
+
                   {tieneImagenActual && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <div className="cmi-fileRow" style={{ alignItems: "center" }}>
-                        <span>Imagen actual</span>
-                        <div className="cmi-fileActions">
-                          <button
-                            type="button"
-                            className="mit-btn mit-btn--ghost"
-                            onClick={() => abrirPreview({ src: imagenActualUrl, mime: imagenActualMime, name: form.nombre || "imagen_actual" })}
-                            disabled={guardando || !imagenActualUrl}
-                            aria-label="Ver imagen"
-                            title="Ver imagen"
-                          >
-                            <FontAwesomeIcon icon={faEye} />
-                          </button>
+                    <div className="cmi-fileResume">
+                      <div className="cmi-fileResume__left">
+                        <span className="cmi-fileResume__icon">
+                          <FontAwesomeIcon icon={faImage} />
+                        </span>
 
-                          <button type="button" className="mit-btn mit-btn--ghost" onClick={() => inputImagenRef.current?.click()} disabled={guardando}>
-                            <FontAwesomeIcon icon={faArrowUpFromBracket} /> Reemplazar
-                          </button>
+                        <div className="cmi-fileResume__meta">
+                          <div className="cmi-fileResume__name">
+                            {form.nombre ? `${form.nombre.slice(0, 28)}…` : "Imagen actual"}
+                          </div>
 
-                          <button type="button" className="mit-btn mit-btn--ghost" onClick={handleEliminarImagenActual} disabled={guardando}>
-                            <FontAwesomeIcon icon={faTrashCan} /> Eliminar
-                          </button>
+                          <span className="cmi-badge cmi-badge--img">Imagen</span>
                         </div>
+                      </div>
+
+                      <div className="cmi-fileActions">
+                        <button
+                          type="button"
+                          className="mit-btn mit-btn--ghost"
+                          onClick={() =>
+                            abrirPreview({
+                              src: imagenActualUrl,
+                              mime: imagenActualMime,
+                              name: form.nombre || "imagen_actual",
+                            })
+                          }
+                          disabled={guardando || !imagenActualUrl}
+                          style={{ padding: "6px 10px", fontSize: 13 }}
+                          title="Ver imagen"
+                        >
+                          <FontAwesomeIcon icon={faEye} />
+                        </button>
+
+                        <button
+                          type="button"
+                          className="mit-btn mit-btn--ghost"
+                          onClick={() => inputImagenRef.current?.click()}
+                          disabled={guardando}
+                          style={{ padding: "6px 10px", fontSize: 13 }}
+                          title="Reemplazar imagen"
+                        >
+                          <FontAwesomeIcon icon={faArrowUpFromBracket} />
+                        </button>
+
+                        <button
+                          type="button"
+                          className="mit-btn mit-btn--ghost"
+                          onClick={handleEliminarImagenActual}
+                          disabled={guardando}
+                          style={{
+                            padding: "6px 10px",
+                            fontSize: 13,
+                            color: "#ef4444",
+                            borderColor: "rgba(239,68,68,0.25)",
+                          }}
+                          title="Eliminar imagen"
+                        >
+                          <FontAwesomeIcon icon={faTrashCan} />
+                        </button>
                       </div>
                     </div>
                   )}
@@ -1550,39 +1830,68 @@ export default function ModalEditarProducto({
                         <FontAwesomeIcon icon={faTriangleExclamation} style={{ marginRight: 8 }} />
                         Atención
                       </div>
-                      <div style={{ marginBottom: 10 }}>La imagen actual se eliminará al guardar.</div>
-                      <button type="button" className="mit-btn mit-btn--ghost" onClick={handleCancelarEliminarImagen} disabled={guardando}>
+
+                      <div style={{ marginBottom: 10, fontSize: 13 }}>
+                        La imagen actual se eliminará al guardar.
+                      </div>
+
+                      <button
+                        type="button"
+                        className="mit-btn mit-btn--ghost"
+                        onClick={handleCancelarEliminarImagen}
+                        disabled={guardando}
+                      >
                         Cancelar
                       </button>
                     </div>
                   )}
 
-                  {!tieneImagenActual && !nuevaImagenFile && (
-                    <button type="button" className="mit-btn mit-btn--ghost" onClick={() => inputImagenRef.current?.click()} disabled={guardando}>
-                      <FontAwesomeIcon icon={faArrowUpFromBracket} /> Seleccionar imagen
-                    </button>
-                  )}
-
                   {nuevaImagenFile && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <div className="cmi-fileRow">
-                        <span>{nuevaImagenNombre}</span>
-                        <div className="cmi-fileActions">
-                          <button
-                            type="button"
-                            className="mit-btn mit-btn--ghost"
-                            onClick={() => abrirPreview({ src: nuevaImagenPreview, mime: nuevaImagenFile?.type || "image/jpeg", name: nuevaImagenNombre })}
-                            disabled={!nuevaImagenPreview}
-                            aria-label="Ver imagen"
-                            title="Ver imagen"
-                          >
-                            <FontAwesomeIcon icon={faEye} />
-                          </button>
+                    <div className="cmi-fileResume">
+                      <div className="cmi-fileResume__left">
+                        <span className="cmi-fileResume__icon">
+                          <FontAwesomeIcon icon={faImage} />
+                        </span>
 
-                          <button type="button" className="mit-btn mit-btn--ghost" onClick={limpiarNuevaImagen} disabled={guardando}>
-                            <FontAwesomeIcon icon={faTrashCan} /> Quitar
-                          </button>
+                        <div className="cmi-fileResume__meta">
+                          <div className="cmi-fileResume__name">{nuevaImagenNombre}</div>
+                          <span className="cmi-badge cmi-badge--img">Imagen</span>
                         </div>
+                      </div>
+
+                      <div className="cmi-fileActions">
+                        <button
+                          type="button"
+                          className="mit-btn mit-btn--ghost"
+                          onClick={() =>
+                            abrirPreview({
+                              src: nuevaImagenPreview,
+                              mime: nuevaImagenFile?.type || "image/jpeg",
+                              name: nuevaImagenNombre,
+                            })
+                          }
+                          disabled={!nuevaImagenPreview}
+                          style={{ padding: "6px 10px", fontSize: 13 }}
+                          title="Ver imagen"
+                        >
+                          <FontAwesomeIcon icon={faEye} />
+                        </button>
+
+                        <button
+                          type="button"
+                          className="mit-btn mit-btn--ghost"
+                          onClick={limpiarNuevaImagen}
+                          disabled={guardando}
+                          style={{
+                            padding: "6px 10px",
+                            fontSize: 13,
+                            color: "#ef4444",
+                            borderColor: "rgba(239,68,68,0.25)",
+                          }}
+                          title="Quitar imagen"
+                        >
+                          <FontAwesomeIcon icon={faTrashCan} />
+                        </button>
                       </div>
                     </div>
                   )}
@@ -1594,11 +1903,21 @@ export default function ModalEditarProducto({
           </div>
 
           <div className="cmi-footer">
-            <button type="button" className="mit-btn mit-btn--ghost" onClick={() => !guardando && onClose?.()} disabled={guardando}>
+            <button
+              type="button"
+              className="mit-btn mit-btn--ghost"
+              onClick={() => !guardando && onClose?.()}
+              disabled={guardando}
+            >
               Cancelar
             </button>
 
-            <button type="button" className="mit-btn mit-btn--solid" onClick={handleGuardar} disabled={isLoading}>
+            <button
+              type="button"
+              className="mit-btn mit-btn--solid"
+              onClick={handleGuardar}
+              disabled={isLoading}
+            >
               <FontAwesomeIcon icon={guardando ? faRefresh : faFloppyDisk} spin={guardando} style={{ marginRight: 8 }} />
               {guardando ? "Guardando..." : "Guardar cambios"}
             </button>
@@ -1647,8 +1966,11 @@ export default function ModalEditarProducto({
 
 function normalizeCategoriaId(value) {
   if (value === null || value === undefined) return "";
+
   const s = String(value).trim();
+
   if (s === "" || s === "0" || s.toLowerCase() === "null") return "";
+
   return s;
 }
 
@@ -1656,15 +1978,19 @@ function normalizeIdValue(value) {
   if (value && typeof value === "object") {
     return String(value.id ?? value.id_stock_categoria ?? value.value ?? "");
   }
+
   return String(value ?? "");
 }
 
 function normalizeOptionLabel(value, fallback = "") {
   if (value == null) return fallback;
+
   if (typeof value === "string" || typeof value === "number") return String(value);
+
   if (typeof value === "object") {
     return String(value.nombre ?? value.label ?? value.descripcion ?? fallback);
   }
+
   return fallback;
 }
 
@@ -1674,17 +2000,21 @@ function toUpperCaseValue(value = "") {
 
 function errorToText(err, fallback = "Ocurrió un error inesperado") {
   const value = err?.message ?? err?.mensaje ?? err;
+
   if (typeof value === "string") return value;
   if (typeof value === "number") return String(value);
+
   if (value && typeof value === "object") {
     if (typeof value.nombre === "string" && value.nombre.trim()) return value.nombre;
     if (typeof value.error === "string" && value.error.trim()) return value.error;
     if (typeof value.mensaje === "string" && value.mensaje.trim()) return value.mensaje;
+
     try {
       return JSON.stringify(value);
     } catch {
       return fallback;
     }
   }
+
   return fallback;
 }

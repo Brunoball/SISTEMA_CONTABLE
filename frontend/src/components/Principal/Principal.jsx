@@ -976,12 +976,19 @@ const Principal = () => {
     [closeAllSubs]
   );
 
-  const handleSubDoubleClick = useCallback(
-    (itemRuta) => {
-      handleNavigate(itemRuta);
-    },
-    [handleNavigate]
-  );
+const DEFAULT_SUBROUTES = {
+  movimientos: "/panel/movimientos",
+  "cuentas-corrientes": "/panel/cuentas-corrientes/clientes",
+  cheques: "/panel/cheques/cartera",
+  stock: "/panel/stock",
+};
+
+const handleSubDoubleClick = useCallback(
+  (itemKey, itemRuta) => {
+    handleNavigate(DEFAULT_SUBROUTES[itemKey] || itemRuta);
+  },
+  [handleNavigate]
+);
 
   return (
     <div className="pp-shell">
@@ -1184,12 +1191,12 @@ const Principal = () => {
                       handleNavigate(item.ruta);
                     }
                   }}
-                  onDoubleClick={() => {
-                    if (hasSub) {
-                      prefetchRoute(item.ruta);
-                      handleSubDoubleClick(item.ruta);
-                    }
-                  }}
+onDoubleClick={() => {
+  if (hasSub) {
+    prefetchRoute(item.ruta);
+    handleSubDoubleClick(item.key, item.ruta);
+  }
+}}
                   aria-expanded={hasSub ? isOpen : undefined}
                   aria-haspopup={hasSub ? "menu" : undefined}
                 >

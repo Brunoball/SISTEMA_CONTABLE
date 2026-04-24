@@ -575,30 +575,37 @@ function MedioPagoRow({ row, mediosPagoList, totalEgreso, sumaMediosPago, onUpda
 
       <div className="nc-mp-row nc-mp-row--monto">
         <div className="nc-field nc-mp-monto-field" style={{ position: "relative" }}>
-          <input
-            className="nc-input nc-mp-monto-input"
-            type="text"
-            inputMode="decimal"
-            value={row.montoFocused ? row.montoDraft ?? "" : formatMoneyInputARS(montoActual)}
-            onFocus={(e) => {
-              if (esCheque && chequesSeleccionados.length > 0) return;
-              onUpdate(row.id, { montoFocused: true, montoDraft: formatEditableMoney(montoActual) });
-              setTimeout(() => e.target.select(), 0);
-            }}
-            onChange={(e) => {
-              if (esCheque && chequesSeleccionados.length > 0) return;
-              const c = e.target.value.replace(/[^\d,\.\-]/g, "");
-              onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
-            }}
-            onBlur={() => {
-              if (esCheque && chequesSeleccionados.length > 0) return;
-              const p = parseMoneyInputARS(row.montoDraft);
-              onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false });
-            }}
-            placeholder="$ 0,00"
-            disabled={saving || (esCheque && chequesSeleccionados.length > 0)}
-            style={{ height: 32, padding: "0 10px", fontSize: 13, textAlign: "right" }}
-          />
+<input
+  className="nc-input nc-mp-monto-input"
+  type="text"
+  inputMode="decimal"
+  value={row.montoFocused ? row.montoDraft ?? "" : formatMoneyInputARS(montoActual)}
+  onFocus={(e) => {
+    if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
+    onUpdate(row.id, { montoFocused: true, montoDraft: formatEditableMoney(montoActual) });
+    setTimeout(() => e.target.select(), 0);
+  }}
+  onChange={(e) => {
+    if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
+    const c = e.target.value.replace(/[^\d,\.\-]/g, "");
+    onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
+  }}
+  onBlur={() => {
+    if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
+    const p = parseMoneyInputARS(row.montoDraft);
+    onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false });
+  }}
+  onKeyDown={(e) => {
+    if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.currentTarget.blur();
+    }
+  }}
+  placeholder="$ 0,00"
+  disabled={saving || (esCheque && chequesSeleccionados.length > 0)}
+  style={{ height: 32, padding: "0 10px", fontSize: 13, textAlign: "right" }}
+/>
           <label className="nc-label nc-label--up">Monto</label>
         </div>
 
@@ -1268,27 +1275,51 @@ export default function ModalNuevoEgreso({
                         </div>
 
                         <div className="mi-cr-cell mi-cr-cell--center">
-                          <input
-                            className="nv-cell-input nv-cell-input--right"
-                            type="text"
-                            inputMode="decimal"
-                            value={r.precioFocused ? r.precioDraft ?? "" : formatMoneyInputARS(r.precio)}
-                            onFocus={(e) => {
-                              updateRow(r.id, { precioFocused: true, precioDraft: formatEditableMoney(r.precio) });
-                              setTimeout(() => e.target.select(), 0);
-                            }}
-                            onChange={(e) => {
-                              const c = e.target.value.replace(/[^\d,.\-]/g, "");
-                              updateRow(r.id, { precioDraft: c, precio: parseMoneyInputARS(c) });
-                            }}
-                            onBlur={() => {
-                              const p = parseMoneyInputARS(r.precioDraft);
-                              updateRow(r.id, { precio: p, precioDraft: "", precioFocused: false });
-                            }}
-                            placeholder="$ 0,00"
-                            disabled={saving}
-                            style={{ width: "100%" }}
-                          />
+<input
+  className="nv-cell-input nv-cell-input--right"
+  type="text"
+  inputMode="decimal"
+  value={r.precioFocused ? r.precioDraft ?? "" : formatMoneyInputARS(r.precio)}
+  onFocus={(e) => {
+    updateRow(r.id, {
+      precioFocused: true,
+      precioDraft: formatEditableMoney(r.precio),
+    });
+    setTimeout(() => e.target.select(), 0);
+  }}
+  onChange={(e) => {
+    const c = e.target.value.replace(/[^\d,.\-]/g, "");
+    updateRow(r.id, {
+      precioDraft: c,
+      precio: parseMoneyInputARS(c),
+    });
+  }}
+  onBlur={() => {
+    const p = parseMoneyInputARS(r.precioDraft);
+    updateRow(r.id, {
+      precio: p,
+      precioDraft: "",
+      precioFocused: false,
+    });
+  }}
+  onKeyDown={(e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+
+      const p = parseMoneyInputARS(r.precioDraft);
+      updateRow(r.id, {
+        precio: p,
+        precioDraft: "",
+        precioFocused: false,
+      });
+
+      e.currentTarget.blur();
+    }
+  }}
+  placeholder="$ 0,00"
+  disabled={saving}
+  style={{ width: "100%" }}
+/>
                         </div>
 
                         <div className="mi-cr-cell mi-cr-cell--center">
@@ -1325,7 +1356,11 @@ export default function ModalNuevoEgreso({
                 <div className="mi-cr-table__foot">
                   <div className="mi-cr-foot-actions">
                     <button type="button" className="nv-foot-btn" onClick={addRow} disabled={saving}>
-                      <span className="nv-foot-btn__icon">+</span>Agregar fila
+                                            <span className="nv-foot-btn__icon">
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M5 1.5V8.5M1.5 5H8.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+                        </svg>
+                      </span>Agregar fila
                     </button>
                     <div className="nv-foot-sep" />
                   </div>

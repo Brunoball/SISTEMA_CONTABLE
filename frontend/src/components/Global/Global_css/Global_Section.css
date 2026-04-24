@@ -1204,4 +1204,75 @@ max-width: 250px;
   background: rgba(148, 163, 184, 0.14);
   color: #64748b;
   border-color: rgba(148, 163, 184, 0.22);
+}/* =========================================================
+   FLUJO DE CHEQUES — Colores por evento
+========================================================= */
+
+/* Base del chip */
+.flujo-badge {
+  gap: 6px;
+  font-weight: 560;
+}
+
+/* INGRESO A CARTERA — Verde */
+.flujo-badge.mov-chip--ok {
+  background: rgba(34, 173, 92, 0.13);
+  color: #16864a;
+  border-color: rgba(34, 173, 92, 0.28);
+}
+
+/* DEPOSITADO EN BANCO — Azul */
+.flujo-badge.mov-chip--info {
+  background: rgba(0, 85, 187, 0.12);
+  color: #0055bb;
+  border-color: rgba(0, 85, 187, 0.28);
+}
+
+/* USADO COMO PAGO — Naranja */
+.flujo-badge.mov-chip--warn {
+  background: rgba(245, 158, 11, 0.15);
+  color: #b86b00;
+  border-color: rgba(245, 158, 11, 0.30);
+}
+
+/* DEVUELTO — Violeta grisáceo */
+.flujo-badge.mov-chip--neutral {
+  background: rgba(124, 58, 237, 0.12);
+  color: #6d28d9;
+  border-color: rgba(124, 58, 237, 0.26);
+}
+
+/* EGRESO / ANULACIÓN — Rojo */
+.flujo-badge.mov-chip--danger {
+  background: rgba(225, 61, 69, 0.13);
+  color: #c92f38;
+  border-color: rgba(225, 61, 69, 0.28);
+}html[data-theme="oscuro"] .flujo-badge.mov-chip--ok {
+  background: rgba(34, 173, 92, 0.17) !important;
+  color: #74e0a3 !important;
+  border-color: rgba(34, 173, 92, 0.30) !important;
+}
+
+html[data-theme="oscuro"] .flujo-badge.mov-chip--info {
+  background: rgba(78, 161, 255, 0.16) !important;
+  color: #8fc5ff !important;
+  border-color: rgba(78, 161, 255, 0.30) !important;
+}
+
+html[data-theme="oscuro"] .flujo-badge.mov-chip--warn {
+  background: rgba(245, 158, 11, 0.17) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(245, 158, 11, 0.32) !important;
+}
+
+html[data-theme="oscuro"] .flujo-badge.mov-chip--neutral {
+  background: rgba(167, 139, 250, 0.16) !important;
+  color: #c4b5fd !important;
+  border-color: rgba(167, 139, 250, 0.30) !important;
+}
+
+html[data-theme="oscuro"] .flujo-badge.mov-chip--danger {
+  background: rgba(225, 61, 69, 0.17) !important;
+  color: #ff8b92 !important;
+  border-color: rgba(225, 61, 69, 0.32) !important;
 }

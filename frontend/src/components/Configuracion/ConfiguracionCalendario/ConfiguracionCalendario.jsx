@@ -6,15 +6,19 @@ import { useDateRange } from "../../../context/DateRangeContext";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarDays,
-  faChevronLeft,
+  faArrowLeft,
   faCheck,
   faSpinner,
   faCalendarWeek,
+  faCircleInfo,
+  faBolt,
+  faShieldHalved,
+  faChevronRight,
 } from "@fortawesome/free-solid-svg-icons";
 import Toast from "../../Global/Toast";
 import "./configuracion_calendario.css";
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+// ─── helpers ─────────────────────────────────────────────────────────────────
 
 function getSessionKey() {
   return (
@@ -80,11 +84,7 @@ function getMaxDiasAtrasDelMesActual(date = new Date()) {
 
 function clampDiasToMonth(value, maxDias = getMaxDiasAtrasDelMesActual()) {
   const n = Number(value);
-
-  if (Number.isNaN(n)) {
-    return Math.min(10, maxDias);
-  }
-
+  if (Number.isNaN(n)) return Math.min(10, maxDias);
   return Math.max(0, Math.min(Math.trunc(n), maxDias));
 }
 
@@ -95,40 +95,93 @@ function getDefaultDiasInput(value, maxDias = getMaxDiasAtrasDelMesActual()) {
 function getDiasAtrasRangeWithinMonth(value) {
   const to = normalizeDay(new Date());
   const dias = clampDiasToMonth(value, getMaxDiasAtrasDelMesActual(to));
-
   const from = new Date(to);
   from.setDate(from.getDate() - dias);
-
-  return {
-    from,
-    to,
-    dias,
-  };
+  return { from, to, dias };
 }
 
-// ─── constantes de modo ──────────────────────────────────────────────────────
+function formatDate(d) {
+  return `${String(d.getDate()).padStart(2, "0")}/${String(
+    d.getMonth() + 1
+  ).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+// ─── constantes de modo ───────────────────────────────────────────────────────
 
 const MODOS = [
   {
     value: "mes_completo",
     label: "Mes completo",
-    description: "Muestra desde el primer día del mes actual hasta el último.",
+    description: "Desde el primer día del mes hasta el último.",
     icon: faCalendarDays,
   },
   {
     value: "dias_atras",
     label: "Últimos N días",
-    description:
-      "Solo permite días hacia atrás dentro del mes actual, sin cruzar al mes anterior.",
+    description: "Días hacia atrás dentro del mes actual, sin cruzar al anterior.",
     icon: faCalendarWeek,
   },
 ];
 
-// ─── componente ─────────────────────────────────────────────────────────────
+// ─── sub-componentes ──────────────────────────────────────────────────────────
+
+function ItemDato({ label, value, full = false }) {
+  return (
+    <div className={`cal-metaItem ${full ? "cal-metaItem--full" : ""}`}>
+      <span className="cal-metaItem__label">{label}</span>
+      <span className="cal-metaItem__value">{value || "-"}</span>
+    </div>
+  );
+}
+
+function ModoPreviewBadge({ modo }) {
+  const labels = {
+    mes_completo: "Mes completo",
+    dias_atras: "Últimos N días",
+  };
+  return (
+    <span className={`cal-badge cal-badge--info`}>
+      {labels[modo] || modo}
+    </span>
+  );
+}
+
+function DiaPreview({ dias }) {
+  const { from, to } = getDiasAtrasRangeWithinMonth(dias);
+  return (
+    <div className="cal-preview">
+      <span className="cal-preview__label">Vista previa del rango</span>
+      <span className="cal-preview__range">
+        {formatDate(from)}
+        <span className="cal-preview__arrow">→</span>
+        {formatDate(to)}
+      </span>
+    </div>
+  );
+}
+
+function MesCompletoPreview() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return (
+    <div className="cal-preview">
+      <span className="cal-preview__label">Vista previa del rango</span>
+      <span className="cal-preview__range">
+        {formatDate(from)}
+        <span className="cal-preview__arrow">→</span>
+        {formatDate(to)}
+      </span>
+    </div>
+  );
+}
+
+// ─── componente principal ─────────────────────────────────────────────────────
 
 export default function ConfiguracionCalendario() {
   const navigate = useNavigate();
   const { calendarConfig, applyCalendarConfig } = useDateRange();
+  const tenantId = getTenantId();
 
   const maxDiasAtrasPermitidos = useMemo(
     () => getMaxDiasAtrasDelMesActual(),
@@ -136,28 +189,18 @@ export default function ConfiguracionCalendario() {
   );
 
   const [modo, setModo] = useState(calendarConfig?.modo ?? "mes_completo");
-
   const [diasAtrasInput, setDiasAtrasInput] = useState(
     getDefaultDiasInput(calendarConfig?.dias_atras, maxDiasAtrasPermitidos)
   );
-
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [toast, setToast] = useState(null);
 
   const diasAtrasNormalizado = useMemo(() => {
     const raw = String(diasAtrasInput ?? "").trim();
-
-    if (raw === "") {
-      return Math.min(10, maxDiasAtrasPermitidos);
-    }
-
+    if (raw === "") return Math.min(10, maxDiasAtrasPermitidos);
     const n = parseInt(raw, 10);
-
-    if (Number.isNaN(n)) {
-      return Math.min(10, maxDiasAtrasPermitidos);
-    }
-
+    if (Number.isNaN(n)) return Math.min(10, maxDiasAtrasPermitidos);
     return clampDiasToMonth(n, maxDiasAtrasPermitidos);
   }, [diasAtrasInput, maxDiasAtrasPermitidos]);
 
@@ -174,90 +217,51 @@ export default function ConfiguracionCalendario() {
       calendarConfig?.dias_atras ?? 10,
       maxDiasAtrasPermitidos
     );
-
     if (modo !== modoActual) return true;
-
-    if (modo === "dias_atras" && diasAtrasNormalizado !== diasActuales) {
-      return true;
-    }
-
+    if (modo === "dias_atras" && diasAtrasNormalizado !== diasActuales) return true;
     return false;
-  }, [
-    modo,
-    diasAtrasNormalizado,
-    calendarConfig,
-    maxDiasAtrasPermitidos,
-  ]);
+  }, [modo, diasAtrasNormalizado, calendarConfig, maxDiasAtrasPermitidos]);
 
   const showToast = useCallback((tipo, mensaje, duracion = 2500) => {
-    setToast({
-      id: Date.now(),
-      tipo,
-      mensaje,
-      duracion,
-    });
+    setToast({ id: Date.now(), tipo, mensaje, duracion });
   }, []);
 
-  // ── guardar ─────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
-    const tenantId = getTenantId();
-
     if (!tenantId) {
       setErrorMsg("No se encontró el tenant. Volvé a iniciar sesión.");
       return;
     }
-
     const diasNum = diasAtrasNormalizado;
     const cfg = { modo, dias_atras: diasNum };
-
     setSaving(true);
     setErrorMsg("");
     setToast(null);
-
     try {
       const data = await apiFetch(
         { action: "configuracion_calendario_set", idTenant: tenantId },
         { method: "POST", body: JSON.stringify(cfg) }
       );
-
-      if (!data?.exito) {
-        throw new Error(data?.mensaje || "No se pudo guardar.");
-      }
-
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar.");
       applyCalendarConfig(cfg);
       setDiasAtrasInput(String(diasNum));
-
       showToast("exito", "Configuración guardada correctamente.");
     } catch (e) {
       setErrorMsg(e.message || "Error guardando la configuración.");
     } finally {
       setSaving(false);
     }
-  }, [modo, diasAtrasNormalizado, applyCalendarConfig, showToast]);
+  }, [modo, diasAtrasNormalizado, applyCalendarConfig, showToast, tenantId]);
 
-  // ── input handlers ───────────────────────────────────────────────────────
   const handleDiasChange = useCallback(
     (e) => {
       const raw = e.target.value;
-
       if (!/^\d*$/.test(raw)) return;
-
       setErrorMsg("");
       setToast(null);
-
-      if (raw === "") {
-        setDiasAtrasInput("");
-        return;
-      }
-
+      if (raw === "") { setDiasAtrasInput(""); return; }
       const n = parseInt(raw, 10);
       if (Number.isNaN(n)) return;
-
-      // Bloquea directamente cualquier número que cruce al mes anterior
-      if (n > maxDiasAtrasPermitidos) {
-        return;
-      }
-
+      if (n > maxDiasAtrasPermitidos) return;
       setDiasAtrasInput(String(n));
     },
     [maxDiasAtrasPermitidos]
@@ -272,24 +276,20 @@ export default function ConfiguracionCalendario() {
       setModo(nuevoModo);
       setErrorMsg("");
       setToast(null);
-
       if (nuevoModo === "dias_atras") {
         const raw = String(diasAtrasInput ?? "").trim();
-
         if (raw === "") {
           setDiasAtrasInput(String(Math.min(10, maxDiasAtrasPermitidos)));
           return;
         }
-
-        setDiasAtrasInput(
-          String(clampDiasToMonth(raw, maxDiasAtrasPermitidos))
-        );
+        setDiasAtrasInput(String(clampDiasToMonth(raw, maxDiasAtrasPermitidos)));
       }
     },
     [diasAtrasInput, maxDiasAtrasPermitidos]
   );
 
-  // ── render ───────────────────────────────────────────────────────────────
+  // ─── render ───────────────────────────────────────────────────────────────
+
   return (
     <>
       {toast && (
@@ -302,170 +302,231 @@ export default function ConfiguracionCalendario() {
         />
       )}
 
-      <div className="cfgcal-page">
-        <div className="cfgcal-header">
-          <button
-            type="button"
-            className="cfgcal-backBtn"
-            onClick={() => navigate("/panel/configuracion")}
-          >
-            <FontAwesomeIcon icon={faChevronLeft} />
-            Volver
-          </button>
+      <section className="cal-page">
+        <div className="cal-topbar" />
 
-          <div className="cfgcal-headerTitle">
-            <FontAwesomeIcon
-              icon={faCalendarDays}
-              className="cfgcal-headerIcon"
-            />
-            <div>
-              <h1 className="cfgcal-title">Calendario global</h1>
-              <p className="cfgcal-subtitle">
-                Elegí cómo se carga el rango de fechas por defecto en todas las
-                vistas.
-              </p>
-            </div>
+        {/* HERO */}
+        <div className="cal-hero">
+          <div className="cal-hero__icon">
+            <FontAwesomeIcon icon={faCalendarDays} />
+          </div>
+
+          <div className="cal-hero__content">
+            <div className="cal-hero__eyebrow">Configuración global</div>
+            <h1 className="cal-title">Calendario global</h1>
+            <p className="cal-subtitle">
+              Elegí cómo se carga el rango de fechas por defecto en todas las
+              vistas de la aplicación.
+            </p>
+          </div>
+
+          <div className="cal-hero__side">
+            <button
+              type="button"
+              className="mov-btn mov-btn--primary"
+              onClick={() => navigate("/panel/configuracion")}
+            >
+              <FontAwesomeIcon icon={faArrowLeft} />
+              <span>Volver</span>
+            </button>
           </div>
         </div>
 
-        <div className="cfgcal-card">
-          <div className="cfgcal-section">
-            <h2 className="cfgcal-sectionTitle">Modo de visualización</h2>
+        {/* ALERTAS */}
+        {!tenantId && (
+          <div className="cal-alert cal-alert--error">
+            No se detectó el <b>idTenant</b> en la sesión del usuario.
+          </div>
+        )}
+        {errorMsg && (
+          <div className="cal-alert cal-alert--error">{errorMsg}</div>
+        )}
 
-            <div className="cfgcal-modos">
+        {/* GRID */}
+        <div className="cal-metaGrid">
+
+          {/* Tarjeta 1 — Estado actual */}
+          <div className="cal-metaCard">
+            <div className="cal-metaCard__top">
+              <div className="cal-metaCard__icon">
+                <FontAwesomeIcon icon={faCircleInfo} />
+              </div>
+              <div className="cal-metaCard__head">
+                <h2>Estado actual</h2>
+                <p>Configuración aplicada en este momento.</p>
+              </div>
+            </div>
+
+            <div className="cal-metaCard__body">
+              <ItemDato label="Tenant" value={tenantId || "-"} />
+              <ItemDato
+                label="Modo activo"
+                value={<ModoPreviewBadge modo={calendarConfig?.modo ?? "mes_completo"} />}
+              />
+              {(calendarConfig?.modo ?? "mes_completo") === "dias_atras" && (
+                <ItemDato
+                  label="Días configurados"
+                  value={`${clampDiasToMonth(calendarConfig?.dias_atras ?? 10, maxDiasAtrasPermitidos)} días`}
+                />
+              )}
+              <ItemDato
+                label="Vista previa"
+                value={
+                  (calendarConfig?.modo ?? "mes_completo") === "dias_atras"
+                    ? (() => {
+                        const { from, to } = getDiasAtrasRangeWithinMonth(
+                          calendarConfig?.dias_atras ?? 10
+                        );
+                        return `${formatDate(from)} → ${formatDate(to)}`;
+                      })()
+                    : (() => {
+                        const now = new Date();
+                        const from = new Date(now.getFullYear(), now.getMonth(), 1);
+                        const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                        return `${formatDate(from)} → ${formatDate(to)}`;
+                      })()
+                }
+                full
+              />
+            </div>
+          </div>
+
+          {/* Tarjeta 2 — Modo de visualización */}
+          <div className="cal-metaCard">
+            <div className="cal-metaCard__top">
+              <div className="cal-metaCard__icon">
+                <FontAwesomeIcon icon={faShieldHalved} />
+              </div>
+              <div className="cal-metaCard__head">
+                <h2>Modo de visualización</h2>
+                <p>Elegí cómo se calcula el rango de fechas por defecto.</p>
+              </div>
+            </div>
+
+            <div className="cal-metaCard__body cal-metaCard__body--stack">
               {MODOS.map((m) => (
                 <button
                   key={m.value}
                   type="button"
-                  className={[
-                    "cfgcal-modoBtn",
-                    modo === m.value ? "cfgcal-modoBtn--active" : "",
-                  ].join(" ")}
+                  className={`cal-actionRow ${modo === m.value ? "cal-actionRow--active" : ""}`}
                   onClick={() => handleModoChange(m.value)}
                 >
-                  <div className="cfgcal-modoBtnIcon">
+                  <div className="cal-actionRow__iconWrap">
                     <FontAwesomeIcon icon={m.icon} />
                   </div>
-
-                  <div className="cfgcal-modoBtnText">
-                    <span className="cfgcal-modoBtnLabel">{m.label}</span>
-                    <span className="cfgcal-modoBtnDesc">{m.description}</span>
+                  <div className="cal-actionRow__text">
+                    <span className="cal-actionRow__title">{m.label}</span>
+                    <span className="cal-actionRow__desc">{m.description}</span>
                   </div>
-
-                  {modo === m.value && (
-                    <span className="cfgcal-modoBtnCheck">
-                      <FontAwesomeIcon icon={faCheck} />
-                    </span>
-                  )}
+                  {modo === m.value
+                    ? <FontAwesomeIcon icon={faCheck} className="cal-actionRow__check" />
+                    : <FontAwesomeIcon icon={faChevronRight} className="cal-actionRow__chevron" />
+                  }
                 </button>
               ))}
             </div>
           </div>
 
+          {/* Tarjeta 3 — Configuración de días (condicional) */}
           {modo === "dias_atras" && (
-            <div className="cfgcal-section cfgcal-section--dias">
-              <h2 className="cfgcal-sectionTitle">¿Cuántos días hacia atrás?</h2>
-
-              <p className="cfgcal-sectionHint">
-                Solo podés ingresar valores entre <strong>0</strong> y{" "}
-                <strong>{maxDiasAtrasPermitidos}</strong>, porque no se permite
-                cruzar al mes anterior.
-              </p>
-
-              <div className="cfgcal-diasRow">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  className="cfgcal-diasInput"
-                  value={diasAtrasInput}
-                  onChange={handleDiasChange}
-                  onBlur={handleDiasBlur}
-                  onFocus={(e) => e.target.select()}
-                  placeholder={String(Math.min(10, maxDiasAtrasPermitidos))}
-                  aria-label="Cantidad de días hacia atrás"
-                  autoComplete="off"
-                />
-                <span className="cfgcal-diasLabel">días</span>
+            <div className="cal-metaCard">
+              <div className="cal-metaCard__top">
+                <div className="cal-metaCard__icon">
+                  <FontAwesomeIcon icon={faCalendarWeek} />
+                </div>
+                <div className="cal-metaCard__head">
+                  <h2>Cantidad de días</h2>
+                  <p>Definí cuántos días hacia atrás mostrar dentro del mes.</p>
+                </div>
               </div>
 
-              <DiaPreview dias={diasAtrasNormalizado} />
+              <div className="cal-metaCard__body cal-metaCard__body--stack">
+                <div className="cal-diasRow">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    className="cal-diasInput"
+                    value={diasAtrasInput}
+                    onChange={handleDiasChange}
+                    onBlur={handleDiasBlur}
+                    onFocus={(e) => e.target.select()}
+                    placeholder={String(Math.min(10, maxDiasAtrasPermitidos))}
+                    aria-label="Cantidad de días hacia atrás"
+                    autoComplete="off"
+                  />
+                  <span className="cal-diasLabel">días</span>
+                </div>
+
+                <p className="cal-diasHint">
+                  Valores permitidos: <strong>0</strong> a{" "}
+                  <strong>{maxDiasAtrasPermitidos}</strong>. No se permite cruzar
+                  al mes anterior.
+                </p>
+
+                <DiaPreview dias={diasAtrasNormalizado} />
+              </div>
             </div>
           )}
 
-          {modo === "mes_completo" && <MesCompletoPreview />}
+          {/* Tarjeta — Vista previa mes completo (condicional) */}
+          {modo === "mes_completo" && (
+            <div className="cal-metaCard">
+              <div className="cal-metaCard__top">
+                <div className="cal-metaCard__icon">
+                  <FontAwesomeIcon icon={faCalendarDays} />
+                </div>
+                <div className="cal-metaCard__head">
+                  <h2>Vista previa del rango</h2>
+                  <p>Rango que se aplicará con el modo seleccionado.</p>
+                </div>
+              </div>
 
-          {errorMsg && (
-            <div className="cfgcal-alert cfgcal-alert--error">{errorMsg}</div>
+              <div className="cal-metaCard__body cal-metaCard__body--stack">
+                <MesCompletoPreview />
+              </div>
+            </div>
           )}
 
-          <div className="cfgcal-actions">
-            <button
-              type="button"
-              className="cfgcal-saveBtn"
-              disabled={saving || (!hasChanges && !errorMsg)}
-              onClick={handleSave}
-            >
-              {saving ? (
-                <>
-                  <FontAwesomeIcon icon={faSpinner} spin />
-                  Guardando…
-                </>
-              ) : (
-                <>
-                  <FontAwesomeIcon icon={faCheck} />
-                  Guardar configuración
-                </>
-              )}
-            </button>
+          {/* Tarjeta 4 — Guardar */}
+          <div className={`cal-metaCard ${modo === "mes_completo" ? "cal-metaCard--fullRow" : ""}`}>
+            <div className="cal-metaCard__top">
+              <div className="cal-metaCard__icon">
+                <FontAwesomeIcon icon={faBolt} />
+              </div>
+              <div className="cal-metaCard__head">
+                <h2>Guardar configuración</h2>
+                <p>Aplicá los cambios a todas las vistas del sistema.</p>
+              </div>
+            </div>
 
-            {!hasChanges && !saving && !errorMsg && (
-              <span className="cfgcal-noChanges">Sin cambios pendientes</span>
-            )}
+            <div className="cal-metaCard__body cal-metaCard__body--stack">
+              <button
+                type="button"
+                className={`cal-saveRow ${!hasChanges && !saving ? "cal-saveRow--disabled" : ""}`}
+                disabled={saving || !hasChanges}
+                onClick={handleSave}
+              >
+                <div className="cal-saveRow__text">
+                  <span className="cal-saveRow__title">
+                    {saving ? "Guardando configuración..." : "Guardar configuración"}
+                  </span>
+                  <span className="cal-saveRow__desc">
+                    {hasChanges
+                      ? "Hay cambios pendientes por guardar."
+                      : "No hay cambios pendientes."}
+                  </span>
+                </div>
+                <FontAwesomeIcon
+                  icon={saving ? faSpinner : faCheck}
+                  spin={saving}
+                />
+              </button>
+            </div>
           </div>
+
         </div>
-      </div>
+      </section>
     </>
-  );
-}
-
-// ─── sub-componentes de preview ──────────────────────────────────────────────
-
-function formatDate(d) {
-  return `${String(d.getDate()).padStart(2, "0")}/${String(
-    d.getMonth() + 1
-  ).padStart(2, "0")}/${d.getFullYear()}`;
-}
-
-function DiaPreview({ dias }) {
-  const { from, to } = getDiasAtrasRangeWithinMonth(dias);
-
-  return (
-    <div className="cfgcal-preview">
-      <span className="cfgcal-previewLabel">Vista previa del rango:</span>
-
-      <span className="cfgcal-previewRange">
-        {formatDate(from)}
-        <span className="cfgcal-previewArrow">→</span>
-        {formatDate(to)}
-      </span>
-    </div>
-  );
-}
-
-function MesCompletoPreview() {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-  return (
-    <div className="cfgcal-preview">
-      <span className="cfgcal-previewLabel">Vista previa del rango:</span>
-      <span className="cfgcal-previewRange">
-        {formatDate(from)}
-        <span className="cfgcal-previewArrow">→</span>
-        {formatDate(to)}
-      </span>
-    </div>
   );
 }

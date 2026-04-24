@@ -43,35 +43,43 @@ function sanitizeEmitter(v) {
 }
 
 /* =========================================================
-   Importe con centavos
-   Se guarda internamente como string de dígitos:
-   "1"    => 0,01
-   "12"   => 0,12
-   "123"  => 1,23
-   "1234" => 12,34
+   Importe estilo Nueva Venta
+   - mientras escribe: número normal
+   - al blur / Enter: agrega ,00 si hace falta
 ========================================================= */
-function formatImporteFromDigits(v) {
-  const digits = onlyDigits(v);
-  if (!digits) return "0,00";
+function parseMoneyInputARS(v) {
+  if (v == null) return 0;
+  let s = String(v).trim();
+  if (!s) return 0;
 
-  const padded = digits.padStart(3, "0");
-  const enteros = padded.slice(0, -2).replace(/^0+(?=\d)/, "") || "0";
-  const decimales = padded.slice(-2);
+  s = s.replace(/\$/g, "").replace(/\s+/g, "");
 
-  return `${enteros},${decimales}`;
+  if (s.includes(",") && s.includes(".")) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (s.includes(",")) {
+    s = s.replace(",", ".");
+  }
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
 }
 
-function importeDigitsToNumber(v) {
-  const digits = onlyDigits(v);
-  if (!digits) return 0;
-  return Number(digits) / 100;
+function formatMoneyInputARS(v) {
+  const n = safeNumber(v);
+  try {
+    return n.toLocaleString("es-AR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  } catch {
+    return n.toFixed(2).replace(".", ",");
+  }
 }
 
-function numberToImporteDigits(v) {
-  if (v == null || v === "") return "";
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "";
-  return String(Math.round(n * 100));
+function formatEditableMoney(v) {
+  const n = safeNumber(v);
+  if (n === 0) return "";
+  return String(n).replace(".", ",");
 }
 
 /* =========================================================
@@ -97,7 +105,9 @@ export default function ModalNuevoCheque({
       fecha_emision: todayISO(),
       emisor: "",
       numero_cheque: "",
-      importe: "",
+      importe: 0,
+      importeDraft: "",
+      importeFocused: false,
       fecha_pago: plusDaysISO(10),
     }),
     []
@@ -148,7 +158,7 @@ export default function ModalNuevoCheque({
         form: {
           ...form,
           numero_cheque: numeroCheque,
-          importe: importeDigitsToNumber(form.importe),
+          importe: safeNumber(form.importe),
         },
       });
 
@@ -195,7 +205,9 @@ export default function ModalNuevoCheque({
         fecha_emision: initialData.fecha_emision || todayISO(),
         emisor: sanitizeEmitter(initialData.emisor || ""),
         numero_cheque: onlyDigits(initialData.numero_cheque || ""),
-        importe: numberToImporteDigits(initialData.importe),
+        importe: safeNumber(initialData.importe),
+        importeDraft: "",
+        importeFocused: false,
         fecha_pago: initialData.fecha_pago || plusDaysISO(10),
       });
 
@@ -302,7 +314,7 @@ export default function ModalNuevoCheque({
       return;
     }
 
-    if (!(importeDigitsToNumber(form.importe) > 0)) {
+    if (!(safeNumber(form.importe) > 0)) {
       notify("advertencia", "Ingresá un importe válido mayor a 0.", 3200);
       return;
     }
@@ -319,7 +331,7 @@ export default function ModalNuevoCheque({
       ...form,
       emisor: sanitizeEmitter(form.emisor),
       numero_cheque: onlyDigits(form.numero_cheque),
-      importe: importeDigitsToNumber(form.importe),
+      importe: safeNumber(form.importe),
       tipo: tipoCheque,
       tipo_cheque: tipoCheque,
       archivo: archivo || null,
@@ -544,16 +556,50 @@ export default function ModalNuevoCheque({
                         className="nc-input"
                         type="text"
                         placeholder="0,00"
-                        value={formatImporteFromDigits(form.importe)}
-                        onChange={(e) => setField("importe", onlyDigits(e.target.value))}
+                        value={
+                          form.importeFocused
+                            ? form.importeDraft ?? ""
+                            : formatMoneyInputARS(form.importe)
+                        }
+                        onFocus={(e) => {
+                          if (saving || checkingNumero) return;
+                          setForm((prev) => ({
+                            ...prev,
+                            importeFocused: true,
+                            importeDraft: formatEditableMoney(prev.importe),
+                          }));
+                          setTimeout(() => e.target.select(), 0);
+                        }}
+                        onChange={(e) => {
+                          const c = e.target.value.replace(/[^\d,.\-]/g, "");
+                          setForm((prev) => ({
+                            ...prev,
+                            importeDraft: c,
+                            importe: parseMoneyInputARS(c),
+                          }));
+                        }}
+                        onBlur={() => {
+                          setForm((prev) => {
+                            const importeParseado = parseMoneyInputARS(prev.importeDraft);
+                            return {
+                              ...prev,
+                              importe: importeParseado,
+                              importeDraft: "",
+                              importeFocused: false,
+                            };
+                          });
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            e.currentTarget.blur();
+                          }
+                        }}
                         disabled={saving || checkingNumero}
-                        inputMode="numeric"
+                        inputMode="decimal"
                         autoComplete="off"
                       />
-                      <label
-                        className="nc-label"
-
-                      >
+                      <label className="nc-label">
                         Importe *
                       </label>
                     </div>

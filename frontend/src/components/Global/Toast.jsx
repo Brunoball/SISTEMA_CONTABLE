@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -13,28 +13,99 @@ import "./Toast.css";
 
 const TIPOS_CON_CIERRE_MANUAL = ["error", "advertencia"];
 
+// Evento global para cerrar cualquier toast anterior
+const TOAST_GLOBAL_EVENT = "toast:cerrar-anteriores";
+
 const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
   const [desapareciendo, setDesapareciendo] = useState(false);
+
+  const toastIdRef = useRef(
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
+
+  const cerradoRef = useRef(false);
+  const timersRef = useRef([]);
+
   const esManual = TIPOS_CON_CIERRE_MANUAL.includes(tipo);
 
-  useEffect(() => {
-    if (esManual) return; // error y advertencia no se cierran solos
+  const limpiarTimers = () => {
+    timersRef.current.forEach((timer) => clearTimeout(timer));
+    timersRef.current = [];
+  };
 
-    const d = Number(duracion) || 2500;
+  const cerrarToast = ({ conAnimacion = true } = {}) => {
+    if (cerradoRef.current) return;
 
-    const mostrarTimer = setTimeout(() => {
+    cerradoRef.current = true;
+    limpiarTimers();
+
+    if (conAnimacion) {
       setDesapareciendo(true);
-    }, Math.max(0, d - 500));
 
-    const ocultarTimer = setTimeout(() => {
+      const timer = setTimeout(() => {
+        onClose?.();
+      }, 250);
+
+      timersRef.current.push(timer);
+    } else {
       onClose?.();
-    }, d);
+    }
+  };
+
+  useEffect(() => {
+    const miId = toastIdRef.current;
+
+    const cerrarSiNoSoyYo = (event) => {
+      const idEntrante = event?.detail?.id;
+
+      if (idEntrante && idEntrante !== miId) {
+        cerrarToast({ conAnimacion: false });
+      }
+    };
+
+    window.addEventListener(TOAST_GLOBAL_EVENT, cerrarSiNoSoyYo);
+
+    // Cuando este toast se monta, cierra todos los toast anteriores
+    window.dispatchEvent(
+      new CustomEvent(TOAST_GLOBAL_EVENT, {
+        detail: { id: miId },
+      })
+    );
 
     return () => {
-      clearTimeout(mostrarTimer);
-      clearTimeout(ocultarTimer);
+      window.removeEventListener(TOAST_GLOBAL_EVENT, cerrarSiNoSoyYo);
+      limpiarTimers();
     };
-  }, [onClose, duracion, esManual]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    limpiarTimers();
+    setDesapareciendo(false);
+    cerradoRef.current = false;
+
+    if (esManual) return;
+
+    const d = Number(duracion) > 0 ? Number(duracion) : 2500;
+    const tiempoAnimacion = 500;
+
+    const mostrarTimer = setTimeout(() => {
+      if (!cerradoRef.current) {
+        setDesapareciendo(true);
+      }
+    }, Math.max(0, d - tiempoAnimacion));
+
+    const ocultarTimer = setTimeout(() => {
+      cerrarToast({ conAnimacion: false });
+    }, d);
+
+    timersRef.current.push(mostrarTimer, ocultarTimer);
+
+    return () => {
+      limpiarTimers();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipo, mensaje, duracion, esManual]);
 
   const iconos = {
     exito: faCheckCircle,
@@ -58,20 +129,21 @@ const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
       className={`toast-container ${claseSeleccionada} ${
         desapareciendo ? "desaparecer" : ""
       }`}
-      role="status"
-      aria-live="polite"
+      role={tipo === "error" || tipo === "advertencia" ? "alert" : "status"}
+      aria-live={tipo === "error" || tipo === "advertencia" ? "assertive" : "polite"}
     >
       <FontAwesomeIcon
         icon={iconoSeleccionado}
         className={`toast-icon ${tipo === "cargando" ? "spin" : ""}`}
       />
+
       <span className="toast-message">{mensaje}</span>
 
-      {/* Botón de cierre solo para error y advertencia */}
       {esManual && (
         <button
+          type="button"
           className="toast-close-btn"
-          onClick={onClose}
+          onClick={() => cerrarToast({ conAnimacion: true })}
           aria-label="Cerrar notificación"
         >
           <FontAwesomeIcon icon={faTimes} />

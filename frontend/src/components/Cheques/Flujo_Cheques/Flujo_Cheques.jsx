@@ -10,9 +10,6 @@ import {
   faBoxOpen,
   faArrowRightToBracket,
   faBuildingColumns,
-  faHandHoldingDollar,
-  faBan,
-  faRotateLeft,
   faCircleInfo,
   faEye,
 } from "@fortawesome/free-solid-svg-icons";
@@ -124,7 +121,7 @@ function normalizeFlujo(row) {
     numero_cheque: row?.numero_cheque ?? row?.numeroCheque ?? "",
     emisor: row?.emisor ?? "",
     importe: row?.importe ?? 0,
-    evento: row?.evento ?? "",
+    evento: normalizarEvento(row?.evento ?? ""),
     descripcion: row?.descripcion ?? "",
     fecha_evento: row?.fecha_evento ?? row?.fechaEvento ?? "",
     fecha_emision: row?.fecha_emision ?? row?.fechaEmision ?? "",
@@ -137,41 +134,73 @@ function normalizeFlujo(row) {
 /* ═══════════════════════════════════════════
    Configuración de eventos
 ═══════════════════════════════════════════ */
+const EVENTO_CANONICO = {
+  INGRESO_CARTERA: "INGRESO_CARTERA",
+  DEPOSITADO_BANCO: "DEPOSITADO_BANCO",
+  EGRESO_CARTERA: "EGRESO_CARTERA",
+};
+
+const EVENTO_ALIAS = {
+  INGRESO_CARTERA: EVENTO_CANONICO.INGRESO_CARTERA,
+  INGRESO: EVENTO_CANONICO.INGRESO_CARTERA,
+  NUEVO: EVENTO_CANONICO.INGRESO_CARTERA,
+  ALTA: EVENTO_CANONICO.INGRESO_CARTERA,
+
+  DEPOSITADO_BANCO: EVENTO_CANONICO.DEPOSITADO_BANCO,
+  DEPOSITO_BANCO: EVENTO_CANONICO.DEPOSITADO_BANCO,
+  DEPOSITO: EVENTO_CANONICO.DEPOSITADO_BANCO,
+  DEPOSITADO: EVENTO_CANONICO.DEPOSITADO_BANCO,
+
+  EGRESO_CARTERA: EVENTO_CANONICO.EGRESO_CARTERA,
+  EGRESO: EVENTO_CANONICO.EGRESO_CARTERA,
+  BAJA: EVENTO_CANONICO.EGRESO_CARTERA,
+  PAGO: EVENTO_CANONICO.EGRESO_CARTERA,
+  USADO_COMO_PAGO: EVENTO_CANONICO.EGRESO_CARTERA,
+  ANULACION: EVENTO_CANONICO.EGRESO_CARTERA,
+};
+
 const EVENTO_CONFIG = {
-  INGRESO: {
+  [EVENTO_CANONICO.INGRESO_CARTERA]: {
     label: "Ingreso a cartera",
     icon: faArrowRightToBracket,
     chipClass: "mov-chip--ok",
   },
-  DEPOSITO: {
+  [EVENTO_CANONICO.DEPOSITADO_BANCO]: {
     label: "Depositado en banco",
     icon: faBuildingColumns,
     chipClass: "mov-chip--info",
   },
-  PAGO: {
-    label: "Usado como pago",
-    icon: faHandHoldingDollar,
+  [EVENTO_CANONICO.EGRESO_CARTERA]: {
+    label: "Egreso de cartera",
+    icon: faCircleInfo,
     chipClass: "mov-chip--warn",
-  },
-  DEVOLUCION: {
-    label: "Devuelto",
-    icon: faRotateLeft,
-    chipClass: "mov-chip--neutral",
-  },
-  ANULACION: {
-    label: "Egreso de la cartera",
-    icon: faBan,
-    chipClass: "mov-chip--danger",
   },
 };
 
+function normalizarEvento(evento) {
+  const key = String(evento || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_");
+
+  return EVENTO_ALIAS[key] || key;
+}
+
+function humanizarEventoDesconocido(evento) {
+  const texto = safeText(evento).replace(/_/g, " ").toLowerCase();
+  return texto.replace(/(^|\s)\S/g, (m) => m.toUpperCase());
+}
+
 function eventoConfig(evento) {
-  return EVENTO_CONFIG[String(evento || "").toUpperCase()] ?? {
-    label: evento || "—",
+  const key = normalizarEvento(evento);
+
+  return EVENTO_CONFIG[key] ?? {
+    label: humanizarEventoDesconocido(evento),
     icon: faCircleInfo,
     chipClass: "mov-chip--neutral",
   };
 }
+
 
 /* ═══════════════════════════════════════════
    Constantes

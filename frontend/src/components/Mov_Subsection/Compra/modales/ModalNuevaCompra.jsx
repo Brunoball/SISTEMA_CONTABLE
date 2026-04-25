@@ -325,50 +325,50 @@ function MedioPagoInlineCompraRow({
 
       <div className="nc-mp-row nc-mp-row--monto">
         <div className="nc-field nc-mp-monto-field" style={{ position: "relative" }}>
-<input
-  className="nc-input nc-mp-monto-input"
-  type="text"
-  inputMode="decimal"
-  value={
-    row.montoFocused
-      ? row.montoDraft ?? ""
-      : formatMoneyInputARS(esCheque ? importeCheques : row.monto)
-  }
-  onFocus={(e) => {
-    if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
-    onUpdate(row.id, {
-      montoFocused: true,
-      montoDraft: formatEditableMoney(esCheque ? importeCheques : row.monto),
-    });
-    setTimeout(() => e.target.select(), 0);
-  }}
-  onChange={(e) => {
-    if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
-    const c = e.target.value.replace(/[^\d,.\-]/g, "");
-    onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
-  }}
-  onBlur={() => {
-    if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
-    const p = parseMoneyInputARS(row.montoDraft);
-    onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false });
-  }}
-  onKeyDown={(e) => {
-    if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
-    if (e.key === "Enter") {
-      e.preventDefault();
-      e.currentTarget.blur();
-    }
-  }}
-  placeholder="$ 0,00"
-  disabled={saving || (esCheque && chequesSeleccionados.length > 0)}
-  style={{
-    background: esCheque && chequesSeleccionados.length > 0 ? "rgba(0,0,0,.03)" : undefined,
-    height: 32,
-    padding: "0 10px",
-    fontSize: 13,
-    textAlign: "right",
-  }}
-/>
+          <input
+            className="nc-input nc-mp-monto-input"
+            type="text"
+            inputMode="decimal"
+            value={
+              row.montoFocused
+                ? row.montoDraft ?? ""
+                : formatMoneyInputARS(esCheque ? importeCheques : row.monto)
+            }
+            onFocus={(e) => {
+              if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
+              onUpdate(row.id, {
+                montoFocused: true,
+                montoDraft: formatEditableMoney(esCheque ? importeCheques : row.monto),
+              });
+              setTimeout(() => e.target.select(), 0);
+            }}
+            onChange={(e) => {
+              if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
+              const c = e.target.value.replace(/[^\d,.\-]/g, "");
+              onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
+            }}
+            onBlur={() => {
+              if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
+              const p = parseMoneyInputARS(row.montoDraft);
+              onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false });
+            }}
+            onKeyDown={(e) => {
+              if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
+            placeholder="$ 0,00"
+            disabled={saving || (esCheque && chequesSeleccionados.length > 0)}
+            style={{
+              background: esCheque && chequesSeleccionados.length > 0 ? "rgba(0,0,0,.03)" : undefined,
+              height: 32,
+              padding: "0 10px",
+              fontSize: 13,
+              textAlign: "right",
+            }}
+          />
           <label className="nc-label nc-label--up">Monto</label>
         </div>
 
@@ -1020,6 +1020,21 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       return { ok: false, msg: "Falta seleccionar el Tipo de compra (Contado / Cuenta Corriente)." };
     }
 
+    // ⭐ VALIDACIÓN DE FECHA ⭐
+    if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      return {
+        ok: false,
+        msg: "La fecha es inválida.",
+      };
+    }
+
+    if (fecha > todayISO()) {
+      return {
+        ok: false,
+        msg: "La fecha no puede ser posterior al día actual.",
+      };
+    }
+
     if (isContado) {
       for (let i = 0; i < mediosFilas.length; i++) {
         const mp = mediosFilas[i];
@@ -1078,7 +1093,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     }
 
     return { ok: true, warn: problems.length > 0 };
-  }, [idProveedor, forma, isContado, mediosFilas, mediosPagoList, rowsCalc, resumen.total, sumaMediosPago]);
+  }, [idProveedor, forma, fecha, isContado, mediosFilas, mediosPagoList, rowsCalc, resumen.total, sumaMediosPago]);
 
   const subirYVincularArchivo = useCallback(
     async (idsMovimientos, archivo) => {
@@ -1474,6 +1489,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                     </div>
 
                     <div className="nc-section-body">
+                      {/* ⭐ INPUT DE FECHA CON VALIDACIONES ⭐ */}
                       <div className="nc-field" onClick={() => fechaInputRef.current?.showPicker?.()}>
                         <input
                           ref={fechaInputRef}
@@ -1482,7 +1498,18 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                           type="date"
                           placeholder=" "
                           value={fecha}
-                          onChange={(e) => setFecha(String(e.target.value || "").trim())}
+                          max={todayISO()}
+                          onChange={(e) => {
+                            const nuevaFecha = String(e.target.value || "").trim();
+
+                            if (nuevaFecha && nuevaFecha > todayISO()) {
+                              setFecha(todayISO());
+                              showToast("advertencia", "No podés seleccionar una fecha posterior al día actual.", 3000);
+                              return;
+                            }
+
+                            setFecha(nuevaFecha);
+                          }}
                           disabled={saving}
                         />
                         <label className="nc-label">Fecha</label>
@@ -1542,86 +1569,86 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                           Quedará registrada como <b>pendiente de pago</b>.
                         </div>
                       )}
-                                          <div className="mi-uploadCard">
-                      <div className="mi-uploadCard__head">
-                        <div className="mi-uploadCard__title">Comprobante adjunto</div>
-                        <div className="mi-uploadCard__sub">
-                          Seleccioná, visualizá o quitá el archivo antes de guardar
+                      <div className="mi-uploadCard">
+                        <div className="mi-uploadCard__head">
+                          <div className="mi-uploadCard__title">Comprobante adjunto</div>
+                          <div className="mi-uploadCard__sub">
+                            Seleccioná, visualizá o quitá el archivo antes de guardar
+                          </div>
+                        </div>
+
+                        <div className="mi-uploadCard__body">
+                          <div className={`mi-uploadFile${archivoAdjunto ? " is-filled" : " is-empty"}`}>
+                            {archivoAdjunto ? (
+                              <>
+                                <div className="mi-uploadFile__icon">
+                                  <FontAwesomeIcon icon={faFileInvoiceDollar} />
+                                </div>
+
+                                <div className="mi-uploadFile__meta">
+                                  <div className="mi-uploadFile__name" title={archivoAdjunto.name}>
+                                    {archivoAdjunto.name}
+                                  </div>
+                                  <div className="mi-uploadFile__size">
+                                    {Math.max(1, Math.round((archivoAdjunto.size || 0) / 1024))} KB
+                                  </div>
+                                </div>
+
+                                <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
+                                  <button
+                                    type="button"
+                                    className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                    onClick={handleOpenVerComprobante}
+                                    disabled={saving}
+                                    title="Ver comprobante"
+                                  >
+                                    <FontAwesomeIcon icon={faEye} />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                    onClick={() => {
+                                      setArchivoAdjunto(null);
+                                      if (fileInputRef.current) fileInputRef.current.value = "";
+                                      setOpenVerComp(false);
+                                      if (compUrl) URL.revokeObjectURL(compUrl);
+                                      setCompUrl("");
+                                    }}
+                                    disabled={saving || openVerComp}
+                                    title="Quitar archivo"
+                                  >
+                                    <FontAwesomeIcon icon={faTrash} />
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="mi-uploadFile__empty">No hay comprobante seleccionado</div>
+                            )}
+                          </div>
+
+                          <div className="mi-uploadBar" style={{ marginTop: 10 }}>
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              className="mi-uploadBar__input"
+                              onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
+                              disabled={saving}
+                              style={{ display: "none" }}
+                            />
+
+                            <button
+                              type="button"
+                              className="mi-uploadBar__btn mi-uploadBar__btn--primary"
+                              onClick={handleOpenFilePicker}
+                              disabled={saving}
+                            >
+                              <FontAwesomeIcon icon={faUpload} />{" "}
+                              {archivoAdjunto ? "Reemplazar archivo" : "Seleccionar archivo"}
+                            </button>
+                          </div>
                         </div>
                       </div>
-
-                      <div className="mi-uploadCard__body">
-                        <div className={`mi-uploadFile${archivoAdjunto ? " is-filled" : " is-empty"}`}>
-                          {archivoAdjunto ? (
-                            <>
-                              <div className="mi-uploadFile__icon">
-                                <FontAwesomeIcon icon={faFileInvoiceDollar} />
-                              </div>
-
-                              <div className="mi-uploadFile__meta">
-                                <div className="mi-uploadFile__name" title={archivoAdjunto.name}>
-                                  {archivoAdjunto.name}
-                                </div>
-                                <div className="mi-uploadFile__size">
-                                  {Math.max(1, Math.round((archivoAdjunto.size || 0) / 1024))} KB
-                                </div>
-                              </div>
-
-                              <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
-                                <button
-                                  type="button"
-                                  className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                  onClick={handleOpenVerComprobante}
-                                  disabled={saving}
-                                  title="Ver comprobante"
-                                >
-                                  <FontAwesomeIcon icon={faEye} />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                  onClick={() => {
-                                    setArchivoAdjunto(null);
-                                    if (fileInputRef.current) fileInputRef.current.value = "";
-                                    setOpenVerComp(false);
-                                    if (compUrl) URL.revokeObjectURL(compUrl);
-                                    setCompUrl("");
-                                  }}
-                                  disabled={saving || openVerComp}
-                                  title="Quitar archivo"
-                                >
-                                  <FontAwesomeIcon icon={faTrash} />
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <div className="mi-uploadFile__empty">No hay comprobante seleccionado</div>
-                          )}
-                        </div>
-
-                        <div className="mi-uploadBar" style={{ marginTop: 10 }}>
-                          <input
-                            ref={fileInputRef}
-                            type="file"
-                            className="mi-uploadBar__input"
-                            onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
-                            disabled={saving}
-                            style={{ display: "none" }}
-                          />
-
-                          <button
-                            type="button"
-                            className="mi-uploadBar__btn mi-uploadBar__btn--primary"
-                            onClick={handleOpenFilePicker}
-                            disabled={saving}
-                          >
-                            <FontAwesomeIcon icon={faUpload} />{" "}
-                            {archivoAdjunto ? "Reemplazar archivo" : "Seleccionar archivo"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
                     </div>
 
                     <div className="nc-section-divider" />
@@ -1631,20 +1658,20 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
 
                 </aside>
-                                  <div className="nc-actions mi-cr-filters__actions mi-cr-filters__actions--sticky">
-                    <button type="button" className="mit-btn mit-btn--solid mit-btn--block" onClick={submit} disabled={saving}>
-                      {saving ? "Guardando..." : "Guardar compra"}
-                    </button>
+                <div className="nc-actions mi-cr-filters__actions mi-cr-filters__actions--sticky">
+                  <button type="button" className="mit-btn mit-btn--solid mit-btn--block" onClick={submit} disabled={saving}>
+                    {saving ? "Guardando..." : "Guardar compra"}
+                  </button>
 
-                    <button
-                      type="button"
-                      className="mit-btn mit-btn--ghost mit-btn--block"
-                      onClick={() => !saving && onClose?.()}
-                      disabled={saving}
-                    >
-                      Cancelar
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className="mit-btn mit-btn--ghost mit-btn--block"
+                    onClick={() => !saving && onClose?.()}
+                    disabled={saving}
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -1068,6 +1068,18 @@ export default function ModalEditarIngreso({
     } catch { el.focus(); }
   }, [saving]);
 
+  // ⭐ FUNCIÓN PARA VALIDAR Y ACTUALIZAR LA FECHA ⭐
+  const handleFechaChange = useCallback((e) => {
+    const nuevaFecha = e.target.value;
+    
+    if (nuevaFecha && nuevaFecha > todayISO()) {
+      showToast("advertencia", "No podés seleccionar una fecha posterior al día actual.");
+      return;
+    }
+    
+    setForm((p) => ({ ...p, fecha: nuevaFecha }));
+  }, [showToast]);
+
   const cerrar = useCallback(() => { if (!saving) onClose?.(); }, [saving, onClose]);
 
   // ─── Operaciones de API sobre comprobante y cheques ───────────────────────────
@@ -1174,6 +1186,11 @@ export default function ModalEditarIngreso({
   const validate = useCallback(() => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(form.fecha || "").trim()))
       return { ok: false, msg: "La fecha es obligatoria." };
+    
+    // ⭐ VALIDACIÓN DE FECHA FUTURA ⭐
+    if (form.fecha > todayISO()) {
+      return { ok: false, msg: "La fecha no puede ser posterior al día actual." };
+    }
 
     if (!Array.isArray(form.medios) || !form.medios.length)
       return { ok: false, msg: "Debés cargar al menos un medio de pago." };
@@ -1343,16 +1360,16 @@ export default function ModalEditarIngreso({
     [API, currentRowIdForNewDesc, updateItem, showToast]
   );
 
-// Lista de detalles con opción de nueva descripción
-const enhancedDetalles = useMemo(
-  () => [
-    { id: "new_option", __isNewOption: true, nombre: "+ Agregar nueva descripción" },
-    ...detalles,
-  ],
-  [detalles]
-);
+  // Lista de detalles con opción de nueva descripción
+  const enhancedDetalles = useMemo(
+    () => [
+      { id: "new_option", __isNewOption: true, nombre: "+ Agregar nueva descripción" },
+      ...detalles,
+    ],
+    [detalles]
+  );
 
-if (!open) return null;
+  if (!open) return null;
   return createPortal(
     <>
       <div className="mi-modal__overlay mi-modal__overlay--mov">
@@ -1627,7 +1644,7 @@ if (!open) return null;
                       </div>
 
                       <div className="nc-section-body">
-                        {/* Fecha */}
+                        {/* ⭐ FECHA CON VALIDACIONES ⭐ */}
                         <div className="nc-field" onClick={openDatePicker}>
                           <input
                             ref={fechaRef}
@@ -1635,9 +1652,8 @@ if (!open) return null;
                             type="date"
                             placeholder=" "
                             value={form.fecha}
-                            onChange={(e) =>
-                              setForm((p) => ({ ...p, fecha: e.target.value }))
-                            }
+                            max={todayISO()}
+                            onChange={handleFechaChange}
                             disabled={saving}
                           />
                           <label className="nc-label">Fecha</label>

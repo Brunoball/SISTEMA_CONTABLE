@@ -405,40 +405,40 @@ function MedioPagoRow({
       {/* Monto */}
       <div className="nc-mp-row nc-mp-row--monto">
         <div className="nc-field nc-mp-monto-field" style={{ position: "relative" }}>
-<input
-  className="nc-input nc-mp-monto-input"
-  type="text"
-  inputMode="decimal"
-  value={row.montoFocused ? row.montoDraft ?? "" : formatMoneyInputARS(montoActual)}
-  onFocus={(e) => {
-    if (saving || (esCheque && !!row.cheque)) return;
-    onUpdate(row.id, {
-      montoFocused: true,
-      montoDraft: formatEditableMoney(montoActual),
-    });
-    setTimeout(() => e.target.select(), 0);
-  }}
-  onChange={(e) => {
-    if (saving || (esCheque && !!row.cheque)) return;
-    const c = e.target.value.replace(/[^\d,.\-]/g, "");
-    onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
-  }}
-  onBlur={() => {
-    if (saving || (esCheque && !!row.cheque)) return;
-    const p = parseMoneyInputARS(row.montoDraft);
-    onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false });
-  }}
-  onKeyDown={(e) => {
-    if (saving || (esCheque && !!row.cheque)) return;
-    if (e.key === "Enter") {
-      e.preventDefault();
-      e.currentTarget.blur();
-    }
-  }}
-  placeholder="$ 0,00"
-  disabled={saving || (esCheque && !!row.cheque)}
-  style={{ height: 32, padding: "0 10px", fontSize: 13, textAlign: "right" }}
-/>
+          <input
+            className="nc-input nc-mp-monto-input"
+            type="text"
+            inputMode="decimal"
+            value={row.montoFocused ? row.montoDraft ?? "" : formatMoneyInputARS(montoActual)}
+            onFocus={(e) => {
+              if (saving || (esCheque && !!row.cheque)) return;
+              onUpdate(row.id, {
+                montoFocused: true,
+                montoDraft: formatEditableMoney(montoActual),
+              });
+              setTimeout(() => e.target.select(), 0);
+            }}
+            onChange={(e) => {
+              if (saving || (esCheque && !!row.cheque)) return;
+              const c = e.target.value.replace(/[^\d,.\-]/g, "");
+              onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
+            }}
+            onBlur={() => {
+              if (saving || (esCheque && !!row.cheque)) return;
+              const p = parseMoneyInputARS(row.montoDraft);
+              onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false });
+            }}
+            onKeyDown={(e) => {
+              if (saving || (esCheque && !!row.cheque)) return;
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
+            placeholder="$ 0,00"
+            disabled={saving || (esCheque && !!row.cheque)}
+            style={{ height: 32, padding: "0 10px", fontSize: 13, textAlign: "right" }}
+          />
           <label className="nc-label nc-label--up">Monto</label>
         </div>
 
@@ -893,9 +893,27 @@ export default function ModalNuevoIngreso({
     setViewerData({ url: "", mime: "", title: "Comprobante" });
   }, [viewerData]);
 
+  // ⭐ FUNCIÓN DE VALIDACIÓN DE FECHA PARA EL onChange ⭐
+  const handleFechaChange = useCallback((e) => {
+    const nuevaFecha = e.target.value;
+    
+    if (nuevaFecha && nuevaFecha > todayISO()) {
+      showToast("advertencia", "No podés seleccionar una fecha posterior al día actual.");
+      return;
+    }
+    
+    setFecha(nuevaFecha);
+  }, [showToast]);
+
   // ─── Validación ──────────────────────────────────────────────────────────────
   const validate = useCallback(() => {
     if (!safeStr(fecha)) return { ok: false, msg: "Falta la fecha." };
+    
+    // ⭐ VALIDACIÓN DE FECHA FUTURA ⭐
+    if (fecha > todayISO()) {
+      return { ok: false, msg: "La fecha no puede ser posterior al día actual." };
+    }
+    
     for (let i = 0; i < mediosFilas.length; i++) {
       const mp = mediosFilas[i];
       if (!mp.id_medio_pago || mp.id_medio_pago === NULL_OPTION)
@@ -1301,7 +1319,7 @@ export default function ModalNuevoIngreso({
                 <div className="mi-cr-table__foot">
                   <div className="mi-cr-foot-actions">
                     <button type="button" className="nv-foot-btn" onClick={addRow} disabled={saving}>
-                                            <span className="nv-foot-btn__icon">
+                      <span className="nv-foot-btn__icon">
                         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M5 1.5V8.5M1.5 5H8.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
                         </svg>
@@ -1336,14 +1354,15 @@ export default function ModalNuevoIngreso({
                     </div>
 
                     <div className="nc-section-body">
-                      {/* Fecha */}
+                      {/* ⭐ FECHA CON VALIDACIONES ⭐ */}
                       <div className="nc-field">
                         <input
                           className="nc-input"
                           type="date"
                           placeholder=" "
                           value={fecha}
-                          onChange={(e) => setFecha(String(e.target.value || "").trim())}
+                          max={todayISO()}
+                          onChange={handleFechaChange}
                           disabled={saving}
                         />
                         <label className="nc-label">Fecha</label>

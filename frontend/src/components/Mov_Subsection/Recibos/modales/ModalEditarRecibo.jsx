@@ -36,6 +36,11 @@ function moneyARS(v) {
   }
 }
 
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function periodoToMMYYYY(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
@@ -364,6 +369,22 @@ export default function ModalEditarRecibo({
     setClienteArmed(false);
   };
 
+  // ⭐ FUNCIÓN PARA VALIDAR Y ACTUALIZAR LA FECHA ⭐
+  const handleFechaChange = useCallback((e) => {
+    const nuevaFecha = e.target.value;
+    
+    if (nuevaFecha && nuevaFecha > todayISO()) {
+      showToast("advertencia", "No podés seleccionar una fecha posterior al día actual.");
+      return;
+    }
+    
+    setForm((p) => ({
+      ...p,
+      fecha: nuevaFecha,
+      periodo: periodoFromISODate(nuevaFecha) || p.periodo,
+    }));
+  }, [showToast]);
+
   const resumen = useMemo(() => {
     const monto = Math.max(0, safeNumber(form.monto_total));
     return {
@@ -381,8 +402,13 @@ export default function ModalEditarRecibo({
     try {
       setSaving(true);
 
+      // ⭐ VALIDACIÓN DE FECHA ⭐
       if (!String(form.fecha || "").trim()) {
         throw new Error("Completá la fecha.");
+      }
+
+      if (form.fecha > todayISO()) {
+        throw new Error("La fecha no puede ser posterior al día actual.");
       }
 
       const perUI = periodoToMMYYYY(form.periodo) || periodoFromISODate(form.fecha);
@@ -606,19 +632,14 @@ export default function ModalEditarRecibo({
 
                   <div className="nc-section-body">
                     <div className="nc-field">
+                      {/* ⭐ INPUT DE FECHA CON VALIDACIONES ⭐ */}
                       <input
                         className="nc-input"
                         type="date"
                         placeholder=" "
                         value={form.fecha}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setForm((p) => ({
-                            ...p,
-                            fecha: v,
-                            periodo: periodoFromISODate(v) || p.periodo,
-                          }));
-                        }}
+                        max={todayISO()}
+                        onChange={handleFechaChange}
                         disabled={saving}
                       />
                       <label className="nc-label">Fecha</label>
@@ -770,8 +791,6 @@ export default function ModalEditarRecibo({
             grid-template-columns:1fr;
           }
         }
-
-
       `}</style>
     </>,
     document.body

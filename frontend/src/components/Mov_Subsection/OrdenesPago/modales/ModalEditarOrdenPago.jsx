@@ -36,6 +36,11 @@ function moneyARS(v) {
   }
 }
 
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function periodoToMMYYYY(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
@@ -563,6 +568,22 @@ export default function ModalEditarOrdenPago({
     }
   };
 
+  // ⭐ FUNCIÓN PARA VALIDAR Y ACTUALIZAR LA FECHA ⭐
+  const handleFechaChange = useCallback((e) => {
+    const nuevaFecha = e.target.value;
+    
+    if (nuevaFecha && nuevaFecha > todayISO()) {
+      showToast("advertencia", "No podés seleccionar una fecha posterior al día actual.");
+      return;
+    }
+    
+    setForm((p) => ({
+      ...p,
+      fecha: nuevaFecha,
+      periodo: periodoFromISODate(nuevaFecha) || p.periodo,
+    }));
+  }, [showToast]);
+
   const resumen = useMemo(() => {
     const monto = Math.max(0, safeNumber(form.monto_total));
     return {
@@ -586,8 +607,14 @@ export default function ModalEditarOrdenPago({
 
     try {
       const fechaFinal = String(form.fecha || defaultsRef.current.fecha || "").trim();
+      
+      // ⭐ VALIDACIÓN DE FECHA ⭐
       if (!fechaFinal || !/^\d{4}-\d{2}-\d{2}$/.test(fechaFinal)) {
         throw new Error("Fecha inválida.");
+      }
+      
+      if (fechaFinal > todayISO()) {
+        throw new Error("La fecha no puede ser posterior al día actual.");
       }
 
       const perUI =
@@ -807,16 +834,19 @@ export default function ModalEditarOrdenPago({
                   </div>
 
                   <div className="nc-section-body">
+
                     <div
                       className="nc-field"
                       onClick={() => openNativeDatePicker(fechaInputRef.current)}
                     >
+
                       <input
                         ref={fechaInputRef}
                         className="nc-input"
                         type="date"
                         placeholder=" "
                         value={form.fecha}
+
                         onMouseDown={(e) => {
                           if (saving) return;
                           e.preventDefault();
@@ -832,6 +862,10 @@ export default function ModalEditarOrdenPago({
                             periodo: periodoFromISODate(v) || p.periodo,
                           }));
                         }}
+
+                        max={todayISO()}
+                        onChange={handleFechaChange}
+
                         disabled={saving}
                       />
                       <label className="nc-label">Fecha</label>

@@ -25,6 +25,10 @@ const IVA_OPTIONS = [
 ];
 
 /* ─── Pure helpers ─── */
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 function safeNumber(v) {
   if (v === "" || v == null) return 0;
   const n = Number(v);
@@ -38,6 +42,12 @@ function round3(n) {
 }
 function safeText(v) {
   return String(v ?? "").trim();
+}
+function upperText(v) {
+  return String(v ?? "").toUpperCase();
+}
+function upperSafeText(v) {
+  return safeText(v).toUpperCase();
 }
 function normalizeName(v) {
   return String(v ?? "")
@@ -179,16 +189,37 @@ function resolveCostoFijoConfig(clasificaciones = []) {
     labelNoCostoFijo: "No es costo fijo",
   };
 }
+function normalizeDateISO(...values) {
+  for (const value of values) {
+    const raw = String(value ?? "").trim();
+    if (!raw) continue;
+    const iso = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (iso) return iso[1];
+    const ar = raw.match(/^(\d{2})[\/.-](\d{2})[\/.-](\d{4})$/);
+    if (ar) return `${ar[3]}-${ar[2]}-${ar[1]}`;
+  }
+  return "";
+}
 function normalizeChequeData(src = {}) {
   const cheque = src?.cheque && typeof src.cheque === "object" ? src.cheque : src;
   return {
     id_cheque: Number(cheque?.id_cheque ?? cheque?.cheque_id ?? src?.id_cheque ?? src?.cheque_id ?? 0) || 0,
     tipo: String(cheque?.tipo ?? cheque?.cheque_tipo ?? src?.cheque_tipo ?? "").trim().toLowerCase(),
-    fecha_emision: String(cheque?.fecha_emision ?? cheque?.cheque_fecha_emision ?? src?.cheque_fecha_emision ?? "").slice(0, 10),
-    emisor: String(cheque?.emisor ?? cheque?.cheque_emisor ?? src?.cheque_emisor ?? "").trim(),
-    numero_cheque: String(cheque?.numero_cheque ?? cheque?.cheque_numero ?? src?.cheque_numero ?? "").trim(),
+    fecha_emision: normalizeDateISO(
+      cheque?.fecha_emision,
+      cheque?.cheque_fecha_emision,
+      src?.cheque_fecha_emision,
+      src?.fecha_emision
+    ),
+    emisor: upperSafeText(cheque?.emisor ?? cheque?.cheque_emisor ?? src?.cheque_emisor ?? ""),
+    numero_cheque: upperSafeText(cheque?.numero_cheque ?? cheque?.cheque_numero ?? src?.cheque_numero ?? ""),
     importe: round2(safeNumber(cheque?.importe ?? cheque?.cheque_importe ?? src?.cheque_importe ?? src?.monto_total ?? 0)),
-    fecha_pago: String(cheque?.fecha_pago ?? cheque?.cheque_fecha_pago ?? src?.cheque_fecha_pago ?? "").slice(0, 10),
+    fecha_pago: normalizeDateISO(
+      cheque?.fecha_pago,
+      cheque?.cheque_fecha_pago,
+      src?.cheque_fecha_pago,
+      src?.fecha_pago
+    ),
   };
 }
 function makeItem(it = {}) {
@@ -199,7 +230,7 @@ function makeItem(it = {}) {
   return {
     uid: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     id_detalle: String(Number(it?.id_detalle ?? 0) || ""),
-    detalle: String(it?.detalle ?? it?.descripcion ?? it?.concepto ?? it?.detalle_nombre ?? "").trim(),
+    detalle: upperSafeText(it?.detalle ?? it?.descripcion ?? it?.concepto ?? it?.detalle_nombre ?? ""),
     cantidad,
     precio,
     precioDraft: "",
@@ -287,9 +318,27 @@ async function parseJsonOrThrow(res) {
     throw new Error(`Respuesta inválida del servidor. HTTP ${res.status}. ${text.slice(0, 300)}`);
   }
 }
-function getComprobanteDownloadUrl(idMovimiento) {
-  return `${BASE_URL}/api.php?action=otros_egresos_comprobantes_descargar&id_movimiento=${Number(idMovimiento || 0)}`;
+
+// ─── FIX: extrae el nombre legible del comprobante desde archivo_path o archivo_url ───
+function resolveNombreComprobante(comprobanteActual) {
+  if (!comprobanteActual) return "Comprobante actual";
+
+  // Preferimos archivo_path porque es la ruta real en el servidor / R2
+  const pathRaw = safeText(comprobanteActual?.archivo_path ?? "");
+  if (pathRaw) {
+    // Quitar prefijo r2:// si lo tiene
+    const clean = pathRaw.replace(/^r2:\/\//, "");
+    const base = clean.split("/").pop();
+    if (base && !base.startsWith("api.php")) return base;
+  }
+
+  // Fallback: archivo_nombre si existe
+  const nombreRaw = safeText(comprobanteActual?.archivo_nombre ?? comprobanteActual?.nombre ?? "");
+  if (nombreRaw) return nombreRaw;
+
+  return "Comprobante actual";
 }
+
 function fileAcceptText() {
   return ".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip";
 }
@@ -365,9 +414,10 @@ function ChequeFields({ cheque, saving, onUpdate }) {
             className="nv-cell-input"
             type="text"
             value={cheque?.emisor || ""}
-            onChange={(e) => onUpdate("emisor", e.target.value)}
+            onChange={(e) => onUpdate("emisor", upperText(e.target.value))}
             disabled={saving}
             placeholder="Emisor"
+            style={{ textTransform: "uppercase" }}
           />
         </div>
 
@@ -376,9 +426,10 @@ function ChequeFields({ cheque, saving, onUpdate }) {
             className="nv-cell-input"
             type="text"
             value={cheque?.numero_cheque || ""}
-            onChange={(e) => onUpdate("numero_cheque", e.target.value)}
+            onChange={(e) => onUpdate("numero_cheque", upperText(e.target.value))}
             disabled={saving}
             placeholder="Número"
+            style={{ textTransform: "uppercase" }}
           />
         </div>
 
@@ -392,7 +443,12 @@ function ChequeFields({ cheque, saving, onUpdate }) {
             className="nv-cell-input"
             type="date"
             value={cheque?.fecha_emision || ""}
-            onChange={(e) => onUpdate("fecha_emision", e.target.value)}
+            max={todayISO()}
+            onChange={(e) => {
+              const nuevaFecha = e.target.value;
+              if (nuevaFecha && nuevaFecha > todayISO()) return;
+              onUpdate("fecha_emision", nuevaFecha);
+            }}
             disabled={saving}
             onClick={(e) => {
               e.stopPropagation();
@@ -411,7 +467,9 @@ function ChequeFields({ cheque, saving, onUpdate }) {
             className="nv-cell-input"
             type="date"
             value={cheque?.fecha_pago || ""}
-            onChange={(e) => onUpdate("fecha_pago", e.target.value)}
+            onChange={(e) => {
+              onUpdate("fecha_pago", e.target.value);
+            }}
             disabled={saving}
             onClick={(e) => {
               e.stopPropagation();
@@ -457,6 +515,8 @@ export default function ModalEditarEgreso({
 
   const [saving, setSaving] = useState(false);
   const [loadingComprobante, setLoadingComprobante] = useState(false);
+  // ─── FIX: estado para saber si estamos obteniendo la URL firmada al abrir el viewer ───
+  const [loadingViewer, setLoadingViewer] = useState(false);
 
   const clasificaciones = useMemo(() => normalizeClasificaciones(lists), [lists]);
   const clasificacionConfig = useMemo(() => resolveCostoFijoConfig(clasificaciones), [clasificaciones]);
@@ -504,6 +564,7 @@ export default function ModalEditarEgreso({
     setComprobanteActual(null);
     setOpenViewer(false);
     setViewerData({ url: "", mime: "", title: "Comprobante" });
+    setLoadingViewer(false);
     setTimeout(() => closeBtnRef.current?.focus(), 0);
   }, [open, initialData, clasificaciones]);
 
@@ -564,7 +625,7 @@ export default function ModalEditarEgreso({
       const sinStock = isSinStock(stockDisponible);
       updateItem(itemUid, {
         id_detalle: String(getDetalleId(item) ?? ""),
-        detalle: optionLabel(item),
+        detalle: upperSafeText(optionLabel(item)),
         precio,
         stock_disponible: stockDisponible,
         sinStock,
@@ -614,39 +675,23 @@ export default function ModalEditarEgreso({
     return sumTotalItems(form.items);
   }, [form]);
 
-  const isCostoFijoChecked =
-    !!form.es_costo_fijo &&
-    String(form.id_clasificacion || "") === String(clasificacionConfig.idCostoFijo);
-  const isNoCostoFijoChecked =
-    !form.es_costo_fijo && String(form.id_clasificacion || "") === "";
-
-  const handleSelectCostoFijo = useCallback(() => {
-    if (saving) return;
-    setForm((prev) => ({
-      ...prev,
-      es_costo_fijo: true,
-      id_clasificacion: String(clasificacionConfig.idCostoFijo),
-    }));
-  }, [clasificacionConfig.idCostoFijo, saving]);
-
-  const handleSelectNoCostoFijo = useCallback(() => {
-    if (saving) return;
-    setForm((prev) => ({
-      ...prev,
-      es_costo_fijo: false,
-      id_clasificacion: "",
-    }));
-  }, [saving]);
-
   const updateChequeField = useCallback((field, value) => {
+    if (field === "fecha_emision" && value && value > todayISO()) {
+      showToast("advertencia", "La fecha de emisión no puede ser posterior al día actual.", 3000);
+      return;
+    }
     setForm((prev) => ({
       ...prev,
       cheque: {
         ...prev.cheque,
-        [field]: field === "importe" ? round2(safeNumber(value)) : value,
+        [field]: field === "importe"
+          ? round2(safeNumber(value))
+          : ["emisor", "numero_cheque"].includes(field)
+            ? upperText(value)
+            : value,
       },
     }));
-  }, []);
+  }, [showToast]);
 
   const openDatePicker = useCallback(() => {
     const el = fechaRef.current;
@@ -657,38 +702,102 @@ export default function ModalEditarEgreso({
     } catch { el.focus(); }
   }, [saving]);
 
+  const handleFechaChange = useCallback((e) => {
+    const nuevaFecha = e.target.value;
+    if (nuevaFecha && nuevaFecha > todayISO()) {
+      showToast("advertencia", "No podés seleccionar una fecha posterior al día actual.", 3000);
+      return;
+    }
+    setForm((p) => ({ ...p, fecha: nuevaFecha }));
+  }, [showToast]);
+
   const mostrarArchivoActual = Boolean(
     (comprobanteActual?.archivo_url || comprobanteActual) &&
       !marcarEliminarComprobante &&
       !archivoNuevo
   );
 
+  // ─── FIX: usar resolveNombreComprobante en lugar de tomar archivo_url directamente ───
   const nombreComprobanteVisible = useMemo(() => {
     if (archivoNuevo) return archivoNuevo.name;
     if (marcarEliminarComprobante) return "";
-    return safeText(comprobanteActual?.archivo_url).split("/").pop() || "Comprobante actual";
+    return resolveNombreComprobante(comprobanteActual);
   }, [archivoNuevo, marcarEliminarComprobante, comprobanteActual]);
 
-  const abrirViewer = useCallback(() => {
-    const idMovimiento = Number(form.id_movimiento || 0);
-    if (!(idMovimiento > 0)) return;
+  // ─────────────────────────────────────────────────────────────────────────────
+  // FIX PRINCIPAL: abrirViewer ahora hace fetch autenticado para obtener
+  // la URL firmada (igual que handleOpenComprobante en OtrosEgresos.jsx).
+  // Antes usaba getComprobanteDownloadUrl() que construía una URL directa al
+  // API sin headers de auth → el browser la cargaba sin el Bearer token → falla.
+  // ─────────────────────────────────────────────────────────────────────────────
+  const abrirViewer = useCallback(async () => {
+    // Si hay un archivo nuevo seleccionado, lo mostramos desde blob (no necesita auth)
     if (archivoNuevo) {
       setViewerData({
         url: URL.createObjectURL(archivoNuevo),
         mime: archivoNuevo.type || "application/octet-stream",
-        title: `Comprobante - ${archivoNuevo.name}`
+        title: `Comprobante - ${archivoNuevo.name}`,
       });
       setOpenViewer(true);
       return;
     }
+
     if (!comprobanteActual || marcarEliminarComprobante) return;
-    setViewerData({
-      url: getComprobanteDownloadUrl(idMovimiento),
-      mime: safeText(comprobanteActual?.archivo_mime) || "application/octet-stream",
-      title: "Comprobante del egreso"
-    });
-    setOpenViewer(true);
-  }, [form.id_movimiento, archivoNuevo, comprobanteActual, marcarEliminarComprobante]);
+
+    const idMovimiento = Number(form.id_movimiento || 0);
+    const idComprobante = Number(comprobanteActual?.id_comprobante ?? 0);
+
+    if (!idMovimiento && !idComprobante) return;
+
+    setLoadingViewer(true);
+    try {
+      // Hacemos fetch con headers de auth para obtener la URL firmada del backend
+      const sp = new URLSearchParams();
+      sp.set("action", "otros_egresos_comprobantes_descargar");
+
+      if (idComprobante > 0) {
+        sp.set("id_comprobante", String(idComprobante));
+      } else {
+        sp.set("id_movimiento", String(idMovimiento));
+      }
+
+      const res = await fetch(`${API}?${sp.toString()}`, {
+        method: "GET",
+        headers: buildHeadersGET(),
+      });
+
+      const data = await parseJsonOrThrow(res);
+
+      if (!data?.exito) {
+        throw new Error(data?.mensaje || "No se pudo obtener el comprobante.");
+      }
+
+      const signedUrl = String(data?.url || "").trim();
+      if (!signedUrl) {
+        throw new Error("El backend no devolvió la URL del comprobante.");
+      }
+
+      const nombreVisible = resolveNombreComprobante(comprobanteActual);
+
+      setViewerData({
+        url: signedUrl,
+        mime: safeText(comprobanteActual?.archivo_mime) || "application/octet-stream",
+        title: `Comprobante del egreso - ${nombreVisible}`,
+      });
+      setOpenViewer(true);
+    } catch (e) {
+      showToast("error", e?.message || "No se pudo abrir el comprobante.", 3200);
+    } finally {
+      setLoadingViewer(false);
+    }
+  }, [
+    API,
+    form.id_movimiento,
+    archivoNuevo,
+    comprobanteActual,
+    marcarEliminarComprobante,
+    showToast,
+  ]);
 
   const cerrarViewer = useCallback(() => {
     if (viewerData?.url?.startsWith("blob:")) URL.revokeObjectURL(viewerData.url);
@@ -752,18 +861,21 @@ export default function ModalEditarEgreso({
       setSaving(true);
       showToast("cargando", "Actualizando egreso…", 12000);
       const fecha = String(form.fecha || "").trim();
+
       if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error("La fecha es obligatoria.");
+      if (fecha > todayISO()) throw new Error("La fecha no puede ser posterior al día actual.");
 
       let payload;
       if (form.es_movimiento_cheque) {
         const id_cheque = Number(form?.cheque?.id_cheque || 0);
         const fecha_emision = String(form?.cheque?.fecha_emision || "").trim();
         const fecha_pago = String(form?.cheque?.fecha_pago || "").trim();
-        const emisor = safeText(form?.cheque?.emisor);
-        const numero_cheque = safeText(form?.cheque?.numero_cheque);
+        const emisor = upperSafeText(form?.cheque?.emisor);
+        const numero_cheque = upperSafeText(form?.cheque?.numero_cheque);
         const importe = round2(safeNumber(form?.cheque?.importe));
         if (!(id_cheque > 0)) throw new Error("No se encontró el cheque vinculado.");
         if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha_emision)) throw new Error("La fecha de emisión del cheque es obligatoria.");
+        if (fecha_emision > todayISO()) throw new Error("La fecha de emisión del cheque no puede ser posterior al día actual.");
         if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha_pago)) throw new Error("La fecha de pago del cheque es obligatoria.");
         if (!emisor) throw new Error("El emisor del cheque es obligatorio.");
         if (!numero_cheque) throw new Error("El número de cheque es obligatorio.");
@@ -787,7 +899,7 @@ export default function ModalEditarEgreso({
         const items = (form.items || [])
           .map((it) => {
             const id_detalle = Number(it.id_detalle || 0);
-            const detalle = String(it.detalle ?? "").trim();
+            const detalle = upperSafeText(it.detalle);
             const cantidad = round3(safeNumber(it.cantidad));
             const precio = round2(safeNumber(it.precio));
             const iva_pct = round2(safeNumber(it.iva_pct));
@@ -834,6 +946,9 @@ export default function ModalEditarEgreso({
 
   const totalIva = (form.items || []).reduce((a, it) => a + safeNumber(it.iva_monto), 0);
   const totalSubtotal = sumTotalItems(form.items) - totalIva;
+
+  // El botón del ojo debe estar deshabilitado si estamos cargando la URL firmada
+  const viewerBtnDisabled = saving || loadingViewer;
 
   return createPortal(
     <>
@@ -892,7 +1007,7 @@ export default function ModalEditarEgreso({
                               value={it.detalle}
                               onChange={(val) =>
                                 updateItem(it.uid, {
-                                  detalle: val,
+                                  detalle: upperText(val),
                                   id_detalle: "",
                                   stock_disponible: null,
                                   sinStock: false,
@@ -943,42 +1058,42 @@ export default function ModalEditarEgreso({
                           </div>
 
                           <div className="mi-cr-cell mi-cr-cell--center">
-<input
-  className="nv-cell-input nv-cell-input--right"
-  type="text"
-  inputMode="decimal"
-  value={it.precioFocused ? it.precioDraft ?? "" : formatMoneyInputARS(it.precio)}
-  onFocus={(e) => {
-    updateItem(it.uid, {
-      precioFocused: true,
-      precioDraft: formatEditableMoney(it.precio),
-    });
-    setTimeout(() => e.target.select(), 0);
-  }}
-  onChange={(e) => {
-    const c = e.target.value.replace(/[^\d,.\-]/g, "");
-    updateItem(it.uid, {
-      precioDraft: c,
-      precio: parseMoneyInputARS(c),
-    });
-  }}
-  onBlur={() => {
-    const p = parseMoneyInputARS(it.precioDraft);
-    updateItem(it.uid, {
-      precio: p,
-      precioDraft: "",
-      precioFocused: false,
-    });
-  }}
-  onKeyDown={(e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      e.currentTarget.blur();
-    }
-  }}
-  placeholder="$ 0,00"
-  disabled={saving}
-/>
+                            <input
+                              className="nv-cell-input nv-cell-input--right"
+                              type="text"
+                              inputMode="decimal"
+                              value={it.precioFocused ? it.precioDraft ?? "" : formatMoneyInputARS(it.precio)}
+                              onFocus={(e) => {
+                                updateItem(it.uid, {
+                                  precioFocused: true,
+                                  precioDraft: formatEditableMoney(it.precio),
+                                });
+                                setTimeout(() => e.target.select(), 0);
+                              }}
+                              onChange={(e) => {
+                                const c = e.target.value.replace(/[^\d,.-]/g, "");
+                                updateItem(it.uid, {
+                                  precioDraft: c,
+                                  precio: parseMoneyInputARS(c),
+                                });
+                              }}
+                              onBlur={() => {
+                                const p = parseMoneyInputARS(it.precioDraft);
+                                updateItem(it.uid, {
+                                  precio: p,
+                                  precioDraft: "",
+                                  precioFocused: false,
+                                });
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  e.currentTarget.blur();
+                                }
+                              }}
+                              placeholder="$ 0,00"
+                              disabled={saving}
+                            />
                           </div>
 
                           <div className="mi-cr-cell mi-cr-cell--center">
@@ -1077,205 +1192,208 @@ export default function ModalEditarEgreso({
 
                 <div className="mi-cr-filters">
                   <aside className="nc-aside">
-                  <div className="nc-section">
-                    <div className="nc-section-head">
-                      <div className="nc-section-dot" />
-                      <span>{esMovCheque ? "Datos del movimiento" : "Datos del egreso"}</span>
-                    </div>
-                    <div className="nc-section-body">
-                      <div className="nc-field" onClick={openDatePicker}>
-                        <input
-                          ref={fechaRef}
-                          className="nc-input"
-                          type="date"
-                          placeholder=" "
-                          value={form.fecha}
-                          onChange={(e) => setForm((p) => ({ ...p, fecha: e.target.value }))}
-                          disabled={saving}
-                        />
-                        <label className="nc-label" onClick={openDatePicker}>
-                          Fecha
-                        </label>
+                    <div className="nc-section">
+                      <div className="nc-section-head">
+                        <div className="nc-section-dot" />
+                        <span>{esMovCheque ? "Datos del movimiento" : "Datos del egreso"}</span>
                       </div>
-
-                      {!esMovCheque && (
-                        <div className="nc-field">
-                          <select
-                            className="nc-input nc-select"
-                            value={String(form.id_medio_pago || "")}
-                            onChange={(e) => setForm((p) => ({ ...p, id_medio_pago: e.target.value }))}
+                      <div className="nc-section-body">
+                        <div className="nc-field" onClick={openDatePicker}>
+                          <input
+                            ref={fechaRef}
+                            className="nc-input"
+                            type="date"
+                            placeholder=" "
+                            value={form.fecha}
+                            max={todayISO()}
+                            onChange={handleFechaChange}
                             disabled={saving}
-                          >
-                            <option value="">Seleccionar...</option>
-                            {mediosPago.map((x) => (
-                              <option key={x.id} value={String(x.id)}>
-                                {x.nombre}
-                              </option>
-                            ))}
-                          </select>
-                          <label className="nc-label" style={{ pointerEvents: "none" }}>
-                            Medio de pago
+                          />
+                          <label className="nc-label" onClick={openDatePicker}>
+                            Fecha
                           </label>
                         </div>
-                      )}
 
-                      {!esMovCheque && (
-                        <div className="nc-field">
-                          <select
-                            className="nc-input nc-select"
-                            value={String(form.id_clasificacion || "")}
-                            onChange={(e) => setForm((p) => ({ ...p, id_clasificacion: e.target.value }))}
-                            disabled={saving}
-                          >
-                            <option value="">Seleccionar...</option>
-                            <option value={String(clasificacionConfig.idCostoFijo)}>
-                              {clasificacionConfig.labelCostoFijo}
-                            </option>
-                            <option value={String(clasificacionConfig.idNoCostoFijo)}>
-                              {clasificacionConfig.labelNoCostoFijo}
-                            </option>
-                          </select>
-                          <label className="nc-label" style={{ pointerEvents: "none" }}>
-                            Clasificación *
-                          </label>
-                        </div>
-                      )}
-                                            <div className="mi-uploadCard">
-                        <div className="mi-uploadCard__head">
-                          <div className="mi-uploadCard__title">Comprobante</div>
-                          <div className="mi-uploadCard__sub">
-                            Seleccioná, visualizá o quitá el archivo antes de guardar
+                        {!esMovCheque && (
+                          <div className="nc-field">
+                            <select
+                              className="nc-input nc-select"
+                              value={String(form.id_medio_pago || "")}
+                              onChange={(e) => setForm((p) => ({ ...p, id_medio_pago: e.target.value }))}
+                              disabled={saving}
+                            >
+                              <option value="">Seleccionar...</option>
+                              {mediosPago.map((x) => (
+                                <option key={x.id} value={String(x.id)}>
+                                  {x.nombre}
+                                </option>
+                              ))}
+                            </select>
+                            <label className="nc-label" style={{ pointerEvents: "none" }}>
+                              Medio de pago
+                            </label>
                           </div>
-                        </div>
+                        )}
 
-                        <div className="mi-uploadCard__body">
-                          {loadingComprobante ? (
-                            <div style={{ fontSize: 12, opacity: 0.75, padding: "6px 0" }}>
-                              Cargando comprobante…
+                        {!esMovCheque && (
+                          <div className="nc-field">
+                            <select
+                              className="nc-input nc-select"
+                              value={String(form.id_clasificacion || "")}
+                              onChange={(e) => setForm((p) => ({ ...p, id_clasificacion: e.target.value }))}
+                              disabled={saving}
+                            >
+                              <option value="">Seleccionar...</option>
+                              <option value={String(clasificacionConfig.idCostoFijo)}>
+                                {clasificacionConfig.labelCostoFijo}
+                              </option>
+                              <option value={String(clasificacionConfig.idNoCostoFijo)}>
+                                {clasificacionConfig.labelNoCostoFijo}
+                              </option>
+                            </select>
+                            <label className="nc-label" style={{ pointerEvents: "none" }}>
+                              Clasificación *
+                            </label>
+                          </div>
+                        )}
+
+                        <div className="mi-uploadCard">
+                          <div className="mi-uploadCard__head">
+                            <div className="mi-uploadCard__title">Comprobante</div>
+                            <div className="mi-uploadCard__sub">
+                              Seleccioná, visualizá o quitá el archivo antes de guardar
                             </div>
-                          ) : (
-                            <>
-                              {mostrarArchivoActual && (
-                                <div className="mi-uploadFile is-filled">
-                                  <div className="mi-uploadFile__icon">
-                                    <FontAwesomeIcon icon={faFileInvoiceDollar} />
-                                  </div>
-                                  <div className="mi-uploadFile__meta">
-                                    <div className="mi-uploadFile__name" title={nombreComprobanteVisible}>
-                                      {nombreComprobanteVisible}
+                          </div>
+
+                          <div className="mi-uploadCard__body">
+                            {loadingComprobante ? (
+                              <div style={{ fontSize: 12, opacity: 0.75, padding: "6px 0" }}>
+                                Cargando comprobante…
+                              </div>
+                            ) : (
+                              <>
+                                {mostrarArchivoActual && (
+                                  <div className="mi-uploadFile is-filled">
+                                    <div className="mi-uploadFile__icon">
+                                      <FontAwesomeIcon icon={faFileInvoiceDollar} />
+                                    </div>
+                                    <div className="mi-uploadFile__meta">
+                                      <div className="mi-uploadFile__name" title={nombreComprobanteVisible}>
+                                        {nombreComprobanteVisible}
+                                      </div>
+                                    </div>
+                                    <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
+                                      {/* ─── FIX: botón ojo llama a abrirViewer async ─── */}
+                                      <button
+                                        type="button"
+                                        className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                        onClick={abrirViewer}
+                                        disabled={viewerBtnDisabled}
+                                        title={loadingViewer ? "Cargando comprobante…" : "Ver comprobante"}
+                                      >
+                                        {loadingViewer
+                                          ? <span style={{ fontSize: 11 }}>…</span>
+                                          : <FontAwesomeIcon icon={faEye} />
+                                        }
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                        onClick={marcarEliminar}
+                                        disabled={saving}
+                                        title="Quitar comprobante"
+                                      >
+                                        <FontAwesomeIcon icon={faTrash} />
+                                      </button>
                                     </div>
                                   </div>
-                                  <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
-                                    <button
-                                      type="button"
-                                      className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                      onClick={abrirViewer}
-                                      disabled={saving}
-                                      title="Ver comprobante"
-                                    >
-                                      <FontAwesomeIcon icon={faEye} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                      onClick={marcarEliminar}
-                                      disabled={saving}
-                                      title="Quitar comprobante"
-                                    >
-                                      <FontAwesomeIcon icon={faTrash} />
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
+                                )}
 
-                              {archivoNuevo && (
-                                <div className="mi-uploadFile is-filled">
-                                  <div className="mi-uploadFile__icon">
-                                    <FontAwesomeIcon icon={faFileInvoiceDollar} />
-                                  </div>
-                                  <div className="mi-uploadFile__meta">
-                                    <div className="mi-uploadFile__name" title={archivoNuevo.name}>
-                                      {archivoNuevo.name}
+                                {archivoNuevo && (
+                                  <div className="mi-uploadFile is-filled">
+                                    <div className="mi-uploadFile__icon">
+                                      <FontAwesomeIcon icon={faFileInvoiceDollar} />
                                     </div>
-                                    <div className="mi-uploadFile__size">
-                                      {Math.max(1, Math.round((archivoNuevo.size || 0) / 1024))} KB
+                                    <div className="mi-uploadFile__meta">
+                                      <div className="mi-uploadFile__name" title={archivoNuevo.name}>
+                                        {archivoNuevo.name}
+                                      </div>
+                                      <div className="mi-uploadFile__size">
+                                        {Math.max(1, Math.round((archivoNuevo.size || 0) / 1024))} KB
+                                      </div>
+                                    </div>
+                                    <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
+                                      <button
+                                        type="button"
+                                        className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                        onClick={abrirViewer}
+                                        disabled={viewerBtnDisabled}
+                                        title="Ver comprobante"
+                                      >
+                                        <FontAwesomeIcon icon={faEye} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
+                                        onClick={quitarArchivoNuevo}
+                                        disabled={saving}
+                                        title="Quitar archivo"
+                                      >
+                                        <FontAwesomeIcon icon={faTrash} />
+                                      </button>
                                     </div>
                                   </div>
-                                  <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
+                                )}
+
+                                {!mostrarArchivoActual && !archivoNuevo && (
+                                  <div className="mi-uploadFile is-empty">
+                                    <div className="mi-uploadFile__empty">
+                                      {marcarEliminarComprobante
+                                        ? "El comprobante actual será eliminado al guardar"
+                                        : "No hay comprobante seleccionado"}
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="mi-uploadBar" style={{ marginTop: 10 }}>
+                                  {marcarEliminarComprobante && !archivoNuevo && (
                                     <button
                                       type="button"
                                       className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                      onClick={abrirViewer}
+                                      onClick={restaurarComprobanteActual}
                                       disabled={saving}
-                                      title="Ver comprobante"
                                     >
-                                      <FontAwesomeIcon icon={faEye} />
+                                      <FontAwesomeIcon icon={faUndo} /> Cancelar
                                     </button>
-                                    <button
-                                      type="button"
-                                      className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                      onClick={quitarArchivoNuevo}
-                                      disabled={saving}
-                                      title="Quitar archivo"
-                                    >
-                                      <FontAwesomeIcon icon={faTrash} />
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-
-                              {!mostrarArchivoActual && !archivoNuevo && (
-                                <div className="mi-uploadFile is-empty">
-                                  <div className="mi-uploadFile__empty">
-                                    {marcarEliminarComprobante
-                                      ? "El comprobante actual será eliminado al guardar"
-                                      : "No hay comprobante seleccionado"}
-                                  </div>
-                                </div>
-                              )}
-
-                              <div className="mi-uploadBar" style={{ marginTop: 10 }}>
-                                {marcarEliminarComprobante && !archivoNuevo && (
+                                  )}
+                                  <input
+                                    ref={inputFileRef}
+                                    type="file"
+                                    accept={fileAcceptText()}
+                                    onChange={seleccionarArchivo}
+                                    disabled={saving}
+                                    style={{ display: "none" }}
+                                  />
                                   <button
                                     type="button"
-                                    className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
-                                    onClick={restaurarComprobanteActual}
+                                    className="mi-uploadBar__btn mi-uploadBar__btn--primary"
+                                    onClick={() => inputFileRef.current?.click()}
                                     disabled={saving}
                                   >
-                                    <FontAwesomeIcon icon={faUndo} /> Cancelar
+                                    <FontAwesomeIcon icon={faUpload} />{" "}
+                                    {mostrarArchivoActual || archivoNuevo
+                                      ? "Reemplazar archivo"
+                                      : "Seleccionar archivo"}
                                   </button>
-                                )}
-                                <input
-                                  ref={inputFileRef}
-                                  type="file"
-                                  accept={fileAcceptText()}
-                                  onChange={seleccionarArchivo}
-                                  disabled={saving}
-                                  style={{ display: "none" }}
-                                />
-                                <button
-                                  type="button"
-                                  className="mi-uploadBar__btn mi-uploadBar__btn--primary"
-                                  onClick={() => inputFileRef.current?.click()}
-                                  disabled={saving}
-                                >
-                                  <FontAwesomeIcon icon={faUpload} />{" "}
-                                  {mostrarArchivoActual || archivoNuevo
-                                    ? "Reemplazar archivo"
-                                    : "Seleccionar archivo"}
-                                </button>
-                              </div>
-                            </>
-                          )}
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
-
-                  </div>
-
-
                   </aside>
-                                    <div className="nc-actions mi-cr-filters__actions mi-cr-filters__actions--sticky">
+                  <div className="nc-actions mi-cr-filters__actions mi-cr-filters__actions--sticky">
                     <button
                       type="submit"
                       disabled={saving}

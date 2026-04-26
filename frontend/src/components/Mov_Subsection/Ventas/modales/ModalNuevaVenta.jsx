@@ -1757,7 +1757,17 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }
 
     const periodoApi = fechaToYYYYMM(fecha);
-    if (!/^\d{4}-\d{2}$/.test(periodoApi)) return { ok: false, msg: "La fecha es inválida." };
+    if (!/^\d{4}-\d{2}$/.test(periodoApi)) {
+      return { ok: false, msg: "La fecha es inválida." };
+    }
+    
+    // Validación: no permitir fechas futuras
+    if (fecha > todayISO()) {
+      return {
+        ok: false,
+        msg: "La fecha no puede ser posterior al día actual.",
+      };
+    }
 
     const problems = [];
     rowsCalc.forEach((r, i) => {
@@ -2449,7 +2459,16 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                           type="date"
                           placeholder=" "
                           value={fecha}
-                          onChange={(e) => setFecha(String(e.target.value || "").trim())}
+                          max={todayISO()}
+                          onChange={(e) => {
+                            const nuevaFecha = e.target.value;
+                            if (nuevaFecha > todayISO()) {
+                              setFecha(todayISO());
+                              showToast?.("advertencia", "No podés seleccionar una fecha posterior al día actual.", 3000);
+                              return;
+                            }
+                            setFecha(nuevaFecha);
+                          }}
                           disabled={saving}
                         />
                         <label className="nc-label">Fecha</label>

@@ -334,6 +334,22 @@ export default function ModalEditarOrdenPago({
   });
 
   const closeBtnRef = useRef(null);
+  const fechaInputRef = useRef(null);
+
+  const openNativeDatePicker = useCallback(
+    (input) => {
+      if (!input || saving) return;
+
+      input.focus();
+
+      if (typeof input.showPicker === "function") {
+        try {
+          input.showPicker();
+        } catch {}
+      }
+    },
+    [saving]
+  );
 
   const defaultsRef = useRef({
     fecha: "",
@@ -791,12 +807,23 @@ export default function ModalEditarOrdenPago({
                   </div>
 
                   <div className="nc-section-body">
-                    <div className="nc-field">
+                    <div
+                      className="nc-field"
+                      onClick={() => openNativeDatePicker(fechaInputRef.current)}
+                    >
                       <input
+                        ref={fechaInputRef}
                         className="nc-input"
                         type="date"
                         placeholder=" "
                         value={form.fecha}
+                        onMouseDown={(e) => {
+                          if (saving) return;
+                          e.preventDefault();
+                          openNativeDatePicker(e.currentTarget);
+                        }}
+                        onClick={(e) => openNativeDatePicker(e.currentTarget)}
+                        onFocus={(e) => openNativeDatePicker(e.currentTarget)}
                         onChange={(e) => {
                           const v = e.target.value;
                           setForm((p) => ({
@@ -822,27 +849,37 @@ export default function ModalEditarOrdenPago({
                     <div className="nc-cc-info">
                       <div className="mi-er-summary-row">
                         <FontAwesomeIcon icon={faCalendarDays} />
-                        <span><b>Fecha:</b> {form.fecha || "--"}</span>
+                        <span>
+                          <b>Fecha:</b> {form.fecha || "--"}
+                        </span>
                       </div>
 
                       <div className="mi-er-summary-row">
                         <FontAwesomeIcon icon={faTruck} />
-                        <span><b>Proveedor:</b> {resumen.proveedor}</span>
+                        <span>
+                          <b>Proveedor:</b> {resumen.proveedor}
+                        </span>
                       </div>
 
                       <div className="mi-er-summary-row">
                         <FontAwesomeIcon icon={faBoxOpen} />
-                        <span><b>Detalle:</b> {resumen.detalle}</span>
+                        <span>
+                          <b>Detalle:</b> {resumen.detalle}
+                        </span>
                       </div>
 
                       <div className="mi-er-summary-row">
                         <FontAwesomeIcon icon={faFileInvoiceDollar} />
-                        <span><b>Período:</b> {resumen.periodo}</span>
+                        <span>
+                          <b>Período:</b> {resumen.periodo}
+                        </span>
                       </div>
 
                       <div className="mi-er-summary-row">
                         <FontAwesomeIcon icon={faDollarSign} />
-                        <span><b>Total:</b> {moneyARS(resumen.total)}</span>
+                        <span>
+                          <b>Total:</b> {moneyARS(resumen.total)}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -877,7 +914,10 @@ export default function ModalEditarOrdenPago({
             value={addUI.text}
             saving={addUI.saving}
             onChange={(text) => setAddUI((p) => ({ ...p, text }))}
-            onCancel={() => !addUI.saving && setAddUI({ open: false, catalogo: "detalles", text: "", saving: false })}
+            onCancel={() =>
+              !addUI.saving &&
+              setAddUI({ open: false, catalogo: "detalles", text: "", saving: false })
+            }
             onSave={guardarNuevoCatalogo}
             dark={darkOn}
             label={addUI.catalogo === "proveedores" ? "Proveedor" : "Detalle"}
@@ -968,8 +1008,6 @@ export default function ModalEditarOrdenPago({
             grid-template-columns:1fr;
           }
         }
-
-
       `}</style>
     </>,
     document.body

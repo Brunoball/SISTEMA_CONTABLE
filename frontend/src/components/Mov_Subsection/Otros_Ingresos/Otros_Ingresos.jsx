@@ -293,7 +293,6 @@ function buildExportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((r) => ({
     FECHA: safeText(formatFechaDMY(r?.fecha)),
     DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
-    CATEGORIA: "OTROS INGRESOS",
     TOTAL: Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0,
   }));
 }
@@ -365,8 +364,8 @@ export default function OtrosIngresos() {
   const [selectedMediosRow, setSelectedMediosRow] = useState(null);
 
   const [toast, setToast] = useState(null);
-  const showToast = useCallback((tipo, mensaje) => {
-    setToast({ tipo, mensaje });
+  const showToast = useCallback((tipo, mensaje, duracion = 2800) => {
+    setToast({ tipo, mensaje, duracion });
   }, []);
   const closeToast = useCallback(() => setToast(null), []);
 
@@ -374,11 +373,11 @@ export default function OtrosIngresos() {
   const signedUrlInFlightRef = useRef(new Set());
 
   useEffect(() => {
-    if (errorListsCtx) showToast("error", errorListsCtx);
+    if (errorListsCtx) showToast("error", errorListsCtx, 4200);
   }, [errorListsCtx, showToast]);
 
   useEffect(() => {
-    if (error) showToast("error", error);
+    if (error) showToast("error", error, 4200);
   }, [error, showToast]);
 
   const cacheRef = useRef(new Map());
@@ -750,17 +749,10 @@ export default function OtrosIngresos() {
       {
         key: "detalle",
         label: "DESCRIPCIÓN",
-        fr: 2.7,
+        fr: 3.2,
         strong: true,
         align: "left",
         render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
-      },
-      {
-        key: "categoria",
-        label: "CATEGORÍA",
-        fr: 1.5,
-        align: "center",
-        render: () => "OTROS INGRESOS",
       },
       {
         key: "total",
@@ -867,7 +859,6 @@ export default function OtrosIngresos() {
         `REGISTRO ${index + 1}`,
         `FECHA: ${row.FECHA ?? ""}`,
         `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
-        `CATEGORIA: ${row.CATEGORIA ?? ""}`,
         `TOTAL: ${row.TOTAL ?? ""}`,
         "----------------------------------------",
       ].join("\n");
@@ -881,28 +872,28 @@ export default function OtrosIngresos() {
     async (type) => {
       try {
         if (hasMore) {
-          showToast("error", 'Faltan registros sin cargar. Tocá "Cargar todos" primero.');
+          showToast("error", 'Faltan registros sin cargar. Tocá "Cargar todos" primero.', 5200);
           return;
         }
 
         if (type === "excel") {
           exportToExcel();
-          showToast("exito", "Excel exportado.");
+          showToast("exito", "Excel exportado.", 2200);
           return;
         }
 
         if (type === "csv") {
           exportToCSV();
-          showToast("exito", "CSV exportado.");
+          showToast("exito", "CSV exportado.", 2200);
           return;
         }
 
         if (type === "txt") {
           exportToTXT();
-          showToast("exito", "TXT exportado.");
+          showToast("exito", "TXT exportado.", 2200);
         }
       } catch (e) {
-        showToast("error", e?.message || "Error exportando archivo.");
+        showToast("error", e?.message || "Error exportando archivo.", 3500);
       }
     },
     [hasMore, exportToExcel, exportToCSV, exportToTXT, showToast]
@@ -971,7 +962,7 @@ export default function OtrosIngresos() {
     } catch (e) {
       const msg = e?.message || "Error recargando la vista.";
       setError(msg);
-      showToast("error", msg);
+      showToast("error", msg, 4200);
     }
   }, [dateRange.from, dateRange.to, loadRows, q, showToast]);
 
@@ -1033,7 +1024,7 @@ export default function OtrosIngresos() {
     if (nextOffset === null) return;
 
     setLoadingAll(true);
-    showToast("cargando", "Cargando todos los ingresos…");
+    showToast("cargando", "Cargando todos los ingresos…", 12000);
 
     let offset = nextOffset;
     let guard = 0;
@@ -1061,9 +1052,9 @@ export default function OtrosIngresos() {
       }
 
       setRows([...rowsRef.current]);
-      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} ingresos.`);
+      showToast("exito", `Listo: se cargaron ${rowsRef.current.length} ingresos.`, 2600);
     } catch (e) {
-      showToast("error", e?.message || "Error cargando todos.");
+      showToast("error", e?.message || "Error cargando todos.", 4200);
     } finally {
       setLoadingAll(false);
     }
@@ -1106,7 +1097,7 @@ export default function OtrosIngresos() {
         setSelectedRow(ingreso);
         setOpenEdit(true);
       } catch (e) {
-        showToast("error", e?.message || "No se pudo abrir el editor.");
+        showToast("error", e?.message || "No se pudo abrir el editor.", 4200);
       } finally {
         setLoadingEditDataId(null);
       }
@@ -1146,14 +1137,14 @@ export default function OtrosIngresos() {
         const rowNormalizada = normalizeOtroIngresoRow(ingreso);
 
         if (!hasOtroIngresoDetalleMedios(rowNormalizada)) {
-          showToast("advertencia", "Este ingreso no tiene más de un medio de pago.");
+          showToast("advertencia", "Este ingreso no tiene más de un medio de pago.", 3000);
           return;
         }
 
         setSelectedMediosRow(rowNormalizada);
         setOpenMediosPago(true);
       } catch (e) {
-        showToast("error", e?.message || "No se pudo abrir el detalle de medios de pago.");
+        showToast("error", e?.message || "No se pudo abrir el detalle de medios de pago.", 4200);
       }
     },
     [API, apiGet, showToast]
@@ -1189,7 +1180,7 @@ export default function OtrosIngresos() {
       try {
         const signedUrl = await getComprobanteSignedUrl(idComprobante, idMovimiento);
         if (!signedUrl) {
-          showToast("error", "No se pudo obtener el comprobante.");
+          showToast("error", "No se pudo obtener el comprobante.", 3000);
           return;
         }
 
@@ -1206,7 +1197,7 @@ export default function OtrosIngresos() {
 
         setOpenViewComprobante(true);
       } catch (e) {
-        showToast("error", e?.message || "No se pudo abrir el comprobante.");
+        showToast("error", e?.message || "No se pudo abrir el comprobante.", 3200);
       }
     },
     [getComprobanteSignedUrl, showToast]
@@ -1227,8 +1218,6 @@ export default function OtrosIngresos() {
     () => ({
       fecha: ["44%", "38%", "40%", "36%"],
       detalle: ["72%", "58%", "66%", "48%"],
-      categoria: ["52%", "44%", "58%", "38%"],
-      medio_pago_nombre: ["52%", "44%", "48%", "36%"],
       total: ["38%", "30%", "34%", "28%"],
     }),
     []
@@ -1301,6 +1290,7 @@ export default function OtrosIngresos() {
         <Toast
           tipo={toast.tipo}
           mensaje={toast.mensaje}
+          duracion={toast.duracion}
           onClose={closeToast}
         />
       )}
@@ -1645,7 +1635,7 @@ export default function OtrosIngresos() {
           signedUrlInFlightRef.current.clear();
           await reloadVista();
           await refreshPeriodos();
-          showToast("exito", "Ingreso guardado correctamente.");
+          showToast("exito", "Ingreso guardado correctamente.", 2600);
         }}
       />
 
@@ -1666,7 +1656,7 @@ export default function OtrosIngresos() {
           signedUrlInFlightRef.current.clear();
           await reloadVista();
           await refreshPeriodos();
-          showToast("exito", "Ingreso actualizado correctamente.");
+          showToast("exito", "Ingreso actualizado correctamente.", 2600);
         }}
       />
 

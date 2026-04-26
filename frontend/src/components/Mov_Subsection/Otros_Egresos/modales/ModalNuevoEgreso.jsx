@@ -460,16 +460,16 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle, esEcheq = fa
               </div>
             </div>
             <span className="nc-cheque-importe">{moneyARS(ch?.importe || 0)}</span>
-            {checked && (
-              <div
-                aria-hidden="true"
-                className={`nc-cheque-check-icon nc-cheque-check-icon--corner ${esEcheq ? "nc-cheque-check-icon--echeq" : "nc-cheque-check-icon--cheque"}`}
-              >
+
+            <div className="nc-cheque-check-icon nc-cheque-check-icon--corner nc-cheque-check-icon--echeq nc-cheque-check-icon--cheque"
+            >
+                            {checked && (
                 <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
                   <path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
+                            )}
               </div>
-            )}
+
           </div>
         );
       })}
@@ -651,7 +651,7 @@ function MedioPagoRow({ row, mediosPagoList, totalEgreso, sumaMediosPago, onUpda
           )}
 
           {chequesSeleccionados.length > 0 && (
-            <div className="nc-mp-cheques-sum">
+            <div className="mi-uploadCard__sub">
               ✓ {chequesSeleccionados.length} cheque(s) — {moneyARS(importeCheques)}
             </div>
           )}

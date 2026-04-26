@@ -134,19 +134,7 @@ function ChequesCarteraCardsCompra({ cheques, idsSeleccionados, onToggle, esEche
             onClick={() => onToggle(String(ch?.id_cheque || ""))}
             onKeyDown={(e) => (e.key === " " || e.key === "Enter") && onToggle(String(ch?.id_cheque || ""))}
           >
-            <div
-              aria-hidden="true"
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: 4,
-                border: checked ? `2px solid ${accent}` : "1.5px solid var(--nv-border-md)",
-                background: checked ? accent : "var(--nv-bg)",
-                display: "grid",
-                placeItems: "center",
-                flexShrink: 0,
-                transition: "all .14s",
-              }}
+            <div className="nc-cheque-check-icon nc-cheque-check-icon--corner nc-cheque-check-icon--echeq nc-cheque-check-icon--cheque"
             >
               {checked && (
                 <svg width="9" height="7" viewBox="0 0 9 7" fill="none">

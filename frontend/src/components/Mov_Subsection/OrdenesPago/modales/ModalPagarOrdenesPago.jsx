@@ -245,19 +245,7 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle, esEcheq = fa
               onToggle(String(ch?.id_cheque || ""))
             }
           >
-            <div
-              aria-hidden="true"
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: 4,
-                border: checked ? `2px solid ${accent}` : "1.5px solid var(--nv-border-md)",
-                background: checked ? accent : "var(--nv-bg)",
-                display: "grid",
-                placeItems: "center",
-                flexShrink: 0,
-                transition: "all .14s",
-              }}
+            <div className="nc-cheque-check-icon nc-cheque-check-icon--corner nc-cheque-check-icon--echeq nc-cheque-check-icon--cheque"
             >
               {checked && (
                 <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
@@ -578,7 +566,7 @@ function MedioPagoRow({
           )}
 
           {chequesSeleccionados.length > 0 && (
-            <div className="nc-mp-cheques-sum">
+            <div className="mi-uploadCard__sub">
               ✓ {chequesSeleccionados.length} cheque(s) — {moneyARS(importeCheques)}
             </div>
           )}

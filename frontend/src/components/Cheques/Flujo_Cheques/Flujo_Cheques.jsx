@@ -245,36 +245,38 @@ const Flujo_Cheques = () => {
     setModalComprobanteTitle("Comprobante de Cheque");
   }, []);
 
-  const openModalComprobante = useCallback(
-    (row) => {
-      const flujo = normalizeFlujo(row);
-      const idCheque = Number(flujo?.id_cheque || 0);
+const openModalComprobante = useCallback(
+  (row) => {
+    const flujo = normalizeFlujo(row);
+    const idCheque = Number(flujo?.id_cheque || 0);
 
-      if (!idCheque) {
-        showToast("error", "No se pudo identificar el cheque.");
-        return;
-      }
+    if (!idCheque) {
+      showToast("error", "No se pudo identificar el cheque.");
+      return;
+    }
 
-      const tipo = String(flujo?.tipo_cheque || "").trim().toLowerCase();
-      const action =
-        tipo === "echeq"
-          ? "echeq_cartera_comprobante_ver"
-          : "cheques_cartera_comprobante_ver";
+    const tipo = String(flujo?.tipo_cheque || "").trim().toLowerCase();
+    const action =
+      tipo === "echeq"
+        ? "echeq_cartera_comprobante_ver"
+        : "cheques_cartera_comprobante_ver";
 
-      const params = new URLSearchParams();
-      params.set("action", action);
-      params.set("id_cheque", String(idCheque));
+    const params = new URLSearchParams();
+    params.set("action", action);
+    params.set("id_cheque", String(idCheque));
 
-      const finalUrl = withSessionKey(`${API_URL}?${params.toString()}`);
 
-      setModalComprobanteUrl(finalUrl);
-      setModalComprobanteMime(String(flujo?.archivo_mime || "").trim() || "application/pdf");
-      setModalComprobanteTitle(tipo === "echeq" ? "Comprobante de E-Cheq" : "Comprobante de Cheque");
-      setModalComprobanteOpen(true);
-    },
-    [API_URL, showToast]
-  );
 
+
+const finalUrl = withSessionKey(`${API_URL}?${params.toString()}`);
+
+setModalComprobanteUrl(finalUrl);
+setModalComprobanteMime(String(row?.archivo_mime || row?.mime || "").trim());
+setModalComprobanteTitle(tipo === "echeq" ? "Comprobante de E-Cheq" : "Comprobante de Cheque");
+setModalComprobanteOpen(true);
+  },
+  [API_URL, showToast]
+);
   /* ── Fetch ── */
   const fetchFlujo = useCallback(
     async ({ offset = 0, append = false, qValue = "" } = {}) => {

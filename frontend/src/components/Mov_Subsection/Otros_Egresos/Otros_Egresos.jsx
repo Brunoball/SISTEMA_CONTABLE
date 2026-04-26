@@ -290,7 +290,6 @@ function buildExportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((r) => ({
     FECHA: safeText(formatFechaDMY(r?.fecha)),
     DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
-    CATEGORIA: safeText(r?.categoria),
     TOTAL: Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0,
   }));
 }
@@ -384,7 +383,7 @@ export default function OtrosEgresos() {
   const moreReqIdRef = useRef(0);
   const searchTimerRef = useRef(null);
   const skipSearchRef = useRef(false);
-  
+
   // Caches para signed URLs
   const signedUrlCacheRef = useRef(new Map());
   const signedUrlInFlightRef = useRef(new Set());
@@ -691,17 +690,10 @@ export default function OtrosEgresos() {
       {
         key: "detalle",
         label: "DESCRIPCIÓN",
-        fr: 2.5,
+        fr: 3.2,
         strong: true,
         align: "left",
         render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
-      },
-      {
-        key: "categoria",
-        label: "CATEGORÍA",
-        fr: 1.5,
-        align: "center",
-        render: (r) => safeText(r.categoria),
       },
       {
         key: "total",
@@ -808,7 +800,6 @@ export default function OtrosEgresos() {
         `REGISTRO ${index + 1}`,
         `FECHA: ${row.FECHA ?? ""}`,
         `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
-        `CATEGORIA: ${row.CATEGORIA ?? ""}`,
         `TOTAL: ${row.TOTAL ?? ""}`,
         "----------------------------------------",
       ].join("\n");
@@ -1190,7 +1181,6 @@ export default function OtrosEgresos() {
     () => ({
       fecha: ["44%", "38%", "40%", "36%"],
       detalle: ["72%", "58%", "66%", "48%"],
-      categoria: ["52%", "44%", "58%", "38%"],
       total: ["38%", "30%", "34%", "28%"],
     }),
     []

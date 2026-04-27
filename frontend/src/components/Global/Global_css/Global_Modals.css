@@ -2716,3 +2716,8 @@ html[data-theme="oscuro"] .mi-modal__container--venta .fl-select + .fl-label {
   background: #0055bb !important;
   border-color: #0055bb !important;
 }
+.nc-cheques-list{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

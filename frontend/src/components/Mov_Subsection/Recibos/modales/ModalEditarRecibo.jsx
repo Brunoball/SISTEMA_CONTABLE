@@ -38,44 +38,53 @@ function moneyARS(v) {
 
 function todayISO() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
 }
 
 function periodoToMMYYYY(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
+
   if (/^\d{4}-\d{1,2}$/.test(s)) {
     const [yyyy, mmRaw] = s.split("-");
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${mm}-${yyyy}`;
   }
+
   if (/^\d{1,2}-\d{4}$/.test(s)) {
     const [mmRaw, yyyy] = s.split("-");
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${mm}-${yyyy}`;
   }
+
   return s;
 }
 
 function periodoToYYYYMM(input) {
   const s = String(input ?? "").trim();
   if (!s) return "";
+
   if (/^\d{1,2}-\d{4}$/.test(s)) {
     const [mmRaw, yyyy] = s.split("-");
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
+
   if (/^\d{4}-\d{1,2}$/.test(s)) {
     const [yyyy, mmRaw] = s.split("-");
     const mm = String(Number(mmRaw)).padStart(2, "0");
     return `${yyyy}-${mm}`;
   }
+
   return s;
 }
 
 function periodoFromISODate(iso) {
   const s = String(iso ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
+
   const [y, m] = s.split("-");
   return `${m}-${y}`;
 }
@@ -92,13 +101,16 @@ function normalizeSearchText(v) {
 function isDarkEnabled(darkProp) {
   if (darkProp === true) return true;
   if (typeof document === "undefined") return false;
+
   const byAttr = document.documentElement.getAttribute("data-theme") === "oscuro";
   const byBody = document.body?.classList?.contains("dark");
+
   return Boolean(byAttr || byBody);
 }
 
 function getAuthInfo() {
   const token = localStorage.getItem("token") || "";
+
   const sessionKey =
     localStorage.getItem("session_key") ||
     localStorage.getItem("sessionKey") ||
@@ -106,8 +118,10 @@ function getAuthInfo() {
     "";
 
   let idUsuario = 0;
+
   try {
     const u = JSON.parse(localStorage.getItem("usuario") || "null");
+
     const cand =
       u?.idUsuarioMaster ??
       u?.idUsuario ??
@@ -115,6 +129,7 @@ function getAuthInfo() {
       u?.id ??
       u?.user_id ??
       0;
+
     if (Number.isFinite(Number(cand))) idUsuario = Number(cand);
   } catch {}
 
@@ -123,9 +138,11 @@ function getAuthInfo() {
 
 async function parseJsonOrThrow(res) {
   const text = await res.text();
+
   if (!text) throw new Error("Respuesta vacía del servidor.");
 
   let data = null;
+
   try {
     data = JSON.parse(text);
   } catch {
@@ -143,11 +160,17 @@ async function parseJsonOrThrow(res) {
 
 async function apiGetJson(url) {
   const { token, sessionKey } = getAuthInfo();
+
   const headers = {};
+
   if (sessionKey) headers["X-Session"] = sessionKey;
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(url, { method: "GET", headers });
+  const res = await fetch(url, {
+    method: "GET",
+    headers,
+  });
+
   return await parseJsonOrThrow(res);
 }
 
@@ -158,12 +181,14 @@ function getArr(x) {
 function getIdGeneric(x) {
   const cand = x?.id ?? x?.id_detalle ?? x?.idDetalle ?? x?.detalle_id ?? 0;
   const n = Number(cand);
+
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 function getIdCliente(x) {
   const cand = x?.id ?? x?.id_cliente ?? x?.idCliente ?? x?.cliente_id ?? 0;
   const n = Number(cand);
+
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
@@ -190,10 +215,7 @@ export default function ModalEditarRecibo({
   const API_LISTS = `${BASE_URL}/api.php?action=global_obtener_listas`;
   const darkOn = isDarkEnabled(dark);
 
-  const showToast = useCallback(
-    (tipo, mensaje) => onToast?.(tipo, mensaje),
-    [onToast]
-  );
+  const showToast = useCallback((tipo, mensaje) => onToast?.(tipo, mensaje), [onToast]);
 
   const [saving, setSaving] = useState(false);
   const [localLists, setLocalLists] = useState(() => normalizeLists(lists));
@@ -215,6 +237,22 @@ export default function ModalEditarRecibo({
   const [clienteArmed, setClienteArmed] = useState(false);
 
   const closeBtnRef = useRef(null);
+  const fechaInputRef = useRef(null);
+
+  const openNativeDatePicker = useCallback(
+    (input) => {
+      if (!input || saving) return;
+
+      input.focus();
+
+      if (typeof input.showPicker === "function") {
+        try {
+          input.showPicker();
+        } catch {}
+      }
+    },
+    [saving]
+  );
 
   useEffect(() => {
     setLocalLists(normalizeLists(lists));
@@ -222,8 +260,10 @@ export default function ModalEditarRecibo({
 
   useEffect(() => {
     if (!open) return;
+
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
       document.body.style.overflow = prev;
     };
@@ -239,6 +279,7 @@ export default function ModalEditarRecibo({
     };
 
     document.addEventListener("keydown", handleEscKey);
+
     return () => document.removeEventListener("keydown", handleEscKey);
   }, [open, saving, onClose]);
 
@@ -265,6 +306,7 @@ export default function ModalEditarRecibo({
     const perAuto = periodoFromISODate(fecha);
 
     const idCliente = r.id_cliente ?? r.cliente_id ?? r.idCliente ?? NULL_OPTION;
+
     const clienteTxt = String(
       r.cliente ?? r.nombre_cliente ?? r.razon_social_cliente ?? ""
     ).trim();
@@ -306,6 +348,7 @@ export default function ModalEditarRecibo({
     });
 
     setTimeout(() => closeBtnRef.current?.focus(), 0);
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, row, periodoDefault]);
 
@@ -314,6 +357,7 @@ export default function ModalEditarRecibo({
     const q = normalizeSearchText(form.detalleInput);
 
     if (!detalleFocus || !detalleArmed || q.length < 1) return [];
+
     return all.filter((d) => normalizeSearchText(d?.nombre).includes(q)).slice(0, 25);
   }, [localLists.detalles, form.detalleInput, detalleFocus, detalleArmed]);
 
@@ -322,6 +366,7 @@ export default function ModalEditarRecibo({
     const q = normalizeSearchText(form.clienteInput);
 
     if (!clienteFocus || !clienteArmed || q.length < 1) return [];
+
     return all
       .filter((c) =>
         normalizeSearchText(c?.nombre ?? c?.razon_social ?? c?.cliente).includes(q)
@@ -331,8 +376,14 @@ export default function ModalEditarRecibo({
 
   const handleDetalleInputChange = (e) => {
     const value = e.target.value;
+
     setDetalleArmed(true);
-    setForm((p) => ({ ...p, detalleInput: value, id_detalle: NULL_OPTION }));
+
+    setForm((p) => ({
+      ...p,
+      detalleInput: value,
+      id_detalle: NULL_OPTION,
+    }));
   };
 
   const handleSelectDetalle = (det) => {
@@ -351,8 +402,14 @@ export default function ModalEditarRecibo({
 
   const handleClienteInputChange = (e) => {
     const value = e.target.value;
+
     setClienteArmed(true);
-    setForm((p) => ({ ...p, clienteInput: value, id_cliente: NULL_OPTION }));
+
+    setForm((p) => ({
+      ...p,
+      clienteInput: value,
+      id_cliente: NULL_OPTION,
+    }));
   };
 
   const handleSelectCliente = (cli) => {
@@ -369,24 +426,27 @@ export default function ModalEditarRecibo({
     setClienteArmed(false);
   };
 
-  // ⭐ FUNCIÓN PARA VALIDAR Y ACTUALIZAR LA FECHA ⭐
-  const handleFechaChange = useCallback((e) => {
-    const nuevaFecha = e.target.value;
-    
-    if (nuevaFecha && nuevaFecha > todayISO()) {
-      showToast("advertencia", "No podés seleccionar una fecha posterior al día actual.");
-      return;
-    }
-    
-    setForm((p) => ({
-      ...p,
-      fecha: nuevaFecha,
-      periodo: periodoFromISODate(nuevaFecha) || p.periodo,
-    }));
-  }, [showToast]);
+  const handleFechaChange = useCallback(
+    (e) => {
+      const nuevaFecha = e.target.value;
+
+      if (nuevaFecha && nuevaFecha > todayISO()) {
+        showToast("advertencia", "No podés seleccionar una fecha posterior al día actual.");
+        return;
+      }
+
+      setForm((p) => ({
+        ...p,
+        fecha: nuevaFecha,
+        periodo: periodoFromISODate(nuevaFecha) || p.periodo,
+      }));
+    },
+    [showToast]
+  );
 
   const resumen = useMemo(() => {
     const monto = Math.max(0, safeNumber(form.monto_total));
+
     return {
       total: monto,
       cliente: String(form.clienteInput || "").trim() || "Sin cliente",
@@ -397,12 +457,12 @@ export default function ModalEditarRecibo({
 
   const submit = async (e) => {
     e?.preventDefault?.();
+
     if (saving) return;
 
     try {
       setSaving(true);
 
-      // ⭐ VALIDACIÓN DE FECHA ⭐
       if (!String(form.fecha || "").trim()) {
         throw new Error("Completá la fecha.");
       }
@@ -414,21 +474,22 @@ export default function ModalEditarRecibo({
       const perUI = periodoToMMYYYY(form.periodo) || periodoFromISODate(form.fecha);
       const perAPI = periodoToYYYYMM(perUI);
 
-      if (!perAPI) throw new Error("No se pudo calcular el período desde la fecha.");
+      if (!perAPI) {
+        throw new Error("No se pudo calcular el período desde la fecha.");
+      }
 
       const idDet =
-        form.id_detalle && form.id_detalle !== NULL_OPTION
-          ? Number(form.id_detalle)
-          : null;
+        form.id_detalle && form.id_detalle !== NULL_OPTION ? Number(form.id_detalle) : null;
 
-      if (!idDet) throw new Error("Seleccioná un detalle.");
+      if (!idDet) {
+        throw new Error("Seleccioná un detalle.");
+      }
 
-      const montoFinal = Math.max(
-        0,
-        Math.round(safeNumber(form.monto_total) * 100) / 100
-      );
+      const montoFinal = Math.max(0, Math.round(safeNumber(form.monto_total) * 100) / 100);
 
-      if (!(montoFinal > 0)) throw new Error("Ingresá un monto válido mayor a 0.");
+      if (!(montoFinal > 0)) {
+        throw new Error("Ingresá un monto válido mayor a 0.");
+      }
 
       const payloadFinal = {
         id_movimiento: form.id_movimiento,
@@ -445,6 +506,7 @@ export default function ModalEditarRecibo({
       };
 
       await onSave?.(payloadFinal);
+
       showToast("exito", "Recibo actualizado.");
       onClose?.();
     } catch (err) {
@@ -508,10 +570,14 @@ export default function ModalEditarRecibo({
                           placeholder=" "
                           value={form.monto_total}
                           onChange={(e) =>
-                            setForm((p) => ({ ...p, monto_total: e.target.value }))
+                            setForm((p) => ({
+                              ...p,
+                              monto_total: e.target.value,
+                            }))
                           }
                           disabled={saving}
                         />
+
                         <label className="nc-label">Monto total</label>
                       </div>
 
@@ -543,6 +609,7 @@ export default function ModalEditarRecibo({
                             disabled={saving}
                             autoComplete="off"
                           />
+
                           <label className="nc-label">Detalle *</label>
                         </div>
 
@@ -592,6 +659,7 @@ export default function ModalEditarRecibo({
                             disabled={saving}
                             autoComplete="off"
                           />
+
                           <label className="nc-label">Cliente</label>
                         </div>
 
@@ -599,6 +667,7 @@ export default function ModalEditarRecibo({
                           <div className="mi-er-autocomplete">
                             {filteredClientes.map((cli) => {
                               const id = getIdCliente(cli);
+
                               const nombre = String(
                                 cli?.nombre ?? cli?.razon_social ?? cli?.cliente ?? ""
                               ).trim();
@@ -631,17 +700,34 @@ export default function ModalEditarRecibo({
                   </div>
 
                   <div className="nc-section-body">
-                    <div className="nc-field">
-                      {/* ⭐ INPUT DE FECHA CON VALIDACIONES ⭐ */}
+                    <div
+                      className="nc-field"
+                      onMouseDown={(e) => {
+                        if (saving) return;
+
+                        e.preventDefault();
+                        openNativeDatePicker(fechaInputRef.current);
+                      }}
+                    >
                       <input
+                        ref={fechaInputRef}
                         className="nc-input"
                         type="date"
                         placeholder=" "
                         value={form.fecha}
                         max={todayISO()}
                         onChange={handleFechaChange}
+                        onClick={(e) => {
+                          if (saving) return;
+                          openNativeDatePicker(e.currentTarget);
+                        }}
+                        onFocus={(e) => {
+                          if (saving) return;
+                          openNativeDatePicker(e.currentTarget);
+                        }}
                         disabled={saving}
                       />
+
                       <label className="nc-label">Fecha</label>
                     </div>
                   </div>
@@ -657,27 +743,37 @@ export default function ModalEditarRecibo({
                     <div className="nc-cc-info">
                       <div className="mi-er-summary-row">
                         <FontAwesomeIcon icon={faCalendarDays} />
-                        <span><b>Fecha:</b> {form.fecha || "--"}</span>
+                        <span>
+                          <b>Fecha:</b> {form.fecha || "--"}
+                        </span>
                       </div>
 
                       <div className="mi-er-summary-row">
                         <FontAwesomeIcon icon={faUser} />
-                        <span><b>Cliente:</b> {resumen.cliente}</span>
+                        <span>
+                          <b>Cliente:</b> {resumen.cliente}
+                        </span>
                       </div>
 
                       <div className="mi-er-summary-row">
                         <FontAwesomeIcon icon={faBoxOpen} />
-                        <span><b>Detalle:</b> {resumen.detalle}</span>
+                        <span>
+                          <b>Detalle:</b> {resumen.detalle}
+                        </span>
                       </div>
 
                       <div className="mi-er-summary-row">
                         <FontAwesomeIcon icon={faReceipt} />
-                        <span><b>Período:</b> {resumen.periodo}</span>
+                        <span>
+                          <b>Período:</b> {resumen.periodo}
+                        </span>
                       </div>
 
                       <div className="mi-er-summary-row">
                         <FontAwesomeIcon icon={faDollarSign} />
-                        <span><b>Total:</b> {moneyARS(resumen.total)}</span>
+                        <span>
+                          <b>Total:</b> {moneyARS(resumen.total)}
+                        </span>
                       </div>
                     </div>
                   </div>

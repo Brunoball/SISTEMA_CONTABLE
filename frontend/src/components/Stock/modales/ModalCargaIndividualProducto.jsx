@@ -16,8 +16,6 @@ import {
   faFloppyDisk,
   faCircleExclamation,
   faMoneyBillTrendUp,
-  faPercent,
-  faDollarSign,
   faLayerGroup,
   faCheck,
 } from "@fortawesome/free-solid-svg-icons";
@@ -93,6 +91,103 @@ function errorToText(err, fallback = "Ocurrió un error inesperado") {
 function hasMoneyValue(value) {
   return value !== null && value !== undefined && String(value).trim() !== "";
 }
+
+function cleanDecoratedNumber(value) {
+  return String(value ?? "")
+    .replace(/\$/g, "")
+    .replace(/%/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function parseDecoratedNumber(value) {
+  const cleaned = cleanDecoratedNumber(value);
+  if (!cleaned) return null;
+
+  const normalized = cleaned.includes(",")
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned;
+
+  const num = Number(normalized.replace(/[^\d.-]/g, ""));
+  return Number.isFinite(num) ? num : null;
+}
+
+function formatPriceDisplay(value) {
+  const num = parseDecoratedNumber(value);
+  if (num === null) return cleanDecoratedNumber(value);
+
+  return `$ ${num.toLocaleString("es-AR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatPercentDisplay(value) {
+  const num = parseDecoratedNumber(value);
+  if (num === null) return cleanDecoratedNumber(value);
+
+  return `${num.toLocaleString("es-AR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })} %`;
+}
+
+function inferPriceInputKind(name = "") {
+  const n = String(name).toLowerCase();
+
+  if (
+    n.includes("porcentaje") ||
+    n.includes("_pct") ||
+    n.includes("pct_") ||
+    n.includes("tipo_pct") ||
+    n.includes("margen_pct") ||
+    n.includes("extra_margen_pct")
+  ) {
+    return "percent";
+  }
+
+  if (
+    n.includes("precio") ||
+    n.includes("costo") ||
+    n.includes("margen_venta_valor") ||
+    n.includes("margen_promo_valor") ||
+    n.includes("margen_valor") ||
+    n.includes("margen_val") ||
+    n.includes("tipo_val") ||
+    n.includes("extra_margen_val") ||
+    n.includes("marginvalue")
+  ) {
+    return "money";
+  }
+
+  return "number";
+}
+
+function decoratePriceInputValue(value, kind, focused) {
+  const cleaned = cleanDecoratedNumber(value);
+  if (!cleaned) return "";
+  if (focused) return cleaned;
+  if (kind === "percent") return formatPercentDisplay(cleaned);
+  if (kind === "money") return formatPriceDisplay(cleaned);
+  return cleaned;
+}
+
+function withCleanPriceEvent(event, cleanValue) {
+  return {
+    ...event,
+    target: {
+      ...event.target,
+      name: event.target?.name,
+      value: cleanValue,
+    },
+    currentTarget: {
+      ...event.currentTarget,
+      name: event.currentTarget?.name,
+      value: cleanValue,
+    },
+  };
+}
+
 
 function formatMoneyEnter(value) {
   if (value === null || value === undefined || value === "") return "";
@@ -305,10 +400,36 @@ function PriceInput({
   disabled,
   className,
 }) {
+  const [focused, setFocused] = useState(false);
+  const kind = inferPriceInputKind(name);
+  const displayValue = decoratePriceInputValue(value, kind, focused);
+
+  const handleChange = (e) => {
+    const cleanValue = cleanDecoratedNumber(e.target.value);
+    onChange?.(withCleanPriceEvent(e, cleanValue));
+  };
+
+  const handleFocus = (e) => {
+    setFocused(true);
+    const cleanValue = cleanDecoratedNumber(e.target.value);
+    onFocus?.(withCleanPriceEvent(e, cleanValue));
+  };
+
+  const handleBlur = (e) => {
+    setFocused(false);
+    const cleanValue = cleanDecoratedNumber(e.target.value);
+    onBlur?.(withCleanPriceEvent(e, cleanValue));
+  };
+
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
+      const cleanValue = cleanDecoratedNumber(e.currentTarget.value);
+      const originalValue = e.currentTarget.value;
+      e.currentTarget.value = cleanValue;
+      e.target.value = cleanValue;
       onEnter?.(e);
+      e.currentTarget.value = originalValue;
       return;
     }
 
@@ -318,13 +439,13 @@ function PriceInput({
   return (
     <input
       name={name}
-      value={value}
-      onChange={onChange}
-      onBlur={onBlur}
-      onFocus={onFocus}
+      value={displayValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      onFocus={handleFocus}
       onKeyDown={handleKeyDown}
       className={className || "cmi-input"}
-      placeholder={placeholder || "0,00"}
+      placeholder={placeholder || (kind === "percent" ? "0 %" : "$ 0,00")}
       disabled={disabled}
       inputMode="decimal"
     />
@@ -1190,7 +1311,7 @@ export default function ModalCargaIndividualProducto({
                   />
                 </FloatingField>
 
-                <FloatingField label="Margen" icon={faPercent}>
+                <FloatingField label="Margen %">
                   <PriceInput
                     name="margen_venta_porcentaje"
                     value={form.margen_venta_porcentaje}
@@ -1209,7 +1330,7 @@ export default function ModalCargaIndividualProducto({
                   />
                 </FloatingField>
 
-                <FloatingField label="Margen" icon={faDollarSign}>
+                <FloatingField label="Margen $">
                   <PriceInput
                     name="margen_venta_valor"
                     value={form.margen_venta_valor}
@@ -1250,7 +1371,7 @@ export default function ModalCargaIndividualProducto({
                   />
                 </FloatingField>
 
-                <FloatingField label="Margen promo" icon={faPercent}>
+                <FloatingField label="Margen %">
                   <PriceInput
                     name="margen_promo_porcentaje"
                     value={form.margen_promo_porcentaje}
@@ -1269,7 +1390,7 @@ export default function ModalCargaIndividualProducto({
                   />
                 </FloatingField>
 
-                <FloatingField label="Margen promo" icon={faDollarSign}>
+                <FloatingField label="Margen $">
                   <PriceInput
                     name="margen_promo_valor"
                     value={form.margen_promo_valor}
@@ -1360,7 +1481,7 @@ export default function ModalCargaIndividualProducto({
                     />
                   </FloatingField>
 
-                  <FloatingField label="Margen">
+                  <FloatingField label="Margen %">
                     <PriceInput
                       name={`extra_margen_pct_${idx}`}
                       value={item.margen_porcentaje}
@@ -1373,7 +1494,7 @@ export default function ModalCargaIndividualProducto({
                     />
                   </FloatingField>
 
-                  <FloatingField label="Margen">
+                  <FloatingField label="Margen $">
                     <PriceInput
                       name={`extra_margen_val_${idx}`}
                       value={item.margen_valor}

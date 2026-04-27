@@ -28,8 +28,6 @@ import {
   faListCheck,
   faPlus,
   faMoneyBillTrendUp,
-  faPercent,
-  faDollarSign,
   faLayerGroup,
   faPaperclip,
 } from "@fortawesome/free-solid-svg-icons";
@@ -59,6 +57,103 @@ function errorToText(error, fallback = "Ocurrió un error inesperado") {
   if (error.error) return error.error;
   return fallback;
 }
+
+function cleanDecoratedNumber(value) {
+  return String(value ?? "")
+    .replace(/\$/g, "")
+    .replace(/%/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function parseDecoratedNumber(value) {
+  const cleaned = cleanDecoratedNumber(value);
+  if (!cleaned) return null;
+
+  const normalized = cleaned.includes(",")
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned;
+
+  const num = Number(normalized.replace(/[^\d.-]/g, ""));
+  return Number.isFinite(num) ? num : null;
+}
+
+function formatPriceDisplay(value) {
+  const num = parseDecoratedNumber(value);
+  if (num === null) return cleanDecoratedNumber(value);
+
+  return `$ ${num.toLocaleString("es-AR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatPercentDisplay(value) {
+  const num = parseDecoratedNumber(value);
+  if (num === null) return cleanDecoratedNumber(value);
+
+  return `${num.toLocaleString("es-AR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })} %`;
+}
+
+function inferPriceInputKind(name = "") {
+  const n = String(name).toLowerCase();
+
+  if (
+    n.includes("porcentaje") ||
+    n.includes("_pct") ||
+    n.includes("pct_") ||
+    n.includes("tipo_pct") ||
+    n.includes("margen_pct") ||
+    n.includes("extra_margen_pct")
+  ) {
+    return "percent";
+  }
+
+  if (
+    n.includes("precio") ||
+    n.includes("costo") ||
+    n.includes("margen_venta_valor") ||
+    n.includes("margen_promo_valor") ||
+    n.includes("margen_valor") ||
+    n.includes("margen_val") ||
+    n.includes("tipo_val") ||
+    n.includes("extra_margen_val") ||
+    n.includes("marginvalue")
+  ) {
+    return "money";
+  }
+
+  return "number";
+}
+
+function decoratePriceInputValue(value, kind, focused) {
+  const cleaned = cleanDecoratedNumber(value);
+  if (!cleaned) return "";
+  if (focused) return cleaned;
+  if (kind === "percent") return formatPercentDisplay(cleaned);
+  if (kind === "money") return formatPriceDisplay(cleaned);
+  return cleaned;
+}
+
+function withCleanPriceEvent(event, cleanValue) {
+  return {
+    ...event,
+    target: {
+      ...event.target,
+      name: event.target?.name,
+      value: cleanValue,
+    },
+    currentTarget: {
+      ...event.currentTarget,
+      name: event.currentTarget?.name,
+      value: cleanValue,
+    },
+  };
+}
+
 
 function isTemaOscuro() {
   return (
@@ -217,15 +312,36 @@ function FloatingField({ label, icon, error, children, style }) {
 }
 
 function PriceInput({ name, value, onChange, onBlur, onFocus, placeholder, disabled, className }) {
+  const [focused, setFocused] = useState(false);
+  const kind = inferPriceInputKind(name);
+  const displayValue = decoratePriceInputValue(value, kind, focused);
+
+  const handleChange = (e) => {
+    const cleanValue = cleanDecoratedNumber(e.target.value);
+    onChange?.(withCleanPriceEvent(e, cleanValue));
+  };
+
+  const handleFocus = (e) => {
+    setFocused(true);
+    const cleanValue = cleanDecoratedNumber(e.target.value);
+    onFocus?.(withCleanPriceEvent(e, cleanValue));
+  };
+
+  const handleBlur = (e) => {
+    setFocused(false);
+    const cleanValue = cleanDecoratedNumber(e.target.value);
+    onBlur?.(withCleanPriceEvent(e, cleanValue));
+  };
+
   return (
     <input
       name={name}
-      value={value}
-      onChange={onChange}
-      onBlur={onBlur}
-      onFocus={onFocus}
+      value={displayValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      onFocus={handleFocus}
       className={className || "cmi-input"}
-      placeholder={placeholder || "0"}
+      placeholder={placeholder || (kind === "percent" ? "0 %" : "$ 0,00")}
       disabled={disabled}
       inputMode="decimal"
     />
@@ -584,7 +700,7 @@ function ModalConfirmarProductosIA({
                               onFocus={(e) => onChangeProducto(idx, "precio", formatMoneyFocus(e.target.value))}
                             />
                           </FloatingField>
-                          <FloatingField label="Margen %" icon={faPercent}>
+                          <FloatingField label="Margen %">
                             <PriceInput
                               name={`margen_venta_porcentaje_${idx}`}
                               value={item.margen_venta_porcentaje}
@@ -594,7 +710,7 @@ function ModalConfirmarProductosIA({
                               disabled={!item.precio_costo}
                             />
                           </FloatingField>
-                          <FloatingField label="Margen $" icon={faDollarSign}>
+                          <FloatingField label="Margen $">
                             <PriceInput
                               name={`margen_venta_valor_${idx}`}
                               value={item.margen_venta_valor}
@@ -616,7 +732,7 @@ function ModalConfirmarProductosIA({
                               onFocus={(e) => onChangeProducto(idx, "precio_promo", formatMoneyFocus(e.target.value))}
                             />
                           </FloatingField>
-                          <FloatingField label="Margen promo %" icon={faPercent}>
+                          <FloatingField label="Margen %">
                             <PriceInput
                               name={`margen_promo_porcentaje_${idx}`}
                               value={item.margen_promo_porcentaje}
@@ -626,7 +742,7 @@ function ModalConfirmarProductosIA({
                               disabled={!item.precio_costo}
                             />
                           </FloatingField>
-                          <FloatingField label="Margen promo $" icon={faDollarSign}>
+                          <FloatingField label="Margen $">
                             <PriceInput
                               name={`margen_promo_valor_${idx}`}
                               value={item.margen_promo_valor}

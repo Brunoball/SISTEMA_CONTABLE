@@ -492,9 +492,6 @@ function getStockDisponible(detalle) {
   const n = Number(c);
   return Number.isFinite(n) ? n : null;
 }
-function isSinStock(stock) {
-  return stock !== null && stock !== undefined && Number(stock) <= 0;
-}
 function buildEmptyRow() {
   return {
     id: uid(),
@@ -860,55 +857,36 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
   const handleSelectDetalle = useCallback(
     (detalle, rowId) => {
-      const precio = Number(detalle?.precio || 0);
       const stockDisponible = getStockDisponible(detalle);
-      const sinStock = isSinStock(stockDisponible);
 
       updateRow(rowId, {
         id_detalle: String(getDetalleId(detalle) || ""),
         detalleText: detalle?.nombre || "",
-        precio,
+        // En compras el precio unitario y la cantidad los define esta compra al proveedor.
+        // No se autocompleta precio desde el producto ni se limita por el stock actual.
         stock_disponible: stockDisponible,
-        sinStock,
-        cantidad: sinStock ? "" : 1,
+        sinStock: false,
+        cantidad: 1,
+        precio: 0,
+        precioDraft: "",
+        precioFocused: false,
       });
-
-      if (sinStock) {
-        showToast("advertencia", `El producto "${detalle?.nombre || ""}" no tiene stock disponible.`, 2500);
-      }
     },
-    [updateRow, showToast]
+    [updateRow]
   );
 
   const handleCantidadChange = useCallback(
     (rowId, newCantidad) => {
-      const row = rows.find((r) => r.id === rowId);
-      if (!row) return;
-
-      if (row.sinStock || isSinStock(row.stock_disponible)) {
-        updateRow(rowId, { cantidad: "" });
-        return;
-      }
-
-      const stockDisponible = row.stock_disponible;
       let cantidadFinal = newCantidad === "" ? "" : Number(newCantidad);
 
-      if (typeof cantidadFinal === "number" && cantidadFinal < 0) cantidadFinal = 0;
-
-      if (
-        stockDisponible !== null &&
-        stockDisponible !== undefined &&
-        stockDisponible !== "" &&
-        typeof cantidadFinal === "number" &&
-        cantidadFinal > Number(stockDisponible)
-      ) {
-        cantidadFinal = Number(stockDisponible);
-        showToast("advertencia", `Stock máximo disponible: ${stockDisponible}`, 2000);
+      if (typeof cantidadFinal === "number" && cantidadFinal < 0) {
+        cantidadFinal = 0;
       }
 
+      // En compras no se valida contra el stock disponible: la compra suma stock.
       updateRow(rowId, { cantidad: cantidadFinal });
     },
-    [rows, updateRow, showToast]
+    [updateRow]
   );
 
   const closeAddMini = useCallback(() => {
@@ -1312,15 +1290,8 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
                 <div ref={rowsContainerRef} className={`mi-cr-table__rows${hasScroll ? " has-scroll" : ""}`}>
                   {rowsCalc.map((r) => {
-                    const stockNum =
-                      r.stock_disponible !== null && r.stock_disponible !== undefined
-                        ? Number(r.stock_disponible)
-                        : null;
-
-                    const rowSinStock = r.sinStock || isSinStock(stockNum);
-
                     return (
-                      <div key={r.id} className={`mi-cr-row${rowSinStock ? " mi-cr-row--sin-stock" : ""}`}>
+                      <div key={r.id} className="mi-cr-row">
                         <div className="mi-cr-cell mi-cr-cell--detalle">
                           <GlobalAutocomplete
                             value={r.detalleText}
@@ -1348,33 +1319,26 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                           <input
                             className="nv-cell-input nv-cell-input--center"
                             type="number"
-                            min={rowSinStock ? undefined : "1"}
+                            min="0"
                             step="1"
-                            value={rowSinStock ? "" : r.cantidad}
+                            value={r.cantidad}
                             onChange={(e) =>
                               handleCantidadChange(r.id, e.target.value === "" ? "" : Number(e.target.value))
                             }
-                            disabled={saving || rowSinStock}
-                            placeholder={rowSinStock ? "0" : ""}
-                            title={rowSinStock ? "No podés ingresar cantidad porque el stock es 0" : ""}
-                            style={{
-                              width: "100%",
-                              background: rowSinStock ? "#f3f4f6" : undefined,
-                              color: rowSinStock ? "#b91c1c" : undefined,
-                              borderColor: rowSinStock ? "#fca5a5" : undefined,
-                              cursor: rowSinStock ? "not-allowed" : undefined,
-                              opacity: rowSinStock ? 0.9 : 1,
-                            }}
+                            disabled={saving}
+                            placeholder=""
+                            title="En compras podés ingresar cualquier cantidad; no se limita por el stock actual."
+                            style={{ width: "100%" }}
                           />
                           {r.stock_disponible !== null && r.stock_disponible !== undefined && (
                             <div
                               style={{
                                 fontSize: "10px",
-                                fontWeight: rowSinStock ? 700 : 500,
-                                color: rowSinStock ? "#b91c1c" : "#666",
+                                fontWeight: 500,
+                                color: "#666",
                               }}
                             >
-                              {rowSinStock ? "Sin stock" : `Stock: ${r.stock_disponible}`}
+                              {`Stock: ${r.stock_disponible}`}
                             </div>
                           )}
                         </div>
@@ -1383,15 +1347,40 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                           <input
                             className="nv-cell-input nv-cell-input--right"
                             type="text"
-                            value={formatMoneyInputARS(r.precio)}
-                            readOnly
-                            tabIndex={-1}
-                            style={{
-                              width: "100%",
-                              pointerEvents: "none",
-                              background: "transparent",
-                              cursor: "default",
+                            inputMode="decimal"
+                            value={r.precioFocused ? r.precioDraft ?? "" : formatMoneyInputARS(r.precio)}
+                            onFocus={(e) => {
+                              if (saving) return;
+                              updateRow(r.id, {
+                                precioFocused: true,
+                                precioDraft: formatEditableMoney(r.precio),
+                              });
+                              setTimeout(() => e.target.select(), 0);
                             }}
+                            onChange={(e) => {
+                              if (saving) return;
+                              const limpio = e.target.value.replace(/[^\d,.\-]/g, "");
+                              updateRow(r.id, { precioDraft: limpio, precio: parseMoneyInputARS(limpio) });
+                            }}
+                            onBlur={() => {
+                              if (saving) return;
+                              const precioFinal = parseMoneyInputARS(r.precioDraft);
+                              updateRow(r.id, {
+                                precio: precioFinal,
+                                precioDraft: "",
+                                precioFocused: false,
+                              });
+                            }}
+                            onKeyDown={(e) => {
+                              if (saving) return;
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                e.currentTarget.blur();
+                              }
+                            }}
+                            disabled={saving}
+                            placeholder="$ 0,00"
+                            style={{ width: "100%" }}
                           />
                         </div>
 

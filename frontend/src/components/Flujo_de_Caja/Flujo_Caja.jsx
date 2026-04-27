@@ -165,7 +165,17 @@ export default function Flujo_Caja() {
 
   const bloque  = data?.tiendas?.[0] || null;
   const rowsRaw = bloque?.rows || [];
-  const rows    = useMemo(() => normalizeRows(rowsRaw), [rowsRaw]);
+
+  // ── CAMBIO: ordenar descendente por fecha (más reciente primero) ──
+  const rows = useMemo(() => {
+    const normalized = normalizeRows(rowsRaw);
+    return [...normalized].sort((a, b) => {
+      if (a.fecha < b.fecha) return 1;
+      if (a.fecha > b.fecha) return -1;
+      return 0;
+    });
+  }, [rowsRaw]);
+
   const showing = rows.length;
 
   /* =========================

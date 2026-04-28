@@ -20,9 +20,11 @@ import {
 function getAuthHeaders() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
   const token = (localStorage.getItem("token") || "").trim();
+
   const headers = {};
   if (sessionKey) headers["X-Session"] = sessionKey;
   if (token) headers["Authorization"] = `Bearer ${token}`;
+
   return headers;
 }
 
@@ -38,6 +40,7 @@ function withSessionKey(url) {
     if (sessionKey && !u.searchParams.has("session_key")) {
       u.searchParams.set("session_key", sessionKey);
     }
+
     if (token && !u.searchParams.has("token")) {
       u.searchParams.set("token", token);
     }
@@ -50,9 +53,13 @@ function withSessionKey(url) {
 
 async function parseJsonOrThrow(res) {
   const text = await res.text();
-  if (!text) throw new Error("Respuesta vacía del servidor.");
+
+  if (!text) {
+    throw new Error("Respuesta vacía del servidor.");
+  }
 
   let data;
+
   try {
     data = JSON.parse(text);
   } catch {
@@ -71,15 +78,22 @@ async function parseJsonOrThrow(res) {
 ═══════════════════════════════════════════ */
 function formatFecha(fecha) {
   const s = String(fecha || "").trim();
+
   if (!s) return "—";
+
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
   return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
 }
 
 function moneyARS(valor) {
   const n = Number(valor || 0);
+
   try {
-    return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
+    return n.toLocaleString("es-AR", {
+      style: "currency",
+      currency: "ARS",
+    });
   } catch {
     return `$${n.toFixed(2)}`;
   }
@@ -96,24 +110,50 @@ function boolish(value, fallback = false) {
   if (typeof value === "number") return value === 1;
 
   const s = String(value).trim().toLowerCase();
+
   if (["1", "true", "sí", "si", "yes"].includes(s)) return true;
   if (["0", "false", "no", ""].includes(s)) return false;
 
   return fallback;
 }
 
+/**
+ * Detecta MIME por ruta/nombre.
+ * Si no puede detectar, devuelve "".
+ * No fuerza PDF acá para no pisar imágenes reales.
+ */
 function inferMime(path) {
   const p = String(path || "").trim().toLowerCase();
-  if (p.endsWith(".png")) return "image/png";
-  if (p.endsWith(".jpg") || p.endsWith(".jpeg")) return "image/jpeg";
-  if (p.endsWith(".webp")) return "image/webp";
-  if (p.endsWith(".gif")) return "image/gif";
-  if (p.endsWith(".pdf")) return "application/pdf";
-  return "application/pdf";
+
+  if (!p) return "";
+
+  if (p.includes(".png")) return "image/png";
+  if (p.includes(".jpg") || p.includes(".jpeg")) return "image/jpeg";
+  if (p.includes(".webp")) return "image/webp";
+  if (p.includes(".gif")) return "image/gif";
+  if (p.includes(".bmp")) return "image/bmp";
+  if (p.includes(".svg")) return "image/svg+xml";
+  if (p.includes(".pdf")) return "application/pdf";
+
+  return "";
+}
+
+function getArchivoRef(row) {
+  return (
+    row?.archivo_path ??
+    row?.archivoPath ??
+    row?.archivo_url ??
+    row?.archivoUrl ??
+    row?.comprobante_url ??
+    row?.comprobanteUrl ??
+    row?.url ??
+    ""
+  );
 }
 
 function normalizeFlujoEcheq(row) {
   const idCheque = Number(row?.id_cheque ?? row?.idCheque ?? 0);
+
   const rawTieneComp =
     row?.tiene_comprobante ??
     row?.tieneComprobante ??
@@ -122,14 +162,12 @@ function normalizeFlujoEcheq(row) {
     row?.id_comprobante ??
     row?.idComprobante;
 
-  const archivoPath =
-    row?.archivo_path ??
-    row?.archivoPath ??
-    row?.archivo_url ??
-    row?.archivoUrl ??
-    "";
+  const archivoRef = getArchivoRef(row);
 
-  const archivoMime = row?.archivo_mime ?? row?.mime ?? inferMime(archivoPath);
+  const archivoMime =
+    inferMime(archivoRef) ||
+    String(row?.archivo_mime ?? row?.mime ?? "").trim() ||
+    "application/pdf";
 
   return {
     ...row,
@@ -146,6 +184,9 @@ function normalizeFlujoEcheq(row) {
     fecha_evento: row?.fecha_evento ?? row?.fechaEvento ?? "",
     fecha_emision: row?.fecha_emision ?? row?.fechaEmision ?? "",
     fecha_pago: row?.fecha_pago ?? row?.fechaPago ?? "",
+    id_comprobante: Number(row?.id_comprobante ?? row?.idComprobante ?? 0),
+    archivo_path: row?.archivo_path ?? row?.archivoPath ?? "",
+    archivo_url: row?.archivo_url ?? row?.archivoUrl ?? "",
     archivo_mime: archivoMime,
     tiene_comprobante: boolish(rawTieneComp, idCheque > 0),
   };
@@ -214,13 +255,14 @@ function humanizarEventoDesconocido(evento) {
 function eventoConfig(evento) {
   const key = normalizarEvento(evento);
 
-  return EVENTO_CONFIG[key] ?? {
-    label: humanizarEventoDesconocido(evento),
-    icon: faCircleInfo,
-    chipClass: "mov-chip--neutral",
-  };
+  return (
+    EVENTO_CONFIG[key] ?? {
+      label: humanizarEventoDesconocido(evento),
+      icon: faCircleInfo,
+      chipClass: "mov-chip--neutral",
+    }
+  );
 }
-
 
 /* ═══════════════════════════════════════════
    Constantes
@@ -255,7 +297,9 @@ const Flujo_Echeqs = () => {
     setToast({ tipo, mensaje, duracion });
   }, []);
 
-  const closeToast = useCallback(() => setToast(null), []);
+  const closeToast = useCallback(() => {
+    setToast(null);
+  }, []);
 
   const closeModalComprobante = useCallback(() => {
     setModalComprobanteOpen(false);
@@ -280,10 +324,22 @@ const Flujo_Echeqs = () => {
 
       const finalUrl = withSessionKey(`${API_URL}?${params.toString()}`);
 
+      const archivoRef =
+        row?.archivo_path ||
+        row?.archivoPath ||
+        row?.archivo_url ||
+        row?.archivoUrl ||
+        flujo?.archivo_path ||
+        flujo?.archivo_url ||
+        "";
+
+      const mimeFinal =
+        inferMime(archivoRef) ||
+        String(row?.archivo_mime || row?.mime || flujo?.archivo_mime || "").trim() ||
+        "application/pdf";
+
       setModalComprobanteUrl(finalUrl);
-      setModalComprobanteMime(
-        String(flujo?.archivo_mime || "").trim() || "application/pdf"
-      );
+      setModalComprobanteMime(mimeFinal);
       setModalComprobanteTitle("Comprobante de E-Cheq");
       setModalComprobanteOpen(true);
     },
@@ -297,7 +353,9 @@ const Flujo_Echeqs = () => {
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(offset));
 
-      if (qValue.trim()) params.set("q", qValue.trim());
+      if (qValue.trim()) {
+        params.set("q", qValue.trim());
+      }
 
       const data = await parseJsonOrThrow(
         await fetch(`${API_URL}?${params.toString()}`, {
@@ -314,6 +372,7 @@ const Flujo_Echeqs = () => {
         setAllRows((prev) => {
           const base = Array.isArray(prev) ? prev : [];
           const ids = new Set(base.map((x) => String(x.id_flujo)));
+
           return [...base, ...lista.filter((x) => !ids.has(String(x.id_flujo)))];
         });
       } else {
@@ -354,7 +413,9 @@ const Flujo_Echeqs = () => {
           setError(e?.message || "No se pudo cargar el flujo de e-cheqs.");
         }
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     })();
 
@@ -507,7 +568,9 @@ const Flujo_Echeqs = () => {
               "mov-gridCell",
               c.align === "right" ? "is-right" : "",
               c.align === "center" ? "is-center" : "",
-            ].join(" ")}
+            ]
+              .filter(Boolean)
+              .join(" ")}
             role="cell"
             data-label={c.label}
           >
@@ -567,6 +630,7 @@ const Flujo_Echeqs = () => {
                         placeholder="Buscar por emisor, N° echeq, evento..."
                         autoComplete="off"
                       />
+
                       <span className="cc-floatingLabel">
                         <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
                       </span>
@@ -591,7 +655,9 @@ const Flujo_Echeqs = () => {
                 "mov-gridCell--head",
                 c.align === "right" ? "is-right" : "",
                 c.align === "center" ? "is-center" : "",
-              ].join(" ")}
+              ]
+                .filter(Boolean)
+                .join(" ")}
               role="columnheader"
             >
               {c.label}
@@ -599,13 +665,19 @@ const Flujo_Echeqs = () => {
           ))}
         </div>
 
-        <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup" id="cheques-st">
+        <div
+          className="mov-tableWrap mov-tableWrap--mov"
+          role="rowgroup"
+          id="cheques-st"
+        >
           <div
             className={[
               "mov-gridBody",
               "mov-gridBody--relative",
               loading ? "mov-softLoading" : "",
-            ].join(" ")}
+            ]
+              .filter(Boolean)
+              .join(" ")}
           >
             {loading ? (
               <div className="mov-skeletonWrap" aria-busy="true">
@@ -617,6 +689,7 @@ const Flujo_Echeqs = () => {
               <>
                 {rows.map((r) => {
                   const cfg = eventoConfig(r.evento);
+
                   const puedeVerComprobante =
                     Number(r?.id_cheque || 0) > 0 && !!r?.tiene_comprobante;
 
@@ -665,7 +738,9 @@ const Flujo_Echeqs = () => {
                                     puedeVerComprobante
                                       ? "mov-iconBtn--comprobante"
                                       : "mov-iconBtn--disabled",
-                                  ].join(" ")}
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" ")}
                                   title={
                                     puedeVerComprobante
                                       ? "Ver comprobante"
@@ -715,6 +790,7 @@ const Flujo_Echeqs = () => {
                 {rows.length === 0 && (
                   <div className="cc-emptyState">
                     <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+
                     <div className="cc-emptyText">
                       {q.trim()
                         ? "No se encontraron registros con el término de búsqueda."

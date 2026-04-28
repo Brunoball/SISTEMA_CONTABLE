@@ -321,7 +321,7 @@ export default function ModalDetalleMediosPago({
     <div className="mi-modal__overlay" onMouseDown={onClose}>
       <div
         className={`mi-modal__container mdp-container ${
-          variant === "simple" ? "mi-modal__container--mov" : ""
+          variant === "simple"  
         }`}
         onMouseDown={(e) => e.stopPropagation()}
       >

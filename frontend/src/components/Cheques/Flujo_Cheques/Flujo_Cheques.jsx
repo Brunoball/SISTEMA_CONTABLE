@@ -20,21 +20,31 @@ import {
 function getAuthHeaders() {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
   const token = (localStorage.getItem("token") || "").trim();
+
   const headers = {};
   if (sessionKey) headers["X-Session"] = sessionKey;
   if (token) headers["Authorization"] = `Bearer ${token}`;
+
   return headers;
 }
 
 function withSessionKey(url) {
   const base = String(url || "").trim();
   if (!base) return "";
+
   try {
     const sessionKey = (localStorage.getItem("session_key") || "").trim();
     const token = (localStorage.getItem("token") || "").trim();
     const u = new URL(base, window.location.origin);
-    if (sessionKey && !u.searchParams.has("session_key")) u.searchParams.set("session_key", sessionKey);
-    if (token && !u.searchParams.has("token")) u.searchParams.set("token", token);
+
+    if (sessionKey && !u.searchParams.has("session_key")) {
+      u.searchParams.set("session_key", sessionKey);
+    }
+
+    if (token && !u.searchParams.has("token")) {
+      u.searchParams.set("token", token);
+    }
+
     return u.toString();
   } catch {
     return base;
@@ -43,14 +53,23 @@ function withSessionKey(url) {
 
 async function parseJsonOrThrow(res) {
   const text = await res.text();
-  if (!text) throw new Error("Respuesta vacía del servidor.");
+
+  if (!text) {
+    throw new Error("Respuesta vacía del servidor.");
+  }
+
   let data;
+
   try {
     data = JSON.parse(text);
   } catch {
     throw new Error(`Respuesta inválida. HTTP ${res.status}`);
   }
-  if (!res.ok || data?.exito === false) throw new Error(data?.mensaje || `Error HTTP ${res.status}`);
+
+  if (!res.ok || data?.exito === false) {
+    throw new Error(data?.mensaje || `Error HTTP ${res.status}`);
+  }
+
   return data;
 }
 
@@ -59,15 +78,22 @@ async function parseJsonOrThrow(res) {
 ═══════════════════════════════════════════ */
 function formatFecha(fecha) {
   const s = String(fecha || "").trim();
+
   if (!s) return "—";
+
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
   return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
 }
 
 function moneyARS(valor) {
   const n = Number(valor || 0);
+
   try {
-    return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
+    return n.toLocaleString("es-AR", {
+      style: "currency",
+      currency: "ARS",
+    });
   } catch {
     return `$${n.toFixed(2)}`;
   }
@@ -84,24 +110,50 @@ function boolish(value, fallback = false) {
   if (typeof value === "number") return value === 1;
 
   const s = String(value).trim().toLowerCase();
+
   if (["1", "true", "sí", "si", "yes"].includes(s)) return true;
   if (["0", "false", "no", ""].includes(s)) return false;
 
   return fallback;
 }
 
+/**
+ * Detecta MIME por ruta/nombre.
+ * Si no puede detectar, devuelve "".
+ * No fuerza PDF acá para no pisar imágenes reales.
+ */
 function inferMime(path) {
   const p = String(path || "").trim().toLowerCase();
-  if (p.endsWith(".png")) return "image/png";
-  if (p.endsWith(".jpg") || p.endsWith(".jpeg")) return "image/jpeg";
-  if (p.endsWith(".webp")) return "image/webp";
-  if (p.endsWith(".gif")) return "image/gif";
-  if (p.endsWith(".pdf")) return "application/pdf";
-  return "application/pdf";
+
+  if (!p) return "";
+
+  if (p.includes(".png")) return "image/png";
+  if (p.includes(".jpg") || p.includes(".jpeg")) return "image/jpeg";
+  if (p.includes(".webp")) return "image/webp";
+  if (p.includes(".gif")) return "image/gif";
+  if (p.includes(".bmp")) return "image/bmp";
+  if (p.includes(".svg")) return "image/svg+xml";
+  if (p.includes(".pdf")) return "application/pdf";
+
+  return "";
+}
+
+function getArchivoRef(row) {
+  return (
+    row?.archivo_path ??
+    row?.archivoPath ??
+    row?.archivo_url ??
+    row?.archivoUrl ??
+    row?.comprobante_url ??
+    row?.comprobanteUrl ??
+    row?.url ??
+    ""
+  );
 }
 
 function normalizeFlujo(row) {
   const idCheque = Number(row?.id_cheque ?? row?.idCheque ?? 0);
+
   const rawTieneComp =
     row?.tiene_comprobante ??
     row?.tieneComprobante ??
@@ -110,14 +162,20 @@ function normalizeFlujo(row) {
     row?.id_comprobante ??
     row?.idComprobante;
 
-  const archivoPath = row?.archivo_path ?? row?.archivoPath ?? row?.archivo_url ?? row?.archivoUrl ?? "";
-  const archivoMime = row?.archivo_mime ?? row?.mime ?? inferMime(archivoPath);
+  const archivoRef = getArchivoRef(row);
+
+  const archivoMime =
+    inferMime(archivoRef) ||
+    String(row?.archivo_mime ?? row?.mime ?? "").trim() ||
+    "application/pdf";
 
   return {
     ...row,
     id_flujo: Number(row?.id_flujo ?? row?.idFlujo ?? row?.id ?? 0),
     id_cheque: idCheque,
-    tipo_cheque: String(row?.tipo_cheque ?? row?.tipoCheque ?? "").trim().toLowerCase(),
+    tipo_cheque: String(row?.tipo_cheque ?? row?.tipoCheque ?? "")
+      .trim()
+      .toLowerCase(),
     numero_cheque: row?.numero_cheque ?? row?.numeroCheque ?? "",
     emisor: row?.emisor ?? "",
     importe: row?.importe ?? 0,
@@ -126,6 +184,9 @@ function normalizeFlujo(row) {
     fecha_evento: row?.fecha_evento ?? row?.fechaEvento ?? "",
     fecha_emision: row?.fecha_emision ?? row?.fechaEmision ?? "",
     fecha_pago: row?.fecha_pago ?? row?.fechaPago ?? "",
+    id_comprobante: Number(row?.id_comprobante ?? row?.idComprobante ?? 0),
+    archivo_path: row?.archivo_path ?? row?.archivoPath ?? "",
+    archivo_url: row?.archivo_url ?? row?.archivoUrl ?? "",
     archivo_mime: archivoMime,
     tiene_comprobante: boolish(rawTieneComp, idCheque > 0),
   };
@@ -194,13 +255,14 @@ function humanizarEventoDesconocido(evento) {
 function eventoConfig(evento) {
   const key = normalizarEvento(evento);
 
-  return EVENTO_CONFIG[key] ?? {
-    label: humanizarEventoDesconocido(evento),
-    icon: faCircleInfo,
-    chipClass: "mov-chip--neutral",
-  };
+  return (
+    EVENTO_CONFIG[key] ?? {
+      label: humanizarEventoDesconocido(evento),
+      icon: faCircleInfo,
+      chipClass: "mov-chip--neutral",
+    }
+  );
 }
-
 
 /* ═══════════════════════════════════════════
    Constantes
@@ -230,13 +292,17 @@ const Flujo_Cheques = () => {
   const [modalComprobanteOpen, setModalComprobanteOpen] = useState(false);
   const [modalComprobanteUrl, setModalComprobanteUrl] = useState("");
   const [modalComprobanteMime, setModalComprobanteMime] = useState("");
-  const [modalComprobanteTitle, setModalComprobanteTitle] = useState("Comprobante de Cheque");
+  const [modalComprobanteTitle, setModalComprobanteTitle] = useState(
+    "Comprobante de Cheque"
+  );
 
   const showToast = useCallback((tipo, mensaje, duracion = 2600) => {
     setToast({ tipo, mensaje, duracion });
   }, []);
 
-  const closeToast = useCallback(() => setToast(null), []);
+  const closeToast = useCallback(() => {
+    setToast(null);
+  }, []);
 
   const closeModalComprobante = useCallback(() => {
     setModalComprobanteOpen(false);
@@ -245,38 +311,46 @@ const Flujo_Cheques = () => {
     setModalComprobanteTitle("Comprobante de Cheque");
   }, []);
 
-const openModalComprobante = useCallback(
-  (row) => {
-    const flujo = normalizeFlujo(row);
-    const idCheque = Number(flujo?.id_cheque || 0);
+  const openModalComprobante = useCallback(
+    (row) => {
+      const flujo = normalizeFlujo(row);
+      const idCheque = Number(flujo?.id_cheque || 0);
 
-    if (!idCheque) {
-      showToast("error", "No se pudo identificar el cheque.");
-      return;
-    }
+      if (!idCheque) {
+        showToast("error", "No se pudo identificar el cheque.");
+        return;
+      }
 
-    const tipo = String(flujo?.tipo_cheque || "").trim().toLowerCase();
-    const action =
-      tipo === "echeq"
-        ? "echeq_cartera_comprobante_ver"
-        : "cheques_cartera_comprobante_ver";
+      const tipo = String(flujo?.tipo_cheque || "").trim().toLowerCase();
 
-    const params = new URLSearchParams();
-    params.set("action", action);
-    params.set("id_cheque", String(idCheque));
+      const action =
+        tipo === "echeq"
+          ? "echeq_cartera_comprobante_ver"
+          : "cheques_cartera_comprobante_ver";
 
+      const params = new URLSearchParams();
+      params.set("action", action);
+      params.set("id_cheque", String(idCheque));
 
+      const finalUrl = withSessionKey(`${API_URL}?${params.toString()}`);
 
+      const archivoRef = getArchivoRef(row);
 
-const finalUrl = withSessionKey(`${API_URL}?${params.toString()}`);
+      const mimeFinal =
+        inferMime(archivoRef) ||
+        String(row?.archivo_mime || row?.mime || flujo?.archivo_mime || "").trim() ||
+        "application/pdf";
 
-setModalComprobanteUrl(finalUrl);
-setModalComprobanteMime(String(row?.archivo_mime || row?.mime || "").trim());
-setModalComprobanteTitle(tipo === "echeq" ? "Comprobante de E-Cheq" : "Comprobante de Cheque");
-setModalComprobanteOpen(true);
-  },
-  [API_URL, showToast]
-);
+      setModalComprobanteUrl(finalUrl);
+      setModalComprobanteMime(mimeFinal);
+      setModalComprobanteTitle(
+        tipo === "echeq" ? "Comprobante de E-Cheq" : "Comprobante de Cheque"
+      );
+      setModalComprobanteOpen(true);
+    },
+    [API_URL, showToast]
+  );
+
   /* ── Fetch ── */
   const fetchFlujo = useCallback(
     async ({ offset = 0, append = false, qValue = "" } = {}) => {
@@ -284,7 +358,10 @@ setModalComprobanteOpen(true);
       params.set("action", "flujo_cheques_listar");
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(offset));
-      if (qValue.trim()) params.set("q", qValue.trim());
+
+      if (qValue.trim()) {
+        params.set("q", qValue.trim());
+      }
 
       const data = await parseJsonOrThrow(
         await fetch(`${API_URL}?${params.toString()}`, {
@@ -301,6 +378,7 @@ setModalComprobanteOpen(true);
         setAllRows((prev) => {
           const base = Array.isArray(prev) ? prev : [];
           const ids = new Set(base.map((x) => String(x.id_flujo)));
+
           return [...base, ...lista.filter((x) => !ids.has(String(x.id_flujo)))];
         });
       } else {
@@ -309,6 +387,7 @@ setModalComprobanteOpen(true);
 
       setHasMore(!!data?.has_more);
       setNextOffset(Number(data?.next_offset || 0));
+
       return { ...data, flujo: lista };
     },
     [API_URL]
@@ -326,17 +405,28 @@ setModalComprobanteOpen(true);
   /* Efecto para buscar cuando cambia el término debounced */
   useEffect(() => {
     let active = true;
+
     (async () => {
       setLoading(true);
       setError("");
+
       try {
-        await fetchFlujo({ offset: 0, append: false, qValue: debouncedQ });
+        await fetchFlujo({
+          offset: 0,
+          append: false,
+          qValue: debouncedQ,
+        });
       } catch (e) {
-        if (active) setError(e?.message || "No se pudo cargar el flujo de cheques.");
+        if (active) {
+          setError(e?.message || "No se pudo cargar el flujo de cheques.");
+        }
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     })();
+
     return () => {
       active = false;
     };
@@ -349,15 +439,21 @@ setModalComprobanteOpen(true);
   /* Cargar más */
   const handleLoadMore = useCallback(async () => {
     if (!hasMore || loadingMore) return;
+
     setLoadingMore(true);
     setError("");
+
     try {
       const data = await fetchFlujo({
         offset: nextOffset,
         append: true,
         qValue: debouncedQ,
       });
-      showToast("exito", `${Array.isArray(data?.flujo) ? data.flujo.length : 0} registros más cargados.`);
+
+      showToast(
+        "exito",
+        `${Array.isArray(data?.flujo) ? data.flujo.length : 0} registros más cargados.`
+      );
     } catch (e) {
       setError(e?.message || "No se pudieron cargar más registros.");
       showToast("error", e?.message || "No se pudieron cargar más registros.");
@@ -369,19 +465,70 @@ setModalComprobanteOpen(true);
   /* ── Columnas ── */
   const columns = useMemo(
     () => [
-      { key: "fecha_evento", label: "FECHA", align: "center", fr: 1.0, render: (r) => formatFecha(r.fecha_evento) },
-      { key: "tipo_cheque", label: "TIPO", align: "center", fr: 0.8, render: (r) => r.tipo_cheque?.toUpperCase() ?? "—" },
-      { key: "numero_cheque", label: "N° CHEQUE", align: "center", fr: 1.1, render: (r) => safeText(r.numero_cheque) },
-      { key: "emisor", label: "EMISOR", align: "left", fr: 2.2, strong: true, render: (r) => safeText(r.emisor) },
-      { key: "importe", label: "IMPORTE", align: "right", fr: 1.1, render: (r) => moneyARS(r.importe) },
-      { key: "evento", label: "EVENTO", align: "center", fr: 1.5, render: () => null },
-      { key: "fecha_emision", label: "EMITIDO", align: "center", fr: 1.0, render: (r) => formatFecha(r.fecha_emision) },
-      { key: "acciones", label: "ACCIONES", align: "center", fr: 0.8, render: () => null },
+      {
+        key: "fecha_evento",
+        label: "FECHA",
+        align: "center",
+        fr: 1.0,
+        render: (r) => formatFecha(r.fecha_evento),
+      },
+      {
+        key: "tipo_cheque",
+        label: "TIPO",
+        align: "center",
+        fr: 0.8,
+        render: (r) => r.tipo_cheque?.toUpperCase() ?? "—",
+      },
+      {
+        key: "numero_cheque",
+        label: "N° CHEQUE",
+        align: "center",
+        fr: 1.1,
+        render: (r) => safeText(r.numero_cheque),
+      },
+      {
+        key: "emisor",
+        label: "EMISOR",
+        align: "left",
+        fr: 2.2,
+        strong: true,
+        render: (r) => safeText(r.emisor),
+      },
+      {
+        key: "importe",
+        label: "IMPORTE",
+        align: "right",
+        fr: 1.1,
+        render: (r) => moneyARS(r.importe),
+      },
+      {
+        key: "evento",
+        label: "EVENTO",
+        align: "center",
+        fr: 1.5,
+        render: () => null,
+      },
+      {
+        key: "fecha_emision",
+        label: "EMITIDO",
+        align: "center",
+        fr: 1.0,
+        render: (r) => formatFecha(r.fecha_emision),
+      },
+      {
+        key: "acciones",
+        label: "ACCIONES",
+        align: "center",
+        fr: 0.8,
+        render: () => null,
+      },
     ],
     []
   );
 
-  const gridCols = useMemo(() => columns.map((c) => `${c.fr ?? 1}fr`).join(" "), [columns]);
+  const gridCols = useMemo(() => {
+    return columns.map((c) => `${c.fr ?? 1}fr`).join(" ");
+  }, [columns]);
 
   /* ── Skeleton ── */
   const skelWidths = useMemo(
@@ -431,7 +578,9 @@ setModalComprobanteOpen(true);
               "mov-gridCell",
               c.align === "right" ? "is-right" : "",
               c.align === "center" ? "is-center" : "",
-            ].join(" ")}
+            ]
+              .filter(Boolean)
+              .join(" ")}
             role="cell"
             data-label={c.label}
           >
@@ -447,7 +596,12 @@ setModalComprobanteOpen(true);
   return (
     <div className="mov-page">
       {toast && (
-        <Toast tipo={toast.tipo} mensaje={toast.mensaje} duracion={toast.duracion} onClose={closeToast} />
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={closeToast}
+        />
       )}
 
       <ModalVerComprobante
@@ -458,13 +612,18 @@ setModalComprobanteOpen(true);
         title={modalComprobanteTitle}
       />
 
-      {error && <div className="mov-alert" role="alert">{error}</div>}
+      {error && (
+        <div className="mov-alert" role="alert">
+          {error}
+        </div>
+      )}
 
       <section className="mov-card mov-card--table">
         <div className="mov-card__head">
           <div className="mov-card__headLeft">
             <div className="title-mov">
               <div className="mov-card__title">Flujo de Cheques</div>
+
               <div className="mov-card__hint">
                 Mostrando <b>{rows.length}</b> registros
                 {hasMore ? " (hay más por cargar)" : ""}
@@ -484,6 +643,7 @@ setModalComprobanteOpen(true);
                         placeholder="Buscar por emisor, N° cheque, evento..."
                         autoComplete="off"
                       />
+
                       <span className="cc-floatingLabel">
                         <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
                       </span>
@@ -508,7 +668,9 @@ setModalComprobanteOpen(true);
                 "mov-gridCell--head",
                 c.align === "right" ? "is-right" : "",
                 c.align === "center" ? "is-center" : "",
-              ].join(" ")}
+              ]
+                .filter(Boolean)
+                .join(" ")}
               role="columnheader"
             >
               {c.label}
@@ -516,16 +678,31 @@ setModalComprobanteOpen(true);
           ))}
         </div>
 
-        <div className="mov-tableWrap mov-tableWrap--mov" role="rowgroup" id="cheques-st">
-          <div className={["mov-gridBody", "mov-gridBody--relative", loading ? "mov-softLoading" : ""].join(" ")}>
+        <div
+          className="mov-tableWrap mov-tableWrap--mov"
+          role="rowgroup"
+          id="cheques-st"
+        >
+          <div
+            className={[
+              "mov-gridBody",
+              "mov-gridBody--relative",
+              loading ? "mov-softLoading" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
             {loading ? (
               <div className="mov-skeletonWrap" aria-busy="true">
-                {Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}
+                {Array.from({ length: SKELETON_ROWS }).map((_, i) =>
+                  renderSkeletonRow(i)
+                )}
               </div>
             ) : (
               <>
                 {rows.map((r) => {
                   const cfg = eventoConfig(r.evento);
+
                   const puedeVerComprobante =
                     Number(r?.id_cheque || 0) > 0 && !!r?.tiene_comprobante;
 
@@ -550,7 +727,9 @@ setModalComprobanteOpen(true);
                                 title={cfg.label}
                               >
                                 <FontAwesomeIcon icon={cfg.icon} />
-                                <span className="flujo-badge__text">{cfg.label}</span>
+                                <span className="flujo-badge__text">
+                                  {cfg.label}
+                                </span>
                               </span>
                             </div>
                           );
@@ -572,13 +751,21 @@ setModalComprobanteOpen(true);
                                     puedeVerComprobante
                                       ? "mov-iconBtn--comprobante"
                                       : "mov-iconBtn--disabled",
-                                  ].join(" ")}
-                                  title={puedeVerComprobante ? "Ver comprobante" : "Sin comprobante"}
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                                  title={
+                                    puedeVerComprobante
+                                      ? "Ver comprobante"
+                                      : "Sin comprobante"
+                                  }
                                   disabled={!puedeVerComprobante}
                                   onClick={() => openModalComprobante(r)}
                                   style={{
                                     opacity: puedeVerComprobante ? 1 : 0.35,
-                                    cursor: puedeVerComprobante ? "pointer" : "not-allowed",
+                                    cursor: puedeVerComprobante
+                                      ? "pointer"
+                                      : "not-allowed",
                                   }}
                                 >
                                   <FontAwesomeIcon icon={faEye} />
@@ -616,6 +803,7 @@ setModalComprobanteOpen(true);
                 {rows.length === 0 && (
                   <div className="cc-emptyState">
                     <FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" />
+
                     <div className="cc-emptyText">
                       {hayBusquedaActiva
                         ? "No se encontraron registros para la búsqueda ingresada."
@@ -625,7 +813,13 @@ setModalComprobanteOpen(true);
                 )}
 
                 {allRows.length > 0 && hasMore && (
-                  <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      padding: "12px 0",
+                    }}
+                  >
                     <button
                       type="button"
                       className="mov-btn mov-btn--loadAll"
@@ -640,7 +834,9 @@ setModalComprobanteOpen(true);
 
                 {loadingMore && (
                   <div className="mov-skeletonMore" aria-busy="true">
-                    {Array.from({ length: 4 }).map((_, i) => renderSkeletonRow(i))}
+                    {Array.from({ length: 4 }).map((_, i) =>
+                      renderSkeletonRow(i)
+                    )}
                   </div>
                 )}
               </>
@@ -648,8 +844,6 @@ setModalComprobanteOpen(true);
           </div>
         </div>
       </section>
-
-
     </div>
   );
 };

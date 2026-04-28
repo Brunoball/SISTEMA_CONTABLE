@@ -718,9 +718,7 @@ useEffect(() => {
             <div className="mi-modal__title mpr-title">
               <span>{modalTitle}</span>
             </div>
-            <div className="mi-modal__subtitle mpr-subtitle">
-              {url ? displayFileName : "—"}
-            </div>
+
           </div>
 
           <button

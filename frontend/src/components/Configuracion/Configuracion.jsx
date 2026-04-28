@@ -8,7 +8,7 @@ import "./configuracion.css";
 import "../Global/Global_css/Global_oscuro.css";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronRight, faCalendarDays } from "@fortawesome/free-solid-svg-icons";
+import { faChevronRight, faCalendarDays, faUsersGear } from "@fortawesome/free-solid-svg-icons";
 
 import { useDateRange } from "../../context/DateRangeContext";
 
@@ -182,6 +182,20 @@ export default function Configuracion() {
             alt="Logo Tienda Nube"
             className="cfg-cardLogo"
           />
+        ),
+      },
+      {
+        id: "usuarios",
+        title: "Usuarios del sistema",
+        description: "Creá usuarios y asigná roles para limitar el acceso a cada empleado.",
+        route: "/panel/configuracion/usuarios",
+        status: { text: "Administrable", type: "success" },
+        metaTop: "Roles activos",
+        metaBottom: "Administrador / Empleado básico",
+        icon: (
+          <div className="cfg-cardLogo cfg-cardLogo--icon">
+            <FontAwesomeIcon icon={faUsersGear} />
+          </div>
         ),
       },
       {

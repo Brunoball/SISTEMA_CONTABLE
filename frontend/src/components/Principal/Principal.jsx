@@ -99,6 +99,12 @@ function looksLikeUnauthorizedPayload(text, contentType = "") {
   );
 }
 
+function isSessionExpiredResponse(status, text = "", contentType = "") {
+  if (Number(status) === 401) return true;
+  if (Number(status) !== 403) return false;
+  return looksLikeUnauthorizedPayload(text, contentType);
+}
+
 async function apiFetch(paramsObj, options = {}) {
   const sessionKey = (localStorage.getItem("session_key") || "").trim();
 
@@ -116,19 +122,19 @@ async function apiFetch(paramsObj, options = {}) {
     headers,
   });
 
-  if (res.status === 401 || res.status === 403) {
-    try {
-      window.dispatchEvent(
-        new CustomEvent("auth:unauthorized", { detail: { status: res.status } })
-      );
-    } catch {}
-    return res;
-  }
-
   try {
     const clone = res.clone();
     const text = await clone.text();
     const ct = clone.headers.get("content-type") || "";
+
+    if (isSessionExpiredResponse(res.status, text, ct)) {
+      try {
+        window.dispatchEvent(
+          new CustomEvent("auth:unauthorized", { detail: { status: res.status } })
+        );
+      } catch {}
+      return res;
+    }
 
     if (looksLikeUnauthorizedPayload(text, ct)) {
       try {
@@ -244,7 +250,7 @@ async function prefetchGlobalListas(onUnauthorized) {
       { method: "GET" }
     );
 
-    if (r.status === 401 || r.status === 403) {
+    if (r.status === 401) {
       try {
         onUnauthorized?.();
       } catch {}
@@ -320,19 +326,15 @@ const ConfirmLogoutModal = memo(function ConfirmLogoutModal({
 /* =========================
    Helpers
 ========================= */
-function normalizeRol(value) {
-  if (value == null) return "vista";
-  const v = String(value).trim().toLowerCase();
-  if (
-    v === "1" ||
-    v === "admin" ||
-    v === "administrator" ||
-    v === "administrador" ||
-    v === "superadmin"
-  ) {
+function normalizeRol(value, idRol = null) {
+  const id = Number(idRol);
+  const v = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+
+  if (id === 1 || ["1", "admin", "administrator", "administrador", "superadmin"].includes(v)) {
     return "admin";
   }
-  return "vista";
+
+  return "empleado_basico";
 }
 function normalizePlanNivel(value) {
   const n = Number(value);
@@ -475,7 +477,7 @@ const Principal = () => {
           cache: "no-store",
         });
 
-        if (res.status === 401 || res.status === 403) {
+        if (res.status === 401) {
           try {
             window.dispatchEvent(
               new CustomEvent("auth:unauthorized", {
@@ -629,7 +631,15 @@ const Principal = () => {
       const response = await originalFetch(...args);
 
       try {
-        if (response.status === 401 || response.status === 403) {
+        const clone = response.clone();
+        const ct = clone.headers.get("content-type") || "";
+        let txt = "";
+
+        if (ct.includes("application/json") || ct.includes("text/plain")) {
+          txt = await clone.text();
+        }
+
+        if (isSessionExpiredResponse(response.status, txt, ct)) {
           try {
             window.dispatchEvent(
               new CustomEvent("auth:unauthorized", {
@@ -640,11 +650,7 @@ const Principal = () => {
           return response;
         }
 
-        const clone = response.clone();
-        const ct = clone.headers.get("content-type") || "";
-
         if (ct.includes("application/json") || ct.includes("text/plain")) {
-          const txt = await clone.text();
           if (looksLikeUnauthorizedPayload(txt, ct)) {
             try {
               window.dispatchEvent(
@@ -791,8 +797,30 @@ const Principal = () => {
     };
   }, [doLogout]);
 
-  const planNivel = normalizePlanNivel(usuario?.plan_nivel ?? 1);
-  const rolUsuario = normalizeRol(usuario?.rol);
+  const rolUsuario = normalizeRol(usuario?.rol ?? usuario?.tipo_rol, usuario?.id_rol);
+
+  useEffect(() => {
+    if (!usuario) return;
+    if (rolUsuario === "admin") return;
+
+    const rutasPermitidas = [
+      "/panel/movimientos",
+      "/panel/ventas",
+      "/panel/compras",
+      "/panel/recibos",
+      "/panel/OrdenesPago",
+      "/panel/Otrosingresos",
+      "/panel/Otrosegresos",
+    ];
+
+    const permitido = rutasPermitidas.some(
+      (ruta) => location.pathname === ruta || location.pathname.startsWith(ruta + "/")
+    );
+
+    if (!permitido) {
+      navigate("/panel/movimientos", { replace: true });
+    }
+  }, [usuario, rolUsuario, location.pathname, navigate]);
 
   const navItems = useMemo(() => {
     const base = [
@@ -840,9 +868,12 @@ const Principal = () => {
       children: x.children || null,
     }));
 
-    const limit = planNivel === 1 ? 1 : planNivel === 2 ? 2 : 6;
-    return base.slice(0, limit);
-  }, [planNivel]);
+    if (rolUsuario !== "admin") {
+      return base.slice(0, 1);
+    }
+
+    return base;
+  }, [rolUsuario]);
 
   const activeKey = useMemo(() => {
     if (location.pathname.startsWith("/panel/movimientos")) return "movimientos";
@@ -912,7 +943,7 @@ const Principal = () => {
         { method: "POST", body: JSON.stringify({ tema: nuevo }) }
       );
 
-      if (r.status === 401 || r.status === 403) {
+      if (r.status === 401) {
         await doLogout({ silent: true });
         return;
       }

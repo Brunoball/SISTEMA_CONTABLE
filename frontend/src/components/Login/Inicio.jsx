@@ -13,13 +13,15 @@ const STORAGE_KEYS = {
   pass: "remember_contrasena",
 };
 
-function normalizeRol(value) {
-  if (value == null) return "vista";
-  const v = String(value).trim().toLowerCase();
-  if (["1", "admin", "administrator", "administrador", "superadmin"].includes(v)) {
+function normalizeRol(value, idRol = null) {
+  const id = Number(idRol);
+  const v = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+
+  if (id === 1 || ["1", "admin", "administrator", "administrador", "superadmin"].includes(v)) {
     return "admin";
   }
-  return "vista";
+
+  return "empleado_basico";
 }
 
 function normalizePlanNivel(value) {
@@ -218,7 +220,9 @@ const Inicio = () => {
 
           const usuarioFinal = {
             ...usuarioResp,
-            rol: normalizeRol(usuarioResp.rol ?? data.rol ?? "vista"),
+            id_rol: Number(usuarioResp.id_rol ?? data.id_rol ?? 2),
+            tipo_rol: usuarioResp.tipo_rol ?? data.tipo_rol ?? "empleado_basico",
+            rol: normalizeRol(usuarioResp.rol ?? usuarioResp.tipo_rol ?? data.rol ?? data.tipo_rol, usuarioResp.id_rol ?? data.id_rol),
             plan_nivel: planNivel,
             nombre:
               usuarioResp.nombre ??

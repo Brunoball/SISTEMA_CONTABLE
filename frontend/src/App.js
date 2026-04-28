@@ -100,8 +100,45 @@ function isAuthenticated() {
   }
 }
 
+
+function normalizeRol(value, idRol = null) {
+  const id = Number(idRol);
+  const v = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+
+  if (id === 1 || ["1", "admin", "administrator", "administrador", "superadmin"].includes(v)) {
+    return "admin";
+  }
+
+  return "empleado_basico";
+}
+
+function getUsuarioLogueado() {
+  try {
+    const rawUser = localStorage.getItem("usuario");
+    if (!rawUser) return null;
+    const u = JSON.parse(rawUser);
+    return u && typeof u === "object" ? u : null;
+  } catch {
+    return null;
+  }
+}
+
+function isAdminUser() {
+  const u = getUsuarioLogueado();
+  return normalizeRol(u?.rol ?? u?.tipo_rol, u?.id_rol) === "admin";
+}
+
 function RutaProtegida({ children }) {
   return isAuthenticated() ? children : <Navigate to="/" replace />;
+}
+
+function RutaAdmin({ children }) {
+  if (!isAuthenticated()) return <Navigate to="/" replace />;
+  return isAdminUser() ? children : <Navigate to="/panel/movimientos" replace />;
+}
+
+function PanelIndexRedirect() {
+  return <Navigate to={isAdminUser() ? "dashboard" : "movimientos"} replace />;
 }
 
 /* =========================================================
@@ -129,9 +166,9 @@ export default function App() {
             </RutaProtegida>
           }
         >
-          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route index element={<PanelIndexRedirect />} />
 
-          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="dashboard" element={<RutaAdmin><Dashboard /></RutaAdmin>} />
 
           <Route path="movimientos" element={<Movimientos />} />
           <Route path="ventas" element={<Ventas />} />
@@ -141,26 +178,26 @@ export default function App() {
           <Route path="Otrosingresos" element={<Otrosingresos />} />
           <Route path="Otrosegresos" element={<Otrosegresos />} />
 
-          <Route path="flujo-de-caja" element={<Flujo_Caja />} />
+          <Route path="flujo-de-caja" element={<RutaAdmin><Flujo_Caja /></RutaAdmin>} />
 
-          <Route path="cuentas-corrientes/clientes" element={<ClientesCC />} />
-          <Route path="cuentas-corrientes/proveedores" element={<ProveedoresCC />} />
+          <Route path="cuentas-corrientes/clientes" element={<RutaAdmin><ClientesCC /></RutaAdmin>} />
+          <Route path="cuentas-corrientes/proveedores" element={<RutaAdmin><ProveedoresCC /></RutaAdmin>} />
 
           {/* STOCK */}
-          <Route path="stock" element={<Stock />} />
+          <Route path="stock" element={<RutaAdmin><Stock /></RutaAdmin>} />
 
           {/* CHEQUES */}
-          <Route path="cheques/cartera" element={<Cheques_Cartera />} />
-          <Route path="cheques/flujo" element={<Flujo_Cheques />} />
-          <Route path="cheques/echeqs-cartera" element={<Echeqs_Cartera />} />
-          <Route path="cheques/flujo-echeqs" element={<Flujo_Echeqs />} />
+          <Route path="cheques/cartera" element={<RutaAdmin><Cheques_Cartera /></RutaAdmin>} />
+          <Route path="cheques/flujo" element={<RutaAdmin><Flujo_Cheques /></RutaAdmin>} />
+          <Route path="cheques/echeqs-cartera" element={<RutaAdmin><Echeqs_Cartera /></RutaAdmin>} />
+          <Route path="cheques/flujo-echeqs" element={<RutaAdmin><Flujo_Echeqs /></RutaAdmin>} />
 
-          <Route path="analisis-financiero" element={<AnalisisFinanciero />} />
+          <Route path="analisis-financiero" element={<RutaAdmin><AnalisisFinanciero /></RutaAdmin>} />
 
           {/* CONFIGURACIÓN */}
-          <Route path="configuracion" element={<Configuracion />} />
-          <Route path="configuracion/tiendanube" element={<ConfigTiendaNube />} />
-          <Route path="configuracion/calendario" element={<ConfiguracionCalendario />} />
+          <Route path="configuracion" element={<RutaAdmin><Configuracion /></RutaAdmin>} />
+          <Route path="configuracion/tiendanube" element={<RutaAdmin><ConfigTiendaNube /></RutaAdmin>} />
+          <Route path="configuracion/calendario" element={<RutaAdmin><ConfiguracionCalendario /></RutaAdmin>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

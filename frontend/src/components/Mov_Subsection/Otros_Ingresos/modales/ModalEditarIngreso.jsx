@@ -1008,9 +1008,10 @@ export default function ModalEditarIngreso({
     );
   }, [archivoNuevo, marcarEliminarComprobante, comprobanteActual]);
 
-  const abrirViewer = useCallback(() => {
+  const abrirViewer = useCallback(async () => {
     const idMovimiento = Number(form.id_movimiento || 0);
     if (!(idMovimiento > 0)) return;
+
     if (archivoNuevo) {
       setViewerData({
         url: URL.createObjectURL(archivoNuevo),
@@ -1020,14 +1021,50 @@ export default function ModalEditarIngreso({
       setOpenViewer(true);
       return;
     }
+
     if (!comprobanteActual || marcarEliminarComprobante) return;
-    setViewerData({
-      url: getComprobanteDownloadUrl(idMovimiento),
-      mime: safeText(comprobanteActual?.archivo_mime) || "application/octet-stream",
-      title: "Comprobante del ingreso",
-    });
-    setOpenViewer(true);
-  }, [form.id_movimiento, archivoNuevo, comprobanteActual, marcarEliminarComprobante]);
+
+    setLoadingComprobante(true);
+    try {
+      const idComprobante = Number(
+        comprobanteActual?.id_comprobante ??
+          comprobanteActual?.comprobante_id ??
+          comprobanteActual?.id_archivo ??
+          0
+      );
+
+      const sp = new URLSearchParams();
+      sp.set("action", "otros_ingresos_comprobantes_descargar");
+      if (idComprobante > 0) sp.set("id_comprobante", String(idComprobante));
+      sp.set("id_movimiento", String(idMovimiento));
+
+      const res = await fetch(`${API}?${sp.toString()}`, {
+        method: "GET",
+        headers: buildHeadersGET(),
+      });
+      const data = await parseJsonOrThrow(res);
+
+      if (!data?.exito) {
+        throw new Error(data?.mensaje || "No se pudo obtener el comprobante.");
+      }
+
+      const signedUrl = String(data?.url || data?.archivo_url || "").trim();
+      if (!signedUrl) {
+        throw new Error("El backend no devolvió la URL del comprobante.");
+      }
+
+      setViewerData({
+        url: signedUrl,
+        mime: safeText(comprobanteActual?.archivo_mime) || safeText(data?.mime) || "application/octet-stream",
+        title: "Comprobante del ingreso",
+      });
+      setOpenViewer(true);
+    } catch (err) {
+      showToast("error", err?.message || "No se pudo abrir el comprobante.");
+    } finally {
+      setLoadingComprobante(false);
+    }
+  }, [API, form.id_movimiento, archivoNuevo, comprobanteActual, marcarEliminarComprobante, showToast]);
 
   const cerrarViewer = useCallback(() => {
     if (viewerData?.url?.startsWith("blob:")) URL.revokeObjectURL(viewerData.url);

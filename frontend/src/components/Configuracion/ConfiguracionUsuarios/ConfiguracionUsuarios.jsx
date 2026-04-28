@@ -1,6 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faArrowLeft,
+  faPlus,
+  faPen,
+  faTrash,
+  faPowerOff,
+  faRotateLeft,
+} from "@fortawesome/free-solid-svg-icons";
+
 import BASE_URL from "../../../config/config";
+import Toast from "../../Global/Toast";
+import ModalEliminar from "../../Global/Modales/ModalEliminar";
+import ModalUsuario from "./modales/ModalUsuario";
 import "./ConfiguracionUsuarios.css";
 
 const API_RELATIVE = "api.php";
@@ -10,10 +23,12 @@ function buildApiUrl(paramsObj = {}) {
   const base = baseRaw.replace(/\/+$/, "") + "/";
   const url = new URL(API_RELATIVE, base);
   const qs = new URLSearchParams();
+
   Object.entries(paramsObj || {}).forEach(([k, v]) => {
     if (v === undefined || v === null || v === "") return;
     qs.set(k, String(v));
   });
+
   url.search = qs.toString();
   return url.toString();
 }
@@ -30,12 +45,159 @@ function safeJsonParse(text) {
   }
 }
 
+function normalizarMensajeError(mensaje) {
+  const msg = String(mensaje || "").trim();
+
+  if (!msg) return "Ocurrió un error inesperado.";
+
+  const lower = msg.toLowerCase();
+
+  if (
+    lower.includes("ya existe un usuario con ese nombre en este tenant") ||
+    lower.includes("usuario con ese nombre en este tenant") ||
+    lower.includes("nombre en este tenant")
+  ) {
+    return "Ya existe un usuario con ese nombre en este sistema.";
+  }
+
+  if (lower.includes("tenant") && lower.includes("usuario") && lower.includes("existe")) {
+    return "Ya existe un usuario con ese nombre en este sistema.";
+  }
+
+  if (lower.includes("tenant")) {
+    return msg.replaceAll("tenant", "sistema").replaceAll("Tenant", "Sistema");
+  }
+
+  return msg;
+}
+
 async function apiFetch(paramsObj = {}, options = {}) {
   const headers = new Headers(options.headers || {});
   const sessionKey = getSessionKey();
+
   if (sessionKey) headers.set("X-Session", sessionKey);
-  if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   return fetch(buildApiUrl(paramsObj), { ...options, headers });
+}
+
+function normalizeRolCodigo(value) {
+  const v = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replaceAll(" ", "_")
+    .replaceAll("-", "_");
+
+  if (["1", "admin", "administrador", "administrator", "superadmin"].includes(v)) {
+    return "admin";
+  }
+
+  if (["2", "empleado_basico", "empleado", "basico"].includes(v)) {
+    return "empleado_basico";
+  }
+
+  return v || "empleado_basico";
+}
+
+function resolverRolIdDesdeUsuario(usuario, roles = []) {
+  const directo =
+    usuario?.idRolMaster ||
+    usuario?.id_rol ||
+    usuario?.rol_id ||
+    usuario?.idRol ||
+    "";
+
+  if (directo) return String(directo);
+
+  const rolTexto = String(
+    usuario?.rol_nombre ||
+      usuario?.tipo_rol ||
+      usuario?.rol ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (!rolTexto) return "";
+
+  const encontrado = roles.find((r) => {
+    const id = String(r.idRolMaster || r.id_rol || "");
+    const nombre = String(r.nombre || r.tipo_rol || r.codigo || "")
+      .trim()
+      .toLowerCase();
+
+    return id === rolTexto || nombre === rolTexto;
+  });
+
+  return encontrado ? String(encontrado.idRolMaster || encontrado.id_rol) : "";
+}
+
+function getStoredCurrentUser() {
+  const posiblesKeys = [
+    "usuario",
+    "user",
+    "usuario_master",
+    "auth_user",
+    "current_user",
+    "userData",
+    "datos_usuario",
+  ];
+
+  const current = {
+    idUsuarioMaster: 0,
+    usuario: "",
+    email_recuperacion: "",
+  };
+
+  for (const key of posiblesKeys) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+
+    const parsed = safeJsonParse(raw);
+
+    if (parsed && typeof parsed === "object") {
+      current.idUsuarioMaster =
+        Number(
+          parsed.idUsuarioMaster ||
+            parsed.id_usuario_master ||
+            parsed.idUsuario ||
+            parsed.id_usuario ||
+            parsed.id
+        ) || current.idUsuarioMaster;
+
+      current.usuario = String(
+        parsed.usuario ||
+          parsed.username ||
+          parsed.nombre_usuario ||
+          current.usuario ||
+          ""
+      ).trim();
+
+      current.email_recuperacion = String(
+        parsed.email_recuperacion ||
+          parsed.email ||
+          parsed.correo ||
+          current.email_recuperacion ||
+          ""
+      ).trim();
+
+      continue;
+    }
+
+    if (!current.usuario && key === "usuario") {
+      current.usuario = String(raw || "").trim();
+    }
+  }
+
+  current.idUsuarioMaster =
+    current.idUsuarioMaster ||
+    Number(localStorage.getItem("idUsuarioMaster") || localStorage.getItem("id_usuario_master") || 0) ||
+    0;
+
+  return current;
 }
 
 const emptyForm = {
@@ -50,251 +212,588 @@ const emptyForm = {
 
 export default function ConfiguracionUsuarios() {
   const navigate = useNavigate();
+
   const [usuarios, setUsuarios] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [usuarioActual, setUsuarioActual] = useState(getStoredCurrentUser());
+
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [ok, setOk] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [changingStatus, setChangingStatus] = useState(false);
+
+  const [modalUsuarioAbierto, setModalUsuarioAbierto] = useState(false);
+  const [usuarioAEliminar, setUsuarioAEliminar] = useState(null);
+  const [usuarioACambiarEstado, setUsuarioACambiarEstado] = useState(null);
+
+  const [editandoUsuarioActualFijo, setEditandoUsuarioActualFijo] = useState(false);
+  const [toast, setToast] = useState(null);
 
   const esEdicion = Number(form.idUsuarioMaster || 0) > 0;
 
+  const mostrarToast = useCallback((tipo, mensaje, duracion = 2800) => {
+    setToast({
+      tipo,
+      mensaje: normalizarMensajeError(mensaje),
+      duracion,
+      key: Date.now(),
+    });
+  }, []);
+
+  const rolEmpleadoDefault = useMemo(() => {
+    return roles.find((r) => normalizeRolCodigo(r.codigo || r.tipo_rol) === "empleado_basico") || roles[0] || null;
+  }, [roles]);
+
   const cargar = useCallback(async () => {
     setLoading(true);
-    setError("");
+
     try {
       const res = await apiFetch({ action: "configuracion_usuarios_listar" });
       const txt = await res.text();
       const data = safeJsonParse(txt);
-      if (!res.ok || !data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar los usuarios.");
-      setUsuarios(Array.isArray(data.usuarios) ? data.usuarios : []);
-      setRoles(Array.isArray(data.roles) ? data.roles : []);
+
+      if (!res.ok || !data?.exito) {
+        throw new Error(normalizarMensajeError(data?.mensaje || "No se pudieron cargar los usuarios."));
+      }
+
+      const usuariosApi = Array.isArray(data.usuarios) ? data.usuarios : [];
+      const rolesApi = Array.isArray(data.roles) ? data.roles : [];
+
+      setUsuarios(usuariosApi);
+      setRoles(rolesApi);
+
+      const actualApi =
+        data.usuario_actual ||
+        data.usuarioActual ||
+        data.current_user ||
+        data.usuarioLogueado ||
+        data.usuario_logueado ||
+        null;
+
+      if (actualApi && typeof actualApi === "object") {
+        setUsuarioActual((prev) => ({
+          idUsuarioMaster:
+            Number(
+              actualApi.idUsuarioMaster ||
+                actualApi.id_usuario_master ||
+                actualApi.idUsuario ||
+                actualApi.id_usuario ||
+                actualApi.id ||
+                prev.idUsuarioMaster
+            ) || 0,
+          usuario: String(actualApi.usuario || actualApi.username || prev.usuario || "").trim(),
+          email_recuperacion: String(
+            actualApi.email_recuperacion ||
+              actualApi.email ||
+              actualApi.correo ||
+              prev.email_recuperacion ||
+              ""
+          ).trim(),
+        }));
+      }
     } catch (e) {
-      setError(e?.message || "Error cargando usuarios.");
+      mostrarToast("error", e?.message || "Error cargando usuarios.", 4200);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mostrarToast]);
 
   useEffect(() => {
     cargar();
   }, [cargar]);
 
-  useEffect(() => {
-    if (!form.idRolMaster && roles.length > 0) {
-      const empleado = roles.find((r) => r.codigo === "empleado_basico") || roles[0];
-      setForm((prev) => ({ ...prev, idRolMaster: empleado.idRolMaster }));
-    }
-  }, [roles, form.idRolMaster]);
-
   const rolesById = useMemo(() => {
     const map = new Map();
-    roles.forEach((r) => map.set(Number(r.idRolMaster), r));
+
+    roles.forEach((r) => {
+      map.set(Number(r.idRolMaster || r.id_rol), r);
+    });
+
     return map;
   }, [roles]);
 
-  const limpiar = () => {
-    const empleado = roles.find((r) => r.codigo === "empleado_basico") || roles[0];
-    setForm({ ...emptyForm, idRolMaster: empleado?.idRolMaster || "" });
-    setError("");
-    setOk("");
-  };
+  /*
+   * CORRECCIÓN IMPORTANTE:
+   * Antes se comparaba también por email y por nombre.
+   * Eso marcaba todos como "Vos" si tenían el mismo email.
+   * Ahora SOLO se detecta por idUsuarioMaster.
+   */
+  const esUsuarioActualPorObjeto = useCallback(
+    (u) => {
+      const idFila = Number(
+        u?.idUsuarioMaster ||
+          u?.id_usuario_master ||
+          u?.idUsuario ||
+          u?.id_usuario ||
+          0
+      );
 
-  const editar = (u) => {
+      const idActual = Number(usuarioActual.idUsuarioMaster || 0);
+
+      return idActual > 0 && idFila > 0 && idActual === idFila;
+    },
+    [usuarioActual.idUsuarioMaster]
+  );
+
+  const editandoUsuarioActual = esEdicion && editandoUsuarioActualFijo;
+
+  const resetForm = useCallback(() => {
     setForm({
-      idUsuarioMaster: u.idUsuarioMaster,
-      usuario: u.usuario || "",
-      email_recuperacion: u.email_recuperacion || "",
-      contrasena: "",
-      idRolMaster: u.idRolMaster || "",
-      tema: u.tema || "claro",
-      activo: Number(u.activo) === 1 ? 1 : 0,
+      ...emptyForm,
+      idRolMaster: rolEmpleadoDefault ? String(rolEmpleadoDefault.idRolMaster || rolEmpleadoDefault.id_rol) : "",
     });
-    setError("");
-    setOk("");
-  };
+    setEditandoUsuarioActualFijo(false);
+  }, [rolEmpleadoDefault]);
+
+  const cerrarModalUsuario = useCallback(() => {
+    if (saving) return;
+
+    setModalUsuarioAbierto(false);
+    resetForm();
+  }, [saving, resetForm]);
+
+  const abrirCrear = useCallback(() => {
+    setEditandoUsuarioActualFijo(false);
+
+    setForm({
+      ...emptyForm,
+      idRolMaster: rolEmpleadoDefault ? String(rolEmpleadoDefault.idRolMaster || rolEmpleadoDefault.id_rol) : "",
+    });
+
+    setModalUsuarioAbierto(true);
+  }, [rolEmpleadoDefault]);
+
+  const abrirEditar = useCallback(
+    (u) => {
+      const esActual = esUsuarioActualPorObjeto(u);
+
+      setEditandoUsuarioActualFijo(esActual);
+
+      setForm({
+        idUsuarioMaster: Number(u.idUsuarioMaster || u.id_usuario_master || 0),
+        usuario: u.usuario || "",
+        email_recuperacion: u.email_recuperacion || "",
+        contrasena: "",
+        idRolMaster: resolverRolIdDesdeUsuario(u, roles),
+        tema: u.tema || "claro",
+        activo: Number(u.activo) === 1 ? 1 : 0,
+      });
+
+      setModalUsuarioAbierto(true);
+    },
+    [esUsuarioActualPorObjeto, roles]
+  );
 
   const guardar = async (e) => {
     e.preventDefault();
+
     setSaving(true);
-    setError("");
-    setOk("");
 
     try {
+      const usuario = String(form.usuario || "").trim();
+      const email = String(form.email_recuperacion || "").trim();
+      const contrasena = String(form.contrasena || "");
+      const rolActual = Number(form.idRolMaster || 0);
+
+      if (!usuario) {
+        throw new Error("Ingresá el nombre de usuario.");
+      }
+
+      if (!esEdicion && contrasena.length < 6) {
+        throw new Error("La contraseña debe tener al menos 6 caracteres.");
+      }
+
+      if (esEdicion && contrasena && contrasena.length < 6) {
+        throw new Error("La nueva contraseña debe tener al menos 6 caracteres.");
+      }
+
+      if (!rolActual) {
+        throw new Error("No se pudo detectar el rol actual del usuario. Cerrá el modal y volvé a abrir la edición.");
+      }
+
       const payload = {
-        ...form,
         idUsuarioMaster: Number(form.idUsuarioMaster || 0),
-        idRolMaster: Number(form.idRolMaster || 0),
+        usuario,
+        email_recuperacion: email,
+        id_rol: rolActual,
+        idRolMaster: rolActual,
+        tema: form.tema || "claro",
         activo: Number(form.activo) === 1 ? 1 : 0,
       };
-      if (esEdicion && !payload.contrasena) delete payload.contrasena;
+
+      if (contrasena) {
+        payload.contrasena = contrasena;
+      }
 
       const res = await apiFetch(
         { action: "configuracion_usuarios_guardar" },
         { method: "POST", body: JSON.stringify(payload) }
       );
+
       const txt = await res.text();
       const data = safeJsonParse(txt);
-      if (!res.ok || !data?.exito) throw new Error(data?.mensaje || "No se pudo guardar el usuario.");
-      setOk(data.mensaje || "Usuario guardado correctamente.");
-      limpiar();
+
+      if (!res.ok || !data?.exito) {
+        throw new Error(normalizarMensajeError(data?.mensaje || "No se pudo guardar el usuario."));
+      }
+
+      mostrarToast("exito", data.mensaje || "Usuario guardado correctamente.", 2800);
+
+      setModalUsuarioAbierto(false);
+      resetForm();
+
       await cargar();
     } catch (e2) {
-      setError(e2?.message || "Error guardando usuario.");
+      mostrarToast("error", e2?.message || "Error guardando usuario.", 4200);
     } finally {
       setSaving(false);
     }
   };
 
-  const cambiarEstado = async (u) => {
-    const nuevo = Number(u.activo) === 1 ? 0 : 1;
-    setError("");
-    setOk("");
+  const pedirCambioEstado = (u) => {
+    if (esUsuarioActualPorObjeto(u)) {
+      mostrarToast("advertencia", "No podés cambiar el estado del usuario con el que estás conectado actualmente.", 4200);
+      return;
+    }
+
+    setUsuarioACambiarEstado(u);
+  };
+
+  const confirmarCambioEstado = async () => {
+    if (!usuarioACambiarEstado) return;
+
+    setChangingStatus(true);
+
     try {
+      const nuevo = Number(usuarioACambiarEstado.activo) === 1 ? 0 : 1;
+
       const res = await apiFetch(
         { action: "configuracion_usuarios_estado" },
-        { method: "POST", body: JSON.stringify({ idUsuarioMaster: u.idUsuarioMaster, activo: nuevo }) }
+        {
+          method: "POST",
+          body: JSON.stringify({
+            idUsuarioMaster: usuarioACambiarEstado.idUsuarioMaster || usuarioACambiarEstado.id_usuario_master,
+            activo: nuevo,
+          }),
+        }
       );
+
       const txt = await res.text();
       const data = safeJsonParse(txt);
-      if (!res.ok || !data?.exito) throw new Error(data?.mensaje || "No se pudo cambiar el estado.");
-      setOk(data.mensaje || "Estado actualizado.");
+
+      if (!res.ok || !data?.exito) {
+        throw new Error(normalizarMensajeError(data?.mensaje || "No se pudo cambiar el estado."));
+      }
+
+      setUsuarioACambiarEstado(null);
       await cargar();
-    } catch (e) {
-      setError(e?.message || "Error cambiando estado.");
+    } finally {
+      setChangingStatus(false);
     }
   };
 
+  const pedirEliminar = (u) => {
+    if (esUsuarioActualPorObjeto(u)) {
+      mostrarToast("advertencia", "No podés eliminar el usuario con el que estás conectado actualmente.", 4200);
+      return;
+    }
+
+    setUsuarioAEliminar(u);
+  };
+
+  const confirmarEliminar = async () => {
+    if (!usuarioAEliminar) return;
+
+    setDeleting(true);
+
+    try {
+      const res = await apiFetch(
+        { action: "configuracion_usuarios_eliminar" },
+        {
+          method: "POST",
+          body: JSON.stringify({
+            idUsuarioMaster: usuarioAEliminar.idUsuarioMaster || usuarioAEliminar.id_usuario_master,
+          }),
+        }
+      );
+
+      const txt = await res.text();
+      const data = safeJsonParse(txt);
+
+      if (!res.ok || !data?.exito) {
+        throw new Error(normalizarMensajeError(data?.mensaje || "No se pudo eliminar el usuario."));
+      }
+
+      setUsuarioAEliminar(null);
+
+      if (Number(form.idUsuarioMaster) === Number(usuarioAEliminar.idUsuarioMaster || usuarioAEliminar.id_usuario_master)) {
+        resetForm();
+        setModalUsuarioAbierto(false);
+      }
+
+      await cargar();
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const detallesEliminar = useMemo(() => {
+    if (!usuarioAEliminar) return [];
+
+    const rol = rolesById.get(Number(usuarioAEliminar.idRolMaster || usuarioAEliminar.id_rol));
+    const activo = Number(usuarioAEliminar.activo) === 1;
+
+    return [
+      {
+        label: "Usuario",
+        value: usuarioAEliminar.usuario || "—",
+      },
+      {
+        label: "Rol",
+        value:
+          rol?.nombre ||
+          rol?.tipo_rol ||
+          usuarioAEliminar.rol_nombre ||
+          usuarioAEliminar.tipo_rol ||
+          usuarioAEliminar.rol ||
+          "—",
+      },
+      {
+        label: "Email",
+        value: usuarioAEliminar.email_recuperacion || "—",
+      },
+      {
+        label: "Estado",
+        value: activo ? "Activo" : "Inactivo",
+      },
+    ];
+  }, [usuarioAEliminar, rolesById]);
+
+  const detallesCambioEstado = useMemo(() => {
+    if (!usuarioACambiarEstado) return [];
+
+    const rol = rolesById.get(Number(usuarioACambiarEstado.idRolMaster || usuarioACambiarEstado.id_rol));
+    const activo = Number(usuarioACambiarEstado.activo) === 1;
+    const nuevoEstado = activo ? "Inactivo" : "Activo";
+
+    return [
+      {
+        label: "Usuario",
+        value: usuarioACambiarEstado.usuario || "—",
+      },
+      {
+        label: "Rol",
+        value:
+          rol?.nombre ||
+          rol?.tipo_rol ||
+          usuarioACambiarEstado.rol_nombre ||
+          usuarioACambiarEstado.tipo_rol ||
+          usuarioACambiarEstado.rol ||
+          "—",
+      },
+      {
+        label: "Email",
+        value: usuarioACambiarEstado.email_recuperacion || "—",
+      },
+      {
+        label: "Estado actual",
+        value: activo ? "Activo" : "Inactivo",
+      },
+      {
+        label: "Nuevo estado",
+        value: nuevoEstado,
+      },
+    ];
+  }, [usuarioACambiarEstado, rolesById]);
+
+  const usuarioCambioActivo = Number(usuarioACambiarEstado?.activo) === 1;
+  const tituloCambioEstado = usuarioCambioActivo ? "Dar de baja usuario" : "Activar usuario";
+  const mensajeCambioEstado = usuarioCambioActivo
+    ? `¿Seguro que querés dar de baja el usuario "${usuarioACambiarEstado?.usuario || ""}"?`
+    : `¿Seguro que querés activar el usuario "${usuarioACambiarEstado?.usuario || ""}"?`;
+
   return (
     <section className="cfg-users-page">
+      {toast && (
+        <Toast
+          key={toast.key}
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={() => setToast(null)}
+        />
+      )}
+
       <div className="cfg-users-head">
         <div>
-          <button className="cfg-users-back" type="button" onClick={() => navigate("/panel/configuracion")}>← Volver</button>
+          <button className="cfg-users-back" type="button" onClick={() => navigate("/panel/configuracion")}>
+            <FontAwesomeIcon icon={faArrowLeft} />
+            Volver
+          </button>
+
           <h1>Usuarios del sistema</h1>
-          <p>Creá usuarios para empleados y asignales un rol. El empleado básico solo ve Movimientos, Perfil y modo claro/oscuro.</p>
+
+          <p>Gestioná los usuarios del sistema actual. Los roles se obtienen desde la base master.</p>
         </div>
+
+        <button className="cfg-users-add-btn" type="button" onClick={abrirCrear}>
+          <FontAwesomeIcon icon={faPlus} />
+          Agregar usuario
+        </button>
       </div>
 
-      {error && <div className="cfg-users-alert cfg-users-alert--error">{error}</div>}
-      {ok && <div className="cfg-users-alert cfg-users-alert--ok">{ok}</div>}
-
-      <div className="cfg-users-grid">
-        <form className="cfg-users-form" onSubmit={guardar}>
-          <h2>{esEdicion ? "Editar usuario" : "Crear usuario"}</h2>
-
-          <label>
-            Usuario
-            <input
-              value={form.usuario}
-              onChange={(e) => setForm((p) => ({ ...p, usuario: e.target.value }))}
-              placeholder="Ej: empleado1"
-              autoComplete="off"
-            />
-          </label>
-
-          <label>
-            Email de recuperación
-            <input
-              value={form.email_recuperacion}
-              onChange={(e) => setForm((p) => ({ ...p, email_recuperacion: e.target.value }))}
-              placeholder="opcional@correo.com"
-              type="email"
-            />
-          </label>
-
-          <label>
-            Contraseña {esEdicion ? <span>(dejar vacía para no cambiar)</span> : null}
-            <input
-              value={form.contrasena}
-              onChange={(e) => setForm((p) => ({ ...p, contrasena: e.target.value }))}
-              placeholder={esEdicion ? "Nueva contraseña opcional" : "Mínimo 6 caracteres"}
-              type="password"
-              autoComplete="new-password"
-            />
-          </label>
-
-          <label>
-            Rol
-            <select value={form.idRolMaster} onChange={(e) => setForm((p) => ({ ...p, idRolMaster: e.target.value }))}>
-              {roles.map((r) => (
-                <option key={r.idRolMaster} value={r.idRolMaster}>{r.nombre}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Tema inicial
-            <select value={form.tema} onChange={(e) => setForm((p) => ({ ...p, tema: e.target.value }))}>
-              <option value="claro">Claro</option>
-              <option value="oscuro">Oscuro</option>
-            </select>
-          </label>
-
-          <label>
-            Estado
-            <select value={form.activo} onChange={(e) => setForm((p) => ({ ...p, activo: Number(e.target.value) }))}>
-              <option value={1}>Activo</option>
-              <option value={0}>Inactivo</option>
-            </select>
-          </label>
-
-          <div className="cfg-users-actions">
-            <button className="cfg-users-btn cfg-users-btn--primary" type="submit" disabled={saving}>
-              {saving ? "Guardando..." : esEdicion ? "Guardar cambios" : "Crear usuario"}
-            </button>
-            {esEdicion && (
-              <button className="cfg-users-btn cfg-users-btn--ghost" type="button" onClick={limpiar}>Cancelar edición</button>
-            )}
-          </div>
-        </form>
-
-        <div className="cfg-users-list">
+      <div className="cfg-users-list cfg-users-list--full">
+        <div className="cfg-users-list-head">
           <h2>Usuarios creados</h2>
-          {loading ? (
-            <div className="cfg-users-empty">Cargando usuarios...</div>
-          ) : usuarios.length === 0 ? (
-            <div className="cfg-users-empty">Todavía no hay usuarios.</div>
-          ) : (
-            <div className="cfg-users-tableWrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Usuario</th>
-                    <th>Rol</th>
-                    <th>Email</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usuarios.map((u) => {
-                    const rol = rolesById.get(Number(u.idRolMaster));
-                    return (
-                      <tr key={u.idUsuarioMaster}>
-                        <td>{u.usuario}</td>
-                        <td>{rol?.nombre || u.rol_nombre || u.rol}</td>
-                        <td>{u.email_recuperacion || "-"}</td>
-                        <td>
-                          <span className={`cfg-users-pill ${Number(u.activo) === 1 ? "is-active" : "is-inactive"}`}>
-                            {Number(u.activo) === 1 ? "Activo" : "Inactivo"}
-                          </span>
-                        </td>
-                        <td className="cfg-users-rowActions">
-                          <button type="button" onClick={() => editar(u)}>Editar</button>
-                          <button type="button" onClick={() => cambiarEstado(u)}>
-                            {Number(u.activo) === 1 ? "Desactivar" : "Activar"}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+
+          <span>
+            {usuarios.length} usuario{usuarios.length === 1 ? "" : "s"}
+          </span>
         </div>
+
+        {loading ? (
+          <div className="cfg-users-empty">Cargando usuarios...</div>
+        ) : usuarios.length === 0 ? (
+          <div className="cfg-users-empty">Todavía no hay usuarios en este sistema.</div>
+        ) : (
+          <div className="cfg-users-tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Rol</th>
+                  <th>Email</th>
+                  <th>Estado</th>
+                  <th className="cfg-users-actions-th">Acciones</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {usuarios.map((u) => {
+                  const idUsuario = Number(u.idUsuarioMaster || u.id_usuario_master || 0);
+                  const rol = rolesById.get(Number(u.idRolMaster || u.id_rol));
+                  const actual = esUsuarioActualPorObjeto(u);
+                  const activo = Number(u.activo) === 1;
+
+                  return (
+                    <tr key={idUsuario || u.usuario} className={actual ? "cfg-users-current-row" : ""}>
+                      <td>
+                        <div className="cfg-users-userCell">
+                          <span>{u.usuario}</span>
+
+                          {actual && (
+                            <span className="cfg-users-current-badge" title="Usuario actual">
+                              📌 Vos
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td>{rol?.nombre || rol?.tipo_rol || u.rol_nombre || u.tipo_rol || u.rol || "-"}</td>
+
+                      <td>{u.email_recuperacion || "-"}</td>
+
+                      <td>
+                        <span className={`cfg-users-pill ${activo ? "is-active" : "is-inactive"}`}>
+                          {activo ? "Activo" : "Inactivo"}
+                        </span>
+                      </td>
+
+                      <td className="cfg-users-rowActions">
+                        <button
+                          type="button"
+                          className="cfg-users-icon-btn"
+                          onClick={() => abrirEditar(u)}
+                          title="Editar usuario"
+                          aria-label="Editar usuario"
+                        >
+                          <FontAwesomeIcon icon={faPen} />
+                        </button>
+
+                        <button
+                          type="button"
+                          className="cfg-users-icon-btn"
+                          onClick={() => pedirCambioEstado(u)}
+                          disabled={actual}
+                          title={actual ? "No podés cambiar el estado del usuario actual" : activo ? "Dar de baja" : "Activar"}
+                          aria-label={activo ? "Dar de baja" : "Activar"}
+                        >
+                          <FontAwesomeIcon icon={activo ? faPowerOff : faRotateLeft} />
+                        </button>
+
+                        <button
+                          type="button"
+                          className="cfg-users-icon-btn cfg-users-icon-btn--danger"
+                          onClick={() => pedirEliminar(u)}
+                          disabled={actual}
+                          title={actual ? "No podés eliminar el usuario actual" : "Eliminar usuario"}
+                          aria-label="Eliminar usuario"
+                        >
+                          <FontAwesomeIcon icon={faTrash} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      <ModalUsuario
+        abierto={modalUsuarioAbierto}
+        form={form}
+        setForm={setForm}
+        roles={roles}
+        saving={saving}
+        esEdicion={esEdicion}
+        editandoUsuarioActual={editandoUsuarioActual}
+        onSubmit={guardar}
+        onClose={cerrarModalUsuario}
+      />
+
+      <ModalEliminar
+        open={!!usuarioACambiarEstado}
+        row={usuarioACambiarEstado}
+        loading={changingStatus}
+        onClose={() => setUsuarioACambiarEstado(null)}
+        onConfirm={confirmarCambioEstado}
+        onToast={mostrarToast}
+        title={tituloCambioEstado}
+        message={mensajeCambioEstado}
+        warning={
+          usuarioCambioActivo
+            ? "El usuario no podrá ingresar al sistema mientras esté inactivo."
+            : "El usuario volverá a tener acceso al sistema."
+        }
+        loadingMessage={usuarioCambioActivo ? "Dando de baja usuario…" : "Activando usuario…"}
+        successMessage={usuarioCambioActivo ? "Usuario dado de baja correctamente." : "Usuario activado correctamente."}
+        errorMessage="No se pudo cambiar el estado del usuario."
+        confirmLabel={usuarioCambioActivo ? "Dar de baja" : "Activar"}
+        cancelLabel="Cancelar"
+        confirmVariant={usuarioCambioActivo ? "danger" : "primary"}
+        details={detallesCambioEstado}
+      />
+
+      <ModalEliminar
+        open={!!usuarioAEliminar}
+        row={usuarioAEliminar}
+        loading={deleting}
+        onClose={() => setUsuarioAEliminar(null)}
+        onConfirm={confirmarEliminar}
+        onToast={mostrarToast}
+        title="Eliminar usuario"
+        message={`¿Seguro que querés eliminar el usuario "${usuarioAEliminar?.usuario || ""}"?`}
+        warning="Esta acción no se puede deshacer."
+        loadingMessage="Eliminando usuario…"
+        successMessage="Usuario eliminado correctamente."
+        errorMessage="No se pudo eliminar el usuario."
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        details={detallesEliminar}
+      />
     </section>
   );
 }

@@ -24,6 +24,7 @@ import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 import Configuracion from "./components/Configuracion/Configuracion";
 import ConfigTiendaNube from "./components/Configuracion/ConfiguracionTiendaNube/ConfigTiendaNube";
 import ConfiguracionCalendario from "./components/Configuracion/ConfiguracionCalendario/ConfiguracionCalendario";
+import ConfiguracionUsuarios from "./components/Configuracion/ConfiguracionUsuarios/ConfiguracionUsuarios";
 
 /* Análisis financiero */
 import * as AnalisisFinancieroModule from "./components/Analisis_Financiero/Analisis_Financiero";
@@ -66,8 +67,8 @@ function resolveComponent(mod, fallbacks = []) {
       <div style={{ padding: 16 }}>
         <h3 style={{ margin: 0 }}>Error de import/export</h3>
         <p style={{ marginTop: 8 }}>
-          No se pudo resolver el componente. Revisá si el archivo exporta <b>default</b> o un{" "}
-          <b>named export</b>.
+          No se pudo resolver el componente. Revisá si el archivo exporta{" "}
+          <b>default</b> o un <b>named export</b>.
         </p>
       </div>
     );
@@ -100,12 +101,14 @@ function isAuthenticated() {
   }
 }
 
-
 function normalizeRol(value, idRol = null) {
   const id = Number(idRol);
   const v = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
 
-  if (id === 1 || ["1", "admin", "administrator", "administrador", "superadmin"].includes(v)) {
+  if (
+    id === 1 ||
+    ["1", "admin", "administrator", "administrador", "superadmin"].includes(v)
+  ) {
     return "admin";
   }
 
@@ -116,6 +119,7 @@ function getUsuarioLogueado() {
   try {
     const rawUser = localStorage.getItem("usuario");
     if (!rawUser) return null;
+
     const u = JSON.parse(rawUser);
     return u && typeof u === "object" ? u : null;
   } catch {
@@ -134,6 +138,7 @@ function RutaProtegida({ children }) {
 
 function RutaAdmin({ children }) {
   if (!isAuthenticated()) return <Navigate to="/" replace />;
+
   return isAdminUser() ? children : <Navigate to="/panel/movimientos" replace />;
 }
 
@@ -168,7 +173,14 @@ export default function App() {
         >
           <Route index element={<PanelIndexRedirect />} />
 
-          <Route path="dashboard" element={<RutaAdmin><Dashboard /></RutaAdmin>} />
+          <Route
+            path="dashboard"
+            element={
+              <RutaAdmin>
+                <Dashboard />
+              </RutaAdmin>
+            }
+          />
 
           <Route path="movimientos" element={<Movimientos />} />
           <Route path="ventas" element={<Ventas />} />
@@ -178,26 +190,121 @@ export default function App() {
           <Route path="Otrosingresos" element={<Otrosingresos />} />
           <Route path="Otrosegresos" element={<Otrosegresos />} />
 
-          <Route path="flujo-de-caja" element={<RutaAdmin><Flujo_Caja /></RutaAdmin>} />
+          <Route
+            path="flujo-de-caja"
+            element={
+              <RutaAdmin>
+                <Flujo_Caja />
+              </RutaAdmin>
+            }
+          />
 
-          <Route path="cuentas-corrientes/clientes" element={<RutaAdmin><ClientesCC /></RutaAdmin>} />
-          <Route path="cuentas-corrientes/proveedores" element={<RutaAdmin><ProveedoresCC /></RutaAdmin>} />
+          <Route
+            path="cuentas-corrientes/clientes"
+            element={
+              <RutaAdmin>
+                <ClientesCC />
+              </RutaAdmin>
+            }
+          />
+          <Route
+            path="cuentas-corrientes/proveedores"
+            element={
+              <RutaAdmin>
+                <ProveedoresCC />
+              </RutaAdmin>
+            }
+          />
 
           {/* STOCK */}
-          <Route path="stock" element={<RutaAdmin><Stock /></RutaAdmin>} />
+          <Route
+            path="stock"
+            element={
+              <RutaAdmin>
+                <Stock />
+              </RutaAdmin>
+            }
+          />
 
           {/* CHEQUES */}
-          <Route path="cheques/cartera" element={<RutaAdmin><Cheques_Cartera /></RutaAdmin>} />
-          <Route path="cheques/flujo" element={<RutaAdmin><Flujo_Cheques /></RutaAdmin>} />
-          <Route path="cheques/echeqs-cartera" element={<RutaAdmin><Echeqs_Cartera /></RutaAdmin>} />
-          <Route path="cheques/flujo-echeqs" element={<RutaAdmin><Flujo_Echeqs /></RutaAdmin>} />
+          <Route
+            path="cheques/cartera"
+            element={
+              <RutaAdmin>
+                <Cheques_Cartera />
+              </RutaAdmin>
+            }
+          />
+          <Route
+            path="cheques/flujo"
+            element={
+              <RutaAdmin>
+                <Flujo_Cheques />
+              </RutaAdmin>
+            }
+          />
+          <Route
+            path="cheques/echeqs-cartera"
+            element={
+              <RutaAdmin>
+                <Echeqs_Cartera />
+              </RutaAdmin>
+            }
+          />
+          <Route
+            path="cheques/flujo-echeqs"
+            element={
+              <RutaAdmin>
+                <Flujo_Echeqs />
+              </RutaAdmin>
+            }
+          />
 
-          <Route path="analisis-financiero" element={<RutaAdmin><AnalisisFinanciero /></RutaAdmin>} />
+          <Route
+            path="analisis-financiero"
+            element={
+              <RutaAdmin>
+                <AnalisisFinanciero />
+              </RutaAdmin>
+            }
+          />
 
           {/* CONFIGURACIÓN */}
-          <Route path="configuracion" element={<RutaAdmin><Configuracion /></RutaAdmin>} />
-          <Route path="configuracion/tiendanube" element={<RutaAdmin><ConfigTiendaNube /></RutaAdmin>} />
-          <Route path="configuracion/calendario" element={<RutaAdmin><ConfiguracionCalendario /></RutaAdmin>} />
+          <Route
+            path="configuracion"
+            element={
+              <RutaAdmin>
+                <Configuracion />
+              </RutaAdmin>
+            }
+          />
+
+          <Route
+            path="configuracion/tiendanube"
+            element={
+              <RutaAdmin>
+                <ConfigTiendaNube />
+              </RutaAdmin>
+            }
+          />
+
+          <Route
+            path="configuracion/calendario"
+            element={
+              <RutaAdmin>
+                <ConfiguracionCalendario />
+              </RutaAdmin>
+            }
+          />
+
+          <Route
+            path="configuracion/usuarios"
+            element={
+              <RutaAdmin>
+                <ConfiguracionUsuarios />
+              </RutaAdmin>
+            }
+          />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

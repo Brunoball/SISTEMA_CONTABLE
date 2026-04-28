@@ -1446,22 +1446,86 @@ export default function ModalEditarCompra({
       ? { tipo: "actual", nombre: archivoActualNombre || "Comprobante actual", url: archivoActualUrl }
       : null;
 
-  const handleOpenVerComprobante = useCallback(() => {
+  const obtenerUrlFirmadaComprobanteActual = useCallback(async () => {
+    const idComp = Number(archivoActualId || getComprobanteIdFromRow(rowRef.current) || 0);
+
+    if (idComp > 0) {
+      const sp = new URLSearchParams();
+      sp.set("action", "compras_comprobantes_descargar");
+      sp.set("id_comprobante", String(idComp));
+
+      const data = await apiGet(`${BASE_URL}/api.php?${sp.toString()}`);
+      if (!data?.exito) {
+        throw new Error(data?.mensaje || "No se pudo obtener el comprobante.");
+      }
+
+      const finalUrl = String(data?.url || "").trim();
+      if (!finalUrl) {
+        throw new Error("El backend no devolvió la URL del comprobante.");
+      }
+
+      return finalUrl;
+    }
+
+    const rawUrl = String(archivoActualUrl || "").trim();
+    if (!rawUrl) return "";
+
+    // Si ya viene una URL firmada externa (R2/S3) o un blob, se puede usar directo.
+    if (/^(blob:|data:)/i.test(rawUrl)) return rawUrl;
+    if (/^https?:\/\//i.test(rawUrl)) {
+      try {
+        const u = new URL(rawUrl);
+        const hasAwsSignature =
+          u.searchParams.has("X-Amz-Signature") ||
+          u.searchParams.has("X-Amz-Algorithm") ||
+          u.searchParams.has("X-Amz-Credential");
+
+        if (hasAwsSignature || !u.pathname.toLowerCase().includes("api.php")) {
+          return rawUrl;
+        }
+      } catch {
+        return rawUrl;
+      }
+    }
+
+    // Si por compatibilidad quedó guardado un endpoint api.php, lo resolvemos con fetch
+    // y headers de sesión. No se lo pasamos directo al visor porque ahí se pierden los headers.
+    const data = await apiGet(rawUrl);
+    if (!data?.exito) {
+      throw new Error(data?.mensaje || "No se pudo obtener el comprobante.");
+    }
+
+    const finalUrl = String(data?.url || "").trim();
+    if (!finalUrl) {
+      throw new Error("El backend no devolvió la URL del comprobante.");
+    }
+
+    return finalUrl;
+  }, [archivoActualId, archivoActualUrl]);
+
+  const handleOpenVerComprobante = useCallback(async () => {
     if (!archivoMostrado) return;
+
     if (archivoMostrado.tipo === "nuevo") {
       const url = URL.createObjectURL(archivoMostrado.file);
       setCompUrl(url);
       setOpenVerComp(true);
-    } else {
-      const targetUrl = String(archivoMostrado.url || "").trim();
-      if (!targetUrl) {
+      return;
+    }
+
+    try {
+      const finalUrl = await obtenerUrlFirmadaComprobanteActual();
+      if (!finalUrl) {
         showToast("advertencia", "No hay comprobante para visualizar.", 2600);
         return;
       }
-      setCompUrl(targetUrl);
+
+      setCompUrl(finalUrl);
       setOpenVerComp(true);
+    } catch (e) {
+      showToast("error", e?.message || "No se pudo abrir el comprobante.", 4200);
     }
-  }, [archivoMostrado, showToast]);
+  }, [archivoMostrado, obtenerUrlFirmadaComprobanteActual, showToast]);
 
   const handleCloseVerComprobante = useCallback(() => {
     setOpenVerComp(false);

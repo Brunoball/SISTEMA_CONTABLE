@@ -273,7 +273,7 @@ body.dark .mu-field__icon {
   border: 1px solid var(--nv-border-md, rgba(15, 23, 42, 0.16));
   border-radius: 11px;
   background: var(--nv-bg, #fff);
-  padding: 10px 12px 0 34px;
+  padding: 0 12px 0 34px;
   font-size: 13px;
   font-weight: 500;
   color: var(--nv-text, #0a2540);

@@ -8,7 +8,8 @@
   --balto-action: #0055BB;
   --balto-action-hover: #004AA3;
   --balto-bg: #F6F9FC;
-  --balto-text: #425466;
+  --balto-text:#425466;
+  --balto-texts:#425466;
   --balto-white: #FFFFFF;
   --balto-placeholder: rgba(66, 84, 102, 0.6);
   --balto-focus: rgba(0, 85, 187, 0.18);
@@ -162,7 +163,7 @@ body {
   width: 18px;
   height: 18px;
 
-  background-color: var(--balto-text);
+  background-color: var(--balto-texts) !important;
   opacity: 0.9;
   pointer-events: none;
   z-index: 4;

@@ -558,6 +558,10 @@ export default function ConfiguracionUsuarios() {
         </div>
 
         <div className="cfg-users-hero__side">
+                    <button className="cfg-users-hero-add" type="button" onClick={abrirCrear}>
+            <FontAwesomeIcon icon={faPlus} />
+            Agregar usuario
+          </button>
           <button
             className="mov-btn mov-btn--primary"
             type="button"
@@ -567,10 +571,7 @@ export default function ConfiguracionUsuarios() {
             Volver
           </button>
 
-          <button className="cfg-users-hero-add" type="button" onClick={abrirCrear}>
-            <FontAwesomeIcon icon={faPlus} />
-            Agregar usuario
-          </button>
+
         </div>
       </div>
 

@@ -1143,3 +1143,326 @@ button{ font-family: inherit; }
 .pp-sidebar:hover .pp-nav{
   overflow-y: auto;
 }
+/* =========================================================
+   RESPONSIVE FINAL - NO TOCA VISTA MONITOR
+   Pegar este bloque al FINAL de principal.css
+   Corrige reglas finales que pisan el drawer mobile.
+========================================================= */
+
+@media (max-width: 980px){
+  .mov-topbar{
+    height: var(--mov-topbar-h);
+  }
+
+  .mov-topbar__left{
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .mov-topbar__right{
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .mov-topbar__logoImg{
+    max-width: 140px;
+  }
+
+  .pp-content,
+  .pp-content__inner{
+    min-width: 0;
+  }
+}
+
+@media (max-width: 720px){
+  html,
+  body,
+  #root{
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  body.pp-lockScroll{
+    overflow: hidden !important;
+  }
+
+  .pp-burger{
+    display: grid !important;
+    flex: 0 0 auto;
+  }
+
+  .pp-shell{
+    display: block !important;
+    width: 100%;
+    min-width: 0;
+    min-height: 100vh;
+    padding-top: var(--mov-topbar-h) !important;
+    overflow-x: hidden;
+  }
+
+  .mov-topbar{
+    min-width: 0;
+    gap: 8px;
+    padding: 0 10px;
+  }
+
+  .mov-topbar__logo{
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+
+  .mov-topbar__logoImg{
+    height: 34px;
+    max-width: 120px;
+  }
+
+  .mov-topbar__titles{
+    display: none !important;
+  }
+
+  .mov-topbar__section{
+    max-width: 34vw;
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+
+  .mov-topbar__right{
+    gap: 6px;
+  }
+
+  /* IMPORTANTÍSIMO:
+     estas reglas van al final porque el CSS original vuelve a declarar
+     .pp-sidebar y .pp-nav después del responsive. */
+  .pp-sidebar{
+    position: fixed !important;
+    top: var(--mov-topbar-h) !important;
+    left: 0 !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: min(var(--drawer-w), calc(100vw - 24px)) !important;
+    max-width: calc(100vw - 24px) !important;
+    height: calc(100vh - var(--mov-topbar-h)) !important;
+    z-index: 1300 !important;
+    transform: translateX(-110%) !important;
+    transition: transform 220ms cubic-bezier(.4,0,.2,1) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 12px 10px !important;
+    will-change: transform;
+    contain: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pp-sidebar:hover{
+    width: min(var(--drawer-w), calc(100vw - 24px)) !important;
+  }
+
+  .pp-sidebar.is-drawerOpen{
+    transform: translateX(0) !important;
+    box-shadow: 4px 0 24px rgba(2, 6, 23, 0.22);
+  }
+
+  .pp-drawerOverlay{
+    display: block;
+    position: fixed;
+    inset: var(--mov-topbar-h) 0 0 0;
+    z-index: 1200;
+  }
+
+  .pp-drawerHeader{
+    display: flex !important;
+  }
+
+  .pp-brand{
+    display: none !important;
+  }
+
+  .pp-nav{
+    margin-top: 8px !important;
+    padding: 6px 4px 12px !important;
+    overflow: visible !important;
+    gap: 8px;
+  }
+
+  .pp-nav__item{
+    min-height: 48px;
+    border-radius: 14px;
+    padding: 0 8px;
+  }
+
+  .pp-nav__icon{
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+  }
+
+  .pp-nav__label,
+  .pp-logout__label,
+  .pp-brand__text{
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .pp-navSub{
+    width: 100%;
+  }
+
+  .pp-navGroup.has-sub.is-open .pp-navSub{
+    position: static !important;
+    width: auto !important;
+    max-height: var(--sub-open-h) !important;
+    padding: 5px 0 0 34px !important;
+    overflow: hidden !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    transform: none !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .pp-navSub__item{
+    min-height: 42px;
+    padding: 9px 10px;
+  }
+
+  .pp-sidebar__bottom{
+    margin-top: 12px;
+    padding-bottom: 10px;
+  }
+
+  .pp-logout{
+    min-height: 46px;
+  }
+
+  .pp-content{
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 10px !important;
+    display: block !important;
+    overflow: visible !important;
+    contain: none !important;
+  }
+
+  .pp-content__inner{
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    padding: 10px !important;
+    border-radius: 12px !important;
+    overflow: visible !important;
+    contain: none !important;
+  }
+
+  .pp-content__inner > *{
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .pp-modal-overlay{
+    padding: 14px;
+    align-items: center;
+  }
+
+  .pp-modal{
+    max-width: 100%;
+    padding: 18px 16px 16px;
+    border-radius: 18px;
+  }
+}
+
+@media (max-width: 560px){
+  .mov-topbar{
+    padding: 0 8px;
+  }
+
+  .mov-topbar__section{
+    display: none !important;
+  }
+
+  .mov-topbar__logoImg{
+    height: 30px;
+    max-width: 105px;
+  }
+
+  .pp-themeBtn,
+  .pp-topbarLogout,
+  .mov-topbar__usericon,
+  .pp-burger{
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    border-radius: 10px !important;
+    font-size: 15px !important;
+  }
+
+  .mov-topbar__usericon{
+    padding: 7px !important;
+  }
+
+  .pp-content{
+    padding: 8px !important;
+  }
+
+  .pp-content__inner{
+    padding: 8px !important;
+    border-radius: 10px !important;
+  }
+
+  .pp-modal__actions{
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+
+  .pp-btn{
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 400px){
+  :root{
+    --drawer-w: calc(100vw - 32px);
+  }
+
+  .mov-topbar{
+    gap: 5px;
+    padding: 0 6px;
+  }
+
+  .mov-topbar__logoImg{
+    height: 27px;
+    max-width: 92px;
+  }
+
+  .mov-topbar__right{
+    gap: 5px;
+  }
+
+  .pp-themeBtn,
+  .pp-topbarLogout,
+  .mov-topbar__usericon,
+  .pp-burger{
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    font-size: 14px !important;
+  }
+
+  .pp-sidebar{
+    width: calc(100vw - 32px) !important;
+    max-width: calc(100vw - 32px) !important;
+  }
+
+  .pp-content{
+    padding: 6px !important;
+  }
+
+  .pp-content__inner{
+    padding: 6px !important;
+    border-radius: 8px !important;
+  }
+}

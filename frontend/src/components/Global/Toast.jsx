@@ -155,7 +155,15 @@ const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
       // Así el botón X sigue cerrando con su propia animación.
       if (target?.closest?.(".toast-container")) return;
 
+      // Escape SIEMPRE cierra el toast manual,
+      // incluso si el foco está dentro de un input, textarea o select.
+      if (event.type === "keydown" && event.key === "Escape") {
+        cerrarToast({ conAnimacion: true });
+        return;
+      }
+
       // Si viene de inputs, textarea, select o selectores, NO cerramos el toast.
+      // Esto mantiene el comportamiento de no cerrar mientras escribís o interactuás con campos.
       if (target?.closest?.(SELECTOR_NO_CIERRA_TOAST)) return;
 
       const esEventoSubmit = event.type === "submit";
@@ -166,8 +174,7 @@ const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
           : false;
 
       const esTeclaDeAccion =
-        event.type === "keydown" &&
-        ["Enter", "Escape", "Tab"].includes(event.key);
+        event.type === "keydown" && ["Enter", "Tab"].includes(event.key);
 
       const debeCerrar =
         esEventoSubmit || esClickEnElementoInteractivo || esTeclaDeAccion;

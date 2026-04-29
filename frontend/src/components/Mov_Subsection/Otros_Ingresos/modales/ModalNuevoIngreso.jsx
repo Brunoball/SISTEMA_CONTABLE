@@ -697,9 +697,6 @@ export default function ModalNuevoIngreso({
       e.preventDefault();
       e.stopPropagation();
 
-      if (typeof e.stopImmediatePropagation === "function") {
-        e.stopImmediatePropagation();
-      }
 
       onClose?.();
     };

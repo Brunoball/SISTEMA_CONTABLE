@@ -1535,9 +1535,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       e.preventDefault();
       e.stopPropagation();
 
-      if (typeof e.stopImmediatePropagation === "function") {
-        e.stopImmediatePropagation();
-      }
+
 
       onClose?.();
     };

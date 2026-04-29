@@ -14,6 +14,7 @@ import {
   faEye,
   faTrashCan,
   faFloppyDisk,
+  faCircleExclamation,
   faMoneyBillTrendUp,
   faLayerGroup,
   faCheck,
@@ -356,30 +357,33 @@ function TipoBadge({ tipo }) {
   return <span className={`cmi-badge ${cls}`}>{label}</span>;
 }
 
-function getFirstErrorText(errs) {
-  if (!errs || typeof errs !== "object") return "Revisá los campos marcados";
-
-  const first = Object.values(errs).find((value) => {
-    if (typeof value === "string") return value.trim();
-    return value !== null && value !== undefined && value !== false;
-  });
-
-  return errorToText(first, "Revisá los campos marcados");
-}
+const ErrorMsg = ({ msg }) => (
+  <span
+    style={{
+      fontSize: "0.74rem",
+      color: "#ef4444",
+      marginTop: 4,
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+    }}
+  >
+    <FontAwesomeIcon icon={faCircleExclamation} style={{ fontSize: 10 }} />
+    {errorToText(msg)}
+  </span>
+);
 
 function FloatingField({ label, icon, error, children, style }) {
   return (
-    <div
-      className={`cmi-floatingField ${error ? "cmi-floatingField--error" : ""}`}
-      style={style}
-      title={error ? errorToText(error) : undefined}
-    >
+    <div className="cmi-floatingField" style={style}>
       <label className="cmi-floatingLabel">
         {icon && <FontAwesomeIcon icon={icon} style={{ fontSize: 10, opacity: 0.8 }} />}
         {label}
       </label>
 
       {children}
+
+      {error && <ErrorMsg msg={error} />}
     </div>
   );
 }
@@ -685,16 +689,12 @@ export default function ModalCargaIndividualProducto({
     const tipos = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
 
     if (!tipos.includes(file.type)) {
-      const msg = "La imagen debe ser JPG, PNG, WEBP o GIF";
-      setErrores((p) => ({ ...p, imagen: msg }));
-      mostrarToast(msg, "error");
+      setErrores((p) => ({ ...p, imagen: "La imagen debe ser JPG, PNG, WEBP o GIF" }));
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      const msg = "La imagen no puede superar los 5 MB";
-      setErrores((p) => ({ ...p, imagen: msg }));
-      mostrarToast(msg, "error");
+      setErrores((p) => ({ ...p, imagen: "La imagen no puede superar los 5 MB" }));
       return;
     }
 
@@ -1111,7 +1111,6 @@ export default function ModalCargaIndividualProducto({
     if (Object.keys(errs).length > 0) {
       setErrores(errs);
       setForm((p) => ({ ...p, ...formNormalizado }));
-      mostrarToast(getFirstErrorText(errs), "error");
       return;
     }
 
@@ -1467,6 +1466,7 @@ export default function ModalCargaIndividualProducto({
                   </button>
                 </div>
 
+                {errores[`tipo_${idx}`] && <ErrorMsg msg={errores[`tipo_${idx}`]} />}
 
                 <div className="fl-row" style={{ gridTemplateColumns: "1.4fr 1fr 1fr" }}>
                   <FloatingField label="Precio">
@@ -1614,6 +1614,7 @@ export default function ModalCargaIndividualProducto({
               </div>
             )}
 
+            {errores.imagen && <ErrorMsg msg={errores.imagen} />}
           </div>
         </div>
       </div>

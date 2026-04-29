@@ -12,6 +12,7 @@ import {
   faRefresh,
   faXmark,
   faFloppyDisk,
+  faCircleExclamation,
   faPaperclip,
   faArrowUpFromBracket,
   faBarcode,
@@ -491,13 +492,25 @@ function normalizarProducto(data) {
   };
 }
 
+const ErrorMsg = ({ msg }) => (
+  <span
+    style={{
+      fontSize: "0.76rem",
+      color: "#ef4444",
+      marginTop: 2,
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+    }}
+  >
+    <FontAwesomeIcon icon={faCircleExclamation} style={{ fontSize: 10 }} />
+    {errorToText(msg)}
+  </span>
+);
+
 function FloatingField({ label, icon, error, children, style }) {
   return (
-    <div
-      className="cmi-floatingField cmi-floatingField--active"
-      style={style}
-      data-error={error ? "true" : undefined}
-    >
+    <div className="cmi-floatingField cmi-floatingField--active" style={style}>
       <label className="cmi-floatingLabel cmi-floatingLabel--active">
         {icon && (
           <FontAwesomeIcon
@@ -508,6 +521,7 @@ function FloatingField({ label, icon, error, children, style }) {
         {label}
       </label>
       {children}
+      {error && <ErrorMsg msg={error} />}
     </div>
   );
 }
@@ -1166,26 +1180,12 @@ export default function ModalEditarProducto({
     const tiposPermitidos = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
 
     if (!tiposPermitidos.includes(file.type)) {
-      const msg = "La imagen debe ser JPG, PNG, WEBP o GIF";
-      setErrores((prev) => ({ ...prev, imagen: msg }));
-      mostrarToast(msg, "error");
-
-      if (inputImagenRef.current) {
-        inputImagenRef.current.value = "";
-      }
-
+      setErrores((prev) => ({ ...prev, imagen: "La imagen debe ser JPG, PNG, WEBP o GIF" }));
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      const msg = "La imagen no puede superar los 5 MB";
-      setErrores((prev) => ({ ...prev, imagen: msg }));
-      mostrarToast(msg, "error");
-
-      if (inputImagenRef.current) {
-        inputImagenRef.current.value = "";
-      }
-
+      setErrores((prev) => ({ ...prev, imagen: "La imagen no puede superar los 5 MB" }));
       return;
     }
 
@@ -1216,10 +1216,7 @@ export default function ModalEditarProducto({
 
   const guardarNuevaCategoria = async () => {
     const nombreLimpio = String(miniCategoriaNombre || "").trim().toUpperCase();
-    if (!nombreLimpio) {
-      mostrarToast("El nombre de la categoría es obligatorio", "error");
-      return;
-    }
+    if (!nombreLimpio) return;
 
     setGuardandoMiniCategoria(true);
 
@@ -1265,10 +1262,7 @@ export default function ModalEditarProducto({
 
   const guardarNuevoTipo = async () => {
     const nombreLimpio = String(miniTipoNombre || "").trim().toUpperCase();
-    if (!nombreLimpio) {
-      mostrarToast("El nombre del tipo de precio es obligatorio", "error");
-      return;
-    }
+    if (!nombreLimpio) return;
 
     setGuardandoMiniTipo(true);
 
@@ -1426,7 +1420,7 @@ export default function ModalEditarProducto({
       const productoGuardado = data?.producto ?? data?.data?.producto ?? data?.data ?? null;
 
       onGuardado?.(productoGuardado);
-      mostrarToast("Producto actualizado correctamente", "exito");
+      mostrarToast("Producto actualizado correctamente", "success");
       onClose?.();
     } catch (err) {
       mostrarToast(err.message || "Error al actualizar el producto", "error");
@@ -1655,8 +1649,14 @@ export default function ModalEditarProducto({
                         </button>
                       </div>
 
+                      {errores[`tipo_${idx}`] && (
+                        <div style={{ marginBottom: 10 }}>
+                          <ErrorMsg msg={errores[`tipo_${idx}`]} />
+                        </div>
+                      )}
+
                       <div className="fl-row" style={{ gridTemplateColumns: "1.4fr 1fr 1fr" }}>
-                        <FloatingField label="Precio" error={errores[`tipo_${idx}`]}>
+                        <FloatingField label="Precio">
                           <PriceInput
                             name={`tipo_precio_${idx}`}
                             value={tipoItem.precio}
@@ -1895,6 +1895,8 @@ export default function ModalEditarProducto({
                       </div>
                     </div>
                   )}
+
+                  {errores.imagen && <ErrorMsg msg={errores.imagen} />}
                 </div>
               </div>
             )}

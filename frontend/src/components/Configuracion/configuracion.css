@@ -197,7 +197,9 @@
   width: 24px;
   height: 24px;
   object-fit: contain;
-  display: block;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .cfg-cardBody {

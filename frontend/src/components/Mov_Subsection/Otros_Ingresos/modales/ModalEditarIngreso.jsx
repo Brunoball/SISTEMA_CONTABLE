@@ -816,9 +816,7 @@ export default function ModalEditarIngreso({
       e.preventDefault();
       e.stopPropagation();
 
-      if (typeof e.stopImmediatePropagation === "function") {
-        e.stopImmediatePropagation();
-      }
+
 
       onClose?.();
     };

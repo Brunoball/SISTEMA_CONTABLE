@@ -211,6 +211,21 @@ export default function ModalNuevoCheque({
     };
   }, [open]);
 
+  /*
+    IMPORTANTE:
+    Esta clase sirve para que los modales que están detrás sepan que
+    hay un modal de cheque abierto y no se cierren con Escape.
+  */
+  useEffect(() => {
+    if (!open) return;
+
+    document.body.classList.add("modal-nuevo-cheque-open");
+
+    return () => {
+      document.body.classList.remove("modal-nuevo-cheque-open");
+    };
+  }, [open]);
+
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
     prevOpenRef.current = open;
@@ -282,7 +297,10 @@ export default function ModalNuevoCheque({
     };
 
     document.addEventListener("keydown", handler, true);
-    return () => document.removeEventListener("keydown", handler, true);
+
+    return () => {
+      document.removeEventListener("keydown", handler, true);
+    };
   }, [
     open,
     saving,
@@ -510,6 +528,8 @@ export default function ModalNuevoCheque({
         className="mp-modal__overlay"
         style={{ zIndex: 9999999999 + 10 }}
         onMouseDown={(e) => {
+          e.stopPropagation();
+
           if (e.target === e.currentTarget && !saving && !checkingNumero) {
             onClose?.();
           }
@@ -686,9 +706,7 @@ export default function ModalNuevoCheque({
                           type="date"
                           placeholder=" "
                           value={form.fecha_pago}
-                          onChange={(e) =>
-                            setField("fecha_pago", e.target.value)
-                          }
+                          onChange={(e) => setField("fecha_pago", e.target.value)}
                           disabled={saving || checkingNumero}
                         />
                         <label className="nc-label">Fecha de pago *</label>
@@ -831,9 +849,7 @@ export default function ModalNuevoCheque({
                   <button
                     type="button"
                     className="mit-btn mit-btn--ghost mit-btn--block"
-                    onClick={() =>
-                      !saving && !checkingNumero && onClose?.()
-                    }
+                    onClick={() => !saving && !checkingNumero && onClose?.()}
                     disabled={saving || checkingNumero}
                   >
                     Cancelar

@@ -801,15 +801,33 @@ export default function ModalEditarIngreso({
   // Escape key
   useEffect(() => {
     if (!open) return;
+
     const h = (e) => {
       if (e.key !== "Escape" || saving) return;
+
+      // Si está abierto el modal superior de cheque,
+      // este modal padre NO debe cerrarse con Escape.
+      if (document.body.classList.contains("modal-nuevo-cheque-open")) {
+        return;
+      }
+
       if (openViewer || openNuevaDescripcionModal) return;
+
       e.preventDefault();
       e.stopPropagation();
+
+      if (typeof e.stopImmediatePropagation === "function") {
+        e.stopImmediatePropagation();
+      }
+
       onClose?.();
     };
+
     document.addEventListener("keydown", h, true);
-    return () => document.removeEventListener("keydown", h, true);
+
+    return () => {
+      document.removeEventListener("keydown", h, true);
+    };
   }, [open, saving, openViewer, openNuevaDescripcionModal, onClose]);
 
   // Carga info comprobante existente
@@ -1001,11 +1019,9 @@ export default function ModalEditarIngreso({
   );
 
   const nombreComprobanteVisible = useMemo(() => {
-    if (archivoNuevo) return archivoNuevo.name;
     if (marcarEliminarComprobante) return "";
-    return (
-      safeText(comprobanteActual?.archivo_url).split("/").pop() || "Comprobante actual"
-    );
+    if (archivoNuevo || comprobanteActual) return "Comprobante adjunto";
+    return "";
   }, [archivoNuevo, marcarEliminarComprobante, comprobanteActual]);
 
   const abrirViewer = useCallback(async () => {
@@ -1016,7 +1032,7 @@ export default function ModalEditarIngreso({
       setViewerData({
         url: URL.createObjectURL(archivoNuevo),
         mime: archivoNuevo.type || "application/octet-stream",
-        title: `Comprobante - ${archivoNuevo.name}`,
+        title: "Comprobante adjunto",
       });
       setOpenViewer(true);
       return;
@@ -1108,12 +1124,12 @@ export default function ModalEditarIngreso({
   // ⭐ FUNCIÓN PARA VALIDAR Y ACTUALIZAR LA FECHA ⭐
   const handleFechaChange = useCallback((e) => {
     const nuevaFecha = e.target.value;
-    
+
     if (nuevaFecha && nuevaFecha > todayISO()) {
       showToast("advertencia", "No podés seleccionar una fecha posterior al día actual.");
       return;
     }
-    
+
     setForm((p) => ({ ...p, fecha: nuevaFecha }));
   }, [showToast]);
 
@@ -1223,7 +1239,7 @@ export default function ModalEditarIngreso({
   const validate = useCallback(() => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(form.fecha || "").trim()))
       return { ok: false, msg: "La fecha es obligatoria." };
-    
+
     // ⭐ VALIDACIÓN DE FECHA FUTURA ⭐
     if (form.fecha > todayISO()) {
       return { ok: false, msg: "La fecha no puede ser posterior al día actual." };
@@ -1738,9 +1754,7 @@ export default function ModalEditarIngreso({
                                       >
                                         {nombreComprobanteVisible}
                                       </div>
-                                      <div className="mi-uploadFile__size">
-                                        Archivo ya vinculado al ingreso
-                                      </div>
+
                                     </div>
                                     <div
                                       style={{
@@ -1782,17 +1796,11 @@ export default function ModalEditarIngreso({
                                     <div className="mi-uploadFile__meta">
                                       <div
                                         className="mi-uploadFile__name"
-                                        title={archivoNuevo.name}
+                                        title="Comprobante adjunto"
                                       >
-                                        {archivoNuevo.name}
+                                        Comprobante adjunto
                                       </div>
-                                      <div className="mi-uploadFile__size">
-                                        {Math.max(
-                                          1,
-                                          Math.round((archivoNuevo.size || 0) / 1024)
-                                        )}{" "}
-                                        KB
-                                      </div>
+
                                     </div>
                                     <div
                                       style={{

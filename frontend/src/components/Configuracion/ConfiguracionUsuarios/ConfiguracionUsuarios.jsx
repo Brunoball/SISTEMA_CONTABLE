@@ -8,6 +8,7 @@ import {
   faTrash,
   faPowerOff,
   faRotateLeft,
+  faUsers,
 } from "@fortawesome/free-solid-svg-icons";
 
 import BASE_URL from "../../../config/config";
@@ -305,20 +306,12 @@ export default function ConfiguracionUsuarios() {
 
   const rolesById = useMemo(() => {
     const map = new Map();
-
     roles.forEach((r) => {
       map.set(Number(r.idRolMaster || r.id_rol), r);
     });
-
     return map;
   }, [roles]);
 
-  /*
-   * CORRECCIÓN IMPORTANTE:
-   * Antes se comparaba también por email y por nombre.
-   * Eso marcaba todos como "Vos" si tenían el mismo email.
-   * Ahora SOLO se detecta por idUsuarioMaster.
-   */
   const esUsuarioActualPorObjeto = useCallback(
     (u) => {
       const idFila = Number(
@@ -328,9 +321,7 @@ export default function ConfiguracionUsuarios() {
           u?.id_usuario ||
           0
       );
-
       const idActual = Number(usuarioActual.idUsuarioMaster || 0);
-
       return idActual > 0 && idFila > 0 && idActual === idFila;
     },
     [usuarioActual.idUsuarioMaster]
@@ -348,28 +339,23 @@ export default function ConfiguracionUsuarios() {
 
   const cerrarModalUsuario = useCallback(() => {
     if (saving) return;
-
     setModalUsuarioAbierto(false);
     resetForm();
   }, [saving, resetForm]);
 
   const abrirCrear = useCallback(() => {
     setEditandoUsuarioActualFijo(false);
-
     setForm({
       ...emptyForm,
       idRolMaster: rolEmpleadoDefault ? String(rolEmpleadoDefault.idRolMaster || rolEmpleadoDefault.id_rol) : "",
     });
-
     setModalUsuarioAbierto(true);
   }, [rolEmpleadoDefault]);
 
   const abrirEditar = useCallback(
     (u) => {
       const esActual = esUsuarioActualPorObjeto(u);
-
       setEditandoUsuarioActualFijo(esActual);
-
       setForm({
         idUsuarioMaster: Number(u.idUsuarioMaster || u.id_usuario_master || 0),
         usuario: u.usuario || "",
@@ -379,7 +365,6 @@ export default function ConfiguracionUsuarios() {
         tema: u.tema || "claro",
         activo: Number(u.activo) === 1 ? 1 : 0,
       });
-
       setModalUsuarioAbierto(true);
     },
     [esUsuarioActualPorObjeto, roles]
@@ -387,7 +372,6 @@ export default function ConfiguracionUsuarios() {
 
   const guardar = async (e) => {
     e.preventDefault();
-
     setSaving(true);
 
     try {
@@ -396,21 +380,10 @@ export default function ConfiguracionUsuarios() {
       const contrasena = String(form.contrasena || "");
       const rolActual = Number(form.idRolMaster || 0);
 
-      if (!usuario) {
-        throw new Error("Ingresá el nombre de usuario.");
-      }
-
-      if (!esEdicion && contrasena.length < 6) {
-        throw new Error("La contraseña debe tener al menos 6 caracteres.");
-      }
-
-      if (esEdicion && contrasena && contrasena.length < 6) {
-        throw new Error("La nueva contraseña debe tener al menos 6 caracteres.");
-      }
-
-      if (!rolActual) {
-        throw new Error("No se pudo detectar el rol actual del usuario. Cerrá el modal y volvé a abrir la edición.");
-      }
+      if (!usuario) throw new Error("Ingresá el nombre de usuario.");
+      if (!esEdicion && contrasena.length < 6) throw new Error("La contraseña debe tener al menos 6 caracteres.");
+      if (esEdicion && contrasena && contrasena.length < 6) throw new Error("La nueva contraseña debe tener al menos 6 caracteres.");
+      if (!rolActual) throw new Error("No se pudo detectar el rol actual del usuario. Cerrá el modal y volvé a abrir la edición.");
 
       const payload = {
         idUsuarioMaster: Number(form.idUsuarioMaster || 0),
@@ -422,9 +395,7 @@ export default function ConfiguracionUsuarios() {
         activo: Number(form.activo) === 1 ? 1 : 0,
       };
 
-      if (contrasena) {
-        payload.contrasena = contrasena;
-      }
+      if (contrasena) payload.contrasena = contrasena;
 
       const res = await apiFetch(
         { action: "configuracion_usuarios_guardar" },
@@ -439,10 +410,8 @@ export default function ConfiguracionUsuarios() {
       }
 
       mostrarToast("exito", data.mensaje || "Usuario guardado correctamente.", 2800);
-
       setModalUsuarioAbierto(false);
       resetForm();
-
       await cargar();
     } catch (e2) {
       mostrarToast("error", e2?.message || "Error guardando usuario.", 4200);
@@ -456,18 +425,15 @@ export default function ConfiguracionUsuarios() {
       mostrarToast("advertencia", "No podés cambiar el estado del usuario con el que estás conectado actualmente.", 4200);
       return;
     }
-
     setUsuarioACambiarEstado(u);
   };
 
   const confirmarCambioEstado = async () => {
     if (!usuarioACambiarEstado) return;
-
     setChangingStatus(true);
 
     try {
       const nuevo = Number(usuarioACambiarEstado.activo) === 1 ? 0 : 1;
-
       const res = await apiFetch(
         { action: "configuracion_usuarios_estado" },
         {
@@ -478,7 +444,6 @@ export default function ConfiguracionUsuarios() {
           }),
         }
       );
-
       const txt = await res.text();
       const data = safeJsonParse(txt);
 
@@ -498,13 +463,11 @@ export default function ConfiguracionUsuarios() {
       mostrarToast("advertencia", "No podés eliminar el usuario con el que estás conectado actualmente.", 4200);
       return;
     }
-
     setUsuarioAEliminar(u);
   };
 
   const confirmarEliminar = async () => {
     if (!usuarioAEliminar) return;
-
     setDeleting(true);
 
     try {
@@ -517,7 +480,6 @@ export default function ConfiguracionUsuarios() {
           }),
         }
       );
-
       const txt = await res.text();
       const data = safeJsonParse(txt);
 
@@ -540,70 +502,26 @@ export default function ConfiguracionUsuarios() {
 
   const detallesEliminar = useMemo(() => {
     if (!usuarioAEliminar) return [];
-
     const rol = rolesById.get(Number(usuarioAEliminar.idRolMaster || usuarioAEliminar.id_rol));
     const activo = Number(usuarioAEliminar.activo) === 1;
-
     return [
-      {
-        label: "Usuario",
-        value: usuarioAEliminar.usuario || "—",
-      },
-      {
-        label: "Rol",
-        value:
-          rol?.nombre ||
-          rol?.tipo_rol ||
-          usuarioAEliminar.rol_nombre ||
-          usuarioAEliminar.tipo_rol ||
-          usuarioAEliminar.rol ||
-          "—",
-      },
-      {
-        label: "Email",
-        value: usuarioAEliminar.email_recuperacion || "—",
-      },
-      {
-        label: "Estado",
-        value: activo ? "Activo" : "Inactivo",
-      },
+      { label: "Usuario", value: usuarioAEliminar.usuario || "—" },
+      { label: "Rol", value: rol?.nombre || rol?.tipo_rol || usuarioAEliminar.rol_nombre || usuarioAEliminar.tipo_rol || usuarioAEliminar.rol || "—" },
+      { label: "Email", value: usuarioAEliminar.email_recuperacion || "—" },
+      { label: "Estado", value: activo ? "Activo" : "Inactivo" },
     ];
   }, [usuarioAEliminar, rolesById]);
 
   const detallesCambioEstado = useMemo(() => {
     if (!usuarioACambiarEstado) return [];
-
     const rol = rolesById.get(Number(usuarioACambiarEstado.idRolMaster || usuarioACambiarEstado.id_rol));
     const activo = Number(usuarioACambiarEstado.activo) === 1;
-    const nuevoEstado = activo ? "Inactivo" : "Activo";
-
     return [
-      {
-        label: "Usuario",
-        value: usuarioACambiarEstado.usuario || "—",
-      },
-      {
-        label: "Rol",
-        value:
-          rol?.nombre ||
-          rol?.tipo_rol ||
-          usuarioACambiarEstado.rol_nombre ||
-          usuarioACambiarEstado.tipo_rol ||
-          usuarioACambiarEstado.rol ||
-          "—",
-      },
-      {
-        label: "Email",
-        value: usuarioACambiarEstado.email_recuperacion || "—",
-      },
-      {
-        label: "Estado actual",
-        value: activo ? "Activo" : "Inactivo",
-      },
-      {
-        label: "Nuevo estado",
-        value: nuevoEstado,
-      },
+      { label: "Usuario", value: usuarioACambiarEstado.usuario || "—" },
+      { label: "Rol", value: rol?.nombre || rol?.tipo_rol || usuarioACambiarEstado.rol_nombre || usuarioACambiarEstado.tipo_rol || usuarioACambiarEstado.rol || "—" },
+      { label: "Email", value: usuarioACambiarEstado.email_recuperacion || "—" },
+      { label: "Estado actual", value: activo ? "Activo" : "Inactivo" },
+      { label: "Nuevo estado", value: activo ? "Inactivo" : "Activo" },
     ];
   }, [usuarioACambiarEstado, rolesById]);
 
@@ -625,123 +543,146 @@ export default function ConfiguracionUsuarios() {
         />
       )}
 
-      <div className="cfg-users-head">
-        <div>
-          <button className="cfg-users-back" type="button" onClick={() => navigate("/panel/configuracion")}>
+      {/* ── HERO ── */}
+      <div className="cfg-users-hero">
+        <div className="cfg-users-hero__icon">
+          <FontAwesomeIcon icon={faUsers} />
+        </div>
+
+        <div className="cfg-users-hero__content">
+          <div className="cfg-users-hero__eyebrow">Configuración global</div>
+          <h1 className="cfg-users-title">Usuarios del sistema</h1>
+          <p className="cfg-users-subtitle">
+            Gestioná los usuarios del sistema actual. Los roles se obtienen desde la base master.
+          </p>
+        </div>
+
+        <div className="cfg-users-hero__side">
+          <button
+            className="mov-btn mov-btn--primary"
+            type="button"
+            onClick={() => navigate("/panel/configuracion")}
+          >
             <FontAwesomeIcon icon={faArrowLeft} />
             Volver
           </button>
 
-          <h1>Usuarios del sistema</h1>
-
-          <p>Gestioná los usuarios del sistema actual. Los roles se obtienen desde la base master.</p>
+          <button className="cfg-users-hero-add" type="button" onClick={abrirCrear}>
+            <FontAwesomeIcon icon={faPlus} />
+            Agregar usuario
+          </button>
         </div>
-
-        <button className="cfg-users-add-btn" type="button" onClick={abrirCrear}>
-          <FontAwesomeIcon icon={faPlus} />
-          Agregar usuario
-        </button>
       </div>
 
-      <div className="cfg-users-list cfg-users-list--full">
-        <div className="cfg-users-list-head">
-          <h2>Usuarios creados</h2>
+      {/* ── GRID ── */}
+      <div className="cfg-users-metaGrid">
 
-          <span>
-            {usuarios.length} usuario{usuarios.length === 1 ? "" : "s"}
-          </span>
-        </div>
-
-        {loading ? (
-          <div className="cfg-users-empty">Cargando usuarios...</div>
-        ) : usuarios.length === 0 ? (
-          <div className="cfg-users-empty">Todavía no hay usuarios en este sistema.</div>
-        ) : (
-          <div className="cfg-users-tableWrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Usuario</th>
-                  <th>Rol</th>
-                  <th>Email</th>
-                  <th>Estado</th>
-                  <th className="cfg-users-actions-th">Acciones</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {usuarios.map((u) => {
-                  const idUsuario = Number(u.idUsuarioMaster || u.id_usuario_master || 0);
-                  const rol = rolesById.get(Number(u.idRolMaster || u.id_rol));
-                  const actual = esUsuarioActualPorObjeto(u);
-                  const activo = Number(u.activo) === 1;
-
-                  return (
-                    <tr key={idUsuario || u.usuario} className={actual ? "cfg-users-current-row" : ""}>
-                      <td>
-                        <div className="cfg-users-userCell">
-                          <span>{u.usuario}</span>
-
-                          {actual && (
-                            <span className="cfg-users-current-badge" title="Usuario actual">
-                              📌 Vos
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td>{rol?.nombre || rol?.tipo_rol || u.rol_nombre || u.tipo_rol || u.rol || "-"}</td>
-
-                      <td>{u.email_recuperacion || "-"}</td>
-
-                      <td>
-                        <span className={`cfg-users-pill ${activo ? "is-active" : "is-inactive"}`}>
-                          {activo ? "Activo" : "Inactivo"}
-                        </span>
-                      </td>
-
-                      <td className="cfg-users-rowActions">
-                        <button
-                          type="button"
-                          className="cfg-users-icon-btn"
-                          onClick={() => abrirEditar(u)}
-                          title="Editar usuario"
-                          aria-label="Editar usuario"
-                        >
-                          <FontAwesomeIcon icon={faPen} />
-                        </button>
-
-                        <button
-                          type="button"
-                          className="cfg-users-icon-btn"
-                          onClick={() => pedirCambioEstado(u)}
-                          disabled={actual}
-                          title={actual ? "No podés cambiar el estado del usuario actual" : activo ? "Dar de baja" : "Activar"}
-                          aria-label={activo ? "Dar de baja" : "Activar"}
-                        >
-                          <FontAwesomeIcon icon={activo ? faPowerOff : faRotateLeft} />
-                        </button>
-
-                        <button
-                          type="button"
-                          className="cfg-users-icon-btn cfg-users-icon-btn--danger"
-                          onClick={() => pedirEliminar(u)}
-                          disabled={actual}
-                          title={actual ? "No podés eliminar el usuario actual" : "Eliminar usuario"}
-                          aria-label="Eliminar usuario"
-                        >
-                          <FontAwesomeIcon icon={faTrash} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {/* Tarjeta — tabla de usuarios */}
+        <div className="cfg-users-metaCard cfg-users-metaCard--full">
+          <div className="cfg-users-metaCard__top">
+            <div className="cfg-users-metaCard__icon">
+              <FontAwesomeIcon icon={faUsers} />
+            </div>
+            <div className="cfg-users-metaCard__head">
+              <h2>Usuarios creados</h2>
+              <p>Listado de todos los usuarios registrados en este sistema.</p>
+            </div>
+            <span className="cfg-users-count" style={{ marginLeft: "auto" }}>
+              {usuarios.length} usuario{usuarios.length === 1 ? "" : "s"}
+            </span>
           </div>
-        )}
+
+          {loading ? (
+            <div className="cfg-users-empty">Cargando usuarios...</div>
+          ) : usuarios.length === 0 ? (
+            <div className="cfg-users-empty">Todavía no hay usuarios en este sistema.</div>
+          ) : (
+            <div className="cfg-users-tableWrap">
+              <table className="cfg-users-table">
+                <thead>
+                  <tr>
+                    <th>Usuario</th>
+                    <th>Rol</th>
+                    <th>Email</th>
+                    <th>Estado</th>
+                    <th className="cfg-users-actions-th">Acciones</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {usuarios.map((u) => {
+                    const idUsuario = Number(u.idUsuarioMaster || u.id_usuario_master || 0);
+                    const rol = rolesById.get(Number(u.idRolMaster || u.id_rol));
+                    const actual = esUsuarioActualPorObjeto(u);
+                    const activo = Number(u.activo) === 1;
+
+                    return (
+                      <tr key={idUsuario || u.usuario} className={actual ? "cfg-users-current-row" : ""}>
+                        <td>
+                          <div className="cfg-users-userCell">
+                            <span>{u.usuario}</span>
+                            {actual && (
+                              <span className="cfg-users-current-badge" title="Usuario actual">
+                                Vos
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td>{rol?.nombre || rol?.tipo_rol || u.rol_nombre || u.tipo_rol || u.rol || "-"}</td>
+
+                        <td>{u.email_recuperacion || "-"}</td>
+
+                        <td>
+                          <span className={`cfg-users-pill ${activo ? "is-active" : "is-inactive"}`}>
+                            {activo ? "Activo" : "Inactivo"}
+                          </span>
+                        </td>
+
+                        <td className="cfg-users-rowActions">
+                          <button
+                            type="button"
+                            className="cfg-users-icon-btn"
+                            onClick={() => abrirEditar(u)}
+                            title="Editar usuario"
+                            aria-label="Editar usuario"
+                          >
+                            <FontAwesomeIcon icon={faPen} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="cfg-users-icon-btn"
+                            onClick={() => pedirCambioEstado(u)}
+                            disabled={actual}
+                            title={actual ? "No podés cambiar el estado del usuario actual" : activo ? "Dar de baja" : "Activar"}
+                            aria-label={activo ? "Dar de baja" : "Activar"}
+                          >
+                            <FontAwesomeIcon icon={activo ? faPowerOff : faRotateLeft} />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="cfg-users-icon-btn cfg-users-icon-btn--danger"
+                            onClick={() => pedirEliminar(u)}
+                            disabled={actual}
+                            title={actual ? "No podés eliminar el usuario actual" : "Eliminar usuario"}
+                            aria-label="Eliminar usuario"
+                          >
+                            <FontAwesomeIcon icon={faTrash} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* ── MODALES ── */}
       <ModalUsuario
         abierto={modalUsuarioAbierto}
         form={form}

@@ -1520,13 +1520,33 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
   useEffect(() => {
     if (!open) return;
+
     const h = (e) => {
       if (e.key !== "Escape") return;
+
+      // Si está abierto el modal superior de Nuevo Cheque,
+      // este modal de atrás NO debe cerrarse con Escape.
+      if (document.body.classList.contains("modal-nuevo-cheque-open")) {
+        return;
+      }
+
       if (openResumenFactura || addUI.open) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (typeof e.stopImmediatePropagation === "function") {
+        e.stopImmediatePropagation();
+      }
+
       onClose?.();
     };
+
     document.addEventListener("keydown", h, true);
-    return () => document.removeEventListener("keydown", h, true);
+
+    return () => {
+      document.removeEventListener("keydown", h, true);
+    };
   }, [open, onClose, openResumenFactura, addUI.open]);
 
   const rowsCalc = useMemo(

@@ -16,6 +16,44 @@ const TIPOS_CON_CIERRE_MANUAL = ["error", "advertencia"];
 // Evento global para cerrar cualquier toast anterior
 const TOAST_GLOBAL_EVENT = "toast:cerrar-anteriores";
 
+const EVENTOS_QUE_CIERRAN_TOAST_MANUAL = [
+  "keydown",
+  "change",
+  "submit",
+  "mousedown",
+  "touchstart",
+];
+
+// Elementos que SÍ cierran el toast.
+// No están input, textarea ni select para que al escribir/tocarlos no se cierre.
+const SELECTOR_INTERACCION_REAL = [
+  "button",
+  "a",
+  "label",
+  "[role='button']",
+  ".btn",
+  ".button",
+].join(", ");
+
+// Elementos que NO deben cerrar el toast.
+const SELECTOR_NO_CIERRA_TOAST = [
+  "input",
+  "textarea",
+  "select",
+  "[contenteditable='true']",
+  "[role='textbox']",
+  "[role='searchbox']",
+  "[role='combobox']",
+  "[role='listbox']",
+  "[role='option']",
+  "[role='menuitem']",
+  ".select",
+  ".selector",
+  ".react-select__control",
+  ".react-select__option",
+  ".react-select__menu",
+].join(", ");
+
 const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
   const [desapareciendo, setDesapareciendo] = useState(false);
 
@@ -107,6 +145,50 @@ const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tipo, mensaje, duracion, esManual]);
 
+  useEffect(() => {
+    if (!esManual) return;
+
+    const cerrarPorEventoGlobal = (event) => {
+      const target = event?.target;
+
+      // Si el evento ocurre dentro del propio toast, no lo cerramos acá.
+      // Así el botón X sigue cerrando con su propia animación.
+      if (target?.closest?.(".toast-container")) return;
+
+      // Si viene de inputs, textarea, select o selectores, NO cerramos el toast.
+      if (target?.closest?.(SELECTOR_NO_CIERRA_TOAST)) return;
+
+      const esEventoSubmit = event.type === "submit";
+
+      const esClickEnElementoInteractivo =
+        event.type === "mousedown" || event.type === "touchstart"
+          ? target?.closest?.(SELECTOR_INTERACCION_REAL)
+          : false;
+
+      const esTeclaDeAccion =
+        event.type === "keydown" &&
+        ["Enter", "Escape", "Tab"].includes(event.key);
+
+      const debeCerrar =
+        esEventoSubmit || esClickEnElementoInteractivo || esTeclaDeAccion;
+
+      if (!debeCerrar) return;
+
+      cerrarToast({ conAnimacion: true });
+    };
+
+    EVENTOS_QUE_CIERRAN_TOAST_MANUAL.forEach((evento) => {
+      document.addEventListener(evento, cerrarPorEventoGlobal, true);
+    });
+
+    return () => {
+      EVENTOS_QUE_CIERRAN_TOAST_MANUAL.forEach((evento) => {
+        document.removeEventListener(evento, cerrarPorEventoGlobal, true);
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esManual, tipo, mensaje]);
+
   const iconos = {
     exito: faCheckCircle,
     error: faTimesCircle,
@@ -130,7 +212,9 @@ const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
         desapareciendo ? "desaparecer" : ""
       }`}
       role={tipo === "error" || tipo === "advertencia" ? "alert" : "status"}
-      aria-live={tipo === "error" || tipo === "advertencia" ? "assertive" : "polite"}
+      aria-live={
+        tipo === "error" || tipo === "advertencia" ? "assertive" : "polite"
+      }
     >
       <FontAwesomeIcon
         icon={iconoSeleccionado}

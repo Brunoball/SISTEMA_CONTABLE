@@ -19,6 +19,7 @@ import {
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
 
 const NULL_OPTION = "";
+const NOMBRE_COMPROBANTE_GENERICO = "Comprobante adjunto";
 
 const IVA_OPTIONS = [
   { label: "0 %", value: 0 },
@@ -1563,12 +1564,10 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                                 </div>
 
                                 <div className="mi-uploadFile__meta">
-                                  <div className="mi-uploadFile__name" title={archivoAdjunto.name}>
-                                    {archivoAdjunto.name}
+                                  <div className="mi-uploadFile__name" title={NOMBRE_COMPROBANTE_GENERICO}>
+                                    {NOMBRE_COMPROBANTE_GENERICO}
                                   </div>
-                                  <div className="mi-uploadFile__size">
-                                    {Math.max(1, Math.round((archivoAdjunto.size || 0) / 1024))} KB
-                                  </div>
+
                                 </div>
 
                                 <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
@@ -1669,9 +1668,9 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
         open={openVerComp}
         url={compUrl}
         mime={archivoAdjunto?.type || ""}
-        fileName={archivoAdjunto?.name || ""}
+        fileName={archivoAdjunto ? NOMBRE_COMPROBANTE_GENERICO : ""}
         onClose={handleCloseVerComprobante}
-        title="Comprobante de compra"
+        title={NOMBRE_COMPROBANTE_GENERICO}
       />
     </>,
     document.body

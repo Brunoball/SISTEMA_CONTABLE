@@ -22,6 +22,7 @@ import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerCompro
 
 const NULL_OPTION = "";
 const ADD_OPTION = "__ADD__";
+const NOMBRE_COMPROBANTE_GENERICO = "Comprobante adjunto";
 
 const IVA_OPTIONS = [
   { label: "0 %", value: 0 },
@@ -665,22 +666,8 @@ function sanitizeDisplayName(name) {
   ) return "";
   return onlyName;
 }
-function getFriendlyComprobanteName(row, url) {
-  const candidates = [
-    row?.archivo_nombre, row?.nombre_archivo, row?.factura_nombre,
-    row?.comprobante_nombre, row?.archivo,
-  ];
-  for (const c of candidates) {
-    const clean = sanitizeDisplayName(c);
-    if (clean) return clean;
-  }
-  const ext =
-    guessExtensionFromValue(url) ||
-    guessExtensionFromValue(row?.archivo_nombre) ||
-    guessExtensionFromValue(row?.nombre_archivo) ||
-    guessExtensionFromValue(row?.factura_nombre) ||
-    ".pdf";
-  return `Comprobante actual${ext}`;
+function getFriendlyComprobanteName() {
+  return NOMBRE_COMPROBANTE_GENERICO;
 }
 
 /* =========================
@@ -1441,9 +1428,9 @@ export default function ModalEditarCompra({
   }, [ENDPOINT_UPLOAD_LINK]);
 
   const archivoMostrado = archivoNuevo
-    ? { tipo: "nuevo", nombre: archivoNuevo.name, size: archivoNuevo.size, file: archivoNuevo }
+    ? { tipo: "nuevo", nombre: NOMBRE_COMPROBANTE_GENERICO, size: archivoNuevo.size, file: archivoNuevo }
     : (!quitarArchivoActual && (archivoActualUrl || archivoActualId))
-      ? { tipo: "actual", nombre: archivoActualNombre || "Comprobante actual", url: archivoActualUrl }
+      ? { tipo: "actual", nombre: NOMBRE_COMPROBANTE_GENERICO, url: archivoActualUrl }
       : null;
 
   const obtenerUrlFirmadaComprobanteActual = useCallback(async () => {
@@ -2064,9 +2051,9 @@ export default function ModalEditarCompra({
         open={openVerComp}
         url={compUrl}
         mime={archivoNuevo?.type || ""}
-        fileName={archivoMostrado?.nombre || ""}
+        fileName={archivoMostrado ? NOMBRE_COMPROBANTE_GENERICO : ""}
         onClose={handleCloseVerComprobante}
-        title="Comprobante de compra"
+        title={NOMBRE_COMPROBANTE_GENERICO}
       />
     </>,
     document.body

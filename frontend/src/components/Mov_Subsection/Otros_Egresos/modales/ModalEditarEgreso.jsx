@@ -24,6 +24,8 @@ const IVA_OPTIONS = [
   { label: "21 %", value: 21 },
 ];
 
+const NOMBRE_COMPROBANTE_GENERICO = "Comprobante adjunto";
+
 /* ─── Pure helpers ─── */
 function todayISO() {
   const d = new Date();
@@ -319,24 +321,9 @@ async function parseJsonOrThrow(res) {
   }
 }
 
-// ─── FIX: extrae el nombre legible del comprobante desde archivo_path o archivo_url ───
-function resolveNombreComprobante(comprobanteActual) {
-  if (!comprobanteActual) return "Comprobante actual";
-
-  // Preferimos archivo_path porque es la ruta real en el servidor / R2
-  const pathRaw = safeText(comprobanteActual?.archivo_path ?? "");
-  if (pathRaw) {
-    // Quitar prefijo r2:// si lo tiene
-    const clean = pathRaw.replace(/^r2:\/\//, "");
-    const base = clean.split("/").pop();
-    if (base && !base.startsWith("api.php")) return base;
-  }
-
-  // Fallback: archivo_nombre si existe
-  const nombreRaw = safeText(comprobanteActual?.archivo_nombre ?? comprobanteActual?.nombre ?? "");
-  if (nombreRaw) return nombreRaw;
-
-  return "Comprobante actual";
+// Nombre visual genérico para no mostrar el nombre real del archivo al usuario.
+function resolveNombreComprobante() {
+  return NOMBRE_COMPROBANTE_GENERICO;
 }
 
 function fileAcceptText() {
@@ -515,7 +502,6 @@ export default function ModalEditarEgreso({
 
   const [saving, setSaving] = useState(false);
   const [loadingComprobante, setLoadingComprobante] = useState(false);
-  // ─── FIX: estado para saber si estamos obteniendo la URL firmada al abrir el viewer ───
   const [loadingViewer, setLoadingViewer] = useState(false);
 
   const clasificaciones = useMemo(() => normalizeClasificaciones(lists), [lists]);
@@ -533,7 +519,7 @@ export default function ModalEditarEgreso({
   const [archivoNuevo, setArchivoNuevo] = useState(null);
   const [marcarEliminarComprobante, setMarcarEliminarComprobante] = useState(false);
   const [openViewer, setOpenViewer] = useState(false);
-  const [viewerData, setViewerData] = useState({ url: "", mime: "", title: "Comprobante" });
+  const [viewerData, setViewerData] = useState({ url: "", mime: "", title: NOMBRE_COMPROBANTE_GENERICO });
 
   const closeBtnRef = useRef(null);
   const inputFileRef = useRef(null);
@@ -563,7 +549,7 @@ export default function ModalEditarEgreso({
     setMarcarEliminarComprobante(false);
     setComprobanteActual(null);
     setOpenViewer(false);
-    setViewerData({ url: "", mime: "", title: "Comprobante" });
+    setViewerData({ url: "", mime: "", title: NOMBRE_COMPROBANTE_GENERICO });
     setLoadingViewer(false);
     setTimeout(() => closeBtnRef.current?.focus(), 0);
   }, [open, initialData, clasificaciones]);
@@ -717,26 +703,19 @@ export default function ModalEditarEgreso({
       !archivoNuevo
   );
 
-  // ─── FIX: usar resolveNombreComprobante en lugar de tomar archivo_url directamente ───
   const nombreComprobanteVisible = useMemo(() => {
-    if (archivoNuevo) return archivoNuevo.name;
+    if (archivoNuevo) return NOMBRE_COMPROBANTE_GENERICO;
     if (marcarEliminarComprobante) return "";
-    return resolveNombreComprobante(comprobanteActual);
+    if (comprobanteActual) return resolveNombreComprobante(comprobanteActual);
+    return "";
   }, [archivoNuevo, marcarEliminarComprobante, comprobanteActual]);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // FIX PRINCIPAL: abrirViewer ahora hace fetch autenticado para obtener
-  // la URL firmada (igual que handleOpenComprobante en OtrosEgresos.jsx).
-  // Antes usaba getComprobanteDownloadUrl() que construía una URL directa al
-  // API sin headers de auth → el browser la cargaba sin el Bearer token → falla.
-  // ─────────────────────────────────────────────────────────────────────────────
   const abrirViewer = useCallback(async () => {
-    // Si hay un archivo nuevo seleccionado, lo mostramos desde blob (no necesita auth)
     if (archivoNuevo) {
       setViewerData({
         url: URL.createObjectURL(archivoNuevo),
         mime: archivoNuevo.type || "application/octet-stream",
-        title: `Comprobante - ${archivoNuevo.name}`,
+        title: NOMBRE_COMPROBANTE_GENERICO,
       });
       setOpenViewer(true);
       return;
@@ -751,7 +730,6 @@ export default function ModalEditarEgreso({
 
     setLoadingViewer(true);
     try {
-      // Hacemos fetch con headers de auth para obtener la URL firmada del backend
       const sp = new URLSearchParams();
       sp.set("action", "otros_egresos_comprobantes_descargar");
 
@@ -777,12 +755,10 @@ export default function ModalEditarEgreso({
         throw new Error("El backend no devolvió la URL del comprobante.");
       }
 
-      const nombreVisible = resolveNombreComprobante(comprobanteActual);
-
       setViewerData({
         url: signedUrl,
         mime: safeText(comprobanteActual?.archivo_mime) || "application/octet-stream",
-        title: `Comprobante del egreso - ${nombreVisible}`,
+        title: NOMBRE_COMPROBANTE_GENERICO,
       });
       setOpenViewer(true);
     } catch (e) {
@@ -802,7 +778,7 @@ export default function ModalEditarEgreso({
   const cerrarViewer = useCallback(() => {
     if (viewerData?.url?.startsWith("blob:")) URL.revokeObjectURL(viewerData.url);
     setOpenViewer(false);
-    setViewerData({ url: "", mime: "", title: "Comprobante" });
+    setViewerData({ url: "", mime: "", title: NOMBRE_COMPROBANTE_GENERICO });
   }, [viewerData]);
 
   const seleccionarArchivo = useCallback((e) => {
@@ -947,7 +923,6 @@ export default function ModalEditarEgreso({
   const totalIva = (form.items || []).reduce((a, it) => a + safeNumber(it.iva_monto), 0);
   const totalSubtotal = sumTotalItems(form.items) - totalIva;
 
-  // El botón del ojo debe estar deshabilitado si estamos cargando la URL firmada
   const viewerBtnDisabled = saving || loadingViewer;
 
   return createPortal(
@@ -1283,7 +1258,6 @@ export default function ModalEditarEgreso({
                                       </div>
                                     </div>
                                     <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
-                                      {/* ─── FIX: botón ojo llama a abrirViewer async ─── */}
                                       <button
                                         type="button"
                                         className="mi-uploadBar__btn mi-uploadBar__btn--ghost"
@@ -1315,8 +1289,8 @@ export default function ModalEditarEgreso({
                                       <FontAwesomeIcon icon={faFileInvoiceDollar} />
                                     </div>
                                     <div className="mi-uploadFile__meta">
-                                      <div className="mi-uploadFile__name" title={archivoNuevo.name}>
-                                        {archivoNuevo.name}
+                                      <div className="mi-uploadFile__name" title={NOMBRE_COMPROBANTE_GENERICO}>
+                                        {NOMBRE_COMPROBANTE_GENERICO}
                                       </div>
                                       <div className="mi-uploadFile__size">
                                         {Math.max(1, Math.round((archivoNuevo.size || 0) / 1024))} KB

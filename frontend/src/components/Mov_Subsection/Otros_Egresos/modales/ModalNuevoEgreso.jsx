@@ -26,6 +26,7 @@ import "./ModalNuevoEgreso_extra.css";
    CONSTANTES Y HELPERS  (idénticos a NuevaCompra)
 ───────────────────────────────────────── */
 const NULL_OPTION = "";
+const NOMBRE_COMPROBANTE_GENERICO = "Comprobante adjunto";
 
 const IVA_OPTIONS = [
   { label: "0 %", value: 0 },
@@ -461,15 +462,13 @@ function ChequesCarteraCards({ cheques, idsSeleccionados, onToggle, esEcheq = fa
             </div>
             <span className="nc-cheque-importe">{moneyARS(ch?.importe || 0)}</span>
 
-            <div className="nc-cheque-check-icon nc-cheque-check-icon--corner nc-cheque-check-icon--echeq nc-cheque-check-icon--cheque"
-            >
-                            {checked && (
+            <div className="nc-cheque-check-icon nc-cheque-check-icon--corner nc-cheque-check-icon--echeq nc-cheque-check-icon--cheque">
+              {checked && (
                 <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
                   <path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                            )}
-              </div>
-
+              )}
+            </div>
           </div>
         );
       })}
@@ -587,7 +586,7 @@ function MedioPagoRow({ row, mediosPagoList, totalEgreso, sumaMediosPago, onUpda
             }}
             onChange={(e) => {
               if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
-              const c = e.target.value.replace(/[^\d,\.\-]/g, "");
+              const c = e.target.value.replace(/[^\d,.\-]/g, "");
               onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
             }}
             onBlur={() => {
@@ -985,15 +984,14 @@ export default function ModalNuevoEgreso({
     [saving]
   );
 
-  // ⭐ FUNCIÓN PARA VALIDAR Y ACTUALIZAR LA FECHA ⭐
   const handleFechaChange = useCallback((e) => {
     const nuevaFecha = String(e.target.value || "").trim();
-    
+
     if (nuevaFecha && nuevaFecha > todayISO()) {
       showToast("advertencia", "No podés seleccionar una fecha posterior al día actual.", 3000);
       return;
     }
-    
+
     setFecha(nuevaFecha);
   }, [showToast]);
 
@@ -1026,12 +1024,11 @@ export default function ModalNuevoEgreso({
     const clas = Number(filters.id_clasificacion);
     if (!Number.isFinite(clas) || clas <= 0) return { ok: false, msg: "Debés indicar si el egreso es costo fijo o no." };
     if (!safeStr(fecha)) return { ok: false, msg: "Falta la fecha." };
-    
-    // ⭐ VALIDACIÓN DE FECHA FUTURA ⭐
+
     if (fecha > todayISO()) {
       return { ok: false, msg: "La fecha no puede ser posterior al día actual." };
     }
-    
+
     for (let i = 0; i < mediosFilas.length; i++) {
       const mp = mediosFilas[i];
       if (!mp.id_medio_pago || mp.id_medio_pago === NULL_OPTION)
@@ -1405,7 +1402,6 @@ export default function ModalNuevoEgreso({
                       <span>Datos del egreso</span>
                     </div>
                     <div className="nc-section-body">
-                      {/* ⭐ FECHA CON VALIDACIONES ⭐ */}
                       <div className="nc-field" onClick={handleOpenDate}>
                         <input
                           ref={fechaInputRef}
@@ -1470,10 +1466,9 @@ export default function ModalNuevoEgreso({
                                 </div>
 
                                 <div className="mi-uploadFile__meta">
-                                  <div className="mi-uploadFile__name" title={archivoAdjunto.name}>
-                                    {archivoAdjunto.name}
+                                  <div className="mi-uploadFile__name" title={NOMBRE_COMPROBANTE_GENERICO}>
+                                    {NOMBRE_COMPROBANTE_GENERICO}
                                   </div>
-                                  <div className="mi-uploadFile__size">{Math.max(1, Math.round((archivoAdjunto.size || 0) / 1024))} KB</div>
                                 </div>
 
                                 <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
@@ -1559,9 +1554,9 @@ export default function ModalNuevoEgreso({
         open={openVerComp}
         url={compUrl}
         mime={archivoAdjunto?.type || ""}
-        fileName={archivoAdjunto?.name || ""}
+        fileName={NOMBRE_COMPROBANTE_GENERICO}
         onClose={handleCloseVerComprobante}
-        title="Comprobante de egreso"
+        title={NOMBRE_COMPROBANTE_GENERICO}
       />
     </>,
     document.body

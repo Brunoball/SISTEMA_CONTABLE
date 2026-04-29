@@ -13,6 +13,7 @@ import "../../../Global/Global_css/roots.css";
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 const NULL_OPTION = "";
+const NOMBRE_COMPROBANTE_GENERICO = "Comprobante adjunto";
 const IVA_OPTIONS = [
   { label: "0 %", value: 0 },
   { label: "10,5 %", value: 10.5 },
@@ -634,7 +635,7 @@ export default function ModalNuevoIngreso({
   const [mediosFilas, setMediosFilas] = useState(() => [buildEmptyMedioPago()]);
   const [archivoAdjunto, setArchivoAdjunto] = useState(null);
   const [openViewer, setOpenViewer] = useState(false);
-  const [viewerData, setViewerData] = useState({ url: "", mime: "", title: "Comprobante" });
+  const [viewerData, setViewerData] = useState({ url: "", mime: "", title: NOMBRE_COMPROBANTE_GENERICO });
   const [openNuevaDescripcionModal, setOpenNuevaDescripcionModal] = useState(false);
   const [currentRowIdForNewDesc, setCurrentRowIdForNewDesc] = useState(null);
 
@@ -684,9 +685,22 @@ export default function ModalNuevoIngreso({
     if (!open) return;
     const h = (e) => {
       if (e.key !== "Escape" || saving) return;
+
+      // Si está abierto ModalNuevoCheque, este modal padre NO debe cerrarse.
+      // El Escape lo maneja únicamente el modal superior.
+      if (document.body.classList.contains("modal-nuevo-cheque-open")) {
+        return;
+      }
+
       if (openViewer || openNuevaDescripcionModal) return;
+
       e.preventDefault();
       e.stopPropagation();
+
+      if (typeof e.stopImmediatePropagation === "function") {
+        e.stopImmediatePropagation();
+      }
+
       onClose?.();
     };
     document.addEventListener("keydown", h, true);
@@ -704,7 +718,7 @@ export default function ModalNuevoIngreso({
       setMediosFilas([buildEmptyMedioPago()]);
       setArchivoAdjunto(null);
       setOpenViewer(false);
-      setViewerData({ url: "", mime: "", title: "Comprobante" });
+      setViewerData({ url: "", mime: "", title: NOMBRE_COMPROBANTE_GENERICO });
       setSaving(false);
       setTimeout(() => closeBtnRef.current?.focus(), 0);
     }
@@ -882,7 +896,7 @@ export default function ModalNuevoIngreso({
     setViewerData({
       url: URL.createObjectURL(archivoAdjunto),
       mime: archivoAdjunto.type || "application/octet-stream",
-      title: `Comprobante - ${archivoAdjunto.name}`,
+      title: NOMBRE_COMPROBANTE_GENERICO,
     });
     setOpenViewer(true);
   }, [archivoAdjunto]);
@@ -890,7 +904,7 @@ export default function ModalNuevoIngreso({
   const cerrarViewer = useCallback(() => {
     if (viewerData?.url?.startsWith("blob:")) URL.revokeObjectURL(viewerData.url);
     setOpenViewer(false);
-    setViewerData({ url: "", mime: "", title: "Comprobante" });
+    setViewerData({ url: "", mime: "", title: NOMBRE_COMPROBANTE_GENERICO });
   }, [viewerData]);
 
   // ⭐ FUNCIÓN DE VALIDACIÓN DE FECHA PARA EL onChange ⭐
@@ -1398,12 +1412,10 @@ export default function ModalNuevoIngreso({
                                   <FontAwesomeIcon icon={faFileInvoiceDollar} />
                                 </div>
                                 <div className="mi-uploadFile__meta">
-                                  <div className="mi-uploadFile__name" title={archivoAdjunto.name}>
-                                    {archivoAdjunto.name}
+                                  <div className="mi-uploadFile__name" title={NOMBRE_COMPROBANTE_GENERICO}>
+                                    {NOMBRE_COMPROBANTE_GENERICO}
                                   </div>
-                                  <div className="mi-uploadFile__size">
-                                    {Math.max(1, Math.round((archivoAdjunto.size || 0) / 1024))} KB
-                                  </div>
+
                                 </div>
                                 <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
                                   <button

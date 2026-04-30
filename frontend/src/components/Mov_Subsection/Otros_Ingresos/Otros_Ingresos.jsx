@@ -1368,7 +1368,7 @@ export default function OtrosIngresos() {
                             });
                           }
                         }}
-                        placeholder="Buscar por descripción, medio de pago..."
+                        placeholder="Buscar por descripción..."
                         disabled={loadingListsCtx || loadingAll}
                       />
 

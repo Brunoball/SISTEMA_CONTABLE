@@ -1381,7 +1381,7 @@ export default function OtrosEgresos() {
                             });
                           }
                         }}
-                        placeholder="Buscar por descripción, medio de pago..."
+                        placeholder="Buscar por descripción..."
                         disabled={loadingListsCtx || loadingAll}
                       />
 

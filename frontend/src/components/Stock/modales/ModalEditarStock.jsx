@@ -1480,6 +1480,8 @@ export default function ModalEditarProducto({
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+                {/* ── Nombre ── */}
                 <FloatingField label="Nombre del producto *" icon={faBoxOpen} error={errores.nombre}>
                   <input
                     name="nombre"
@@ -1493,6 +1495,7 @@ export default function ModalEditarProducto({
                   />
                 </FloatingField>
 
+                {/* ── SKU + Stock + Categoría (igual que en carga individual) ── */}
                 <div className="fl-row">
                   <FloatingField label="SKU / Código" icon={faBarcode}>
                     <input
@@ -1519,8 +1522,31 @@ export default function ModalEditarProducto({
                       disabled={guardando}
                     />
                   </FloatingField>
+
+                  <FloatingField label="Categoría" icon={faTag}>
+                    <select
+                      name="id_categoria_stock"
+                      value={form.id_categoria_stock}
+                      onChange={handleChange}
+                      onKeyDown={handleFieldEnter}
+                      className="cmi-input cmi-select"
+                      disabled={guardando || loadingCategorias}
+                    >
+                      <option value="">
+                        {loadingCategorias ? "Cargando categorías..." : "Sin categoría"}
+                      </option>
+                      <option value="__nueva_categoria__">+ Nueva categoría</option>
+
+                      {categorias.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </FloatingField>
                 </div>
 
+                {/* ── Precios principales ── */}
                 <div className="cmi-priceBlock">
                   <div className="cmi-priceBlock__title">
                     <FontAwesomeIcon icon={faMoneyBillTrendUp} /> Precios principales
@@ -1613,6 +1639,7 @@ export default function ModalEditarProducto({
                   </div>
                 </div>
 
+                {/* ── Tipos de precio adicionales ── */}
                 <div className="cmi-priceBlock">
                   <div className="cmi-priceBlock__title">
                     <FontAwesomeIcon icon={faLayerGroup} /> Tipos de precio adicionales
@@ -1693,26 +1720,7 @@ export default function ModalEditarProducto({
                   ))}
                 </div>
 
-                <FloatingField label="Categoría" icon={faTag}>
-                  <select
-                    name="id_categoria_stock"
-                    value={form.id_categoria_stock}
-                    onChange={handleChange}
-                    onKeyDown={handleFieldEnter}
-                    className="cmi-input cmi-select"
-                    disabled={guardando || loadingCategorias}
-                  >
-                    <option value="">{loadingCategorias ? "Cargando categorías..." : "Sin categoría"}</option>
-                    <option value="__nueva_categoria__">+ Nueva categoría</option>
-
-                    {categorias.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </FloatingField>
-
+                {/* ── Descripción ── */}
                 <FloatingField label="Descripción" icon={faAlignLeft}>
                   <textarea
                     name="descripcion"
@@ -1727,6 +1735,7 @@ export default function ModalEditarProducto({
                   />
                 </FloatingField>
 
+                {/* ── Imagen ── */}
                 <div className="cmi-uploadBox">
                   <div className="cmi-uploadBox__title">
                     <FontAwesomeIcon icon={faPaperclip} />
@@ -1896,10 +1905,12 @@ export default function ModalEditarProducto({
                     </div>
                   )}
                 </div>
+
               </div>
             )}
           </div>
 
+          {/* ── Footer ── */}
           <div className="cmi-footer">
             <button
               type="button"
@@ -1961,6 +1972,8 @@ export default function ModalEditarProducto({
     document.body
   );
 }
+
+/* ── Helpers ── */
 
 function normalizeCategoriaId(value) {
   if (value === null || value === undefined) return "";

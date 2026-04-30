@@ -1570,7 +1570,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
 
                                 </div>
 
-                                <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
+                                <div style={{ display: "flex", gap: 8, marginLeft: "auto"}}>
                                   <button
                                     type="button"
                                     className="mi-uploadBar__btn mi-uploadBar__btn--ghost"

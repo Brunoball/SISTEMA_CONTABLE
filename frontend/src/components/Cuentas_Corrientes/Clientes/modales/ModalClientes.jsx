@@ -14,8 +14,10 @@ import {
   faUser,
   faUserSlash,
   faUserCheck,
+  faMagnifyingGlass,
 } from "@fortawesome/free-solid-svg-icons";
 import ModalEliminar from "../../../Global/Modales/ModalEliminar";
+import "../../../Global/Global_css/Global_oscuro.css";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 
@@ -45,6 +47,14 @@ function toUpperValue(value) {
 
 function getClienteId(row) {
   return Number(row?.id_cliente ?? row?.id ?? 0);
+}
+
+function normalizeSearch(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 async function parseJsonOrThrow(res) {
@@ -110,6 +120,7 @@ export default function ModalClientes({
   const [saving, setSaving] = useState(false);
   const [accionandoId, setAccionandoId] = useState(null);
   const [clientes, setClientes] = useState([]);
+  const [busqueda, setBusqueda] = useState("");
   const [pestana, setPestana] = useState("activos");
   const [modo, setModo] = useState("crear");
   const [editandoId, setEditandoId] = useState(null);
@@ -125,7 +136,7 @@ export default function ModalClientes({
     loading: false,
   });
 
-const isBusy = loading || saving || modalAccion.loading || modalAccion.open;
+  const isBusy = loading || saving || modalAccion.loading || modalAccion.open;
 
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
@@ -159,28 +170,29 @@ const isBusy = loading || saving || modalAccion.loading || modalAccion.open;
     };
   }, [open]);
 
-useEffect(() => {
-  if (!open) return;
+  useEffect(() => {
+    if (!open) return;
 
-  const h = (e) => {
-    if (e.key !== "Escape") return;
+    const h = (e) => {
+      if (e.key !== "Escape") return;
 
-    // Si está abierto el modal de eliminar / alta / baja,
-    // este modal padre NO se tiene que cerrar.
-    if (modalAccion.open) return;
+      // Si está abierto el modal de eliminar / alta / baja,
+      // este modal padre NO se tiene que cerrar.
+      if (modalAccion.open) return;
 
-    if (!loading && !saving) {
-      onClose?.();
-    }
-  };
+      if (!loading && !saving) {
+        onClose?.();
+      }
+    };
 
-  document.addEventListener("keydown", h, true);
-  return () => document.removeEventListener("keydown", h, true);
-}, [open, onClose, loading, saving, modalAccion.open]);
+    document.addEventListener("keydown", h, true);
+    return () => document.removeEventListener("keydown", h, true);
+  }, [open, onClose, loading, saving, modalAccion.open]);
 
   useEffect(() => {
     if (open) {
       setTimeout(() => closeBtnRef.current?.focus(), 0);
+      setBusqueda("");
     }
   }, [open]);
 
@@ -226,6 +238,19 @@ useEffect(() => {
       })
     );
   }, [clientes]);
+
+  const clientesFiltrados = useMemo(() => {
+    const needle = normalizeSearch(busqueda);
+
+    if (!needle) return clientesOrdenados;
+
+    return clientesOrdenados.filter((row) => {
+      const nombre = normalizeSearch(row?.nombre);
+      const id = String(getClienteId(row));
+
+      return nombre.includes(needle) || id.includes(needle);
+    });
+  }, [clientesOrdenados, busqueda]);
 
   const iniciarEdicion = (row) => {
     setModo("editar");
@@ -354,7 +379,6 @@ useEffect(() => {
       });
     } catch (err) {
       onToast?.("error", err?.message || "No se pudo completar la acción.");
-
     } finally {
       setAccionandoId(null);
       setModalAccion((prev) => ({ ...prev, loading: false }));
@@ -562,11 +586,47 @@ useEffect(() => {
                       Listado de clientes
                     </div>
                     <div style={{ fontSize: 12, color: "var(--nv-muted)" }}>
-                      Total: <b>{clientesOrdenados.length}</b>
+                      Total: <b>{clientesFiltrados.length}</b>
+                      {busqueda.trim() && (
+                        <>
+                          {" "}
+                          / {clientesOrdenados.length}
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
+              <div className="cc-filter cc-filter--search" id="vents-comppr-wits">
+                <div className="cc-floatingField cc-floatingField--search is-active">
+                  <div className="cc-searchInput">
+                    <div className="cc-searchInput__fieldWrap cc-field">
+                      <input
+                        className="cc-input cc-input--floating"
+                        value={busqueda}
+                        onChange={(e) => setBusqueda(e.target.value)}
+                        placeholder="Buscar por cliente..."
+                        disabled={loading || saving || modalAccion.loading}
+                      />
 
+                      <span className="cc-floatingLabel">
+                        <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                      </span>
+
+                      {busqueda.trim() !== "" && !loading && (
+                        <button
+                          type="button"
+                          className="cc-clearSearch cc-clearSearch--inside"
+                          onClick={() => setBusqueda("")}
+                          disabled={saving || modalAccion.loading}
+                          title="Limpiar búsqueda"
+                        >
+                          <FontAwesomeIcon icon={faXmark} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
                     type="button"
@@ -613,18 +673,20 @@ useEffect(() => {
                       <FontAwesomeIcon icon={faArrowRotateRight} spin />
                       <span>Cargando clientes...</span>
                     </div>
-                  ) : clientesOrdenados.length === 0 ? (
+                  ) : clientesFiltrados.length === 0 ? (
                     <div className="cc-empty-state">
                       <FontAwesomeIcon icon={faUsers} />
                       <span>
-                        {pestana === "activos"
+                        {busqueda.trim()
+                          ? `No se encontraron clientes para "${busqueda}".`
+                          : pestana === "activos"
                           ? "No hay clientes activos."
                           : "No hay clientes inactivos."}
                       </span>
                     </div>
                   ) : (
                     <div className="cc-grid-rows">
-                      {clientesOrdenados.map((row) => {
+                      {clientesFiltrados.map((row) => {
                         const activo = Number(row?.activo ?? 1) === 1;
                         const bloqueado =
                           accionandoId === getClienteId(row) ||

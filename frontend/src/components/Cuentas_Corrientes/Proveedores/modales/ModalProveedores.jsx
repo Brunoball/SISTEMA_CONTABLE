@@ -14,8 +14,10 @@ import {
   faBuilding,
   faUserSlash,
   faUserCheck,
+  faMagnifyingGlass,
 } from "@fortawesome/free-solid-svg-icons";
 import ModalEliminar from "../../../Global/Modales/ModalEliminar";
+import "../../../Global/Global_css/Global_oscuro.css";
 
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
 
@@ -51,6 +53,14 @@ function getProveedorId(row) {
       row?.id ??
       0
   );
+}
+
+function normalizeSearch(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 async function parseJsonOrThrow(res) {
@@ -116,6 +126,7 @@ export default function ModalProveedores({
   const [saving, setSaving] = useState(false);
   const [accionandoId, setAccionandoId] = useState(null);
   const [proveedores, setProveedores] = useState([]);
+  const [busqueda, setBusqueda] = useState("");
   const [pestana, setPestana] = useState("activos");
   const [modo, setModo] = useState("crear");
   const [editandoId, setEditandoId] = useState(null);
@@ -186,6 +197,7 @@ useEffect(() => {
   useEffect(() => {
     if (open) {
       setTimeout(() => closeBtnRef.current?.focus(), 0);
+      setBusqueda("");
     }
   }, [open]);
 
@@ -231,6 +243,19 @@ useEffect(() => {
       })
     );
   }, [proveedores]);
+
+  const proveedoresFiltrados = useMemo(() => {
+    const needle = normalizeSearch(busqueda);
+
+    if (!needle) return proveedoresOrdenados;
+
+    return proveedoresOrdenados.filter((row) => {
+      const nombre = normalizeSearch(row?.nombre);
+      const id = String(getProveedorId(row));
+
+      return nombre.includes(needle) || id.includes(needle);
+    });
+  }, [proveedoresOrdenados, busqueda]);
 
   const iniciarEdicion = (row) => {
     setModo("editar");
@@ -571,7 +596,45 @@ useEffect(() => {
                       Listado de proveedores
                     </div>
                     <div style={{ fontSize: 12, color: "var(--nv-muted)" }}>
-                      Total: <b>{proveedoresOrdenados.length}</b>
+                      Total: <b>{proveedoresFiltrados.length}</b>
+                      {busqueda.trim() && (
+                        <>
+                          {" "}
+                          / {proveedoresOrdenados.length}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="cc-filter cc-filter--search" id="vents-comppr-wits">
+                  <div className="cc-floatingField cc-floatingField--search is-active">
+                    <div className="cc-searchInput">
+                      <div className="cc-searchInput__fieldWrap cc-field">
+                        <input
+                          className="cc-input cc-input--floating"
+                          value={busqueda}
+                          onChange={(e) => setBusqueda(e.target.value)}
+                          placeholder="Buscar por proveedor..."
+                          disabled={loading || saving || modalAccion.loading}
+                        />
+
+                        <span className="cc-floatingLabel">
+                          <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                        </span>
+
+                        {busqueda.trim() !== "" && !loading && (
+                          <button
+                            type="button"
+                            className="cc-clearSearch cc-clearSearch--inside"
+                            onClick={() => setBusqueda("")}
+                            disabled={saving || modalAccion.loading}
+                            title="Limpiar búsqueda"
+                          >
+                            <FontAwesomeIcon icon={faXmark} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -622,18 +685,20 @@ useEffect(() => {
                       <FontAwesomeIcon icon={faArrowRotateRight} spin />
                       <span>Cargando proveedores...</span>
                     </div>
-                  ) : proveedoresOrdenados.length === 0 ? (
+                  ) : proveedoresFiltrados.length === 0 ? (
                     <div className="cc-empty-state">
                       <FontAwesomeIcon icon={faTruckField} />
                       <span>
-                        {pestana === "activos"
+                        {busqueda.trim()
+                          ? `No se encontraron proveedores para "${busqueda}".`
+                          : pestana === "activos"
                           ? "No hay proveedores activos."
                           : "No hay proveedores inactivos."}
                       </span>
                     </div>
                   ) : (
                     <div className="cc-grid-rows">
-                      {proveedoresOrdenados.map((row) => {
+                      {proveedoresFiltrados.map((row) => {
                         const activo = Number(row?.activo ?? 1) === 1;
                         const bloqueado =
                           accionandoId === getProveedorId(row) ||

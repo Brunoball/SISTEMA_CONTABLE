@@ -17,7 +17,10 @@ function normalizeRol(value, idRol = null) {
   const id = Number(idRol);
   const v = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
 
-  if (id === 1 || ["1", "admin", "administrator", "administrador", "superadmin"].includes(v)) {
+  if (
+    id === 1 ||
+    ["1", "admin", "administrator", "administrador", "superadmin"].includes(v)
+  ) {
     return "admin";
   }
 
@@ -32,21 +35,10 @@ function normalizePlanNivel(value) {
   return 3;
 }
 
-function isConnectionError(err) {
-  const msg = String(err?.message || err || "").toLowerCase();
-  return (
-    msg.includes("failed to fetch") ||
-    msg.includes("networkerror") ||
-    msg.includes("network error") ||
-    msg.includes("econnrefused") ||
-    msg.includes("connection refused") ||
-    msg.includes("err_connection_refused")
-  );
-}
-
 function withTimeout(ms) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);
+
   return {
     controller,
     clear: () => clearTimeout(id),
@@ -77,20 +69,10 @@ const Inicio = () => {
     setToast({ tipo, mensaje, duracion });
   };
 
-  const LOGIN_ENDPOINTS = useMemo(() => {
-    const primary = `${BASE_URL}/api.php?action=inicio`;
-    const fallback = `http://127.0.0.1:3001/routes/api.php?action=inicio`;
-
-    const unique = [];
-    for (const u of [primary, fallback]) {
-      if (!unique.includes(u)) unique.push(u);
-    }
-    return unique;
+  const LOGIN_ENDPOINT = useMemo(() => {
+    return `${BASE_URL}/api.php?action=inicio`;
   }, []);
 
-  /* =========================
-     Remember me
-  ========================= */
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.rememberFlag) === "1";
     if (!saved) return;
@@ -129,16 +111,16 @@ const Inicio = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nombre, contrasena, remember]);
 
-  /* =========================
-     Login
-  ========================= */
   const postLogin = async (url, payload) => {
-    const { controller, clear } = withTimeout(8000);
+    const { controller, clear } = withTimeout(12000);
 
     try {
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
@@ -172,94 +154,74 @@ const Inicio = () => {
     setCargando(true);
 
     try {
-      let lastError = null;
+      const r = await postLogin(LOGIN_ENDPOINT, {
+        nombre: user,
+        contrasena: pass,
+      });
 
-      for (let i = 0; i < LOGIN_ENDPOINTS.length; i++) {
-        const url = LOGIN_ENDPOINTS[i];
-
-        try {
-          const r = await postLogin(url, {
-            nombre: user,
-            contrasena: pass,
-          });
-
-          if (r.status === 401 || r.status === 403) {
-            mostrarToast("error", r.data?.mensaje || "Usuario o contraseña incorrectos");
-            return;
-          }
-
-          if (!r.ok) {
-            mostrarToast(
-              "error",
-              r.data?.mensaje ||
-                `No se pudo iniciar sesión. Error HTTP ${r.status}.`
-            );
-            return;
-          }
-
-          const data = r.data;
-
-          if (!data || !data.exito) {
-            mostrarToast("error", data?.mensaje || "Usuario o contraseña incorrectos");
-            return;
-          }
-
-          const sessionKey = String(data.session_key || "").trim();
-
-          if (!sessionKey) {
-            mostrarToast("error", "Login correcto pero falta session_key. Revisá inicio.php.");
-            return;
-          }
-
-          localStorage.setItem("session_key", sessionKey);
-
-          const usuarioResp = data.usuario || {};
-          const planNivel = normalizePlanNivel(
-            usuarioResp.plan_nivel ?? usuarioResp.planNivel ?? data.plan_nivel ?? 1
-          );
-
-          const usuarioFinal = {
-            ...usuarioResp,
-            id_rol: Number(usuarioResp.id_rol ?? data.id_rol ?? 2),
-            tipo_rol: usuarioResp.tipo_rol ?? data.tipo_rol ?? "empleado_basico",
-            rol: normalizeRol(usuarioResp.rol ?? usuarioResp.tipo_rol ?? data.rol ?? data.tipo_rol, usuarioResp.id_rol ?? data.id_rol),
-            plan_nivel: planNivel,
-            nombre:
-              usuarioResp.nombre ??
-              usuarioResp.Nombre_Completo ??
-              usuarioResp.user ??
-              user,
-          };
-
-          localStorage.setItem("usuario", JSON.stringify(usuarioFinal));
-          persistRemember(user, pass, remember);
-
-          navigate("/panel");
-          return;
-        } catch (err) {
-          if (isConnectionError(err) && i < LOGIN_ENDPOINTS.length - 1) {
-            lastError = err;
-            continue;
-          }
-
-          mostrarToast(
-            "error",
-            err?.name === "AbortError"
-              ? "Tiempo de espera agotado conectando al servidor."
-              : "No se pudo iniciar sesión. Verificá que el backend esté corriendo en http://127.0.0.1:3001."
-          );
-          return;
-        }
+      if (r.status === 401 || r.status === 403) {
+        mostrarToast("error", r.data?.mensaje || "Usuario o contraseña incorrectos");
+        return;
       }
 
-      if (lastError) {
+      if (!r.ok) {
         mostrarToast(
           "error",
-          "No se pudo conectar al backend (puerto 3001). Verificá que esté levantado con: php -S 127.0.0.1:3001 -t ."
+          r.data?.mensaje || `No se pudo iniciar sesión. Error HTTP ${r.status}.`
         );
-      } else {
-        mostrarToast("error", "No se pudo iniciar sesión. Intente nuevamente.");
+        return;
       }
+
+      const data = r.data;
+
+      if (!data || !data.exito) {
+        mostrarToast("error", data?.mensaje || "Usuario o contraseña incorrectos");
+        return;
+      }
+
+      const sessionKey = String(data.session_key || "").trim();
+
+      if (!sessionKey) {
+        mostrarToast("error", "Login correcto pero falta session_key. Revisá inicio.php.");
+        return;
+      }
+
+      localStorage.setItem("session_key", sessionKey);
+
+      const usuarioResp = data.usuario || {};
+      const planNivel = normalizePlanNivel(
+        usuarioResp.plan_nivel ?? usuarioResp.planNivel ?? data.plan_nivel ?? 1
+      );
+
+      const usuarioFinal = {
+        ...usuarioResp,
+        id_rol: Number(usuarioResp.id_rol ?? data.id_rol ?? 2),
+        tipo_rol: usuarioResp.tipo_rol ?? data.tipo_rol ?? "empleado_basico",
+        rol: normalizeRol(
+          usuarioResp.rol ?? usuarioResp.tipo_rol ?? data.rol ?? data.tipo_rol,
+          usuarioResp.id_rol ?? data.id_rol
+        ),
+        plan_nivel: planNivel,
+        nombre:
+          usuarioResp.nombre ??
+          usuarioResp.Nombre_Completo ??
+          usuarioResp.user ??
+          user,
+      };
+
+      localStorage.setItem("usuario", JSON.stringify(usuarioFinal));
+      persistRemember(user, pass, remember);
+
+      navigate("/panel");
+    } catch (err) {
+      console.error("Error login Balto:", err);
+
+      mostrarToast(
+        "error",
+        err?.name === "AbortError"
+          ? "Tiempo de espera agotado conectando al servidor."
+          : "No se pudo conectar al servidor. Verificá tu conexión o intentá nuevamente."
+      );
     } finally {
       setCargando(false);
     }
@@ -338,6 +300,7 @@ const Inicio = () => {
               onChange={(e) => {
                 const checked = e.target.checked;
                 setRemember(checked);
+
                 if (!checked) {
                   persistRemember("", "", false);
                 }

@@ -1015,27 +1015,19 @@ const Principal = () => {
     return found?.label || "Dashboard";
   }, [location.pathname, navItems]);
 
-  const closeAllSubs = useCallback(() => {
-    setOpenMovSub(false);
-    setOpenCCSub(false);
-    setOpenChequesSub(false);
-    setOpenStockSub(false);
-  }, []);
-
-  const handleNavigate = useCallback(
-    (ruta) => {
-      closeAllSubs();
-      navigate(ruta);
-      setDrawerOpen(false);
-    },
-    [navigate, closeAllSubs]
-  );
+const handleNavigate = useCallback(
+  (ruta) => {
+    closeAllSubs();
+    navigate(ruta);
+    setDrawerOpen(false);
+  },
+  [navigate, closeAllSubs]
+);
 
   const handleLogoClick = useCallback(() => {
-    closeAllSubs();
     navigate("/panel/dashboard");
     setDrawerOpen(false);
-  }, [navigate, closeAllSubs]);
+  }, [navigate]);
 
   const confirmarCierreSesion = useCallback(async () => {
     await doLogout({ silent: false });
@@ -1108,6 +1100,13 @@ const Principal = () => {
 
     return "";
   }, [tenantLogoIconoLoaded, tenantLogoIconoSrc]);
+
+  const closeAllSubs = useCallback(() => {
+    setOpenMovSub(false);
+    setOpenCCSub(false);
+    setOpenChequesSub(false);
+    setOpenStockSub(false);
+  }, []);
 
   const toggleSubmenu = useCallback(
     (itemKey, isCurrentlyOpen) => {
@@ -1331,31 +1330,27 @@ const Principal = () => {
                 }`}
                 onMouseEnter={() => prefetchRoute(item.ruta)}
               >
-<button
-  type="button"
-  className={`pp-nav__item ${isActive ? "is-active" : ""}`}
-  onDoubleClick={() => {
-    if (!hasSub) return;
-    handleNavigate(DEFAULT_SUBROUTES[item.key] || item.ruta);
-  }}
-  onClick={() => {
-    prefetchRoute(item.ruta);
+                <button
+                  type="button"
+                  className={`pp-nav__item ${isActive ? "is-active" : ""}`}
+                  onClick={() => {
+                    prefetchRoute(item.ruta);
 
-    if (hasSub) {
-      if (isOpen) {
-        closeAllSubs();
-        return;
-      }
+                    if (hasSub) {
+                      if (isOpen) {
+                        handleNavigate(DEFAULT_SUBROUTES[item.key] || item.ruta);
+                        return;
+                      }
 
-      toggleSubmenu(item.key, isOpen);
-      return;
-    }
+                      toggleSubmenu(item.key, isOpen);
+                      return;
+                    }
 
-    handleNavigate(item.ruta);
-  }}
-  aria-expanded={hasSub ? isOpen : undefined}
-  aria-haspopup={hasSub ? "menu" : undefined}
->
+                    handleNavigate(item.ruta);
+                  }}
+                  aria-expanded={hasSub ? isOpen : undefined}
+                  aria-haspopup={hasSub ? "menu" : undefined}
+                >
                   <span className="pp-nav__icon">
                     <FontAwesomeIcon icon={item.icon} />
                   </span>
@@ -1375,11 +1370,11 @@ const Principal = () => {
                             : ""
                         }`}
                         onMouseEnter={() => prefetchRoute(sub.ruta)}
-                        onClick={() => {
-
-                          navigate(sub.ruta);
-                          setDrawerOpen(false);
-                        }}
+onClick={() => {
+  closeAllSubs();
+  navigate(sub.ruta);
+  setDrawerOpen(false);
+}}
                       >
                         <span className="pp-navSub__dot" />
                         <span className="pp-navSub__label">{sub.label}</span>

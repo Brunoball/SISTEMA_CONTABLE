@@ -38,7 +38,7 @@ export default function GlobalAutocomplete({
 
   const [open,        setOpen]        = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [listPos,     setListPos]     = useState({ top: 0, left: 0, width: 200 });
+const [listPos, setListPos] = useState(null);
 
   const normalizedValue = normalizeText(value);
 
@@ -56,16 +56,24 @@ export default function GlobalAutocomplete({
     activeIndex >= filteredOptions.length ? 0 : activeIndex;
 
   /* Recalcular posición del dropdown en cada apertura y en scroll/resize */
-  const updatePos = useCallback(() => {
-    const el = inputRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    setListPos({
-      top:   rect.bottom + window.scrollY + 4,
-      left:  rect.left   + window.scrollX,
-      width: rect.width,
-    });
-  }, []);
+const getCurrentPos = useCallback(() => {
+  const el = inputRef.current;
+  if (!el) return null;
+
+  const rect = el.getBoundingClientRect();
+
+  return {
+    top: rect.bottom + window.scrollY + 4,
+    left: rect.left + window.scrollX,
+    width: rect.width,
+  };
+}, []);
+
+const updatePos = useCallback(() => {
+  const nextPos = getCurrentPos();
+  if (!nextPos) return;
+  setListPos(nextPos);
+}, [getCurrentPos]);
 
   useEffect(() => {
     if (!open) return;
@@ -113,13 +121,17 @@ export default function GlobalAutocomplete({
 
   const closeList = () => { setOpen(false); setActiveIndex(0); };
 
-  const openList = () => {
-    if (disabled) return;
-    if (showAllOnFocus || normalizedValue) {
-      updatePos();
-      setOpen(true);
-    }
-  };
+const openList = () => {
+  if (disabled) return;
+  if (!(showAllOnFocus || normalizedValue)) return;
+
+  const nextPos = getCurrentPos();
+
+  if (!nextPos) return;
+
+  setListPos(nextPos);
+  setOpen(true);
+};
 
   const selectOption = (opt) => {
     onSelect?.(opt);
@@ -160,7 +172,7 @@ export default function GlobalAutocomplete({
   };
 
   /* ── Portal dropdown ── */
-  const dropdown = open ? createPortal(
+const dropdown = open && listPos ? createPortal(
     <ul
       id="ga-portal-list"
       className={["ga-list", listClassName].filter(Boolean).join(" ")}
@@ -219,11 +231,17 @@ export default function GlobalAutocomplete({
         onFocus={handleFocus}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
-        onChange={(e) => {
-          onChange?.(e.target.value);
-          setOpen(true);
-          setActiveIndex(0);
-        }}
+onChange={(e) => {
+  onChange?.(e.target.value);
+
+  const nextPos = getCurrentPos();
+  if (nextPos) {
+    setListPos(nextPos);
+    setOpen(true);
+  }
+
+  setActiveIndex(0);
+}}
       />
 
       {label ? (

@@ -299,12 +299,30 @@ export default function ModalFacturaBaltoResumen({
     setTimeout(() => firstRef.current?.focus?.(), 0);
   }, [open, data]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => e.key === "Escape" && onClose?.();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+useEffect(() => {
+  if (!open) return;
+
+  const onKey = (e) => {
+    if (e.key !== "Escape") return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (typeof e.stopImmediatePropagation === "function") {
+      e.stopImmediatePropagation();
+    }
+
+    if (!loading) {
+      onClose?.();
+    }
+  };
+
+  document.addEventListener("keydown", onKey, true);
+
+  return () => {
+    document.removeEventListener("keydown", onKey, true);
+  };
+}, [open, loading, onClose]);
 
   useEffect(() => {
     let revokeUrl = "";

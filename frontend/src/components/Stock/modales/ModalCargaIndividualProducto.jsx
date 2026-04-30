@@ -187,7 +187,6 @@ function withCleanPriceEvent(event, cleanValue) {
   };
 }
 
-
 function formatMoneyEnter(value) {
   if (value === null || value === undefined || value === "") return "";
 
@@ -1232,27 +1231,35 @@ export default function ModalCargaIndividualProducto({
                   inputMode="numeric"
                 />
               </FloatingField>
-            </div>
 
-            <FloatingField label="Categoría" icon={faTag}>
-              <select
-                name="id_categoria_stock"
-                value={normalizeIdValue(form.id_categoria_stock)}
-                onChange={handleChange}
-                onKeyDown={handleFieldEnter}
-                className="cmi-input cmi-select"
-                disabled={loadingCategorias}
-              >
-                <option value="">{loadingCategorias ? "Cargando categorías..." : "Sin categoría"}</option>
-                <option value="__nueva_categoria__">+ Nueva categoría</option>
-
-                {categoriasSafe.map((cat) => (
-                  <option key={cat.id ?? cat.id_stock_categoria} value={cat.id ?? cat.id_stock_categoria}>
-                    {normalizeOptionLabel(cat.nombre, `Categoría ${cat.id ?? cat.id_stock_categoria ?? ""}`)}
+              <FloatingField label="Categoría" icon={faTag}>
+                <select
+                  name="id_categoria_stock"
+                  value={normalizeIdValue(form.id_categoria_stock)}
+                  onChange={handleChange}
+                  onKeyDown={handleFieldEnter}
+                  className="cmi-input cmi-select"
+                  disabled={loadingCategorias}
+                >
+                  <option value="">
+                    {loadingCategorias ? "Cargando categorías..." : "Sin categoría"}
                   </option>
-                ))}
-              </select>
-            </FloatingField>
+                  <option value="__nueva_categoria__">+ Nueva categoría</option>
+
+                  {categoriasSafe.map((cat) => (
+                    <option
+                      key={cat.id ?? cat.id_stock_categoria}
+                      value={cat.id ?? cat.id_stock_categoria}
+                    >
+                      {normalizeOptionLabel(
+                        cat.nombre,
+                        `Categoría ${cat.id ?? cat.id_stock_categoria ?? ""}`
+                      )}
+                    </option>
+                  ))}
+                </select>
+              </FloatingField>
+            </div>
           </section>
 
           <div className="cmi-priceBlock">
@@ -1293,7 +1300,7 @@ export default function ModalCargaIndividualProducto({
             />
 
             <PriceGroupSection title="Precio de venta">
-              <div className="fl-row" style={{ gridTemplateColumns: "1.4fr 1fr 1fr" }}>
+              <div className="fl-row">
                 <FloatingField label="Precio de venta *" error={errores.precio}>
                   <PriceInput
                     name="precio"
@@ -1353,7 +1360,7 @@ export default function ModalCargaIndividualProducto({
             </PriceGroupSection>
 
             <PriceGroupSection title="Precio promocional">
-              <div className="fl-row" style={{ gridTemplateColumns: "1.4fr 1fr 1fr" }}>
+              <div className="fl-row">
                 <FloatingField label="Precio promocional" error={errores.precio_promo}>
                   <PriceInput
                     name="precio_promo"
@@ -1434,7 +1441,10 @@ export default function ModalCargaIndividualProducto({
                 <option value="__nuevo_tipo__">+ Nuevo tipo de precio</option>
 
                 {tiposPrecioSafe.map((tipo) => (
-                  <option key={tipo.id ?? tipo.id_tipo_precio_stock} value={tipo.id ?? tipo.id_tipo_precio_stock}>
+                  <option
+                    key={tipo.id ?? tipo.id_tipo_precio_stock}
+                    value={tipo.id ?? tipo.id_tipo_precio_stock}
+                  >
                     {normalizeOptionLabel(tipo.nombre, `Tipo ${tipo.id ?? tipo.id_tipo_precio_stock ?? ""}`)}
                   </option>
                 ))}
@@ -1466,7 +1476,6 @@ export default function ModalCargaIndividualProducto({
                     Quitar
                   </button>
                 </div>
-
 
                 <div className="fl-row" style={{ gridTemplateColumns: "1.4fr 1fr 1fr" }}>
                   <FloatingField label="Precio">
@@ -1613,7 +1622,6 @@ export default function ModalCargaIndividualProducto({
                 </div>
               </div>
             )}
-
           </div>
         </div>
       </div>

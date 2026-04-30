@@ -466,7 +466,7 @@ const Flujo_Echeqs = () => {
         key: "tipo_cheque",
         label: "TIPO",
         align: "center",
-        fr: 0.8,
+        fr: 0.6,
         render: () => "ECHEQ",
       },
       {
@@ -509,7 +509,7 @@ const Flujo_Echeqs = () => {
         key: "acciones",
         label: "ACCIONES",
         align: "center",
-        fr: 0.7,
+        fr: 0.6,
         render: () => null,
       },
     ],

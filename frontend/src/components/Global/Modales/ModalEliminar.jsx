@@ -6,8 +6,12 @@ import "./ModalEliminar.css";
 function moneyARS(v) {
   const n = Number(v || 0);
   if (!Number.isFinite(n)) return String(v ?? "—");
+
   try {
-    return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
+    return n.toLocaleString("es-AR", {
+      style: "currency",
+      currency: "ARS",
+    });
   } catch {
     return `$${n.toFixed(2)}`;
   }
@@ -31,8 +35,11 @@ function getMontoTotal(row) {
 
   for (const c of candidates) {
     if (c === null || c === undefined || c === "") continue;
+
     const n = Number(c);
+
     if (Number.isFinite(n)) return n;
+
     return c;
   }
 
@@ -68,7 +75,9 @@ export default function ModalEliminar({
   const cancelRef = useRef(null);
 
   const showToast = useCallback(
-    (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),
+    (tipo, mensaje, duracion = 2800) => {
+      onToast?.(tipo, mensaje, duracion);
+    },
     [onToast]
   );
 
@@ -79,18 +88,19 @@ export default function ModalEliminar({
 
   const handleConfirm = useCallback(async () => {
     if (loading || confirmDisabled) return;
-    if (!onConfirm) return;
+    if (typeof onConfirm !== "function") return;
 
     showToast("cargando", loadingMessage, 12000);
 
     try {
       await onConfirm();
 
-      // ✅ Reemplaza el toast de carga por el de éxito
+      // Reemplaza el toast de carga por el de éxito
       showToast("exito", successMessage, 2800);
     } catch (e) {
+      // Importante: NO hacemos throw.
+      // Si relanzás el error, puede quedar una promesa rota y el modal después no vuelve bien.
       showToast("error", e?.message || errorMessage, 4200);
-      throw e;
     }
   }, [
     loading,
@@ -104,27 +114,48 @@ export default function ModalEliminar({
 
   const handleSecondaryAction = useCallback(async () => {
     if (loading || secondaryActionDisabled) return;
-    await onSecondaryAction?.();
-  }, [loading, secondaryActionDisabled, onSecondaryAction]);
+    if (typeof onSecondaryAction !== "function") return;
+
+    try {
+      await onSecondaryAction();
+    } catch (e) {
+      showToast("error", e?.message || "No se pudo completar la acción.", 4200);
+    }
+  }, [loading, secondaryActionDisabled, onSecondaryAction, showToast]);
 
   useEffect(() => {
     if (!open) return;
 
-    const timer = setTimeout(() => cancelRef.current?.focus(), 0);
+    const timer = setTimeout(() => {
+      cancelRef.current?.focus();
+    }, 0);
 
     const onKeyDown = (e) => {
-      if (e.key === "Escape") cerrar();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation?.();
+
+        cerrar();
+        return;
+      }
 
       if (e.key === "Enter" && !loading && !confirmDisabled && onConfirm) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation?.();
+
         handleConfirm();
       }
     };
 
-    document.addEventListener("keydown", onKeyDown);
+    // true = fase captura.
+    // Así este modal toma el Escape antes que los modales de atrás.
+    document.addEventListener("keydown", onKeyDown, true);
 
     return () => {
       clearTimeout(timer);
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keydown", onKeyDown, true);
     };
   }, [open, cerrar, loading, confirmDisabled, onConfirm, handleConfirm]);
 
@@ -136,6 +167,7 @@ export default function ModalEliminar({
         row?.tipo_venta ??
         row?.pago_tipo_venta ??
         row?.tipo ??
+        row?.estado ??
         ""
     );
 
@@ -144,6 +176,7 @@ export default function ModalEliminar({
         row?.concepto ??
         row?.descripcion ??
         row?.observacion ??
+        row?.nombre ??
         ""
     );
 
@@ -189,8 +222,22 @@ export default function ModalEliminar({
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-eliminar-mov-title"
+      onMouseDown={(e) => {
+        e.stopPropagation();
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+      }}
     >
-      <div className="mvdel-modal mvdel-modal--danger">
+      <div
+        className="mvdel-modal mvdel-modal--danger"
+        onMouseDown={(e) => {
+          e.stopPropagation();
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+        }}
+      >
         <button
           className="mvdel-close"
           type="button"
@@ -205,7 +252,10 @@ export default function ModalEliminar({
           <FaTrashAlt />
         </div>
 
-        <h3 id="modal-eliminar-mov-title" className="mvdel-title mvdel-title--danger">
+        <h3
+          id="modal-eliminar-mov-title"
+          className="mvdel-title mvdel-title--danger"
+        >
           {title}
         </h3>
 
@@ -230,7 +280,9 @@ export default function ModalEliminar({
           </div>
         )}
 
-        {extraContent ? <div className="mvdel-extraContent">{extraContent}</div> : null}
+        {extraContent ? (
+          <div className="mvdel-extraContent">{extraContent}</div>
+        ) : null}
 
         <div className="mvdel-actions">
           <button

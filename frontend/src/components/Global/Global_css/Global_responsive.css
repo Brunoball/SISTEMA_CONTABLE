@@ -487,9 +487,9 @@
   }
 
   /* orden + etiquetas segun columna (por posición) */
-  .mpr-row > .mpr-td:nth-child(1)::before{ content: "Sel"; }
+  .mpr-row > .mpr-td:nth-child(1)::before{ content: ""; }
   .mpr-row > .mpr-td:nth-child(2)::before{ content: "Fecha"; }
-  .mpr-row > .mpr-td:nth-child(3)::before{ content: "Descripción"; }
+  .mpr-row > .mpr-td:nth-child(3)::before{ content: ""; }
   .mpr-row > .mpr-td:nth-child(4)::before{ content: "Estado"; }
   .mpr-row > .mpr-td:nth-child(5)::before{ content: "Monto"; }
 

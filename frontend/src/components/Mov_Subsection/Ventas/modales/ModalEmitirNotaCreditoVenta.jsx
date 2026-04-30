@@ -131,12 +131,33 @@ export default function ModalEmitirNotaCreditoVenta({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const h = (e) => e.key === "Escape" && !loading && onClose?.();
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [open, loading, onClose]);
+useEffect(() => {
+  if (!open) return;
+
+  const h = (e) => {
+    if (e.key !== "Escape") return;
+
+    // Si está abierto el modal de resumen, este modal de atrás NO debe cerrarse.
+    if (openResumen) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (typeof e.stopImmediatePropagation === "function") {
+      e.stopImmediatePropagation();
+    }
+
+    if (!loading) {
+      onClose?.();
+    }
+  };
+
+  document.addEventListener("keydown", h, true);
+
+  return () => {
+    document.removeEventListener("keydown", h, true);
+  };
+}, [open, openResumen, loading, onClose]);
 
   const showToast = useCallback(
     (tipo, mensaje, duracion = 2800) => onToast?.(tipo, mensaje, duracion),

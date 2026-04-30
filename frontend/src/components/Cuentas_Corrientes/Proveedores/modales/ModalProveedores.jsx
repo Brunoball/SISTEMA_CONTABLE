@@ -131,7 +131,7 @@ export default function ModalProveedores({
     loading: false,
   });
 
-  const isBusy = loading || saving || modalAccion.loading;
+const isBusy = loading || saving || modalAccion.loading || modalAccion.open;
 
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
@@ -165,16 +165,23 @@ export default function ModalProveedores({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
+useEffect(() => {
+  if (!open) return;
 
-    const h = (e) => {
-      if (e.key === "Escape" && !isBusy) onClose?.();
-    };
+  const h = (e) => {
+    if (e.key !== "Escape") return;
 
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [open, onClose, isBusy]);
+    // Si hay un modal de acción abierto, el padre NO debe cerrarse.
+    if (modalAccion.open) return;
+
+    if (!loading && !saving) {
+      onClose?.();
+    }
+  };
+
+  document.addEventListener("keydown", h, true);
+  return () => document.removeEventListener("keydown", h, true);
+}, [open, onClose, loading, saving, modalAccion.open]);
 
   useEffect(() => {
     if (open) {
@@ -526,7 +533,7 @@ export default function ModalProveedores({
 
                 <div
                   className="mi-cr-filters__actions"
-                  style={{ flexDirection: "column" }}
+                  style={{ flexDirection: "row" }}
                 >
                   <button
                     type="button"
@@ -539,7 +546,7 @@ export default function ModalProveedores({
                       ? "Guardando..."
                       : modo === "crear"
                       ? "Crear proveedor"
-                      : "Guardar cambios"}
+                      : "Guardar"}
                   </button>
 
                   {modo === "editar" && (
@@ -549,7 +556,7 @@ export default function ModalProveedores({
                       onClick={cancelarEdicion}
                       disabled={saving}
                     >
-                      Cancelar edición
+                      Cancelar
                     </button>
                   )}
                 </div>

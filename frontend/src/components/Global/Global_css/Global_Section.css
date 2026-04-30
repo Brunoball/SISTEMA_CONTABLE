@@ -524,11 +524,7 @@ html[data-theme="oscuro"] .mov-page .mov-emptyRow{
 }
 
 /* contenedor */
-.mov-gridTable{
-  display:grid;
-  width: 100%;
-
-}
+.mov-gridTable{display:grid;}
 
 /* celdas: centrado vertical global */
 .mov-gridCell,

@@ -125,7 +125,7 @@ export default function ModalClientes({
     loading: false,
   });
 
-  const isBusy = loading || saving || modalAccion.loading;
+const isBusy = loading || saving || modalAccion.loading || modalAccion.open;
 
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
@@ -159,16 +159,24 @@ export default function ModalClientes({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
+useEffect(() => {
+  if (!open) return;
 
-    const h = (e) => {
-      if (e.key === "Escape" && !isBusy) onClose?.();
-    };
+  const h = (e) => {
+    if (e.key !== "Escape") return;
 
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [open, onClose, isBusy]);
+    // Si está abierto el modal de eliminar / alta / baja,
+    // este modal padre NO se tiene que cerrar.
+    if (modalAccion.open) return;
+
+    if (!loading && !saving) {
+      onClose?.();
+    }
+  };
+
+  document.addEventListener("keydown", h, true);
+  return () => document.removeEventListener("keydown", h, true);
+}, [open, onClose, loading, saving, modalAccion.open]);
 
   useEffect(() => {
     if (open) {
@@ -346,7 +354,7 @@ export default function ModalClientes({
       });
     } catch (err) {
       onToast?.("error", err?.message || "No se pudo completar la acción.");
-      throw err;
+
     } finally {
       setAccionandoId(null);
       setModalAccion((prev) => ({ ...prev, loading: false }));
@@ -516,7 +524,7 @@ export default function ModalClientes({
 
                 <div
                   className="mi-cr-filters__actions"
-                  style={{ flexDirection: "column" }}
+                  style={{ flexDirection: "row" }}
                 >
                   <button
                     type="button"
@@ -529,7 +537,7 @@ export default function ModalClientes({
                       ? "Guardando..."
                       : modo === "crear"
                       ? "Crear cliente"
-                      : "Guardar cambios"}
+                      : "Guardar"}
                   </button>
 
                   {modo === "editar" && (
@@ -539,7 +547,7 @@ export default function ModalClientes({
                       onClick={cancelarEdicion}
                       disabled={saving}
                     >
-                      Cancelar edición
+                      Cancelar
                     </button>
                   )}
                 </div>

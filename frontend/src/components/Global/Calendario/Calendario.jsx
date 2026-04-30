@@ -324,16 +324,19 @@ export default function Calendario({
           </span>
         </div>
 
-        {(from || to) && (
-          <button
-            type="button"
-            className="cal-clear"
-            onClick={() => onChange({ from: null, to: null })}
-            title="Limpiar fechas"
-          >
-            ×
-          </button>
-        )}
+<button
+  type="button"
+  className="cal-clear"
+  onClick={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onClose?.();
+  }}
+  title="Cerrar calendario"
+  aria-label="Cerrar calendario"
+>
+  ×
+</button>
       </div>
 
       {/* Months */}

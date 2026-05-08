@@ -872,9 +872,11 @@ const Principal = () => {
     if (rolUsuario === "admin") return;
 
     const rutasPermitidas = [
+      "/panel/dashboard",
       "/panel/movimientos",
       "/panel/ventas",
       "/panel/recibos",
+      "/panel/flujo-de-caja",
     ];
 
     const permitido = rutasPermitidas.some(
@@ -883,12 +885,13 @@ const Principal = () => {
     );
 
     if (!permitido) {
-      navigate("/panel/movimientos", { replace: true });
+      navigate("/panel/dashboard", { replace: true });
     }
   }, [usuario, rolUsuario, location.pathname, navigate]);
 
   const navItems = useMemo(() => {
     const base = [
+      { label: "Dashboard", ruta: "/panel/dashboard" },
       {
         label: "Movimientos",
         ruta: "/panel/movimientos",
@@ -940,18 +943,30 @@ const Principal = () => {
     }));
 
     if (rolUsuario !== "admin") {
+      const dashboard = base.find((x) => x.ruta === "/panel/dashboard");
       const movimientos = base.find((x) => x.key === "movimientos");
+      const flujoCaja = base.find((x) => x.ruta === "/panel/flujo-de-caja");
 
-      if (!movimientos) return [];
+      const itemsPermitidos = [];
 
-      return [
-        {
+      if (dashboard) {
+        itemsPermitidos.push(dashboard);
+      }
+
+      if (movimientos) {
+        itemsPermitidos.push({
           ...movimientos,
           children: (movimientos.children || []).filter((sub) =>
             ["/panel/ventas", "/panel/recibos"].includes(sub.ruta)
           ),
-        },
-      ];
+        });
+      }
+
+      if (flujoCaja) {
+        itemsPermitidos.push(flujoCaja);
+      }
+
+      return itemsPermitidos;
     }
 
     return base;
@@ -1040,7 +1055,7 @@ const Principal = () => {
 
   const handleLogoClick = useCallback(() => {
     closeAllSubs();
-    navigate(rolUsuario === "admin" ? "/panel/dashboard" : "/panel/movimientos");
+    navigate("/panel/dashboard");
     setDrawerOpen(false);
   }, [navigate, closeAllSubs, rolUsuario]);
 

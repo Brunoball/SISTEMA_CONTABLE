@@ -18,7 +18,7 @@ import "./dashboard.css";
 import { useListas } from "../../context/ListasContext";
 
 function normalizeRol(value) {
-  if (value == null) return "vista";
+  if (value == null) return "empleado_basico";
   const v = String(value).trim().toLowerCase();
   if (
     v === "1" ||
@@ -29,7 +29,7 @@ function normalizeRol(value) {
   ) {
     return "admin";
   }
-  return "vista";
+  return "empleado_basico";
 }
 
 function normalizePlanNivel(value) {
@@ -120,7 +120,7 @@ export default function Dashboard() {
   const usuario = useMemo(() => {
     try {
       const u = JSON.parse(localStorage.getItem("usuario"));
-      if (u) u.rol = normalizeRol(u.rol);
+      if (u) u.rol = normalizeRol(u.rol ?? u.tipo_rol ?? u.id_rol);
       return u || null;
     } catch {
       return null;
@@ -145,13 +145,14 @@ export default function Dashboard() {
       info: pickInfo(it.label),
     }));
 
-    // si querés que todos vean todo, dejá esto:
-    return base;
+    if (usuario?.rol !== "admin") {
+      return base.filter((it) =>
+        ["movimientos", "flujo-de-caja"].includes(it.key)
+      );
+    }
 
-    // si querés seguir limitando por plan, usá esto en lugar del return base:
-    // const limit = planNivel === 1 ? 2 : planNivel === 2 ? 4 : 6;
-    // return base.slice(0, limit);
-  }, [planNivel]);
+    return base;
+  }, [planNivel, usuario]);
 
   const handleNavigate = (ruta) => {
     try {
@@ -190,8 +191,7 @@ export default function Dashboard() {
               <h2>Bienvenido a BALTO</h2>
               <p>
                 Tu sistema contable para gestionar el negocio de punta a punta:
-                movimientos, caja, cuentas corrientes, stock, cheques y análisis
-                financiero en un solo lugar.
+                movimientos y caja. Los módulos visibles dependen de tu rol.
               </p>
             </div>
           </div>
@@ -201,7 +201,7 @@ export default function Dashboard() {
           <div className="db-card">
             <div className="db-card__title">Acceso rápido</div>
             <div className="db-card__desc">
-              Accedé a los módulos disponibles según tu plan.
+              Accedé a los módulos disponibles según tu rol.
             </div>
 
             <div className="db-quick db-stats2">

@@ -637,9 +637,16 @@ function MiniCreateModal({ open, title, value, loading, onChange, onCancel, onSa
     }
   };
 
-  return (
-    <div className="cmi-miniOverlay">
-      <div className="cmi-miniModal">
+  return createPortal(
+    <div
+      className="cmi-miniOverlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !loading) {
+          onCancel?.();
+        }
+      }}
+    >
+      <div className="cmi-miniModal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="cmi-miniModal__head">{title}</div>
 
         <div className="cmi-miniModal__body">
@@ -649,7 +656,8 @@ function MiniCreateModal({ open, title, value, loading, onChange, onCancel, onSa
               value={value}
               onChange={(e) => onChange(toUpperCaseValue(e.target.value))}
               onKeyDown={handleMiniEnter}
-              placeholder="Escribí el nombre"
+              placeholder="ESCRIBÍ EL NOMBRE"
+              style={{ textTransform: "uppercase" }}
               autoFocus
             />
           </FloatingField>
@@ -675,7 +683,8 @@ function MiniCreateModal({ open, title, value, loading, onChange, onCancel, onSa
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1270,6 +1279,7 @@ export default function ModalEditarProducto({
     if (!val) return;
 
     if (val === "__nuevo_tipo__") {
+      setMiniTipoNombre("");
       setMiniTipoOpen(true);
       return;
     }
@@ -1989,31 +1999,33 @@ export default function ModalEditarProducto({
                     <FontAwesomeIcon icon={faLayerGroup} /> Tipos de precio adicionales
                   </div>
 
-                  <FloatingField label="Agregar tipo de precio">
-                    <select
-                      className="cmi-input cmi-select"
-                      value=""
-                      onChange={(e) => handleTipoSelectChange(e.target.value)}
-                      onKeyDown={handleFieldEnter}
-                      disabled={loadingTiposPrecio || guardando}
-                    >
-                      <option value="">
-                        {loadingTiposPrecio
-                          ? "Cargando tipos..."
-                          : "Seleccionar tipo para agregar..."}
-                      </option>
-                      <option value="__nuevo_tipo__">+ Nuevo tipo de precio</option>
-
-                      {tiposPrecio.map((tipo) => (
-                        <option
-                          key={tipo.id ?? tipo.id_tipo_precio_stock}
-                          value={tipo.id ?? tipo.id_tipo_precio_stock}
-                        >
-                          {tipo.nombre}
+                  <div className="cmi-addPriceRow">
+                    <FloatingField label="Agregar tipo de precio" style={{ flex: 1 }}>
+                      <select
+                        className="cmi-input cmi-select"
+                        value=""
+                        onChange={(e) => handleTipoSelectChange(e.target.value)}
+                        onKeyDown={handleFieldEnter}
+                        disabled={loadingTiposPrecio || guardando}
+                      >
+                        <option value="">
+                          {loadingTiposPrecio
+                            ? "CARGANDO TIPOS..."
+                            : "SELECCIONAR TIPO PARA AGREGAR..."}
                         </option>
-                      ))}
-                    </select>
-                  </FloatingField>
+                        <option value="__nuevo_tipo__">+ NUEVO TIPO DE PRECIO</option>
+
+                        {tiposPrecio.map((tipo) => (
+                          <option
+                            key={tipo.id ?? tipo.id_tipo_precio_stock}
+                            value={tipo.id ?? tipo.id_tipo_precio_stock}
+                          >
+                            {tipo.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </FloatingField>
+                  </div>
 
                   {(form.tipos_precio_extra || []).map((tipoItem, idx) => (
                     <div

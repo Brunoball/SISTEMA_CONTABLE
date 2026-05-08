@@ -45,11 +45,10 @@ function normalizeIdValue(value) {
 }
 
 function toCapitalizedText(value) {
-  const text = String(value ?? "").trimStart().toLowerCase();
-
-  if (!text) return "";
-
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  return String(value ?? "")
+    .trimStart()
+    .normalize("NFC")
+    .toUpperCase();
 }
 
 function normalizeOptionLabel(value, fallback = "") {
@@ -492,7 +491,8 @@ function MiniCreateModal({ open, title, value, loading, onChange, onCancel, onSa
               value={value}
               onChange={(e) => onChange(toCapitalizedText(e.target.value))}
               onKeyDown={handleMiniEnter}
-              placeholder="Escribí el nombre"
+              placeholder="ESCRIBÍ EL NOMBRE"
+              style={{ textTransform: "uppercase" }}
               autoFocus
             />
           </FloatingField>

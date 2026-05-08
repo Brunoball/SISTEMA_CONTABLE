@@ -140,11 +140,11 @@ function RutaProtegida({ children }) {
 function RutaAdmin({ children }) {
   if (!isAuthenticated()) return <Navigate to="/" replace />;
 
-  return isAdminUser() ? children : <Navigate to="/panel/movimientos" replace />;
+  return isAdminUser() ? children : <Navigate to="/panel/dashboard" replace />;
 }
 
 function PanelIndexRedirect() {
-  return <Navigate to={isAdminUser() ? "dashboard" : "movimientos"} replace />;
+  return <Navigate to="dashboard" replace />;
 }
 
 /* =========================================================
@@ -174,31 +174,46 @@ export default function App() {
         >
           <Route index element={<PanelIndexRedirect />} />
 
-          <Route
-            path="dashboard"
-            element={
-              <RutaAdmin>
-                <Dashboard />
-              </RutaAdmin>
-            }
-          />
+          <Route path="dashboard" element={<Dashboard />} />
 
           <Route path="movimientos" element={<Movimientos />} />
           <Route path="ventas" element={<Ventas />} />
-          <Route path="compras" element={<Compras />} />
-          <Route path="recibos" element={<Recibos />} />
-          <Route path="OrdenesPago" element={<OrdenesPago />} />
-          <Route path="Otrosingresos" element={<Otrosingresos />} />
-          <Route path="Otrosegresos" element={<Otrosegresos />} />
-
           <Route
-            path="flujo-de-caja"
+            path="compras"
             element={
               <RutaAdmin>
-                <Flujo_Caja />
+                <Compras />
               </RutaAdmin>
             }
           />
+          <Route path="recibos" element={<Recibos />} />
+          <Route
+            path="OrdenesPago"
+            element={
+              <RutaAdmin>
+                <OrdenesPago />
+              </RutaAdmin>
+            }
+          />
+          <Route
+            path="Otrosingresos"
+            element={
+              <RutaAdmin>
+                <Otrosingresos />
+              </RutaAdmin>
+            }
+          />
+          <Route
+            path="Otrosegresos"
+            element={
+              <RutaAdmin>
+                <Otrosegresos />
+              </RutaAdmin>
+            }
+          />
+
+          {/* Disponible para admin y usuario básico logueado */}
+          <Route path="flujo-de-caja" element={<Flujo_Caja />} />
 
           <Route
             path="cuentas-corrientes/clientes"
@@ -306,7 +321,6 @@ export default function App() {
               </RutaAdmin>
             }
           />
-
 
           <Route
             path="configuracion/datos-legales"

@@ -1,4 +1,4 @@
-const BASE_URL = process.env.REACT_APP_API_URL || "https://balto.3devsnet.com/api/routes";
+const BASE_URL = process.env.REACT_APP_API_URL || "https://app.balto.com.ar/api/routes";
 
 export default BASE_URL;
 

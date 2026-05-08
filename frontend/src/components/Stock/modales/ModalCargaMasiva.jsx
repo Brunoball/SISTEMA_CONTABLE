@@ -360,7 +360,8 @@ function MiniCreateModal({ open, title, value, loading, onChange, onCancel, onSa
               className="cmi-input"
               value={value}
               onChange={(e) => onChange(toUpperCaseValue(e.target.value))}
-              placeholder="Escribí el nombre"
+              placeholder="ESCRIBÍ EL NOMBRE"
+              style={{ textTransform: "uppercase" }}
               autoFocus
             />
           </FloatingField>
@@ -529,7 +530,7 @@ function ModalConfirmarProductosIA({
     if (miniCategoriaFila === null || !miniCategoriaNombre.trim()) return;
     setGuardandoMiniCategoria(true);
     try {
-      const nueva = await onCategoriaCreate(miniCategoriaNombre.trim());
+      const nueva = await onCategoriaCreate(toUpperCaseValue(miniCategoriaNombre.trim()));
       onChangeProducto(miniCategoriaFila, "id_categoria_stock", String(nueva.id ?? nueva.id_stock_categoria ?? ""));
       setMiniCategoriaOpen(false);
       setMiniCategoriaNombre("");
@@ -545,7 +546,7 @@ function ModalConfirmarProductosIA({
     if (miniTipoFila === null || !miniTipoNombre.trim()) return;
     setGuardandoMiniTipo(true);
     try {
-      const nuevo = await onTipoCreate(miniTipoNombre.trim());
+      const nuevo = await onTipoCreate(toUpperCaseValue(miniTipoNombre.trim()));
       const current = productos[miniTipoFila]?.tipos_precio_extra || [];
       onChangeProducto(miniTipoFila, "tipos_precio_extra", [...current, emptyExtraPriceRow(nuevo)]);
       setMiniTipoOpen(false);
@@ -650,7 +651,7 @@ function ModalConfirmarProductosIA({
                           className="cmi-input"
                           value={item.nombre}
                           onChange={(e) => onChangeProducto(idx, "nombre", toUpperCaseValue(e.target.value))}
-                          placeholder="Nombre del producto"
+                          placeholder="NOMBRE DEL PRODUCTO"
                         />
                       </FloatingField>
 
@@ -894,7 +895,7 @@ function ModalConfirmarProductosIA({
                           rows={3}
                           value={item.descripcion}
                           onChange={(e) => onChangeProducto(idx, "descripcion", toUpperCaseValue(e.target.value))}
-                          placeholder="Descripción opcional"
+                          placeholder="DESCRIPCIÓN OPCIONAL"
                         />
                       </FloatingField>
 

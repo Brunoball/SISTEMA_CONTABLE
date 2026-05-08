@@ -311,7 +311,7 @@ export default function ConfiguracionDatosLegales() {
       )}
 
       <div className="cfg-legal-hero">
-        <div className="cfg-legal-hero__icon">
+        <div className="cfg-users-hero__icon">
           <FontAwesomeIcon icon={faFileInvoiceDollar} />
         </div>
 
@@ -343,6 +343,7 @@ export default function ConfiguracionDatosLegales() {
             <FontAwesomeIcon icon={faBuilding} />
           </div>
 
+          <span className="cfg-legal-summary__kicker">Vista previa fiscal</span>
           <h2>{resumen.razon}</h2>
           <p>{resumen.fantasia}</p>
 
@@ -386,61 +387,65 @@ export default function ConfiguracionDatosLegales() {
               </div>
 
               <div className="cfg-legal-form-grid">
-                <label className="cfg-legal-field cfg-legal-field--full">
-                  <span>Razón social *</span>
+                <label className="cfg-legal-floatingField cfg-legal-floatingField--full is-active">
                   <input
+                    className="cfg-legal-control cfg-legal-control--floating"
                     type="text"
                     value={form.razon_social || ""}
                     onChange={(e) =>
                       setField("razon_social", toMayus(e.target.value))
                     }
-                    placeholder="EJ: VALVERDE FRANCO ANTONIO"
+                    placeholder=" "
                     disabled={saving}
                   />
+                  <span>Razón social *</span>
                 </label>
 
-                <label className="cfg-legal-field cfg-legal-field--full">
-                  <span>Nombre fantasía</span>
+                <label className="cfg-legal-floatingField cfg-legal-floatingField--full is-active">
                   <input
+                    className="cfg-legal-control cfg-legal-control--floating"
                     type="text"
                     value={form.nombre_fantasia || ""}
                     onChange={(e) =>
                       setField("nombre_fantasia", toMayus(e.target.value))
                     }
-                    placeholder="EJ: 3 DEVS SOLUTIONS"
+                    placeholder=" "
                     disabled={saving}
                   />
+                  <span>Nombre fantasía</span>
                 </label>
 
-                <label className="cfg-legal-field">
-                  <span>CUIT *</span>
+                <label className="cfg-legal-floatingField is-active">
                   <input
+                    className="cfg-legal-control cfg-legal-control--floating"
                     type="text"
                     value={form.cuit || ""}
                     onChange={(e) =>
                       setField("cuit", normalizarCuit(e.target.value))
                     }
-                    placeholder="EJ: 20-25752516-4"
+                    placeholder=" "
                     disabled={saving}
                   />
+                  <span>CUIT *</span>
                 </label>
 
-                <label className="cfg-legal-field">
-                  <span>Ingresos brutos</span>
+                <label className="cfg-legal-floatingField is-active">
                   <input
+                    className="cfg-legal-control cfg-legal-control--floating"
                     type="text"
                     value={form.ingresos_brutos || ""}
                     onChange={(e) =>
                       setField("ingresos_brutos", toMayus(e.target.value))
                     }
-                    placeholder="EJ: 20257525164"
+                    placeholder=" "
                     disabled={saving}
                   />
+                  <span>Ingresos brutos</span>
                 </label>
 
-                <label className="cfg-legal-field">
-                  <span>Condición frente al IVA *</span>
+                <label className="cfg-legal-floatingField cfg-legal-floatingField--select is-active">
                   <select
+                    className="cfg-legal-control cfg-legal-control--floating"
                     value={form.condicion_iva || ""}
                     onChange={(e) =>
                       setField("condicion_iva", toMayus(e.target.value))
@@ -453,14 +458,15 @@ export default function ConfiguracionDatosLegales() {
                       </option>
                     ))}
                   </select>
+                  <span>Condición frente al IVA *</span>
                 </label>
 
                 <label
-                  className="cfg-legal-field"
+                  className="cfg-legal-floatingField cfg-legal-floatingField--date is-active"
                   onClick={abrirCalendarioFecha}
                 >
-                  <span>Inicio de actividades</span>
                   <input
+                    className="cfg-legal-control cfg-legal-control--floating"
                     ref={fechaInputRef}
                     type="date"
                     value={form.fecha_inicio_actividades || ""}
@@ -469,21 +475,24 @@ export default function ConfiguracionDatosLegales() {
                     onChange={(e) =>
                       setField("fecha_inicio_actividades", e.target.value)
                     }
+                    placeholder=" "
                     disabled={saving}
                   />
+                  <span>Inicio de actividades</span>
                 </label>
 
-                <label className="cfg-legal-field cfg-legal-field--full">
-                  <span>Domicilio comercial *</span>
+                <label className="cfg-legal-floatingField cfg-legal-floatingField--full is-active">
                   <input
+                    className="cfg-legal-control cfg-legal-control--floating"
                     type="text"
                     value={form.domicilio_comercial || ""}
                     onChange={(e) =>
                       setField("domicilio_comercial", toMayus(e.target.value))
                     }
-                    placeholder="EJ: ROMA 2407 - SAN FRANCISCO, CÓRDOBA"
+                    placeholder=" "
                     disabled={saving}
                   />
+                  <span>Domicilio comercial *</span>
                 </label>
               </div>
 
@@ -493,9 +502,9 @@ export default function ConfiguracionDatosLegales() {
               </div>
 
               <div className="cfg-legal-form-grid">
-                <label className="cfg-legal-field">
-                  <span>Punto de venta</span>
+                <label className="cfg-legal-floatingField is-active">
                   <input
+                    className="cfg-legal-control cfg-legal-control--floating"
                     type="text"
                     value={form.punto_venta || ""}
                     onChange={(e) =>
@@ -510,14 +519,15 @@ export default function ConfiguracionDatosLegales() {
                         normalizarPuntoVenta(form.punto_venta) || "00001"
                       )
                     }
-                    placeholder="00001"
+                    placeholder=" "
                     disabled={saving}
                   />
+                  <span>Punto de venta</span>
                 </label>
 
-                <label className="cfg-legal-field">
-                  <span>Tipo de comprobante</span>
+                <label className="cfg-legal-floatingField cfg-legal-floatingField--select is-active">
                   <select
+                    className="cfg-legal-control cfg-legal-control--floating"
                     value={form.tipo_comprobante_default || "FACTURA C"}
                     onChange={(e) => handleTipoComprobante(e.target.value)}
                     disabled={saving}
@@ -528,11 +538,12 @@ export default function ConfiguracionDatosLegales() {
                       </option>
                     ))}
                   </select>
+                  <span>Tipo de comprobante</span>
                 </label>
 
-                <label className="cfg-legal-field">
-                  <span>Código comprobante</span>
+                <label className="cfg-legal-floatingField is-active">
                   <input
+                    className="cfg-legal-control cfg-legal-control--floating"
                     type="text"
                     value={form.codigo_comprobante || ""}
                     onChange={(e) =>
@@ -548,9 +559,10 @@ export default function ConfiguracionDatosLegales() {
                           "011"
                       )
                     }
-                    placeholder="011"
+                    placeholder=" "
                     disabled={saving}
                   />
+                  <span>Código comprobante</span>
                 </label>
               </div>
 

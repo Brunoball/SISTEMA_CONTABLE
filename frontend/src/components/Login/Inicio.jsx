@@ -35,6 +35,11 @@ function normalizePlanNivel(value) {
   return 3;
 }
 
+function normalizePlanId(value) {
+  const n = Number(value);
+  return n === 2 ? 2 : 1;
+}
+
 function withTimeout(ms) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);
@@ -191,12 +196,17 @@ const Inicio = () => {
       localStorage.setItem("session_key", sessionKey);
 
       const usuarioResp = data.usuario || {};
+      const idPlan = normalizePlanId(
+        usuarioResp.idPlan ?? usuarioResp.id_plan ?? usuarioResp.plan_id ?? data.idPlan ?? data.id_plan ?? 1
+      );
       const planNivel = normalizePlanNivel(
-        usuarioResp.plan_nivel ?? usuarioResp.planNivel ?? data.plan_nivel ?? 1
+        usuarioResp.plan_nivel ?? usuarioResp.planNivel ?? data.plan_nivel ?? idPlan
       );
 
       const usuarioFinal = {
         ...usuarioResp,
+        idPlan,
+        id_plan: idPlan,
         id_rol: Number(usuarioResp.id_rol ?? data.id_rol ?? 2),
         tipo_rol: usuarioResp.tipo_rol ?? data.tipo_rol ?? "empleado_basico",
         rol: normalizeRol(

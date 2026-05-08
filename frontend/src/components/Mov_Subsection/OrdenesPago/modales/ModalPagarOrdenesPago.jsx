@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { filtrarMediosPagoPorPlan } from "../../_shared/planMediosPago";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
 import "../../../Global/Global_css/Global_responsive.css";
@@ -685,7 +686,7 @@ export default function ModalPagarOrdenesPago({
   const [rows, setRows] = useState(() => []);
 
   const mediosPagoFromContext = useMemo(
-    () => normalizeMediosPago(lists || {}),
+    () => filtrarMediosPagoPorPlan(normalizeMediosPago(lists || {})),
     [lists]
   );
   const [mediosPago, setMediosPago] = useState([]);
@@ -731,7 +732,7 @@ export default function ModalPagarOrdenesPago({
         `${BASE_URL}/api.php?action=global_obtener_listas`,
         { method: "GET", headers: buildAuthHeaders(false) }
       );
-      setMediosPago(normalizeMediosPago(data));
+      setMediosPago(filtrarMediosPagoPorPlan(normalizeMediosPago(data)));
     } catch (e) {
       showToast("error", e?.message || "No se pudieron cargar los medios de pago.");
       setMediosPago([]);

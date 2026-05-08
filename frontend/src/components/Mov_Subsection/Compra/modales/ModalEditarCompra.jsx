@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { filtrarMediosPagoPorPlan } from "../../_shared/planMediosPago";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
 import "../../../Global/Global_css/Global_responsive.css";
@@ -977,7 +978,13 @@ export default function ModalEditarCompra({
     setLocalLists({ ...SAFE_LISTS, ...normalizeIncomingLists(lists) });
   }, [lists]);
 
-  const safeLists = useMemo(() => localLists, [localLists]);
+  const safeLists = useMemo(
+    () => ({
+      ...localLists,
+      mediosPago: filtrarMediosPagoPorPlan(localLists.mediosPago),
+    }),
+    [localLists]
+  );
   const tiposVentaUI = useMemo(() => {
     if (Array.isArray(safeLists.tiposVenta) && safeLists.tiposVenta.length) return safeLists.tiposVenta;
     return [{ id: 1, nombre: "CONTADO" }, { id: 2, nombre: "CUENTA CORRIENTE" }];
@@ -1315,24 +1322,62 @@ export default function ModalEditarCompra({
   const onPrecioChange = useCallback((v) => recalcFromItem({ precio: v === "" ? "" : Number(v) }), [recalcFromItem]);
   const onIvaPctChange = useCallback((v) => recalcFromItem({ iva_pct: v === "" ? "" : Number(v) }), [recalcFromItem]);
 
+  const findExactCatalogItem = useCallback((arr, value) => {
+    const q = normalizeText(value);
+    if (!q) return null;
+
+    return (Array.isArray(arr) ? arr : []).find(
+      (item) => normalizeText(item?.nombre) === q
+    ) || null;
+  }, []);
+
   const filteredProveedores = useMemo(() => {
     const all = Array.isArray(safeLists.proveedores) ? safeLists.proveedores : [];
-    const q = proveedorInput.trim().toLowerCase();
+    const q = normalizeText(proveedorInput);
     if (!proveedorFocus || q.length < 1) return [];
-    return all.filter((p) => String(p?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
+    return all.filter((p) => normalizeText(p?.nombre).includes(q)).slice(0, 25);
   }, [safeLists.proveedores, proveedorInput, proveedorFocus]);
 
   const filteredDetalles = useMemo(() => {
     const all = Array.isArray(safeLists.detalles) ? safeLists.detalles : [];
-    const q = detalleInput.trim().toLowerCase();
+    const q = normalizeText(detalleInput);
     if (!detalleFocus || q.length < 1) return [];
-    return all.filter((d) => String(d?.nombre ?? "").toLowerCase().includes(q)).slice(0, 25);
+    return all.filter((d) => normalizeText(d?.nombre).includes(q)).slice(0, 25);
   }, [safeLists.detalles, detalleInput, detalleFocus]);
 
+  const proveedorExacto = useMemo(
+    () => findExactCatalogItem(safeLists.proveedores, proveedorInput),
+    [findExactCatalogItem, safeLists.proveedores, proveedorInput]
+  );
+
+  const detalleExacto = useMemo(
+    () => findExactCatalogItem(safeLists.detalles, detalleInput),
+    [findExactCatalogItem, safeLists.detalles, detalleInput]
+  );
+
+  const puedeAgregarProveedor = useMemo(() => {
+    const q = normalizeText(proveedorInput);
+    return proveedorFocus && q.length >= 2 && !proveedorExacto && filteredProveedores.length === 0;
+  }, [proveedorFocus, proveedorInput, proveedorExacto, filteredProveedores.length]);
+
+  const puedeAgregarDetalle = useMemo(() => {
+    const q = normalizeText(detalleInput);
+    return detalleFocus && q.length >= 2 && !detalleExacto && filteredDetalles.length === 0;
+  }, [detalleFocus, detalleInput, detalleExacto, filteredDetalles.length]);
+
+  const mostrarSugerenciasProveedor = proveedorFocus && (filteredProveedores.length > 0 || puedeAgregarProveedor);
+  const mostrarSugerenciasDetalle = detalleFocus && (filteredDetalles.length > 0 || puedeAgregarDetalle);
+
   const handleProveedorInputChange = useCallback((e) => {
-    setProveedorInput(e.target.value);
-    setForm((prev) => ({ ...prev, id_proveedor: NULL_OPTION }));
-  }, []);
+    const value = e.target.value;
+    const exact = findExactCatalogItem(safeLists.proveedores, value);
+
+    setProveedorInput(value);
+    setForm((prev) => ({
+      ...prev,
+      id_proveedor: exact ? String(getGenericId(exact)) : NULL_OPTION,
+    }));
+  }, [findExactCatalogItem, safeLists.proveedores]);
   const handleSelectProveedor = useCallback((proveedor) => {
     const nombre = String(proveedor?.nombre ?? "").trim();
     const pid = getGenericId(proveedor);
@@ -1341,9 +1386,15 @@ export default function ModalEditarCompra({
     setProveedorFocus(false);
   }, []);
   const handleDetalleInputChange = useCallback((e) => {
-    setDetalleInput(e.target.value);
-    setForm((prev) => ({ ...prev, id_detalle: NULL_OPTION }));
-  }, []);
+    const value = e.target.value;
+    const exact = findExactCatalogItem(safeLists.detalles, value);
+
+    setDetalleInput(value);
+    setForm((prev) => ({
+      ...prev,
+      id_detalle: exact ? String(getGenericId(exact)) : NULL_OPTION,
+    }));
+  }, [findExactCatalogItem, safeLists.detalles]);
   const handleSelectDetalle = useCallback((det) => {
     const nombre = String(det?.nombre ?? "").trim();
     const did = getGenericId(det);
@@ -1750,17 +1801,19 @@ export default function ModalEditarCompra({
                           disabled={saving || addUI.open || openVerComp}
                           autoComplete="off"
                         />
-                        {detalleFocus && filteredDetalles.length > 0 && (
+                        {mostrarSugerenciasDetalle && (
                           <ul className="mi-cr-suggest">
-                            <li
-                              className="mi-cr-suggest__item mi-cr-suggest__item--add"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                startAddDetalle();
-                              }}
-                            >
-                              <span>+ Agregar "{detalleInput}"</span>
-                            </li>
+                            {puedeAgregarDetalle && (
+                              <li
+                                className="mi-cr-suggest__item mi-cr-suggest__item--add"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  startAddDetalle();
+                                }}
+                              >
+                                <span>+ Agregar "{detalleInput}"</span>
+                              </li>
+                            )}
                             {filteredDetalles.map((d) => {
                               const did = getGenericId(d);
                               return (
@@ -1882,17 +1935,19 @@ export default function ModalEditarCompra({
                             autoComplete="off"
                           />
                           <label className="fl-label">Proveedor *</label>
-                          {proveedorFocus && filteredProveedores.length > 0 && (
+                          {mostrarSugerenciasProveedor && (
                             <ul className="mi-cr-suggest">
-                              <li
-                                className="mi-cr-suggest__item mi-cr-suggest__item--add"
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  startAddProveedor();
-                                }}
-                              >
-                                <span>+ Agregar "{proveedorInput}"</span>
-                              </li>
+                              {puedeAgregarProveedor && (
+                                <li
+                                  className="mi-cr-suggest__item mi-cr-suggest__item--add"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    startAddProveedor();
+                                  }}
+                                >
+                                  <span>+ Agregar "{proveedorInput}"</span>
+                                </li>
+                              )}
                               {filteredProveedores.map((p) => {
                                 const pid = getGenericId(p);
                                 return (

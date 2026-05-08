@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { filtrarMediosPagoPorPlan } from "../../_shared/planMediosPago";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
 import "../../../Global/Global_css/Global_responsive.css";
@@ -1236,7 +1237,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   useEffect(() => setLocalLists({ ...SAFE_LISTS, ...normalizeLists(lists) }), [lists]);
 
   const mediosPagoList = useMemo(
-    () => (Array.isArray(localLists.medios_pago) ? localLists.medios_pago : []),
+    () => filtrarMediosPagoPorPlan(Array.isArray(localLists.medios_pago) ? localLists.medios_pago : []),
     [localLists.medios_pago]
   );
   const tiposVentaList = useMemo(

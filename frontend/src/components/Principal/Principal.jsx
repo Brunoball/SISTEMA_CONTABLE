@@ -359,6 +359,57 @@ function normalizePlanNivel(value) {
   return 3;
 }
 
+function normalizePlanId(value) {
+  const n = Number(value);
+  return n === 2 ? 2 : 1;
+}
+
+const PLAN_BASICO_NAV_KEYS = new Set([
+  "dashboard",
+  "movimientos",
+  "flujo-de-caja",
+  "cuentas-corrientes",
+]);
+
+function planAllowsNavKey(planId, key) {
+  const id = normalizePlanId(planId);
+
+  // Plan 2 = PRO: todo habilitado.
+  if (id === 2) return true;
+
+  // Plan 1 = BÁSICO: solo módulos principales.
+  return PLAN_BASICO_NAV_KEYS.has(String(key || ""));
+}
+
+function getModuleKeyByPath(pathname) {
+  const path = String(pathname || "");
+
+  if (path === "/panel" || path === "/panel/" || path.startsWith("/panel/dashboard")) {
+    return "dashboard";
+  }
+
+  if (
+    path.startsWith("/panel/movimientos") ||
+    path.startsWith("/panel/ventas") ||
+    path.startsWith("/panel/compras") ||
+    path.startsWith("/panel/recibos") ||
+    path.startsWith("/panel/OrdenesPago") ||
+    path.startsWith("/panel/Otrosingresos") ||
+    path.startsWith("/panel/Otrosegresos")
+  ) {
+    return "movimientos";
+  }
+
+  if (path.startsWith("/panel/flujo-de-caja")) return "flujo-de-caja";
+  if (path.startsWith("/panel/cuentas-corrientes")) return "cuentas-corrientes";
+  if (path.startsWith("/panel/stock")) return "stock";
+  if (path.startsWith("/panel/cheques")) return "cheques";
+  if (path.startsWith("/panel/analisis-financiero")) return "analisis-financiero";
+  if (path.startsWith("/panel/configuracion")) return "configuracion";
+
+  return "dashboard";
+}
+
 function slugify(name) {
   return (
     String(name ?? "")
@@ -733,7 +784,8 @@ const Principal = () => {
 
       if (u) {
         u.rol = normalizeRol(u.rol);
-        u.plan_nivel = normalizePlanNivel(u.plan_nivel ?? 1);
+        u.idPlan = normalizePlanId(u.idPlan ?? u.id_plan ?? u.plan_id ?? u.plan_nivel ?? 1);
+        u.plan_nivel = normalizePlanNivel(u.plan_nivel ?? u.idPlan ?? 1);
         u.tema = normalizeTema(u.tema ?? "claro");
       }
 
@@ -867,6 +919,23 @@ const Principal = () => {
     usuario?.id_rol
   );
 
+  const planIdUsuario = normalizePlanId(
+    usuario?.idPlan ?? usuario?.id_plan ?? usuario?.plan_id ?? usuario?.plan_nivel ?? 1
+  );
+
+  const puedeVerConfiguracion =
+    rolUsuario === "admin" && planAllowsNavKey(planIdUsuario, "configuracion");
+
+  useEffect(() => {
+    if (!usuario) return;
+
+    const moduloActual = getModuleKeyByPath(location.pathname);
+
+    if (!planAllowsNavKey(planIdUsuario, moduloActual)) {
+      navigate("/panel/dashboard", { replace: true });
+    }
+  }, [usuario, planIdUsuario, location.pathname, navigate]);
+
   useEffect(() => {
     if (!usuario) return;
     if (rolUsuario === "admin") return;
@@ -942,10 +1011,14 @@ const Principal = () => {
       children: x.children || null,
     }));
 
+    const basePorPlan = base.filter((item) =>
+      planAllowsNavKey(planIdUsuario, item.key)
+    );
+
     if (rolUsuario !== "admin") {
-      const dashboard = base.find((x) => x.ruta === "/panel/dashboard");
-      const movimientos = base.find((x) => x.key === "movimientos");
-      const flujoCaja = base.find((x) => x.ruta === "/panel/flujo-de-caja");
+      const dashboard = basePorPlan.find((x) => x.ruta === "/panel/dashboard");
+      const movimientos = basePorPlan.find((x) => x.key === "movimientos");
+      const flujoCaja = basePorPlan.find((x) => x.ruta === "/panel/flujo-de-caja");
 
       const itemsPermitidos = [];
 
@@ -969,8 +1042,8 @@ const Principal = () => {
       return itemsPermitidos;
     }
 
-    return base;
-  }, [rolUsuario]);
+    return basePorPlan;
+  }, [rolUsuario, planIdUsuario]);
 
   const activeKey = useMemo(() => {
     if (
@@ -1213,7 +1286,7 @@ const Principal = () => {
             <FontAwesomeIcon icon={tema === "oscuro" ? faSun : faMoon} />
           </button>
 
-          {rolUsuario === "admin" && (
+          {puedeVerConfiguracion && (
             <button
               className="pp-themeBtn"
               onClick={() => handleNavigate("/panel/configuracion")}
@@ -1429,7 +1502,13 @@ const Principal = () => {
         rolUsuario={rolUsuario}
         onConfigRequest={() => {
           setShowPerfilModal(false);
-          handleNavigate("/panel/configuracion");
+
+          if (puedeVerConfiguracion) {
+            handleNavigate("/panel/configuracion");
+            return;
+          }
+
+          handleNavigate("/panel/dashboard");
         }}
         onLogoutRequest={() => {
           setShowPerfilModal(false);

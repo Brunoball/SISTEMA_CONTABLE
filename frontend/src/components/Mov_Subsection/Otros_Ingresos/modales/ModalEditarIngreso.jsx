@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { filtrarMediosPagoPorPlan } from "../../_shared/planMediosPago";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -790,7 +791,7 @@ export default function ModalEditarIngreso({
 
   const dark = typeof darkProp === "boolean" ? darkProp : darkAuto;
   const detalles = useMemo(() => normalizeDetalles(lists), [lists]);
-  const mediosPago = useMemo(() => normalizeMediosPago(lists), [lists]);
+  const mediosPago = useMemo(() => filtrarMediosPagoPorPlan(normalizeMediosPago(lists)), [lists]);
 
   // Bloqueo scroll body
   useEffect(() => {

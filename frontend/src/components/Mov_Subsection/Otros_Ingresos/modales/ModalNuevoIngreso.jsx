@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { filtrarMediosPagoPorPlan } from "../../_shared/planMediosPago";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus, faFileInvoiceDollar, faEye, faTrash, faUpload, faMoneyCheckDollar, faCheck } from "@fortawesome/free-solid-svg-icons";
@@ -661,7 +662,7 @@ export default function ModalNuevoIngreso({
 
   const localLists = useMemo(() => normalizeLists(lists), [lists]);
   const mediosPagoList = useMemo(
-    () => (Array.isArray(localLists.medios_pago) ? localLists.medios_pago : []),
+    () => filtrarMediosPagoPorPlan(Array.isArray(localLists.medios_pago) ? localLists.medios_pago : []),
     [localLists.medios_pago]
   );
   const detallesList = useMemo(

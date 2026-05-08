@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { filtrarMediosPagoPorPlan } from "../../_shared/planMediosPago";
 import { createPortal } from "react-dom";
 import BASE_URL from "../../../../config/config.jsx";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
@@ -522,7 +523,7 @@ export default function ModalEditarEgreso({
   const clasificaciones = useMemo(() => normalizeClasificaciones(lists), [lists]);
   const clasificacionConfig = useMemo(() => resolveCostoFijoConfig(clasificaciones), [clasificaciones]);
   const detalles = useMemo(() => normalizeDetalles(lists), [lists]);
-  const mediosPago = useMemo(() => normalizeMediosPago(lists), [lists]);
+  const mediosPago = useMemo(() => filtrarMediosPagoPorPlan(normalizeMediosPago(lists)), [lists]);
 
   const enhancedDetallesList = useMemo(
     () => [{ id: "new_option", __isNewOption: true, nombre: "+ Agregar nueva descripción" }, ...detalles],

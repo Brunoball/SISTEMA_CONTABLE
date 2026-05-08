@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { filtrarMediosPagoPorPlan } from "../../_shared/planMediosPago";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -781,7 +782,10 @@ export default function ModalNuevoEgreso({
   const fileInputRef = useRef(null);
 
   const localLists = useMemo(() => normalizeLists(lists), [lists]);
-  const mediosPagoList = useMemo(() => (Array.isArray(localLists.medios_pago) ? localLists.medios_pago : []), [localLists.medios_pago]);
+  const mediosPagoList = useMemo(
+    () => filtrarMediosPagoPorPlan(Array.isArray(localLists.medios_pago) ? localLists.medios_pago : []),
+    [localLists.medios_pago]
+  );
   const detallesList = useMemo(() => (Array.isArray(localLists.detalles) ? localLists.detalles : []), [localLists.detalles]);
   const clasificacionesList = useMemo(
     () => (Array.isArray(localLists.clasificaciones) ? localLists.clasificaciones : []),

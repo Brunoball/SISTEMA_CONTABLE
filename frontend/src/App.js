@@ -133,8 +133,45 @@ function isAdminUser() {
   return normalizeRol(u?.rol ?? u?.tipo_rol, u?.id_rol) === "admin";
 }
 
+function normalizePlanId(value) {
+  const n = Number(value);
+  return n === 2 ? 2 : 1;
+}
+
+function getPlanIdUsuario() {
+  const u = getUsuarioLogueado();
+  return normalizePlanId(u?.idPlan ?? u?.id_plan ?? u?.plan_id ?? u?.plan_nivel ?? 1);
+}
+
+const PLAN_BASICO_MODULES = new Set([
+  "dashboard",
+  "movimientos",
+  "flujo-caja",
+  "cuentas-corrientes",
+]);
+
+function planAllowsModule(modulo) {
+  const planId = getPlanIdUsuario();
+
+  // Plan 2 = PRO: acceso completo a todos los módulos.
+  if (planId === 2) return true;
+
+  // Plan 1 = BÁSICO: solo módulos principales habilitados.
+  return PLAN_BASICO_MODULES.has(String(modulo || ""));
+}
+
 function RutaProtegida({ children }) {
   return isAuthenticated() ? children : <Navigate to="/" replace />;
+}
+
+function RutaModulo({ modulo, children }) {
+  if (!isAuthenticated()) return <Navigate to="/" replace />;
+
+  return planAllowsModule(modulo) ? (
+    children
+  ) : (
+    <Navigate to="/panel/dashboard" replace />
+  );
 }
 
 function RutaAdmin({ children }) {
@@ -174,61 +211,108 @@ export default function App() {
         >
           <Route index element={<PanelIndexRedirect />} />
 
-          <Route path="dashboard" element={<Dashboard />} />
+          <Route
+            path="dashboard"
+            element={
+              <RutaModulo modulo="dashboard">
+                <Dashboard />
+              </RutaModulo>
+            }
+          />
 
-          <Route path="movimientos" element={<Movimientos />} />
-          <Route path="ventas" element={<Ventas />} />
+          <Route
+            path="movimientos"
+            element={
+              <RutaModulo modulo="movimientos">
+                <Movimientos />
+              </RutaModulo>
+            }
+          />
+          <Route
+            path="ventas"
+            element={
+              <RutaModulo modulo="movimientos">
+                <Ventas />
+              </RutaModulo>
+            }
+          />
           <Route
             path="compras"
             element={
-              <RutaAdmin>
-                <Compras />
-              </RutaAdmin>
+              <RutaModulo modulo="movimientos">
+                <RutaAdmin>
+                  <Compras />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
-          <Route path="recibos" element={<Recibos />} />
+          <Route
+            path="recibos"
+            element={
+              <RutaModulo modulo="movimientos">
+                <Recibos />
+              </RutaModulo>
+            }
+          />
           <Route
             path="OrdenesPago"
             element={
-              <RutaAdmin>
-                <OrdenesPago />
-              </RutaAdmin>
+              <RutaModulo modulo="movimientos">
+                <RutaAdmin>
+                  <OrdenesPago />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
           <Route
             path="Otrosingresos"
             element={
-              <RutaAdmin>
-                <Otrosingresos />
-              </RutaAdmin>
+              <RutaModulo modulo="movimientos">
+                <RutaAdmin>
+                  <Otrosingresos />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
           <Route
             path="Otrosegresos"
             element={
-              <RutaAdmin>
-                <Otrosegresos />
-              </RutaAdmin>
+              <RutaModulo modulo="movimientos">
+                <RutaAdmin>
+                  <Otrosegresos />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
 
           {/* Disponible para admin y usuario básico logueado */}
-          <Route path="flujo-de-caja" element={<Flujo_Caja />} />
+          <Route
+            path="flujo-de-caja"
+            element={
+              <RutaModulo modulo="flujo-caja">
+                <Flujo_Caja />
+              </RutaModulo>
+            }
+          />
 
           <Route
             path="cuentas-corrientes/clientes"
             element={
-              <RutaAdmin>
-                <ClientesCC />
-              </RutaAdmin>
+              <RutaModulo modulo="cuentas-corrientes">
+                <RutaAdmin>
+                  <ClientesCC />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
           <Route
             path="cuentas-corrientes/proveedores"
             element={
-              <RutaAdmin>
-                <ProveedoresCC />
-              </RutaAdmin>
+              <RutaModulo modulo="cuentas-corrientes">
+                <RutaAdmin>
+                  <ProveedoresCC />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
 
@@ -236,9 +320,11 @@ export default function App() {
           <Route
             path="stock"
             element={
-              <RutaAdmin>
-                <Stock />
-              </RutaAdmin>
+              <RutaModulo modulo="stock">
+                <RutaAdmin>
+                  <Stock />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
 
@@ -246,42 +332,52 @@ export default function App() {
           <Route
             path="cheques/cartera"
             element={
-              <RutaAdmin>
-                <Cheques_Cartera />
-              </RutaAdmin>
+              <RutaModulo modulo="cheques">
+                <RutaAdmin>
+                  <Cheques_Cartera />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
           <Route
             path="cheques/flujo"
             element={
-              <RutaAdmin>
-                <Flujo_Cheques />
-              </RutaAdmin>
+              <RutaModulo modulo="cheques">
+                <RutaAdmin>
+                  <Flujo_Cheques />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
           <Route
             path="cheques/echeqs-cartera"
             element={
-              <RutaAdmin>
-                <Echeqs_Cartera />
-              </RutaAdmin>
+              <RutaModulo modulo="cheques">
+                <RutaAdmin>
+                  <Echeqs_Cartera />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
           <Route
             path="cheques/flujo-echeqs"
             element={
-              <RutaAdmin>
-                <Flujo_Echeqs />
-              </RutaAdmin>
+              <RutaModulo modulo="cheques">
+                <RutaAdmin>
+                  <Flujo_Echeqs />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
 
           <Route
             path="analisis-financiero"
             element={
-              <RutaAdmin>
-                <AnalisisFinanciero />
-              </RutaAdmin>
+              <RutaModulo modulo="analisis-financiero">
+                <RutaAdmin>
+                  <AnalisisFinanciero />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
 
@@ -289,45 +385,55 @@ export default function App() {
           <Route
             path="configuracion"
             element={
-              <RutaAdmin>
-                <Configuracion />
-              </RutaAdmin>
+              <RutaModulo modulo="configuracion">
+                <RutaAdmin>
+                  <Configuracion />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
 
           <Route
             path="configuracion/tiendanube"
             element={
-              <RutaAdmin>
-                <ConfigTiendaNube />
-              </RutaAdmin>
+              <RutaModulo modulo="configuracion">
+                <RutaAdmin>
+                  <ConfigTiendaNube />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
 
           <Route
             path="configuracion/calendario"
             element={
-              <RutaAdmin>
-                <ConfiguracionCalendario />
-              </RutaAdmin>
+              <RutaModulo modulo="configuracion">
+                <RutaAdmin>
+                  <ConfiguracionCalendario />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
 
           <Route
             path="configuracion/usuarios"
             element={
-              <RutaAdmin>
-                <ConfiguracionUsuarios />
-              </RutaAdmin>
+              <RutaModulo modulo="configuracion">
+                <RutaAdmin>
+                  <ConfiguracionUsuarios />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
 
           <Route
             path="configuracion/datos-legales"
             element={
-              <RutaAdmin>
-                <ConfiguracionDatosLegales />
-              </RutaAdmin>
+              <RutaModulo modulo="configuracion">
+                <RutaAdmin>
+                  <ConfiguracionDatosLegales />
+                </RutaAdmin>
+              </RutaModulo>
             }
           />
         </Route>

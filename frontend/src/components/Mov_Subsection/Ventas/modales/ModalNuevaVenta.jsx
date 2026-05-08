@@ -216,6 +216,35 @@ function getAuthInfo() {
   return { token, sessionKey, idUsuario };
 }
 
+function normalizeRolVenta(value, idRol = null) {
+  const id = Number(idRol);
+  const v = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+  if (id === 1 || ["1", "admin", "administrator", "administrador", "superadmin"].includes(v)) {
+    return "admin";
+  }
+
+  return "empleado_basico";
+}
+
+function getUsuarioActualVenta() {
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    return u && typeof u === "object" ? u : null;
+  } catch {
+    return null;
+  }
+}
+
+function usuarioVentaEsBasico() {
+  const u = getUsuarioActualVenta();
+  const rol = normalizeRolVenta(u?.rol ?? u?.tipo_rol, u?.id_rol);
+  return rol !== "admin";
+}
+
 async function parseJsonOrThrow(res) {
   const text = await res.text();
   if (!text) throw new Error("Respuesta vacía del servidor.");
@@ -1224,6 +1253,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   );
 
   const [fecha, setFecha] = useState(todayISO);
+  const usuarioBasicoVentas = useMemo(() => usuarioVentaEsBasico(), [open]);
   const [filters, setFilters] = useState({
     id_tipo_venta: NULL_OPTION,
     id_medio_pago: NULL_OPTION,
@@ -1251,6 +1281,12 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const rowsContainerRef = useRef(null);
   const fechaInputRef = useRef(null);
   const [hasScroll, setHasScroll] = useState(false);
+
+  useEffect(() => {
+    if (!open || !usuarioBasicoVentas) return;
+    const hoy = todayISO();
+    if (fecha !== hoy) setFecha(hoy);
+  }, [open, usuarioBasicoVentas, fecha]);
 
   const cerrarFlujoFacturacion = useCallback(() => {
     setOpenResumenFactura(false);
@@ -1779,8 +1815,16 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       return { ok: false, msg: "La fecha es inválida." };
     }
     
+    const hoy = todayISO();
+    if (usuarioBasicoVentas && fecha !== hoy) {
+      return {
+        ok: false,
+        msg: "Tu usuario solo puede cargar ventas con fecha del día actual.",
+      };
+    }
+
     // Validación: no permitir fechas futuras
-    if (fecha > todayISO()) {
+    if (fecha > hoy) {
       return {
         ok: false,
         msg: "La fecha no puede ser posterior al día actual.",
@@ -1807,7 +1851,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }
 
     return { ok: true, warn: problems.length > 0 };
-  }, [cliInput, selectedClienteId, filters, isContado, fecha, rowsCalc, mediosFilas, mediosPagoList, resumen.total, sumaMediosPago]);
+  }, [cliInput, selectedClienteId, filters, isContado, fecha, usuarioBasicoVentas, rowsCalc, mediosFilas, mediosPagoList, resumen.total, sumaMediosPago]);
 
   const buildResumenFacturaPayload = useCallback(
     (clienteFiscalResuelto, cfg) => {
@@ -2469,7 +2513,12 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                     </div>
 
                     <div className="nc-section-body">
-                      <div className="nc-field" onClick={() => fechaInputRef.current?.showPicker?.()}>
+                      <div
+                        className="nc-field"
+                        onClick={() => {
+                          if (!saving && !usuarioBasicoVentas) fechaInputRef.current?.showPicker?.();
+                        }}
+                      >
                         <input
                           ref={fechaInputRef}
                           id="nv-fecha-input"
@@ -2477,17 +2526,26 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                           type="date"
                           placeholder=" "
                           value={fecha}
+                          min={usuarioBasicoVentas ? todayISO() : undefined}
                           max={todayISO()}
                           onChange={(e) => {
+                            const hoy = todayISO();
+                            if (usuarioBasicoVentas) {
+                              setFecha(hoy);
+                              showToast?.("advertencia", "Tu usuario solo puede cargar ventas con fecha de hoy.", 3000);
+                              return;
+                            }
+
                             const nuevaFecha = e.target.value;
-                            if (nuevaFecha > todayISO()) {
-                              setFecha(todayISO());
+                            if (nuevaFecha > hoy) {
+                              setFecha(hoy);
                               showToast?.("advertencia", "No podés seleccionar una fecha posterior al día actual.", 3000);
                               return;
                             }
                             setFecha(nuevaFecha);
                           }}
-                          disabled={saving}
+                          disabled={saving || usuarioBasicoVentas}
+                          title={usuarioBasicoVentas ? "Usuario básico: las ventas se cargan solamente con fecha de hoy." : undefined}
                         />
                         <label className="nc-label">Fecha</label>
                       </div>

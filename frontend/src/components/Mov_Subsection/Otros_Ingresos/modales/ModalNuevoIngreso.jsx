@@ -85,6 +85,20 @@ function safeText(v) {
   return s ? s : "-";
 }
 
+function isAllowedComprobanteFile(file) {
+  if (!file) return false;
+
+  const mime = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+
+  const isImageMime = mime.startsWith("image/");
+  const isPdfMime = mime === "application/pdf";
+  const isImageExt = /\.(jpg|jpeg|png|webp|gif|bmp|svg|heic|heif|avif|tif|tiff)$/i.test(name);
+  const isPdfExt = /\.pdf$/i.test(name);
+
+  return isImageMime || isPdfMime || isImageExt || isPdfExt;
+}
+
 // ─── Helpers de listas ─────────────────────────────────────────────────────────
 function getDetalleId(d) {
   const c =
@@ -904,6 +918,23 @@ export default function ModalNuevoIngreso({
     setViewerData({ url: "", mime: "", title: NOMBRE_COMPROBANTE_GENERICO });
   }, [viewerData]);
 
+  const handleArchivoAdjuntoSeleccionado = useCallback((e) => {
+    const file = e.target.files?.[0] || null;
+
+    if (!file) return;
+
+    if (!isAllowedComprobanteFile(file)) {
+      showToast("advertencia", "Archivo inválido. Solo se permiten imágenes o archivos PDF.");
+      setArchivoAdjunto(null);
+
+      if (inputFileRef.current) inputFileRef.current.value = "";
+
+      return;
+    }
+
+    setArchivoAdjunto(file);
+  }, [showToast]);
+
   // ⭐ FUNCIÓN DE VALIDACIÓN DE FECHA PARA EL onChange ⭐
   const handleFechaChange = useCallback((e) => {
     const nuevaFecha = e.target.value;
@@ -1099,6 +1130,12 @@ export default function ModalNuevoIngreso({
     }
     const v = validate();
     if (!v.ok) { showToast("advertencia", v.msg || "Faltan datos."); return; }
+
+    if (archivoAdjunto && !isAllowedComprobanteFile(archivoAdjunto)) {
+      showToast("advertencia", "Archivo inválido. Solo se permiten imágenes o archivos PDF.");
+      return;
+    }
+
     setSaving(true);
     if (v.warn)
       showToast("advertencia", "Hay filas incompletas: se guardarán solo las válidas.");
@@ -1447,8 +1484,9 @@ export default function ModalNuevoIngreso({
                             <input
                               ref={inputFileRef}
                               type="file"
+                              accept="image/*,application/pdf,.pdf"
                               className="mi-uploadBar__input"
-                              onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
+                              onChange={handleArchivoAdjuntoSeleccionado}
                               disabled={saving}
                               style={{ display: "none" }}
                             />

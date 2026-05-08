@@ -102,6 +102,21 @@ function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "-";
 }
+
+function isAllowedComprobanteFile(file) {
+  if (!file) return false;
+
+  const mime = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+
+  const isImageMime = mime.startsWith("image/");
+  const isPdfMime = mime === "application/pdf";
+
+  const isImageExt = /\.(jpg|jpeg|png|webp|gif|bmp|svg|heic|heif)$/i.test(name);
+  const isPdfExt = /\.pdf$/i.test(name);
+
+  return isImageMime || isPdfMime || isImageExt || isPdfExt;
+}
 function getChequeIdsArray(value) {
   if (Array.isArray(value)) return value.map((x) => String(x)).filter(Boolean);
   if (value == null || value === "") return [];
@@ -1545,14 +1560,37 @@ export default function ModalEditarCompra({
 
   const handleFileSelected = useCallback((e) => {
     const file = e.target.files?.[0] || null;
-    setArchivoNuevo(file);
-    if (file) {
-      setQuitarArchivoActual(false);
+
+    if (!file) {
+      setArchivoNuevo(null);
       setOpenVerComp(false);
       if (compUrl && compUrl.startsWith("blob:")) URL.revokeObjectURL(compUrl);
       setCompUrl("");
+      return;
     }
-  }, [compUrl]);
+
+    if (!isAllowedComprobanteFile(file)) {
+      showToast(
+        "advertencia",
+        "Archivo inválido. Solo se permiten imágenes o archivos PDF.",
+        4200
+      );
+
+      setArchivoNuevo(null);
+      setOpenVerComp(false);
+      if (compUrl && compUrl.startsWith("blob:")) URL.revokeObjectURL(compUrl);
+      setCompUrl("");
+
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setArchivoNuevo(file);
+    setQuitarArchivoActual(false);
+    setOpenVerComp(false);
+    if (compUrl && compUrl.startsWith("blob:")) URL.revokeObjectURL(compUrl);
+    setCompUrl("");
+  }, [compUrl, showToast]);
 
   // ⭐ SUBMIT CON VALIDACIÓN DE FECHA ⭐
   const submit = async (e) => {
@@ -1626,6 +1664,10 @@ export default function ModalEditarCompra({
       const habiaArchivo = Boolean(archivoActualUrl || archivoActualId);
       const quiereQuitar = Boolean(quitarArchivoActual);
       const quiereSubirNuevo = Boolean(archivoNuevo);
+
+      if (archivoNuevo && !isAllowedComprobanteFile(archivoNuevo)) {
+        throw new Error("Archivo inválido. Solo se permiten imágenes o archivos PDF.");
+      }
 
       if (habiaArchivo && (quiereQuitar || quiereSubirNuevo)) {
         showToast("cargando", quiereSubirNuevo ? "Reemplazando archivo…" : "Quitando archivo…", 12000);
@@ -1970,6 +2012,7 @@ export default function ModalEditarCompra({
                             <input
                               ref={fileInputRef}
                               type="file"
+                              accept="image/*,application/pdf,.pdf"
                               className="mi-uploadBar__input"
                               onChange={handleFileSelected}
                               disabled={saving}

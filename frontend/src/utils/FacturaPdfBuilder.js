@@ -282,20 +282,88 @@ function computeItems(fact, data, totalArs) {
   ];
 }
 
-function getMeta(fact) {
-  const ptoVta = padLeft(fact?.pto_vta ?? 2, 5);
-  const cbteNro = padLeft(fact?.cbte_nro ?? fact?.cbte_numero ?? "", 8);
-  const cbteTipo = padLeft(fact?.cbte_tipo ?? 11, 3);
-  const fechaEmision = ymdToHuman(fact?.fecha_cbte || fact?.fecha_emision || "");
+function normalizeCbteTipoCode(...values) {
+  for (const value of values) {
+    const digits = String(value ?? "").replace(/\D/g, "");
+    const n = Number(digits);
+
+    if (Number.isFinite(n) && n > 0) {
+      return n;
+    }
+  }
+
+  return 11;
+}
+
+function getCbteVisualMeta(cbteTipo, data = {}, fact = {}) {
+  const n = normalizeCbteTipoCode(
+    cbteTipo,
+    fact?.cbte_tipo,
+    data?.cbte_tipo,
+    fact?.codigo_comprobante,
+    data?.codigo_comprobante
+  );
+
+  const byCode = {
+    1: { letra: "A", tipoTxt: "FACTURA", cod: "001" },
+    6: { letra: "B", tipoTxt: "FACTURA", cod: "006" },
+    11: { letra: "C", tipoTxt: "FACTURA", cod: "011" },
+    3: { letra: "A", tipoTxt: "NOTA DE CRÉDITO", cod: "003" },
+    8: { letra: "B", tipoTxt: "NOTA DE CRÉDITO", cod: "008" },
+    13: { letra: "C", tipoTxt: "NOTA DE CRÉDITO", cod: "013" },
+    2: { letra: "A", tipoTxt: "NOTA DE DÉBITO", cod: "002" },
+    7: { letra: "B", tipoTxt: "NOTA DE DÉBITO", cod: "007" },
+    12: { letra: "C", tipoTxt: "NOTA DE DÉBITO", cod: "012" },
+    4: { letra: "A", tipoTxt: "RECIBO", cod: "004" },
+    9: { letra: "B", tipoTxt: "RECIBO", cod: "009" },
+    15: { letra: "C", tipoTxt: "RECIBO", cod: "015" },
+  };
+
+  const mapped = byCode[n] || {
+    letra: FIX.letra,
+    tipoTxt: FIX.tipoTxt,
+    cod: String(n || 11).padStart(3, "0"),
+  };
+
+  const tipoConfig = sanitizePdfText(
+    data?.tipo_comprobante_default ||
+      fact?.tipo_comprobante_default ||
+      ""
+  ).toUpperCase();
+
+  const codigoConfig = String(
+    data?.codigo_comprobante ||
+      fact?.codigo_comprobante ||
+      ""
+  ).replace(/\D/g, "");
+
+  return {
+    letra: mapped.letra,
+    tipoTxt: tipoConfig || mapped.tipoTxt,
+    cod: codigoConfig ? codigoConfig.padStart(3, "0") : mapped.cod,
+    cbteTipoNumero: n,
+  };
+}
+
+function getMeta(fact, data = {}) {
+  const ptoVta = padLeft(fact?.pto_vta ?? data?.pto_vta ?? 2, 5);
+  const cbteNro = padLeft(fact?.cbte_nro ?? fact?.cbte_numero ?? data?.cbte_nro ?? "", 8);
+  const visual = getCbteVisualMeta(
+    fact?.cbte_tipo ?? data?.cbte_tipo ?? data?.codigo_comprobante ?? FIX.cod_afip,
+    data,
+    fact
+  );
+  const cbteTipo = padLeft(visual.cbteTipoNumero, 3);
+  const fechaEmision = ymdToHuman(fact?.fecha_cbte || fact?.fecha_emision || data?.fecha_cbte || "");
   const remito = cbteNro ? `${ptoVta}-${cbteNro}` : "";
 
   const caeDigits = String(fact?.cae || "").replace(/\D/g, "");
   const cae = caeDigits ? caeDigits.padStart(14, "0").slice(0, 14) : "";
 
   return {
-    letra: FIX.letra,
-    tipoTxt: FIX.tipoTxt,
-    cod: FIX.cod_afip,
+    letra: visual.letra,
+    tipoTxt: visual.tipoTxt,
+    cod: visual.cod,
     cbteTipo,
     ptoVta,
     cbteNro,
@@ -590,7 +658,7 @@ async function drawBottomAnchored(doc, ctx, layout) {
   const { fact, data, forceTestAmount, testAmount } = ctx;
   const { W, H, B, innerW } = layout;
 
-  const meta = getMeta(fact);
+  const meta = getMeta(fact, data);
   const totalReal = safeNumber(
     fact?.imp_total ?? fact?.importe ?? data?.monto ?? data?.importe ?? 0,
     0
@@ -699,7 +767,7 @@ async function drawPage(doc, pageName, ctx) {
   });
   line(doc, B, B + bandH, W - B, B + bandH, 0.55);
 
-  const meta = getMeta(fact);
+  const meta = getMeta(fact, data);
   const em = getEmisor(data, fact);
   const rc = getReceptor(fact, data);
   const per = getPeriodo(fact, data);
@@ -757,7 +825,7 @@ async function drawPage(doc, pageName, ctx) {
 
   const rx = splitX + 1;
   set(doc, "helvetica", "bold", 20);
-  text(doc, "FACTURA", rx + 30, headerY + 48);
+  text(doc, meta.tipoTxt || "FACTURA", rx + 30, headerY + 48);
 
   set(doc, "helvetica", "bold", 9);
   text(doc, "Punto de Venta:", rx + 40, headerY + 65);

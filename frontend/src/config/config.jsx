@@ -3,6 +3,9 @@ const BASE_URL = process.env.REACT_APP_API_URL || "https://balto.3devsnet.com/ap
 export default BASE_URL;
 
 
-//Hostinger: https://balto.3devsnet.com/api/routes
+//Hostinger produccion: https://app.balto.com.ar/api/routes
+
+//Hostinger pruebas: https://balto.3devsnet.com/api/routes
+
 //Local: http://localhost:3001/routes
 

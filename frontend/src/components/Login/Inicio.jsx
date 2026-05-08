@@ -78,14 +78,7 @@ const Inicio = () => {
     if (!saved) return;
 
     const savedUser = localStorage.getItem(STORAGE_KEYS.user) || "";
-    const savedPassB64 = localStorage.getItem(STORAGE_KEYS.pass) || "";
-
-    let savedPass = "";
-    try {
-      savedPass = savedPassB64 ? atob(savedPassB64) : "";
-    } catch {
-      savedPass = "";
-    }
+    const savedPass = localStorage.getItem(STORAGE_KEYS.pass) || "";
 
     setRemember(true);
     setNombre(savedUser);
@@ -96,7 +89,7 @@ const Inicio = () => {
     if (flag) {
       localStorage.setItem(STORAGE_KEYS.rememberFlag, "1");
       localStorage.setItem(STORAGE_KEYS.user, user ?? "");
-      localStorage.setItem(STORAGE_KEYS.pass, btoa(pass ?? ""));
+      localStorage.setItem(STORAGE_KEYS.pass, pass ?? "");
     } else {
       localStorage.removeItem(STORAGE_KEYS.rememberFlag);
       localStorage.removeItem(STORAGE_KEYS.user);
@@ -159,6 +152,15 @@ const Inicio = () => {
         contrasena: pass,
       });
 
+      if (r.status === 429) {
+        mostrarToast(
+          "error",
+          r.data?.mensaje || "Demasiados intentos fallidos. Probá nuevamente más tarde.",
+          7000
+        );
+        return;
+      }
+
       if (r.status === 401 || r.status === 403) {
         mostrarToast("error", r.data?.mensaje || "Usuario o contraseña incorrectos");
         return;
@@ -210,6 +212,8 @@ const Inicio = () => {
       };
 
       localStorage.setItem("usuario", JSON.stringify(usuarioFinal));
+
+      // Recordar usuario y contraseña si está marcado
       persistRemember(user, pass, remember);
 
       navigate("/panel");
@@ -301,7 +305,9 @@ const Inicio = () => {
                 const checked = e.target.checked;
                 setRemember(checked);
 
-                if (!checked) {
+                if (checked) {
+                  persistRemember(nombre, contrasena, true);
+                } else {
                   persistRemember("", "", false);
                 }
               }}

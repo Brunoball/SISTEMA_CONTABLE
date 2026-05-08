@@ -874,11 +874,7 @@ const Principal = () => {
     const rutasPermitidas = [
       "/panel/movimientos",
       "/panel/ventas",
-      "/panel/compras",
       "/panel/recibos",
-      "/panel/OrdenesPago",
-      "/panel/Otrosingresos",
-      "/panel/Otrosegresos",
     ];
 
     const permitido = rutasPermitidas.some(
@@ -944,7 +940,18 @@ const Principal = () => {
     }));
 
     if (rolUsuario !== "admin") {
-      return base.slice(0, 1);
+      const movimientos = base.find((x) => x.key === "movimientos");
+
+      if (!movimientos) return [];
+
+      return [
+        {
+          ...movimientos,
+          children: (movimientos.children || []).filter((sub) =>
+            ["/panel/ventas", "/panel/recibos"].includes(sub.ruta)
+          ),
+        },
+      ];
     }
 
     return base;
@@ -1033,9 +1040,9 @@ const Principal = () => {
 
   const handleLogoClick = useCallback(() => {
     closeAllSubs();
-    navigate("/panel/dashboard");
+    navigate(rolUsuario === "admin" ? "/panel/dashboard" : "/panel/movimientos");
     setDrawerOpen(false);
-  }, [navigate, closeAllSubs]);
+  }, [navigate, closeAllSubs, rolUsuario]);
 
   const confirmarCierreSesion = useCallback(async () => {
     await doLogout({ silent: false });

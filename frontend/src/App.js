@@ -25,6 +25,7 @@ import Configuracion from "./components/Configuracion/Configuracion";
 import ConfigTiendaNube from "./components/Configuracion/ConfiguracionTiendaNube/ConfigTiendaNube";
 import ConfiguracionCalendario from "./components/Configuracion/ConfiguracionCalendario/ConfiguracionCalendario";
 import ConfiguracionUsuarios from "./components/Configuracion/ConfiguracionUsuarios/ConfiguracionUsuarios";
+import ConfiguracionDatosLegales from "./components/Configuracion/ConfiguracionDatosLegales/ConfiguracionDatosLegales";
 
 /* Análisis financiero */
 import * as AnalisisFinancieroModule from "./components/Analisis_Financiero/Analisis_Financiero";
@@ -302,6 +303,16 @@ export default function App() {
             element={
               <RutaAdmin>
                 <ConfiguracionUsuarios />
+              </RutaAdmin>
+            }
+          />
+
+
+          <Route
+            path="configuracion/datos-legales"
+            element={
+              <RutaAdmin>
+                <ConfiguracionDatosLegales />
               </RutaAdmin>
             }
           />

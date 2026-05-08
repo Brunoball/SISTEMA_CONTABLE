@@ -8,7 +8,12 @@ import "./configuracion.css";
 import "../Global/Global_css/Global_oscuro.css";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronRight, faCalendarDays, faUsersGear } from "@fortawesome/free-solid-svg-icons";
+import {
+  faChevronRight,
+  faCalendarDays,
+  faUsersGear,
+  faFileInvoiceDollar,
+} from "@fortawesome/free-solid-svg-icons";
 
 import { useDateRange } from "../../context/DateRangeContext";
 
@@ -124,23 +129,45 @@ export default function Configuracion() {
     store_id: "",
   });
 
+  const [datosLegales, setDatosLegales] = useState({
+    razon_social: "",
+    nombre_fantasia: "",
+    cuit: "",
+    condicion_iva: "",
+  });
+
   // ── config de calendario (leída del contexto global) ──────────────────
   const { calendarConfig, configLoaded } = useDateRange();
 
   const cargarResumen = useCallback(async () => {
-    if (!tenantId) return;
+    if (tenantId) {
+      try {
+        const res = await apiFetch({
+          action: "tiendanube_status",
+          idTenant: tenantId,
+        });
+        const txt = await res.text();
+        const data = safeJsonParse(txt);
+        const c = data?.conexion || {};
+        setTiendanube({
+          connected: Boolean(c.connected),
+          webhooks_configured: Boolean(c.webhooks_configured),
+          store_id: c.store_id || "",
+        });
+      } catch {}
+    }
+
     try {
-      const res = await apiFetch({
-        action: "tiendanube_status",
-        idTenant: tenantId,
-      });
+      const res = await apiFetch({ action: "config_facturacion_get" });
       const txt = await res.text();
       const data = safeJsonParse(txt);
-      const c = data?.conexion || {};
-      setTiendanube({
-        connected: Boolean(c.connected),
-        webhooks_configured: Boolean(c.webhooks_configured),
-        store_id: c.store_id || "",
+      const c = data?.config || {};
+
+      setDatosLegales({
+        razon_social: c.razon_social || "",
+        nombre_fantasia: c.nombre_fantasia || "",
+        cuit: c.cuit || "",
+        condicion_iva: c.condicion_iva || "",
       });
     } catch {}
   }, [tenantId]);
@@ -199,6 +226,21 @@ export default function Configuracion() {
         ),
       },
       {
+        id: "datos-legales",
+        title: "Datos legales",
+        description:
+          "Actualizá razón social, CUIT, condición fiscal, domicilio y datos de facturación.",
+        route: "/panel/configuracion/datos-legales",
+        status: datosLegales.razon_social ? { text: "Configurado", type: "success" } : { text: "Pendiente", type: "pending" },
+        metaTop: datosLegales.razon_social || "Sin razón social",
+        metaBottom: datosLegales.cuit ? `CUIT: ${datosLegales.cuit}` : "CUIT sin cargar",
+        icon: (
+          <div className="cfg-cardLogo cfg-cardLogo--icon">
+            <FontAwesomeIcon icon={faFileInvoiceDollar} />
+          </div>
+        ),
+      },
+      {
         id: "calendario",
         title: "Calendario global",
         description:
@@ -210,7 +252,7 @@ export default function Configuracion() {
         icon: <CalendarioIcon />,
       },
     ];
-  }, [tiendanube, calendarConfig, configLoaded]);
+  }, [tiendanube, datosLegales, calendarConfig, configLoaded]);
 
   return (
     <section className="cfg-page">

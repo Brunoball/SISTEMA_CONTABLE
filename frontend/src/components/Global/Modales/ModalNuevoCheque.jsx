@@ -47,6 +47,21 @@ function sanitizeEmitter(v) {
     .trimStart();
 }
 
+function isAllowedChequeFile(file) {
+  if (!file) return false;
+
+  const mime = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+
+  const isImageMime = mime.startsWith("image/");
+  const isPdfMime = mime === "application/pdf";
+
+  const isImageExt = /\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i.test(name);
+  const isPdfExt = /\.pdf$/i.test(name);
+
+  return isImageMime || isPdfMime || isImageExt || isPdfExt;
+}
+
 /* =========================================================
    Importe estilo Nueva Venta
 ========================================================= */
@@ -128,6 +143,8 @@ export default function ModalNuevoCheque({
   const fileInputRef = useRef(null);
   const closeBtnRef = useRef(null);
   const numeroInputRef = useRef(null);
+  const fechaEmisionRef = useRef(null);
+  const fechaPagoRef = useRef(null);
   const prevOpenRef = useRef(false);
 
   const notify = useCallback(
@@ -158,6 +175,24 @@ export default function ModalNuevoCheque({
 
     setCompUrl("");
   }, [compUrl]);
+
+  const abrirCalendario = useCallback(
+    (ref) => {
+      const input = ref?.current;
+      if (!input || saving || checkingNumero || openVerComp) return;
+
+      input.focus();
+
+      if (typeof input.showPicker === "function") {
+        try {
+          input.showPicker();
+        } catch {
+          // Algunos navegadores bloquean showPicker si no viene directo de un click.
+        }
+      }
+    },
+    [saving, checkingNumero, openVerComp]
+  );
 
   const runNumeroCheck = useCallback(async () => {
     if (typeof verificarNumeroCheque !== "function") return true;
@@ -244,10 +279,15 @@ export default function ModalNuevoCheque({
       });
 
       if (initialData.archivo instanceof File) {
-        setArchivo(initialData.archivo);
-        setArchivoNombre(
-          initialData.archivo_nombre || initialData.archivo.name || ""
-        );
+        if (isAllowedChequeFile(initialData.archivo)) {
+          setArchivo(initialData.archivo);
+          setArchivoNombre(
+            initialData.archivo_nombre || initialData.archivo.name || ""
+          );
+        } else {
+          setArchivo(null);
+          setArchivoNombre("");
+        }
       } else {
         setArchivo(null);
         setArchivoNombre("");
@@ -331,6 +371,40 @@ export default function ModalNuevoCheque({
     (e) => {
       const file = e.target.files?.[0] || null;
 
+      if (!file) {
+        setArchivo(null);
+        setArchivoNombre("");
+        setOpenVerComp(false);
+
+        if (compUrl && compUrl.startsWith("blob:")) {
+          URL.revokeObjectURL(compUrl);
+        }
+
+        setCompUrl("");
+        return;
+      }
+
+      if (!isAllowedChequeFile(file)) {
+        notify(
+          "advertencia",
+          "Archivo inválido. Solo se permiten imágenes o archivos PDF.",
+          4200
+        );
+
+        setArchivo(null);
+        setArchivoNombre("");
+        setOpenVerComp(false);
+
+        if (compUrl && compUrl.startsWith("blob:")) {
+          URL.revokeObjectURL(compUrl);
+        }
+
+        setCompUrl("");
+
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+
       setArchivo(file);
       setArchivoNombre(file?.name || "");
       setOpenVerComp(false);
@@ -341,7 +415,7 @@ export default function ModalNuevoCheque({
 
       setCompUrl("");
     },
-    [compUrl]
+    [compUrl, notify]
   );
 
   const handleOpenVerComprobante = useCallback(() => {
@@ -391,6 +465,15 @@ export default function ModalNuevoCheque({
 
     if (!String(form.fecha_pago || "").trim()) {
       notify("advertencia", "Ingresá la fecha de pago.", 3200);
+      return;
+    }
+
+    if (archivo && !isAllowedChequeFile(archivo)) {
+      notify(
+        "advertencia",
+        "Archivo inválido. Solo se permiten imágenes o archivos PDF.",
+        4200
+      );
       return;
     }
 
@@ -686,30 +769,52 @@ export default function ModalNuevoCheque({
                     </div>
 
                     <div className="mnc-dates">
-                      <div className="nc-field">
+                      <div
+                        className="nc-field"
+                        onClick={() => abrirCalendario(fechaEmisionRef)}
+                      >
                         <input
+                          ref={fechaEmisionRef}
                           className="nc-input"
                           type="date"
                           placeholder=" "
                           value={form.fecha_emision}
+                          onClick={() => abrirCalendario(fechaEmisionRef)}
+                          onFocus={() => abrirCalendario(fechaEmisionRef)}
                           onChange={(e) =>
                             setField("fecha_emision", e.target.value)
                           }
                           disabled={saving || checkingNumero}
                         />
-                        <label className="nc-label">Fecha emisión</label>
+                        <label
+                          className="nc-label"
+                          onClick={() => abrirCalendario(fechaEmisionRef)}
+                        >
+                          Fecha emisión
+                        </label>
                       </div>
 
-                      <div className="nc-field">
+                      <div
+                        className="nc-field"
+                        onClick={() => abrirCalendario(fechaPagoRef)}
+                      >
                         <input
+                          ref={fechaPagoRef}
                           className="nc-input"
                           type="date"
                           placeholder=" "
                           value={form.fecha_pago}
+                          onClick={() => abrirCalendario(fechaPagoRef)}
+                          onFocus={() => abrirCalendario(fechaPagoRef)}
                           onChange={(e) => setField("fecha_pago", e.target.value)}
                           disabled={saving || checkingNumero}
                         />
-                        <label className="nc-label">Fecha de pago *</label>
+                        <label
+                          className="nc-label"
+                          onClick={() => abrirCalendario(fechaPagoRef)}
+                        >
+                          Fecha de pago *
+                        </label>
                       </div>
                     </div>
                   </div>
@@ -808,7 +913,7 @@ export default function ModalNuevoCheque({
                           <input
                             ref={fileInputRef}
                             type="file"
-                            accept="image/*,.pdf"
+                            accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,image/bmp,image/svg+xml,application/pdf,.pdf"
                             className="mi-uploadBar__input"
                             onChange={handleFileSelected}
                             disabled={saving || checkingNumero}

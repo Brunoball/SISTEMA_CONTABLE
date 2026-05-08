@@ -87,6 +87,21 @@ function safeText(v) {
   return s ? s : "-";
 }
 
+function isAllowedComprobanteFile(file) {
+  if (!file) return false;
+
+  const mime = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+
+  const isImageMime = mime.startsWith("image/");
+  const isPdfMime = mime === "application/pdf";
+
+  const isImageExt = /\.(jpg|jpeg|png|webp|gif|bmp|svg|heic|heif)$/i.test(name);
+  const isPdfExt = /\.pdf$/i.test(name);
+
+  return isImageMime || isPdfMime || isImageExt || isPdfExt;
+}
+
 function getChequeIdsArray(value) {
   if (Array.isArray(value)) return value.map((x) => String(x)).filter(Boolean);
   if (value == null || value === "") return [];
@@ -1080,6 +1095,39 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     fileInputRef.current?.click();
   }, [saving]);
 
+  const handleFileSelected = useCallback((e) => {
+    const file = e.target.files?.[0] || null;
+
+    if (!file) {
+      setArchivoAdjunto(null);
+      setOpenVerComp(false);
+      if (compUrl) URL.revokeObjectURL(compUrl);
+      setCompUrl("");
+      return;
+    }
+
+    if (!isAllowedComprobanteFile(file)) {
+      showToast(
+        "advertencia",
+        "Archivo inválido. Solo se permiten imágenes o archivos PDF.",
+        4200
+      );
+
+      setArchivoAdjunto(null);
+      setOpenVerComp(false);
+      if (compUrl) URL.revokeObjectURL(compUrl);
+      setCompUrl("");
+
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setArchivoAdjunto(file);
+    setOpenVerComp(false);
+    if (compUrl) URL.revokeObjectURL(compUrl);
+    setCompUrl("");
+  }, [compUrl, showToast]);
+
   const handleOpenVerComprobante = useCallback(() => {
     if (!archivoAdjunto) return;
     const url = URL.createObjectURL(archivoAdjunto);
@@ -1204,6 +1252,10 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
         : [];
 
       let warningArchivo = "";
+
+      if (archivoAdjunto && !isAllowedComprobanteFile(archivoAdjunto)) {
+        throw new Error("Archivo inválido. Solo se permiten imágenes o archivos PDF.");
+      }
 
       if (archivoAdjunto && idsCreados.length > 0) {
         try {
@@ -1607,8 +1659,9 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                             <input
                               ref={fileInputRef}
                               type="file"
+                              accept="image/*,application/pdf,.pdf"
                               className="mi-uploadBar__input"
-                              onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
+                              onChange={handleFileSelected}
                               disabled={saving}
                               style={{ display: "none" }}
                             />

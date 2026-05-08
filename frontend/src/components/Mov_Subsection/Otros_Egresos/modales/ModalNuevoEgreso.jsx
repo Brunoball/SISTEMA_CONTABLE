@@ -28,6 +28,21 @@ import "./ModalNuevoEgreso_extra.css";
 const NULL_OPTION = "";
 const NOMBRE_COMPROBANTE_GENERICO = "Comprobante adjunto";
 
+function isAllowedComprobanteFile(file) {
+  if (!file) return false;
+
+  const mime = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+
+  const isImageMime = mime.startsWith("image/");
+  const isPdfMime = mime === "application/pdf";
+
+  const isImageExt = /\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i.test(name);
+  const isPdfExt = /\.pdf$/i.test(name);
+
+  return isImageMime || isPdfMime || isImageExt || isPdfExt;
+}
+
 const IVA_OPTIONS = [
   { label: "0 %", value: 0 },
   { label: "10,5 %", value: 10.5 },
@@ -845,6 +860,37 @@ export default function ModalNuevoEgreso({
     if (!saving) fileInputRef.current?.click();
   }, [saving]);
 
+  const handleFileSelected = useCallback((e) => {
+    const file = e.target.files?.[0] || null;
+
+    if (!file) {
+      setArchivoAdjunto(null);
+      setOpenVerComp(false);
+      if (compUrl) URL.revokeObjectURL(compUrl);
+      setCompUrl("");
+      return;
+    }
+
+    if (!isAllowedComprobanteFile(file)) {
+      showToast(
+        "advertencia",
+        "Archivo inválido. Solo se permiten imágenes o archivos PDF.",
+        4200
+      );
+      setArchivoAdjunto(null);
+      setOpenVerComp(false);
+      if (compUrl) URL.revokeObjectURL(compUrl);
+      setCompUrl("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setArchivoAdjunto(file);
+    setOpenVerComp(false);
+    if (compUrl) URL.revokeObjectURL(compUrl);
+    setCompUrl("");
+  }, [compUrl, showToast]);
+
   const handleOpenVerComprobante = useCallback(() => {
     if (!archivoAdjunto) return;
     if (compUrl) URL.revokeObjectURL(compUrl);
@@ -1162,6 +1208,10 @@ export default function ModalNuevoEgreso({
     const v = validate();
     if (!v.ok) {
       showToast("advertencia", v.msg || "Faltan datos.", 4200);
+      return;
+    }
+    if (archivoAdjunto && !isAllowedComprobanteFile(archivoAdjunto)) {
+      showToast("advertencia", "Archivo inválido. Solo se permiten imágenes o archivos PDF.", 4200);
       return;
     }
     setSaving(true);
@@ -1508,8 +1558,9 @@ export default function ModalNuevoEgreso({
                             <input
                               ref={fileInputRef}
                               type="file"
+                              accept="image/*,application/pdf,.pdf"
                               className="mi-uploadBar__input"
-                              onChange={(e) => setArchivoAdjunto(e.target.files?.[0] || null)}
+                              onChange={handleFileSelected}
                               disabled={saving}
                               style={{ display: "none" }}
                             />

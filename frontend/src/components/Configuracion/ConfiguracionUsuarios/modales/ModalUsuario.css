@@ -526,3 +526,155 @@ html[data-theme="oscuro"] .mu-select option {
   background: #071a2c;
   color: rgba(255, 255, 255, 0.92);
 }
+
+/* =============================================
+   MODAL USUARIO — CONTRASEÑA / OJO / SEGURIDAD
+   ============================================= */
+
+.mu-field--password {
+  position: relative;
+}
+
+.mu-input--password {
+  padding-right: 46px !important;
+}
+
+.mu-password-eye {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 32px;
+  height: 32px;
+  transform: translateY(-50%);
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #697586;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+  z-index: 3;
+}
+
+.mu-password-eye:hover:not(:disabled) {
+  background: #eef4ff;
+  border-color: #c8d9f5;
+  color: #2c5aad;
+}
+
+.mu-password-eye:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.96);
+}
+
+.mu-password-eye:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mu-password-strength {
+  margin-top: 8px;
+  padding: 9px 10px;
+  border-radius: 11px;
+  background: #f7f9fc;
+  border: 1px solid #e5ebf2;
+}
+
+.mu-password-strength__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+  font-size: 11px;
+  color: #6a7989;
+  font-weight: 600;
+}
+
+.mu-password-strength__top strong {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mu-password-strength__top strong.is-weak {
+  color: #ef4444;
+}
+
+.mu-password-strength__top strong.is-regular {
+  color: #f59e0b;
+}
+
+.mu-password-strength__top strong.is-good {
+  color: #3b82f6;
+}
+
+.mu-password-strength__top strong.is-strong {
+  color: #22c55e;
+}
+
+.mu-password-strength__bar {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e5eaf1;
+}
+
+.mu-password-strength__fill {
+  height: 100%;
+  border-radius: inherit;
+  transition:
+    width 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.mu-password-strength__hint {
+  margin: 7px 0 0;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: #7b8794;
+  font-weight: 500;
+}
+
+.mu-hint {
+  margin: 8px 0 0;
+}
+
+/* Dark mode */
+[data-theme="oscuro"] .mu-password-eye,
+body.dark .mu-password-eye {
+  color: rgba(210, 220, 235, 0.68);
+}
+
+[data-theme="oscuro"] .mu-password-eye:hover:not(:disabled),
+body.dark .mu-password-eye:hover:not(:disabled) {
+  background: rgba(44, 90, 173, 0.18);
+  border-color: rgba(44, 90, 173, 0.38);
+  color: rgba(140, 180, 255, 0.95);
+}
+
+[data-theme="oscuro"] .mu-password-strength,
+body.dark .mu-password-strength {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+[data-theme="oscuro"] .mu-password-strength__top,
+body.dark .mu-password-strength__top {
+  color: rgba(210, 220, 235, 0.65);
+}
+
+[data-theme="oscuro"] .mu-password-strength__bar,
+body.dark .mu-password-strength__bar {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+[data-theme="oscuro"] .mu-password-strength__hint,
+body.dark .mu-password-strength__hint {
+  color: rgba(210, 220, 235, 0.52);
+}

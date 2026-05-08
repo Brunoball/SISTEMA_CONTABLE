@@ -38,6 +38,20 @@ function round2(n) {
 function safeText(v) {
   return String(v ?? "").trim();
 }
+
+function isAllowedComprobanteFile(file) {
+  if (!file) return false;
+
+  const mime = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+
+  const isImageMime = mime.startsWith("image/");
+  const isPdfMime = mime === "application/pdf";
+  const isImageExt = /\.(jpg|jpeg|png|webp|gif|bmp|svg|heic|heif|avif|tif|tiff)$/i.test(name);
+  const isPdfExt = /\.pdf$/i.test(name);
+
+  return isImageMime || isPdfMime || isImageExt || isPdfExt;
+}
 function uid() {
   return window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -1088,10 +1102,21 @@ export default function ModalEditarIngreso({
 
   const seleccionarArchivo = useCallback((e) => {
     const file = e.target.files?.[0] || null;
+
     if (!file) return;
+
+    if (!isAllowedComprobanteFile(file)) {
+      showToast("advertencia", "Archivo inválido. Solo se permiten imágenes o archivos PDF.");
+      setArchivoNuevo(null);
+
+      if (inputFileRef.current) inputFileRef.current.value = "";
+
+      return;
+    }
+
     setArchivoNuevo(file);
     setMarcarEliminarComprobante(false);
-  }, []);
+  }, [showToast]);
 
   const quitarArchivoNuevo = useCallback(() => {
     setArchivoNuevo(null);
@@ -1299,6 +1324,10 @@ export default function ModalEditarIngreso({
 
       const v = validate();
       if (!v.ok) throw new Error(v.msg);
+
+      if (archivoNuevo && !isAllowedComprobanteFile(archivoNuevo)) {
+        throw new Error("Archivo inválido. Solo se permiten imágenes o archivos PDF.");
+      }
 
       const items = v.items.map((it) => ({
         id_detalle: it.id_detalle,
@@ -1865,6 +1894,7 @@ export default function ModalEditarIngreso({
                                   <input
                                     ref={inputFileRef}
                                     type="file"
+                                    accept="image/*,application/pdf,.pdf"
                                     className="mi-uploadBar__input"
                                     onChange={seleccionarArchivo}
                                     disabled={saving}

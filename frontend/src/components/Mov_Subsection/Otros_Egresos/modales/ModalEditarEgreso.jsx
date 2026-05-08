@@ -327,7 +327,22 @@ function resolveNombreComprobante() {
 }
 
 function fileAcceptText() {
-  return ".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.txt,.zip";
+  return "image/*,application/pdf,.pdf";
+}
+
+function isAllowedComprobanteFile(file) {
+  if (!file) return false;
+
+  const mime = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+
+  const isImageMime = mime.startsWith("image/");
+  const isPdfMime = mime === "application/pdf";
+
+  const isImageExt = /\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i.test(name);
+  const isPdfExt = /\.pdf$/i.test(name);
+
+  return isImageMime || isPdfMime || isImageExt || isPdfExt;
 }
 
 /* ─────────────────────────────────────────
@@ -783,10 +798,26 @@ export default function ModalEditarEgreso({
 
   const seleccionarArchivo = useCallback((e) => {
     const file = e.target.files?.[0] || null;
-    if (!file) return;
+
+    if (!file) {
+      setArchivoNuevo(null);
+      return;
+    }
+
+    if (!isAllowedComprobanteFile(file)) {
+      showToast(
+        "advertencia",
+        "Archivo inválido. Solo se permiten imágenes o archivos PDF.",
+        4200
+      );
+      setArchivoNuevo(null);
+      if (inputFileRef.current) inputFileRef.current.value = "";
+      return;
+    }
+
     setArchivoNuevo(file);
     setMarcarEliminarComprobante(false);
-  }, []);
+  }, [showToast]);
 
   const quitarArchivoNuevo = useCallback(() => {
     setArchivoNuevo(null);
@@ -840,6 +871,9 @@ export default function ModalEditarEgreso({
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error("La fecha es obligatoria.");
       if (fecha > todayISO()) throw new Error("La fecha no puede ser posterior al día actual.");
+      if (archivoNuevo && !isAllowedComprobanteFile(archivoNuevo)) {
+        throw new Error("Archivo inválido. Solo se permiten imágenes o archivos PDF.");
+      }
 
       let payload;
       if (form.es_movimiento_cheque) {

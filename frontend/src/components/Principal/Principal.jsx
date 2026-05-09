@@ -369,6 +369,7 @@ const PLAN_BASICO_NAV_KEYS = new Set([
   "movimientos",
   "flujo-de-caja",
   "cuentas-corrientes",
+  "configuracion",
 ]);
 
 function planAllowsNavKey(planId, key) {
@@ -923,8 +924,7 @@ const Principal = () => {
     usuario?.idPlan ?? usuario?.id_plan ?? usuario?.plan_id ?? usuario?.plan_nivel ?? 1
   );
 
-  const puedeVerConfiguracion =
-    rolUsuario === "admin" && planAllowsNavKey(planIdUsuario, "configuracion");
+  const puedeVerConfiguracion = rolUsuario === "admin";
 
   useEffect(() => {
     if (!usuario) return;

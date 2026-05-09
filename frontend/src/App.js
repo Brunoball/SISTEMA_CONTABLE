@@ -148,6 +148,7 @@ const PLAN_BASICO_MODULES = new Set([
   "movimientos",
   "flujo-caja",
   "cuentas-corrientes",
+  "configuracion",
 ]);
 
 function planAllowsModule(modulo) {
@@ -178,6 +179,16 @@ function RutaAdmin({ children }) {
   if (!isAuthenticated()) return <Navigate to="/" replace />;
 
   return isAdminUser() ? children : <Navigate to="/panel/dashboard" replace />;
+}
+
+function RutaPlanPro({ children }) {
+  if (!isAuthenticated()) return <Navigate to="/" replace />;
+
+  return getPlanIdUsuario() === 2 ? (
+    children
+  ) : (
+    <Navigate to="/panel/configuracion" replace />
+  );
 }
 
 function PanelIndexRedirect() {
@@ -398,7 +409,9 @@ export default function App() {
             element={
               <RutaModulo modulo="configuracion">
                 <RutaAdmin>
-                  <ConfigTiendaNube />
+                  <RutaPlanPro>
+                    <ConfigTiendaNube />
+                  </RutaPlanPro>
                 </RutaAdmin>
               </RutaModulo>
             }

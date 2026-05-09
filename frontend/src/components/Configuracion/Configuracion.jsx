@@ -54,6 +54,11 @@ function getUsuario() {
   }
 }
 
+function normalizePlanId(value) {
+  const n = Number(value);
+  return n === 2 ? 2 : 1;
+}
+
 async function apiFetch(paramsObj = {}, options = {}) {
   const sessionKey = getSessionKey();
   const headers = new Headers(options.headers || {});
@@ -122,6 +127,11 @@ export default function Configuracion() {
     usuario?.tenant?.idTenant ||
     "";
 
+  const planIdUsuario = normalizePlanId(
+    usuario?.idPlan ?? usuario?.id_plan ?? usuario?.plan_id ?? usuario?.plan_nivel ?? 1
+  );
+  const esPlanBasico = planIdUsuario === 1;
+
   // ── estado Tienda Nube ─────────────────────────────────────────────────
   const [tiendanube, setTiendanube] = useState({
     connected: false,
@@ -140,7 +150,7 @@ export default function Configuracion() {
   const { calendarConfig, configLoaded } = useDateRange();
 
   const cargarResumen = useCallback(async () => {
-    if (tenantId) {
+    if (!esPlanBasico && tenantId) {
       try {
         const res = await apiFetch({
           action: "tiendanube_status",
@@ -170,7 +180,7 @@ export default function Configuracion() {
         condicion_iva: c.condicion_iva || "",
       });
     } catch {}
-  }, [tenantId]);
+  }, [tenantId, esPlanBasico]);
 
   useEffect(() => {
     cargarResumen();
@@ -191,26 +201,28 @@ export default function Configuracion() {
       ? { text: "Configurado", type: "success" }
       : { text: "Cargando",   type: "pending" };
 
+    const tiendaNubeCard = {
+      id: "tiendanube",
+      title: "Tienda Nube",
+      description:
+        "Conectá tu tienda y configurá la sincronización con una interfaz simple.",
+      route: "/panel/configuracion/tiendanube",
+      status: tiendaNubeEstado,
+      metaTop: tiendanube.connected ? "Conexión activa" : "Sin conexión",
+      metaBottom: tiendanube.store_id
+        ? `Store ID: ${tiendanube.store_id}`
+        : "Todavía no configurado",
+      icon: (
+        <img
+          src={logoTiendaNube}
+          alt="Logo Tienda Nube"
+          className="cfg-cardLogo"
+        />
+      ),
+    };
+
     return [
-      {
-        id: "tiendanube",
-        title: "Tienda Nube",
-        description:
-          "Conectá tu tienda y configurá la sincronización con una interfaz simple.",
-        route: "/panel/configuracion/tiendanube",
-        status: tiendaNubeEstado,
-        metaTop:    tiendanube.connected ? "Conexión activa" : "Sin conexión",
-        metaBottom: tiendanube.store_id
-          ? `Store ID: ${tiendanube.store_id}`
-          : "Todavía no configurado",
-        icon: (
-          <img
-            src={logoTiendaNube}
-            alt="Logo Tienda Nube"
-            className="cfg-cardLogo"
-          />
-        ),
-      },
+      ...(!esPlanBasico ? [tiendaNubeCard] : []),
       {
         id: "usuarios",
         title: "Usuarios del sistema",
@@ -252,7 +264,7 @@ export default function Configuracion() {
         icon: <CalendarioIcon />,
       },
     ];
-  }, [tiendanube, datosLegales, calendarConfig, configLoaded]);
+  }, [tiendanube, datosLegales, calendarConfig, configLoaded, esPlanBasico]);
 
   return (
     <section className="cfg-page">

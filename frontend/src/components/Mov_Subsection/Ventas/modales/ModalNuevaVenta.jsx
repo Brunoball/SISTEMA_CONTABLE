@@ -10,6 +10,11 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFileInvoiceDollar, faPlus, faMoneyCheckDollar } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
 import ModalNuevoCheque from "../../../Global/Modales/ModalNuevoCheque.jsx";
+import {
+  saveVentaNoFacturadaPdf,
+  preloadVentaNoFacturadaPdfAssets,
+} from "../../../../utils/VentaNoFacturadaPdfBuilder";
+import { saveRemitoPdf } from "../../../../utils/RemitoPdfBuilder";
 
 /* ================================================================
    CONSTANTS
@@ -361,6 +366,20 @@ function getMedioPagoId(mp) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+function getMedioPagoNombre(mp) {
+  return safeStr(
+    mp?.nombre ||
+      mp?.Nombre ||
+      mp?.medio_pago ||
+      mp?.medioPago ||
+      mp?.nombre_medio_pago ||
+      mp?.descripcion ||
+      mp?.detalle ||
+      mp?.label ||
+      ""
+  );
+}
+
 function normalizeChequeTipoFromMedio(nombre) {
   const s = String(nombre || "")
     .toLowerCase()
@@ -434,11 +453,15 @@ function buildMediosPagoPayload(mediosFilas, mediosPagoList) {
       const mpRow = mediosPagoList.find(
         (x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago)
       );
-      const tipoCheque = normalizeChequeTipoFromMedio(mpRow?.nombre || "");
+      const medioPagoNombre = getMedioPagoNombre(mpRow);
+      const tipoCheque = normalizeChequeTipoFromMedio(medioPagoNombre);
 
       const base = {
         frontend_row_uid: mp.id,
         id_medio_pago: Number(mp.id_medio_pago),
+        nombre: medioPagoNombre,
+        medio_pago: medioPagoNombre,
+        descripcion: medioPagoNombre,
         monto: tipoCheque !== null ? safeNumber(mp.cheque?.importe) : safeNumber(mp.monto),
       };
 
@@ -1281,6 +1304,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const prevOpenRef = useRef(false);
   const rowsContainerRef = useRef(null);
   const fechaInputRef = useRef(null);
+  const pdfAssetsPreloadedRef = useRef(false);
   const [hasScroll, setHasScroll] = useState(false);
 
   useEffect(() => {
@@ -1627,7 +1651,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       const mpRow = mediosPagoList.find(
         (x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago ?? "")
       );
-      const tipoCheque = normalizeChequeTipoFromMedio(mpRow?.nombre || "");
+      const tipoCheque = normalizeChequeTipoFromMedio(getMedioPagoNombre(mpRow));
       return acc + (tipoCheque !== null ? safeNumber(mp.cheque?.importe) : safeNumber(mp.monto));
     }, 0);
   }, [mediosFilas, mediosPagoList]);
@@ -1779,7 +1803,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         const mpRow = mediosPagoList.find(
           (x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago ?? "")
         );
-        const tipoCheque = normalizeChequeTipoFromMedio(mpRow?.nombre || "");
+        const tipoCheque = normalizeChequeTipoFromMedio(getMedioPagoNombre(mpRow));
 
         if (!mp.id_medio_pago || mp.id_medio_pago === NULL_OPTION) {
           return { ok: false, msg: `Medio de pago ${i + 1}: falta seleccionar el medio.` };
@@ -1919,6 +1943,113 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     },
     [rowsCalc, mediosFilas, mediosPagoList, selectedClienteNombre, selectedClienteId, filters.id_tipo_venta, fecha, isContado, resumen.total]
   );
+
+  const buildVentaNoFacturadaPayload = useCallback(
+    (cfg = null) => {
+      const items = rowsCalc
+        .filter((r) => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0)
+        .map((r, i) => ({
+          id: r.id,
+          id_detalle: Number(r.id_detalle || 0),
+          codigo: String(i + 1),
+          descripcion: safeStr(r.detalleText),
+          cantidad: Number(r.cantidad || 0),
+          unidad: "u",
+          precio_unitario: Number(r.precio || 0),
+          precio: Number(r.precio || 0),
+          bonif_pct: 0,
+          impBonif: 0,
+          subtotal: Number(r.subtotal || 0),
+          ars: Number(r.total || 0),
+          iva_pct: Number(r.ivaPct || 0),
+          iva_monto: Number(r.ivaMonto || 0),
+          total: Number(r.total || 0),
+        }));
+
+      const mediosPayload = buildMediosPagoPayload(mediosFilas, mediosPagoList);
+      const primerMedioId = mediosPayload[0]?.id_medio_pago || null;
+      const clienteFiscal = clienteFiscalDb || fiscalArcaData || {};
+      const nombreCliente =
+        selectedClienteNombre || safeStr(cliInput) || safeStr(clienteFiscal?.razon_social) || "Cliente";
+
+      return {
+        id_pago: null,
+        id_sistema: null,
+        labelCliente: nombreCliente,
+        labelSistema: "Nueva venta",
+        cliente_facturacion: {
+          doc_tipo: clienteFiscal?.doc_tipo ?? null,
+          doc_nro: safeStr(clienteFiscal?.doc_nro || clienteFiscal?.cuit || ""),
+          cuit: safeStr(clienteFiscal?.cuit || ""),
+          razon_social: safeStr(clienteFiscal?.razon_social || nombreCliente),
+          cond_iva: safeStr(clienteFiscal?.condicion_iva || clienteFiscal?.cond_iva || ""),
+          condicion_iva: safeStr(clienteFiscal?.condicion_iva || clienteFiscal?.cond_iva || ""),
+          domicilio: safeStr(clienteFiscal?.domicilio || ""),
+          origen: safeStr(clienteFiscal?.origen || "venta_no_facturada"),
+        },
+        id_cliente: selectedClienteId || null,
+        id_tipo_venta: Number(filters.id_tipo_venta || 0) || null,
+        tipo_venta_nombre: safeStr(
+          tipoVentaSelected?.nombre || tipoVentaSelected?.descripcion || tipoVentaSelected?.detalle || "Contado"
+        ),
+        id_medio_pago: isContado ? primerMedioId : null,
+        id_clasificacion: null,
+        fecha_cbte_iso: String(fecha || todayISO()).slice(0, 10),
+        vto_pago_iso: plusDaysISOFrom(fecha || todayISO(), 10),
+        cbte_tipo: null,
+        pto_vta: null,
+        items_facturacion: items,
+        medios_pago: mediosPayload,
+        total_ars: Number(resumen.total || 0),
+        monto: Number(resumen.total || 0),
+        importe: Number(resumen.total || 0),
+        observaciones:
+          "Comprobante interno generado automáticamente por una venta no facturada. Sin CAE, sin QR fiscal y sin validez fiscal.",
+        emisor_nombre: safeStr(cfg?.razon_social || cfg?.nombre_fantasia || "BALTO"),
+        emisor_domicilio: safeStr(cfg?.domicilio_comercial || cfg?.domicilio || ""),
+        cuit_emisor: safeStr(cfg?.cuit || ""),
+        cond_iva_emisor: safeStr(cfg?.condicion_iva || cfg?.cond_iva || ""),
+        ingresos_brutos_emisor: safeStr(cfg?.ingresos_brutos || ""),
+        fecha_inicio_actividades_emisor: safeStr(cfg?.fecha_inicio_actividades || ""),
+        logo_url: safeStr(cfg?.logo_url || ""),
+      };
+    },
+    [
+      rowsCalc,
+      mediosFilas,
+      mediosPagoList,
+      clienteFiscalDb,
+      fiscalArcaData,
+      selectedClienteNombre,
+      cliInput,
+      selectedClienteId,
+      filters.id_tipo_venta,
+      tipoVentaSelected,
+      isContado,
+      fecha,
+      resumen.total,
+    ]
+  );
+
+  useEffect(() => {
+    if (!open) {
+      pdfAssetsPreloadedRef.current = false;
+      return undefined;
+    }
+
+    if (pdfAssetsPreloadedRef.current) return undefined;
+    pdfAssetsPreloadedRef.current = true;
+
+    const timer = window.setTimeout(() => {
+      try {
+        preloadVentaNoFacturadaPdfAssets(buildVentaNoFacturadaPayload(configFacturacion || {}));
+      } catch {
+        preloadVentaNoFacturadaPdfAssets({});
+      }
+    }, 180);
+
+    return () => window.clearTimeout(timer);
+  }, [open, configFacturacion, buildVentaNoFacturadaPayload]);
 
   const actualizarChequeConArchivo = useCallback(
     async ({ idCheque, idMovimiento, cheque }) => {
@@ -2107,6 +2238,123 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     [API_VINCULAR_COMPROBANTE, resumen.total, resumenFacturaData]
   );
 
+  const subirVentaNoFacturadaPdfYVincular = useCallback(
+    async ({ idMovimiento, blob, filename, ventaMeta }) => {
+      if (!idMovimiento || !blob) throw new Error("Faltan datos para subir el comprobante interno.");
+
+      const fd = new FormData();
+      fd.append("tipo", "VENTA_NO_FACTURADA");
+      fd.append("id_movimiento", String(idMovimiento));
+
+      const idsMovimientoPdf = Array.isArray(ventaMeta?.ids_movimiento)
+        ? ventaMeta.ids_movimiento.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0)
+        : [];
+
+      if (idsMovimientoPdf.length > 0) {
+        fd.append("ids_movimiento", JSON.stringify(idsMovimientoPdf));
+      }
+
+      fd.append(
+        "pdf",
+        blob instanceof Blob ? blob : new Blob([blob], { type: "application/pdf" }),
+        filename || "venta_no_facturada.pdf"
+      );
+
+      const meta = {
+        tipo: "VENTA_NO_FACTURADA",
+        estado: "venta_no_facturada",
+        emitido_en_arca: 0,
+        id_pago: ventaMeta?.id_pago ?? null,
+        id_sistema: ventaMeta?.id_sistema ?? null,
+        id_cliente: ventaMeta?.id_cliente ?? null,
+        ids_movimiento: Array.isArray(ventaMeta?.ids_movimiento) ? ventaMeta.ids_movimiento : [],
+        monto_ars: Number(ventaMeta?.total_ars ?? ventaMeta?.importe ?? resumen.total ?? 0),
+        fecha_cbte: ventaMeta?.fecha_cbte_iso ?? fecha ?? null,
+        razon_social: ventaMeta?.cliente_facturacion?.razon_social || ventaMeta?.labelCliente || null,
+        cond_iva:
+          ventaMeta?.cliente_facturacion?.cond_iva || ventaMeta?.cliente_facturacion?.condicion_iva || null,
+        domicilio: ventaMeta?.cliente_facturacion?.domicilio || null,
+        resultado: "P",
+        json_arca: null,
+        resumen_facturacion: {
+          ...ventaMeta,
+          items_facturacion: Array.isArray(ventaMeta?.items_facturacion) ? ventaMeta.items_facturacion : [],
+        },
+      };
+
+      fd.append("meta", JSON.stringify(meta));
+
+      const res = await fetch(API_VINCULAR_COMPROBANTE, {
+        method: "POST",
+        body: fd,
+        headers: buildAuthHeaders(false),
+      });
+      const j = await parseJsonOrThrow(res);
+      if (!j?.exito) throw new Error(j?.mensaje || "No se pudo subir el comprobante interno.");
+      return j;
+    },
+    [API_VINCULAR_COMPROBANTE, fecha, resumen.total]
+  );
+
+  const subirRemitoPdfYVincular = useCallback(
+    async ({ idMovimiento, blob, filename, remitoMeta }) => {
+      if (!idMovimiento || !blob) throw new Error("Faltan datos para subir el remito.");
+
+      const fd = new FormData();
+      fd.append("tipo", "REMITO");
+      fd.append("id_movimiento", String(idMovimiento));
+
+      const idsMovimientoPdf = Array.isArray(remitoMeta?.ids_movimiento)
+        ? remitoMeta.ids_movimiento.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0)
+        : [];
+
+      if (idsMovimientoPdf.length > 0) {
+        fd.append("ids_movimiento", JSON.stringify(idsMovimientoPdf));
+      }
+
+      fd.append(
+        "pdf",
+        blob instanceof Blob ? blob : new Blob([blob], { type: "application/pdf" }),
+        filename || "remito.pdf"
+      );
+
+      const meta = {
+        tipo: "REMITO",
+        estado: "remito",
+        emitido_en_arca: 0,
+        id_pago: remitoMeta?.id_pago ?? null,
+        id_sistema: remitoMeta?.id_sistema ?? null,
+        id_cliente: remitoMeta?.id_cliente ?? null,
+        ids_movimiento: Array.isArray(remitoMeta?.ids_movimiento) ? remitoMeta.ids_movimiento : [],
+        monto_ars: Number(remitoMeta?.total_ars ?? remitoMeta?.importe ?? resumen.total ?? 0),
+        fecha_cbte: remitoMeta?.fecha_cbte_iso ?? fecha ?? null,
+        razon_social: remitoMeta?.cliente_facturacion?.razon_social || remitoMeta?.labelCliente || null,
+        cond_iva:
+          remitoMeta?.cliente_facturacion?.cond_iva || remitoMeta?.cliente_facturacion?.condicion_iva || null,
+        domicilio: remitoMeta?.cliente_facturacion?.domicilio || null,
+        resultado: "P",
+        json_arca: null,
+        resumen_facturacion: {
+          ...remitoMeta,
+          tipo: "REMITO",
+          items_facturacion: Array.isArray(remitoMeta?.items_facturacion) ? remitoMeta.items_facturacion : [],
+        },
+      };
+
+      fd.append("meta", JSON.stringify(meta));
+
+      const res = await fetch(API_VINCULAR_COMPROBANTE, {
+        method: "POST",
+        body: fd,
+        headers: buildAuthHeaders(false),
+      });
+      const j = await parseJsonOrThrow(res);
+      if (!j?.exito) throw new Error(j?.mensaje || "No se pudo subir el remito.");
+      return j;
+    },
+    [API_VINCULAR_COMPROBANTE, fecha, resumen.total]
+  );
+
   const vincularComprobanteAMovimientosLote = useCallback(
     async (idsMovimiento, idComprobante) => {
       if (!idComprobante || !Array.isArray(idsMovimiento) || !idsMovimiento.length) return;
@@ -2120,6 +2368,152 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       return data;
     },
     [API_VINCULAR_COMPROBANTE_LOTE]
+  );
+
+  const generarYVincularVentaNoFacturadaPdf = useCallback(
+    async (info) => {
+      const idsOk = (
+        Array.isArray(info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
+          ? info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? []
+          : info?.id_movimiento
+          ? [info.id_movimiento]
+          : []
+      )
+        .map((x) => Number(x))
+        .filter((x) => Number.isFinite(x) && x > 0);
+
+      if (!idsOk.length) {
+        throw new Error("La venta se guardó, pero el backend no devolvió movimientos para vincular el comprobante interno.");
+      }
+
+      let cfg = configFacturacion;
+      if (!cfg) {
+        try {
+          cfg = await fetchConfigFacturacion();
+        } catch {
+          cfg = null;
+        }
+      }
+
+      const ventaMeta = {
+        ...buildVentaNoFacturadaPayload(cfg || {}),
+        ids_movimiento: idsOk,
+      };
+
+      const { blob, filename } = await saveVentaNoFacturadaPdf({
+        data: ventaMeta,
+        download: false,
+      });
+
+      const subida = await subirVentaNoFacturadaPdfYVincular({
+        idMovimiento: idsOk[0],
+        blob,
+        filename,
+        ventaMeta,
+      });
+
+      const idComprobante =
+        Number(subida?.id_comprobante ?? subida?.comprobante?.id_comprobante ?? 0) || null;
+      if (!idComprobante) {
+        throw new Error("El backend no devolvió un id_comprobante válido para el comprobante interno.");
+      }
+
+      const idsVinculadosBackend = Array.isArray(subida?.ids_movimiento_vinculados)
+        ? subida.ids_movimiento_vinculados.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0)
+        : [];
+      const setVinculadosBackend = new Set(idsVinculadosBackend);
+      const idsPendientes = idsOk.filter((id) => !setVinculadosBackend.has(id));
+
+      // Compatibilidad: si el backend viejo no devuelve ids_movimiento_vinculados,
+      // se vincula el resto con el endpoint anterior. Con el backend nuevo no hace
+      // esta segunda llamada, por eso guardar queda más rápido.
+      if (idsPendientes.length > 0) {
+        const pendientesSinPrincipal = idsPendientes.filter((id) => id !== idsOk[0]);
+        if (pendientesSinPrincipal.length > 0) {
+          await vincularComprobanteAMovimientosLote(pendientesSinPrincipal, idComprobante);
+        }
+      }
+
+      return {
+        id_comprobante: idComprobante,
+        pdf_filename: filename,
+        ids_movimiento: idsOk,
+      };
+    },
+    [
+      configFacturacion,
+      fetchConfigFacturacion,
+      buildVentaNoFacturadaPayload,
+      subirVentaNoFacturadaPdfYVincular,
+      vincularComprobanteAMovimientosLote,
+    ]
+  );
+
+  const generarYVincularRemitoPdf = useCallback(
+    async (info, baseData = null) => {
+      const idsOk = (
+        Array.isArray(info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? [])
+          ? info?.ids ?? info?.ids_movimiento ?? info?.ids_movimientos ?? []
+          : info?.id_movimiento
+          ? [info.id_movimiento]
+          : []
+      )
+        .map((x) => Number(x))
+        .filter((x) => Number.isFinite(x) && x > 0);
+
+      if (!idsOk.length) {
+        throw new Error("La venta se guardó, pero el backend no devolvió movimientos para vincular el remito.");
+      }
+
+      let cfg = configFacturacion;
+      if (!cfg) {
+        try {
+          cfg = await fetchConfigFacturacion();
+        } catch {
+          cfg = null;
+        }
+      }
+
+      const sourceData = baseData && typeof baseData === "object" ? baseData : buildVentaNoFacturadaPayload(cfg || {});
+      const remitoMeta = {
+        ...sourceData,
+        tipo: "REMITO",
+        estado: "remito",
+        ids_movimiento: idsOk,
+        observaciones_remito:
+          "Remito generado automáticamente desde la venta. Lista de productos sin precios ni importes.",
+      };
+
+      const { blob, filename } = await saveRemitoPdf({
+        data: remitoMeta,
+        download: false,
+      });
+
+      const subida = await subirRemitoPdfYVincular({
+        idMovimiento: idsOk[0],
+        blob,
+        filename,
+        remitoMeta,
+      });
+
+      const idComprobante =
+        Number(subida?.id_comprobante ?? subida?.comprobante?.id_comprobante ?? 0) || null;
+      if (!idComprobante) {
+        throw new Error("El backend no devolvió un id_comprobante válido para el remito.");
+      }
+
+      return {
+        id_comprobante: idComprobante,
+        pdf_filename: filename,
+        ids_movimiento: idsOk,
+      };
+    },
+    [
+      configFacturacion,
+      fetchConfigFacturacion,
+      buildVentaNoFacturadaPayload,
+      subirRemitoPdfYVincular,
+    ]
   );
 
   const abrirResumenFactura = useCallback(async () => {
@@ -2193,12 +2587,26 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           await vincularComprobanteAMovimientosLote(restoIds, idComprobante);
         }
 
+        let remito = null;
+        const remitoWarnings = [];
+        try {
+          remito = await generarYVincularRemitoPdf(info, resumenFacturaData);
+        } catch (remitoError) {
+          remitoWarnings.push(remitoError?.message || "La venta se guardó, pero no se pudo generar el remito.");
+        }
+
         const chequeWarnings = await subirArchivosChequesCreados(info);
+        const warnings = [...remitoWarnings, ...chequeWarnings];
 
         showToast("exito", "Venta agregada correctamente.", 3000);
-        if (chequeWarnings.length) showToast("advertencia", chequeWarnings.join(" "), 5200);
+        if (warnings.length) showToast("advertencia", warnings.join(" "), 6200);
 
-        onSaved?.({ ...info, factura_emitida: factEmitida || null, id_comprobante: idComprobante });
+        onSaved?.({
+          ...info,
+          factura_emitida: factEmitida || null,
+          remito,
+          id_comprobante: idComprobante,
+        });
       } catch (e) {
         showToast("error", e?.message || "La factura se emitió pero no se pudo guardar la venta.", 5200);
       } finally {
@@ -2214,6 +2622,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       onSaved,
       subirComprobanteYVincularPrimerMovimiento,
       vincularComprobanteAMovimientosLote,
+      generarYVincularRemitoPdf,
       subirArchivosChequesCreados,
     ]
   );
@@ -2244,6 +2653,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     }
 
     setSaving(true);
+    showToast("exito", "Guardando venta y generando PDF...", 5200);
     if (v.warn) showToast("advertencia", "Hay filas incompletas: se guardarán solo las válidas.", 3600);
 
     try {
@@ -2252,16 +2662,54 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         accionFinal: "guardar",
         esFacturadaFinal: false,
       });
+
+      let comprobanteInterno = null;
+      let remito = null;
+      const pdfWarnings = [];
+      try {
+        comprobanteInterno = await generarYVincularVentaNoFacturadaPdf(info);
+      } catch (pdfError) {
+        pdfWarnings.push(
+          pdfError?.message || "La venta se guardó, pero no se pudo generar el comprobante interno."
+        );
+      }
+
+      try {
+        remito = await generarYVincularRemitoPdf(info);
+      } catch (remitoError) {
+        pdfWarnings.push(remitoError?.message || "La venta se guardó, pero no se pudo generar el remito.");
+      }
+
       const chequeWarnings = await subirArchivosChequesCreados(info);
+      const warnings = [...pdfWarnings, ...chequeWarnings];
+
       showToast("exito", "Venta agregada correctamente.", 3000);
-      if (chequeWarnings.length) showToast("advertencia", chequeWarnings.join(" "), 5200);
-      onSaved?.(info);
+      if (warnings.length) showToast("advertencia", warnings.join(" "), 6200);
+      onSaved?.({
+        ...info,
+        comprobante_interno: comprobanteInterno,
+        remito,
+        id_comprobante: comprobanteInterno?.id_comprobante ?? info?.id_comprobante ?? null,
+      });
     } catch (e) {
       showToast("error", e?.message || "Error guardando.", 4500);
     } finally {
       setSaving(false);
     }
-  }, [saving, addUI.open, validate, showToast, tipoVentaSeleccionado, accionContado, guardarVentaBatch, onSaved, abrirResumenFactura, subirArchivosChequesCreados]);
+  }, [
+    saving,
+    addUI.open,
+    validate,
+    showToast,
+    tipoVentaSeleccionado,
+    accionContado,
+    guardarVentaBatch,
+    generarYVincularVentaNoFacturadaPdf,
+    generarYVincularRemitoPdf,
+    subirArchivosChequesCreados,
+    onSaved,
+    abrirResumenFactura,
+  ]);
 
   const onClickFacturar = useCallback(async () => {
     setAccionContado("facturar");
@@ -2673,7 +3121,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                     disabled={saving}
                     className="mit-btn mit-btn--solid mit-btn--block"
                   >
-                    {saving && accionContado === "guardar" ? "Procesando..." : "Guardar venta"}
+                    {saving && accionContado === "guardar" ? "Guardando y generando PDF..." : "Guardar venta"}
                   </button>
                   <button
                     type="button"

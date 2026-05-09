@@ -88,7 +88,24 @@ function getRowKey(r) {
   return `fx:${f}|${c}|${d}|${m}`;
 }
 function getFacturaIdComprobante(row) { const n = Number(row?.factura_id_comprobante ?? row?.id_comprobante ?? row?.comprobante_id ?? 0); return Number.isFinite(n) && n > 0 ? n : null; }
-function getFacturaMime(row) { return String(row?.factura_comprobante_tipo ?? row?.archivo_mime ?? row?.comprobante_mime ?? "").trim(); }
+function getFacturaMime(row) {
+  return String(
+    row?.factura_comprobante_mime ??
+      row?.archivo_mime ??
+      row?.comprobante_mime ??
+      row?.mime_type ??
+      row?.content_type ??
+      ""
+  ).trim();
+}
+function getRemitoIdComprobante(row) { const n = Number(row?.remito_id_comprobante ?? row?.id_comprobante_remito ?? row?.remito_comprobante_id ?? 0); return Number.isFinite(n) && n > 0 ? n : null; }
+function getRemitoMime(row) {
+  return String(
+    row?.remito_comprobante_mime ??
+      row?.remito_mime ??
+      ""
+  ).trim();
+}
 function hasCliente(r) { const idCli = Number(r?.id_cliente ?? 0); if (Number.isFinite(idCli) && idCli > 0) return true; return String(r?.cliente ?? "").trim().length > 0; }
 function hasTipoVentaText(r) { return String(r?.pago_tipo_venta ?? r?.tipo_venta ?? "").trim().length > 0; }
 function hasTipoVentaId(r) { const id = Number(r?.id_tipo_venta ?? r?.tipo_venta_id ?? 0); return Number.isFinite(id) && id > 0; }
@@ -101,6 +118,10 @@ function normalizeVentaRow(r) {
   const idMov = getMovimientoId(r);
   const facturaId = getFacturaIdComprobante(r);
   const facturaMime = getFacturaMime(r);
+  const facturaTipo = String(r?.factura_comprobante_tipo ?? r?.comprobante_tipo ?? r?.tipo_comprobante ?? "").trim();
+  const remitoId = getRemitoIdComprobante(r);
+  const remitoMime = getRemitoMime(r);
+  const remitoTipo = String(r?.remito_comprobante_tipo ?? "").trim();
   return {
     ...r,
     id_movimiento: idMov ?? r?.id_movimiento ?? null,
@@ -111,11 +132,16 @@ function normalizeVentaRow(r) {
     id_comprobante: facturaId,
     comprobante_url: String(r?.factura_comprobante_url ?? r?.comprobante_url ?? ""),
     archivo_mime: facturaMime,
+    factura_comprobante_mime: facturaMime,
     factura_id_comprobante: facturaId,
     factura_comprobante_url: String(r?.factura_comprobante_url ?? ""),
-    factura_comprobante_tipo: facturaMime,
+    factura_comprobante_tipo: facturaTipo,
     factura_emitida_en_arca: Number(r?.factura_emitida_en_arca || 0),
     factura_tiene_nota_credito: Number(r?.factura_tiene_nota_credito || 0),
+    remito_id_comprobante: remitoId,
+    remito_comprobante_url: String(r?.remito_comprobante_url ?? ""),
+    remito_comprobante_mime: remitoMime,
+    remito_comprobante_tipo: remitoTipo,
     cantidad_medios_pago: Number(r?.cantidad_medios_pago || 0),
     medios_pago_detalle: Array.isArray(r?.medios_pago_detalle) ? r.medios_pago_detalle : [],
   };
@@ -158,6 +184,7 @@ export default function Ventas() {
   const [openVerComprobante, setOpenVerComprobante] = useState(false);
   const [comprobanteUrl, setComprobanteUrl] = useState("");
   const [comprobanteMime, setComprobanteMime] = useState("");
+  const [comprobanteDocs, setComprobanteDocs] = useState([]);
   const signedUrlCacheRef = useRef(new Map());
   const signedUrlInFlightRef = useRef(new Set());
   const prewarmCancelRef = useRef(false);
@@ -205,13 +232,19 @@ export default function Ventas() {
   const prewarmAllComprobantes = useCallback(async (rowsToWarm) => {
     prewarmCancelRef.current = true; await new Promise((r) => setTimeout(r, 0)); prewarmCancelRef.current = false;
     const ids = [];
-    for (const row of rowsToWarm) { const id = getFacturaIdComprobante(row); if (id && !signedUrlCacheRef.current.has(String(id))) ids.push(id); }
-    if (!ids.length) return;
-    for (let i = 0; i < ids.length; i += PREWARM_BATCH_SIZE) {
+    for (const row of rowsToWarm) {
+      const facturaId = getFacturaIdComprobante(row);
+      const remitoId = getRemitoIdComprobante(row);
+      if (facturaId && !signedUrlCacheRef.current.has(String(facturaId))) ids.push(facturaId);
+      if (remitoId && !signedUrlCacheRef.current.has(String(remitoId))) ids.push(remitoId);
+    }
+    const uniqueIds = Array.from(new Set(ids));
+    if (!uniqueIds.length) return;
+    for (let i = 0; i < uniqueIds.length; i += PREWARM_BATCH_SIZE) {
       if (prewarmCancelRef.current) return;
-      const batch = ids.slice(i, i + PREWARM_BATCH_SIZE);
+      const batch = uniqueIds.slice(i, i + PREWARM_BATCH_SIZE);
       await Promise.allSettled(batch.map((id) => getComprobanteSignedUrl(id).catch(() => {})));
-      if (i + PREWARM_BATCH_SIZE < ids.length && !prewarmCancelRef.current) await new Promise((r) => setTimeout(r, PREWARM_DELAY_MS));
+      if (i + PREWARM_BATCH_SIZE < uniqueIds.length && !prewarmCancelRef.current) await new Promise((r) => setTimeout(r, PREWARM_DELAY_MS));
     }
   }, [getComprobanteSignedUrl]);
   const refreshPeriodos = useCallback(async () => { try { await refreshLists(); } catch {} }, [refreshLists]);
@@ -346,8 +379,67 @@ export default function Ventas() {
   const reloadVista = useCallback(async () => { cacheRef.current.clear(); signedUrlCacheRef.current.clear(); signedUrlInFlightRef.current.clear(); await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false }); try { const token = await fetchLiveToken(dateRange.from, dateRange.to, q); liveTokenRef.current = token; } catch {} }, [dateRange.from, dateRange.to, loadRows, q, fetchLiveToken]);
   const confirmDelete = async () => { if (!selectedRow?.id_movimiento) return; const id = selectedRow.id_movimiento; setDeletingId(id); setError(""); try { const { idUsuario } = getAuthInfo(); const sp = new URLSearchParams(); sp.set("action", "ventas_eliminar"); sp.set("id_movimiento", String(id)); const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario }); if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar."); setOpenDel(false); setSelectedRow(null); await reloadVista(); await refreshPeriodos(); } catch (e) { setError(e.message || "Error eliminando venta."); throw e; } finally { setDeletingId(null); } };
   const handleLoadMore = useCallback(async () => { if (!hasMore || loadingMore || loadingRows || loadingListsCtx || nextOffset === null) return; try { await loadRows({ from: dateRange.from, to: dateRange.to, q: (q || "").trim(), offset: nextOffset, append: true }); try { const token = await fetchLiveToken(dateRange.from, dateRange.to, q); liveTokenRef.current = token; } catch {} } catch (e) { showToast("error", e?.message || "Error cargando más ventas.", 4200); } }, [hasMore, loadingMore, loadingRows, loadingListsCtx, nextOffset, dateRange, q, loadRows, showToast, fetchLiveToken]);
-  const handleVerComprobante = useCallback(async (r) => { const idComprobante = getFacturaIdComprobante(r); if (!idComprobante) { showToast("error", "No se encontró el comprobante.", 3000); return; } try { const signedUrl = await getComprobanteSignedUrl(idComprobante); if (!signedUrl) { showToast("error", "No se pudo obtener el comprobante.", 3000); return; } setComprobanteUrl(signedUrl); setComprobanteMime(getFacturaMime(r)); setOpenVerComprobante(true); } catch (e) { showToast("error", e?.message || "No se pudo abrir el comprobante.", 3200); } }, [getComprobanteSignedUrl, showToast]);
-  const handlePrewarmComprobante = useCallback(async (r) => { const idComprobante = getFacturaIdComprobante(r); if (!idComprobante) return; getComprobanteSignedUrl(idComprobante).catch(() => {}); }, [getComprobanteSignedUrl]);
+  const handleVerComprobante = useCallback(async (r) => {
+    const facturaId = getFacturaIdComprobante(r);
+    const remitoId = getRemitoIdComprobante(r);
+
+    const facturaTipo = String(r?.factura_comprobante_tipo || "").toUpperCase();
+    const facturaLabel = facturaTipo === "VENTA_NO_FACTURADA" ? "Venta no facturada" : "Factura";
+
+    const candidates = [];
+    if (facturaId) {
+      candidates.push({
+        key: "factura",
+        label: facturaLabel,
+        title: facturaLabel,
+        id_comprobante: facturaId,
+        mime: getFacturaMime(r) || "application/pdf",
+        fileName: `${facturaLabel.toLowerCase().replace(/\s+/g, "_")}.pdf`,
+      });
+    }
+    if (remitoId) {
+      candidates.push({
+        key: "remito",
+        label: "Remito",
+        title: "Remito",
+        id_comprobante: remitoId,
+        mime: getRemitoMime(r) || "application/pdf",
+        fileName: "remito.pdf",
+      });
+    }
+
+    if (!candidates.length) {
+      showToast("error", "No se encontraron comprobantes para esta venta.", 3000);
+      return;
+    }
+
+    try {
+      const docs = (
+        await Promise.all(
+          candidates.map(async (doc) => ({
+            ...doc,
+            url: await getComprobanteSignedUrl(doc.id_comprobante),
+          }))
+        )
+      ).filter((doc) => String(doc.url || "").trim());
+
+      if (!docs.length) {
+        showToast("error", "No se pudieron obtener los comprobantes.", 3000);
+        return;
+      }
+
+      setComprobanteDocs(docs);
+      setComprobanteUrl(docs[0]?.url || "");
+      setComprobanteMime(docs[0]?.mime || "application/pdf");
+      setOpenVerComprobante(true);
+    } catch (e) {
+      showToast("error", e?.message || "No se pudieron abrir los comprobantes.", 3200);
+    }
+  }, [getComprobanteSignedUrl, showToast]);
+  const handlePrewarmComprobante = useCallback(async (r) => {
+    const ids = [getFacturaIdComprobante(r), getRemitoIdComprobante(r)].filter(Boolean);
+    ids.forEach((idComprobante) => getComprobanteSignedUrl(idComprobante).catch(() => {}));
+  }, [getComprobanteSignedUrl]);
   const requiereNC = useMemo(() => Number(selectedRow?.factura_emitida_en_arca || 0) === 1 && Number(selectedRow?.factura_tiene_nota_credito || 0) !== 1, [selectedRow]);
   const yaTieneNC = useMemo(() => Number(selectedRow?.factura_emitida_en_arca || 0) === 1 && Number(selectedRow?.factura_tiene_nota_credito || 0) === 1, [selectedRow]);
   const deleteModalExtraContent = useMemo(() => {
@@ -390,7 +482,7 @@ export default function Ventas() {
           </div>
         </div>
         <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">{columns.map((c) => <div key={c.key} className={["mov-gridCell", "mov-gridCell--head", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")} role="columnheader">{c.label}</div>)}</div>
-        <div className="mov-tableWrap" role="rowgroup"><div className={["mov-gridBody", "mov-gridBody--relative", loadingRows ? "mov-softLoading" : ""].join(" ")}>{loadingRows ? <div className="mov-skeletonWrap" aria-busy="true">{Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}</div> : <>{filteredRows.map((r) => { const key = getRowKey(r); const facturaId = getFacturaIdComprobante(r); const tieneComprobante = !!facturaId; const tieneDetalleMedios = (Number(r?.cantidad_medios_pago || 0) > 0) || (Array.isArray(r?.medios_pago_detalle) && r.medios_pago_detalle.length > 0); return <div key={key} className="mov-gridTable mov-gridTable--row" style={{ gridTemplateColumns: gridCols }} role="row">{columns.map((c) => { if (c.key === "acciones") return <div key={c.key} className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")} role="cell" data-label={c.label}><div className="mov-actionsInline"><button type="button" className={["mov-iconBtn", tieneComprobante ? "mov-iconBtn--comprobante" : "mov-iconBtn--disabled"].join(" ")} title={tieneComprobante ? "Ver comprobante" : "Sin comprobante"} disabled={!tieneComprobante || isAnyLoading} onMouseEnter={() => { if (tieneComprobante) handlePrewarmComprobante(r); }} onPointerEnter={() => { if (tieneComprobante) handlePrewarmComprobante(r); }} onFocus={() => { if (tieneComprobante) handlePrewarmComprobante(r); }} onClick={() => { if (tieneComprobante) handleVerComprobante(r); }} style={{ opacity: tieneComprobante ? 1 : 0.35, cursor: tieneComprobante ? "pointer" : "not-allowed" }}><FontAwesomeIcon icon={faEye} /></button><button type="button" className={["mov-iconBtn", tieneDetalleMedios ? "" : "mov-iconBtn--disabled"].join(" ")} title={tieneDetalleMedios ? "Ver detalle de medios de pago" : "Sin detalle de medios de pago"} disabled={!tieneDetalleMedios || isAnyLoading} onClick={() => { setSelectedRow(r); setOpenDetalleMedios(true); }} style={{ opacity: tieneDetalleMedios ? 1 : 0.35, cursor: tieneDetalleMedios ? "pointer" : "not-allowed" }}><FontAwesomeIcon icon={faMoneyCheckDollar} /></button><button type="button" className="mov-iconBtn mov-iconBtn--danger" title="Eliminar" disabled={isAnyLoading || loadingListsCtx || deletingId === r.id_movimiento} onClick={() => { setSelectedRow(r); setOpenDel(true); }}>{deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}</button></div></div>; const val = c.render ? c.render(r) : safeText(r[c.key]); return <div key={c.key} className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : "", c.strong ? "is-strong" : ""].filter(Boolean).join(" ")} role="cell" data-label={c.label} title={typeof val === "string" ? val : undefined}><span className="mov-ellipsissss">{val}</span></div>; })}</div>; })}{!isAnyLoading && filteredRows.length === 0 && <div className="cc-emptyState"><FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" /><div className="cc-emptyText">{q.trim() ? `No se encontraron ventas para "${q.trim()}".` : "No hay ventas para mostrar en el rango de fechas seleccionado."}</div></div>}{!loadingRows && hasMore && filteredRows.length > 0 && <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}><button type="button" className="mov-btn mov-btn--loadAll" onClick={handleLoadMore} disabled={loadingMore || loadingListsCtx} title="Cargar los próximos 100 registros">{loadingMore ? "Cargando…" : "Cargar 100 más"}</button></div>}{loadingMore && <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">{Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}</div>}</>}</div></div>
+        <div className="mov-tableWrap" role="rowgroup"><div className={["mov-gridBody", "mov-gridBody--relative", loadingRows ? "mov-softLoading" : ""].join(" ")}>{loadingRows ? <div className="mov-skeletonWrap" aria-busy="true">{Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}</div> : <>{filteredRows.map((r) => { const key = getRowKey(r); const facturaId = getFacturaIdComprobante(r); const remitoId = getRemitoIdComprobante(r); const tieneComprobante = !!(facturaId || remitoId); const tieneDetalleMedios = (Number(r?.cantidad_medios_pago || 0) > 0) || (Array.isArray(r?.medios_pago_detalle) && r.medios_pago_detalle.length > 0); return <div key={key} className="mov-gridTable mov-gridTable--row" style={{ gridTemplateColumns: gridCols }} role="row">{columns.map((c) => { if (c.key === "acciones") return <div key={c.key} className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")} role="cell" data-label={c.label}><div className="mov-actionsInline"><button type="button" className={["mov-iconBtn", tieneComprobante ? "mov-iconBtn--comprobante" : "mov-iconBtn--disabled"].join(" ")} title={tieneComprobante ? "Ver comprobantes" : "Sin comprobantes"} disabled={!tieneComprobante || isAnyLoading} onMouseEnter={() => { if (tieneComprobante) handlePrewarmComprobante(r); }} onPointerEnter={() => { if (tieneComprobante) handlePrewarmComprobante(r); }} onFocus={() => { if (tieneComprobante) handlePrewarmComprobante(r); }} onClick={() => { if (tieneComprobante) handleVerComprobante(r); }} style={{ opacity: tieneComprobante ? 1 : 0.35, cursor: tieneComprobante ? "pointer" : "not-allowed" }}><FontAwesomeIcon icon={faEye} /></button><button type="button" className={["mov-iconBtn", tieneDetalleMedios ? "" : "mov-iconBtn--disabled"].join(" ")} title={tieneDetalleMedios ? "Ver detalle de medios de pago" : "Sin detalle de medios de pago"} disabled={!tieneDetalleMedios || isAnyLoading} onClick={() => { setSelectedRow(r); setOpenDetalleMedios(true); }} style={{ opacity: tieneDetalleMedios ? 1 : 0.35, cursor: tieneDetalleMedios ? "pointer" : "not-allowed" }}><FontAwesomeIcon icon={faMoneyCheckDollar} /></button><button type="button" className="mov-iconBtn mov-iconBtn--danger" title="Eliminar" disabled={isAnyLoading || loadingListsCtx || deletingId === r.id_movimiento} onClick={() => { setSelectedRow(r); setOpenDel(true); }}>{deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}</button></div></div>; const val = c.render ? c.render(r) : safeText(r[c.key]); return <div key={c.key} className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : "", c.strong ? "is-strong" : ""].filter(Boolean).join(" ")} role="cell" data-label={c.label} title={typeof val === "string" ? val : undefined}><span className="mov-ellipsissss">{val}</span></div>; })}</div>; })}{!isAnyLoading && filteredRows.length === 0 && <div className="cc-emptyState"><FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" /><div className="cc-emptyText">{q.trim() ? `No se encontraron ventas para "${q.trim()}".` : "No hay ventas para mostrar en el rango de fechas seleccionado."}</div></div>}{!loadingRows && hasMore && filteredRows.length > 0 && <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}><button type="button" className="mov-btn mov-btn--loadAll" onClick={handleLoadMore} disabled={loadingMore || loadingListsCtx} title="Cargar los próximos 100 registros">{loadingMore ? "Cargando…" : "Cargar 100 más"}</button></div>}{loadingMore && <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">{Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}</div>}</>}</div></div>
       </section>
       <ModalNuevaVenta open={openAdd} lists={lists} periodoDefault={dateRange.from ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}` : ""} onClose={() => setOpenAdd(false)} onToast={showToast} onSaved={async () => { try { setOpenAdd(false); setQ(""); skipSearchRef.current = true; liveTokenRef.current = null; signedUrlCacheRef.current.clear(); signedUrlInFlightRef.current.clear(); await refreshPeriodos(); await reloadVista(); } catch (e) { showToast("error", e?.message || "Se guardó, pero falló la recarga.", 4200); } }} />
       <ModalEliminar open={openDel} row={selectedRow} loading={deletingId === selectedRow?.id_movimiento} onClose={() => { setOpenDel(false); setSelectedRow(null); }} onConfirm={requiereNC ? null : confirmDelete} onToast={showToast} title={deleteModalConfig.title} message={deleteModalConfig.message} warning={deleteModalConfig.warning} loadingMessage="Eliminando venta…" successMessage="Venta eliminada correctamente." errorMessage="No se pudo eliminar la venta." confirmLabel={deleteModalConfig.confirmLabel} cancelLabel="Cancelar" confirmDisabled={deleteModalConfig.confirmDisabled} confirmVariant={deleteModalConfig.confirmVariant} secondaryActionLabel={deleteModalConfig.secondaryActionLabel} onSecondaryAction={requiereNC ? async () => { setOpenDel(false); setOpenNC(true); } : null} details={deleteModalConfig.details} extraContent={deleteModalExtraContent} />
@@ -403,7 +495,7 @@ export default function Ventas() {
           if (!openDel) setSelectedRow(null);
         }}
       />
-      <ModalVerComprobante open={openVerComprobante} url={comprobanteUrl} mime={comprobanteMime} title="Comprobante de Venta" onClose={() => { setOpenVerComprobante(false); setComprobanteUrl(""); setComprobanteMime(""); }} />
+      <ModalVerComprobante open={openVerComprobante} url={comprobanteUrl} mime={comprobanteMime} documents={comprobanteDocs} title="Comprobantes de Venta" onClose={() => { setOpenVerComprobante(false); setComprobanteUrl(""); setComprobanteMime(""); setComprobanteDocs([]); }} />
     </div>
   );
 }

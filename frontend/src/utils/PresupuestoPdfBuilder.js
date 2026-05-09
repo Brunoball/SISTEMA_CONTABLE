@@ -1,0 +1,548 @@
+// src/utils/PresupuestoPdfBuilder.js
+
+import jsPDF from "jspdf";
+import BASE_URL from "../config/config";
+
+const API_RELATIVE = "api.php";
+
+const FIX = {
+  tipoTxt: "PRESUPUESTO",
+  letra: "X",
+  codTxt: "COD. 000",
+  emisor_nombre: "BALTO",
+  condicion_venta_default: "Presupuesto",
+};
+
+function sanitizePdfText(input) {
+  let t = input == null ? "" : String(input);
+  t = t.replace(/\s+/g, " ").trim();
+  t = t
+    .replace(/[“”]/g, '"')
+    .replace(/[’‘]/g, "'")
+    .replace(/[–—]/g, "-")
+    .replace(/→/g, "->")
+    .replace(/✓/g, "OK");
+
+  let out = "";
+  for (let i = 0; i < t.length; i += 1) {
+    out += t.charCodeAt(i) <= 255 ? t[i] : " ";
+  }
+  return out.replace(/\s+/g, " ").trim();
+}
+
+function s(v) {
+  return v == null ? "" : String(v);
+}
+
+function safeNumber(v, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function numEs(v, dec = 2) {
+  const n = safeNumber(v, 0);
+  return n.toLocaleString("es-AR", {
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec,
+  });
+}
+
+function moneyEs(v) {
+  return numEs(v, 2);
+}
+
+function ymdToHuman(value) {
+  const str = String(value || "").trim();
+  if (!str) return "";
+  if (/^\d{8}$/.test(str)) return `${str.slice(6, 8)}/${str.slice(4, 6)}/${str.slice(0, 4)}`;
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const [y, m, d] = str.slice(0, 10).split("-");
+    return `${d}/${m}/${y}`;
+  }
+  return str;
+}
+
+function nowStamp() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}_${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function safeFilePart(value, fallback = "PRESUPUESTO") {
+  const clean = sanitizePdfText(String(value || fallback))
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 60);
+  return clean || fallback;
+}
+
+function set(doc, font = "helvetica", style = "normal", size = 10) {
+  doc.setFont(font, style);
+  doc.setFontSize(size);
+}
+
+function text(doc, value, x, y, opt) {
+  doc.text(sanitizePdfText(value), x, y, opt);
+}
+
+function rect(doc, x, y, w, h, lw = 0.55) {
+  doc.setLineWidth(lw);
+  doc.rect(x, y, w, h);
+}
+
+function line(doc, x1, y1, x2, y2, lw = 0.45) {
+  doc.setLineWidth(lw);
+  doc.line(x1, y1, x2, y2);
+}
+
+function fillRect(doc, x, y, w, h, gray = 0.88) {
+  const g = Math.max(0, Math.min(1, gray));
+  doc.setFillColor(Math.round(g * 255));
+  doc.rect(x, y, w, h, "F");
+}
+
+function clampToWidth(doc, value, maxW) {
+  const t = sanitizePdfText(value);
+  if (!t) return "";
+  if (doc.getTextWidth(t) <= maxW) return t;
+  let out = t;
+  while (out.length > 0 && doc.getTextWidth(`${out}...`) > maxW) out = out.slice(0, -1);
+  return out ? `${out}...` : "";
+}
+
+function wrapByWidth(doc, value, maxW) {
+  const t = sanitizePdfText(value);
+  if (!t) return [];
+  const words = t.split(" ");
+  const lines = [];
+  let cur = "";
+  for (const w of words) {
+    const test = cur ? `${cur} ${w}` : w;
+    if (doc.getTextWidth(test) <= maxW) cur = test;
+    else {
+      if (cur) lines.push(cur);
+      cur = w;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+function buildApiUrl(paramsObj) {
+  const baseRaw = String(BASE_URL || "").trim();
+  const base = baseRaw.replace(/\/+$/, "") + "/";
+  const url = new URL(API_RELATIVE, base);
+  const qs = new URLSearchParams();
+  Object.entries(paramsObj || {}).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    qs.set(k, String(v));
+  });
+  url.search = qs.toString();
+  return url.toString();
+}
+
+function isLocalApiBase() {
+  try {
+    const base = String(BASE_URL || "").toLowerCase().trim();
+    return base.includes("localhost") || base.includes("127.0.0.1");
+  } catch {
+    return false;
+  }
+}
+
+function getSessionKey() {
+  try {
+    return String(localStorage.getItem("session_key") || localStorage.getItem("sessionKey") || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(blob);
+    } catch {
+      resolve("");
+    }
+  });
+}
+
+let logoDataUrlCache = "";
+let logoDataUrlPromise = null;
+
+async function fetchTenantLogoDataUrl() {
+  if (logoDataUrlCache) return logoDataUrlCache;
+  if (logoDataUrlPromise) return logoDataUrlPromise;
+  if (isLocalApiBase()) return "";
+
+  logoDataUrlPromise = (async () => {
+    try {
+      const sessionKey = getSessionKey();
+      if (!sessionKey) return "";
+      const res = await fetch(buildApiUrl({ action: "tenant_logo_ver", tipo: "principal" }), {
+        method: "GET",
+        headers: { "X-Session": sessionKey },
+        cache: "no-store",
+      });
+      if (!res.ok) return "";
+      const ct = String(res.headers.get("content-type") || "").toLowerCase();
+      if (!ct.startsWith("image/")) return "";
+      const blob = await res.blob();
+      if (!blob || !blob.size) return "";
+      const dataUrl = await blobToDataUrl(blob);
+      logoDataUrlCache = dataUrl;
+      return dataUrl;
+    } catch {
+      return "";
+    } finally {
+      logoDataUrlPromise = null;
+    }
+  })();
+
+  return logoDataUrlPromise;
+}
+
+function getEmisor(data) {
+  const em = data?.emisor || data?.config_facturacion || data?.facturacion || data?.config || {};
+  return {
+    razon: sanitizePdfText(em.razon_social || em.nombre_fantasia || em.nombre || data?.emisor_nombre || FIX.emisor_nombre),
+    fantasia: sanitizePdfText(em.nombre_fantasia || ""),
+    cuit: sanitizePdfText(em.cuit || data?.cuit_emisor || ""),
+    ib: sanitizePdfText(em.ingresos_brutos || ""),
+    iva: sanitizePdfText(em.condicion_iva || em.cond_iva || ""),
+    dom: sanitizePdfText(em.domicilio_comercial || em.domicilio || ""),
+    inicio: ymdToHuman(em.fecha_inicio_actividades || ""),
+    puntoVenta: sanitizePdfText(em.punto_venta || data?.pto_vta || "00000"),
+  };
+}
+
+function getCliente(data) {
+  const cl = data?.cliente_facturacion || data?.cliente || {};
+  return {
+    razon: sanitizePdfText(cl.razon_social || cl.nombre || data?.cliente_nombre || data?.labelCliente || "Consumidor Final"),
+    cuit: sanitizePdfText(cl.cuit || cl.doc_nro || data?.cliente_cuit || ""),
+    iva: sanitizePdfText(cl.condicion_iva || cl.cond_iva || data?.cliente_condicion_iva || ""),
+    dom: sanitizePdfText(cl.domicilio || data?.cliente_domicilio || ""),
+  };
+}
+
+function normalizeItems(data) {
+  const arr = Array.isArray(data?.items_facturacion)
+    ? data.items_facturacion
+    : Array.isArray(data?.items)
+    ? data.items
+    : [];
+
+  return arr
+    .map((it, idx) => {
+      const cantidad = safeNumber(it?.cantidad ?? 1, 1);
+      const precio = safeNumber(it?.precio_unitario ?? it?.precio ?? 0, 0);
+      const ivaPct = safeNumber(it?.iva_pct ?? it?.ivaPct ?? 0, 0);
+      const subtotal = safeNumber(it?.subtotal ?? cantidad * precio, cantidad * precio);
+      const ivaMonto = safeNumber(it?.iva_monto ?? subtotal * ivaPct / 100, subtotal * ivaPct / 100);
+      const total = safeNumber(it?.total ?? subtotal + ivaMonto, subtotal + ivaMonto);
+      return {
+        codigo: sanitizePdfText(it?.codigo || it?.sku || String(idx + 1)),
+        descripcion: sanitizePdfText(it?.descripcion || it?.detalle || it?.nombre || "Producto / Servicio"),
+        cantidad,
+        unidad: sanitizePdfText(it?.unidad || "u"),
+        precio,
+        ivaPct,
+        subtotal,
+        ivaMonto,
+        total,
+      };
+    })
+    .filter((it) => it.descripcion && it.cantidad > 0);
+}
+
+function getTotales(items, data) {
+  const subtotal = items.reduce((a, it) => a + safeNumber(it.subtotal, 0), 0);
+  const iva = items.reduce((a, it) => a + safeNumber(it.ivaMonto, 0), 0);
+  const total = items.reduce((a, it) => a + safeNumber(it.total, 0), 0);
+  return {
+    subtotal: safeNumber(data?.subtotal_ars ?? data?.subtotal, subtotal),
+    iva: safeNumber(data?.iva_ars ?? data?.iva, iva),
+    total: safeNumber(data?.total_ars ?? data?.importe ?? data?.monto_ars ?? data?.total, total),
+  };
+}
+
+function drawOuter(doc) {
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  rect(doc, 10, 10, W - 20, H - 20, 0.55);
+}
+
+function drawLogoOrFallback(doc, logoDataUrl, em, x, y, w) {
+  const maxW = Math.min(140, w - 36);
+  const maxH = 48;
+  if (logoDataUrl) {
+    try {
+      doc.addImage(logoDataUrl, undefined, x + 18, y + 18, maxW, maxH, undefined, "FAST");
+      return;
+    } catch {}
+  }
+  set(doc, "helvetica", "bold", 15);
+  text(doc, clampToWidth(doc, em.fantasia || em.razon || FIX.emisor_nombre, maxW), x + 18, y + 44);
+}
+
+function drawHeader(doc, data, logoDataUrl) {
+  const W = doc.internal.pageSize.getWidth();
+  const B = 10;
+  const innerW = W - B * 2;
+  const em = getEmisor(data);
+  const cl = getCliente(data);
+  const headerY = B + 28;
+  const headerH = 132;
+  const splitX = B + innerW * 0.5;
+  const letterBoxW = 46;
+  const letterX = W / 2 - letterBoxW / 2;
+
+  set(doc, "helvetica", "bold", 14);
+  text(doc, "ORIGINAL", W / 2, B + 18, { align: "center" });
+  line(doc, B, B + 28, W - B, B + 28, 0.55);
+
+  rect(doc, B, headerY, innerW, headerH, 0.55);
+  line(doc, splitX, headerY, splitX, headerY + headerH, 0.55);
+
+  fillRect(doc, letterX, headerY, letterBoxW, 44, 0.97);
+  rect(doc, letterX, headerY, letterBoxW, 44, 0.55);
+  set(doc, "helvetica", "bold", 24);
+  text(doc, FIX.letra, W / 2, headerY + 29, { align: "center" });
+  set(doc, "helvetica", "normal", 6.5);
+  text(doc, FIX.codTxt, W / 2, headerY + 39, { align: "center" });
+
+  drawLogoOrFallback(doc, logoDataUrl, em, B, headerY, splitX - B);
+
+  const leftLabelX = B + 18;
+  const leftValueX = B + 112;
+  const leftValueW = splitX - leftValueX - 14;
+  const leftInfoY = headerY + 80;
+  set(doc, "helvetica", "bold", 8.6);
+  text(doc, "Razón Social:", leftLabelX, leftInfoY);
+  text(doc, "Domicilio:", leftLabelX, leftInfoY + 16);
+  text(doc, "Condición IVA:", leftLabelX, leftInfoY + 32);
+  set(doc, "helvetica", "normal", 8.6);
+  text(doc, clampToWidth(doc, em.razon || "-", leftValueW), leftValueX, leftInfoY);
+  text(doc, clampToWidth(doc, em.dom || "-", leftValueW), leftValueX, leftInfoY + 16);
+  text(doc, clampToWidth(doc, em.iva || "-", leftValueW), leftValueX, leftInfoY + 32);
+
+  const rightX = splitX + 22;
+  const rightW = W - B - rightX - 18;
+  set(doc, "helvetica", "bold", 18);
+  text(doc, FIX.tipoTxt, rightX + rightW / 2, headerY + 28, { align: "center" });
+  set(doc, "helvetica", "bold", 8.6);
+  text(doc, "DOCUMENTO NO FISCAL", rightX + rightW / 2, headerY + 44, { align: "center" });
+
+  const fecha = ymdToHuman(data?.fecha_cbte_iso || data?.fecha || new Date().toISOString().slice(0, 10));
+  const nro = sanitizePdfText(data?.numero_presupuesto || data?.nro_presupuesto || data?.numero_interno || data?.id_movimiento || "Pendiente");
+  const labels = [
+    ["Fecha:", fecha],
+    ["Presupuesto N°:", nro],
+    ["CUIT:", em.cuit || "-"],
+    ["Ingresos Brutos:", em.ib || "-"],
+    ["Inicio Actividades:", em.inicio || "-"],
+  ];
+  let y = headerY + 66;
+  labels.forEach(([lab, val]) => {
+    set(doc, "helvetica", "bold", 8.4);
+    text(doc, lab, rightX, y);
+    set(doc, "helvetica", "normal", 8.4);
+    text(doc, clampToWidth(doc, val, rightW - 86), rightX + 88, y);
+    y += 13;
+  });
+
+  const clientY = headerY + headerH;
+  const clientH = 54;
+  rect(doc, B, clientY, innerW, clientH, 0.55);
+  set(doc, "helvetica", "bold", 9);
+  text(doc, "Cliente:", B + 18, clientY + 20);
+  text(doc, "CUIT/DNI:", B + 18, clientY + 38);
+  text(doc, "Cond. IVA:", splitX + 18, clientY + 20);
+  text(doc, "Domicilio:", splitX + 18, clientY + 38);
+  set(doc, "helvetica", "normal", 9);
+  text(doc, clampToWidth(doc, cl.razon || "Consumidor Final", splitX - B - 82), B + 72, clientY + 20);
+  text(doc, clampToWidth(doc, cl.cuit || "-", splitX - B - 82), B + 72, clientY + 38);
+  text(doc, clampToWidth(doc, cl.iva || "Consumidor Final", W - B - splitX - 96), splitX + 84, clientY + 20);
+  text(doc, clampToWidth(doc, cl.dom || "-", W - B - splitX - 96), splitX + 84, clientY + 38);
+
+  return clientY + clientH;
+}
+
+function getColumns(doc) {
+  const W = doc.internal.pageSize.getWidth();
+  const B = 10;
+  const innerW = W - B * 2;
+  const wCodigo = 46;
+  const wCant = 56;
+  const wUM = 44;
+  const wPU = 72;
+  const wIva = 46;
+  const wSub = 72;
+  const wDesc = Math.max(80, innerW - (wCodigo + wCant + wUM + wPU + wIva + wSub));
+  const x0 = B;
+  const x1 = x0 + wCodigo;
+  const x2 = x1 + wDesc;
+  const x3 = x2 + wCant;
+  const x4 = x3 + wUM;
+  const x5 = x4 + wPU;
+  const x6 = x5 + wIva;
+  const x7 = B + innerW;
+  return { x0, x1, x2, x3, x4, x5, x6, x7, padL: 7, padR: 7 };
+}
+
+function drawTableHeader(doc, y) {
+  const B = 10;
+  const W = doc.internal.pageSize.getWidth();
+  const innerW = W - B * 2;
+  const rowH = 22;
+  const c = getColumns(doc);
+  fillRect(doc, B, y, innerW, rowH, 0.86);
+  rect(doc, B, y, innerW, rowH, 0.55);
+  set(doc, "helvetica", "bold", 8.2);
+  text(doc, "Código", c.x0 + c.padL, y + 15);
+  text(doc, "Producto / Servicio", c.x1 + c.padL, y + 15);
+  text(doc, "Cant.", c.x3 - c.padR, y + 15, { align: "right" });
+  text(doc, "U.M.", c.x4 - c.padR, y + 15, { align: "right" });
+  text(doc, "Precio Unit.", c.x5 - c.padR, y + 15, { align: "right" });
+  text(doc, "IVA %", c.x6 - c.padR, y + 15, { align: "right" });
+  text(doc, "Subtotal", c.x7 - c.padR, y + 15, { align: "right" });
+  return { nextY: y + rowH + 15, cols: c };
+}
+
+function drawTableRow(doc, item, idx, cols, y, maxBodyY) {
+  const descMaxW = cols.x2 - cols.padR - (cols.x1 + cols.padL);
+  const descLines = wrapByWidth(doc, item.descripcion, Math.max(20, descMaxW));
+  const lh = 11;
+  const blockH = Math.max(14, descLines.length * lh);
+  if (y + blockH > maxBodyY) return { y, drawn: false };
+
+  set(doc, "helvetica", "normal", 8.7);
+  text(doc, s(item.codigo || String(idx + 1)), cols.x0 + cols.padL, y);
+  descLines.forEach((ln, li) => text(doc, ln, cols.x1 + cols.padL, y + li * lh));
+  text(doc, numEs(item.cantidad, 2), cols.x3 - cols.padR, y, { align: "right" });
+  text(doc, s(item.unidad || "u"), cols.x4 - cols.padR, y, { align: "right" });
+  text(doc, moneyEs(item.precio), cols.x5 - cols.padR, y, { align: "right" });
+  text(doc, numEs(item.ivaPct, 2), cols.x6 - cols.padR, y, { align: "right" });
+  text(doc, moneyEs(item.subtotal), cols.x7 - cols.padR, y, { align: "right" });
+  return { y: y + blockH + 5, drawn: true };
+}
+
+function drawTotalsAndFooter(doc, items, data, y) {
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const B = 10;
+  const innerW = W - B * 2;
+  const totals = getTotales(items, data);
+  const totH = 92;
+  const footerH = 58;
+  const footerTopY = H - B - footerH;
+  const minTotY = footerTopY - totH;
+  const totY = Math.max(y, minTotY);
+
+  rect(doc, B, totY, innerW, totH, 0.55);
+  const sepX = B + innerW * 0.58;
+  line(doc, sepX, totY, sepX, totY + totH, 0.45);
+
+  const obsX = B + 12;
+  const obsW = sepX - obsX - 14;
+  set(doc, "helvetica", "bold", 8.5);
+  text(doc, "Observaciones:", obsX, totY + 20);
+  set(doc, "helvetica", "normal", 8);
+  const obs = data?.observaciones || "Presupuesto sin validez fiscal. No reemplaza factura ni comprobante fiscal.";
+  wrapByWidth(doc, obs, obsW).slice(0, 4).forEach((ln, i) => text(doc, ln, obsX, totY + 38 + i * 10));
+
+  const labelX = sepX + 24;
+  const valueX = B + innerW - 14;
+  set(doc, "helvetica", "bold", 8.8);
+  text(doc, "Subtotal: $", labelX, totY + 28);
+  text(doc, moneyEs(totals.subtotal), valueX, totY + 28, { align: "right" });
+  text(doc, "IVA: $", labelX, totY + 50);
+  text(doc, moneyEs(totals.iva), valueX, totY + 50, { align: "right" });
+  set(doc, "helvetica", "bold", 10);
+  text(doc, "Importe Total: $", labelX, totY + 75);
+  text(doc, moneyEs(totals.total), valueX, totY + 75, { align: "right" });
+
+  line(doc, B, footerTopY, W - B, footerTopY, 0.45);
+  set(doc, "helvetica", "bold", 8.8);
+  text(doc, "Presupuesto generado desde Balto", B + 12, footerTopY + 30);
+  set(doc, "helvetica", "italic", 7.3);
+  text(doc, "Documento no fiscal. Sin CAE, sin QR fiscal y sin intervención de ARCA.", B + 12, footerTopY + 44);
+}
+
+function addPageNumbering(doc) {
+  const total = doc.internal.getNumberOfPages();
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  for (let i = 1; i <= total; i += 1) {
+    doc.setPage(i);
+    set(doc, "helvetica", "normal", 8);
+    text(doc, `Pág. ${i}/${total}`, W / 2, H - 48, { align: "center" });
+  }
+}
+
+export async function buildPresupuestoPdf({ data } = {}) {
+  const doc = new jsPDF({ unit: "pt", format: "a4", compress: true });
+  const logoDataUrl = await fetchTenantLogoDataUrl();
+  const items = normalizeItems(data || {});
+  const H = doc.internal.pageSize.getHeight();
+  const B = 10;
+  const bottomLimit = H - B - 170;
+  let y;
+  let cols;
+
+  const startPage = () => {
+    drawOuter(doc);
+    y = drawHeader(doc, data || {}, logoDataUrl) + 14;
+    const header = drawTableHeader(doc, y);
+    y = header.nextY;
+    cols = header.cols;
+  };
+
+  startPage();
+  items.forEach((it, idx) => {
+    const res = drawTableRow(doc, it, idx, cols, y, bottomLimit);
+    if (!res.drawn) {
+      doc.addPage();
+      startPage();
+      const next = drawTableRow(doc, it, idx, cols, y, bottomLimit);
+      y = next.y;
+    } else {
+      y = res.y;
+    }
+  });
+
+  if (y + 120 > bottomLimit) {
+    doc.addPage();
+    startPage();
+  }
+  drawTotalsAndFooter(doc, items, data || {}, y + 10);
+  addPageNumbering(doc);
+  return doc;
+}
+
+export async function savePresupuestoPdf({ data, download = false, filename: filenameIn } = {}) {
+  const doc = await buildPresupuestoPdf({ data });
+  const blob = doc.output("blob");
+  const cliente = safeFilePart(data?.cliente_facturacion?.razon_social || data?.cliente_nombre || data?.labelCliente || "CLIENTE", "CLIENTE");
+  const fecha = safeFilePart(data?.fecha_cbte_iso || data?.fecha || nowStamp(), nowStamp());
+  const filename = filenameIn || `PRESUPUESTO_${fecha}_${cliente}.pdf`;
+
+  if (download) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  return { blob, filename };
+}

@@ -166,6 +166,7 @@ async function apiFetch(paramsObj, options = {}) {
 const ROUTE_PREFETCH = {
   "/panel/movimientos": () => import("../Movimientos/Movimientos"),
   "/panel/ventas": () => import("../Mov_Subsection/Ventas/Ventas"),
+  "/panel/presupuesto": () => import("../Mov_Subsection/Presupuesto/Presupuesto"),
   "/panel/compras": () => import("../Mov_Subsection/Compra/Compras"),
   "/panel/recibos": () => import("../Mov_Subsection/Recibos/Recibos"),
   "/panel/OrdenesPago": () =>
@@ -396,7 +397,8 @@ function getModuleKeyByPath(pathname) {
     path.startsWith("/panel/recibos") ||
     path.startsWith("/panel/OrdenesPago") ||
     path.startsWith("/panel/Otrosingresos") ||
-    path.startsWith("/panel/Otrosegresos")
+    path.startsWith("/panel/Otrosegresos") ||
+    path.startsWith("/panel/presupuesto")
   ) {
     return "movimientos";
   }
@@ -971,6 +973,7 @@ const Principal = () => {
           { label: "Orden de Pago", ruta: "/panel/OrdenesPago" },
           { label: "Otros Ingresos", ruta: "/panel/Otrosingresos" },
           { label: "Otros Egresos", ruta: "/panel/Otrosegresos" },
+          { label: "Presupuesto", ruta: "/panel/presupuesto" },
         ],
       },
       { label: "Flujo de Caja", ruta: "/panel/flujo-de-caja" },
@@ -1053,7 +1056,8 @@ const Principal = () => {
       location.pathname.startsWith("/panel/recibos") ||
       location.pathname.startsWith("/panel/OrdenesPago") ||
       location.pathname.startsWith("/panel/Otrosingresos") ||
-      location.pathname.startsWith("/panel/Otrosegresos")
+      location.pathname.startsWith("/panel/Otrosegresos") ||
+      location.pathname.startsWith("/panel/presupuesto")
     ) {
       return "movimientos";
     }
@@ -1079,7 +1083,8 @@ const Principal = () => {
       location.pathname.startsWith("/panel/recibos") ||
       location.pathname.startsWith("/panel/OrdenesPago") ||
       location.pathname.startsWith("/panel/Otrosingresos") ||
-      location.pathname.startsWith("/panel/Otrosegresos")
+      location.pathname.startsWith("/panel/Otrosegresos") ||
+      location.pathname.startsWith("/panel/presupuesto")
     ) {
       return "Movimientos";
     }
@@ -1406,7 +1411,8 @@ const Principal = () => {
                   location.pathname.startsWith("/panel/recibos") ||
                   location.pathname.startsWith("/panel/OrdenesPago") ||
                   location.pathname.startsWith("/panel/Otrosingresos") ||
-                  location.pathname.startsWith("/panel/Otrosegresos"))) ||
+                  location.pathname.startsWith("/panel/Otrosegresos") ||
+                  location.pathname.startsWith("/panel/presupuesto"))) ||
               (isCC &&
                 location.pathname.startsWith("/panel/cuentas-corrientes")) ||
               (isCheques && location.pathname.startsWith("/panel/cheques")) ||

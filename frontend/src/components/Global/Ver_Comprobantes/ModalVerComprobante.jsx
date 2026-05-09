@@ -275,12 +275,14 @@ function buildSimpleDisplayName({
 function resolveFixedModalTitle(title = "") {
   const t = safeText(title).toLowerCase();
 
-  if (t.includes("venta")) return "Comprobante de Venta";
-  if (t.includes("ingreso")) return "Comprobante de Ingreso";
-  if (t.includes("egreso")) return "Comprobante de Egreso";
-  if (t.includes("compra")) return "Comprobante de Compra";
-  if (t.includes("cobro")) return "Comprobante de Cobro";
-  if (t.includes("pago")) return "Comprobante de Pago";
+  const plural = t.includes("comprobantes");
+
+  if (t.includes("venta")) return plural ? "Comprobantes de Venta" : "Comprobante de Venta";
+  if (t.includes("ingreso")) return plural ? "Comprobantes de Ingreso" : "Comprobante de Ingreso";
+  if (t.includes("egreso")) return plural ? "Comprobantes de Egreso" : "Comprobante de Egreso";
+  if (t.includes("compra")) return plural ? "Comprobantes de Compra" : "Comprobante de Compra";
+  if (t.includes("cobro")) return plural ? "Comprobantes de Cobro" : "Comprobante de Cobro";
+  if (t.includes("pago")) return plural ? "Comprobantes de Pago" : "Comprobante de Pago";
 
   return "Comprobante";
 }
@@ -364,11 +366,49 @@ function triggerDirectDownload(targetUrl, filename = "") {
   a.remove();
 }
 
+function normalizeDocumentsInput({ documents, url, mime = "", fileName = "", title = "Comprobante" }) {
+  if (Array.isArray(documents) && documents.length > 0) {
+    return documents
+      .map((doc, index) => {
+        const docUrl = safeText(doc?.url || doc?.archivo_url || doc?.href || "");
+        if (!docUrl) return null;
+
+        const label = safeText(doc?.label || doc?.tabLabel || doc?.title || `Archivo ${index + 1}`);
+        const keyBase = safeText(doc?.key || doc?.id_comprobante || doc?.id || label || index);
+
+        return {
+          key: `${keyBase}-${index}`,
+          label,
+          title: safeText(doc?.title || label || title),
+          url: docUrl,
+          mime: safeText(doc?.mime || doc?.archivo_mime || mime),
+          fileName: safeText(doc?.fileName || doc?.filename || doc?.nombre_archivo || fileName),
+        };
+      })
+      .filter(Boolean);
+  }
+
+  const singleUrl = safeText(url);
+  if (!singleUrl) return [];
+
+  return [
+    {
+      key: "principal-0",
+      label: safeText(title || "Comprobante"),
+      title: safeText(title || "Comprobante"),
+      url: singleUrl,
+      mime: safeText(mime),
+      fileName: safeText(fileName),
+    },
+  ];
+}
+
 export default function ModalVerComprobante({
   open,
   url,
   mime = "",
   fileName = "",
+  documents = null,
   onClose,
   title = "Comprobante",
 }) {
@@ -382,13 +422,39 @@ export default function ModalVerComprobante({
   const [resolvedFileName, setResolvedFileName] = useState("");
   const [textPreview, setTextPreview] = useState("");
   const [htmlPreview, setHtmlPreview] = useState("");
+  const [activeTabKey, setActiveTabKey] = useState("");
   const internalBlobRef = useRef("");
+
+  const tabs = useMemo(
+    () => normalizeDocumentsInput({ documents, url, mime, fileName, title }),
+    [documents, url, mime, fileName, title]
+  );
+
+  useEffect(() => {
+    if (!open) {
+      setActiveTabKey("");
+      return;
+    }
+    if (!tabs.length) return;
+    if (!tabs.some((tab) => tab.key === activeTabKey)) {
+      setActiveTabKey(tabs[0].key);
+    }
+  }, [open, tabs, activeTabKey]);
+
+  const activeDoc = useMemo(() => {
+    return tabs.find((tab) => tab.key === activeTabKey) || tabs[0] || null;
+  }, [tabs, activeTabKey]);
+
+  const activeUrl = activeDoc?.url || "";
+  const activeMime = activeDoc?.mime || "";
+  const activeFileName = activeDoc?.fileName || "";
+  const activeTitle = activeDoc?.title || activeDoc?.label || title;
 
   const modalTitle = useMemo(() => resolveFixedModalTitle(title), [title]);
 
   const initialKind = useMemo(() => {
-    return guessKindFromUrlOrMime(url, mime);
-  }, [url, mime]);
+    return guessKindFromUrlOrMime(activeUrl, activeMime);
+  }, [activeUrl, activeMime]);
 
   const isDirectPreviewKind = useMemo(() => {
     return initialKind === "pdf" || initialKind === "img";
@@ -403,25 +469,25 @@ export default function ModalVerComprobante({
     };
   }, [open]);
 
-useEffect(() => {
-  if (!open) return;
+  useEffect(() => {
+    if (!open) return;
 
-  const onKeyDown = (e) => {
-    if (e.key !== "Escape") return;
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape") return;
 
-    e.preventDefault();
-    e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
 
-    if (typeof e.stopImmediatePropagation === "function") {
-      e.stopImmediatePropagation();
-    }
+      if (typeof e.stopImmediatePropagation === "function") {
+        e.stopImmediatePropagation();
+      }
 
-    onClose?.();
-  };
+      onClose?.();
+    };
 
-  document.addEventListener("keydown", onKeyDown, true);
-  return () => document.removeEventListener("keydown", onKeyDown, true);
-}, [open, onClose]);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [open, onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -437,7 +503,7 @@ useEffect(() => {
       }
     };
 
-    if (!open || !url) {
+    if (!open || !activeUrl) {
       setLoading(false);
       setDownloading(false);
       setErrorMsg("");
@@ -463,21 +529,21 @@ useEffect(() => {
       revokeInternalBlob();
 
       try {
-        if (isBlobUrl(url)) {
+        if (isBlobUrl(activeUrl)) {
           if (cancelled) return;
 
-          setResolvedMime(safeText(mime));
+          setResolvedMime(safeText(activeMime));
           setResolvedFileName("");
-          setBlobUrl(url);
+          setBlobUrl(activeUrl);
           return;
         }
 
-        const inferredKind = guessKindFromUrlOrMime(url, mime);
+        const inferredKind = guessKindFromUrlOrMime(activeUrl, activeMime);
 
         if (inferredKind === "pdf" || inferredKind === "img") {
           if (cancelled) return;
 
-          setResolvedMime(safeText(mime));
+          setResolvedMime(safeText(activeMime));
           setResolvedFileName("");
           setBlobUrl("");
           return;
@@ -487,11 +553,11 @@ useEffect(() => {
           method: "GET",
         };
 
-        if (shouldSendAuthHeaders(url)) {
+        if (shouldSendAuthHeaders(activeUrl)) {
           fetchOptions.headers = buildHeadersGET();
         }
 
-        const res = await fetch(url, fetchOptions);
+        const res = await fetch(activeUrl, fetchOptions);
 
         if (res.status === 401 || res.status === 403) {
           throw new Error("Sesión vencida o no autorizada para ver este comprobante.");
@@ -501,12 +567,12 @@ useEffect(() => {
           throw new Error(`No se pudo cargar el comprobante. HTTP ${res.status}`);
         }
 
-        const contentType = safeText(res.headers.get("Content-Type")) || safeText(mime);
+        const contentType = safeText(res.headers.get("Content-Type")) || safeText(activeMime);
         const headerFileName = parseContentDispositionFileName(
           res.headers.get("Content-Disposition") || ""
         );
 
-        const finalKind = guessKindFromUrlOrMime(url, contentType);
+        const finalKind = guessKindFromUrlOrMime(activeUrl, contentType);
 
         setResolvedMime(contentType);
         setResolvedFileName(headerFileName);
@@ -559,34 +625,34 @@ useEffect(() => {
       cancelled = true;
       revokeInternalBlob();
     };
-  }, [open, url, mime]);
+  }, [open, activeUrl, activeMime]);
 
   const previewUrl = useMemo(() => {
     if (blobUrl) return blobUrl;
-    if (isDirectPreviewKind) return url || "";
+    if (isDirectPreviewKind) return activeUrl || "";
     return "";
-  }, [blobUrl, isDirectPreviewKind, url]);
+  }, [blobUrl, isDirectPreviewKind, activeUrl]);
 
   const kind = useMemo(() => {
     if (textPreview) {
-      const textKind = guessKindFromUrlOrMime(url, resolvedMime || mime);
+      const textKind = guessKindFromUrlOrMime(activeUrl, resolvedMime || activeMime);
       if (textKind === "other") return "text";
       return textKind;
     }
     if (htmlPreview) return "html";
-    return guessKindFromUrlOrMime(previewUrl || url, resolvedMime || mime);
-  }, [previewUrl, resolvedMime, mime, textPreview, htmlPreview, url]);
+    return guessKindFromUrlOrMime(previewUrl || activeUrl, resolvedMime || activeMime);
+  }, [previewUrl, resolvedMime, activeMime, textPreview, htmlPreview, activeUrl]);
 
   const displayFileName = useMemo(() => {
     return buildSimpleDisplayName({
-      explicitFileName: fileName,
+      explicitFileName: activeFileName,
       headerFileName: resolvedFileName,
-      mime: resolvedMime || mime,
+      mime: resolvedMime || activeMime,
       kind,
-      title: modalTitle,
-      url,
+      title: activeTitle || modalTitle,
+      url: activeUrl,
     });
-  }, [fileName, resolvedFileName, resolvedMime, mime, kind, modalTitle, url]);
+  }, [activeFileName, resolvedFileName, resolvedMime, activeMime, kind, activeTitle, modalTitle, activeUrl]);
 
   const csvData = useMemo(() => {
     if (kind !== "csv" || !textPreview) return { headers: [], rows: [] };
@@ -598,15 +664,15 @@ useEffect(() => {
   }, [kind]);
 
   async function handleDownload() {
-    if (!url || downloading) return;
+    if (!activeUrl || downloading) return;
 
-    if (isBlobUrl(url)) {
+    if (isBlobUrl(activeUrl)) {
       try {
         setDownloading(true);
         setErrorMsg("");
 
         const a = document.createElement("a");
-        a.href = url;
+        a.href = activeUrl;
         a.download = displayFileName || "archivo";
         document.body.appendChild(a);
         a.click();
@@ -625,13 +691,8 @@ useEffect(() => {
 
       const binaryLikeKinds = ["pdf", "img", "excel", "word", "other"];
 
-      if (binaryLikeKinds.includes(kind) && !shouldSendAuthHeaders(url)) {
-        triggerDirectDownload(url, displayFileName || "archivo");
-        return;
-      }
-
-      if (binaryLikeKinds.includes(kind) && shouldSendAuthHeaders(url)) {
-        triggerDirectDownload(url, displayFileName || "archivo");
+      if (binaryLikeKinds.includes(kind)) {
+        triggerDirectDownload(activeUrl, displayFileName || "archivo");
         return;
       }
 
@@ -639,11 +700,11 @@ useEffect(() => {
         method: "GET",
       };
 
-      if (shouldSendAuthHeaders(url)) {
+      if (shouldSendAuthHeaders(activeUrl)) {
         fetchOptions.headers = buildHeadersGET();
       }
 
-      const res = await fetch(url, fetchOptions);
+      const res = await fetch(activeUrl, fetchOptions);
 
       if (res.status === 401 || res.status === 403) {
         throw new Error("Sesión vencida o no autorizada para descargar este comprobante.");
@@ -654,22 +715,22 @@ useEffect(() => {
       }
 
       const contentType =
-        safeText(res.headers.get("Content-Type")) || safeText(resolvedMime) || safeText(mime);
+        safeText(res.headers.get("Content-Type")) || safeText(resolvedMime) || safeText(activeMime);
 
       const headerFileName = parseContentDispositionFileName(
         res.headers.get("Content-Disposition") || ""
       );
 
-      const detectedKind = guessKindFromUrlOrMime(url, contentType);
+      const detectedKind = guessKindFromUrlOrMime(activeUrl, contentType);
       const blob = await res.blob();
 
       const realName = buildSimpleDisplayName({
-        explicitFileName: fileName,
+        explicitFileName: activeFileName,
         headerFileName,
         mime: contentType || blob.type,
         kind: detectedKind,
-        title: modalTitle,
-        url,
+        title: activeTitle || modalTitle,
+        url: activeUrl,
       });
 
       const tmpUrl = URL.createObjectURL(blob);
@@ -689,7 +750,7 @@ useEffect(() => {
   }
 
   function handleOpen() {
-    const target = blobUrl || url;
+    const target = blobUrl || activeUrl;
     if (target) window.open(target, "_blank", "noopener,noreferrer");
   }
 
@@ -718,7 +779,6 @@ useEffect(() => {
             <div className="mi-modal__title mpr-title">
               <span>{modalTitle}</span>
             </div>
-
           </div>
 
           <button
@@ -733,18 +793,35 @@ useEffect(() => {
           </button>
         </div>
 
+        {tabs.length > 1 && (
+          <div className="mpr-tabsBar" role="tablist" aria-label="Comprobantes vinculados">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={tab.key === activeTabKey}
+                className={["mpr-tabBtn", tab.key === activeTabKey ? "is-active" : ""].filter(Boolean).join(" ")}
+                onClick={() => setActiveTabKey(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="mi-modal__body mpr-body">
           <div className="mpr-content">
             <div className="mpr-card mpr-viewCard">
-              {!url && <div className="mov-emptyRow">No hay comprobante.</div>}
+              {!activeUrl && <div className="mov-emptyRow">No hay comprobante.</div>}
 
-              {!!url && loading && (
+              {!!activeUrl && loading && (
                 <div className="mov-emptyRow" style={{ padding: 18 }}>
-                  Cargando {displayFileName}…
+                  Cargando {displayFileName}...
                 </div>
               )}
 
-              {!!url && !loading && !!errorMsg && (
+              {!!activeUrl && !loading && !!errorMsg && (
                 <div className="mov-emptyRow" style={{ padding: 18, color: "#b91c1c" }}>
                   {errorMsg}
                 </div>
@@ -772,7 +849,7 @@ useEffect(() => {
                 </div>
               )}
 
-              {!!url && !loading && !errorMsg && kind === "csv" && (
+              {!!activeUrl && !loading && !errorMsg && kind === "csv" && (
                 <div
                   className="mpr-previewScroll"
                   aria-label="Vista previa CSV"
@@ -800,7 +877,7 @@ useEffect(() => {
                                   whiteSpace: "nowrap",
                                 }}
                               >
-                                {h || "—"}
+                                {h || "-"}
                               </th>
                             ))}
                           </tr>
@@ -819,7 +896,7 @@ useEffect(() => {
                                       whiteSpace: "pre-wrap",
                                     }}
                                   >
-                                    {safeText(row[colIdx]) || "—"}
+                                    {safeText(row[colIdx]) || "-"}
                                   </td>
                                 ))}
                               </tr>
@@ -852,7 +929,7 @@ useEffect(() => {
                 </div>
               )}
 
-              {!!url && !loading && !errorMsg && kind === "json" && (
+              {!!activeUrl && !loading && !errorMsg && kind === "json" && (
                 <div
                   className="mpr-previewScroll"
                   aria-label="Vista previa JSON"
@@ -878,7 +955,7 @@ useEffect(() => {
                 </div>
               )}
 
-              {!!url && !loading && !errorMsg && kind === "text" && (
+              {!!activeUrl && !loading && !errorMsg && kind === "text" && (
                 <div
                   className="mpr-previewScroll"
                   aria-label="Vista previa texto"
@@ -899,7 +976,7 @@ useEffect(() => {
                 </div>
               )}
 
-              {!!url && !loading && !errorMsg && kind === "html" && (
+              {!!activeUrl && !loading && !errorMsg && kind === "html" && (
                 <div className="mpr-previewScroll" aria-label="Vista previa HTML">
                   <iframe
                     title={displayFileName || "Vista previa HTML"}
@@ -910,7 +987,7 @@ useEffect(() => {
                 </div>
               )}
 
-              {!!url &&
+              {!!activeUrl &&
                 !loading &&
                 !errorMsg &&
                 !canPreviewText &&
@@ -937,7 +1014,7 @@ useEffect(() => {
               className="mit-btn mit-btn--ghost mit-btn--block"
               id="maxBTN"
               onClick={handleDownload}
-              disabled={!url || downloading}
+              disabled={!activeUrl || downloading}
               title={`Descargar ${displayFileName}`}
             >
               <FontAwesomeIcon icon={faDownload} style={{ marginRight: 8 }} />
@@ -949,7 +1026,7 @@ useEffect(() => {
               className="mit-btn mit-btn--solid mit-btn--block"
               id="maxBTN"
               onClick={handleOpen}
-              disabled={!blobUrl && !url}
+              disabled={!blobUrl && !activeUrl}
               title={`Abrir ${displayFileName} en nueva pestaña`}
             >
               <FontAwesomeIcon icon={faUpRightFromSquare} style={{ marginRight: 8 }} />

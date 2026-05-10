@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
 import "../../../Global/Global_css/Global_responsive.css";
@@ -56,6 +56,34 @@ function moneyARS(v) {
   } catch {
     return `$ ${Number(v || 0).toFixed(2)}`;
   }
+}
+
+
+function parsePrecioInput(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return 0;
+
+  let clean = raw
+    .replace(/\$/g, "")
+    .replace(/ARS/gi, "")
+    .replace(/\s+/g, "")
+    .trim();
+
+  if (!clean) return 0;
+
+  // Formato argentino: 1.234,56 => 1234.56
+  if (clean.includes(",")) {
+    clean = clean.replace(/\./g, "").replace(",", ".");
+  }
+
+  const n = Number(clean);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function precioInputDraft(value) {
+  const n = parsePrecioInput(value);
+  if (!n) return "";
+  return String(Math.round(n * 100) / 100);
 }
 
 function uid() {
@@ -163,6 +191,292 @@ function pickDetallePrecioInicial(precios) {
   return precios.find((p) => Number(p?.id_tipo_precio_stock ?? 0) === 2) || precios[0] || null;
 }
 
+
+
+/* ================================================================
+   ABREVIADOR DE TIPO PRECIO
+   Mismo criterio visual que Nueva Venta
+================================================================ */
+function abreviarTipoPrecio(nombre) {
+  const raw = safeStr(nombre);
+  const n = normalizeTipoPrecioNombre(raw);
+  if (n === "PRECIO DE VENTA" || n === "PRECIO VENTA" || n === "VENTA") return "P. Venta";
+  if (n === "PRECIO DE COSTO" || n === "COSTO") return "P. de COSTO";
+  if (n === "PRECIO PROMOCIONAL" || n === "PROMOCIONAL" || n === "PROMO") return "P. Promo";
+  if (n === "PRECIO MAYORISTA" || n === "MAYORISTA") return "P. Mayor.";
+  if (n === "PRECIO MINORISTA" || n === "MINORISTA") return "P. Minor.";
+  if (n === "PRECIO ESPECIAL" || n === "ESPECIAL") return "P. Especial";
+  if (n === "PRECIO COSTO" || n === "COSTO") return "P. Costo";
+  if (n === "PRECIO LISTA" || n === "LISTA") return "P. Lista";
+  if (n === "PRECIO" || n === "PRECIO 1") return "Precio";
+  return raw.length > 12 ? raw.slice(0, 11).trim() + "…" : raw;
+}
+
+/* ================================================================
+   PRECIO DROPDOWN
+   Replica la estética del selector de precios de Nueva Venta
+================================================================ */
+function PrecioDropdown({ precios, value, onChange, disabled }) {
+  const [open, setOpen] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const ref = useRef(null);
+
+  const safePrecios = Array.isArray(precios) ? precios : [];
+  const selectedIndex = Math.max(
+    0,
+    safePrecios.findIndex((p) => String(p.value) === String(value))
+  );
+  const selected = safePrecios[selectedIndex] || safePrecios[0] || null;
+
+  useEffect(() => {
+    if (!open) return;
+    setHighlightIndex(selectedIndex >= 0 ? selectedIndex : 0);
+  }, [open, selectedIndex]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [open]);
+
+  const moveSelection = useCallback(
+    (direction) => {
+      if (!safePrecios.length) return;
+      const currentIndex = safePrecios.findIndex((p) => String(p.value) === String(value));
+      const baseIndex = currentIndex >= 0 ? currentIndex : 0;
+      let nextIndex = baseIndex + direction;
+
+      if (nextIndex < 0) nextIndex = safePrecios.length - 1;
+      if (nextIndex >= safePrecios.length) nextIndex = 0;
+
+      const next = safePrecios[nextIndex];
+      if (next) onChange(next.value);
+      setHighlightIndex(nextIndex);
+    },
+    [safePrecios, value, onChange]
+  );
+
+  const handleKeyDown = useCallback(
+    (e) => {
+      if (disabled || !safePrecios.length) return;
+
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        moveSelection(1);
+        return;
+      }
+
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        moveSelection(-1);
+        return;
+      }
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!open) {
+          setOpen(true);
+          setHighlightIndex(selectedIndex >= 0 ? selectedIndex : 0);
+          return;
+        }
+        setHighlightIndex((prev) => (prev + 1 >= safePrecios.length ? 0 : prev + 1));
+        return;
+      }
+
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!open) {
+          setOpen(true);
+          setHighlightIndex(selectedIndex >= 0 ? selectedIndex : 0);
+          return;
+        }
+        setHighlightIndex((prev) => (prev - 1 < 0 ? safePrecios.length - 1 : prev - 1));
+        return;
+      }
+
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        if (!open) {
+          setOpen(true);
+          setHighlightIndex(selectedIndex >= 0 ? selectedIndex : 0);
+          return;
+        }
+        const item = safePrecios[highlightIndex];
+        if (item) onChange(item.value);
+        setOpen(false);
+        return;
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+      }
+    },
+    [disabled, safePrecios, open, selectedIndex, highlightIndex, onChange, moveSelection]
+  );
+
+  return (
+    <div ref={ref} style={{ position: "relative", width: "100%" }}>
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen((p) => !p)}
+        onKeyDown={handleKeyDown}
+        disabled={disabled}
+        style={{
+          width: "100%",
+          background: disabled ? "var(--nv-surface2)" : "var(--nv-bg)",
+          border: "1px solid var(--nv-border-md)",
+          borderRadius: 6,
+          padding: "4px 18px 4px 8px",
+          cursor: disabled ? "not-allowed" : "pointer",
+          textAlign: "left",
+          lineHeight: 1.25,
+          minHeight: 38,
+          position: "relative",
+          transition: "border-color 0.15s, background 0.15s",
+          boxSizing: "border-box",
+        }}
+        onMouseEnter={(e) => {
+          if (!disabled) e.currentTarget.style.borderColor = "var(--nv-action)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.borderColor = "var(--nv-border-md)";
+        }}
+      >
+        {selected ? (
+          <>
+            <div
+              style={{
+                fontSize: 9,
+                color: "var(--nv-muted)",
+                textTransform: "uppercase",
+                fontWeight: 700,
+                letterSpacing: "0.05em",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {abreviarTipoPrecio(selected.tipo_precio)}
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: "var(--nv-text)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {moneyARS(selected.monto)}
+            </div>
+          </>
+        ) : (
+          <span style={{ color: "var(--nv-placeholder)", fontSize: 12 }}>Precio</span>
+        )}
+
+        <span
+          style={{
+            position: "absolute",
+            right: 7,
+            top: "50%",
+            transform: `translateY(-50%) rotate(${open ? "180deg" : "0deg"})`,
+            transition: "transform 0.18s",
+            fontSize: 10,
+            color: "var(--nv-muted)",
+            pointerEvents: "none",
+            lineHeight: 1,
+          }}
+        >
+          ▼
+        </span>
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            left: 0,
+            zIndex: 9999,
+            background: "var(--nv-bg)",
+            border: "1px solid var(--nv-border-md)",
+            borderRadius: 8,
+            boxShadow: "var(--nv-shadow-md)",
+            minWidth: "100%",
+            width: "max-content",
+            maxWidth: 240,
+            overflow: "hidden",
+          }}
+        >
+          {safePrecios.map((p, idx) => {
+            const isActive = String(p.value) === String(value);
+            const isHighlighted = idx === highlightIndex;
+
+            return (
+              <div
+                key={p.value}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(p.value);
+                  setOpen(false);
+                }}
+                onMouseEnter={() => setHighlightIndex(idx)}
+                style={{
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                  background: isHighlighted
+                    ? "var(--nv-row-hover)"
+                    : isActive
+                    ? "var(--nv-action-10)"
+                    : "transparent",
+                  borderLeft: isActive ? "3px solid var(--nv-action)" : "3px solid transparent",
+                  transition: "background 0.1s",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 9,
+                    color: isActive ? "var(--nv-action)" : "var(--nv-muted)",
+                    textTransform: "uppercase",
+                    fontWeight: 700,
+                    letterSpacing: "0.05em",
+                    marginBottom: 1,
+                  }}
+                >
+                  {abreviarTipoPrecio(p.tipo_precio)}
+                </div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: isActive ? "var(--nv-action)" : "var(--nv-text)",
+                  }}
+                >
+                  {moneyARS(p.monto)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function buildEmptyRow() {
   return {
     id: uid(),
@@ -172,6 +486,8 @@ function buildEmptyRow() {
     codigo: "",
     cantidad: 1,
     precio: 0,
+    precioDraft: "",
+    precioFocused: false,
     id_tipo_precio_stock: NULL_OPTION,
     precio_tipo_label: "",
     precios_disponibles: [],
@@ -247,6 +563,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
   const detallesList = normalizedLists.detalles;
 
   const [fecha, setFecha] = useState(todayISO());
+  const fechaInputRef = useRef(null);
   const [cliInput, setCliInput] = useState("");
   const [clienteSel, setClienteSel] = useState(null);
   const [observaciones, setObservaciones] = useState("");
@@ -310,6 +627,8 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
       detalleText: getDetalleNombre(detalle),
       codigo: getDetalleCodigo(detalle),
       precio: inicial ? safeNumber(inicial.monto) : 0,
+      precioDraft: "",
+      precioFocused: false,
       id_tipo_precio_stock: inicial?.value || NULL_OPTION,
       precio_tipo_label: inicial?.tipo_precio || "",
       precios_disponibles: precios,
@@ -325,6 +644,8 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
       codigo: "",
       precios_disponibles: [],
       precio_tipo_label: "",
+      precioDraft: "",
+      precioFocused: false,
     });
   }, [updateRow]);
 
@@ -335,8 +656,56 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
       id_tipo_precio_stock: value,
       precio_tipo_label: p?.tipo_precio || "",
       precio: p ? safeNumber(p.monto) : safeNumber(row?.precio),
+      precioDraft: "",
+      precioFocused: false,
     });
   }, [rows, updateRow]);
+
+
+  const handlePrecioFocus = useCallback((rowId) => {
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === rowId
+          ? {
+              ...r,
+              precioFocused: true,
+              precioDraft: precioInputDraft(r.precio),
+            }
+          : r
+      )
+    );
+  }, []);
+
+  const handlePrecioInputChange = useCallback((rowId, value) => {
+    const parsed = parsePrecioInput(value);
+    updateRow(rowId, {
+      precioDraft: value,
+      precio: parsed,
+    });
+  }, [updateRow]);
+
+  const commitPrecioInput = useCallback((rowId) => {
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== rowId) return r;
+        const parsed = parsePrecioInput(r.precioDraft !== "" ? r.precioDraft : r.precio);
+        const rounded = Math.round(parsed * 100) / 100;
+        return {
+          ...r,
+          precio: rounded,
+          precioDraft: "",
+          precioFocused: false,
+        };
+      })
+    );
+  }, []);
+
+  const handlePrecioKeyDown = useCallback((e, rowId) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    commitPrecioInput(rowId);
+    e.currentTarget.blur();
+  }, [commitPrecioInput]);
 
   const computedRows = useMemo(() => {
     return rows.map((r) => {
@@ -349,6 +718,23 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
       return { ...r, cantidad, precio, ivaPct, subtotal, iva_monto, total };
     });
   }, [rows]);
+
+  const openFechaPicker = useCallback(() => {
+    if (saving) return;
+
+    const input = fechaInputRef.current;
+    if (!input) return;
+
+    input.focus();
+
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+      } catch {
+        // Algunos navegadores bloquean showPicker fuera de una acción directa.
+      }
+    }
+  }, [saving]);
 
   const totals = useMemo(() => {
     return computedRows.reduce(
@@ -487,7 +873,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
 
   return createPortal(
     <div
-      className="mi-modal__overlay mi-modal__overlay--mov presupuesto-overlay"
+      className="mi-modal__overlay presupuesto-overlay"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !saving) onClose?.();
@@ -501,125 +887,245 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="mi-modal__header">
-          <div className="mi-modal__head-icon" aria-hidden="true"><FontAwesomeIcon icon={faFileInvoiceDollar} /></div>
+          <div className="mi-modal__head-icon" aria-hidden="true">
+            <FontAwesomeIcon icon={faFileInvoiceDollar} />
+          </div>
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Nuevo Presupuesto</h2>
-            <p className="mi-modal__subtitle">Documento no fiscal, sin ARCA, sin CAE y sin medio de pago.</p>
           </div>
-          <button type="button" className="mi-modal__close" onClick={onClose} disabled={saving} title="Cerrar" aria-label="Cerrar">
-            <FontAwesomeIcon icon={faXmark} />
+          <button
+            type="button"
+            className="mi-modal__close"
+            onClick={() => (!saving ? onClose?.() : null)}
+            disabled={saving}
+            title="Cerrar"
+            aria-label="Cerrar"
+          >
+            ✕
           </button>
         </div>
 
         <form className="mi-modal__content presupuesto-modal__content" onSubmit={handleSubmit}>
-          <div className="nc-grid nc-grid--2">
-            <label className="nc-field">
-              <span className="nc-label">Fecha *</span>
-              <input className="nc-input" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} disabled={saving} />
-            </label>
-
-            <div className="nc-field">
-              <GlobalAutocomplete
-                value={cliInput}
-                onChange={handleClienteInputChange}
-                onSelect={handleSelectCliente}
-                options={clientesList}
-                getOptionLabel={(c) => getClienteNombre(c)}
-                getOptionValue={(c) => String(getClienteId(c) || getClienteNombre(c))}
-                label="Cliente *"
-                placeholder="Buscar cliente…"
-                disabled={saving}
-                showAllOnFocus={true}
-                maxItems={25}
-                inputClassName="nc-input"
-              />
-            </div>
-          </div>
-
-          <div className="mi-cr-block">
-            <div className="mi-cr-block__head">
-              <div>
-                <div className="mi-cr-block__title">Productos / servicios</div>
-                <div className="mi-cr-block__hint">El presupuesto se arma igual que una venta, pero no impacta caja ni solicita medio de pago.</div>
-              </div>
-              <button type="button" className="mov-btn mov-btn--soft" onClick={addRow} disabled={saving}>
-                <FontAwesomeIcon icon={faPlus} /> Agregar ítem
-              </button>
-            </div>
-
-            <div className="nv-itemsTable nv-itemsTable--presupuesto">
-              <div className="nv-itemsHead" style={{ gridTemplateColumns: "2fr 0.9fr 0.9fr 1fr 0.8fr 1fr 42px" }}>
-                <div>Detalle</div>
-                <div>Cantidad</div>
-                <div>Precio</div>
-                <div>Tipo precio</div>
-                <div>IVA</div>
-                <div>Total</div>
+          <div className="mi-cr-grid">
+            <section className="mi-cr-table">
+              <div className="mi-cr-table__head">
+                <div style={{ paddingLeft: 10 }}>Detalle</div>
+                <div>Cant.</div>
+                <div className="right">Precio</div>
+                <div>IVA %</div>
+                <div className="right">IVA $</div>
+                <div className="right">Total</div>
                 <div />
               </div>
 
-              {computedRows.map((r) => (
-                <div key={r.id} className="nv-itemsRow" style={{ gridTemplateColumns: "2fr 0.9fr 0.9fr 1fr 0.8fr 1fr 42px" }}>
-                  <div className="nv-cell">
-                    <GlobalAutocomplete
-                      value={r.detalleText}
-                      onChange={(val) => handleDetalleInputChange(r.id, val)}
-                      onSelect={(d) => handleSelectDetalle(r.id, d)}
-                      options={detallesList}
-                      getOptionLabel={(d) => getDetalleNombre(d)}
-                      getOptionValue={(d) => String(getDetalleId(d) || getDetalleNombre(d))}
-                      placeholder="Producto o servicio…"
-                      disabled={saving}
-                      showAllOnFocus={false}
-                      maxItems={18}
-                      inputClassName="nv-cell-input"
-                    />
+              <div className="mi-cr-table__rows">
+                {computedRows.map((r) => (
+                  <div key={r.id} className="mi-cr-row">
+                    <div className="mi-cr-cell mi-cr-cell--detalle">
+                      <GlobalAutocomplete
+                        value={r.detalleText}
+                        onChange={(val) => handleDetalleInputChange(r.id, val)}
+                        onSelect={(d) => handleSelectDetalle(r.id, d)}
+                        options={detallesList}
+                        getOptionLabel={(d) => getDetalleNombre(d)}
+                        getOptionValue={(d) => String(getDetalleId(d) || getDetalleNombre(d))}
+                        placeholder="Escribí o buscá un detalle…"
+                        disabled={saving}
+                        showAllOnFocus={false}
+                        maxItems={18}
+                        inputClassName="nv-cell-input"
+                      />
+                    </div>
+
+                    <div className="mi-cr-cell mi-cr-cell--center">
+                      <input
+                        className="nv-cell-input nv-cell-input--center"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={r.cantidad}
+                        onChange={(e) => updateRow(r.id, { cantidad: e.target.value })}
+                        disabled={saving}
+                      />
+                    </div>
+
+                    <div className="mi-cr-cell mi-cr-cell--center">
+                      {Array.isArray(r.precios_disponibles) && r.precios_disponibles.length > 0 ? (
+                        <PrecioDropdown
+                          precios={r.precios_disponibles}
+                          value={String(r.id_tipo_precio_stock || r.precios_disponibles?.[0]?.value || NULL_OPTION)}
+                          onChange={(val) => handlePrecioTipoChange(r.id, val)}
+                          disabled={saving || !r.precios_disponibles?.length}
+                        />
+                      ) : (
+                        <input
+                          className="nv-cell-input nv-cell-input--right"
+                          type="text"
+                          inputMode="decimal"
+                          value={r.precioFocused ? r.precioDraft : moneyARS(r.precio)}
+                          onFocus={(e) => {
+                            handlePrecioFocus(r.id);
+                            requestAnimationFrame(() => e.target.select());
+                          }}
+                          onChange={(e) => handlePrecioInputChange(r.id, e.target.value)}
+                          onKeyDown={(e) => handlePrecioKeyDown(e, r.id)}
+                          onBlur={() => commitPrecioInput(r.id)}
+                          disabled={saving}
+                        />
+                      )}
+                    </div>
+
+                    <div className="mi-cr-cell mi-cr-cell--center">
+                      <select
+                        className="nv-cell-input nv-cell-input--center nv-cell-input--select"
+                        value={r.ivaPct}
+                        onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })}
+                        disabled={saving}
+                        style={{ width: "100%" }}
+                      >
+                        {IVA_OPTIONS.map((op) => (
+                          <option key={op.value} value={op.value}>{op.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
+                      {moneyARS(r.iva_monto)}
+                    </div>
+                    <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
+                      {moneyARS(r.total)}
+                    </div>
+                    <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
+                      <button
+                        type="button"
+                        className="mi-cr-del"
+                        onClick={() => removeRow(r.id)}
+                        disabled={saving || rows.length <= 1}
+                        title="Eliminar fila"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
-                  <div className="nv-cell">
-                    <input className="nv-cell-input" type="number" min="0" step="0.01" value={r.cantidad} onChange={(e) => updateRow(r.id, { cantidad: e.target.value })} disabled={saving} />
+                ))}
+              </div>
+
+              <div className="mi-cr-table__foot">
+                <div className="mi-cr-foot-actions">
+                  <button type="button" className="nv-foot-btn" onClick={addRow} disabled={saving}>
+                    <span className="nv-foot-btn__icon">
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M5 1.5V8.5M1.5 5H8.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+                      </svg>
+                    </span>
+                    Agregar fila
+                  </button>
+                  <div className="nv-foot-sep" />
+                </div>
+
+                <div className="mi-cr-totals">
+                  <div className="mi-cr-totalLine mi-cr-totalLine--sub">
+                    <span>Subtotal</span>
+                    <b>{moneyARS(totals.subtotal)}</b>
                   </div>
-                  <div className="nv-cell">
-                    <input className="nv-cell-input" type="number" min="0" step="0.01" value={r.precio} onChange={(e) => updateRow(r.id, { precio: e.target.value })} disabled={saving} />
+                  <div className="mi-cr-totalLine mi-cr-totalLine--iva">
+                    <span>IVA</span>
+                    <b>{moneyARS(totals.iva)}</b>
                   </div>
-                  <div className="nv-cell">
-                    <select className="nv-cell-input" value={r.id_tipo_precio_stock || ""} onChange={(e) => handlePrecioTipoChange(r.id, e.target.value)} disabled={saving || !r.precios_disponibles?.length}>
-                      {(r.precios_disponibles?.length ? r.precios_disponibles : [{ value: "", label: "Precio manual" }]).map((p) => (
-                        <option key={p.value || "manual"} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="nv-cell">
-                    <select className="nv-cell-input" value={r.ivaPct} onChange={(e) => updateRow(r.id, { ivaPct: Number(e.target.value) })} disabled={saving}>
-                      {IVA_OPTIONS.map((op) => <option key={op.value} value={op.value}>{op.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="nv-cell nv-cell--money">{moneyARS(r.total)}</div>
-                  <div className="nv-cell nv-cell--action">
-                    <button type="button" className="mov-iconBtn mov-iconBtn--danger" onClick={() => removeRow(r.id)} disabled={saving || rows.length <= 1} title="Eliminar fila">
-                      <FontAwesomeIcon icon={faTrashCan} />
-                    </button>
+                  <div className="mi-cr-totalLine mi-cr-totalLine--total">
+                    <span>Total</span>
+                    <b>{moneyARS(totals.total)}</b>
                   </div>
                 </div>
-              ))}
+              </div>
+            </section>
+
+            <div className="mi-cr-filters">
+              <aside className="nc-aside">
+                <div className="nc-section">
+                  <div className="nc-section-head">
+                    <div className="nc-section-dot" />
+                    <span>Datos del presupuesto</span>
+                  </div>
+
+                  <div className="nc-section-body">
+                    <div
+                      className="nc-field"
+                      onMouseDown={(e) => {
+                        if (e.target !== fechaInputRef.current) {
+                          e.preventDefault();
+                        }
+                      }}
+                      onClick={openFechaPicker}
+                    >
+                      <input
+                        ref={fechaInputRef}
+                        className="nc-input"
+                        type="date"
+                        placeholder=" "
+                        value={fecha}
+                        onClick={openFechaPicker}
+                        onFocus={openFechaPicker}
+                        onChange={(e) => setFecha(e.target.value)}
+                        disabled={saving}
+                      />
+                      <label className="nc-label">Fecha</label>
+                    </div>
+
+                    <div className="nc-prov-wrap">
+                      <GlobalAutocomplete
+                        value={cliInput}
+                        onChange={handleClienteInputChange}
+                        onSelect={handleSelectCliente}
+                        options={clientesList}
+                        getOptionLabel={(c) => getClienteNombre(c)}
+                        getOptionValue={(c) => String(getClienteId(c) || getClienteNombre(c))}
+                        label="Cliente *"
+                        placeholder=" "
+                        disabled={saving}
+                        showAllOnFocus={true}
+                        maxItems={25}
+                        inputClassName="nc-input"
+                      />
+                    </div>
+
+                    <div className="nc-field presupuesto-observaciones-field">
+                      <textarea
+                        className="nc-input presupuesto-observaciones"
+                        rows={4}
+                        value={observaciones}
+                        onChange={(e) => setObservaciones(e.target.value)}
+                        disabled={saving}
+                        placeholder=" "
+                      />
+                      <label className="nc-label">Observaciones</label>
+                    </div>
+
+                    <div className="nc-cc-info presupuesto-info">
+                      Se guarda como presupuesto y genera PDF. No impacta caja, ARCA ni medio de pago.
+                    </div>
+                  </div>
+                </div>
+              </aside>
+
+              <div className="nc-actions mi-cr-filters__actions mi-cr-filters__actions--sticky">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="mit-btn mit-btn--solid mit-btn--block"
+                >
+                  {saving ? "Generando..." : "Guardar presupuesto"}
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={saving}
+                  className="mit-btn mit-btn--ghost mit-btn--block"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
-          </div>
-
-          <label className="nc-field">
-            <span className="nc-label">Observaciones</span>
-            <textarea className="nc-input" rows={3} value={observaciones} onChange={(e) => setObservaciones(e.target.value)} disabled={saving} placeholder="Notas internas o condiciones del presupuesto…" />
-          </label>
-
-          <div className="mi-cr-summary">
-            <div><span>Subtotal</span><b>{moneyARS(totals.subtotal)}</b></div>
-            <div><span>IVA</span><b>{moneyARS(totals.iva)}</b></div>
-            <div className="mi-cr-summary__total"><span>Total</span><b>{moneyARS(totals.total)}</b></div>
-          </div>
-
-          <div className="presupuesto-modal__footer">
-            <button type="button" className="mov-btn mov-btn--ghost" onClick={onClose} disabled={saving}>Cancelar</button>
-            <button type="submit" className="mov-btn mov-btn--primary" disabled={saving}>
-              <FontAwesomeIcon icon={faFileInvoiceDollar} /> {saving ? "Generando…" : "Guardar presupuesto"}
-            </button>
           </div>
         </form>
       </div>

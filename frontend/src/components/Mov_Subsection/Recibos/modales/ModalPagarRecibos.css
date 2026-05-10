@@ -1149,3 +1149,126 @@ width: 100%;
     font-size: 12px;
   }
 }
+
+/* =========================================================
+   Pestañas de comprobantes (Remito / Venta no facturada)
+   Usado por ModalVerComprobante.jsx: .mpr-tabsBar / .mpr-tabBtn
+========================================================= */
+.mpr-tabsBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px 0;
+  background: var(--nv-surface, #f8fafc);
+  border-bottom: 1px solid var(--nv-border-md, rgba(148, 163, 184, .35));
+  scrollbar-width: thin;
+}
+
+.mpr-tabBtn {
+  appearance: none;
+  border: 1px solid var(--nv-border-md, rgba(148, 163, 184, .42));
+  background: rgba(255, 255, 255, .72);
+  color: var(--nv-muted, #64748b);
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 12px 12px 0 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  position: relative;
+  top: 1px;
+  transition:
+    color .16s ease,
+    background .16s ease,
+    border-color .16s ease,
+    box-shadow .16s ease,
+    transform .16s ease;
+}
+
+.mpr-tabBtn:hover {
+  color: var(--nv-action, #0055bb);
+  background: rgba(255, 255, 255, .94);
+  border-color: rgba(0, 85, 187, .34);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, .07);
+  transform: translateY(-1px);
+}
+
+.mpr-tabBtn.is-active {
+  color: var(--nv-action, #0055bb);
+  background: var(--nv-bg, #fff);
+  border-color: rgba(0, 85, 187, .42);
+  border-bottom-color: var(--nv-bg, #fff);
+  box-shadow: 0 -1px 0 var(--nv-bg, #fff), 0 12px 22px rgba(0, 85, 187, .10);
+}
+
+.mpr-tabBtn.is-active::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 5px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--nv-action, #0055bb);
+}
+
+.mpr-tabBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--nv-action-18, rgba(0, 85, 187, .18));
+}
+
+.mi-modal--dark .mpr-tabsBar,
+body.dark .mpr-tabsBar,
+html[data-theme="oscuro"] .mpr-tabsBar {
+  background: rgba(6, 18, 28, .78);
+  border-bottom-color: rgba(255, 255, 255, .10);
+}
+
+.mi-modal--dark .mpr-tabBtn,
+body.dark .mpr-tabBtn,
+html[data-theme="oscuro"] .mpr-tabBtn {
+  background: rgba(255, 255, 255, .055);
+  border-color: rgba(255, 255, 255, .12);
+  color: rgba(226, 232, 240, .72);
+}
+
+.mi-modal--dark .mpr-tabBtn:hover,
+body.dark .mpr-tabBtn:hover,
+html[data-theme="oscuro"] .mpr-tabBtn:hover {
+  background: rgba(255, 255, 255, .085);
+  border-color: rgba(80, 150, 255, .34);
+  color: rgba(160, 200, 255, .96);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, .28);
+}
+
+.mi-modal--dark .mpr-tabBtn.is-active,
+body.dark .mpr-tabBtn.is-active,
+html[data-theme="oscuro"] .mpr-tabBtn.is-active {
+  background: rgba(10, 25, 40, .98);
+  border-color: rgba(80, 150, 255, .42);
+  border-bottom-color: rgba(10, 25, 40, .98);
+  color: rgba(160, 200, 255, .98);
+  box-shadow: 0 -1px 0 rgba(10, 25, 40, .98), 0 14px 28px rgba(0, 0, 0, .34);
+}
+
+@media (max-width: 640px) {
+  .mpr-tabsBar {
+    padding: 8px 10px 0;
+    gap: 5px;
+  }
+
+  .mpr-tabBtn {
+    min-height: 32px;
+    padding: 0 11px;
+    font-size: 11px;
+    border-radius: 10px 10px 0 0;
+  }
+}

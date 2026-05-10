@@ -547,86 +547,94 @@ function drawHeader(doc, data, logoDataUrl) {
 
   const bandH = 28;
   const headerY = B + bandH;
-  const headerH = 138;
-  const splitX = B + innerW * 0.5;
-  const leftW = splitX - B;
-  const rightW = W - B - splitX;
+  const headerH = 132;
+  const splitX = B + innerW * 0.52;
+
+  const boxW = 50;
+  const boxH = 50;
+  const boxX = splitX - boxW / 2;
+  const boxY = headerY;
+  const gap = 1.2;
 
   set(doc, "helvetica", "bold", 14);
-  text(doc, "ORIGINAL", B + innerW / 2, B + bandH / 2 + 5, { align: "center" });
+  text(doc, "ORIGINAL", B + innerW / 2 + 10, B + bandH / 2 + 5, { align: "center" });
   line(doc, B, B + bandH, W - B, B + bandH, 0.55);
 
   rect(doc, B, headerY, innerW, headerH, 0.55);
-  line(doc, splitX, headerY, splitX, headerY + headerH, 0.55);
+  line(doc, splitX, headerY, splitX, boxY - gap, 0.55);
+  line(doc, splitX, boxY + boxH + gap, splitX, headerY + headerH, 0.55);
+  rect(doc, boxX, boxY, boxW, boxH, 0.55);
 
-  drawLogoOrFallback(doc, logoDataUrl, em, B, headerY, leftW);
+  set(doc, "helvetica", "bold", 30);
+  text(doc, "X", boxX + boxW / 2, boxY + 26, { align: "center" });
+  set(doc, "helvetica", "bold", 9);
+  text(doc, "COD. 000", boxX + boxW / 2, boxY + 34, { align: "center" });
 
-  const leftLabelX = B + 18;
-  const leftValueX = B + 112;
-  const leftValueW = splitX - leftValueX - 12;
-  const leftInfoY = headerY + 90;
+  const leftX = B + 12;
+  const ly = headerY + 72;
+  drawLogoOrFallback(doc, logoDataUrl, em, B, headerY, splitX - B);
 
-  set(doc, "helvetica", "bold", 8.8);
-  text(doc, "Razón Social:", leftLabelX, leftInfoY);
-  text(doc, "Domicilio Comercial:", leftLabelX, leftInfoY + 20);
+  set(doc, "helvetica", "bold", 9);
+  text(doc, "Razón Social:", leftX, ly + 18);
+  text(doc, "Domicilio Comercial:", leftX, ly + 38);
+  text(doc, "Condición frente al IVA:", leftX, ly + 58);
 
-  set(doc, "helvetica", "normal", 8.8);
-  text(doc, clampToWidth(doc, em.razon || "-", leftValueW), leftValueX, leftInfoY);
-  text(doc, clampToWidth(doc, em.domComercial || "-", leftValueW), leftValueX, leftInfoY + 20);
+  set(doc, "helvetica", "normal", 9);
+  text(doc, clampToWidth(doc, em.razon || "-", splitX - leftX - 12), leftX + 78, ly + 18);
+  text(doc, clampToWidth(doc, em.domComercial || "-", splitX - leftX - 12), leftX + 100, ly + 38);
+  text(doc, "-", leftX + 130, ly + 58);
 
-  const rightInnerX = splitX + 20;
-  const rightInnerW = rightW - 40;
-  const rightCenter = rightInnerX + rightInnerW / 2;
+  const rx = splitX + 1;
+  set(doc, "helvetica", "bold", 14);
+  text(doc, FIX.tipoTxt, rx + 40, headerY + 48);
 
-  set(doc, "helvetica", "bold", 13);
-  text(doc, clampToWidth(doc, FIX.tipoTxt, rightInnerW), rightCenter, headerY + 31, {
-    align: "center",
-  });
-
-  set(doc, "helvetica", "bold", 10.5);
-  text(doc, clampToWidth(doc, FIX.subtipoTxt, rightInnerW), rightCenter, headerY + 47, {
-    align: "center",
-  });
-
-  fillRect(doc, rightInnerX, headerY + 56, rightInnerW, 20, 0.9);
-
-  set(doc, "helvetica", "bold", 8.5);
-  text(doc, "SIN VALIDEZ FISCAL", rightCenter, headerY + 70, { align: "center" });
+  set(doc, "helvetica", "bold", 9);
+  text(doc, FIX.subtipoTxt, rx + 40, headerY + 65);
 
   const fecha = ymdToHuman(data?.fecha_cbte_iso || data?.fecha || new Date().toISOString().slice(0, 10));
   const numeroInterno = getNumeroInterno(data);
   const medioPago = getMediosPagoTxt(data) || "-";
 
-  const labelX = rightInnerX + 2;
-  const valueX = rightInnerX + 82;
-  const valueW = rightInnerX + rightInnerW - valueX;
+  set(doc, "helvetica", "bold", 9);
+  text(doc, "Fecha de Emisión:", rx + 40, headerY + 80);
+  text(doc, "N° interno:", rx + 40, headerY + 102);
+  text(doc, "Medio de pago:", rx + 40, headerY + 115);
+  text(doc, "Validez:", rx + 40, headerY + 128);
 
-  set(doc, "helvetica", "bold", 8.7);
-  text(doc, "Fecha:", labelX, headerY + 94);
-  text(doc, "N° interno:", labelX, headerY + 111);
-  text(doc, "Medio de pago:", labelX, headerY + 128);
+  set(doc, "helvetica", "normal", 9);
+  text(doc, fecha, rx + 135, headerY + 80);
+  text(doc, clampToWidth(doc, numeroInterno, 150), rx + 100, headerY + 102);
+  text(doc, clampToWidth(doc, medioPago, 150), rx + 115, headerY + 115);
+  text(doc, "Sin validez fiscal", rx + 82, headerY + 128);
 
-  set(doc, "helvetica", "normal", 8.7);
-  text(doc, clampToWidth(doc, fecha, valueW), valueX, headerY + 94);
-  text(doc, clampToWidth(doc, numeroInterno, valueW), valueX, headerY + 111);
-  text(doc, clampToWidth(doc, medioPago, valueW), valueX, headerY + 128);
-
-  const clientY = headerY + headerH;
-  const clientH = 42;
-
-  rect(doc, B, clientY, innerW, clientH, 0.55);
+  const recY = headerY + headerH;
+  const recH = 78;
+  rect(doc, B, recY, innerW, recH, 0.55);
 
   const clienteNombre = cl.razon || data?.labelCliente || "Cliente";
+  const recLx = B + 10;
+  const recRx = B + innerW * 0.46;
 
-  set(doc, "helvetica", "bold", 10);
-  text(doc, "Cliente:", B + 18, clientY + 26);
+  set(doc, "helvetica", "bold", 9);
+  text(doc, "CUIT / DOC:", recLx, recY + 18);
+  text(doc, "Condición de venta:", recLx, recY + 46);
+  text(doc, "Documento:", recLx, recY + 62);
+  text(doc, "Apellido y Nombre / Razón Social:", 150, recY + 18);
+  text(doc, "Domicilio:", recRx, recY + 46);
+  text(doc, "Comprobante:", recRx, recY + 62);
 
-  set(doc, "helvetica", "normal", 10);
-  text(doc, clampToWidth(doc, clienteNombre, innerW - 100), B + 70, clientY + 26);
+  set(doc, "helvetica", "normal", 9);
+  text(doc, "-", recLx + 58, recY + 18);
+  text(doc, clampToWidth(doc, cl.condVenta || FIX.condicion_venta_default, 190), recLx + 96, recY + 46);
+  text(doc, "Interno", recLx + 58, recY + 62);
+  const razonLines = wrapByWidth(doc, clienteNombre, innerW - (recRx - B) - 12);
+  text(doc, razonLines[0] || "", recRx + 30, recY + 18);
+  if (razonLines[1]) text(doc, razonLines[1], recRx + 185, recY + 30);
+  text(doc, "-", recRx + 45, recY + 46);
+  text(doc, "Venta no facturada", recRx + 65, recY + 62);
 
-  return clientY + clientH;
+  return recY + recH;
 }
-
 function getFacturaTableColumns(doc) {
   const W = doc.internal.pageSize.getWidth();
   const B = 10;

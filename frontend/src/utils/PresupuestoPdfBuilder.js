@@ -279,7 +279,7 @@ function drawOuter(doc) {
 }
 
 function drawLogoOrFallback(doc, logoDataUrl, em, x, y, w) {
-  const maxW = Math.min(140, w - 36);
+  const maxW = Math.min(200, w - 36);
   const maxH = 48;
   if (logoDataUrl) {
     try {
@@ -299,23 +299,25 @@ function drawHeader(doc, data, logoDataUrl) {
   const cl = getCliente(data);
   const headerY = B + 28;
   const headerH = 132;
-  const splitX = B + innerW * 0.5;
-  const letterBoxW = 46;
-  const letterX = W / 2 - letterBoxW / 2;
+  const splitX = B + innerW * 0.52;
+  const letterBoxW = 50;
+  const letterBoxH = 50;
+  const letterX = splitX - letterBoxW / 2;
 
   set(doc, "helvetica", "bold", 14);
   text(doc, "ORIGINAL", W / 2, B + 18, { align: "center" });
   line(doc, B, B + 28, W - B, B + 28, 0.55);
 
   rect(doc, B, headerY, innerW, headerH, 0.55);
-  line(doc, splitX, headerY, splitX, headerY + headerH, 0.55);
+  const gap = 1.2;
+  line(doc, splitX, headerY, splitX, headerY - gap, 0.55);
+  line(doc, splitX, headerY + letterBoxH + gap, splitX, headerY + headerH, 0.55);
 
-  fillRect(doc, letterX, headerY, letterBoxW, 44, 0.97);
-  rect(doc, letterX, headerY, letterBoxW, 44, 0.55);
-  set(doc, "helvetica", "bold", 24);
-  text(doc, FIX.letra, W / 2, headerY + 29, { align: "center" });
-  set(doc, "helvetica", "normal", 6.5);
-  text(doc, FIX.codTxt, W / 2, headerY + 39, { align: "center" });
+  rect(doc, letterX, headerY, letterBoxW, letterBoxH, 0.55);
+  set(doc, "helvetica", "bold", 30);
+  text(doc, FIX.letra, letterX + letterBoxW / 2, headerY + 26, { align: "center" });
+  set(doc, "helvetica", "bold", 9);
+  text(doc, FIX.codTxt, letterX + letterBoxW / 2, headerY + 34, { align: "center" });
 
   drawLogoOrFallback(doc, logoDataUrl, em, B, headerY, splitX - B);
 
@@ -334,10 +336,10 @@ function drawHeader(doc, data, logoDataUrl) {
 
   const rightX = splitX + 22;
   const rightW = W - B - rightX - 18;
-  set(doc, "helvetica", "bold", 18);
-  text(doc, FIX.tipoTxt, rightX + rightW / 2, headerY + 28, { align: "center" });
-  set(doc, "helvetica", "bold", 8.6);
-  text(doc, "DOCUMENTO NO FISCAL", rightX + rightW / 2, headerY + 44, { align: "center" });
+  set(doc, "helvetica", "bold", 20);
+  text(doc, FIX.tipoTxt, rightX + 8, headerY + 48);
+  set(doc, "helvetica", "bold", 9);
+  text(doc, "DOCUMENTO NO FISCAL", rightX + 18, headerY + 65);
 
   const fecha = ymdToHuman(data?.fecha_cbte_iso || data?.fecha || new Date().toISOString().slice(0, 10));
   const nro = sanitizePdfText(data?.numero_presupuesto || data?.nro_presupuesto || data?.numero_interno || data?.id_movimiento || "Pendiente");
@@ -348,13 +350,13 @@ function drawHeader(doc, data, logoDataUrl) {
     ["Ingresos Brutos:", em.ib || "-"],
     ["Inicio Actividades:", em.inicio || "-"],
   ];
-  let y = headerY + 66;
+  let y = headerY + 80;
   labels.forEach(([lab, val]) => {
     set(doc, "helvetica", "bold", 8.4);
     text(doc, lab, rightX, y);
     set(doc, "helvetica", "normal", 8.4);
     text(doc, clampToWidth(doc, val, rightW - 86), rightX + 88, y);
-    y += 13;
+    y += 10;
   });
 
   const clientY = headerY + headerH;

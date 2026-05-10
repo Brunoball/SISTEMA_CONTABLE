@@ -759,7 +759,11 @@ export default function OtrosIngresos() {
         label: "TOTAL",
         fr: 1.1,
         align: "right",
-        render: (r) => moneyARS(r.monto_total ?? r.total ?? r.total_general ?? 0),
+        render: (r) => (
+          <span className="fc-num fc-in">
+            {moneyARS(r.monto_total ?? r.total ?? r.total_general ?? 0)}
+          </span>
+        ),
       },
       { key: "acciones", label: "ACCIONES", fr: 1.2, align: "center", render: () => null },
     ];

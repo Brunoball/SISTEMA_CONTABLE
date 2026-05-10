@@ -700,7 +700,11 @@ export default function OtrosEgresos() {
         label: "TOTAL",
         fr: 1.1,
         align: "right",
-        render: (r) => moneyARS(r.monto_total ?? r.total ?? r.total_general ?? 0),
+        render: (r) => (
+          <span className="fc-num fc-eg">
+            {moneyARS(r.monto_total ?? r.total ?? r.total_general ?? 0)}
+          </span>
+        ),
       },
       { key: "acciones", label: "ACCIONES", fr: 1.15, align: "center", render: () => null },
     ];

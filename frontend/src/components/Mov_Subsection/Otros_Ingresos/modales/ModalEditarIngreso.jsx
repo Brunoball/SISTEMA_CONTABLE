@@ -560,6 +560,13 @@ function MedioPagoRow({
               const p = parseMoneyInputARS(row.montoDraft);
               onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false });
             }}
+            onKeyDown={(e) => {
+              if (esCheque && row.cheque) return;
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
             placeholder="$ 0,00"
             disabled={saving || (esCheque && !!row.cheque)}
             style={{ height: 32, padding: "0 10px", fontSize: 13, textAlign: "right" }}
@@ -1629,6 +1636,12 @@ export default function ModalEditarIngreso({
                                   precioDraft: "",
                                   precioFocused: false,
                                 });
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  e.currentTarget.blur();
+                                }
                               }}
                               placeholder="$ 0,00"
                               disabled={saving}

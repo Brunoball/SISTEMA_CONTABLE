@@ -1,6 +1,17 @@
 // src/utils/RemitoPdfBuilder.js
 
 import jsPDF from "jspdf";
+import BASE_URL from "../config/config";
+
+const API_RELATIVE = "api.php";
+
+const FIX = {
+  emisor_nombre: "BALTO",
+  letra: "X",
+  codTxt: "COD. 000",
+  tipoTxt: "REMITO",
+  subtipoTxt: "DOCUMENTO NO FISCAL",
+};
 
 function sanitizePdfText(input) {
   let t = input == null ? "" : String(input);
@@ -92,7 +103,7 @@ function line(doc, x1, y1, x2, y2, lw = 0.45) {
   doc.line(x1, y1, x2, y2);
 }
 
-function fillRect(doc, x, y, w, h, gray = 0.92) {
+function fillRect(doc, x, y, w, h, gray = 0.84) {
   const g = Math.max(0, Math.min(1, gray));
   doc.setFillColor(Math.round(g * 255));
   doc.rect(x, y, w, h, "F");
@@ -134,6 +145,228 @@ function wrapByWidth(doc, value, maxW) {
   return lines;
 }
 
+function buildApiUrl(paramsObj) {
+  const baseRaw = String(BASE_URL || "").trim();
+  const base = baseRaw.replace(/\/+$/, "") + "/";
+  const url = new URL(API_RELATIVE, base);
+
+  const qs = new URLSearchParams();
+
+  Object.entries(paramsObj || {}).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    qs.set(k, String(v));
+  });
+
+  url.search = qs.toString();
+  return url.toString();
+}
+
+function isLocalApiBase() {
+  try {
+    const base = String(BASE_URL || "").toLowerCase().trim();
+    return base.includes("localhost") || base.includes("127.0.0.1");
+  } catch {
+    return false;
+  }
+}
+
+function getSessionKey() {
+  try {
+    return String(
+      localStorage.getItem("session_key") || localStorage.getItem("sessionKey") || ""
+    ).trim();
+  } catch {
+    return "";
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(blob);
+    } catch {
+      resolve("");
+    }
+  });
+}
+
+const LOGO_CACHE_PREFIX = "balto_remito_logo_pdf_v2";
+const LOGO_CACHE_TTL_MS = 1000 * 60 * 60 * 12;
+let logoDataUrlCache = "";
+let logoDataUrlPromise = null;
+
+function getLogoCacheKey(sessionKey) {
+  return `${LOGO_CACHE_PREFIX}_${sessionKey || "anon"}`;
+}
+
+function readCachedLogo(sessionKey) {
+  if (logoDataUrlCache) return logoDataUrlCache;
+
+  try {
+    const raw = sessionStorage.getItem(getLogoCacheKey(sessionKey));
+    if (!raw) return "";
+
+    const cached = JSON.parse(raw);
+    const ts = Number(cached?.ts || 0);
+    const dataUrl = String(cached?.dataUrl || "");
+
+    if (!dataUrl || !ts || Date.now() - ts > LOGO_CACHE_TTL_MS) {
+      sessionStorage.removeItem(getLogoCacheKey(sessionKey));
+      return "";
+    }
+
+    logoDataUrlCache = dataUrl;
+    return dataUrl;
+  } catch {
+    return "";
+  }
+}
+
+function writeCachedLogo(sessionKey, dataUrl) {
+  const value = String(dataUrl || "");
+  if (!value) return;
+
+  logoDataUrlCache = value;
+
+  try {
+    sessionStorage.setItem(
+      getLogoCacheKey(sessionKey),
+      JSON.stringify({ ts: Date.now(), dataUrl: value })
+    );
+  } catch {
+    // Si el storage está lleno, igual queda cacheado en memoria durante esta sesión.
+  }
+}
+
+function optimizeLogoDataUrl(dataUrl) {
+  const source = String(dataUrl || "");
+  if (!source || typeof Image === "undefined" || typeof document === "undefined") {
+    return Promise.resolve(source);
+  }
+
+  return new Promise((resolve) => {
+    try {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxW = 520;
+          const maxH = 180;
+          const originalW = Number(img.naturalWidth || img.width || maxW);
+          const originalH = Number(img.naturalHeight || img.height || maxH);
+
+          if (!originalW || !originalH) {
+            resolve(source);
+            return;
+          }
+
+          const ratio = Math.min(1, maxW / originalW, maxH / originalH);
+          const targetW = Math.max(1, Math.round(originalW * ratio));
+          const targetH = Math.max(1, Math.round(originalH * ratio));
+
+          const canvas = document.createElement("canvas");
+          canvas.width = targetW;
+          canvas.height = targetH;
+
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(source);
+            return;
+          }
+
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, targetW, targetH);
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+
+          const optimized = canvas.toDataURL("image/jpeg", 0.82);
+          resolve(optimized || source);
+        } catch {
+          resolve(source);
+        }
+      };
+      img.onerror = () => resolve(source);
+      img.src = source;
+    } catch {
+      resolve(source);
+    }
+  });
+}
+
+async function fetchTenantLogoDataUrl(data = {}) {
+  try {
+    const direct = s(data?.emisor_logo_data_url) || s(data?.logo_data_url);
+    const sessionKey = getSessionKey();
+
+    if (direct) {
+      const optimizedDirect = await optimizeLogoDataUrl(direct);
+      writeCachedLogo(sessionKey, optimizedDirect);
+      return optimizedDirect;
+    }
+
+    if (isLocalApiBase()) return "";
+
+    const cached = readCachedLogo(sessionKey);
+    if (cached) return cached;
+
+    if (!sessionKey) return "";
+
+    if (logoDataUrlPromise) return await logoDataUrlPromise;
+
+    logoDataUrlPromise = (async () => {
+      const logoUrl = buildApiUrl({
+        action: "tenant_logo_ver",
+        tipo: "principal",
+      });
+
+      const res = await fetch(logoUrl, {
+        method: "GET",
+        headers: { "X-Session": sessionKey },
+        cache: "force-cache",
+      });
+
+      if (!res.ok || res.status === 204) return "";
+
+      const contentType = String(res.headers.get("content-type") || "").toLowerCase();
+      if (!contentType.startsWith("image/")) return "";
+
+      const blob = await res.blob();
+      if (!blob || !blob.size) return "";
+
+      const dataUrl = await blobToDataUrl(blob);
+      const optimized = await optimizeLogoDataUrl(dataUrl);
+      writeCachedLogo(sessionKey, optimized);
+      return optimized;
+    })();
+
+    try {
+      return await logoDataUrlPromise;
+    } finally {
+      logoDataUrlPromise = null;
+    }
+  } catch {
+    return "";
+  }
+}
+
+export async function preloadRemitoPdfAssets(data = {}) {
+  try {
+    await fetchTenantLogoDataUrl(data || {});
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getImageFormatFromDataUrl(dataUrl) {
+  const t = String(dataUrl || "").toLowerCase();
+  if (t.startsWith("data:image/png")) return "PNG";
+  if (t.startsWith("data:image/webp")) return "WEBP";
+  if (t.startsWith("data:image/jpeg") || t.startsWith("data:image/jpg")) return "JPEG";
+  return "PNG";
+}
+
 function normalizeItems(data) {
   const items = Array.isArray(data?.items_facturacion)
     ? data.items_facturacion
@@ -148,7 +381,9 @@ function normalizeItems(data) {
       );
       const cantidad = safeNumber(it?.cantidad ?? it?.qty ?? it?.unidades, 0);
       const unidad = sanitizePdfText(it?.unidad || it?.um || "u");
-      const codigo = sanitizePdfText(it?.codigo || it?.sku || it?.id_detalle || it?.id || String(index + 1));
+      const codigo = sanitizePdfText(
+        it?.codigo || it?.sku || it?.id_detalle || it?.id || String(index + 1)
+      );
 
       return {
         codigo: codigo || String(index + 1),
@@ -163,169 +398,348 @@ function normalizeItems(data) {
 function getCliente(data) {
   const cf = data?.cliente_facturacion || {};
   return {
-    razon_social: sanitizePdfText(cf.razon_social || data?.labelCliente || data?.cliente || "Cliente"),
-    doc_nro: sanitizePdfText(cf.doc_nro || cf.cuit || cf.dni || ""),
-    cond_iva: sanitizePdfText(cf.cond_iva || cf.condicion_iva || ""),
-    domicilio: sanitizePdfText(cf.domicilio || ""),
+    razon: sanitizePdfText(cf.razon_social || data?.labelCliente || data?.cliente || "Cliente"),
+    cuit: sanitizePdfText(cf.doc_nro || cf.cuit || cf.dni || ""),
+    iva: sanitizePdfText(cf.cond_iva || cf.condicion_iva || ""),
+    dom: sanitizePdfText(cf.domicilio || ""),
   };
 }
 
 function getEmisor(data) {
+  const em = data?.emisor || data?.config_facturacion || data?.facturacion || data?.config || {};
   return {
-    nombre: sanitizePdfText(data?.emisor_nombre || data?.razon_social_emisor || "BALTO"),
-    domicilio: sanitizePdfText(data?.emisor_domicilio || ""),
-    cuit: sanitizePdfText(data?.cuit_emisor || ""),
-    cond_iva: sanitizePdfText(data?.cond_iva_emisor || data?.condicion_iva_emisor || ""),
+    razon: sanitizePdfText(
+      em.razon_social || em.nombre_fantasia || em.nombre || data?.emisor_nombre || FIX.emisor_nombre
+    ),
+    dom: sanitizePdfText(em.domicilio || em.domicilio_comercial || data?.emisor_domicilio || ""),
+    cuit: sanitizePdfText(em.cuit || data?.cuit_emisor || ""),
+    iva: sanitizePdfText(em.condicion_iva || em.cond_iva || data?.cond_iva_emisor || ""),
+    ib: sanitizePdfText(em.ingresos_brutos || data?.ingresos_brutos || ""),
+    inicio: sanitizePdfText(em.inicio_actividades || data?.inicio_actividades || ""),
   };
 }
 
-function getMovimientoText(data) {
+function getNumeroRemito(data) {
   const ids = Array.isArray(data?.ids_movimiento)
     ? data.ids_movimiento.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0)
     : [];
-  if (ids.length > 1) return `Movimientos #${ids.join(", #")}`;
-  if (ids.length === 1) return `Movimiento #${ids[0]}`;
+
+  if (data?.numero_remito || data?.nro_remito || data?.numero_interno) {
+    return sanitizePdfText(data?.numero_remito || data?.nro_remito || data?.numero_interno);
+  }
+
+  if (ids.length === 1) return `MOV-${String(ids[0]).padStart(8, "0")}`;
+  if (ids.length > 1) return `LOTE-${ids.map((x) => String(x)).join("-")}`;
+
   const id = Number(data?.id_movimiento || 0);
-  return id > 0 ? `Movimiento #${id}` : "Movimiento";
+  return id > 0 ? `MOV-${String(id).padStart(8, "0")}` : `REM-${nowStamp()}`;
 }
 
-function header(doc, data, pageInfo = "") {
-  const emisor = getEmisor(data);
-  const cliente = getCliente(data);
-  const fecha = ymdToHuman(data?.fecha_cbte_iso || data?.fecha_cbte || data?.fecha || new Date().toISOString().slice(0, 10));
-  const movimientoTxt = getMovimientoText(data);
+function drawLogoOrFallback(doc, logoDataUrl, em, boxX, boxY, boxW) {
+  const logoBoxW = Math.min(190, boxW - 36);
+  const logoBoxH = 58;
+  const logoBoxX = boxX + 22;
+  const logoBoxY = boxY + 12;
 
-  doc.setDrawColor(35);
-  doc.setTextColor(25);
+  if (logoDataUrl) {
+    try {
+      doc.addImage(logoDataUrl, getImageFormatFromDataUrl(logoDataUrl), logoBoxX, logoBoxY, logoBoxW, logoBoxH);
+      return;
+    } catch {
+      // fallback al texto
+    }
+  }
 
-  rect(doc, 12, 12, 186, 35, 0.7);
-  line(doc, 122, 12, 122, 47, 0.55);
+  set(doc, "helvetica", "bold", 10);
+  text(doc, clampToWidth(doc, em?.razon || "BALTO", boxW - 44), logoBoxX, logoBoxY + 30);
+}
+
+function drawOuter(doc) {
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const B = 10;
+  rect(doc, B, B, W - B * 2, H - B * 2, 0.75);
+}
+
+function drawHeader(doc, data) {
+  const W = doc.internal.pageSize.getWidth();
+  const B = 10;
+  const innerW = W - B * 2;
+  const em = getEmisor(data);
+  const cl = getCliente(data);
+
+  const bandH = 28;
+  const headerY = B + bandH;
+  const headerH = 132;
+  const splitX = B + innerW * 0.52;
+  const boxW = 50;
+  const boxH = 50;
+  const boxX = splitX - boxW / 2;
+  const boxY = headerY;
+  const gap = 1.2;
 
   set(doc, "helvetica", "bold", 14);
-  text(doc, emisor.nombre || "BALTO", 16, 22);
-  set(doc, "helvetica", "normal", 8.2);
-  text(doc, emisor.domicilio ? `Domicilio: ${emisor.domicilio}` : "", 16, 29);
-  text(doc, emisor.cuit ? `CUIT: ${emisor.cuit}` : "", 16, 35);
-  text(doc, emisor.cond_iva ? `Condicion IVA: ${emisor.cond_iva}` : "", 16, 41);
+  text(doc, "ORIGINAL", B + innerW / 2 + 10, B + bandH / 2 + 5, { align: "center" });
+  line(doc, B, B + bandH, W - B, B + bandH, 0.55);
 
-  set(doc, "helvetica", "bold", 22);
-  text(doc, "REMITO", 160, 24, { align: "center" });
-  set(doc, "helvetica", "normal", 9);
-  text(doc, "Documento no fiscal", 160, 31, { align: "center" });
-  text(doc, movimientoTxt, 160, 38, { align: "center" });
-  text(doc, `Fecha: ${fecha}`, 160, 44, { align: "center" });
+  rect(doc, B, headerY, innerW, headerH, 0.55);
+  line(doc, splitX, headerY, splitX, boxY - gap, 0.55);
+  line(doc, splitX, boxY + boxH + gap, splitX, headerY + headerH, 0.55);
+  rect(doc, boxX, boxY, boxW, boxH, 0.55);
 
-  rect(doc, 12, 52, 186, 31, 0.55);
-  fillRect(doc, 12, 52, 186, 7, 0.9);
+  set(doc, "helvetica", "bold", 30);
+  text(doc, FIX.letra, boxX + boxW / 2, boxY + 26, { align: "center" });
   set(doc, "helvetica", "bold", 9);
-  text(doc, "DATOS DEL CLIENTE / DESTINATARIO", 16, 57);
-  set(doc, "helvetica", "normal", 8.4);
-  text(doc, `Cliente: ${cliente.razon_social || "Consumidor final"}`, 16, 66);
-  text(doc, cliente.doc_nro ? `Documento/CUIT: ${cliente.doc_nro}` : "Documento/CUIT: -", 16, 73);
-  text(doc, cliente.cond_iva ? `Condicion IVA: ${cliente.cond_iva}` : "Condicion IVA: -", 112, 73);
-  text(doc, cliente.domicilio ? `Domicilio: ${cliente.domicilio}` : "Domicilio: -", 16, 80);
+  text(doc, FIX.codTxt, boxX + boxW / 2, boxY + 34, { align: "center" });
 
-  if (pageInfo) {
-    set(doc, "helvetica", "normal", 8);
-    text(doc, pageInfo, 198, 287, { align: "right" });
-  }
+  const leftX = B + 12;
+  const ly = headerY + 72;
+  drawLogoOrFallback(doc, data?.__logoDataUrl || "", em, B, headerY, splitX - B);
+
+  set(doc, "helvetica", "bold", 9);
+  text(doc, "Razón Social:", leftX, ly + 18);
+  text(doc, "Domicilio Comercial:", leftX, ly + 38);
+  text(doc, "Condición frente al IVA:", leftX, ly + 58);
+  set(doc, "helvetica", "normal", 9);
+  text(doc, clampToWidth(doc, em.razon || "-", splitX - leftX - 12), leftX + 78, ly + 18);
+  text(doc, clampToWidth(doc, em.dom || "-", splitX - leftX - 12), leftX + 100, ly + 38);
+  text(doc, clampToWidth(doc, em.iva || "-", splitX - leftX - 12), leftX + 130, ly + 58);
+
+  const rx = splitX + 1;
+  set(doc, "helvetica", "bold", 20);
+  text(doc, FIX.tipoTxt, rx + 40, headerY + 48);
+  set(doc, "helvetica", "bold", 9);
+  text(doc, FIX.subtipoTxt, rx + 40, headerY + 65);
+
+  const fecha = ymdToHuman(data?.fecha_cbte_iso || data?.fecha_cbte || data?.fecha || new Date().toISOString().slice(0, 10));
+  const nro = getNumeroRemito(data);
+
+  set(doc, "helvetica", "bold", 9);
+  text(doc, "Fecha de Emisión:", rx + 40, headerY + 80);
+  text(doc, "CUIT:", rx + 40, headerY + 102);
+  text(doc, "Ingresos Brutos:", rx + 40, headerY + 115);
+  text(doc, "Fecha de Inicio de Actividades:", rx + 40, headerY + 128);
+  set(doc, "helvetica", "normal", 9);
+  text(doc, fecha, rx + 135, headerY + 80);
+  text(doc, em.cuit || "-", rx + 75, headerY + 102);
+  text(doc, em.ib || "-", rx + 125, headerY + 115);
+  text(doc, s(em.inicio || "-"), W - B - 48, headerY + 128, { align: "right" });
+
+  const recY = headerY + headerH;
+  const recH = 78;
+  rect(doc, B, recY, innerW, recH, 0.55);
+
+  const recLx = B + 10;
+  set(doc, "helvetica", "bold", 9);
+  text(doc, "CUIT / DOC:", recLx, recY + 18);
+  text(doc, "Condición frente al IVA:", recLx, recY + 46);
+  text(doc, "Documento:", recLx, recY + 62);
+  set(doc, "helvetica", "normal", 9);
+  text(doc, cl.cuit || "-", recLx + 58, recY + 18);
+  text(doc, clampToWidth(doc, cl.iva || "-", 190), recLx + 110, recY + 46);
+  text(doc, "Remito interno", recLx + 58, recY + 62);
+
+  const recRx = B + innerW * 0.46;
+  set(doc, "helvetica", "bold", 9);
+  text(doc, "Apellido y Nombre / Razón Social:", 150, recY + 18);
+  text(doc, "Domicilio:", recRx, recY + 46);
+  text(doc, "Remito:", recRx, recY + 62);
+  set(doc, "helvetica", "normal", 9);
+  const razonLines = wrapByWidth(doc, cl.razon || "Cliente", innerW - (recRx - B) - 12);
+  text(doc, razonLines[0] || "", recRx + 30, recY + 18);
+  if (razonLines[1]) text(doc, razonLines[1], recRx + 185, recY + 30);
+  text(doc, clampToWidth(doc, cl.dom || "-", innerW - (recRx - B) - 12), recRx + 45, recY + 46);
+  text(doc, clampToWidth(doc, nro, innerW - (recRx - B) - 12), recRx + 45, recY + 62);
+
+  return recY + recH;
+}
+
+function getColumns(doc) {
+  const W = doc.internal.pageSize.getWidth();
+  const B = 10;
+  const innerW = W - B * 2;
+  const wCodigo = 50;
+  const wCant = 70;
+  const wUM = 50;
+  const wDesc = Math.max(120, innerW - (wCodigo + wCant + wUM));
+  const x0 = B;
+  const x1 = x0 + wCodigo;
+  const x2 = x1 + wDesc;
+  const x3 = x2 + wCant;
+  const x4 = B + innerW;
+  return { x0, x1, x2, x3, x4, padL: 8, padR: 8 };
 }
 
 function drawTableHeader(doc, y) {
-  fillRect(doc, 12, y, 186, 8, 0.86);
-  rect(doc, 12, y, 186, 8, 0.5);
-  set(doc, "helvetica", "bold", 8.2);
-  text(doc, "COD.", 15, y + 5.5);
-  text(doc, "DESCRIPCION", 37, y + 5.5);
-  text(doc, "CANT.", 168, y + 5.5, { align: "right" });
-  text(doc, "UN.", 192, y + 5.5, { align: "right" });
+  const W = doc.internal.pageSize.getWidth();
+  const B = 10;
+  const innerW = W - B * 2;
+  const headerRowH = 22;
+  const c = getColumns(doc);
 
-  line(doc, 33, y, 33, y + 8, 0.35);
-  line(doc, 160, y, 160, y + 8, 0.35);
-  line(doc, 176, y, 176, y + 8, 0.35);
+  fillRect(doc, B, y, innerW, headerRowH, 0.84);
+  rect(doc, B, y, innerW, headerRowH, 0.55);
+
+  set(doc, "helvetica", "bold", 8.6);
+  text(doc, "Código", c.x0 + c.padL, y + 15);
+  text(doc, "Producto / Servicio", c.x1 + c.padL, y + 15);
+  text(doc, "Cantidad", c.x3 - c.padR, y + 15, { align: "right" });
+  text(doc, "U. Medida", c.x4 - c.padR, y + 15, { align: "right" });
+
+  return { nextY: y + headerRowH + 16, cols: c };
 }
 
-function drawFooter(doc, data) {
+function drawTableRow(doc, item, idx, cols, y, maxBodyY) {
+  const descMaxW = cols.x2 - cols.padR - (cols.x1 + cols.padL);
+  const descLines = wrapByWidth(doc, item.descripcion, Math.max(20, descMaxW));
+  const lh = 11;
+  const blockH = Math.max(14, descLines.length * lh);
+
+  if (y + blockH > maxBodyY) return { y, drawn: false };
+
+  set(doc, "helvetica", "normal", 9);
+  text(doc, s(item.codigo || String(idx + 1)), cols.x0 + cols.padL, y);
+  descLines.forEach((ln, li) => text(doc, ln, cols.x1 + cols.padL, y + li * lh));
+  text(doc, numEs(item.cantidad, 2), cols.x3 - cols.padR, y, { align: "right" });
+  text(doc, s(item.unidad || "u"), cols.x4 - cols.padR, y, { align: "right" });
+
+  return { y: y + blockH + 4, drawn: true };
+}
+
+function drawFooter(doc, data, y) {
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const B = 10;
+  const innerW = W - B * 2;
+  const footerH = 62;
+  const obsH = 88;
+  const footerTopY = H - B - footerH;
+  const obsY = Math.max(y, footerTopY - obsH);
+
+  rect(doc, B, obsY, innerW, obsH, 0.55);
+  const sepX = B + innerW * 0.62;
+  line(doc, sepX, obsY, sepX, obsY + obsH, 0.45);
+
+  const obsX = B + 12;
+  const obsW = sepX - obsX - 14;
   const obs = sanitizePdfText(
     data?.observaciones_remito ||
+      data?.observaciones ||
       "Se deja constancia de la entrega de los productos detallados. Este remito no incluye precios ni importes."
   );
 
-  rect(doc, 12, 247, 186, 20, 0.55);
-  set(doc, "helvetica", "bold", 8.4);
-  text(doc, "OBSERVACIONES", 16, 253);
-  set(doc, "helvetica", "normal", 7.8);
-  const lines = wrapByWidth(doc, obs, 176).slice(0, 2);
-  lines.forEach((ln, i) => text(doc, ln, 16, 260 + i * 4));
-
-  line(doc, 28, 280, 84, 280, 0.45);
-  line(doc, 126, 280, 182, 280, 0.45);
+  set(doc, "helvetica", "bold", 8.5);
+  text(doc, "Observaciones:", obsX, obsY + 20);
   set(doc, "helvetica", "normal", 8);
-  text(doc, "Entregado por", 56, 285, { align: "center" });
-  text(doc, "Recibido por", 154, 285, { align: "center" });
+  wrapByWidth(doc, obs, obsW).slice(0, 4).forEach((ln, i) => text(doc, ln, obsX, obsY + 38 + i * 10));
+
+  const signLeft = sepX + 42;
+  const signRight = B + innerW - 46;
+  line(doc, signLeft - 30, obsY + 58, signLeft + 42, obsY + 58, 0.45);
+  line(doc, signRight - 36, obsY + 58, signRight + 36, obsY + 58, 0.45);
+  set(doc, "helvetica", "normal", 8);
+  text(doc, "Entregado por", signLeft + 6, obsY + 72, { align: "center" });
+  text(doc, "Recibido por", signRight, obsY + 72, { align: "center" });
+
+  line(doc, B, footerTopY, W - B, footerTopY, 0.45);
+  set(doc, "helvetica", "bold", 9);
+  text(doc, "Remito interno de gestión", B + 12, footerTopY + 34);
+  set(doc, "helvetica", "italic", 7.5);
+  text(doc, "Documento no fiscal. Sin CAE, sin QR fiscal y sin intervención de ARCA.", B + 12, footerTopY + 48);
+
+  return obsY + obsH;
 }
 
-export function buildRemitoPdf({ data = {} } = {}) {
-  const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4", compress: true });
-  const items = normalizeItems(data);
+function addPageNumbering(doc) {
+  const total = doc.internal.getNumberOfPages();
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const B = 10;
+  const footerH = 62;
+  const footerTopY = H - B - footerH;
 
-  let page = 1;
-  header(doc, data, `Pagina ${page}`);
-  drawTableHeader(doc, 90);
+  for (let i = 1; i <= total; i += 1) {
+    doc.setPage(i);
+    set(doc, "helvetica", "normal", 8);
+    text(doc, `Pág. ${i}/${total}`, W / 2, footerTopY + 18, { align: "center" });
+  }
+}
 
-  let y = 102;
-  const bottomLimit = 239;
+export async function buildRemitoPdf({ data = {} } = {}) {
+  const doc = new jsPDF({ unit: "pt", format: "a4", compress: true });
+  const logoDataUrl = await fetchTenantLogoDataUrl(data || {});
+  const pdfData = { ...(data || {}), __logoDataUrl: logoDataUrl };
+  const items = normalizeItems(pdfData);
 
-  const drawItem = (it, index) => {
-    set(doc, "helvetica", "normal", 8.2);
-    const descLines = wrapByWidth(doc, it.descripcion, 118).slice(0, 3);
-    const rowH = Math.max(8, 4.2 * Math.max(descLines.length, 1) + 3);
+  const H = doc.internal.pageSize.getHeight();
+  const footerH = 62;
+  const obsH = 88;
+  const B = 10;
+  const bottomLimit = H - B - footerH - obsH - 20;
 
-    if (y + rowH > bottomLimit) {
-      drawFooter(doc, data);
-      doc.addPage();
-      page += 1;
-      header(doc, data, `Pagina ${page}`);
-      drawTableHeader(doc, 90);
-      y = 102;
-    }
+  let y;
+  let cols;
 
-    rect(doc, 12, y - 6, 186, rowH, 0.28);
-    line(doc, 33, y - 6, 33, y - 6 + rowH, 0.25);
-    line(doc, 160, y - 6, 160, y - 6 + rowH, 0.25);
-    line(doc, 176, y - 6, 176, y - 6 + rowH, 0.25);
-
-    text(doc, clampToWidth(doc, it.codigo || String(index + 1), 15), 15, y);
-    descLines.forEach((ln, i) => text(doc, ln, 37, y + i * 4.2));
-    text(doc, numEs(it.cantidad, 2), 168, y, { align: "right" });
-    text(doc, clampToWidth(doc, it.unidad || "u", 14), 192, y, { align: "right" });
-
-    y += rowH;
+  const startPage = () => {
+    drawOuter(doc);
+    y = drawHeader(doc, pdfData || {}) + 14;
+    const header = drawTableHeader(doc, y);
+    y = header.nextY;
+    cols = header.cols;
   };
 
+  startPage();
+
   if (!items.length) {
-    rect(doc, 12, 96, 186, 18, 0.35);
     set(doc, "helvetica", "normal", 9);
-    text(doc, "No hay productos cargados para este remito.", 105, 107, { align: "center" });
+    text(doc, "No hay productos cargados para este remito.", doc.internal.pageSize.getWidth() / 2, y + 12, {
+      align: "center",
+    });
+    y += 28;
   } else {
-    items.forEach(drawItem);
+    items.forEach((it, idx) => {
+      const res = drawTableRow(doc, it, idx, cols, y, bottomLimit);
+      if (!res.drawn) {
+        drawFooter(doc, pdfData, y + 10);
+        doc.addPage();
+        startPage();
+        const next = drawTableRow(doc, it, idx, cols, y, bottomLimit);
+        y = next.y;
+      } else {
+        y = res.y;
+      }
+    });
   }
 
-  drawFooter(doc, data);
+  if (y + 110 > bottomLimit) {
+    drawFooter(doc, pdfData, y + 10);
+    doc.addPage();
+    startPage();
+  }
+
+  drawFooter(doc, pdfData, y + 10);
+  addPageNumbering(doc);
   return doc;
 }
 
 export async function saveRemitoPdf({ data = {}, download = true, filename = "" } = {}) {
-  const doc = buildRemitoPdf({ data });
+  const doc = await buildRemitoPdf({ data });
   const cliente = data?.cliente_facturacion?.razon_social || data?.labelCliente || "CLIENTE";
-  const finalName =
-    filename || `remito_${safeFilePart(cliente, "CLIENTE")}_${nowStamp()}.pdf`;
-
-  if (download) {
-    doc.save(finalName);
-  }
+  const finalName = filename || `remito_${safeFilePart(cliente, "CLIENTE")}_${nowStamp()}.pdf`;
 
   const blob = doc.output("blob");
+
+  if (download) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = finalName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
   return { doc, blob, filename: finalName, data };
 }
 

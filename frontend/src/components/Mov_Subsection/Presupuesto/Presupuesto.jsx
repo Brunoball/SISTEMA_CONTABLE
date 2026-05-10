@@ -371,13 +371,13 @@ export default function Presupuesto() {
   }, [dateRange]);
 
   const columns = useMemo(() => [
-    { key: "fecha", label: "Fecha", render: (r) => formatFechaDMY(r.fecha) },
+    { key: "fecha",align: "center", label: "Fecha", render: (r) => formatFechaDMY(r.fecha) },
     { key: "detalle", label: "Descripción", render: (r) => safeText(r.detalle || r.descripcion || r.concepto) },
-    { key: "cliente", label: "Cliente", render: (r) => safeText(r.cliente) },
+    { key: "cliente",align: "center", label: "Cliente", render: (r) => safeText(r.cliente) },
     { key: "total", label: "Total", align: "right", strong: true, render: (r) => moneyARS(r.monto_total) },
     { key: "acciones", label: "Acciones", align: "center" },
   ], []);
-  const gridCols = "0.85fr 2.25fr 1.5fr 1fr 118px";
+  const gridCols = "0.9fr 2.2fr 1.6fr 1.1fr 1.1fr";
 
   const exportOptions = useMemo(() => [
     {

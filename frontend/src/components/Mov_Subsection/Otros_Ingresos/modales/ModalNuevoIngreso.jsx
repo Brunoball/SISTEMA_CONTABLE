@@ -1315,11 +1315,42 @@ export default function ModalNuevoIngreso({
                         <div className="mi-cr-cell mi-cr-cell--right">
                           <input
                             className="nv-cell-input nv-cell-input--right"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={r.precio}
-                            onChange={(e) => updateRow(r.id, { precio: Number(e.target.value) })}
+                            type="text"
+                            inputMode="decimal"
+                            value={
+                              r.precioFocused
+                                ? r.precioDraft ?? ""
+                                : formatMoneyInputARS(r.precio)
+                            }
+                            onFocus={(e) => {
+                              updateRow(r.id, {
+                                precioFocused: true,
+                                precioDraft: formatEditableMoney(r.precio),
+                              });
+                              setTimeout(() => e.target.select(), 0);
+                            }}
+                            onChange={(e) => {
+                              const cleaned = e.target.value.replace(/[^\d,.\-]/g, "");
+                              updateRow(r.id, {
+                                precioDraft: cleaned,
+                                precio: parseMoneyInputARS(cleaned),
+                              });
+                            }}
+                            onBlur={() => {
+                              const parsed = parseMoneyInputARS(r.precioDraft);
+                              updateRow(r.id, {
+                                precio: parsed,
+                                precioDraft: "",
+                                precioFocused: false,
+                              });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                e.currentTarget.blur();
+                              }
+                            }}
+                            placeholder="$ 0,00"
                             disabled={saving}
                             style={{ width: "100%" }}
                           />

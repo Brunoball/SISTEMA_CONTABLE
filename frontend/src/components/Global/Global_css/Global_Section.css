@@ -1200,7 +1200,37 @@ max-width: 250px;
   background: rgba(148, 163, 184, 0.14);
   color: #64748b;
   border-color: rgba(148, 163, 184, 0.22);
-}/* =========================================================
+}
+/* =========================================================
+   COLORES SEMÁNTICOS DE IMPORTES (igual que Flujo de Caja)
+========================================================= */
+.fc-num {
+  font-weight: 520;
+  font-size: 13px;
+}
+
+.fc-in {
+  color: #16a34a;
+}
+
+.fc-eg {
+  color: #dc2626;
+}
+
+.fc-saldo {
+  font-weight: 660;
+  letter-spacing: -0.01em;
+}
+
+.fc-saldo--pos {
+  color: #16a34a;
+}
+
+.fc-saldo--neg {
+  color: #dc2626;
+}
+
+/* =========================================================
    FLUJO DE CHEQUES — Colores por evento
 ========================================================= */
 

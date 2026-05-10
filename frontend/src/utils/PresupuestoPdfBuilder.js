@@ -345,7 +345,7 @@ function drawHeader(doc, data, logoDataUrl) {
   const rightX = splitX + 22;
   const rightW = W - B - rightX - 18;
   set(doc, "helvetica", "bold", 20);
-  text(doc, FIX.tipoTxt, rightX + 8, headerY + 48);
+  text(doc, FIX.tipoTxt, rightX + 15, headerY + 48);
   set(doc, "helvetica", "bold", 9);
   text(doc, "DOCUMENTO NO FISCAL", rightX + 18, headerY + 65);
 
@@ -354,7 +354,7 @@ function drawHeader(doc, data, logoDataUrl) {
   const labels = [
     ["Fecha:", fecha],
     ["Presupuesto N°:", nro],
-    ["CUIT:", em.cuit || "-"],
+
     ["Ingresos Brutos:", em.ib || "-"],
     ["Inicio Actividades:", em.inicio || "-"],
   ];
@@ -373,13 +373,13 @@ function drawHeader(doc, data, logoDataUrl) {
   set(doc, "helvetica", "bold", 9);
   text(doc, "Cliente:", B + 18, clientY + 20);
   text(doc, "CUIT/DNI:", B + 18, clientY + 38);
-  text(doc, "Cond. IVA:", splitX + 18, clientY + 20);
-  text(doc, "Domicilio:", splitX + 18, clientY + 38);
+  text(doc, "Cond. IVA:", splitX - 20, clientY + 20);
+  text(doc, "Domicilio:", splitX - 20, clientY + 38);
   set(doc, "helvetica", "normal", 9);
   text(doc, clampToWidth(doc, cl.razon || "Consumidor Final", splitX - B - 82), B + 72, clientY + 20);
   text(doc, clampToWidth(doc, cl.cuit || "-", splitX - B - 82), B + 72, clientY + 38);
   text(doc, clampToWidth(doc, cl.iva || "Consumidor Final", W - B - splitX - 96), splitX + 84, clientY + 20);
-  text(doc, clampToWidth(doc, cl.dom || "-", W - B - splitX - 96), splitX + 84, clientY + 38);
+  text(doc, clampToWidth(doc, cl.dom || "-", W - B - splitX - 6), splitX + 44, clientY + 38);
 
   return clientY + clientH;
 }

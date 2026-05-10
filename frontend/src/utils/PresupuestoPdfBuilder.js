@@ -207,27 +207,35 @@ async function fetchTenantLogoDataUrl() {
   return logoDataUrlPromise;
 }
 
+function pickText(...values) {
+  for (const value of values) {
+    const txt = sanitizePdfText(value);
+    if (txt) return txt;
+  }
+  return "";
+}
+
 function getEmisor(data) {
   const em = data?.emisor || data?.config_facturacion || data?.facturacion || data?.config || {};
   return {
-    razon: sanitizePdfText(em.razon_social || em.nombre_fantasia || em.nombre || data?.emisor_nombre || FIX.emisor_nombre),
-    fantasia: sanitizePdfText(em.nombre_fantasia || ""),
-    cuit: sanitizePdfText(em.cuit || data?.cuit_emisor || ""),
-    ib: sanitizePdfText(em.ingresos_brutos || ""),
-    iva: sanitizePdfText(em.condicion_iva || em.cond_iva || ""),
-    dom: sanitizePdfText(em.domicilio_comercial || em.domicilio || ""),
-    inicio: ymdToHuman(em.fecha_inicio_actividades || ""),
-    puntoVenta: sanitizePdfText(em.punto_venta || data?.pto_vta || "00000"),
+    razon: pickText(data?.emisor_nombre, em.razon_social, em.nombre_fantasia, em.nombre, FIX.emisor_nombre),
+    fantasia: pickText(em.nombre_fantasia),
+    cuit: pickText(data?.cuit_emisor, em.cuit),
+    ib: pickText(data?.ingresos_brutos_emisor, em.ingresos_brutos),
+    iva: pickText(data?.cond_iva_emisor, em.condicion_iva, em.cond_iva),
+    dom: pickText(data?.emisor_domicilio, em.domicilio_comercial, em.domicilio, em.domicilio_fiscal),
+    inicio: ymdToHuman(pickText(data?.fecha_inicio_actividades_emisor, em.fecha_inicio_actividades, em.inicio_actividades)),
+    puntoVenta: pickText(em.punto_venta, data?.pto_vta, "00000"),
   };
 }
 
 function getCliente(data) {
   const cl = data?.cliente_facturacion || data?.cliente || {};
   return {
-    razon: sanitizePdfText(cl.razon_social || cl.nombre || data?.cliente_nombre || data?.labelCliente || "Consumidor Final"),
-    cuit: sanitizePdfText(cl.cuit || cl.doc_nro || data?.cliente_cuit || ""),
-    iva: sanitizePdfText(cl.condicion_iva || cl.cond_iva || data?.cliente_condicion_iva || ""),
-    dom: sanitizePdfText(cl.domicilio || data?.cliente_domicilio || ""),
+    razon: pickText(cl.razon_social, cl.nombre, data?.cliente_nombre, data?.labelCliente, "Consumidor Final"),
+    cuit: pickText(cl.cuit, cl.doc_nro, cl.dni, data?.cliente_cuit, data?.doc_nro),
+    iva: pickText(cl.condicion_iva, cl.cond_iva, data?.cliente_condicion_iva),
+    dom: pickText(cl.domicilio, data?.cliente_domicilio),
   };
 }
 

@@ -382,26 +382,67 @@ function getImageFormatFromDataUrl(dataUrl) {
   return "PNG";
 }
 
+function pickText(...values) {
+  for (const value of values) {
+    const txt = sanitizePdfText(value);
+    if (txt) return txt;
+  }
+  return "";
+}
+
+function getDocCliente(cf = {}, data = {}) {
+  const doc = pickText(cf?.doc_nro, cf?.cuit, cf?.dni, data?.cliente_cuit, data?.doc_nro);
+  return doc;
+}
+
 function getEmisor(data = {}) {
+  const em = data?.emisor || data?.config_facturacion || data?.facturacion || data?.config || {};
+
   return {
-    razon: sanitizePdfText(data?.emisor_nombre || FIX.emisor_nombre),
-    domComercial: sanitizePdfText(data?.emisor_domicilio || FIX.emisor_domicilio),
+    razon: pickText(
+      data?.emisor_nombre,
+      em?.razon_social,
+      em?.nombre_fantasia,
+      em?.nombre,
+      FIX.emisor_nombre
+    ),
+    domComercial: pickText(
+      data?.emisor_domicilio,
+      em?.domicilio_comercial,
+      em?.domicilio,
+      em?.domicilio_fiscal,
+      FIX.emisor_domicilio
+    ),
+    cuit: pickText(data?.cuit_emisor, em?.cuit),
+    iva: pickText(data?.cond_iva_emisor, em?.condicion_iva, em?.cond_iva),
+    iibb: pickText(data?.ingresos_brutos_emisor, em?.ingresos_brutos),
+    inicio: pickText(
+      data?.fecha_inicio_actividades_emisor,
+      em?.fecha_inicio_actividades,
+      em?.inicio_actividades
+    ),
   };
 }
 
 function getCliente(data = {}) {
-  const cf = data?.cliente_facturacion || {};
+  const cf = data?.cliente_facturacion || data?.cliente || {};
 
   return {
-    razon: sanitizePdfText(
-      cf?.razon_social ||
-        data?.labelCliente ||
-        data?.cliente_nombre ||
-        data?.cliente ||
-        "Cliente"
+    razon: pickText(
+      cf?.razon_social,
+      cf?.nombre,
+      data?.labelCliente,
+      data?.cliente_nombre,
+      data?.cliente,
+      "Cliente"
     ),
-    condVenta: sanitizePdfText(
-      data?.condicion_venta || data?.tipo_venta_nombre || FIX.condicion_venta_default
+    cuit: getDocCliente(cf, data),
+    iva: pickText(cf?.condicion_iva, cf?.cond_iva, data?.cliente_condicion_iva),
+    domicilio: pickText(cf?.domicilio, data?.cliente_domicilio),
+    condVenta: pickText(
+      data?.condicion_venta,
+      data?.tipo_venta_nombre,
+      FIX.condicion_venta_default
     ),
   };
 }
@@ -582,7 +623,7 @@ function drawHeader(doc, data, logoDataUrl) {
   set(doc, "helvetica", "normal", 9);
   text(doc, clampToWidth(doc, em.razon || "-", splitX - leftX - 12), leftX + 78, ly + 18);
   text(doc, clampToWidth(doc, em.domComercial || "-", splitX - leftX - 12), leftX + 100, ly + 38);
-  text(doc, "-", leftX + 130, ly + 58);
+  text(doc, clampToWidth(doc, em.iva || "-", splitX - leftX - 12), leftX + 130, ly + 58);
 
   const rx = splitX + 1;
   set(doc, "helvetica", "bold", 14);
@@ -624,13 +665,13 @@ function drawHeader(doc, data, logoDataUrl) {
   text(doc, "Comprobante:", recRx, recY + 62);
 
   set(doc, "helvetica", "normal", 9);
-  text(doc, "-", recLx + 58, recY + 18);
+  text(doc, clampToWidth(doc, cl.cuit || "-", 165), recLx + 58, recY + 18);
   text(doc, clampToWidth(doc, cl.condVenta || FIX.condicion_venta_default, 190), recLx + 96, recY + 46);
   text(doc, "Interno", recLx + 58, recY + 62);
   const razonLines = wrapByWidth(doc, clienteNombre, innerW - (recRx - B) - 12);
   text(doc, razonLines[0] || "", recRx + 30, recY + 18);
   if (razonLines[1]) text(doc, razonLines[1], recRx + 185, recY + 30);
-  text(doc, "-", recRx + 45, recY + 46);
+  text(doc, clampToWidth(doc, cl.domicilio || "-", innerW - (recRx - B) - 12), recRx + 45, recY + 46);
   text(doc, "Venta no facturada", recRx + 65, recY + 62);
 
   return recY + recH;

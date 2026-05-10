@@ -49,6 +49,66 @@ function safeText(v) {
   return String(v ?? "").trim();
 }
 
+function pickText(...values) {
+  for (const value of values) {
+    const txt = safeText(value);
+    if (txt) return txt;
+  }
+  return "";
+}
+
+function normalizeEmisorPdfInfo(data = {}, fact = {}) {
+  const cfg = data?.config_facturacion || fact?.config_facturacion || data?.emisor || fact?.emisor || data?.facturacion || {};
+  const nombre = pickText(data?.emisor_nombre, fact?.emisor_nombre, cfg?.razon_social, cfg?.nombre_fantasia, cfg?.nombre, "BALTO");
+  const domicilio = pickText(data?.emisor_domicilio, fact?.emisor_domicilio, cfg?.domicilio_comercial, cfg?.domicilio, cfg?.domicilio_fiscal);
+  const cuit = pickText(data?.cuit_emisor, fact?.cuit_emisor, cfg?.cuit);
+  const iva = pickText(data?.cond_iva_emisor, fact?.cond_iva_emisor, cfg?.condicion_iva, cfg?.cond_iva);
+  const iibb = pickText(data?.ingresos_brutos_emisor, fact?.ingresos_brutos_emisor, cfg?.ingresos_brutos);
+  const inicio = pickText(data?.fecha_inicio_actividades_emisor, fact?.fecha_inicio_actividades_emisor, cfg?.fecha_inicio_actividades, cfg?.inicio_actividades);
+
+  return {
+    emisor_nombre: nombre,
+    emisor_domicilio: domicilio,
+    cuit_emisor: cuit,
+    cond_iva_emisor: iva,
+    ingresos_brutos_emisor: iibb,
+    fecha_inicio_actividades_emisor: inicio,
+    emisor: {
+      razon_social: nombre,
+      nombre_fantasia: pickText(cfg?.nombre_fantasia),
+      domicilio_comercial: domicilio,
+      domicilio,
+      cuit,
+      condicion_iva: iva,
+      cond_iva: iva,
+      ingresos_brutos: iibb,
+      fecha_inicio_actividades: inicio,
+      inicio_actividades: inicio,
+      punto_venta: pickText(cfg?.punto_venta, data?.pto_vta, fact?.pto_vta),
+      tipo_comprobante_default: pickText(cfg?.tipo_comprobante_default),
+      codigo_comprobante: pickText(cfg?.codigo_comprobante),
+    },
+  };
+}
+
+function normalizeClienteFacturacionPdfInfo(data = {}, fallback = {}) {
+  const cf = data?.cliente_facturacion || data?.cliente || {};
+  const docNro = pickText(cf?.doc_nro, cf?.cuit, cf?.dni, fallback?.doc_nro, data?.doc_nro).replace(/\D/g, "");
+  const cuit = pickText(cf?.cuit, Number(cf?.doc_tipo || fallback?.doc_tipo) === 80 ? docNro : "", data?.cliente_cuit);
+  const condicion = pickText(cf?.cond_iva, cf?.condicion_iva, data?.cond_iva_receptor, data?.cliente_condicion_iva);
+
+  return {
+    doc_tipo: Number(cf?.doc_tipo || fallback?.doc_tipo || (cuit ? 80 : 96)) || null,
+    doc_nro: docNro,
+    cuit,
+    razon_social: pickText(cf?.razon_social, cf?.nombre, data?.receptor_nombre, data?.labelCliente, data?.cliente),
+    cond_iva: condicion,
+    condicion_iva: condicion,
+    domicilio: pickText(cf?.domicilio, data?.receptor_domicilio, data?.cliente_domicilio),
+    origen: pickText(cf?.origen),
+  };
+}
+
 function toNumberOrNull(v) {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -199,8 +259,14 @@ export default function ModalFacturaBaltoResumen({
   const idPago = data?.id_pago ?? null;
   const idSistema = data?.id_sistema ?? null;
 
+  const emisorInfo = useMemo(() => normalizeEmisorPdfInfo(data || {}), [data]);
+  const clienteFacturaInfo = useMemo(
+    () => normalizeClienteFacturacionPdfInfo(data || {}, { doc_tipo: docTipo, doc_nro: docNro }),
+    [data, docTipo, docNro]
+  );
+
   const nombreCliente =
-    data?.cliente_facturacion?.razon_social ||
+    clienteFacturaInfo?.razon_social ||
     data?.labelCliente ||
     data?.cliente ||
     "—";
@@ -220,12 +286,12 @@ export default function ModalFacturaBaltoResumen({
   const fechaCbteISO = String(data?.fecha_cbte_iso ?? "").slice(0, 10);
   const vtoPagoISO = String(data?.vto_pago_iso ?? "").slice(0, 10);
 
-  const emisorNombre = safeText(data?.emisor_nombre);
-  const emisorDomicilio = safeText(data?.emisor_domicilio);
-  const emisorCuit = safeText(data?.cuit_emisor);
-  const emisorCondIva = safeText(data?.cond_iva_emisor);
-  const emisorIibb = safeText(data?.ingresos_brutos_emisor);
-  const emisorFechaInicio = safeText(data?.fecha_inicio_actividades_emisor);
+  const emisorNombre = emisorInfo.emisor_nombre;
+  const emisorDomicilio = emisorInfo.emisor_domicilio;
+  const emisorCuit = emisorInfo.cuit_emisor;
+  const emisorCondIva = emisorInfo.cond_iva_emisor;
+  const emisorIibb = emisorInfo.ingresos_brutos_emisor;
+  const emisorFechaInicio = emisorInfo.fecha_inicio_actividades_emisor;
 
   const resumen = useMemo(() => {
     const doc = String(docNro ?? "").replace(/\D/g, "");
@@ -241,11 +307,8 @@ export default function ModalFacturaBaltoResumen({
       comprobante: getCbteLabel(cbteTipo),
       receptorTxt: doc ? `${docLabel}: ${doc}` : "—",
       pvTxt: pv || "—",
-      iva:
-        data?.cliente_facturacion?.cond_iva ||
-        data?.cliente_facturacion?.condicion_iva ||
-        "—",
-      domicilio: data?.cliente_facturacion?.domicilio || "—",
+      iva: clienteFacturaInfo?.cond_iva || clienteFacturaInfo?.condicion_iva || "—",
+      domicilio: clienteFacturaInfo?.domicilio || "—",
       observaciones: safeText(data?.observaciones),
     };
   }, [
@@ -259,6 +322,7 @@ export default function ModalFacturaBaltoResumen({
     docNro,
     ptoVta,
     docLabel,
+    clienteFacturaInfo,
     data,
     cbteTipo,
   ]);
@@ -346,7 +410,8 @@ useEffect(() => {
             importe: monto,
             cbte_tipo: Number(cbteTipo) || 13,
             pto_vta: Number(ptoVta) || 2,
-            cliente_facturacion: data?.cliente_facturacion || {},
+            cliente_facturacion: clienteFacturaInfo || data?.cliente_facturacion || {},
+            config_facturacion: data?.config_facturacion || {},
             items_facturacion: items,
             emisor_nombre: emisorNombre || "BALTO",
             emisor_domicilio: emisorDomicilio || "",
@@ -354,6 +419,7 @@ useEffect(() => {
             cond_iva_emisor: emisorCondIva || "",
             ingresos_brutos_emisor: emisorIibb || "",
             fecha_inicio_actividades_emisor: emisorFechaInicio || "",
+            emisor: emisorInfo?.emisor || null,
             observaciones: data?.observaciones || "",
             factura_original: data?.factura_original || null,
             cae: "",
@@ -395,15 +461,11 @@ useEffect(() => {
             ingresos_brutos_emisor: emisorIibb || "",
             fecha_inicio_actividades_emisor: emisorFechaInicio || "",
             receptor_nombre:
-              data?.cliente_facturacion?.razon_social || nombreCliente,
+              clienteFacturaInfo?.razon_social || nombreCliente,
             receptor_domicilio:
-              data?.cliente_facturacion?.domicilio ||
-              data?.cliente_domicilio ||
-              "",
+              clienteFacturaInfo?.domicilio || data?.cliente_domicilio || "",
             cond_iva_receptor:
-              data?.cliente_facturacion?.cond_iva ||
-              data?.cliente_facturacion?.condicion_iva ||
-              "",
+              clienteFacturaInfo?.cond_iva || clienteFacturaInfo?.condicion_iva || "",
             doc_tipo: Number(docTipo),
             doc_nro: String(docNro || "").replace(/\D/g, ""),
           };
@@ -419,6 +481,9 @@ useEffect(() => {
               total_ars: monto,
               monto,
               importe: monto,
+              cliente_facturacion: clienteFacturaInfo || data?.cliente_facturacion || {},
+              config_facturacion: data?.config_facturacion || {},
+              emisor: emisorInfo?.emisor || null,
               items_facturacion: items,
             },
             forceTestAmount,
@@ -457,6 +522,8 @@ useEffect(() => {
     fechaCbteISO,
     vtoPagoISO,
     items,
+    clienteFacturaInfo,
+    emisorInfo,
     emisorNombre,
     emisorDomicilio,
     emisorCuit,
@@ -704,12 +771,15 @@ useEffect(() => {
         id_pago: idPago ?? null,
         id_sistema: idSistema ?? null,
 
-        razon_social: data?.cliente_facturacion?.razon_social || null,
+        razon_social: clienteFacturaInfo?.razon_social || null,
         cond_iva:
-          data?.cliente_facturacion?.cond_iva ||
-          data?.cliente_facturacion?.condicion_iva ||
+          clienteFacturaInfo?.cond_iva ||
+          clienteFacturaInfo?.condicion_iva ||
           null,
-        domicilio: data?.cliente_facturacion?.domicilio || null,
+        domicilio: clienteFacturaInfo?.domicilio || null,
+        cliente_facturacion: clienteFacturaInfo || null,
+        emisor: emisorInfo?.emisor || null,
+        config_facturacion: data?.config_facturacion || null,
 
         items_facturacion: Array.isArray(data?.items_facturacion)
           ? data.items_facturacion
@@ -776,6 +846,8 @@ useEffect(() => {
     [
       apiBase,
       data,
+      clienteFacturaInfo,
+      emisorInfo,
       docTipo,
       docNro,
       cbteTipo,
@@ -827,19 +899,10 @@ useEffect(() => {
           id_sistema: v.id_sistema,
 
           cliente_facturacion: {
+            ...clienteFacturaInfo,
             doc_tipo: Number(docTipo),
             doc_nro: String(v.docN),
-            cuit: Number(docTipo) === 80 ? String(v.docN) : "",
-            razon_social: data?.cliente_facturacion?.razon_social || null,
-            cond_iva:
-              data?.cliente_facturacion?.cond_iva ||
-              data?.cliente_facturacion?.condicion_iva ||
-              null,
-            condicion_iva:
-              data?.cliente_facturacion?.condicion_iva ||
-              data?.cliente_facturacion?.cond_iva ||
-              null,
-            domicilio: data?.cliente_facturacion?.domicilio || null,
+            cuit: Number(docTipo) === 80 ? String(v.docN) : clienteFacturaInfo?.cuit || "",
           },
 
           doc_tipo: Number(docTipo),
@@ -847,12 +910,12 @@ useEffect(() => {
           cbte_tipo: Number(cbteTipo),
           pto_vta: v.pvN,
 
-          razon_social: data?.cliente_facturacion?.razon_social || null,
+          razon_social: clienteFacturaInfo?.razon_social || null,
           cond_iva:
-            data?.cliente_facturacion?.cond_iva ||
-            data?.cliente_facturacion?.condicion_iva ||
+            clienteFacturaInfo?.cond_iva ||
+            clienteFacturaInfo?.condicion_iva ||
             null,
-          domicilio: data?.cliente_facturacion?.domicilio || null,
+          domicilio: clienteFacturaInfo?.domicilio || null,
 
           total_ars: forceTestAmount ? Number(testAmount) : Number(monto),
           monto: forceTestAmount ? Number(testAmount) : Number(monto),
@@ -869,6 +932,8 @@ useEffect(() => {
           items_facturacion: items,
           observaciones: data?.observaciones || "",
           concepto: data?.concepto ?? 1,
+          config_facturacion: data?.config_facturacion || null,
+          emisor: emisorInfo?.emisor || null,
 
           cbtes_asoc: Array.isArray(data?.cbtes_asoc) ? data.cbtes_asoc : [],
 
@@ -920,7 +985,8 @@ useEffect(() => {
           qr_url: fact?.qr_url || "",
           qr_base64: fact?.qr_base64 || "",
           qr_payload: fact?.qr_payload || null,
-          cliente_facturacion: data?.cliente_facturacion || {},
+          cliente_facturacion: clienteFacturaInfo || data?.cliente_facturacion || {},
+          config_facturacion: data?.config_facturacion || {},
           items_facturacion: items,
           observaciones: data?.observaciones || "",
           emisor_nombre: emisorNombre || "BALTO",
@@ -929,6 +995,7 @@ useEffect(() => {
           cond_iva_emisor: emisorCondIva || "",
           ingresos_brutos_emisor: emisorIibb || "",
           fecha_inicio_actividades_emisor: emisorFechaInicio || "",
+          emisor: emisorInfo?.emisor || null,
           factura_original: data?.factura_original || null,
         };
 
@@ -993,12 +1060,12 @@ useEffect(() => {
             fecha_inicio_actividades_emisor:
               emisorFechaInicio || fact?.fecha_inicio_actividades_emisor,
             receptor_nombre:
-              data?.cliente_facturacion?.razon_social || fact?.receptor_nombre,
+              clienteFacturaInfo?.razon_social || fact?.receptor_nombre,
             receptor_domicilio:
-              data?.cliente_facturacion?.domicilio || fact?.receptor_domicilio,
+              clienteFacturaInfo?.domicilio || fact?.receptor_domicilio,
             cond_iva_receptor:
-              data?.cliente_facturacion?.cond_iva ||
-              data?.cliente_facturacion?.condicion_iva ||
+              clienteFacturaInfo?.cond_iva ||
+              clienteFacturaInfo?.condicion_iva ||
               fact?.cond_iva_receptor,
           },
           data: {
@@ -1008,6 +1075,9 @@ useEffect(() => {
             labelSistema: nombreSistema,
             fecha_cbte: isoToYmd8(fact?.fecha_cbte || fechaCbteISO),
             vto_pago: isoToYmd8(vtoPagoISO),
+            cliente_facturacion: clienteFacturaInfo || data?.cliente_facturacion || {},
+            config_facturacion: data?.config_facturacion || {},
+            emisor: emisorInfo?.emisor || null,
             items_facturacion: items,
             total_ars: Number(fact?.imp_total || monto),
             monto: Number(fact?.imp_total || monto),
@@ -1082,6 +1152,8 @@ useEffect(() => {
     fechaCbteISO,
     vtoPagoISO,
     items,
+    clienteFacturaInfo,
+    emisorInfo,
     emisorNombre,
     emisorDomicilio,
     emisorCuit,

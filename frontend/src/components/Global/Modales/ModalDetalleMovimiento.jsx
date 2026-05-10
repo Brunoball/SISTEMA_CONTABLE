@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import "../Global_css/Global_Modals.css";
 import "../Global_css/Global_responsive.css";
+import "../Global_css/roots.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faInfoCircle,
@@ -175,10 +176,20 @@ export default function ModalDetalleMovimiento({
     ];
   }, [row]);
 
-  const totalItems = useMemo(
-    () => items.reduce((acc, item) => acc + Number(item?.total || 0), 0),
+  const resumenItems = useMemo(
+    () =>
+      items.reduce(
+        (acc, item) => ({
+          subtotal: acc.subtotal + Number(item?.subtotal || 0),
+          iva: acc.iva + Number(item?.iva_monto || 0),
+          total: acc.total + Number(item?.total || 0),
+        }),
+        { subtotal: 0, iva: 0, total: 0 }
+      ),
     [items]
   );
+
+  const totalItems = resumenItems.total;
 
   const totalMedios = useMemo(
     () => medios.reduce((acc, item) => acc + Number(item?.monto || 0), 0),
@@ -225,7 +236,12 @@ export default function ModalDetalleMovimiento({
 
   return createPortal(
     <div className="mi-modal__overlay" role="presentation">
-      <div className="mi-modal__container mdm-modal">
+      <div
+        className="mi-modal__container mi-modal__container--mov mdm-modal"
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="mi-modal__header mdm-header">
           <div className="mi-modal__head-icon mdm-header__icon" aria-hidden="true">
             <FontAwesomeIcon icon={faInfoCircle} />
@@ -242,7 +258,7 @@ export default function ModalDetalleMovimiento({
         </div>
 
         <div className="mi-modal__content mdm-content">
-          <div className="mdm-summary-card">
+          <aside className="mdm-summary-card">
             <InfoPill label="Fecha" value={formatFechaDMY(row?.fecha)} />
 
             {!hideTerceroYTipo ? (
@@ -262,11 +278,9 @@ export default function ModalDetalleMovimiento({
             ) : null}
 
             {estado ? <InfoPill label="Estado" value={estado} /> : null}
+          </aside>
 
-            <InfoPill label="Total" value={moneyARS(totalMovimiento)} strong />
-          </div>
-
-          <div className="mdm-section">
+          <section className="mdm-section mdm-section--items">
             <SectionTitle icon={faShoppingCart} title="Productos / detalle" />
 
             {items.length === 0 ? (
@@ -282,7 +296,6 @@ export default function ModalDetalleMovimiento({
                     <span>Cant.</span>
                     <span>Precio</span>
                     <span>IVA %</span>
-                    <span>Subtotal</span>
                     <span>IVA</span>
                     <span>Total</span>
                   </div>
@@ -292,13 +305,12 @@ export default function ModalDetalleMovimiento({
                       className="mdm-table__row"
                       key={item?.id_item || `${getItemName(item)}-${index}`}
                     >
-                      <span className="mdm-product-name" title={getItemName(item)}>
-                        {getItemName(item)}
+                      <span className="mdm-product-cell" title={getItemName(item)}>
+                        <span className="mdm-product-name">{getItemName(item)}</span>
                       </span>
                       <span>{formatNumber(item?.cantidad)}</span>
                       <span>{moneyARS(item?.precio)}</span>
                       <span>{formatNumber(item?.iva_pct)}%</span>
-                      <span>{moneyARS(item?.subtotal)}</span>
                       <span>{moneyARS(item?.iva_monto)}</span>
                       <span className="is-strong">{moneyARS(item?.total)}</span>
                     </div>
@@ -307,14 +319,29 @@ export default function ModalDetalleMovimiento({
               </div>
             )}
 
-            <div className="mdm-total-line">
-              <span>Total productos / detalle</span>
-              <strong>{moneyARS(totalItems || totalMovimiento)}</strong>
-            </div>
-          </div>
+            {items.length > 0 ? (
+              <div className="mi-cr-table__foot mdm-table__foot">
+                <div className="mi-cr-foot-actions mdm-foot-actions" />
+                <div className="mi-cr-totals mdm-foot-totals">
+                  <div className="mi-cr-totalLine mi-cr-totalLine--sub">
+                    <span>Subtotal</span>
+                    <b>{moneyARS(resumenItems.subtotal)}</b>
+                  </div>
+                  <div className="mi-cr-totalLine mi-cr-totalLine--iva">
+                    <span>IVA</span>
+                    <b>{moneyARS(resumenItems.iva)}</b>
+                  </div>
+                  <div className="mi-cr-totalLine mi-cr-totalLine--total">
+                    <span>Total</span>
+                    <b>{moneyARS(totalItems || totalMovimiento)}</b>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </section>
 
           {!hideMediosPago ? (
-            <div className="mdm-section">
+            <section className="mdm-section mdm-section--medios">
               <SectionTitle icon={faCreditCard} title="Medios de pago" />
 
               {medios.length === 0 ? (
@@ -338,16 +365,17 @@ export default function ModalDetalleMovimiento({
                           {safeText(medio?.medio_pago_nombre || medio?.medio_pago || medio?.nombre)}
                         </span>
 
-                        <span className="mdm-medio-card__sub">
-                          {medio?.id_cheque
-                            ? `${safeText(medio?.cheque_tipo)} · cheque #${safeText(
-                                medio?.numero_cheque || medio?.id_cheque
-                              )}`
-                            : "Pago registrado"}
+                        <span className="mdm-medio-card__meta" style={{justifyContent:"space-between"}}>
+                          <span className="mdm-medio-card__sub">
+                            {medio?.id_cheque
+                              ? `${safeText(medio?.cheque_tipo)} · cheque #${safeText(
+                                  medio?.numero_cheque || medio?.id_cheque
+                                )}`
+                              : "Pago registrado"}
+                          </span>
+                          <span className="mdm-medio-card__amount">{moneyARS(medio?.monto)}</span>
                         </span>
                       </div>
-
-                      <div className="mdm-medio-card__amount">{moneyARS(medio?.monto)}</div>
 
                       {medio?.id_cheque ? (
                         <div className="mdm-cheque-extra">
@@ -362,12 +390,16 @@ export default function ModalDetalleMovimiento({
               )}
 
               {medios.length > 0 ? (
-                <div className="mdm-total-line">
-                  <span>Total pagado</span>
-                  <strong>{moneyARS(totalMedios || totalMovimiento)}</strong>
+                <div className="mdm-total-line mdm-total-line--chip">
+                  <div className="mi-cr-totals mdm-total-paid-totals">
+                    <div className="mi-cr-totalLine mi-cr-totalLine--total mdm-total-paid-chip">
+                      <span>Total pagado</span>
+                      <b>{moneyARS(totalMedios || totalMovimiento)}</b>
+                    </div>
+                  </div>
                 </div>
               ) : null}
-            </div>
+            </section>
           ) : null}
         </div>
       </div>

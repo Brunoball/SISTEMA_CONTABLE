@@ -166,7 +166,12 @@ async function apiFetch(paramsObj, options = {}) {
 const ROUTE_PREFETCH = {
   "/panel/movimientos": () => import("../Movimientos/Movimientos"),
   "/panel/ventas": () => import("../Mov_Subsection/Ventas/Ventas"),
-  "/panel/presupuesto": () => import("../Mov_Subsection/Presupuesto/Presupuesto"),
+  "/panel/documentos_comerciales": () =>
+    import("../Mov_Subsection/Documentos_Comerciales/DocumentosComerciales"),
+  "/panel/facturacion": () =>
+    import("../Mov_Subsection/Documentos_Comerciales/DocumentosComerciales"),
+  "/panel/presupuesto": () =>
+    import("../Mov_Subsection/Documentos_Comerciales/DocumentosComerciales"),
   "/panel/compras": () => import("../Mov_Subsection/Compra/Compras"),
   "/panel/recibos": () => import("../Mov_Subsection/Recibos/Recibos"),
   "/panel/OrdenesPago": () =>
@@ -398,6 +403,8 @@ function getModuleKeyByPath(pathname) {
     path.startsWith("/panel/OrdenesPago") ||
     path.startsWith("/panel/Otrosingresos") ||
     path.startsWith("/panel/Otrosegresos") ||
+    path.startsWith("/panel/documentos_comerciales") ||
+    path.startsWith("/panel/facturacion") ||
     path.startsWith("/panel/presupuesto")
   ) {
     return "movimientos";
@@ -973,7 +980,7 @@ const Principal = () => {
           { label: "Orden de Pago", ruta: "/panel/OrdenesPago" },
           { label: "Otros Ingresos", ruta: "/panel/Otrosingresos" },
           { label: "Otros Egresos", ruta: "/panel/Otrosegresos" },
-          { label: "Presupuesto", ruta: "/panel/presupuesto" },
+          { label: "Facturación", ruta: "/panel/documentos_comerciales" },
         ],
       },
       { label: "Flujo de Caja", ruta: "/panel/flujo-de-caja" },
@@ -1057,6 +1064,8 @@ const Principal = () => {
       location.pathname.startsWith("/panel/OrdenesPago") ||
       location.pathname.startsWith("/panel/Otrosingresos") ||
       location.pathname.startsWith("/panel/Otrosegresos") ||
+      location.pathname.startsWith("/panel/documentos_comerciales") ||
+      location.pathname.startsWith("/panel/facturacion") ||
       location.pathname.startsWith("/panel/presupuesto")
     ) {
       return "movimientos";
@@ -1084,6 +1093,8 @@ const Principal = () => {
       location.pathname.startsWith("/panel/OrdenesPago") ||
       location.pathname.startsWith("/panel/Otrosingresos") ||
       location.pathname.startsWith("/panel/Otrosegresos") ||
+      location.pathname.startsWith("/panel/documentos_comerciales") ||
+      location.pathname.startsWith("/panel/facturacion") ||
       location.pathname.startsWith("/panel/presupuesto")
     ) {
       return "Movimientos";
@@ -1412,6 +1423,8 @@ const Principal = () => {
                   location.pathname.startsWith("/panel/OrdenesPago") ||
                   location.pathname.startsWith("/panel/Otrosingresos") ||
                   location.pathname.startsWith("/panel/Otrosegresos") ||
+                  location.pathname.startsWith("/panel/documentos_comerciales") ||
+                  location.pathname.startsWith("/panel/facturacion") ||
                   location.pathname.startsWith("/panel/presupuesto"))) ||
               (isCC &&
                 location.pathname.startsWith("/panel/cuentas-corrientes")) ||

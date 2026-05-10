@@ -17,7 +17,7 @@ import Compras from "./components/Mov_Subsection/Compra/Compras";
 import Recibos from "./components/Mov_Subsection/Recibos/Recibos";
 import Otrosingresos from "./components/Mov_Subsection/Otros_Ingresos/Otros_Ingresos";
 import Otrosegresos from "./components/Mov_Subsection/Otros_Egresos/Otros_Egresos";
-import Presupuesto from "./components/Mov_Subsection/Presupuesto/Presupuesto";
+import DocumentosComerciales from "./components/Mov_Subsection/Documentos_Comerciales/DocumentosComerciales";
 import OrdenesPago from "./components/Mov_Subsection/OrdenesPago/OrdenesPago";
 import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 
@@ -297,11 +297,33 @@ export default function App() {
             }
           />
           <Route
+            path="documentos_comerciales"
+            element={
+              <RutaModulo modulo="movimientos">
+                <RutaAdmin>
+                  <DocumentosComerciales />
+                </RutaAdmin>
+              </RutaModulo>
+            }
+          />
+
+          <Route
+            path="facturacion"
+            element={
+              <RutaModulo modulo="movimientos">
+                <RutaAdmin>
+                  <Navigate to="/panel/documentos_comerciales" replace />
+                </RutaAdmin>
+              </RutaModulo>
+            }
+          />
+
+          <Route
             path="presupuesto"
             element={
               <RutaModulo modulo="movimientos">
                 <RutaAdmin>
-                  <Presupuesto />
+                  <Navigate to="/panel/documentos_comerciales" replace />
                 </RutaAdmin>
               </RutaModulo>
             }

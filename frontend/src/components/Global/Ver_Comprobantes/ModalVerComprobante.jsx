@@ -355,17 +355,6 @@ function parseCSV(text = "") {
   return { headers, rows: dataRows };
 }
 
-function triggerDirectDownload(targetUrl, filename = "") {
-  const a = document.createElement("a");
-  a.href = targetUrl;
-  if (filename) a.download = filename;
-  a.rel = "noreferrer";
-  a.target = "_blank";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
 function normalizeDocumentsInput({ documents, url, mime = "", fileName = "", title = "Comprobante" }) {
   if (Array.isArray(documents) && documents.length > 0) {
     return documents
@@ -663,14 +652,17 @@ export default function ModalVerComprobante({
     return ["text", "json", "csv", "html"].includes(kind);
   }, [kind]);
 
+  // ─── DESCARGA ARREGLADA ────────────────────────────────────────────────────
+  // Todos los tipos (incluyendo pdf e img) pasan por fetch → blob → <a download>
+  // para forzar descarga real en lugar de abrir una nueva pestaña.
   async function handleDownload() {
     if (!activeUrl || downloading) return;
 
+    // Blob URL local: descarga directa sin fetch
     if (isBlobUrl(activeUrl)) {
       try {
         setDownloading(true);
         setErrorMsg("");
-
         const a = document.createElement("a");
         a.href = activeUrl;
         a.download = displayFileName || "archivo";
@@ -685,21 +677,13 @@ export default function ModalVerComprobante({
       return;
     }
 
+    // Para TODOS los tipos (pdf, img, excel, word, csv, json, text, other)
+    // hacemos fetch → blob → createObjectURL → <a download>
     try {
       setDownloading(true);
       setErrorMsg("");
 
-      const binaryLikeKinds = ["pdf", "img", "excel", "word", "other"];
-
-      if (binaryLikeKinds.includes(kind)) {
-        triggerDirectDownload(activeUrl, displayFileName || "archivo");
-        return;
-      }
-
-      const fetchOptions = {
-        method: "GET",
-      };
-
+      const fetchOptions = { method: "GET" };
       if (shouldSendAuthHeaders(activeUrl)) {
         fetchOptions.headers = buildHeadersGET();
       }
@@ -715,7 +699,9 @@ export default function ModalVerComprobante({
       }
 
       const contentType =
-        safeText(res.headers.get("Content-Type")) || safeText(resolvedMime) || safeText(activeMime);
+        safeText(res.headers.get("Content-Type")) ||
+        safeText(resolvedMime) ||
+        safeText(activeMime);
 
       const headerFileName = parseContentDispositionFileName(
         res.headers.get("Content-Disposition") || ""
@@ -740,7 +726,6 @@ export default function ModalVerComprobante({
       document.body.appendChild(a);
       a.click();
       a.remove();
-
       setTimeout(() => URL.revokeObjectURL(tmpUrl), 1500);
     } catch (e) {
       setErrorMsg(e?.message || "No se pudo descargar el archivo.");
@@ -748,6 +733,7 @@ export default function ModalVerComprobante({
       setDownloading(false);
     }
   }
+  // ──────────────────────────────────────────────────────────────────────────
 
   function handleOpen() {
     const target = blobUrl || activeUrl;

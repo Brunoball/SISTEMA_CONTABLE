@@ -12,7 +12,7 @@ import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import ModalNuevoEgreso from "./modales/ModalNuevoEgreso.jsx";
 import ModalEditarEgreso from "./modales/ModalEditarEgreso.jsx";
-import { ModalDetalleMediosPagoEgreso } from "../../Global/Modales/ModalDetalleMediosPago.jsx";
+import { ModalDetalleMovimientoEgreso } from "../../Global/Modales/ModalDetalleMovimiento.jsx";
 import ModalEliminar from "../../Global/Modales/ModalEliminar.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -28,7 +28,7 @@ import {
   faTimes,
   faEye,
   faBoxOpen,
-  faMoneyCheckDollar,
+  faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -53,6 +53,15 @@ function moneyARS(v) {
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "—";
+}
+function productosLabel(row) {
+  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
+  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
+  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
+
+  if (cantidad <= 0) return "SIN PRODUCTOS";
+  if (cantidad === 1) return "1 PRODUCTO";
+  return `${cantidad} PRODUCTOS`;
 }
 
 function normalizeSearchText(v) {
@@ -289,7 +298,7 @@ function slugifySheetName(name) {
 function buildExportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((r) => ({
     FECHA: safeText(formatFechaDMY(r?.fecha)),
-    DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
+    DESCRIPCION: productosLabel(r),
     TOTAL: Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0,
   }));
 }
@@ -693,7 +702,7 @@ export default function OtrosEgresos() {
         fr: 3.2,
         strong: true,
         align: "left",
-        render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
+        render: (r) => productosLabel(r),
       },
       {
         key: "total",
@@ -1105,7 +1114,6 @@ export default function OtrosEgresos() {
   );
 
   const handleOpenMediosPago = useCallback((row) => {
-    if (!hasOtroEgresoDetalleMedios(row)) return;
     setSelectedRow(row);
     setOpenMediosPago(true);
   }, []);
@@ -1491,8 +1499,6 @@ export default function OtrosEgresos() {
                   const tieneComprobante =
                     (idComprobante && idComprobante > 0) ||
                     String(r?.comprobante_url ?? "").trim() !== "";
-                  const hasMedios = hasOtroEgresoDetalleMedios(r);
-
                   return (
                     <div
                       key={key}
@@ -1535,16 +1541,12 @@ export default function OtrosEgresos() {
 
                                 <button
                                   type="button"
-                                  className={`mov-iconBtn ${hasMedios ? "" : "is-disabled"}`}
-                                  title={
-                                    hasMedios
-                                      ? "Ver detalle de medios de pago"
-                                      : "Sin detalle de medios de pago"
-                                  }
-                                  onClick={() => hasMedios && handleOpenMediosPago(r)}
-                                  disabled={!hasMedios || isAnyLoading || loadingListsCtx}
+                                  className="mov-iconBtn"
+                                  title="Ver información completa del movimiento"
+                                  onClick={() => handleOpenMediosPago(r)}
+                                  disabled={isAnyLoading || loadingListsCtx}
                                 >
-                                  <FontAwesomeIcon icon={faMoneyCheckDollar} />
+                                  <FontAwesomeIcon icon={faInfoCircle} />
                                 </button>
 
                                 <button
@@ -1683,7 +1685,7 @@ export default function OtrosEgresos() {
         }}
       />
 
-      <ModalDetalleMediosPagoEgreso
+      <ModalDetalleMovimientoEgreso
         open={openMediosPago}
         row={selectedRow}
         onClose={handleCloseMediosPago}

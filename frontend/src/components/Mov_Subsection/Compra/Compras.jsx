@@ -10,7 +10,7 @@ import "../../Global/Calendario/calendario.css";
 
 import ModalNuevaCompra from "./modales/ModalNuevaCompra.jsx";
 import ModalEditarCompra from "./modales/ModalEditarCompra.jsx";
-import { ModalDetalleMediosPagoCompra } from "../../Global/Modales/ModalDetalleMediosPago.jsx";
+import { ModalDetalleMovimientoCompra } from "../../Global/Modales/ModalDetalleMovimiento.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import ModalEliminarMovimientos from "../../Global/Modales/ModalEliminar.jsx";
 
@@ -29,7 +29,7 @@ import {
   faArrowRightLong,
   faTimes,
   faBoxOpen,
-  faMoneyCheckDollar,
+  faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -91,6 +91,15 @@ function moneyARS(v) {
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "—";
+}
+function productosLabel(row) {
+  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
+  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
+  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
+
+  if (cantidad <= 0) return "SIN PRODUCTOS";
+  if (cantidad === 1) return "1 PRODUCTO";
+  return `${cantidad} PRODUCTOS`;
 }
 
 function numOrZero(v) {
@@ -352,9 +361,7 @@ function slugifySheetName(name) {
 function buildExportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((r) => ({
     FECHA: safeText(formatFechaDMY(pick(r, ["fecha"], ""))),
-    DESCRIPCION: safeText(
-      pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")
-    ),
+    DESCRIPCION: productosLabel(r),
     PROVEEDOR: safeText(
       pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")
     ),
@@ -1047,8 +1054,7 @@ export default function Compras() {
         fr: 2.2,
         strong: true,
         align: "left",
-        render: (r) =>
-          safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
+        render: (r) => productosLabel(r),
       },
       {
         key: "proveedor",
@@ -1503,8 +1509,6 @@ export default function Compras() {
                   const canSee = !!idComp;
                   const isDeleting =
                     deletingId !== null && String(deletingId) === String(rowId);
-                  const hasMedios = hasCompraDetalleMedios(r);
-
                   return (
                     <div
                       key={rowId}
@@ -1541,16 +1545,12 @@ export default function Compras() {
 
                                 <button
                                   type="button"
-                                  className={`mov-iconBtn ${!hasMedios ? "is-disabled" : ""}`}
-                                  title={
-                                    hasMedios
-                                      ? "Ver detalle de medios de pago"
-                                      : "Sin detalle de medios de pago"
-                                  }
-                                  onClick={() => hasMedios && openMediosPagoModal(r)}
-                                  disabled={!hasMedios || isAnyLoading || loadingListsCtx}
+                                  className="mov-iconBtn"
+                                  title="Ver información completa del movimiento"
+                                  onClick={() => openMediosPagoModal(r)}
+                                  disabled={isAnyLoading || loadingListsCtx}
                                 >
-                                  <FontAwesomeIcon icon={faMoneyCheckDollar} />
+                                  <FontAwesomeIcon icon={faInfoCircle} />
                                 </button>
 
                                 <button
@@ -1678,7 +1678,7 @@ export default function Compras() {
         }}
       />
 
-      <ModalDetalleMediosPagoCompra
+      <ModalDetalleMovimientoCompra
         open={openMediosPago}
         row={selectedRow}
         onClose={() => {

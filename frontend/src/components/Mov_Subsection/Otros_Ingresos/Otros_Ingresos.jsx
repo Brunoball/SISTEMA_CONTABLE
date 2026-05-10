@@ -13,7 +13,7 @@ import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComproban
 import ModalNuevoIngreso from "./modales/ModalNuevoIngreso.jsx";
 import ModalEditarIngreso from "./modales/ModalEditarIngreso.jsx";
 import ModalEliminar from "../../Global/Modales/ModalEliminar.jsx";
-import ModalDetalleMediosPago from "../../Global/Modales/ModalDetalleMediosPago.jsx";
+import { ModalDetalleMovimientoIngreso } from "../../Global/Modales/ModalDetalleMovimiento.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -28,7 +28,7 @@ import {
   faTimes,
   faBoxOpen,
   faEye,
-  faMoneyCheckDollar,
+  faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -53,6 +53,15 @@ function moneyARS(v) {
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "—";
+}
+function productosLabel(row) {
+  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
+  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
+  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
+
+  if (cantidad <= 0) return "SIN PRODUCTOS";
+  if (cantidad === 1) return "1 PRODUCTO";
+  return `${cantidad} PRODUCTOS`;
 }
 
 function normalizeSearchText(v) {
@@ -292,7 +301,7 @@ function slugifySheetName(name) {
 function buildExportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((r) => ({
     FECHA: safeText(formatFechaDMY(r?.fecha)),
-    DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
+    DESCRIPCION: productosLabel(r),
     TOTAL: Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0,
   }));
 }
@@ -752,7 +761,7 @@ export default function OtrosIngresos() {
         fr: 3.2,
         strong: true,
         align: "left",
-        render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
+        render: (r) => productosLabel(r),
       },
       {
         key: "total",
@@ -1109,50 +1118,10 @@ export default function OtrosIngresos() {
     [API, apiGet, showToast]
   );
 
-  const handleOpenMediosPago = useCallback(
-    async (row) => {
-      const id = Number(row?.id_movimiento ?? 0);
-      if (!id) return;
-
-      const detalleLocal = getOtroIngresoMediosDetalle(row);
-      const cantidadLocal = getOtroIngresoCantidadMedios(row);
-
-      if (detalleLocal.length > 0 && cantidadLocal > 1) {
-        setSelectedMediosRow(normalizeOtroIngresoRow(row));
-        setOpenMediosPago(true);
-        return;
-      }
-
-      try {
-        const sp = new URLSearchParams();
-        sp.set("action", "otros_ingresos_obtener");
-        sp.set("id_movimiento", String(id));
-
-        const data = await apiGet(`${API}?${sp.toString()}`);
-        if (!data?.exito) {
-          throw new Error(data?.mensaje || "No se pudo obtener el detalle de medios de pago.");
-        }
-
-        const ingreso = data?.ingreso ?? data?.otro_ingreso ?? data?.movimiento ?? null;
-        if (!ingreso) {
-          throw new Error("No se encontró la información del ingreso.");
-        }
-
-        const rowNormalizada = normalizeOtroIngresoRow(ingreso);
-
-        if (!hasOtroIngresoDetalleMedios(rowNormalizada)) {
-          showToast("advertencia", "Este ingreso no tiene más de un medio de pago.", 3000);
-          return;
-        }
-
-        setSelectedMediosRow(rowNormalizada);
-        setOpenMediosPago(true);
-      } catch (e) {
-        showToast("error", e?.message || "No se pudo abrir el detalle de medios de pago.", 4200);
-      }
-    },
-    [API, apiGet, showToast]
-  );
+  const handleOpenMediosPago = useCallback((row) => {
+    setSelectedMediosRow(normalizeOtroIngresoRow(row));
+    setOpenMediosPago(true);
+  }, []);
 
   const handleCloseMediosPago = useCallback(() => {
     setOpenMediosPago(false);
@@ -1476,8 +1445,6 @@ export default function OtrosIngresos() {
                   const isLoadingThisEdit = loadingEditDataId === r.id_movimiento;
                   const tieneComprobante =
                     Number(r?.id_comprobante ?? 0) > 0 || String(r?.comprobante_url ?? "").trim() !== "";
-                  const hasMedios = hasOtroIngresoDetalleMedios(r);
-
                   return (
                     <div
                       key={key}
@@ -1520,16 +1487,12 @@ export default function OtrosIngresos() {
 
                                 <button
                                   type="button"
-                                  className={`mov-iconBtn ${hasMedios ? "" : "is-disabled"}`}
-                                  title={
-                                    hasMedios
-                                      ? "Ver detalle de medios de pago"
-                                      : "Este ingreso no tiene más de un medio de pago"
-                                  }
+                                  className="mov-iconBtn"
+                                  title="Ver información completa del movimiento"
                                   onClick={() => handleOpenMediosPago(r)}
-                                  disabled={!hasMedios || isAnyLoading || loadingListsCtx}
+                                  disabled={isAnyLoading || loadingListsCtx}
                                 >
-                                  <FontAwesomeIcon icon={faMoneyCheckDollar} />
+                                  <FontAwesomeIcon icon={faInfoCircle} />
                                 </button>
 
                                 <button
@@ -1708,11 +1671,10 @@ export default function OtrosIngresos() {
         ]}
       />
 
-      <ModalDetalleMediosPago
+      <ModalDetalleMovimientoIngreso
         open={openMediosPago}
         row={selectedMediosRow}
         onClose={handleCloseMediosPago}
-        tipo="movimiento"
       />
 
       <ModalVerComprobante

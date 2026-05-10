@@ -6,6 +6,7 @@ import "../../Global/Global_css/roots.css";
 import ModalPagarOrdenesPago from "./modales/ModalPagarOrdenesPago.jsx";
 import ModalEditarOrdenPago from "./modales/ModalEditarOrdenPago.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
+import ModalDetalleMovimiento from "../../Global/Modales/ModalDetalleMovimiento.jsx";
 
 import Calendario from "../../Global/Calendario/Calendario.jsx";
 import "../../Global/Calendario/calendario.css";
@@ -24,6 +25,7 @@ import {
   faChevronDown,
   faArrowRightLong,
   faBoxOpen,
+  faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -51,6 +53,15 @@ function moneyARS(v) {
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "—";
+}
+function productosLabel(row) {
+  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
+  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
+  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
+
+  if (cantidad <= 0) return "SIN PRODUCTOS";
+  if (cantidad === 1) return "1 PRODUCTO";
+  return `${cantidad} PRODUCTOS`;
 }
 function normalizeSearchText(v) {
   return String(v ?? "")
@@ -216,7 +227,7 @@ function slugifySheetName(name) {
 function buildExportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((r) => ({
     FECHA: safeText(formatFechaDMY(r?.fecha)),
-    DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
+    DESCRIPCION: productosLabel(r),
     PROVEEDOR: safeText(r?.proveedor),
     ESTADO: "PENDIENTE",
     MONTO: Number(r?.monto_total ?? r?.total ?? 0) || 0,
@@ -866,6 +877,8 @@ export default function OrdenesPago() {
   const [openVerComprobante, setOpenVerComprobante] = useState(false);
   const [comprobanteUrl, setComprobanteUrl] = useState("");
   const [loadingComprobante, setLoadingComprobante] = useState(false);
+  const [openDetalleMovimiento, setOpenDetalleMovimiento] = useState(false);
+  const [detalleRow, setDetalleRow] = useState(null);
 
   const closeVerComprobanteModal = useCallback(() => {
     setOpenVerComprobante(false);
@@ -1023,7 +1036,7 @@ export default function OrdenesPago() {
         fr: 2.5,
         strong: true,
         align: "left",
-        render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
+        render: (r) => productosLabel(r),
       },
       { key: "proveedor", label: "PROVEEDOR", fr: 1.9, align: "center", render: (r) => safeText(r.proveedor) },
       {
@@ -1291,6 +1304,19 @@ export default function OrdenesPago() {
                               <button
                                 type="button"
                                 className="mov-iconBtn"
+                                title="Ver detalle de la deuda"
+                                onClick={() => {
+                                  setDetalleRow(r);
+                                  setOpenDetalleMovimiento(true);
+                                }}
+                                disabled={isAnyLoading || loadingListsCtx}
+                              >
+                                <FontAwesomeIcon icon={faInfoCircle} />
+                              </button>
+
+                              <button
+                                type="button"
+                                className="mov-iconBtn"
                                 title="Pagar"
                                 onClick={() => openPagarModal(r)}
                                 disabled={isAnyLoading || loadingListsCtx}
@@ -1371,6 +1397,16 @@ export default function OrdenesPago() {
           </div>
         </div>
       </section>
+
+      <ModalDetalleMovimiento
+        open={openDetalleMovimiento}
+        row={detalleRow}
+        title="Detalle de deuda a pagar"
+        onClose={() => {
+          setOpenDetalleMovimiento(false);
+          setDetalleRow(null);
+        }}
+      />
 
       <ModalPagarOrdenesPago
         open={openPagar}

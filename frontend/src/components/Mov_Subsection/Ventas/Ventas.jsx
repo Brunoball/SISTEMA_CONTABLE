@@ -13,7 +13,7 @@ import ModalEmitirNotaCreditoVenta from "./modales/ModalEmitirNotaCreditoVenta.j
 import ModalEliminar from "../../Global/Modales/ModalEliminar.jsx";
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
-import { ModalDetalleMediosPagoVenta } from "../../Global/Modales/ModalDetalleMediosPago.jsx";
+import { ModalDetalleMovimientoVenta } from "../../Global/Modales/ModalDetalleMovimiento.jsx";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -27,7 +27,7 @@ import {
   faTimes,
   faEye,
   faBoxOpen,
-  faMoneyCheckDollar,
+  faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -45,6 +45,15 @@ const PREWARM_DELAY_MS = 60;
 
 function moneyARS(v) { const n = Number(v || 0); try { return n.toLocaleString("es-AR", { style: "currency", currency: "ARS" }); } catch { return `$${n.toFixed(2)}`; } }
 function safeText(v) { const s = String(v ?? "").trim(); return s ? s : "—"; }
+function productosLabel(row) {
+  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
+  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
+  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
+
+  if (cantidad <= 0) return "SIN PRODUCTOS";
+  if (cantidad === 1) return "1 PRODUCTO";
+  return `${cantidad} PRODUCTOS`;
+}
 function normalizeSearchText(v) { return String(v ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim(); }
 function formatFechaDMY(v) {
   const s = String(v ?? "").trim(); if (!s) return "—";
@@ -79,8 +88,22 @@ function getMovimientoId(r) {
   const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+function getRowItemId(r) {
+  const cand = r?.id_item ?? r?.id_movimiento_item ?? r?.id_item_movimiento ?? r?.item_id ?? r?.id_detalle_item ?? null;
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 function getRowKey(r) {
-  const id = getMovimientoId(r); if (id) return `id:${id}`;
+  const id = getMovimientoId(r);
+  const itemId = getRowItemId(r);
+  if (id && itemId) return `id:${id}:item:${itemId}`;
+  if (id) {
+    const d = String(r?.detalle ?? r?.descripcion ?? r?.concepto ?? "").trim();
+    const c = String(r?.cantidad ?? "").trim();
+    const p = String(r?.precio ?? "").trim();
+    const t = String(r?.total ?? r?.monto_total ?? "").trim();
+    return `id:${id}:fallback:${d}|${c}|${p}|${t}`;
+  }
   const f = String(r?.fecha ?? "").trim();
   const c = String(r?.cliente ?? r?.cliente_nombre ?? "").trim();
   const d = String(r?.detalle ?? r?.descripcion ?? r?.concepto ?? "").trim();
@@ -125,6 +148,8 @@ function normalizeVentaRow(r) {
   return {
     ...r,
     id_movimiento: idMov ?? r?.id_movimiento ?? null,
+    id_item: getRowItemId(r) ?? r?.id_item ?? null,
+    id_movimiento_item: getRowItemId(r) ?? r?.id_movimiento_item ?? null,
     fecha: r?.fecha,
     cliente: String(cliente ?? "").trim() || "",
     pago_tipo_venta: String(tipoVentaTxt ?? "").trim() || "",
@@ -144,6 +169,8 @@ function normalizeVentaRow(r) {
     remito_comprobante_tipo: remitoTipo,
     cantidad_medios_pago: Number(r?.cantidad_medios_pago || 0),
     medios_pago_detalle: Array.isArray(r?.medios_pago_detalle) ? r.medios_pago_detalle : [],
+    cantidad_items: Number(r?.cantidad_items || 0),
+    items_detalle: Array.isArray(r?.items_detalle) ? r.items_detalle : [],
   };
 }
 function rowMatchesQuery(row, query) {
@@ -151,13 +178,22 @@ function rowMatchesQuery(row, query) {
   const montoNum = Number(row?.monto_total || row?.total || 0);
   const parts = [];
   if (row && typeof row === "object") for (const k of Object.keys(row)) { const val = row[k]; if (val && typeof val === "object") continue; parts.push(String(val ?? "")); }
+  if (Array.isArray(row?.items_detalle)) row.items_detalle.forEach((it) => parts.push(it?.producto_nombre, it?.stock_producto_nombre, it?.detalle_nombre, it?.nombre, it?.descripcion));
+  if (Array.isArray(row?.medios_pago_detalle)) row.medios_pago_detalle.forEach((mp) => parts.push(mp?.medio_pago_nombre, mp?.cheque_tipo, mp?.numero_cheque, mp?.emisor));
   parts.push(formatFechaDMY(row?.fecha), String(montoNum), String(Math.trunc(montoNum)), moneyARS(montoNum));
   const hay = normalizeSearchText(parts.join(" | "));
   return hay.includes(qq);
 }
 function rowInDateRange(row, from, to) { if (!from && !to) return true; const fecha = parseRowFecha(row?.fecha); if (!fecha) return true; if (from && fecha < startOfDay(from)) return false; if (to) { const toEnd = startOfDay(to); toEnd.setHours(23,59,59,999); if (fecha > toEnd) return false; } return true; }
 function slugifySheetName(name) { const s = String(name || "Ventas").replace(/[\[\]\*\/\\\?\:]/g, " ").replace(/\s+/g, " ").trim(); return (s || "Ventas").slice(0, 31); }
-function buildExportRows(rows) { return (Array.isArray(rows) ? rows : []).map((r) => ({ FECHA: safeText(formatFechaDMY(r?.fecha)), DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto), CLIENTE: safeText(r?.cliente), TOTAL: Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0 })); }
+function buildExportRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map((r) => ({
+    FECHA: safeText(formatFechaDMY(r?.fecha)),
+    DESCRIPCION: productosLabel(r),
+    CLIENTE: safeText(r?.cliente),
+    TOTAL: Number(r?.monto_total ?? r?.total ?? r?.total_general ?? 0) || 0,
+  }));
+}
 function escapeCSV(value) { const s = String(value ?? ""); if (/[",;\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`; return s; }
 function downloadBlob(content, fileName, mimeType) { const blob = new Blob([content], { type: mimeType }); const url = window.URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url); }
 
@@ -179,7 +215,7 @@ export default function Ventas() {
   const [openAdd, setOpenAdd] = useState(false);
   const [openDel, setOpenDel] = useState(false);
   const [openNC, setOpenNC] = useState(false);
-  const [openDetalleMedios, setOpenDetalleMedios] = useState(false);
+  const [openDetalleMovimiento, setOpenDetalleMovimiento] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
   const [openVerComprobante, setOpenVerComprobante] = useState(false);
   const [comprobanteUrl, setComprobanteUrl] = useState("");
@@ -272,7 +308,7 @@ export default function Ventas() {
         const cached = cacheRef.current.get(cacheKey); const cachedRows = Array.isArray(cached?.rows) ? cached.rows : [];
         rowsRef.current = cachedRows; setRows(cachedRows); setHasMore(!!cached?.hasMore); setNextOffset(cached?.nextOffset ?? null); if (rowsReqIdRef.current === myReqId) setLoadingRows(false); prewarmAllComprobantes(cachedRows); return { hasMore: !!cached?.hasMore, nextOffset: cached?.nextOffset ?? null, received: cachedRows.length };
       }
-      const sp = new URLSearchParams(); sp.set("action", "ventas_listar"); if (fromAPI) sp.set("fecha_desde", fromAPI); if (toAPI) sp.set("fecha_hasta", toAPI); if (qKey) sp.set("q", qKey); sp.set("limit", String(PROBE_LIMIT)); sp.set("offset", String(offset));
+      const sp = new URLSearchParams(); sp.set("action", "ventas_listar"); if (fromAPI) sp.set("fecha_desde", fromAPI); if (toAPI) sp.set("fecha_hasta", toAPI); if (qKey) sp.set("q", qKey); sp.set("limit", String(PAGE_SIZE)); sp.set("offset", String(offset));
       const data = await apiGet(`${API}?${sp.toString()}`); if (!data?.exito) throw new Error(data?.mensaje || "No se pudieron cargar ventas.");
       if (myReqId !== reqIdRef.current) return null;
       const rawArr = Array.isArray(data.ventas) ? data.ventas : Array.isArray(data.movimientos) ? data.movimientos : [];
@@ -333,7 +369,7 @@ export default function Ventas() {
     let cancelled = false;
     const tick = async () => {
       if (cancelled) return;
-      if (document.hidden || liveBusyRef.current || loadingRows || loadingMore || loadingListsCtx || showCalendario || openAdd || openDel || openNC || openVerComprobante || openDetalleMedios) { liveTimerRef.current = setTimeout(tick, LIVE_POLL_MS); return; }
+      if (document.hidden || liveBusyRef.current || loadingRows || loadingMore || loadingListsCtx || showCalendario || openAdd || openDel || openNC || openVerComprobante || openDetalleMovimiento) { liveTimerRef.current = setTimeout(tick, LIVE_POLL_MS); return; }
       liveBusyRef.current = true;
       try {
         const token = await fetchLiveToken(dateRange.from, dateRange.to, q);
@@ -353,12 +389,12 @@ export default function Ventas() {
     };
     liveTimerRef.current = setTimeout(tick, LIVE_POLL_MS);
     return () => { cancelled = true; if (liveTimerRef.current) clearTimeout(liveTimerRef.current); };
-  }, [dateRange.from, dateRange.to, q, loadingRows, loadingMore, loadingListsCtx, showCalendario, openAdd, openDel, openNC, openVerComprobante, openDetalleMedios, hasMore, fetchLiveToken, loadRows, showToast]);
+  }, [dateRange.from, dateRange.to, q, loadingRows, loadingMore, loadingListsCtx, showCalendario, openAdd, openDel, openNC, openVerComprobante, openDetalleMovimiento, hasMore, fetchLiveToken, loadRows, showToast]);
 
   const filteredRows = useMemo(() => (Array.isArray(rows) ? rows : []).filter((r) => isVentaRow(r)).filter((r) => rowInDateRange(r, dateRange.from, dateRange.to)).filter((r) => rowMatchesQuery(r, q)), [rows, dateRange, q]);
   const columns = useMemo(() => [
     { key: "fecha", label: "FECHA", align: "center", fr: 0.9, render: (r) => safeText(formatFechaDMY(r.fecha)) },
-    { key: "detalle", label: "DESCRIPCIÓN", fr: 2.2, strong: true, align: "left", render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto) },
+    { key: "detalle", label: "DESCRIPCIÓN", fr: 2.2, strong: true, align: "left", render: (r) => productosLabel(r) },
     { key: "cliente", label: "CLIENTE", fr: 1.6, align: "center", render: (r) => safeText(r.cliente) },
     { key: "total", label: "TOTAL", fr: 1.1, align: "right", render: (r) => moneyARS(r.monto_total ?? r.total ?? r.total_general ?? 0) },
     { key: "acciones", label: "ACCIONES", fr: 1.1, align: "center", render: () => null },
@@ -482,16 +518,16 @@ export default function Ventas() {
           </div>
         </div>
         <div className="mov-gridTable mov-gridTable--head" style={{ gridTemplateColumns: gridCols }} role="row">{columns.map((c) => <div key={c.key} className={["mov-gridCell", "mov-gridCell--head", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : ""].join(" ")} role="columnheader">{c.label}</div>)}</div>
-        <div className="mov-tableWrap" role="rowgroup"><div className={["mov-gridBody", "mov-gridBody--relative", loadingRows ? "mov-softLoading" : ""].join(" ")}>{loadingRows ? <div className="mov-skeletonWrap" aria-busy="true">{Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}</div> : <>{filteredRows.map((r) => { const key = getRowKey(r); const facturaId = getFacturaIdComprobante(r); const remitoId = getRemitoIdComprobante(r); const tieneComprobante = !!(facturaId || remitoId); const tieneDetalleMedios = (Number(r?.cantidad_medios_pago || 0) > 0) || (Array.isArray(r?.medios_pago_detalle) && r.medios_pago_detalle.length > 0); return <div key={key} className="mov-gridTable mov-gridTable--row" style={{ gridTemplateColumns: gridCols }} role="row">{columns.map((c) => { if (c.key === "acciones") return <div key={c.key} className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")} role="cell" data-label={c.label}><div className="mov-actionsInline"><button type="button" className={["mov-iconBtn", tieneComprobante ? "mov-iconBtn--comprobante" : "mov-iconBtn--disabled"].join(" ")} title={tieneComprobante ? "Ver comprobantes" : "Sin comprobantes"} disabled={!tieneComprobante || isAnyLoading} onMouseEnter={() => { if (tieneComprobante) handlePrewarmComprobante(r); }} onPointerEnter={() => { if (tieneComprobante) handlePrewarmComprobante(r); }} onFocus={() => { if (tieneComprobante) handlePrewarmComprobante(r); }} onClick={() => { if (tieneComprobante) handleVerComprobante(r); }} style={{ opacity: tieneComprobante ? 1 : 0.35, cursor: tieneComprobante ? "pointer" : "not-allowed" }}><FontAwesomeIcon icon={faEye} /></button><button type="button" className={["mov-iconBtn", tieneDetalleMedios ? "" : "mov-iconBtn--disabled"].join(" ")} title={tieneDetalleMedios ? "Ver detalle de medios de pago" : "Sin detalle de medios de pago"} disabled={!tieneDetalleMedios || isAnyLoading} onClick={() => { setSelectedRow(r); setOpenDetalleMedios(true); }} style={{ opacity: tieneDetalleMedios ? 1 : 0.35, cursor: tieneDetalleMedios ? "pointer" : "not-allowed" }}><FontAwesomeIcon icon={faMoneyCheckDollar} /></button><button type="button" className="mov-iconBtn mov-iconBtn--danger" title="Eliminar" disabled={isAnyLoading || loadingListsCtx || deletingId === r.id_movimiento} onClick={() => { setSelectedRow(r); setOpenDel(true); }}>{deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}</button></div></div>; const val = c.render ? c.render(r) : safeText(r[c.key]); return <div key={c.key} className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : "", c.strong ? "is-strong" : ""].filter(Boolean).join(" ")} role="cell" data-label={c.label} title={typeof val === "string" ? val : undefined}><span className="mov-ellipsissss">{val}</span></div>; })}</div>; })}{!isAnyLoading && filteredRows.length === 0 && <div className="cc-emptyState"><FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" /><div className="cc-emptyText">{q.trim() ? `No se encontraron ventas para "${q.trim()}".` : "No hay ventas para mostrar en el rango de fechas seleccionado."}</div></div>}{!loadingRows && hasMore && filteredRows.length > 0 && <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}><button type="button" className="mov-btn mov-btn--loadAll" onClick={handleLoadMore} disabled={loadingMore || loadingListsCtx} title="Cargar los próximos 100 registros">{loadingMore ? "Cargando…" : "Cargar 100 más"}</button></div>}{loadingMore && <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">{Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}</div>}</>}</div></div>
+        <div className="mov-tableWrap" role="rowgroup"><div className={["mov-gridBody", "mov-gridBody--relative", loadingRows ? "mov-softLoading" : ""].join(" ")}>{loadingRows ? <div className="mov-skeletonWrap" aria-busy="true">{Array.from({ length: SKELETON_ROWS }).map((_, i) => renderSkeletonRow(i))}</div> : <>{filteredRows.map((r) => { const key = getRowKey(r); const facturaId = getFacturaIdComprobante(r); const remitoId = getRemitoIdComprobante(r); const tieneComprobante = !!(facturaId || remitoId); return <div key={key} className="mov-gridTable mov-gridTable--row" style={{ gridTemplateColumns: gridCols }} role="row">{columns.map((c) => { if (c.key === "acciones") return <div key={c.key} className={["mov-gridCell", "mov-gridCell--actions", "is-center"].join(" ")} role="cell" data-label={c.label}><div className="mov-actionsInline"><button type="button" className={["mov-iconBtn", tieneComprobante ? "mov-iconBtn--comprobante" : "mov-iconBtn--disabled"].join(" ")} title={tieneComprobante ? "Ver comprobantes" : "Sin comprobantes"} disabled={!tieneComprobante || isAnyLoading} onMouseEnter={() => { if (tieneComprobante) handlePrewarmComprobante(r); }} onPointerEnter={() => { if (tieneComprobante) handlePrewarmComprobante(r); }} onFocus={() => { if (tieneComprobante) handlePrewarmComprobante(r); }} onClick={() => { if (tieneComprobante) handleVerComprobante(r); }} style={{ opacity: tieneComprobante ? 1 : 0.35, cursor: tieneComprobante ? "pointer" : "not-allowed" }}><FontAwesomeIcon icon={faEye} /></button><button type="button" className="mov-iconBtn" title="Ver información completa del movimiento" disabled={isAnyLoading} onClick={() => { setSelectedRow(r); setOpenDetalleMovimiento(true); }}><FontAwesomeIcon icon={faInfoCircle} /></button><button type="button" className="mov-iconBtn mov-iconBtn--danger" title="Eliminar" disabled={isAnyLoading || loadingListsCtx || deletingId === r.id_movimiento} onClick={() => { setSelectedRow(r); setOpenDel(true); }}>{deletingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faTrashCan} />}</button></div></div>; const val = c.render ? c.render(r) : safeText(r[c.key]); return <div key={c.key} className={["mov-gridCell", c.align === "right" ? "is-right" : "", c.align === "center" ? "is-center" : "", c.strong ? "is-strong" : ""].filter(Boolean).join(" ")} role="cell" data-label={c.label} title={typeof val === "string" ? val : undefined}><span className="mov-ellipsissss">{val}</span></div>; })}</div>; })}{!isAnyLoading && filteredRows.length === 0 && <div className="cc-emptyState"><FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" /><div className="cc-emptyText">{q.trim() ? `No se encontraron ventas para "${q.trim()}".` : "No hay ventas para mostrar en el rango de fechas seleccionado."}</div></div>}{!loadingRows && hasMore && filteredRows.length > 0 && <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}><button type="button" className="mov-btn mov-btn--loadAll" onClick={handleLoadMore} disabled={loadingMore || loadingListsCtx} title="Cargar los próximos 100 registros">{loadingMore ? "Cargando…" : "Cargar 100 más"}</button></div>}{loadingMore && <div className="mov-skeletonMore" aria-busy="true" aria-label="Cargando más registros">{Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}</div>}</>}</div></div>
       </section>
       <ModalNuevaVenta open={openAdd} lists={lists} periodoDefault={dateRange.from ? `${String(dateRange.from.getMonth() + 1).padStart(2, "0")}-${dateRange.from.getFullYear()}` : ""} onClose={() => setOpenAdd(false)} onToast={showToast} onSaved={async () => { try { setOpenAdd(false); setQ(""); skipSearchRef.current = true; liveTokenRef.current = null; signedUrlCacheRef.current.clear(); signedUrlInFlightRef.current.clear(); await refreshPeriodos(); await reloadVista(); } catch (e) { showToast("error", e?.message || "Se guardó, pero falló la recarga.", 4200); } }} />
       <ModalEliminar open={openDel} row={selectedRow} loading={deletingId === selectedRow?.id_movimiento} onClose={() => { setOpenDel(false); setSelectedRow(null); }} onConfirm={requiereNC ? null : confirmDelete} onToast={showToast} title={deleteModalConfig.title} message={deleteModalConfig.message} warning={deleteModalConfig.warning} loadingMessage="Eliminando venta…" successMessage="Venta eliminada correctamente." errorMessage="No se pudo eliminar la venta." confirmLabel={deleteModalConfig.confirmLabel} cancelLabel="Cancelar" confirmDisabled={deleteModalConfig.confirmDisabled} confirmVariant={deleteModalConfig.confirmVariant} secondaryActionLabel={deleteModalConfig.secondaryActionLabel} onSecondaryAction={requiereNC ? async () => { setOpenDel(false); setOpenNC(true); } : null} details={deleteModalConfig.details} extraContent={deleteModalExtraContent} />
       <ModalEmitirNotaCreditoVenta open={openNC} row={selectedRow} onClose={() => setOpenNC(false)} onToast={showToast} onDone={async () => { const currentId = selectedRow?.id_movimiento || null; setOpenNC(false); await reloadVista(); if (currentId) { const updated = rowsRef.current.find((x) => getMovimientoId(x) === currentId) || null; setSelectedRow(updated); if (updated) setOpenDel(true); } showToast("exito", "Nota de crédito emitida. Ahora ya podés eliminar la venta.", 3600); }} />
-      <ModalDetalleMediosPagoVenta
-        open={openDetalleMedios}
+      <ModalDetalleMovimientoVenta
+        open={openDetalleMovimiento}
         row={selectedRow}
         onClose={() => {
-          setOpenDetalleMedios(false);
+          setOpenDetalleMovimiento(false);
           if (!openDel) setSelectedRow(null);
         }}
       />

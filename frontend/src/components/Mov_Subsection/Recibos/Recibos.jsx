@@ -10,6 +10,7 @@ import "../../Global/Calendario/calendario.css";
 
 import ModalEditarRecibo from "./modales/ModalEditarRecibo.jsx";
 import ModalPagarRecibos from "./modales/ModalPagarRecibos.jsx";
+import ModalDetalleMovimiento from "../../Global/Modales/ModalDetalleMovimiento.jsx";
 
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 
@@ -23,6 +24,7 @@ import {
   faChevronDown,
   faArrowRightLong,
   faBoxOpen,
+  faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -53,6 +55,15 @@ function moneyARS(v) {
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "—";
+}
+function productosLabel(row) {
+  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
+  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
+  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
+
+  if (cantidad <= 0) return "SIN PRODUCTOS";
+  if (cantidad === 1) return "1 PRODUCTO";
+  return `${cantidad} PRODUCTOS`;
 }
 
 function formatFechaDMY(v) {
@@ -153,7 +164,7 @@ function slugifySheetName(name) {
 function buildExportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((r) => ({
     FECHA: safeText(formatFechaDMY(r?.fecha)),
-    DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
+    DESCRIPCION: productosLabel(r),
     CLIENTE: safeText(r?.cliente),
     ESTADO: "PENDIENTE",
     MONTO: Number(r?.monto_total ?? r?.total ?? 0) || 0,
@@ -225,6 +236,8 @@ export default function Recibos() {
   const [openPagar, setOpenPagar] = useState(false);
   const [pagarCliente, setPagarCliente] = useState(null);
   const [pagarDeudas, setPagarDeudas] = useState([]);
+  const [openDetalleMovimiento, setOpenDetalleMovimiento] = useState(false);
+  const [detalleRow, setDetalleRow] = useState(null);
   const [loadingClienteDeudas, setLoadingClienteDeudas] = useState(false);
 
   const [toast, setToast] = useState(null);
@@ -749,7 +762,7 @@ export default function Recibos() {
         fr: 2.7,
         strong: true,
         align: "left",
-        render: (r) => safeText(r.detalle ?? r.descripcion ?? r.concepto),
+        render: (r) => productosLabel(r),
       },
       {
         key: "cliente",
@@ -1219,6 +1232,19 @@ export default function Recibos() {
                                 <button
                                   type="button"
                                   className="mov-iconBtn"
+                                  title="Ver detalle de la deuda"
+                                  onClick={() => {
+                                    setDetalleRow(r);
+                                    setOpenDetalleMovimiento(true);
+                                  }}
+                                  disabled={isAnyLoading || loadingListsCtx || loadingClienteDeudas}
+                                >
+                                  <FontAwesomeIcon icon={faInfoCircle} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="mov-iconBtn"
                                   title="Cobrar"
                                   onClick={() => openPagarModal(r)}
                                   disabled={isAnyLoading || loadingListsCtx || loadingClienteDeudas}
@@ -1302,6 +1328,16 @@ export default function Recibos() {
           </div>
         </div>
       </section>
+
+      <ModalDetalleMovimiento
+        open={openDetalleMovimiento}
+        row={detalleRow}
+        title="Detalle de deuda a cobrar"
+        onClose={() => {
+          setOpenDetalleMovimiento(false);
+          setDetalleRow(null);
+        }}
+      />
 
       <ModalPagarRecibos
         open={openPagar}

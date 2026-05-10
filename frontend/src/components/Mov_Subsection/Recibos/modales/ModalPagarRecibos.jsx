@@ -15,10 +15,12 @@ import {
   faCircleNotch,
   faMoneyCheckDollar,
   faPlus,
+  faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
 
 import ModalReciboGenerado from "./ModalReciboGenerado";
 import ModalNuevoCheque from "../../../Global/Modales/ModalNuevoCheque.jsx";
+import ModalDetalleMovimiento from "../../../Global/Modales/ModalDetalleMovimiento.jsx";
 import { buildReciboHTML } from "../../../../utils/reciboTemplate";
 
 /* =========================
@@ -36,6 +38,16 @@ function moneyARS(v) {
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "-";
+}
+
+function productosLabel(row) {
+  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
+  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
+  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
+
+  if (cantidad <= 0) return "1 CONCEPTO";
+  if (cantidad === 1) return "1 PRODUCTO";
+  return `${cantidad} PRODUCTOS`;
 }
 
 function formatFechaDMY(v) {
@@ -656,6 +668,8 @@ export default function ModalPagarRecibos({
   const [loading, setLoading] = useState(false);
   const [savingCheque, setSavingCheque] = useState(false);
   const [rows, setRows] = useState(() => []);
+  const [openDetalleDeuda, setOpenDetalleDeuda] = useState(false);
+  const [detalleDeudaRow, setDetalleDeudaRow] = useState(null);
 
   /* =========================
      Medios de pago - lista global
@@ -687,6 +701,16 @@ export default function ModalPagarRecibos({
     setMediosFilas((p) =>
       p.map((r) => (r.id === id ? { ...r, ...patch } : r))
     );
+  }, []);
+
+  const abrirDetalleDeuda = useCallback((row) => {
+    setDetalleDeudaRow(row || null);
+    setOpenDetalleDeuda(true);
+  }, []);
+
+  const cerrarDetalleDeuda = useCallback(() => {
+    setOpenDetalleDeuda(false);
+    setDetalleDeudaRow(null);
   }, []);
 
   const sumaMediosPago = useMemo(
@@ -769,6 +793,8 @@ export default function ModalPagarRecibos({
     setLoading(false);
     setSavingCheque(false);
     setRows(Array.isArray(deudas) ? [...deudas] : []);
+    setOpenDetalleDeuda(false);
+    setDetalleDeudaRow(null);
     setOpenRecibo(false);
     setReciboHtml("");
     setReciboTitle("Recibo");
@@ -790,7 +816,7 @@ export default function ModalPagarRecibos({
 
   /* ESC handler */
   useEffect(() => {
-    if (!open || openRecibo) return;
+    if (!open || openRecibo || openDetalleDeuda) return;
     const onKey = (e) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -800,7 +826,7 @@ export default function ModalPagarRecibos({
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, openRecibo, onClose, loading]);
+  }, [open, openRecibo, openDetalleDeuda, onClose, loading]);
 
   /* =========================
      Datos ordenados
@@ -1425,6 +1451,7 @@ export default function ModalPagarRecibos({
                     <div className="mpr-th mpr-th--desc">Descripción</div>
                     <div className="mpr-th mpr-th--center">Estado</div>
                     <div className="mpr-th mpr-th--right">Monto</div>
+                    <div className="mpr-th mpr-th--info">Info</div>
                   </div>
 
                   <div
@@ -1488,19 +1515,26 @@ export default function ModalPagarRecibos({
                           </div>
                           <div
                             className="mpr-td mpr-td--desc"
-                            title={safeText(
-                              r?.detalle ?? r?.descripcion ?? r?.concepto
-                            )}
+                            title={safeText(r?.detalle ?? r?.descripcion ?? r?.concepto)}
                           >
-                            {safeText(
-                              r?.detalle ?? r?.descripcion ?? r?.concepto
-                            )}
+                            {productosLabel(r)}
                           </div>
                           <div className="mpr-td mpr-td--center">
                             <EstadoChip pagado={pagado} />
                           </div>
                           <div className="mpr-td mpr-td--right mpr-td--mono">
                             {moneyARS(monto)}
+                          </div>
+                          <div className="mpr-td mpr-td--info" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              className="mpr-info-btn"
+                              onClick={() => abrirDetalleDeuda(r)}
+                              title="Ver detalle de la deuda"
+                              aria-label="Ver detalle de la deuda"
+                            >
+                              <FontAwesomeIcon icon={faInfoCircle} />
+                            </button>
                           </div>
                         </div>
                       );
@@ -1615,6 +1649,14 @@ export default function ModalPagarRecibos({
       )}
 
       {/* Modal de recibo generado */}
+      <ModalDetalleMovimiento
+        open={openDetalleDeuda}
+        row={detalleDeudaRow}
+        title="Detalle de deuda a cobrar"
+        hideMediosPago
+        onClose={cerrarDetalleDeuda}
+      />
+
       <ModalReciboGenerado
         open={openRecibo}
         html={reciboHtml}

@@ -1,54 +1,22 @@
 import React from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faMoneyCheckDollar,
-  faCircleInfo,
-  faMagnifyingGlass,
-  faBoxOpen,
-} from "@fortawesome/free-solid-svg-icons";
+import ClienteDocumentos from "./ClienteDocumentos.jsx";
 
 export default function Facturas() {
   return (
-    <div className="doccom-subpage">
-      <section className="mov-card mov-card--table doccom-emptyCard">
-        <div className="mov-card__head doccom-emptyHead">
-          <div className="mov-card__headLeft">
-            <div className="title-mov">
-              <div className="mov-card__title">Facturas</div>
-              <div className="mov-card__hint">
-                Sección preparada para listar facturas emitidas, no emitidas y sus
-                comprobantes asociados.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="doccom-placeholder">
-          <div className="doccom-placeholder__icon">
-            <FontAwesomeIcon icon={faMoneyCheckDollar} />
-          </div>
-
-          <div className="doccom-placeholder__body">
-            <h3>Facturas</h3>
-            <p>
-              El archivo de la sección ya está separado para conectar acá el
-              listado de facturas del módulo de ventas.
-            </p>
-
-            <div className="doccom-placeholder__grid" aria-label="Columnas preparadas">
-              <span>
-                <FontAwesomeIcon icon={faMagnifyingGlass} /> Cliente / razón social
-              </span>
-              <span>
-                <FontAwesomeIcon icon={faCircleInfo} /> Tipo y estado fiscal
-              </span>
-              <span>
-                <FontAwesomeIcon icon={faBoxOpen} /> PDF / comprobante
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
+    <ClienteDocumentos
+      grupo="facturas"
+      titulo="Facturación"
+      subtitulo="Buscá un cliente y visualizá todas sus facturas emitidas, no emitidas, notas de crédito y notas de débito."
+      emptyTitle="Seleccioná un cliente para ver sus facturas"
+      emptyText="Acá se centralizan los PDFs fiscales y no fiscales generados desde ventas."
+      clienteCounterLabel="Clientes con facturas"
+      totalCounterLabel="Facturas encontradas"
+      visibleCounterLabel="Facturas visibles"
+      documentoSingular="factura"
+      documentoPlural="facturas"
+      searchPlaceholder="Buscar por número, tipo o producto..."
+      noDocsTitle="No hay facturas para este cliente"
+      noDocsText="Probá con otro cliente o limpiá la búsqueda."
+    />
   );
 }

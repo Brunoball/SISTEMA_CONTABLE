@@ -214,7 +214,7 @@ function normalizeItem(it, i = 0) {
 
   return {
     id: it?.id || it?.id_item || `item-${i + 1}`,
-    id_detalle: Number(it?.id_detalle ?? it?.idDetalle ?? 0) || null,
+    id_detalle: null,
     id_stock_producto: Number(it?.id_stock_producto ?? it?.idStockProducto ?? 0) || null,
     codigo: safeStr(it?.codigo || it?.codigo_producto || i + 1),
     descripcion: safeStr(it?.descripcion || it?.detalle || it?.nombre || it?.producto || it?.nombre_producto || "Producto o servicio"),

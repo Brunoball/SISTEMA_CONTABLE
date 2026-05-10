@@ -11,6 +11,7 @@ import ModalEliminar from "../../Global/Modales/ModalEliminar.jsx";
 import ModalAsignarPresupuestoVenta from "./modales/ModalAsignarPresupuestoVenta.jsx";
 import BotonExportar from "../../Global/Boton_Exportar/BotonExportar.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
+import ModalDetalleMovimiento from "../../Global/Modales/ModalDetalleMovimiento.jsx";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBoxOpen,
@@ -20,6 +21,7 @@ import {
   faChevronDown,
   faEye,
   faFileExcel,
+  faInfoCircle,
   faMagnifyingGlass,
   faPlus,
   faTimes,
@@ -125,10 +127,54 @@ function getClienteId(row) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+function detalleProductosLabel(cantidad) {
+  const n = Number(cantidad || 0);
+  if (!Number.isFinite(n) || n <= 0) return "SIN PRODUCTOS";
+  if (n === 1) return "1 PRODUCTO";
+  return `${n} PRODUCTOS`;
+}
+
+function getDetallePresupuesto(row) {
+  const cantidad = Number(row?.cantidad_items ?? row?.items_detalle?.length ?? 0);
+  if (Number.isFinite(cantidad) && cantidad > 0) return detalleProductosLabel(cantidad);
+  return detalleProductosLabel(0);
+}
+
+function normalizePresupuestoItemForModal(it, idx = 0, idMovimiento = null) {
+  const raw = it && typeof it === "object" ? it : {};
+  const nombre =
+    safeStr(raw.producto_nombre) ||
+    safeStr(raw.stock_producto_nombre) ||
+    safeStr(raw.detalle_nombre) ||
+    safeStr(raw.descripcion) ||
+    safeStr(raw.detalle) ||
+    safeStr(raw.nombre) ||
+    "Producto / Servicio";
+
+  return {
+    ...raw,
+    id_item: raw.id_item ?? raw.id ?? idx + 1,
+    id_movimiento: raw.id_movimiento ?? idMovimiento ?? null,
+    id_detalle: raw.id_detalle ?? null,
+    id_stock_producto: raw.id_stock_producto ?? null,
+    producto_nombre: nombre,
+    stock_producto_nombre: safeStr(raw.stock_producto_nombre || raw.producto_nombre || ""),
+    detalle_nombre: safeStr(raw.detalle_nombre || raw.descripcion || raw.detalle || nombre),
+    descripcion: safeStr(raw.descripcion || raw.detalle || nombre),
+    cantidad: Number(raw.cantidad ?? 0) || 0,
+    precio: Number(raw.precio ?? raw.precio_unitario ?? 0) || 0,
+    precio_unitario: Number(raw.precio_unitario ?? raw.precio ?? 0) || 0,
+    iva_pct: Number(raw.iva_pct ?? raw.ivaPct ?? 0) || 0,
+    subtotal: Number(raw.subtotal ?? 0) || 0,
+    iva_monto: Number(raw.iva_monto ?? raw.ivaMonto ?? 0) || 0,
+    total: Number(raw.total ?? 0) || 0,
+  };
+}
+
 function buildExportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((r) => ({
     FECHA: safeText(formatFechaDMY(r?.fecha)),
-    DESCRIPCION: safeText(r?.detalle ?? r?.descripcion ?? r?.concepto),
+    DESCRIPCION: safeText(getDetallePresupuesto(r)),
     CLIENTE: safeText(r?.cliente ?? r?.cliente_nombre),
     ESTADO: r?.convertido_a_venta ? "CONVERTIDO EN VENTA" : "DOCUMENTO COMERCIAL",
     TOTAL: Number(r?.monto_total ?? r?.total ?? 0) || 0,
@@ -232,7 +278,7 @@ function buildItemsFacturacionFromPresupuesto(items) {
     .filter((it) => Number(it?.total ?? 0) > 0 || Number(it?.cantidad ?? 0) > 0)
     .map((it, idx) => ({
       id: it?.id_item ?? it?.id ?? idx + 1,
-      id_detalle: Number(it?.id_detalle || 0) || null,
+      id_detalle: null,
       id_stock_producto: Number(it?.id_stock_producto || 0) || null,
       codigo: safeStr(it?.codigo || it?.sku || idx + 1),
       descripcion: safeStr(it?.descripcion || it?.detalle || it?.producto_nombre || it?.nombre || "Producto / Servicio"),
@@ -283,6 +329,8 @@ export default function Presupuestos() {
   const [comprobanteUrl, setComprobanteUrl] = useState("");
   const [comprobanteMime, setComprobanteMime] = useState("application/pdf");
   const [comprobanteTitle, setComprobanteTitle] = useState("Comprobante");
+  const [openDetalleMovimiento, setOpenDetalleMovimiento] = useState(false);
+  const [loadingDetalleId, setLoadingDetalleId] = useState(null);
   const offsetRef = useRef(0);
   const searchTimerRef = useRef(null);
   const hasLoadedRowsRef = useRef(false);
@@ -353,20 +401,33 @@ export default function Presupuestos() {
     return url;
   }, [API, apiGet]);
 
-  const normalizePresupuestoRow = useCallback((r) => ({
-    ...r,
-    id_movimiento: getMovimientoId(r),
-    id_cliente: getClienteId(r),
-    cliente: String(r?.cliente ?? r?.cliente_nombre ?? "").trim(),
-    detalle: String(r?.detalle ?? r?.descripcion ?? r?.concepto ?? "").trim(),
-    monto_total: Number(r?.monto_total ?? r?.total ?? 0) || 0,
-    presupuesto_id_comprobante: getComprobanteId(r),
-    presupuesto_comprobante_url: String(r?.presupuesto_comprobante_url ?? r?.comprobante_url ?? "").trim(),
-    presupuesto_comprobante_mime: getComprobanteMime(r),
-    convertido_a_venta: Number(r?.convertido_a_venta ?? r?.convertido ?? 0) === 1,
-    id_venta_generada: Number(r?.id_venta_generada ?? r?.id_venta ?? 0) || null,
-    fecha_conversion: String(r?.fecha_conversion ?? "").trim(),
-  }), []);
+  const normalizePresupuestoRow = useCallback((r) => {
+    const cantidadItems = Number(r?.cantidad_items ?? r?.items_detalle?.length ?? 0) || 0;
+    const detalleOriginal = String(r?.detalle_original ?? r?.detalle ?? r?.descripcion ?? r?.concepto ?? "").trim();
+
+    return {
+      ...r,
+      id_movimiento: getMovimientoId(r),
+      id_cliente: getClienteId(r),
+      cliente: String(r?.cliente ?? r?.cliente_nombre ?? "").trim(),
+      detalle_original: detalleOriginal,
+      detalle: detalleProductosLabel(cantidadItems),
+      cantidad_items: cantidadItems,
+      items_detalle: Array.isArray(r?.items_detalle)
+        ? r.items_detalle.map((it, idx) => normalizePresupuestoItemForModal(it, idx, getMovimientoId(r)))
+        : [],
+      cantidad_medios_pago: 0,
+      medios_pago_detalle: [],
+      tipo_operacion_nombre: "PRESUPUESTO",
+      monto_total: Number(r?.monto_total ?? r?.total ?? 0) || 0,
+      presupuesto_id_comprobante: getComprobanteId(r),
+      presupuesto_comprobante_url: String(r?.presupuesto_comprobante_url ?? r?.comprobante_url ?? "").trim(),
+      presupuesto_comprobante_mime: getComprobanteMime(r),
+      convertido_a_venta: Number(r?.convertido_a_venta ?? r?.convertido ?? 0) === 1,
+      id_venta_generada: Number(r?.id_venta_generada ?? r?.id_venta ?? 0) || null,
+      fecha_conversion: String(r?.fecha_conversion ?? "").trim(),
+    };
+  }, []);
 
   const fetchLiveToken = useCallback(async (from, to, query) => {
     const p = new URLSearchParams({ action: "presupuestos_live_token" });
@@ -482,6 +543,73 @@ export default function Presupuestos() {
       conversion: data?.conversion || null,
     };
   }, [API, apiGet]);
+
+  const buildDetallePresupuestoRow = useCallback((row, detalle = null) => {
+    const base = row && typeof row === "object" ? row : {};
+    const mov = detalle?.presupuesto && typeof detalle.presupuesto === "object" ? detalle.presupuesto : {};
+    const idMov = getMovimientoId(base) || getMovimientoId(mov);
+    const rawItems = Array.isArray(detalle?.items) && detalle.items.length
+      ? detalle.items
+      : Array.isArray(base.items_detalle)
+        ? base.items_detalle
+        : [];
+    const items = rawItems.map((it, idx) => normalizePresupuestoItemForModal(it, idx, idMov));
+    const conversion = detalle?.conversion && typeof detalle.conversion === "object" ? detalle.conversion : null;
+    const convertido = !!(base.convertido_a_venta || conversion?.id_venta);
+
+    return {
+      ...base,
+      ...mov,
+      id_movimiento: idMov,
+      id_cliente: getClienteId(base) || getClienteId(mov),
+      fecha: mov.fecha || base.fecha,
+      cliente: safeStr(base.cliente || mov.cliente || base.cliente_nombre || mov.cliente_nombre),
+      detalle: detalleProductosLabel(items.length || base.cantidad_items || 0),
+      detalle_original: safeStr(base.detalle_original || mov.detalle_original || items.map((it) => it.producto_nombre).filter(Boolean).join(", ")),
+      tipo_operacion_nombre: "PRESUPUESTO",
+      operacion: "PRESUPUESTO",
+      documento_tipo: "PRESUPUESTO",
+      clasificacion: "Documento comercial",
+      estado: convertido ? "CONVERTIDO EN VENTA" : "DOCUMENTO COMERCIAL",
+      estado_documento: convertido ? "CONVERTIDO EN VENTA" : "DOCUMENTO COMERCIAL",
+      cantidad_items: items.length || Number(base.cantidad_items || 0) || 0,
+      items_detalle: items,
+      cantidad_medios_pago: 0,
+      medios_pago_detalle: [],
+      medio_pago_nombre: "—",
+      monto_total: Number(mov.monto_total ?? base.monto_total ?? base.total ?? 0) || 0,
+      total: Number(mov.monto_total ?? base.monto_total ?? base.total ?? 0) || 0,
+      convertido_a_venta: convertido,
+      id_venta_generada: Number(conversion?.id_venta ?? base.id_venta_generada ?? 0) || null,
+      fecha_conversion: safeStr(conversion?.fecha_conversion || base.fecha_conversion || ""),
+    };
+  }, []);
+
+  const handleVerDetallePresupuesto = useCallback(async (row) => {
+    const id = getMovimientoId(row);
+    if (!id) {
+      setSelectedRow(buildDetallePresupuestoRow(row));
+      setOpenDetalleMovimiento(true);
+      return;
+    }
+
+    if (Array.isArray(row?.items_detalle) && row.items_detalle.length > 0) {
+      setSelectedRow(buildDetallePresupuestoRow(row));
+      setOpenDetalleMovimiento(true);
+      return;
+    }
+
+    setLoadingDetalleId(id);
+    try {
+      const detalle = await fetchPresupuestoDetalle(id);
+      setSelectedRow(buildDetallePresupuestoRow(row, detalle));
+      setOpenDetalleMovimiento(true);
+    } catch (e) {
+      showToast("error", e?.message || "No se pudo cargar el detalle del documento comercial.", 4200);
+    } finally {
+      setLoadingDetalleId(null);
+    }
+  }, [buildDetallePresupuestoRow, fetchPresupuestoDetalle, showToast]);
 
   const fetchConfigFacturacion = useCallback(async () => {
     try {
@@ -736,13 +864,13 @@ export default function Presupuestos() {
 
   const columns = useMemo(() => [
     { key: "fecha", align: "center", label: "Fecha", render: (r) => formatFechaDMY(r.fecha) },
-    { key: "detalle", label: "Descripción", render: (r) => safeText(r.detalle || r.descripcion || r.concepto) },
+    { key: "detalle", label: "Descripción", render: (r) => safeText(getDetallePresupuesto(r)) },
     { key: "cliente", align: "center", label: "Cliente", render: (r) => safeText(r.cliente) },
     { key: "estado", align: "center", label: "Estado", render: (r) => (r.convertido_a_venta ? "CONVERTIDO EN VENTA" : "DOCUMENTO COMERCIAL") },
     { key: "total", label: "Total", align: "right", strong: true, render: (r) => moneyARS(r.monto_total) },
     { key: "acciones", label: "Acciones", align: "center" },
   ], []);
-  const gridCols = "0.85fr 2.1fr 1.45fr 1.15fr 1fr 1.25fr";
+  const gridCols = "0.85fr 2.05fr 1.35fr 1.15fr 1fr 1.55fr";
 
   const exportOptions = useMemo(() => [
     {
@@ -852,6 +980,9 @@ export default function Presupuestos() {
                               <button type="button" className={["mov-iconBtn", tieneComprobante ? "mov-iconBtn--comprobante" : "mov-iconBtn--disabled"].join(" ")} title={tieneComprobante ? "Ver documento comercial PDF" : "Sin documento comercial PDF"} disabled={!tieneComprobante || isAnyLoading} onClick={() => handleVerComprobante(r, "Documento comercial")} style={{ opacity: tieneComprobante ? 1 : 0.35, cursor: tieneComprobante ? "pointer" : "not-allowed" }}>
                                 <FontAwesomeIcon icon={faEye} />
                               </button>
+                              <button type="button" className="mov-iconBtn" title="Ver información completa del documento comercial" disabled={isAnyLoading || loadingLists || loadingDetalleId === r.id_movimiento} onClick={() => handleVerDetallePresupuesto(r)}>
+                                {loadingDetalleId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faInfoCircle} />}
+                              </button>
                               <button type="button" className={["mov-iconBtn", "mov-iconBtn--comprobante"].join(" ")} title={convertido ? "Documento comercial ya asignado como venta" : "Asignar documento comercial como venta"} disabled={isAnyLoading || loadingLists || convertingId === r.id_movimiento} onClick={() => { setSelectedRow(r); setOpenConvert(true); }} style={{ opacity: 1, cursor: "pointer" }}>
                                 {convertingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={convertido ? faCheckCircle : faCartShopping} />}
                               </button>
@@ -915,9 +1046,19 @@ export default function Presupuestos() {
         details={[
           { label: "ID Movimiento", value: `#${selectedRow?.id_movimiento ?? "—"}` },
           { label: "Cliente", value: selectedRow?.cliente || "—" },
-          { label: "Concepto", value: selectedRow?.detalle || "—" },
+          { label: "Concepto", value: selectedRow ? getDetallePresupuesto(selectedRow) : "—" },
           { label: "Monto", value: moneyARS(selectedRow?.monto_total || 0) },
         ]}
+      />
+
+      <ModalDetalleMovimiento
+        open={openDetalleMovimiento}
+        row={selectedRow}
+        title="Información del documento comercial"
+        onClose={() => {
+          setOpenDetalleMovimiento(false);
+          setSelectedRow(null);
+        }}
       />
 
       <ModalVerComprobante open={openVerComprobante} url={comprobanteUrl} mime={comprobanteMime} title={comprobanteTitle} onClose={() => { setOpenVerComprobante(false); setComprobanteUrl(""); setComprobanteMime("application/pdf"); setComprobanteTitle("Comprobante"); }} />

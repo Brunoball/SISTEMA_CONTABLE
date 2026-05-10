@@ -690,7 +690,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
     const sinStock = isSinStock(stockDisponible);
 
     updateRow(rowId, {
-      id_detalle: getDetalleId(detalle) || NULL_OPTION,
+      id_detalle: NULL_OPTION,
       id_stock_producto: getStockProductoId(detalle) || NULL_OPTION,
       detalleText: getDetalleNombre(detalle),
       codigo: getDetalleCodigo(detalle),
@@ -891,7 +891,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
     return computedRows
       .filter((r) => safeStr(r.detalleText) && r.cantidad > 0 && r.precio > 0)
       .map((r) => ({
-        id_detalle: r.id_detalle || null,
+        id_detalle: null,
         id_stock_producto: r.id_stock_producto || null,
         codigo: r.codigo || "",
         descripcion: safeStr(r.detalleText),

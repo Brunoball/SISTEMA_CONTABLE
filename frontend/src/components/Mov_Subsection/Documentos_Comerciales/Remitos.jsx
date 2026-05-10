@@ -1,54 +1,22 @@
 import React from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faBoxesStacked,
-  faCircleInfo,
-  faMagnifyingGlass,
-  faBoxOpen,
-} from "@fortawesome/free-solid-svg-icons";
+import ClienteDocumentos from "./ClienteDocumentos.jsx";
 
 export default function Remitos() {
   return (
-    <div className="doccom-subpage">
-      <section className="mov-card mov-card--table doccom-emptyCard">
-        <div className="mov-card__head doccom-emptyHead">
-          <div className="mov-card__headLeft">
-            <div className="title-mov">
-              <div className="mov-card__title">Remitos</div>
-              <div className="mov-card__hint">
-                Sección preparada para listar remitos generados desde ventas y
-                presupuestos convertidos.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="doccom-placeholder">
-          <div className="doccom-placeholder__icon">
-            <FontAwesomeIcon icon={faBoxesStacked} />
-          </div>
-
-          <div className="doccom-placeholder__body">
-            <h3>Remitos</h3>
-            <p>
-              El archivo de la sección ya está separado para conectar acá el
-              listado de remitos generados por cada venta.
-            </p>
-
-            <div className="doccom-placeholder__grid" aria-label="Columnas preparadas">
-              <span>
-                <FontAwesomeIcon icon={faMagnifyingGlass} /> Cliente / venta relacionada
-              </span>
-              <span>
-                <FontAwesomeIcon icon={faCircleInfo} /> Origen del remito
-              </span>
-              <span>
-                <FontAwesomeIcon icon={faBoxOpen} /> PDF / comprobante
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
+    <ClienteDocumentos
+      grupo="remitos"
+      titulo="Remitos"
+      subtitulo="Buscá un cliente y visualizá todos los remitos generados desde ventas o documentos comerciales convertidos."
+      emptyTitle="Seleccioná un cliente para ver sus remitos"
+      emptyText="Acá se centralizan los PDFs de remitos vinculados a cada venta o documento comercial."
+      clienteCounterLabel="Clientes con remitos"
+      totalCounterLabel="Remitos encontrados"
+      visibleCounterLabel="Remitos visibles"
+      documentoSingular="remito"
+      documentoPlural="remitos"
+      searchPlaceholder="Buscar por número, producto o venta..."
+      noDocsTitle="No hay remitos para este cliente"
+      noDocsText="Probá con otro cliente o limpiá la búsqueda."
+    />
   );
 }

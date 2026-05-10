@@ -39,6 +39,13 @@ function moneyARS(v) {
   }
 }
 
+function moneyToneClass(value) {
+  const n = Number(value || 0);
+  if (n < 0) return "cc-money cc-money--negative";
+  if (n > 0) return "cc-money cc-money--positive";
+  return "cc-money cc-money--neutral";
+}
+
 function formatDateISO(d) {
   if (!d) return "";
   const yyyy = d.getFullYear();
@@ -874,7 +881,7 @@ export default function ProveedoresCC() {
                     <span className="mov-ellipsissss mov-ellipsialingf">{r.nombre || "-"}</span>
                   </div>
                   <div className="mov-gridCell is-right is-strong">
-                    <span className="mov-ellipsissss">{moneyARS(r.saldo || 0)}</span>
+                    <span className={`mov-ellipsissss ${moneyToneClass(r.saldo)}`}>{moneyARS(r.saldo || 0)}</span>
                   </div>
                 </button>
               ))
@@ -926,19 +933,19 @@ export default function ProveedoresCC() {
                     </div>
 
                     <div className="mov-gridCell is-right">
-                      <span className="mov-ellipsissss">
+                      <span className="mov-ellipsissss cc-money cc-money--negative">
                         {Number(r.debito || 0) > 0 ? moneyARS(r.debito) : "—"}
                       </span>
                     </div>
 
                     <div className="mov-gridCell is-right">
-                      <span className="mov-ellipsissss">
+                      <span className="mov-ellipsissss cc-money cc-money--positive">
                         {Number(r.credito || 0) > 0 ? moneyARS(r.credito) : "—"}
                       </span>
                     </div>
 
                     <div className="mov-gridCell is-right is-strong">
-                      <span className="mov-ellipsissss">{moneyARS(r.saldo || 0)}</span>
+                      <span className={`mov-ellipsissss ${moneyToneClass(r.saldo)}`}>{moneyARS(r.saldo || 0)}</span>
                     </div>
 
                     <div className="mov-gridCell mov-gridCell--actions">
@@ -996,13 +1003,13 @@ export default function ProveedoresCC() {
             >
               <div className="mov-gridCell is-strong">Totales</div>
               <div className="mov-gridCell mov-gridCellf vacio"></div>
-              <div className="mov-gridCell mov-gridCellf is-right is-strong">
+              <div className="mov-gridCell mov-gridCellf is-right is-strong cc-money cc-money--negative">
                 {moneyARS(totales?.debito || 0)}
               </div>
-              <div className="mov-gridCell mov-gridCellf is-right is-strong">
+              <div className="mov-gridCell mov-gridCellf is-right is-strong cc-money cc-money--positive">
                 {moneyARS(totales?.credito || 0)}
               </div>
-              <div className="mov-gridCell mov-gridCellf is-right is-strong">
+              <div className={`mov-gridCell mov-gridCellf is-right is-strong ${moneyToneClass(totales?.saldo)}`}>
                 {moneyARS(totales?.saldo || 0)}
               </div>
               <div className="mov-gridCell vacio mov-gridCellf"></div>

@@ -1197,3 +1197,30 @@ button.cc-cliente-table__row:focus-visible{
     line-height: 1.2;
   }
 }
+/* =========================
+   Colores monetarios como Flujo de Caja
+   Débito = rojo, Crédito = verde, Saldo = dinámico
+========================= */
+.cc-money{
+  font-weight: 660;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.cc-money--positive{
+  color: #16a34a !important;
+}
+
+.cc-money--negative{
+  color: #dc2626 !important;
+}
+
+.cc-money--neutral{
+  color: var(--b-midnight, #0A2540) !important;
+}
+
+.cc-cliente-table__totals .cc-money,
+.cc-cliente-table__footWrap .cc-money{
+  font-weight: 700;
+}

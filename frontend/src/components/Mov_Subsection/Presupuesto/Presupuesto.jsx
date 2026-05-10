@@ -447,7 +447,7 @@ export default function Presupuesto() {
                 <div className="cc-floatingField cc-floatingField--search is-active">
                   <div className="cc-searchInput">
                     <div className="cc-searchInput__fieldWrap">
-                      <input className="cc-input cc-input--floating" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por descripción, cliente..." disabled={loadingLists} />
+                      <input className="cc-input cc-input--floating" id="vents-comppr-wit" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por descripción, cliente..." disabled={loadingLists} />
                       <span className="cc-floatingLabel"><FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda</span>
                       {q.trim() !== "" && <button type="button" className="cc-clearSearch cc-clearSearch--inside" title="Limpiar búsqueda" onClick={() => setQ("")}><FontAwesomeIcon icon={faTimes} /></button>}
                     </div>

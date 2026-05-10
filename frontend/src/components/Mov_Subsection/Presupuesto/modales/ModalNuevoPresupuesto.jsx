@@ -115,6 +115,67 @@ function getClienteNombre(c) {
   return safeStr(c?.nombre || c?.razon_social || c?.cliente || c?.label || "");
 }
 
+function normalizeClienteFiscalPresupuesto(fiscalSource, clienteSource, nombreFallback = "Cliente") {
+  const fiscal = fiscalSource && typeof fiscalSource === "object" ? fiscalSource : {};
+  const cliente = clienteSource && typeof clienteSource === "object" ? clienteSource : {};
+  const nombre =
+    safeStr(fiscal.razon_social) ||
+    safeStr(cliente.razon_social) ||
+    safeStr(cliente.nombre) ||
+    safeStr(nombreFallback) ||
+    "Cliente";
+  const docTipo = Number(fiscal.doc_tipo || (fiscal.cuit || cliente.cuit ? 80 : 96)) || null;
+  const docNro = safeStr(fiscal.doc_nro || fiscal.cuit || cliente.doc_nro || cliente.cuit || cliente.dni || "");
+  const cuit = safeStr(fiscal.cuit || cliente.cuit || (docTipo === 80 ? docNro : ""));
+  const condicion = safeStr(fiscal.condicion_iva || fiscal.cond_iva || cliente.condicion_iva || cliente.cond_iva || "");
+  const domicilio = safeStr(fiscal.domicilio || cliente.domicilio || cliente.direccion || "");
+
+  return {
+    id_cliente_fiscal: Number(fiscal.id_cliente_fiscal || 0) || null,
+    id_cliente: Number(fiscal.id_cliente || getClienteId(cliente) || 0) || null,
+    doc_tipo: docTipo,
+    doc_nro: docNro,
+    cuit,
+    razon_social: nombre,
+    cond_iva: condicion,
+    condicion_iva: condicion,
+    domicilio,
+    origen: safeStr(fiscal.origen || (fiscal.id_cliente_fiscal ? "clientes_fiscales" : "cliente")),
+  };
+}
+
+function normalizeConfigFacturacionPresupuesto(cfg) {
+  const c = cfg && typeof cfg === "object" ? cfg : {};
+  const nombre = safeStr(c.razon_social || c.nombre_fantasia || c.nombre || "BALTO");
+  const domicilio = safeStr(c.domicilio_comercial || c.domicilio || c.domicilio_fiscal || "");
+  const condicionIva = safeStr(c.condicion_iva || c.cond_iva || "");
+  const inicio = safeStr(c.fecha_inicio_actividades || c.inicio_actividades || "");
+
+  return {
+    emisor_nombre: nombre,
+    emisor_domicilio: domicilio,
+    cuit_emisor: safeStr(c.cuit || ""),
+    cond_iva_emisor: condicionIva,
+    ingresos_brutos_emisor: safeStr(c.ingresos_brutos || ""),
+    fecha_inicio_actividades_emisor: inicio,
+    emisor: {
+      razon_social: nombre,
+      nombre_fantasia: safeStr(c.nombre_fantasia || ""),
+      domicilio_comercial: domicilio,
+      domicilio,
+      cuit: safeStr(c.cuit || ""),
+      condicion_iva: condicionIva,
+      cond_iva: condicionIva,
+      ingresos_brutos: safeStr(c.ingresos_brutos || ""),
+      fecha_inicio_actividades: inicio,
+      inicio_actividades: inicio,
+      punto_venta: safeStr(c.punto_venta || ""),
+      tipo_comprobante_default: safeStr(c.tipo_comprobante_default || ""),
+      codigo_comprobante: safeStr(c.codigo_comprobante || ""),
+    },
+  };
+}
+
 function getDetalleNombre(d) {
   return safeStr(d?.nombre || d?.descripcion || d?.detalle || d?.producto || d?.label || "");
 }
@@ -788,19 +849,34 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
 
   const uploadPresupuestoPdf = useCallback(async ({ idMovimiento, payload, items }) => {
     const clienteNombre = getClienteNombre(clienteSel) || cliInput;
+    const idCliente = getClienteId(clienteSel);
+    let clienteFiscal = null;
+
+    if (idCliente) {
+      try {
+        const fiscalResp = await apiGetJson(`${API}?action=cliente_fiscal_get&id_cliente=${idCliente}`);
+        if (fiscalResp?.existe && fiscalResp?.cliente_fiscal) {
+          clienteFiscal = fiscalResp.cliente_fiscal;
+        }
+      } catch {
+        clienteFiscal = null;
+      }
+    }
+
+    const clienteFacturacion = normalizeClienteFiscalPresupuesto(clienteFiscal, clienteSel, clienteNombre);
+    const emisorPdf = normalizeConfigFacturacionPresupuesto(configFacturacion || {});
+
     const pdfData = {
       ...payload,
       id_movimiento: idMovimiento,
       numero_presupuesto: idMovimiento,
       fecha_cbte_iso: fecha,
       cliente_nombre: clienteNombre,
-      cliente: {
-        nombre: clienteNombre,
-        cuit: safeStr(clienteSel?.cuit || clienteSel?.doc_nro || clienteSel?.dni || ""),
-        condicion_iva: safeStr(clienteSel?.condicion_iva || clienteSel?.cond_iva || ""),
-        domicilio: safeStr(clienteSel?.domicilio || clienteSel?.direccion || ""),
-      },
+      labelCliente: clienteNombre,
+      cliente: clienteFacturacion,
+      cliente_facturacion: clienteFacturacion,
       config_facturacion: configFacturacion || {},
+      ...emisorPdf,
       items,
       items_facturacion: items,
       subtotal_ars: totals.subtotal,
@@ -822,7 +898,12 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
       id_movimiento: idMovimiento,
       ids_movimiento: [idMovimiento],
       id_cliente: getClienteId(clienteSel),
-      razon_social: clienteNombre,
+      razon_social: clienteFacturacion.razon_social || clienteNombre,
+      cond_iva: clienteFacturacion.condicion_iva || clienteFacturacion.cond_iva || null,
+      domicilio: clienteFacturacion.domicilio || null,
+      cliente_facturacion: clienteFacturacion,
+      emisor: emisorPdf.emisor,
+      config_facturacion: configFacturacion || {},
       fecha_cbte: fecha.replace(/-/g, ""),
       fecha_cbte_iso: fecha,
       monto_ars: totals.total,

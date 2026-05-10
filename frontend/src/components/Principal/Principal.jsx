@@ -203,7 +203,7 @@ function prefetchRoute(ruta) {
    IDLE
 ========================================================= */
 const LAST_ACTIVITY_KEY = "balto_last_activity_ts";
-const IDLE_MS = 30 * 60 * 1000;
+const IDLE_MS = 2 * 60 * 60 * 1000;
 
 function setLastActivityNow() {
   try {

@@ -326,6 +326,69 @@ function normalizeClienteFiscalDb(data) {
   };
 }
 
+function normalizeConfigFacturacionPdf(cfg) {
+  const c = cfg && typeof cfg === "object" ? cfg : {};
+  const razon = safeStr(c.razon_social || c.nombre_fantasia || c.nombre || "BALTO");
+  const domicilio = safeStr(c.domicilio_comercial || c.domicilio || c.domicilio_fiscal || "");
+  const condicionIva = safeStr(c.condicion_iva || c.cond_iva || "");
+  const inicio = safeStr(c.fecha_inicio_actividades || c.inicio_actividades || "");
+
+  return {
+    raw: c,
+    emisor_nombre: razon,
+    emisor_domicilio: domicilio,
+    cuit_emisor: safeStr(c.cuit || ""),
+    cond_iva_emisor: condicionIva,
+    ingresos_brutos_emisor: safeStr(c.ingresos_brutos || ""),
+    fecha_inicio_actividades_emisor: inicio,
+    logo_url: safeStr(c.logo_url || ""),
+    emisor: {
+      razon_social: razon,
+      nombre_fantasia: safeStr(c.nombre_fantasia || ""),
+      domicilio_comercial: domicilio,
+      domicilio,
+      cuit: safeStr(c.cuit || ""),
+      condicion_iva: condicionIva,
+      cond_iva: condicionIva,
+      ingresos_brutos: safeStr(c.ingresos_brutos || ""),
+      fecha_inicio_actividades: inicio,
+      inicio_actividades: inicio,
+      punto_venta: safeStr(c.punto_venta || ""),
+      tipo_comprobante_default: safeStr(c.tipo_comprobante_default || ""),
+      codigo_comprobante: safeStr(c.codigo_comprobante || ""),
+      logo_url: safeStr(c.logo_url || ""),
+    },
+  };
+}
+
+function buildClienteFiscalPdf(fiscalSource, clienteSource, nombreFallback = "Cliente") {
+  const fiscal = normalizeClienteFiscalDb(fiscalSource || {});
+  const cliente = clienteSource && typeof clienteSource === "object" ? clienteSource : {};
+  const nombre =
+    safeStr(fiscal.razon_social) ||
+    safeStr(cliente.razon_social) ||
+    safeStr(cliente.nombre) ||
+    safeStr(nombreFallback) ||
+    "Cliente";
+  const docNro = safeStr(fiscal.doc_nro || fiscal.cuit || cliente.doc_nro || cliente.cuit || cliente.dni || "");
+  const cuit = safeStr(fiscal.cuit || cliente.cuit || (String(fiscal.doc_tipo) === "80" ? docNro : ""));
+  const condicion = safeStr(fiscal.condicion_iva || cliente.condicion_iva || cliente.cond_iva || "");
+  const domicilio = safeStr(fiscal.domicilio || cliente.domicilio || cliente.direccion || "");
+
+  return {
+    id_cliente_fiscal: fiscal.id_cliente_fiscal || null,
+    id_cliente: fiscal.id_cliente || getClienteId(cliente) || null,
+    doc_tipo: fiscal.doc_tipo || (cuit ? 80 : null),
+    doc_nro: docNro,
+    cuit,
+    razon_social: nombre,
+    cond_iva: condicion,
+    condicion_iva: condicion,
+    domicilio,
+    origen: safeStr(fiscal.origen || (fiscal.id_cliente_fiscal ? "clientes_fiscales" : "cliente")),
+  };
+}
+
 function resolveClienteByInput(clientes, inputValue) {
   const q = normalizeText(inputValue);
   if (!q) return null;
@@ -1903,12 +1966,15 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       const codigoCbte = Number(String(cfg?.codigo_comprobante || "11").replace(/\D/g, "")) || 11;
       const mediosPayload = buildMediosPagoPayload(mediosFilas, mediosPagoList);
       const primerMedioId = mediosPayload[0]?.id_medio_pago || null;
+      const emisorPdf = normalizeConfigFacturacionPdf(cfg || {});
 
       return {
         id_pago: null,
         id_sistema: null,
         labelCliente: selectedClienteNombre || "Cliente",
         labelSistema: "Nueva venta",
+        config_facturacion: cfg || {},
+        ...emisorPdf,
         cliente_facturacion: {
           doc_tipo: Number(clienteFiscalResuelto?.doc_tipo || 80),
           doc_nro: safeStr(clienteFiscalResuelto?.doc_nro || clienteFiscalResuelto?.cuit),
@@ -1932,20 +1998,14 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         monto: Number(resumen.total || 0),
         importe: Number(resumen.total || 0),
         observaciones: "",
-        emisor_nombre: safeStr(cfg?.razon_social || cfg?.nombre_fantasia || "BALTO"),
-        emisor_domicilio: safeStr(cfg?.domicilio_comercial),
-        cuit_emisor: safeStr(cfg?.cuit),
-        cond_iva_emisor: safeStr(cfg?.condicion_iva),
-        ingresos_brutos_emisor: safeStr(cfg?.ingresos_brutos),
-        fecha_inicio_actividades_emisor: safeStr(cfg?.fecha_inicio_actividades),
-        logo_url: safeStr(cfg?.logo_url),
+        emisor: emisorPdf.emisor,
       };
     },
     [rowsCalc, mediosFilas, mediosPagoList, selectedClienteNombre, selectedClienteId, filters.id_tipo_venta, fecha, isContado, resumen.total]
   );
 
   const buildVentaNoFacturadaPayload = useCallback(
-    (cfg = null) => {
+    (cfg = null, clienteFiscalOverride = null) => {
       const items = rowsCalc
         .filter((r) => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0)
         .map((r, i) => ({
@@ -1968,7 +2028,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
 
       const mediosPayload = buildMediosPagoPayload(mediosFilas, mediosPagoList);
       const primerMedioId = mediosPayload[0]?.id_medio_pago || null;
-      const clienteFiscal = clienteFiscalDb || fiscalArcaData || {};
+      const clienteFiscal = clienteFiscalOverride || clienteFiscalDb || fiscalArcaData || {};
+      const emisorPdf = normalizeConfigFacturacionPdf(cfg || {});
       const nombreCliente =
         selectedClienteNombre || safeStr(cliInput) || safeStr(clienteFiscal?.razon_social) || "Cliente";
 
@@ -1977,16 +2038,9 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         id_sistema: null,
         labelCliente: nombreCliente,
         labelSistema: "Nueva venta",
-        cliente_facturacion: {
-          doc_tipo: clienteFiscal?.doc_tipo ?? null,
-          doc_nro: safeStr(clienteFiscal?.doc_nro || clienteFiscal?.cuit || ""),
-          cuit: safeStr(clienteFiscal?.cuit || ""),
-          razon_social: safeStr(clienteFiscal?.razon_social || nombreCliente),
-          cond_iva: safeStr(clienteFiscal?.condicion_iva || clienteFiscal?.cond_iva || ""),
-          condicion_iva: safeStr(clienteFiscal?.condicion_iva || clienteFiscal?.cond_iva || ""),
-          domicilio: safeStr(clienteFiscal?.domicilio || ""),
-          origen: safeStr(clienteFiscal?.origen || "venta_no_facturada"),
-        },
+        cliente_facturacion: buildClienteFiscalPdf(clienteFiscal, clienteResolvedFromInput, nombreCliente),
+        config_facturacion: cfg || {},
+        ...emisorPdf,
         id_cliente: selectedClienteId || null,
         id_tipo_venta: Number(filters.id_tipo_venta || 0) || null,
         tipo_venta_nombre: safeStr(
@@ -2005,13 +2059,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         importe: Number(resumen.total || 0),
         observaciones:
           "Comprobante interno generado automáticamente por una venta no facturada. Sin CAE, sin QR fiscal y sin validez fiscal.",
-        emisor_nombre: safeStr(cfg?.razon_social || cfg?.nombre_fantasia || "BALTO"),
-        emisor_domicilio: safeStr(cfg?.domicilio_comercial || cfg?.domicilio || ""),
-        cuit_emisor: safeStr(cfg?.cuit || ""),
-        cond_iva_emisor: safeStr(cfg?.condicion_iva || cfg?.cond_iva || ""),
-        ingresos_brutos_emisor: safeStr(cfg?.ingresos_brutos || ""),
-        fecha_inicio_actividades_emisor: safeStr(cfg?.fecha_inicio_actividades || ""),
-        logo_url: safeStr(cfg?.logo_url || ""),
+        emisor: emisorPdf.emisor,
       };
     },
     [
@@ -2020,6 +2068,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       mediosPagoList,
       clienteFiscalDb,
       fiscalArcaData,
+      clienteResolvedFromInput,
       selectedClienteNombre,
       cliInput,
       selectedClienteId,
@@ -2274,6 +2323,9 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         cond_iva:
           ventaMeta?.cliente_facturacion?.cond_iva || ventaMeta?.cliente_facturacion?.condicion_iva || null,
         domicilio: ventaMeta?.cliente_facturacion?.domicilio || null,
+        cliente_facturacion: ventaMeta?.cliente_facturacion || null,
+        emisor: ventaMeta?.emisor || null,
+        config_facturacion: ventaMeta?.config_facturacion || null,
         resultado: "P",
         json_arca: null,
         resumen_facturacion: {
@@ -2332,6 +2384,9 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         cond_iva:
           remitoMeta?.cliente_facturacion?.cond_iva || remitoMeta?.cliente_facturacion?.condicion_iva || null,
         domicilio: remitoMeta?.cliente_facturacion?.domicilio || null,
+        cliente_facturacion: remitoMeta?.cliente_facturacion || null,
+        emisor: remitoMeta?.emisor || null,
+        config_facturacion: remitoMeta?.config_facturacion || null,
         resultado: "P",
         json_arca: null,
         resumen_facturacion: {
@@ -2354,6 +2409,28 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     },
     [API_VINCULAR_COMPROBANTE, fecha, resumen.total]
   );
+
+  const resolveClienteFiscalForPdf = useCallback(async () => {
+    const id = Number(selectedClienteId || 0);
+    if (clienteFiscalDb && (!id || Number(clienteFiscalDb.id_cliente || 0) === id)) {
+      return clienteFiscalDb;
+    }
+    if (fiscalArcaData && (fiscalArcaData.cuit || fiscalArcaData.razon_social)) {
+      return normalizeClienteFiscalDb(fiscalArcaData);
+    }
+    if (!id) return null;
+
+    try {
+      const data = await apiGetJson(`${API_GET_CLIENTE_FISCAL}&id_cliente=${id}`);
+      if (data?.existe && data?.cliente_fiscal) {
+        return normalizeClienteFiscalDb(data.cliente_fiscal);
+      }
+    } catch {
+      // Si no hay datos fiscales o falla la consulta puntual, el PDF se completa con nombre y guiones.
+    }
+
+    return null;
+  }, [API_GET_CLIENTE_FISCAL, selectedClienteId, clienteFiscalDb, fiscalArcaData]);
 
   const vincularComprobanteAMovimientosLote = useCallback(
     async (idsMovimiento, idComprobante) => {
@@ -2395,8 +2472,10 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         }
       }
 
+      const clienteFiscalPdf = await resolveClienteFiscalForPdf();
+
       const ventaMeta = {
-        ...buildVentaNoFacturadaPayload(cfg || {}),
+        ...buildVentaNoFacturadaPayload(cfg || {}, clienteFiscalPdf),
         ids_movimiento: idsOk,
       };
 
@@ -2444,6 +2523,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       configFacturacion,
       fetchConfigFacturacion,
       buildVentaNoFacturadaPayload,
+      resolveClienteFiscalForPdf,
       subirVentaNoFacturadaPdfYVincular,
       vincularComprobanteAMovimientosLote,
     ]
@@ -2474,7 +2554,19 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         }
       }
 
-      const sourceData = baseData && typeof baseData === "object" ? baseData : buildVentaNoFacturadaPayload(cfg || {});
+      const clienteFiscalPdf = await resolveClienteFiscalForPdf();
+      const sourceData = baseData && typeof baseData === "object"
+        ? {
+            ...baseData,
+            config_facturacion: baseData.config_facturacion || cfg || {},
+            ...normalizeConfigFacturacionPdf(baseData.config_facturacion || cfg || {}),
+            cliente_facturacion: buildClienteFiscalPdf(
+              baseData.cliente_facturacion || clienteFiscalPdf,
+              clienteResolvedFromInput,
+              baseData.labelCliente || selectedClienteNombre || cliInput
+            ),
+          }
+        : buildVentaNoFacturadaPayload(cfg || {}, clienteFiscalPdf);
       const remitoMeta = {
         ...sourceData,
         tipo: "REMITO",
@@ -2512,6 +2604,10 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       configFacturacion,
       fetchConfigFacturacion,
       buildVentaNoFacturadaPayload,
+      resolveClienteFiscalForPdf,
+      clienteResolvedFromInput,
+      selectedClienteNombre,
+      cliInput,
       subirRemitoPdfYVincular,
     ]
   );

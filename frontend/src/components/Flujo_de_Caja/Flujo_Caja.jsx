@@ -11,6 +11,7 @@ import {
   faFileExcel,
   faChevronDown,
   faArrowRightLong,
+  faWallet,
 } from "@fortawesome/free-solid-svg-icons";
 
 import Toast from "../Global/Toast.jsx";
@@ -53,6 +54,23 @@ function formatDateUI(d) {
   if (!d) return "—";
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
+function normalizePaymentCards(rawCards) {
+  const cards = Array.isArray(rawCards) ? rawCards : [];
+
+  return cards.map((card) => ({
+    key: String(card?.key ?? card?.label ?? ""),
+    label: String(card?.label ?? "MEDIO DE PAGO"),
+    ingresos: Number(card?.ingresos || 0),
+    egresos: Number(card?.egresos || 0),
+    saldo: Number(card?.saldo || 0),
+    medios: Array.isArray(card?.medios)
+      ? card.medios.map((m) => ({
+          id_medio_pago: Number(m?.id_medio_pago || 0),
+          nombre: String(m?.nombre ?? ""),
+        }))
+      : [],
+  }));
+}
 function normalizeRows(rawRows) {
   const rr = Array.isArray(rawRows) ? rawRows : [];
   return rr.map((r) => ({
@@ -60,6 +78,7 @@ function normalizeRows(rawRows) {
     ingresos: r?.ingresos == null ? null : Number(r.ingresos || 0),
     egresos:  r?.egresos  == null ? null : Number(r.egresos  || 0),
     saldo:    r?.saldo    == null ? null : Number(r.saldo    || 0),
+    medios_pago: normalizePaymentCards(r?.medios_pago),
   }));
 }
 async function parseJsonOrThrow(res) {
@@ -97,6 +116,26 @@ function downloadBlob(content, fileName, mimeType) {
   a.remove();
   window.URL.revokeObjectURL(url);
 }
+function paymentCardSubtitle(card) {
+  const medios = Array.isArray(card?.medios) ? card.medios : [];
+  const names = medios.map((m) => String(m?.nombre || "").trim()).filter(Boolean);
+
+  if (!names.length) return "Sin medios vinculados";
+  if (names.length === 1) return names[0];
+  return names.join(" + ");
+}
+function pickDefaultSelectedDate(items) {
+  if (!items.length) return "";
+
+  const todayIso = formatDateISO(new Date());
+  const todayRow = items.find((r) => r.fecha === todayIso);
+  if (todayRow) return todayRow.fecha;
+
+  const latestNotFuture = items.find((r) => r.fecha && r.fecha <= todayIso);
+  if (latestNotFuture) return latestNotFuture.fecha;
+
+  return items[0]?.fecha || "";
+}
 
 /* =========================
    Skeleton config
@@ -112,6 +151,7 @@ export default function Flujo_Caja() {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
   const [data, setData]         = useState(null);
+  const [selectedDate, setSelectedDate] = useState("");
 
   const [toast, setToast] = useState(null);
   const showToast  = useCallback((tipo, mensaje, duracion = 2800) => setToast({ tipo, mensaje, duracion }), []);
@@ -166,7 +206,7 @@ export default function Flujo_Caja() {
   const bloque  = data?.tiendas?.[0] || null;
   const rowsRaw = bloque?.rows || [];
 
-  // ── CAMBIO: ordenar descendente por fecha (más reciente primero) ──
+  // Orden descendente por fecha (más reciente primero)
   const rows = useMemo(() => {
     const normalized = normalizeRows(rowsRaw);
     return [...normalized].sort((a, b) => {
@@ -176,6 +216,24 @@ export default function Flujo_Caja() {
     });
   }, [rowsRaw]);
 
+  useEffect(() => {
+    if (!rows.length) {
+      setSelectedDate("");
+      return;
+    }
+
+    const exists = rows.some((r) => r.fecha === selectedDate);
+    if (exists) return;
+
+    setSelectedDate(pickDefaultSelectedDate(rows));
+  }, [rows, selectedDate]);
+
+  const selectedRow = useMemo(() => {
+    if (!rows.length) return null;
+    return rows.find((r) => r.fecha === selectedDate) || rows[0] || null;
+  }, [rows, selectedDate]);
+
+  const selectedPaymentCards = selectedRow?.medios_pago || [];
   const showing = rows.length;
 
   /* =========================
@@ -213,7 +271,7 @@ export default function Flujo_Caja() {
   }, [dateRange]);
 
   /* =========================
-     Export helpers  (sin OTROS)
+     Export helpers
   ========================= */
   const buildExportRows = useCallback(() => {
     if (!rows.length) throw new Error("No hay datos para exportar.");
@@ -290,7 +348,7 @@ export default function Flujo_Caja() {
   ], [handleExport]);
 
   /* =========================
-     Skeleton row  (4 columnas: sin OTROS)
+     Skeleton row  (4 columnas)
   ========================= */
   const skelWidths = useMemo(() => ({
     fecha:    ["34%", "42%", "38%", "46%"],
@@ -299,7 +357,6 @@ export default function Flujo_Caja() {
     saldo:    ["52%", "46%", "38%", "56%"],
   }), []);
 
-  // 4 columnas (sin OTROS)
   const gridCols = "0.9fr 1.3fr 1.3fr 1.3fr";
 
   const renderSkeletonRow = (idx) => {
@@ -413,7 +470,60 @@ export default function Flujo_Caja() {
           </div>
         </div>
 
-        {/* ===== HEADER TABLA (4 cols, sin OTROS) ===== */}
+        {/* ===== TARJETAS DINÁMICAS POR MEDIO DE PAGO ===== */}
+        <div className="fc-paymentSummary">
+          <div className="fc-paymentSummary__head">
+            <div>
+              <div className="fc-paymentSummary__title">Detalle por caja / medio de pago</div>
+              <div className="fc-paymentSummary__hint">
+                Día seleccionado: <b>{fmtDateES(selectedRow?.fecha)}</b>. Tocá una fecha de la tabla para actualizar las tarjetas.
+              </div>
+            </div>
+          </div>
+
+          {selectedPaymentCards.length ? (
+            <div className="fc-paymentCards" aria-label="Detalle de medios de pago del día seleccionado">
+              {selectedPaymentCards.map((card) => {
+                const saldoNeg = Number(card.saldo) < 0;
+
+                return (
+                  <div key={card.key} className="fc-payCard">
+                    <div className="fc-payCard__top">
+                      <span className="fc-payCard__icon"><FontAwesomeIcon icon={faWallet} /></span>
+                      <div className="fc-payCard__titleWrap">
+                        <div className="fc-payCard__title">{card.label}</div>
+                        <div className="fc-payCard__subtitle" title={paymentCardSubtitle(card)}>
+                          {paymentCardSubtitle(card)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={`fc-payCard__amount ${saldoNeg ? "is-negative" : "is-positive"}`}>
+                      {moneyARS(card.saldo)}
+                    </div>
+
+                    <div className="fc-payCard__rows">
+                      <div className="fc-payCard__row">
+                        <span>Ingresos</span>
+                        <b className="fc-in">{moneyARS(card.ingresos)}</b>
+                      </div>
+                      <div className="fc-payCard__row">
+                        <span>Egresos</span>
+                        <b className="fc-eg">{moneyARS(card.egresos)}</b>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="fc-paymentEmpty">
+              No hay medios de pago activos para mostrar. Las tarjetas se generan automáticamente desde la tabla medios_pago, excluyendo CHEQUE y ECHEQ.
+            </div>
+          )}
+        </div>
+
+        {/* ===== HEADER TABLA (4 cols) ===== */}
         <div
           className="mov-gridTable mov-gridTable--head"
           style={{ gridTemplateColumns: gridCols }}
@@ -437,13 +547,23 @@ export default function Flujo_Caja() {
               <>
                 {rows.map((r) => {
                   const saldoNeg = Number(r.saldo) < 0;
+                  const isSelected = selectedRow?.fecha === r.fecha;
 
                   return (
                     <div
                       key={r.fecha}
-                      className="mov-gridTable mov-gridTable--row"
+                      className={`mov-gridTable mov-gridTable--row fc-dayRow ${isSelected ? "fc-dayRow--selected" : ""}`}
                       style={{ gridTemplateColumns: gridCols }}
                       role="row"
+                      tabIndex={0}
+                      title="Ver detalle del día en las tarjetas superiores"
+                      onClick={() => setSelectedDate(r.fecha)}
+                      onKeyDown={(ev) => {
+                        if (ev.key === "Enter" || ev.key === " ") {
+                          ev.preventDefault();
+                          setSelectedDate(r.fecha);
+                        }
+                      }}
                     >
                       {/* FECHA */}
                       <div className="mov-gridCell is-center" role="cell" data-label="FECHA">
@@ -484,7 +604,7 @@ export default function Flujo_Caja() {
         <div className="fc-footnote">
           * Ingresos: ventas de contado + ventas en cuenta corriente ya cobradas.
           Egresos: compras de contado + compras en cuenta corriente ya pagadas.
-          El saldo acumula día a día desde el saldo base.
+          Las tarjetas superiores se arman con los medios de pago activos del tenant y excluyen CHEQUE / ECHEQ.
         </div>
 
       </section>

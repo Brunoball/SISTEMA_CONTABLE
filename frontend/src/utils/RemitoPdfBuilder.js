@@ -395,27 +395,48 @@ function normalizeItems(data) {
     .filter((it) => it.descripcion && safeNumber(it.cantidad, 0) !== 0);
 }
 
+function pickText(...values) {
+  for (const value of values) {
+    const txt = sanitizePdfText(value);
+    if (txt) return txt;
+  }
+  return "";
+}
+
 function getCliente(data) {
-  const cf = data?.cliente_facturacion || {};
+  const cf = data?.cliente_facturacion || data?.cliente || {};
   return {
-    razon: sanitizePdfText(cf.razon_social || data?.labelCliente || data?.cliente || "Cliente"),
-    cuit: sanitizePdfText(cf.doc_nro || cf.cuit || cf.dni || ""),
-    iva: sanitizePdfText(cf.cond_iva || cf.condicion_iva || ""),
-    dom: sanitizePdfText(cf.domicilio || ""),
+    razon: pickText(cf.razon_social, cf.nombre, data?.labelCliente, data?.cliente_nombre, data?.cliente, "Cliente"),
+    cuit: pickText(cf.doc_nro, cf.cuit, cf.dni, data?.cliente_cuit, data?.doc_nro),
+    iva: pickText(cf.cond_iva, cf.condicion_iva, data?.cliente_condicion_iva),
+    dom: pickText(cf.domicilio, data?.cliente_domicilio),
   };
 }
 
 function getEmisor(data) {
   const em = data?.emisor || data?.config_facturacion || data?.facturacion || data?.config || {};
   return {
-    razon: sanitizePdfText(
-      em.razon_social || em.nombre_fantasia || em.nombre || data?.emisor_nombre || FIX.emisor_nombre
+    razon: pickText(
+      data?.emisor_nombre,
+      em.razon_social,
+      em.nombre_fantasia,
+      em.nombre,
+      FIX.emisor_nombre
     ),
-    dom: sanitizePdfText(em.domicilio || em.domicilio_comercial || data?.emisor_domicilio || ""),
-    cuit: sanitizePdfText(em.cuit || data?.cuit_emisor || ""),
-    iva: sanitizePdfText(em.condicion_iva || em.cond_iva || data?.cond_iva_emisor || ""),
-    ib: sanitizePdfText(em.ingresos_brutos || data?.ingresos_brutos || ""),
-    inicio: sanitizePdfText(em.inicio_actividades || data?.inicio_actividades || ""),
+    dom: pickText(
+      data?.emisor_domicilio,
+      em.domicilio_comercial,
+      em.domicilio,
+      em.domicilio_fiscal
+    ),
+    cuit: pickText(data?.cuit_emisor, em.cuit),
+    iva: pickText(data?.cond_iva_emisor, em.condicion_iva, em.cond_iva),
+    ib: pickText(data?.ingresos_brutos_emisor, em.ingresos_brutos),
+    inicio: pickText(
+      data?.fecha_inicio_actividades_emisor,
+      em.fecha_inicio_actividades,
+      em.inicio_actividades
+    ),
   };
 }
 

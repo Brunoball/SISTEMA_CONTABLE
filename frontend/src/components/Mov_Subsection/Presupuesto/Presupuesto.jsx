@@ -155,6 +155,8 @@ export default function Presupuesto() {
   const [comprobanteMime, setComprobanteMime] = useState("application/pdf");
   const offsetRef = useRef(0);
   const searchTimerRef = useRef(null);
+  const hasLoadedRowsRef = useRef(false);
+  const lastQueryRef = useRef("");
   const liveTimerRef = useRef(null);
   const liveTokenRef = useRef("");
   const signedUrlCacheRef = useRef(new Map());
@@ -262,10 +264,10 @@ export default function Presupuesto() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      try { await ensureListsLoaded?.({ force: false, background: true }); } catch {}
+      try {
+        await ensureListsLoaded?.({ force: false, background: true });
+      } catch {}
       if (!alive) return;
-      await loadRows({ from: dateRange.from, to: dateRange.to, query: "", offset: 0, append: false });
-      try { liveTokenRef.current = await fetchLiveToken(dateRange.from, dateRange.to, ""); } catch {}
     })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -273,11 +275,20 @@ export default function Presupuesto() {
 
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    const queryChanged = hasLoadedRowsRef.current && q !== lastQueryRef.current;
+    const delay = queryChanged ? 300 : 0;
+
     searchTimerRef.current = setTimeout(async () => {
       await loadRows({ from: dateRange.from, to: dateRange.to, query: q, offset: 0, append: false });
+      hasLoadedRowsRef.current = true;
+      lastQueryRef.current = q;
       try { liveTokenRef.current = await fetchLiveToken(dateRange.from, dateRange.to, q); } catch {}
-    }, 300);
-    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+    }, delay);
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
   }, [q, dateRange.from, dateRange.to, fetchLiveToken, loadRows]);
 
   useEffect(() => {
@@ -301,11 +312,9 @@ export default function Presupuesto() {
     };
   }, [dateRange.from, dateRange.to, fetchLiveToken, loadRows, loadingMore, loadingRows, q]);
 
-  const handleDateRangeChange = useCallback(async (newRange) => {
+  const handleDateRangeChange = useCallback((newRange) => {
     setDateRange(newRange);
-    await loadRows({ from: newRange.from, to: newRange.to, query: q, offset: 0, append: false });
-    try { liveTokenRef.current = await fetchLiveToken(newRange.from, newRange.to, q); } catch {}
-  }, [fetchLiveToken, loadRows, q, setDateRange]);
+  }, [setDateRange]);
 
   const reloadVista = useCallback(async () => {
     signedUrlCacheRef.current.clear();

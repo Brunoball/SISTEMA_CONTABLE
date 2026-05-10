@@ -197,6 +197,10 @@ function getStockDisponible(detalle) {
   return Number.isFinite(n) ? n : null;
 }
 
+function isSinStock(stock) {
+  return stock !== null && stock !== undefined && Number(stock) <= 0;
+}
+
 function normalizeTipoPrecioNombre(nombre) {
   return String(nombre ?? "")
     .toUpperCase()
@@ -554,6 +558,7 @@ function buildEmptyRow() {
     precios_disponibles: [],
     ivaPct: 0,
     stock_disponible: null,
+    sinStock: false,
   };
 }
 
@@ -682,20 +687,29 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
   const handleSelectDetalle = useCallback((rowId, detalle) => {
     const precios = getDetallePreciosDisponibles(detalle);
     const inicial = pickDetallePrecioInicial(precios);
+    const stockDisponible = getStockDisponible(detalle);
+    const sinStock = isSinStock(stockDisponible);
+
     updateRow(rowId, {
       id_detalle: getDetalleId(detalle) || NULL_OPTION,
       id_stock_producto: getStockProductoId(detalle) || NULL_OPTION,
       detalleText: getDetalleNombre(detalle),
       codigo: getDetalleCodigo(detalle),
+      cantidad: sinStock ? "" : 1,
       precio: inicial ? safeNumber(inicial.monto) : 0,
       precioDraft: "",
       precioFocused: false,
       id_tipo_precio_stock: inicial?.value || NULL_OPTION,
       precio_tipo_label: inicial?.tipo_precio || "",
       precios_disponibles: precios,
-      stock_disponible: getStockDisponible(detalle),
+      stock_disponible: stockDisponible,
+      sinStock,
     });
-  }, [updateRow]);
+
+    if (sinStock) {
+      onToast?.("advertencia", `El producto "${getDetalleNombre(detalle)}" no tiene stock disponible.`, 2500);
+    }
+  }, [onToast, updateRow]);
 
   const handleDetalleInputChange = useCallback((rowId, value) => {
     updateRow(rowId, {
@@ -707,8 +721,37 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
       precio_tipo_label: "",
       precioDraft: "",
       precioFocused: false,
+      stock_disponible: null,
+      sinStock: false,
     });
   }, [updateRow]);
+
+  const handleCantidadChange = useCallback((rowId, newCantidad) => {
+    const row = rows.find((r) => r.id === rowId);
+    if (!row) return;
+
+    if (row.sinStock || isSinStock(row.stock_disponible)) {
+      updateRow(rowId, { cantidad: "" });
+      return;
+    }
+
+    let cantidadFinal = newCantidad === "" ? "" : Number(newCantidad);
+    if (typeof cantidadFinal === "number" && cantidadFinal < 0) cantidadFinal = 0;
+
+    if (
+      row.stock_disponible !== null &&
+      row.stock_disponible !== undefined &&
+      row.stock_disponible !== "" &&
+      typeof cantidadFinal === "number" &&
+      Number.isFinite(cantidadFinal) &&
+      cantidadFinal > Number(row.stock_disponible)
+    ) {
+      cantidadFinal = Number(row.stock_disponible);
+      onToast?.("advertencia", `Stock máximo disponible: ${row.stock_disponible}`, 2000);
+    }
+
+    updateRow(rowId, { cantidad: cantidadFinal });
+  }, [onToast, rows, updateRow]);
 
   const handlePrecioTipoChange = useCallback((rowId, value) => {
     const row = rows.find((r) => r.id === rowId);
@@ -796,6 +839,25 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
       }
     }
   }, [saving]);
+
+  const requestClose = useCallback(() => {
+    if (saving) return;
+    onClose?.();
+  }, [onClose, saving]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" || e.key === "Esc") {
+        e.preventDefault();
+        requestClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, requestClose]);
 
   const totals = useMemo(() => {
     return computedRows.reduce(
@@ -957,7 +1019,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
       className="mi-modal__overlay presupuesto-overlay"
       role="presentation"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !saving) onClose?.();
+        if (e.target === e.currentTarget) requestClose();
       }}
     >
       <div
@@ -977,7 +1039,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
           <button
             type="button"
             className="mi-modal__close"
-            onClick={() => (!saving ? onClose?.() : null)}
+            onClick={requestClose}
             disabled={saving}
             title="Cerrar"
             aria-label="Cerrar"
@@ -1000,35 +1062,65 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
               </div>
 
               <div className="mi-cr-table__rows">
-                {computedRows.map((r) => (
-                  <div key={r.id} className="mi-cr-row">
-                    <div className="mi-cr-cell mi-cr-cell--detalle">
-                      <GlobalAutocomplete
-                        value={r.detalleText}
-                        onChange={(val) => handleDetalleInputChange(r.id, val)}
-                        onSelect={(d) => handleSelectDetalle(r.id, d)}
-                        options={detallesList}
-                        getOptionLabel={(d) => getDetalleNombre(d)}
-                        getOptionValue={(d) => String(getDetalleId(d) || getDetalleNombre(d))}
-                        placeholder="Escribí o buscá un detalle…"
-                        disabled={saving}
-                        showAllOnFocus={false}
-                        maxItems={18}
-                        inputClassName="nv-cell-input"
-                      />
-                    </div>
+                {computedRows.map((r) => {
+                  const stockNum =
+                    r.stock_disponible !== null && r.stock_disponible !== undefined
+                      ? Number(r.stock_disponible)
+                      : null;
+                  const rowSinStock = r.sinStock || isSinStock(stockNum);
 
-                    <div className="mi-cr-cell mi-cr-cell--center">
-                      <input
-                        className="nv-cell-input nv-cell-input--center"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={r.cantidad}
-                        onChange={(e) => updateRow(r.id, { cantidad: e.target.value })}
-                        disabled={saving}
-                      />
-                    </div>
+                  return (
+                    <div key={r.id} className={`mi-cr-row ${rowSinStock ? "mi-cr-row--sin-stock" : ""}`}>
+                      <div className="mi-cr-cell mi-cr-cell--detalle">
+                        <GlobalAutocomplete
+                          value={r.detalleText}
+                          onChange={(val) => handleDetalleInputChange(r.id, val)}
+                          onSelect={(d) => handleSelectDetalle(r.id, d)}
+                          options={detallesList}
+                          getOptionLabel={(d) => getDetalleNombre(d)}
+                          getOptionValue={(d) => String(getDetalleId(d) || getDetalleNombre(d))}
+                          placeholder="Escribí o buscá un detalle…"
+                          disabled={saving}
+                          showAllOnFocus={false}
+                          maxItems={18}
+                          inputClassName="nv-cell-input"
+                        />
+                      </div>
+
+                      <div className="mi-cr-cell mi-cr-cell--center stock_cant">
+                        <input
+                          className="nv-cell-input nv-cell-input--center"
+                          type="number"
+                          min={rowSinStock ? undefined : "1"}
+                          step="1"
+                          value={rowSinStock ? "" : r.cantidad}
+                          onChange={(e) =>
+                            handleCantidadChange(r.id, e.target.value === "" ? "" : Number(e.target.value))
+                          }
+                          disabled={saving || rowSinStock}
+                          placeholder={rowSinStock ? "0" : ""}
+                          title={rowSinStock ? "No podés ingresar cantidad porque el stock es 0" : ""}
+                          style={{
+                            width: "100%",
+                            background: rowSinStock ? "#f3f4f6" : undefined,
+                            color: rowSinStock ? "#b91c1c" : undefined,
+                            borderColor: rowSinStock ? "#fca5a5" : undefined,
+                            cursor: rowSinStock ? "not-allowed" : undefined,
+                            opacity: rowSinStock ? 0.9 : 1,
+                          }}
+                        />
+                        {r.stock_disponible !== null && r.stock_disponible !== undefined && (
+                          <div
+                            style={{
+                              fontSize: "10px",
+                              fontWeight: rowSinStock ? 700 : 500,
+                              color: rowSinStock ? "#b91c1c" : "#666",
+                            }}
+                          >
+                            {rowSinStock ? "Sin stock" : `Stock: ${r.stock_disponible}`}
+                          </div>
+                        )}
+                      </div>
 
                     <div className="mi-cr-cell mi-cr-cell--center">
                       {Array.isArray(r.precios_disponibles) && r.precios_disponibles.length > 0 ? (
@@ -1087,8 +1179,9 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
                         ×
                       </button>
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="mi-cr-table__foot">
@@ -1199,7 +1292,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
                 </button>
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={requestClose}
                   disabled={saving}
                   className="mit-btn mit-btn--ghost mit-btn--block"
                 >

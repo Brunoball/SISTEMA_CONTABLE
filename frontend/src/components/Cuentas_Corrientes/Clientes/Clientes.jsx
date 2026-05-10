@@ -43,6 +43,16 @@ function moneyToneClass(value) {
   return "cc-money cc-money--neutral";
 }
 
+function saldoMovimientoToneClass(row) {
+  const debito = Number(row?.debito || 0);
+  const credito = Number(row?.credito || 0);
+
+  if (debito > 0 && credito <= 0) return "cc-money cc-money--negative";
+  if (credito > 0 && debito <= 0) return "cc-money cc-money--positive";
+
+  return moneyToneClass(row?.saldo);
+}
+
 function formatDateISO(d) {
   if (!d) return "";
   const yyyy = d.getFullYear();
@@ -964,7 +974,7 @@ export default function ClientesCC() {
                     </div>
 
                     <div className="mov-gridCell is-right is-strong">
-                      <span className={`mov-ellipsissss ${moneyToneClass(r.saldo)}`}>{moneyARS(r.saldo || 0)}</span>
+                      <span className={`mov-ellipsissss ${saldoMovimientoToneClass(r)}`}>{moneyARS(r.saldo || 0)}</span>
                     </div>
 
                     <div className="mov-gridCell mov-gridCell--actions">

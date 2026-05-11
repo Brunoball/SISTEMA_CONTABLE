@@ -332,7 +332,8 @@ export default function ConfiguracionCalendario() {
           </div>
         </div>
 
-        {/* ALERTAS */}
+        <div className="cal-contentScroll">
+          {/* ALERTAS */}
         {!tenantId && (
           <div className="cal-alert cal-alert--error">
             No se detectó el <b>idTenant</b> en la sesión del usuario.
@@ -525,6 +526,7 @@ export default function ConfiguracionCalendario() {
             </div>
           </div>
 
+        </div>
         </div>
       </section>
     </>

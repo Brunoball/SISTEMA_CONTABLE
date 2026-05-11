@@ -1,17 +1,27 @@
 .cfg-legal-page {
   width: 100%;
   height: calc(100vh - 110px);
-  overflow: auto;
+  overflow: hidden;
   padding: 16px;
   color: var(--balto-text, #425466);
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-height: 0;
 
 }
 
 .cfg-legal-page * {
   box-sizing: border-box;
+}
+
+.cfg-legal-contentScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 .cfg-legal-hero {
@@ -512,8 +522,9 @@
 
 @media (max-width: 620px) {
   .cfg-legal-page {
-    height: auto;
-    min-height: calc(100vh - 90px);
+    height: calc(100vh - 90px);
+    min-height: 0;
+    overflow: hidden;
     padding: 12px;
   }
 

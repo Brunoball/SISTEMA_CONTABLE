@@ -1,10 +1,21 @@
 .cfg-page {
-  height: 100%;
+  height: calc(100vh - 110px);
   width: 100%;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
   padding: 6px 2px 16px;
   color: var(--balto-text, #425466);
+}
+
+.cfg-contentScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* =========================

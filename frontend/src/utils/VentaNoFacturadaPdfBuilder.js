@@ -622,7 +622,7 @@ function drawHeader(doc, data, logoDataUrl) {
 
   set(doc, "helvetica", "normal", 9);
   text(doc, clampToWidth(doc, em.razon || "-", splitX - leftX - 12), leftX + 78, ly + 18);
-  text(doc, clampToWidth(doc, em.domComercial || "-", splitX - leftX - 12), leftX + 100, ly + 38);
+  text(doc, clampToWidth(doc, em.domComercial || "-", splitX - leftX - 12), leftX + 90, ly + 38);
   text(doc, clampToWidth(doc, em.iva || "-", splitX - leftX - 12), leftX + 130, ly + 58);
 
   const rx = splitX + 1;

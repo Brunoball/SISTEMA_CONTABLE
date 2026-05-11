@@ -4,17 +4,30 @@
 
 .cal-page {
   width: 100%;
-  overflow: auto;
+  overflow: hidden;
   height: calc(100vh - 110px);
   padding: 14px 16px 18px;
   color: var(--balto-text, #425466);
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
 }
 
 .cal-topbar {
   display: none;
+}
+
+.cal-contentScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ── HERO ── */

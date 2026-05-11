@@ -11,8 +11,6 @@ import {
   faFileInvoiceDollar,
   faFloppyDisk,
   faSpinner,
-  faTriangleExclamation,
-  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import ModalFacturaBaltoResumen from "../../Facturacion/ModalFacturaBaltoResumen.jsx";
 import { PanelMediosPagoInlineVenta } from "../../Ventas/modales/ModalNuevaVenta.jsx";
@@ -428,6 +426,7 @@ export default function ModalAsignarPresupuestoVenta({
   const [openResumenFactura, setOpenResumenFactura] = useState(false);
   const [resumenFacturaData, setResumenFacturaData] = useState(null);
   const [fiscalParaFacturar, setFiscalParaFacturar] = useState(null);
+  const [mostrarCuitFiscal, setMostrarCuitFiscal] = useState(false);
   const abortRef = useRef(null);
 
   const convertido = Number(row?.convertido_a_venta ?? row?.convertido ?? 0) === 1;
@@ -536,6 +535,7 @@ export default function ModalAsignarPresupuestoVenta({
     setFiscalArcaData(null);
     setClienteFiscalDb(null);
     setFiscalCuitInput("");
+    setMostrarCuitFiscal(false);
     setMediosFilas([buildEmptyMedioPago(safeNumber(row?.monto_total || row?.total || 0))]);
     setFecha(todayISO());
     fetchDetalle();
@@ -852,6 +852,30 @@ export default function ModalAsignarPresupuestoVenta({
     const error = validate("facturar");
     if (error) return showToast("advertencia", error, 5200);
 
+    setMostrarCuitFiscal(true);
+
+    try {
+      const fiscalGuardado = clienteFiscalDb || (clienteBase.id_cliente ? await fetchClienteFiscal(clienteBase.id_cliente) : null);
+      if (!(fiscalGuardado?.cuit || fiscalGuardado?.doc_nro) && onlyDigits(fiscalCuitInput).length !== 11) {
+        showToast(
+          "advertencia",
+          "Este cliente no tiene datos fiscales guardados. Ingresá el CUIT y presioná Facturar en ARCA nuevamente.",
+          5200
+        );
+        return;
+      }
+    } catch {
+      // Si la consulta puntual falla, se deja visible el CUIT para que el usuario pueda completarlo manualmente.
+      if (onlyDigits(fiscalCuitInput).length !== 11) {
+        showToast(
+          "advertencia",
+          "No se encontraron datos fiscales guardados. Ingresá el CUIT y presioná Facturar en ARCA nuevamente.",
+          5200
+        );
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const [cfg, fiscal] = await Promise.all([fetchConfigFacturacion(), resolveFiscalParaFacturar()]);
@@ -866,7 +890,19 @@ export default function ModalAsignarPresupuestoVenta({
     } finally {
       setSaving(false);
     }
-  }, [validate, showToast, fetchConfigFacturacion, resolveFiscalParaFacturar, buildComprobantePayload]);
+  }, [
+    validate,
+    showToast,
+    clienteFiscalDb,
+    clienteBase.id_cliente,
+    fetchClienteFiscal,
+    fiscalCuitInput,
+    fetchConfigFacturacion,
+    resolveFiscalParaFacturar,
+    buildComprobantePayload,
+  ]);
+
+  const shouldNeedFiscalPanel = open && mostrarCuitFiscal && !clienteFiscalDb && clienteBase.id_cliente > 0;
 
   const finalizarFacturacionYGuardarVenta = useCallback(async (factEmitida) => {
     setSaving(true);
@@ -970,27 +1006,76 @@ export default function ModalAsignarPresupuestoVenta({
             ) : (
               <div className="mi-cr-grid dc-asignar-grid">
                 <section className="mi-cr-table dc-asignar-products">
-                  <div className="mi-cr-table__head dc-asignar-products__head">
+                  <div className="mi-cr-table__head">
                     <div style={{ paddingLeft: 10 }}>Detalle</div>
                     <div>Cant.</div>
                     <div className="right">Precio</div>
                     <div>IVA %</div>
+                    <div className="right">IVA $</div>
                     <div className="right">Total</div>
+                    <div />
                   </div>
 
                   <div className="mi-cr-table__rows dc-asignar-products__rows">
-                    {items.map((it) => (
-                      <div key={it.id} className="mi-cr-row dc-asignar-product-row">
-                        <div className="mi-cr-cell mi-cr-cell--detalle">
-                          <b className="mdm-product-name">{safeText(it.descripcion)}</b>
-                          {it.codigo ? <small>Código: {it.codigo}</small> : null}
+                    {items.map((it) => {
+                      const itemCantidad = safeNumber(it.cantidad);
+                      const itemPrecio = safeNumber(it.precio);
+                      const itemIvaPct = safeNumber(it.iva_pct);
+                      const itemSubtotal = safeNumber(it.subtotal) || itemCantidad * itemPrecio;
+                      const itemIvaMonto = safeNumber(it.iva_monto) || itemSubtotal * itemIvaPct / 100;
+                      const itemTotal = safeNumber(it.total) || itemSubtotal + itemIvaMonto;
+
+                      return (
+                        <div key={it.id} className="mi-cr-row dc-asignar-product-row">
+                          <div className="mi-cr-cell mi-cr-cell--detalle">
+                            <div className="nv-cell-input dc-asignar-readonly-input dc-asignar-readonly-input--detalle">
+                              <span>{safeText(it.descripcion)}</span>
+                              {it.codigo ? <small>Código: {it.codigo}</small> : null}
+                            </div>
+                          </div>
+
+                          <div className="mi-cr-cell mi-cr-cell--center stock_cant">
+                            <input
+                              className="nv-cell-input nv-cell-input--center dc-asignar-readonly-field-input"
+                              type="text"
+                              value={itemCantidad.toLocaleString("es-AR")}
+                              readOnly
+                              tabIndex={-1}
+                            />
+                          </div>
+
+                          <div className="mi-cr-cell mi-cr-cell--center">
+                            <input
+                              className="nv-cell-input nv-cell-input--right dc-asignar-readonly-field-input"
+                              type="text"
+                              value={moneyARS(itemPrecio)}
+                              readOnly
+                              tabIndex={-1}
+                            />
+                          </div>
+
+                          <div className="mi-cr-cell mi-cr-cell--center">
+                            <input
+                              className="nv-cell-input nv-cell-input--center dc-asignar-readonly-field-input"
+                              type="text"
+                              value={`${itemIvaPct.toLocaleString("es-AR")}%`}
+                              readOnly
+                              tabIndex={-1}
+                            />
+                          </div>
+
+                          <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">
+                            {moneyARS(itemIvaMonto)}
+                          </div>
+                          <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">
+                            {moneyARS(itemTotal)}
+                          </div>
+                          <div className="mi-cr-cell mi-cr-cell--center" id="delete_cell">
+                            <span className="dc-asignar-row-lock" aria-hidden="true" />
+                          </div>
                         </div>
-                        <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--soft">{safeNumber(it.cantidad).toLocaleString("es-AR")}</div>
-                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">{moneyARS(it.precio)}</div>
-                        <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--soft">{safeNumber(it.iva_pct).toLocaleString("es-AR")}%</div>
-                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">{moneyARS(it.total)}</div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {!items.length ? (
                       <div className="dc-asignar-empty">No hay productos cargados.</div>
                     ) : null}
@@ -1097,58 +1182,32 @@ export default function ModalAsignarPresupuestoVenta({
                             saving={saving}
                           />
                         ) : null}
-                      </div>
-                    </div>
 
-                    <div className="nc-section">
-                      <div className="nc-section-head">
-                        <div className="nc-section-dot" />
-                        <span>Datos fiscales para emitir factura</span>
-                      </div>
+                        {shouldNeedFiscalPanel ? (
+                          <>
+                            <div className="nc-section-divider" />
 
-                      <div className="nc-section-body">
-                        <div className="nc-field">
-                          <input
-                            className="nc-input"
-                            value={fiscalCuitInput}
-                            maxLength={11}
-                            onChange={(e) => setFiscalCuitInput(onlyDigits(e.target.value).slice(0, 11))}
-                            placeholder=" "
-                            disabled={saving || fiscalLoading}
-                            inputMode="numeric"
-                          />
-                          <label className={`nc-label${fiscalCuitInput ? " nc-label--up" : ""}`}>CUIT del cliente</label>
-                        </div>
-
-                        <button type="button" className="mit-btn mit-btn--ghost mit-btn--block dc-asignar-search-btn" onClick={buscarFiscalEnArca} disabled={saving || fiscalLoading}>
-                          {fiscalLoading ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faFileInvoiceDollar} />}
-                          Buscar datos fiscales
-                        </button>
-
-                        {fiscalActual?.razon_social || fiscalActual?.cuit ? (
-                          <div className="arca-alert arca-alert--info dc-asignar-fiscal-ok">
-                            <div className="arca-alert__title">Datos encontrados</div>
-                            <div className="arca-resumen">
-                              <div className="arca-row arca-row--full">
-                                <b>Razón social:</b>
-                                <span>{safeText(fiscalActual?.razon_social)}</span>
+                            {fiscalLoading ? (
+                              <div className="nc-mp-cheques-loading">Consultando datos fiscales…</div>
+                            ) : (
+                              <div className="nc-field">
+                                <input
+                                  className="nc-input"
+                                  value={fiscalCuitInput}
+                                  maxLength={11}
+                                  onChange={(e) => {
+                                    setFiscalCuitInput(onlyDigits(e.target.value).slice(0, 11));
+                                    setFiscalArcaData(null);
+                                  }}
+                                  placeholder=" "
+                                  disabled={saving}
+                                  inputMode="numeric"
+                                />
+                                <label className={`nc-label${fiscalCuitInput ? " nc-label--up" : ""}`}>CUIT *</label>
                               </div>
-                              <div className="arca-row">
-                                <b>CUIT:</b>
-                                <span>{safeText(fiscalActual?.cuit || fiscalActual?.doc_nro)}</span>
-                              </div>
-                              <div className="arca-row">
-                                <b>IVA:</b>
-                                <span>{safeText(fiscalActual?.condicion_iva || fiscalActual?.cond_iva)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="arca-alert arca-alert--error dc-asignar-alert">
-                            <FontAwesomeIcon icon={faTriangleExclamation} />
-                            <span>Para “Facturar en ARCA” el cliente necesita CUIT y datos fiscales.</span>
-                          </div>
-                        )}
+                            )}
+                          </>
+                        ) : null}
                       </div>
                     </div>
                   </aside>

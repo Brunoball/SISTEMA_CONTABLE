@@ -430,7 +430,7 @@ html[data-theme="oscuro"] .cmi-fileResume__name {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999999999999999999999;
+  z-index: 9999999999;
   padding: 16px;
   animation: nv-fade 0.15s ease;
 }

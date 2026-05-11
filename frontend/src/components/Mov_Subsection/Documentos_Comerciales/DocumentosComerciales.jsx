@@ -19,8 +19,8 @@ import Remitos from "./Remitos.jsx";
 const TABS = [
   {
     key: "presupuesto",
-    label: "Presupuesto",
-    hint: "Documentos comerciales",
+    label: "Presupuestos",
+    hint: "Presupuestos",
     icon: faCheckCircle,
     component: Presupuestos,
   },

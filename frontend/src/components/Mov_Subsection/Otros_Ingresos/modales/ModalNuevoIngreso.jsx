@@ -1191,7 +1191,7 @@ export default function ModalNuevoIngreso({
     showToast, initialData, archivoAdjunto, subirArchivo, mediosFilas, guardarChequeEnBackend,
   ]);
 
-  const btnLabel = saving ? "Procesando..." : mode === "edit" ? "Guardar cambios" : "Guardar ingreso";
+  const btnLabel = saving ? "Guardando..." : mode === "edit" ? "Guardar cambios" : "Guardar ingreso";
 
   if (!open) return null;
 

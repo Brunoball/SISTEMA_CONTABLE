@@ -3219,7 +3219,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                     disabled={saving}
                     className="mit-btn mit-btn--solid mit-btn--block"
                   >
-                    {saving && accionContado === "guardar" ? "Guardando y generando PDF..." : "Guardar venta"}
+                    {saving && accionContado === "guardar" ? "Guardando..." : "Guardar venta"}
                   </button>
                   <button
                     type="button"

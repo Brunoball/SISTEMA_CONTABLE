@@ -1001,12 +1001,12 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
     try {
       const creado = await apiPostJson(`${API}?action=presupuestos_crear`, payload);
       const idMovimiento = Number(creado?.id_movimiento || creado?.movimiento?.id_movimiento || 0);
-      if (!idMovimiento) throw new Error("El documento comercial se guardó, pero el backend no devolvió id_movimiento.");
+      if (!idMovimiento) throw new Error("El presupuesto se guardó, pero el backend no devolvió id_movimiento.");
       await uploadPresupuestoPdf({ idMovimiento, payload, items });
-      onToast?.("exito", "Documento comercial generado y vinculado correctamente.", 3200);
+      onToast?.("exito", "Presupuesto generado y vinculado correctamente.", 3200);
       onSaved?.({ id_movimiento: idMovimiento });
     } catch (err) {
-      onToast?.("error", err?.message || "No se pudo generar el documento comercial.", 5200);
+      onToast?.("error", err?.message || "No se pudo generar el presupuesto.", 5200);
     } finally {
       setSaving(false);
     }
@@ -1026,7 +1026,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
         className="mi-modal__container mi-modal__container--mov presupuesto-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="Nuevo documento comercial"
+        aria-label="Nuevo presupuesto"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="mi-modal__header">
@@ -1034,7 +1034,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
             <FontAwesomeIcon icon={faFileInvoiceDollar} />
           </div>
           <div className="mi-modal__head-left">
-            <h2 className="mi-modal__title">Nuevo documento comercial</h2>
+            <h2 className="mi-modal__title">Nuevo presupuesto</h2>
           </div>
           <button
             type="button"
@@ -1219,7 +1219,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
                 <div className="nc-section">
                   <div className="nc-section-head">
                     <div className="nc-section-dot" />
-                    <span>Datos del documento comercial</span>
+                    <span>Datos del presupuesto</span>
                   </div>
 
                   <div className="nc-section-body">
@@ -1266,7 +1266,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
 
 
                     <div className="nc-cc-info presupuesto-info">
-                      Se guarda como documento comercial y genera PDF. No impacta caja, ARCA ni medio de pago.
+                      Se guarda como presupuesto y genera PDF. No impacta caja, ARCA ni medio de pago.
                     </div>
                   </div>
                 </div>

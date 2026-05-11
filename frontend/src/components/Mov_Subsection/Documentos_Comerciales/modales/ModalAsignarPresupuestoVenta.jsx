@@ -518,7 +518,7 @@ export default function ModalAsignarPresupuestoVenta({
       const clienteId = getClienteId(nextDetalle.presupuesto) || getClienteId(row);
       fetchClienteFiscal(clienteId);
     } catch (e) {
-      if (!controller.signal.aborted) showToast("error", e?.message || "No se pudo cargar el documento comercial.", 5200);
+      if (!controller.signal.aborted) showToast("error", e?.message || "No se pudo cargar el presupuesto.", 5200);
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
@@ -647,12 +647,12 @@ export default function ModalAsignarPresupuestoVenta({
   }, [fiscalActual, clienteBase]);
 
   const validate = useCallback((modo) => {
-    if (convertido) return "Este documento comercial ya fue convertido en venta.";
-    if (!idPresupuesto) return "No se encontró el ID del documento comercial.";
-    if (!clienteBase.id_cliente) return "El documento comercial no tiene un cliente válido.";
-    if (!items.length) return "El documento comercial no tiene productos o servicios cargados.";
+    if (convertido) return "Este presupuesto ya fue convertido en venta.";
+    if (!idPresupuesto) return "No se encontró el ID del presupuesto.";
+    if (!clienteBase.id_cliente) return "El presupuesto no tiene un cliente válido.";
+    if (!items.length) return "El presupuesto no tiene productos o servicios cargados.";
     if (!idTipoVenta) return "Seleccioná la forma de venta.";
-    if (total <= 0) return "El total del documento comercial debe ser mayor a cero.";
+    if (total <= 0) return "El total del presupuesto debe ser mayor a cero.";
     if (isContado) {
       if (!mediosPayload.length) return "Para venta contado cargá al menos un medio de pago.";
       if (sumaMedios < total - 0.05) return "La suma de los medios de pago no cubre el total de la venta.";
@@ -672,7 +672,7 @@ export default function ModalAsignarPresupuestoVenta({
       id_pago: null,
       id_sistema: null,
       labelCliente: fiscal?.razon_social || clienteBase.nombre || "Cliente",
-      labelSistema: "Venta desde documento comercial",
+      labelSistema: "Venta desde presupuesto",
       cliente_facturacion: fiscal || fiscalPdfParaInterno(),
       config_facturacion: cfg || {},
       ...emisorPdf,
@@ -804,7 +804,7 @@ export default function ModalAsignarPresupuestoVenta({
       const ventaMeta = buildComprobantePayload(cfg, fiscal, idVenta, {
         cbte_tipo: null,
         pto_vta: null,
-        observaciones: "Comprobante interno generado desde un documento comercial. Sin CAE, sin QR fiscal y sin validez fiscal.",
+        observaciones: "Comprobante interno generado desde un presupuesto. Sin CAE, sin QR fiscal y sin validez fiscal.",
       });
 
       const ventaPdf = await saveVentaNoFacturadaPdf({ data: ventaMeta, download: false });
@@ -820,7 +820,7 @@ export default function ModalAsignarPresupuestoVenta({
         ...ventaMeta,
         tipo: "REMITO",
         estado: "remito",
-        observaciones_remito: "Remito generado automáticamente desde un documento comercial convertido en venta.",
+        observaciones_remito: "Remito generado automáticamente desde un presupuesto convertido en venta.",
       };
       const remitoPdf = await saveRemitoPdf({ data: remitoMeta, download: false });
       await subirPdfDocumento({
@@ -832,7 +832,7 @@ export default function ModalAsignarPresupuestoVenta({
       });
 
       await subirArchivosChequesCreados(data);
-      await afterSaved(data, "Documento comercial guardado como venta. Se generaron la factura no emitida y el remito.");
+      await afterSaved(data, "Presupuesto guardado como venta. Se generaron la factura no emitida y el remito.");
     } catch (e) {
       showToast("error", e?.message || "No se pudo guardar como venta.", 6500);
     } finally {
@@ -848,7 +848,7 @@ export default function ModalAsignarPresupuestoVenta({
     try {
       const [cfg, fiscal] = await Promise.all([fetchConfigFacturacion(), resolveFiscalParaFacturar()]);
       const data = buildComprobantePayload(cfg, fiscal, null, {
-        observaciones: "Factura emitida desde documento comercial convertido en venta.",
+        observaciones: "Factura emitida desde presupuesto convertido en venta.",
       });
       setFiscalParaFacturar(fiscal);
       setResumenFacturaData(data);
@@ -906,7 +906,7 @@ export default function ModalAsignarPresupuestoVenta({
 
       await subirArchivosChequesCreados(data);
       setOpenResumenFactura(false);
-      await afterSaved(data, "Documento comercial facturado correctamente. Se guardaron la factura emitida y el remito.");
+      await afterSaved(data, "Presupuesto facturado correctamente. Se guardaron la factura emitida y el remito.");
     } catch (e) {
       showToast("error", e?.message || "La factura se emitió, pero no se pudo terminar de guardar la venta.", 7000);
     } finally {
@@ -936,7 +936,7 @@ export default function ModalAsignarPresupuestoVenta({
             <div className="mi-modal__head-left">
               <h2 className="mi-modal__title">Asignar como venta</h2>
               <p className="dc-asignar-head-subtitle">
-                Convertí el documento comercial en una venta respetando cliente, detalle y productos.
+                Convertí el presupuesto en una venta respetando cliente, detalle y productos.
               </p>
             </div>
             <button type="button" className="mi-modal__close" onClick={onClose} disabled={saving} aria-label="Cerrar">
@@ -948,7 +948,7 @@ export default function ModalAsignarPresupuestoVenta({
             <div className="dc-asignar-convertido">
               <FontAwesomeIcon icon={faCheckCircle} />
               <div>
-                <b>Este documento comercial ya fue convertido en venta.</b>
+                <b>Este presupuesto ya fue convertido en venta.</b>
                 <span>No se vuelve a crear otra venta para evitar duplicados.</span>
               </div>
             </div>
@@ -957,7 +957,7 @@ export default function ModalAsignarPresupuestoVenta({
           <div className="mi-modal__content dc-asignar-content">
             {loading ? (
               <div className="dc-asignar-loading">
-                <FontAwesomeIcon icon={faSpinner} spin /> Cargando datos del documento comercial…
+                <FontAwesomeIcon icon={faSpinner} spin /> Cargando datos del presupuesto…
               </div>
             ) : (
               <div className="mi-cr-grid dc-asignar-grid">

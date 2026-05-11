@@ -176,7 +176,7 @@ function buildExportRows(rows) {
     FECHA: safeText(formatFechaDMY(r?.fecha)),
     DESCRIPCION: safeText(getDetallePresupuesto(r)),
     CLIENTE: safeText(r?.cliente ?? r?.cliente_nombre),
-    ESTADO: r?.convertido_a_venta ? "CONVERTIDO EN VENTA" : "DOCUMENTO COMERCIAL",
+    ESTADO: r?.convertido_a_venta ? "CONVERTIDO EN VENTA" : "PRESUPUESTO",
     TOTAL: Number(r?.monto_total ?? r?.total ?? 0) || 0,
   }));
 }
@@ -298,7 +298,7 @@ function buildItemsFacturacionFromPresupuesto(items) {
 
 function documentLabel(tipo) {
   const t = safeStr(tipo).toUpperCase();
-  if (t === "PRESUPUESTO") return "Documento comercial";
+  if (t === "PRESUPUESTO") return "Presupuesto";
   if (t === "REMITO") return "Remito";
   if (t === "VENTA_NO_FACTURADA") return "Factura no emitida";
   if (t === "FACTURA") return "Factura emitida";
@@ -457,7 +457,7 @@ export default function Presupuestos({ navigationTabs = null }) {
       offsetRef.current = offset + normalized.length;
       setRows((prev) => (append ? [...prev, ...normalized] : normalized));
     } catch (e) {
-      setError(e?.message || "No se pudieron cargar los documentos comerciales.");
+      setError(e?.message || "No se pudieron cargar los presupuestos.");
     } finally {
       setLoadingRows(false);
       setLoadingMore(false);
@@ -569,9 +569,9 @@ export default function Presupuestos({ navigationTabs = null }) {
       tipo_operacion_nombre: "PRESUPUESTO",
       operacion: "PRESUPUESTO",
       documento_tipo: "PRESUPUESTO",
-      clasificacion: "Documento comercial",
-      estado: convertido ? "CONVERTIDO EN VENTA" : "DOCUMENTO COMERCIAL",
-      estado_documento: convertido ? "CONVERTIDO EN VENTA" : "DOCUMENTO COMERCIAL",
+      clasificacion: "Presupuesto",
+      estado: convertido ? "CONVERTIDO EN VENTA" : "PRESUPUESTO",
+      estado_documento: convertido ? "CONVERTIDO EN VENTA" : "PRESUPUESTO",
       cantidad_items: items.length || Number(base.cantidad_items || 0) || 0,
       items_detalle: items,
       cantidad_medios_pago: 0,
@@ -605,7 +605,7 @@ export default function Presupuestos({ navigationTabs = null }) {
       setSelectedRow(buildDetallePresupuestoRow(row, detalle));
       setOpenDetalleMovimiento(true);
     } catch (e) {
-      showToast("error", e?.message || "No se pudo cargar el detalle del documento comercial.", 4200);
+      showToast("error", e?.message || "No se pudo cargar el detalle del presupuesto.", 4200);
     } finally {
       setLoadingDetalleId(null);
     }
@@ -647,7 +647,7 @@ export default function Presupuestos({ navigationTabs = null }) {
       id_pago: null,
       id_sistema: null,
       labelCliente: clienteFiscalPdf.razon_social || row?.cliente || "Cliente",
-      labelSistema: `Venta desde documento comercial #${row?.id_movimiento || movimiento?.id_movimiento || ""}`.trim(),
+      labelSistema: `Venta desde presupuesto #${row?.id_movimiento || movimiento?.id_movimiento || ""}`.trim(),
       cliente_facturacion: clienteFiscalPdf,
       config_facturacion: cfg || {},
       ...emisorPdf,
@@ -668,7 +668,7 @@ export default function Presupuestos({ navigationTabs = null }) {
       ids_movimiento: [Number(idVenta)].filter((x) => Number.isFinite(x) && x > 0),
       id_presupuesto_origen: row?.id_movimiento || movimiento?.id_movimiento || null,
       observaciones:
-        "Comprobante interno generado automáticamente desde un documento comercial asignado como venta. Sin CAE, sin QR fiscal y sin validez fiscal.",
+        "Comprobante interno generado automáticamente desde un presupuesto asignado como venta. Sin CAE, sin QR fiscal y sin validez fiscal.",
       emisor: emisorPdf.emisor,
     };
   }, []);
@@ -741,7 +741,7 @@ export default function Presupuestos({ navigationTabs = null }) {
       tipo: "REMITO",
       estado: "remito",
       observaciones_remito:
-        "Remito generado automáticamente desde un documento comercial asignado como venta. Lista de productos sin precios ni importes.",
+        "Remito generado automáticamente desde un presupuesto asignado como venta. Lista de productos sin precios ni importes.",
     };
     const remitoPdf = await saveRemitoPdf({ data: remitoMeta, download: false });
     await subirPdfDocumento({
@@ -771,7 +771,7 @@ export default function Presupuestos({ navigationTabs = null }) {
     );
   }, []);
 
-  const handleVerComprobante = useCallback(async (row, overrideTitle = "Documento comercial") => {
+  const handleVerComprobante = useCallback(async (row, overrideTitle = "Presupuesto") => {
     const id = getComprobanteId(row);
     if (!id) {
       showToast("error", "Este documento todavía no tiene PDF vinculado.", 3500);
@@ -794,7 +794,7 @@ export default function Presupuestos({ navigationTabs = null }) {
     if (!id) return;
 
     if (selectedRow?.convertido_a_venta) {
-      showToast("advertencia", "Este documento comercial ya fue asignado como venta anteriormente.", 4200);
+      showToast("advertencia", "Este presupuesto ya fue asignado como venta anteriormente.", 4200);
       setOpenConvert(false);
       setSelectedRow(null);
       return;
@@ -813,16 +813,16 @@ export default function Presupuestos({ navigationTabs = null }) {
 
       try {
         await generarDocumentosVentaDesdePresupuesto({ row: selectedRow, idVenta });
-        showToast("exito", "Documento comercial asignado como venta correctamente. Se generaron los documentos correspondientes.", 5200);
+        showToast("exito", "Presupuesto asignado como venta correctamente. Se generaron los documentos correspondientes.", 5200);
       } catch (pdfError) {
-        showToast("advertencia", `El documento comercial fue asignado como venta, pero faltó generar algún documento: ${pdfError?.message || "error desconocido"}`, 7000);
+        showToast("advertencia", `El presupuesto fue asignado como venta, pero faltó generar algún documento: ${pdfError?.message || "error desconocido"}`, 7000);
       }
 
       setOpenConvert(false);
       setSelectedRow(null);
       await reloadVista();
     } catch (e) {
-      showToast("error", e?.message || "No se pudo asignar el documento comercial como venta.", 5200);
+      showToast("error", e?.message || "No se pudo asignar el presupuesto como venta.", 5200);
     } finally {
       setConvertingId(null);
     }
@@ -832,18 +832,18 @@ export default function Presupuestos({ navigationTabs = null }) {
     const id = getMovimientoId(selectedRow);
     if (!id) return;
     if (selectedRow?.convertido_a_venta) {
-      showToast("advertencia", "Este documento comercial ya fue convertido a venta. No conviene eliminarlo porque queda como respaldo del proceso.", 4200);
+      showToast("advertencia", "Este presupuesto ya fue convertido a venta. No conviene eliminarlo porque queda como respaldo del proceso.", 4200);
       return;
     }
     setDeletingId(id);
     try {
       await apiPostJson(`${API}?action=presupuestos_eliminar`, { id_movimiento: id });
-      showToast("exito", "Documento comercial eliminado correctamente.", 3000);
+      showToast("exito", "Presupuesto eliminado correctamente.", 3000);
       setOpenDel(false);
       setSelectedRow(null);
       await reloadVista();
     } catch (e) {
-      showToast("error", e?.message || "No se pudo eliminar el documento comercial.", 4500);
+      showToast("error", e?.message || "No se pudo eliminar el presupuesto.", 4500);
     } finally {
       setDeletingId(null);
     }
@@ -866,7 +866,7 @@ export default function Presupuestos({ navigationTabs = null }) {
     { key: "fecha", align: "center", label: "Fecha", render: (r) => formatFechaDMY(r.fecha) },
     { key: "detalle", label: "Descripción", render: (r) => safeText(getDetallePresupuesto(r)) },
     { key: "cliente", align: "center", label: "Cliente", render: (r) => safeText(r.cliente) },
-    { key: "estado", align: "center", label: "Estado", render: (r) => (r.convertido_a_venta ? "CONVERTIDO EN VENTA" : "DOCUMENTO COMERCIAL") },
+    { key: "estado", align: "center", label: "Estado", render: (r) => (r.convertido_a_venta ? "CONVERTIDO EN VENTA" : "PRESUPUESTO") },
     { key: "total", label: "Total", align: "right", strong: true, render: (r) => moneyARS(r.monto_total) },
     { key: "acciones", label: "Acciones", align: "center" },
   ], []);
@@ -881,8 +881,8 @@ export default function Presupuestos({ navigationTabs = null }) {
         const exportRows = buildExportRows(filteredRows);
         const ws = XLSX.utils.json_to_sheet(exportRows);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Documentos comerciales"));
-        XLSX.writeFile(wb, `documentos_comerciales_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        XLSX.utils.book_append_sheet(wb, ws, slugifySheetName("Presupuestos"));
+        XLSX.writeFile(wb, `presupuestos_${new Date().toISOString().slice(0, 10)}.xlsx`);
       },
     },
     {
@@ -893,7 +893,7 @@ export default function Presupuestos({ navigationTabs = null }) {
         const headers = Object.keys(exportRows[0] || { FECHA: "", DESCRIPCION: "", CLIENTE: "", ESTADO: "", TOTAL: "" });
         const csvRows = exportRows.map((row) => headers.map((h) => escapeCSV(row[h])).join(";"));
         const csv = [headers.join(";"), ...csvRows].join("\n");
-        downloadBlob(csv, `documentos_comerciales_${new Date().toISOString().slice(0, 10)}.csv`, "text/csv;charset=utf-8");
+        downloadBlob(csv, `presupuestos_${new Date().toISOString().slice(0, 10)}.csv`, "text/csv;charset=utf-8");
       },
     },
   ], [filteredRows]);
@@ -920,7 +920,7 @@ export default function Presupuestos({ navigationTabs = null }) {
         <div className="mov-card__head  doc-card__head">
           <div className="mov-card__headLeft">
             <div className="title-mov">
-              <div className="mov-card__title">Movs · Documentos comerciales</div>
+              <div className="mov-card__title">Presupuestos</div>
               {navigationTabs}
             </div>
 
@@ -952,8 +952,8 @@ export default function Presupuestos({ navigationTabs = null }) {
 
           <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <BotonExportar className="doccom-exportBtn" disabled={loadingRows || filteredRows.length === 0} loading={false} label="Exportar" title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"} opciones={exportOptions} align="right" />
-            <button type="button" className="mov-btn mov-btn--primary" onClick={handleOpenNuevoPresupuesto} title="Crear nuevo documento comercial">
-              <FontAwesomeIcon icon={faPlus} /> Nuevo documento comercial
+            <button type="button" className="mov-btn mov-btn--primary" onClick={handleOpenNuevoPresupuesto} title="Crear nuevo presupuesto">
+              <FontAwesomeIcon icon={faPlus} /> Nuevo presupuesto
             </button>
           </div>
         </div>
@@ -977,13 +977,13 @@ export default function Presupuestos({ navigationTabs = null }) {
                         return (
                           <div key={c.key} className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label={c.label}>
                             <div className="mov-actionsInline">
-                              <button type="button" className={["mov-iconBtn", tieneComprobante ? "mov-iconBtn--comprobante" : "mov-iconBtn--disabled"].join(" ")} title={tieneComprobante ? "Ver documento comercial PDF" : "Sin documento comercial PDF"} disabled={!tieneComprobante || isAnyLoading} onClick={() => handleVerComprobante(r, "Documento comercial")} style={{ opacity: tieneComprobante ? 1 : 0.35, cursor: tieneComprobante ? "pointer" : "not-allowed" }}>
+                              <button type="button" className={["mov-iconBtn", tieneComprobante ? "mov-iconBtn--comprobante" : "mov-iconBtn--disabled"].join(" ")} title={tieneComprobante ? "Ver presupuesto PDF" : "Sin presupuesto PDF"} disabled={!tieneComprobante || isAnyLoading} onClick={() => handleVerComprobante(r, "Presupuesto")} style={{ opacity: tieneComprobante ? 1 : 0.35, cursor: tieneComprobante ? "pointer" : "not-allowed" }}>
                                 <FontAwesomeIcon icon={faEye} />
                               </button>
-                              <button type="button" className="mov-iconBtn" title="Ver información completa del documento comercial" disabled={isAnyLoading || loadingLists || loadingDetalleId === r.id_movimiento} onClick={() => handleVerDetallePresupuesto(r)}>
+                              <button type="button" className="mov-iconBtn" title="Ver información completa del presupuesto" disabled={isAnyLoading || loadingLists || loadingDetalleId === r.id_movimiento} onClick={() => handleVerDetallePresupuesto(r)}>
                                 {loadingDetalleId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={faInfoCircle} />}
                               </button>
-                              <button type="button" className={["mov-iconBtn", "mov-iconBtn--comprobante"].join(" ")} title={convertido ? "Documento comercial ya asignado como venta" : "Asignar documento comercial como venta"} disabled={isAnyLoading || loadingLists || convertingId === r.id_movimiento} onClick={() => { setSelectedRow(r); setOpenConvert(true); }} style={{ opacity: 1, cursor: "pointer" }}>
+                              <button type="button" className={["mov-iconBtn", "mov-iconBtn--comprobante"].join(" ")} title={convertido ? "Presupuesto ya asignado como venta" : "Asignar presupuesto como venta"} disabled={isAnyLoading || loadingLists || convertingId === r.id_movimiento} onClick={() => { setSelectedRow(r); setOpenConvert(true); }} style={{ opacity: 1, cursor: "pointer" }}>
                                 {convertingId === r.id_movimiento ? "..." : <FontAwesomeIcon icon={convertido ? faCheckCircle : faCartShopping} />}
                               </button>
                               <button type="button" className="mov-iconBtn mov-iconBtn--danger" title={convertido ? "No se puede eliminar: ya fue convertido a venta" : "Eliminar"} disabled={isAnyLoading || loadingLists || deletingId === r.id_movimiento || convertido} onClick={() => { setSelectedRow(r); setOpenDel(true); }} style={{ opacity: convertido ? 0.35 : 1, cursor: convertido ? "not-allowed" : "pointer" }}>
@@ -1000,7 +1000,7 @@ export default function Presupuestos({ navigationTabs = null }) {
                 );
               })}
 
-              {!isAnyLoading && filteredRows.length === 0 && <div className="cc-emptyState"><FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" /><div className="cc-emptyText">{q.trim() ? `No se encontraron documentos para "${q.trim()}".` : "No hay documentos comerciales para mostrar en el rango de fechas seleccionado."}</div></div>}
+              {!isAnyLoading && filteredRows.length === 0 && <div className="cc-emptyState"><FontAwesomeIcon icon={faBoxOpen} className="cc-emptyIcon" /><div className="cc-emptyText">{q.trim() ? `No se encontraron documentos para "${q.trim()}".` : "No hay presupuestos para mostrar en el rango de fechas seleccionado."}</div></div>}
               {!loadingRows && hasMore && filteredRows.length > 0 && <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}><button type="button" className="mov-btn mov-btn--loadAll" onClick={handleLoadMore} disabled={loadingMore || loadingLists}>{loadingMore ? "Cargando…" : "Cargar 100 más"}</button></div>}
               {loadingMore && <div className="mov-skeletonMore" aria-busy="true">{Array.from({ length: 6 }).map((_, i) => renderSkeletonRow(i))}</div>}
             </>}
@@ -1034,12 +1034,12 @@ export default function Presupuestos({ navigationTabs = null }) {
         onClose={() => { setOpenDel(false); setSelectedRow(null); }}
         onConfirm={confirmDelete}
         onToast={showToast}
-        title="Eliminar documento comercial"
-        message="¿Seguro que querés eliminar este documento comercial?"
-        warning="Esta acción elimina el documento comercial. No impacta caja ni stock. Si ya fue convertido a venta, no se elimina desde acá."
-        loadingMessage="Eliminando documento comercial…"
-        successMessage="Documento comercial eliminado correctamente."
-        errorMessage="No se pudo eliminar el documento comercial."
+        title="Eliminar presupuesto"
+        message="¿Seguro que querés eliminar este presupuesto?"
+        warning="Esta acción elimina el presupuesto. No impacta caja ni stock. Si ya fue convertido a venta, no se elimina desde acá."
+        loadingMessage="Eliminando presupuesto…"
+        successMessage="Presupuesto eliminado correctamente."
+        errorMessage="No se pudo eliminar el presupuesto."
         confirmLabel="Eliminar"
         cancelLabel="Cancelar"
         confirmVariant="danger"
@@ -1054,7 +1054,7 @@ export default function Presupuestos({ navigationTabs = null }) {
       <ModalDetalleMovimiento
         open={openDetalleMovimiento}
         row={selectedRow}
-        title="Información del documento comercial"
+        title="Información del presupuesto"
         onClose={() => {
           setOpenDetalleMovimiento(false);
           setSelectedRow(null);

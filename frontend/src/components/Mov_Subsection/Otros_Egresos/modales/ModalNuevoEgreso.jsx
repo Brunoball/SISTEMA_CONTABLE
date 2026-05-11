@@ -263,8 +263,8 @@ function resolveClasificacionesConfig(arr = []) {
   return {
     idCostoFijo: String(fijo?.id ?? 1),
     idNoCostoFijo: String(noFijo?.id ?? 2),
-    labelCostoFijo: "Costo fijo",
-    labelNoCostoFijo: "No es costo fijo",
+    labelCostoFijo: "COSTO FIJO",
+    labelNoCostoFijo: "NO ES COSTO FIJO",
   };
 }
 

@@ -54,7 +54,88 @@ function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "—";
 }
+
+function normalizeFlag(v) {
+  if (v === true || v === 1) return true;
+  const s = String(v ?? "").trim().toLowerCase();
+  return ["1", "true", "si", "sí", "yes"].includes(s);
+}
+
+function getDepositoChequeLabel(row) {
+  if (!row || typeof row !== "object") return "";
+
+  const chequeId = Number(row?.cheque_id ?? row?.id_cheque ?? row?.cheque?.id_cheque ?? 0);
+  const esDepositoCheque =
+    normalizeFlag(row?.es_deposito_cheque) ||
+    normalizeFlag(row?.esDepositoCheque) ||
+    (Number.isFinite(chequeId) && chequeId > 0);
+
+  if (!esDepositoCheque) return "";
+
+  const tipoCheque = String(
+    row?.cheque_tipo ??
+      row?.cheque?.tipo ??
+      row?.medio_pago_nombre ??
+      row?.medio_pago ??
+      row?.comprobante_tipo ??
+      ""
+  )
+    .toUpperCase()
+    .replace(/[-_]/g, " ")
+    .trim();
+
+  return tipoCheque.includes("ECHEQ") || tipoCheque.includes("E CHEQ")
+    ? "ECHEQ DEPOSITADO"
+    : "CHEQUE DEPOSITADO";
+}
+
+function withDepositoChequeDetalle(row) {
+  const label = getDepositoChequeLabel(row);
+  if (!label) return row;
+
+  const total =
+    Number(
+      row?.cheque_importe ??
+        row?.cheque?.importe ??
+        row?.monto_total ??
+        row?.total ??
+        row?.total_general ??
+        0
+    ) || 0;
+
+  const itemCheque = {
+    id_item: null,
+    id_movimiento: row?.id_movimiento ?? null,
+    id_detalle: null,
+    id_stock_producto: null,
+    producto_nombre: label,
+    stock_producto_nombre: label,
+    detalle_nombre: label,
+    detalle: label,
+    descripcion: label,
+    cantidad: 1,
+    precio: total,
+    iva_pct: 0,
+    subtotal: total,
+    iva_monto: 0,
+    total,
+  };
+
+  return {
+    ...row,
+    detalle: label,
+    descripcion: label,
+    concepto: label,
+    cantidad_items: 1,
+    items: [itemCheque],
+    items_detalle: [itemCheque],
+  };
+}
+
 function productosLabel(row) {
+  const depositoLabel = getDepositoChequeLabel(row);
+  if (depositoLabel) return depositoLabel;
+
   const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
   const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
   const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
@@ -263,6 +344,7 @@ function rowMatchesQuery(row, query) {
   }
 
   parts.push(formatFechaDMY(row?.fecha));
+  parts.push(productosLabel(row));
   parts.push(String(montoNum), String(Math.trunc(montoNum)), moneyARS(montoNum));
 
   const hay = normalizeSearchText(parts.join(" | "));
@@ -1114,7 +1196,7 @@ export default function OtrosEgresos() {
   );
 
   const handleOpenMediosPago = useCallback((row) => {
-    setSelectedRow(row);
+    setSelectedRow(withDepositoChequeDetalle(row));
     setOpenMediosPago(true);
   }, []);
 
@@ -1722,6 +1804,7 @@ export default function OtrosEgresos() {
           {
             label: "Concepto",
             value:
+              getDepositoChequeLabel(rowToDelete) ||
               rowToDelete?.detalle ||
               rowToDelete?.descripcion ||
               rowToDelete?.concepto ||

@@ -264,7 +264,7 @@ function resolveClasificacionesConfig(arr = []) {
     idCostoFijo: String(fijo?.id ?? 1),
     idNoCostoFijo: String(noFijo?.id ?? 2),
     labelCostoFijo: "COSTO FIJO",
-    labelNoCostoFijo: "NO ES COSTO FIJO",
+    labelNoCostoFijo: "COSTO VARIABLE",
   };
 }
 
@@ -1073,7 +1073,7 @@ export default function ModalNuevoEgreso({
 
   const validate = useCallback(() => {
     const clas = Number(filters.id_clasificacion);
-    if (!Number.isFinite(clas) || clas <= 0) return { ok: false, msg: "Debés indicar si el egreso es costo fijo o no." };
+    if (!Number.isFinite(clas) || clas <= 0) return { ok: false, msg: "Debés indicar si el egreso es costo fijo o costo variable." };
     if (!safeStr(fecha)) return { ok: false, msg: "Falta la fecha." };
 
     if (fecha > todayISO()) {

@@ -469,7 +469,12 @@ function getGenericId(x) {
     x?.id_medio_pago ??
     x?.id_cliente ??
     x?.id_proveedor ??
+    x?.id_stock_producto ??
+    x?.idStockProducto ??
+    x?.stock_producto_id ??
     x?.id_detalle ??
+    x?.idDetalle ??
+    x?.detalle_id ??
     x?.id_tipo_venta ??
     x?.id_tipo_movimiento ??
     x?.id_comprobante ??
@@ -754,20 +759,112 @@ function nameById(arr, id) {
   return String(found?.nombre ?? "").trim();
 }
 
+function getCompraItemsDetalle(row) {
+  const raw = row?.items_detalle ?? row?.itemsDetalle ?? row?.items ?? row?.productos ?? [];
+
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function getPrimerItemCompra(row) {
+  const items = getCompraItemsDetalle(row);
+  return items.length ? items[0] : null;
+}
+
+function getProductoIdFromCompra(row) {
+  const item = getPrimerItemCompra(row);
+  const cand =
+    item?.id_stock_producto ??
+    item?.idStockProducto ??
+    item?.stock_producto_id ??
+    item?.id_detalle ??
+    item?.idDetalle ??
+    row?.id_stock_producto ??
+    row?.idStockProducto ??
+    row?.stock_producto_id ??
+    row?.id_detalle ??
+    row?.idDetalle ??
+    null;
+
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? String(n) : NULL_OPTION;
+}
+
+function isResumenProductosLabel(value) {
+  const s = normalizeText(value);
+  return (
+    s === "sin productos" ||
+    /^\d+\s+producto(s)?$/.test(s) ||
+    /^producto(s)?\s*:\s*\d+$/.test(s)
+  );
+}
+
+function getProductoNombreFromCompra(row) {
+  const item = getPrimerItemCompra(row);
+  const fromItem = String(
+    item?.producto_nombre ??
+    item?.stock_producto_nombre ??
+    item?.detalle_nombre ??
+    item?.nombre ??
+    item?.descripcion ??
+    ""
+  ).trim();
+  if (fromItem) return fromItem;
+
+  const original = String(row?.detalle_original ?? row?.producto_nombre ?? row?.stock_producto_nombre ?? "").trim();
+  if (original) return original.split("|")[0].trim();
+
+  const detalle = String(row?.detalle ?? "").trim();
+  return detalle && !isResumenProductosLabel(detalle) ? detalle : "";
+}
+
+function getNumeroFromItemOCompra(row, item, keys, fallback) {
+  for (const key of keys) {
+    const value = item?.[key] ?? row?.[key];
+    if (value !== undefined && value !== null && value !== "") {
+      const n = Number(value);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return fallback;
+}
+
 /* =========================
    Build form + medios
 ========================= */
 function buildFormFromRowCompra(row, fixedLocal) {
   const r = row || {};
+  const item = getPrimerItemCompra(r);
   const nOrNull = (v) =>
     Number.isFinite(Number(v)) && Number(v) > 0 ? String(Number(v)) : NULL_OPTION;
-  const cantidad = r.cantidad != null ? safeNumber(r.cantidad) : 1;
-  const precio = r.precio != null ? safeNumber(r.precio) : safeNumber(r.monto_total);
-  const iva_pct = r.iva_pct != null ? safeNumber(r.iva_pct) : 0;
+
+  const cantidad = Math.max(
+    0,
+    getNumeroFromItemOCompra(r, item, ["cantidad"], 1)
+  );
+  const precio = Math.max(
+    0,
+    getNumeroFromItemOCompra(r, item, ["precio"], safeNumber(r.monto_total))
+  );
+  const iva_pct = Math.max(
+    0,
+    getNumeroFromItemOCompra(r, item, ["iva_pct", "ivaPct"], 0)
+  );
+
   const totals = calcItemTotals(cantidad, precio, iva_pct);
-  const subtotal = r.subtotal != null ? safeNumber(r.subtotal) : totals.subtotal;
-  const iva_monto = r.iva_monto != null ? safeNumber(r.iva_monto) : totals.iva_monto;
-  const total = r.total != null ? safeNumber(r.total) : totals.total;
+  const subtotal = getNumeroFromItemOCompra(r, item, ["subtotal"], totals.subtotal);
+  const iva_monto = getNumeroFromItemOCompra(r, item, ["iva_monto", "ivaMonto"], totals.iva_monto);
+  const total = getNumeroFromItemOCompra(r, item, ["total"], totals.total);
   const monto_total = r.monto_total != null ? safeNumber(r.monto_total) : total;
 
   const fallbackTipoVenta = isPositiveId(r?.id_tipo_venta)
@@ -780,7 +877,10 @@ function buildFormFromRowCompra(row, fixedLocal) {
     id_tipo_venta: nOrNull(r.id_tipo_venta) || fallbackTipoVenta,
     id_tipo_movimiento: fixedLocal?.idEntrada ?? NULL_OPTION,
     id_proveedor: nOrNull(r.id_proveedor),
-    id_detalle: nOrNull(r.id_detalle),
+    // En la tabla se muestra "1 PRODUCTO" como resumen. Para editar, se usa el producto real
+    // guardado en movimientos_items.id_stock_producto. El backend de compras lo recibe como id_detalle
+    // por compatibilidad, pero representa un producto de stock.
+    id_detalle: getProductoIdFromCompra(r),
     monto_total: Math.max(0, Math.round(monto_total * 100) / 100),
     cantidad: Math.max(0, Math.round(cantidad * 1000) / 1000),
     precio: Math.max(0, Math.round(precio * 100) / 100),
@@ -1234,7 +1334,7 @@ export default function ModalEditarCompra({
     );
     setProveedorFocus(false);
     setDetalleInput(
-      nameById(merged.detalles, built.id_detalle) || String(rowRef.current?.detalle || "").trim()
+      nameById(merged.detalles, built.id_detalle) || getProductoNombreFromCompra(rowRef.current)
     );
     setDetalleFocus(false);
 
@@ -1448,6 +1548,7 @@ export default function ModalEditarCompra({
       id_proveedor: toNullableId(form.id_proveedor),
       id_cliente: null,
       id_detalle: toNullableId(form.id_detalle),
+      id_stock_producto: toNullableId(form.id_detalle),
       cantidad: Math.round(cantidad * 1000) / 1000,
       precio: Math.round(precio * 100) / 100,
       iva_pct: Math.round(iva_pct * 100) / 100,
@@ -1710,7 +1811,12 @@ export default function ModalEditarCompra({
         }
       }
 
-      const payloadFinal = { ...payload, id_proveedor: Number(proveedorId), id_detalle: Number(detalleId) };
+      const payloadFinal = {
+        ...payload,
+        id_proveedor: Number(proveedorId),
+        id_detalle: Number(detalleId),
+        id_stock_producto: Number(detalleId),
+      };
       await onSave?.(payloadFinal);
 
       const habiaArchivo = Boolean(archivoActualUrl || archivoActualId);

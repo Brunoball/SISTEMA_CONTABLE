@@ -189,8 +189,8 @@ function resolveCostoFijoConfig(clasificaciones = []) {
   return {
     idCostoFijo: String(Number(fijo?.id ?? 1) || 1),
     idNoCostoFijo: String(Number(noFijo?.id ?? 2) || 2),
-    labelCostoFijo: "Costo fijo",
-    labelNoCostoFijo: "No es costo fijo",
+    labelCostoFijo: "COSTO FIJO",
+    labelNoCostoFijo: "COSTO VARIABLE",
   };
 }
 function normalizeDateISO(...values) {

@@ -1487,3 +1487,62 @@ body.dark .doccom-subpage .doccom-filter .cc-input:focus {
 
 
 
+
+
+/* =====================================================================
+   Asignar presupuesto a venta — tabla espejada con Nueva Venta
+   Mantiene la lógica read-only del presupuesto, pero usa la misma grilla
+   global de Nueva Venta: Detalle / Cant. / Precio / IVA % / IVA $ / Total.
+===================================================================== */
+@media (min-width: 921px) {
+  .dc-asignar-modal .dc-asignar-product-row {
+    grid-template-columns: 2.4fr 72px 1fr 80px 1fr 1fr 36px !important;
+  }
+}
+
+.dc-asignar-modal .dc-asignar-readonly-input,
+.dc-asignar-modal .dc-asignar-readonly-field-input {
+  pointer-events: none;
+  cursor: default;
+  background: transparent;
+}
+
+.dc-asignar-modal .dc-asignar-readonly-input {
+  height: auto;
+  min-height: 30px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  color: var(--nv-text);
+  font-weight: 600;
+}
+
+.dc-asignar-modal .dc-asignar-readonly-input:hover,
+.dc-asignar-modal .dc-asignar-readonly-input:focus,
+.dc-asignar-modal .dc-asignar-readonly-field-input:hover,
+.dc-asignar-modal .dc-asignar-readonly-field-input:focus {
+  border-color: transparent;
+  box-shadow: none;
+  background: transparent;
+}
+
+.dc-asignar-modal .dc-asignar-readonly-input small {
+  margin-top: 0;
+  color: var(--nv-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.dc-asignar-modal .dc-asignar-row-lock {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.dc-asignar-modal .nc-section-divider {
+  margin-top: 2px;
+}

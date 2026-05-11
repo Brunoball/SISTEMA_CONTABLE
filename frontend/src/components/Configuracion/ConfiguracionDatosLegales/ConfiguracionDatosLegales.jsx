@@ -337,7 +337,8 @@ export default function ConfiguracionDatosLegales() {
         </div>
       </div>
 
-      <div className="cfg-legal-grid">
+      <div className="cfg-legal-contentScroll">
+        <div className="cfg-legal-grid">
         <aside className="cfg-legal-summary">
           <div className="cfg-legal-summary__icon">
             <FontAwesomeIcon icon={faBuilding} />
@@ -587,6 +588,7 @@ export default function ConfiguracionDatosLegales() {
               </div>
             </form>
           )}
+        </div>
         </div>
       </div>
     </section>

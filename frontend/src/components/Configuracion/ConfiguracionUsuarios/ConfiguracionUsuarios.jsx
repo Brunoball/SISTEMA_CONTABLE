@@ -575,8 +575,9 @@ export default function ConfiguracionUsuarios() {
         </div>
       </div>
 
-      {/* ── GRID ── */}
-      <div className="cfg-users-metaGrid">
+      <div className="cfg-users-contentScroll">
+        {/* ── GRID ── */}
+        <div className="cfg-users-metaGrid">
 
         {/* Tarjeta — tabla de usuarios */}
         <div className="cfg-users-metaCard cfg-users-metaCard--full">
@@ -681,6 +682,7 @@ export default function ConfiguracionUsuarios() {
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* ── MODALES ── */}

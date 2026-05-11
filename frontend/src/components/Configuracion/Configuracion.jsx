@@ -268,7 +268,8 @@ export default function Configuracion() {
 
   return (
     <section className="cfg-page">
-      <div className="cfg-cards">
+      <div className="cfg-contentScroll">
+        <div className="cfg-cards">
         {cards.map((card) => (
           <div key={card.id} className="cfg-cardWrap">
             <button
@@ -310,6 +311,7 @@ export default function Configuracion() {
             </button>
           </div>
         ))}
+        </div>
       </div>
     </section>
   );

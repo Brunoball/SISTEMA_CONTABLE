@@ -594,7 +594,8 @@ export default function ConfigTiendaNube() {
         </div>
       </div>
 
-      {!tenantId && (
+      <div className="tn-contentScroll">
+        {!tenantId && (
         <div className="tn-alert tn-alert--error">
           No se detectó el <b>idTenant</b> en la sesión del usuario. Revisá el
           objeto guardado en <code>localStorage.usuario</code>.
@@ -804,6 +805,7 @@ export default function ConfigTiendaNube() {
               </span>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </section>

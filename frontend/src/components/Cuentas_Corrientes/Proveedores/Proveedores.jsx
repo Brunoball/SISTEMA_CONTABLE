@@ -467,7 +467,11 @@ export default function ProveedoresCC() {
     setTotales({ debito: 0, credito: 0, saldo: 0 });
     setHasSearched(false);
     setQueryUsed("");
-  }, []);
+
+    // Al volver desde el detalle, el saldo del listado debe recalcularse
+    // porque una acción interna (por ejemplo eliminar un cobro) puede cambiarlo.
+    loadSummary();
+  }, [loadSummary]);
 
   const getExportData = useCallback(() => {
     const data = buildExportRows(rows);
@@ -635,9 +639,11 @@ export default function ProveedoresCC() {
   const refreshCurrent = useCallback(async () => {
     if (selectedProveedor?.id_proveedor) {
       await loadHistorial(selectedProveedor, { keepSelection: true });
-    } else {
       await loadSummary();
+      return;
     }
+
+    await loadSummary();
   }, [selectedProveedor, loadHistorial, loadSummary]);
 
   const refreshAfterProveedoresUpdate = useCallback(async () => {

@@ -24,6 +24,78 @@ function safeText(value, fallback = "—") {
   return s || fallback;
 }
 
+function safeFileName(value, fallback = "documento") {
+  const clean = String(value ?? "")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .slice(0, 120);
+  return clean || fallback;
+}
+
+function getDocumentoId(doc) {
+  const id = Number(
+    doc?.id_comprobante ??
+      doc?.comprobante_id ??
+      doc?.idComprobante ??
+      doc?.id_documento ??
+      doc?.id ??
+      0
+  );
+
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+function buildDocumentoFileName(doc, documentoSingular = "documento") {
+  const tipo = safeFileName(
+    doc?.documento_label || doc?.tipo_label || doc?.tipo_nombre || doc?.tipo || documentoSingular,
+    documentoSingular || "documento"
+  );
+  const numero = safeFileName(
+    doc?.numero_visual ||
+      doc?.numero ||
+      doc?.numero_comprobante ||
+      doc?.cbte_nro ||
+      doc?.id_comprobante ||
+      doc?.id_movimiento ||
+      "sin_numero",
+    "sin_numero"
+  );
+
+  return `${tipo}_${numero}.pdf`;
+}
+
+async function downloadPdfFromUrl(url, filename = "documento.pdf") {
+  const finalUrl = String(url || "").trim();
+  if (!finalUrl) throw new Error("No se encontró la URL del PDF.");
+
+  const res = await fetch(finalUrl, {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`No se pudo descargar el PDF. HTTP ${res.status}`);
+  }
+
+  const blob = await res.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = blobUrl;
+  link.download = filename || "documento.pdf";
+  link.style.display = "none";
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  window.setTimeout(() => {
+    window.URL.revokeObjectURL(blobUrl);
+  }, 500);
+}
+
 function moneyARS(value) {
   const n = Number(value || 0);
   try {
@@ -177,6 +249,7 @@ export default function ClienteDocumentos({
   const [comprobanteUrl, setComprobanteUrl] = useState("");
   const [comprobanteMime, setComprobanteMime] = useState("application/pdf");
   const [comprobanteTitle, setComprobanteTitle] = useState("Comprobante");
+  const [downloadingId, setDownloadingId] = useState(null);
   const mountedRef = useRef(true);
   const documentActions = useMemo(() => getDocumentActions(grupo), [grupo]);
   const gridCols = "1.15fr 0.85fr 1.65fr 0.95fr 0.95fr 0.8fr";
@@ -382,9 +455,14 @@ export default function ClienteDocumentos({
     }
   };
 
-  const handleAbrirNuevaPestana = async (doc) => {
-    const id = Number(doc?.id_comprobante || 0);
-    if (!id) return;
+  const handleDescargarDocumento = async (doc) => {
+    const id = getDocumentoId(doc);
+    if (!id) {
+      setError("Este documento no tiene comprobante asociado.");
+      return;
+    }
+
+    setDownloadingId(id);
 
     try {
       setError("");
@@ -393,9 +471,12 @@ export default function ClienteDocumentos({
       );
       const url = data?.url || data?.archivo_url || data?.download_url || "";
       if (!url) throw new Error("No se pudo obtener el enlace del PDF.");
-      window.open(url, "_blank", "noopener,noreferrer");
+
+      await downloadPdfFromUrl(url, buildDocumentoFileName(doc, documentoSingular));
     } catch (err) {
-      setError(err?.message || "No se pudo abrir el PDF en una nueva pestaña.");
+      setError(err?.message || "No se pudo descargar el PDF.");
+    } finally {
+      if (mountedRef.current) setDownloadingId(null);
     }
   };
 
@@ -616,8 +697,14 @@ export default function ClienteDocumentos({
                               <button type="button" className="mov-iconBtn" title="Ver PDF" onClick={() => handleVerDocumento(doc)}>
                                 <FontAwesomeIcon icon={faEye} />
                               </button>
-                              <button type="button" className="mov-iconBtn" title="Abrir PDF" onClick={() => handleAbrirNuevaPestana(doc)}>
-                                <FontAwesomeIcon icon={faDownload} />
+                              <button
+                                type="button"
+                                className="mov-iconBtn"
+                                title="Descargar PDF"
+                                disabled={downloadingId === getDocumentoId(doc)}
+                                onClick={() => handleDescargarDocumento(doc)}
+                              >
+                                {downloadingId === getDocumentoId(doc) ? "..." : <FontAwesomeIcon icon={faDownload} />}
                               </button>
                             </div>
                           </div>

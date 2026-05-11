@@ -474,7 +474,11 @@ export default function ClientesCC() {
     setTotales({ debito: 0, credito: 0, saldo: 0 });
     setHasSearched(false);
     setQueryUsed("");
-  }, []);
+
+    // Al volver desde el detalle, el saldo del listado debe recalcularse
+    // porque una acción interna (por ejemplo eliminar un cobro) puede cambiarlo.
+    loadSummary();
+  }, [loadSummary]);
 
   useEffect(() => {
     if (selectedCliente?.id_cliente) {
@@ -662,9 +666,11 @@ export default function ClientesCC() {
   const refreshCurrent = useCallback(async () => {
     if (selectedCliente?.id_cliente) {
       await loadHistorial(selectedCliente, { keepSelection: true });
-    } else {
       await loadSummary();
+      return;
     }
+
+    await loadSummary();
   }, [selectedCliente, loadHistorial, loadSummary]);
 
   const refreshAfterClientesUpdate = useCallback(async () => {

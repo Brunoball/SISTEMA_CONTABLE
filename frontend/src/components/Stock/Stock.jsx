@@ -125,6 +125,15 @@ function formatMoney(value) {
   })}`;
 }
 
+function toNonNegativeInt(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
+}
+
+function pluralize(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function normalizeText(value) {
   return String(value ?? "")
     .toLowerCase()
@@ -345,6 +354,9 @@ const Stock = () => {
   const [modalEliminarAbierto, setModalEliminarAbierto] = useState(false);
   const [productoEliminar, setProductoEliminar] = useState(null);
   const [eliminando, setEliminando] = useState(false);
+  const [impactoEliminar, setImpactoEliminar] = useState(null);
+  const [cargandoImpactoEliminar, setCargandoImpactoEliminar] = useState(false);
+  const [errorImpactoEliminar, setErrorImpactoEliminar] = useState("");
 
   const [toast, setToast] = useState(null);
   const [versionImagenPorProducto, setVersionImagenPorProducto] = useState({});
@@ -352,6 +364,7 @@ const Stock = () => {
   const [reintentosImagenes, setReintentosImagenes] = useState({});
 
   const refreshTimersRef = useRef([]);
+  const impactoEliminarRequestRef = useRef(0);
   const productosPorPagina = 20;
 
   const mostrarToast = useCallback((tipo, mensaje, duracion = 2500) => {
@@ -634,6 +647,41 @@ const Stock = () => {
     setProductoEditarId(null);
   };
 
+  const consultarImpactoEliminacion = useCallback(async (productoId) => {
+    const id = Number(productoId || 0);
+    if (!id) return;
+
+    const requestId = impactoEliminarRequestRef.current + 1;
+    impactoEliminarRequestRef.current = requestId;
+    setCargandoImpactoEliminar(true);
+    setErrorImpactoEliminar("");
+    setImpactoEliminar(null);
+
+    try {
+      const params = new URLSearchParams({
+        action: "stock_producto_impacto_eliminacion",
+        id: String(id),
+      });
+
+      const data = await apiGet(`${API_URL}?${params.toString()}`);
+      if (data?.exito === false) {
+        throw new Error(data?.mensaje || "No se pudo consultar el impacto de eliminación.");
+      }
+
+      if (impactoEliminarRequestRef.current !== requestId) return;
+      setImpactoEliminar(data?.impacto || null);
+    } catch (err) {
+      if (impactoEliminarRequestRef.current !== requestId) return;
+      setErrorImpactoEliminar(
+        err?.message || "No se pudo consultar cuántos movimientos se afectarían."
+      );
+    } finally {
+      if (impactoEliminarRequestRef.current === requestId) {
+        setCargandoImpactoEliminar(false);
+      }
+    }
+  }, []);
+
   const handleAbrirEliminar = (producto) => {
     const productoId = getProductoId(producto);
 
@@ -646,13 +694,21 @@ const Stock = () => {
       ...producto,
       id: productoId,
     });
+    setImpactoEliminar(null);
+    setErrorImpactoEliminar("");
+    setCargandoImpactoEliminar(true);
     setModalEliminarAbierto(true);
+    consultarImpactoEliminacion(productoId);
   };
 
   const handleCerrarEliminar = () => {
     if (eliminando) return;
+    impactoEliminarRequestRef.current += 1;
     setModalEliminarAbierto(false);
     setProductoEliminar(null);
+    setImpactoEliminar(null);
+    setErrorImpactoEliminar("");
+    setCargandoImpactoEliminar(false);
   };
 
   const handleConfirmarEliminar = async () => {
@@ -717,6 +773,101 @@ const Stock = () => {
       acc.push(p);
       return acc;
     }, []);
+
+  const impactoEliminacionProducto = useMemo(() => {
+    if (!productoEliminar) return null;
+
+    const baseStyle = {
+      marginTop: "12px",
+      padding: "12px 14px",
+      borderRadius: "14px",
+      border: "1px solid #fde68a",
+      background: "#fffbeb",
+      color: "#92400e",
+      fontSize: "13px",
+      lineHeight: 1.45,
+      textAlign: "left",
+    };
+
+    if (cargandoImpactoEliminar) {
+      return (
+        <div style={baseStyle}>
+          <strong>Consultando movimientos...</strong>
+          <div>Se está verificando en la base de datos cuántos registros usan este producto.</div>
+        </div>
+      );
+    }
+
+    if (errorImpactoEliminar) {
+      return (
+        <div
+          style={{
+            ...baseStyle,
+            borderColor: "#fecaca",
+            background: "#fef2f2",
+            color: "#991b1b",
+          }}
+        >
+          <strong>No se pudo consultar el impacto.</strong>
+          <div>{errorImpactoEliminar}</div>
+        </div>
+      );
+    }
+
+    if (!impactoEliminar) return null;
+
+    const itemsAfectados = toNonNegativeInt(impactoEliminar.total_items_afectados);
+    const movimientosAfectados = toNonNegativeInt(impactoEliminar.total_movimientos_afectados);
+    const movimientosSinProductos = toNonNegativeInt(
+      impactoEliminar.movimientos_quedarian_sin_productos
+    );
+    const movimientosConOtrosProductos = toNonNegativeInt(
+      impactoEliminar.movimientos_con_otros_productos
+    );
+
+    if (movimientosAfectados <= 0) {
+      return (
+        <div
+          style={{
+            ...baseStyle,
+            borderColor: "#bbf7d0",
+            background: "#f0fdf4",
+            color: "#166534",
+          }}
+        >
+          <strong>Impacto en movimientos</strong>
+          <div>Este producto no está usado en ningún movimiento.</div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={baseStyle}>
+        <strong>Impacto en movimientos</strong>
+        <div>
+          Este producto está usado en {pluralize(itemsAfectados, "ítem", "ítems")} de {" "}
+          {pluralize(movimientosAfectados, "movimiento")}.
+        </div>
+        {movimientosSinProductos > 0 ? (
+          <div style={{ marginTop: "6px", fontWeight: 700 }}>
+            Atención: {pluralize(movimientosSinProductos, "movimiento")} {" "}
+            {movimientosSinProductos === 1 ? "quedaría" : "quedarían"} sin productos asociados.
+          </div>
+        ) : (
+          <div style={{ marginTop: "6px" }}>
+            Ningún movimiento quedaría vacío, porque {" "}
+            {pluralize(movimientosConOtrosProductos, "movimiento")} {" "}
+            {movimientosConOtrosProductos === 1 ? "tiene" : "tienen"} otros productos cargados.
+          </div>
+        )}
+      </div>
+    );
+  }, [
+    productoEliminar,
+    cargandoImpactoEliminar,
+    errorImpactoEliminar,
+    impactoEliminar,
+  ]);
 
   const OrdenIcon = ({ campo }) => {
     if (orden.campo !== campo) {
@@ -1155,7 +1306,9 @@ const Stock = () => {
         errorMessage="No se pudo eliminar el producto."
         confirmLabel="Eliminar"
         cancelLabel="Cancelar"
+        confirmDisabled={cargandoImpactoEliminar}
         confirmVariant="danger"
+        extraContent={impactoEliminacionProducto}
         details={
           productoEliminar
             ? [

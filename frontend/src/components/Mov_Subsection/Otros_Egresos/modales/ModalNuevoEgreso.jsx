@@ -48,6 +48,7 @@ const IVA_OPTIONS = [
   { label: "0 %", value: 0 },
   { label: "10,5 %", value: 10.5 },
   { label: "21 %", value: 21 },
+  { label: "27 %", value: 27 },
 ];
 
 function todayISO() {

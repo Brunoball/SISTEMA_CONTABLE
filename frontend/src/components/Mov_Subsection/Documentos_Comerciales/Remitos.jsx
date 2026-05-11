@@ -1,9 +1,10 @@
 import React from "react";
 import ClienteDocumentos from "./ClienteDocumentos.jsx";
 
-export default function Remitos() {
+export default function Remitos({ navigationTabs = null }) {
   return (
     <ClienteDocumentos
+      navigationTabs={navigationTabs}
       grupo="remitos"
       titulo="Remitos"
       subtitulo="Buscá un cliente y visualizá todos los remitos generados desde ventas o documentos comerciales convertidos."

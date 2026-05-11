@@ -91,46 +91,31 @@ export default function DocumentosComerciales() {
 
   const ActiveComponent = activeItem.component;
 
+  const navigationTabs = (
+    <div className="doccom-googleTabs" role="tablist" aria-label="Pestañas de documentos comerciales">
+      {TABS.map((tab) => {
+        const isActive = tab.key === activeTab;
+
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            className={`doccom-googleTab ${isActive ? "is-active" : ""}`}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => handleTabClick(tab.key)}
+          >
+
+            <span className="doccom-googleTab__label">{tab.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="doccom-page">
-      <section className="doccom-tabsCard" aria-label="Secciones de facturación">
-        <div className="doccom-tabsCard__header">
-          <div>
-            <div className="doccom-tabsCard__eyebrow">Movimientos</div>
-            <h1>Facturación</h1>
-            <p>
-              Gestión centralizada de presupuesto, facturas y remitos.
-            </p>
-          </div>
-        </div>
-
-        <div className="doccom-tabs" role="tablist" aria-label="Pestañas de facturación">
-          {TABS.map((tab) => {
-            const isActive = tab.key === activeTab;
-
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                className={`doccom-tab ${isActive ? "is-active" : ""}`}
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => handleTabClick(tab.key)}
-              >
-                <span className="doccom-tab__icon">
-                  <FontAwesomeIcon icon={tab.icon} />
-                </span>
-                <span className="doccom-tab__text">
-                  <strong>{tab.label}</strong>
-                  <small>{tab.hint}</small>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <ActiveComponent />
+      <ActiveComponent navigationTabs={navigationTabs} />
     </div>
   );
 }

@@ -10,7 +10,7 @@ import {
   faFilePdf,
   faMagnifyingGlass,
   faReceipt,
-  faRotateRight,
+  faTimes,
   faUser,
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
@@ -161,6 +161,7 @@ export default function ClienteDocumentos({
   searchPlaceholder = "Buscar por número, tipo o producto...",
   noDocsTitle = "No hay documentos para este cliente",
   noDocsText = "Probá con otro cliente o limpiá la búsqueda.",
+  navigationTabs = null,
 }) {
   const [qClientes, setQClientes] = useState("");
   const [qDocumentos, setQDocumentos] = useState("");
@@ -176,6 +177,7 @@ export default function ClienteDocumentos({
   const [comprobanteTitle, setComprobanteTitle] = useState("Comprobante");
   const mountedRef = useRef(true);
   const documentActions = useMemo(() => getDocumentActions(grupo), [grupo]);
+  const gridCols = "1.15fr 0.85fr 1.65fr 0.95fr 0.95fr 0.8fr";
 
   useEffect(() => {
     mountedRef.current = true;
@@ -323,49 +325,67 @@ export default function ClienteDocumentos({
   };
 
   return (
-    <div className="doccom-subpage">
+    <div
+      id={`doccom-${normalizeText(grupo) || "documentos"}-section`}
+      className="doccom-subpage mov-page"
+    >
       <section className="mov-card mov-card--table doccom-clientDocs">
         <div className="mov-card__head doccom-clientDocs__head">
           <div className="mov-card__headLeft">
             <div className="title-mov">
               <div className="mov-card__title">{titulo}</div>
-              <div className="mov-card__hint">{subtitulo}</div>
+              {navigationTabs}
             </div>
           </div>
 
-          <button type="button" className="doccom-refreshBtn" onClick={() => { cargarClientes(); cargarDocumentos(); }}>
-            <FontAwesomeIcon icon={faRotateRight} />
-            Actualizar
-          </button>
+          <div className="doccom-clientDocs__summary" aria-label="Resumen de documentos">
+            <div>
+              <strong>{clientes.length}</strong>
+              <span>{clienteCounterLabel}</span>
+            </div>
+            <div>
+              <strong>{totalDocumentos}</strong>
+              <span>{totalCounterLabel}</span>
+            </div>
+            <div>
+              <strong>{filteredDocumentos.length}</strong>
+              <span>{visibleCounterLabel}</span>
+            </div>
+          </div>
         </div>
 
         {error ? <div className="doccom-alert">{error}</div> : null}
 
-        <div className="doccom-clientDocs__summary">
-          <div>
-            <strong>{clientes.length}</strong>
-            <span>{clienteCounterLabel}</span>
-          </div>
-          <div>
-            <strong>{totalDocumentos}</strong>
-            <span>{totalCounterLabel}</span>
-          </div>
-          <div>
-            <strong>{filteredDocumentos.length}</strong>
-            <span>{visibleCounterLabel}</span>
-          </div>
-        </div>
-
         <div className="doccom-clientDocs__layout">
           <aside className="doccom-clientList" aria-label="Clientes">
-            <div className="doccom-searchBox">
-              <FontAwesomeIcon icon={faMagnifyingGlass} />
-              <input
-                type="text"
-                value={qClientes}
-                onChange={(e) => setQClientes(e.target.value)}
-                placeholder="Buscar cliente..."
-              />
+            <div className="cc-filter doccom-filter doccom-filter--clientes">
+              <div className="cc-floatingField cc-floatingField--search is-active">
+                <div className="cc-searchInput">
+                  <div className="cc-searchInput__fieldWrap">
+                    <input
+                      className="cc-input cc-input--floating"
+                      id={`doccom-clientes-${grupo}`}
+                      type="text"
+                      value={qClientes}
+                      onChange={(e) => setQClientes(e.target.value)}
+                      placeholder="Buscar cliente..."
+                    />
+                    <span className="cc-floatingLabel">
+                      <FontAwesomeIcon icon={faMagnifyingGlass} /> Cliente
+                    </span>
+                    {qClientes.trim() !== "" && (
+                      <button
+                        type="button"
+                        className="cc-clearSearch cc-clearSearch--inside"
+                        title="Limpiar búsqueda"
+                        onClick={() => setQClientes("")}
+                      >
+                        <FontAwesomeIcon icon={faTimes} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="doccom-clientList__body">
@@ -419,88 +439,131 @@ export default function ClienteDocumentos({
                     <p>{getClienteSubtext(selectedCliente)}</p>
                   </div>
 
-                  <div className="doccom-searchBox doccom-searchBox--docs">
-                    <FontAwesomeIcon icon={faMagnifyingGlass} />
-                    <input
-                      type="text"
-                      value={qDocumentos}
-                      onChange={(e) => setQDocumentos(e.target.value)}
-                      placeholder={searchPlaceholder}
-                    />
+                  <div className="cc-filter doccom-filter doccom-filter--docs">
+                    <div className="cc-floatingField cc-floatingField--search is-active">
+                      <div className="cc-searchInput">
+                        <div className="cc-searchInput__fieldWrap">
+                          <input
+                            className="cc-input cc-input--floating"
+                            id={`doccom-documentos-${grupo}`}
+                            type="text"
+                            value={qDocumentos}
+                            onChange={(e) => setQDocumentos(e.target.value)}
+                            placeholder={searchPlaceholder}
+                          />
+                          <span className="cc-floatingLabel">
+                            <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                          </span>
+                          {qDocumentos.trim() !== "" && (
+                            <button
+                              type="button"
+                              className="cc-clearSearch cc-clearSearch--inside"
+                              title="Limpiar búsqueda"
+                              onClick={() => setQDocumentos("")}
+                            >
+                              <FontAwesomeIcon icon={faTimes} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="doccom-docTableWrap">
-                  <table className="doccom-docTable">
-                    <thead>
-                      <tr>
-                        <th>{documentoSingular.charAt(0).toUpperCase() + documentoSingular.slice(1)}</th>
-                        <th>Fecha</th>
-                        <th>Detalle</th>
-                        <th>Estado</th>
-                        <th>Total</th>
-                        <th>PDF</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loadingDocumentos ? (
-                        Array.from({ length: 6 }).map((_, idx) => (
-                          <tr key={idx}>
-                            <td colSpan="6"><div className="doccom-rowSkeleton" /></td>
-                          </tr>
-                        ))
-                      ) : filteredDocumentos.length ? (
-                        filteredDocumentos.map((doc) => (
-                          <tr key={`${doc.id_comprobante}-${doc.tipo}`}>
-                            <td>
-                              <div className="doccom-docMain">
-                                <span className="doccom-docMain__icon">
-                                  <FontAwesomeIcon icon={getDocumentoIcon(doc.tipo)} />
-                                </span>
-                                <span>
-                                  <button type="button" onClick={() => handleVerDocumento(doc)}>
-                                    {safeText(doc.numero_visual || doc.documento_label)}
-                                  </button>
-                                  <small>ID comprobante #{doc.id_comprobante}</small>
-                                </span>
-                              </div>
-                            </td>
-                            <td>{formatFecha(doc.fecha_cbte || doc.fecha || doc.created_at)}</td>
-                            <td className="doccom-docDetalle">
+                <div
+                  id={`doccom-${normalizeText(grupo) || "documentos"}-tableWrap`}
+                  className="doccom-docTableWrap"
+                  role="rowgroup"
+                >
+                  <div
+                    className="mov-gridTable mov-gridTable--head doccom-docGridHead"
+                    style={{ gridTemplateColumns: gridCols }}
+                    role="row"
+                  >
+                    <div className="mov-gridCell mov-gridCell--head" role="columnheader">
+                      {documentoSingular.charAt(0).toUpperCase() + documentoSingular.slice(1)}
+                    </div>
+                    <div className="mov-gridCell mov-gridCell--head" role="columnheader">Fecha</div>
+                    <div className="mov-gridCell mov-gridCell--head" role="columnheader">Detalle</div>
+                    <div className="mov-gridCell mov-gridCell--head is-center" role="columnheader">Estado</div>
+                    <div className="mov-gridCell mov-gridCell--head is-right" role="columnheader">Total</div>
+                    <div className="mov-gridCell mov-gridCell--head is-center" role="columnheader">PDF</div>
+                  </div>
+
+                  <div className="mov-gridBody doccom-docGridBody">
+                    {loadingDocumentos ? (
+                      Array.from({ length: 6 }).map((_, idx) => (
+                        <div
+                          className="mov-gridTable mov-gridTable--row doccom-docGridRow"
+                          style={{ gridTemplateColumns: gridCols }}
+                          role="row"
+                          key={idx}
+                        >
+                          {Array.from({ length: 6 }).map((__, cellIdx) => (
+                            <div className="mov-gridCell" role="cell" key={cellIdx}>
+                              <div className="doccom-rowSkeleton" />
+                            </div>
+                          ))}
+                        </div>
+                      ))
+                    ) : filteredDocumentos.length ? (
+                      filteredDocumentos.map((doc) => (
+                        <div
+                          key={`${doc.id_comprobante}-${doc.tipo}`}
+                          className="mov-gridTable mov-gridTable--row doccom-docGridRow"
+                          style={{ gridTemplateColumns: gridCols }}
+                          role="row"
+                        >
+                          <div className="mov-gridCell is-strong" role="cell" data-label={documentoSingular.charAt(0).toUpperCase() + documentoSingular.slice(1)}>
+                            <div className="doccom-docMain">
+                              <span className="doccom-docMain__icon">
+                                <FontAwesomeIcon icon={getDocumentoIcon(doc.tipo)} />
+                              </span>
+                              <span>
+                                <button type="button" onClick={() => handleVerDocumento(doc)}>
+                                  {safeText(doc.numero_visual || doc.documento_label)}
+                                </button>
+                                <small>ID comprobante #{doc.id_comprobante}</small>
+                              </span>
+                            </div>
+                          </div>
+                          <div className="mov-gridCell" role="cell" data-label="Fecha">
+                            <span className="mov-ellipsissss">{formatFecha(doc.fecha_cbte || doc.fecha || doc.created_at)}</span>
+                          </div>
+                          <div className="mov-gridCell" role="cell" data-label="Detalle">
+                            <span className="doccom-docDetalle">
                               <strong>{safeText(doc.documento_label)}</strong>
                               <small>{safeText(doc.detalle, "Sin detalle cargado")}</small>
-                            </td>
-                            <td>
-                              <span className={`doccom-status doccom-status--${String(doc.tipo || "doc").toLowerCase()}`}>
-                                {getDocumentoEstado(doc)}
-                              </span>
-                            </td>
-                            <td>{moneyARS(doc.monto_total)}</td>
-                            <td>
-                              <div className="doccom-actions">
-                                <button type="button" title="Ver PDF" onClick={() => handleVerDocumento(doc)}>
-                                  <FontAwesomeIcon icon={faEye} />
-                                </button>
-                                <button type="button" title="Abrir PDF" onClick={() => handleAbrirNuevaPestana(doc)}>
-                                  <FontAwesomeIcon icon={faDownload} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="6">
-                            <div className="doccom-emptyMini doccom-emptyMini--table">
-                              <FontAwesomeIcon icon={faFilePdf} />
-                              <strong>{noDocsTitle}</strong>
-                              <span>{noDocsText}</span>
+                            </span>
+                          </div>
+                          <div className="mov-gridCell is-center" role="cell" data-label="Estado">
+                            <span className={`doccom-status doccom-status--${String(doc.tipo || "doc").toLowerCase()}`}>
+                              {getDocumentoEstado(doc)}
+                            </span>
+                          </div>
+                          <div className="mov-gridCell is-right is-strong" role="cell" data-label="Total">
+                            <span>{moneyARS(doc.monto_total)}</span>
+                          </div>
+                          <div className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label="PDF">
+                            <div className="mov-actionsInline doccom-actions">
+                              <button type="button" className="mov-iconBtn" title="Ver PDF" onClick={() => handleVerDocumento(doc)}>
+                                <FontAwesomeIcon icon={faEye} />
+                              </button>
+                              <button type="button" className="mov-iconBtn" title="Abrir PDF" onClick={() => handleAbrirNuevaPestana(doc)}>
+                                <FontAwesomeIcon icon={faDownload} />
+                              </button>
                             </div>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="cc-emptyState doccom-emptyMini doccom-emptyMini--table">
+                        <FontAwesomeIcon icon={faFilePdf} className="cc-emptyIcon" />
+                        <strong>{noDocsTitle}</strong>
+                        <span>{noDocsText}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </>
             ) : (

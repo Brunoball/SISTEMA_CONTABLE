@@ -307,7 +307,7 @@ function documentLabel(tipo) {
   return safeText(tipo || "Comprobante");
 }
 
-export default function Presupuestos() {
+export default function Presupuestos({ navigationTabs = null }) {
   const API = `${BASE_URL}/api.php`;
   const { lists: listasCtx, loadingLists, error: errorLists, ensureListsLoaded } = useListas();
   const { dateRange, setDateRange } = useDateRange();
@@ -917,11 +917,11 @@ export default function Presupuestos() {
       {error && <div className="mov-alert" role="alert">{error}</div>}
 
       <section className="mov-card mov-card--table">
-        <div className="mov-card__head">
+        <div className="mov-card__head  doc-card__head">
           <div className="mov-card__headLeft">
             <div className="title-mov">
               <div className="mov-card__title">Movs · Documentos comerciales</div>
-              <div className="mov-card__hint">Documentos comerciales, remitos y facturas por cliente. Mostrando <b>{filteredRows.length}</b> documentos base{hasMore && filteredRows.length > 0 ? " (hay más)" : ""}</div>
+              {navigationTabs}
             </div>
 
             <div className="mov-headFilters">
@@ -940,7 +940,7 @@ export default function Presupuestos() {
                 <div className="cc-floatingField cc-floatingField--search is-active">
                   <div className="cc-searchInput">
                     <div className="cc-searchInput__fieldWrap">
-                      <input className="cc-input cc-input--floating" id="presu-docs-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por descripción, cliente, venta..." disabled={loadingLists} />
+                      <input className="cc-input cc-input--floating" id="presu-docs-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por descripción..." disabled={loadingLists} />
                       <span className="cc-floatingLabel"><FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda</span>
                       {q.trim() !== "" && <button type="button" className="cc-clearSearch cc-clearSearch--inside" title="Limpiar búsqueda" onClick={() => setQ("")}><FontAwesomeIcon icon={faTimes} /></button>}
                     </div>
@@ -951,7 +951,7 @@ export default function Presupuestos() {
           </div>
 
           <div className="mov-card__actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <BotonExportar disabled={loadingRows || filteredRows.length === 0} loading={false} label="Exportar" title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"} opciones={exportOptions} align="right" />
+            <BotonExportar className="doccom-exportBtn" disabled={loadingRows || filteredRows.length === 0} loading={false} label="Exportar" title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"} opciones={exportOptions} align="right" />
             <button type="button" className="mov-btn mov-btn--primary" onClick={handleOpenNuevoPresupuesto} title="Crear nuevo documento comercial">
               <FontAwesomeIcon icon={faPlus} /> Nuevo documento comercial
             </button>

@@ -1,9 +1,10 @@
 import React from "react";
 import ClienteDocumentos from "./ClienteDocumentos.jsx";
 
-export default function Facturas() {
+export default function Facturas({ navigationTabs = null }) {
   return (
     <ClienteDocumentos
+      navigationTabs={navigationTabs}
       grupo="facturas"
       titulo="Facturación"
       subtitulo="Buscá un cliente y visualizá todas sus facturas emitidas, no emitidas, notas de crédito y notas de débito."

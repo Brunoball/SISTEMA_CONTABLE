@@ -3,12 +3,11 @@ import { createPortal } from "react-dom";
 import "../../../Global/Global_css/Global_Modals.css";
 import "../../../Global/Global_css/Global_responsive.css";
 import "../../../Global/Global_css/roots.css";
+import "../DocumentosComerciales.css";
 import BASE_URL from "../../../../config/config";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faCartShopping,
   faCheckCircle,
-  faCircleInfo,
   faFileInvoiceDollar,
   faFloppyDisk,
   faSpinner,
@@ -448,6 +447,9 @@ export default function ModalAsignarPresupuestoVenta({
     const n = safeNumber(mov?.monto_total ?? row?.monto_total ?? row?.total);
     return n > 0 ? n : items.reduce((acc, it) => acc + safeNumber(it.total), 0);
   }, [detalle, row, items]);
+
+  const subtotal = useMemo(() => items.reduce((acc, it) => acc + safeNumber(it.subtotal), 0), [items]);
+  const ivaTotal = useMemo(() => items.reduce((acc, it) => acc + safeNumber(it.iva_monto), 0), [items]);
 
   const tipoVentaSelected = useMemo(
     () => tiposVentaList.find((t) => String(getTipoVentaId(t) ?? "") === String(idTipoVenta)) || null,
@@ -921,19 +923,24 @@ export default function ModalAsignarPresupuestoVenta({
   const modal = (
     <>
       <div className="mi-modal__overlay dc-asignar-overlay" onMouseDown={handleBackdrop}>
-        <div className="mi-modal__container mi-modal__container--mov dc-asignar-modal" onMouseDown={(e) => e.stopPropagation()}>
-          <div className="mi-modal__header dc-asignar-header">
-            <div className="mi-modal__headText">
-              <div className="mi-modal__eyebrow">
-                <FontAwesomeIcon icon={faCartShopping} /> Documentos comerciales
-              </div>
-              <h3 className="mi-modal__title">Asignar como venta</h3>
-              <p className="mi-modal__subtitle">
-                Se copia el cliente, la descripción y todos los productos del documento comercial para crear una venta.
+        <div
+          className="mi-modal__container mi-modal__container--mov dc-asignar-modal"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="mi-modal__header">
+            <div className="mi-modal__head-icon" aria-hidden="true">
+              <FontAwesomeIcon icon={faFileInvoiceDollar} />
+            </div>
+            <div className="mi-modal__head-left">
+              <h2 className="mi-modal__title">Asignar como venta</h2>
+              <p className="dc-asignar-head-subtitle">
+                Convertí el documento comercial en una venta respetando cliente, detalle y productos.
               </p>
             </div>
             <button type="button" className="mi-modal__close" onClick={onClose} disabled={saving} aria-label="Cerrar">
-              <FontAwesomeIcon icon={faXmark} />
+              ✕
             </button>
           </div>
 
@@ -947,155 +954,209 @@ export default function ModalAsignarPresupuestoVenta({
             </div>
           ) : null}
 
-          <div className="mi-modal__body dc-asignar-body">
+          <div className="mi-modal__content dc-asignar-content">
             {loading ? (
               <div className="dc-asignar-loading">
                 <FontAwesomeIcon icon={faSpinner} spin /> Cargando datos del documento comercial…
               </div>
             ) : (
-              <div className="dc-asignar-grid">
-                <section className="dc-asignar-main">
-                  <div className="dc-asignar-card dc-asignar-card--cliente">
-                    <div>
-                      <span className="dc-asignar-label">Cliente</span>
-                      <h4>{safeText(clienteBase.nombre || clienteBase.razon_social)}</h4>
-                    </div>
-                    <div className="dc-asignar-mini">
-                      <span>Documento</span>
-                      <b>#{idPresupuesto || "—"}</b>
-                    </div>
-                    <div className="dc-asignar-mini">
-                      <span>Fecha venta</span>
-                      <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} disabled={saving || convertido} />
-                    </div>
+              <div className="mi-cr-grid dc-asignar-grid">
+                <section className="mi-cr-table dc-asignar-products">
+                  <div className="mi-cr-table__head dc-asignar-products__head">
+                    <div style={{ paddingLeft: 10 }}>Detalle</div>
+                    <div>Cant.</div>
+                    <div className="right">Precio</div>
+                    <div>IVA %</div>
+                    <div className="right">Total</div>
                   </div>
 
-                  <div className="dc-asignar-table-wrap">
-                    <table className="dc-asignar-table">
-                      <thead>
-                        <tr>
-                          <th>Descripción</th>
-                          <th>Cant.</th>
-                          <th>Precio</th>
-                          <th>IVA</th>
-                          <th>Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.map((it) => (
-                          <tr key={it.id}>
-                            <td>
-                              <b>{safeText(it.descripcion)}</b>
-                              {it.codigo ? <small>Código: {it.codigo}</small> : null}
-                            </td>
-                            <td>{safeNumber(it.cantidad).toLocaleString("es-AR")}</td>
-                            <td>{moneyARS(it.precio)}</td>
-                            <td>{safeNumber(it.iva_pct).toLocaleString("es-AR")}%</td>
-                            <td><b>{moneyARS(it.total)}</b></td>
-                          </tr>
-                        ))}
-                        {!items.length ? (
-                          <tr>
-                            <td colSpan="5" className="dc-asignar-empty">No hay productos cargados.</td>
-                          </tr>
-                        ) : null}
-                      </tbody>
-                    </table>
+                  <div className="mi-cr-table__rows dc-asignar-products__rows">
+                    {items.map((it) => (
+                      <div key={it.id} className="mi-cr-row dc-asignar-product-row">
+                        <div className="mi-cr-cell mi-cr-cell--detalle">
+                          <b className="mdm-product-name">{safeText(it.descripcion)}</b>
+                          {it.codigo ? <small>Código: {it.codigo}</small> : null}
+                        </div>
+                        <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--soft">{safeNumber(it.cantidad).toLocaleString("es-AR")}</div>
+                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--soft">{moneyARS(it.precio)}</div>
+                        <div className="mi-cr-cell mi-cr-cell--center mi-cr-cell--soft">{safeNumber(it.iva_pct).toLocaleString("es-AR")}%</div>
+                        <div className="mi-cr-cell mi-cr-cell--right mi-cr-cell--mono mi-cr-cell--total-val">{moneyARS(it.total)}</div>
+                      </div>
+                    ))}
+                    {!items.length ? (
+                      <div className="dc-asignar-empty">No hay productos cargados.</div>
+                    ) : null}
                   </div>
 
-                  <div className="dc-asignar-totalbar">
-                    <span>Total de venta</span>
-                    <b>{moneyARS(total)}</b>
+                  <div className="mi-cr-table__foot dc-asignar-products__foot">
+                    <div className="mi-cr-foot-actions">
+                      <div className="dc-asignar-doc-chip">
+                        <span>Documento</span>
+                        <b>N° {idPresupuesto || "—"}</b>
+                      </div>
+                      <div className="nv-foot-sep" />
+                    </div>
+                    <div className="mi-cr-totals">
+                      <div className="mi-cr-totalLine mi-cr-totalLine--sub">
+                        <span>Subtotal</span>
+                        <b>{moneyARS(subtotal)}</b>
+                      </div>
+                      <div className="mi-cr-totalLine mi-cr-totalLine--iva">
+                        <span>IVA</span>
+                        <b>{moneyARS(ivaTotal)}</b>
+                      </div>
+                      <div className="mi-cr-totalLine mi-cr-totalLine--total">
+                        <span>Total</span>
+                        <b>{moneyARS(total)}</b>
+                      </div>
+                    </div>
                   </div>
                 </section>
 
-                <aside className="dc-asignar-side">
-                  <div className="dc-asignar-card">
-                    <label className="nc-field">
-                      <span>Forma de venta</span>
-                      <select
-                        className="nc-input"
-                        value={idTipoVenta}
-                        onChange={(e) => setIdTipoVenta(e.target.value)}
-                        disabled={saving || convertido}
-                      >
-                        <option value="">Seleccionar</option>
-                        {tiposVentaList.map((t) => {
-                          const id = getTipoVentaId(t);
-                          return <option key={id || safeStr(t.nombre)} value={id || ""}>{safeText(t.nombre || t.descripcion || t.detalle)}</option>;
-                        })}
-                      </select>
-                    </label>
-
-                    {isCuentaCorriente ? (
-                      <div className="dc-asignar-alert dc-asignar-alert--cc">
-                        <FontAwesomeIcon icon={faCircleInfo} />
-                        <span>La venta queda registrada en cuenta corriente. No se cargan medios de pago en este paso.</span>
+                <div className="mi-cr-filters dc-asignar-side">
+                  <aside className="nc-aside">
+                    <div className="nc-section">
+                      <div className="nc-section-head">
+                        <div className="nc-section-dot" />
+                        <span>Datos de venta</span>
                       </div>
-                    ) : null}
 
-                    {isContado ? (
-                      <div className="dc-asignar-mp">
-                        <div className="dc-asignar-subtitle">Medios de pago</div>
-                        <PanelMediosPagoInlineVenta
-                          mediosFilas={mediosFilas}
-                          mediosPagoList={mediosPagoList}
-                          totalCompra={total}
-                          onUpdate={updateMedioPago}
-                          onRemove={removeMedioPago}
-                          onAdd={addMedioPago}
-                          showToast={showToast}
-                          saving={saving || convertido}
-                        />
+                      <div className="nc-section-body">
+                        <div
+                          className="nc-field dc-asignar-date-field"
+                          onClick={() => {
+                            if (!saving) document.getElementById("dc-asignar-fecha")?.showPicker?.();
+                          }}
+                        >
+                          <input
+                            id="dc-asignar-fecha"
+                            className="nc-input"
+                            type="date"
+                            placeholder=" "
+                            value={fecha}
+                            onChange={(e) => setFecha(e.target.value)}
+                            disabled={saving}
+                          />
+                          <label className="nc-label">Fecha</label>
+                        </div>
+
+                        <div className="nc-field dc-asignar-readonly-field">
+                          <select
+                            className="nc-input nc-select"
+                            value="cliente-presupuesto"
+                            disabled
+                            title="El cliente viene del presupuesto seleccionado y no se puede cambiar."
+                          >
+                            <option value="cliente-presupuesto">
+                              {safeText(clienteBase.nombre || clienteBase.razon_social)}
+                            </option>
+                          </select>
+                          <label className="nc-label nc-label--up">Cliente *</label>
+                        </div>
+
+                        <div className="nc-field">
+                          <select
+                            className="nc-input nc-select"
+                            value={idTipoVenta}
+                            onChange={(e) => setIdTipoVenta(e.target.value)}
+                            disabled={saving}
+                          >
+                            <option value="">Seleccionar</option>
+                            {tiposVentaList.map((t) => {
+                              const id = getTipoVentaId(t);
+                              return <option key={id || safeStr(t.nombre)} value={id || ""}>{safeText(t.nombre || t.descripcion || t.detalle)}</option>;
+                            })}
+                          </select>
+                          <label className={`nc-label${idTipoVenta ? " nc-label--up" : ""}`}>Forma de venta *</label>
+                        </div>
+
+                        {isCuentaCorriente ? (
+                          <div className="nc-cc-info">
+                            Quedará registrada como <b>pendiente de cobro</b> en la cuenta corriente del cliente.
+                          </div>
+                        ) : null}
+
+                        {isContado ? (
+                          <PanelMediosPagoInlineVenta
+                            mediosFilas={mediosFilas}
+                            mediosPagoList={mediosPagoList}
+                            totalCompra={total}
+                            onUpdate={updateMedioPago}
+                            onRemove={removeMedioPago}
+                            onAdd={addMedioPago}
+                            showToast={showToast}
+                            saving={saving}
+                          />
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
+                    </div>
 
-                  <div className="dc-asignar-card">
-                    <div className="dc-asignar-subtitle">Datos fiscales para emitir factura</div>
-                    <label className="nc-field">
-                      <span>CUIT del cliente</span>
-                      <input
-                        className="nc-input"
-                        value={fiscalCuitInput}
-                        maxLength={11}
-                        onChange={(e) => setFiscalCuitInput(onlyDigits(e.target.value).slice(0, 11))}
-                        placeholder="Ej: 30711222333"
-                        disabled={saving || fiscalLoading || convertido}
-                      />
-                    </label>
-                    <button type="button" className="dc-asignar-btn dc-asignar-btn--soft" onClick={buscarFiscalEnArca} disabled={saving || fiscalLoading || convertido}>
-                      {fiscalLoading ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faFileInvoiceDollar} />}
-                      Buscar datos fiscales
+                    <div className="nc-section">
+                      <div className="nc-section-head">
+                        <div className="nc-section-dot" />
+                        <span>Datos fiscales para emitir factura</span>
+                      </div>
+
+                      <div className="nc-section-body">
+                        <div className="nc-field">
+                          <input
+                            className="nc-input"
+                            value={fiscalCuitInput}
+                            maxLength={11}
+                            onChange={(e) => setFiscalCuitInput(onlyDigits(e.target.value).slice(0, 11))}
+                            placeholder=" "
+                            disabled={saving || fiscalLoading}
+                            inputMode="numeric"
+                          />
+                          <label className={`nc-label${fiscalCuitInput ? " nc-label--up" : ""}`}>CUIT del cliente</label>
+                        </div>
+
+                        <button type="button" className="mit-btn mit-btn--ghost mit-btn--block dc-asignar-search-btn" onClick={buscarFiscalEnArca} disabled={saving || fiscalLoading}>
+                          {fiscalLoading ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faFileInvoiceDollar} />}
+                          Buscar datos fiscales
+                        </button>
+
+                        {fiscalActual?.razon_social || fiscalActual?.cuit ? (
+                          <div className="arca-alert arca-alert--info dc-asignar-fiscal-ok">
+                            <div className="arca-alert__title">Datos encontrados</div>
+                            <div className="arca-resumen">
+                              <div className="arca-row arca-row--full">
+                                <b>Razón social:</b>
+                                <span>{safeText(fiscalActual?.razon_social)}</span>
+                              </div>
+                              <div className="arca-row">
+                                <b>CUIT:</b>
+                                <span>{safeText(fiscalActual?.cuit || fiscalActual?.doc_nro)}</span>
+                              </div>
+                              <div className="arca-row">
+                                <b>IVA:</b>
+                                <span>{safeText(fiscalActual?.condicion_iva || fiscalActual?.cond_iva)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="arca-alert arca-alert--error dc-asignar-alert">
+                            <FontAwesomeIcon icon={faTriangleExclamation} />
+                            <span>Para “Facturar en ARCA” el cliente necesita CUIT y datos fiscales.</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </aside>
+
+                  <div className="nc-actions mi-cr-filters__actions mi-cr-filters__actions--sticky dc-asignar-actions">
+                    <button type="button" className="mit-btn mit-btn--solid mit-btn--block" onClick={guardarComoVenta} disabled={saving || loading || convertido}>
+                      {saving ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faFloppyDisk} />}
+                      Guardar
                     </button>
-                    {fiscalActual?.razon_social || fiscalActual?.cuit ? (
-                      <div className="dc-asignar-fiscal-ok">
-                        <b>{safeText(fiscalActual?.razon_social)}</b>
-                        <span>CUIT: {safeText(fiscalActual?.cuit || fiscalActual?.doc_nro)}</span>
-                        <span>{safeText(fiscalActual?.condicion_iva || fiscalActual?.cond_iva)}</span>
-                      </div>
-                    ) : (
-                      <div className="dc-asignar-alert">
-                        <FontAwesomeIcon icon={faTriangleExclamation} />
-                        <span>Para “Facturar en ARCA” el cliente necesita CUIT y datos fiscales.</span>
-                      </div>
-                    )}
+                    <button type="button" className="mit-btn mit-btn--ghost mit-btn--block" onClick={abrirFacturacion} disabled={saving || loading || convertido}>
+                      {saving ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faFileInvoiceDollar} />}
+                      Facturar en ARCA
+                    </button>
                   </div>
-                </aside>
+                </div>
               </div>
             )}
-          </div>
-
-          <div className="mi-modal__footer dc-asignar-footer">
-            <button type="button" className="dc-asignar-btn" onClick={onClose} disabled={saving}>Cancelar</button>
-            <button type="button" className="dc-asignar-btn dc-asignar-btn--primary" onClick={guardarComoVenta} disabled={saving || loading || convertido}>
-              {saving ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faFloppyDisk} />}
-              Guardar como venta
-            </button>
-            <button type="button" className="dc-asignar-btn dc-asignar-btn--success" onClick={abrirFacturacion} disabled={saving || loading || convertido}>
-              {saving ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faFileInvoiceDollar} />}
-              Facturar en ARCA
-            </button>
           </div>
         </div>
       </div>

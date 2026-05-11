@@ -1262,17 +1262,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
                       />
                     </div>
 
-                    <div className="nc-field presupuesto-observaciones-field">
-                      <textarea
-                        className="nc-input presupuesto-observaciones"
-                        rows={4}
-                        value={observaciones}
-                        onChange={(e) => setObservaciones(e.target.value)}
-                        disabled={saving}
-                        placeholder=" "
-                      />
-                      <label className="nc-label">Observaciones</label>
-                    </div>
+
 
                     <div className="nc-cc-info presupuesto-info">
                       Se guarda como documento comercial y genera PDF. No impacta caja, ARCA ni medio de pago.
@@ -1287,7 +1277,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
                   disabled={saving}
                   className="mit-btn mit-btn--solid mit-btn--block"
                 >
-                  {saving ? "Generando..." : "Guardar documento comercial"}
+                  {saving ? "Generando..." : "Guardar"}
                 </button>
                 <button
                   type="button"

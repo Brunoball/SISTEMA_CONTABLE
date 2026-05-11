@@ -13,6 +13,49 @@ import "./Toast.css";
 
 const TIPOS_CON_CIERRE_MANUAL = ["error", "advertencia"];
 
+const normalizarTexto = (value) =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+const esAlertaDeCampoObligatorio = (mensaje) => {
+  const texto = normalizarTexto(mensaje);
+
+  return [
+    "campo obligatorio",
+    "campos obligatorios",
+    "faltan campos",
+    "falta completar",
+    "falta rellenar",
+    "debes completar",
+    "debe completar",
+    "debes ingresar",
+    "debe ingresar",
+    "complete los campos",
+    "completa los campos",
+    "completar los campos",
+    "completa todos los campos",
+    "complete todos los campos",
+    "rellena los campos",
+    "rellene los campos",
+    "ingresa",
+    "ingrese",
+    "ingresa un",
+    "ingrese un",
+    "selecciona",
+    "seleccione",
+  ].some((frase) => texto.includes(frase));
+};
+
+const normalizarTipoToast = (tipo, mensaje) => {
+  if (tipo === "error" && esAlertaDeCampoObligatorio(mensaje)) {
+    return "advertencia";
+  }
+
+  return tipo;
+};
+
 // Evento global para cerrar cualquier toast anterior
 const TOAST_GLOBAL_EVENT = "toast:cerrar-anteriores";
 
@@ -55,6 +98,7 @@ const SELECTOR_NO_CIERRA_TOAST = [
 ].join(", ");
 
 const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
+  const tipoVisual = normalizarTipoToast(tipo, mensaje);
   const [desapareciendo, setDesapareciendo] = useState(false);
 
   const toastIdRef = useRef(
@@ -64,7 +108,7 @@ const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
   const cerradoRef = useRef(false);
   const timersRef = useRef([]);
 
-  const esManual = TIPOS_CON_CIERRE_MANUAL.includes(tipo);
+  const esManual = TIPOS_CON_CIERRE_MANUAL.includes(tipoVisual);
 
   const limpiarTimers = () => {
     timersRef.current.forEach((timer) => clearTimeout(timer));
@@ -143,7 +187,7 @@ const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
       limpiarTimers();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tipo, mensaje, duracion, esManual]);
+  }, [tipoVisual, mensaje, duracion, esManual]);
 
   useEffect(() => {
     if (!esManual) return;
@@ -194,7 +238,7 @@ const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
       });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [esManual, tipo, mensaje]);
+  }, [esManual, tipoVisual, mensaje]);
 
   const iconos = {
     exito: faCheckCircle,
@@ -210,22 +254,22 @@ const Toast = ({ tipo, mensaje, onClose, duracion = 2500 }) => {
     cargando: "toast-cargando",
   };
 
-  const iconoSeleccionado = iconos[tipo] || faInfoCircle;
-  const claseSeleccionada = clasesTipo[tipo] || "toast-info";
+  const iconoSeleccionado = iconos[tipoVisual] || faInfoCircle;
+  const claseSeleccionada = clasesTipo[tipoVisual] || "toast-info";
 
   return createPortal(
     <div
       className={`toast-container ${claseSeleccionada} ${
         desapareciendo ? "desaparecer" : ""
       }`}
-      role={tipo === "error" || tipo === "advertencia" ? "alert" : "status"}
+      role={tipoVisual === "error" || tipoVisual === "advertencia" ? "alert" : "status"}
       aria-live={
-        tipo === "error" || tipo === "advertencia" ? "assertive" : "polite"
+        tipoVisual === "error" || tipoVisual === "advertencia" ? "assertive" : "polite"
       }
     >
       <FontAwesomeIcon
         icon={iconoSeleccionado}
-        className={`toast-icon ${tipo === "cargando" ? "spin" : ""}`}
+        className={`toast-icon ${tipoVisual === "cargando" ? "spin" : ""}`}
       />
 
       <span className="toast-message">{mensaje}</span>

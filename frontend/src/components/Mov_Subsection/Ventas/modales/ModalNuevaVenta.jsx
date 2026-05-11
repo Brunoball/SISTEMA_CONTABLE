@@ -25,6 +25,7 @@ const IVA_OPTIONS = [
   { label: "0 %", value: 0 },
   { label: "10,5 %", value: 10.5 },
   { label: "21 %", value: 21 },
+  { label: "27 %", value: 27 },
 ];
 
 const API_CHECK_NUMERO = `${BASE_URL}/api.php?action=ventas_cheques_obtener&modo=verificar_numero`;
@@ -2180,7 +2181,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           id_tipo_venta: Number(filters.id_tipo_venta),
           id_medio_pago: primerMedioId,
           id_cuenta_corriente: null,
-          id_detalle: Number(r.id_detalle),
+          id_detalle: null,
+          id_stock_producto: Number(r.id_detalle),
           cantidad: Math.round(Number(r.cantidad) * 100) / 100,
           precio: Math.round(Number(r.precio) * 100) / 100,
           iva_pct: Math.round(Number(r.ivaPct) * 100) / 100,

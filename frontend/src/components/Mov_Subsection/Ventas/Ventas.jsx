@@ -133,7 +133,18 @@ function hasCliente(r) { const idCli = Number(r?.id_cliente ?? 0); if (Number.is
 function hasTipoVentaText(r) { return String(r?.pago_tipo_venta ?? r?.tipo_venta ?? "").trim().length > 0; }
 function hasTipoVentaId(r) { const id = Number(r?.id_tipo_venta ?? r?.tipo_venta_id ?? 0); return Number.isFinite(id) && id > 0; }
 function isSalida(r) { const tmTxt = normalizeSearchText(r?.tipo_movimiento ?? r?.pago_tipo_movimiento ?? ""); if (tmTxt.includes("salida")) return true; const id = Number(r?.id_tipo_movimiento ?? r?.tipo_movimiento_id ?? 0); return Number.isFinite(id) && id > 0; }
-function isVentaRow(row) { if (!hasCliente(row)) return false; if (hasTipoVentaText(row)) return true; if (hasTipoVentaId(row)) return true; return isSalida(row); }
+function isVentaRow(row) {
+  const idTipoOperacion = Number(row?.id_tipo_operacion ?? row?.tipo_operacion_id ?? row?.idTipoOperacion ?? 0);
+  if (Number.isFinite(idTipoOperacion) && idTipoOperacion === 1) return true;
+
+  const tipoOperacionTxt = normalizeSearchText(row?.tipo_operacion ?? row?.tipo_operacion_nombre ?? row?.operacion ?? "");
+  if (tipoOperacionTxt.includes("venta")) return true;
+
+  if (!hasCliente(row)) return false;
+  if (hasTipoVentaText(row)) return true;
+  if (hasTipoVentaId(row)) return true;
+  return isSalida(row);
+}
 function normalizeVentaRow(r) {
   const cliente = r?.cliente ?? r?.cliente_nombre ?? r?.nombre_cliente ?? r?.razon_social_cliente ?? "";
   const tipoVentaTxt = r?.pago_tipo_venta ?? r?.tipo_venta ?? "";

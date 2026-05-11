@@ -27,6 +27,12 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function clampFechaHastaHoy(value) {
+  const hoy = todayISO();
+  const next = String(value ?? "").slice(0, 10);
+  return next && next > hoy ? hoy : next;
+}
+
 function safeNumber(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -874,6 +880,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
     const idCliente = getClienteId(clienteSel);
     if (!idCliente) return "Seleccioná un cliente del listado.";
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) return "Seleccioná una fecha válida.";
+    if (String(fecha).slice(0, 10) > todayISO()) return "La fecha no puede ser posterior al día actual.";
     const validItems = computedRows.filter((r) => safeStr(r.detalleText) && r.cantidad > 0 && r.precio > 0);
     if (!validItems.length) return "Agregá al menos un producto o servicio con cantidad y precio.";
 
@@ -1240,7 +1247,8 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
                         value={fecha}
                         onClick={openFechaPicker}
                         onFocus={openFechaPicker}
-                        onChange={(e) => setFecha(e.target.value)}
+                        max={todayISO()}
+                        onChange={(e) => setFecha(clampFechaHastaHoy(e.target.value))}
                         disabled={saving}
                       />
                       <label className="nc-label">Fecha</label>

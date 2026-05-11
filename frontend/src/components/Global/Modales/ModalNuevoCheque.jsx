@@ -22,12 +22,17 @@ function todayISO() {
   ).padStart(2, "0")}`;
 }
 
-function plusDaysISO(days = 10) {
-  const d = new Date();
-  d.setDate(d.getDate() + Number(days));
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
-  ).padStart(2, "0")}`;
+function clampDateToToday(value) {
+  const fecha = String(value || "").trim();
+  if (!fecha) return "";
+
+  const hoy = todayISO();
+  return fecha > hoy ? hoy : fecha;
+}
+
+function isFutureDateISO(value) {
+  const fecha = String(value || "").trim();
+  return !!fecha && fecha > todayISO();
 }
 
 function safeNumber(v) {
@@ -126,7 +131,7 @@ export default function ModalNuevoCheque({
       importe: 0,
       importeDraft: "",
       importeFocused: false,
-      fecha_pago: plusDaysISO(10),
+      fecha_pago: todayISO(),
     }),
     []
   );
@@ -269,13 +274,13 @@ export default function ModalNuevoCheque({
 
     if (initialData) {
       setForm({
-        fecha_emision: initialData.fecha_emision || todayISO(),
+        fecha_emision: clampDateToToday(initialData.fecha_emision || todayISO()),
         emisor: sanitizeEmitter(initialData.emisor || ""),
         numero_cheque: onlyDigits(initialData.numero_cheque || ""),
         importe: safeNumber(initialData.importe),
         importeDraft: "",
         importeFocused: false,
-        fecha_pago: initialData.fecha_pago || plusDaysISO(10),
+        fecha_pago: clampDateToToday(initialData.fecha_pago || todayISO()),
       });
 
       if (initialData.archivo instanceof File) {
@@ -468,6 +473,20 @@ export default function ModalNuevoCheque({
       return;
     }
 
+    if (isFutureDateISO(form.fecha_emision)) {
+      notify("advertencia", "La fecha de emisión no puede ser posterior al día actual.", 3600);
+      setField("fecha_emision", todayISO());
+      fechaEmisionRef.current?.focus();
+      return;
+    }
+
+    if (isFutureDateISO(form.fecha_pago)) {
+      notify("advertencia", "La fecha de pago no puede ser posterior al día actual.", 3600);
+      setField("fecha_pago", todayISO());
+      fechaPagoRef.current?.focus();
+      return;
+    }
+
     if (archivo && !isAllowedChequeFile(archivo)) {
       notify(
         "advertencia",
@@ -500,6 +519,7 @@ export default function ModalNuevoCheque({
     onSave,
     notify,
     runNumeroCheck,
+    setField,
   ]);
 
   if (!open) return null;
@@ -779,10 +799,11 @@ export default function ModalNuevoCheque({
                           type="date"
                           placeholder=" "
                           value={form.fecha_emision}
+                          max={todayISO()}
                           onClick={() => abrirCalendario(fechaEmisionRef)}
                           onFocus={() => abrirCalendario(fechaEmisionRef)}
                           onChange={(e) =>
-                            setField("fecha_emision", e.target.value)
+                            setField("fecha_emision", clampDateToToday(e.target.value))
                           }
                           disabled={saving || checkingNumero}
                         />
@@ -804,9 +825,10 @@ export default function ModalNuevoCheque({
                           type="date"
                           placeholder=" "
                           value={form.fecha_pago}
+                          max={todayISO()}
                           onClick={() => abrirCalendario(fechaPagoRef)}
                           onFocus={() => abrirCalendario(fechaPagoRef)}
-                          onChange={(e) => setField("fecha_pago", e.target.value)}
+                          onChange={(e) => setField("fecha_pago", clampDateToToday(e.target.value))}
                           disabled={saving || checkingNumero}
                         />
                         <label

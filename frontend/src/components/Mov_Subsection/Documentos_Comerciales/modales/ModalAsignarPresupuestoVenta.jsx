@@ -35,6 +35,12 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function clampFechaHastaHoy(value) {
+  const hoy = todayISO();
+  const next = String(value ?? "").slice(0, 10);
+  return next && next > hoy ? hoy : next;
+}
+
 function plusDaysISOFrom(baseIso, days = 10) {
   const base = String(baseIso || todayISO()).slice(0, 10);
   const d = /^\d{4}-\d{2}-\d{2}$/.test(base) ? new Date(`${base}T00:00:00`) : new Date();
@@ -653,13 +659,15 @@ export default function ModalAsignarPresupuestoVenta({
     if (!items.length) return "El presupuesto no tiene productos o servicios cargados.";
     if (!idTipoVenta) return "Seleccioná la forma de venta.";
     if (total <= 0) return "El total del presupuesto debe ser mayor a cero.";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) return "Seleccioná una fecha válida.";
+    if (String(fecha).slice(0, 10) > todayISO()) return "La fecha no puede ser posterior al día actual.";
     if (isContado) {
       if (!mediosPayload.length) return "Para venta contado cargá al menos un medio de pago.";
       if (sumaMedios < total - 0.05) return "La suma de los medios de pago no cubre el total de la venta.";
     }
     if (modo === "facturar" && !clienteBase.id_cliente) return "Para facturar necesitás un cliente válido.";
     return "";
-  }, [convertido, idPresupuesto, clienteBase.id_cliente, items.length, idTipoVenta, total, isContado, mediosPayload.length, sumaMedios]);
+  }, [convertido, idPresupuesto, clienteBase.id_cliente, items.length, idTipoVenta, total, fecha, isContado, mediosPayload.length, sumaMedios]);
 
   const buildComprobantePayload = useCallback((cfg, fiscal, idVenta, extra = {}) => {
     const puntoVenta = Number(String(cfg?.punto_venta || "2").replace(/\D/g, "")) || 2;
@@ -1034,7 +1042,8 @@ export default function ModalAsignarPresupuestoVenta({
                             type="date"
                             placeholder=" "
                             value={fecha}
-                            onChange={(e) => setFecha(e.target.value)}
+                            max={todayISO()}
+                            onChange={(e) => setFecha(clampFechaHastaHoy(e.target.value))}
                             disabled={saving}
                           />
                           <label className="nc-label">Fecha</label>

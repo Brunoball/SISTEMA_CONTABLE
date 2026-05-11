@@ -809,7 +809,7 @@ async function drawPage(doc, pageName, ctx) {
   text(
     doc,
     clampToWidth(doc, em.domComercial, splitX - leftX - 12),
-    leftX + 118,
+    leftX + 100,
     ly + 38
   );
 

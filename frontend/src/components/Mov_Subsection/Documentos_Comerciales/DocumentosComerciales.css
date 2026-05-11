@@ -232,7 +232,7 @@ body.dark .doccom-placeholder {
 }
 
 .doccom-clientDocs__summary {
-  width: min(100%, 560px);
+
   margin-left: auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(118px, 1fr));
@@ -786,7 +786,7 @@ body.dark .doccom-alert {
 }
 
 .dc-asignar-date-field .nc-input {
-  border: 0;
+
   box-shadow: none;
   background: transparent;
 
@@ -900,7 +900,7 @@ html[data-theme="oscuro"] .dc-asignar-client-strip {
 html[data-theme="oscuro"] .dc-asignar-client-main,
 html[data-theme="oscuro"] .dc-asignar-client-chip,
 html[data-theme="oscuro"] .dc-asignar-date-field {
-  background: rgba(15, 23, 42, 0.76);
+  background: rgb(255 255 255 / 0%);
   border-color: rgba(255, 255, 255, 0.1);
 }
 
@@ -1087,7 +1087,7 @@ body.dark {
 }
 
 .doccom-clientDocs__summary {
-  width: min(100%, 620px);
+  width: 100%;
   gap: 10px;
 }
 

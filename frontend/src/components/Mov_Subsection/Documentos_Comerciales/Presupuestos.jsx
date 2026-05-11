@@ -875,7 +875,7 @@ export default function Presupuestos({ navigationTabs = null }) {
   const exportOptions = useMemo(() => [
     {
       key: "excel",
-      label: "Excel",
+      label: "Exportar Excel (.xlsx)",
       icon: faFileExcel,
       onClick: () => {
         const exportRows = buildExportRows(filteredRows);
@@ -887,13 +887,31 @@ export default function Presupuestos({ navigationTabs = null }) {
     },
     {
       key: "csv",
-      label: "CSV",
+      label: "Exportar CSV (.csv)",
       onClick: () => {
         const exportRows = buildExportRows(filteredRows);
         const headers = Object.keys(exportRows[0] || { FECHA: "", DESCRIPCION: "", CLIENTE: "", ESTADO: "", TOTAL: "" });
         const csvRows = exportRows.map((row) => headers.map((h) => escapeCSV(row[h])).join(";"));
-        const csv = [headers.join(";"), ...csvRows].join("\n");
+        const csv = "\uFEFF" + [headers.join(";"), ...csvRows].join("\n");
         downloadBlob(csv, `presupuestos_${new Date().toISOString().slice(0, 10)}.csv`, "text/csv;charset=utf-8");
+      },
+    },
+    {
+      key: "txt",
+      label: "Exportar TXT (.txt)",
+      onClick: () => {
+        const exportRows = buildExportRows(filteredRows);
+        const lines = exportRows.map((row, index) => [
+          `REGISTRO ${index + 1}`,
+          `FECHA: ${row.FECHA ?? ""}`,
+          `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
+          `CLIENTE: ${row.CLIENTE ?? ""}`,
+          `ESTADO: ${row.ESTADO ?? ""}`,
+          `TOTAL: ${moneyARS(row.TOTAL ?? 0)}`,
+          "----------------------------------------",
+        ].join("\n"));
+
+        downloadBlob(lines.join("\n"), `presupuestos_${new Date().toISOString().slice(0, 10)}.txt`, "text/plain;charset=utf-8");
       },
     },
   ], [filteredRows]);

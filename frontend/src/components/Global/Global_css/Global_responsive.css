@@ -764,7 +764,8 @@
 /* Mobile: convertir tabla a cards */
 @media (max-width: 720px) {
   #Flujo_Cj-tableWrap{
-    min-height: 60vh !important;
+    min-height: 55vh !important;
+    max-height: 55vh !important;
   }
     .mov-card__actions{
   flex-wrap: nowrap;

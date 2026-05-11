@@ -13,7 +13,6 @@
   gap: 0;
   margin-top: 0;
   padding: 0 5px 0;
-  border-bottom: 1px solid var(--border-color, rgba(15, 23, 42, 0.12));
   overflow: hidden;
   scrollbar-width: thin;
 }
@@ -341,7 +340,7 @@ body.dark .doccom-placeholder {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 590px;
+  height:calc(100vh - 300px) ;
   overflow: auto;
   padding-right: 3px;
 }
@@ -1481,8 +1480,8 @@ body.dark .doccom-subpage .doccom-filter .cc-input:focus {
   border-bottom: 0;
   border-radius: 0 0 18px 18px;
   overflow: auto;
-  min-height: calc(100vh - 380px);
-  max-height: calc(100vh - 380px);
+  min-height: calc(100vh - 370px);
+  max-height: calc(100vh - 370px);
 }
 
 

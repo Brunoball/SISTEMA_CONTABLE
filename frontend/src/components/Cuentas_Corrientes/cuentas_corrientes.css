@@ -1224,3 +1224,35 @@ button.cc-cliente-table__row:focus-visible{
 .cc-cliente-table__footWrap .cc-money{
   font-weight: 700;
 }
+
+/* =========================================================
+   Fix dark mode: colores monetarios en Cuentas Corrientes
+   Evita que los estilos globales de .mov-ellipsissss/.mov-gridCell
+   pisen Débito, Crédito y Saldo en modo oscuro.
+========================================================= */
+html[data-theme="oscuro"] .contenedor-cards.mov-page .cc-cliente-table .mov-ellipsissss.cc-money--negative,
+html[data-theme="oscuro"] .contenedor-cards.mov-page .cc-cliente-table .mov-gridCell.cc-money--negative,
+html[data-theme="oscuro"] .cc-cliente-table__footWrap .mov-gridCell.cc-money--negative,
+body.dark .contenedor-cards.mov-page .cc-cliente-table .mov-ellipsissss.cc-money--negative,
+body.dark .contenedor-cards.mov-page .cc-cliente-table .mov-gridCell.cc-money--negative,
+body.dark .cc-cliente-table__footWrap .mov-gridCell.cc-money--negative{
+  color: #f87171 !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards.mov-page .cc-cliente-table .mov-ellipsissss.cc-money--positive,
+html[data-theme="oscuro"] .contenedor-cards.mov-page .cc-cliente-table .mov-gridCell.cc-money--positive,
+html[data-theme="oscuro"] .cc-cliente-table__footWrap .mov-gridCell.cc-money--positive,
+body.dark .contenedor-cards.mov-page .cc-cliente-table .mov-ellipsissss.cc-money--positive,
+body.dark .contenedor-cards.mov-page .cc-cliente-table .mov-gridCell.cc-money--positive,
+body.dark .cc-cliente-table__footWrap .mov-gridCell.cc-money--positive{
+  color: #34d399 !important;
+}
+
+html[data-theme="oscuro"] .contenedor-cards.mov-page .cc-cliente-table .mov-ellipsissss.cc-money--neutral,
+html[data-theme="oscuro"] .contenedor-cards.mov-page .cc-cliente-table .mov-gridCell.cc-money--neutral,
+html[data-theme="oscuro"] .cc-cliente-table__footWrap .mov-gridCell.cc-money--neutral,
+body.dark .contenedor-cards.mov-page .cc-cliente-table .mov-ellipsissss.cc-money--neutral,
+body.dark .contenedor-cards.mov-page .cc-cliente-table .mov-gridCell.cc-money--neutral,
+body.dark .cc-cliente-table__footWrap .mov-gridCell.cc-money--neutral{
+  color: rgba(226, 232, 240, 0.78) !important;
+}

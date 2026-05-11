@@ -357,7 +357,7 @@ export default function Flujo_Caja() {
     saldo:    ["52%", "46%", "38%", "56%"],
   }), []);
 
-  const gridCols = "0.9fr 1.3fr 1.3fr 1.3fr";
+  const gridCols = "minmax(82px, 0.8fr) repeat(3, minmax(102px, 1fr))";
 
   const renderSkeletonRow = (idx) => {
     const w = (key) => {
@@ -463,6 +463,7 @@ export default function Flujo_Caja() {
         {/* ===== SUBHEAD ===== */}
         <div className="fc-subhead">
           <div className="fc-subhead__name">
+            Detalle por caja / medio de pago •
             Caja diaria
             <span className="fc-subhead__meta">
               &nbsp;•&nbsp;Saldo base: <b>{moneyARS(bloque?.saldo_base ?? 0)}</b>
@@ -472,34 +473,28 @@ export default function Flujo_Caja() {
 
         {/* ===== TARJETAS DINÁMICAS POR MEDIO DE PAGO ===== */}
         <div className="fc-paymentSummary">
-          <div className="fc-paymentSummary__head">
-            <div>
-              <div className="fc-paymentSummary__title">Detalle por caja / medio de pago</div>
-              <div className="fc-paymentSummary__hint">
-                Día seleccionado: <b>{fmtDateES(selectedRow?.fecha)}</b>. Tocá una fecha de la tabla para actualizar las tarjetas.
-              </div>
-            </div>
-          </div>
+
 
           {selectedPaymentCards.length ? (
             <div className="fc-paymentCards" aria-label="Detalle de medios de pago del día seleccionado">
-              {selectedPaymentCards.map((card) => {
+              {selectedPaymentCards.map((card, index) => {
                 const saldoNeg = Number(card.saldo) < 0;
+                const tones = ["green", "blue", "pink", "yellow"];
+                const tone = saldoNeg ? "red" : tones[index % tones.length];
 
                 return (
-                  <div key={card.key} className="fc-payCard">
+                  <div key={card.key} className={`fc-payCard fc-payCard--${tone}`}>
                     <div className="fc-payCard__top">
                       <span className="fc-payCard__icon"><FontAwesomeIcon icon={faWallet} /></span>
                       <div className="fc-payCard__titleWrap">
                         <div className="fc-payCard__title">{card.label}</div>
+                        <div className={`fc-payCard__amount ${saldoNeg ? "is-negative" : "is-positive"}`}>
+                          {moneyARS(card.saldo)}
+                        </div>
                         <div className="fc-payCard__subtitle" title={paymentCardSubtitle(card)}>
                           {paymentCardSubtitle(card)}
                         </div>
                       </div>
-                    </div>
-
-                    <div className={`fc-payCard__amount ${saldoNeg ? "is-negative" : "is-positive"}`}>
-                      {moneyARS(card.saldo)}
                     </div>
 
                     <div className="fc-payCard__rows">
@@ -604,7 +599,6 @@ export default function Flujo_Caja() {
         <div className="fc-footnote">
           * Ingresos: ventas de contado + ventas en cuenta corriente ya cobradas.
           Egresos: compras de contado + compras en cuenta corriente ya pagadas.
-          Las tarjetas superiores se arman con los medios de pago activos del tenant y excluyen CHEQUE / ECHEQ.
         </div>
 
       </section>

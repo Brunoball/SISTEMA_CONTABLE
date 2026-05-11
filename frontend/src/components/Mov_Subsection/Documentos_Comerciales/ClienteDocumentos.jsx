@@ -17,6 +17,7 @@ import {
 
 const API = `${BASE_URL}/api.php`;
 const CLIENTES_LIMIT = 120;
+const SKELETON_ROWS = 6;
 
 function safeText(value, fallback = "—") {
   const s = String(value ?? "").trim();
@@ -168,8 +169,9 @@ export default function ClienteDocumentos({
   const [clientes, setClientes] = useState([]);
   const [documentos, setDocumentos] = useState([]);
   const [selectedCliente, setSelectedCliente] = useState(null);
-  const [loadingClientes, setLoadingClientes] = useState(false);
+  const [loadingClientes, setLoadingClientes] = useState(true);
   const [loadingDocumentos, setLoadingDocumentos] = useState(false);
+  const [documentosLoaded, setDocumentosLoaded] = useState(false);
   const [error, setError] = useState("");
   const [openVerComprobante, setOpenVerComprobante] = useState(false);
   const [comprobanteUrl, setComprobanteUrl] = useState("");
@@ -178,6 +180,68 @@ export default function ClienteDocumentos({
   const mountedRef = useRef(true);
   const documentActions = useMemo(() => getDocumentActions(grupo), [grupo]);
   const gridCols = "1.15fr 0.85fr 1.65fr 0.95fr 0.95fr 0.8fr";
+  const documentoHeader = documentoSingular.charAt(0).toUpperCase() + documentoSingular.slice(1);
+
+  const skelWidths = useMemo(
+    () => ({
+      documento: ["64%", "52%", "70%", "46%"],
+      fecha: ["44%", "38%", "42%", "34%"],
+      detalle: ["74%", "62%", "68%", "54%"],
+      estado: ["56%", "46%", "52%", "42%"],
+      total: ["42%", "34%", "38%", "30%"],
+    }),
+    []
+  );
+
+  const renderSkeletonRow = useCallback(
+    (idx) => (
+      <div
+        key={`skel-${idx}`}
+        className="mov-gridTable mov-gridTable--row doccom-docGridRow mov-row--skeleton"
+        style={{ gridTemplateColumns: gridCols }}
+        role="row"
+        aria-hidden="true"
+      >
+        <div className="mov-gridCell is-strong" role="cell" data-label={documentoHeader}>
+          <span
+            className="mov-skeletonBar"
+            style={{ width: skelWidths.documento[idx % skelWidths.documento.length] }}
+          />
+        </div>
+        <div className="mov-gridCell" role="cell" data-label="Fecha">
+          <span
+            className="mov-skeletonBar"
+            style={{ width: skelWidths.fecha[idx % skelWidths.fecha.length] }}
+          />
+        </div>
+        <div className="mov-gridCell" role="cell" data-label="Detalle">
+          <span
+            className="mov-skeletonBar"
+            style={{ width: skelWidths.detalle[idx % skelWidths.detalle.length] }}
+          />
+        </div>
+        <div className="mov-gridCell is-center" role="cell" data-label="Estado">
+          <span
+            className="mov-skeletonBar"
+            style={{ width: skelWidths.estado[idx % skelWidths.estado.length] }}
+          />
+        </div>
+        <div className="mov-gridCell is-right" role="cell" data-label="Total">
+          <span
+            className="mov-skeletonBar"
+            style={{ width: skelWidths.total[idx % skelWidths.total.length] }}
+          />
+        </div>
+        <div className="mov-gridCell mov-gridCell--actions is-center" role="cell" data-label="PDF">
+          <div className="mov-skelActions">
+            <span className="mov-skelIcon" />
+            <span className="mov-skelIcon" />
+          </div>
+        </div>
+      </div>
+    ),
+    [documentoHeader, gridCols, skelWidths]
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -247,10 +311,14 @@ export default function ClienteDocumentos({
     const idCliente = Number(selectedCliente?.id_cliente || 0);
     if (!idCliente) {
       setDocumentos([]);
+      setDocumentosLoaded(false);
+      setLoadingDocumentos(false);
       return;
     }
 
     setLoadingDocumentos(true);
+    setDocumentosLoaded(false);
+    setDocumentos([]);
     setError("");
 
     try {
@@ -263,9 +331,11 @@ export default function ClienteDocumentos({
       const rows = Array.isArray(data?.documentos) ? data.documentos : [];
       if (!mountedRef.current) return;
       setDocumentos(rows);
+      setDocumentosLoaded(true);
     } catch (err) {
       if (!mountedRef.current) return;
       setDocumentos([]);
+      setDocumentosLoaded(true);
       setError(err?.message || "No se pudieron cargar los documentos del cliente.");
     } finally {
       if (mountedRef.current) setLoadingDocumentos(false);
@@ -273,15 +343,20 @@ export default function ClienteDocumentos({
   }, [documentActions, grupo, selectedCliente]);
 
   useEffect(() => {
-    const t = window.setTimeout(() => {
-      cargarClientes();
-    }, 280);
-    return () => window.clearTimeout(t);
+    cargarClientes();
   }, [cargarClientes]);
 
   useEffect(() => {
     cargarDocumentos();
   }, [cargarDocumentos]);
+
+  const showClientesSkeleton = loadingClientes;
+  const showPanelSkeleton = Boolean(
+    loadingClientes ||
+      loadingDocumentos ||
+      (selectedCliente && !documentosLoaded)
+  );
+  const showTablePanel = Boolean(selectedCliente) || showPanelSkeleton;
 
   const handleVerDocumento = async (doc) => {
     const id = Number(doc?.id_comprobante || 0);
@@ -389,7 +464,7 @@ export default function ClienteDocumentos({
             </div>
 
             <div className="doccom-clientList__body">
-              {loadingClientes ? (
+              {showClientesSkeleton ? (
                 Array.from({ length: 7 }).map((_, idx) => (
                   <div className="doccom-clientSkeleton" key={idx} />
                 ))
@@ -404,6 +479,8 @@ export default function ClienteDocumentos({
                       onClick={() => {
                         setSelectedCliente(cliente);
                         setQDocumentos("");
+                        setDocumentos([]);
+                        setDocumentosLoaded(false);
                       }}
                     >
                       <span className="doccom-clientItem__icon">
@@ -430,13 +507,13 @@ export default function ClienteDocumentos({
           </aside>
 
           <main className="doccom-docPanel" aria-label="Documentos del cliente">
-            {selectedCliente ? (
+            {showTablePanel ? (
               <>
                 <div className="doccom-docPanel__top">
                   <div>
                     <span>Cliente seleccionado</span>
-                    <h3>{getClienteDisplay(selectedCliente)}</h3>
-                    <p>{getClienteSubtext(selectedCliente)}</p>
+                    <h3>{selectedCliente ? getClienteDisplay(selectedCliente) : "Cargando documentos..."}</h3>
+                    <p>{selectedCliente ? getClienteSubtext(selectedCliente) : "Preparando la tabla."}</p>
                   </div>
 
                   <div className="cc-filter doccom-filter doccom-filter--docs">
@@ -450,11 +527,12 @@ export default function ClienteDocumentos({
                             value={qDocumentos}
                             onChange={(e) => setQDocumentos(e.target.value)}
                             placeholder={searchPlaceholder}
+                            disabled={!selectedCliente}
                           />
                           <span className="cc-floatingLabel">
                             <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
                           </span>
-                          {qDocumentos.trim() !== "" && (
+                          {qDocumentos.trim() !== "" && selectedCliente && (
                             <button
                               type="button"
                               className="cc-clearSearch cc-clearSearch--inside"
@@ -481,7 +559,7 @@ export default function ClienteDocumentos({
                     role="row"
                   >
                     <div className="mov-gridCell mov-gridCell--head" role="columnheader">
-                      {documentoSingular.charAt(0).toUpperCase() + documentoSingular.slice(1)}
+                      {documentoHeader}
                     </div>
                     <div className="mov-gridCell mov-gridCell--head" role="columnheader">Fecha</div>
                     <div className="mov-gridCell mov-gridCell--head" role="columnheader">Detalle</div>
@@ -490,22 +568,11 @@ export default function ClienteDocumentos({
                     <div className="mov-gridCell mov-gridCell--head is-center" role="columnheader">PDF</div>
                   </div>
 
-                  <div className="mov-gridBody doccom-docGridBody">
-                    {loadingDocumentos ? (
-                      Array.from({ length: 6 }).map((_, idx) => (
-                        <div
-                          className="mov-gridTable mov-gridTable--row doccom-docGridRow"
-                          style={{ gridTemplateColumns: gridCols }}
-                          role="row"
-                          key={idx}
-                        >
-                          {Array.from({ length: 6 }).map((__, cellIdx) => (
-                            <div className="mov-gridCell" role="cell" key={cellIdx}>
-                              <div className="doccom-rowSkeleton" />
-                            </div>
-                          ))}
-                        </div>
-                      ))
+                  <div className={["mov-gridBody", "doccom-docGridBody", showPanelSkeleton ? "mov-softLoading" : ""].join(" ")}>
+                    {showPanelSkeleton ? (
+                      <div className="mov-skeletonWrap" aria-busy="true">
+                        {Array.from({ length: SKELETON_ROWS }).map((_, idx) => renderSkeletonRow(idx))}
+                      </div>
                     ) : filteredDocumentos.length ? (
                       filteredDocumentos.map((doc) => (
                         <div
@@ -514,7 +581,7 @@ export default function ClienteDocumentos({
                           style={{ gridTemplateColumns: gridCols }}
                           role="row"
                         >
-                          <div className="mov-gridCell is-strong" role="cell" data-label={documentoSingular.charAt(0).toUpperCase() + documentoSingular.slice(1)}>
+                          <div className="mov-gridCell is-strong" role="cell" data-label={documentoHeader}>
                             <div className="doccom-docMain">
                               <span className="doccom-docMain__icon">
                                 <FontAwesomeIcon icon={getDocumentoIcon(doc.tipo)} />

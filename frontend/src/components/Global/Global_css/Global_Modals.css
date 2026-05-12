@@ -476,7 +476,7 @@ html[data-theme="oscuro"] .mi-cr-del {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 10px;
   padding: 10px 12px;
   border-top: 1px solid var(--nv-border-md);
@@ -558,7 +558,7 @@ html[data-theme="oscuro"] .nv-foot-btn__icon {
   background: rgba(0, 85, 187, .70);
 }
 
-.nv-foot-sep { width: 1px; height: 16px; background: var(--nv-border-md); }
+.nv-foot-sep {display: none; width: 1px; height: 16px; background: var(--nv-border-md); }
 
 /* ── Totales ── */
 .mi-cr-totals { display: flex; align-items: center; gap: 6px; }

@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import BASE_URL from "../../../config/config.jsx";
 import "../../Global/Global_css/Global_Section.css";
 import "../../Global/Global_css/roots.css";
 import "../../Global/Global_css/Global_oscuro.css";
+import "./DocumentosComerciales.css";
 import Toast from "../../Global/Toast.jsx";
 import Calendario from "../../Global/Calendario/Calendario.jsx";
 import "../../Global/Calendario/calendario.css";
@@ -32,6 +34,47 @@ import { useListas } from "../../../context/ListasContext.jsx";
 import { useDateRange } from "../../../context/DateRangeContext";
 import { saveVentaNoFacturadaPdf } from "../../../utils/VentaNoFacturadaPdfBuilder";
 import { saveRemitoPdf } from "../../../utils/RemitoPdfBuilder";
+
+const DOCUMENTOS_TABS = [
+  { key: "presupuesto", label: "Presupuestos", path: "/panel/presupuesto" },
+  { key: "facturas", label: "Facturas", path: "/panel/facturacion" },
+  { key: "remitos", label: "Remitos", path: "/panel/remitos" },
+];
+
+function DocumentosTabs({ activeKey }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleTabClick = (tab) => {
+    if (!tab?.path || location.pathname === tab.path) return;
+    navigate(tab.path);
+  };
+
+  return (
+    <div
+      className="doccom-googleTabs"
+      role="tablist"
+      aria-label="Pestañas de documentos comerciales"
+    >
+      {DOCUMENTOS_TABS.map((tab) => {
+        const isActive = tab.key === activeKey;
+
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            className={`doccom-googleTab ${isActive ? "is-active" : ""}`}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => handleTabClick(tab)}
+          >
+            <span className="doccom-googleTab__label">{tab.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 const PAGE_SIZE = 100;
 const PROBE_LIMIT = PAGE_SIZE + 1;
@@ -307,7 +350,7 @@ function documentLabel(tipo) {
   return safeText(tipo || "Comprobante");
 }
 
-export default function Presupuestos({ navigationTabs = null }) {
+export default function Presupuestos() {
   const API = `${BASE_URL}/api.php`;
   const { lists: listasCtx, loadingLists, error: errorLists, ensureListsLoaded } = useListas();
   const { dateRange, setDateRange } = useDateRange();
@@ -937,9 +980,11 @@ export default function Presupuestos({ navigationTabs = null }) {
       <section className="mov-card mov-card--table">
         <div className="mov-card__head  doc-card__head">
           <div className="mov-card__headLeft">
-            <div className="title-mov">
+            <div className="title-mov doccom-titleBlock">
               <div className="mov-card__title">Presupuestos</div>
-              {navigationTabs}
+              <div className="doccom-tabsRow doccom-tabsRow--head">
+                <DocumentosTabs activeKey="presupuesto" />
+              </div>
             </div>
 
             <div className="mov-headFilters">

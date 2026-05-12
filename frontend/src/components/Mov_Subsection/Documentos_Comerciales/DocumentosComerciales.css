@@ -25,7 +25,6 @@
   border-radius: 13px 13px 0 0;
   background: transparent;
   color: var(--muted-color, #64748b);
-  min-height: 38px;
   padding: 9px 15px 10px;
   display: inline-flex;
   align-items: center;
@@ -232,7 +231,7 @@ body.dark .doccom-placeholder {
 }
 
 .doccom-clientDocs__summary {
-
+  width: 100%;
   margin-left: auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(118px, 1fr));
@@ -786,7 +785,7 @@ body.dark .doccom-alert {
 }
 
 .dc-asignar-date-field .nc-input {
-
+  border: 0;
   box-shadow: none;
   background: transparent;
 
@@ -900,7 +899,7 @@ html[data-theme="oscuro"] .dc-asignar-client-strip {
 html[data-theme="oscuro"] .dc-asignar-client-main,
 html[data-theme="oscuro"] .dc-asignar-client-chip,
 html[data-theme="oscuro"] .dc-asignar-date-field {
-  background: rgb(255 255 255 / 0%);
+  background: rgba(15, 23, 42, 0.76);
   border-color: rgba(255, 255, 255, 0.1);
 }
 
@@ -1030,7 +1029,6 @@ body.dark {
   opacity: 0.85;
 }
 .dc-asignar-doc-chip {
-  min-height: 38px;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -1489,10 +1487,178 @@ body.dark .doccom-subpage .doccom-filter .cc-input:focus {
 
 
 
+/* =========================================================
+   Navegación propia entre Presupuestos / Facturas / Remitos
+   Debajo del nombre de la sección, dentro del contenedor.
+========================================================= */
+.doccom-titleBlock {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.doc-card__head .mov-card__headLeft,
+.doccom-clientDocs__head .mov-card__headLeft {
+  min-width: 0;
+}
+
+.doccom-tabsRow {
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+
+
+.doccom-tabsRow .doccom-googleTabs {
+  width: 100%;
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  align-items: flex-end;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--mov-border, rgba(15, 23, 42, 0.12));
+}
+
+.doccom-tabsRow .doccom-googleTab {
+  padding: 8px 10px ;
+  border-color: transparent;
+  background: transparent;
+}
+
+.doccom-tabsRow .doccom-googleTab.is-active {
+  background: var(--mov-card, var(--card-bg, #ffffff));
+  border-color: var(--mov-border, rgba(15, 23, 42, 0.12));
+  border-bottom-color: var(--mov-card, var(--card-bg, #ffffff));
+}
+
+html[data-theme="oscuro"] .doccom-tabsRow,
+body.dark .doccom-tabsRow {
+  background: transparent;
+  border-bottom-color: transparent;
+}
+
+html[data-theme="oscuro"] .doccom-tabsRow .doccom-googleTabs,
+body.dark .doccom-tabsRow .doccom-googleTabs {
+  border-bottom-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="oscuro"] .doccom-tabsRow .doccom-googleTab.is-active,
+body.dark .doccom-tabsRow .doccom-googleTab.is-active {
+  background: rgba(15, 23, 42, 0.96);
+  border-color: rgba(148, 163, 184, 0.22);
+  border-bottom-color: rgba(15, 23, 42, 0.96);
+}
+
+@media (max-width: 980px) {
+  .doccom-tabsRow--head {
+    width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  .doccom-tabsRow .doccom-googleTabs {
+    gap: 4px;
+  }
+
+  .doccom-tabsRow .doccom-googleTab {
+    flex: 1 0 auto;
+    padding-inline: 12px;
+  }
+}
+
+
+/* =========================================================
+   Ellipsis global en tablas de Documentos Comerciales
+   Aplica a Presupuestos, Facturas, Remitos y tablas de modales.
+========================================================= */
+.doccom-page .mov-gridTable,
+.doccom-subpage .mov-gridTable,
+.doccom-clientDocs .mov-gridTable,
+.presupuesto-modal__content .mi-cr-table,
+.dc-asignar-content .mi-cr-table {
+  min-width: 0;
+}
+
+.doccom-page .mov-gridCell,
+.doccom-subpage .mov-gridCell,
+.doccom-clientDocs .mov-gridCell,
+.presupuesto-modal__content .mi-cr-table__head > div,
+.presupuesto-modal__content .mi-cr-cell,
+.dc-asignar-content .mi-cr-table__head > div,
+.dc-asignar-content .mi-cr-cell {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.doccom-page .mov-gridCell--head,
+.doccom-subpage .mov-gridCell--head,
+.doccom-clientDocs .mov-gridCell--head,
+.doccom-page .mov-ellipsissss,
+.doccom-subpage .mov-ellipsissss,
+.doccom-clientDocs .mov-ellipsissss,
+
+.presupuesto-modal__content .mi-cr-table__head > div,
+
+.dc-asignar-content .mi-cr-table__head > div {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doccom-docMain,
+.doccom-docMain > span:last-child,
+.doccom-docDetalle,
+.doccom-clientItem__main {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.doccom-docMain button,
+.doccom-docMain strong,
+.doccom-docMain small,
+.doccom-docDetalle strong,
+.doccom-docDetalle small,
+.doccom-clientItem__main strong,
+.doccom-clientItem__main small,
+.doccom-status,
+.dc-asignar-product-row .mdm-product-name,
+.dc-asignar-product-row small {
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doccom-status,
+.dc-asignar-product-row .mdm-product-name,
+.dc-asignar-product-row small {
+  display: inline-block;
+}
+
+.doccom-page .mov-gridCell--actions,
+.doccom-subpage .mov-gridCell--actions,
+.doccom-clientDocs .mov-gridCell--actions,
+.presupuesto-modal__content .mi-cr-cell:has(button),
+.dc-asignar-content .mi-cr-cell:has(button) {
+  overflow: visible;
+}
+
 /* =====================================================================
-   Asignar presupuesto a venta — tabla espejada con Nueva Venta
-   Mantiene la lógica read-only del presupuesto, pero usa la misma grilla
-   global de Nueva Venta: Detalle / Cant. / Precio / IVA % / IVA $ / Total.
+   Asignar presupuesto a venta — estética restaurada desde ZIP asignar
+   Se mantiene el paquete de ellipsis de Documentos Comerciales.
 ===================================================================== */
 @media (min-width: 921px) {
   .dc-asignar-modal .dc-asignar-product-row {
@@ -1546,3 +1712,16 @@ body.dark .doccom-subpage .doccom-filter .cc-input:focus {
 .dc-asignar-modal .nc-section-divider {
   margin-top: 2px;
 }
+
+/* Ellipsis compatible con la estética restaurada del modal Asignar */
+.dc-asignar-modal .dc-asignar-readonly-input,
+.dc-asignar-modal .dc-asignar-readonly-input span,
+.dc-asignar-modal .dc-asignar-readonly-input small,
+.dc-asignar-modal .dc-asignar-readonly-field-input {
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+

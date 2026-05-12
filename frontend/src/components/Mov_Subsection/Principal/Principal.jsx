@@ -170,6 +170,10 @@ const ROUTE_PREFETCH = {
     import("../Mov_Subsection/Documentos_Comerciales/Presupuestos"),
   "/panel/presupuesto": () =>
     import("../Mov_Subsection/Documentos_Comerciales/Presupuestos"),
+  "/panel/facturacion": () =>
+    import("../Mov_Subsection/Documentos_Comerciales/Facturas"),
+  "/panel/remitos": () =>
+    import("../Mov_Subsection/Documentos_Comerciales/Remitos"),
   "/panel/compras": () => import("../Mov_Subsection/Compra/Compras"),
   "/panel/recibos": () => import("../Mov_Subsection/Recibos/Recibos"),
   "/panel/OrdenesPago": () =>
@@ -402,7 +406,9 @@ function getModuleKeyByPath(pathname) {
     path.startsWith("/panel/Otrosingresos") ||
     path.startsWith("/panel/Otrosegresos") ||
     path.startsWith("/panel/documentos_comerciales") ||
-    path.startsWith("/panel/presupuesto")
+    path.startsWith("/panel/facturacion") ||
+    path.startsWith("/panel/presupuesto") ||
+    path.startsWith("/panel/remitos")
   ) {
     return "movimientos";
   }
@@ -978,7 +984,8 @@ const Principal = () => {
           { label: "Otros Ingresos", ruta: "/panel/Otrosingresos" },
           { label: "Otros Egresos", ruta: "/panel/Otrosegresos" },
           { label: "Presupuestos", ruta: "/panel/presupuesto" },
-
+          { label: "Facturas", ruta: "/panel/facturacion" },
+          { label: "Remitos", ruta: "/panel/remitos" },
         ],
       },
       { label: "Flujo de Caja", ruta: "/panel/flujo-de-caja" },
@@ -1063,7 +1070,9 @@ const Principal = () => {
       location.pathname.startsWith("/panel/Otrosingresos") ||
       location.pathname.startsWith("/panel/Otrosegresos") ||
       location.pathname.startsWith("/panel/documentos_comerciales") ||
-      location.pathname.startsWith("/panel/presupuesto")
+      location.pathname.startsWith("/panel/facturacion") ||
+      location.pathname.startsWith("/panel/presupuesto") ||
+      location.pathname.startsWith("/panel/remitos")
     ) {
       return "movimientos";
     }
@@ -1091,8 +1100,9 @@ const Principal = () => {
       location.pathname.startsWith("/panel/Otrosingresos") ||
       location.pathname.startsWith("/panel/Otrosegresos") ||
       location.pathname.startsWith("/panel/documentos_comerciales") ||
-
-      location.pathname.startsWith("/panel/presupuesto")
+      location.pathname.startsWith("/panel/facturacion") ||
+      location.pathname.startsWith("/panel/presupuesto") ||
+      location.pathname.startsWith("/panel/remitos")
     ) {
       return "Movimientos";
     }
@@ -1421,7 +1431,9 @@ const Principal = () => {
                   location.pathname.startsWith("/panel/Otrosingresos") ||
                   location.pathname.startsWith("/panel/Otrosegresos") ||
                   location.pathname.startsWith("/panel/documentos_comerciales") ||
-                  location.pathname.startsWith("/panel/presupuesto"))) ||
+                  location.pathname.startsWith("/panel/facturacion") ||
+                  location.pathname.startsWith("/panel/presupuesto") ||
+                  location.pathname.startsWith("/panel/remitos"))) ||
               (isCC &&
                 location.pathname.startsWith("/panel/cuentas-corrientes")) ||
               (isCheques && location.pathname.startsWith("/panel/cheques")) ||

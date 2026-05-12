@@ -17,7 +17,9 @@ import Compras from "./components/Mov_Subsection/Compra/Compras";
 import Recibos from "./components/Mov_Subsection/Recibos/Recibos";
 import Otrosingresos from "./components/Mov_Subsection/Otros_Ingresos/Otros_Ingresos";
 import Otrosegresos from "./components/Mov_Subsection/Otros_Egresos/Otros_Egresos";
-import DocumentosComerciales from "./components/Mov_Subsection/Documentos_Comerciales/DocumentosComerciales";
+import Presupuestos from "./components/Mov_Subsection/Documentos_Comerciales/Presupuestos";
+import Facturas from "./components/Mov_Subsection/Documentos_Comerciales/Facturas";
+import Remitos from "./components/Mov_Subsection/Documentos_Comerciales/Remitos";
 import OrdenesPago from "./components/Mov_Subsection/OrdenesPago/OrdenesPago";
 import Flujo_Caja from "./components/Flujo_de_Caja/Flujo_Caja";
 
@@ -296,23 +298,14 @@ export default function App() {
               </RutaModulo>
             }
           />
+
+          {/* Compatibilidad: la ruta vieja ya no renderiza wrapper, redirige a Presupuestos */}
           <Route
             path="documentos_comerciales"
             element={
               <RutaModulo modulo="movimientos">
                 <RutaAdmin>
-                  <DocumentosComerciales />
-                </RutaAdmin>
-              </RutaModulo>
-            }
-          />
-
-          <Route
-            path="facturacion"
-            element={
-              <RutaModulo modulo="movimientos">
-                <RutaAdmin>
-                  <Navigate to="/panel/documentos_comerciales" replace />
+                  <Navigate to="/panel/presupuesto" replace />
                 </RutaAdmin>
               </RutaModulo>
             }
@@ -323,7 +316,29 @@ export default function App() {
             element={
               <RutaModulo modulo="movimientos">
                 <RutaAdmin>
-                  <Navigate to="/panel/documentos_comerciales" replace />
+                  <Presupuestos />
+                </RutaAdmin>
+              </RutaModulo>
+            }
+          />
+
+          <Route
+            path="facturacion"
+            element={
+              <RutaModulo modulo="movimientos">
+                <RutaAdmin>
+                  <Facturas />
+                </RutaAdmin>
+              </RutaModulo>
+            }
+          />
+
+          <Route
+            path="remitos"
+            element={
+              <RutaModulo modulo="movimientos">
+                <RutaAdmin>
+                  <Remitos />
                 </RutaAdmin>
               </RutaModulo>
             }

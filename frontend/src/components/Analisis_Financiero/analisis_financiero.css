@@ -779,3 +779,327 @@ html[data-theme="oscuro"] .af-dispoCard__sub {
 #clrRight{
   left: -200px;
 }
+
+/* =========================================================
+   TARJETAS ANÁLISIS FINANCIERO — MISMA ESTRUCTURA DASHBOARD
+   Ícono circular + título + valor + detalle, sin tocar cálculos.
+========================================================= */
+.mov-page--analisisFinanciero {
+  --af-midnight: #0A2540;
+  --af-action: #0055BB;
+  --af-bg: #F6F9FC;
+  --af-surface: #FFFFFF;
+  --af-text: #425466;
+  --af-text-muted: rgba(66, 84, 102, 0.72);
+  --af-success: #22AD5C;
+  --af-danger: #E13D45;
+  --af-warning: #f4b942;
+  --af-info: #4bb8ff;
+  --af-pink: #ff6b9a;
+  --af-action-10: rgba(0, 85, 187, 0.1);
+  --af-success-15: rgba(34, 173, 92, 0.15);
+  --af-danger-15: rgba(225, 61, 69, 0.15);
+  --af-warning-18: rgba(244, 185, 66, 0.18);
+  --af-info-16: rgba(75, 184, 255, 0.16);
+  --af-pink-16: rgba(255, 107, 154, 0.16);
+  --af-shadow-md: 0 10px 26px rgba(10, 37, 64, 0.1);
+  --af-shadow-lg: 0 18px 45px rgba(10, 37, 64, 0.13);
+  --af-trans: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mov-page--analisisFinanciero .af-sectionHead {
+  padding: 0 14px;
+  margin-bottom: 12px;
+}
+
+.mov-page--analisisFinanciero .af-sectionTitle {
+  color: var(--af-midnight);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.mov-page--analisisFinanciero .af-sectionTitle--light {
+  color: var(--af-midnight);
+}
+
+.mov-page--analisisFinanciero .af-dispoTotal {
+  color: var(--af-text-muted);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.mov-page--analisisFinanciero .af-dispoTotal strong {
+  color: var(--af-success);
+  font-weight: 800;
+}
+
+.mov-page--analisisFinanciero .af-breakdownGrid,
+.mov-page--analisisFinanciero .af-dispoGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0 14px 14px;
+  min-width: 0;
+}
+
+.mov-page--analisisFinanciero .af-footTotals {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding: 0 14px 14px;
+  background: transparent;
+}
+
+.mov-page--analisisFinanciero .af-breakCard,
+.mov-page--analisisFinanciero .af-dispoCard,
+.mov-page--analisisFinanciero .af-totalCard {
+  position: relative;
+  min-width: 0;
+  min-height: 142px;
+  background: var(--af-surface);
+  border: 1px solid rgba(10, 37, 64, 0.09);
+  border-radius: 20px;
+  box-shadow: var(--af-shadow-md);
+  padding: 20px 16px 17px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transition: var(--af-trans);
+}
+
+.mov-page--analisisFinanciero .af-breakCard:hover,
+.mov-page--analisisFinanciero .af-dispoCard:hover,
+.mov-page--analisisFinanciero .af-totalCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--af-shadow-lg);
+}
+
+.mov-page--analisisFinanciero .af-breakCard::before,
+.mov-page--analisisFinanciero .af-dispoCard::before,
+.mov-page--analisisFinanciero .af-totalCard::before {
+  display: none !important;
+}
+
+.mov-page--analisisFinanciero .af-breakCard::after,
+.mov-page--analisisFinanciero .af-dispoCard::after,
+.mov-page--analisisFinanciero .af-totalCard::after {
+  content: "";
+  position: absolute;
+  inset: auto -40px -55px auto;
+  width: 115px;
+  height: 115px;
+  border-radius: 999px;
+  opacity: 0.46;
+  pointer-events: none;
+}
+
+.mov-page--analisisFinanciero .af-breakCard--ingreso::after,
+.mov-page--analisisFinanciero .af-totalCard--pos::after,
+.mov-page--analisisFinanciero .af-dispoCard::after {
+  background: var(--af-success-15);
+}
+
+.mov-page--analisisFinanciero .af-breakCard--egreso::after,
+.mov-page--analisisFinanciero .af-totalCard--neg::after {
+  background: var(--af-danger-15);
+}
+
+.mov-page--analisisFinanciero .af-breakCard--neutral::after {
+  background: var(--af-info-16);
+}
+
+.mov-page--analisisFinanciero .af-breakCard__icon,
+.mov-page--analisisFinanciero .af-dispoCard__icon,
+.mov-page--analisisFinanciero .af-totalCard__icon,
+.mov-page--analisisFinanciero .af-cardIconSkeleton {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+  font-size: 18px;
+  flex: 0 0 auto;
+}
+
+.mov-page--analisisFinanciero .af-breakCard--ingreso .af-breakCard__icon,
+.mov-page--analisisFinanciero .af-totalCard--pos .af-totalCard__icon,
+.mov-page--analisisFinanciero .af-dispoCard__icon {
+  background: var(--af-success-15);
+  color: var(--af-success);
+}
+
+.mov-page--analisisFinanciero .af-breakCard--egreso .af-breakCard__icon,
+.mov-page--analisisFinanciero .af-totalCard--neg .af-totalCard__icon {
+  background: var(--af-danger-15);
+  color: var(--af-danger);
+}
+
+.mov-page--analisisFinanciero .af-breakCard--neutral .af-breakCard__icon {
+  background: var(--af-info-16);
+  color: var(--af-action);
+}
+
+.mov-page--analisisFinanciero .af-cardIconSkeleton {
+  display: block;
+  background: rgba(10, 37, 64, 0.08);
+}
+
+.mov-page--analisisFinanciero .af-breakCard__body,
+.mov-page--analisisFinanciero .af-dispoCard__body,
+.mov-page--analisisFinanciero .af-totalCard__body {
+  width: 100%;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.mov-page--analisisFinanciero .af-breakCard__label,
+.mov-page--analisisFinanciero .af-dispoCard__label,
+.mov-page--analisisFinanciero .af-totalLabel {
+  display: block;
+  color: var(--af-text-muted);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  line-height: 1.25;
+  margin: 0 0 4px;
+}
+
+.mov-page--analisisFinanciero .af-breakCard__value,
+.mov-page--analisisFinanciero .af-dispoCard__value,
+.mov-page--analisisFinanciero .af-totalValue {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  color: var(--af-midnight);
+  font-size: clamp(21px, 2vw, 28px);
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.mov-page--analisisFinanciero .af-breakCard__value--ingreso,
+.mov-page--analisisFinanciero .af-totalCard--pos .af-totalValue,
+.mov-page--analisisFinanciero .af-dispoCard__value {
+  color: var(--af-success);
+}
+
+.mov-page--analisisFinanciero .af-breakCard__value--egreso,
+.mov-page--analisisFinanciero .af-totalCard--neg .af-totalValue {
+  color: var(--af-danger);
+}
+
+.mov-page--analisisFinanciero .af-breakCard__sub,
+.mov-page--analisisFinanciero .af-dispoCard__sub,
+.mov-page--analisisFinanciero .af-totalSub {
+  display: block;
+  color: var(--af-text-muted);
+  font-size: 12px;
+  margin-top: 6px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.mov-page--analisisFinanciero .af-breakCard__badge,
+.mov-page--analisisFinanciero .af-totalTop {
+  display: none !important;
+}
+
+@media (max-width: 1200px) {
+  .mov-page--analisisFinanciero .af-breakdownGrid,
+  .mov-page--analisisFinanciero .af-dispoGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .mov-page--analisisFinanciero .af-breakdownGrid,
+  .mov-page--analisisFinanciero .af-dispoGrid,
+  .mov-page--analisisFinanciero .af-footTotals {
+    grid-template-columns: 1fr;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .mov-page--analisisFinanciero .af-sectionHead {
+    padding: 0 10px;
+  }
+}
+
+html[data-theme="oscuro"] .mov-page--analisisFinanciero,
+body.dark .mov-page--analisisFinanciero {
+  --af-bg: #071624;
+  --af-surface: #0b1e33;
+  --af-text: rgba(255, 255, 255, 0.84);
+  --af-text-muted: rgba(255, 255, 255, 0.68);
+  --af-action: #4a8dff;
+  --af-shadow-md: 0 14px 34px rgba(0, 0, 0, 0.45);
+  --af-shadow-lg: 0 18px 45px rgba(0, 0, 0, 0.55);
+}
+
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-breakCard,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-dispoCard,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalCard,
+body.dark .mov-page--analisisFinanciero .af-breakCard,
+body.dark .mov-page--analisisFinanciero .af-dispoCard,
+body.dark .mov-page--analisisFinanciero .af-totalCard {
+  background: var(--af-surface) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-sectionTitle,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-sectionTitle--light,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-breakCard__value,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalValue,
+body.dark .mov-page--analisisFinanciero .af-sectionTitle,
+body.dark .mov-page--analisisFinanciero .af-sectionTitle--light,
+body.dark .mov-page--analisisFinanciero .af-breakCard__value,
+body.dark .mov-page--analisisFinanciero .af-totalValue {
+  color: rgba(226, 232, 240, 0.92);
+}
+
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-breakCard__label,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-dispoCard__label,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalLabel,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-breakCard__sub,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-dispoCard__sub,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalSub,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-dispoTotal,
+body.dark .mov-page--analisisFinanciero .af-breakCard__label,
+body.dark .mov-page--analisisFinanciero .af-dispoCard__label,
+body.dark .mov-page--analisisFinanciero .af-totalLabel,
+body.dark .mov-page--analisisFinanciero .af-breakCard__sub,
+body.dark .mov-page--analisisFinanciero .af-dispoCard__sub,
+body.dark .mov-page--analisisFinanciero .af-totalSub,
+body.dark .mov-page--analisisFinanciero .af-dispoTotal {
+  color: rgba(226, 232, 240, 0.68) !important;
+}
+
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-breakCard__value--ingreso,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalCard--pos .af-totalValue,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-dispoCard__value,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-dispoTotal strong,
+body.dark .mov-page--analisisFinanciero .af-breakCard__value--ingreso,
+body.dark .mov-page--analisisFinanciero .af-totalCard--pos .af-totalValue,
+body.dark .mov-page--analisisFinanciero .af-dispoCard__value,
+body.dark .mov-page--analisisFinanciero .af-dispoTotal strong {
+  color: #4ade80 !important;
+}
+
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-breakCard__value--egreso,
+html[data-theme="oscuro"] .mov-page--analisisFinanciero .af-totalCard--neg .af-totalValue,
+body.dark .mov-page--analisisFinanciero .af-breakCard__value--egreso,
+body.dark .mov-page--analisisFinanciero .af-totalCard--neg .af-totalValue {
+  color: #fb7185 !important;
+}

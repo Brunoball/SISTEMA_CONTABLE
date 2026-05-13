@@ -10,9 +10,9 @@ if (!window.__BALTO_FETCH_PATCHED__) {
   window.__BALTO_FETCH_PATCHED__ = true;
 
   const realFetch = window.fetch.bind(window);
-  const DEFAULT_TIMEOUT_MS = 15000;
+  const DEFAULT_TIMEOUT_MS = 20000;
 
-  function mergeSignals(signalA, signalB) {
+  function createMergedSignal(signalA, signalB) {
     if (!signalA) return signalB;
     if (!signalB) return signalA;
 
@@ -20,24 +20,76 @@ if (!window.__BALTO_FETCH_PATCHED__) {
       return AbortSignal.any([signalA, signalB]);
     }
 
-    return signalB;
+    const mergedCtrl = new AbortController();
+    const abortMerged = () => {
+      if (!mergedCtrl.signal.aborted) mergedCtrl.abort();
+    };
+
+    if (signalA.aborted || signalB.aborted) {
+      abortMerged();
+      return mergedCtrl.signal;
+    }
+
+    signalA.addEventListener("abort", abortMerged, { once: true });
+    signalB.addEventListener("abort", abortMerged, { once: true });
+
+    return mergedCtrl.signal;
+  }
+
+  function normalizeFetchError(error, { input, timeoutMs, timedOut, callerSignal }) {
+    const rawMessage = String(error?.message || error || "");
+    const isAbort = error?.name === "AbortError" || /abort|aborted/i.test(rawMessage);
+    const cancelledByCaller = isAbort && !timedOut && callerSignal?.aborted === true;
+
+    if (cancelledByCaller) {
+      const cancelled = new Error("Solicitud cancelada.");
+      cancelled.name = "AbortError";
+      cancelled.isCancelled = true;
+      cancelled.isNetworkError = false;
+      return cancelled;
+    }
+
+    const offlineNow = typeof navigator !== "undefined" && navigator.onLine === false;
+    const message = offlineNow
+      ? "Sin conexión. Revisá tu WiFi o Internet."
+      : isAbort || timedOut
+        ? "La conexión tardó demasiado. Estamos verificando la red."
+        : "No se pudo conectar con el servidor. Verificá tu conexión e intentá nuevamente.";
+
+    const friendly = new Error(message);
+    friendly.name = isAbort || timedOut ? "TimeoutError" : "NetworkError";
+    friendly.isNetworkError = true;
+    friendly.isTimeout = Boolean(isAbort || timedOut);
+    friendly.originalError = error;
+    friendly.url = typeof input === "string" ? input : "";
+    friendly.timeoutMs = timeoutMs;
+    return friendly;
   }
 
   window.fetch = async (input, init = {}) => {
     const ctrl = new AbortController();
+    const callerSignal = init?.signal;
     const timeoutMs =
       typeof init?.timeoutMs === "number" && init.timeoutMs > 0
         ? init.timeoutMs
         : DEFAULT_TIMEOUT_MS;
 
+    let timedOut = false;
     const timeoutId = setTimeout(() => {
-      ctrl.abort();
+      timedOut = true;
+      try {
+        ctrl.abort("timeout");
+      } catch {
+        ctrl.abort();
+      }
     }, timeoutMs);
+
+    const { timeoutMs: _timeoutMs, signal: _signal, ...fetchInit } = init || {};
 
     try {
       const response = await realFetch(input, {
-        ...init,
-        signal: mergeSignals(init.signal, ctrl.signal),
+        ...fetchInit,
+        signal: createMergedSignal(callerSignal, ctrl.signal),
       });
 
       try {
@@ -45,22 +97,29 @@ if (!window.__BALTO_FETCH_PATCHED__) {
       } catch {}
 
       return response;
-    } catch (e) {
-      const isAbort = e?.name === "AbortError";
+    } catch (error) {
+      const friendly = normalizeFetchError(error, {
+        input,
+        timeoutMs,
+        timedOut,
+        callerSignal,
+      });
 
-      try {
-        window.dispatchEvent(
-          new CustomEvent(isAbort ? "net:fetch_timeout" : "net:fetch_failed", {
-            detail: {
-              error: String(e),
-              url: typeof input === "string" ? input : "",
-              timeoutMs,
-            },
-          })
-        );
-      } catch {}
+      if (!friendly.isCancelled) {
+        try {
+          window.dispatchEvent(
+            new CustomEvent(friendly.isTimeout ? "net:fetch_timeout" : "net:fetch_failed", {
+              detail: {
+                error: friendly.message,
+                url: typeof input === "string" ? input : "",
+                timeoutMs,
+              },
+            })
+          );
+        } catch {}
+      }
 
-      throw e;
+      throw friendly;
     } finally {
       clearTimeout(timeoutId);
     }

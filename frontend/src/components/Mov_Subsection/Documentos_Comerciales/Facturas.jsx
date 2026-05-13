@@ -123,22 +123,58 @@ function buildUrl(action, params = {}) {
   return `${API}?${qs.toString()}`;
 }
 
+function isNetworkError(err) {
+  if (err?.isNetworkError === true) return true;
+  const msg = String(err?.message || err || "").toLowerCase();
+  return (
+    err?.name === "NetworkError" ||
+    err?.name === "TimeoutError" ||
+    msg.includes("failed to fetch") ||
+    msg.includes("network") ||
+    msg.includes("timeout") ||
+    msg.includes("aborted") ||
+    msg.includes("abort") ||
+    msg.includes("sin conexión") ||
+    msg.includes("sin conexion") ||
+    msg.includes("no se pudo conectar") ||
+    msg.includes("tardó demasiado") ||
+    msg.includes("tardo demasiado")
+  );
+}
+
 async function apiGetJson(url) {
-  const res = await fetch(url, { method: "GET", headers: getAuthHeaders() });
-  const text = await res.text();
-  let data = null;
-
   try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    throw new Error("La API no devolvió JSON válido.");
-  }
+    const res = await fetch(url, {
+      method: "GET",
+      headers: getAuthHeaders(),
+      cache: "no-store",
+      timeoutMs: 20000,
+    });
+    const text = await res.text();
+    let data = null;
 
-  if (!res.ok || data?.exito === false || data?.success === false) {
-    throw new Error(data?.mensaje || data?.message || "No se pudo completar la operación.");
-  }
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      throw new Error("La API no devolvió JSON válido.");
+    }
 
-  return data || {};
+    if (!res.ok || data?.exito === false || data?.success === false) {
+      throw new Error(data?.mensaje || data?.message || "No se pudo completar la operación.");
+    }
+
+    return data || {};
+  } catch (err) {
+    if (err?.isCancelled) throw err;
+
+    if (isNetworkError(err)) {
+      const e = new Error("Sin conexión o servidor no disponible. Cuando vuelva Internet, los datos se actualizarán automáticamente.");
+      e.isNetworkError = true;
+      throw e;
+    }
+
+    throw err;
+  }
 }
 
 function getDocumentoIcon(tipo) {
@@ -219,6 +255,7 @@ function DocumentosClientePanel({
   const [loadingDocumentos, setLoadingDocumentos] = useState(false);
   const [documentosLoaded, setDocumentosLoaded] = useState(false);
   const [error, setError] = useState("");
+  const [reloadTick, setReloadTick] = useState(0);
   const [openVerComprobante, setOpenVerComprobante] = useState(false);
   const [comprobanteUrl, setComprobanteUrl] = useState("");
   const [comprobanteMime, setComprobanteMime] = useState("application/pdf");
@@ -296,6 +333,16 @@ function DocumentosClientePanel({
     };
   }, []);
 
+  useEffect(() => {
+    const handleReconnect = () => {
+      setError("");
+      setReloadTick((tick) => tick + 1);
+    };
+
+    window.addEventListener("net:reconnected", handleReconnect);
+    return () => window.removeEventListener("net:reconnected", handleReconnect);
+  }, []);
+
   const totalDocumentos = useMemo(
     () => clientes.reduce((acc, cli) => acc + Number(cli?.total_documentos || 0), 0),
     [clientes]
@@ -344,7 +391,13 @@ function DocumentosClientePanel({
         return rows[0] || null;
       });
     } catch (err) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || err?.isCancelled) return;
+
+      if (err?.isNetworkError) {
+        setError("");
+        return;
+      }
+
       setClientes([]);
       setSelectedCliente(null);
       setError(err?.message || "No se pudieron cargar los clientes.");
@@ -364,7 +417,6 @@ function DocumentosClientePanel({
 
     setLoadingDocumentos(true);
     setDocumentosLoaded(false);
-    setDocumentos([]);
     setError("");
 
     try {
@@ -379,7 +431,14 @@ function DocumentosClientePanel({
       setDocumentos(rows);
       setDocumentosLoaded(true);
     } catch (err) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || err?.isCancelled) return;
+
+      if (err?.isNetworkError) {
+        setError("");
+        setDocumentosLoaded(true);
+        return;
+      }
+
       setDocumentos([]);
       setDocumentosLoaded(true);
       setError(err?.message || "No se pudieron cargar los documentos del cliente.");
@@ -390,11 +449,11 @@ function DocumentosClientePanel({
 
   useEffect(() => {
     cargarClientes();
-  }, [cargarClientes]);
+  }, [cargarClientes, reloadTick]);
 
   useEffect(() => {
     cargarDocumentos();
-  }, [cargarDocumentos]);
+  }, [cargarDocumentos, reloadTick]);
 
   const showClientesSkeleton = loadingClientes;
   const showPanelSkeleton = Boolean(

@@ -20,6 +20,8 @@ const PING_INTERVAL_MS = 2500;
 const PING_TIMEOUT_MS = 3500;
 const FAILS_TO_LOCK = 2;
 const SUCCESSES_TO_UNLOCK = 3;
+const AUTO_RELOAD_AFTER_RECONNECT = true;
+const RELOAD_DELAY_MS = 1200;
 
 function buildPingUrl() {
   const base = String(BASE_URL || "").trim().replace(/\/+$/, "");
@@ -209,9 +211,41 @@ export default function NetworkProvider({ children }) {
 
     if (prev === true && offline === false) {
       setToastOk(true);
+
+      try {
+        window.dispatchEvent(new CustomEvent("net:reconnected"));
+      } catch {}
+
+      if (AUTO_RELOAD_AFTER_RECONNECT) {
+        let alreadyReloading = false;
+
+        try {
+          alreadyReloading = sessionStorage.getItem("balto_reconnect_reloading") === "1";
+        } catch {}
+
+        if (!alreadyReloading) {
+          try {
+            sessionStorage.setItem("balto_reconnect_reloading", "1");
+          } catch {}
+
+          setTimeout(() => {
+            window.location.reload();
+          }, RELOAD_DELAY_MS);
+        }
+      }
     }
 
     prevOfflineRef.current = offline;
+
+    if (!offline) {
+      const cleanId = setTimeout(() => {
+        try {
+          sessionStorage.removeItem("balto_reconnect_reloading");
+        } catch {}
+      }, 4000);
+
+      return () => clearTimeout(cleanId);
+    }
   }, [offline]);
 
   useEffect(() => {

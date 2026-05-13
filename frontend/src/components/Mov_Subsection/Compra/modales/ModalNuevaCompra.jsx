@@ -18,6 +18,7 @@ import {
   faPlus,
 } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
+import ModalClienteFiscalArca from "../../../Global/Modales/ModalClienteFiscalArca.jsx";
 
 const NULL_OPTION = "";
 const NOMBRE_COMPROBANTE_GENERICO = "Comprobante adjunto";
@@ -87,6 +88,57 @@ function uid() {
 function safeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "-";
+}
+function safeStr(v) {
+  return String(v ?? "").trim();
+}
+function onlyDigits(v) {
+  return String(v ?? "").replace(/\D/g, "");
+}
+function normalizeText(v) {
+  return String(v ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function normalizeArcaSummary(s) {
+  const x = s && typeof s === "object" ? s : {};
+  return {
+    cuit: safeStr(x.cuit),
+    razon_social: safeStr(x.razon_social),
+    condicion_iva: safeStr(x.iva || x.condicion_iva),
+    domicilio: safeStr(x.domicilio),
+    doc_tipo: 80,
+    doc_nro: safeStr(x.cuit),
+    origen: "arca_cuit",
+  };
+}
+function normalizeProveedorFiscalDb(data) {
+  const s = data && typeof data === "object" ? data : {};
+  return {
+    id_cliente_fiscal: Number(s.id_cliente_fiscal || 0) || null,
+    id_proveedor: Number(s.id_proveedor || 0) || null,
+    tipo_entidad: safeStr(s.tipo_entidad || "proveedor"),
+    doc_tipo: Number(s.doc_tipo || 80) || 80,
+    doc_nro: safeStr(s.doc_nro),
+    cuit: safeStr(s.cuit),
+    razon_social: safeStr(s.razon_social),
+    condicion_iva: safeStr(s.condicion_iva || s.cond_iva),
+    domicilio: safeStr(s.domicilio),
+    origen: safeStr(s.origen || "manual"),
+  };
+}
+function normalizeProveedorSimple(data) {
+  const s = data && typeof data === "object" ? data : {};
+  const id = getProveedorId(s) || Number(s.id_proveedor || s.id || 0) || null;
+  return {
+    id_proveedor: id,
+    id,
+    nombre: safeStr(s.nombre || s.razon_social || s.label || ""),
+    activo: Number(s.activo ?? 1) === 0 ? 0 : 1,
+  };
 }
 
 function isAllowedComprobanteFile(file) {
@@ -556,6 +608,40 @@ function describeLineProblem(r, idx1based) {
 }
 
 const SAFE_LISTS = { proveedores: [], detalles: [], medios_pago: [] };
+const ADD_PROVEEDOR_OPTION = {
+  __action: "add_proveedor",
+  id: "__add_proveedor__",
+  id_proveedor: "__add_proveedor__",
+  nombre: "➕ Agregar proveedor por CUIT",
+};
+
+function isAddProveedorOption(option) {
+  return option?.__action === "add_proveedor";
+}
+
+function resolveProveedorByInput(proveedores, inputValue) {
+  const q = normalizeText(inputValue);
+  if (!q) return null;
+
+  const arr = Array.isArray(proveedores) ? proveedores : [];
+  const wm = arr
+    .map((p) => ({
+      raw: p,
+      id: getProveedorId(p),
+      nombreNorm: normalizeText(p?.nombre),
+    }))
+    .filter((x) => x.id && x.nombreNorm);
+
+  if (!wm.length) return null;
+
+  const exact = wm.find((x) => x.nombreNorm === q);
+  if (exact) return exact.raw;
+
+  const starts = wm.filter((x) => x.nombreNorm.startsWith(q));
+  if (starts.length === 1) return starts[0].raw;
+
+  return null;
+}
 
 function normalizeLists(lists) {
   const src = lists && typeof lists === "object" ? lists : {};
@@ -731,6 +817,8 @@ function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, o
 export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSaved }) {
   const API_BATCH = `${BASE_URL}/api.php?action=compras_crear_batch`;
   const API_UPLOAD_LINK = `${BASE_URL}/api.php?action=compras_comprobantes_vincular_movimientos_lote_upload`;
+  const API_PADRON_CUIT = `${BASE_URL}/api.php?action=padron_cuit&op=padron_cuit`;
+  const API_SAVE_PROVEEDOR_DESDE_ARCA = `${BASE_URL}/api.php?action=proveedor_fiscal_crear_desde_arca`;
 
   const showToast = useCallback((tipo, mensaje, dur = 2800) => onToast?.(tipo, mensaje, dur), [onToast]);
 
@@ -758,6 +846,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     () => (Array.isArray(localLists.proveedores) ? localLists.proveedores : []),
     [localLists.proveedores]
   );
+  const proveedoresOptions = useMemo(() => [ADD_PROVEEDOR_OPTION, ...proveedoresList], [proveedoresList]);
 
   const [fecha, setFecha] = useState(todayISO);
   const [forma, setForma] = useState(NULL_OPTION);
@@ -766,7 +855,17 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const [rows, setRows] = useState(() => [buildEmptyRow()]);
   const [saving, setSaving] = useState(false);
   const [archivoAdjunto, setArchivoAdjunto] = useState(null);
-  const [addUI, setAddUI] = useState({ open: false, kind: null, rowId: null, text: "", saving: false });
+  const [addUI, setAddUI] = useState({
+    open: false,
+    kind: null,
+    rowId: null,
+    text: "",
+    cuit: "",
+    fiscalData: null,
+    fiscalError: "",
+    lookupLoading: false,
+    saving: false,
+  });
   const [mediosFilas, setMediosFilas] = useState(() => [buildEmptyMedioPago()]);
 
   const closeBtnRef = useRef(null);
@@ -792,7 +891,17 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       setProvInput("");
       setRows([buildEmptyRow()]);
       setMediosFilas([buildEmptyMedioPago()]);
-      setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
+      setAddUI({
+        open: false,
+        kind: null,
+        rowId: null,
+        text: "",
+        cuit: "",
+        fiscalData: null,
+        fiscalError: "",
+        lookupLoading: false,
+        saving: false,
+      });
       setSaving(false);
       setArchivoAdjunto(null);
       setTimeout(() => closeBtnRef.current?.focus(), 0);
@@ -851,10 +960,125 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     setIdProveedor(NULL_OPTION);
   }, []);
 
+  const startAddProveedor = useCallback(() => {
+    if (saving) return;
+    setAddUI({
+      open: true,
+      kind: "proveedores",
+      rowId: null,
+      text: provInput || "",
+      cuit: "",
+      fiscalData: null,
+      fiscalError: "",
+      lookupLoading: false,
+      saving: false,
+    });
+  }, [saving, provInput]);
+
+  const registrarProveedorLocal = useCallback((proveedorRaw, fiscalRaw = null) => {
+    const proveedor = normalizeProveedorSimple(proveedorRaw);
+    if (!proveedor.id_proveedor) return proveedor;
+
+    setLocalLists((prev) => {
+      const arr = Array.isArray(prev.proveedores) ? prev.proveedores.slice() : [];
+      const idx = arr.findIndex((x) => Number(getProveedorId(x)) === Number(proveedor.id_proveedor));
+      const item = {
+        id: Number(proveedor.id_proveedor),
+        id_proveedor: Number(proveedor.id_proveedor),
+        nombre: proveedor.nombre,
+        activo: proveedor.activo,
+      };
+      if (idx >= 0) arr[idx] = { ...arr[idx], ...item };
+      else arr.push(item);
+      return { ...prev, proveedores: arr };
+    });
+
+    setIdProveedor(String(proveedor.id_proveedor));
+    setProvInput(proveedor.nombre || "");
+
+    return { proveedor, fiscal: fiscalRaw ? normalizeProveedorFiscalDb(fiscalRaw) : null };
+  }, []);
+
+  const consultarArcaAddProveedor = useCallback(async () => {
+    const cuit = onlyDigits(addUI.cuit);
+    if (cuit.length !== 11) {
+      setAddUI((p) => ({ ...p, fiscalError: "Ingresá un CUIT válido de 11 dígitos." }));
+      return null;
+    }
+
+    setAddUI((p) => ({ ...p, lookupLoading: true, fiscalError: "", fiscalData: null }));
+    try {
+      const data = await apiGet(`${API_PADRON_CUIT}&cuit=${cuit}`);
+      const summary = data?.data?.summary ?? data?.summary ?? null;
+      if (!summary) throw new Error("ARCA no devolvió datos para ese CUIT.");
+      const fiscal = normalizeArcaSummary(summary);
+      if (!fiscal.cuit || !fiscal.razon_social) throw new Error("ARCA devolvió datos incompletos.");
+
+      setAddUI((p) => ({
+        ...p,
+        lookupLoading: false,
+        fiscalData: fiscal,
+        fiscalError: "",
+        text: fiscal.razon_social || p.text,
+      }));
+      return fiscal;
+    } catch (e) {
+      setAddUI((p) => ({
+        ...p,
+        lookupLoading: false,
+        fiscalData: null,
+        fiscalError: e?.message || "No se pudo consultar ARCA.",
+      }));
+      return null;
+    }
+  }, [API_PADRON_CUIT, addUI.cuit]);
+
+  const guardarProveedorDesdeArcaEnModal = useCallback(async (fiscalSource) => {
+    const fiscal = normalizeProveedorFiscalDb(fiscalSource || {});
+    if (!fiscal.cuit || !fiscal.razon_social) {
+      throw new Error("Primero consultá un CUIT válido en ARCA.");
+    }
+
+    const { idUsuario, idUsuarioMaster } = getAuthInfo();
+    const saved = await apiPostJson(API_SAVE_PROVEEDOR_DESDE_ARCA, {
+      idUsuario,
+      idUsuarioMaster,
+      tipo_entidad: "proveedor",
+      id_proveedor: null,
+      doc_tipo: Number(fiscal.doc_tipo || 80),
+      doc_nro: fiscal.doc_nro || fiscal.cuit,
+      cuit: fiscal.cuit,
+      razon_social: fiscal.razon_social,
+      condicion_iva: fiscal.condicion_iva,
+      domicilio: fiscal.domicilio,
+      origen: fiscal.origen || "arca_cuit",
+      actualizar_nombre_proveedor: 1,
+      activo: 1,
+    });
+
+    if (!saved?.exito || !saved?.proveedor || !saved?.cliente_fiscal) {
+      throw new Error(saved?.mensaje || "No se pudo guardar el proveedor fiscal.");
+    }
+
+    const result = registrarProveedorLocal(saved.proveedor, saved.cliente_fiscal);
+    return {
+      proveedor: result.proveedor,
+      proveedor_fiscal: result.fiscal,
+      ya_existia: !!saved?.ya_existia,
+      sin_cambios: !!saved?.sin_cambios,
+      mensaje: saved?.mensaje || "",
+    };
+  }, [API_SAVE_PROVEEDOR_DESDE_ARCA, registrarProveedorLocal]);
+
   const handleSelectProveedor = useCallback((prov) => {
+    if (isAddProveedorOption(prov)) {
+      startAddProveedor();
+      return;
+    }
+
     setProvInput(String(prov?.nombre ?? "").trim());
     setIdProveedor(getProveedorId(prov) != null ? String(getProveedorId(prov)) : NULL_OPTION);
-  }, []);
+  }, [startAddProveedor]);
 
   useEffect(() => {
     if (!open) return;
@@ -907,20 +1131,74 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     [updateRow]
   );
 
+  const resetAddUIState = useCallback(() => {
+    setAddUI({
+      open: false,
+      kind: null,
+      rowId: null,
+      text: "",
+      cuit: "",
+      fiscalData: null,
+      fiscalError: "",
+      lookupLoading: false,
+      saving: false,
+    });
+  }, []);
+
   const closeAddMini = useCallback(() => {
-    if (addUI.saving) return;
-    setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
-  }, [addUI.saving]);
+    if (addUI.saving || addUI.lookupLoading) return;
+    resetAddUIState();
+  }, [addUI.saving, addUI.lookupLoading, resetAddUIState]);
 
   const guardarNuevoCatalogo = useCallback(async () => {
+    const kind = addUI.kind;
+    if (!kind) return;
+
+    if (kind === "proveedores") {
+      const cuit = onlyDigits(addUI.cuit);
+      if (cuit.length !== 11) {
+        const msg = "Ingresá un CUIT válido de 11 dígitos, presioná Consultar ARCA y después confirmá.";
+        setAddUI((p) => ({ ...p, fiscalError: msg }));
+        showToast("advertencia", msg, 3600);
+        return;
+      }
+
+      setAddUI((p) => ({ ...p, saving: true, fiscalError: "" }));
+      showToast("cargando", "Consultando ARCA y creando proveedor…", 12000);
+
+      try {
+        let fiscal = addUI.fiscalData;
+        if (!fiscal || onlyDigits(fiscal.cuit) !== cuit) {
+          const data = await apiGet(`${API_PADRON_CUIT}&cuit=${cuit}`);
+          const summary = data?.data?.summary ?? data?.summary ?? null;
+          if (!summary) throw new Error("ARCA no devolvió datos para ese CUIT.");
+          fiscal = normalizeArcaSummary(summary);
+        }
+
+        const result = await guardarProveedorDesdeArcaEnModal(fiscal);
+        resetAddUIState();
+        if (result?.ya_existia) {
+          showToast(
+            "exito",
+            `El proveedor ya existía. Se seleccionó "${result?.proveedor?.nombre || fiscal.razon_social}" sin duplicarlo.`,
+            3600
+          );
+        } else {
+          showToast("exito", `Proveedor fiscal creado: "${result?.proveedor?.nombre || fiscal.razon_social}"`, 3200);
+        }
+        return;
+      } catch (e) {
+        setAddUI((p) => ({ ...p, saving: false, fiscalError: e?.message || "No se pudo guardar el proveedor desde ARCA." }));
+        showToast("error", e?.message || "No se pudo guardar el proveedor desde ARCA.", 5200);
+        return;
+      }
+    }
+
     const nombre = String(addUI.text || "").trim();
     if (!nombre) {
       showToast("advertencia", "Escribí un nombre antes de guardar.", 2600);
       return;
     }
-
-    const kind = addUI.kind;
-    if (!kind) return;
 
     setAddUI((p) => ({ ...p, saving: true }));
     showToast("cargando", `Creando ${kind === "detalles" ? "detalle" : "proveedor"}…`, 12000);
@@ -961,13 +1239,39 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
         setProvInput(newNombre);
       }
 
-      setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
+      resetAddUIState();
       showToast("exito", `${kind === "detalles" ? "Detalle" : "Proveedor"} creado: "${newNombre}"`, 2600);
     } catch (e) {
       setAddUI((p) => ({ ...p, saving: false }));
       showToast("error", e?.message || "Error creando.", 4200);
     }
-  }, [addUI, showToast]);
+  }, [
+    addUI,
+    API_PADRON_CUIT,
+    guardarProveedorDesdeArcaEnModal,
+    resetAddUIState,
+    showToast,
+  ]);
+
+  const proveedorResolvedFromInput = useMemo(
+    () => resolveProveedorByInput(proveedoresList, provInput),
+    [proveedoresList, provInput]
+  );
+
+  const selectedProveedorId = useMemo(() => {
+    const d = Number(idProveedor);
+    if (Number.isFinite(d) && d > 0) return d;
+    return getProveedorId(proveedorResolvedFromInput) ?? 0;
+  }, [idProveedor, proveedorResolvedFromInput]);
+
+  useEffect(() => {
+    if (!open) return;
+    const direct = Number(idProveedor);
+    const fallbackId = getProveedorId(proveedorResolvedFromInput);
+    if ((!Number.isFinite(direct) || direct <= 0) && fallbackId) {
+      setIdProveedor(String(fallbackId));
+    }
+  }, [open, idProveedor, proveedorResolvedFromInput]);
 
   const rowsCalc = useMemo(
     () =>
@@ -995,7 +1299,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
   const sumaMediosPago = useMemo(() => mediosFilas.reduce((a, r) => a + safeNumber(r.monto), 0), [mediosFilas]);
 
   const validate = useCallback(() => {
-    const provId = Number(idProveedor);
+    const provId = Number(selectedProveedorId);
     if (!(Number.isFinite(provId) && provId > 0)) {
       return { ok: false, msg: "Falta seleccionar un Proveedor válido de la lista." };
     }
@@ -1077,7 +1381,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     }
 
     return { ok: true, warn: problems.length > 0 };
-  }, [idProveedor, forma, fecha, isContado, mediosFilas, mediosPagoList, rowsCalc, resumen.total, sumaMediosPago]);
+  }, [selectedProveedorId, forma, fecha, isContado, mediosFilas, mediosPagoList, rowsCalc, resumen.total, sumaMediosPago]);
 
   const subirYVincularArchivo = useCallback(
     async (idsMovimientos, archivo) => {
@@ -1179,7 +1483,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
       const idTipoVenta = isCorriente ? 2 : 1;
       const accionFinal = isCorriente ? "guardar" : "pagar";
       const esPagadaFinal = !isCorriente;
-      const proveedorIdFinal = Number(idProveedor) > 0 ? Number(idProveedor) : null;
+      const proveedorIdFinal = Number(selectedProveedorId) > 0 ? Number(selectedProveedorId) : null;
 
       const mediosPagoPayload = isContado
         ? mediosFilas.flatMap((mp) => {
@@ -1289,7 +1593,7 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
     isContado,
     rowsCalc,
     fecha,
-    idProveedor,
+    selectedProveedorId,
     provInput,
     mediosFilas,
     mediosPagoList,
@@ -1552,9 +1856,9 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
                           value={provInput}
                           onChange={handleProveedorInputChange}
                           onSelect={handleSelectProveedor}
-                          options={proveedoresList}
-                          getOptionLabel={(p) => String(p?.nombre ?? "").trim()}
-                          getOptionValue={(p) => String(getProveedorId(p) ?? p?.nombre ?? "")}
+                          options={proveedoresOptions}
+                          getOptionLabel={(p) => isAddProveedorOption(p) ? "➕ Agregar proveedor por CUIT" : String(p?.nombre ?? "").trim()}
+                          getOptionValue={(p) => isAddProveedorOption(p) ? "__add_proveedor__" : String(getProveedorId(p) ?? p?.nombre ?? "")}
                           label="Proveedor *"
                           placeholder=" "
                           disabled={saving || addUI.open}
@@ -1708,13 +2012,36 @@ export default function ModalNuevaCompra({ open, lists, onClose, onToast, onSave
           </div>
 
           <AddCatalogMiniModal
-            open={addUI.open}
+            open={addUI.open && addUI.kind !== "proveedores"}
             title={addUI.kind === "proveedores" ? "Nuevo proveedor" : "Nuevo detalle"}
             value={addUI.text}
             saving={addUI.saving}
             onChange={(txt) => setAddUI((p) => ({ ...p, text: txt }))}
             onCancel={closeAddMini}
             onSave={guardarNuevoCatalogo}
+          />
+
+          <ModalClienteFiscalArca
+            open={addUI.open && addUI.kind === "proveedores"}
+            title="Agregar proveedor por CUIT"
+            infoTitle="Alta rápida de proveedor"
+            description={
+              <>
+                Ingresá el CUIT, consultamos ARCA, guardamos la razón social en <b>Proveedores</b> y los datos completos en <b>Clientes fiscales</b>.
+              </>
+            }
+            cuit={addUI.cuit}
+            fiscalData={addUI.fiscalData}
+            error={addUI.fiscalError}
+            loading={addUI.lookupLoading}
+            saving={addUI.saving}
+            confirmText="Confirmar y cargar proveedor"
+            footerHelp="Primero buscá el CUIT. Cuando aparezcan los datos, confirmá para guardar la razón social en proveedores y los datos completos en clientes fiscales."
+            requireFiscalData={true}
+            onCuitChange={(v) => setAddUI((p) => ({ ...p, cuit: v, fiscalData: null, fiscalError: "" }))}
+            onLookup={consultarArcaAddProveedor}
+            onClose={closeAddMini}
+            onConfirm={guardarNuevoCatalogo}
           />
         </div>
       </div>

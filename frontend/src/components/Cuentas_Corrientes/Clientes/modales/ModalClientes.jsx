@@ -15,6 +15,9 @@ import {
   faUserSlash,
   faUserCheck,
   faMagnifyingGlass,
+  faIdCard,
+  faFileInvoiceDollar,
+  faCircleCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import ModalEliminar from "../../../Global/Modales/ModalEliminar";
 import "../../../Global/Global_css/Global_oscuro.css";
@@ -45,8 +48,20 @@ function toUpperValue(value) {
   return String(value || "").toUpperCase();
 }
 
+function safeStr(value) {
+  return String(value ?? "").trim();
+}
+
+function onlyDigits(value) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
 function getClienteId(row) {
   return Number(row?.id_cliente ?? row?.id ?? 0);
+}
+
+function getClienteFiscalId(row) {
+  return Number(row?.id_cliente_fiscal ?? row?.cliente_fiscal?.id_cliente_fiscal ?? 0);
 }
 
 function normalizeSearch(value) {
@@ -55,6 +70,72 @@ function normalizeSearch(value) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function normalizeFiscalData(data) {
+  const src = data && typeof data === "object" ? data : {};
+  const cuit = onlyDigits(src.fiscal_cuit || src.cuit || src.doc_nro || src.CUIT || "");
+  const razonSocial = safeStr(
+    src.razon_social ||
+      src.razonSocial ||
+      src.nombre ||
+      src.apellidoNombre ||
+      src.denominacion ||
+      ""
+  );
+  const condicionIva = safeStr(src.condicion_iva || src.cond_iva || src.iva || src.descripcionImpuesto || "");
+  const domicilio = safeStr(src.domicilio || src.direccion || src.domicilioFiscal || "");
+
+  return {
+    id_cliente_fiscal: Number(src.id_cliente_fiscal || 0) || null,
+    id_cliente: Number(src.id_cliente || 0) || null,
+    doc_tipo: Number(src.doc_tipo || 80) || 80,
+    doc_nro: safeStr(src.doc_nro || cuit),
+    cuit,
+    razon_social: razonSocial,
+    condicion_iva: condicionIva,
+    domicilio,
+    origen: safeStr(src.origen || "arca_cuit"),
+    activo: Number(src.activo ?? 1) === 0 ? 0 : 1,
+  };
+}
+
+function fiscalFromClienteRow(row) {
+  if (!row || typeof row !== "object") return null;
+  const nested = row.cliente_fiscal || row.fiscal || null;
+  const fiscal = normalizeFiscalData(nested || row);
+  if (!fiscal.cuit && !fiscal.razon_social && !fiscal.id_cliente_fiscal) return null;
+  fiscal.id_cliente = fiscal.id_cliente || getClienteId(row) || null;
+  return fiscal;
+}
+
+function fiscalIsUsable(fiscal) {
+  const f = normalizeFiscalData(fiscal);
+  return f.cuit.length === 11 && !!f.razon_social;
+}
+
+function fiscalHasAnyData(fiscal) {
+  const f = normalizeFiscalData(fiscal);
+  return !!(
+    f.id_cliente_fiscal ||
+    f.cuit ||
+    f.razon_social ||
+    f.condicion_iva ||
+    f.domicilio
+  );
+}
+
+function buildEmptyForm(activo = 1) {
+  return {
+    nombre: "",
+    activo,
+    cuit: "",
+    fiscalData: null,
+    fiscalError: "",
+    fiscalLoading: false,
+    fiscalConsultado: false,
+    cargaManual: true,
+  };
 }
 
 async function parseJsonOrThrow(res) {
@@ -107,6 +188,213 @@ async function apiPost(action, body) {
   return parseJsonOrThrow(res);
 }
 
+function FiscalResumen({ fiscal }) {
+  const f = normalizeFiscalData(fiscal);
+  if (!fiscalIsUsable(f) && !f.id_cliente_fiscal) return null;
+
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(34, 197, 94, 0.25)",
+        background: "rgba(34, 197, 94, 0.08)",
+        borderRadius: 12,
+        padding: "10px 12px",
+        marginTop: -2,
+        fontSize: 12,
+        color: "var(--nv-text)",
+        display: "grid",
+        gap: 6,
+      }}
+    >
+      <div style={{ fontWeight: 800, display: "flex", alignItems: "center", gap: 7 }}>
+        <FontAwesomeIcon icon={faCircleCheck} /> Datos fiscales cargados
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 10px" }}>
+        <div>
+          <b>CUIT:</b> {f.cuit || "—"}
+        </div>
+        <div>
+          <b>IVA:</b> {f.condicion_iva || "—"}
+        </div>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <b>Razón social:</b> {f.razon_social || "—"}
+        </div>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <b>Domicilio:</b> {f.domicilio || "—"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FiscalEditableFields({ fiscal, cuit, saving, fiscalLoading, dark, onFieldChange }) {
+  const f = normalizeFiscalData({ ...(fiscal || {}), cuit: fiscal?.cuit || cuit });
+  if (!fiscalHasAnyData(f)) return null;
+
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(15, 23, 42, 0.12)",
+        background: dark ? "rgba(15, 23, 42, 0.30)" : "rgba(248, 250, 252, 0.88)",
+        borderRadius: 14,
+        padding: "12px",
+        display: "grid",
+        gap: 10,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, color: "var(--nv-text)", fontSize: 13 }}>
+        <FontAwesomeIcon icon={faFileInvoiceDollar} />
+        Datos legales editables
+      </div>
+
+      <div style={{ fontSize: 12, color: "var(--nv-muted)", lineHeight: 1.45 }}>
+        Estos datos salen en facturación. Podés corregir domicilio, condición IVA o razón social si ARCA vino incompleto/desactualizado.
+      </div>
+
+      <div className="fl-field">
+        <input
+          type="text"
+          className="fl-input"
+          placeholder=" "
+          value={f.razon_social}
+          onChange={(e) => onFieldChange("razon_social", e.target.value)}
+          disabled={saving || fiscalLoading}
+        />
+        <label className="fl-label">Razón social legal *</label>
+      </div>
+
+      <div className="fl-field">
+        <input
+          type="text"
+          className="fl-input"
+          placeholder=" "
+          value={f.condicion_iva}
+          onChange={(e) => onFieldChange("condicion_iva", e.target.value)}
+          disabled={saving || fiscalLoading}
+        />
+        <label className="fl-label">Condición IVA</label>
+      </div>
+
+      <div className="fl-field">
+        <textarea
+          className="fl-input"
+          placeholder=" "
+          value={f.domicilio}
+          onChange={(e) => onFieldChange("domicilio", e.target.value)}
+          disabled={saving || fiscalLoading}
+          rows={3}
+          style={{ minHeight: 76, resize: "vertical", paddingTop: 14 }}
+        />
+        <label className="fl-label">Domicilio fiscal</label>
+      </div>
+    </div>
+  );
+}
+
+function ModalDatosLegalesCliente({ open, dark, row, fiscal, loading, onClose, onEdit }) {
+  if (!open) return null;
+
+  const f = normalizeFiscalData(fiscal || fiscalFromClienteRow(row) || {});
+  const tieneDatos = fiscalHasAnyData(f);
+
+  return createPortal(
+    <div className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim()}>
+      <div
+        className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{ maxWidth: 560, width: "calc(100vw - 34px)" }}
+      >
+        <div className="mi-mini__head">
+          <h4 className="mi-mini__title">Datos legales del cliente</h4>
+          <button type="button" className="mi-mini__close" onClick={onClose} disabled={loading} aria-label="Cerrar">
+            ✕
+          </button>
+        </div>
+
+        <div className="mi-mini__body" style={{ display: "grid", gap: 12 }}>
+          <div
+            style={{
+              border: "1px solid rgba(59, 130, 246, 0.22)",
+              background: "rgba(59, 130, 246, 0.08)",
+              borderRadius: 12,
+              padding: "10px 12px",
+              fontSize: 12,
+              lineHeight: 1.45,
+              color: "var(--nv-text)",
+            }}
+          >
+            Cliente: <b>{row?.nombre || "—"}</b>
+          </div>
+
+          {loading ? (
+            <div className="cc-loading-state" style={{ minHeight: 110 }}>
+              <FontAwesomeIcon icon={faArrowRotateRight} spin />
+              <span>Cargando datos legales...</span>
+            </div>
+          ) : tieneDatos ? (
+            <div
+              style={{
+                border: "1px solid rgba(15, 23, 42, 0.12)",
+                borderRadius: 12,
+                overflow: "hidden",
+              }}
+            >
+              {[
+                ["CUIT", f.cuit || "—"],
+                ["Razón social", f.razon_social || "—"],
+                ["Condición IVA", f.condicion_iva || "—"],
+                ["Domicilio fiscal", f.domicilio || "—"],
+                ["Origen", f.origen || "—"],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "140px 1fr",
+                    gap: 10,
+                    padding: "10px 12px",
+                    borderBottom: "1px solid rgba(15, 23, 42, 0.08)",
+                    fontSize: 13,
+                  }}
+                >
+                  <b style={{ color: "var(--nv-muted)" }}>{label}</b>
+                  <span style={{ color: "var(--nv-text)", whiteSpace: "pre-wrap" }}>{value}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                border: "1px solid rgba(245, 158, 11, 0.28)",
+                background: "rgba(245, 158, 11, 0.10)",
+                borderRadius: 12,
+                padding: "12px",
+                fontSize: 13,
+                color: "var(--nv-text)",
+                lineHeight: 1.45,
+              }}
+            >
+              Este cliente todavía no tiene datos fiscales cargados. Podés editarlo y consultar ARCA por CUIT para crear los datos legales.
+            </div>
+          )}
+
+          <div className="mi-mini__actions">
+            <button type="button" className="mit-btn mit-btn--ghost" onClick={onClose} disabled={loading}>
+              Cerrar
+            </button>
+            <button type="button" className="mit-btn mit-btn--solid" onClick={onEdit} disabled={loading}>
+              {tieneDatos ? "Editar datos legales" : "Cargar datos legales"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export default function ModalClientes({
   open,
   onClose,
@@ -124,10 +412,7 @@ export default function ModalClientes({
   const [pestana, setPestana] = useState("activos");
   const [modo, setModo] = useState("crear");
   const [editandoId, setEditandoId] = useState(null);
-  const [form, setForm] = useState({
-    nombre: "",
-    activo: 1,
-  });
+  const [form, setForm] = useState(() => buildEmptyForm(1));
 
   const [modalAccion, setModalAccion] = useState({
     open: false,
@@ -136,7 +421,21 @@ export default function ModalClientes({
     loading: false,
   });
 
-  const isBusy = loading || saving || modalAccion.loading || modalAccion.open;
+  const [modalFiscal, setModalFiscal] = useState({
+    open: false,
+    row: null,
+    fiscal: null,
+    loading: false,
+  });
+
+  const isBusy =
+    loading ||
+    saving ||
+    form.fiscalLoading ||
+    modalAccion.loading ||
+    modalAccion.open ||
+    modalFiscal.loading ||
+    modalFiscal.open;
 
   useEffect(() => {
     const update = () => setDark(isTemaOscuro());
@@ -175,34 +474,29 @@ export default function ModalClientes({
 
     const h = (e) => {
       if (e.key !== "Escape") return;
+      if (modalAccion.open || modalFiscal.open) return;
 
-      // Si está abierto el modal de eliminar / alta / baja,
-      // este modal padre NO se tiene que cerrar.
-      if (modalAccion.open) return;
-
-      if (!loading && !saving) {
+      if (!loading && !saving && !form.fiscalLoading) {
         onClose?.();
       }
     };
 
     document.addEventListener("keydown", h, true);
     return () => document.removeEventListener("keydown", h, true);
-  }, [open, onClose, loading, saving, modalAccion.open]);
+  }, [open, onClose, loading, saving, form.fiscalLoading, modalAccion.open, modalFiscal.open]);
 
   useEffect(() => {
     if (open) {
       setTimeout(() => closeBtnRef.current?.focus(), 0);
       setBusqueda("");
+      setModalFiscal({ open: false, row: null, fiscal: null, loading: false });
     }
   }, [open]);
 
   const resetForm = useCallback(() => {
     setModo("crear");
     setEditandoId(null);
-    setForm({
-      nombre: "",
-      activo: pestana === "inactivos" ? 0 : 1,
-    });
+    setForm(buildEmptyForm(pestana === "inactivos" ? 0 : 1));
   }, [pestana]);
 
   const cargarClientes = useCallback(
@@ -225,6 +519,96 @@ export default function ModalClientes({
     [onToast, pestana]
   );
 
+  const cargarFiscalCliente = useCallback(async (idCliente) => {
+    const id = Number(idCliente || 0);
+    if (!id) return null;
+
+    try {
+      const params = new URLSearchParams({
+        action: "cc_cliente_fiscal_get",
+        id_cliente: String(id),
+      });
+      const data = await apiGet(`${API_URL}?${params.toString()}`);
+      const fiscal = data?.cliente_fiscal ? normalizeFiscalData(data.cliente_fiscal) : null;
+      return fiscal && (fiscal.id_cliente_fiscal || fiscal.cuit) ? fiscal : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const actualizarCampoFiscal = useCallback((campo, valor) => {
+    setForm((prev) => {
+      const cuitActual = onlyDigits(prev.cuit);
+      const base = normalizeFiscalData(prev.fiscalData || {
+        cuit: cuitActual,
+        doc_nro: cuitActual,
+        doc_tipo: 80,
+        origen: "manual",
+        activo: 1,
+      });
+
+      const next = { ...base };
+
+      if (campo === "cuit") {
+        const cuit = onlyDigits(valor);
+        next.cuit = cuit;
+        next.doc_nro = cuit;
+        return {
+          ...prev,
+          cuit,
+          fiscalData: next,
+          fiscalError: "",
+          fiscalConsultado: false,
+          cargaManual: false,
+        };
+      }
+
+      if (campo === "razon_social") {
+        next.razon_social = toUpperValue(valor);
+        return {
+          ...prev,
+          nombre: toUpperValue(valor),
+          fiscalData: next,
+          fiscalError: "",
+          cargaManual: false,
+        };
+      }
+
+      next[campo] = campo === "condicion_iva" ? safeStr(valor) : String(valor ?? "");
+
+      return {
+        ...prev,
+        fiscalData: next,
+        fiscalError: "",
+        cargaManual: false,
+      };
+    });
+  }, []);
+
+  const abrirDatosLegales = useCallback(async (row) => {
+    const fiscalRow = fiscalFromClienteRow(row);
+    setModalFiscal({
+      open: true,
+      row,
+      fiscal: fiscalRow,
+      loading: true,
+    });
+
+    const fiscalDb = await cargarFiscalCliente(getClienteId(row));
+
+    setModalFiscal({
+      open: true,
+      row,
+      fiscal: fiscalDb || fiscalRow,
+      loading: false,
+    });
+  }, [cargarFiscalCliente]);
+
+  const cerrarDatosLegales = useCallback(() => {
+    if (modalFiscal.loading) return;
+    setModalFiscal({ open: false, row: null, fiscal: null, loading: false });
+  }, [modalFiscal.loading]);
+
   useEffect(() => {
     if (!open) return;
     cargarClientes(pestana);
@@ -244,25 +628,160 @@ export default function ModalClientes({
 
     if (!needle) return clientesOrdenados;
 
+    const needleDigits = onlyDigits(busqueda);
+
     return clientesOrdenados.filter((row) => {
+      const fiscal = fiscalFromClienteRow(row);
       const nombre = normalizeSearch(row?.nombre);
+      const razonSocial = normalizeSearch(fiscal?.razon_social || row?.razon_social || "");
+      const cuit = onlyDigits(fiscal?.cuit || row?.cuit || "");
       const id = String(getClienteId(row));
 
-      return nombre.includes(needle) || id.includes(needle);
+      return (
+        nombre.includes(needle) ||
+        razonSocial.includes(needle) ||
+        id.includes(needle) ||
+        (needleDigits !== "" && cuit.includes(needleDigits))
+      );
     });
   }, [clientesOrdenados, busqueda]);
 
-  const iniciarEdicion = (row) => {
+  const iniciarEdicion = async (row, fiscalPreloaded = null) => {
+    const fiscalRow = fiscalPreloaded || fiscalFromClienteRow(row);
     setModo("editar");
     setEditandoId(getClienteId(row));
     setForm({
+      ...buildEmptyForm(Number(row?.activo ?? 1) === 1 ? 1 : 0),
       nombre: toUpperValue(row?.nombre),
-      activo: Number(row?.activo ?? 1) === 1 ? 1 : 0,
+      cuit: onlyDigits(fiscalRow?.cuit || row?.cuit || ""),
+      fiscalData: fiscalRow,
+      fiscalConsultado: !!fiscalRow,
+      cargaManual: !fiscalRow,
     });
+
+    if (fiscalPreloaded) return;
+
+    const fiscalDb = await cargarFiscalCliente(getClienteId(row));
+    if (fiscalDb) {
+      setForm((prev) => ({
+        ...prev,
+        cuit: onlyDigits(fiscalDb.cuit || fiscalDb.doc_nro || prev.cuit),
+        fiscalData: fiscalDb,
+        fiscalConsultado: true,
+        cargaManual: false,
+      }));
+    }
   };
+
+  const editarDesdeModalFiscal = useCallback(() => {
+    const row = modalFiscal.row;
+    const fiscal = modalFiscal.fiscal;
+    setModalFiscal({ open: false, row: null, fiscal: null, loading: false });
+    if (row) iniciarEdicion(row, fiscal);
+  }, [modalFiscal.row, modalFiscal.fiscal]);
 
   const cancelarEdicion = () => {
     resetForm();
+  };
+
+  const consultarArca = useCallback(async () => {
+    const cuit = onlyDigits(form.cuit);
+
+    if (cuit.length !== 11) {
+      setForm((prev) => ({
+        ...prev,
+        fiscalError: "Ingresá un CUIT válido de 11 dígitos.",
+        fiscalData: null,
+        fiscalConsultado: true,
+      }));
+      return null;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      fiscalLoading: true,
+      fiscalError: "",
+      fiscalData: null,
+      fiscalConsultado: false,
+    }));
+
+    try {
+      const params = new URLSearchParams({
+        action: "padron_cuit",
+        op: "padron_cuit",
+        cuit,
+      });
+
+      const data = await apiGet(`${API_URL}?${params.toString()}`);
+      const summary = data?.data?.summary ?? data?.summary ?? data?.cliente ?? data?.data ?? null;
+      const fiscal = normalizeFiscalData(summary);
+
+      if (!fiscal.cuit || !fiscal.razon_social) {
+        throw new Error("ARCA no devolvió datos completos para ese CUIT.");
+      }
+
+      setForm((prev) => ({
+        ...prev,
+        nombre: toUpperValue(fiscal.razon_social || prev.nombre),
+        cuit: fiscal.cuit,
+        fiscalData: fiscal,
+        fiscalError: "",
+        fiscalLoading: false,
+        fiscalConsultado: true,
+        cargaManual: false,
+      }));
+
+      onToast?.("exito", "Datos fiscales encontrados. Revisá y guardá el cliente.");
+      return fiscal;
+    } catch (err) {
+      setForm((prev) => ({
+        ...prev,
+        fiscalData: null,
+        fiscalError:
+          err?.message ||
+          "No se encontró el CUIT en ARCA. Podés cargar el cliente manualmente con el nombre solamente.",
+        fiscalLoading: false,
+        fiscalConsultado: true,
+        cargaManual: true,
+      }));
+      return null;
+    }
+  }, [form.cuit, onToast]);
+
+  const usarCargaManual = useCallback(() => {
+    setForm((prev) => ({
+      ...prev,
+      cuit: "",
+      fiscalData: null,
+      fiscalError: "",
+      fiscalLoading: false,
+      fiscalConsultado: false,
+      cargaManual: true,
+    }));
+    onToast?.("info", "Carga manual activada. Guardá solo el nombre del cliente.");
+  }, [onToast]);
+
+  const guardarConFiscal = async (payloadBase, fiscal) => {
+    const f = normalizeFiscalData(fiscal);
+    const data = await apiPost("cc_cliente_guardar_con_fiscal", {
+      id_cliente: modo === "editar" ? editandoId : null,
+      nombre: payloadBase.nombre,
+      activo: payloadBase.activo,
+      actualizar_nombre_cliente: 1,
+      fiscal: {
+        id_cliente_fiscal: f.id_cliente_fiscal,
+        doc_tipo: Number(f.doc_tipo || 80),
+        doc_nro: f.doc_nro || f.cuit,
+        cuit: f.cuit,
+        razon_social: f.razon_social,
+        condicion_iva: f.condicion_iva,
+        domicilio: f.domicilio,
+        origen: f.origen || "arca_cuit",
+        activo: 1,
+      },
+    });
+
+    return data;
   };
 
   const handleGuardar = async () => {
@@ -271,38 +790,52 @@ export default function ModalClientes({
       activo: Number(form.activo) === 1 ? 1 : 0,
     };
 
-    if (!payload.nombre) {
-      onToast?.("error", "El nombre del cliente es obligatorio.");
+    const tieneFiscalValido = fiscalIsUsable(form.fiscalData);
+    const cuitIngresado = onlyDigits(form.cuit);
+
+    if (!payload.nombre && !tieneFiscalValido) {
+      onToast?.("error", "El nombre del cliente es obligatorio. Si tiene CUIT, primero consultalo en ARCA.");
+      return;
+    }
+
+    if (cuitIngresado && cuitIngresado.length !== 11) {
+      onToast?.("error", "El CUIT debe tener 11 dígitos o dejarse vacío para cargar manualmente.");
+      return;
+    }
+
+    if (cuitIngresado.length === 11 && !tieneFiscalValido) {
+      onToast?.(
+        "advertencia",
+        "Ingresaste un CUIT pero todavía no hay datos de ARCA. Podés consultarlo o borrar el CUIT para guardarlo como cliente manual.",
+        5200
+      );
       return;
     }
 
     setSaving(true);
 
     try {
-      if (modo === "crear") {
-        const data = await apiPost("cc_cliente_crear", payload);
-        onToast?.("exito", data?.mensaje || "Cliente creado correctamente.");
+      let data;
+      let tabDestino = payload.activo === 1 ? "activos" : "inactivos";
 
-        if (payload.activo === 1) {
-          setPestana("activos");
-        } else {
-          setPestana("inactivos");
-        }
+      if (tieneFiscalValido) {
+        data = await guardarConFiscal(payload, form.fiscalData);
+        const clienteGuardado = data?.cliente || null;
+        tabDestino = Number(clienteGuardado?.activo ?? payload.activo) === 1 ? "activos" : "inactivos";
+        onToast?.("exito", data?.mensaje || "Cliente y datos fiscales guardados correctamente.");
+      } else if (modo === "crear") {
+        data = await apiPost("cc_cliente_crear", payload);
+        onToast?.("exito", data?.mensaje || "Cliente creado correctamente.");
       } else {
-        const data = await apiPost("cc_cliente_actualizar", {
+        data = await apiPost("cc_cliente_actualizar", {
           id_cliente: editandoId,
           ...payload,
         });
         onToast?.("exito", data?.mensaje || "Cliente actualizado correctamente.");
-
-        if (payload.activo === 1) {
-          setPestana("activos");
-        } else {
-          setPestana("inactivos");
-        }
       }
 
-      await cargarClientes(payload.activo === 1 ? "activos" : "inactivos");
+      setPestana(tabDestino);
+      await cargarClientes(tabDestino);
       await onActualizado?.();
       resetForm();
     } catch (err) {
@@ -397,6 +930,12 @@ export default function ModalClientes({
     const row = modalAccion.row;
     const nombre = String(row?.nombre || "—");
     const activo = Number(row?.activo ?? 1) === 1;
+    const fiscal = fiscalFromClienteRow(row);
+    const detailsBase = [
+      { label: "ID Cliente", value: `#${getClienteId(row)}` },
+      { label: "Nombre", value: nombre },
+      ...(fiscal?.cuit ? [{ label: "CUIT", value: fiscal.cuit }] : []),
+    ];
 
     if (modalAccion.type === "baja") {
       return {
@@ -408,11 +947,7 @@ export default function ModalClientes({
         errorMessage: "No se pudo dar de baja el cliente.",
         confirmLabel: "Dar de baja",
         confirmVariant: "danger",
-        details: [
-          { label: "ID Cliente", value: `#${getClienteId(row)}` },
-          { label: "Nombre", value: nombre },
-          { label: "Estado actual", value: "Activo" },
-        ],
+        details: [...detailsBase, { label: "Estado actual", value: "Activo" }],
       };
     }
 
@@ -426,11 +961,7 @@ export default function ModalClientes({
         errorMessage: "No se pudo dar de alta el cliente.",
         confirmLabel: "Dar de alta",
         confirmVariant: "primary",
-        details: [
-          { label: "ID Cliente", value: `#${getClienteId(row)}` },
-          { label: "Nombre", value: nombre },
-          { label: "Estado actual", value: "Inactivo" },
-        ],
+        details: [...detailsBase, { label: "Estado actual", value: "Inactivo" }],
       };
     }
 
@@ -443,11 +974,7 @@ export default function ModalClientes({
       errorMessage: "No se pudo eliminar el cliente.",
       confirmLabel: "Eliminar",
       confirmVariant: "danger",
-      details: [
-        { label: "ID Cliente", value: `#${getClienteId(row)}` },
-        { label: "Nombre", value: nombre },
-        { label: "Estado", value: activo ? "Activo" : "Inactivo" },
-      ],
+      details: [...detailsBase, { label: "Estado", value: activo ? "Activo" : "Inactivo" }],
     };
   }, [modalAccion]);
 
@@ -478,7 +1005,7 @@ export default function ModalClientes({
           <div className="mi-modal__head-left">
             <h2 className="mi-modal__title">Clientes</h2>
             <p className="mi-modal__subtitle">
-              Agregá, editá, da de baja, da de alta o eliminá clientes.
+              Agregá o editá clientes combinando datos simples y datos fiscales de ARCA.
             </p>
           </div>
 
@@ -508,6 +1035,105 @@ export default function ModalClientes({
               </div>
 
               <div className="mi-cr-filters__body">
+                <div
+                  style={{
+                    border: "1px solid rgba(59, 130, 246, 0.22)",
+                    background: "rgba(59, 130, 246, 0.08)",
+                    borderRadius: 12,
+                    padding: "10px 12px",
+                    fontSize: 12,
+                    color: "var(--nv-text)",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  <b style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 4 }}>
+                    <FontAwesomeIcon icon={faFileInvoiceDollar} /> Cliente fiscal o manual
+                  </b>
+                  Ingresá CUIT para traer datos de ARCA. Si no aparece o es venta informal, dejá el CUIT vacío y cargá solo el nombre.
+                </div>
+
+                <div className="fl-field">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={11}
+                    className="fl-input"
+                    placeholder=" "
+                    value={form.cuit}
+                    onChange={(e) =>
+                      setForm((prev) => {
+                        const cuit = onlyDigits(e.target.value);
+                        const fiscalActual = fiscalHasAnyData(prev.fiscalData)
+                          ? { ...normalizeFiscalData(prev.fiscalData), cuit, doc_nro: cuit }
+                          : null;
+
+                        return {
+                          ...prev,
+                          cuit,
+                          fiscalData: fiscalActual,
+                          fiscalError: "",
+                          fiscalConsultado: false,
+                          cargaManual: !fiscalActual,
+                        };
+                      })
+                    }
+                    disabled={saving || form.fiscalLoading}
+                  />
+                  <label className="fl-label">
+                    <FontAwesomeIcon icon={faIdCard} style={{ marginRight: 5 }} />
+                    CUIT ARCA
+                  </label>
+                </div>
+
+                <div className="mi-cr-filters__actions" style={{ flexDirection: "row", marginTop: 0 }}>
+                  <button
+                    type="button"
+                    className="mit-btn mit-btn--ghost mit-btn--block"
+                    onClick={consultarArca}
+                    disabled={saving || form.fiscalLoading || onlyDigits(form.cuit).length !== 11}
+                  >
+                    <FontAwesomeIcon icon={faMagnifyingGlass} style={{ marginRight: 8 }} />
+                    {form.fiscalLoading ? "Consultando..." : "Consultar ARCA"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="mit-btn mit-btn--ghost mit-btn--block"
+                    onClick={usarCargaManual}
+                    disabled={saving || form.fiscalLoading}
+                    title="Cargar cliente sin datos fiscales"
+                  >
+                    Sin CUIT
+                  </button>
+                </div>
+
+                {form.fiscalError && (
+                  <div
+                    style={{
+                      border: "1px solid rgba(239, 68, 68, 0.25)",
+                      background: "rgba(239, 68, 68, 0.08)",
+                      borderRadius: 12,
+                      padding: "9px 11px",
+                      fontSize: 12,
+                      color: dark ? "#fecaca" : "#b91c1c",
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {form.fiscalError} Completá el nombre y guardalo sin CUIT si corresponde.
+                  </div>
+                )}
+
+                <FiscalResumen fiscal={form.fiscalData} />
+
+                <FiscalEditableFields
+                  fiscal={form.fiscalData}
+                  cuit={form.cuit}
+                  saving={saving}
+                  fiscalLoading={form.fiscalLoading}
+                  dark={dark}
+                  onFieldChange={actualizarCampoFiscal}
+                />
+
                 <div className="fl-field">
                   <input
                     type="text"
@@ -520,11 +1146,11 @@ export default function ModalClientes({
                         nombre: toUpperValue(e.target.value),
                       }))
                     }
-                    disabled={saving}
+                    disabled={saving || form.fiscalLoading}
                   />
                   <label className="fl-label">
                     <FontAwesomeIcon icon={faUser} style={{ marginRight: 5 }} />
-                    Nombre *
+                    Nombre / razón social *
                   </label>
                 </div>
 
@@ -538,7 +1164,7 @@ export default function ModalClientes({
                         activo: Number(e.target.value) === 1 ? 1 : 0,
                       }))
                     }
-                    disabled={saving}
+                    disabled={saving || form.fiscalLoading}
                   >
                     <option value="1">Activo</option>
                     <option value="0">Inactivo</option>
@@ -546,21 +1172,22 @@ export default function ModalClientes({
                   <label className="fl-label">Estado</label>
                 </div>
 
-                <div
-                  className="mi-cr-filters__actions"
-                  style={{ flexDirection: "row" }}
-                >
+                <div className="mi-cr-filters__actions" style={{ flexDirection: "row" }}>
                   <button
                     type="button"
                     className="mit-btn mit-btn--solid mit-btn--block"
                     onClick={handleGuardar}
-                    disabled={saving}
+                    disabled={saving || form.fiscalLoading}
                   >
                     <FontAwesomeIcon icon={faFloppyDisk} style={{ marginRight: 8 }} />
                     {saving
                       ? "Guardando..."
                       : modo === "crear"
-                      ? "Crear cliente"
+                      ? fiscalIsUsable(form.fiscalData)
+                        ? "Crear cliente fiscal"
+                        : "Crear cliente"
+                      : fiscalIsUsable(form.fiscalData)
+                      ? "Guardar cliente fiscal"
                       : "Guardar"}
                   </button>
 
@@ -569,7 +1196,7 @@ export default function ModalClientes({
                       type="button"
                       className="mit-btn mit-btn--ghost mit-btn--block"
                       onClick={cancelarEdicion}
-                      disabled={saving}
+                      disabled={saving || form.fiscalLoading}
                     >
                       Cancelar
                     </button>
@@ -596,37 +1223,37 @@ export default function ModalClientes({
                     </div>
                   </div>
                 </div>
-              <div className="cc-filter cc-filter--search" id="vents-comppr-wits">
-                <div className="cc-floatingField cc-floatingField--search is-active">
-                  <div className="cc-searchInput">
-                    <div className="cc-searchInput__fieldWrap cc-field">
-                      <input
-                        className="cc-input cc-input--floating"
-                        value={busqueda}
-                        onChange={(e) => setBusqueda(e.target.value)}
-                        placeholder="Buscar por cliente..."
-                        disabled={loading || saving || modalAccion.loading}
-                      />
+                <div className="cc-filter cc-filter--search" id="vents-comppr-wits">
+                  <div className="cc-floatingField cc-floatingField--search is-active">
+                    <div className="cc-searchInput">
+                      <div className="cc-searchInput__fieldWrap cc-field">
+                        <input
+                          className="cc-input cc-input--floating"
+                          value={busqueda}
+                          onChange={(e) => setBusqueda(e.target.value)}
+                          placeholder="Buscar por cliente o CUIT..."
+                          disabled={loading || saving || modalAccion.loading}
+                        />
 
-                      <span className="cc-floatingLabel">
-                        <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                      </span>
+                        <span className="cc-floatingLabel">
+                          <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                        </span>
 
-                      {busqueda.trim() !== "" && !loading && (
-                        <button
-                          type="button"
-                          className="cc-clearSearch cc-clearSearch--inside"
-                          onClick={() => setBusqueda("")}
-                          disabled={saving || modalAccion.loading}
-                          title="Limpiar búsqueda"
-                        >
-                          <FontAwesomeIcon icon={faXmark} />
-                        </button>
-                      )}
+                        {busqueda.trim() !== "" && !loading && (
+                          <button
+                            type="button"
+                            className="cc-clearSearch cc-clearSearch--inside"
+                            onClick={() => setBusqueda("")}
+                            disabled={saving || modalAccion.loading}
+                            title="Limpiar búsqueda"
+                          >
+                            <FontAwesomeIcon icon={faXmark} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
                     type="button"
@@ -635,7 +1262,7 @@ export default function ModalClientes({
                       setPestana("activos");
                       setModo("crear");
                       setEditandoId(null);
-                      setForm((prev) => ({ ...prev, activo: 1 }));
+                      setForm(buildEmptyForm(1));
                     }}
                     disabled={loading || saving || modalAccion.loading}
                   >
@@ -649,7 +1276,7 @@ export default function ModalClientes({
                       setPestana("inactivos");
                       setModo("crear");
                       setEditandoId(null);
-                      setForm((prev) => ({ ...prev, activo: 0 }));
+                      setForm(buildEmptyForm(0));
                     }}
                     disabled={loading || saving || modalAccion.loading}
                   >
@@ -692,6 +1319,9 @@ export default function ModalClientes({
                           accionandoId === getClienteId(row) ||
                           saving ||
                           modalAccion.loading;
+                        const fiscal = fiscalFromClienteRow(row);
+                        // ── Solo mostrar botón fiscal si el cliente tiene CUIT ──
+                        const tieneCuit = !!fiscal?.cuit;
 
                         return (
                           <div key={getClienteId(row)} className="cc-grid-row">
@@ -699,8 +1329,24 @@ export default function ModalClientes({
                               <span
                                 className="cc-ellipsis-text"
                                 title={row?.nombre || "—"}
+                                style={{ display: "block" }}
                               >
                                 {row?.nombre || "—"}
+                              </span>
+                              <span
+                                style={{
+                                  display: "block",
+                                  marginTop: 3,
+                                  fontSize: 11,
+                                  color: "var(--nv-muted)",
+                                  fontWeight: 500,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                                title={tieneCuit ? `${fiscal.cuit} - ${fiscal.razon_social || ""}` : "Cliente sin datos fiscales"}
+                              >
+                                {tieneCuit ? `CUIT ${fiscal.cuit}` : "Sin datos fiscales / manual"}
                               </span>
                             </div>
 
@@ -718,6 +1364,19 @@ export default function ModalClientes({
 
                             <div className="cc-grid-cell">
                               <div className="cc-actions-group">
+                                {/* ── Botón datos fiscales: solo si tiene CUIT ── */}
+                                {tieneCuit && (
+                                  <button
+                                    type="button"
+                                    className="cc-action-btn"
+                                    onClick={() => abrirDatosLegales(row)}
+                                    disabled={bloqueado}
+                                    title="Ver datos legales"
+                                  >
+                                    <FontAwesomeIcon icon={faFileInvoiceDollar} />
+                                  </button>
+                                )}
+
                                 {activo ? (
                                   <>
                                     <button
@@ -772,7 +1431,7 @@ export default function ModalClientes({
 
                 <div className="cc-cliente-table__footWrap">
                   <span style={{ fontSize: 12, color: "var(--nv-muted)" }}>
-                    Administrá el padrón de <b>clientes</b>.
+                    Administrá el padrón de <b>clientes</b> y sus <b>datos fiscales</b>.
                   </span>
                 </div>
               </div>
@@ -782,7 +1441,7 @@ export default function ModalClientes({
 
         <div className="mit-actions">
           <span className="mit-help">
-            Gestión de clientes con activos, inactivos, alta, baja y eliminación.
+            Clientes simples para cuenta corriente y clientes fiscales para facturación ARCA.
           </span>
           <button
             type="button"
@@ -794,6 +1453,16 @@ export default function ModalClientes({
           </button>
         </div>
       </div>
+
+      <ModalDatosLegalesCliente
+        open={modalFiscal.open}
+        dark={dark}
+        row={modalFiscal.row}
+        fiscal={modalFiscal.fiscal}
+        loading={modalFiscal.loading}
+        onClose={cerrarDatosLegales}
+        onEdit={editarDesdeModalFiscal}
+      />
 
       <ModalEliminar
         open={modalAccion.open}
@@ -824,16 +1493,5 @@ export default function ModalClientes({
       />
     </div>,
     document.body
-  );
-}
-
-function EmptyState({ icon, text, spin = false }) {
-  return (
-    <div className="mi-empty-state">
-      <div className="mi-empty-state__iconWrap">
-        <FontAwesomeIcon icon={icon} spin={spin} />
-      </div>
-      <span className="mi-empty-state__text">{text}</span>
-    </div>
   );
 }

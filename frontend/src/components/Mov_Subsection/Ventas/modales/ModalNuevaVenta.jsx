@@ -10,6 +10,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFileInvoiceDollar, faPlus, faMoneyCheckDollar } from "@fortawesome/free-solid-svg-icons";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
 import ModalNuevoCheque from "../../../Global/Modales/ModalNuevoCheque.jsx";
+import ModalClienteFiscalArca from "../../../Global/Modales/ModalClienteFiscalArca.jsx";
 import {
   saveVentaNoFacturadaPdf,
   preloadVentaNoFacturadaPdfAssets,
@@ -169,6 +170,11 @@ function pickDetallePrecioInicial(precios) {
 }
 
 const SAFE_LISTS = { clientes: [], detalles: [], medios_pago: [], tipos_venta: [], cuentas_corrientes: [] };
+const ADD_CLIENTE_OPTION = { __action: "add_cliente", id: "__add_cliente__", nombre: "➕ Agregar cliente" };
+
+function isAddClienteOption(option) {
+  return option?.__action === "add_cliente";
+}
 
 function normalizeLists(lists) {
   const src = lists && typeof lists === "object" ? lists : {};
@@ -324,6 +330,17 @@ function normalizeClienteFiscalDb(data) {
     condicion_iva: safeStr(s.condicion_iva || s.cond_iva),
     domicilio: safeStr(s.domicilio),
     origen: safeStr(s.origen || "manual"),
+  };
+}
+
+function normalizeClienteSimple(data) {
+  const s = data && typeof data === "object" ? data : {};
+  const id = getClienteId(s) || Number(s.id_cliente || s.id || 0) || null;
+  return {
+    id_cliente: id,
+    id,
+    nombre: safeStr(s.nombre || s.razon_social || s.label || ""),
+    activo: Number(s.activo ?? 1) === 0 ? 0 : 1,
   };
 }
 
@@ -1221,67 +1238,6 @@ export function PanelMediosPagoInlineVenta({
 }
 
 /* ================================================================
-   MINI MODAL CATÁLOGO
-================================================================ */
-function AddCatalogMiniModal({ open, title, value, saving, onChange, onCancel, onSave, dark = false }) {
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const t = setTimeout(() => inputRef.current?.focus(), 0);
-    return () => clearTimeout(t);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const h = (e) => {
-      if (e.key === "Escape") onCancel?.();
-      if (e.key === "Enter") onSave?.();
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [open, onCancel, onSave]);
-
-  if (!open) return null;
-
-  return createPortal(
-    <div className="mi-mini__overlay">
-      <div className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()} onMouseDown={(e) => e.stopPropagation()}>
-        <div className="mi-mini__head">
-          <h4 className="mi-mini__title">{title}</h4>
-          <button type="button" className="mi-mini__close" onClick={onCancel} disabled={saving} aria-label="Cerrar">
-            ✕
-          </button>
-        </div>
-        <div className="mi-mini__body">
-          <div className="fl-field">
-            <input
-              ref={inputRef}
-              className="fl-input"
-              placeholder=" "
-              value={value}
-              onChange={(e) => onChange?.(e.target.value)}
-              disabled={saving}
-              autoComplete="off"
-            />
-            <label className="fl-label">Nombre</label>
-          </div>
-          <div className="mi-mini__actions">
-            <button type="button" className="mit-btn mit-btn--ghost" onClick={onCancel} disabled={saving}>
-              Cancelar
-            </button>
-            <button type="button" className="mit-btn mit-btn--solid" onClick={onSave} disabled={saving}>
-              {saving ? "Guardando..." : "Guardar"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-/* ================================================================
    MODAL PRINCIPAL
 ================================================================ */
 export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved }) {
@@ -1289,6 +1245,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const API_CATALOGO = `${BASE_URL}/api.php?action=catalogo_crear`;
   const API_GET_CLIENTE_FISCAL = `${BASE_URL}/api.php?action=cliente_fiscal_get`;
   const API_SAVE_CLIENTE_FISCAL = `${BASE_URL}/api.php?action=cliente_fiscal_upsert`;
+  const API_SAVE_CLIENTE_DESDE_ARCA = `${BASE_URL}/api.php?action=cliente_fiscal_crear_desde_arca`;
   const API_PADRON_CUIT = `${BASE_URL}/api.php?action=padron_cuit&op=padron_cuit`;
   const API_CONFIG_FACTURACION = `${BASE_URL}/api.php?action=config_facturacion_get`;
   const API_VINCULAR_COMPROBANTE = `${BASE_URL}/api.php?action=ventas_comprobantes_vincular_movimiento`;
@@ -1339,6 +1296,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     () => (Array.isArray(localLists.clientes) ? localLists.clientes : []),
     [localLists.clientes]
   );
+  const clientesOptions = useMemo(() => [ADD_CLIENTE_OPTION, ...clientesList], [clientesList]);
 
   const [fecha, setFecha] = useState(todayISO);
   const usuarioBasicoVentas = useMemo(() => usuarioVentaEsBasico(), [open]);
@@ -1353,13 +1311,14 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const [rows, setRows] = useState(() => [buildEmptyRow()]);
   const [mediosFilas, setMediosFilas] = useState(() => [buildEmptyMedioPagoVenta()]);
   const [saving, setSaving] = useState(false);
-  const [addUI, setAddUI] = useState({ open: false, kind: null, rowId: null, text: "", saving: false });
+  const [addUI, setAddUI] = useState({ open: false, kind: null, rowId: null, text: "", cuit: "", fiscalData: null, fiscalError: "", lookupLoading: false, saving: false });
   const [fiscalLoading, setFiscalLoading] = useState(false);
   const [fiscalError, setFiscalError] = useState("");
   const [clienteFiscalDb, setClienteFiscalDb] = useState(null);
   const [fiscalCuitInput, setFiscalCuitInput] = useState("");
   const [fiscalLookupLoading, setFiscalLookupLoading] = useState(false);
   const [fiscalArcaData, setFiscalArcaData] = useState(null);
+  const [fiscalPanelOpen, setFiscalPanelOpen] = useState(false);
   const [configFacturacion, setConfigFacturacion] = useState(null);
   const [openResumenFactura, setOpenResumenFactura] = useState(false);
   const [resumenFacturaData, setResumenFacturaData] = useState(null);
@@ -1400,7 +1359,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       setCliInput("");
       setRows([buildEmptyRow()]);
       setMediosFilas([buildEmptyMedioPagoVenta()]);
-      setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
+      setAddUI({ open: false, kind: null, rowId: null, text: "", cuit: "", fiscalData: null, fiscalError: "", lookupLoading: false, saving: false });
       setSaving(false);
       setFiscalLoading(false);
       setFiscalError("");
@@ -1408,6 +1367,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       setFiscalCuitInput("");
       setFiscalLookupLoading(false);
       setFiscalArcaData(null);
+      setFiscalPanelOpen(false);
       setConfigFacturacion(null);
       setOpenResumenFactura(false);
       setResumenFacturaData(null);
@@ -1451,24 +1411,192 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     setMediosFilas((p) => p.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }, []);
 
+
+  const resetAddUIState = useCallback(() => {
+    setAddUI({
+      open: false,
+      kind: null,
+      rowId: null,
+      text: "",
+      cuit: "",
+      fiscalData: null,
+      fiscalError: "",
+      lookupLoading: false,
+      saving: false,
+    });
+  }, []);
+
+  const registrarClienteLocal = useCallback(
+    (clienteRaw, fiscalRaw = null) => {
+      const cliente = normalizeClienteSimple(clienteRaw);
+      if (!cliente.id_cliente) return cliente;
+
+      setLocalLists((prev) => {
+        const arr = Array.isArray(prev.clientes) ? prev.clientes.slice() : [];
+        const idx = arr.findIndex((x) => Number(getClienteId(x)) === Number(cliente.id_cliente));
+        const item = { id: Number(cliente.id_cliente), id_cliente: Number(cliente.id_cliente), nombre: cliente.nombre, activo: cliente.activo };
+        if (idx >= 0) arr[idx] = { ...arr[idx], ...item };
+        else arr.push(item);
+        return { ...prev, clientes: arr };
+      });
+
+      updateFilter("id_cliente", String(cliente.id_cliente));
+      setCliInput(cliente.nombre || "");
+
+      if (fiscalRaw) {
+        const fiscal = normalizeClienteFiscalDb(fiscalRaw);
+        setClienteFiscalDb(fiscal);
+        setFiscalArcaData(fiscal);
+        setFiscalCuitInput(fiscal.cuit || fiscal.doc_nro || "");
+      }
+
+      return cliente;
+    },
+    [updateFilter]
+  );
+
   const startAddCliente = useCallback(() => {
     if (saving) return;
-    setAddUI({ open: true, kind: "clientes", rowId: null, text: cliInput || "", saving: false });
+    setAddUI({
+      open: true,
+      kind: "clientes",
+      rowId: null,
+      text: cliInput || "",
+      cuit: "",
+      fiscalData: null,
+      fiscalError: "",
+      lookupLoading: false,
+      saving: false,
+    });
   }, [saving, cliInput]);
 
   const closeAddMini = useCallback(() => {
-    if (addUI.saving) return;
-    setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
-  }, [addUI.saving]);
+    if (addUI.saving || addUI.lookupLoading) return;
+    resetAddUIState();
+  }, [addUI.saving, addUI.lookupLoading, resetAddUIState]);
+
+  const consultarArcaAddCliente = useCallback(async () => {
+    const cuit = onlyDigits(addUI.cuit);
+    if (cuit.length !== 11) {
+      setAddUI((p) => ({ ...p, fiscalError: "Ingresá un CUIT válido de 11 dígitos." }));
+      return null;
+    }
+
+    setAddUI((p) => ({ ...p, lookupLoading: true, fiscalError: "", fiscalData: null }));
+    try {
+      const data = await apiGetJson(`${API_PADRON_CUIT}&cuit=${cuit}`);
+      const summary = data?.data?.summary ?? data?.summary ?? null;
+      if (!summary) throw new Error("ARCA no devolvió datos para ese CUIT.");
+      const fiscal = normalizeArcaSummary(summary);
+      if (!fiscal.cuit || !fiscal.razon_social) throw new Error("ARCA devolvió datos incompletos.");
+      setAddUI((p) => ({
+        ...p,
+        lookupLoading: false,
+        fiscalData: fiscal,
+        fiscalError: "",
+        text: fiscal.razon_social || p.text,
+      }));
+      return fiscal;
+    } catch (e) {
+      setAddUI((p) => ({
+        ...p,
+        lookupLoading: false,
+        fiscalData: null,
+        fiscalError: e?.message || "No se pudo consultar ARCA.",
+      }));
+      return null;
+    }
+  }, [API_PADRON_CUIT, addUI.cuit]);
+
+  const guardarClienteDesdeArcaEnModal = useCallback(
+    async (fiscalSource) => {
+      const fiscal = normalizeClienteFiscalDb(fiscalSource || {});
+      if (!fiscal.cuit || !fiscal.razon_social) {
+        throw new Error("Primero consultá un CUIT válido en ARCA.");
+      }
+
+      const { idUsuario } = getAuthInfo();
+      const saved = await apiPostJson(API_SAVE_CLIENTE_DESDE_ARCA, {
+        idUsuario,
+        id_cliente: null,
+        doc_tipo: Number(fiscal.doc_tipo || 80),
+        doc_nro: fiscal.doc_nro || fiscal.cuit,
+        cuit: fiscal.cuit,
+        razon_social: fiscal.razon_social,
+        condicion_iva: fiscal.condicion_iva,
+        domicilio: fiscal.domicilio,
+        origen: fiscal.origen || "arca_cuit",
+        actualizar_nombre_cliente: 1,
+        activo: 1,
+      });
+
+      if (!saved?.exito || !saved?.cliente || !saved?.cliente_fiscal) {
+        throw new Error(saved?.mensaje || "No se pudo guardar el cliente fiscal.");
+      }
+
+      const fiscalDb = normalizeClienteFiscalDb(saved.cliente_fiscal);
+      const cliente = registrarClienteLocal(saved.cliente, fiscalDb);
+      return {
+        cliente,
+        cliente_fiscal: fiscalDb,
+        ya_existia: !!saved?.ya_existia,
+        sin_cambios: !!saved?.sin_cambios,
+        mensaje: saved?.mensaje || "",
+      };
+    },
+    [API_SAVE_CLIENTE_DESDE_ARCA, registrarClienteLocal]
+  );
 
   const guardarNuevoCatalogo = useCallback(async () => {
-    const nombre = String(addUI.text || "").trim();
-    if (!nombre) {
-      showToast("advertencia", "Escribí un nombre antes de guardar.", 2600);
-      return;
-    }
     const kind = addUI.kind;
     if (!kind) return;
+
+    const nombre = String(addUI.text || "").trim();
+    const cuit = onlyDigits(addUI.cuit);
+
+    if (kind === "clientes") {
+      if (cuit.length !== 11) {
+        const msg = "Ingresá un CUIT válido de 11 dígitos, presioná Consultar ARCA y después confirmá.";
+        setAddUI((p) => ({ ...p, fiscalError: msg }));
+        showToast("advertencia", msg, 3600);
+        return;
+      }
+
+      setAddUI((p) => ({ ...p, saving: true, fiscalError: "" }));
+      showToast("cargando", "Consultando ARCA y creando cliente…", 12000);
+
+      try {
+        let fiscal = addUI.fiscalData;
+        if (!fiscal || onlyDigits(fiscal.cuit) !== cuit) {
+          const data = await apiGetJson(`${API_PADRON_CUIT}&cuit=${cuit}`);
+          const summary = data?.data?.summary ?? data?.summary ?? null;
+          if (!summary) throw new Error("ARCA no devolvió datos para ese CUIT.");
+          fiscal = normalizeArcaSummary(summary);
+        }
+
+        const result = await guardarClienteDesdeArcaEnModal(fiscal);
+        resetAddUIState();
+        if (result?.ya_existia) {
+          showToast(
+            "exito",
+            `El cliente ya existía. Se seleccionó "${result?.cliente?.nombre || fiscal.razon_social}" sin duplicarlo.`,
+            3600
+          );
+        } else {
+          showToast("exito", `Cliente fiscal creado: "${result?.cliente?.nombre || fiscal.razon_social}"`, 3200);
+        }
+        return;
+      } catch (e) {
+        setAddUI((p) => ({ ...p, saving: false, fiscalError: e?.message || "No se pudo guardar el cliente desde ARCA." }));
+        showToast("error", e?.message || "No se pudo guardar el cliente desde ARCA.", 5200);
+        return;
+      }
+    }
+
+    if (!nombre) {
+      showToast("advertencia", "Escribí un nombre antes de guardar.", 3200);
+      return;
+    }
 
     setAddUI((p) => ({ ...p, saving: true }));
     showToast("cargando", `Creando ${kind === "detalles" ? "detalle" : "cliente"}…`, 12000);
@@ -1496,7 +1624,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           const xid = kind === "detalles" ? getDetalleId(x) : getClienteId(x);
           return Number(xid) === Number(newId);
         });
-        if (!already) arr.push({ id: Number(newId), nombre: newNombre });
+        if (!already) arr.push({ id: Number(newId), id_cliente: kind === "clientes" ? Number(newId) : undefined, nombre: newNombre });
         next[kind] = arr;
         return next;
       });
@@ -1510,13 +1638,21 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         setFiscalError("");
       }
 
-      setAddUI({ open: false, kind: null, rowId: null, text: "", saving: false });
+      resetAddUIState();
       showToast("exito", `${kind === "detalles" ? "Detalle" : "Cliente"} creado: "${newNombre}"`, 2600);
     } catch (e) {
       setAddUI((p) => ({ ...p, saving: false }));
       showToast("error", e?.message || "Error creando.", 4200);
     }
-  }, [API_CATALOGO, addUI, showToast, updateFilter]);
+  }, [
+    API_CATALOGO,
+    API_PADRON_CUIT,
+    addUI,
+    guardarClienteDesdeArcaEnModal,
+    resetAddUIState,
+    showToast,
+    updateFilter,
+  ]);
 
   const clienteResolvedFromInput = useMemo(() => resolveClienteByInput(clientesList, cliInput), [clientesList, cliInput]);
 
@@ -1557,6 +1693,11 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   }, []);
 
   const handleSelectCliente = useCallback((cli) => {
+    if (isAddClienteOption(cli)) {
+      startAddCliente();
+      return;
+    }
+
     setCliInput(String(cli?.nombre ?? "").trim());
     setFilters((p) => ({
       ...p,
@@ -1566,7 +1707,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     setFiscalArcaData(null);
     setFiscalCuitInput("");
     setFiscalError("");
-  }, []);
+  }, [startAddCliente]);
 
   const handleSelectDetalle = useCallback(
     (detalle, rowId) => {
@@ -1655,7 +1796,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         return;
       }
 
-      if (openResumenFactura || addUI.open) return;
+      if (openResumenFactura || addUI.open || fiscalPanelOpen) return;
 
       e.preventDefault();
       e.stopPropagation();
@@ -1670,7 +1811,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     return () => {
       document.removeEventListener("keydown", h, true);
     };
-  }, [open, onClose, openResumenFactura, addUI.open]);
+  }, [open, onClose, openResumenFactura, addUI.open, fiscalPanelOpen]);
 
   const rowsCalc = useMemo(
     () =>
@@ -1786,16 +1927,16 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     [API_PADRON_CUIT]
   );
 
-  const guardarClienteFiscal = useCallback(
-    async (fiscalSource) => {
-      if (!selectedClienteId) throw new Error("Seleccioná un cliente antes de facturar.");
+  const guardarClienteFiscalDesdeArca = useCallback(
+    async (fiscalSource, opts = {}) => {
       const fiscal = normalizeClienteFiscalDb(fiscalSource || {});
       if (!fiscal.cuit || !fiscal.razon_social) throw new Error("Datos fiscales inválidos.");
 
+      const idClienteObjetivo = Number(opts?.id_cliente ?? selectedClienteId ?? 0) || null;
       const { idUsuario } = getAuthInfo();
-      const saved = await apiPostJson(API_SAVE_CLIENTE_FISCAL, {
+      const saved = await apiPostJson(API_SAVE_CLIENTE_DESDE_ARCA, {
         idUsuario,
-        id_cliente: selectedClienteId,
+        id_cliente: idClienteObjetivo,
         doc_tipo: Number(fiscal.doc_tipo || 80),
         doc_nro: fiscal.doc_nro || fiscal.cuit,
         cuit: fiscal.cuit,
@@ -1803,6 +1944,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         condicion_iva: fiscal.condicion_iva,
         domicilio: fiscal.domicilio,
         origen: fiscal.origen || "arca_cuit",
+        actualizar_nombre_cliente: opts?.actualizar_nombre_cliente === false ? 0 : 1,
         activo: 1,
       });
 
@@ -1811,11 +1953,29 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       }
 
       const n = normalizeClienteFiscalDb(saved.cliente_fiscal);
+      const cliente = saved?.cliente ? registrarClienteLocal(saved.cliente, n) : null;
       setClienteFiscalDb(n);
       setFiscalCuitInput(n.cuit || n.doc_nro || "");
-      return n;
+      return {
+        cliente,
+        cliente_fiscal: n,
+        ya_existia: !!saved?.ya_existia,
+        sin_cambios: !!saved?.sin_cambios,
+        mensaje: saved?.mensaje || "",
+      };
     },
-    [API_SAVE_CLIENTE_FISCAL, selectedClienteId]
+    [API_SAVE_CLIENTE_DESDE_ARCA, registrarClienteLocal, selectedClienteId]
+  );
+
+  const guardarClienteFiscal = useCallback(
+    async (fiscalSource) => {
+      const result = await guardarClienteFiscalDesdeArca(fiscalSource, {
+        id_cliente: selectedClienteId || null,
+        actualizar_nombre_cliente: true,
+      });
+      return result.cliente_fiscal;
+    },
+    [guardarClienteFiscalDesdeArca, selectedClienteId]
   );
 
   const resolveFiscalForFacturacion = useCallback(async () => {
@@ -1845,9 +2005,10 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     showToast,
   ]);
 
-  const validate = useCallback(() => {
+  const validate = useCallback((opts = {}) => {
+    const skipCliente = Boolean(opts?.skipCliente);
     const cliTxt = String(cliInput || "").trim();
-    if (!(selectedClienteId > 0 || cliTxt.length > 0)) {
+    if (!skipCliente && !(selectedClienteId > 0 || cliTxt.length > 0)) {
       return { ok: false, msg: "Falta seleccionar un Cliente (obligatorio)." };
     }
 
@@ -1943,7 +2104,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   }, [cliInput, selectedClienteId, filters, isContado, fecha, usuarioBasicoVentas, rowsCalc, mediosFilas, mediosPagoList, resumen.total, sumaMediosPago]);
 
   const buildResumenFacturaPayload = useCallback(
-    (clienteFiscalResuelto, cfg) => {
+    (clienteFiscalResuelto, cfg, clienteOverride = null) => {
       const items = rowsCalc
         .filter((r) => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0)
         .map((r, i) => ({
@@ -1968,11 +2129,14 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       const mediosPayload = buildMediosPagoPayload(mediosFilas, mediosPagoList);
       const primerMedioId = mediosPayload[0]?.id_medio_pago || null;
       const emisorPdf = normalizeConfigFacturacionPdf(cfg || {});
+      const clienteFinal = clienteOverride ? normalizeClienteSimple(clienteOverride) : null;
+      const labelClienteFinal = clienteFinal?.nombre || selectedClienteNombre || safeStr(clienteFiscalResuelto?.razon_social) || "Cliente";
+      const idClienteFinal = Number(clienteFinal?.id_cliente || selectedClienteId || 0) || null;
 
       return {
         id_pago: null,
         id_sistema: null,
-        labelCliente: selectedClienteNombre || "Cliente",
+        labelCliente: labelClienteFinal,
         labelSistema: "Nueva venta",
         config_facturacion: cfg || {},
         ...emisorPdf,
@@ -1986,7 +2150,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           domicilio: safeStr(clienteFiscalResuelto?.domicilio),
           origen: safeStr(clienteFiscalResuelto?.origen || "arca_cuit"),
         },
-        id_cliente: selectedClienteId || null,
+        id_cliente: idClienteFinal,
         id_tipo_venta: Number(filters.id_tipo_venta || 0) || null,
         id_medio_pago: isContado ? primerMedioId : null,
         id_clasificacion: null,
@@ -2164,11 +2328,14 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   );
 
   const guardarVentaBatch = useCallback(
-    async ({ clienteFiscalResuelto = null, accionFinal = "guardar", esFacturadaFinal = false }) => {
+    async ({ clienteFiscalResuelto = null, clienteOverride = null, accionFinal = "guardar", esFacturadaFinal = false }) => {
       const { idUsuario } = getAuthInfo();
       const periodoApi = fechaToYYYYMM(fecha);
       const mediosPayload = buildMediosPagoPayload(mediosFilas, mediosPagoList);
       const primerMedioId = isContado ? mediosPayload[0]?.id_medio_pago || null : null;
+      const clienteFinal = clienteOverride ? normalizeClienteSimple(clienteOverride) : null;
+      const idClienteParaGuardar = Number(clienteFinal?.id_cliente || selectedClienteId || 0) || null;
+      const nombreClienteParaGuardar = clienteFinal?.nombre || selectedClienteNombre || safeStr(clienteFiscalResuelto?.razon_social) || null;
 
       const payloads = rowsCalc
         .filter((r) => Number.isFinite(Number(r.id_detalle)) && Number(r.id_detalle) > 0 && Number(r.total || 0) > 0)
@@ -2176,8 +2343,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           idUsuario,
           fecha,
           periodo: periodoApi,
-          id_cliente: selectedClienteId > 0 ? selectedClienteId : null,
-          cliente_nombre: selectedClienteNombre || null,
+          id_cliente: idClienteParaGuardar,
+          cliente_nombre: nombreClienteParaGuardar,
           id_tipo_venta: Number(filters.id_tipo_venta),
           id_medio_pago: primerMedioId,
           id_cuenta_corriente: null,
@@ -2209,8 +2376,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         periodoApi,
         fecha,
         cliente_fiscal: clienteFiscalResuelto,
-        cliente_id: selectedClienteId || null,
-        cliente_nombre: selectedClienteNombre,
+        cliente_id: idClienteParaGuardar,
+        cliente_nombre: nombreClienteParaGuardar,
         accion_venta: accionFinal,
         es_facturada: esFacturadaFinal,
       };
@@ -2614,26 +2781,31 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     ]
   );
 
-  const abrirResumenFactura = useCallback(async () => {
-    const v = validate();
-    if (!v.ok) {
-      showToast("advertencia", v.msg || "Faltan datos.", 4200);
-      return;
-    }
-    if (v.warn) showToast("advertencia", "Hay filas incompletas: se mostrarán solo las válidas.", 3200);
+  const abrirResumenFactura = useCallback(
+    async (clienteFiscalOverride = null, clienteOverride = null) => {
+      const v = validate({ skipCliente: !!clienteOverride });
+      if (!v.ok) {
+        showToast("advertencia", v.msg || "Faltan datos.", 4200);
+        return;
+      }
+      if (v.warn) showToast("advertencia", "Hay filas incompletas: se mostrarán solo las válidas.", 3200);
 
-    setSaving(true);
-    try {
-      const cf = await resolveFiscalForFacturacion();
-      const cfg = configFacturacion || (await fetchConfigFacturacion());
-      setResumenFacturaData(buildResumenFacturaPayload(cf, cfg));
-      setOpenResumenFactura(true);
-    } catch (e) {
-      showToast("error", e?.message || "No se pudo preparar la factura.", 4500);
-    } finally {
-      setSaving(false);
-    }
-  }, [validate, showToast, resolveFiscalForFacturacion, configFacturacion, fetchConfigFacturacion, buildResumenFacturaPayload]);
+      setSaving(true);
+      try {
+        const cf = clienteFiscalOverride
+          ? normalizeClienteFiscalDb(clienteFiscalOverride)
+          : await resolveFiscalForFacturacion();
+        const cfg = configFacturacion || (await fetchConfigFacturacion());
+        setResumenFacturaData(buildResumenFacturaPayload(cf, cfg, clienteOverride));
+        setOpenResumenFactura(true);
+      } catch (e) {
+        showToast("error", e?.message || "No se pudo preparar la factura.", 4500);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [validate, showToast, resolveFiscalForFacturacion, configFacturacion, fetchConfigFacturacion, buildResumenFacturaPayload]
+  );
 
   const finalizarFacturacionYGuardarVenta = useCallback(
     async (factEmitida) => {
@@ -2644,8 +2816,14 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           resumenFacturaData?.cliente_facturacion || clienteFiscalDb || fiscalArcaData || {}
         );
 
+        const clienteParaVenta = normalizeClienteSimple({
+          id_cliente: resumenFacturaData?.id_cliente,
+          nombre: resumenFacturaData?.labelCliente,
+        });
+
         const info = await guardarVentaBatch({
           clienteFiscalResuelto: cf,
+          clienteOverride: clienteParaVenta,
           accionFinal: "facturar",
           esFacturadaFinal: true,
         });
@@ -2809,12 +2987,80 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
     abrirResumenFactura,
   ]);
 
+  const consultarArcaPanelFiscal = useCallback(async () => {
+    const cuit = onlyDigits(fiscalCuitInput);
+    if (cuit.length !== 11) {
+      setFiscalError("Ingresá un CUIT válido de 11 dígitos.");
+      return null;
+    }
+    try {
+      return await buscarFiscalEnArcaPorCuit(cuit);
+    } catch {
+      return null;
+    }
+  }, [fiscalCuitInput, buscarFiscalEnArcaPorCuit]);
+
+  const confirmarFiscalPanelYFacturar = useCallback(async () => {
+    const cuit = onlyDigits(fiscalCuitInput);
+    if (cuit.length !== 11) {
+      setFiscalError("Ingresá un CUIT válido de 11 dígitos.");
+      return;
+    }
+
+    const v = validate({ skipCliente: true });
+    if (!v.ok) {
+      showToast("advertencia", v.msg || "Faltan datos.", 4200);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      let fiscal = fiscalArcaData;
+      if (!fiscal || onlyDigits(fiscal.cuit) !== cuit) {
+        fiscal = await buscarFiscalEnArcaPorCuit(cuit);
+      }
+
+      const result = await guardarClienteFiscalDesdeArca(fiscal, {
+        id_cliente: selectedClienteId || null,
+        actualizar_nombre_cliente: true,
+      });
+
+      setFiscalPanelOpen(false);
+      if (result?.ya_existia) {
+        showToast("exito", "El CUIT ya estaba cargado. Se usaron los datos fiscales existentes.", 3200);
+      } else {
+        showToast("exito", "Datos fiscales obtenidos y guardados correctamente.", 2600);
+      }
+      await abrirResumenFactura(result.cliente_fiscal, result.cliente);
+    } catch (e) {
+      setFiscalError(e?.message || "No se pudo resolver el cliente fiscal.");
+      showToast("error", e?.message || "No se pudo resolver el cliente fiscal.", 5200);
+    } finally {
+      setSaving(false);
+    }
+  }, [
+    fiscalCuitInput,
+    fiscalArcaData,
+    validate,
+    showToast,
+    buscarFiscalEnArcaPorCuit,
+    guardarClienteFiscalDesdeArca,
+    selectedClienteId,
+    abrirResumenFactura,
+  ]);
+
   const onClickFacturar = useCallback(async () => {
     setAccionContado("facturar");
     setFiscalError("");
 
+    const v = validate({ skipCliente: !selectedClienteId });
+    if (!v.ok) {
+      showToast("advertencia", v.msg || "Faltan datos.", 4200);
+      return;
+    }
+
     if (!selectedClienteId) {
-      showToast("advertencia", "Seleccioná un cliente antes de facturar.", 3200);
+      setFiscalPanelOpen(true);
       return;
     }
 
@@ -2825,23 +3071,16 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         await abrirResumenFactura();
         return;
       }
-      if (onlyDigits(fiscalCuitInput).length === 11) {
-        await abrirResumenFactura();
-        return;
-      }
-      showToast(
-        "advertencia",
-        "Este cliente no tiene datos fiscales guardados. Ingresá el CUIT y presioná Facturar nuevamente.",
-        4200
-      );
+
+      setFiscalPanelOpen(true);
     } catch (e) {
       showToast("error", e?.message || "No se pudo iniciar la facturación.", 4200);
     } finally {
       setSaving(false);
     }
-  }, [selectedClienteId, clienteFiscalDb, fiscalCuitInput, fetchClienteFiscal, abrirResumenFactura, showToast]);
+  }, [selectedClienteId, clienteFiscalDb, fetchClienteFiscal, abrirResumenFactura, showToast, validate]);
 
-  const shouldNeedFiscalPanel = open && accionContado === "facturar" && !clienteFiscalDb && selectedClienteId > 0;
+  const shouldNeedFiscalPanel = false;
 
   if (!open) return null;
 
@@ -3102,9 +3341,9 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
                           value={cliInput}
                           onChange={handleClienteInputChange}
                           onSelect={handleSelectCliente}
-                          options={clientesList}
-                          getOptionLabel={(c) => String(c?.nombre ?? "").trim()}
-                          getOptionValue={(c) => String(getClienteId(c) ?? c?.nombre ?? "")}
+                          options={clientesOptions}
+                          getOptionLabel={(c) => isAddClienteOption(c) ? "➕ Agregar cliente" : String(c?.nombre ?? "").trim()}
+                          getOptionValue={(c) => isAddClienteOption(c) ? "__add_cliente__" : String(getClienteId(c) ?? c?.nombre ?? "")}
                           label="Cliente *"
                           placeholder=" "
                           disabled={saving || addUI.open}
@@ -3259,15 +3498,63 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         />
       )}
 
-      <AddCatalogMiniModal
-        open={addUI.open}
-        title={addUI.kind === "clientes" ? "Nuevo Cliente" : "Nuevo Detalle"}
-        value={addUI.text}
-        saving={addUI.saving}
-        onChange={(v) => setAddUI((p) => ({ ...p, text: v }))}
-        onCancel={closeAddMini}
-        onSave={guardarNuevoCatalogo}
+      <ModalClienteFiscalArca
+        open={fiscalPanelOpen}
         dark={dark}
+        title="Datos fiscales para facturar"
+        infoTitle="Factura por CUIT"
+        description={
+          selectedClienteNombre ? (
+            <>
+              Cliente seleccionado: <b>{selectedClienteNombre}</b>. Al confirmar, se actualizará con la razón social obtenida.
+            </>
+          ) : (
+            <>
+              No hace falta cargar todos los datos a mano: ingresá el CUIT, consultamos ARCA y creamos el cliente automáticamente.
+            </>
+          )
+        }
+        cuit={fiscalCuitInput}
+        fiscalData={fiscalArcaData}
+        error={fiscalError}
+        loading={fiscalLookupLoading}
+        saving={saving}
+        confirmText="Confirmar y facturar"
+        requireFiscalData={false}
+        onCuitChange={(v) => {
+          setFiscalCuitInput(v);
+          setFiscalArcaData(null);
+          setFiscalError("");
+        }}
+        onLookup={consultarArcaPanelFiscal}
+        onClose={() => {
+          if (!saving && !fiscalLookupLoading) setFiscalPanelOpen(false);
+        }}
+        onConfirm={confirmarFiscalPanelYFacturar}
+      />
+
+      <ModalClienteFiscalArca
+        open={addUI.open && addUI.kind === "clientes"}
+        dark={dark}
+        title="Agregar cliente por CUIT"
+        infoTitle="Alta rápida por CUIT"
+        description={
+          <>
+            Ingresá el CUIT, consultamos ARCA, guardamos la razón social en <b>Clientes</b> y los datos completos en <b>Clientes fiscales</b>.
+          </>
+        }
+        cuit={addUI.cuit}
+        fiscalData={addUI.fiscalData}
+        error={addUI.fiscalError}
+        loading={addUI.lookupLoading}
+        saving={addUI.saving}
+        confirmText="Confirmar y cargar cliente"
+        footerHelp="Primero buscá el CUIT. Cuando aparezcan los datos, confirmá para guardar la razón social en clientes y los datos completos en clientes fiscales."
+        requireFiscalData={true}
+        onCuitChange={(v) => setAddUI((p) => ({ ...p, cuit: v, fiscalData: null, fiscalError: "" }))}
+        onLookup={consultarArcaAddCliente}
+        onClose={closeAddMini}
+        onConfirm={guardarNuevoCatalogo}
       />
     </>,
     document.body

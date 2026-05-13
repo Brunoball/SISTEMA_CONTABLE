@@ -8,7 +8,6 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faXmark,
   faUpRightFromSquare,
-  faDownload,
 } from "@fortawesome/free-solid-svg-icons";
 
 function safeText(v) {
@@ -404,7 +403,6 @@ export default function ModalVerComprobante({
   const closeBtnRef = useRef(null);
 
   const [loading, setLoading] = useState(false);
-  const [downloading, setDownloading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [blobUrl, setBlobUrl] = useState("");
   const [resolvedMime, setResolvedMime] = useState("");
@@ -494,7 +492,6 @@ export default function ModalVerComprobante({
 
     if (!open || !activeUrl) {
       setLoading(false);
-      setDownloading(false);
       setErrorMsg("");
       setResolvedMime("");
       setResolvedFileName("");
@@ -652,88 +649,6 @@ export default function ModalVerComprobante({
     return ["text", "json", "csv", "html"].includes(kind);
   }, [kind]);
 
-  // ─── DESCARGA ARREGLADA ────────────────────────────────────────────────────
-  // Todos los tipos (incluyendo pdf e img) pasan por fetch → blob → <a download>
-  // para forzar descarga real en lugar de abrir una nueva pestaña.
-  async function handleDownload() {
-    if (!activeUrl || downloading) return;
-
-    // Blob URL local: descarga directa sin fetch
-    if (isBlobUrl(activeUrl)) {
-      try {
-        setDownloading(true);
-        setErrorMsg("");
-        const a = document.createElement("a");
-        a.href = activeUrl;
-        a.download = displayFileName || "archivo";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      } catch (e) {
-        setErrorMsg(e?.message || "No se pudo descargar el archivo.");
-      } finally {
-        setDownloading(false);
-      }
-      return;
-    }
-
-    // Para TODOS los tipos (pdf, img, excel, word, csv, json, text, other)
-    // hacemos fetch → blob → createObjectURL → <a download>
-    try {
-      setDownloading(true);
-      setErrorMsg("");
-
-      const fetchOptions = { method: "GET" };
-      if (shouldSendAuthHeaders(activeUrl)) {
-        fetchOptions.headers = buildHeadersGET();
-      }
-
-      const res = await fetch(activeUrl, fetchOptions);
-
-      if (res.status === 401 || res.status === 403) {
-        throw new Error("Sesión vencida o no autorizada para descargar este comprobante.");
-      }
-
-      if (!res.ok) {
-        throw new Error(`No se pudo descargar el archivo. HTTP ${res.status}`);
-      }
-
-      const contentType =
-        safeText(res.headers.get("Content-Type")) ||
-        safeText(resolvedMime) ||
-        safeText(activeMime);
-
-      const headerFileName = parseContentDispositionFileName(
-        res.headers.get("Content-Disposition") || ""
-      );
-
-      const detectedKind = guessKindFromUrlOrMime(activeUrl, contentType);
-      const blob = await res.blob();
-
-      const realName = buildSimpleDisplayName({
-        explicitFileName: activeFileName,
-        headerFileName,
-        mime: contentType || blob.type,
-        kind: detectedKind,
-        title: activeTitle || modalTitle,
-        url: activeUrl,
-      });
-
-      const tmpUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = tmpUrl;
-      a.download = realName || displayFileName || "archivo";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(tmpUrl), 1500);
-    } catch (e) {
-      setErrorMsg(e?.message || "No se pudo descargar el archivo.");
-    } finally {
-      setDownloading(false);
-    }
-  }
-  // ──────────────────────────────────────────────────────────────────────────
 
   function handleOpen() {
     const target = blobUrl || activeUrl;
@@ -986,7 +901,7 @@ export default function ModalVerComprobante({
                     {kind === "other" &&
                       "No se puede previsualizar este archivo en el navegador."}
                     <br />
-                    Podés abrirlo o descargarlo desde abajo.
+                    Podés abrirlo desde abajo.
                   </div>
                 )}
             </div>
@@ -995,18 +910,6 @@ export default function ModalVerComprobante({
 
         <div className="mi-modal__footer mpr-footer">
           <div style={{ display: "flex", gap: 10, width: "100%", justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              className="mit-btn mit-btn--ghost mit-btn--block"
-              id="maxBTN"
-              onClick={handleDownload}
-              disabled={!activeUrl || downloading}
-              title={`Descargar ${displayFileName}`}
-            >
-              <FontAwesomeIcon icon={faDownload} style={{ marginRight: 8 }} />
-              {downloading ? "Descargando..." : "Descargar"}
-            </button>
-
             <button
               type="button"
               className="mit-btn mit-btn--solid mit-btn--block"

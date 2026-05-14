@@ -1,7 +1,13 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faIdCard, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
+import {
+  faBuilding,
+  faCheckCircle,
+  faIdCard,
+  faMagnifyingGlass,
+  faUser,
+} from "@fortawesome/free-solid-svg-icons";
 import "../Global_css/Global_Modals.css";
 import "../Global_css/roots.css";
 import "./ModalClienteFiscalArca.css";
@@ -89,19 +95,24 @@ export default function ModalClienteFiscalArca({
   if (!open) return null;
 
   return createPortal(
-    <div className="mi-mini__overlay gcf-modal__overlay">
+    <div className={["mi-modal__overlay", "gcf-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim()}>
       <div
-        className={["mi-mini__modal", "gcf-modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
+        className={["mi-modal__container", "gcf-modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
         onMouseDown={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={title}
       >
-        <div className="mi-mini__head gcf-modal__head">
-          <h4 className="mi-mini__title gcf-modal__title">{title}</h4>
+        <div className="mi-modal__header gcf-modal__head">
+          <div className="mi-modal__head-icon" aria-hidden="true">
+            <FontAwesomeIcon icon={faIdCard} />
+          </div>
+          <div className="mi-modal__head-left">
+            <h2 className="mi-modal__title gcf-modal__title">{title}</h2>
+          </div>
           <button
             type="button"
-            className="mi-mini__close"
+            className="mi-modal__close"
             onClick={onClose}
             disabled={busy}
             aria-label="Cerrar"
@@ -110,79 +121,118 @@ export default function ModalClienteFiscalArca({
           </button>
         </div>
 
-        <div className="mi-mini__body gcf-modal__body">
-          <div className="gcf-alert gcf-alert--info">
-            <div className="gcf-alert__title">{infoTitle}</div>
-            {description && <div className="gcf-alert__description">{description}</div>}
-          </div>
-
-          <div className="fl-field gcf-modal__field">
-            <input
-              ref={inputRef}
-              className="fl-input"
-              placeholder=" "
-              value={cleanCuit}
-              onChange={(event) => onCuitChange?.(onlyDigits(event.target.value))}
-              disabled={busy}
-              autoComplete="off"
-              inputMode="numeric"
-              maxLength={11}
-            />
-            <label className="fl-label">
-              <FontAwesomeIcon icon={faIdCard} className="gcf-modal__label-icon" />
-              CUIT *
-            </label>
-          </div>
-
-          <button
-            type="button"
-            className="mit-btn mit-btn--ghost gcf-modal__lookup-btn"
-            onClick={onLookup}
-            disabled={busy || !cuitOk}
-          >
-            <FontAwesomeIcon icon={faMagnifyingGlass} className="gcf-modal__btn-icon" />
-            {loading ? searchingText : lookupText}
-          </button>
-
-          {fiscalData && (
-            <div className="gcf-alert gcf-alert--success">
-              <div className="gcf-alert__title">Datos encontrados</div>
-              <div className="gcf-summary">
-                <div className="gcf-summary__row">
-                  <b>CUIT:</b>
-                  <span>{safeText(fiscalData.cuit)}</span>
+        <div className="mi-modal__content gcf-modal__content">
+          <div className="gcf-modal__layout">
+            <section className="gcf-client-card" aria-label="Tarjeta del cliente">
+              <div className="gcf-client-card__top">
+                <div className="gcf-client-card__avatar" aria-hidden="true">
+                  <FontAwesomeIcon icon={fiscalData ? faBuilding : faUser} />
                 </div>
-                <div className="gcf-summary__row">
-                  <b>IVA:</b>
-                  <span>{safeText(fiscalData.condicion_iva || fiscalData.iva)}</span>
-                </div>
-                <div className="gcf-summary__row gcf-summary__row--full">
-                  <b>Razón social:</b>
-                  <span>{safeText(fiscalData.razon_social)}</span>
-                </div>
-                <div className="gcf-summary__row gcf-summary__row--full">
-                  <b>Domicilio:</b>
-                  <span>{safeText(fiscalData.domicilio)}</span>
+                <div className="gcf-client-card__heading">
+                  <span className="gcf-client-card__eyebrow">Cliente fiscal</span>
+                  <h3>{fiscalData ? safeText(fiscalData.razon_social) : infoTitle}</h3>
                 </div>
               </div>
-            </div>
-          )}
 
-          {error && (
-            <div className="gcf-alert gcf-alert--error" role="alert">
-              {error}
-            </div>
-          )}
+              {fiscalData ? (
+                <>
+                  <div className="gcf-client-card__status gcf-client-card__status--success">
+                    <FontAwesomeIcon icon={faCheckCircle} />
+                    Datos encontrados y listos para confirmar
+                  </div>
 
-          {helperText && <div className="gcf-modal__help">{helperText}</div>}
+                  <div className="gcf-client-data">
+                    <div className="gcf-data-chip">
+                      <span>CUIT</span>
+                      <b>{safeText(fiscalData.cuit || cleanCuit)}</b>
+                    </div>
+                    <div className="gcf-data-chip">
+                      <span>IVA</span>
+                      <b>{safeText(fiscalData.condicion_iva || fiscalData.iva)}</b>
+                    </div>
+                    <div className="gcf-data-row gcf-data-row--full">
+                      <span>Razón social</span>
+                      <b>{safeText(fiscalData.razon_social)}</b>
+                    </div>
+                    <div className="gcf-data-row gcf-data-row--full">
+                      <span>Domicilio</span>
+                      <b>{safeText(fiscalData.domicilio)}</b>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="gcf-client-empty">
+                  <div className="gcf-client-empty__icon" aria-hidden="true">
+                    <FontAwesomeIcon icon={faMagnifyingGlass} />
+                  </div>
+                  <div>
+                    <b>Esperando consulta</b>
+                    <span>Ingresá el CUIT en el panel derecho para traer los datos fiscales desde ARCA.</span>
+                  </div>
+                </div>
+              )}
+            </section>
 
-          <div className="mi-mini__actions gcf-modal__actions">
-            <button type="button" className="mit-btn mit-btn--ghost" onClick={onClose} disabled={busy}>
-              Cancelar
-            </button>
-            <button type="button" className="mit-btn mit-btn--solid" onClick={onConfirm} disabled={!canConfirm}>
-              {saving ? "Guardando..." : confirmText}
-            </button>
+            <aside className="nc-aside gcf-side-panel" aria-label="Consulta de CUIT">
+              <section className="nc-section gcf-panel-section">
+                <div className="nc-section-head">
+                  <span className="nc-section-dot" />
+                  <span>Consulta ARCA</span>
+                </div>
+
+                <div className="nc-section-body gcf-panel-section__body">
+                  <div className="gcf-panel-intro">
+                    <b>{infoTitle}</b>
+                    <span>Completá el CUIT para consultar y luego confirmar los datos.</span>
+                  </div>
+
+                  <div className="fl-field gcf-modal__field">
+                    <input
+                      ref={inputRef}
+                      className="fl-input"
+                      placeholder=" "
+                      value={cleanCuit}
+                      onChange={(event) => onCuitChange?.(onlyDigits(event.target.value))}
+                      disabled={busy}
+                      autoComplete="off"
+                      inputMode="numeric"
+                      maxLength={11}
+                    />
+                    <label className="fl-label">
+                      <FontAwesomeIcon icon={faIdCard} className="gcf-modal__label-icon" />
+                      CUIT *
+                    </label>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="mit-btn mit-btn--ghost gcf-modal__lookup-btn"
+                    onClick={onLookup}
+                    disabled={busy || !cuitOk}
+                  >
+                    <FontAwesomeIcon icon={faMagnifyingGlass} className="gcf-modal__btn-icon" />
+                    {loading ? searchingText : lookupText}
+                  </button>
+                </div>
+              </section>
+
+              {error && (
+                <div className="gcf-alert gcf-alert--error" role="alert">
+                  {error}
+                </div>
+              )}
+
+              {helperText && <div className="gcf-modal__help">{helperText}</div>}
+
+              <div className="gcf-modal__actions">
+                <button type="button" className="mit-btn mit-btn--ghost" onClick={onClose} disabled={busy}>
+                  Cancelar
+                </button>
+                <button type="button" className="mit-btn mit-btn--solid" onClick={onConfirm} disabled={!canConfirm}>
+                  {saving ? "Guardando..." : confirmText}
+                </button>
+              </div>
+            </aside>
           </div>
         </div>
       </div>

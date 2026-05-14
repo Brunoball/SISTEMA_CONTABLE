@@ -193,99 +193,90 @@ function FiscalResumen({ fiscal }) {
   if (!fiscalIsUsable(f) && !f.id_cliente_fiscal) return null;
 
   return (
-    <div
-      style={{
-        border: "1px solid rgba(34, 197, 94, 0.25)",
-        background: "rgba(34, 197, 94, 0.08)",
-        borderRadius: 12,
-        padding: "10px 12px",
-        marginTop: -2,
-        fontSize: 12,
-        color: "var(--nv-text)",
-        display: "grid",
-        gap: 6,
-      }}
-    >
-      <div style={{ fontWeight: 800, display: "flex", alignItems: "center", gap: 7 }}>
-        <FontAwesomeIcon icon={faCircleCheck} /> Datos fiscales cargados
+    <div className="cc-fiscal-summary-card">
+      <div className="cc-fiscal-summary-card__title">
+        <FontAwesomeIcon icon={faCircleCheck} />
+        Datos fiscales cargados
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 10px" }}>
-        <div>
-          <b>CUIT:</b> {f.cuit || "—"}
+
+      <div className="cc-fiscal-summary-grid">
+        <div className="cc-fiscal-summary-item">
+          <span>CUIT</span>
+          <b>{f.cuit || "—"}</b>
         </div>
-        <div>
-          <b>IVA:</b> {f.condicion_iva || "—"}
+        <div className="cc-fiscal-summary-item">
+          <span>IVA</span>
+          <b>{f.condicion_iva || "—"}</b>
         </div>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <b>Razón social:</b> {f.razon_social || "—"}
+        <div className="cc-fiscal-summary-item cc-fiscal-summary-item--full">
+          <span>Razón social</span>
+          <b>{f.razon_social || "—"}</b>
         </div>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <b>Domicilio:</b> {f.domicilio || "—"}
+        <div className="cc-fiscal-summary-item cc-fiscal-summary-item--full">
+          <span>Domicilio</span>
+          <b>{f.domicilio || "—"}</b>
         </div>
       </div>
     </div>
   );
 }
 
-function FiscalEditableFields({ fiscal, cuit, saving, fiscalLoading, dark, onFieldChange }) {
+function FiscalEditableFields({ fiscal, cuit, saving, fiscalLoading, onFieldChange }) {
   const f = normalizeFiscalData({ ...(fiscal || {}), cuit: fiscal?.cuit || cuit });
   if (!fiscalHasAnyData(f)) return null;
 
   return (
-    <div
-      style={{
-        border: "1px solid rgba(15, 23, 42, 0.12)",
-        background: dark ? "rgba(15, 23, 42, 0.30)" : "rgba(248, 250, 252, 0.88)",
-        borderRadius: 14,
-        padding: "12px",
-        display: "grid",
-        gap: 10,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, color: "var(--nv-text)", fontSize: 13 }}>
-        <FontAwesomeIcon icon={faFileInvoiceDollar} />
-        Datos legales editables
+    <div className="cc-legal-edit-card">
+      <div className="cc-legal-edit-card__head">
+        <span className="cc-legal-edit-card__icon" aria-hidden="true">
+          <FontAwesomeIcon icon={faFileInvoiceDollar} />
+        </span>
+        <div>
+          <b>Datos legales editables</b>
+          <span>Información que se usará en facturación y comprobantes.</span>
+        </div>
       </div>
 
-      <div style={{ fontSize: 12, color: "var(--nv-muted)", lineHeight: 1.45 }}>
-        Estos datos salen en facturación. Podés corregir domicilio, condición IVA o razón social si ARCA vino incompleto/desactualizado.
-      </div>
+      <p className="cc-legal-edit-card__hint">
+        Podés corregir razón social, condición IVA o domicilio si ARCA vino incompleto o desactualizado.
+      </p>
 
-      <div className="fl-field">
-        <input
-          type="text"
-          className="fl-input"
-          placeholder=" "
-          value={f.razon_social}
-          onChange={(e) => onFieldChange("razon_social", e.target.value)}
-          disabled={saving || fiscalLoading}
-        />
-        <label className="fl-label">Razón social legal *</label>
-      </div>
+      <div className="cc-legal-edit-card__grid">
+        <div className="fl-field cc-legal-edit-card__field cc-legal-edit-card__field--full">
+          <input
+            type="text"
+            className="fl-input"
+            placeholder=" "
+            value={f.razon_social}
+            onChange={(e) => onFieldChange("razon_social", e.target.value)}
+            disabled={saving || fiscalLoading}
+          />
+          <label className="fl-label">Razón social legal *</label>
+        </div>
 
-      <div className="fl-field">
-        <input
-          type="text"
-          className="fl-input"
-          placeholder=" "
-          value={f.condicion_iva}
-          onChange={(e) => onFieldChange("condicion_iva", e.target.value)}
-          disabled={saving || fiscalLoading}
-        />
-        <label className="fl-label">Condición IVA</label>
-      </div>
+        <div className="fl-field cc-legal-edit-card__field cc-legal-edit-card__field--full">
+          <input
+            type="text"
+            className="fl-input"
+            placeholder=" "
+            value={f.condicion_iva}
+            onChange={(e) => onFieldChange("condicion_iva", e.target.value)}
+            disabled={saving || fiscalLoading}
+          />
+          <label className="fl-label">Condición IVA</label>
+        </div>
 
-      <div className="fl-field">
-        <textarea
-          className="fl-input"
-          placeholder=" "
-          value={f.domicilio}
-          onChange={(e) => onFieldChange("domicilio", e.target.value)}
-          disabled={saving || fiscalLoading}
-          rows={3}
-          style={{ minHeight: 76, resize: "vertical", paddingTop: 14 }}
-        />
-        <label className="fl-label">Domicilio fiscal</label>
+        <div className="fl-field cc-legal-edit-card__field cc-legal-edit-card__field--full">
+          <textarea
+            className="fl-input cc-legal-edit-card__textarea"
+            placeholder=" "
+            value={f.domicilio}
+            onChange={(e) => onFieldChange("domicilio", e.target.value)}
+            disabled={saving || fiscalLoading}
+            rows={3}
+          />
+          <label className="fl-label">Domicilio fiscal</label>
+        </div>
       </div>
     </div>
   );
@@ -296,97 +287,142 @@ function ModalDatosLegalesCliente({ open, dark, row, fiscal, loading, onClose, o
 
   const f = normalizeFiscalData(fiscal || fiscalFromClienteRow(row) || {});
   const tieneDatos = fiscalHasAnyData(f);
+  const nombre = row?.nombre || "—";
 
   return createPortal(
-    <div className={["mi-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim()}>
+    <div className={["mi-modal__overlay", "cc-legal-modal__overlay", dark ? "mi-modal__overlay--dark" : ""].join(" ").trim()}>
       <div
-        className={["mi-mini__modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
+        className={["mi-modal__container", "cc-legal-modal", dark ? "mi-modal--dark" : ""].join(" ").trim()}
         role="dialog"
         aria-modal="true"
+        aria-label="Datos legales del cliente"
         onMouseDown={(e) => e.stopPropagation()}
-        style={{ maxWidth: 560, width: "calc(100vw - 34px)" }}
       >
-        <div className="mi-mini__head">
-          <h4 className="mi-mini__title">Datos legales del cliente</h4>
-          <button type="button" className="mi-mini__close" onClick={onClose} disabled={loading} aria-label="Cerrar">
+        <div className="mi-modal__header cc-legal-modal__head">
+          <div className="mi-modal__head-icon cc-legal-modal__headIcon" aria-hidden="true">
+            <FontAwesomeIcon icon={faFileInvoiceDollar} />
+          </div>
+          <div className="mi-modal__head-left cc-legal-modal__headText">
+            <span>Datos fiscales</span>
+            <h2 className="mi-modal__title">Datos legales del cliente</h2>
+          </div>
+          <button type="button" className="mi-modal__close" onClick={onClose} disabled={loading} aria-label="Cerrar">
             ✕
           </button>
         </div>
 
-        <div className="mi-mini__body" style={{ display: "grid", gap: 12 }}>
-          <div
-            style={{
-              border: "1px solid rgba(59, 130, 246, 0.22)",
-              background: "rgba(59, 130, 246, 0.08)",
-              borderRadius: 12,
-              padding: "10px 12px",
-              fontSize: 12,
-              lineHeight: 1.45,
-              color: "var(--nv-text)",
-            }}
-          >
-            Cliente: <b>{row?.nombre || "—"}</b>
-          </div>
-
-          {loading ? (
-            <div className="cc-loading-state" style={{ minHeight: 110 }}>
-              <FontAwesomeIcon icon={faArrowRotateRight} spin />
-              <span>Cargando datos legales...</span>
-            </div>
-          ) : tieneDatos ? (
-            <div
-              style={{
-                border: "1px solid rgba(15, 23, 42, 0.12)",
-                borderRadius: 12,
-                overflow: "hidden",
-              }}
-            >
-              {[
-                ["CUIT", f.cuit || "—"],
-                ["Razón social", f.razon_social || "—"],
-                ["Condición IVA", f.condicion_iva || "—"],
-                ["Domicilio fiscal", f.domicilio || "—"],
-                ["Origen", f.origen || "—"],
-              ].map(([label, value]) => (
-                <div
-                  key={label}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "140px 1fr",
-                    gap: 10,
-                    padding: "10px 12px",
-                    borderBottom: "1px solid rgba(15, 23, 42, 0.08)",
-                    fontSize: 13,
-                  }}
-                >
-                  <b style={{ color: "var(--nv-muted)" }}>{label}</b>
-                  <span style={{ color: "var(--nv-text)", whiteSpace: "pre-wrap" }}>{value}</span>
+        <div className="mi-modal__content cc-legal-modal__content">
+          <div className="cc-legal-modal__layout">
+            <section className="cc-legal-client-card" aria-label="Tarjeta del cliente">
+              <div className="cc-legal-client-card__top">
+                <div className="cc-legal-client-card__avatar" aria-hidden="true">
+                  <FontAwesomeIcon icon={faUser} />
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div
-              style={{
-                border: "1px solid rgba(245, 158, 11, 0.28)",
-                background: "rgba(245, 158, 11, 0.10)",
-                borderRadius: 12,
-                padding: "12px",
-                fontSize: 13,
-                color: "var(--nv-text)",
-                lineHeight: 1.45,
-              }}
-            >
-              Este cliente todavía no tiene datos fiscales cargados. Podés editarlo y consultar ARCA por CUIT para crear los datos legales.
-            </div>
-          )}
+                <div className="cc-legal-client-card__heading">
+                  <span className="cc-legal-client-card__eyebrow">Cliente seleccionado</span>
+                  <h3 title={nombre}>{nombre}</h3>
+                  <div className="cc-legal-client-card__description">
+                    {tieneDatos
+                      ? "Información fiscal guardada para facturación y comprobantes."
+                      : "Este cliente todavía no tiene datos fiscales cargados."}
+                  </div>
+                </div>
+              </div>
 
-          <div className="mi-mini__actions">
-            <button type="button" className="mit-btn mit-btn--ghost" onClick={onClose} disabled={loading}>
-              Cerrar
-            </button>
-            <button type="button" className="mit-btn mit-btn--solid" onClick={onEdit} disabled={loading}>
-              {tieneDatos ? "Editar datos legales" : "Cargar datos legales"}
-            </button>
+              {loading ? (
+                <div className="cc-loading-state cc-legal-client-card__loading">
+                  <FontAwesomeIcon icon={faArrowRotateRight} spin />
+                  <span>Cargando datos legales del cliente...</span>
+                </div>
+              ) : tieneDatos ? (
+                <>
+                  <div className="cc-legal-client-card__status cc-legal-client-card__status--success">
+                    <FontAwesomeIcon icon={faCircleCheck} />
+                    Datos encontrados y listos para revisar
+                  </div>
+
+                  <div className="cc-legal-client-data">
+                    <div className="cc-legal-data-chip cc-legal-data-chip--strong">
+                      <span>CUIT</span>
+                      <b>{f.cuit || "—"}</b>
+                    </div>
+                    <div className="cc-legal-data-chip">
+                      <span>IVA</span>
+                      <b>{f.condicion_iva || "—"}</b>
+                    </div>
+                    <div className="cc-legal-data-row cc-legal-data-row--full">
+                      <span>Razón social</span>
+                      <b>{f.razon_social || "—"}</b>
+                    </div>
+                    <div className="cc-legal-data-row cc-legal-data-row--full">
+                      <span>Domicilio fiscal</span>
+                      <b>{f.domicilio || "—"}</b>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="cc-legal-client-empty">
+                  <div className="cc-legal-client-empty__icon" aria-hidden="true">
+                    <FontAwesomeIcon icon={faIdCard} />
+                  </div>
+                  <div>
+                    <b>Sin datos legales</b>
+                    <span>Usá el panel derecho para cargar o consultar los datos fiscales por CUIT.</span>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <aside className="cc-legal-side-panel" aria-label="Acciones de datos legales">
+              <section className="cc-legal-panel-section">
+                <div className="cc-legal-panel-section__head">
+                  <span className="cc-legal-panel-section__dot" />
+                  <span>Resumen fiscal</span>
+                </div>
+
+                <div className="cc-legal-panel-section__body">
+                  <div className="cc-legal-panel-intro">
+                    <b>{tieneDatos ? "Datos guardados" : "Carga pendiente"}</b>
+                    <span>
+                      {tieneDatos
+                        ? "Podés revisar la información actual o editarla si hace falta corregir algún dato."
+                        : "Editá el cliente para consultar ARCA por CUIT y guardar la información legal."}
+                    </span>
+                  </div>
+
+                  <div className="cc-legal-side-list">
+                    <div className="cc-legal-side-item">
+                      <span>Estado</span>
+                      <b>{tieneDatos ? "Con datos fiscales" : "Pendiente"}</b>
+                    </div>
+                    <div className="cc-legal-side-item">
+                      <span>CUIT</span>
+                      <b>{f.cuit || "—"}</b>
+                    </div>
+
+                  </div>
+                </div>
+              </section>
+
+              {!loading && !tieneDatos && (
+                <div className="cc-fiscal-alert cc-fiscal-alert--warning">
+                  Este cliente todavía no tiene datos fiscales cargados. Podés editarlo y consultar ARCA por CUIT para crear los datos legales.
+                </div>
+              )}
+
+              <div className="cc-legal-modal__help">
+                Los datos legales se usan en facturación, comprobantes y documentos comerciales.
+              </div>
+
+              <div className="cc-legal-modal__actions">
+                <button type="button" className="mit-btn mit-btn--ghost" onClick={onClose} disabled={loading}>
+                  Cerrar
+                </button>
+                <button type="button" className="mit-btn mit-btn--solid" onClick={onEdit} disabled={loading}>
+                  {tieneDatos ? "Editar datos legales" : "Cargar datos legales"}
+                </button>
+              </div>
+            </aside>
           </div>
         </div>
       </div>
@@ -991,6 +1027,7 @@ export default function ModalClientes({
         className={[
           "mi-modal__container",
           "mi-modal__container--categorias",
+          "cc-entity-modal",
           dark ? "mi-modal--dark" : "",
         ].join(" ").trim()}
         role="dialog"
@@ -1022,8 +1059,8 @@ export default function ModalClientes({
         </div>
 
         <div className="mi-modal__content">
-          <div className="mi-cr-grid">
-            <aside className="mi-cr-filters">
+          <div className="mi-cr-grid cc-entity-admin-grid">
+            <aside className="mi-cr-filters cc-entity-form-panel">
               <div className="mi-cr-filters__top">
                 <div className="mi-cr-filters__title">
                   <FontAwesomeIcon
@@ -1034,22 +1071,14 @@ export default function ModalClientes({
                 </div>
               </div>
 
-              <div className="mi-cr-filters__body">
-                <div
-                  style={{
-                    border: "1px solid rgba(59, 130, 246, 0.22)",
-                    background: "rgba(59, 130, 246, 0.08)",
-                    borderRadius: 12,
-                    padding: "10px 12px",
-                    fontSize: 12,
-                    color: "var(--nv-text)",
-                    lineHeight: 1.45,
-                  }}
-                >
-                  <b style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 4 }}>
+              <div className="mi-cr-filters__body cc-entity-form-body">
+                <div className="cc-fiscal-intro-card">
+                  <b className="cc-fiscal-intro-card__title">
                     <FontAwesomeIcon icon={faFileInvoiceDollar} /> Cliente fiscal o manual
                   </b>
-                  Ingresá CUIT para traer datos de ARCA. Si no aparece o es venta informal, dejá el CUIT vacío y cargá solo el nombre.
+                  <span>
+                    Ingresá CUIT para traer datos de ARCA. Si no aparece o es venta informal, dejá el CUIT vacío y cargá solo el nombre.
+                  </span>
                 </div>
 
                 <div className="fl-field">
@@ -1085,7 +1114,7 @@ export default function ModalClientes({
                   </label>
                 </div>
 
-                <div className="mi-cr-filters__actions" style={{ flexDirection: "row", marginTop: 0 }}>
+                <div className="mi-cr-filters__actions cc-fiscal-action-row">
                   <button
                     type="button"
                     className="mit-btn mit-btn--ghost mit-btn--block"
@@ -1108,17 +1137,7 @@ export default function ModalClientes({
                 </div>
 
                 {form.fiscalError && (
-                  <div
-                    style={{
-                      border: "1px solid rgba(239, 68, 68, 0.25)",
-                      background: "rgba(239, 68, 68, 0.08)",
-                      borderRadius: 12,
-                      padding: "9px 11px",
-                      fontSize: 12,
-                      color: dark ? "#fecaca" : "#b91c1c",
-                      lineHeight: 1.45,
-                    }}
-                  >
+                  <div className="cc-fiscal-alert cc-fiscal-alert--error">
                     {form.fiscalError} Completá el nombre y guardalo sin CUIT si corresponde.
                   </div>
                 )}
@@ -1130,7 +1149,6 @@ export default function ModalClientes({
                   cuit={form.cuit}
                   saving={saving}
                   fiscalLoading={form.fiscalLoading}
-                  dark={dark}
                   onFieldChange={actualizarCampoFiscal}
                 />
 
@@ -1172,7 +1190,7 @@ export default function ModalClientes({
                   <label className="fl-label">Estado</label>
                 </div>
 
-                <div className="mi-cr-filters__actions" style={{ flexDirection: "row" }}>
+                <div className="mi-cr-filters__actions cc-form-action-row">
                   <button
                     type="button"
                     className="mit-btn mit-btn--solid mit-btn--block"
@@ -1205,7 +1223,7 @@ export default function ModalClientes({
               </div>
             </aside>
 
-            <section className="mi-cr-table">
+            <section className="mi-cr-table cc-entity-list-panel">
               <div className="mi-cr-table__foot mi-cr-table__foot--top">
                 <div className="mi-cr-table__summary">
                   <div>
@@ -1285,7 +1303,7 @@ export default function ModalClientes({
                 </div>
               </div>
 
-              <div className="cc-cliente-table">
+              <div className="cc-cliente-table cc-entity-list-table">
                 <div className="cc-cliente-table__desktopHead">
                   <div className="cc-grid-header">
                     <div className="cc-grid-header__cell">Cliente</div>
@@ -1334,16 +1352,7 @@ export default function ModalClientes({
                                 {row?.nombre || "—"}
                               </span>
                               <span
-                                style={{
-                                  display: "block",
-                                  marginTop: 3,
-                                  fontSize: 11,
-                                  color: "var(--nv-muted)",
-                                  fontWeight: 500,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
+                                className="cc-grid-submeta"
                                 title={tieneCuit ? `${fiscal.cuit} - ${fiscal.razon_social || ""}` : "Cliente sin datos fiscales"}
                               >
                                 {tieneCuit ? `CUIT ${fiscal.cuit}` : "Sin datos fiscales / manual"}
@@ -1368,7 +1377,7 @@ export default function ModalClientes({
                                 {tieneCuit && (
                                   <button
                                     type="button"
-                                    className="cc-action-btn"
+                                    className="cc-action-btn cc-action-btn--legal"
                                     onClick={() => abrirDatosLegales(row)}
                                     disabled={bloqueado}
                                     title="Ver datos legales"

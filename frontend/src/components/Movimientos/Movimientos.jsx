@@ -5,6 +5,7 @@ import "../Global/Global_css/Global_responsive.css";
 
 // Toast global
 import Toast from "../Global/Toast.jsx";
+import ModalDetalleMovimiento from "../Global/Modales/ModalDetalleMovimiento.jsx";
 
 // Calendario
 import Calendario from "../Global/Calendario/Calendario.jsx";
@@ -24,6 +25,7 @@ import {
   faArrowRightLong,
   faTimes,
   faBoxOpen,
+  faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
 
 import * as XLSX from "xlsx";
@@ -75,6 +77,164 @@ function safeText(v) {
   return s ? s : "-";
 }
 
+function normalizeComparableText(v) {
+  return String(v ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+}
+
+
+function normalizeFlag(v) {
+  if (v === true || v === 1) return true;
+  const s = String(v ?? "").trim().toLowerCase();
+  return ["1", "true", "si", "sí", "yes"].includes(s);
+}
+
+function getDepositoChequeLabel(row) {
+  if (!row || typeof row !== "object") return "";
+
+  // No alcanza con que un egreso tenga cheque/eCheq como medio de pago.
+  // Solo se considera depósito bancario cuando el backend lo marca explícitamente
+  // con es_deposito_cheque, igual que en Otros Egresos.
+  const esDepositoCheque =
+    normalizeFlag(row?.es_deposito_cheque) || normalizeFlag(row?.esDepositoCheque);
+
+  if (!esDepositoCheque) return "";
+
+  const tipoCheque = String(
+    row?.cheque_tipo ??
+      row?.cheque?.tipo ??
+      row?.medio_pago_nombre ??
+      row?.medio_pago ??
+      ""
+  )
+    .toUpperCase()
+    .replace(/[-_]/g, " ")
+    .trim();
+
+  return tipoCheque.includes("ECHEQ") || tipoCheque.includes("E CHEQ")
+    ? "ECHEQ DEPOSITADO"
+    : "CHEQUE DEPOSITADO";
+}
+
+function withDepositoChequeDetalle(row) {
+  const label = getDepositoChequeLabel(row);
+  if (!label) return row;
+
+  const total =
+    Number(
+      row?.cheque_importe ??
+        row?.cheque?.importe ??
+        row?.monto_total ??
+        row?.total ??
+        row?.total_general ??
+        0
+    ) || 0;
+
+  const tipoCheque = String(row?.cheque_tipo ?? row?.cheque?.tipo ?? row?.medio_pago_nombre ?? "CHEQUE")
+    .toUpperCase()
+    .trim();
+
+  const itemCheque = {
+    id_item: null,
+    id_movimiento: row?.id_movimiento ?? null,
+    id_detalle: null,
+    id_stock_producto: null,
+    producto_nombre: label,
+    stock_producto_nombre: label,
+    detalle_nombre: label,
+    detalle: label,
+    descripcion: label,
+    cantidad: 1,
+    precio: total,
+    iva_pct: 0,
+    subtotal: total,
+    iva_monto: 0,
+    total,
+  };
+
+  const chequeTipoValor = String(row?.cheque_tipo ?? row?.cheque?.tipo ?? tipoCheque ?? "cheque").toLowerCase();
+
+  const medioCheque = {
+    id_movimiento_medio_pago: 0,
+    id_movimiento: row?.id_movimiento ?? null,
+    id_medio_pago: row?.id_medio_pago ?? null,
+    medio_pago_nombre: tipoCheque || "CHEQUE",
+    medio_pago: tipoCheque || "CHEQUE",
+    nombre: tipoCheque || "CHEQUE",
+    monto: total,
+    id_cheque: row?.cheque_id ?? row?.cheque?.id_cheque ?? null,
+    cheque_tipo: chequeTipoValor,
+    tipo_cheque: chequeTipoValor,
+    numero_cheque: row?.cheque_numero ?? row?.cheque?.numero_cheque ?? "",
+    emisor: row?.cheque_emisor ?? row?.cheque?.emisor ?? "",
+    fecha_emision: row?.cheque_fecha_emision ?? row?.cheque?.fecha_emision ?? "",
+    fecha_pago: row?.cheque_fecha_pago ?? row?.cheque?.fecha_pago ?? "",
+    cheque_importe: total,
+  };
+
+  return {
+    ...row,
+    detalle: label,
+    descripcion: label,
+    concepto: label,
+    cantidad_items: 1,
+    items: [itemCheque],
+    items_detalle: [itemCheque],
+    cantidad_medios_pago: 1,
+    medios_pago_detalle: [medioCheque],
+  };
+}
+
+function isOtrosMovimiento(row) {
+  const idTipo = Number(row?.id_tipo_operacion ?? row?.id_tipo_movimiento ?? 0);
+  if (idTipo === 3 || idTipo === 4) return true;
+
+  const op = normalizeComparableText(row?.operacion ?? row?.tipo_operacion ?? "");
+  return op.includes("OTROS INGRESOS") || op.includes("OTROS EGRESOS");
+}
+
+function clienteProveedorLabel(row) {
+  if (isOtrosMovimiento(row)) return "-";
+
+  const cliente = safeText(pick(row, ["cliente", "nombre_cliente", "razon_social_cliente"], ""));
+  if (cliente !== "-") return cliente;
+
+  return safeText(pick(row, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""));
+}
+
+function normalizeRowForInfoModal(row) {
+  if (!row) return row;
+
+  const next = withDepositoChequeDetalle({ ...row });
+  if (isOtrosMovimiento(next)) {
+    next.cliente = "";
+    next.nombre_cliente = "";
+    next.razon_social_cliente = "";
+    next.proveedor = "";
+    next.nombre_proveedor = "";
+    next.razon_social_proveedor = "";
+    next.tercero = "";
+  }
+
+  return next;
+}
+
+function productosLabel(row) {
+  const depositoLabel = getDepositoChequeLabel(row);
+  if (depositoLabel) return depositoLabel;
+
+  const cantidadDesdeCampo = Number(row?.cantidad_items || 0);
+  const cantidadDesdeItems = Array.isArray(row?.items_detalle) ? row.items_detalle.length : 0;
+  const cantidad = cantidadDesdeCampo > 0 ? cantidadDesdeCampo : cantidadDesdeItems;
+
+  if (cantidad <= 0) return "SIN PRODUCTOS";
+  if (cantidad === 1) return "1 PRODUCTO";
+  return `${cantidad} PRODUCTOS`;
+}
+
 function numOrZero(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -109,6 +269,56 @@ function formatFechaDMY(v) {
   }
 
   return s;
+}
+
+function dateOnlyScore(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return 0;
+
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return Date.UTC(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? t : 0;
+}
+
+function dateTimeScore(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return 0;
+
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (m) {
+    return Date.UTC(
+      Number(m[1]),
+      Number(m[2]) - 1,
+      Number(m[3]),
+      Number(m[4] || 0),
+      Number(m[5] || 0),
+      Number(m[6] || 0)
+    );
+  }
+
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? t : 0;
+}
+
+function sortMovimientosRecientes(list) {
+  return [...(Array.isArray(list) ? list : [])].sort((a, b) => {
+    const fechaB = dateOnlyScore(pick(b, ["fecha", "fecha_movimiento", "created_at"], ""));
+    const fechaA = dateOnlyScore(pick(a, ["fecha", "fecha_movimiento", "created_at"], ""));
+    if (fechaB !== fechaA) return fechaB - fechaA;
+
+    const createdB = dateTimeScore(pick(b, ["created_at", "fecha_creacion", "createdAt"], ""));
+    const createdA = dateTimeScore(pick(a, ["created_at", "fecha_creacion", "createdAt"], ""));
+    if (createdB !== createdA) return createdB - createdA;
+
+    const idB = Number(b?.id_movimiento ?? b?.id ?? 0);
+    const idA = Number(a?.id_movimiento ?? a?.id ?? 0);
+    return idB - idA;
+  });
 }
 
 /* =========================
@@ -149,22 +359,11 @@ function slugifySheetName(name) {
 function buildExportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((r) => {
     const total = pick(r, ["monto_total", "total", "importe_total", "monto", "importe"], 0);
-    const cliente = safeText(pick(r, ["cliente", "nombre_cliente", "razon_social_cliente"], ""));
-    const proveedor = safeText(
-      pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], "")
-    );
-    const tercero = cliente !== "-" ? cliente : proveedor;
-
     return {
       FECHA: safeText(formatFechaDMY(pick(r, ["fecha", "fecha_movimiento", "created_at"], ""))),
-      DESCRIPCION: safeText(
-        pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")
-      ),
+      DESCRIPCION: productosLabel(r),
       OPERACION: safeText(pick(r, ["operacion"], "")),
-      "CLIENTE/PROVEEDOR": tercero,
-      "MEDIO DE PAGO": safeText(
-        pick(r, ["medio_pago_nombre", "medio_pago", "tipo_pago", "forma_pago"], "")
-      ),
+      "CLIENTE/PROVEEDOR": clienteProveedorLabel(r),
       MONTO: numOrZero(total),
     };
   });
@@ -208,6 +407,8 @@ export default function Movimientos() {
 
   const [calOpen, setCalOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [openInfo, setOpenInfo] = useState(false);
+  const [selectedRow, setSelectedRow] = useState(null);
 
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(null);
@@ -347,10 +548,11 @@ export default function Movimientos() {
         !FORCE_SHOW_LOADER_DEV
       ) {
         const cached = cacheRef.current.get(cacheKey);
+        const cachedRows = sortMovimientosRecientes(Array.isArray(cached?.rows) ? cached.rows : []);
         rowsReqIdRef.current = myReqId;
         setShowSkeleton(false);
         setLoadingRows(false);
-        setRows(Array.isArray(cached?.rows) ? cached.rows : []);
+        setRows(cachedRows);
         setHasMore(!!cached?.hasMore);
         setNextOffset(cached?.nextOffset ?? null);
         setError("");
@@ -388,7 +590,7 @@ export default function Movimientos() {
 
         if (myReqId !== reqIdRef.current) return null;
 
-        const movs = Array.isArray(data.movimientos) ? data.movimientos : [];
+        const movs = sortMovimientosRecientes(Array.isArray(data.movimientos) ? data.movimientos : []);
 
         const newHasMore = !!data.has_more;
         const newNextOffset =
@@ -407,7 +609,10 @@ export default function Movimientos() {
               setRows((prev) => {
                 const base = Array.isArray(prev) ? prev : [];
                 const seen = new Set(base.map((x) => String(x?.id_movimiento)));
-                return [...base, ...movs.filter((x) => !seen.has(String(x?.id_movimiento)))];
+                return sortMovimientosRecientes([
+                  ...base,
+                  ...movs.filter((x) => !seen.has(String(x?.id_movimiento))),
+                ]);
               });
             } else {
               setRows(movs);
@@ -679,8 +884,7 @@ export default function Movimientos() {
         label: "DESCRIPCIÓN",
         align: "left",
         fr: 2.2,
-        render: (r) =>
-          safeText(pick(r, ["detalle", "descripcion", "concepto", "observacion", "item"], "")),
+        render: (r) => productosLabel(r),
       },
       {
         key: "operacion",
@@ -694,20 +898,7 @@ export default function Movimientos() {
         label: "CLIENTE/PROVEEDOR",
         align: "left",
         fr: 1.8,
-        render: (r) => {
-          const c = safeText(pick(r, ["cliente", "nombre_cliente", "razon_social_cliente"], ""));
-          return c !== "-"
-            ? c
-            : safeText(pick(r, ["proveedor", "nombre_proveedor", "razon_social_proveedor"], ""));
-        },
-      },
-      {
-        key: "medio_pago",
-        label: "MEDIO DE PAGO",
-        align: "center",
-        fr: 1.3,
-        render: (r) =>
-          safeText(pick(r, ["medio_pago_nombre", "medio_pago", "tipo_pago", "forma_pago"], "")),
+        render: (r) => clienteProveedorLabel(r),
       },
       {
         key: "monto",
@@ -723,9 +914,15 @@ export default function Movimientos() {
             )
           ),
       },
+      { key: "acciones", label: "INFO", align: "center", fr: 0.8, render: () => null },
     ],
     []
   );
+
+  const openInfoModal = useCallback((row) => {
+    setSelectedRow(normalizeRowForInfoModal(row));
+    setOpenInfo(true);
+  }, []);
 
   const gridCols = useMemo(() => columns.map((c) => `${Number(c.fr) || 1}fr`).join(" "), [columns]);
 
@@ -766,7 +963,6 @@ export default function Movimientos() {
         `DESCRIPCION: ${row.DESCRIPCION ?? ""}`,
         `OPERACION: ${row.OPERACION ?? ""}`,
         `CLIENTE/PROVEEDOR: ${row["CLIENTE/PROVEEDOR"] ?? ""}`,
-        `MEDIO DE PAGO: ${row["MEDIO DE PAGO"] ?? ""}`,
         `MONTO: ${row.MONTO ?? ""}`,
         "----------------------------------------",
       ].join("\n");
@@ -819,8 +1015,8 @@ export default function Movimientos() {
       descripcion: ["72%", "58%", "66%", "48%"],
       operacion: ["44%", "34%", "40%", "30%"],
       tercero: ["62%", "54%", "46%", "58%"],
-      medio_pago: ["48%", "38%", "44%", "36%"],
       monto: ["38%", "30%", "34%", "28%"],
+      acciones: ["34%", "30%", "38%", "32%"],
     }),
     []
   );
@@ -1070,6 +1266,27 @@ export default function Movimientos() {
                     role="row"
                   >
                     {columns.map((c) => {
+                      if (c.key === "acciones") {
+                        return (
+                          <div
+                            key={c.key}
+                            className="mov-gridCell mov-gridCell--actions is-center"
+                            role="cell"
+                            data-label={c.label}
+                          >
+                            <button
+                              type="button"
+                              className="mov-iconBtn"
+                              title="Ver información completa del movimiento"
+                              onClick={() => openInfoModal(r)}
+                              disabled={isAnyLoading || loadingListsCtx}
+                            >
+                              <FontAwesomeIcon icon={faInfoCircle} />
+                            </button>
+                          </div>
+                        );
+                      }
+
                       const val = c.render ? c.render(r) : safeText(r[c.key]);
 
                       return (
@@ -1132,6 +1349,15 @@ export default function Movimientos() {
           </div>
         </div>
       </section>
+
+      <ModalDetalleMovimiento
+        open={openInfo}
+        row={selectedRow}
+        onClose={() => {
+          setOpenInfo(false);
+          setSelectedRow(null);
+        }}
+      />
     </div>
   );
 }

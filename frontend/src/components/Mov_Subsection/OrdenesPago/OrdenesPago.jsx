@@ -120,6 +120,10 @@ function dateToAPI(d) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function todayISO() {
+  return dateToAPI(new Date());
+}
+
 function formatDateUI(d) {
   if (!d) return "—";
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
@@ -982,6 +986,9 @@ export default function OrdenesPago() {
       const data = await apiPostJson(`${API}?action=ordenes_pago_confirmar_pago`, {
         ids_movimiento: ids,
         medios_pago: mediosPagoPayload,
+        fecha_cobro: payload?.fecha_cobro || payload?.fecha_pago || payload?.fecha || todayISO(),
+        fecha_pago: payload?.fecha_pago || payload?.fecha_cobro || payload?.fecha || todayISO(),
+        fecha: payload?.fecha || payload?.fecha_cobro || payload?.fecha_pago || todayISO(),
         idUsuario,
         idUsuarioMaster: idUsuarioMaster || idUsuario,
       });

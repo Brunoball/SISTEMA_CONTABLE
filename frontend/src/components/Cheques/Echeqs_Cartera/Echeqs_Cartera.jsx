@@ -155,6 +155,33 @@ function normalizeEcheq(row) {
 /* =========================
    Config
 ========================= */
+
+function toISODate(fecha) {
+  const s = String(fecha || "").trim();
+  if (!s) return "";
+
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) {
+    return `${String(iso[1]).padStart(4, "0")}-${String(iso[2]).padStart(2, "0")}-${String(iso[3]).padStart(2, "0")}`;
+  }
+
+  const visual = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  if (visual) {
+    return `${String(visual[3]).padStart(4, "0")}-${String(visual[2]).padStart(2, "0")}-${String(visual[1]).padStart(2, "0")}`;
+  }
+
+  return "";
+}
+
+function isValidISODate(fecha) {
+  const s = String(fecha || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+
 const PAGE_SIZE = 100;
 const SKELETON_ROWS = 10;
 const API_URL = `${String(BASE_URL || "").replace(/\/+$/, "")}/api.php`;
@@ -371,11 +398,17 @@ const Echeqs_Cartera = () => {
     fetchData({ reset: true, offset: 0 });
   }, [fetchData]);
 
-  const handleDepositarEcheq = useCallback(async () => {
+  const handleDepositarEcheq = useCallback(async (fechaDepositoSeleccionada) => {
     const idCheque = Number(echeqSeleccionado?.id_cheque || 0);
 
     if (!idCheque) {
       showToast("error", "No se pudo identificar el echeq seleccionado.");
+      return;
+    }
+
+    const fechaDeposito = toISODate(fechaDepositoSeleccionada);
+    if (!isValidISODate(fechaDeposito)) {
+      showToast("error", "Seleccioná una fecha de depósito válida desde el modal.");
       return;
     }
 
@@ -387,6 +420,9 @@ const Echeqs_Cartera = () => {
 
       const body = buildAuditUserPayload({
         id_cheque: idCheque,
+        fecha_deposito: fechaDeposito,
+        fecha_operacion: fechaDeposito,
+        fecha: fechaDeposito,
       });
 
       const data = await parseJsonOrThrow(

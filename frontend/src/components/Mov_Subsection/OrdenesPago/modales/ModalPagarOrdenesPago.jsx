@@ -62,6 +62,14 @@ function formatFechaDMY(v) {
   return s;
 }
 
+function todayISO() {
+  const d = new Date();
+  const yyyy = String(d.getFullYear());
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function isTemaOscuro() {
   return document.documentElement.getAttribute("data-theme") === "oscuro";
 }
@@ -925,6 +933,9 @@ export default function ModalPagarOrdenesPago({
         body: JSON.stringify({
           ids_movimiento,
           medios_pago,
+          fecha_cobro: todayISO(),
+          fecha_pago: todayISO(),
+          fecha: todayISO(),
           idUsuario,
           idUsuarioMaster: idUsuarioMaster || idUsuario,
         }),
@@ -1061,6 +1072,9 @@ export default function ModalPagarOrdenesPago({
             seleccion,
             totalSeleccionado,
             medios_pago: mediosPagoPayload,
+            fecha_cobro: todayISO(),
+            fecha_pago: todayISO(),
+            fecha: todayISO(),
             ids_movimiento: ids,
           })
         );

@@ -2041,6 +2041,18 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
               msg: `Medio de pago ${i + 1}: falta cargar el ${tipoCheque === "echeq" ? "eCheq" : "cheque"}.`,
             };
           }
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(String(mp.cheque?.fecha_emision || "").slice(0, 10))) {
+            return {
+              ok: false,
+              msg: `Medio de pago ${i + 1}: falta la fecha de emisión del cheque.`,
+            };
+          }
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(String(mp.cheque?.fecha_pago || "").slice(0, 10))) {
+            return {
+              ok: false,
+              msg: `Medio de pago ${i + 1}: falta la fecha de pago del cheque.`,
+            };
+          }
           if (safeNumber(mp.cheque?.importe) <= 0) {
             return {
               ok: false,
@@ -2058,6 +2070,10 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
           msg: `La suma de los medios de pago (${moneyARS(sumaMediosPago)}) no cubre el total de la venta (${moneyARS(resumen.total)}).`,
         };
       }
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha || ""))) {
+      return { ok: false, msg: "La fecha es obligatoria y debe ser la seleccionada en el modal." };
     }
 
     const periodoApi = fechaToYYYYMM(fecha);
@@ -2154,8 +2170,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         id_tipo_venta: Number(filters.id_tipo_venta || 0) || null,
         id_medio_pago: isContado ? primerMedioId : null,
         id_clasificacion: null,
-        fecha_cbte_iso: String(fecha || todayISO()).slice(0, 10),
-        vto_pago_iso: plusDaysISOFrom(fecha || todayISO(), 10),
+        fecha_cbte_iso: String(fecha).slice(0, 10),
+        vto_pago_iso: plusDaysISOFrom(fecha, 10),
         cbte_tipo: codigoCbte,
         pto_vta: puntoVenta,
         items_facturacion: items,
@@ -2213,8 +2229,8 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
         ),
         id_medio_pago: isContado ? primerMedioId : null,
         id_clasificacion: null,
-        fecha_cbte_iso: String(fecha || todayISO()).slice(0, 10),
-        vto_pago_iso: plusDaysISOFrom(fecha || todayISO(), 10),
+        fecha_cbte_iso: String(fecha).slice(0, 10),
+        vto_pago_iso: plusDaysISOFrom(fecha, 10),
         cbte_tipo: null,
         pto_vta: null,
         items_facturacion: items,
@@ -2277,11 +2293,21 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
       fd.append("idUsuario", String(idUsuario || 0));
       fd.append("tipo", String(cheque?.tipo || "cheque"));
       fd.append("tipo_cheque", String(cheque?.tipo || "cheque"));
-      fd.append("fecha_emision", String(cheque?.fecha_emision || todayISO()).slice(0, 10));
+
+      const fechaEmisionCheque = String(cheque?.fecha_emision || "").slice(0, 10);
+      const fechaPagoCheque = String(cheque?.fecha_pago || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaEmisionCheque)) {
+        throw new Error("El cheque no tiene fecha de emisión válida cargada desde el modal.");
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaPagoCheque)) {
+        throw new Error("El cheque no tiene fecha de pago válida cargada desde el modal.");
+      }
+
+      fd.append("fecha_emision", fechaEmisionCheque);
       fd.append("emisor", String(cheque?.emisor || "").trim().toUpperCase());
       fd.append("numero_cheque", String(cheque?.numero_cheque || "").trim());
       fd.append("importe", String(safeNumber(cheque?.importe || 0)));
-      fd.append("fecha_pago", String(cheque?.fecha_pago || todayISO()).slice(0, 10));
+      fd.append("fecha_pago", fechaPagoCheque);
       fd.append("observaciones", String(cheque?.observaciones || "").trim());
       fd.append("archivo", cheque.archivo, cheque.archivo_nombre || cheque.archivo.name || "adjunto");
 

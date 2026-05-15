@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FaXmark, FaCircleInfo, FaBuildingColumns } from "react-icons/fa6";
 
@@ -8,6 +8,50 @@ function formatFecha(fecha) {
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m) return `${m[3]}/${m[2]}/${m[1]}`;
   return s;
+}
+
+function toISODate(fecha) {
+  const s = String(fecha || "").trim();
+  if (!s) return "";
+
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) {
+    const y = String(iso[1]).padStart(4, "0");
+    const m = String(iso[2]).padStart(2, "0");
+    const d = String(iso[3]).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  const visual = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  if (visual) {
+    const d = String(visual[1]).padStart(2, "0");
+    const m = String(visual[2]).padStart(2, "0");
+    const y = String(visual[3]).padStart(4, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  return "";
+}
+
+function todayLocalISO() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function isValidISODate(fecha) {
+  const s = String(fecha || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return (
+    dt.getFullYear() === y &&
+    dt.getMonth() === m - 1 &&
+    dt.getDate() === d
+  );
 }
 
 function moneyARS(valor) {
@@ -40,6 +84,21 @@ export default function ModalDepositarCheque({
   loadingText = "Depositando...",
   infoText = "Al presionar Depositar, este registro se dará de baja de Cartera y se generará automáticamente un movimiento en Otros Egresos, para que la salida de fondos quede correctamente reflejada en el sistema.",
 }) {
+  const [fechaDeposito, setFechaDeposito] = useState("");
+  const [fechaError, setFechaError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+
+    const inicial =
+      toISODate(cheque?.fecha_deposito) ||
+      toISODate(cheque?.fechaDeposito) ||
+      todayLocalISO();
+
+    setFechaDeposito(inicial);
+    setFechaError("");
+  }, [open, cheque?.fecha_deposito, cheque?.fechaDeposito]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -173,6 +232,34 @@ export default function ModalDepositarCheque({
               />
               <label className="fl-label">Importe</label>
             </div>
+
+            <div className="fl-field" style={{ gridColumn: "1 / -1" }}>
+              <input
+                className="fl-input"
+                type="date"
+                value={fechaDeposito}
+                onChange={(e) => {
+                  setFechaDeposito(e.target.value);
+                  setFechaError("");
+                }}
+                disabled={loading}
+                placeholder=" "
+                required
+              />
+              <label className="fl-label">Fecha de depósito</label>
+              {fechaError && (
+                <small
+                  style={{
+                    display: "block",
+                    marginTop: 6,
+                    color: "#b91c1c",
+                    fontWeight: 700,
+                  }}
+                >
+                  {fechaError}
+                </small>
+              )}
+            </div>
           </div>
 
           <div
@@ -210,7 +297,15 @@ export default function ModalDepositarCheque({
             <button
               type="button"
               className="mit-btn mit-btn--solid"
-              onClick={onConfirm}
+              onClick={() => {
+                const fecha = toISODate(fechaDeposito);
+                if (!isValidISODate(fecha)) {
+                  setFechaError("Seleccioná una fecha de depósito válida.");
+                  return;
+                }
+
+                onConfirm?.(fecha);
+              }}
               disabled={loading}
             >
               {loading ? loadingText : confirmText}

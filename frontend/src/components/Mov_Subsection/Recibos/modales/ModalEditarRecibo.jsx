@@ -179,7 +179,15 @@ function getArr(x) {
 }
 
 function getIdGeneric(x) {
-  const cand = x?.id ?? x?.id_detalle ?? x?.idDetalle ?? x?.detalle_id ?? 0;
+  const cand =
+    x?.id ??
+    x?.id_stock_producto ??
+    x?.idStockProducto ??
+    x?.stock_producto_id ??
+    x?.id_detalle ??
+    x?.idDetalle ??
+    x?.detalle_id ??
+    0;
   const n = Number(cand);
 
   return Number.isFinite(n) && n > 0 ? n : 0;
@@ -190,6 +198,77 @@ function getIdCliente(x) {
   const n = Number(cand);
 
   return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function getReciboItemsDetalle(row) {
+  const raw = row?.items_detalle ?? row?.itemsDetalle ?? row?.items ?? row?.productos ?? [];
+
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function getPrimerItemRecibo(row) {
+  const items = getReciboItemsDetalle(row);
+  return items.length ? items[0] : null;
+}
+
+function getProductoIdFromRecibo(row) {
+  const item = getPrimerItemRecibo(row);
+  const cand =
+    item?.id_stock_producto ??
+    item?.idStockProducto ??
+    item?.stock_producto_id ??
+    item?.id_detalle ??
+    item?.idDetalle ??
+    row?.id_stock_producto ??
+    row?.idStockProducto ??
+    row?.stock_producto_id ??
+    row?.id_detalle ??
+    row?.idDetalle ??
+    null;
+
+  const n = Number(cand);
+  return Number.isFinite(n) && n > 0 ? String(n) : NULL_OPTION;
+}
+
+function isResumenProductosLabel(value) {
+  const s = normalizeSearchText(value);
+  return (
+    s === "sin productos" ||
+    /^\d+\s+producto(s)?$/.test(s) ||
+    /^producto(s)?\s*:\s*\d+$/.test(s)
+  );
+}
+
+function getProductoNombreFromRecibo(row) {
+  const item = getPrimerItemRecibo(row);
+  const fromItem = String(
+    item?.producto_nombre ??
+      item?.stock_producto_nombre ??
+      item?.detalle_nombre ??
+      item?.nombre ??
+      item?.descripcion ??
+      ""
+  ).trim();
+  if (fromItem) return fromItem;
+
+  const original = String(
+    row?.detalle_original ?? row?.producto_nombre ?? row?.stock_producto_nombre ?? ""
+  ).trim();
+  if (original) return original.split("|")[0].trim();
+
+  const detalle = String(row?.detalle ?? row?.descripcion ?? row?.concepto ?? "").trim();
+  return detalle && !isResumenProductosLabel(detalle) ? detalle : "";
 }
 
 function normalizeLists(lists) {
@@ -311,8 +390,11 @@ export default function ModalEditarRecibo({
       r.cliente ?? r.nombre_cliente ?? r.razon_social_cliente ?? ""
     ).trim();
 
-    const idDetalle = r.id_detalle ?? NULL_OPTION;
-    const detFallback = String(r.detalle ?? r.descripcion ?? r.concepto ?? "").trim();
+    // La tabla muestra "1 PRODUCTO" como resumen, pero para editar necesitamos
+    // el producto real guardado en movimientos_items / detalle_original.
+    const idDetalle = getProductoIdFromRecibo(r);
+    const productoTxt = getProductoNombreFromRecibo(r);
+    const detFallback = productoTxt || "";
 
     const cliName = String(
       getArr(localLists.clientes).find(
@@ -343,7 +425,7 @@ export default function ModalEditarRecibo({
       id_cliente: String(idCliente ?? NULL_OPTION),
       clienteInput: cliName || clienteTxt || "",
       id_detalle: String(idDetalle ?? NULL_OPTION),
-      detalleInput: detName || detFallback || "",
+      detalleInput: detFallback || detName || "",
       monto_total: safeNumber(r.monto_total ?? r.total ?? 0),
     });
 
@@ -500,6 +582,9 @@ export default function ModalEditarRecibo({
             ? Number(form.id_cliente)
             : null,
         cliente: String(form.clienteInput || "").trim(),
+        // Compatibilidad: el backend nuevo usa id_stock_producto; id_detalle queda como alias
+        // porque varios componentes todavía nombran al producto como "detalle".
+        id_stock_producto: idDet,
         id_detalle: idDet,
         detalle: String(form.detalleInput || "").trim(),
         monto_total: montoFinal,

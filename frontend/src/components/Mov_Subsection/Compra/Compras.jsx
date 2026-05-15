@@ -683,7 +683,7 @@ export default function Compras() {
       const cacheKey = `${fromAPI}|${toAPI}|${qKey}`;
 
       if (!append && offset === 0 && !cacheRef.current.has(cacheKey)) {
-        const persisted = readMovPerfCache("compras:listar", cacheKey);
+        const persisted = readMovPerfCache("compras:listar:cc-medios-v2", cacheKey);
         if (persisted?.rows) cacheRef.current.set(cacheKey, persisted);
       }
 
@@ -798,7 +798,7 @@ export default function Compras() {
             nextOffset: newNextOffset,
           };
           cacheRef.current.set(cacheKey, cachePayload);
-          writeMovPerfCache("compras:listar", cacheKey, cachePayload);
+          writeMovPerfCache("compras:listar:cc-medios-v2", cacheKey, cachePayload);
         }
 
         setHasMore(newHasMore);
@@ -887,7 +887,7 @@ export default function Compras() {
       if (!newRange?.from && !newRange?.to) return;
       setDateRange(newRange);
       cacheRef.current.clear();
-      clearMovPerfCache("compras:listar");
+      clearMovPerfCache("compras:listar:cc-medios-v2");
       signedUrlCacheRef.current.clear();
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -1166,7 +1166,7 @@ export default function Compras() {
     setOpenEdit(false);
     setSelectedRow(null);
     cacheRef.current.clear();
-    clearMovPerfCache("compras:listar");
+    clearMovPerfCache("compras:listar:cc-medios-v2");
     signedUrlCacheRef.current.clear();
     await loadRows({ dateRange, q: "", offset: 0, append: false });
     await refreshPeriodos();
@@ -1210,7 +1210,7 @@ export default function Compras() {
       setOpenDel(false);
       setSelectedRow(null);
       cacheRef.current.clear();
-      clearMovPerfCache("compras:listar");
+      clearMovPerfCache("compras:listar:cc-medios-v2");
       signedUrlCacheRef.current.clear();
 
       await loadRows({ dateRange, q, offset: 0, append: false });

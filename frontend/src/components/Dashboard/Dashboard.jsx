@@ -18,6 +18,7 @@ import {
 import GifCarga from "../Global/Gif_Carga";
 import Toast from "../Global/Toast.jsx";
 import "./dashboard.css";
+import "../Global/Global_css/Global_responsive.css";
 import { useListas } from "../../context/ListasContext";
 
 const EMPTY_DASHBOARD = {

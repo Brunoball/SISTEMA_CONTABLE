@@ -1103,3 +1103,318 @@ body.dark .mov-page--analisisFinanciero .af-breakCard__value--egreso,
 body.dark .mov-page--analisisFinanciero .af-totalCard--neg .af-totalValue {
   color: #fb7185 !important;
 }
+
+/* =========================================================
+   ANÁLISIS FINANCIERO — RESPONSIVE MOBILE/TABLET
+   Solo afecta pantallas chicas. Vista monitor intacta.
+========================================================= */
+@media (max-width: 900px) {
+  .mov-page--analisisFinanciero {
+    width: 100%;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding-bottom: 18px;
+  }
+
+  .mov-page--analisisFinanciero .mov-card,
+  .mov-page--analisisFinanciero .mov-card--table {
+    min-width: 0;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .mov-page--analisisFinanciero .mov-card__head {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title title"
+      "filters actions";
+    align-items: end !important;
+    gap: 12px !important;
+    padding: 14px !important;
+  }
+
+  .mov-page--analisisFinanciero .mov-card__headLeft {
+    display: contents !important;
+  }
+
+  .mov-page--analisisFinanciero .title-mov {
+    grid-area: title;
+    min-width: 0;
+  }
+
+  .mov-page--analisisFinanciero .mov-card__title {
+    font-size: 17px;
+    line-height: 1.2;
+  }
+
+  .mov-page--analisisFinanciero .mov-card__hint {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .mov-page--analisisFinanciero .mov-headFilters {
+    grid-area: filters;
+    width: 100%;
+    min-width: 0;
+    display: grid !important;
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .mov-page--analisisFinanciero .mov-filter,
+  .mov-page--analisisFinanciero .mov-filter--cal,
+  .mov-page--analisisFinanciero .floatingField {
+    width: 100%;
+    min-width: 0 !important;
+  }
+
+  .mov-page--analisisFinanciero .cc-calTrigger,
+  .mov-page--analisisFinanciero .mov-calTrigger {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 44px;
+    padding: 0 12px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mov-page--analisisFinanciero .mov-card__actions {
+    grid-area: actions;
+    width: auto !important;
+    min-width: 0;
+    justify-content: flex-end !important;
+    align-self: end;
+    flex-wrap: nowrap !important;
+  }
+
+  .mov-page--analisisFinanciero .boton-exportar-wrap {
+    flex: 0 0 auto;
+  }
+
+  .mov-page--analisisFinanciero #clrRight,
+  .mov-page--analisisFinanciero .mov-calDropdown {
+    left: 0 !important;
+    right: auto !important;
+    transform: none !important;
+    max-width: calc(100vw - 28px);
+    z-index: 9999;
+  }
+
+  .mov-page--analisisFinanciero .cal-wrap {
+    width: min(520px, calc(100vw - 28px));
+    max-width: calc(100vw - 28px);
+  }
+
+  .mov-page--analisisFinanciero .af-sectionHead {
+    padding: 0 12px !important;
+    gap: 8px;
+  }
+
+  .mov-page--analisisFinanciero .af-breakdownGrid,
+  .mov-page--analisisFinanciero .af-dispoGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+    padding: 0 12px 12px !important;
+  }
+
+  .mov-page--analisisFinanciero .af-footTotals {
+    padding: 0 12px 12px !important;
+  }
+
+  .mov-page--analisisFinanciero .af-breakCard,
+  .mov-page--analisisFinanciero .af-dispoCard,
+  .mov-page--analisisFinanciero .af-totalCard {
+    min-width: 0;
+    min-height: 130px;
+    border-radius: 18px;
+    padding: 16px 12px 14px;
+  }
+
+  .mov-page--analisisFinanciero .af-breakCard__icon,
+  .mov-page--analisisFinanciero .af-dispoCard__icon,
+  .mov-page--analisisFinanciero .af-totalCard__icon,
+  .mov-page--analisisFinanciero .af-cardIconSkeleton {
+    width: 42px;
+    height: 42px;
+    margin-bottom: 10px;
+    font-size: 16px;
+  }
+
+  .mov-page--analisisFinanciero .af-breakCard__label,
+  .mov-page--analisisFinanciero .af-dispoCard__label,
+  .mov-page--analisisFinanciero .af-totalLabel {
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  .mov-page--analisisFinanciero .af-breakCard__value,
+  .mov-page--analisisFinanciero .af-dispoCard__value,
+  .mov-page--analisisFinanciero .af-totalValue {
+    font-size: clamp(18px, 4.9vw, 24px);
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+
+  .mov-page--analisisFinanciero .af-breakCard__sub,
+  .mov-page--analisisFinanciero .af-dispoCard__sub,
+  .mov-page--analisisFinanciero .af-totalSub {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+}
+
+@media (max-width: 640px) {
+  .mov-page--analisisFinanciero {
+    padding: 8px 8px 22px;
+  }
+
+  .mov-page--analisisFinanciero .mov-card {
+    border-radius: 16px;
+  }
+
+  .mov-page--analisisFinanciero .mov-card__head {
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: 10px !important;
+    padding: 12px !important;
+  }
+
+  .mov-page--analisisFinanciero .boton-exportar-trigger {
+    width: 44px !important;
+    min-width: 44px !important;
+    height: 44px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    border-radius: 14px;
+  }
+
+  .mov-page--analisisFinanciero .boton-exportar-trigger__left {
+    gap: 0;
+  }
+
+  .mov-page--analisisFinanciero .boton-exportar-trigger__iconWrap {
+    width: 34px;
+    height: 34px;
+  }
+
+  .mov-page--analisisFinanciero .boton-exportar-trigger__text,
+  .mov-page--analisisFinanciero .boton-exportar-trigger__right {
+    display: none !important;
+  }
+
+  .mov-page--analisisFinanciero .boton-exportar-menu {
+    position: absolute;
+    right: 0 !important;
+    left: auto !important;
+    min-width: min(260px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+  }
+
+  .mov-page--analisisFinanciero .af-breakdownGrid,
+  .mov-page--analisisFinanciero .af-dispoGrid,
+  .mov-page--analisisFinanciero .af-footTotals {
+    grid-template-columns: 1fr !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .mov-page--analisisFinanciero .af-sectionHead {
+    flex-direction: column;
+    align-items: stretch !important;
+    padding: 0 10px !important;
+  }
+
+  .mov-page--analisisFinanciero .af-dispoTotal {
+    width: 100%;
+    white-space: normal;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .mov-page--analisisFinanciero .af-breakCard,
+  .mov-page--analisisFinanciero .af-dispoCard,
+  .mov-page--analisisFinanciero .af-totalCard {
+    min-height: 118px;
+    padding: 15px 12px;
+  }
+}
+
+@media (max-width: 420px) {
+  .mov-page--analisisFinanciero .mov-card__title {
+    font-size: 16px;
+  }
+
+  .mov-page--analisisFinanciero .mov-card__hint {
+    font-size: 11.5px;
+  }
+
+  .mov-page--analisisFinanciero .cc-calTrigger,
+  .mov-page--analisisFinanciero .mov-calTrigger {
+    font-size: 12px;
+    padding: 0 10px !important;
+  }
+
+  .mov-page--analisisFinanciero .cal-wrap {
+    width: calc(100vw - 24px);
+  }
+
+  .mov-page--analisisFinanciero .cal-header__slot {
+    padding: 12px 14px;
+  }
+
+  .mov-page--analisisFinanciero .cal-panels {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
+
+/* =========================================================
+   FIX MOBILE — scroll interno de Análisis Financiero
+   - Solo mobile/tablet
+   - Evita que el contenedor padre corte las tarjetas
+   - Vista monitor intacta
+========================================================= */
+@media (max-width: 900px) {
+  .mov-page--analisisFinanciero {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: calc(100dvh - 54px) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    padding-bottom: calc(90px + env(safe-area-inset-bottom)) !important;
+    box-sizing: border-box;
+  }
+
+  .mov-page--analisisFinanciero .mov-card,
+  .mov-page--analisisFinanciero .mov-card--table {
+    flex: 0 0 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .mov-page--analisisFinanciero .af-breakdownSection,
+  .mov-page--analisisFinanciero .af-dispoSection,
+  .mov-page--analisisFinanciero .af-footTotals {
+    flex: 0 0 auto;
+  }
+
+  .mov-page--analisisFinanciero .af-dispoSection {
+    padding-bottom: 32px;
+  }
+}
+
+@media (max-width: 640px) {
+  .mov-page--analisisFinanciero {
+    max-height: calc(100dvh - 48px) !important;
+    padding-bottom: 20px !important;
+  }
+}

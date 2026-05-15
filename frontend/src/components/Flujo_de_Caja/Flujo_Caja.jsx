@@ -10,6 +10,7 @@ import {
   faCalendarDays,
   faFileExcel,
   faChevronDown,
+  faChevronRight,
   faArrowRightLong,
   faWallet,
 } from "@fortawesome/free-solid-svg-icons";
@@ -157,6 +158,9 @@ export default function Flujo_Caja() {
   const showToast  = useCallback((tipo, mensaje, duracion = 2800) => setToast({ tipo, mensaje, duracion }), []);
   const closeToast = useCallback(() => setToast(null), []);
 
+  const paymentCardsRef = useRef(null);
+  const [activePaymentCardIndex, setActivePaymentCardIndex] = useState(0);
+
   // Skeleton anti-parpadeo
   const skelTimerRef             = useRef(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
@@ -235,6 +239,36 @@ export default function Flujo_Caja() {
 
   const selectedPaymentCards = selectedRow?.medios_pago || [];
   const showing = rows.length;
+
+  useEffect(() => {
+    setActivePaymentCardIndex((current) => {
+      if (!selectedPaymentCards.length) return 0;
+      return Math.min(current, selectedPaymentCards.length - 1);
+    });
+  }, [selectedPaymentCards.length]);
+
+  const goToNextPaymentCard = useCallback(() => {
+    const total = selectedPaymentCards.length;
+    if (total <= 1) return;
+
+    setActivePaymentCardIndex((current) => {
+      const next = (current + 1) % total;
+
+      window.requestAnimationFrame(() => {
+        const scroller = paymentCardsRef.current;
+        const nextCard = scroller?.children?.[next];
+        if (nextCard?.scrollIntoView) {
+          nextCard.scrollIntoView({
+            behavior: "smooth",
+            inline: "start",
+            block: "nearest",
+          });
+        }
+      });
+
+      return next;
+    });
+  }, [selectedPaymentCards.length]);
 
   /* =========================
      Label calendario
@@ -474,9 +508,27 @@ export default function Flujo_Caja() {
         {/* ===== TARJETAS DINÁMICAS POR MEDIO DE PAGO ===== */}
         <div className="fc-paymentSummary">
 
+          {selectedPaymentCards.length > 1 && (
+            <div className="fc-cardPager" aria-label="Navegación de tarjetas de medios de pago">
+              <span className="fc-cardPager__counter">
+                Tarjeta {Math.min(activePaymentCardIndex + 1, selectedPaymentCards.length)}/{selectedPaymentCards.length}
+              </span>
+
+              <button
+                type="button"
+                className="fc-cardPager__btn"
+                onClick={goToNextPaymentCard}
+                title="Ver siguiente tarjeta"
+                aria-label="Ver siguiente tarjeta"
+              >
+                Siguiente
+                <FontAwesomeIcon icon={faChevronRight} />
+              </button>
+            </div>
+          )}
 
           {selectedPaymentCards.length ? (
-            <div className="fc-paymentCards" aria-label="Detalle de medios de pago del día seleccionado">
+            <div ref={paymentCardsRef} className="fc-paymentCards" aria-label="Detalle de medios de pago del día seleccionado">
               {selectedPaymentCards.map((card, index) => {
                 const saldoNeg = Number(card.saldo) < 0;
                 const tones = ["green", "blue", "pink", "yellow"];

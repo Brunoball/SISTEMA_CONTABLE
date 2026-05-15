@@ -199,7 +199,6 @@ html[data-theme="oscuro"] .mi-modal__container {
 }
 
 /* IDs especiales */
-#mi-modal__container { min-height: auto; }
 
 #mov--modaleditarrecibo,
 #mov--modaleditarordenpago {

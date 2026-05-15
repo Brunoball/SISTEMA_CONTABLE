@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Toast from "../Toast.jsx";
 import ModalVerComprobante from "../Ver_Comprobantes/ModalVerComprobante.jsx";
+import BASE_URL from "../../../config/config";
 import "../Global_css/Global_Modals.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -42,6 +43,85 @@ function safeNumber(v) {
 
 function onlyDigits(v) {
   return String(v ?? "").replace(/\D/g, "");
+}
+
+function getSessionKey() {
+  return (
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("x_session") ||
+    localStorage.getItem("X-Session") ||
+    ""
+  ).trim();
+}
+
+function buildAuthHeaders(includeJson = false) {
+  const session = getSessionKey();
+  const token = (localStorage.getItem("token") || "").trim();
+  const headers = {};
+  if (includeJson) headers["Content-Type"] = "application/json";
+  if (session) headers["X-Session"] = session;
+  else if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+}
+
+async function parseJsonOrThrow(res) {
+  const text = await res.text();
+  if (!text) throw new Error("Respuesta vacía del servidor.");
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    const preview = text.length > 500 ? text.slice(0, 500) + "..." : text;
+    throw new Error(`Respuesta inválida (no es JSON). HTTP ${res.status} ${preview}`);
+  }
+
+  if (!res.ok) throw new Error(data?.mensaje || data?.error || `HTTP ${res.status}`);
+  return data;
+}
+
+async function verificarNumeroChequeDefault({ numero_cheque, tipoCheque, initialData }) {
+  const numeroCheque = onlyDigits(numero_cheque);
+  if (!numeroCheque) {
+    return {
+      ok: false,
+      tipo: "advertencia",
+      mensaje: "Ingresá el número de cheque antes de confirmar.",
+      duracion: 3200,
+    };
+  }
+
+  const params = new URLSearchParams();
+  params.set("numero_cheque", numeroCheque);
+  params.set("tipo", String(tipoCheque || "cheque"));
+
+  const idChequeActual = Number(initialData?.id_cheque || 0);
+  if (Number.isFinite(idChequeActual) && idChequeActual > 0) {
+    params.set("id_cheque", String(idChequeActual));
+  }
+
+  const url = `${BASE_URL}/api.php?action=mov_global_cheques_obtener&modo=verificar_numero&${params.toString()}`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: buildAuthHeaders(false),
+  });
+  const data = await parseJsonOrThrow(res);
+
+  if (!data?.exito) {
+    throw new Error(data?.mensaje || "No se pudo verificar el número del cheque.");
+  }
+
+  if (data?.existe || data?.disponible === false) {
+    return {
+      ok: false,
+      tipo: "error",
+      mensaje: data?.mensaje || "Ese número de cheque ya existe.",
+      duracion: 4600,
+    };
+  }
+
+  return { ok: true };
 }
 
 function sanitizeEmitter(v) {
@@ -200,13 +280,16 @@ export default function ModalNuevoCheque({
   );
 
   const runNumeroCheck = useCallback(async () => {
-    if (typeof verificarNumeroCheque !== "function") return true;
-
     const numeroCheque = onlyDigits(form.numero_cheque);
+    const verificar =
+      typeof verificarNumeroCheque === "function"
+        ? verificarNumeroCheque
+        : verificarNumeroChequeDefault;
+
     setCheckingNumero(true);
 
     try {
-      const result = await verificarNumeroCheque({
+      const result = await verificar({
         numero_cheque: numeroCheque,
         tipoCheque,
         initialData,

@@ -35,6 +35,7 @@ import {
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
+import { readMovPerfCache, writeMovPerfCache, clearMovPerfCache } from "../_shared/performanceCache.js";
 
 /* =========================
    PERF: paginado
@@ -681,6 +682,11 @@ export default function Compras() {
       const qKey = (qLocal || "").trim();
       const cacheKey = `${fromAPI}|${toAPI}|${qKey}`;
 
+      if (!append && offset === 0 && !cacheRef.current.has(cacheKey)) {
+        const persisted = readMovPerfCache("compras:listar", cacheKey);
+        if (persisted?.rows) cacheRef.current.set(cacheKey, persisted);
+      }
+
       const myReqId = ++reqIdRef.current;
 
       if (!fromDate && !toDate) {
@@ -786,11 +792,13 @@ export default function Compras() {
           });
         } else {
           setRows(page);
-          cacheRef.current.set(cacheKey, {
+          const cachePayload = {
             rows: page,
             hasMore: newHasMore,
             nextOffset: newNextOffset,
-          });
+          };
+          cacheRef.current.set(cacheKey, cachePayload);
+          writeMovPerfCache("compras:listar", cacheKey, cachePayload);
         }
 
         setHasMore(newHasMore);
@@ -879,6 +887,7 @@ export default function Compras() {
       if (!newRange?.from && !newRange?.to) return;
       setDateRange(newRange);
       cacheRef.current.clear();
+      clearMovPerfCache("compras:listar");
       signedUrlCacheRef.current.clear();
       skipSearchRef.current = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -1157,6 +1166,7 @@ export default function Compras() {
     setOpenEdit(false);
     setSelectedRow(null);
     cacheRef.current.clear();
+    clearMovPerfCache("compras:listar");
     signedUrlCacheRef.current.clear();
     await loadRows({ dateRange, q: "", offset: 0, append: false });
     await refreshPeriodos();
@@ -1200,6 +1210,7 @@ export default function Compras() {
       setOpenDel(false);
       setSelectedRow(null);
       cacheRef.current.clear();
+      clearMovPerfCache("compras:listar");
       signedUrlCacheRef.current.clear();
 
       await loadRows({ dateRange, q, offset: 0, append: false });

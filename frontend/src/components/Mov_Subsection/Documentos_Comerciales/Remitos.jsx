@@ -6,6 +6,7 @@ import "../../Global/Global_css/Global_oscuro.css";
 import "./DocumentosComerciales.css";
 import BASE_URL from "../../../config/config.jsx";
 import ModalVerComprobante from "../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
+import { readMovPerfCache, writeMovPerfCache, MOV_CACHE_LONG_TTL_MS } from "../_shared/performanceCache.js";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBoxesStacked,
@@ -261,6 +262,7 @@ function DocumentosClientePanel({
   const [comprobanteMime, setComprobanteMime] = useState("application/pdf");
   const [comprobanteTitle, setComprobanteTitle] = useState("Comprobante");
   const mountedRef = useRef(true);
+  const signedUrlCacheRef = useRef(new Map());
   const documentActions = useMemo(() => getDocumentActions(grupo), [grupo]);
   const gridCols = "1.15fr 0.85fr 1.65fr 0.95fr 0.95fr 0.8fr";
   const documentoHeader = documentoSingular.charAt(0).toUpperCase() + documentoSingular.slice(1);
@@ -369,7 +371,20 @@ function DocumentosClientePanel({
   }, [documentos, qDocumentos]);
 
   const cargarClientes = useCallback(async () => {
-    setLoadingClientes(true);
+    const cacheKey = `${grupo}|${qClientes}|${CLIENTES_LIMIT}`;
+    const cached = readMovPerfCache(`documentos:${grupo}:clientes`, cacheKey, MOV_CACHE_LONG_TTL_MS);
+
+    if (cached?.clientes && mountedRef.current) {
+      const cachedRows = Array.isArray(cached.clientes) ? cached.clientes : [];
+      setClientes(cachedRows);
+      setSelectedCliente((prev) => {
+        if (prev && cachedRows.some((cli) => Number(cli.id_cliente) === Number(prev.id_cliente))) return prev;
+        return cachedRows[0] || null;
+      });
+      setLoadingClientes(false);
+    } else {
+      setLoadingClientes(true);
+    }
     setError("");
 
     try {
@@ -386,6 +401,7 @@ function DocumentosClientePanel({
       if (!mountedRef.current) return;
 
       setClientes(rows);
+      writeMovPerfCache(`documentos:${grupo}:clientes`, cacheKey, { clientes: rows });
       setSelectedCliente((prev) => {
         if (prev && rows.some((cli) => Number(cli.id_cliente) === Number(prev.id_cliente))) return prev;
         return rows[0] || null;
@@ -415,8 +431,16 @@ function DocumentosClientePanel({
       return;
     }
 
-    setLoadingDocumentos(true);
-    setDocumentosLoaded(false);
+    const cacheKey = `${grupo}|${idCliente}`;
+    const cached = readMovPerfCache(`documentos:${grupo}:documentos`, cacheKey, MOV_CACHE_LONG_TTL_MS);
+    if (cached?.documentos && mountedRef.current) {
+      setDocumentos(Array.isArray(cached.documentos) ? cached.documentos : []);
+      setDocumentosLoaded(true);
+      setLoadingDocumentos(false);
+    } else {
+      setLoadingDocumentos(true);
+      setDocumentosLoaded(false);
+    }
     setError("");
 
     try {
@@ -429,6 +453,7 @@ function DocumentosClientePanel({
       const rows = Array.isArray(data?.documentos) ? data.documentos : [];
       if (!mountedRef.current) return;
       setDocumentos(rows);
+      writeMovPerfCache(`documentos:${grupo}:documentos`, cacheKey, { documentos: rows });
       setDocumentosLoaded(true);
     } catch (err) {
       if (!mountedRef.current || err?.isCancelled) return;
@@ -472,10 +497,14 @@ function DocumentosClientePanel({
 
     try {
       setError("");
-      const data = await apiGetJson(
-        buildUrl("ventas_comprobantes_descargar", { id_comprobante: id })
-      );
-      const url = data?.url || data?.archivo_url || data?.download_url || "";
+      let url = signedUrlCacheRef.current.get(String(id)) || "";
+      if (!url) {
+        const data = await apiGetJson(
+          buildUrl("ventas_comprobantes_descargar", { id_comprobante: id })
+        );
+        url = data?.url || data?.archivo_url || data?.download_url || "";
+        if (url) signedUrlCacheRef.current.set(String(id), url);
+      }
       if (!url) throw new Error("No se pudo obtener el enlace del PDF.");
 
       setComprobanteUrl(url);
@@ -493,10 +522,14 @@ function DocumentosClientePanel({
 
     try {
       setError("");
-      const data = await apiGetJson(
-        buildUrl("ventas_comprobantes_descargar", { id_comprobante: id })
-      );
-      const url = data?.url || data?.archivo_url || data?.download_url || "";
+      let url = signedUrlCacheRef.current.get(String(id)) || "";
+      if (!url) {
+        const data = await apiGetJson(
+          buildUrl("ventas_comprobantes_descargar", { id_comprobante: id })
+        );
+        url = data?.url || data?.archivo_url || data?.download_url || "";
+        if (url) signedUrlCacheRef.current.set(String(id), url);
+      }
       if (!url) throw new Error("No se pudo obtener el enlace del PDF.");
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (err) {

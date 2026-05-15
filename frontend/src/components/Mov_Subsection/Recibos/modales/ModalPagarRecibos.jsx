@@ -23,6 +23,8 @@ import ModalNuevoCheque from "../../../Global/Modales/ModalNuevoCheque.jsx";
 import ModalDetalleMovimiento from "../../../Global/Modales/ModalDetalleMovimiento.jsx";
 import { buildReciboHTML } from "../../../../utils/reciboTemplate";
 
+const API_CHECK_NUMERO_CHEQUE = `${BASE_URL}/api.php?action=mov_global_cheques_obtener&modo=verificar_numero`;
+
 /* =========================
    Helpers
 ========================= */
@@ -202,6 +204,10 @@ async function fetchJsonOrThrow(url, opts = {}) {
 /* =========================
    Money input helpers
 ========================= */
+function onlyDigits(v) {
+  return String(v ?? "").replace(/\D/g, "");
+}
+
 function safeNumber(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -926,6 +932,72 @@ export default function ModalPagarRecibos({
     });
   };
 
+  const verificarNumeroChequeRecibos = useCallback(
+    async ({ numero_cheque, tipoCheque, initialData }) => {
+      const numeroCheque = onlyDigits(numero_cheque);
+      const tipoNormalizado = String(tipoCheque || "cheque").toLowerCase() === "echeq" ? "echeq" : "cheque";
+
+      if (!numeroCheque) {
+        return {
+          ok: false,
+          tipo: "advertencia",
+          mensaje: "Ingresá el número de cheque antes de confirmar.",
+          duracion: 3200,
+        };
+      }
+
+      const rowActualId = chequeModalRowId;
+      const duplicadoEnModal = mediosFilas.some((mp) => {
+        if (!mp || mp.id === rowActualId) return false;
+        const ch = mp.chequeData;
+        if (!ch) return false;
+        const numero = onlyDigits(ch.numero_cheque);
+        const tipo = String(ch.tipo || ch.tipo_cheque || "cheque").toLowerCase() === "echeq" ? "echeq" : "cheque";
+        return numero && numero === numeroCheque && tipo === tipoNormalizado;
+      });
+
+      if (duplicadoEnModal) {
+        return {
+          ok: false,
+          tipo: "error",
+          mensaje: `Ya cargaste otro ${tipoNormalizado === "echeq" ? "eCheq" : "cheque"} con el número ${numeroCheque} en este cobro.`,
+          duracion: 4600,
+        };
+      }
+
+      const params = new URLSearchParams();
+      params.set("numero_cheque", numeroCheque);
+      params.set("tipo", tipoNormalizado);
+
+      const idChequeActual = Number(initialData?.id_cheque || rowParaCheque?.chequeData?.id_cheque || 0);
+      if (Number.isFinite(idChequeActual) && idChequeActual > 0) {
+        params.set("id_cheque", String(idChequeActual));
+      }
+
+      const res = await fetch(`${API_CHECK_NUMERO_CHEQUE}&${params.toString()}`, {
+        method: "GET",
+        headers: buildAuthHeaders(false),
+      });
+      const data = await parseJsonOrThrow(res);
+
+      if (!data?.exito) {
+        throw new Error(data?.mensaje || "No se pudo verificar el número del cheque.");
+      }
+
+      if (data?.existe || data?.disponible === false) {
+        return {
+          ok: false,
+          tipo: "error",
+          mensaje: data?.mensaje || "Ese número de cheque ya existe.",
+          duracion: 4600,
+        };
+      }
+
+      return { ok: true };
+    },
+    [chequeModalRowId, mediosFilas, rowParaCheque?.chequeData?.id_cheque]
+  );
+
   /* =========================
      Guardar cheque desde modal
   ========================= */
@@ -1612,6 +1684,7 @@ export default function ModalPagarRecibos({
         cliente={cliente?.cliente}
         onToast={onToast}
         saving={isProcessing}
+        verificarNumeroCheque={verificarNumeroChequeRecibos}
       />
     </>,
     document.body

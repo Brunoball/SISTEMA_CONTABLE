@@ -32,6 +32,7 @@ import {
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 import { useDateRange } from "../../../context/DateRangeContext";
+import { readMovPerfCache, writeMovPerfCache, clearMovPerfCache } from "../_shared/performanceCache.js";
 import { saveVentaNoFacturadaPdf } from "../../../utils/VentaNoFacturadaPdfBuilder";
 import { saveRemitoPdf } from "../../../utils/RemitoPdfBuilder";
 
@@ -412,6 +413,7 @@ export default function Presupuestos() {
   const liveTimerRef = useRef(null);
   const liveTokenRef = useRef("");
   const signedUrlCacheRef = useRef(new Map());
+  const cacheRef = useRef(new Map());
 
   const showToast = useCallback((tipo, mensaje, duracion = 3200) => setToast({ tipo, mensaje, duracion }), []);
   const closeToast = useCallback(() => setToast(null), []);
@@ -513,6 +515,27 @@ export default function Presupuestos() {
   }, [API, apiGet]);
 
   const loadRows = useCallback(async ({ from = dateRange.from, to = dateRange.to, query = q, offset = 0, append = false } = {}) => {
+    const fromAPI = dateToAPI(from);
+    const toAPI = dateToAPI(to);
+    const qKey = String(query || "").trim();
+    const cacheKey = `${fromAPI}|${toAPI}|${qKey}`;
+
+    if (!append && offset === 0 && !cacheRef.current.has(cacheKey)) {
+      const persisted = readMovPerfCache("presupuestos:listar", cacheKey);
+      if (persisted?.rows) cacheRef.current.set(cacheKey, persisted);
+    }
+
+    if (!append && offset === 0 && cacheRef.current.has(cacheKey)) {
+      const cached = cacheRef.current.get(cacheKey);
+      const cachedRows = Array.isArray(cached?.rows) ? cached.rows : [];
+      setRows(cachedRows);
+      setHasMore(!!cached?.hasMore);
+      offsetRef.current = Number(cached?.nextOffset || cachedRows.length || 0);
+      setLoadingRows(false);
+      setLoadingMore(false);
+      return { hasMore: !!cached?.hasMore, received: cachedRows.length };
+    }
+
     append ? setLoadingMore(true) : setLoadingRows(true);
     setError("");
     try {
@@ -521,15 +544,24 @@ export default function Presupuestos() {
         limit: String(PROBE_LIMIT),
         offset: String(offset),
       });
-      if (from) p.set("fecha_desde", dateToAPI(from));
-      if (to) p.set("fecha_hasta", dateToAPI(to));
+      if (from) p.set("fecha_desde", fromAPI);
+      if (to) p.set("fecha_hasta", toAPI);
       if (query) p.set("q", query);
       const data = await apiGet(`${API}?${p.toString()}`);
       const arr = Array.isArray(data?.presupuestos) ? data.presupuestos : Array.isArray(data?.movimientos) ? data.movimientos : [];
       const normalized = arr.slice(0, PAGE_SIZE).map(normalizePresupuestoRow);
-      setHasMore(arr.length > PAGE_SIZE || !!data?.has_more);
+      const newHasMore = arr.length > PAGE_SIZE || !!data?.has_more;
+      setHasMore(newHasMore);
       offsetRef.current = offset + normalized.length;
-      setRows((prev) => (append ? [...prev, ...normalized] : normalized));
+      setRows((prev) => {
+        const nextRows = append ? [...prev, ...normalized] : normalized;
+        if (!append && offset === 0) {
+          const cachePayload = { rows: nextRows, hasMore: newHasMore, nextOffset: offsetRef.current };
+          cacheRef.current.set(cacheKey, cachePayload);
+          writeMovPerfCache("presupuestos:listar", cacheKey, cachePayload);
+        }
+        return nextRows;
+      });
     } catch (e) {
       setError(e?.message || "No se pudieron cargar los presupuestos.");
     } finally {
@@ -590,10 +622,14 @@ export default function Presupuestos() {
   }, [dateRange.from, dateRange.to, fetchLiveToken, loadRows, loadingMore, loadingRows, q]);
 
   const handleDateRangeChange = useCallback((newRange) => {
+    cacheRef.current.clear();
+    clearMovPerfCache("presupuestos:listar");
     setDateRange(newRange);
   }, [setDateRange]);
 
   const reloadVista = useCallback(async () => {
+    cacheRef.current.clear();
+    clearMovPerfCache("presupuestos:listar");
     signedUrlCacheRef.current.clear();
     await loadRows({ from: dateRange.from, to: dateRange.to, query: q, offset: 0, append: false });
     try { liveTokenRef.current = await fetchLiveToken(dateRange.from, dateRange.to, q); } catch {}

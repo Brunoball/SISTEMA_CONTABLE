@@ -34,6 +34,7 @@ import {
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
+import { readMovPerfCache, writeMovPerfCache, clearMovPerfCache } from "../_shared/performanceCache.js";
 
 const MIN_LOADING_MS = 0;
 const FORCE_SHOW_LOADER_DEV = false;
@@ -554,6 +555,11 @@ export default function OtrosEgresos() {
       const qKey = (qLocal || "").trim();
       const cacheKey = `${fromAPI}|${toAPI}|${qKey}`;
 
+      if (!append && offset === 0 && !cacheRef.current.has(cacheKey)) {
+        const persisted = readMovPerfCache("otros_egresos:listar", cacheKey);
+        if (persisted?.rows) cacheRef.current.set(cacheKey, persisted);
+      }
+
       const myReqId = ++reqIdRef.current;
       const start = Date.now();
 
@@ -656,11 +662,13 @@ export default function OtrosEgresos() {
               setNextOffset(newNextOffset);
 
               if (offset === 0) {
-                cacheRef.current.set(cacheKey, {
+                const cachePayload = {
                   rows: page,
                   hasMore: newHasMore,
                   nextOffset: newNextOffset,
-                });
+                };
+                cacheRef.current.set(cacheKey, cachePayload);
+                writeMovPerfCache("otros_egresos:listar", cacheKey, cachePayload);
               }
 
               if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
@@ -748,6 +756,7 @@ export default function OtrosEgresos() {
 
       setDateRange(newRange);
       cacheRef.current.clear();
+      clearMovPerfCache("otros_egresos:listar");
       skipSearchRef.current = true;
 
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -983,6 +992,7 @@ export default function OtrosEgresos() {
   const reloadVista = useCallback(async () => {
     try {
       cacheRef.current.clear();
+      clearMovPerfCache("otros_egresos:listar");
       signedUrlCacheRef.current.clear();
       signedUrlInFlightRef.current.clear();
       await loadRows({

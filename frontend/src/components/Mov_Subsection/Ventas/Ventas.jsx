@@ -33,6 +33,7 @@ import {
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 import { useDateRange } from "../../../context/DateRangeContext";
+import { readMovPerfCache, writeMovPerfCache, clearMovPerfCache } from "../_shared/performanceCache.js";
 
 const MIN_LOADING_MS = 0;
 const FORCE_SHOW_LOADER_DEV = false;
@@ -311,6 +312,10 @@ export default function Ventas() {
     const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
     const fromAPI = dateToAPI(fromDate); const toAPI = dateToAPI(toDate); const qKey = (qLocal || "").trim();
     const cacheKey = `${fromAPI}|${toAPI}|${qKey}`; const myReqId = ++reqIdRef.current; const start = Date.now();
+    if (!append && offset === 0 && !cacheRef.current.has(cacheKey)) {
+      const persisted = readMovPerfCache("ventas:listar", cacheKey);
+      if (persisted?.rows) cacheRef.current.set(cacheKey, persisted);
+    }
     if (!append) { rowsReqIdRef.current = myReqId; setLoadingRows(true); } else { moreReqIdRef.current = myReqId; setLoadingMore(true); }
     setError("");
     try {
@@ -340,7 +345,11 @@ export default function Ventas() {
             if (add.length === 0) { newHasMore = false; newNextOffset = null; }
             setHasMore(newHasMore); setNextOffset(newNextOffset); if (moreReqIdRef.current === myReqId) setLoadingMore(false); prewarmAllComprobantes(add);
           } else {
-            rowsRef.current = page; setRows(page); setHasMore(newHasMore); setNextOffset(newNextOffset); if (offset === 0) cacheRef.current.set(cacheKey, { rows: page, hasMore: newHasMore, nextOffset: newNextOffset }); if (rowsReqIdRef.current === myReqId) setLoadingRows(false); prewarmAllComprobantes(page);
+            rowsRef.current = page; setRows(page); setHasMore(newHasMore); setNextOffset(newNextOffset); if (offset === 0) {
+              const cachePayload = { rows: page, hasMore: newHasMore, nextOffset: newNextOffset };
+              cacheRef.current.set(cacheKey, cachePayload);
+              writeMovPerfCache("ventas:listar", cacheKey, cachePayload);
+            } if (rowsReqIdRef.current === myReqId) setLoadingRows(false); prewarmAllComprobantes(page);
           }
           resolve({ hasMore: newHasMore, nextOffset: newNextOffset, received: page.length });
         };
@@ -372,7 +381,7 @@ export default function Ventas() {
   }, [q, dateRange]); // eslint-disable-line
   const handleDateRangeChange = useCallback(async (newRange) => {
     if (!newRange.from && !newRange.to) return;
-    setDateRange(newRange); cacheRef.current.clear(); skipSearchRef.current = true; liveTokenRef.current = null; if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    setDateRange(newRange); cacheRef.current.clear(); clearMovPerfCache("ventas:listar"); skipSearchRef.current = true; liveTokenRef.current = null; if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     await loadRows({ from: newRange.from, to: newRange.to, q, offset: 0, append: false });
     try { const token = await fetchLiveToken(newRange.from, newRange.to, q); liveTokenRef.current = token; } catch {}
   }, [setDateRange, loadRows, q, fetchLiveToken]);
@@ -423,7 +432,7 @@ export default function Ventas() {
     { key: "csv", label: "Exportar CSV (.csv)", onClick: () => handleExport("csv") },
     { key: "txt", label: "Exportar TXT (.txt)", onClick: () => handleExport("txt") },
   ], [handleExport]);
-  const reloadVista = useCallback(async () => { cacheRef.current.clear(); signedUrlCacheRef.current.clear(); signedUrlInFlightRef.current.clear(); await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false }); try { const token = await fetchLiveToken(dateRange.from, dateRange.to, q); liveTokenRef.current = token; } catch {} }, [dateRange.from, dateRange.to, loadRows, q, fetchLiveToken]);
+  const reloadVista = useCallback(async () => { cacheRef.current.clear(); clearMovPerfCache("ventas:listar"); signedUrlCacheRef.current.clear(); signedUrlInFlightRef.current.clear(); await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false }); try { const token = await fetchLiveToken(dateRange.from, dateRange.to, q); liveTokenRef.current = token; } catch {} }, [dateRange.from, dateRange.to, loadRows, q, fetchLiveToken]);
   const confirmDelete = async () => { if (!selectedRow?.id_movimiento) return; const id = selectedRow.id_movimiento; setDeletingId(id); setError(""); try { const { idUsuario } = getAuthInfo(); const sp = new URLSearchParams(); sp.set("action", "ventas_eliminar"); sp.set("id_movimiento", String(id)); const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario }); if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar."); setOpenDel(false); setSelectedRow(null); await reloadVista(); await refreshPeriodos(); } catch (e) { setError(e.message || "Error eliminando venta."); throw e; } finally { setDeletingId(null); } };
   const handleLoadMore = useCallback(async () => { if (!hasMore || loadingMore || loadingRows || loadingListsCtx || nextOffset === null) return; try { await loadRows({ from: dateRange.from, to: dateRange.to, q: (q || "").trim(), offset: nextOffset, append: true }); try { const token = await fetchLiveToken(dateRange.from, dateRange.to, q); liveTokenRef.current = token; } catch {} } catch (e) { showToast("error", e?.message || "Error cargando más ventas.", 4200); } }, [hasMore, loadingMore, loadingRows, loadingListsCtx, nextOffset, dateRange, q, loadRows, showToast, fetchLiveToken]);
   const handleVerComprobante = useCallback(async (r) => {

@@ -34,6 +34,7 @@ import {
 import * as XLSX from "xlsx";
 import { useListas } from "../../../context/ListasContext.jsx";
 import { useDateRange } from "../../../context/DateRangeContext.jsx";
+import { readMovPerfCache, writeMovPerfCache, clearMovPerfCache } from "../_shared/performanceCache.js";
 
 const MIN_LOADING_MS = 0;
 const FORCE_SHOW_LOADER_DEV = false;
@@ -531,6 +532,11 @@ export default function OtrosIngresos() {
       const qKey = (qLocal || "").trim();
       const cacheKey = `${fromAPI}|${toAPI}|${qKey}`;
 
+      if (!append && offset === 0 && !cacheRef.current.has(cacheKey)) {
+        const persisted = readMovPerfCache("otros_ingresos:listar", cacheKey);
+        if (persisted?.rows) cacheRef.current.set(cacheKey, persisted);
+      }
+
       const myReqId = ++reqIdRef.current;
       const start = Date.now();
 
@@ -633,11 +639,13 @@ export default function OtrosIngresos() {
               setNextOffset(newNextOffset);
 
               if (offset === 0) {
-                cacheRef.current.set(cacheKey, {
+                const cachePayload = {
                   rows: page,
                   hasMore: newHasMore,
                   nextOffset: newNextOffset,
-                });
+                };
+                cacheRef.current.set(cacheKey, cachePayload);
+                writeMovPerfCache("otros_ingresos:listar", cacheKey, cachePayload);
               }
 
               if (rowsReqIdRef.current === myReqId) setLoadingRows(false);
@@ -725,6 +733,7 @@ export default function OtrosIngresos() {
 
       setDateRange(newRange);
       cacheRef.current.clear();
+      clearMovPerfCache("otros_ingresos:listar");
       skipSearchRef.current = true;
 
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -965,6 +974,7 @@ export default function OtrosIngresos() {
       signedUrlInFlightRef.current.clear();
 
       cacheRef.current.clear();
+      clearMovPerfCache("otros_ingresos:listar");
       await loadRows({
         from: dateRange.from,
         to: dateRange.to,

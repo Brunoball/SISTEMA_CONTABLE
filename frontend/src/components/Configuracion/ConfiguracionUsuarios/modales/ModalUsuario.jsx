@@ -71,6 +71,8 @@ export default function ModalUsuario({
   saving,
   esEdicion,
   editandoUsuarioActual,
+  hasChanges = true,
+  saveDisabled = false,
   onSubmit,
   onClose,
 }) {
@@ -395,6 +397,12 @@ export default function ModalUsuario({
         </div>
 
         <div className="mu-footer">
+          <span className={`mu-saveHint ${hasChanges ? "is-pending" : ""}`}>
+            {hasChanges
+              ? "Hay cambios pendientes por guardar."
+              : "No hay cambios pendientes."}
+          </span>
+
           <button
             type="button"
             className="mu-btn-cancel"
@@ -408,7 +416,7 @@ export default function ModalUsuario({
             type="submit"
             form="mu-form"
             className="mu-btn-submit"
-            disabled={saving || (!editandoUsuarioActual && roles.length === 0)}
+            disabled={saveDisabled}
           >
             <FontAwesomeIcon icon={esEdicion ? faFloppyDisk : faUserPlus} />
             {saving

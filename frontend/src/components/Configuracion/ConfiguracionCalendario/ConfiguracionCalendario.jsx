@@ -12,6 +12,7 @@ import {
   faCalendarWeek,
   faCircleInfo,
   faBolt,
+  faFloppyDisk,
   faShieldHalved,
   faChevronRight,
 } from "@fortawesome/free-solid-svg-icons";
@@ -430,7 +431,7 @@ export default function ConfiguracionCalendario() {
 
           {/* Tarjeta 3 — Configuración de días (condicional) */}
           {modo === "dias_atras" && (
-            <div className="cal-metaCard">
+            <div className="cal-metaCard cal-metaCard--dias">
               <div className="cal-metaCard__top">
                 <div className="cal-metaCard__icon">
                   <FontAwesomeIcon icon={faCalendarWeek} />
@@ -461,7 +462,7 @@ export default function ConfiguracionCalendario() {
 
                 <p className="cal-diasHint">
                   Valores permitidos: <strong>0</strong> a{" "}
-                  <strong>{maxDiasAtrasPermitidos}</strong>. No se permite cruzar
+                  <strong>{maxDiasAtrasPermitidos}</strong>. <br/> No se permite cruzar
                   al mes anterior.
                 </p>
 
@@ -502,27 +503,26 @@ export default function ConfiguracionCalendario() {
             </div>
 
             <div className="cal-metaCard__body cal-metaCard__body--stack">
-              <button
-                type="button"
-                className={`cal-saveRow ${!hasChanges && !saving ? "cal-saveRow--disabled" : ""}`}
-                disabled={saving || !hasChanges}
-                onClick={handleSave}
-              >
-                <div className="cal-saveRow__text">
-                  <span className="cal-saveRow__title">
-                    {saving ? "Guardando configuración..." : "Guardar configuración"}
-                  </span>
-                  <span className="cal-saveRow__desc">
-                    {hasChanges
-                      ? "Hay cambios pendientes por guardar."
-                      : "No hay cambios pendientes."}
-                  </span>
-                </div>
-                <FontAwesomeIcon
-                  icon={saving ? faSpinner : faCheck}
-                  spin={saving}
-                />
-              </button>
+              <div className="cal-saveActions">
+                <span className={`cal-saveHint ${hasChanges ? "is-pending" : ""}`}>
+                  {hasChanges
+                    ? "Hay cambios pendientes por guardar."
+                    : "No hay cambios pendientes."}
+                </span>
+
+                <button
+                  type="button"
+                  className="cal-btn cal-btn--save"
+                  disabled={saving || !hasChanges}
+                  onClick={handleSave}
+                >
+                  <FontAwesomeIcon
+                    icon={saving ? faSpinner : faFloppyDisk}
+                    spin={saving}
+                  />
+                  {saving ? "Guardando..." : "Guardar configuración"}
+                </button>
+              </div>
             </div>
           </div>
 

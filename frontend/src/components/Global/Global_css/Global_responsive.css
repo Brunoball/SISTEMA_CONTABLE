@@ -735,7 +735,7 @@
 
   }
   #vents-comppr-wit{
-    max-width: 100%;
+    max-width: none !important;
   }
   .is-right{
     text-align: left !important ;

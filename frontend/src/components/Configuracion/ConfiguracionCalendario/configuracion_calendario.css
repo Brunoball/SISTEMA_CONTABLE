@@ -119,6 +119,11 @@
   gap: 10px;
 }
 
+
+.cal-metaCard--fullRow {
+  grid-column: 1 / -1;
+}
+
 /* ── CABECERA DE TARJETA ── */
 .cal-metaCard__top {
   display: flex;
@@ -352,6 +357,63 @@
   color: #23384f;
 }
 
+
+
+/* ── TARJETA CANTIDAD DE DÍAS — COMPACTA ── */
+.cal-metaCard--dias {
+  padding: 12px 14px;
+  gap: 8px;
+}
+
+.cal-metaCard--dias .cal-metaCard__top {
+  gap: 9px;
+}
+
+.cal-metaCard--dias .cal-metaCard__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+
+.cal-metaCard--dias .cal-metaCard__body {
+  grid-template-columns: minmax(132px, 0.72fr) minmax(210px, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.cal-metaCard--dias .cal-diasRow {
+  grid-column: 1;
+  grid-row: 1;
+  gap: 8px;
+}
+
+.cal-metaCard--dias .cal-diasInput {
+  width: 74px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 16px;
+}
+
+.cal-metaCard--dias .cal-diasLabel {
+  font-size: 12px;
+}
+
+.cal-metaCard--dias .cal-diasHint {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.cal-metaCard--dias .cal-preview {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-height: 44px;
+  justify-content: center;
+  padding: 8px 10px;
+}
+
 /* ── PREVIEW DE RANGO ── */
 .cal-preview {
   display: flex;
@@ -387,69 +449,65 @@
   font-weight: 400;
 }
 
-/* ── SAVE ROW ── */
-.cal-saveRow {
-  width: 100%;
-  border: 1px solid #edf1f5;
-  background: #fbfcfe;
-  border-radius: 10px;
-  padding: 10px 12px;
+/* ── ACCIONES / GUARDAR — MISMA BASE QUE DATOS LEGALES ── */
+.cal-saveActions {
   display: flex;
+  justify-content: flex-end;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
-  text-align: left;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  border-top: 1px solid rgba(10, 37, 64, 0.075);
+}
+
+.cal-saveHint {
+  margin-right: auto;
+  font-size: 11.5px;
+  color: #6a7989;
+  font-weight: 560;
+  line-height: 1.35;
+}
+
+.cal-saveHint.is-pending {
+  color: var(--balto-action, #0055bb);
+}
+
+.cal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 12px;
+  min-height: 38px;
+  padding: 9px 14px;
+  font-size: 12px;
+  font-weight: 720;
   cursor: pointer;
-  transition: all 0.15s ease;
-  color: inherit;
+  transition: transform 0.14s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  white-space: nowrap;
 }
 
-.cal-saveRow:hover:not(:disabled):not(.cal-saveRow--disabled) {
-  background: #edf8f1;
-  border-color: #d4eadc;
+.cal-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
-.cal-saveRow:hover:not(:disabled):not(.cal-saveRow--disabled) .cal-saveRow__title {
-  color: #237545;
+.cal-btn--save {
+  background: rgba(0, 85, 187, 0.92);
+  border: 1px solid rgba(0, 85, 187, 0.72);
+  color: #fff;
+  box-shadow: 0 12px 24px -18px rgba(0, 85, 187, 0.62);
 }
 
-.cal-saveRow:hover:not(:disabled):not(.cal-saveRow--disabled) svg {
-  color: #237545;
+.cal-btn--save:hover:not(:disabled) {
+  background: var(--balto-action, #0055bb);
+  border-color: var(--balto-action, #0055bb);
 }
 
-.cal-saveRow:disabled,
-.cal-saveRow--disabled {
+.cal-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-}
-
-.cal-saveRow__text {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.cal-saveRow__title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--balto-ink, #0a2540);
-  line-height: 1.25;
-  transition: color 0.15s ease;
-}
-
-.cal-saveRow__desc {
-  font-size: 10.5px;
-  color: #6a7989;
-  line-height: 1.35;
-  font-weight: 430;
-}
-
-.cal-saveRow svg {
-  font-size: 13px;
-  color: #697586;
-  flex: 0 0 auto;
-  transition: color 0.15s ease;
+  transform: none;
+  box-shadow: none;
 }
 
 /* ── TABLET ── */
@@ -508,8 +566,39 @@
     grid-template-columns: 1fr;
   }
 
+  .cal-metaCard--dias .cal-metaCard__body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .cal-metaCard--dias .cal-diasRow,
+  .cal-metaCard--dias .cal-diasHint,
+  .cal-metaCard--dias .cal-preview {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .cal-metaCard--dias .cal-preview {
+    justify-content: flex-start;
+  }
+
+
   .cal-metaItem--full {
     grid-column: auto;
+  }
+
+  .cal-saveActions {
+    justify-content: stretch;
+  }
+
+  .cal-saveHint {
+    width: 100%;
+    margin-right: 0;
+    text-align: center;
+  }
+
+  .cal-saveActions .cal-btn {
+    flex: 1;
   }
 }
 
@@ -536,9 +625,7 @@ body.dark .cal-metaCard__head h2,
 [data-theme="oscuro"] .cal-title,
 body.dark .cal-title,
 [data-theme="oscuro"] .cal-actionRow__title,
-body.dark .cal-actionRow__title,
-[data-theme="oscuro"] .cal-saveRow__title,
-body.dark .cal-saveRow__title {
+body.dark .cal-actionRow__title {
   color: rgba(255, 255, 255, 0.92);
 }
 
@@ -548,8 +635,6 @@ body.dark .cal-metaCard__head p,
 body.dark .cal-subtitle,
 [data-theme="oscuro"] .cal-actionRow__desc,
 body.dark .cal-actionRow__desc,
-[data-theme="oscuro"] .cal-saveRow__desc,
-body.dark .cal-saveRow__desc,
 [data-theme="oscuro"] .cal-diasLabel,
 body.dark .cal-diasLabel,
 [data-theme="oscuro"] .cal-diasHint,
@@ -579,9 +664,7 @@ body.dark .cal-metaItem {
 }
 
 [data-theme="oscuro"] .cal-actionRow,
-body.dark .cal-actionRow,
-[data-theme="oscuro"] .cal-saveRow,
-body.dark .cal-saveRow {
+body.dark .cal-actionRow {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
 }
@@ -647,25 +730,27 @@ body.dark .cal-preview__range {
   color: rgba(140, 180, 255, 0.95);
 }
 
-[data-theme="oscuro"] .cal-saveRow:hover:not(:disabled):not(.cal-saveRow--disabled),
-body.dark .cal-saveRow:hover:not(:disabled):not(.cal-saveRow--disabled) {
-  background: rgba(16, 185, 129, 0.08);
-  border-color: rgba(16, 185, 129, 0.20);
+[data-theme="oscuro"] .cal-saveActions,
+body.dark .cal-saveActions {
+  border-top-color: rgba(148, 163, 184, 0.12);
 }
 
-[data-theme="oscuro"] .cal-saveRow:hover:not(:disabled):not(.cal-saveRow--disabled) .cal-saveRow__title,
-body.dark .cal-saveRow:hover:not(:disabled):not(.cal-saveRow--disabled) .cal-saveRow__title {
-  color: rgba(72, 210, 160, 0.95);
-}
-
-[data-theme="oscuro"] .cal-saveRow:hover:not(:disabled):not(.cal-saveRow--disabled) svg,
-body.dark .cal-saveRow:hover:not(:disabled):not(.cal-saveRow--disabled) svg {
-  color: rgba(72, 210, 160, 0.95);
-}
-
-[data-theme="oscuro"] .cal-saveRow svg,
-body.dark .cal-saveRow svg {
+[data-theme="oscuro"] .cal-saveHint,
+body.dark .cal-saveHint {
   color: rgba(210, 220, 235, 0.60);
+}
+
+[data-theme="oscuro"] .cal-saveHint.is-pending,
+body.dark .cal-saveHint.is-pending {
+  color: rgba(160, 200, 255, 0.95);
+}
+
+[data-theme="oscuro"] .cal-btn--save,
+body.dark .cal-btn--save {
+  background: rgba(78, 161, 255, 0.88);
+  border-color: rgba(78, 161, 255, 0.48);
+  color: #071018;
+  box-shadow: 0 12px 24px -18px rgba(78, 161, 255, 0.50);
 }
 
 [data-theme="oscuro"] .cal-badge--info,

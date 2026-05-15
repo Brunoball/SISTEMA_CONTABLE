@@ -436,6 +436,65 @@
   line-height: 1.4;
 }
 
+
+.cfg-legal-saveCard {
+  margin-top: 2px;
+  border: 1px solid #d9e1ea;
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 15px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cfg-legal-saveCard__top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cfg-legal-saveCard__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #f3f5f7;
+  border: 1px solid #e4eaf1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #697586;
+  font-size: 13px;
+  flex: 0 0 auto;
+}
+
+.cfg-legal-saveCard__head {
+  min-width: 0;
+}
+
+.cfg-legal-saveCard__head h2 {
+  margin: 0 0 2px;
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 600;
+  color: var(--balto-ink, #0a2540);
+}
+
+.cfg-legal-saveCard__head p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #6a7989;
+  font-weight: 430;
+}
+
+.cfg-legal-saveCard__body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
 .cfg-legal-actions {
   display: flex;
   justify-content: flex-end;
@@ -445,6 +504,18 @@
   margin-top: 2px;
   padding-top: 14px;
   border-top: 1px solid rgba(10, 37, 64, 0.075);
+}
+
+.cfg-legal-saveHint {
+  margin-right: auto;
+  font-size: 11.5px;
+  color: #6a7989;
+  font-weight: 560;
+  line-height: 1.35;
+}
+
+.cfg-legal-saveHint.is-pending {
+  color: var(--balto-action, #0055bb);
 }
 
 .cfg-legal-btn {
@@ -535,6 +606,12 @@
 
   .cfg-legal-actions {
     justify-content: stretch;
+  }
+
+  .cfg-legal-saveHint {
+    width: 100%;
+    margin-right: 0;
+    text-align: center;
   }
 
   .cfg-legal-actions .cfg-legal-btn {
@@ -694,11 +771,45 @@ body.dark .cfg-legal-empty {
   color: rgba(210, 220, 235, 0.55);
 }
 
+
+[data-theme="oscuro"] .cfg-legal-saveCard,
+body.dark .cfg-legal-saveCard {
+  background: rgba(6, 18, 28, 0.96);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="oscuro"] .cfg-legal-saveCard__icon,
+body.dark .cfg-legal-saveCard__icon {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.10);
+  color: rgba(210, 220, 235, 0.75);
+}
+
+[data-theme="oscuro"] .cfg-legal-saveCard__head h2,
+body.dark .cfg-legal-saveCard__head h2 {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+[data-theme="oscuro"] .cfg-legal-saveCard__head p,
+body.dark .cfg-legal-saveCard__head p {
+  color: rgba(210, 220, 235, 0.60);
+}
+
 [data-theme="oscuro"] .cfg-legal-note,
 body.dark .cfg-legal-note {
   background: rgba(44, 90, 173, 0.18);
   border-color: rgba(44, 90, 173, 0.38);
   color: rgba(180, 205, 255, 0.92);
+}
+
+[data-theme="oscuro"] .cfg-legal-saveHint,
+body.dark .cfg-legal-saveHint {
+  color: rgba(210, 220, 235, 0.60);
+}
+
+[data-theme="oscuro"] .cfg-legal-saveHint.is-pending,
+body.dark .cfg-legal-saveHint.is-pending {
+  color: rgba(160, 200, 255, 0.95);
 }
 
 [data-theme="oscuro"] .cfg-legal-btn--ghost,

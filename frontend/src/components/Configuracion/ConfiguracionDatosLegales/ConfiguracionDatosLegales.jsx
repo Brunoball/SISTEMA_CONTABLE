@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
+  faBolt,
   faBuilding,
   faFileInvoiceDollar,
   faFloppyDisk,
@@ -141,11 +142,31 @@ function normalizarConfigDesdeApi(config = {}) {
   };
 }
 
+function normalizarConfigParaComparar(config = {}) {
+  const normalizada = normalizarConfigDesdeApi(config);
+
+  return {
+    idConfigFacturacion: Number(normalizada.idConfigFacturacion || 0),
+    razon_social: normalizada.razon_social,
+    nombre_fantasia: normalizada.nombre_fantasia,
+    cuit: normalizada.cuit,
+    ingresos_brutos: normalizada.ingresos_brutos,
+    condicion_iva: normalizada.condicion_iva,
+    domicilio_comercial: normalizada.domicilio_comercial,
+    fecha_inicio_actividades: normalizada.fecha_inicio_actividades || "",
+    punto_venta: normalizada.punto_venta,
+    tipo_comprobante_default: normalizada.tipo_comprobante_default,
+    codigo_comprobante: normalizada.codigo_comprobante,
+    activo: Number(normalizada.activo) === 0 ? 0 : 1,
+  };
+}
+
 export default function ConfiguracionDatosLegales() {
   const navigate = useNavigate();
   const fechaInputRef = useRef(null);
 
   const [form, setForm] = useState(emptyForm);
+  const [formInicial, setFormInicial] = useState(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
@@ -187,7 +208,9 @@ export default function ConfiguracionDatosLegales() {
         );
       }
 
-      setForm(normalizarConfigDesdeApi(data.config || {}));
+      const configNormalizada = normalizarConfigDesdeApi(data.config || {});
+      setForm(configNormalizada);
+      setFormInicial(configNormalizada);
     } catch (err) {
       console.error("Error cargando datos legales:", err);
       mostrarToast(
@@ -212,9 +235,16 @@ export default function ConfiguracionDatosLegales() {
     return { razon, fantasia, cuit };
   }, [form]);
 
+  const hasChanges = useMemo(() => {
+    return (
+      JSON.stringify(normalizarConfigParaComparar(form)) !==
+      JSON.stringify(normalizarConfigParaComparar(formInicial))
+    );
+  }, [form, formInicial]);
+
   const guardar = async (e) => {
     e.preventDefault();
-    if (saving) return;
+    if (saving || !hasChanges) return;
 
     const payload = {
       ...form,
@@ -270,7 +300,9 @@ export default function ConfiguracionDatosLegales() {
         );
       }
 
-      setForm(normalizarConfigDesdeApi(data.config || payload));
+      const configGuardada = normalizarConfigDesdeApi(data.config || payload);
+      setForm(configGuardada);
+      setFormInicial(configGuardada);
       mostrarToast(
         "exito",
         data?.mensaje || "Datos legales guardados correctamente."
@@ -379,7 +411,34 @@ export default function ConfiguracionDatosLegales() {
           </div>
 
           {loading ? (
-            <div className="cfg-legal-empty">Cargando datos legales...</div>
+            <>
+              <div className="cfg-legal-empty">Cargando datos legales...</div>
+              <div className="cfg-legal-saveCard">
+                <div className="cfg-legal-saveCard__top">
+                  <div className="cfg-legal-saveCard__icon">
+                    <FontAwesomeIcon icon={faBolt} />
+                  </div>
+                  <div className="cfg-legal-saveCard__head">
+                    <h2>Guardar configuración</h2>
+                    <p>Aplicá los cambios a todas las vistas del sistema.</p>
+                  </div>
+                </div>
+
+                <div className="cfg-legal-saveCard__body">
+                  <div className="cfg-legal-actions">
+                    <span className="cfg-legal-saveHint">No hay cambios pendientes.</span>
+                    <button
+                      type="button"
+                      className="cfg-legal-btn cfg-legal-btn--save"
+                      disabled
+                    >
+                      <FontAwesomeIcon icon={faFloppyDisk} />
+                      Guardar configuración
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
           ) : (
             <form className="cfg-legal-form" onSubmit={guardar} noValidate>
               <div className="cfg-legal-section-title">
@@ -567,24 +626,35 @@ export default function ConfiguracionDatosLegales() {
                 </label>
               </div>
 
-              <div className="cfg-legal-actions">
-                <button
-                  type="button"
-                  className="cfg-legal-btn cfg-legal-btn--ghost"
-                  onClick={() => navigate("/panel/configuracion")}
-                  disabled={saving}
-                >
-                  Cancelar
-                </button>
+              <div className="cfg-legal-saveCard">
+                <div className="cfg-legal-saveCard__top">
+                  <div className="cfg-legal-saveCard__icon">
+                    <FontAwesomeIcon icon={faBolt} />
+                  </div>
+                  <div className="cfg-legal-saveCard__head">
+                    <h2>Guardar configuración</h2>
+                    <p>Aplicá los cambios a todas las vistas del sistema.</p>
+                  </div>
+                </div>
 
-                <button
-                  type="submit"
-                  className="cfg-legal-btn cfg-legal-btn--save"
-                  disabled={saving}
-                >
-                  <FontAwesomeIcon icon={faFloppyDisk} />
-                  {saving ? "Guardando..." : "Guardar datos legales"}
-                </button>
+                <div className="cfg-legal-saveCard__body">
+                  <div className="cfg-legal-actions">
+                    <span className={`cfg-legal-saveHint ${hasChanges ? "is-pending" : ""}`}>
+                      {hasChanges
+                        ? "Hay cambios pendientes por guardar."
+                        : "No hay cambios pendientes."}
+                    </span>
+
+                    <button
+                      type="submit"
+                      className="cfg-legal-btn cfg-legal-btn--save"
+                      disabled={saving || !hasChanges}
+                    >
+                      <FontAwesomeIcon icon={faFloppyDisk} />
+                      {saving ? "Guardando..." : "Guardar configuración"}
+                    </button>
+                  </div>
+                </div>
               </div>
             </form>
           )}

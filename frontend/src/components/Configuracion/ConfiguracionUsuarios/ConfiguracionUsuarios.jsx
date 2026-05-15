@@ -211,6 +211,39 @@ const emptyForm = {
   activo: 1,
 };
 
+function crearFormUsuarioBase(rolEmpleadoDefault) {
+  return {
+    ...emptyForm,
+    idRolMaster: rolEmpleadoDefault
+      ? String(rolEmpleadoDefault.idRolMaster || rolEmpleadoDefault.id_rol)
+      : "",
+  };
+}
+
+function normalizarFormUsuarioParaComparar(form = {}) {
+  return {
+    idUsuarioMaster: Number(form.idUsuarioMaster || 0),
+    usuario: String(form.usuario || "").trim(),
+    email_recuperacion: String(form.email_recuperacion || "").trim(),
+    contrasena: String(form.contrasena || ""),
+    idRolMaster: String(form.idRolMaster || ""),
+    tema: form.tema || "claro",
+    activo: Number(form.activo) === 1 ? 1 : 0,
+  };
+}
+
+function crearFormUsuarioDesdeRegistro(usuario, roles = []) {
+  return {
+    idUsuarioMaster: Number(usuario.idUsuarioMaster || usuario.id_usuario_master || 0),
+    usuario: usuario.usuario || "",
+    email_recuperacion: usuario.email_recuperacion || "",
+    contrasena: "",
+    idRolMaster: resolverRolIdDesdeUsuario(usuario, roles),
+    tema: usuario.tema || "claro",
+    activo: Number(usuario.activo) === 1 ? 1 : 0,
+  };
+}
+
 export default function ConfiguracionUsuarios() {
   const navigate = useNavigate();
 
@@ -219,6 +252,7 @@ export default function ConfiguracionUsuarios() {
   const [usuarioActual, setUsuarioActual] = useState(getStoredCurrentUser());
 
   const [form, setForm] = useState(emptyForm);
+  const [formInicial, setFormInicial] = useState(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -329,11 +363,32 @@ export default function ConfiguracionUsuarios() {
 
   const editandoUsuarioActual = esEdicion && editandoUsuarioActualFijo;
 
+  const modalHasChanges = useMemo(() => {
+    return (
+      JSON.stringify(normalizarFormUsuarioParaComparar(form)) !==
+      JSON.stringify(normalizarFormUsuarioParaComparar(formInicial))
+    );
+  }, [form, formInicial]);
+
+  const modalSaveDisabled = useMemo(() => {
+    const usuario = String(form.usuario || "").trim();
+    const contrasena = String(form.contrasena || "");
+    const rolActual = Number(form.idRolMaster || 0);
+
+    if (saving || !modalHasChanges) return true;
+    if (!usuario) return true;
+    if (!rolActual) return true;
+    if (!esEdicion && contrasena.length < 6) return true;
+    if (esEdicion && contrasena && contrasena.length < 6) return true;
+    if (!editandoUsuarioActual && roles.length === 0) return true;
+
+    return false;
+  }, [form, saving, modalHasChanges, esEdicion, editandoUsuarioActual, roles.length]);
+
   const resetForm = useCallback(() => {
-    setForm({
-      ...emptyForm,
-      idRolMaster: rolEmpleadoDefault ? String(rolEmpleadoDefault.idRolMaster || rolEmpleadoDefault.id_rol) : "",
-    });
+    const formBase = crearFormUsuarioBase(rolEmpleadoDefault);
+    setForm(formBase);
+    setFormInicial(formBase);
     setEditandoUsuarioActualFijo(false);
   }, [rolEmpleadoDefault]);
 
@@ -344,27 +399,20 @@ export default function ConfiguracionUsuarios() {
   }, [saving, resetForm]);
 
   const abrirCrear = useCallback(() => {
+    const formBase = crearFormUsuarioBase(rolEmpleadoDefault);
     setEditandoUsuarioActualFijo(false);
-    setForm({
-      ...emptyForm,
-      idRolMaster: rolEmpleadoDefault ? String(rolEmpleadoDefault.idRolMaster || rolEmpleadoDefault.id_rol) : "",
-    });
+    setForm(formBase);
+    setFormInicial(formBase);
     setModalUsuarioAbierto(true);
   }, [rolEmpleadoDefault]);
 
   const abrirEditar = useCallback(
     (u) => {
       const esActual = esUsuarioActualPorObjeto(u);
+      const formEdicion = crearFormUsuarioDesdeRegistro(u, roles);
       setEditandoUsuarioActualFijo(esActual);
-      setForm({
-        idUsuarioMaster: Number(u.idUsuarioMaster || u.id_usuario_master || 0),
-        usuario: u.usuario || "",
-        email_recuperacion: u.email_recuperacion || "",
-        contrasena: "",
-        idRolMaster: resolverRolIdDesdeUsuario(u, roles),
-        tema: u.tema || "claro",
-        activo: Number(u.activo) === 1 ? 1 : 0,
-      });
+      setForm(formEdicion);
+      setFormInicial(formEdicion);
       setModalUsuarioAbierto(true);
     },
     [esUsuarioActualPorObjeto, roles]
@@ -372,6 +420,8 @@ export default function ConfiguracionUsuarios() {
 
   const guardar = async (e) => {
     e.preventDefault();
+    if (modalSaveDisabled) return;
+
     setSaving(true);
 
     try {
@@ -558,9 +608,11 @@ export default function ConfiguracionUsuarios() {
         </div>
 
         <div className="cfg-users-hero__side">
-                    <button className="cfg-users-hero-add" type="button" onClick={abrirCrear}>
-            <FontAwesomeIcon icon={faPlus} />
-            Agregar usuario
+          <button className="cfg-users-hero-add" type="button" onClick={abrirCrear}>
+            <span className="cfg-users-hero-add__iconWrap">
+              <FontAwesomeIcon icon={faPlus} />
+            </span>
+            <span className="cfg-users-hero-add__text">Agregar usuario</span>
           </button>
           <button
             className="mov-btn mov-btn--primary"
@@ -694,6 +746,8 @@ export default function ConfiguracionUsuarios() {
         saving={saving}
         esEdicion={esEdicion}
         editandoUsuarioActual={editandoUsuarioActual}
+        hasChanges={modalHasChanges}
+        saveDisabled={modalSaveDisabled}
         onSubmit={guardar}
         onClose={cerrarModalUsuario}
       />

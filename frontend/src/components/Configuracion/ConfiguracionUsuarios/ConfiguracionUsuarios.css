@@ -104,26 +104,63 @@
   border-color: #c0ccd8;
 }
 
+/* Mismo lenguaje visual que BotonExportar */
 .cfg-users-hero-add {
+  --cfg-add-bg: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  --cfg-add-border: rgba(10, 37, 64, 0.12);
+  --cfg-add-text: #0f172a;
+  --cfg-add-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+
   height: 44px;
+  padding: 0 10px 0 6px;
+  border: 1px solid var(--cfg-add-border);
+  border-radius: 14px;
+  background: var(--cfg-add-bg);
+  color: var(--cfg-add-text);
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
-  border-radius: 10px;
-  border: 1px solid #b8cef5;
-  background: #f0f5ff;
-  color: #2c5aad;
-  font-size: 12px;
-  font-weight: 600;
+  justify-content: center;
+  gap: 6px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.12s ease;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: var(--cfg-add-shadow);
+  backdrop-filter: blur(10px);
   white-space: nowrap;
 }
 
-.cfg-users-hero-add:hover {
-  background: #e6eeff;
-  border-color: #9ab8f0;
+.cfg-users-hero-add:hover:not(:disabled) {
+  border-color: rgba(0, 85, 187, 0.26);
+  box-shadow:
+    0 14px 28px rgba(15, 23, 42, 0.11),
+    0 0 0 4px rgba(0, 85, 187, 0.06);
+  transform: translateY(-1px);
+}
+
+.cfg-users-hero-add:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.cfg-users-hero-add__iconWrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0055bb;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  flex-shrink: 0;
+}
+
+.cfg-users-hero-add__text {
+  white-space: nowrap;
 }
 
 /* ── CARD GRID ── */
@@ -182,6 +219,36 @@
   color: #6a7989;
   font-weight: 430;
   line-height: 1.4;
+}
+
+
+.cfg-users-metaCard__body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cfg-users-metaCard__body--stack {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.cfg-users-saveActions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  border-top: 1px solid rgba(10, 37, 64, 0.075);
+}
+
+.cfg-users-saveHint {
+  margin-right: auto;
+  font-size: 11.5px;
+  color: #6a7989;
+  font-weight: 560;
+  line-height: 1.35;
 }
 
 /* ── TABLA ── */
@@ -520,6 +587,24 @@
   border-color: #e8a0a0;
 }
 
+
+.cfg-users-btn--save {
+  background: rgba(0, 85, 187, 0.92);
+  border: 1px solid rgba(0, 85, 187, 0.72);
+  color: #fff;
+  border-radius: 12px;
+  min-height: 38px;
+  font-weight: 720;
+  box-shadow: 0 12px 24px -18px rgba(0, 85, 187, 0.62);
+  transition: transform 0.14s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cfg-users-btn--save:hover:not(:disabled) {
+  background: var(--balto-action, #0055bb);
+  border-color: var(--balto-action, #0055bb);
+  transform: translateY(-1px);
+}
+
 .cfg-users-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -599,9 +684,24 @@ body.dark .cfg-users-hero-back {
 
 [data-theme="oscuro"] .cfg-users-hero-add,
 body.dark .cfg-users-hero-add {
-  background: rgba(44, 90, 173, 0.15);
-  border-color: rgba(44, 90, 173, 0.35);
-  color: rgba(140, 180, 255, 0.95);
+  --cfg-add-bg: rgba(15, 23, 42, 0.72);
+  --cfg-add-border: rgba(255, 255, 255, 0.12);
+  --cfg-add-text: rgba(255, 255, 255, 0.88);
+  --cfg-add-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
+}
+
+[data-theme="oscuro"] .cfg-users-hero-add:hover:not(:disabled),
+body.dark .cfg-users-hero-add:hover:not(:disabled) {
+  border-color: rgba(78, 161, 255, 0.28);
+  box-shadow:
+    0 14px 28px rgba(0, 0, 0, 0.30),
+    0 0 0 4px rgba(78, 161, 255, 0.08);
+}
+
+[data-theme="oscuro"] .cfg-users-hero-add__iconWrap,
+body.dark .cfg-users-hero-add__iconWrap {
+  color: rgba(160, 200, 255, 0.95);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="oscuro"] .cfg-users-table th,
@@ -754,6 +854,25 @@ body.dark .cfg-users-confirmIcon {
   color: rgba(255, 160, 160, 0.95);
 }
 
+
+[data-theme="oscuro"] .cfg-users-saveActions,
+body.dark .cfg-users-saveActions {
+  border-top-color: rgba(148, 163, 184, 0.12);
+}
+
+[data-theme="oscuro"] .cfg-users-saveHint,
+body.dark .cfg-users-saveHint {
+  color: rgba(210, 220, 235, 0.60);
+}
+
+[data-theme="oscuro"] .cfg-users-btn--save,
+body.dark .cfg-users-btn--save {
+  background: rgba(78, 161, 255, 0.88);
+  border-color: rgba(78, 161, 255, 0.48);
+  color: #071018;
+  box-shadow: 0 12px 24px -18px rgba(78, 161, 255, 0.50);
+}
+
 /* ── ANIMATIONS ── */
 @keyframes cfgUsersFadeIn {
   from { opacity: 0; }
@@ -810,5 +929,19 @@ body.dark .cfg-users-confirmIcon {
   }
   .cfg-users-btn {
     width: 100%;
+  }
+
+  .cfg-users-metaCard__body {
+    grid-template-columns: 1fr;
+  }
+
+  .cfg-users-saveActions {
+    justify-content: stretch;
+  }
+
+  .cfg-users-saveHint {
+    width: 100%;
+    margin-right: 0;
+    text-align: center;
   }
 }

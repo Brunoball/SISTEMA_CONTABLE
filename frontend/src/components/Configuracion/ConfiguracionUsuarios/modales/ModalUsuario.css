@@ -405,10 +405,32 @@ body.dark .mu-hint {
   background: var(--nv-bg, #fff);
 }
 
+.mu-saveHint {
+  margin-right: auto;
+  font-size: 11.5px;
+  color: #6a7989;
+  font-weight: 560;
+  line-height: 1.35;
+}
+
+.mu-saveHint.is-pending {
+  color: var(--blue-action, #0055bb);
+}
+
 html[data-theme="oscuro"] .mu-footer,
 body.dark .mu-footer {
   background: rgba(6, 18, 28, 0.97);
   border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="oscuro"] .mu-saveHint,
+body.dark .mu-saveHint {
+  color: rgba(210, 220, 235, 0.60);
+}
+
+html[data-theme="oscuro"] .mu-saveHint.is-pending,
+body.dark .mu-saveHint.is-pending {
+  color: rgba(140, 190, 255, 0.92);
 }
 
 .mu-btn-cancel {
@@ -452,26 +474,28 @@ body.dark .mu-btn-cancel:hover:not(:disabled) {
 
 .mu-btn-submit {
   appearance: none;
-  height: 38px;
-  padding: 0 18px;
-  border: none;
-  border-radius: 10px;
-  background: var(--nv-midnight, #0a2540);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: rgba(0, 85, 187, 0.92);
+  border: 1px solid rgba(0, 85, 187, 0.72);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 720;
+  cursor: pointer;
   font-family: inherit;
-  transition:
-    filter 0.14s,
-    transform 0.12s;
+  white-space: nowrap;
+  box-shadow: 0 12px 24px -18px rgba(0, 85, 187, 0.62);
+  transition: transform 0.14s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .mu-btn-submit:hover:not(:disabled) {
-  filter: brightness(1.1);
+  background: var(--balto-action, #0055bb);
+  border-color: var(--balto-action, #0055bb);
   transform: translateY(-1px);
 }
 
@@ -479,11 +503,15 @@ body.dark .mu-btn-cancel:hover:not(:disabled) {
   opacity: 0.55;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
 html[data-theme="oscuro"] .mu-btn-submit,
 body.dark .mu-btn-submit {
-  background: #0055bb;
+  background: rgba(78, 161, 255, 0.88);
+  border-color: rgba(78, 161, 255, 0.48);
+  color: #071018;
+  box-shadow: 0 12px 24px -18px rgba(78, 161, 255, 0.50);
 }
 
 /* ── ANIMACIONES ── */
@@ -509,6 +537,12 @@ body.dark .mu-btn-submit {
 
   .mu-footer {
     flex-direction: column-reverse;
+  }
+
+  .mu-saveHint {
+    width: 100%;
+    margin-right: 0;
+    text-align: center;
   }
 
   .mu-btn-cancel,

@@ -635,9 +635,9 @@ export default function ModalNuevoIngreso({
   onSaved,
 }) {
   const API_UPLOAD = `${BASE_URL}/api.php?action=otros_ingresos_comprobantes_vincular_movimiento_upload`;
-  const API_CHEQUES_GUARDAR = `${BASE_URL}/api.php?action=otros_ingresos_cheques_guardar`;
+  const API_CHEQUES_GUARDAR = `${BASE_URL}/api.php?action=mov_global_cheques_guardar`;
   const API_DETALLES_CREAR = `${BASE_URL}/api.php?action=otros_ingresos_detalles_crear`;
-  const API_CHECK_NUMERO = `${BASE_URL}/api.php?action=ventas_cheques_obtener&modo=verificar_numero`;
+  const API_CHECK_NUMERO = `${BASE_URL}/api.php?action=mov_global_cheques_obtener&modo=verificar_numero`;
 
   const showToast = useCallback(
     (tipo, mensaje) => onToast?.(tipo, mensaje),

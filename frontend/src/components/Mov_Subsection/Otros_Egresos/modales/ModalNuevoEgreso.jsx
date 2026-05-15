@@ -688,7 +688,7 @@ function PanelMediosPagoInlineCompraGlobal({
   saving = false,
   apiGet,
   BASE_URL: baseUrlCompra,
-  chequesAction = "compras_cheques_cartera_listar",
+  chequesAction = "mov_global_cheques_cartera_listar",
 }) {
   const filas = Array.isArray(mediosFilas) && mediosFilas.length ? mediosFilas : [buildEmptyMedioPago()];
 
@@ -1504,7 +1504,7 @@ export default function ModalNuevoEgreso({
                         saving={saving}
                         apiGet={apiGet}
                         BASE_URL={BASE_URL}
-                        chequesAction="otros_egresos_cheques_cartera_listar"
+                        chequesAction="mov_global_cheques_cartera_listar"
                       />
                       <div className="mi-uploadCard">
                         <div className="mi-uploadCard__head">

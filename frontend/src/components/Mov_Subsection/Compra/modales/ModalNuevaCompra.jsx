@@ -332,7 +332,7 @@ function MedioPagoInlineCompraRow({
       if (tipo !== null) {
         try {
           const sp = new URLSearchParams();
-          sp.set("action", "compras_cheques_cartera_listar");
+          sp.set("action", "mov_global_cheques_cartera_listar");
           sp.set("tipo", tipo);
           const data = await apiGet(`${BASE_URL}/api.php?${sp.toString()}`);
           onUpdate(row.id, {

@@ -64,11 +64,11 @@ function normalizeFlag(v) {
 function getDepositoChequeLabel(row) {
   if (!row || typeof row !== "object") return "";
 
-  const chequeId = Number(row?.cheque_id ?? row?.id_cheque ?? row?.cheque?.id_cheque ?? 0);
+  // No alcanza con que el egreso tenga cheque_id: un egreso normal puede estar
+  // pagado con cheque/eCheq. Solo mostramos "depositado" si el backend lo
+  // marcó explícitamente como movimiento de depósito bancario.
   const esDepositoCheque =
-    normalizeFlag(row?.es_deposito_cheque) ||
-    normalizeFlag(row?.esDepositoCheque) ||
-    (Number.isFinite(chequeId) && chequeId > 0);
+    normalizeFlag(row?.es_deposito_cheque) || normalizeFlag(row?.esDepositoCheque);
 
   if (!esDepositoCheque) return "";
 
@@ -1236,14 +1236,14 @@ export default function OtrosEgresos() {
         const detalle = String(row?.detalle ?? row?.descripcion ?? row?.concepto ?? "").trim();
         const fecha = formatFechaDMY(row?.fecha);
 
-        const esCheque =
-          Number(row?.cheque_id ?? 0) > 0 ||
-          ["CHEQUE", "ECHEQ"].includes(String(row?.medio_pago_nombre ?? "").trim().toUpperCase());
+        const esComprobanteCheque = ["CHEQUE", "ECHEQ", "ECHEQUE"].includes(
+          String(row?.comprobante_tipo ?? "").trim().toUpperCase()
+        );
 
         setComprobanteView({
           url: signedUrl,
           mime: String(row?.archivo_mime ?? "").trim() || "application/octet-stream",
-          title: esCheque
+          title: esComprobanteCheque
             ? detalle
               ? `Comprobante de cheque - ${detalle} - ${fecha}`
               : `Comprobante de cheque - ${fecha}`

@@ -666,7 +666,6 @@ export default function ModalPagarRecibos({
   const [pagaTodo, setPagaTodo] = useState(false);
   const [nota, setNota] = useState("");
   const [loading, setLoading] = useState(false);
-  const [savingCheque, setSavingCheque] = useState(false);
   const [rows, setRows] = useState(() => []);
   const [openDetalleDeuda, setOpenDetalleDeuda] = useState(false);
   const [detalleDeudaRow, setDetalleDeudaRow] = useState(null);
@@ -791,7 +790,6 @@ export default function ModalPagarRecibos({
     setPagaTodo(false);
     setNota("");
     setLoading(false);
-    setSavingCheque(false);
     setRows(Array.isArray(deudas) ? [...deudas] : []);
     setOpenDetalleDeuda(false);
     setDetalleDeudaRow(null);
@@ -919,71 +917,6 @@ export default function ModalPagarRecibos({
       return next;
     });
   };
-
-  /* =========================
-     Guardar cheque en backend
-  ========================= */
-  const API_RECIBOS_CHEQUES_GUARDAR = `${String(BASE_URL || "").replace(
-    /\/+$/,
-    ""
-  )}/api.php?action=recibos_cheques_guardar`;
-
-  const guardarChequeEnBackend = useCallback(
-    async (idMovimiento, datosCheque) => {
-      if (!datosCheque) return null;
-
-      const fd = new FormData();
-      const { token, sessionKey, idUsuario } = getAuthInfo();
-
-      fd.append("id_movimiento", String(idMovimiento));
-      fd.append("idUsuario", String(idUsuario || 0));
-      fd.append("tipo", datosCheque.tipo || datosCheque.tipo_cheque || "cheque");
-      fd.append(
-        "tipo_cheque",
-        datosCheque.tipo_cheque || datosCheque.tipo || "cheque"
-      );
-      fd.append(
-        "fecha_emision",
-        datosCheque.fecha_emision ||
-          new Date().toISOString().slice(0, 10)
-      );
-      fd.append("emisor", datosCheque.emisor || "");
-      fd.append("numero_cheque", datosCheque.numero_cheque || "");
-      fd.append("importe", String(datosCheque.importe || 0));
-      fd.append(
-        "fecha_pago",
-        datosCheque.fecha_pago ||
-          new Date().toISOString().slice(0, 10)
-      );
-      fd.append("observaciones", datosCheque.observaciones || "");
-      if (datosCheque.id_comprobante)
-        fd.append(
-          "id_comprobante",
-          String(datosCheque.id_comprobante)
-        );
-      if (datosCheque.archivo instanceof File) {
-        fd.append(
-          "archivo",
-          datosCheque.archivo,
-          datosCheque.archivo_nombre ||
-            datosCheque.archivo.name ||
-            "adjunto"
-        );
-      }
-
-      const headers = {};
-      if (sessionKey) headers["X-Session"] = sessionKey;
-      else if (token) headers.Authorization = `Bearer ${token}`;
-
-      const res = await fetch(API_RECIBOS_CHEQUES_GUARDAR, {
-        method: "POST",
-        headers,
-        body: fd,
-      });
-      return await parseJsonOrThrow(res);
-    },
-    []
-  );
 
   /* =========================
      Guardar cheque desde modal
@@ -1218,31 +1151,6 @@ export default function ModalPagarRecibos({
     try {
       setLoading(true);
 
-      const chequeFilas = mediosFilas.filter(
-        (mp) =>
-          isMedioPagoCheque(mediosPago, mp.id_medio_pago) && mp.chequeData
-      );
-
-      if (chequeFilas.length > 0) {
-        setSavingCheque(true);
-        try {
-          for (const mp of chequeFilas) {
-            for (const idMovimiento of ids) {
-              await guardarChequeEnBackend(idMovimiento, mp.chequeData);
-            }
-          }
-        } catch (err) {
-          onToast?.(
-            "error",
-            `Error al guardar cheque: ${err.message}`
-          );
-          setLoading(false);
-          setSavingCheque(false);
-          return;
-        }
-        setSavingCheque(false);
-      }
-
       let resp = null;
       if (onConfirm) {
         resp = await onConfirm({
@@ -1384,7 +1292,7 @@ export default function ModalPagarRecibos({
   ========================= */
   if (!open) return null;
 
-  const isProcessing = loading || savingCheque;
+  const isProcessing = loading;
   const canConfirm =
     !isProcessing &&
     selectedIds.size > 0 &&

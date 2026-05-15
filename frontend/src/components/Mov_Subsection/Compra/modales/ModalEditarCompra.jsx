@@ -266,7 +266,7 @@ function MedioPagoInlineCompraRow({
       if (tipo !== null) {
         try {
           const sp = new URLSearchParams();
-          sp.set("action", "compras_cheques_cartera_listar");
+          sp.set("action", "mov_global_cheques_cartera_listar");
           sp.set("tipo", tipo);
           const data = await apiGet(`${BASE_URL}/api.php?${sp.toString()}`);
           onUpdate(row.id, {
@@ -1198,7 +1198,7 @@ export default function ModalEditarCompra({
       updateMedioPago(rowId, { loadingCheques: true, chequesDisponibles: [] });
       try {
         const sp = new URLSearchParams();
-        sp.set("action", "compras_cheques_cartera_listar");
+        sp.set("action", "mov_global_cheques_cartera_listar");
         sp.set("tipo", tipoCheque);
         if (Array.isArray(includeIds) && includeIds.length) {
           sp.set("include_ids", includeIds.join(","));

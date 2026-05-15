@@ -406,7 +406,7 @@ function MedioPagoRow({
       if (tipo !== null) {
         try {
           const sp = new URLSearchParams();
-          sp.set("action", "ordenes_pago_cheques_cartera_listar");
+          sp.set("action", "mov_global_cheques_cartera_listar");
           sp.set("tipo", tipo);
           const data = await fetchJsonOrThrow(`${BASE_URL}/api.php?${sp.toString()}`, {
             method: "GET",

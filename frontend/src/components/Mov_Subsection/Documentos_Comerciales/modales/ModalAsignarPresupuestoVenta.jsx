@@ -26,7 +26,7 @@ const API_CLIENTE_FISCAL_GET = `${API}?action=cliente_fiscal_get`;
 const API_CLIENTE_FISCAL_SAVE = `${API}?action=cliente_fiscal_upsert`;
 const API_PADRON_CUIT = `${API}?action=padron_cuit&op=padron_cuit`;
 const API_VINCULAR_COMPROBANTE = `${API}?action=ventas_comprobantes_vincular_movimiento`;
-const API_CHEQUES_ACTUALIZAR = `${API}?action=ventas_cheques_actualizar`;
+const API_CHEQUES_ACTUALIZAR = `${API}?action=mov_global_cheques_actualizar`;
 
 function todayISO() {
   const d = new Date();
@@ -102,10 +102,24 @@ function getAuthInfo() {
   } catch {
     usuario = null;
   }
+
+  const candMaster = usuario?.idUsuarioMaster ?? usuario?.id_usuario_master ?? 0;
+  const candUser = usuario?.idUsuario ?? usuario?.id_usuario ?? usuario?.id ?? usuario?.user_id ?? candMaster ?? 0;
+  const idUsuarioMaster = Number.isFinite(Number(candMaster)) && Number(candMaster) > 0 ? Number(candMaster) : 0;
+  const idUsuarioBase = Number.isFinite(Number(candUser)) && Number(candUser) > 0 ? Number(candUser) : 0;
+  const idUsuario = idUsuarioBase || idUsuarioMaster || 0;
+
   return {
     usuario,
+    idUsuario,
+    idUsuarioMaster: idUsuarioMaster || idUsuario || 0,
     token: localStorage.getItem("token") || localStorage.getItem("auth_token") || "",
-    sessionKey: localStorage.getItem("session_key") || "",
+    sessionKey:
+      localStorage.getItem("session_key") ||
+      localStorage.getItem("sessionKey") ||
+      localStorage.getItem("x_session") ||
+      localStorage.getItem("X-Session") ||
+      "",
   };
 }
 
@@ -114,13 +128,23 @@ function buildAuthHeaders(isJson = true) {
   const headers = {};
   if (isJson) headers["Content-Type"] = "application/json";
   if (sessionKey) headers["X-Session"] = sessionKey;
-  else if (token) headers.Authorization = `Bearer ${token}`;
+  if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
 }
 
+function getAuditUserPayload() {
+  const { idUsuario, idUsuarioMaster } = getAuthInfo();
+  return {
+    idUsuario,
+    idUsuarioMaster,
+    id_usuario: idUsuario,
+    id_usuario_master: idUsuarioMaster || idUsuario || 0,
+  };
+}
+
 function getIdUsuarioLocal() {
-  const { usuario } = getAuthInfo();
-  return Number(usuario?.id_usuario ?? usuario?.idUsuario ?? usuario?.id ?? 0) || null;
+  const { idUsuario } = getAuthInfo();
+  return Number(idUsuario || 0) || null;
 }
 
 async function parseJsonOrThrow(res) {
@@ -782,6 +806,7 @@ export default function ModalAsignarPresupuestoVenta({
       id_tipo_venta: Number(idTipoVenta || 0) || null,
       id_medio_pago: isContado ? (mediosPayload[0]?.id_medio_pago || null) : null,
       medios_pago: isContado ? mediosPayload : [],
+      ...getAuditUserPayload(),
       id_usuario: getIdUsuarioLocal(),
       accion_venta: modo,
       es_facturada: modo === "facturar" ? 1 : 0,

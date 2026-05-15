@@ -29,7 +29,7 @@ const IVA_OPTIONS = [
   { label: "27 %", value: 27 },
 ];
 
-const API_CHECK_NUMERO = `${BASE_URL}/api.php?action=ventas_cheques_obtener&modo=verificar_numero`;
+const API_CHECK_NUMERO = `${BASE_URL}/api.php?action=mov_global_cheques_obtener&modo=verificar_numero`;
 
 /* ================================================================
    UTILS
@@ -1250,7 +1250,7 @@ export default function ModalNuevaVenta({ open, lists, onClose, onToast, onSaved
   const API_CONFIG_FACTURACION = `${BASE_URL}/api.php?action=config_facturacion_get`;
   const API_VINCULAR_COMPROBANTE = `${BASE_URL}/api.php?action=ventas_comprobantes_vincular_movimiento`;
   const API_VINCULAR_COMPROBANTE_LOTE = `${BASE_URL}/api.php?action=ventas_comprobantes_vincular_movimientos_lote`;
-  const API_CHEQUES_ACTUALIZAR = `${BASE_URL}/api.php?action=ventas_cheques_actualizar`;
+  const API_CHEQUES_ACTUALIZAR = `${BASE_URL}/api.php?action=mov_global_cheques_actualizar`;
 
   const showToast = useCallback((tipo, mensaje, dur = 2800) => onToast?.(tipo, mensaje, dur), [onToast]);
 

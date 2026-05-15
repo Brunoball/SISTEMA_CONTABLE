@@ -578,6 +578,29 @@ function normalizeLists(lists) {
   };
 }
 
+function getAuditUserPayload() {
+  let idUsuario = 0;
+  let idUsuarioMaster = 0;
+
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const candMaster = u?.idUsuarioMaster ?? u?.id_usuario_master ?? 0;
+    const candUser = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? candMaster ?? 0;
+
+    if (Number.isFinite(Number(candMaster)) && Number(candMaster) > 0) idUsuarioMaster = Number(candMaster);
+    if (Number.isFinite(Number(candUser)) && Number(candUser) > 0) idUsuario = Number(candUser);
+    if (!idUsuario && idUsuarioMaster) idUsuario = idUsuarioMaster;
+    if (!idUsuarioMaster && idUsuario) idUsuarioMaster = idUsuario;
+  } catch {}
+
+  return {
+    idUsuario,
+    idUsuarioMaster,
+    id_usuario: idUsuario,
+    id_usuario_master: idUsuarioMaster,
+  };
+}
+
 function buildAuthHeaders(isJson = true) {
   const sessionKey =
     localStorage.getItem("session_key") ||
@@ -585,7 +608,7 @@ function buildAuthHeaders(isJson = true) {
     localStorage.getItem("x_session") ||
     localStorage.getItem("X-Session") ||
     "";
-  const token = localStorage.getItem("token") || "";
+  const token = localStorage.getItem("token") || localStorage.getItem("auth_token") || "";
   const headers = {};
   if (isJson) headers["Content-Type"] = "application/json";
   if (sessionKey) headers["X-Session"] = sessionKey;
@@ -1002,6 +1025,7 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
       monto_total: totals.total,
       observaciones,
       items,
+      ...getAuditUserPayload(),
     };
 
     setSaving(true);

@@ -248,9 +248,40 @@ function downloadBlob(content, fileName, mimeType) {
 }
 
 function getAuthInfo() {
-  const token = (localStorage.getItem("token") || "").trim();
-  const sessionKey = (localStorage.getItem("session_key") || localStorage.getItem("sessionKey") || localStorage.getItem("X-Session") || "").trim();
-  return { token, sessionKey };
+  const token = (localStorage.getItem("token") || localStorage.getItem("auth_token") || "").trim();
+  const sessionKey = (
+    localStorage.getItem("session_key") ||
+    localStorage.getItem("sessionKey") ||
+    localStorage.getItem("x_session") ||
+    localStorage.getItem("X-Session") ||
+    ""
+  ).trim();
+
+  let idUsuario = 0;
+  let idUsuarioMaster = 0;
+
+  try {
+    const u = JSON.parse(localStorage.getItem("usuario") || "null");
+    const candMaster = u?.idUsuarioMaster ?? u?.id_usuario_master ?? 0;
+    const candUser = u?.idUsuario ?? u?.id_usuario ?? u?.id ?? u?.user_id ?? candMaster ?? 0;
+
+    if (Number.isFinite(Number(candMaster)) && Number(candMaster) > 0) idUsuarioMaster = Number(candMaster);
+    if (Number.isFinite(Number(candUser)) && Number(candUser) > 0) idUsuario = Number(candUser);
+    if (!idUsuario && idUsuarioMaster) idUsuario = idUsuarioMaster;
+    if (!idUsuarioMaster && idUsuario) idUsuarioMaster = idUsuario;
+  } catch {}
+
+  return { token, sessionKey, idUsuario, idUsuarioMaster };
+}
+
+function getAuditUserPayload() {
+  const { idUsuario, idUsuarioMaster } = getAuthInfo();
+  return {
+    idUsuario,
+    idUsuarioMaster,
+    id_usuario: idUsuario,
+    id_usuario_master: idUsuarioMaster,
+  };
 }
 
 function normalizeConfigFacturacionPdf(cfg) {
@@ -721,6 +752,9 @@ export default function Presupuestos() {
     const fd = new FormData();
     fd.append("tipo", tipo);
     fd.append("id_movimiento", String(idMovimiento));
+    const auditUser = getAuditUserPayload();
+    fd.append("idUsuario", String(auditUser.idUsuario || 0));
+    fd.append("idUsuarioMaster", String(auditUser.idUsuarioMaster || 0));
     if (Array.isArray(meta?.ids_movimiento) && meta.ids_movimiento.length) {
       fd.append("ids_movimiento", JSON.stringify(meta.ids_movimiento));
     }
@@ -848,6 +882,7 @@ export default function Presupuestos() {
       const data = await apiPostJson(`${API}?action=presupuestos_convertir_venta`, {
         id_presupuesto: id,
         fecha: todayISO(),
+        ...getAuditUserPayload(),
       });
       const idVenta = Number(data?.id_venta ?? data?.id_movimiento_venta ?? data?.id_movimiento ?? data?.conversion?.id_venta ?? 0);
       if (!idVenta) throw new Error("El backend creó la venta pero no devolvió el ID de movimiento.");
@@ -880,7 +915,10 @@ export default function Presupuestos() {
     }
     setDeletingId(id);
     try {
-      await apiPostJson(`${API}?action=presupuestos_eliminar`, { id_movimiento: id });
+      await apiPostJson(`${API}?action=presupuestos_eliminar`, {
+        id_movimiento: id,
+        ...getAuditUserPayload(),
+      });
       showToast("exito", "Presupuesto eliminado correctamente.", 3000);
       setOpenDel(false);
       setSelectedRow(null);

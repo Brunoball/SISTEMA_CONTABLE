@@ -758,7 +758,7 @@ export default function ModalEditarIngreso({
   dark: darkProp,
 }) {
   const API = `${BASE_URL}/api.php`;
-  const API_CHECK_NUMERO = `${BASE_URL}/api.php?action=ventas_cheques_obtener&modo=verificar_numero`;
+  const API_CHECK_NUMERO = `${BASE_URL}/api.php?action=mov_global_cheques_obtener&modo=verificar_numero`;
 
   const showToast = useCallback(
     (tipo, mensaje) => onToast?.(tipo, mensaje),
@@ -1237,8 +1237,8 @@ export default function ModalEditarIngreso({
       if (sessionKey) headers["X-Session"] = sessionKey;
       if (token) headers.Authorization = `Bearer ${token}`;
       const action = chequeData.id_cheque
-        ? "otros_ingresos_cheques_actualizar"
-        : "otros_ingresos_cheques_guardar";
+        ? "mov_global_cheques_actualizar"
+        : "mov_global_cheques_guardar";
       if (chequeData.id_cheque) fd.append("id_cheque", String(Number(chequeData.id_cheque)));
       const res = await fetch(`${API}?action=${action}`, {
         method: "POST",
@@ -1255,7 +1255,7 @@ export default function ModalEditarIngreso({
   const eliminarCheque = useCallback(
     async (idCheque) => {
       const { idUsuario } = getAuthInfo();
-      const res = await fetch(`${API}?action=otros_ingresos_cheques_eliminar`, {
+      const res = await fetch(`${API}?action=mov_global_cheques_eliminar`, {
         method: "POST",
         headers: buildHeadersJSON(),
         body: JSON.stringify({ id_cheque: idCheque, idUsuario, idUsuarioMaster: idUsuario }),

@@ -96,7 +96,93 @@ function formatMoney(value) {
 function formatNumber(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "0";
-  return new Intl.NumberFormat("es-AR").format(n);
+  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(
+    Math.round(n)
+  );
+}
+
+
+function toFiniteNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function useCountUp(value, { duration = 850 } = {}) {
+  const target = toFiniteNumber(value);
+  const [displayValue, setDisplayValue] = useState(0);
+  const displayRef = useRef(0);
+  const frameRef = useRef(null);
+
+  useEffect(() => {
+    const getNow = () =>
+      typeof performance !== "undefined" && typeof performance.now === "function"
+        ? performance.now()
+        : Date.now();
+
+    const requestFrame =
+      typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame
+        : (callback) => setTimeout(() => callback(getNow()), 16);
+
+    const cancelFrame =
+      typeof cancelAnimationFrame === "function" ? cancelAnimationFrame : clearTimeout;
+
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (frameRef.current) cancelFrame(frameRef.current);
+
+    const startValue = displayRef.current;
+    const endValue = target;
+
+    if (reduceMotion || startValue === endValue) {
+      displayRef.current = endValue;
+      setDisplayValue(endValue);
+      return undefined;
+    }
+
+    const startedAt = getNow();
+    const distance = endValue - startValue;
+
+    const tick = (now) => {
+      const elapsed = now - startedAt;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const nextValue = startValue + distance * eased;
+
+      displayRef.current = nextValue;
+      setDisplayValue(nextValue);
+
+      if (progress < 1) {
+        frameRef.current = requestFrame(tick);
+      } else {
+        displayRef.current = endValue;
+        setDisplayValue(endValue);
+      }
+    };
+
+    frameRef.current = requestFrame(tick);
+
+    return () => {
+      if (frameRef.current) cancelFrame(frameRef.current);
+    };
+  }, [target, duration]);
+
+  return displayValue;
+}
+
+function AnimatedValue({
+  value,
+  formatter = formatNumber,
+  className = "",
+  as: Tag = "span",
+  duration = 850,
+}) {
+  const animatedValue = useCountUp(value, { duration });
+
+  return <Tag className={className}>{formatter(animatedValue)}</Tag>;
 }
 
 function moneyClass(value) {
@@ -209,7 +295,14 @@ function DashboardBarChart({ rows }) {
   );
 }
 
-function IndItem({ icon, label, value, valueClass = "", iconClass = "" }) {
+function IndItem({
+  icon,
+  label,
+  value,
+  formatter = formatNumber,
+  valueClass = "",
+  iconClass = "",
+}) {
   return (
     <div className="db-ind-item">
       <div className={`db-ind-icon db-ind-icon--${iconClass}`}>
@@ -218,7 +311,12 @@ function IndItem({ icon, label, value, valueClass = "", iconClass = "" }) {
 
       <div className="db-ind-item__body">
         <span className="db-ind-label">{label}</span>
-        <strong className={`db-ind-value ${valueClass}`}>{value}</strong>
+        <AnimatedValue
+          as="strong"
+          className={`db-ind-value ${valueClass}`}
+          value={value}
+          formatter={formatter}
+        />
       </div>
     </div>
   );
@@ -248,9 +346,12 @@ function SideIndicators({ kpis }) {
 
         <div className="db-ind-resultado__body">
           <span className="db-ind-label">Resultado del mes</span>
-          <strong className={`db-ind-value ${saldoClass}`}>
-            {formatMoney(kpis.saldo_periodo)}
-          </strong>
+          <AnimatedValue
+            as="strong"
+            className={`db-ind-value ${saldoClass}`}
+            value={kpis.saldo_periodo}
+            formatter={formatMoney}
+          />
         </div>
       </div>
 
@@ -259,7 +360,8 @@ function SideIndicators({ kpis }) {
         <IndItem
           icon={faArrowUpRightFromSquare}
           label="Ingresos mes"
-          value={formatMoney(kpis.ingresos_periodo)}
+          value={kpis.ingresos_periodo}
+          formatter={formatMoney}
           valueClass="is-positive"
           iconClass="green"
         />
@@ -267,7 +369,8 @@ function SideIndicators({ kpis }) {
         <IndItem
           icon={faArrowDown}
           label="Egresos mes"
-          value={formatMoney(kpis.egresos_periodo)}
+          value={kpis.egresos_periodo}
+          formatter={formatMoney}
           valueClass="is-negative"
           iconClass="red"
         />
@@ -278,14 +381,16 @@ function SideIndicators({ kpis }) {
         <IndItem
           icon={faTruck}
           label="Proveedores activos"
-          value={formatNumber(kpis.proveedores_activos)}
+          value={kpis.proveedores_activos}
+          formatter={formatNumber}
           iconClass="amber"
         />
 
         <IndItem
           icon={faCreditCard}
           label="Saldo proveedores"
-          value={formatMoney(kpis.saldo_proveedores_cc)}
+          value={kpis.saldo_proveedores_cc}
+          formatter={formatMoney}
           iconClass="teal"
         />
       </div>
@@ -409,7 +514,8 @@ export default function Dashboard() {
       {
         key: "caja",
         label: "Caja actual",
-        value: formatMoney(kpis.saldo_caja_actual),
+        value: kpis.saldo_caja_actual,
+        formatter: formatMoney,
         detail: "Saldo real acumulado",
         icon: faWallet,
         tone: "green",
@@ -418,8 +524,14 @@ export default function Dashboard() {
       {
         key: "ingresos",
         label: "Ingresos mes actual",
-        value: formatMoney(kpis.ingresos_periodo),
-        detail: `${formatNumber(kpis.movimientos_periodo)} movimientos del mes`,
+        value: kpis.ingresos_periodo,
+        formatter: formatMoney,
+        detail: (
+          <>
+            <AnimatedValue value={kpis.movimientos_periodo} formatter={formatNumber} />
+            {" movimientos del mes"}
+          </>
+        ),
         icon: faMoneyBillTrendUp,
         tone: "blue",
         valueClass: "is-positive",
@@ -427,8 +539,14 @@ export default function Dashboard() {
       {
         key: "stock",
         label: "Stock valorizado",
-        value: formatMoney(kpis.stock_valorizado),
-        detail: `${formatNumber(kpis.productos_con_stock)} productos con stock`,
+        value: kpis.stock_valorizado,
+        formatter: formatMoney,
+        detail: (
+          <>
+            <AnimatedValue value={kpis.productos_con_stock} formatter={formatNumber} />
+            {" productos con stock"}
+          </>
+        ),
         icon: faBoxesStacked,
         tone: "pink",
         valueClass: "",
@@ -436,8 +554,14 @@ export default function Dashboard() {
       {
         key: "cc",
         label: "Saldo clientes",
-        value: formatMoney(kpis.saldo_clientes_cc),
-        detail: `${formatNumber(kpis.clientes_activos)} clientes activos`,
+        value: kpis.saldo_clientes_cc,
+        formatter: formatMoney,
+        detail: (
+          <>
+            <AnimatedValue value={kpis.clientes_activos} formatter={formatNumber} />
+            {" clientes activos"}
+          </>
+        ),
         icon: faUsers,
         tone: "yellow",
         valueClass: "",
@@ -497,9 +621,12 @@ export default function Dashboard() {
               <div className="db-kpi__body">
                 <span className="db-kpi__label">{card.label}</span>
 
-                <strong className={`db-kpi__value ${card.valueClass}`}>
-                  {card.value}
-                </strong>
+                <AnimatedValue
+                  as="strong"
+                  className={`db-kpi__value ${card.valueClass}`}
+                  value={card.value}
+                  formatter={card.formatter}
+                />
 
                 <span className="db-kpi__detail">{card.detail}</span>
               </div>

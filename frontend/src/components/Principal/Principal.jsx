@@ -1232,6 +1232,38 @@ const Principal = () => {
     [closeAllSubs]
   );
 
+  const handleNavItemClick = useCallback(
+    (item, hasSub, isOpen) => {
+      prefetchRoute(item.ruta);
+
+      if (!hasSub) {
+        handleNavigate(item.ruta);
+        return;
+      }
+
+      /*
+        En escritorio se mantiene el comportamiento de siempre:
+        click abre/cierra y doble click entra a la ruta principal.
+
+        En celular el doble click/tap no es confiable, por eso cuando el
+        drawer está abierto el segundo toque sobre el grupo abierto navega
+        a la ruta principal/default del módulo.
+      */
+      if (drawerOpen && isOpen) {
+        handleNavigate(DEFAULT_SUBROUTES[item.key] || item.ruta);
+        return;
+      }
+
+      toggleSubmenu(item.key, isOpen);
+    },
+    [
+      DEFAULT_SUBROUTES,
+      drawerOpen,
+      handleNavigate,
+      toggleSubmenu,
+    ]
+  );
+
   return (
     <div className="pp-shell">
       <header className="mov-topbar">
@@ -1448,21 +1480,7 @@ const Principal = () => {
     if (!hasSub) return;
     handleNavigate(DEFAULT_SUBROUTES[item.key] || item.ruta);
   }}
-  onClick={() => {
-    prefetchRoute(item.ruta);
-
-    if (hasSub) {
-      if (isOpen) {
-        closeAllSubs();
-        return;
-      }
-
-      toggleSubmenu(item.key, isOpen);
-      return;
-    }
-
-    handleNavigate(item.ruta);
-  }}
+  onClick={() => handleNavItemClick(item, hasSub, isOpen)}
   aria-expanded={hasSub ? isOpen : undefined}
   aria-haspopup={hasSub ? "menu" : undefined}
 >
@@ -1486,7 +1504,7 @@ const Principal = () => {
                         }`}
                         onMouseEnter={() => prefetchRoute(sub.ruta)}
                         onClick={() => {
-
+                          closeAllSubs();
                           navigate(sub.ruta);
                           setDrawerOpen(false);
                         }}

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import BASE_URL from "../../config/config";
 import "../Global/Global_css/Global_Section.css";
 import "../Global/Global_css/Global_responsive.css";
+import "./Movimientos.mobile.css";
 
 // Toast global
 import Toast from "../Global/Toast.jsx";
@@ -1144,75 +1145,85 @@ export default function Movimientos() {
                 </div>
               </div>
 
-              <div className="cc-filter cc-filter--search">
-                <div className="cc-floatingField cc-floatingField--search is-active">
-                  <div className="cc-searchInput">
-                    <div className="cc-searchInput__fieldWrap">
-                      <input
-                        className="cc-input cc-input--floating"
-                        value={q}
-                        onChange={(e) => setQ(e.target.value)}
-                        onKeyDown={async (e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                            skipSearchRef.current = true;
-                            invalidateCache();
-                            liveTokenRef.current = null;
-                            await loadRows({
-                              dateRange,
-                              q: e.currentTarget.value,
-                              offset: 0,
-                              append: false,
-                            });
-                            try {
-                              const token = await fetchLiveToken(dateRange, e.currentTarget.value);
-                              liveTokenRef.current = token;
-                            } catch {}
-                          }
-                        }}
-                        placeholder="Buscar por descripción, operación, cliente, proveedor..."
-                        disabled={loadingListsCtx || loadingMore}
-                        autoComplete="off"
-                      />
-
-                      <span className="cc-floatingLabel">
-                        <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
-                      </span>
-
-                      {q.trim() !== "" && (
-                        <button
-                          type="button"
-                          className="cc-clearSearch cc-clearSearch--inside"
-                          title="Limpiar búsqueda"
-                          onClick={async () => {
-                            if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                            setQ("");
-                            skipSearchRef.current = true;
-                            invalidateCache();
-                            liveTokenRef.current = null;
-                            await loadRows({ dateRange, q: "", offset: 0, append: false });
-                            try {
-                              const token = await fetchLiveToken(dateRange, "");
-                              liveTokenRef.current = token;
-                            } catch {}
+              <div className="mov-mobileSearchExportLine">
+                <div className="cc-filter cc-filter--search">
+                  <div className="cc-floatingField cc-floatingField--search is-active">
+                    <div className="cc-searchInput">
+                      <div className="cc-searchInput__fieldWrap">
+                        <input
+                          className="cc-input cc-input--floating"
+                          value={q}
+                          onChange={(e) => setQ(e.target.value)}
+                          onKeyDown={async (e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                              skipSearchRef.current = true;
+                              invalidateCache();
+                              liveTokenRef.current = null;
+                              await loadRows({
+                                dateRange,
+                                q: e.currentTarget.value,
+                                offset: 0,
+                                append: false,
+                              });
+                              try {
+                                const token = await fetchLiveToken(dateRange, e.currentTarget.value);
+                                liveTokenRef.current = token;
+                              } catch {}
+                            }
                           }}
-                          disabled={loadingMore}
-                        >
-                          <FontAwesomeIcon icon={faTimes} />
-                        </button>
-                      )}
+                          placeholder="Buscar por descripción, operación, cliente, proveedor..."
+                          disabled={loadingListsCtx || loadingMore}
+                          autoComplete="off"
+                        />
+
+                        <span className="cc-floatingLabel">
+                          <FontAwesomeIcon icon={faMagnifyingGlass} /> Búsqueda
+                        </span>
+
+                        {q.trim() !== "" && (
+                          <button
+                            type="button"
+                            className="cc-clearSearch cc-clearSearch--inside"
+                            title="Limpiar búsqueda"
+                            onClick={async () => {
+                              if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                              setQ("");
+                              skipSearchRef.current = true;
+                              invalidateCache();
+                              liveTokenRef.current = null;
+                              await loadRows({ dateRange, q: "", offset: 0, append: false });
+                              try {
+                                const token = await fetchLiveToken(dateRange, "");
+                                liveTokenRef.current = token;
+                              } catch {}
+                            }}
+                            disabled={loadingMore}
+                          >
+                            <FontAwesomeIcon icon={faTimes} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
+                </div>
+
+                <div className="mov-card__actions mov-card__actions--mobile">
+                  <BotonExportar
+                    disabled={loadingRows || filteredRows.length === 0}
+                    loading={false}
+                    label="Exportar"
+                    title={filteredRows.length ? "Exportar archivo" : "No hay datos para exportar"}
+                    opciones={exportOptions}
+                    align="right"
+                  />
                 </div>
               </div>
             </div>
           </div>
 
-          <div
-            className="mov-card__actions"
-            style={{ display: "flex", gap: 10, alignItems: "center" }}
-          >
+          <div className="mov-card__actions mov-card__actions--desktop">
             <BotonExportar
               disabled={loadingRows || filteredRows.length === 0}
               loading={false}

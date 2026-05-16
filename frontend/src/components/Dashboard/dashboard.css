@@ -299,6 +299,7 @@ body.dark .db-period-chip--header {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
 }
 
 .db-kpi__detail {
@@ -602,6 +603,7 @@ body.dark .db-period-chip--header {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
 }
 
 /* =========================================================

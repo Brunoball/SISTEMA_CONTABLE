@@ -1106,9 +1106,47 @@ export default function Compras() {
     setOpenDel(true);
   };
 
-  const openMediosPagoModal = (r) => {
+  const openMediosPagoModal = async (r) => {
+    const id = getRowId(r);
+
+    // Abrimos con la fila actual para que el modal responda rápido.
     setSelectedRow(r);
     setOpenMediosPago(true);
+
+    // Si la compra fue cuenta corriente y después se pagó desde Orden de Pago,
+    // la fila cacheada puede quedar vieja. Pedimos la compra puntual al backend
+    // para traer SIEMPRE los medios reales con los que fue pagada.
+    if (!id) return;
+
+    try {
+      const sp = new URLSearchParams();
+      sp.set("action", "compras_obtener");
+      sp.set("id_movimiento", String(id));
+      sp.set("_ts", String(Date.now()));
+
+      const data = await apiGet(`${API}?${sp.toString()}`);
+      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo obtener el detalle actualizado de la compra.");
+
+      const fresh = Array.isArray(data.compras)
+        ? data.compras[0]
+        : data.compra || data.data || null;
+
+      if (!fresh || !getRowId(fresh)) return;
+
+      const sameId = (a, b) => String(getRowId(a) || "") === String(b || "");
+      const merged = { ...(r || {}), ...(fresh || {}) };
+
+      setSelectedRow((prev) => (sameId(prev, id) ? { ...(prev || {}), ...(fresh || {}) } : prev));
+      setRows((prev) =>
+        (Array.isArray(prev) ? prev : []).map((row) => (sameId(row, id) ? { ...row, ...merged } : row))
+      );
+
+      // Evita volver a abrir el modal con una versión vieja persistida en localStorage.
+      cacheRef.current.clear();
+      clearMovPerfCache("compras:listar:cc-medios-v2");
+    } catch (e) {
+      console.warn("No se pudo refrescar el detalle de medios de pago de la compra:", e);
+    }
   };
 
   const buildComprobanteFastUrl = useCallback((r) => {

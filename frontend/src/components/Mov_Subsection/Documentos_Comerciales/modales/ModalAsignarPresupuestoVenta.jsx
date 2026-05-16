@@ -400,13 +400,14 @@ function formatEditableMoney(v) {
   return String(n).replace(".", ",");
 }
 
-function buildEmptyMedioPago(total = 0) {
+function buildEmptyMedioPago(montoInicial = 0) {
   const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `mp-${Date.now()}-${Math.random()}`;
+  const monto = safeNumber(montoInicial);
   return {
     id,
     id_medio_pago: NULL_OPTION,
-    monto: safeNumber(total),
-    montoDraft: formatEditableMoney(total),
+    monto,
+    montoDraft: formatEditableMoney(monto),
     montoFocused: false,
     cheque: null,
   };
@@ -497,15 +498,6 @@ export default function ModalAsignarPresupuestoVenta({
     return null;
   }, [fiscalArcaData, clienteFiscalDb]);
 
-  const ensureDefaultTipoVenta = useCallback(() => {
-    const currentOk = idTipoVenta && tiposVentaList.some((t) => String(getTipoVentaId(t)) === String(idTipoVenta));
-    if (currentOk) return;
-    const cuenta = tiposVentaList.find(isCuentaCorrienteTipoVenta);
-    const contado = tiposVentaList.find(isContadoTipoVenta);
-    const selected = cuenta || contado || tiposVentaList[0] || null;
-    setIdTipoVenta(selected ? String(getTipoVentaId(selected) || "") : "");
-  }, [idTipoVenta, tiposVentaList]);
-
   const fetchClienteFiscal = useCallback(async (idCliente) => {
     if (!idCliente) {
       setClienteFiscalDb(null);
@@ -543,7 +535,6 @@ export default function ModalAsignarPresupuestoVenta({
         items: Array.isArray(data?.items) ? data.items : [],
       };
       setDetalle(nextDetalle);
-      setFecha(todayISO());
       const clienteId = getClienteId(nextDetalle.presupuesto) || getClienteId(row);
       fetchClienteFiscal(clienteId);
     } catch (e) {
@@ -560,26 +551,20 @@ export default function ModalAsignarPresupuestoVenta({
     setClienteFiscalDb(null);
     setFiscalCuitInput("");
     setMostrarCuitFiscal(false);
-    setMediosFilas([buildEmptyMedioPago(safeNumber(row?.monto_total || row?.total || 0))]);
+    setIdTipoVenta("");
+    setMediosFilas([buildEmptyMedioPago(0)]);
     setFecha(todayISO());
     fetchDetalle();
     return () => abortRef.current?.abort?.();
   }, [open, row, fetchDetalle]);
 
   useEffect(() => {
-    if (!open) return;
-    ensureDefaultTipoVenta();
-  }, [open, ensureDefaultTipoVenta]);
-
-  useEffect(() => {
     if (!open || !isContado) return;
     setMediosFilas((prev) => {
-      if (Array.isArray(prev) && prev.length) {
-        return prev.map((mp, idx) => idx === 0 && safeNumber(mp.monto) <= 0 ? { ...mp, monto: total, montoDraft: formatEditableMoney(total) } : mp);
-      }
-      return [buildEmptyMedioPago(total)];
+      const arr = Array.isArray(prev) ? prev : [];
+      return arr.length ? arr : [buildEmptyMedioPago(0)];
     });
-  }, [open, isContado, total]);
+  }, [open, isContado]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -597,14 +582,13 @@ export default function ModalAsignarPresupuestoVenta({
   const removeMedioPago = useCallback((id) => {
     setMediosFilas((prev) => {
       const arr = (Array.isArray(prev) ? prev : []).filter((r) => r.id !== id);
-      return arr.length ? arr : [buildEmptyMedioPago(total)];
+      return arr.length ? arr : [buildEmptyMedioPago(0)];
     });
-  }, [total]);
+  }, []);
 
   const addMedioPago = useCallback(() => {
-    const faltante = Math.max(0, total - sumaMedios);
-    setMediosFilas((prev) => [...(Array.isArray(prev) ? prev : []), buildEmptyMedioPago(faltante)]);
-  }, [total, sumaMedios]);
+    setMediosFilas((prev) => [...(Array.isArray(prev) ? prev : []), buildEmptyMedioPago(0)]);
+  }, []);
 
   const fetchConfigFacturacion = useCallback(async () => {
     try {
@@ -713,8 +697,8 @@ export default function ModalAsignarPresupuestoVenta({
       tipo_venta_nombre: tipoVentaNombre,
       id_medio_pago: isContado ? primerMedioId : null,
       id_clasificacion: null,
-      fecha_cbte_iso: String(fecha || todayISO()).slice(0, 10),
-      vto_pago_iso: plusDaysISOFrom(fecha || todayISO(), 10),
+      fecha_cbte_iso: String(fecha).slice(0, 10),
+      vto_pago_iso: plusDaysISOFrom(fecha, 10),
       cbte_tipo: extra.cbte_tipo ?? codigoCbte,
       pto_vta: extra.pto_vta ?? puntoVenta,
       items_facturacion: items,
@@ -800,9 +784,10 @@ export default function ModalAsignarPresupuestoVenta({
   }, [mediosFilas]);
 
   const guardarConversion = useCallback(async ({ modo, fiscal = null }) => {
+    const fechaEnvio = String(fecha || "").slice(0, 10);
     const payload = {
       id_presupuesto: idPresupuesto,
-      fecha,
+      fecha: fechaEnvio,
       id_tipo_venta: Number(idTipoVenta || 0) || null,
       id_medio_pago: isContado ? (mediosPayload[0]?.id_medio_pago || null) : null,
       medios_pago: isContado ? mediosPayload : [],
@@ -1186,7 +1171,7 @@ export default function ModalAsignarPresupuestoVenta({
                               return <option key={id || safeStr(t.nombre)} value={id || ""}>{safeText(t.nombre || t.descripcion || t.detalle)}</option>;
                             })}
                           </select>
-                          <label className={`nc-label${idTipoVenta ? " nc-label--up" : ""}`}>Forma de venta *</label>
+                          <label className={`nc-label${idTipoVenta ? " nc-label--up" : ""}`}>Tipo de pago *</label>
                         </div>
 
                         {isCuentaCorriente ? (

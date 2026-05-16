@@ -90,6 +90,35 @@ function getDepositoChequeLabel(row) {
     : "CHEQUE DEPOSITADO";
 }
 
+
+function isDepositoChequeEgreso(row) {
+  if (!row || typeof row !== "object") return false;
+  if (getDepositoChequeLabel(row)) return true;
+
+  // Blindaje extra por si el backend todavía no manda es_deposito_cheque,
+  // pero el movimiento ya viene identificado en la descripción/listado.
+  const text = normalizeSearchText([
+    row?.detalle,
+    row?.descripcion,
+    row?.concepto,
+    row?.producto_nombre,
+    row?.stock_producto_nombre,
+    row?.detalle_nombre,
+    row?.comprobante_tipo,
+    row?.tipo_movimiento,
+    row?.tipo,
+  ].join(" "));
+
+  const mencionaCheque =
+    text.includes("cheque") ||
+    text.includes("echeq") ||
+    text.includes("e cheq") ||
+    text.includes("e-cheq") ||
+    text.includes("e cheque");
+
+  return mencionaCheque && text.includes("depositad");
+}
+
 function withDepositoChequeDetalle(row) {
   const label = getDepositoChequeLabel(row);
   if (!label) return row;
@@ -266,19 +295,57 @@ function getRowKey(r) {
   return `fx:${f}|${d}|${cat}|${m}`;
 }
 
-function getOtroEgresoMediosDetalle(row) {
-  if (Array.isArray(row?.medios_pago_detalle)) return row.medios_pago_detalle;
+function normalizeOtroEgresoMedioDetalle(mp) {
+  if (!mp || typeof mp !== "object") return mp;
 
-  if (typeof row?.medios_pago_detalle === "string") {
+  const idCheque = Number(mp?.id_cheque ?? mp?.cheque_id ?? 0) || null;
+  const chequeTipo = String(mp?.cheque_tipo ?? mp?.tipo_cheque ?? mp?.tipo ?? "").trim();
+  const numeroCheque = String(mp?.numero_cheque ?? mp?.cheque_numero ?? "").trim();
+  const emisor = String(mp?.emisor ?? mp?.cheque_emisor ?? "").trim();
+  const fechaEmision = String(mp?.fecha_emision ?? mp?.cheque_fecha_emision ?? "").trim();
+  const fechaPago = String(mp?.fecha_pago ?? mp?.cheque_fecha_pago ?? "").trim();
+  const chequeImporte = Number(mp?.cheque_importe ?? mp?.importe ?? mp?.monto ?? 0) || 0;
+
+  if (!idCheque && !chequeTipo && !numeroCheque && !emisor) return mp;
+
+  return {
+    ...mp,
+    id_cheque: idCheque,
+    cheque_tipo: chequeTipo,
+    tipo_cheque: chequeTipo,
+    numero_cheque: numeroCheque,
+    emisor,
+    fecha_emision: fechaEmision,
+    fecha_pago: fechaPago,
+    cheque_importe: chequeImporte,
+    cheque: {
+      id_cheque: idCheque,
+      tipo: chequeTipo.toLowerCase(),
+      tipo_cheque: chequeTipo.toLowerCase(),
+      numero_cheque: numeroCheque,
+      emisor,
+      fecha_emision: fechaEmision,
+      fecha_pago: fechaPago,
+      importe: chequeImporte,
+    },
+  };
+}
+
+function getOtroEgresoMediosDetalle(row) {
+  let detalle = [];
+
+  if (Array.isArray(row?.medios_pago_detalle)) {
+    detalle = row.medios_pago_detalle;
+  } else if (typeof row?.medios_pago_detalle === "string") {
     try {
       const parsed = JSON.parse(row.medios_pago_detalle);
-      return Array.isArray(parsed) ? parsed : [];
+      detalle = Array.isArray(parsed) ? parsed : [];
     } catch {
-      return [];
+      detalle = [];
     }
   }
 
-  return [];
+  return detalle.map((mp) => normalizeOtroEgresoMedioDetalle(mp));
 }
 
 function getOtroEgresoCantidadMedios(row) {
@@ -1173,6 +1240,15 @@ export default function OtrosEgresos() {
 
   const handleOpenEdit = useCallback(
     async (row) => {
+      if (isDepositoChequeEgreso(row)) {
+        showToast(
+          "error",
+          "Los egresos generados por depósito de cheque/eCheq no se pueden editar.",
+          3600
+        );
+        return;
+      }
+
       const id = Number(row?.id_movimiento ?? 0);
       if (!id) return;
 
@@ -1587,6 +1663,7 @@ export default function OtrosEgresos() {
                 {filteredRows.map((r) => {
                   const key = getRowKey(r);
                   const isLoadingThisEdit = loadingEditDataId === r.id_movimiento;
+                  const esDepositoChequeEgreso = isDepositoChequeEgreso(r);
                   const idComprobante = getEgresoIdComprobante(r);
                   const tieneComprobante =
                     (idComprobante && idComprobante > 0) ||
@@ -1641,15 +1718,17 @@ export default function OtrosEgresos() {
                                   <FontAwesomeIcon icon={faInfoCircle} />
                                 </button>
 
-                                <button
-                                  type="button"
-                                  className="mov-iconBtn"
-                                  title="Editar"
-                                  onClick={() => handleOpenEdit(r)}
-                                  disabled={isAnyLoading || loadingListsCtx || isLoadingThisEdit}
-                                >
-                                  {isLoadingThisEdit ? "..." : <FontAwesomeIcon icon={faPenToSquare} />}
-                                </button>
+                                {!esDepositoChequeEgreso && (
+                                  <button
+                                    type="button"
+                                    className="mov-iconBtn"
+                                    title="Editar"
+                                    onClick={() => handleOpenEdit(r)}
+                                    disabled={isAnyLoading || loadingListsCtx || isLoadingThisEdit}
+                                  >
+                                    {isLoadingThisEdit ? "..." : <FontAwesomeIcon icon={faPenToSquare} />}
+                                  </button>
+                                )}
 
                                 <button
                                   type="button"

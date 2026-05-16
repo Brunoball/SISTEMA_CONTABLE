@@ -310,16 +310,17 @@ export default function Ventas() {
     const qLocal = typeof opts.q === "string" ? opts.q : q;
     const append = !!opts.append;
     const offset = Number.isFinite(Number(opts.offset)) ? Number(opts.offset) : 0;
+    const bypassCache = opts.bypassCache === true;
     const fromAPI = dateToAPI(fromDate); const toAPI = dateToAPI(toDate); const qKey = (qLocal || "").trim();
     const cacheKey = `${fromAPI}|${toAPI}|${qKey}`; const myReqId = ++reqIdRef.current; const start = Date.now();
-    if (!append && offset === 0 && !cacheRef.current.has(cacheKey)) {
+    if (!bypassCache && !append && offset === 0 && !cacheRef.current.has(cacheKey)) {
       const persisted = readMovPerfCache("ventas:listar:cc-medios-v2", cacheKey);
       if (persisted?.rows) cacheRef.current.set(cacheKey, persisted);
     }
     if (!append) { rowsReqIdRef.current = myReqId; setLoadingRows(true); } else { moreReqIdRef.current = myReqId; setLoadingMore(true); }
     setError("");
     try {
-      if (!append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
+      if (!bypassCache && !append && offset === 0 && cacheRef.current.has(cacheKey) && !FORCE_SHOW_LOADER_DEV) {
         if (rowsReqIdRef.current !== myReqId) return null;
         const cached = cacheRef.current.get(cacheKey); const cachedRows = Array.isArray(cached?.rows) ? cached.rows : [];
         rowsRef.current = cachedRows; setRows(cachedRows); setHasMore(!!cached?.hasMore); setNextOffset(cached?.nextOffset ?? null); if (rowsReqIdRef.current === myReqId) setLoadingRows(false); prewarmAllComprobantes(cachedRows); return { hasMore: !!cached?.hasMore, nextOffset: cached?.nextOffset ?? null, received: cachedRows.length };
@@ -368,7 +369,7 @@ export default function Ventas() {
       });
     }
   }, [API, apiGet, dateRange, q, prewarmAllComprobantes]);
-  useEffect(() => { let alive = true; (async () => { try { await ensureListsLoaded({ force: false, background: true }); } catch {} if (!alive) return; await loadRows({ from: dateRange.from, to: dateRange.to, q: "", offset: 0, append: false }); try { const token = await fetchLiveToken(dateRange.from, dateRange.to, ""); if (alive) liveTokenRef.current = token; } catch {} })(); return () => { alive = false; }; }, []); // eslint-disable-line
+  useEffect(() => { let alive = true; (async () => { try { await ensureListsLoaded({ force: false, background: true }); } catch {} if (!alive) return; await loadRows({ from: dateRange.from, to: dateRange.to, q: "", offset: 0, append: false, bypassCache: true }); try { const token = await fetchLiveToken(dateRange.from, dateRange.to, ""); if (alive) liveTokenRef.current = token; } catch {} })(); return () => { alive = false; }; }, []); // eslint-disable-line
   useEffect(() => { liveTokenRef.current = null; }, [dateRange.from, dateRange.to, q]);
   useEffect(() => {
     if (skipSearchRef.current) { skipSearchRef.current = false; return; }
@@ -398,7 +399,7 @@ export default function Ventas() {
         else if (liveTokenRef.current !== token) {
           liveTokenRef.current = token; cacheRef.current.clear(); signedUrlCacheRef.current.clear(); signedUrlInFlightRef.current.clear();
           const prevLen = rowsRef.current.length; const prevHasMore = hasMore;
-          await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false });
+          await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false, bypassCache: true });
           const now = Date.now();
           if (now - liveToastCooldownRef.current > 4000) {
             const mensaje = prevHasMore || prevLen >= PAGE_SIZE ? "Ventas actualizadas en vivo. La vista se recargó desde el inicio." : "Ventas actualizadas en vivo.";
@@ -432,7 +433,7 @@ export default function Ventas() {
     { key: "csv", label: "Exportar CSV (.csv)", onClick: () => handleExport("csv") },
     { key: "txt", label: "Exportar TXT (.txt)", onClick: () => handleExport("txt") },
   ], [handleExport]);
-  const reloadVista = useCallback(async () => { cacheRef.current.clear(); clearMovPerfCache("ventas:listar:cc-medios-v2"); signedUrlCacheRef.current.clear(); signedUrlInFlightRef.current.clear(); await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false }); try { const token = await fetchLiveToken(dateRange.from, dateRange.to, q); liveTokenRef.current = token; } catch {} }, [dateRange.from, dateRange.to, loadRows, q, fetchLiveToken]);
+  const reloadVista = useCallback(async () => { cacheRef.current.clear(); clearMovPerfCache("ventas:listar:cc-medios-v2"); signedUrlCacheRef.current.clear(); signedUrlInFlightRef.current.clear(); await loadRows({ from: dateRange.from, to: dateRange.to, q, offset: 0, append: false, bypassCache: true }); try { const token = await fetchLiveToken(dateRange.from, dateRange.to, q); liveTokenRef.current = token; } catch {} }, [dateRange.from, dateRange.to, loadRows, q, fetchLiveToken]);
   const confirmDelete = async () => { if (!selectedRow?.id_movimiento) return; const id = selectedRow.id_movimiento; setDeletingId(id); setError(""); try { const { idUsuario } = getAuthInfo(); const sp = new URLSearchParams(); sp.set("action", "ventas_eliminar"); sp.set("id_movimiento", String(id)); const data = await apiPostJson(`${API}?${sp.toString()}`, { idUsuario }); if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar."); setOpenDel(false); setSelectedRow(null); await reloadVista(); await refreshPeriodos(); } catch (e) { setError(e.message || "Error eliminando venta."); throw e; } finally { setDeletingId(null); } };
   const handleLoadMore = useCallback(async () => { if (!hasMore || loadingMore || loadingRows || loadingListsCtx || nextOffset === null) return; try { await loadRows({ from: dateRange.from, to: dateRange.to, q: (q || "").trim(), offset: nextOffset, append: true }); try { const token = await fetchLiveToken(dateRange.from, dateRange.to, q); liveTokenRef.current = token; } catch {} } catch (e) { showToast("error", e?.message || "Error cargando más ventas.", 4200); } }, [hasMore, loadingMore, loadingRows, loadingListsCtx, nextOffset, dateRange, q, loadRows, showToast, fetchLiveToken]);
   const handleVerComprobante = useCallback(async (r) => {

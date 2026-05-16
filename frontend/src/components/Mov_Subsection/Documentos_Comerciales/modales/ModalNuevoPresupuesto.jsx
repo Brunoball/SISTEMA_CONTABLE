@@ -1015,8 +1015,9 @@ export default function ModalNuevoPresupuesto({ open, lists, onClose, onToast, o
 
     const idCliente = getClienteId(clienteSel);
     const items = buildItemsPayload();
+    const fechaEnvio = String(fecha || "").slice(0, 10);
     const payload = {
-      fecha,
+      fecha: fechaEnvio,
       id_cliente: idCliente,
       cliente_nombre: getClienteNombre(clienteSel) || cliInput,
       subtotal: totals.subtotal,

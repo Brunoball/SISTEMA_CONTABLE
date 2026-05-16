@@ -134,77 +134,68 @@ function buildEmptyMedioPago() {
     id_cheque: [],
     chequesDisponibles: [],
     loadingCheques: false,
+    chequesCarteraCargados: false,
+    // En edición, cuando la compra ya tiene cheque/eCheq vinculado,
+    // se muestra solamente ese cheque y no se vuelve a listar toda la cartera.
+    soloChequeVinculado: false,
   };
 }
 
-function ChequesCarteraCardsCompra({ cheques, idsSeleccionados, onToggle, esEcheq = false }) {
-  if (!cheques.length) return null;
-  const accent = esEcheq ? "#0055BB" : "#0f766e";
-  const accentBg = esEcheq ? "rgba(0,85,187,.07)" : "rgba(15,118,110,.07)";
-  const accentBorder = esEcheq ? "rgba(0,85,187,.28)" : "rgba(15,118,110,.28)";
+function ChequesCarteraCardsCompra({
+  cheques,
+  idsSeleccionados,
+  onToggle,
+  esEcheq = false,
+  soloLectura = false,
+}) {
+  if (!Array.isArray(cheques) || cheques.length === 0) return null;
+
   return (
     <div className="nc-cheques-list">
       {cheques.map((ch, idx) => {
-        const checked = idsSeleccionados.includes(String(ch?.id_cheque));
+        const idChequeStr = String(ch?.id_cheque || "");
+        const checked = idsSeleccionados.includes(idChequeStr);
+
+        const handleSelect = () => {
+          if (soloLectura) return;
+          onToggle?.(idChequeStr);
+        };
+
         return (
           <div
             key={ch?.id_cheque || idx}
-            role="checkbox"
-            aria-checked={checked}
-            tabIndex={0}
             className={`nc-cheque-item ${checked ? "nc-cheque-item--selected" : ""} ${esEcheq ? "nc-cheque-item--echeq" : ""}`}
-            onClick={() => onToggle(String(ch?.id_cheque || ""))}
-            onKeyDown={(e) => (e.key === " " || e.key === "Enter") && onToggle(String(ch?.id_cheque || ""))}
+            role={soloLectura ? undefined : "button"}
+            tabIndex={soloLectura ? undefined : 0}
+            onClick={handleSelect}
+            onKeyDown={(e) => {
+              if (soloLectura) return;
+              if (e.key === " " || e.key === "Enter") handleSelect();
+            }}
+            style={soloLectura ? { cursor: "default" } : undefined}
           >
-            <div className="nc-cheque-check-icon nc-cheque-check-icon--corner nc-cheque-check-icon--echeq nc-cheque-check-icon--cheque"
-            >
-              {checked && (
-                <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                  <path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span
-                  style={{
-                    fontFamily: "'Courier New', monospace",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: "var(--nv-text)",
-                    letterSpacing: ".04em",
-                  }}
-                >
-                  N°&nbsp;{safeText(ch?.numero_cheque)}
-                </span>
-                {esEcheq && (
-                  <span
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      letterSpacing: ".07em",
-                      color: accent,
-                      background: accentBg,
-                      border: `1px solid ${accentBorder}`,
-                      borderRadius: 999,
-                      padding: "1px 5px",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    eCheq
-                  </span>
-                )}
+            <div className="nc-cheque-main">
+              <div className="nc-cheque-top">
+                <span className="nc-cheque-number">N° {safeText(ch?.numero_cheque) || "-"}</span>
+                {esEcheq && <span className="nc-cheque-badge nc-cheque-badge--echeq">eCheq</span>}
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 8px", fontSize: 11, color: "var(--nv-muted)", lineHeight: 1.3 }}>
-                <span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {safeText(ch?.emisor)}
-                </span>
-                <span style={{ opacity: 0.4 }}>·</span>
-                <span>Pago:&nbsp;{safeText(formatFechaDMY(ch?.fecha_pago))}</span>
+              <div className="nc-cheque-meta">
+                <span className="nc-cheque-emisor" title={safeText(ch?.emisor) || "-"}>{safeText(ch?.emisor) || "-"}</span>
+                <span className="nc-cheque-separator">·</span>
+                <span>Pago: {formatFechaDMY(ch?.fecha_pago)}</span>
               </div>
             </div>
             <span className="nc-cheque-importe">{moneyARS(ch?.importe || 0)}</span>
+
+            {!soloLectura && (
+              <div className="nc-cheque-check-icon nc-cheque-check-icon--corner nc-cheque-check-icon--echeq nc-cheque-check-icon--cheque">
+                {checked && (
+                  <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                    <path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+            )}
           </div>
         );
       })}
@@ -232,7 +223,16 @@ function MedioPagoInlineCompraRow({
   const tipoCheque = useMemo(() => normalizeChequeTipoFromMedio(mpSeleccionado?.nombre || ""), [mpSeleccionado]);
   const esCheque = tipoCheque !== null;
   const esEcheq = tipoCheque === "echeq";
+  const soloChequeVinculado = !!row.soloChequeVinculado;
   const chequesSeleccionados = useMemo(() => getChequeIdsArray(row.id_cheque), [row.id_cheque]);
+
+  const chequesAMostrar = useMemo(() => {
+    const disponibles = Array.isArray(row.chequesDisponibles) ? row.chequesDisponibles : [];
+    if (!soloChequeVinculado) return disponibles;
+
+    const ids = new Set(chequesSeleccionados.map(String));
+    return disponibles.filter((ch) => ids.has(String(ch?.id_cheque)));
+  }, [row.chequesDisponibles, soloChequeVinculado, chequesSeleccionados]);
 
   const importeCheques = useMemo(() => {
     if (!esCheque || !chequesSeleccionados.length) return 0;
@@ -258,6 +258,8 @@ function MedioPagoInlineCompraRow({
         id_cheque: [],
         chequesDisponibles: [],
         loadingCheques: tipo !== null,
+        chequesCarteraCargados: false,
+        soloChequeVinculado: false,
         monto: tipo !== null ? 0 : row.monto,
         montoDraft: "",
         montoFocused: false,
@@ -284,11 +286,13 @@ function MedioPagoInlineCompraRow({
 
   const handleToggleCheque = useCallback(
     (idChequeStr) => {
+      if (soloChequeVinculado) return;
+
       const current = getChequeIdsArray(row.id_cheque);
       const next = current.includes(idChequeStr) ? current.filter((x) => x !== idChequeStr) : [...current, idChequeStr];
       onUpdate(row.id, { id_cheque: next });
     },
-    [row.id, row.id_cheque, onUpdate]
+    [row.id, row.id_cheque, onUpdate, soloChequeVinculado]
   );
 
   useEffect(() => {
@@ -384,24 +388,31 @@ function MedioPagoInlineCompraRow({
         <div className="nc-mp-cheques">
           <div className="nc-mp-cheques-title">
             <FontAwesomeIcon icon={faMoneyCheckDollar} style={{ fontSize: 11 }} />
-            {esEcheq ? "eCheqs en cartera" : "Cheques en cartera"}
+            {soloChequeVinculado
+              ? esEcheq ? "eCheq vinculado" : "Cheque vinculado"
+              : esEcheq ? "eCheqs en cartera" : "Cheques en cartera"}
           </div>
           {row.loadingCheques ? (
             <div className="nc-mp-cheques-loading">
               <FontAwesomeIcon icon={faCircleNotch} spin style={{ marginRight: 6 }} />
               Cargando…
             </div>
-          ) : row.chequesDisponibles.length === 0 ? (
-            <div className="nc-mp-cheques-empty">No hay {esEcheq ? "eCheqs" : "cheques"} activos en cartera.</div>
+          ) : !Array.isArray(chequesAMostrar) || chequesAMostrar.length === 0 ? (
+            <div className="nc-mp-cheques-empty">
+              {soloChequeVinculado
+                ? `No se encontró el ${esEcheq ? "eCheq" : "cheque"} vinculado.`
+                : `No hay ${esEcheq ? "eCheqs" : "cheques"} activos en cartera.`}
+            </div>
           ) : (
             <ChequesCarteraCardsCompra
-              cheques={row.chequesDisponibles}
+              cheques={chequesAMostrar}
               idsSeleccionados={chequesSeleccionados}
               onToggle={handleToggleCheque}
               esEcheq={esEcheq}
+              soloLectura={soloChequeVinculado}
             />
           )}
-          {chequesSeleccionados.length > 0 && <div className="nc-mp-cheques-sum">✓ {chequesSeleccionados.length} cheque(s) — {moneyARS(importeCheques)}</div>}
+          {chequesSeleccionados.length > 0 && <div className="mi-uploadCard__sub">✓ {chequesSeleccionados.length} cheque(s) — {moneyARS(importeCheques)}</div>}
         </div>
       )}
     </div>
@@ -919,10 +930,22 @@ function buildMediosFromRowCompra(row, mediosPagoList) {
             id_cheque: [],
             chequesDisponibles: [],
             loadingCheques: false,
+            // CLAVE: ya tenemos el cheque de la compra. En editar no hay que traer toda la cartera.
+            chequesCarteraCargados: true,
+            soloChequeVinculado: true,
           });
         }
         const rowMp = groupedCheque.get(key);
         rowMp.id_cheque.push(String(idCheque));
+        rowMp.chequesDisponibles.push({
+          id_cheque: idCheque,
+          tipo: tipoCheque,
+          emisor: safeText(mp?.emisor ?? mp?.cheque_emisor ?? ""),
+          numero_cheque: safeText(mp?.numero_cheque ?? mp?.cheque_numero ?? ""),
+          fecha_emision: safeText(mp?.fecha_emision ?? mp?.cheque_fecha_emision ?? ""),
+          fecha_pago: safeText(mp?.fecha_pago ?? mp?.cheque_fecha_pago ?? ""),
+          importe: safeNumber(mp?.cheque_importe || mp?.monto || 0),
+        });
         rowMp.monto =
           Math.round(
             (safeNumber(rowMp.monto) + safeNumber(mp?.cheque_importe || mp?.monto || 0)) * 100
@@ -937,6 +960,8 @@ function buildMediosFromRowCompra(row, mediosPagoList) {
           id_cheque: [],
           chequesDisponibles: [],
           loadingCheques: false,
+          chequesCarteraCargados: false,
+          soloChequeVinculado: false,
         });
       }
     }
@@ -950,6 +975,7 @@ function buildMediosFromRowCompra(row, mediosPagoList) {
       id_cheque: [],
       chequesDisponibles: [],
       loadingCheques: false,
+      soloChequeVinculado: false,
     });
   }
 
@@ -1192,10 +1218,16 @@ export default function ModalEditarCompra({
       );
       const tipoCheque = normalizeChequeTipoFromMedio(medioObj?.nombre || "");
       if (!tipoCheque) {
-        updateMedioPago(rowId, { chequesDisponibles: [], loadingCheques: false, id_cheque: [] });
+        updateMedioPago(rowId, {
+          chequesDisponibles: [],
+          loadingCheques: false,
+          chequesCarteraCargados: false,
+          id_cheque: [],
+        });
         return;
       }
-      updateMedioPago(rowId, { loadingCheques: true, chequesDisponibles: [] });
+
+      updateMedioPago(rowId, { loadingCheques: true });
       try {
         const sp = new URLSearchParams();
         sp.set("action", "mov_global_cheques_cartera_listar");
@@ -1204,12 +1236,26 @@ export default function ModalEditarCompra({
           sp.set("include_ids", includeIds.join(","));
         }
         const data = await apiGet(`${BASE_URL}/api.php?${sp.toString()}`);
-        updateMedioPago(rowId, {
-          chequesDisponibles: Array.isArray(data?.cheques) ? data.cheques : [],
-          loadingCheques: false,
-        });
+        const recibidos = Array.isArray(data?.cheques) ? data.cheques : [];
+
+        setMediosFilas((prev) =>
+          prev.map((fila) => {
+            if (fila.id !== rowId) return fila;
+            const byId = new Map();
+            [...(Array.isArray(fila.chequesDisponibles) ? fila.chequesDisponibles : []), ...recibidos].forEach((ch) => {
+              const id = Number(ch?.id_cheque || 0);
+              if (id > 0) byId.set(id, ch);
+            });
+            return {
+              ...fila,
+              chequesDisponibles: Array.from(byId.values()),
+              loadingCheques: false,
+              chequesCarteraCargados: true,
+            };
+          })
+        );
       } catch (e) {
-        updateMedioPago(rowId, { chequesDisponibles: [], loadingCheques: false });
+        updateMedioPago(rowId, { loadingCheques: false, chequesCarteraCargados: true });
         showToast("error", e?.message || "No se pudieron cargar los cheques.", 4200);
       }
     },
@@ -1346,7 +1392,7 @@ export default function ModalEditarCompra({
         (x) => String(getGenericId(x) ?? x?.id_medio_pago ?? "") === String(mp.id_medio_pago ?? "")
       );
       const tipoCheque = normalizeChequeTipoFromMedio(medioObj?.nombre || "");
-      if (tipoCheque) {
+      if (tipoCheque && !mp.soloChequeVinculado) {
         const includeIds = Array.isArray(mp.id_cheque) ? mp.id_cheque : [];
         setTimeout(() => {
           cargarChequesParaFila(mp.id, mp.id_medio_pago, includeIds);

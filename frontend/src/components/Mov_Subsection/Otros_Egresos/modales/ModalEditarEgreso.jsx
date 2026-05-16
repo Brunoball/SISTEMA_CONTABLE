@@ -16,6 +16,9 @@ import {
   faUpload,
   faUndo,
   faPenToSquare,
+  faPlus,
+  faMoneyCheckDollar,
+  faCircleNotch,
 } from "@fortawesome/free-solid-svg-icons";
 
 /* ─── IVA options ─── */
@@ -27,6 +30,7 @@ const IVA_OPTIONS = [
 ];
 
 const NOMBRE_COMPROBANTE_GENERICO = "Comprobante adjunto";
+const NULL_OPTION = "";
 
 /* ─── Pure helpers ─── */
 function todayISO() {
@@ -109,11 +113,46 @@ function formatEditableMoney(v) {
   if (n === 0) return "";
   return String(n).replace(".", ",");
 }
+function uid() {
+  return window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+function formatFechaDMY(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return "-";
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${String(Number(m[3])).padStart(2, "0")}/${String(Number(m[2])).padStart(2, "0")}/${m[1]}`;
+  return s;
+}
+function normalizeText(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function normalizeChequeTipoFromMedio(nombre) {
+  const s = normalizeText(nombre);
+  if (!s) return null;
+  if (s.includes("echeq") || s.includes("e-cheq") || s.includes("e cheq")) return "echeq";
+  if (s.includes("cheque")) return "cheque";
+  return null;
+}
+function getChequeIdsArray(v) {
+  if (Array.isArray(v)) return v.map((x) => String(x));
+  if (v == null || v === "") return [];
+  return [String(v)];
+}
 function getDetalleId(d) {
   const c =
     d?.id ?? d?.id_detalle ?? d?.idDetalle ?? d?.detalle_id ??
     d?.id_categoria_egreso ?? d?.idCategoriaEgreso ?? d?.id_stock_producto ?? null;
   const n = Number(c);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function getMedioPagoId(c) {
+  const cand = c?.id ?? c?.id_medio_pago ?? c?.idMedioPago ?? c?.medio_pago_id ?? null;
+  const n = Number(cand);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 function optionLabel(x) {
@@ -204,6 +243,100 @@ function normalizeDateISO(...values) {
   }
   return "";
 }
+/* Medios de pago */
+function buildEmptyMedioPago() {
+  return {
+    id: uid(),
+    id_medio_pago: NULL_OPTION,
+    monto: 0,
+    montoDraft: "",
+    montoFocused: false,
+    id_cheque: [],
+    chequesDisponibles: [],
+    loadingCheques: false,
+    chequesCarteraCargados: false,
+    // En edición, cuando el movimiento ya tiene cheque/eCheq vinculado,
+    // se muestra solamente ese cheque y NO se vuelve a listar toda la cartera.
+    soloChequeVinculado: false,
+  };
+}
+
+function buildMediosPagoFromInitial(data) {
+  const detalle = Array.isArray(data?.medios_pago_detalle) ? data.medios_pago_detalle : [];
+
+  if (detalle.length) {
+    const rows = [];
+    const chequeRows = new Map();
+
+    detalle.forEach((mp) => {
+      const idMedio = String(mp?.id_medio_pago ?? "");
+      const idCheque = Number(mp?.id_cheque ?? 0);
+      const chequeTipo = safeText(mp?.cheque_tipo || mp?.tipo_cheque || mp?.tipo || "").toLowerCase();
+      const idMovimientoMedioPago = Number(mp?.id_movimiento_medio_pago ?? mp?.id_movimiento_medio ?? mp?.id ?? 0) || null;
+
+      if (idCheque > 0) {
+        const key = `${idMedio}|${chequeTipo || "cheque"}`;
+
+        if (!chequeRows.has(key)) {
+          const chequeRow = {
+            ...buildEmptyMedioPago(),
+            id_medio_pago: idMedio,
+            monto: 0,
+            id_cheque: [],
+            chequesDisponibles: [],
+            loadingCheques: false,
+            // CLAVE: ya tenemos el cheque del movimiento. En editar no hay que traer toda la cartera.
+            chequesCarteraCargados: true,
+            soloChequeVinculado: true,
+            id_movimiento_medio_pago: idMovimientoMedioPago,
+          };
+          chequeRows.set(key, chequeRow);
+          rows.push(chequeRow);
+        }
+
+        const currentChequeRow = chequeRows.get(key);
+        const idChequeStr = String(idCheque);
+
+        if (!currentChequeRow.id_cheque.includes(idChequeStr)) {
+          currentChequeRow.id_cheque.push(idChequeStr);
+        }
+
+        const importeCheque = safeNumber(mp?.cheque_importe ?? mp?.importe ?? mp?.monto);
+        currentChequeRow.monto = round2(safeNumber(currentChequeRow.monto) + importeCheque);
+
+        if (!currentChequeRow.chequesDisponibles.some((ch) => String(ch?.id_cheque) === idChequeStr)) {
+          currentChequeRow.chequesDisponibles.push({
+            id_cheque: idCheque,
+            tipo: chequeTipo,
+            emisor: safeText(mp?.emisor ?? mp?.cheque_emisor),
+            numero_cheque: safeText(mp?.numero_cheque ?? mp?.cheque_numero),
+            fecha_emision: normalizeDateISO(mp?.fecha_emision ?? mp?.cheque_fecha_emision),
+            fecha_pago: normalizeDateISO(mp?.fecha_pago ?? mp?.cheque_fecha_pago),
+            importe: importeCheque,
+          });
+        }
+      } else {
+        rows.push({
+          ...buildEmptyMedioPago(),
+          id_medio_pago: idMedio,
+          monto: safeNumber(mp?.monto),
+          id_movimiento_medio_pago: idMovimientoMedioPago,
+        });
+      }
+    });
+
+    return rows;
+  }
+
+  const legacyId = Number(data?.id_medio_pago ?? data?.medio_pago_id ?? 0);
+  const legacyMonto = safeNumber(data?.monto_total ?? data?.total ?? 0);
+  if (legacyId > 0) {
+    return [{ ...buildEmptyMedioPago(), id_medio_pago: String(legacyId), monto: legacyMonto }];
+  }
+
+  return [buildEmptyMedioPago()];
+}
+
 function normalizeChequeData(src = {}) {
   const cheque = src?.cheque && typeof src.cheque === "object" ? src.cheque : src;
   return {
@@ -270,6 +403,7 @@ function buildInitialState(data, clasificaciones = []) {
     items: items.length
       ? items
       : [makeItem({ cantidad: 1, precio: Number(src?.monto_total ?? 0) || 0 })],
+    medios: buildMediosPagoFromInitial(src),
   };
 }
 function sumTotalItems(items) {
@@ -499,6 +633,431 @@ function ChequeFields({ cheque, saving, onUpdate }) {
   );
 }
 
+function ChequesCarteraCards({
+  cheques,
+  idsSeleccionados,
+  onToggle,
+  esEcheq = false,
+  soloLectura = false,
+}) {
+  if (!Array.isArray(cheques) || cheques.length === 0) return null;
+
+  return (
+    <div className="nc-cheques-list">
+      {cheques.map((ch, idx) => {
+        const idChequeStr = String(ch?.id_cheque || "");
+        const checked = idsSeleccionados.includes(idChequeStr);
+
+        const handleSelect = () => {
+          if (soloLectura) return;
+          onToggle?.(idChequeStr);
+        };
+
+        return (
+          <div
+            key={ch?.id_cheque || idx}
+            className={`nc-cheque-item ${checked ? "nc-cheque-item--selected" : ""} ${esEcheq ? "nc-cheque-item--echeq" : ""}`}
+            role={soloLectura ? undefined : "button"}
+            tabIndex={soloLectura ? undefined : 0}
+            onClick={handleSelect}
+            onKeyDown={(e) => {
+              if (soloLectura) return;
+              if (e.key === " " || e.key === "Enter") handleSelect();
+            }}
+            style={soloLectura ? { cursor: "default" } : undefined}
+          >
+            <div className="nc-cheque-main">
+              <div className="nc-cheque-top">
+                <span className="nc-cheque-number">N° {safeText(ch?.numero_cheque) || "-"}</span>
+                {esEcheq && <span className="nc-cheque-badge nc-cheque-badge--echeq">eCheq</span>}
+              </div>
+              <div className="nc-cheque-meta">
+                <span className="nc-cheque-emisor" title={safeText(ch?.emisor) || "-"}>
+                  {safeText(ch?.emisor) || "-"}
+                </span>
+                <span className="nc-cheque-separator">·</span>
+                <span>Pago: {formatFechaDMY(ch?.fecha_pago)}</span>
+              </div>
+            </div>
+
+            <span className="nc-cheque-importe">{moneyARS(ch?.importe || 0)}</span>
+
+            {!soloLectura && (
+              <div className="nc-cheque-check-icon nc-cheque-check-icon--corner nc-cheque-check-icon--echeq nc-cheque-check-icon--cheque">
+                {checked && (
+                  <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                    <path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MedioPagoRow({ row, mediosPagoList, totalEgreso, sumaMediosPago, onUpdate, onRemove, onLoadCheques, saving }) {
+  const mpSeleccionado = useMemo(
+    () => mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(row.id_medio_pago ?? "")) || null,
+    [mediosPagoList, row.id_medio_pago]
+  );
+
+  const tipoCheque = useMemo(
+    () => normalizeChequeTipoFromMedio(mpSeleccionado?.nombre || ""),
+    [mpSeleccionado]
+  );
+
+  const esCheque = tipoCheque !== null;
+  const esEcheq = tipoCheque === "echeq";
+  const soloChequeVinculado = !!row.soloChequeVinculado;
+  const chequesSeleccionados = useMemo(() => getChequeIdsArray(row.id_cheque), [row.id_cheque]);
+
+  const chequesAMostrar = useMemo(() => {
+    const disponibles = Array.isArray(row.chequesDisponibles) ? row.chequesDisponibles : [];
+    if (!soloChequeVinculado) return disponibles;
+
+    const ids = new Set(chequesSeleccionados.map(String));
+    return disponibles.filter((ch) => ids.has(String(ch?.id_cheque)));
+  }, [row.chequesDisponibles, soloChequeVinculado, chequesSeleccionados]);
+
+  const importeCheques = useMemo(() => {
+    if (!esCheque || !chequesSeleccionados.length) return 0;
+
+    return chequesSeleccionados.reduce((acc, idStr) => {
+      const ch = Array.isArray(row.chequesDisponibles)
+        ? row.chequesDisponibles.find((x) => String(x?.id_cheque) === idStr)
+        : null;
+      return acc + (ch ? safeNumber(ch?.importe) : 0);
+    }, 0);
+  }, [esCheque, chequesSeleccionados, row.chequesDisponibles]);
+
+  const montoActual = esCheque ? importeCheques : safeNumber(row.monto);
+
+  const restanteParaEstaFila = useMemo(() => {
+    const sumaOtros = Math.max(0, safeNumber(sumaMediosPago) - montoActual);
+    return Math.max(0, safeNumber(totalEgreso) - sumaOtros);
+  }, [sumaMediosPago, totalEgreso, montoActual]);
+
+  const puedeCompletarRestante = !esCheque && totalEgreso > 0 && restanteParaEstaFila > 0.009;
+
+  const handleChangeMedio = useCallback(
+    async (val) => {
+      const mp = mediosPagoList.find((x) => String(getMedioPagoId(x) ?? "") === String(val));
+      const tipo = normalizeChequeTipoFromMedio(mp?.nombre || "");
+
+      onUpdate(row.id, {
+        id_medio_pago: val,
+        id_cheque: [],
+        chequesDisponibles: [],
+        loadingCheques: tipo !== null,
+        chequesCarteraCargados: false,
+        soloChequeVinculado: false,
+        monto: tipo !== null ? 0 : safeNumber(row.monto),
+        montoDraft: "",
+        montoFocused: false,
+      });
+
+      if (tipo !== null) {
+        await onLoadCheques?.(row.id, tipo, { includeIds: [], onlySelected: false });
+      }
+    },
+    [mediosPagoList, onUpdate, onLoadCheques, row.id, row.monto]
+  );
+
+  const handleToggleCheque = useCallback(
+    (idChequeStr) => {
+      if (soloChequeVinculado) return;
+
+      const current = getChequeIdsArray(row.id_cheque);
+      const next = current.includes(idChequeStr)
+        ? current.filter((x) => x !== idChequeStr)
+        : [...current, idChequeStr];
+
+      onUpdate(row.id, { id_cheque: next });
+    },
+    [row.id, row.id_cheque, onUpdate, soloChequeVinculado]
+  );
+
+  useEffect(() => {
+    if (esCheque && chequesSeleccionados.length > 0) {
+      onUpdate(row.id, { monto: importeCheques, montoDraft: "", montoFocused: false });
+    }
+  }, [esCheque, chequesSeleccionados.length, importeCheques, onUpdate, row.id]);
+
+  useEffect(() => {
+    if (!esCheque || row.loadingCheques || row.chequesCarteraCargados) return;
+
+    const disponibles = Array.isArray(row.chequesDisponibles) ? row.chequesDisponibles : [];
+    const idsSeleccionados = getChequeIdsArray(row.id_cheque);
+    const tieneChequePrecargado =
+      idsSeleccionados.length > 0 &&
+      idsSeleccionados.every((id) => disponibles.some((ch) => String(ch?.id_cheque) === String(id)));
+
+    // Si el egreso viene de edición y ya trae el cheque vinculado dentro de medios_pago_detalle,
+    // no se consulta toda la cartera. Se bloquea la carga y queda visible solo ese cheque.
+    if (tieneChequePrecargado) {
+      onUpdate(row.id, {
+        loadingCheques: false,
+        chequesCarteraCargados: true,
+        soloChequeVinculado: true,
+      });
+      return;
+    }
+
+    onUpdate(row.id, { loadingCheques: true });
+    onLoadCheques?.(row.id, tipoCheque, {
+      includeIds: idsSeleccionados,
+      onlySelected: idsSeleccionados.length > 0,
+    });
+  }, [
+    esCheque,
+    row.loadingCheques,
+    row.chequesCarteraCargados,
+    row.chequesDisponibles,
+    row.id,
+    row.id_cheque,
+    tipoCheque,
+    onLoadCheques,
+    onUpdate,
+  ]);
+
+  return (
+    <div className="nc-mp-card">
+      <div className="nc-mp-row nc-mp-row--medio">
+        <div className="nc-field" style={{ position: "relative" }}>
+          <select
+            className="nc-input nc-select"
+            value={String(row.id_medio_pago || "")}
+            onChange={(e) => handleChangeMedio(e.target.value)}
+            disabled={saving}
+          >
+            <option value={NULL_OPTION}>Seleccionar…</option>
+            {mediosPagoList.map((x) => {
+              const idMp = getMedioPagoId(x);
+              return (
+                <option key={idMp ?? x?.nombre ?? uid()} value={idMp != null ? String(idMp) : ""}>
+                  {String(x?.nombre ?? "").trim() || "Medio"}
+                </option>
+              );
+            })}
+          </select>
+          <label className={`nc-label${row.id_medio_pago ? " nc-label--up" : ""}`}>Medio de pago</label>
+        </div>
+      </div>
+
+      <div className="nc-mp-row nc-mp-row--monto">
+        <div className="nc-field nc-mp-monto-field" style={{ position: "relative" }}>
+          <input
+            className="nc-input nc-mp-monto-input"
+            type="text"
+            inputMode="decimal"
+            value={row.montoFocused ? row.montoDraft ?? "" : formatMoneyInputARS(montoActual)}
+            onFocus={(e) => {
+              if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
+              onUpdate(row.id, { montoFocused: true, montoDraft: formatEditableMoney(montoActual) });
+              setTimeout(() => e.target.select(), 0);
+            }}
+            onChange={(e) => {
+              if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
+              const c = e.target.value.replace(/[^\d,.\-]/g, "");
+              onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
+            }}
+            onBlur={() => {
+              if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
+              const p = parseMoneyInputARS(row.montoDraft);
+              onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false });
+            }}
+            onKeyDown={(e) => {
+              if (saving || (esCheque && chequesSeleccionados.length > 0)) return;
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
+            placeholder="$ 0,00"
+            disabled={saving || (esCheque && chequesSeleccionados.length > 0)}
+            style={{ height: 32, padding: "0 10px", fontSize: 13, textAlign: "right" }}
+          />
+          <label className="nc-label nc-label--up">Monto</label>
+        </div>
+
+        <div className="nc-mp-actions-col">
+          {!esCheque && (
+            <button
+              type="button"
+              className="nc-mp-completar"
+              onClick={() => onUpdate(row.id, { monto: restanteParaEstaFila, montoDraft: "", montoFocused: false })}
+              disabled={!puedeCompletarRestante || saving}
+              title="Completar importe restante"
+            >
+              ↓ Rest.
+            </button>
+          )}
+          <button type="button" className="nc-mp-del-btn" onClick={() => onRemove(row.id)} title="Quitar" disabled={saving}>
+            ×
+          </button>
+        </div>
+      </div>
+
+      {esCheque && (
+        <div className="nc-mp-cheques">
+          <div className="nc-mp-cheques-title">
+            <FontAwesomeIcon icon={faMoneyCheckDollar} style={{ fontSize: 12 }} />
+            {soloChequeVinculado
+              ? esEcheq ? "eCheq vinculado" : "Cheque vinculado"
+              : esEcheq ? "eCheqs en cartera" : "Cheques en cartera"}
+          </div>
+
+          {row.loadingCheques ? (
+            <div className="nc-mp-cheques-loading">
+              <FontAwesomeIcon icon={faCircleNotch} spin style={{ marginRight: 6 }} />
+              Cargando...
+            </div>
+          ) : !Array.isArray(chequesAMostrar) || chequesAMostrar.length === 0 ? (
+            <div className="nc-mp-cheques-empty">
+              {soloChequeVinculado
+                ? `No se encontró el ${esEcheq ? "eCheq" : "cheque"} vinculado.`
+                : `No hay ${esEcheq ? "eCheqs" : "cheques"} activos en cartera.`}
+            </div>
+          ) : (
+            <ChequesCarteraCards
+              cheques={chequesAMostrar}
+              idsSeleccionados={chequesSeleccionados}
+              onToggle={handleToggleCheque}
+              esEcheq={esEcheq}
+              soloLectura={soloChequeVinculado}
+            />
+          )}
+
+          {chequesSeleccionados.length > 0 && (
+            <div className="mi-uploadCard__sub">
+              ✓ {chequesSeleccionados.length} cheque(s) — {moneyARS(importeCheques)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PanelMediosPagoInlineEgreso({
+  mediosFilas,
+  mediosPagoList,
+  totalEgreso,
+  onUpdate,
+  onRemove,
+  onAdd,
+  showToast,
+  saving = false,
+  apiGet,
+  baseUrl,
+  chequesAction = "mov_global_cheques_cartera_listar",
+}) {
+  const filas = Array.isArray(mediosFilas) && mediosFilas.length ? mediosFilas : [buildEmptyMedioPago()];
+
+  const handleLoadCheques = useCallback(
+    async (rowId, tipo, options = {}) => {
+      const includeIds = getChequeIdsArray(options?.includeIds);
+      const onlySelected = !!options?.onlySelected && includeIds.length > 0;
+
+      try {
+        const sp = new URLSearchParams();
+        sp.set("action", chequesAction);
+        sp.set("tipo", tipo);
+
+        // Cuando el movimiento ya viene con cheque elegido en edición,
+        // pedimos solo ese/estos IDs. Si el backend ignora include_ids, igual filtramos abajo.
+        if (includeIds.length) sp.set("include_ids", includeIds.join(","));
+
+        const data = await apiGet(`${baseUrl}/api.php?${sp.toString()}`);
+        const rowActual = filas.find((x) => x.id === rowId) || null;
+        const actuales = Array.isArray(rowActual?.chequesDisponibles) ? rowActual.chequesDisponibles : [];
+        const recibidosRaw = Array.isArray(data?.cheques) ? data.cheques : [];
+        const idsPermitidos = new Set(includeIds.map(String));
+
+        const actualesFiltrados = onlySelected
+          ? actuales.filter((ch) => idsPermitidos.has(String(ch?.id_cheque)))
+          : actuales;
+
+        const recibidos = onlySelected
+          ? recibidosRaw.filter((ch) => idsPermitidos.has(String(ch?.id_cheque)))
+          : recibidosRaw;
+
+        const byId = new Map();
+        [...actualesFiltrados, ...recibidos].forEach((ch) => {
+          const id = Number(ch?.id_cheque || 0);
+          if (id > 0) byId.set(id, ch);
+        });
+
+        onUpdate(rowId, {
+          chequesDisponibles: Array.from(byId.values()),
+          loadingCheques: false,
+          chequesCarteraCargados: true,
+          soloChequeVinculado: onlySelected,
+        });
+      } catch (e) {
+        const rowActual = filas.find((x) => x.id === rowId) || null;
+        const actuales = Array.isArray(rowActual?.chequesDisponibles) ? rowActual.chequesDisponibles : [];
+        const idsPermitidos = new Set(includeIds.map(String));
+
+        onUpdate(rowId, {
+          chequesDisponibles: onlySelected
+            ? actuales.filter((ch) => idsPermitidos.has(String(ch?.id_cheque)))
+            : actuales,
+          loadingCheques: false,
+          chequesCarteraCargados: true,
+          soloChequeVinculado: onlySelected || !!rowActual?.soloChequeVinculado,
+        });
+
+        if (!onlySelected) {
+          showToast?.("error", e?.message || "No se pudieron cargar los cheques.", 4000);
+        }
+      }
+    },
+    [apiGet, baseUrl, chequesAction, filas, onUpdate, showToast]
+  );
+
+  const sumaMediosPago = useMemo(
+    () => filas.reduce((a, r) => a + safeNumber(r?.monto), 0),
+    [filas]
+  );
+
+  const diferenciaRestante = useMemo(
+    () => Math.max(0, safeNumber(totalEgreso) - sumaMediosPago),
+    [totalEgreso, sumaMediosPago]
+  );
+
+  return (
+    <>
+      {filas.map((mp) => (
+        <MedioPagoRow
+          key={mp.id}
+          row={mp}
+          mediosPagoList={mediosPagoList}
+          totalEgreso={totalEgreso}
+          sumaMediosPago={sumaMediosPago}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          onLoadCheques={handleLoadCheques}
+          saving={saving}
+        />
+      ))}
+
+      <div className="nc-mp-totals">
+        <span className="nc-mp-totals-asignado">Asignado: <b>{moneyARS(sumaMediosPago)}</b></span>
+        {diferenciaRestante > 0.01 && <span className="nc-mp-totals-falta">Falta: {moneyARS(diferenciaRestante)}</span>}
+        {diferenciaRestante <= 0.01 && safeNumber(totalEgreso) > 0 && <span className="nc-mp-totals-ok">✓ Cubierto</span>}
+      </div>
+
+      <button type="button" className="nc-pago-btn" onClick={onAdd} disabled={saving}>
+        <FontAwesomeIcon icon={faPlus} style={{ fontSize: 11 }} /> Agregar otro medio
+      </button>
+    </>
+  );
+}
+
 /* ─────────────────────────────────────────
    COMPONENTE PRINCIPAL
 ───────────────────────────────────────── */
@@ -593,6 +1152,13 @@ export default function ModalEditarEgreso({
 
   useEffect(() => { if (open) cargarInfoComprobante(); }, [open, cargarInfoComprobante]);
 
+  const apiGet = useCallback(async (url) => {
+    const res = await fetch(url, { method: "GET", headers: buildHeadersGET() });
+    const data = await parseJsonOrThrow(res);
+    if (!data?.exito) throw new Error(data?.mensaje || "No se pudo obtener la información.");
+    return data;
+  }, []);
+
   const updateItem = useCallback((uid, patch) => {
     setForm((prev) => ({
       ...prev,
@@ -670,6 +1236,24 @@ export default function ModalEditarEgreso({
     setForm((prev) => {
       if ((prev.items || []).length <= 1) return prev;
       return { ...prev, items: prev.items.filter((it) => it.uid !== uid) };
+    });
+  }, []);
+
+  const updateMedioPago = useCallback((id, patch) => {
+    setForm((prev) => ({
+      ...prev,
+      medios: (prev.medios || []).map((mp) => (mp.id === id ? { ...mp, ...patch } : mp)),
+    }));
+  }, []);
+
+  const addMedioPago = useCallback(() => {
+    setForm((prev) => ({ ...prev, medios: [...(prev.medios || []), buildEmptyMedioPago()] }));
+  }, []);
+
+  const removeMedioPago = useCallback((id) => {
+    setForm((prev) => {
+      const next = (prev.medios || []).filter((mp) => mp.id !== id);
+      return { ...prev, medios: next.length ? next : [buildEmptyMedioPago()] };
     });
   }, []);
 
@@ -906,8 +1490,6 @@ export default function ModalEditarEgreso({
           monto_total: importe,
         };
       } else {
-        const id_medio_pago = Number(form.id_medio_pago || 0);
-        if (!(id_medio_pago > 0)) throw new Error("El medio de pago es obligatorio.");
         const items = (form.items || [])
           .map((it) => {
             const id_detalle = Number(it.id_detalle || 0);
@@ -920,14 +1502,57 @@ export default function ModalEditarEgreso({
           })
           .filter((it) => it.id_detalle > 0 && it.cantidad > 0 && it.precio > 0 && it.total > 0);
         if (!items.length) throw new Error("Debés cargar al menos un ítem válido.");
+
+        const mediosPagoPayload = (form.medios || []).flatMap((mp, idx) => {
+          const idMedioPago = Number(mp.id_medio_pago || 0);
+          const medioRow = mediosPago.find((x) => String(getMedioPagoId(x) ?? "") === String(mp.id_medio_pago));
+          const tipoCheque = normalizeChequeTipoFromMedio(medioRow?.nombre || "");
+          if (!(idMedioPago > 0)) throw new Error(`Medio de pago ${idx + 1}: falta seleccionar el medio.`);
+
+          if (tipoCheque !== null) {
+            const chequesSeleccionados = getChequeIdsArray(mp.id_cheque);
+            if (!chequesSeleccionados.length) {
+              throw new Error(`Medio de pago ${idx + 1}: debés seleccionar al menos un ${tipoCheque === "echeq" ? "eCheq" : "cheque"} en cartera.`);
+            }
+            return chequesSeleccionados.map((idChequeStr) => {
+              const ch = Array.isArray(mp.chequesDisponibles)
+                ? mp.chequesDisponibles.find((x) => String(x.id_cheque) === String(idChequeStr))
+                : null;
+              return {
+                id_medio_pago: idMedioPago,
+                id_movimiento_medio_pago: mp.id_movimiento_medio_pago || null,
+                id_cheque: Number(idChequeStr),
+                cheque_tipo: tipoCheque,
+                monto: safeNumber(ch?.importe ?? mp.monto),
+              };
+            });
+          }
+
+          const monto = safeNumber(mp.monto);
+          if (!(monto > 0)) throw new Error(`Medio de pago ${idx + 1}: el monto debe ser mayor a 0.`);
+          return [{
+            id_medio_pago: idMedioPago,
+            id_movimiento_medio_pago: mp.id_movimiento_medio_pago || null,
+            monto,
+          }];
+        });
+
+        const totalMedios = mediosPagoPayload.reduce((acc, mp) => acc + safeNumber(mp.monto), 0);
+        const totalItems = sumTotalItems(items);
+        if (totalMedios < totalItems - 0.05) {
+          throw new Error(`La suma de los medios de pago (${moneyARS(totalMedios)}) no cubre el total del egreso (${moneyARS(totalItems)}).`);
+        }
+
+        const primerMedio = mediosPagoPayload[0] || null;
         payload = {
           id_movimiento: Number(form.id_movimiento || 0),
           fecha,
-          id_medio_pago,
+          id_medio_pago: primerMedio ? Number(primerMedio.id_medio_pago) : null,
           id_clasificacion: form.es_costo_fijo ? Number(clasificacionConfig.idCostoFijo) : null,
           es_costo_fijo: !!form.es_costo_fijo,
           id_detalle: items[0]?.id_detalle ?? null,
-          monto_total: sumTotalItems(items),
+          monto_total: totalItems,
+          medios_pago: mediosPagoPayload,
           items,
         };
       }
@@ -1226,24 +1851,19 @@ export default function ModalEditarEgreso({
                         </div>
 
                         {!esMovCheque && (
-                          <div className="nc-field">
-                            <select
-                              className="nc-input nc-select"
-                              value={String(form.id_medio_pago || "")}
-                              onChange={(e) => setForm((p) => ({ ...p, id_medio_pago: e.target.value }))}
-                              disabled={saving}
-                            >
-                              <option value="">Seleccionar...</option>
-                              {mediosPago.map((x) => (
-                                <option key={x.id} value={String(x.id)}>
-                                  {x.nombre}
-                                </option>
-                              ))}
-                            </select>
-                            <label className="nc-label" style={{ pointerEvents: "none" }}>
-                              Medio de pago
-                            </label>
-                          </div>
+                          <PanelMediosPagoInlineEgreso
+                            mediosFilas={form.medios || []}
+                            mediosPagoList={mediosPago}
+                            totalEgreso={totalGeneral}
+                            onUpdate={updateMedioPago}
+                            onRemove={removeMedioPago}
+                            onAdd={addMedioPago}
+                            showToast={showToast}
+                            saving={saving}
+                            apiGet={apiGet}
+                            baseUrl={BASE_URL}
+                            chequesAction="mov_global_cheques_cartera_listar"
+                          />
                         )}
 
                         {!esMovCheque && (

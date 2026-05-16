@@ -16,7 +16,6 @@ import "../../../Global/Global_css/Global_responsive.css";
 import "../../../Global/Global_css/roots.css";
 import ModalVerComprobante from "../../../Global/Ver_Comprobantes/ModalVerComprobante.jsx";
 import GlobalAutocomplete from "../../../Global/GlobalAutocomplete/GlobalAutocomplete.jsx";
-import ModalNuevoCheque from "../../../Global/Modales/ModalNuevoCheque.jsx";
 import ModalNuevaDescripcion from "./ModalNuevaDescripcion.jsx";
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
@@ -389,17 +388,14 @@ function MedioPagoRow({
   onUpdate,
   onRemove,
   saving,
-  showToast,
-  apiCheckNumero,
 }) {
-  const [openChequeModal, setOpenChequeModal] = useState(false);
-
   const medio = useMemo(
     () => mediosPago.find((x) => String(x.id) === String(row.id_medio_pago)) || null,
     [mediosPago, row.id_medio_pago]
   );
   const tipoCheque = useMemo(() => detectChequeTipo(medio?.nombre || ""), [medio]);
   const esCheque = tipoCheque !== null;
+  const esEcheq = tipoCheque === "echeq";
 
   const montoActual = esCheque && row.cheque
     ? safeNumber(row.cheque?.importe)
@@ -410,7 +406,7 @@ function MedioPagoRow({
     return Math.max(0, safeNumber(totalIngreso) - sumaOtros);
   }, [sumaMediosPago, totalIngreso, montoActual]);
 
-  // Sincronizar monto cuando se carga un cheque
+  // Sincronizar el monto visual cuando el medio tiene un cheque/eCheq vinculado.
   useEffect(() => {
     if (
       esCheque &&
@@ -435,70 +431,10 @@ function MedioPagoRow({
         montoDraft: "",
         montoFocused: false,
         cheque: tipo === null ? null : row.cheque,
+        id_cheque: tipo === null ? null : row.id_cheque,
       });
     },
-    [mediosPago, onUpdate, row.id, row.monto, row.cheque]
-  );
-
-  const handleSaveCheque = useCallback(
-    (datosCheque) => {
-      const cheque = {
-        ...datosCheque,
-        tipo_cheque: tipoCheque || "cheque",
-        id_cheque: row.cheque?.id_cheque || null,
-        archivo_nombre:
-          datosCheque?.archivo_nombre ||
-          (datosCheque?.archivo instanceof File ? datosCheque.archivo.name : ""),
-      };
-      onUpdate(row.id, {
-        cheque,
-        id_cheque: cheque.id_cheque || row.id_cheque || null,
-        monto: safeNumber(cheque.importe),
-        montoDraft: "",
-        montoFocused: false,
-      });
-      setOpenChequeModal(false);
-      showToast?.(
-        "exito",
-        `${tipoCheque === "echeq" ? "eCheq" : "Cheque"} ${cheque.numero_cheque || ""} actualizado.`);
-    },
-    [onUpdate, row.id, row.cheque, row.id_cheque, showToast, tipoCheque]
-  );
-
-  const verificarNumeroCheque = useCallback(
-    async ({ numero_cheque, tipoCheque: tc, initialData }) => {
-      const numeroCheque = String(numero_cheque ?? "").replace(/\D/g, "");
-      if (!numeroCheque) {
-        return {
-          ok: false,
-          tipo: "advertencia",
-          mensaje: "Ingresá el número de cheque antes de confirmar.",
-        };
-      }
-      const params = new URLSearchParams();
-      params.set("numero_cheque", numeroCheque);
-      params.set("tipo", String(tc || "cheque"));
-      const idChequeActual = Number(initialData?.id_cheque || row?.cheque?.id_cheque || 0);
-      if (Number.isFinite(idChequeActual) && idChequeActual > 0) {
-        params.set("id_cheque", String(idChequeActual));
-      }
-      const res = await fetch(`${apiCheckNumero}&${params.toString()}`, {
-        method: "GET",
-        headers: buildHeadersGET(),
-      });
-      const data = await parseJsonOrThrow(res);
-      if (!data?.exito)
-        throw new Error(data?.mensaje || "No se pudo verificar el número del cheque.");
-      if (data?.existe || data?.disponible === false) {
-        return {
-          ok: false,
-          tipo: "error",
-          mensaje: data?.mensaje || "Ese número de cheque ya existe.",
-        };
-      }
-      return { ok: true };
-    },
-    [apiCheckNumero, row?.cheque?.id_cheque]
+    [mediosPago, onUpdate, row.id, row.monto, row.cheque, row.id_cheque]
   );
 
   return (
@@ -544,7 +480,7 @@ function MedioPagoRow({
                 : formatMoneyInputARS(montoActual)
             }
             onFocus={(e) => {
-              if (esCheque && row.cheque) return;
+              if (saving || (esCheque && row.cheque)) return;
               onUpdate(row.id, {
                 montoFocused: true,
                 montoDraft: formatEditableMoney(montoActual),
@@ -552,17 +488,17 @@ function MedioPagoRow({
               setTimeout(() => e.target.select(), 0);
             }}
             onChange={(e) => {
-              if (esCheque && row.cheque) return;
+              if (saving || (esCheque && row.cheque)) return;
               const c = e.target.value.replace(/[^\d,.\-]/g, "");
               onUpdate(row.id, { montoDraft: c, monto: parseMoneyInputARS(c) });
             }}
             onBlur={() => {
-              if (esCheque && row.cheque) return;
+              if (saving || (esCheque && row.cheque)) return;
               const p = parseMoneyInputARS(row.montoDraft);
               onUpdate(row.id, { monto: p, montoDraft: "", montoFocused: false });
             }}
             onKeyDown={(e) => {
-              if (esCheque && row.cheque) return;
+              if (saving || (esCheque && row.cheque)) return;
               if (e.key === "Enter") {
                 e.preventDefault();
                 e.currentTarget.blur();
@@ -605,68 +541,31 @@ function MedioPagoRow({
         </div>
       </div>
 
-      {/* Sección cheque */}
+      {/* Sección cheque/eCheq: solo lectura en edición */}
       {esCheque && (
         <div className="nc-mp-cheques">
           <div className="nc-mp-cheques-title">
             <FontAwesomeIcon icon={faMoneyCheckDollar} style={{ fontSize: 12 }} />
-            {tipoCheque === "echeq" ? "eCheq cargado" : "Cheque cargado"}
+            {esEcheq ? "eCheqs en cartera" : "Cheques en cartera"}
           </div>
 
           {row.cheque ? (
             <>
               <ChequeResumen cheque={row.cheque} tipoCheque={tipoCheque} />
-              <button
-                type="button"
-                className="nc-pago-btn"
-                onClick={() => setOpenChequeModal(true)}
-                disabled={saving}
-              >
-                Editar {tipoCheque === "echeq" ? "eCheq" : "cheque"}
-              </button>
+              <div className="mi-uploadCard__sub">
+                ✓ 1 cheque(s) — {moneyARS(row.cheque?.importe || row.monto || 0)}
+              </div>
             </>
           ) : (
-            <button
-              type="button"
-              className="nc-pago-btn"
-              onClick={() => setOpenChequeModal(true)}
-              disabled={saving}
-            >
-              Cargar {tipoCheque === "echeq" ? "eCheq" : "cheque"}
-            </button>
+            <div className="nc-mp-cheques-empty">
+              No hay {esEcheq ? "eCheq" : "cheque"} vinculado a este medio de pago.
+            </div>
           )}
         </div>
-      )}
-
-      {openChequeModal && (
-        <ModalNuevoCheque
-          open={openChequeModal}
-          onClose={() => setOpenChequeModal(false)}
-          onSave={handleSaveCheque}
-          initialData={
-            row.cheque
-              ? {
-                  id_cheque: row.cheque.id_cheque,
-                  fecha_emision: row.cheque.fecha_emision,
-                  emisor: row.cheque.emisor,
-                  numero_cheque: row.cheque.numero_cheque,
-                  importe: row.cheque.importe,
-                  fecha_pago: row.cheque.fecha_pago,
-                  observaciones: row.cheque.observaciones,
-                  archivo: row.cheque.archivo,
-                  archivo_nombre: row.cheque.archivo_nombre,
-                }
-              : undefined
-          }
-          tipoCheque={tipoCheque || "cheque"}
-          saving={false}
-          verificarNumeroCheque={verificarNumeroCheque}
-        />
       )}
     </div>
   );
 }
-
 // ─── Panel inline de medios de pago ───────────────────────────────────────────
 function PanelMediosPago({
   mediosFilas,
@@ -676,8 +575,6 @@ function PanelMediosPago({
   onRemove,
   onAdd,
   saving,
-  showToast,
-  apiCheckNumero,
 }) {
   const filas =
     Array.isArray(mediosFilas) && mediosFilas.length
@@ -715,8 +612,6 @@ function PanelMediosPago({
           onUpdate={onUpdate}
           onRemove={onRemove}
           saving={saving}
-          showToast={showToast}
-          apiCheckNumero={apiCheckNumero}
         />
       ))}
 
@@ -758,7 +653,6 @@ export default function ModalEditarIngreso({
   dark: darkProp,
 }) {
   const API = `${BASE_URL}/api.php`;
-  const API_CHECK_NUMERO = `${BASE_URL}/api.php?action=mov_global_cheques_obtener&modo=verificar_numero`;
 
   const showToast = useCallback(
     (tipo, mensaje) => onToast?.(tipo, mensaje),
@@ -776,7 +670,6 @@ export default function ModalEditarIngreso({
   const [viewerData, setViewerData] = useState({ url: "", mime: "", title: "Comprobante" });
   const [openNuevaDescripcionModal, setOpenNuevaDescripcionModal] = useState(false);
   const [currentRowIdForNewDesc, setCurrentRowIdForNewDesc] = useState(null);
-  const [removedChequeIds, setRemovedChequeIds] = useState([]);
 
   const closeBtnRef = useRef(null);
   const inputFileRef = useRef(null);
@@ -817,7 +710,6 @@ export default function ModalEditarIngreso({
     setArchivoNuevo(null);
     setMarcarEliminarComprobante(false);
     setComprobanteActual(null);
-    setRemovedChequeIds([]);
     setTimeout(() => closeBtnRef.current?.focus(), 0);
   }, [open, initialData]);
 
@@ -1015,7 +907,6 @@ export default function ModalEditarIngreso({
       const next = prev.medios.filter((x) => x.id !== row.id);
       return { ...prev, medios: next.length ? next : [makeMedioPagoRow()] };
     });
-    if (row?.id_cheque) setRemovedChequeIds((p) => [...p, Number(row.id_cheque)]);
   }, []);
 
   // ─── Cálculos ────────────────────────────────────────────────────────────────
@@ -1206,66 +1097,7 @@ export default function ModalEditarIngreso({
     [API]
   );
 
-  const guardarCheque = useCallback(
-    async (idMovimiento, medioDetalle, chequeData) => {
-      if (!chequeData) return null;
-      const { token, sessionKey, idUsuario } = getAuthInfo();
-      const fd = new FormData();
-      fd.append("id_movimiento", String(idMovimiento));
-      fd.append(
-        "id_movimiento_medio_pago",
-        String(Number(medioDetalle?.id_movimiento_medio_pago || 0))
-      );
-      fd.append("id_medio_pago", String(Number(medioDetalle?.id_medio_pago || 0)));
-      fd.append("tipo", chequeData.tipo_cheque || "cheque");
-      fd.append("fecha_emision", chequeData.fecha_emision || "");
-      fd.append("emisor", chequeData.emisor || "");
-      fd.append("numero_cheque", chequeData.numero_cheque || "");
-      fd.append("importe", String(chequeData.importe || 0));
-      fd.append("fecha_pago", chequeData.fecha_pago || "");
-      fd.append("observaciones", chequeData.observaciones || "");
-      fd.append("idUsuario", String(idUsuario || 0));
-      fd.append("idUsuarioMaster", String(idUsuario || 0));
-      if (chequeData.archivo instanceof File) {
-        fd.append(
-          "archivo",
-          chequeData.archivo,
-          chequeData.archivo_nombre || chequeData.archivo.name || "adjunto"
-        );
-      }
-      const headers = {};
-      if (sessionKey) headers["X-Session"] = sessionKey;
-      if (token) headers.Authorization = `Bearer ${token}`;
-      const action = chequeData.id_cheque
-        ? "mov_global_cheques_actualizar"
-        : "mov_global_cheques_guardar";
-      if (chequeData.id_cheque) fd.append("id_cheque", String(Number(chequeData.id_cheque)));
-      const res = await fetch(`${API}?action=${action}`, {
-        method: "POST",
-        headers,
-        body: fd,
-      });
-      const data = await parseJsonOrThrow(res);
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo guardar el cheque.");
-      return data;
-    },
-    [API]
-  );
 
-  const eliminarCheque = useCallback(
-    async (idCheque) => {
-      const { idUsuario } = getAuthInfo();
-      const res = await fetch(`${API}?action=mov_global_cheques_eliminar`, {
-        method: "POST",
-        headers: buildHeadersJSON(),
-        body: JSON.stringify({ id_cheque: idCheque, idUsuario, idUsuarioMaster: idUsuario }),
-      });
-      const data = await parseJsonOrThrow(res);
-      if (!data?.exito) throw new Error(data?.mensaje || "No se pudo eliminar el cheque.");
-      return data;
-    },
-    [API]
-  );
 
   // ─── Validación ──────────────────────────────────────────────────────────────
   const validate = useCallback(() => {
@@ -1381,28 +1213,6 @@ export default function ModalEditarIngreso({
         await subirComprobanteNuevo(idMovimientoFinal, archivoNuevo);
       }
 
-      // Cheques
-      const mediosDetalle = Array.isArray(resp?.medios_pago_detalle)
-        ? resp.medios_pago_detalle
-        : [];
-      for (let index = 0; index < (form.medios || []).length; index++) {
-        const mp = form.medios[index];
-        if (!mp.cheque) continue;
-        const detalleMp =
-          mediosDetalle.find(
-            (x) =>
-              Number(x?.id_movimiento_medio_pago || 0) ===
-              Number(mp.id_movimiento_medio_pago || 0)
-          ) ||
-          mediosDetalle[index] ||
-          null;
-        await guardarCheque(idMovimientoFinal, detalleMp, mp.cheque);
-      }
-
-      // Cheques eliminados
-      for (const idCheque of removedChequeIds) {
-        try { await eliminarCheque(idCheque); } catch {}
-      }
 
       await onSaved?.(resp);
     } catch (err) {
@@ -1763,8 +1573,6 @@ export default function ModalEditarIngreso({
                           onRemove={removeMedioPago}
                           onAdd={addMedioPago}
                           saving={saving}
-                          showToast={showToast}
-                          apiCheckNumero={API_CHECK_NUMERO}
                         />
 
                         {/* Comprobante */}

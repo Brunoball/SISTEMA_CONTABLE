@@ -478,30 +478,47 @@ export default function Presupuestos() {
   }, [API, apiGet]);
 
   const normalizePresupuestoRow = useCallback((r) => {
+    const idMov = getMovimientoId(r);
     const cantidadItems = Number(r?.cantidad_items ?? r?.items_detalle?.length ?? 0) || 0;
     const detalleOriginal = String(r?.detalle_original ?? r?.detalle ?? r?.descripcion ?? r?.concepto ?? "").trim();
+    const ventaGenerada = r?.venta_generada || r?.venta || null;
+    const mediosVenta = Array.isArray(r?.venta_medios_pago_detalle)
+      ? r.venta_medios_pago_detalle
+      : Array.isArray(ventaGenerada?.medios_pago_detalle)
+        ? ventaGenerada.medios_pago_detalle
+        : Array.isArray(r?.medios_pago_detalle)
+          ? r.medios_pago_detalle
+          : [];
+    const medioPagoNombre = safeStr(r?.venta_medio_pago_nombre || ventaGenerada?.medio_pago_nombre || r?.medio_pago_nombre || "—");
 
     return {
       ...r,
-      id_movimiento: getMovimientoId(r),
+      id_movimiento: idMov,
       id_cliente: getClienteId(r),
       cliente: String(r?.cliente ?? r?.cliente_nombre ?? "").trim(),
       detalle_original: detalleOriginal,
       detalle: detalleProductosLabel(cantidadItems),
       cantidad_items: cantidadItems,
       items_detalle: Array.isArray(r?.items_detalle)
-        ? r.items_detalle.map((it, idx) => normalizePresupuestoItemForModal(it, idx, getMovimientoId(r)))
+        ? r.items_detalle.map((it, idx) => normalizePresupuestoItemForModal(it, idx, idMov))
         : [],
-      cantidad_medios_pago: 0,
-      medios_pago_detalle: [],
+      cantidad_medios_pago: mediosVenta.length || Number(r?.venta_cantidad_medios_pago ?? r?.cantidad_medios_pago ?? 0) || 0,
+      medios_pago_detalle: mediosVenta,
+      medio_pago_nombre: medioPagoNombre,
       tipo_operacion_nombre: "PRESUPUESTO",
       monto_total: Number(r?.monto_total ?? r?.total ?? 0) || 0,
       presupuesto_id_comprobante: getComprobanteId(r),
       presupuesto_comprobante_url: String(r?.presupuesto_comprobante_url ?? r?.comprobante_url ?? "").trim(),
       presupuesto_comprobante_mime: getComprobanteMime(r),
       convertido_a_venta: Number(r?.convertido_a_venta ?? r?.convertido ?? 0) === 1,
-      id_venta_generada: Number(r?.id_venta_generada ?? r?.id_venta ?? 0) || null,
+      id_venta_generada: Number(r?.id_venta_generada ?? r?.id_venta ?? ventaGenerada?.id_venta ?? ventaGenerada?.id_movimiento ?? 0) || null,
       fecha_conversion: String(r?.fecha_conversion ?? "").trim(),
+      venta_generada: ventaGenerada,
+      venta_fecha: safeStr(r?.venta_fecha || ventaGenerada?.fecha || ""),
+      venta_id_tipo_venta: Number(r?.venta_id_tipo_venta ?? ventaGenerada?.id_tipo_venta ?? 0) || null,
+      venta_tipo_venta_nombre: safeStr(r?.venta_tipo_venta_nombre || ventaGenerada?.tipo_venta_nombre || ""),
+      venta_medio_pago_nombre: medioPagoNombre,
+      venta_medios_pago_detalle: mediosVenta,
     };
   }, []);
 
@@ -651,6 +668,11 @@ export default function Presupuestos() {
       presupuesto: data?.presupuesto || data?.movimiento || null,
       items: Array.isArray(data?.items) ? data.items : [],
       conversion: data?.conversion || null,
+      venta_generada: data?.venta_generada || data?.venta || null,
+      venta: data?.venta || data?.venta_generada || null,
+      cantidad_medios_pago: Number(data?.cantidad_medios_pago ?? 0) || 0,
+      medios_pago_detalle: Array.isArray(data?.medios_pago_detalle) ? data.medios_pago_detalle : [],
+      medio_pago_nombre: safeStr(data?.medio_pago_nombre || "—"),
     };
   }, [API, apiGet]);
 
@@ -665,7 +687,18 @@ export default function Presupuestos() {
         : [];
     const items = rawItems.map((it, idx) => normalizePresupuestoItemForModal(it, idx, idMov));
     const conversion = detalle?.conversion && typeof detalle.conversion === "object" ? detalle.conversion : null;
-    const convertido = !!(base.convertido_a_venta || conversion?.id_venta);
+    const ventaGenerada = detalle?.venta_generada || detalle?.venta || base.venta_generada || base.venta || null;
+    const mediosVenta = Array.isArray(detalle?.medios_pago_detalle) && detalle.medios_pago_detalle.length
+      ? detalle.medios_pago_detalle
+      : Array.isArray(ventaGenerada?.medios_pago_detalle)
+        ? ventaGenerada.medios_pago_detalle
+        : Array.isArray(base.venta_medios_pago_detalle)
+          ? base.venta_medios_pago_detalle
+          : Array.isArray(base.medios_pago_detalle)
+            ? base.medios_pago_detalle
+            : [];
+    const medioPagoVenta = safeStr(detalle?.medio_pago_nombre || ventaGenerada?.medio_pago_nombre || base.venta_medio_pago_nombre || base.medio_pago_nombre || "—");
+    const convertido = !!(base.convertido_a_venta || conversion?.id_venta || ventaGenerada?.id_venta || ventaGenerada?.id_movimiento);
 
     return {
       ...base,
@@ -684,14 +717,19 @@ export default function Presupuestos() {
       estado_documento: convertido ? "CONVERTIDO EN VENTA" : "PRESUPUESTO",
       cantidad_items: items.length || Number(base.cantidad_items || 0) || 0,
       items_detalle: items,
-      cantidad_medios_pago: 0,
-      medios_pago_detalle: [],
-      medio_pago_nombre: "—",
+      cantidad_medios_pago: mediosVenta.length || Number(detalle?.cantidad_medios_pago ?? base.cantidad_medios_pago ?? 0) || 0,
+      medios_pago_detalle: mediosVenta,
+      medio_pago_nombre: medioPagoVenta,
       monto_total: Number(mov.monto_total ?? base.monto_total ?? base.total ?? 0) || 0,
       total: Number(mov.monto_total ?? base.monto_total ?? base.total ?? 0) || 0,
       convertido_a_venta: convertido,
-      id_venta_generada: Number(conversion?.id_venta ?? base.id_venta_generada ?? 0) || null,
+      id_venta_generada: Number(conversion?.id_venta ?? base.id_venta_generada ?? ventaGenerada?.id_venta ?? ventaGenerada?.id_movimiento ?? 0) || null,
       fecha_conversion: safeStr(conversion?.fecha_conversion || base.fecha_conversion || ""),
+      venta_generada: ventaGenerada,
+      venta_fecha: safeStr(ventaGenerada?.fecha || base.venta_fecha || ""),
+      venta_tipo_venta_nombre: safeStr(ventaGenerada?.tipo_venta_nombre || base.venta_tipo_venta_nombre || ""),
+      venta_medio_pago_nombre: medioPagoVenta,
+      venta_medios_pago_detalle: mediosVenta,
     };
   }, []);
 
@@ -703,7 +741,8 @@ export default function Presupuestos() {
       return;
     }
 
-    if (Array.isArray(row?.items_detalle) && row.items_detalle.length > 0) {
+    const convertido = !!(row?.convertido_a_venta || row?.id_venta_generada || row?.venta_generada?.id_venta || row?.venta_generada?.id_movimiento);
+    if (!convertido && Array.isArray(row?.items_detalle) && row.items_detalle.length > 0) {
       setSelectedRow(buildDetallePresupuestoRow(row));
       setOpenDetalleMovimiento(true);
       return;
@@ -1154,6 +1193,9 @@ export default function Presupuestos() {
         onToast={showToast}
         onClose={() => { setOpenConvert(false); setSelectedRow(null); }}
         onSaved={async (data) => {
+          // La conversión presupuesto → venta crea un movimiento nuevo fuera de la sección Ventas.
+          // Invalidamos el cache persistente de Ventas para que aparezca al primer ingreso.
+          clearMovPerfCache("ventas:listar:cc-medios-v2");
           const idVenta = Number(data?.id_venta || data?.id_movimiento || data?.ids?.[0] || data?.ids_movimiento?.[0] || 0);
           if (selectedRow?.id_movimiento && idVenta) {
             marcarPresupuestoConvertido(selectedRow.id_movimiento, idVenta, data?.conversion?.fecha_conversion || "");

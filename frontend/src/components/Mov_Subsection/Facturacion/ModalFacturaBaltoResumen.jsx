@@ -19,6 +19,12 @@ function isoToYmd8(iso) {
   return "";
 }
 
+
+function todayLocalISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function ymdToHuman(ymd) {
   if (!ymd) return "";
   const s = String(ymd);
@@ -402,9 +408,9 @@ useEffect(() => {
             ...data,
             labelCliente: nombreCliente,
             labelSistema: nombreSistema,
-            fecha_cbte_iso: fechaCbteISO || new Date().toISOString().slice(0, 10),
-            fecha_cbte: fechaCbteISO || new Date().toISOString().slice(0, 10),
-            vto_pago_iso: vtoPagoISO || new Date().toISOString().slice(0, 10),
+            fecha_cbte_iso: fechaCbteISO || todayLocalISO(),
+            fecha_cbte: fechaCbteISO || todayLocalISO(),
+            vto_pago_iso: vtoPagoISO || todayLocalISO(),
             total_ars: monto,
             monto,
             importe: monto,
@@ -444,12 +450,12 @@ useEffect(() => {
             cbte_tipo: Number(cbteTipo) || 11,
             cbte_nro: cbteNroLocal,
             fecha_cbte: isoToYmd8(
-              fechaCbteISO || new Date().toISOString().slice(0, 10)
+              fechaCbteISO || todayLocalISO()
             ),
             imp_total: Number(monto) || 0,
             importe: Number(monto) || 0,
             cae: "00000000000000",
-            cae_vto: isoToYmd8(vtoPagoISO || new Date().toISOString().slice(0, 10)),
+            cae_vto: isoToYmd8(vtoPagoISO || todayLocalISO()),
             resultado: "P",
             qr_url: "",
             qr_base64: "",
